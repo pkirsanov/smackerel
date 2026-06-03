@@ -35,6 +35,7 @@ The repository now exposes a sanctioned CLI-owned runtime test surface for the f
 | Go + Python unit | `./smackerel.sh test unit` | Runtime code changes |
 | Integration | `./smackerel.sh test integration` | Runtime lifecycle or health changes |
 | End-to-end | `./smackerel.sh test e2e` | Runtime, compose, or config changes |
+| End-to-end UI (PWA browser) | `./smackerel.sh test e2e-ui` | PWA `.spec.ts` under `web/pwa/tests/` changes, login/auth UI, CSP, or served-route shape changes |
 | Stress smoke | `./smackerel.sh test stress` | Runtime health, lifecycle, or stress env handoff changes |
 | Framework doctor | `bash .github/bubbles/scripts/cli.sh doctor` | Project-owned bootstrap docs change |
 | Framework validate | `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate` | Before claiming bootstrap health |
@@ -53,9 +54,40 @@ The current CLI-owned runtime surface exposes these categories today:
 | Integration | `integration` | `./smackerel.sh test integration` |
 | End-to-end API | `e2e-api` | `./smackerel.sh test e2e` |
 | End-to-end UI | `e2e-ui` | `./smackerel.sh test e2e` (web UI paths included) |
+| End-to-end UI (PWA browser) | `e2e-ui` | `./smackerel.sh test e2e-ui` |
 | Stress | `stress` | `./smackerel.sh test stress` |
 
-### ntfy Source Adapter Test Surface (Spec 055)
+### PWA Browser e2e-ui Harness (Spec 077)
+
+Spec 077 ships a Playwright-driven browser harness for the PWA. It runs
+under the dedicated disposable Compose project `smackerel-test-e2e-ui`
+so it cannot collide with the persistent dev stack or the
+`smackerel-test` lane used by Go integration/e2e/stress.
+
+| Concept | Value |
+|---------|-------|
+| Dispatcher subcommand | `./smackerel.sh test e2e-ui` |
+| Compose project | `smackerel-test-e2e-ui` |
+| Spec discovery convention | `web/pwa/tests/*.spec.ts` (auto-discovered via `testDir: "tests"` + `testMatch: "**/*.spec.ts"` in `web/pwa/playwright.config.ts`; `_support/` is excluded) |
+| Helpers directory | `web/pwa/tests/_support/` (e.g. `env.ts`, `csp.ts`) — never picked up as specs |
+| SST consumer | `SMACKEREL_BASE_URL` (derived from `CORE_EXTERNAL_URL` in `config/generated/test.env`); fail-loud if unset |
+| Proof-of-life smoke | `web/pwa/tests/proof_of_life.spec.ts` (asserts HTTP 200 OR 401 against `/` — the disposable stack is auth-gated) |
+| Artifact paths on failure | `web/pwa/test-results/`, `web/pwa/playwright-report/` |
+| CI workflow | `.github/workflows/e2e-ui.yml` (runs on every push to `main` and PR; uploads artifacts on failure) |
+
+Adding a new browser test is as simple as dropping a `*.spec.ts` file
+under `web/pwa/tests/` — the discovery convention is the only contract
+and is asserted by `tests/unit/web/spec_077_discovery_convention_test.sh`.
+
+Note on Chromium sandboxing in CI: this repo currently runs the
+harness with the default Playwright Chromium sandbox enabled. If a
+future CI runner cannot enable user namespaces (for example, a
+container without `CAP_SYS_ADMIN`) the workflow may need to pass
+`--no-sandbox` to Chromium. That flag drops a defense-in-depth layer
+and MUST be justified inline in the workflow if ever introduced — see
+spec 077 Hard Constraint 7.
+
+### Spec 055 — ntfy Source Adapter Test Surface
 
 Spec 055 test coverage is focused on the adapter boundary: ntfy transport and
 payload translation live in `internal/notification/source/ntfy`, while the core

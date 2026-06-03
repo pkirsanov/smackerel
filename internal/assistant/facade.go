@@ -638,6 +638,53 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		}
 	}
 
+	// --- Step 2.5: spec 076 SCOPE-4a — NL routing for /find + /rate ---
+	//
+	// Deterministic facade rule that replaces the retired /find and
+	// /rate slash commands with NL phrasings. Runs only when the
+	// slash-shortcut step did NOT already pin a scenario. See
+	// nl_routing.go for the matched prefixes and rate-target words.
+	//
+	// SCN-066-A02: "find me X" → pin retrieval_qa via the explicit-id
+	// fast path (same as a slash shortcut hit).
+	//
+	// SCN-066-A03: "rate this/that/it" with no named target → emit a
+	// deterministic spec 061 DisambiguationPrompt and short-circuit.
+	// PendingDisambig is persisted by appendTurnAndPersist via the
+	// normal response flow so the next inbound turn resolves through
+	// resolvePendingDisambig.
+	if msg.Kind == contracts.KindText && shortcutScenarioID == "" {
+		if hit, ok := LookupNLRouting(msg.Text); ok {
+			switch {
+			case hit.ScenarioID != "":
+				shortcutScenarioID = hit.ScenarioID
+			case hit.RateDisambig:
+				prompt := f.buildRateDisambiguationPrompt(emittedAt)
+				resp = contracts.AssistantResponse{
+					Status:               contracts.StatusThinking,
+					Body:                 "which item would you like to rate?",
+					DisambiguationPrompt: prompt,
+					EmittedAt:            emittedAt,
+				}
+				choiceIDs := make([]assistantctx.DisambigChoiceID, 0, len(prompt.Choices))
+				for _, c := range prompt.Choices {
+					choiceIDs = append(choiceIDs, assistantctx.DisambigChoiceID{
+						Number: c.Number,
+						ID:     c.ID,
+					})
+				}
+				conv.PendingDisambig = &assistantctx.PendingDisambig{
+					DisambiguationRef: prompt.DisambiguationRef,
+					Choices:           choiceIDs,
+					ExpiresAt:         emittedAt.Add(prompt.Timeout),
+				}
+				conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+				f.writeAudit(ctx, msg, BandBorderline, nil, nil, resp)
+				return resp, nil
+			}
+		}
+	}
+
 	// --- Step 3: reference resolution (text turns only) ---
 	if msg.Kind == contracts.KindText && shortcutScenarioID == "" {
 		if ref := assistantctx.ResolveReference(msg.Text, conv.WorkingContext); ref.Outcome == assistantctx.ResolveOutcomeMissing {
@@ -1180,6 +1227,27 @@ func (f *Facade) buildDisambiguationPrompt(decision agent.RoutingDecision, emitt
 		Label:  "save as a note",
 	})
 	ref := fmt.Sprintf("disambig-%d", emittedAt.UnixNano())
+	return &contracts.DisambiguationPrompt{
+		Choices:           choices,
+		Timeout:           f.cfg.DisambigTimeout,
+		DisambiguationRef: ref,
+	}
+}
+
+// buildRateDisambiguationPrompt is the spec 076 SCOPE-4a (SCN-066-A03)
+// counterpart to buildDisambiguationPrompt for the NL /rate
+// replacement path. The router does NOT produce rate-target
+// candidates (there is no rateable-artifact scenario in the v1
+// substrate), so this helper emits a deterministic spec 061
+// DisambiguationPrompt seeded only with the save_as_note sentinel —
+// the same single-choice shape the borderline path emits when zero
+// scenarios pass the manifest filter. The prompt body (set by the
+// caller) asks the user to identify the target.
+func (f *Facade) buildRateDisambiguationPrompt(emittedAt time.Time) *contracts.DisambiguationPrompt {
+	choices := []contracts.DisambiguationChoice{
+		{Number: 1, ID: contracts.SaveAsNoteChoiceID, Label: "save as a note"},
+	}
+	ref := fmt.Sprintf("disambig-rate-%d", emittedAt.UnixNano())
 	return &contracts.DisambiguationPrompt{
 		Choices:           choices,
 		Timeout:           f.cfg.DisambigTimeout,

@@ -69,6 +69,22 @@ type LegacyRetirementConfig struct {
 	// to the canonical unknown-command response body returned after
 	// window_state=closed. Same coverage rule as NoticeCopyPerCommand.
 	PostWindowUnknownResponseCopy map[string]string
+	// Spec 076 SCOPE-6a — runtime wiring SST keys.
+	//
+	// ThresholdEvaluatorIntervalSeconds is the polling interval (in
+	// seconds, >= 1) for the legacy-residual breach evaluator job
+	// registered on the core scheduler.
+	ThresholdEvaluatorIntervalSeconds int
+	// ObservationCronExpr is the cron expression for the post-window
+	// observation job that persists the zero-invocation gate report.
+	// Non-empty; parsed by the scheduler at startup (fail-loud on
+	// invalid expression).
+	ObservationCronExpr string
+	// RollbackThresholdDailyInvocations is the per-day flat-count
+	// safety gate consulted alongside the percent-of-active-users
+	// threshold. A day counts as breaching when EITHER gate fires.
+	// >= 1.
+	RollbackThresholdDailyInvocations int64
 }
 
 // LoadLegacyRetirement reads every LEGACY_RETIREMENT_* env var and
@@ -89,6 +105,12 @@ func LoadLegacyRetirement() (LegacyRetirementConfig, error) {
 	cfg.UserBucketHMACKey, errs = lookupString("LEGACY_RETIREMENT_USER_BUCKET_HMAC_KEY", errs)
 	cfg.NoticeCopyPerCommand, errs = lookupJSONStringMap("LEGACY_RETIREMENT_NOTICE_COPY_PER_COMMAND", errs)
 	cfg.PostWindowUnknownResponseCopy, errs = lookupJSONStringMap("LEGACY_RETIREMENT_POST_WINDOW_UNKNOWN_RESPONSE_COPY", errs)
+	// Spec 076 SCOPE-6a — runtime wiring SST keys.
+	cfg.ThresholdEvaluatorIntervalSeconds, errs = lookupInt("LEGACY_RETIREMENT_THRESHOLD_EVALUATOR_INTERVAL_SECONDS", errs)
+	cfg.ObservationCronExpr, errs = lookupString("LEGACY_RETIREMENT_OBSERVATION_CRON_EXPR", errs)
+	dailyInv, errs2 := lookupInt("LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAILY_INVOCATIONS", errs)
+	errs = errs2
+	cfg.RollbackThresholdDailyInvocations = int64(dailyInv)
 
 	if len(errs) > 0 {
 		return LegacyRetirementConfig{}, fmt.Errorf("[F075-SST-MISSING] missing or invalid required legacy_retirement configuration: %s", strings.Join(errs, ", "))
@@ -153,6 +175,17 @@ func (c *LegacyRetirementConfig) Validate() error {
 				errs = append(errs, fmt.Sprintf("legacy_retirement.post_window_unknown_response_copy[%q] (empty body)", cmd))
 			}
 		}
+	}
+
+	// Spec 076 SCOPE-6a — runtime wiring SST keys.
+	if c.ThresholdEvaluatorIntervalSeconds < 1 {
+		errs = append(errs, fmt.Sprintf("legacy_retirement.threshold_evaluator_interval_seconds (must be >= 1, got %d)", c.ThresholdEvaluatorIntervalSeconds))
+	}
+	if strings.TrimSpace(c.ObservationCronExpr) == "" {
+		errs = append(errs, "legacy_retirement.observation_cron_expr (empty)")
+	}
+	if c.RollbackThresholdDailyInvocations < 1 {
+		errs = append(errs, fmt.Sprintf("legacy_retirement.rollback_threshold_daily_invocations (must be >= 1, got %d)", c.RollbackThresholdDailyInvocations))
 	}
 
 	if len(errs) > 0 {

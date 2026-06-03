@@ -68,13 +68,41 @@ test("requireSmackerelBaseUrl returns the value when set", () => {
   }
 });
 
-test("attachCSPGuard skeleton compiles and exposes the SCOPE-3 contract", () => {
+test("attachCSPGuard exposes the SCOPE-3 contract and wires page listeners", () => {
   assert.equal(typeof attachCSPGuard, "function");
   assert.equal(
     attachCSPGuard.length,
     1,
     "must accept exactly one parameter (the Playwright Page)",
   );
-  // Skeleton is a no-op in SCOPE-1b; real assertions land in SCOPE-3.
-  assert.doesNotThrow(() => attachCSPGuard({} as unknown));
+  // SCOPE-3 wires real listeners. Drive a stub page that records the
+  // `on(...)` / `exposeBinding(...)` / `addInitScript(...)` calls so
+  // this Node-level test can keep running without `@playwright/test`
+  // installed.
+  const calls: { kind: string; arg: unknown }[] = [];
+  const stub = {
+    on(event: string, _fn: unknown) {
+      calls.push({ kind: `on:${event}`, arg: null });
+    },
+    exposeBinding(name: string, _fn: unknown) {
+      calls.push({ kind: `exposeBinding:${name}`, arg: null });
+      return Promise.resolve();
+    },
+    addInitScript(_fn: unknown) {
+      calls.push({ kind: "addInitScript", arg: null });
+      return Promise.resolve();
+    },
+  };
+  assert.doesNotThrow(() => attachCSPGuard(stub as never));
+  const kinds = calls.map((c) => c.kind).sort();
+  assert.deepEqual(
+    kinds,
+    [
+      "addInitScript",
+      "exposeBinding:__spec077ReportCSPViolation",
+      "on:console",
+      "on:pageerror",
+    ],
+    "SCOPE-3 guard must wire console + pageerror listeners and expose the CSP-violation binding + init script",
+  );
 });

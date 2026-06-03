@@ -197,44 +197,56 @@
 
     {
       "scenarioId": "SCN-066-A02",
-      "scopeId": "SCOPE-04",
+      "scopeId": "SCOPE-04a",
       "title": "NL replaces /find",
       "behaviorClass": "api",
       "changeType": "regression",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": [
+        { "file": "tests/e2e/assistant/nl_find_replacement_test.go", "testId": "TestNLReplaceFind_LiveSameAsLegacyFind", "category": "e2e-api" },
+        { "file": "tests/e2e/assistant/nl_facade_routing_e2e_test.go", "testId": "TestFacadeNLRouting_FindAndRate", "category": "Regression E2E" }
+      ],
+      "evidenceRefs": ["report.md#scope-4a-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/066-legacy-keyword-surface-retirement", "scenarioId": "SCN-066-A02"}
     },
     {
       "scenarioId": "SCN-066-A03",
-      "scopeId": "SCOPE-04",
+      "scopeId": "SCOPE-04a",
       "title": "NL replaces /rate via disambiguation",
       "behaviorClass": "api",
       "changeType": "regression",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": [
+        { "file": "tests/e2e/assistant/nl_rate_disambig_test.go", "testId": "TestNLReplaceRate_EntersDisambiguation", "category": "e2e-api" },
+        { "file": "tests/e2e/assistant/nl_facade_routing_e2e_test.go", "testId": "TestFacadeNLRouting_FindAndRate", "category": "Regression E2E" }
+      ],
+      "evidenceRefs": ["report.md#scope-4a-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/066-legacy-keyword-surface-retirement", "scenarioId": "SCN-066-A03"}
     },
     {
       "scenarioId": "SCN-066-A08",
-      "scopeId": "SCOPE-04",
+      "scopeId": "SCOPE-04b",
       "title": "Annotation classification uses LLM extraction (annotation.classify.v1)",
       "behaviorClass": "api",
       "changeType": "replacement",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": [
+        { "file": "internal/annotation/classifier_interface_test.go", "testId": "TestClassifierInterface_ImplementedByClassifyV1", "category": "unit" },
+        { "file": "internal/annotation/classifier_shadow_test.go", "testId": "TestDualWriteShadowComparator_EmitsDivergenceTelemetry", "category": "unit" },
+        { "file": "tests/integration/annotation/classify_v1_test.go", "testId": "TestAnnotationClassifyV1_WarmCacheConsistency", "category": "integration" },
+        { "file": "tests/integration/annotation/dual_write_shadow_test.go", "testId": "TestDualWriteShadowComparator_EmitsDivergenceTelemetry", "category": "integration" },
+        { "file": "tests/e2e/assistant/annotation_classifier_e2e_test.go", "testId": "TestAnnotationClassifierWithShadowComparator", "category": "Regression E2E" }
+      ],
+      "evidenceRefs": ["report.md#scope-4b-implement-round--2026-06-02"],
       "inheritsFrom": {"spec": "specs/066-legacy-keyword-surface-retirement", "scenarioId": "SCN-066-A08"}
     },
 
     {
       "scenarioId": "SCN-073-A02",
-      "scopeId": "SCOPE-07",
+      "scopeId": "SCOPE-07a",
       "title": "Shared mobile client uses generated types from the golden schema",
       "behaviorClass": "ui",
       "changeType": "regression",
@@ -246,55 +258,64 @@
     },
     {
       "scenarioId": "SCN-073-A03",
-      "scopeId": "SCOPE-07",
+      "scopeId": "SCOPE-07b",
       "title": "Transient network failure retries with the same transport_message_id (mobile)",
       "behaviorClass": "ui",
       "changeType": "regression",
-      "requiredTestType": ["e2e-ui"],
+      "requiredTestType": ["integration"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": [
+        "tests/integration/mobile/retry_idempotency_test.go::TestMobileRetry_ReusesTransportMessageId",
+        "tests/integration/mobile/retry_idempotency_test.go::TestMobileRetry_DistinctTransportMessageIdsAreNotMixed"
+      ],
+      "evidenceRefs": ["report.md#scope-7b-implement-2026-06-03"],
       "inheritsFrom": {"spec": "specs/073-web-mobile-assistant-frontend", "scenarioId": "SCN-073-A03"}
     },
     {
       "scenarioId": "SCN-073-A04",
-      "scopeId": "SCOPE-07",
+      "scopeId": "SCOPE-07c",
       "title": "Disambiguation prompt renders and round-trips on web and mobile",
       "behaviorClass": "ui",
       "changeType": "regression",
-      "requiredTestType": ["e2e-ui"],
+      "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": [
+        "tests/e2e/transports/disambig_parity_test.go::TestDisambigParity_WebTelegramWhatsApp"
+      ],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-7c-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/073-web-mobile-assistant-frontend", "scenarioId": "SCN-073-A04"}
     },
     {
       "scenarioId": "SCN-073-A05",
-      "scopeId": "SCOPE-07",
+      "scopeId": "SCOPE-07c",
       "title": "Confirm card renders identically and round-trips",
       "behaviorClass": "ui",
       "changeType": "regression",
-      "requiredTestType": ["e2e-ui"],
+      "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": [
+        "tests/e2e/transports/confirm_card_parity_test.go::TestConfirmCardParity_AcrossWebTelegramWhatsApp"
+      ],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-7c-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/073-web-mobile-assistant-frontend", "scenarioId": "SCN-073-A05"}
     },
     {
       "scenarioId": "SCN-073-A06",
-      "scopeId": "SCOPE-07",
+      "scopeId": "SCOPE-07c",
       "title": "Capture-as-fallback acknowledgement is identical to other transports",
       "behaviorClass": "ui",
       "changeType": "regression",
-      "requiredTestType": ["e2e-ui"],
+      "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": [
+        "tests/e2e/transports/capture_ack_parity_test.go::TestCaptureAckParity_AcrossWebTelegramWhatsApp"
+      ],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-7c-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/073-web-mobile-assistant-frontend", "scenarioId": "SCN-073-A06"}
     },
     {
       "scenarioId": "SCN-073-A07",
-      "scopeId": "SCOPE-07",
+      "scopeId": "SCOPE-07a",
       "title": "No client-side scenario logic exists",
       "behaviorClass": "ui",
       "changeType": "regression",
@@ -306,7 +327,7 @@
     },
     {
       "scenarioId": "SCN-073-A10",
-      "scopeId": "SCOPE-07",
+      "scopeId": "SCOPE-07d",
       "title": "Shared mobile client meets VoiceOver and TalkBack accessibility floor",
       "behaviorClass": "ui",
       "changeType": "regression",
@@ -318,7 +339,7 @@
     },
     {
       "scenarioId": "SCN-073-A11",
-      "scopeId": "SCOPE-07",
+      "scopeId": "SCOPE-07a",
       "title": "Missing backend base URL fails loud at build/start time (mobile)",
       "behaviorClass": "ui",
       "changeType": "regression",
@@ -404,7 +425,7 @@
 
     {
       "scenarioId": "SCN-075-A01",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06c",
       "title": "First retired-command invocation shows one notice and serves the intent",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -416,7 +437,7 @@
     },
     {
       "scenarioId": "SCN-075-A02",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06c",
       "title": "Second invocation of the same retired command does not re-notify",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -428,7 +449,7 @@
     },
     {
       "scenarioId": "SCN-075-A03",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06c",
       "title": "Different retired command produces its own one-time notice",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -440,7 +461,7 @@
     },
     {
       "scenarioId": "SCN-075-A04",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06b",
       "title": "Residual telemetry counts invocations per command per user_bucket",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -452,7 +473,7 @@
     },
     {
       "scenarioId": "SCN-075-A05",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06a",
       "title": "Rollback threshold pauses the window automatically",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -464,7 +485,7 @@
     },
     {
       "scenarioId": "SCN-075-A06",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06a",
       "title": "Resuming the window resets the consecutive-day counter",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -476,7 +497,7 @@
     },
     {
       "scenarioId": "SCN-075-A07",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06c",
       "title": "Window-closed response is the canonical unknown-command response",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -488,7 +509,7 @@
     },
     {
       "scenarioId": "SCN-075-A08",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06a",
       "title": "Post-window observation confirms zero legacy handler invocations",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -500,7 +521,7 @@
     },
     {
       "scenarioId": "SCN-075-A09",
-      "scopeId": "SCOPE-06",
+      "scopeId": "SCOPE-06c",
       "title": "Dedup ledger survives across sessions and devices",
       "behaviorClass": "ui",
       "changeType": "regression",

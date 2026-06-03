@@ -27,12 +27,31 @@ func wireLegacyAliasInterceptor(cfg *config.Config, svc *coreServices, tgBot *te
 	if tgBot == nil {
 		return
 	}
+	// Spec 076 SCOPE-6a — when a postgres pool is available, use the
+	// durable SQLPauseStateStore so the interceptor observes the
+	// same threshold-evaluator-driven pause transitions as the
+	// facade. Without a pool (dev/test install with no DB) we fall
+	// back to the static not-paused reader so the interceptor still
+	// exercises the rewrite + closed-window paths.
+	var pauseReader legacyretirement.PauseStateReader
+	if svc != nil && svc.pg != nil && svc.pg.Pool != nil {
+		store, perr := legacyretirement.NewSQLPauseStateStore(svc.pg.Pool)
+		if perr != nil {
+			slog.Warn("legacy alias interceptor: SQL pause-state store construction failed; falling back to static reader",
+				"error", perr)
+			pauseReader = legacyretirement.NewStaticPauseStateReader(false)
+		} else {
+			pauseReader = store
+		}
+	} else {
+		pauseReader = legacyretirement.NewStaticPauseStateReader(false)
+	}
 	resolver, err := legacyretirement.NewWindowStateResolver(
 		legacyretirement.SSTStateConfig{
 			WindowID:    cfg.LegacyRetirement.WindowID,
 			WindowState: cfg.LegacyRetirement.WindowState,
 		},
-		legacyretirement.NewStaticPauseStateReader(false),
+		pauseReader,
 	)
 	if err != nil {
 		slog.Warn("legacy alias interceptor: window-state resolver construction failed; interceptor not wired",

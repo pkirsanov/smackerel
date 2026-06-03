@@ -1053,6 +1053,17 @@ legacy_retirement:
   post_window_unknown_response_copy:
     /weather: "I do not use /weather anymore. Ask in plain English instead, for example: weather in Barcelona tomorrow."
     /remind: "I do not use /remind anymore. Ask in plain English instead, for example: remind me tomorrow at 9 to call the dentist."
+  # Spec 076 SCOPE-6a — runtime wiring SST keys.
+  # threshold_evaluator_interval_seconds drives the periodic legacy-residual
+  # breach evaluator; observation_cron_expr drives the post-window observation
+  # cron that emits the zero-invocation gate evidence row;
+  # rollback_threshold_daily_invocations is the per-day flat-count safety gate
+  # consulted alongside the percent-of-active-users threshold (a day counts as
+  # breaching when EITHER gate fires). All three are REQUIRED; missing values
+  # abort startup via the canonical NO-DEFAULTS error.
+  threshold_evaluator_interval_seconds: 300 # REQUIRED: >= 1; recommended 300s (5 min) in dev/test, tune for production.
+  observation_cron_expr: "0 4 * * *" # REQUIRED: non-empty cron expression; default daily at 04:00 UTC.
+  rollback_threshold_daily_invocations: 100 # REQUIRED: >= 1; per-day invocation count gate (additive to percent gate).
 
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key

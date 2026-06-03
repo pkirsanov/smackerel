@@ -95,6 +95,13 @@ func (b *Bot) handleReplyAnnotation(ctx context.Context, msg *tgbotapi.Message) 
 	// Parse the annotation text
 	parsed := annotation.Parse(text)
 
+	// Spec 076 SCOPE-4b — dual-write shadow comparator. PRIMARY
+	// remains parsed.InteractionType (inline interactionMap path);
+	// the comparator emits divergence telemetry only.
+	if b.annotationShadow != nil {
+		b.annotationShadow.Compare(ctx, text, annotation.ChannelTelegram, parsed.InteractionType)
+	}
+
 	// Submit annotation via internal API
 	created, err := b.submitAnnotation(ctx, chatID, artifactID, text)
 	if err != nil {
@@ -144,6 +151,12 @@ func (b *Bot) handleDisambiguationReply(ctx context.Context, msg *tgbotapi.Messa
 	}
 
 	parsed := annotation.Parse(pending.Annotation)
+
+	// Spec 076 SCOPE-4b — dual-write shadow comparator (disambig finalizer path).
+	if b.annotationShadow != nil {
+		b.annotationShadow.Compare(ctx, pending.Annotation, annotation.ChannelTelegram, parsed.InteractionType)
+	}
+
 	created, err := b.submitAnnotation(ctx, chatID, selected.ArtifactID, pending.Annotation)
 	if err != nil {
 		b.reply(chatID, "? Failed to record annotation")

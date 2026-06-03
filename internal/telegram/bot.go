@@ -14,6 +14,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+	"github.com/smackerel/smackerel/internal/annotation"
 	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	"github.com/smackerel/smackerel/internal/stringutil"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
@@ -91,6 +92,12 @@ type Bot struct {
 	// SetLegacyRetirementResolver wires it; when nil the legacy
 	// closed-window inventory is used.
 	legacyRetirementResolver legacyretirement.WindowStateResolver
+
+	// Spec 076 SCOPE-4b — annotation classifier dual-write shadow
+	// comparator. Wired via SetAnnotationShadowComparator from
+	// cmd/core/wiring.go after the agent bridge is constructed.
+	// Nil = no-op (safe pre-bridge / test default).
+	annotationShadow *annotation.ShadowComparator
 }
 
 // Config holds Telegram bot configuration.
@@ -239,6 +246,16 @@ func (b *Bot) SetAssistantAdapter(a *assistant_adapter.Adapter) {
 // effective deprecation-window state. Safe to call once at startup.
 func (b *Bot) SetLegacyRetirementResolver(r legacyretirement.WindowStateResolver) {
 	b.legacyRetirementResolver = r
+}
+
+// SetAnnotationShadowComparator wires the spec 076 SCOPE-4b dual-write
+// shadow comparator. Every annotation parsed by the Telegram bot
+// (reply-to capture path + disambiguation finalizer) is mirrored to
+// the new `annotation.classify.v1` classifier and divergences emit
+// telemetry. The primary (inline interactionMap) result is unaffected.
+// Safe to call once at startup; nil is a no-op.
+func (b *Bot) SetAnnotationShadowComparator(c *annotation.ShadowComparator) {
+	b.annotationShadow = c
 }
 
 // bearerForChat returns the bearer token the Telegram bot should

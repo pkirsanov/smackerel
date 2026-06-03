@@ -164,6 +164,27 @@ function renderResponse(response) {
   if (typeof response.capture_route === "string" && response.capture_route.length > 0) {
     responseNode.dataset.captureRoute = response.capture_route;
   }
+
+  // Spec 075 / 076 SCOPE-6c — legacy-retirement notice rendered as a
+  // one-line addendum AFTER the primary body. Never replaces the body;
+  // never branches on scenario id. Same canonical copy shape as the
+  // WhatsApp renderer (LegacyRetirementNoticeAddendum): the descriptor
+  // projection at web/pwa/lib/render_descriptor_v1.js carries the
+  // replacement_example verbatim, and this consumer matches the
+  // transport-side phrasing the server-owned ledger dedupes against.
+  const notice = response.notice;
+  if (notice && typeof notice === "object" && !Array.isArray(notice)) {
+    const cmd = typeof notice.command === "string" ? notice.command.trim() : "";
+    const ex = typeof notice.replacement_example === "string" ? notice.replacement_example.trim() : "";
+    if (cmd.length > 0 && ex.length > 0) {
+      const p = document.createElement("p");
+      p.className = "assistant-notice";
+      p.dataset.copyKey = typeof notice.copy_key === "string" ? notice.copy_key : "";
+      p.dataset.windowId = typeof notice.window_id === "string" ? notice.window_id : "";
+      p.textContent = "Heads up: " + cmd + " is retiring \u2014 try \"" + ex + "\" instead.";
+      responseNode.appendChild(p);
+    }
+  }
 }
 
 function showLocalError(message) {

@@ -65,7 +65,10 @@
         "description": "Cross-cutting infra gap: smackerel has no tests/e2e/ui/ browser harness; surfaced while dispositioning F-057-T-001; follow-up tracked at specs/_ops/F-057-V-001-e2e-ui-harness/README.md",
         "followUpOwner": "bubbles.plan",
         "followUpAction": "file-followup-spec",
-        "evidenceRef": "report.md#discovered-issues"
+        "evidenceRef": "report.md#discovered-issues",
+        "status": "resolved",
+        "resolvedAt": "2026-06-02T22:30:00Z",
+        "resolution": "Resolved by spec 077 SCOPE-3. Browser harness shipped under web/pwa/tests/ via Playwright + the dedicated ./smackerel.sh test e2e-ui lane (Compose project smackerel-test-e2e-ui). web/pwa/tests/auth_login.spec.ts ports spec 057 SCOPE-4 rows 4.1\u20134.5 (login render + CSP-clean baseline, sanitize_next matrix, cookie set + post-login destination, logout + cookie clear, adversarial CSP injection) against a real headless Chromium driven against the disposable test stack. See specs/077-pwa-browser-test-harness/report.md#scope-3--first-real-consumer-login-flow--csp-smoke--2026-06-02 (TP-077-03-01..03-05 + TP-077-03-07 all PASS in the SCOPE-3 GREEN run) and specs/_ops/F-057-V-001-e2e-ui-harness/README.md (status routed_resolved)."
       },
       {
         "id": "F-057-T-003",

@@ -181,6 +181,10 @@ func run() error {
 	attachDriveRetrieveBridgeToTelegram(svc, tgBot)
 	wireLegacyAliasInterceptor(cfg, svc, tgBot)
 
+	// Spec 076 SCOPE-4b — wire the annotation classifier dual-write
+	// shadow comparator into the HTTP handler + Telegram bot.
+	wireAnnotationShadowComparator(agentBridge, deps, tgBot)
+
 	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
 	// run in webhook mode, register the POST handler on the existing
 	// chi router OUTSIDE bearer-auth (Telegram does not send our
@@ -261,13 +265,21 @@ func run() error {
 
 	// Spec 061 SCOPE-05 — construct the capability-layer facade +
 	// Telegram reference adapter and bind it to the bot AFTER the
-	// bot has started. Fail-loud per SST: when the assistant block
-	// is enabled but wiring fails, surface the error so operators
-	// see the misconfiguration; when the assistant is disabled this
-	// is a no-op.
-	if err := wireAssistantFacade(ctx, cfg, svc, agentRT, tgBot, scenarioDir); err != nil {
-		return fmt.Errorf("assistant facade wiring: %w", err)
-	}
+	// bot has started. The facade wiring synchronously pre-computes
+	// router intent-example embeddings against the ML sidecar's
+	// POST /embed endpoint (see internal/agent/router.go NewRouter);
+	// on a cold-start where ml-sidecar boots in parallel with core,
+	// that probe can fail before the sidecar is reachable and crash
+	// the core HTTP listener before it ever binds. To break that
+	// boot-order coupling, run facade wiring in a background
+	// goroutine with bounded retries: HTTP /api/assistant/turn is
+	// already mounted via a LateBoundHandler that returns 503
+	// "assistant_http_not_ready" until SetAdapter fires, and the
+	// telegram bot.SetAssistantAdapter is also a late setter. SST
+	// misconfiguration (nil cfg, missing tokens, etc.) still surfaces
+	// loud via repeated error logs; transient sidecar unavailability
+	// drains naturally as ml-sidecar finishes its own startup.
+	go runAssistantFacadeWiringWithRetry(ctx, cfg, svc, agentRT, tgBot, scenarioDir)
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(svc.digestGen, tgBot, svc.intEngine, svc.topicLifecycle)
@@ -294,6 +306,7 @@ func run() error {
 	wireKnowledgeLinter(sched, cfg, svc)
 	wireMealPlanningSchedulerAndBot(cfg, svc, sched, tgBot)
 	wireRecommendationWatchPoller(sched, agentBridge, svc, cfg, tgBot, deps.RecommendationWatchHandlers)
+	wireLegacyRetirementScheduler(cfg, svc, sched)
 
 	if err := sched.Start(ctx, cfg.DigestCron); err != nil {
 		slog.Warn("digest scheduler failed to start", "error", err)
@@ -378,4 +391,49 @@ func run() error {
 
 	slog.Info("smackerel-core stopped")
 	return nil
+}
+
+// runAssistantFacadeWiringWithRetry invokes wireAssistantFacade in a
+// loop with bounded exponential backoff until it succeeds or ctx is
+// canceled. The wiring step pre-computes scenario embeddings via the
+// ML sidecar's /embed endpoint; on a cold-start where ml-sidecar is
+// still booting it can transiently fail, and we must not bring down
+// the core HTTP listener for that. SST misconfiguration surfaces as
+// repeated structured error logs instead of process exit; operators
+// notice via /api/assistant/turn returning 503 "assistant_http_not_ready"
+// indefinitely combined with the error log stream.
+func runAssistantFacadeWiringWithRetry(
+	ctx context.Context,
+	cfg *config.Config,
+	svc *coreServices,
+	agentRT *agentRuntime,
+	tgBot *telegram.Bot,
+	scenarioDir string,
+) {
+	backoff := 2 * time.Second
+	const maxBackoff = 30 * time.Second
+	attempt := 0
+	for {
+		attempt++
+		err := wireAssistantFacade(ctx, cfg, svc, agentRT, tgBot, scenarioDir)
+		if err == nil {
+			if attempt > 1 {
+				slog.Info("assistant facade wired after deferred retries", "attempts", attempt)
+			}
+			return
+		}
+		slog.Error("assistant facade wiring failed; will retry in background",
+			"attempt", attempt, "backoff", backoff.String(), "error", err)
+		select {
+		case <-ctx.Done():
+			slog.Warn("assistant facade wiring abandoned (shutdown)",
+				"attempts", attempt, "last_error", err)
+			return
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+	}
 }
