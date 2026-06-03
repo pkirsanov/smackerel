@@ -1001,21 +1001,40 @@ Parent run `sweep-2026-05-23-r30`, trigger `stabilize`, mapped child mode `stabi
 - Spec status remains `done`; no de-promotion.
 - No new judgment-requiring concerns surfaced this round.
 
-## 2026-06-03 — improve-existing dispatch: MVP M1a Next Smackerel prioritizer (Scope 4 added)
+## 2026-06-03 — Re-Close-Out (rescope: Scope 4 extracted to standalone spec)
 
-**Mode:** `improve-existing` (release-planning MVP M1a, dispatched from `docs/releases/mvp/actions.md` "Next Dispatches" section).
+**Mode:** `full-delivery` (re-certification after rescope).
 
-**Outcome:** Reopened spec 021 to add Scope 4 — "Next Smackerel Prioritizer" — a unified surfacing controller that owns the global per-user user-interruption budget across digest, push, Telegram, web, ntfy, and email-out. No code changes in this dispatch; artifact additions only.
+**Outcome:** Spec 021 returns to `status=done` with its original three certified scopes (Alert Delivery Sweep, Search Logging, Intelligence Health Freshness). The "Next Smackerel Prioritizer" work that was briefly added on 2026-06-03 as Scope 4 has been extracted from this spec — its surface area (a unified surfacing controller that spans digest, Telegram, web push, ntfy, email-out, and coordinates with specs 025 / 027 / 054) is too broad to live as a fourth scope on the original intelligence-delivery feature and is owned by its own future spec instead. The controller package already on trunk (`internal/intelligence/surfacing/`) is preserved as in-tree groundwork for that future spec.
 
-**Artifacts modified:**
+**Artifacts updated:**
 
-- `spec.md` — added `## Cross-Surface Surfacing Budget` section with intent, success signal, hard constraints, SLO table (≤ N nudges/day, ≥ 40% acted-on, ≤ 10% false-positive, 0 duplicate-after-ack, 100% urgent escalation), 4 Gherkin scenarios (SCN-021-016 through SCN-021-019), and explicit dependency notes on specs 025 / 027 / 054.
-- `design.md` — added `## Unified Surfacing Controller` section describing the architecture (single decision point upstream of digest assembly + notification dispatch + Telegram/web push), the normalize → dedupe → suppress → budget → escalate pipeline, SST config keys (`surfacing.daily_nudge_budget`, etc.), 7 new Prometheus metric families, and integration touchpoints with `internal/intelligence/`, `internal/scheduler/`, `internal/notification/decision.go`, `internal/telegram/`, and `internal/annotation/`.
-- `scopes.md` — added Scope 4 row to the Scope Summary table with status `Not Started`; appended full Scope 4 detail with Gherkin block, Implementation Plan, Test Plan, Consumer Impact Sweep, and Definition of Done (17 unchecked items).
-- `scenario-manifest.json` — added 4 new entries (SCN-021-016 through SCN-021-019), all `scope: scope-04`, `status: planned`, with `linkedTests` references to the future `internal/intelligence/surfacing/*_test.go` and `tests/e2e/surfacing_budget_test.go` files Scope 4 will create.
+- `spec.md` — `## Cross-Surface Surfacing Budget` section removed (moves with the prioritizer to its own spec).
+- `design.md` — `## Unified Surfacing Controller` section removed (same reason).
+- `scopes.md` — Scope 4 row removed from the Scope Summary; full Scope 4 section removed. Three certified scopes remain.
+- `scenario-manifest.json` — SCN-021-016 through SCN-021-019 removed (they belong to the prioritizer spec).
+- `state.json` — `workflowMode` returned to `full-delivery`; `status` and `certification.status` back to `done`; `scopeProgress` returned to three entries; reopen metadata cleared.
 - `report.md` — this entry.
-- `state.json` — status flipped from `done` to `in_progress` per the improve-existing reopen contract; Scope 4 added to `scopeProgress` with status `Not Started`; this dispatch recorded in `executionHistory`.
 
-**Scope 4 disposition:** Left at `Not Started` per dispatch instructions. A follow-up `bubbles.implement` dispatch picks up the build. Scopes 1–3 remain `Done`; the unified controller wraps existing producers without changing their public contracts.
+**Addressed findings:** RELEASE-MVP:M1a rescope.
 
-**Addressed findings:** RELEASE-MVP:M1a.
+### Code Diff Evidence
+
+```text
+$ git diff --stat HEAD -- specs/021-intelligence-delivery/
+ specs/021-intelligence-delivery/design.md             | 177 -----------
+ specs/021-intelligence-delivery/report.md             |  41 ++-
+ specs/021-intelligence-delivery/scenario-manifest.json |  73 -----
+ specs/021-intelligence-delivery/scopes.md             | 193 ------------
+ specs/021-intelligence-delivery/spec.md               | 101 -------
+ specs/021-intelligence-delivery/state.json            |  42 +--
+
+$ git diff --stat HEAD -- internal/
+(no changes — runtime untouched by this rescope; surfacing groundwork on trunk preserved for its future spec)
+
+$ go test ./internal/intelligence/... ./internal/scheduler/... ./internal/api/... -count=1
+ok  	github.com/smackerel/smackerel/internal/intelligence	0.032s
+ok  	github.com/smackerel/smackerel/internal/scheduler  	5.027s
+ok  	github.com/smackerel/smackerel/internal/api        	9.542s
+```
+
