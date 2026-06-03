@@ -228,6 +228,51 @@ And the full text is stored as a note
 
 ---
 
+## Editing Surface Contracts
+
+> Added 2026-06-03 to coordinate with MVP M2 (spec 073 — graph-browse UI),
+> which exposes artifact-detail, topic, person, and place pages that need
+> editable annotation entry points. Per-user bearer authentication
+> (spec 044) and the bearer scope claim (spec 060) gate every endpoint
+> called from these surfaces. Annotations remain append-only — "edit"
+> means appending a new event that supersedes the prior state.
+
+### BS-013: Inline-edit annotation from artifact page (SCN-027-71)
+Given the user is viewing an artifact-detail page from the graph-browse UI (spec 073)
+And the artifact already has a rating of 3 created by this user
+When the user inline-edits the rating to 5 and saves
+Then the UI calls `POST /api/artifacts/{id}/annotations` with `{rating: 5}` using the user's bearer token
+And the bearer's per-user scope claim is verified (spec 060)
+And a new rating annotation event is appended (the prior rating is preserved in history)
+And the artifact-annotation summary view returns `current_rating: 5` within 2 seconds
+And the audit trail records actor, channel `web`, and timestamp
+
+### BS-014: Create annotation from topic / person / place page (SCN-027-72)
+Given the user is viewing a topic, person, or place page that lists associated artifacts (spec 073)
+When the user adds a tag `#weeknight` to one of the listed artifacts inline
+Then the UI calls `POST /api/artifacts/{id}/annotations` with `{tags: ["weeknight"]}` using the user's bearer token
+And the bearer's per-user scope claim is verified
+And a `tag_add` annotation event is recorded against the artifact (not against the topic/person/place itself)
+And the topic/person/place page reflects the new tag on the artifact row within 2 seconds
+
+### BS-015: List-my-annotations view (SCN-027-73)
+Given the user opens a "my annotations" view from the graph-browse UI
+When the UI calls `GET /api/annotations?actor=me&limit=50` with the user's bearer token
+Then the response returns the user's own annotation events across all artifacts in reverse chronological order
+And each entry includes `artifact_id`, `annotation_type`, the relevant payload (rating, tags, note, interaction_type), and `created_at`
+And entries belonging to other actors are excluded
+And the response time is < 500ms for the first 50 entries
+
+### BS-016: Conflict handling on stale edit (SCN-027-74)
+Given the user opened an artifact-detail page when the annotation summary `version` was `7`
+And the summary has since advanced to `version: 8` because another channel (Telegram) recorded a new annotation
+When the user submits an inline-edit including the stale `If-Match` precondition for `version: 7`
+Then the API returns `409 Conflict` with the current summary and an explanatory body
+And no annotation event is recorded
+And the UI prompts the user to refresh and re-apply, preserving their pending edit text
+
+---
+
 ## Non-Functional Requirements
 
 - **Latency:** Annotation operations complete in < 2 seconds

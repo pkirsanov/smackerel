@@ -58,6 +58,7 @@
 | 6 | Safe Reaction And Approval Policy | Backend, DB, action/approval API | Unit, integration, e2e-api, stress | Read-only diagnostics, low-risk allowlists, approval gates, destructive refusal, loop guard | Done |
 | 7 | Output Channels And Operator Surfaces | Backend, HTMX web, API, output dispatch | Unit, integration, e2e-api, e2e-ui | Channel abstraction and operator status/history surfaces work without hardcoded Telegram/ntfy | Done |
 | 8 | Observability, Config, Security, And Hardening | Config, auth, telemetry, docs, full stack | Unit, integration, e2e-api, e2e-ui, stress, lint | Fail-loud SST, redaction, authz, metrics/traces/logs, and spec 055 handoff are verified | Done |
+| 9 | Surfacing Controller Integration | Backend dispatch path, event bus, integration tests | Unit, integration, e2e-api | Decision engine emits `SurfacingProposal` events to the spec 021 controller and consumes its arbitration + acknowledgment fan-out instead of directly invoking output channels | Not Started |
 
 ## Cross-Scope Certification Gates
 
@@ -799,6 +800,122 @@ And core production code still contains no ntfy-specific imports, branches, inci
 - [x] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh test stress`, `./smackerel.sh lint`, and `./smackerel.sh format --check` pass with zero warnings. Evidence: `report.md#scope-8-observability-config-security-and-full-pipeline-hardening`
 - [x] Artifact lint and traceability guard pass. Evidence: `report.md#scope-8-observability-config-security-and-full-pipeline-hardening`
 - [x] Docs are updated for API, operations, config, security, testing, output channels, approval workflow, and the spec 055 dependency boundary. Evidence: `report.md#scope-8-observability-config-security-and-full-pipeline-hardening`
+
+## Scope 9: Surfacing Controller Integration
+
+**Status:** Not Started  
+**Depends On:** Scope 8 (this spec) AND spec 021 M1a unified surfacing controller delivered  
+**Surfaces:** `internal/notification` decision dispatch path, `SurfacingProposal` event type, `AcknowledgmentBus` subscription, integration tests against ephemeral stack
+
+### Use Cases
+
+#### SCN-054-027: Decision Engine Emits SurfacingProposal Instead Of Direct Dispatch
+
+Scenario: SCN-054-027: Decision Engine Emits SurfacingProposal Instead Of Direct Dispatch
+
+Given the unified surfacing controller from spec 021 is enabled  
+And a notification decision classifies as user-facing severity informational  
+When the notification decision engine reaches its dispatch step  
+Then it publishes a `SurfacingProposal` event addressed to the controller  
+And it does not directly invoke an output channel  
+And the proposal carries the decision id, source-qualified context, severity class, urgency class, requested surfaces, and a redacted preview  
+And the controller's arbitration decision is the authoritative dispatch outcome
+
+#### SCN-054-028: Controller Suppresses Non-Urgent Proposal When Global Budget Exhausted
+
+Scenario: SCN-054-028: Controller Suppresses Non-Urgent Proposal When Global Budget Exhausted
+
+Given the global per-day nudge budget for the active operator is exhausted  
+And the notification engine emits a non-urgent `SurfacingProposal`  
+When the controller arbitrates the proposal  
+Then the controller returns decision `suppressed` with reason `global-budget-exceeded`  
+And the notification engine persists the suppression outcome against the decision record  
+And no output channel is invoked for that proposal  
+And the suppression is observable via metrics and audit trail without leaking payload
+
+#### SCN-054-029: Urgent-Class Decisions Bypass The Soft Global Budget
+
+Scenario: SCN-054-029: Urgent-Class Decisions Bypass The Soft Global Budget
+
+Given a notification decision classifies as urgency class urgent  
+And the global per-day nudge budget is already exhausted  
+When the notification engine emits the `SurfacingProposal` with urgency urgent  
+Then the controller arbitrates as `deliver` regardless of the soft budget  
+And the controller records the urgent bypass against the budget ledger  
+And downstream output channels receive the proposal exactly once per requested surface
+
+#### SCN-054-030: Acknowledgment On One Surface Cancels Sibling Proposals
+
+Scenario: SCN-054-030: Acknowledgment On One Surface Cancels Sibling Proposals
+
+Given a notification decision was fanned out to multiple surfaces via the controller  
+And the user acknowledges the notification on any one surface  
+When the controller propagates the acknowledgment event  
+Then the notification engine marks sibling proposals for the same decision as `superseded-by-ack`  
+And the engine cancels any not-yet-dispatched sibling proposals for that decision  
+And duplicate output is not delivered on any other surface  
+And the acknowledgment chain is observable in the decision's audit trail
+
+### Implementation Plan
+
+1. Add a `SurfacingProposalSink` client to `internal/notification` that wraps the spec 021 controller publisher.
+2. Refactor the decision-engine dispatch step: replace direct output-channel invocation with `sink.Publish(SurfacingProposal)`.
+3. Add an `AcknowledgmentBus` subscriber that cancels sibling proposals on ack.
+4. Persist the `SurfacingArbitration` outcome (`delivered | suppressed | deferred | superseded`) against the decision row for audit.
+5. Introduce a fail-loud SST config key `notification.use_surfacing_controller` (no implicit default) gating the new path versus the legacy in-engine dispatch for rollback.
+6. Update metrics, traces, and audit log fields to surface arbitration outcome and urgent-bypass events.
+
+### Consumer Impact Sweep
+
+- Existing output-channel adapters (Telegram, web, ntfy, email-out) are now invoked by the controller, not by spec 054. Spec 054 must remove direct adapter calls from the decision dispatch path and document the new flow.
+- Digest, intelligence, and other proposal producers share the controller; spec 054 must not assume exclusive controller ownership.
+- Operator surfaces that show "delivered" status must read the new `SurfacingArbitration` field.
+
+### Shared Infrastructure Impact Sweep
+
+- `SurfacingProposalSink` and `AcknowledgmentBus` are shared infrastructure owned by spec 021. Spec 054 MUST consume them as published; it MUST NOT fork the contract.
+- Integration tests MUST run against an ephemeral stack with the controller wired in, not against an in-process stub of the controller.
+
+### Change Boundary
+
+- ALLOWED: changes under `internal/notification/decision.go`, `internal/notification/dispatch*.go`, decision-row schema additions for arbitration outcome, new SST keys, new tests.
+- FORBIDDEN: changes to controller internals (spec 021 territory), changes to output-channel adapter contracts, changes to the canonical `SurfacingProposal` schema (spec 021 owns it).
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|---------------|---------------------|---------|-------------|
+| Unit | `unit` | SCN-054-027 | `internal/notification/decision_surfacing_test.go` | `TestDecisionEnginePublishesSurfacingProposalInsteadOfDirectDispatch` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-054-029 | `internal/notification/decision_surfacing_test.go` | `TestUrgentDecisionMarksProposalForBudgetBypass` | `./smackerel.sh test unit` | No |
+| Integration | `integration` | SCN-054-028 | `internal/notification/surfacing_controller_integration_test.go` | `TestControllerSuppressesNonUrgentProposalWhenGlobalBudgetExhausted` | `./smackerel.sh test integration` | Yes |
+| Integration | `integration` | SCN-054-030 | `internal/notification/surfacing_controller_integration_test.go` | `TestAcknowledgmentOnOneSurfaceCancelsSiblingProposals` | `./smackerel.sh test integration` | Yes |
+| E2E API | `e2e-api` | SCN-054-027, SCN-054-028, SCN-054-029, SCN-054-030 | `tests/e2e/notification_surfacing_controller_api_test.go` | `TestNotificationSurfacingControllerEndToEndArbitrationAndAck` | `./smackerel.sh test e2e` | Yes |
+
+### Definition of Done
+
+**Behavior**
+
+- [ ] Decision engine publishes a `SurfacingProposal` for every user-facing decision instead of directly invoking an output channel.
+- [ ] Controller `suppressed` arbitration is persisted against the decision record and observable via metrics and audit trail.
+- [ ] Urgent-class decisions bypass the soft global budget and are recorded in the controller's bypass ledger.
+- [ ] Acknowledgment on any one surface cancels sibling proposals for the same decision/correlation key; no duplicate output is delivered.
+- [ ] `notification.use_surfacing_controller` SST key is fail-loud (missing value aborts startup) and gates the new path versus the legacy dispatch for rollback.
+
+**Core Items**
+
+- [ ] Decision engine production code contains zero direct output-channel invocations after the gate is enabled.
+- [ ] `SurfacingProposalSink` and `AcknowledgmentBus` consumption follow the canonical spec 021 contract without local schema forks.
+- [ ] Arbitration outcome field is added to the decision record and exposed in operator surfaces.
+- [ ] Metrics, traces, logs, and audit trail expose arbitration outcome and urgent-bypass events without leaking payload.
+- [ ] Scenario-specific unit, integration, and e2e-api tests pass for SCN-054-027, SCN-054-028, SCN-054-029, and SCN-054-030.
+- [ ] Scenario-specific E2E regression tests for every new behavior pass.
+- [ ] Broader E2E regression suite passes.
+
+**Build Quality Gate**
+
+- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh lint`, and `./smackerel.sh format --check` pass with zero warnings.
+- [ ] Artifact lint and traceability guard pass.
+- [ ] Docs are updated for API, operations, and the spec 021 controller dependency boundary.
 
 ## Sequential Execution Rules
 

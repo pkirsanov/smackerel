@@ -40,6 +40,7 @@
 | 1 | Alert Delivery Sweep + Alert Producers | Scheduler, Intelligence Engine, Telegram Bot | Unit, Integration, E2E-API | Pending alerts delivered via Telegram, all 6 alert types have producers | Done |
 | 2 | Search Logging (LogSearch Call) | Search API handler | Unit, Integration, E2E-API | Every search query feeds LogSearch(), failures non-blocking | Done |
 | 3 | Intelligence Health Freshness | Health API handler, Intelligence Engine | Unit, E2E-API | Health reports stale when synthesis > 48h | Done |
+| 4 | Next Smackerel Prioritizer | Intelligence Engine, Scheduler, Notification, Telegram, Annotation, Metrics | Unit, Integration, E2E-API | Unified surfacing controller enforces global per-user nudge budget with measurable SLOs (≤ N/day, acted-on rate, false-positive ceiling) | Not Started |
 
 ---
 
@@ -332,3 +333,118 @@ A workspace grep for `IntelligenceEngine != nil` and for `"intelligence"` JSON f
 - [x] Scope 3 consumer impact sweep complete — zero stale first-party references remain after the `/api/health` intelligence subcheck was extended to add the `stale` status branch (additive change; the only first-party consumer was `internal/api/health.go` itself, and `internal/api/health_test.go` was updated to cover the new branches)
   - Evidence: see §Consumer Impact Sweep table above; workspace grep for `IntelligenceEngine != nil` and `"intelligence"` health-field consumers across `internal/`, `web/`, and `tests/` confirms no stale references; navigation / breadcrumb / redirect / generated-client surfaces are all unaffected.
 - [x] `./smackerel.sh test unit` passes
+
+---
+
+## Scope 4: Next Smackerel Prioritizer
+
+**Status:** Not Started
+
+> **Added:** 2026-06-03 (release-planning MVP M1a — Next Smackerel
+> prioritizer). Reopens spec 021 via `improve-existing`. This dispatch
+> only ADDS the scope plus its DoD; a follow-up `bubbles.implement`
+> dispatch picks up the build. Do NOT mark this scope `Done` in this
+> dispatch.
+
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-021-016 Daily nudge budget enforced across all surfaces
+  Given the per-user daily surfacing budget is configured to 5 nudges
+  And 5 nudges have already been delivered today across digest, Telegram, and web push
+  And a new non-urgent insight is ready to surface
+  When the unified surfacing controller evaluates the candidate event
+  Then the event is held (status "deferred-budget-exhausted")
+  And no Telegram, web push, ntfy, or email-out dispatch occurs
+  And the daily budget counter is unchanged
+
+Scenario: SCN-021-017 Duplicate content deduped across surfaces
+  Given an alert for artifact "artifact-789" was delivered via Telegram earlier today
+  And the daily digest assembler proposes including the same artifact
+  When the unified surfacing controller evaluates the digest candidate
+  Then the digest entry referencing "artifact-789" is suppressed
+  And the digest is assembled without that entry
+  And a suppression event is recorded with content_key "artifact-789"
+
+Scenario: SCN-021-018 Acknowledged item suppresses follow-up nudges
+  Given a user acknowledged or dismissed nudge for insight "insight-42" 30 minutes ago
+  And another producer queues a follow-up nudge for the same insight
+  When the unified surfacing controller evaluates the follow-up
+  Then the follow-up is suppressed for the configured suppression window
+  And the suppression reason is recorded as "acknowledged-by-user"
+
+Scenario: SCN-021-019 Urgent event escalates past exhausted budget
+  Given the daily nudge budget for the user is fully consumed
+  And a new event with priority 1 and time-critical flag is ready
+  And the prior urgent event for the same priority class went undelivered today
+  When the unified surfacing controller evaluates the urgent candidate
+  Then the event is permitted to dispatch despite the budget being exhausted
+  And the override is recorded with reason "urgent_escalation"
+  And the per-channel safety net (e.g., 2 alerts/day) is still respected
+```
+
+### Implementation Plan
+
+| File | Change |
+|------|--------|
+| `internal/intelligence/surfacing/controller.go` (new) | Define `SurfacingCandidate`, `SurfacingDecision`, `Controller`. Implement `Propose(ctx, candidate) (SurfacingDecision, error)` with normalize → dedupe → suppress → budget → escalate pipeline per design |
+| `internal/intelligence/surfacing/budget.go` (new) | Per-user daily counter; reads `surfacing.daily_nudge_budget` from generated config; fail-loud on missing SST keys |
+| `internal/intelligence/surfacing/dedupe.go` (new) | In-memory `contentKey` index with `surfacing.dedupe_window_hours` window |
+| `internal/intelligence/surfacing/suppression.go` (new) | Reads ack/dismiss/"not useful" signals from `internal/annotation` (spec 027); applies `surfacing.suppression_window_hours` |
+| `internal/intelligence/alerts.go` | Replace direct Telegram dispatch in alert delivery sweep (added Scope 1) with `controller.Propose` + conditional dispatch |
+| `internal/scheduler/scheduler.go` | Wrap digest, resurfacing, weekly synthesis, monthly report, pre-meeting briefs with controller proposals |
+| `internal/notification/decision.go` | No public API change; controller reads `DecisionEvaluation.Record()` as enrichment context |
+| `internal/metrics/metrics.go` | Register `smackerel_surfacing_nudges_delivered_total`, `_acted_on_total`, `_false_positive_total`, `_dedupe_total`, `_suppression_total`, `_budget_overrides_total`, `_budget_remaining` per design |
+| `config/smackerel.yaml` | Add `surfacing:` block with `daily_nudge_budget`, `suppression_window_hours`, `urgent_escalation_enabled`, `dedupe_window_hours` — no defaults; missing values must fail loud at startup |
+
+### Test Plan
+
+| Type | File/Location | Purpose | Scenarios Covered |
+|------|---------------|---------|-------------------|
+| Unit | `internal/intelligence/surfacing/controller_test.go` | Budget exhaustion holds non-urgent candidates | SCN-021-016 |
+| Unit | `internal/intelligence/surfacing/dedupe_test.go` | Same `contentKey` across channels collapses to one delivery | SCN-021-017 |
+| Unit | `internal/intelligence/surfacing/suppression_test.go` | Acknowledged content suppresses follow-ups for the configured window | SCN-021-018 |
+| Unit | `internal/intelligence/surfacing/escalation_test.go` | Priority-1 + timeCritical escalates past exhausted budget; per-channel cap still respected | SCN-021-019 |
+| Unit | `internal/metrics/metrics_test.go` | All 7 new surfacing metrics registered and observable | SCN-021-016 through SCN-021-019 |
+| Integration | `internal/intelligence/surfacing/integration_test.go` | Producers (alerts, digest, resurfacing) flow through controller against ephemeral stack — verify dedupe across channels in a single run | SCN-021-016, SCN-021-017 |
+| E2E-API | `tests/e2e/surfacing_budget_test.go` | Full stack: configure budget=5, exercise 6 nudges from mixed producers, assert exactly 5 dispatched, 1 deferred; record/replay annotation ack to assert suppression | SCN-021-016, SCN-021-018 |
+| Regression E2E | `internal/intelligence/surfacing/*_test.go` + `tests/e2e/surfacing_budget_test.go` | Scenario-specific persistent regression coverage — every Gherkin scenario (SCN-021-016/017/018/019) re-runs on every CI push so any reintroduction of cross-surface over-fire, dedupe leak, suppression bypass, or unwarranted escalation is caught immediately | SCN-021-016, SCN-021-017, SCN-021-018, SCN-021-019 |
+
+### Consumer Impact Sweep
+
+This scope introduces a new upstream decision point between producers and
+dispatchers. It is additive at the public API level (no removed handlers,
+no broken JSON contracts) but changes the internal call shape for every
+producer that delivers user-visible content. The sweep MUST enumerate:
+
+- Every cron job in `internal/scheduler/scheduler.go` that dispatches to
+  Telegram, web push, ntfy, or email-out, and confirm it routes through
+  `controller.Propose`.
+- Every direct `bot.SendDigest()` / `bot.SendMessage()` call site, and
+  confirm none remains outside the controller boundary.
+- The new `surfacing:` config block, and confirm SST generation fails
+  loud when any required key is missing.
+- Documentation surfaces (`docs/Architecture.md`, `docs/Operations.md`)
+  that describe alert delivery and digest assembly — update to reference
+  the controller.
+
+### Definition of Done
+
+- [ ] `SurfacingCandidate`, `SurfacingDecision`, and `Controller` types live in `internal/intelligence/surfacing/` with public Go doc describing the unified budget contract
+- [ ] `Controller.Propose` implements the full pipeline (normalize → dedupe → suppress → budget → escalate) and returns one of `permit`, `deduped`, `suppressed`, `deferred-budget-exhausted`, `escalated`
+- [ ] All existing producers in this spec (alerts delivery sweep added in Scope 1, digest, resurfacing, weekly synthesis, monthly report, pre-meeting briefs) route through the controller before dispatching
+- [ ] All 4 alert producers added in Scope 1 still respect their existing 2/day safety net BENEATH the global budget
+- [ ] Scenario SCN-021-016 (daily nudge budget enforced across all surfaces) covered by unit + E2E regression tests
+- [ ] Scenario SCN-021-017 (duplicate content deduped across surfaces) covered by unit + integration regression tests
+- [ ] Scenario SCN-021-018 (acknowledged item suppresses follow-up nudges) covered by unit + E2E regression tests; suppression reads from `internal/annotation` (spec 027)
+- [ ] Scenario SCN-021-019 (urgent event escalates past exhausted budget) covered by unit regression tests, with `budget_overrides_total{reason="urgent_escalation"}` asserted to increment
+- [ ] All 7 surfacing metrics (`smackerel_surfacing_nudges_delivered_total`, `_acted_on_total`, `_false_positive_total`, `_dedupe_total`, `_suppression_total`, `_budget_overrides_total`, `_budget_remaining`) registered in `internal/metrics/metrics.go` and asserted present in `internal/metrics/metrics_test.go`
+- [ ] SLO targets from `spec.md` `## Cross-Surface Surfacing Budget` (≤ N nudges/day, ≥ 40% acted-on, ≤ 10% false-positive, 0 duplicate-after-ack, 100% urgent escalation when not budget-blocked) have observable evidence via the new metrics
+- [ ] `config/smackerel.yaml` includes the `surfacing:` block; missing keys fail loud at startup per the NO-DEFAULTS policy; generated env files include the resolved values
+- [ ] Consumer Impact Sweep above completed with zero stale first-party references and every direct `bot.SendDigest()` / `bot.SendMessage()` call site routed through the controller
+- [ ] Coordination with spec 025 (synthesis), spec 027 (annotations), spec 054 (notification intelligence) documented in `design.md` `## Unified Surfacing Controller` and verified — no schema or API change required in those specs for this scope
+- [ ] Scenario-specific E2E regression tests for SCN-021-016 through SCN-021-019 live in `internal/intelligence/surfacing/*_test.go` + `tests/e2e/surfacing_budget_test.go` and re-run on every CI push
+- [ ] Broader E2E regression suite passes — `./smackerel.sh test e2e` runs the full E2E set (health, alert delivery, search, surfacing) without regression in tangential scenarios
+- [ ] `./smackerel.sh test unit` passes
+- [ ] `./smackerel.sh test integration` passes against the ephemeral test stack
+- [ ] No env-specific content introduced (no real hostnames, IPs, or tailnet identifiers); generic placeholders only

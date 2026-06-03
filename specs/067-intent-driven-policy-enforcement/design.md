@@ -124,7 +124,7 @@ Missing metadata or expired exceptions are violations.
 
 ## API And Output Contracts
 
-Stable JSON report shape for tests:
+Stable JSON report shape for tests. The `internal/api/domain_intent.go` path below is preserved as a historical illustration; the file itself was retired by spec 066 SCOPE-4 on 2026-06-02.
 
 ```json
 {

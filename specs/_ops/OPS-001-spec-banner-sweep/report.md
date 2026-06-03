@@ -171,3 +171,21 @@ The state-transition-guard at `workflowMode=spec-scope-hardening` reports 30 blo
 | G040 | report.md "Bug Verification — After Fix" originally lacked past-tense evidence — REWRITTEN inline above to past-tense execution evidence | bubbles.implement (done) |
 
 The 54 banner edits themselves are clean, verified, and idempotent. Promotion to `specs_hardened` is blocked solely on packet-authoring defects that require `bubbles.plan` ownership to fix.
+
+## EB-7 Idempotence Verification (2026-06-03)
+
+Dispatched by `bubbles.workflow mode: validate-only` per `specs/_spec-review-report.md` (release-planning:MVP M5). EB-7 (every enumerated spec carries the canonical `**Status:** Done` banner) was not verified at original certification; verified now.
+
+Method: for each of the 54 enumerated specs (Cat A: 001-017,019,025-028; Cat B: 021-024,029-037,039,042-055; Cat C: 038,040,041; Cat D: 056), grep `spec.md` first `**Status:**` line (allowing blockquote prefix `> `) and assert it matches `**Status:** Done`.
+
+Command:
+```
+for n in $SPECS; do d=$(ls -d specs/${n}-* | head -1); line=$(grep -m1 -E '^[> ]*\*\*Status:\*\*' "$d/spec.md"); echo "$line" | grep -qiE '\*\*Status:\*\*[[:space:]]+Done' || echo "FAIL [$n]"; done
+```
+
+Result:
+```
+Total checked: 54, OK: 54
+```
+
+EB-7 status: **VERIFIED**. All 54 enumerated specs carry the canonical banner. Sweep is idempotent.

@@ -262,6 +262,78 @@
           "liveSystem": false
         }
       ]
+    },
+    {
+      "scopeId": "09-calendar-triggered-briefs",
+      "scopeName": "Calendar-Triggered Briefs",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-24",
+          "scenario": "Lead-time scheduler fires a brief before an upcoming calendar event",
+          "requiredTestType": "unit",
+          "file": "internal/scheduler/calendar_briefs_test.go",
+          "linkedTests": ["TestCalendarBriefScheduler_FiresAtLeadTimeBeforeEvent"],
+          "evidenceRefs": ["scopes.md#scope-9-calendar-triggered-briefs"],
+          "liveSystem": false,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-025-25",
+          "scenario": "Lead-time policy is per category and configurable",
+          "requiredTestType": "unit",
+          "file": "internal/scheduler/calendar_briefs_test.go",
+          "linkedTests": ["TestCalendarBriefScheduler_PerCategoryLeadTimePolicy"],
+          "evidenceRefs": ["scopes.md#scope-9-calendar-triggered-briefs"],
+          "liveSystem": false,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-025-26",
+          "scenario": "Dedupe with existing briefs prevents duplicate proposals",
+          "requiredTestType": "unit",
+          "file": "internal/scheduler/calendar_briefs_test.go",
+          "linkedTests": ["TestCalendarBriefScheduler_DedupesByEventIdAndPolicyVersion"],
+          "evidenceRefs": ["scopes.md#scope-9-calendar-triggered-briefs"],
+          "liveSystem": false,
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "scopeId": "10-reminder-promise-engine",
+      "scopeName": "Reminder & Promise Engine",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-27",
+          "scenario": "User-stated promise is captured and persisted as pending",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/promises_test.go",
+          "linkedTests": ["TestPromiseStore_CapturePersistsPendingWithTriggerCondition"],
+          "evidenceRefs": ["scopes.md#scope-10-reminder-promise-engine"],
+          "liveSystem": false,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-025-28",
+          "scenario": "Pending promise fires when its trigger condition is satisfied",
+          "requiredTestType": "unit",
+          "file": "internal/scheduler/promises_test.go",
+          "linkedTests": ["TestPromiseScheduler_FiresPendingPromiseWhenTriggerSatisfied"],
+          "evidenceRefs": ["scopes.md#scope-10-reminder-promise-engine"],
+          "liveSystem": false,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-025-29",
+          "scenario": "Promise expires when its expiration policy elapses without trigger or acknowledgment",
+          "requiredTestType": "unit",
+          "file": "internal/scheduler/promises_test.go",
+          "linkedTests": ["TestPromiseScheduler_ExpiresPendingPromiseAfterPolicyElapsed"],
+          "evidenceRefs": ["scopes.md#scope-10-reminder-promise-engine"],
+          "liveSystem": false,
+          "status": "planned"
+        }
+      ]
     }
   ]
 }

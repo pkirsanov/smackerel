@@ -257,6 +257,8 @@ Scenario: SCN-067-A08 — Threshold value sourced from SST
 
 **Actor:** Agent / human author, Reviewer | **Route:** CI check `intent-policy-guard` | **Status:** New
 
+> Note: the `internal/api/domain_intent.go` reference in the illustrative output below is preserved as a historical example; the file was retired by spec 066 SCOPE-4 on 2026-06-02.
+
 ┌────────────────────────────────────────────────────────────────────────────┐
 │ Intent Policy Guard                                                        │
 ├────────────────────────────────────────────────────────────────────────────┤

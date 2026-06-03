@@ -337,3 +337,104 @@ Scenario: SCN-021-015 No alerts swept when none pending
 | Search logging coverage | 100% of search queries logged | LogSearch call count vs SearchHandler invocation count |
 | Intelligence freshness accuracy | Health reports stale when synthesis > 48h | Health endpoint integration test with synthetic timestamps |
 | Alert deduplication rate | 0 duplicate alerts per condition per dedup window | Query for duplicate alert_type + artifact_id combinations |
+
+## Cross-Surface Surfacing Budget
+
+> **Added:** 2026-06-03 (release-planning MVP M1a). Reopens spec via
+> `improve-existing`. Introduces a UNIFIED "Next Smackerel" prioritizer that
+> owns the GLOBAL user-interruption budget across every surfacing channel
+> Smackerel produces: digest assembly, Telegram messages, web push, ntfy,
+> email-out, and any future channel. Today each channel enforces its own
+> rate ceiling in isolation (e.g., alerts cap at 2/day, digest is once
+> daily). That keeps any one channel quiet but does NOT protect the user
+> from the SUM of all channels firing on the same day. The prioritizer
+> closes that gap.
+
+**Intent:** Treat every outbound nudge — alert, digest, resurfacing,
+synthesis narrative, monthly report, trip prep ping, Telegram broadcast —
+as drawing from ONE shared interruption budget per user per day. The
+prioritizer is the single decision point that grants or refuses each
+surfacing event before the channel-specific dispatcher runs.
+
+**Success Signal:**
+- Total user-visible nudges across ALL channels never exceed the configured
+  per-day cap.
+- Duplicate content across channels is deduped so the user is not pinged
+  twice for the same insight on the same day.
+- Acknowledged or acted-on items suppress follow-up nudges for the
+  configured suppression window.
+- Genuinely urgent items (priority 1, time-critical) escalate past the
+  budget when an earlier urgent nudge was missed.
+
+### Hard Constraints
+
+- Budget is a UNIFIED global cap, not a per-channel cap. Per-channel caps
+  (e.g., 2 alerts/day) become channel-level safety nets that sit BELOW the
+  global cap.
+- All budget knobs come from `config/smackerel.yaml` via SST. No hidden
+  defaults; missing config fails loud.
+- The prioritizer MUST sit upstream of digest assembly, notification
+  dispatch, and Telegram delivery — it is NOT a post-hoc filter.
+- Deduplication is content-keyed (artifact id + insight kind), not
+  surface-keyed.
+- Acknowledgement signal is read from the existing annotation surface
+  (spec 027) and the notification decision engine outputs (spec 054).
+
+### SLOs
+
+| SLO | Target | Measurement |
+|-----|--------|-------------|
+| Daily nudge budget | ≤ N nudges/day per user (N set via SST config; MVP default proposed at 5) | `smackerel_surfacing_nudges_delivered_total` over rolling 24h per user |
+| Acted-on rate | ≥ 40% of delivered nudges result in user action within 7 days | Annotation/dismissal/click signal joined to surfacing event id |
+| False-positive ceiling | ≤ 10% of delivered nudges marked irrelevant within 24h | Explicit "not useful" annotation rate (spec 027) per surfacing event |
+| Suppression-on-acknowledged | 0 follow-up nudges for the same content key within suppression window | Query for surfacing events with duplicate `content_key` after an ack timestamp |
+| Urgent escalation | 100% of priority-1 events not blocked by exhausted budget | Audit `budget_overrides_total{reason="urgent_escalation"}` against priority-1 producer counts |
+
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-021-016 Daily nudge budget enforced across all surfaces
+  Given the per-user daily surfacing budget is configured to 5 nudges
+  And 5 nudges have already been delivered today across digest, Telegram, and web push
+  And a new non-urgent insight is ready to surface
+  When the unified surfacing controller evaluates the candidate event
+  Then the event is held (status "deferred-budget-exhausted")
+  And no Telegram, web push, ntfy, or email-out dispatch occurs
+  And the daily budget counter is unchanged
+
+Scenario: SCN-021-017 Duplicate content deduped across surfaces
+  Given an alert for artifact "artifact-789" was delivered via Telegram earlier today
+  And the daily digest assembler proposes including the same artifact
+  When the unified surfacing controller evaluates the digest candidate
+  Then the digest entry referencing "artifact-789" is suppressed
+  And the digest is assembled without that entry
+  And a suppression event is recorded with content_key "artifact-789"
+
+Scenario: SCN-021-018 Acknowledged item suppresses follow-up nudges
+  Given a user acknowledged or dismissed nudge for insight "insight-42" 30 minutes ago
+  And another producer queues a follow-up nudge for the same insight
+  When the unified surfacing controller evaluates the follow-up
+  Then the follow-up is suppressed for the configured suppression window
+  And the suppression reason is recorded as "acknowledged-by-user"
+
+Scenario: SCN-021-019 Urgent event escalates past exhausted budget
+  Given the daily nudge budget for the user is fully consumed
+  And a new event with priority 1 and time-critical flag is ready
+  And the prior urgent event for the same priority class went undelivered today
+  When the unified surfacing controller evaluates the urgent candidate
+  Then the event is permitted to dispatch despite the budget being exhausted
+  And the override is recorded with reason "urgent_escalation"
+  And the per-channel safety net (e.g., 2 alerts/day) is still respected
+```
+
+### Dependencies
+
+- Coordinates with [spec 025 — synthesis](../025-synthesis/) for content
+  quality scoring of candidate nudges.
+- Reads decision inputs from [spec 054 — notification intelligence](../054-notification-intelligence/)
+  via the existing `internal/notification/decision.go` `DecisionEngine`.
+- Reads user-feedback (acted-on, dismissed, "not useful") signals from
+  [spec 027 — annotations](../027-annotations/).
+- Sits alongside existing producers in `internal/intelligence/` and the
+  delivery pipeline added by Scopes 1–3 of this spec; the prioritizer does
+  not replace producers, it gates them.

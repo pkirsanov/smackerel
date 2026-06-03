@@ -2,8 +2,8 @@
   "version": 3,
   "featureDir": "specs/027-user-annotations",
   "featureName": "User Annotations & Interaction Tracking",
-  "status": "done",
-  "workflowMode": "full-delivery",
+  "status": "specs_hardened",
+  "workflowMode": "improve-existing",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -26,7 +26,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "specs_hardened",
     "completedScopes": [
       "DB Migration",
       "Annotation Types & Parser",
@@ -111,6 +111,15 @@
         "status": "Done",
         "dependsOn": [
           3
+        ]
+      },
+      {
+        "scope": 9,
+        "name": "Annotation Editing API (UI coordination)",
+        "status": "Not Started",
+        "dependsOn": [
+          3,
+          4
         ]
       }
     ],

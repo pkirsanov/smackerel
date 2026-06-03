@@ -1184,3 +1184,67 @@ Spec 055 must not provide:
 | Output channel separation | BS-054-013, BS-054-014, BS-054-018 |
 | Loop prevention | BS-054-012 |
 | ntfy dependency | BS-054-001, BS-054-005 |
+
+## Coordination with Unified Surfacing Controller
+
+Spec 054's decision engine MUST become a SUBORDINATE producer to the global unified
+surfacing controller introduced by spec 021 M1a (`specs/021-intelligence-delivery`).
+It no longer owns final cross-surface dispatch or rate budgeting. Instead, every
+notification decision that would have triggered user-facing output is emitted as
+a `SurfacingProposal` event to the controller, which arbitrates against the
+GLOBAL per-day nudge budget and the cross-surface acknowledgment state.
+
+**Hard dependency:** Spec 021 M1a scope (unified surfacing controller + proposal
+ingress + acknowledgment fan-out) MUST be implemented before spec 054 Scope 9 is
+implemented. Until then, Scope 9 remains `not_started` and the legacy
+in-engine dispatch path stays active behind the existing decision pipeline.
+
+### Coordination Scenarios
+
+```gherkin
+Scenario: SCN-054-027 Notification engine emits proposal and defers final dispatch
+  Given the unified surfacing controller from spec 021 is enabled
+  And a notification decision classifies as user-facing severity "informational"
+  When the notification decision engine reaches its dispatch step
+  Then it MUST publish a SurfacingProposal event addressed to the controller
+  And it MUST NOT directly invoke an output channel
+  And the proposal MUST carry the decision id, source-qualified context,
+    severity class, urgency class, requested surfaces, and a redacted preview
+  And the controller's arbitration decision MUST be the authoritative dispatch outcome
+
+Scenario: SCN-054-028 Controller suppresses notification when global budget exceeded
+  Given the global per-day nudge budget for the active operator is exhausted
+  And the notification engine emits a non-urgent SurfacingProposal
+  When the controller arbitrates the proposal
+  Then the controller MUST return decision "suppressed" with reason "global-budget-exceeded"
+  And the notification engine MUST persist the suppression outcome against the decision record
+  And no output channel MUST be invoked for that proposal
+  And the suppression MUST be observable via metrics and audit trail without leaking payload
+
+Scenario: SCN-054-029 Urgent-class decisions bypass the soft budget
+  Given a notification decision classifies as urgency class "urgent"
+  And the global per-day nudge budget is already exhausted
+  When the notification engine emits the SurfacingProposal with urgency "urgent"
+  Then the controller MUST arbitrate as "deliver" regardless of the soft budget
+  And the controller MUST record the urgent bypass against the budget ledger
+  And downstream output channels MUST receive the proposal exactly once per requested surface
+
+Scenario: SCN-054-030 Acknowledgment on one surface suppresses duplicates on others
+  Given a notification decision was fanned out to multiple surfaces via the controller
+  And the user acknowledges the notification on any one surface
+  When the controller propagates the acknowledgment event
+  Then the notification engine MUST mark sibling proposals for the same decision as "superseded-by-ack"
+  And the engine MUST cancel any not-yet-dispatched sibling proposals for that decision
+  And duplicate output MUST NOT be delivered on any other surface
+  And the acknowledgment chain MUST be observable in the decision's audit trail
+```
+
+### Boundary Notes
+
+- The notification engine retains ownership of classification, dedupe, incident
+  correlation, enrichment, and decision creation.
+- The controller owns: global budget accounting, cross-surface arbitration,
+  acknowledgment fan-out, and the published per-day nudge SLO.
+- This split satisfies Product Principle 6 (Invisible by Default, Felt Not Heard):
+  the engine cannot independently spend the global interruption budget.
+

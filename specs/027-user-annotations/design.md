@@ -1657,3 +1657,68 @@ The new `SearchResult` fields (`rating`, `times_used`, `tags`) are optional in t
 - Annotation analytics or visualization dashboard
 - Automated annotation inference
 - Web UI annotation forms (additive, can follow as enhancement)
+
+---
+
+## UI Coordination
+
+> Added 2026-06-03 — coordinates the annotation API surface with the
+> graph-browse UI (spec 073, MVP M2). The append-only annotation model
+> from this spec is unchanged; this section enumerates the contract
+> the UI consumers depend on and the auth/audit guarantees they
+> inherit.
+
+### Consumer Surfaces (spec 073)
+
+The graph-browse UI exposes editable annotation entry points from:
+
+- Artifact-detail page — inline-edit rating, note, tags, interaction
+- Topic / person / place pages — add tag / rating to listed artifacts inline
+- "My annotations" view — list, filter, and navigate the user's own annotation history
+
+### Endpoints Exposed to the UI
+
+| Method | Path | Purpose | Auth | Scenario |
+|--------|------|---------|------|----------|
+| `POST` | `/api/artifacts/{id}/annotations` | Append rating / note / tag / interaction | Bearer + per-user scope | SCN-027-71, SCN-027-72 |
+| `GET` | `/api/artifacts/{id}/annotations` | History for one artifact | Bearer + per-user scope | existing |
+| `GET` | `/api/artifacts/{id}/annotations/summary` | Aggregated current state (includes `version` for conflict detection) | Bearer + per-user scope | SCN-027-74 |
+| `DELETE` | `/api/artifacts/{id}/annotations/tags/{tag}` | Remove a tag (records `tag_remove` event) | Bearer + per-user scope | existing |
+| `GET` | `/api/annotations?actor=me&limit=N` | Cross-artifact list of caller's own annotations | Bearer + per-user scope | SCN-027-73 |
+
+All endpoints are existing surfaces extended for UI use, except
+`GET /api/annotations?actor=me` (list-my-annotations) and the
+`If-Match` / `version` precondition on `POST` (conflict handling),
+which land via the `annotation-editing-api` scope.
+
+### Permissions
+
+- Every UI-originated request MUST carry a per-user bearer token issued
+  per spec 044 (per-user bearer auth).
+- The bearer scope claim from spec 060 MUST authorize annotation writes
+  for the caller; tokens without the annotation scope receive `403`.
+- `actor=me` filters use the bearer's resolved subject; `actor=<other>`
+  is rejected with `403` in the single-tenant deployment.
+
+### Audit Trail
+
+- Every annotation event already records `created_at`. UI-originated
+  events additionally record `source_channel = web` and the bearer's
+  resolved subject as `actor_id` so the audit log distinguishes
+  Telegram, API, and web origins.
+- The `annotations.created` NATS event payload includes
+  `source_channel` and `actor_id` so downstream subscribers
+  (intelligence, search, future audit sinks) can attribute the change.
+- No PII beyond the existing annotation payload is added. The bearer
+  token itself is never logged.
+
+### Conflict Semantics
+
+- `GET /annotations/summary` returns a monotonically increasing
+  `version` integer derived from the materialized view's refresh
+  counter for the artifact.
+- `POST /annotations` accepts an optional `If-Match: <version>` header.
+  When present and stale, the API returns `409 Conflict` with the
+  current summary so the UI can reconcile.
+- Without `If-Match`, append semantics are preserved unchanged
+  (Telegram path, API path).

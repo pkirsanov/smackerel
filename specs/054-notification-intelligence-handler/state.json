@@ -2,8 +2,8 @@
   "version": 3,
   "featureDir": "specs/054-notification-intelligence-handler",
   "featureName": "Notification Intelligence Handler Service",
-  "status": "done",
-  "workflowMode": "full-delivery",
+  "status": "in_progress",
+  "workflowMode": "improve-existing",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -25,7 +25,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "lastSpecialistVerdict": "VALIDATE-054-PASSED-STRUCTURED-COMMIT-GATE-2026-05-24",
     "certifiedAt": "2026-05-24T23:39:28Z",
     "certifiedBy": "bubbles.validate",
@@ -217,6 +217,14 @@
         "dependsOn": ["SCOPE-7"],
         "scenarioIds": ["SCN-054-023", "SCN-054-024", "SCN-054-025", "SCN-054-026"],
         "surfaces": ["backend", "config", "api", "web", "telemetry", "docs"]
+      },
+      {
+        "id": "SCOPE-9",
+        "name": "Surfacing Controller Integration",
+        "status": "not_started",
+        "dependsOn": ["SCOPE-8", "spec-021-m1a-unified-surfacing-controller"],
+        "scenarioIds": ["SCN-054-027", "SCN-054-028", "SCN-054-029", "SCN-054-030"],
+        "surfaces": ["backend", "event-bus", "api", "telemetry"]
       }
     ],
     "validation": {
@@ -417,12 +425,23 @@
       "startedAt": "2026-05-29T00:00:00Z",
       "endedAt": "2026-05-29T00:00:00Z",
       "summary": "Formally accepted inbound cross-spec packet from spec 061 SCOPE-08 (specs/061-conversational-assistant/cross-spec/packet-054-scheduler.md). Verdict: artifact-level acceptance. Contract for additive Job.Source (string) and Job.Originator{Transport, ConfirmRef} fields plus nullable scheduler_jobs.source / scheduler_jobs.originator columns is ratified with zero-valued backward-compat guarantee. Code wiring deferred to a dedicated follow-up spec 054 scope (bubbles.plan -> bubbles.implement) because internal/scheduler/ has no public Job struct today and the additive type + migration + round-trip + dispatch tests are design-grade work unsuitable for fastlane. Spec 061 SCOPE-08 BS-004 e2e remains gated on that follow-up scope landing; notificationSchedulerStub in cmd/core/wiring_assistant_skills.go stays in place until then. Packet header updated routed -> accepted. Report.md updated with Accepted Cross-Spec Packets section. No code changes in this run; spec 054 status remains done."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "improve-existing"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-03T00:00:00Z",
+      "endedAt": "2026-06-03T00:00:00Z",
+      "summary": "Release-planning dispatch (docs/releases/mvp/actions.md MVP M1c, addressedFindings RELEASE-MVP:M1c). Reopened spec 054 for additive planning-only refinement to subordinate the notification decision engine to the spec 021 M1a unified surfacing controller. Added 'Coordination with Unified Surfacing Controller' section to spec.md with 4 Gherkin scenarios (SCN-054-027..030). Added 'Upstream Coordination' section to design.md describing the SurfacingProposal producer/arbiter split, contract edges, AcknowledgmentBus, and fail-loud rollback gate. Added Scope 9 'Surfacing Controller Integration' (status not_started) with implementation plan, change boundary, test plan, and DoD. Added SCN-054-027 through SCN-054-030 to scenario-manifest.json. Hard dependency: spec 021 M1a controller MUST land before SCOPE-9 implementation. nextRequiredOwner=bubbles.implement (after M1a + M1b land). No code changes."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-29T00:00:00Z",
+  "lastUpdatedAt": "2026-06-03T00:00:00Z",
   "completedAt": "2026-05-24T23:39:28Z",
   "artifacts": {
     "spec": "spec.md",
@@ -436,5 +455,5 @@
     "transitionRequests": "transition-requests.json",
     "reworkQueue": "rework-queue.json"
   },
-  "notes": "DoD and scope evidence are certified. The prior structured-commit blocker is resolved by the spec(054) closeout commit touching this spec artifact set."
+  "notes": "Reopened 2026-06-03 (improve-existing) to add SCOPE-9 Surfacing Controller Integration per release-planning dispatch RELEASE-MVP:M1c. SCOPE-1..8 remain certified done; SCOPE-9 is not_started and hard-depends on spec 021 M1a controller delivery before implementation can begin. nextRequiredOwner=bubbles.implement after M1a + M1b land."
 }

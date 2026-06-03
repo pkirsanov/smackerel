@@ -3,9 +3,9 @@
   "featureDir": "specs/073-web-mobile-assistant-frontend",
   "featureNumber": "073",
   "featureName": "Web/Mobile Assistant Frontend Client",
-  "status": "done",
-  "workflowMode": "full-delivery",
-  "statusCeiling": "done",
+  "status": "specs_hardened",
+  "workflowMode": "improve-existing",
+  "statusCeiling": "specs_hardened",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
   "planningOnly": false,
@@ -25,7 +25,7 @@
     "noDefaults": "smackerel-no-defaults",
     "principleAlignmentRequired": true,
     "principleDeviations": [],
-    "workflowMode": "full-delivery",
+    "workflowMode": "improve-existing",
     "grill": { "mode": "off", "source": "repo-default" },
     "tdd": { "mode": "off", "source": "repo-default" },
     "autoCommit": { "mode": "off", "source": "repo-default" },
@@ -34,7 +34,7 @@
     "validation": { "mode": "certification-required", "source": "repo-default" }
   },
   "certification": {
-    "status": "done",
+    "status": "specs_hardened",
     "completedAt": "2026-06-02T07:30:00Z",
     "evidenceRef": "report.md#code-diff-evidence",
     "completedScopes": [
@@ -62,7 +62,8 @@
       "SCOPE-073-01": {"status": "done", "dodChecked": 10, "dodTotal": 10, "evidenceRef": "report.md#scope-073-01-scope-1-row-verification-bubblesimplement-2026-06-01"},
       "SCOPE-073-02": {"status": "done", "dodChecked": 9, "dodTotal": 9, "evidenceRef": "report.md#scope-073-02-web-chat-vertical-slice-authoring-bubblesimplement-2026-06-01"},
       "SCOPE-073-03": {"status": "done_rescoped", "dodChecked": 7, "dodTotal": 7, "evidenceRef": "scopes.md#rescope-decision", "deferredTo": "follow-on-mobile-delivery"},
-      "SCOPE-073-04": {"status": "done_rescoped", "dodChecked": 7, "dodTotal": 7, "evidenceRef": "scopes.md#rescope-decision", "deferredTo": "follow-on-mobile-delivery"}
+      "SCOPE-073-04": {"status": "done_rescoped", "dodChecked": 7, "dodTotal": 7, "evidenceRef": "scopes.md#rescope-decision", "deferredTo": "follow-on-mobile-delivery"},
+      "SCOPE-073-05": {"status": "not_started", "dodChecked": 0, "dodTotal": 11, "evidenceRef": "scopes.md#scope-5-knowledge-graph-browse-surface-graph-browse-surface", "addedAt": "2026-06-03T00:00:00Z", "addedBy": "bubbles.plan", "dispatchReason": "release-planning:MVP M2 — wiki/graph-browse UI surface", "dependsOn": ["SCOPE-073-01", "specs/027-knowledge-management#SCOPE-9"]}
     },
     "lockdownState": {
       "mode": "off",
@@ -286,6 +287,15 @@
         "runStartedAt": "2026-06-01T23:30:00Z",
         "runEndedAt": "2026-06-02T07:30:00Z",
         "summary": "Chaos coverage: adversarial sibling on TP-073-10 (different transport_message_ids must produce distinct assistant_turn_ids) proves the retry parity check fails loudly if regression reintroduces fresh-id-per-retry. Adversarial sibling on TP-073-02 codegen drift proves the schema drift detector itself is not tautological. No chaos injection harness regressions detected. Transitioning status to done under passed-with-known-drift policy with convergenceHealth.knownDrift documenting the queued live-stack runs."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning"],
+        "statusBefore": "done",
+        "statusAfter": "specs_hardened",
+        "runStartedAt": "2026-06-03T00:00:00Z",
+        "runEndedAt": "2026-06-03T00:00:00Z",
+        "summary": "MVP M2 dispatch (parent-expanded from bubbles.goal → bubbles.workflow improve-existing). Reopened spec 073 additively to add SCOPE-073-05 (Knowledge Graph Browse Surface / graph-browse-surface): web/PWA wiki routes for topics/people/places/time/artifact-detail, server-driven cross-link renderer, and inline annotation entry point delegating to spec 027 SCOPE-9 (SCN-027-71..74). Added six Gherkin scenarios SCN-073-B01..B06 to spec.md under new section '## Knowledge Graph Browse Surface'; added '## Graph Browse UI Architecture' to design.md (routes, data fetch, link rendering, annotation entry point, <1s LAN initial-paint performance budget, accessibility, reuse of existing PWA shell/auth/codegen foundations). Added Scope 5 to scopes.md with full UI matrix, implementation plan, consumer/shared-infra sweeps, change boundary, test plan (TP-073-25..31), and tiered DoD. Added six SCN-073-B01..B06 entries to scenario-manifest.json (status: planned; B06 dependsOn spec 027 SCOPE-9). Status reopened from done → specs_hardened under improve-existing ceiling; workflowMode improve-existing; planning-only (no code changes). Existing assistant-centric scopes 1-4 untouched. Next required owner: bubbles.implement after spec 027 SCOPE-9 lands; browse surface itself does not block on annotation endpoint (degrades to disabled affordance)."
       }
     ]
   }

@@ -338,3 +338,54 @@ Per-file responsibility summary:
 | `internal/config/assistant_frontend.go` (+ validators test) | SCOPE-073-01 | added — fail-loud SST config for web + mobile assistant keys (TP-073-07) |
 
 Rollback procedure: `git revert` each listed file (no migration, no external store, no service-worker cache change). See `scopes.md` § Rescope Decision → Rollback Strategy.
+
+---
+
+## 2026-06-03 — bubbles.plan dispatch (MVP M2 — Knowledge Graph Browse Surface)
+
+**Dispatch source:** parent-expanded from `bubbles.goal` → `bubbles.workflow` improve-existing, after the nested workflow runtime blocked on missing `runSubagent` for the planning chain. Authorized as the consolidated planning owner for this additive scoped change.
+
+**Origin:** `docs/releases/mvp/actions.md` "Next Dispatches" → MVP M2 (wiki / graph-browse UI surface).
+
+**Mode equivalent:** improve-existing (planning-only). Status reopened `done` → `specs_hardened` under the improve-existing ceiling. No code changes.
+
+**Artifacts modified (additive only):**
+
+| File | Change |
+|---|---|
+| `spec.md` | Appended `## Knowledge Graph Browse Surface` section with six Gherkin scenarios SCN-073-B01..B06 (browse topics/people/places/time index → detail; cross-link rendering with explainable reasons; inline annotation entry point delegating to spec 027 SCOPE-9). |
+| `design.md` | Appended `## Graph Browse UI Architecture`: routes table (web/PWA), data fetch (same-origin cookie reused from spec 070), link rendering (server-supplied edges projected verbatim), annotation entry point (delegated to SCN-027-71..74, gracefully disabled when unreachable), performance budget (≤1s LAN initial paint), accessibility, reuse of existing PWA shell/auth/codegen foundations. |
+| `scopes.md` | Added Scope 5 (graph-browse-surface) — Not started — with UI scenario matrix, implementation plan, consumer/shared-infra impact sweeps, change boundary, test plan rows TP-073-25..31 (six e2e-api rows + one unit performance-budget row), tiered DoD with adversarial cross-link parity coverage. Updated Scope Inventory table to include Scope 5. |
+| `scenario-manifest.json` | Added six entries SCN-073-B01..B06 (status: planned). SCN-073-B06 declares `dependsOn` on `specs/027-knowledge-management#SCOPE-9` and SCN-027-71..74. |
+| `state.json` | `status` done → specs_hardened; `workflowMode` full-delivery → improve-existing; `statusCeiling` done → specs_hardened; `execution.workflowMode` improve-existing; added SCOPE-073-05 to `certification.scopeProgress` (status: not_started, dodTotal: 11, dependsOn SCOPE-073-01 + spec 027 SCOPE-9); appended bubbles.plan executionHistory entry. |
+| `report.md` | This entry. |
+
+**Dependencies cited in design:**
+
+- Backend ready (no further backend work for read paths): [`internal/knowledge/`](../../internal/knowledge/), [`internal/intelligence/`](../../internal/intelligence/) (topics, `people*.go`), [`internal/graph/`](../../internal/graph/).
+- Inline annotation entry point depends on [spec 027 SCOPE-9](../027-knowledge-management/scopes.md) (SCN-027-71..74). The browse surface itself does not block — annotation button renders disabled with affordance until spec 027 SCOPE-9 lands.
+- Capture flow remains owned by specs 033 / 058 — graph browse is read+annotate only.
+
+**Constraints honored:**
+
+- IDE file tools only for all writes (no shell heredoc, no `python open()`).
+- No code, test, config, or runtime file changes — planning artifacts only.
+- Existing assistant-centric scopes 1-4 untouched (additive only).
+- smackerel governance respected: NO-DEFAULTS / fail-loud SST policy maintained (no fallback defaults introduced in spec or design).
+- Pattern mirrors the parallel-completed bubbles.workflow dispatches for specs 021, 054, 027 on 2026-06-03.
+
+**Evidence:** see `## RESULT-ENVELOPE` for artifact-lint output.
+
+**Next required owner:** `bubbles.implement` (after M2-support spec 027 SCOPE-9 lands, or for the routes/cross-link renderer/performance harness now — annotation entry point degrades gracefully).
+
+### Validation Evidence
+
+Planning-only dispatch. No new validation evidence under this run for SCOPE-073-05 — implementation, test, and validate phases will be dispatched by `bubbles.workflow` after this planning packet is accepted. Pre-existing validation evidence for SCOPE-073-01..04 retained verbatim above; not re-asserted here.
+
+### Audit Evidence
+
+Planning-only dispatch. No new audit evidence under this run for SCOPE-073-05 — audit will run after implement/test/validate complete. The reopening from `done` → `specs_hardened` under improve-existing ceiling is itself audit-compliant: scopes 1-4 retain their `done` / `done_rescoped` records in `certification.scopeProgress`; scope 5 is additive and entered as `not_started` with full DoD aggregate. Pre-existing audit evidence for SCOPE-073-01..04 (chaos round, rescope rationale, anti-fabrication on-disk citations) retained verbatim above.
+
+### Chaos Evidence
+
+Planning-only dispatch. No new chaos evidence under this run for SCOPE-073-05 — chaos will run after implement/test/validate/audit complete. The planned adversarial coverage is captured in `scopes.md` Scope 5 Test Plan: TP-073-29 (cross-link parity) includes an adversarial sibling proving the assertion fails if the client re-derives or re-orders graph edges. Pre-existing chaos evidence for TP-073-10 (retry id reuse) and TP-073-02 (codegen drift) retained verbatim above.

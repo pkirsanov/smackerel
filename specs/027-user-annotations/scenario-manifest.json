@@ -1088,6 +1088,72 @@
         {"type": "source", "location": "cmd/core/main.go"}
       ],
       "linkedDoD": ["SubscribeAnnotations subscribes to annotations.created NATS subject"]
+    },
+    {
+      "scenarioId": "SCN-027-71",
+      "name": "Inline-edit annotation from artifact page (graph-browse UI)",
+      "scope": "scope-09",
+      "status": "planned",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/api/annotation_conflict_test.go", "function": "TestCreateAnnotation_AppendWithoutIfMatch"},
+        {"file": "tests/e2e/annotation_editing_ui_test.go", "function": "TestInlineEditFromArtifactPage"}
+      ],
+      "evidenceRefs": [
+        {"type": "spec", "location": "specs/027-user-annotations/spec.md#bs-013-inline-edit-annotation-from-artifact-page-scn-027-71"},
+        {"type": "design", "location": "specs/027-user-annotations/design.md#ui-coordination"}
+      ],
+      "linkedDoD": ["Scenarios SCN-027-71, SCN-027-72: inline-edit from artifact page and add-tag from topic/person/place page round-trip through the API with bearer auth and produce the expected events"]
+    },
+    {
+      "scenarioId": "SCN-027-72",
+      "name": "Create annotation from topic/person/place page (graph-browse UI)",
+      "scope": "scope-09",
+      "status": "planned",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/api/annotation_audit_test.go", "function": "TestCreateAnnotation_RecordsSourceChannelWeb"},
+        {"file": "tests/e2e/annotation_editing_ui_test.go", "function": "TestCreateFromTopicPersonPlacePage"}
+      ],
+      "evidenceRefs": [
+        {"type": "spec", "location": "specs/027-user-annotations/spec.md#bs-014-create-annotation-from-topic--person--place-page-scn-027-72"},
+        {"type": "design", "location": "specs/027-user-annotations/design.md#ui-coordination"}
+      ],
+      "linkedDoD": ["UI-originated events record source_channel = web and the bearer's resolved subject as actor_id"]
+    },
+    {
+      "scenarioId": "SCN-027-73",
+      "name": "List-my-annotations cross-artifact view",
+      "scope": "scope-09",
+      "status": "planned",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/api/annotation_list_test.go", "function": "TestListMyAnnotations_ActorMe"},
+        {"file": "internal/api/annotation_list_test.go", "function": "TestListMyAnnotations_RejectsOtherActor"},
+        {"file": "tests/e2e/annotation_editing_ui_test.go", "function": "TestListMyAnnotationsView"}
+      ],
+      "evidenceRefs": [
+        {"type": "spec", "location": "specs/027-user-annotations/spec.md#bs-015-list-my-annotations-view-scn-027-73"},
+        {"type": "design", "location": "specs/027-user-annotations/design.md#endpoints-exposed-to-the-ui"}
+      ],
+      "linkedDoD": ["Scenario SCN-027-73: list-my-annotations returns caller's events across all artifacts in reverse chronological order, excludes other actors, p95 < 500ms for first 50 entries"]
+    },
+    {
+      "scenarioId": "SCN-027-74",
+      "name": "Conflict handling on stale edit (If-Match precondition)",
+      "scope": "scope-09",
+      "status": "planned",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/api/annotation_conflict_test.go", "function": "TestCreateAnnotation_StaleIfMatchReturns409"},
+        {"file": "internal/api/annotation_summary_test.go", "function": "TestGetSummary_IncludesVersion"},
+        {"file": "tests/e2e/annotation_editing_ui_test.go", "function": "TestStaleEditConflict"}
+      ],
+      "evidenceRefs": [
+        {"type": "spec", "location": "specs/027-user-annotations/spec.md#bs-016-conflict-handling-on-stale-edit-scn-027-74"},
+        {"type": "design", "location": "specs/027-user-annotations/design.md#conflict-semantics"}
+      ],
+      "linkedDoD": ["Scenario SCN-027-74: stale-edit conflict path records no annotation event and returns the current summary body"]
     }
   ]
 }

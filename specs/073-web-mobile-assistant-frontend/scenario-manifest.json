@@ -235,6 +235,85 @@
       "liveSystemExpectation": "Deferred to follow-on spec for the cross-surface variant; web-only transport_hint coverage is live under SCN-073-A08 primary entry",
       "status": "deferred",
       "deferredTo": "follow-on-mobile-delivery"
+    },
+    {
+      "scenarioId": "SCN-073-B01",
+      "title": "Browse topics index to a topic page",
+      "scopeId": "SCOPE-073-05",
+      "source": "spec.md#knowledge-graph-browse-surface",
+      "gherkin": "Given the user opens the wiki surface\nWhen the user selects \"Topics\"\nThen the topics index lists topics from the knowledge graph with counts of linked artifacts, people, and places\nAnd selecting a topic opens a topic page showing the topic's linked artifacts, related people, and related places",
+      "plannedTestRows": ["TP-073-25", "TP-073-31"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#scope-5-knowledge-graph-browse-surface-graph-browse-surface"],
+      "liveSystemExpectation": "Served /wiki/topics index and topic detail page assert against the live knowledge graph API; rendered HTML matches the schema fixture per route",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-073-B02",
+      "title": "Browse people index to a person page",
+      "scopeId": "SCOPE-073-05",
+      "source": "spec.md#knowledge-graph-browse-surface",
+      "gherkin": "Given the user opens the wiki surface\nWhen the user selects \"People\"\nThen the people index lists people derived from the intelligence layer with artifact counts\nAnd selecting a person opens a person page showing a timeline of artifacts, related topics, and related places for that person",
+      "plannedTestRows": ["TP-073-26", "TP-073-31"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#scope-5-knowledge-graph-browse-surface-graph-browse-surface"],
+      "liveSystemExpectation": "Served /wiki/people index and person detail page assert against the live intelligence layer (internal/intelligence/people*.go) plus graph edges",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-073-B03",
+      "title": "Browse places index to a place page",
+      "scopeId": "SCOPE-073-05",
+      "source": "spec.md#knowledge-graph-browse-surface",
+      "gherkin": "Given the user opens the wiki surface\nWhen the user selects \"Places\"\nThen the places index lists places derived from the maps connector and any artifact-derived locations\nAnd selecting a place opens a place page showing the place's map-derived location and linked artifacts",
+      "plannedTestRows": ["TP-073-27", "TP-073-31"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#scope-5-knowledge-graph-browse-surface-graph-browse-surface"],
+      "liveSystemExpectation": "Served /wiki/places index and place detail page assert against the maps-connector-derived places API plus graph edges",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-073-B04",
+      "title": "Time view renders a calendar-style scroll",
+      "scopeId": "SCOPE-073-05",
+      "source": "spec.md#knowledge-graph-browse-surface",
+      "gherkin": "Given the user opens the wiki surface\nWhen the user selects \"Time\"\nThen the time view renders artifacts grouped by day in a vertical calendar-style scroll\nAnd the user can scroll backward and forward in time without losing scroll position when navigating away and back",
+      "plannedTestRows": ["TP-073-28", "TP-073-31"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#scope-5-knowledge-graph-browse-surface-graph-browse-surface"],
+      "liveSystemExpectation": "Served /wiki/time renders day-grouped artifacts from the live artifacts API; scroll-position preservation asserted via rendered DOM markers across navigation",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-073-B05",
+      "title": "Cross-links render on every artifact page with explainable reasons",
+      "scopeId": "SCOPE-073-05",
+      "source": "spec.md#knowledge-graph-browse-surface",
+      "gherkin": "Given the user is on any artifact, topic, person, or place page\nWhen the page renders\nThen a \"Related\" section lists graph-derived cross-links to other artifacts, topics, people, or places\nAnd each cross-link carries an explainable reason sourced from the graph edge metadata",
+      "plannedTestRows": ["TP-073-29"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#scope-5-knowledge-graph-browse-surface-graph-browse-surface"],
+      "liveSystemExpectation": "Served detail pages render Related sections whose anchors and reason strings deep-equal the live graph edge response; adversarial sibling proves the assertion fails if the client re-derives or re-orders",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-073-B06",
+      "title": "Inline annotation entry point opens from any artifact page",
+      "scopeId": "SCOPE-073-05",
+      "source": "spec.md#knowledge-graph-browse-surface",
+      "gherkin": "Given the user is on an artifact page\nAnd the spec 027 SCOPE-9 annotation endpoints (SCN-027-71..74) are available\nWhen the user activates the \"Annotate\" entry point\nThen an inline annotation editor opens scoped to the current artifact\nAnd submitting calls the spec 027 SCOPE-9 annotation endpoints\nAnd the rendered artifact page reflects the new annotation after submit",
+      "plannedTestRows": ["TP-073-30"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#scope-5-knowledge-graph-browse-surface-graph-browse-surface"],
+      "liveSystemExpectation": "When spec 027 SCOPE-9 endpoints are reachable, Annotate opens the inline editor and submit hits SCN-027-71..74; when unreachable, button renders aria-disabled with affordance; storage guard asserts no bearer/session material persists from wiki pages",
+      "status": "planned",
+      "dependsOn": ["specs/027-knowledge-management#SCOPE-9", "SCN-027-71", "SCN-027-72", "SCN-027-73", "SCN-027-74"]
     }
   ]
 }

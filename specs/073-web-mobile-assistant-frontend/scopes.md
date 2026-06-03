@@ -41,6 +41,7 @@
 | 2 | Web Chat Vertical Slice | web/PWA UI, same-origin POST, retry, web a11y | SCN-073-A01, SCN-073-A03, SCN-073-A09 | Done |
 | 3 | Shared Mobile Chat Vertical Slice | shared mobile core, iPhone/iOS adapter, Android adapter, mobile retry, VoiceOver/TalkBack | SCN-073-A02, SCN-073-A03, SCN-073-A10, SCN-073-A11 | Done (rescoped to follow-on spec) |
 | 4 | Cross-Surface Response Controls, Capture, And Parity | renderer, disambig, confirm, capture ack, citations, parity fixtures | SCN-073-A04, SCN-073-A05, SCN-073-A06, SCN-073-A07, SCN-073-A08 | Done (rescoped to follow-on spec) |
+| 5 | Knowledge Graph Browse Surface (graph-browse-surface) | web/PWA wiki routes (topics/people/places/time/artifact-detail), cross-link renderer, annotation entry point | SCN-073-B01, SCN-073-B02, SCN-073-B03, SCN-073-B04, SCN-073-B05, SCN-073-B06 | Not started |
 
 ---
 
@@ -447,3 +448,209 @@ No project impact map is configured. Renderer work must use unit/functional fixt
 
 - TP-073-05 (live integration transport-hint) and TP-073-08 (live e2e transport-hint parity) were authored and compile under their build tags; live-stack execution was serialized behind the integration suite lock at report.md timestamp. Live evidence is captured in subsequent runs or under the follow-on spec; the static + build evidence (go vet, compile) is recorded in report.md.
 - SCOPE-073-02 live e2e rows (TP-073-09 / TP-073-10 / TP-073-11) share the same queue; their Go files compile under `go vet -tags e2e` and exercise the live PWA route once the lock is released.
+
+---
+
+## Scope 5: Knowledge Graph Browse Surface (graph-browse-surface)
+
+**Status:** Not started
+**Added:** 2026-06-03 (MVP M2 dispatch — release-planning:MVP M2)
+**Depends On:** Scope 1 (shared schema/codegen foundation reused for
+knowledge graph schemas); upstream spec
+[027 SCOPE-9](../027-knowledge-management/scopes.md) annotation
+endpoints (`SCN-027-71..74`) for the inline annotation entry point —
+the browse surface itself does not block on it (degrades to disabled
+"coming soon" affordance until 027 SCOPE-9 ships).
+**Scope-Kind:** runtime-behavior
+**foundation:** false (overlay on Scope 1 schema/codegen + auth/PWA
+foundations; reuses existing knowledge/intelligence/graph backend).
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-073-B01 — Browse topics index to a topic page
+  Given the user opens the wiki surface
+  When the user selects "Topics"
+  Then the topics index lists topics from the knowledge graph with
+    counts of linked artifacts, people, and places
+  And selecting a topic opens a topic page showing the topic's
+    linked artifacts, related people, and related places
+
+Scenario: SCN-073-B02 — Browse people index to a person page
+  Given the user opens the wiki surface
+  When the user selects "People"
+  Then the people index lists people derived from the intelligence
+    layer with artifact counts
+  And selecting a person opens a person page showing a timeline of
+    artifacts, related topics, and related places for that person
+
+Scenario: SCN-073-B03 — Browse places index to a place page
+  Given the user opens the wiki surface
+  When the user selects "Places"
+  Then the places index lists places derived from the maps connector
+    and any artifact-derived locations
+  And selecting a place opens a place page showing the place's
+    map-derived location and linked artifacts
+
+Scenario: SCN-073-B04 — Time view renders a calendar-style scroll
+  Given the user opens the wiki surface
+  When the user selects "Time"
+  Then the time view renders artifacts grouped by day in a vertical
+    calendar-style scroll
+  And the user can scroll backward and forward in time without
+    losing scroll position when navigating away and back
+
+Scenario: SCN-073-B05 — Cross-links render on every artifact page
+  Given the user is on any artifact, topic, person, or place page
+  When the page renders
+  Then a "Related" section lists graph-derived cross-links to other
+    artifacts, topics, people, or places
+  And each cross-link carries an explainable reason sourced from
+    the graph edge metadata
+
+Scenario: SCN-073-B06 — Inline annotation entry point opens from any artifact page
+  Given the user is on an artifact page
+  And the spec 027 SCOPE-9 annotation endpoints (SCN-027-71..74) are available
+  When the user activates the "Annotate" entry point
+  Then an inline annotation editor opens scoped to the current artifact
+  And submitting calls the spec 027 SCOPE-9 annotation endpoints
+  And the rendered artifact page reflects the new annotation after submit
+```
+
+### UI Scenario Matrix
+
+| Scenario | Surface | Preconditions | User Action | Expected Assertion | Test Row |
+|---|---|---|---|---|---|
+| SCN-073-B01 | Web wiki / topics | authenticated session; backend has topics | navigate to `/wiki/topics` then a topic | topics index lists from API; topic page renders linked artifacts/people/places via graph edges | TP-073-25 |
+| SCN-073-B02 | Web wiki / people | authenticated session; intelligence layer populated | navigate to `/wiki/people` then a person | people index lists from API; person page renders timeline, related topics, related places | TP-073-26 |
+| SCN-073-B03 | Web wiki / places | authenticated session; places populated from maps connector | navigate to `/wiki/places` then a place | places index lists from API; place page renders location + linked artifacts | TP-073-27 |
+| SCN-073-B04 | Web wiki / time | authenticated session; artifacts populated | open `/wiki/time` and scroll | day-grouped scroll renders; back/forward preserves scroll position | TP-073-28 |
+| SCN-073-B05 | Web wiki / any detail page | graph edges present | open any artifact/topic/person/place page | "Related" section renders cross-links with server-supplied `reason` strings verbatim | TP-073-29 |
+| SCN-073-B06 | Web wiki / artifact detail | spec 027 SCOPE-9 endpoints reachable | activate "Annotate" | inline editor opens; submit hits SCN-027-71..74; artifact re-fetch reflects new annotation. When 027 SCOPE-9 unavailable, button renders `aria-disabled` with affordance | TP-073-30 |
+
+### Implementation Plan
+
+- Add `web/pwa/wiki.html` + `web/pwa/wiki.js` for the wiki landing,
+  plus per-route pages (`topics.html`/`.js`, `people.html`/`.js`,
+  `places.html`/`.js`, `time.html`/`.js`, `artifact_detail.html`/`.js`)
+  following the existing embedded-PWA shape.
+- Extend `web/pwa/embed.go` route serving to include the new wiki
+  routes; no changes to service worker cache semantics.
+- Generate web client request/response validators from the existing
+  knowledge/intelligence/graph API schemas, reusing the Scope 1
+  codegen pipeline. If a backing schema is missing for any documented
+  route, stop and route a finding to the owning spec (knowledge /
+  intelligence / graph) instead of hand-rolling client types.
+- Implement the cross-link renderer as a single component that
+  consumes server-supplied `{targetKind, targetId, targetLabel, reason}`
+  edges; render `reason` verbatim with no client-side ranking or
+  re-derivation.
+- Wire the annotation entry point to spec 027 SCOPE-9 endpoints
+  (`SCN-027-71..74`); probe availability at page load; render
+  disabled with affordance when unavailable.
+- Reuse the existing same-origin HttpOnly cookie auth path (spec 070);
+  extend the storage guard to cover the new wiki pages.
+- Add unit tests for the cross-link renderer (verbatim `reason`,
+  ordering, deep-link `href` correctness) and the annotation
+  availability probe.
+- Add e2e-api tests that drive the served wiki routes against the
+  live stack and assert the rendered HTML matches the schema fixture
+  per route.
+
+### Consumer Impact Sweep
+
+- No renames/removals; pure additive routes. The new routes do not
+  shadow existing PWA paths. The annotation entry point delegates
+  to existing spec 027 SCOPE-9 endpoints — no client of those
+  endpoints is renamed.
+
+### Shared Infrastructure Impact Sweep
+
+| Shared Surface | Downstream Contract | Canary Validation |
+|---|---|---|
+| PWA shell / `web/pwa/embed.go` | Existing PWA routes must remain healthy after wiki routes are added | TP-073-25..29 served-route e2e-api canaries |
+| Auth/session middleware | Wiki same-origin cookie usage must not regress assistant chat auth | TP-073-09/10/11 retain coverage; TP-073-30 storage guard |
+| Storage guard | No bearer/session material persisted from wiki pages | TP-073-30 extends TP-073-06 guard |
+| Knowledge / intelligence / graph read APIs | Wiki must consume existing contracts without modification | TP-073-25..29 fail loud if API shape changes |
+| spec 027 SCOPE-9 annotation endpoints | Inline entry must call `SCN-027-71..74` shapes without client-side reshape | TP-073-30 + spec 027 contract tests |
+
+### Change Boundary
+
+- **Allowed file families:** new `web/pwa/wiki*.html`, new
+  `web/pwa/wiki*.js`, additions to `web/pwa/embed.go` route table,
+  generated knowledge graph client validators under
+  `web/pwa/generated/`, new wiki tests under `tests/e2e/wiki/`
+  and `web/pwa/tests/`.
+- **Excluded surfaces:** server endpoints (route to owning spec if
+  missing), assistant chat files (`web/pwa/assistant.{html,js}`),
+  capture pipeline (specs 033/058), native mobile clients
+  (`clients/mobile/**`), service worker cache behavior changes,
+  bearer/session storage primitives.
+- **Containment rule:** the wiki renderer projects exactly what the
+  backing APIs return; no client-side relationship derivation, no
+  client-side ranking, no scenario branching. If the backend cannot
+  supply the required edge `reason` strings or grouping, route a
+  finding upstream instead of synthesizing.
+
+### Impact-Aware Validation
+
+No project impact map is configured. Because this scope adds new
+PWA routes consuming existing read APIs and a cross-link renderer
+that depends on server-supplied edge metadata, validation must
+include: per-route served-page e2e-api canaries against the live
+stack, cross-link renderer unit tests asserting verbatim `reason`
+projection, annotation availability probe unit tests, storage guard
+extension, and a performance-budget assertion for initial paint
+under TP-073-31.
+
+### Test Plan
+
+| Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
+|---|---|---|---|---|---|---|
+| TP-073-25 | SCN-073-B01 | e2e-api | `TBD: tests/e2e/wiki/topics_e2e_test.go` | Planned: served `/wiki/topics` index lists topics from the live knowledge graph; selecting a topic renders linked artifacts/people/places | `./smackerel.sh test e2e` | Yes |
+| TP-073-26 | SCN-073-B02 | e2e-api | `TBD: tests/e2e/wiki/people_e2e_test.go` | Planned: served `/wiki/people` index lists people from the live intelligence layer; person page renders timeline + related topics + related places | `./smackerel.sh test e2e` | Yes |
+| TP-073-27 | SCN-073-B03 | e2e-api | `TBD: tests/e2e/wiki/places_e2e_test.go` | Planned: served `/wiki/places` index lists places from maps + artifact-derived sources; place page renders location + linked artifacts | `./smackerel.sh test e2e` | Yes |
+| TP-073-28 | SCN-073-B04 | e2e-api | `TBD: tests/e2e/wiki/time_e2e_test.go` | Planned: served `/wiki/time` renders day-grouped artifacts; scroll-position preservation across navigation asserted via rendered DOM markers | `./smackerel.sh test e2e` | Yes |
+| TP-073-29 | SCN-073-B05 | e2e-api | `TBD: tests/e2e/wiki/cross_links_e2e_test.go` | Planned regression: every artifact/topic/person/place detail page renders a "Related" section whose anchors and `reason` strings match the live graph edge response verbatim; adversarial sibling proves the assertion fails if the client re-derives or re-orders | `./smackerel.sh test e2e` | Yes |
+| TP-073-30 | SCN-073-B06 | e2e-api | `TBD: tests/e2e/wiki/annotation_entry_e2e_test.go` | Planned: when spec 027 SCOPE-9 endpoints are reachable, "Annotate" opens the inline editor and submit hits `SCN-027-71..74`; when unreachable, button renders `aria-disabled` with affordance; extended storage guard asserts no bearer/session material persists from wiki pages | `./smackerel.sh test e2e` | Yes |
+| TP-073-31 | SCN-073-B01..B04 | unit | `TBD: web/pwa/tests/wiki_initial_paint_budget_test.go` | Planned: synthetic initial-paint timing harness asserts each wiki route paints index/detail body under the 1s LAN budget against a primed in-process server | `./smackerel.sh test unit` | No |
+
+### Definition of Done — Tiered Validation
+
+- [ ] All six SCN-073-B01..B06 scenarios implemented and validated by
+  TP-073-25..30 against the live stack.
+- [ ] Cross-link renderer projects server-supplied `reason` strings
+  verbatim with no client-side ranking or re-derivation; adversarial
+  test under TP-073-29 proves the assertion is not tautological.
+- [ ] Annotation entry point delegates to spec 027 SCOPE-9 endpoints
+  (`SCN-027-71..74`) when available; renders disabled with affordance
+  otherwise.
+- [ ] Performance budget: TP-073-31 asserts ≤1s initial paint for
+  every wiki route on local LAN.
+- [ ] Storage guard extended to wiki pages — no bearer/session
+  material persisted (extension of TP-073-06).
+- [ ] Build Quality Gate passes: `./smackerel.sh check`,
+  `./smackerel.sh lint`, `./smackerel.sh format --check`, artifact
+  lint clean for this spec.
+- [ ] Scenario-specific regression E2E rows (TP-073-25..30) added or
+  updated for every changed behavior in this scope.
+- [ ] Broader E2E regression suite passes for this scope.
+- [ ] Shared-infrastructure canary coverage: TP-073-25..29 prove
+  existing PWA shell + auth/session middleware remain healthy after
+  wiki routes are added; cross-link renderer unit canary asserts
+  no client-side derivation.
+- [ ] Rollback/restore proof: all wiki files are additive; `git revert`
+  of the wiki commit removes the routes without touching assistant
+  chat, capture, or backend code.
+- [ ] Change Boundary respected: zero changes to assistant chat
+  files, capture pipeline, native mobile clients, server endpoints,
+  or service worker cache behavior.
+
+**Uncertainty Declaration:** Implementation depends on the existence
+of read APIs for topics/people/places/time/artifacts with graph edge
+metadata. If any required route is not yet exposed by `internal/
+knowledge`, `internal/intelligence`, or `internal/graph`, planning
+routes a finding back to the owning spec instead of synthesizing
+endpoints under this scope. Inline annotation entry point is
+gracefully disabled until spec 027 SCOPE-9 lands; the rest of the
+scope ships independently.

@@ -150,9 +150,42 @@
   "certification": {
     "status": "done_with_concerns",
     "certifiedAt": "2026-05-28T15:40:00Z",
-    "lastEvaluatedAt": "2026-05-28T15:40:00Z",
+    "lastEvaluatedAt": "2026-06-03T00:00:00Z",
     "evidenceRefs": [
       "specs/058-chrome-extension-bridge/report.md"
+    ],
+    "followUps": [
+      {
+        "id": "DI-058-01-router-mount",
+        "parent": "DI-058-01",
+        "status": "resolved",
+        "resolvedAt": "2026-06-03",
+        "note": "Router-mount for POST /v1/connectors/extension/ingest (auth.RequireScope extension:bookmarks AND extension:history) and GET /v1/admin/extension/devices is live in internal/api/router.go:354-379. Verified during release-planning:MVP M5 re-verification.",
+        "evidenceRef": "internal/api/router.go:354-379"
+      },
+      {
+        "id": "DI-058-01-playwright-uds",
+        "parent": "DI-058-01",
+        "status": "open",
+        "severity": "low",
+        "owner": "bubbles.plan",
+        "lastVerifiedAt": "2026-06-03",
+        "note": "Playwright-harness-gated DoD rows still pending: F-057-V-001 extension Playwright harness, HTMX admin page, live post-merge cosign verify-blob. Confirmed 2026-06-03: no extensions/chrome-bridge/test/e2e/ directory."
+      },
+      {
+        "id": "DI-058-03",
+        "status": "open",
+        "severity": "low",
+        "owner": "bubbles.plan",
+        "lastVerifiedAt": "2026-06-03",
+        "note": "Playwright spec files bookmark_roundtrip.spec.ts and auth_failure.spec.ts still absent from repo. Blocked on F-057-V-001."
+      },
+      {
+        "id": "DI-058-07",
+        "status": "accepted",
+        "lastVerifiedAt": "2026-06-03",
+        "note": "G088 post-cert spec-edit acceptance unchanged."
+      }
     ],
     "completedScopes": [
       "SCOPE-1",

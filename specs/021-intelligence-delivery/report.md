@@ -1000,3 +1000,22 @@ Parent run `sweep-2026-05-23-r30`, trigger `stabilize`, mapped child mode `stabi
 - 1 mechanical finding → 1 bug → 1 closure (BUG-021-002), one-to-one accounting per the parent contract.
 - Spec status remains `done`; no de-promotion.
 - No new judgment-requiring concerns surfaced this round.
+
+## 2026-06-03 — improve-existing dispatch: MVP M1a Next Smackerel prioritizer (Scope 4 added)
+
+**Mode:** `improve-existing` (release-planning MVP M1a, dispatched from `docs/releases/mvp/actions.md` "Next Dispatches" section).
+
+**Outcome:** Reopened spec 021 to add Scope 4 — "Next Smackerel Prioritizer" — a unified surfacing controller that owns the global per-user user-interruption budget across digest, push, Telegram, web, ntfy, and email-out. No code changes in this dispatch; artifact additions only.
+
+**Artifacts modified:**
+
+- `spec.md` — added `## Cross-Surface Surfacing Budget` section with intent, success signal, hard constraints, SLO table (≤ N nudges/day, ≥ 40% acted-on, ≤ 10% false-positive, 0 duplicate-after-ack, 100% urgent escalation), 4 Gherkin scenarios (SCN-021-016 through SCN-021-019), and explicit dependency notes on specs 025 / 027 / 054.
+- `design.md` — added `## Unified Surfacing Controller` section describing the architecture (single decision point upstream of digest assembly + notification dispatch + Telegram/web push), the normalize → dedupe → suppress → budget → escalate pipeline, SST config keys (`surfacing.daily_nudge_budget`, etc.), 7 new Prometheus metric families, and integration touchpoints with `internal/intelligence/`, `internal/scheduler/`, `internal/notification/decision.go`, `internal/telegram/`, and `internal/annotation/`.
+- `scopes.md` — added Scope 4 row to the Scope Summary table with status `Not Started`; appended full Scope 4 detail with Gherkin block, Implementation Plan, Test Plan, Consumer Impact Sweep, and Definition of Done (17 unchecked items).
+- `scenario-manifest.json` — added 4 new entries (SCN-021-016 through SCN-021-019), all `scope: scope-04`, `status: planned`, with `linkedTests` references to the future `internal/intelligence/surfacing/*_test.go` and `tests/e2e/surfacing_budget_test.go` files Scope 4 will create.
+- `report.md` — this entry.
+- `state.json` — status flipped from `done` to `in_progress` per the improve-existing reopen contract; Scope 4 added to `scopeProgress` with status `Not Started`; this dispatch recorded in `executionHistory`.
+
+**Scope 4 disposition:** Left at `Not Started` per dispatch instructions. A follow-up `bubbles.implement` dispatch picks up the build. Scopes 1–3 remain `Done`; the unified controller wraps existing producers without changing their public contracts.
+
+**Addressed findings:** RELEASE-MVP:M1a.

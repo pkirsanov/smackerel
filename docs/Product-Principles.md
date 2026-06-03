@@ -1,10 +1,10 @@
 # Smackerel — Product Principles
 
-> **STATUS**: Surfaced from existing repo evidence ([`docs/smackerel.md`](smackerel.md), [`.specify/memory/constitution.md`](../.specify/memory/constitution.md)) for **owner approval — not yet ratified**.
+> **STATUS**: Ratified 2026-06-03; companion enforcement file in [`.github/instructions/product-principles.instructions.md`](../.github/instructions/product-principles.instructions.md) is BLOCKING.
 >
-> The constitution defines the **engineering principles** (10 numbered Core Principles) that are already NON-NEGOTIABLE on their own enforcement track. The design doc defines the **product design principles** (13 principles in §2). This document surfaces the **product-level principles** (the WHY and the user-facing contracts) at a higher abstraction level than the design doc's design principles, suitable for owner review and ratification.
+> The constitution defines the **engineering principles** (10 numbered Core Principles) that are already NON-NEGOTIABLE on their own enforcement track. The design doc defines the **product design principles** (13 principles in §2). This document surfaces the **product-level principles** (the WHY and the user-facing contracts) at a higher abstraction level than the design doc's design principles.
 >
-> Each principle below cites its evidence source. If a principle does not match the current product direction, the owner SHOULD edit, replace, or remove it. Once ratified, the [companion enforcement file](../.github/instructions/product-principles.instructions.md) becomes binding.
+> Each principle below cites its evidence source. The principles were ratified by the owner on 2026-06-03; the [companion enforcement file](../.github/instructions/product-principles.instructions.md) is now binding.
 
 ---
 
@@ -12,16 +12,16 @@
 
 | Audience | What To Do |
 |----------|-----------|
-| **Product owner** | Review each principle. Approve, edit, or reject. Replace "Surfaced for owner approval" status when ratified. |
-| **Engineering** | Treat as directional product context until ratified. Do NOT cite as enforcement until status changes. |
-| **Spec authors** | When writing a feature spec touching a principle area, reference the principle by number AFTER ratification. Until then, cite the underlying source document. |
-| **AI agents** | Read this file alongside the constitution. Until ratified, principles are advisory; constitution rules remain absolute. |
+| **Product owner** | Principles 1–10 are ratified (2026-06-03). Edits go through the normal product-principles change process. |
+| **Engineering** | Principles 1–10 are binding via the companion enforcement file. |
+| **Spec authors** | When writing a feature spec touching a principle area, reference the principle by number and cite `docs/Product-Principles.md`. |
+| **AI agents** | Read this file alongside the constitution. Principles 1–10 are BLOCKING; constitution rules (C1–C10) remain NON-NEGOTIABLE on their own track. |
 
 ---
 
 ## Already-Ratified Engineering Principles (Constitution)
 
-These are **already binding** in [`.specify/memory/constitution.md`](../.specify/memory/constitution.md). Listed here as reference; they are NOT in "Surfaced for owner approval" status.
+These are **already binding** in [`.specify/memory/constitution.md`](../.specify/memory/constitution.md). Listed here as reference; they are on a separate enforcement track from the ratified product principles below.
 
 | # | Constitution Principle | Source |
 |---|------------------------|--------|
@@ -42,7 +42,7 @@ The principles below are **product-level principles** that complement the consti
 
 ## Principle 1 — Observe First, Ask Second
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 1, §1.2 Vision
 
 The system exhausts its own inference before asking the user anything. Default mode is **passive**. Active capture is one of many input mechanisms, not the primary one.
@@ -55,7 +55,7 @@ This is the cornerstone product principle. Existing tools (Notion, Obsidian, Eve
 
 ## Principle 2 — Vague In, Precise Out
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 3
 
 Search and retrieval MUST work with imprecise, natural-language queries. Users remember impressions ("that pricing video", "what did Sarah recommend"), not metadata.
@@ -68,7 +68,7 @@ This is a customer-trust principle: a user who cannot find their saved informati
 
 ## Principle 3 — Knowledge Breathes (Lifecycle, Not Static)
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 4, §11 Knowledge Lifecycle (Promotion & Decay)
 
 Topics automatically promote (rising engagement) and decay (declining engagement). The knowledge surface is always **live**, not a static archive that grows forever and rots.
@@ -83,7 +83,7 @@ This is a customer-trust principle: existing tools accumulate stale information 
 
 ## Principle 4 — Source-Qualified Processing
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 5
 
 Use metadata from source systems (Gmail labels, YouTube playlists, watch history, calendar attendees) to improve classification and priority. The source IS the signal.
@@ -96,7 +96,7 @@ This is a quality multiplier: connectors that strip metadata down to raw content
 
 ## Principle 5 — One Graph, Many Views
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 6, §8 Knowledge Graph & Storage
 
 ALL artifacts live in ONE knowledge graph. Views (by topic, person, time, place) are projections, not separate stores.
@@ -109,7 +109,7 @@ This is an architectural principle with product implications: cross-domain conne
 
 ## Principle 6 — Invisible By Default, Felt Not Heard
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 7, §1.4 Success Metrics ("System-initiated prompts < 3 per week")
 
 NO notifications unless actionable. NO "I processed 47 items today!" noise. The system is **felt, not heard**.
@@ -124,7 +124,7 @@ This is a customer-trust principle: notification fatigue kills tools. Smackerel 
 
 ## Principle 7 — Small, Frequent, Actionable Output
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 8, §1.4 Success Metrics ("Daily digest read time < 2 minutes")
 
 Digests fit a phone screen. Insights are one sentence. Actions are concrete. NEVER a 2,000-word analysis.
@@ -139,7 +139,7 @@ This is a customer-trust principle: long output is a hidden tax. Users abandon t
 
 ## Principle 8 — Trust Through Transparency
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 11, Constitution Core Principle 4 (Explainable Synthesis), Model Compensations table
 
 Every filing decision is logged. Every connection is explainable. Every synthesis cites sources. The user can ALWAYS trace WHY the system did what it did.
@@ -152,7 +152,7 @@ This is the explainability contract that prevents the system from becoming a bla
 
 ## Principle 9 — Design For Restart, Not Perfection
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §2 Design Principle 12
 
 Miss a week? The system kept ingesting passively. Just ask "what did I miss?" NO backlog guilt. NO punishment for absence.
@@ -165,7 +165,7 @@ This is a customer-trust principle: existing tools (todo apps especially) punish
 
 ## Principle 10 — QF Companion Boundary (NON-NEGOTIABLE Cross-Product Surface)
 
-**Status**: Surfaced for owner approval — not yet ratified
+**Status**: Ratified 2026-06-03
 **Evidence**: [`docs/smackerel.md`](smackerel.md) §1.6 (QF Companion Boundary)
 
 When acting as a companion surface for QuantitativeFinance:
@@ -201,12 +201,12 @@ NO principles were fabricated. Every principle traces to existing source. The ow
 
 ## Ratification Process
 
-1. Owner reviews each principle in this file (1-10 in "Surfaced" status; C1-C10 already live).
-2. Owner approves, edits, or rejects each surfaced principle.
-3. Owner replaces "Surfaced for owner approval — not yet ratified" with "Ratified YYYY-MM-DD" once each principle is confirmed.
+1. Owner reviews each principle in this file (1-10; C1-C10 already live).
+2. Owner approves, edits, or rejects each principle.
+3. Owner stamps each principle as "Ratified YYYY-MM-DD" once confirmed.
 4. Once ALL principles are ratified, the [companion enforcement file](../.github/instructions/product-principles.instructions.md) becomes binding policy.
 
-Until ratification, principles are advisory. The constitution remains the only NON-NEGOTIABLE engineering authority.
+Principles 1–10 were ratified 2026-06-03. The companion enforcement file is now binding. The constitution remains the sole NON-NEGOTIABLE engineering authority on its own track.
 
 ---
 
@@ -214,5 +214,5 @@ Until ratification, principles are advisory. The constitution remains the only N
 
 - [`.specify/memory/constitution.md`](../.specify/memory/constitution.md) — Engineering principles (NON-NEGOTIABLE)
 - [`docs/smackerel.md`](smackerel.md) — Authoritative product and architecture design (source for all surfaced principles)
-- [`.github/instructions/product-principles.instructions.md`](../.github/instructions/product-principles.instructions.md) — Product principles enforcement (binding ONLY after ratification of 1-10)
+- [`.github/instructions/product-principles.instructions.md`](../.github/instructions/product-principles.instructions.md) — Product principles enforcement (BLOCKING; ratified 2026-06-03)
 - [`docs/INVESTOR_OVERVIEW.md`](INVESTOR_OVERVIEW.md) — Investor-facing platform overview

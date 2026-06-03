@@ -2,8 +2,8 @@
   "version": 3,
   "featureDir": "specs/025-knowledge-synthesis-layer",
   "featureName": "Knowledge Synthesis Layer (LLM Wiki Pattern)",
-  "status": "done",
-  "workflowMode": "full-delivery",
+  "status": "in_progress",
+  "workflowMode": "improve-existing",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -38,7 +38,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "scope-1-knowledge-store-schema",
       "scope-2-synthesis-pipeline",
@@ -62,7 +62,28 @@
       "chaos",
       "spec-review"
     ],
-    "scopeProgress": [],
+    "scopeProgress": [
+      {
+        "scopeId": "scope-9-calendar-triggered-briefs",
+        "scopeName": "Calendar-Triggered Briefs",
+        "status": "not_started",
+        "dependsOn": ["scope-2-synthesis-pipeline", "scope-8-digest-integration-health", "spec-021-m1a-unified-surfacing-controller"],
+        "scenarioIds": ["SCN-025-24", "SCN-025-25", "SCN-025-26"],
+        "surfaces": ["scheduler", "intelligence", "caldav-cache", "surfacing-controller"],
+        "evidenceRef": "scopes.md#scope-9-calendar-triggered-briefs",
+        "dodChecked": false
+      },
+      {
+        "scopeId": "scope-10-reminder-promise-engine",
+        "scopeName": "Reminder & Promise Engine",
+        "status": "not_started",
+        "dependsOn": ["scope-1-knowledge-store-schema", "scope-2-synthesis-pipeline", "scope-9-calendar-triggered-briefs", "spec-021-m1a-unified-surfacing-controller"],
+        "scenarioIds": ["SCN-025-27", "SCN-025-28", "SCN-025-29"],
+        "surfaces": ["scheduler", "knowledge", "intelligence", "surfacing-controller"],
+        "evidenceRef": "scopes.md#scope-10-reminder-promise-engine",
+        "dodChecked": false
+      }
+    ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -261,6 +282,17 @@
       "runStartedAt": "2026-04-21T00:00:00Z",
       "runFinishedAt": "2026-04-21T00:30:00Z",
       "summary": "Stochastic sweep regression-to-doc probe: zero findings. Cross-spec conflict scan clean (routes, tables, NATS subjects, schema, design). Baseline test comparison: 41 Go packages ok, 214 Python tests, E2E all pass, lint clean, build compiles, config SST in sync. regression-baseline-guard PASSED, artifact-lint PASSED. One artifact fix: state.json certification.status aligned to done."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "bootstrap"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-03T00:00:00Z",
+      "runFinishedAt": "2026-06-03T00:00:00Z",
+      "summary": "Release-planning dispatch (docs/releases/mvp/actions.md MVP M1b, addressedFindings RELEASE-MVP:M1b). Reopened spec 025 for additive planning-only refinement (workflowMode improve-existing). Added 'Calendar-Triggered Briefs' and 'Reminder & Promise Engine' sections to spec.md (6 new Gherkin scenarios SCN-025-24..29). Added 'Calendar-Triggered Briefs (Architecture)' and 'Reminder & Promise Engine (Architecture)' sections to design.md covering producer/store schema, scheduler integration, and explicit coordination with spec 021 M1a unified surfacing controller (both producers MUST flow THROUGH the controller, not around it). Added Scope 9 'Calendar-Triggered Briefs' and Scope 10 'Reminder & Promise Engine' to scopes.md (status Not Started) with full implementation plan, consumer/shared-infra impact sweeps, change boundary, test plan (unit + integration + e2e-api + regression e2e), and DoD. Added SCN-025-24..29 to scenario-manifest.json under new scope entries 09-calendar-triggered-briefs and 10-reminder-promise-engine (status planned). Hard dependency: spec 021 M1a controller MUST land before Scope 9/10 implementation. nextRequiredOwner=bubbles.implement (after M1a lands). No code changes."
     }
   ],
   "activeBugs": [],
@@ -276,7 +308,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T00:00:00Z",
+  "lastUpdatedAt": "2026-06-03T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -313,5 +345,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Addresses 5 gaps identified from Karpathy LLM Wiki pattern analysis: pre-synthesis layer, prompt contract implementation, incremental knowledge building, lint/quality maintenance, cross-source synthesis at ingest time."
+  "notes": "Addresses 5 gaps identified from Karpathy LLM Wiki pattern analysis: pre-synthesis layer, prompt contract implementation, incremental knowledge building, lint/quality maintenance, cross-source synthesis at ingest time. Reopened 2026-06-03 (improve-existing) to add Scope 9 (Calendar-Triggered Briefs) and Scope 10 (Reminder & Promise Engine) per release-planning dispatch RELEASE-MVP:M1b. Scopes 1..8 remain certified done; Scopes 9/10 are not_started and hard-depend on spec 021 M1a unified surfacing controller delivery before implementation can begin. nextRequiredOwner=bubbles.implement after M1a lands."
 }

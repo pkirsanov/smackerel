@@ -296,6 +296,123 @@ Scenario: SCN-073-A11 — Missing backend base URL fails loud at build/start tim
   without creating separate business logic paths; web remains between
   HttpOnly cookie vs. in-memory token + refresh.
 
+---
+
+## Knowledge Graph Browse Surface
+
+**Added:** 2026-06-03 (MVP M2 dispatch — release-planning:MVP M2).
+**Status:** planned (planning-only; implementation routes to
+`bubbles.implement` after spec 027 SCOPE-9 annotation endpoints land).
+
+### Purpose
+
+The assistant transport surface (Sections 1–8) covers conversational
+capture and Q&A. MVP M2 requires the complementary **read+annotate**
+surface: a wiki / graph-browse UI that lets the user navigate the
+knowledge graph by topic, person, place, and time, see rendered
+cross-links between artifacts, and open an inline annotation editor
+from any artifact page. The backend (knowledge graph, topics,
+intelligence, graph) has been ready since spec 025; this section
+specifies the missing UI surface.
+
+### Dependencies
+
+- Backend ready (no further backend work for read paths):
+  [`internal/knowledge/`](../../internal/knowledge/),
+  [`internal/intelligence/`](../../internal/intelligence/) (topics,
+  `people*.go`), [`internal/graph/`](../../internal/graph/).
+- Inline annotation entry point depends on
+  [spec 027 SCOPE-9](../027-knowledge-management/scopes.md) annotation
+  editing API (`SCN-027-71..74`). Until that lands, the entry point
+  is rendered disabled with a "coming soon" affordance — the browse
+  surface itself does not block on it.
+- Capture flow is owned by specs 033 / 058 and is **not** in scope here.
+  The graph-browse surface is read+annotate only.
+
+### Personas
+
+- **Returning user with accumulated knowledge:** uses the wiki surface
+  to explore what the system has captured about a topic, person, or
+  place without typing a query.
+- **Annotator:** opens an artifact page to add a correction or note
+  inline, then returns to browsing.
+
+### Functional Requirements (BDD Scenarios)
+
+```gherkin
+Scenario: SCN-073-B01 — Browse topics index to a topic page
+  Given the user opens the wiki surface
+  When the user selects "Topics"
+  Then the topics index lists topics from the knowledge graph with
+    counts of linked artifacts, people, and places
+  And selecting a topic opens a topic page showing the topic's
+    linked artifacts, related people, and related places
+
+Scenario: SCN-073-B02 — Browse people index to a person page
+  Given the user opens the wiki surface
+  When the user selects "People"
+  Then the people index lists people derived from the intelligence
+    layer with artifact counts
+  And selecting a person opens a person page showing a timeline of
+    artifacts, related topics, and related places for that person
+
+Scenario: SCN-073-B03 — Browse places index to a place page
+  Given the user opens the wiki surface
+  When the user selects "Places"
+  Then the places index lists places derived from the maps connector
+    and any artifact-derived locations
+  And selecting a place opens a place page showing the place's
+    map-derived location and linked artifacts
+
+Scenario: SCN-073-B04 — Time view renders a calendar-style scroll
+  Given the user opens the wiki surface
+  When the user selects "Time"
+  Then the time view renders artifacts grouped by day in a vertical
+    calendar-style scroll
+  And the user can scroll backward and forward in time without
+    losing scroll position when navigating away and back
+
+Scenario: SCN-073-B05 — Cross-links render on every artifact page
+  Given the user is on any artifact, topic, person, or place page
+  When the page renders
+  Then a "Related" section lists graph-derived cross-links to other
+    artifacts, topics, people, or places
+  And each cross-link carries an explainable reason (e.g. "shares
+    topic X", "mentioned in artifact Y", "same place Z") sourced
+    from the graph edge metadata
+
+Scenario: SCN-073-B06 — Inline annotation entry point opens from any artifact page
+  Given the user is on an artifact page
+  And the spec 027 SCOPE-9 annotation endpoints (SCN-027-71..74) are available
+  When the user activates the "Annotate" entry point
+  Then an inline annotation editor opens scoped to the current artifact
+  And submitting calls the spec 027 SCOPE-9 annotation endpoints
+  And the rendered artifact page reflects the new annotation after submit
+```
+
+### Acceptance Criteria (Graph Browse Surface)
+
+- The web/PWA frontend serves wiki routes for topics, people, places,
+  time, and artifact detail.
+- Every artifact-bearing page renders cross-links with explainable
+  reasons sourced from graph edge metadata; no client-side
+  re-derivation of relationships.
+- The annotation entry point on artifact pages calls the spec 027
+  SCOPE-9 endpoints (`SCN-027-71..74`) and is rendered disabled with
+  a clear affordance when those endpoints are unavailable.
+- Initial paint on local LAN is under 1s for any browse route
+  (target; measured under § Performance Budget in design).
+- Surface is read+annotate only; no capture, no chat composer reuse.
+
+### Non-Goals (Graph Browse Surface)
+
+- Editing artifact bodies themselves (annotation is the only mutation).
+- Re-implementing the assistant chat composer or capture pipeline.
+- Native mobile parity for the wiki surface (web/PWA only for M2;
+  mobile parity defers to a follow-on spec alongside the rescoped
+  SCOPE-073-03 / SCOPE-073-04 mobile delivery).
+- Server-side changes — backend is already ready (spec 025).
+
 ## UI Wireframes
 
 ### Screen Inventory

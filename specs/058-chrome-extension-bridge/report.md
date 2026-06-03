@@ -629,4 +629,17 @@ named close-out concerns above.
 - `unresolvedFindings`: DI-058-01 (12 not-run UDs gated on infra not in repo), DI-058-03 (3 missing Playwright files), DI-058-07 (G088 inherent-to-close-out, user-accepted).
 - No code changes. Terminal discipline respected (IDE tools only).
 
+## Re-Verification 2026-06-03 (release-planning:MVP M5)
+
+Triggered by `specs/_spec-review-report.md` MINOR_DRIFT entry for spec 058. Re-verified each recorded close-out concern against the current tree:
+
+| Concern | Status as of 2026-06-03 | Evidence |
+|---|---|---|
+| DI-058-01 (router-mount follow-up, shared with spec 060) | **Partially resolved.** Router-mount for `POST /v1/connectors/extension/ingest` (with `auth.RequireScope("extension:bookmarks","extension:history")`) AND `GET /v1/admin/extension/devices` is now live in `internal/api/router.go` lines 354–379. Remaining DI-058-01 surface (Playwright-harness-gated rows, HTMX admin page, live post-merge cosign verify-blob) is unchanged. | `internal/api/router.go:354-379` |
+| DI-058-01 (Playwright-gated DoD rows) | **Still applies.** No `extensions/chrome-bridge/test/e2e/` directory exists; F-057-V-001 Playwright harness for the extension surface still not landed. | `file_search extensions/chrome-bridge/test/e2e/**` → 0 results |
+| DI-058-03 (3 missing Playwright spec files for chrome-bridge) | **Still applies.** Files `bookmark_roundtrip.spec.ts` / `auth_failure.spec.ts` not present anywhere in repo. | `file_search **/bookmark_roundtrip.spec.ts` → 0 results |
+| DI-058-07 (G088 inherent-to-close-out) | **Closed by acceptance** (unchanged). | report.md line 623 |
+
+**Disposition:** Concerns remain (Playwright-harness-blocked DoD rows + missing e2e spec files). Status stays `done_with_concerns`; promotion to `done` is not appropriate this cycle. `certification.lastEvaluatedAt` refreshed to 2026-06-03; partial resolution of the router-mount sub-item recorded in `certification.followUps[]`.
+
 
