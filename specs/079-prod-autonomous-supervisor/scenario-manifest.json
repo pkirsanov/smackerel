@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "featureDir": "specs/079-prod-autonomous-supervisor",
+  "generatedAt": "2026-06-03T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-079-001",
+      "scopeId": "TBD-post-ratification",
+      "title": "Anomaly detected with valid write token → bug filed under owning spec with full evidence",
+      "behaviorClass": "agent-decision",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["spec.md#scn-079-a01-anomaly-detected-with-valid-write-token--bug-filed"]
+    },
+    {
+      "scenarioId": "SCN-079-002",
+      "scopeId": "TBD-post-ratification",
+      "title": "Anomaly detected without write token → read-only ledger entry only, no bug filed",
+      "behaviorClass": "agent-decision",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["spec.md#scn-079-a02-anomaly-detected-without-write-token--read-only-only"]
+    },
+    {
+      "scenarioId": "SCN-079-003",
+      "scopeId": "TBD-post-ratification",
+      "title": "Supervisor respects operator quiet hours for non-critical anomalies",
+      "behaviorClass": "agent-decision",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["spec.md#scn-079-a03-supervisor-respects-operator-quiet-hours"]
+    },
+    {
+      "scenarioId": "SCN-079-004",
+      "scopeId": "TBD-post-ratification",
+      "title": "Supervisor defers to an active spec already covering the symptom",
+      "behaviorClass": "agent-decision",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["spec.md#scn-079-a04-supervisor-defers-to-an-active-spec"]
+    },
+    {
+      "scenarioId": "SCN-079-005",
+      "scopeId": "TBD-post-ratification",
+      "title": "Supervisor detects its own noise and self-throttles within budget",
+      "behaviorClass": "agent-decision",
+      "changeType": "new",
+      "requiredTestType": ["unit", "stress"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["spec.md#scn-079-a05-supervisor-detects-its-own-noise-and-self-throttles"]
+    },
+    {
+      "scenarioId": "SCN-079-006",
+      "scopeId": "TBD-post-ratification",
+      "title": "Capability token expiry revokes write access mid-flight with no partial state",
+      "behaviorClass": "agent-decision",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["spec.md#scn-079-a06-capability-token-expiry-revokes-write-access-mid-flight"]
+    }
+  ]
+}

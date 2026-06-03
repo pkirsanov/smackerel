@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "featureDir": "specs/078-cross-surface-surfacing-prioritizer",
+  "generatedAt": "2026-06-03T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-078-001",
+      "scopeId": "02-adopt-e2e-suite-and-certify",
+      "title": "Budget exhaustion defers a non-urgent candidate",
+      "behaviorClass": "domain",
+      "changeType": "adopt-existing",
+      "requiredTestType": ["unit", "e2e"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/intelligence/surfacing/controller_test.go",
+        "tests/e2e/surfacing_budget_test.go"
+      ],
+      "evidenceRefs": ["report.md#adopted-evidence"]
+    },
+    {
+      "scenarioId": "SCN-078-002",
+      "scopeId": "02-adopt-e2e-suite-and-certify",
+      "title": "Acknowledged content_key suppresses follow-ups across channels",
+      "behaviorClass": "domain",
+      "changeType": "adopt-existing",
+      "requiredTestType": ["unit", "e2e"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/intelligence/surfacing/controller_test.go",
+        "tests/e2e/surfacing_budget_test.go"
+      ],
+      "evidenceRefs": ["report.md#adopted-evidence"]
+    },
+    {
+      "scenarioId": "SCN-078-003",
+      "scopeId": "01-adopt-controller-metrics-and-sst-loader",
+      "title": "Urgent escalation permitted past exhausted budget",
+      "behaviorClass": "domain",
+      "changeType": "adopt-existing",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/intelligence/surfacing/controller_test.go"
+      ],
+      "evidenceRefs": ["report.md#adopted-evidence"]
+    },
+    {
+      "scenarioId": "SCN-078-004",
+      "scopeId": "01-adopt-controller-metrics-and-sst-loader",
+      "title": "Content-key dedupe collapses cross-channel duplicates",
+      "behaviorClass": "domain",
+      "changeType": "adopt-existing",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/intelligence/surfacing/controller_test.go"
+      ],
+      "evidenceRefs": ["report.md#adopted-evidence"]
+    }
+  ]
+}
