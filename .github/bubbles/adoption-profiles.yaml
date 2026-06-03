@@ -75,7 +75,7 @@ profiles:
     id: production
     label: Production
     description: Production lifecycle guidance for repos operating release trains, propagation, upkeep, incident response, and live telemetry adapters.
-    intendedAudience: Teams using Bubbles past delivery into real operational lifecycle management: parallel trains, recurring upkeep, production incidents, propagation, and framework self-observation.
+    intendedAudience: "Teams using Bubbles past delivery into real operational lifecycle management: parallel trains, recurring upkeep, production incidents, propagation, and framework self-observation."
     bootstrapSummary: Delivery profile plus production-cycle surfaces (release trains, propagation policy, upkeep calendar, live telemetry adapter contract, incident fastlane).
     doctorProjectReadiness: gating
     repoReadinessPosture: production-lifecycle
