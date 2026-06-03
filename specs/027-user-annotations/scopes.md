@@ -97,6 +97,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 6 | Telegram Annotation Handler | Go telegram | unit: reply-to flow, /rate command, disambiguation, formatting | Done |
 | 7 | Search Extension | Go API | unit: intent detection, annotation filters, result enrichment, boost | Done |
 | 8 | Intelligence Integration | Go intelligence, NATS | unit: relevance delta, subscriber, resurfacing query | Done |
+| 9 | Annotation Editing API (UI coordination) | Go API | unit: list-my-annotations, If-Match conflict, source_channel=web audit | Not Started |
 
 ---
 
@@ -1140,3 +1141,72 @@ Scenario: Intelligence engine subscribes to annotations.created
   > **Phase:** regression
   > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
   > **Claim Source:** executed
+
+---
+
+## Scope 9 — Annotation Editing API (UI coordination)
+
+**Status:** Not Started
+**Depends on:** Scope 3 (Annotation Store), Scope 4 (REST API Endpoints), spec 044 (per-user bearer auth), spec 060 (bearer scope claim)
+**Consumer:** spec 073 — graph-browse UI (MVP M2)
+**Added:** 2026-06-03 via release-planning dispatch (RELEASE-MVP:M2-support)
+
+### Surface
+
+Extends the existing annotation REST API with the surface the graph-browse UI requires:
+
+- `GET /api/annotations?actor=me&limit=N` — cross-artifact list-my-annotations endpoint (new)
+- `POST /api/artifacts/{id}/annotations` — accept optional `If-Match: <version>` header for stale-edit conflict detection (extension)
+- `GET /api/artifacts/{id}/annotations/summary` — include monotonic `version` field derived from materialized view refresh counter (extension)
+- All annotation endpoints — enforce per-user bearer auth (spec 044) and bearer scope claim (spec 060); record `source_channel = web` and resolved `actor_id` on UI-originated events
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T9-01 | unit | `internal/api/annotation_list_test.go` | SCN-027-73 | `GET /api/annotations?actor=me` returns caller's events in reverse chronological order |
+| T9-02 | unit | `internal/api/annotation_list_test.go` | SCN-027-73 | `actor=<other>` is rejected with 403 in single-tenant mode |
+| T9-03 | unit | `internal/api/annotation_conflict_test.go` | SCN-027-74 | `POST` with stale `If-Match` returns 409 + current summary; no event recorded |
+| T9-04 | unit | `internal/api/annotation_conflict_test.go` | SCN-027-71 | `POST` without `If-Match` preserves append semantics unchanged |
+| T9-05 | unit | `internal/api/annotation_summary_test.go` | SCN-027-74 | Summary response includes monotonic `version` derived from view refresh counter |
+| T9-06 | unit | `internal/api/annotation_auth_test.go` | SCN-027-71..74 | All endpoints reject calls missing bearer or missing annotation scope claim (403) |
+| T9-07 | unit | `internal/api/annotation_audit_test.go` | SCN-027-71, SCN-027-72 | UI-originated events record `source_channel=web` and resolved `actor_id` |
+| T9-08 | e2e-api | `tests/e2e/annotation_editing_ui_test.go` | SCN-027-71..74 | Full flow: bearer → POST with If-Match → 200; stale If-Match → 409; list-my-annotations returns own events only |
+
+### Definition of Done
+
+- [ ] `GET /api/annotations` handler implemented with `actor`, `limit`, and (optional) `since` query parameters
+  > **Evidence:** Pending implementation.
+
+- [ ] Scenario SCN-027-73: list-my-annotations returns caller's events across all artifacts in reverse chronological order, excludes other actors, p95 < 500ms for first 50 entries
+  > **Evidence:** Pending implementation.
+
+- [ ] `If-Match: <version>` precondition supported on `POST /api/artifacts/{id}/annotations`; stale version returns `409 Conflict` with current summary
+  > **Evidence:** Pending implementation.
+
+- [ ] Scenario SCN-027-74: stale-edit conflict path records no annotation event and returns the current summary body
+  > **Evidence:** Pending implementation.
+
+- [ ] `GET /api/artifacts/{id}/annotations/summary` response includes monotonic `version` integer derived from `artifact_annotation_summary` refresh counter
+  > **Evidence:** Pending implementation.
+
+- [ ] All annotation endpoints require per-user bearer (spec 044) and annotation scope claim (spec 060); calls missing either receive `403`
+  > **Evidence:** Pending implementation.
+
+- [ ] UI-originated events record `source_channel = web` and the bearer's resolved subject as `actor_id`; `annotations.created` NATS payload includes both fields
+  > **Evidence:** Pending implementation.
+
+- [ ] Scenarios SCN-027-71, SCN-027-72: inline-edit from artifact page and add-tag from topic/person/place page round-trip through the API with bearer auth and produce the expected events
+  > **Evidence:** Pending implementation.
+
+- [ ] Audit log distinguishes Telegram, API, and web origins via `source_channel`
+  > **Evidence:** Pending implementation.
+
+- [ ] All unit tests pass: `./smackerel.sh test unit`
+  > **Evidence:** Pending implementation.
+
+- [ ] Scenario-specific E2E regression tests land alongside the change and stay green on every subsequent run
+  > **Evidence:** Pending implementation.
+
+- [ ] Broader E2E regression suite passes: `./smackerel.sh test integration` + `./smackerel.sh test e2e`
+  > **Evidence:** Pending implementation.

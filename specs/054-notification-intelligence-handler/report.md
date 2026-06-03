@@ -1211,6 +1211,28 @@ ok      github.com/smackerel/smackerel/tests/stress/readiness   0.227s
 |---|---|---|---|---|
 | 2026-05-29 | [packet-054-scheduler.md](../061-conversational-assistant/cross-spec/packet-054-scheduler.md) | spec 061 SCOPE-08 (Conversational Assistant — Notifications skill) | **Accepted, artifact-level.** The additive `Job.Source` (string) and `Job.Originator{Transport, ConfirmRef}` fields, the proposed nullable `scheduler_jobs.source` / `scheduler_jobs.originator` columns, and the backward-compat guarantees (zero-valued → NULL, no dispatch-loop behavior change) are accepted as the contract spec 054 will honor. | **Deferred to a follow-up spec 054 scope.** The current `internal/scheduler/` implementation is function-registration-based and has no public `Job` struct yet; introducing one plus the migration plus round-trip + dispatch tests is design-grade work that must go through `bubbles.plan` → `bubbles.implement` on a dedicated spec 054 scope, not a fastlane edit. Spec 061 SCOPE-08 BS-004 e2e remains gated on that follow-up scope landing the wiring; the existing `notificationSchedulerStub` in `cmd/core/wiring_assistant_skills.go` stays in place until then. |
 
+## Scope 9 Forward-Looking Test Scaffolds (Planning Reference, 2026-06-03)
+
+Scope 9 (Surfacing Controller Integration) is `not_started` and depends on spec
+021 M1a unified surfacing controller delivery before implementation can begin.
+Planning-only dispatch RELEASE-MVP:M1c added the following forward-looking test
+scaffolds. Each file currently contains a `t.Skip(...)` body pointing back to
+Scope 9; these scaffolds exist so traceability-guard's
+scenario → test-file → report-reference chain remains intact while the scope
+awaits its upstream dependency. They MUST be replaced with real test bodies
+when Scope 9 is implemented.
+
+| Scenario | Test File | Test Title |
+|---|---|---|
+| SCN-054-027 | `internal/notification/decision_surfacing_test.go` | `TestDecisionEnginePublishesSurfacingProposalInsteadOfDirectDispatch` |
+| SCN-054-028 | `internal/notification/surfacing_controller_integration_test.go` | `TestControllerSuppressesNonUrgentProposalWhenGlobalBudgetExhausted` |
+| SCN-054-029 | `internal/notification/decision_surfacing_test.go` | `TestUrgentDecisionMarksProposalForBudgetBypass` |
+| SCN-054-030 | `internal/notification/surfacing_controller_integration_test.go` AND `tests/e2e/notification_surfacing_controller_api_test.go` | `TestAcknowledgmentOnOneSurfaceCancelsSiblingProposals` / `TestNotificationSurfacingControllerEndToEndArbitrationAndAck` |
+
+No DoD items in Scope 9 are checked. Implementation evidence will be appended
+under a new `### scope-9-surfacing-controller-integration` section once Scope 9
+is delivered.
+
 Acceptance answers to the packet's §9 open questions:
 1. Field names `Source` and `Originator` are accepted as proposed.
 2. `Originator` will be a struct (preferred for type safety), persisted as JSONB.

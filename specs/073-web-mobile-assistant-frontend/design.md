@@ -500,6 +500,128 @@ Additional validation requirements:
 | Mobile auth persistence across process death may need a broader auth design | Auth owner must approve any OS secure-session adapter behavior before implementation persists or restores session capability. |
 | Offline retry persistence can become sensitive if it stores full prompts | Planning must either keep retry state memory-only or add security tests for any persisted queue that excludes auth material. |
 
+## Graph Browse UI Architecture
+
+**Added:** 2026-06-03 (MVP M2 dispatch). Implements the spec.md
+`## Knowledge Graph Browse Surface` section. Web/PWA only for M2.
+
+### Scope Boundary
+
+Read+annotate UI for the existing knowledge graph. Backend is unchanged
+— consumes existing read APIs from
+[`internal/knowledge/`](../../internal/knowledge/),
+[`internal/intelligence/`](../../internal/intelligence/) (topics,
+people), and [`internal/graph/`](../../internal/graph/). Annotation
+entry point delegates to spec 027 SCOPE-9 endpoints
+(`SCN-027-71..74`). Capture (specs 033 / 058) and assistant chat
+(this spec's Sections 1–8) are not in scope.
+
+### Routes (Web/PWA)
+
+Added under [`web/pwa/`](../../web/pwa/) following the existing
+embedded-PWA shape served by `web/pwa/embed.go`:
+
+| Route | Purpose | Backing API |
+|---|---|---|
+| `/wiki/` | Wiki landing — links to topics/people/places/time indices | none (static index) |
+| `/wiki/topics` | Topics index | `GET /api/knowledge/topics` (from `internal/intelligence/topics`) |
+| `/wiki/topics/:id` | Topic detail page | `GET /api/knowledge/topics/:id` + graph edges |
+| `/wiki/people` | People index | `GET /api/knowledge/people` (from `internal/intelligence/people*.go`) |
+| `/wiki/people/:id` | Person detail page | `GET /api/knowledge/people/:id` + graph edges |
+| `/wiki/places` | Places index | `GET /api/knowledge/places` (maps connector + artifact-derived) |
+| `/wiki/places/:id` | Place detail page | `GET /api/knowledge/places/:id` + graph edges |
+| `/wiki/time` | Calendar-style time scroll | `GET /api/knowledge/artifacts?groupBy=day` |
+| `/wiki/artifacts/:id` | Artifact detail page (with annotation entry point) | `GET /api/knowledge/artifacts/:id` + graph edges |
+
+If any backing read endpoint is missing today, planning routes a
+finding back to the knowledge/intelligence owners to expose it.
+Implementation MUST NOT silently add server endpoints under this
+spec — that is out of scope; route to the owning spec instead.
+
+### Data Fetch
+
+- All fetches use same-origin `fetch(url, { credentials: 'same-origin' })`
+  carrying the spec 070 HttpOnly session cookie. The web client never
+  reads or stores bearer material (same boundary as Section 8's
+  assistant chat).
+- Generated request/response validators projected from the knowledge
+  graph API schemas; same codegen pattern as the assistant schema
+  (see § Capability Foundation). If schemas are not yet codified,
+  implementation routes a finding to the knowledge owner before
+  hand-rolling clients.
+- Pagination: indices use cursor-based pagination from the backing
+  API; no client-side accumulation of unbounded lists.
+
+### Link Rendering
+
+Graph edges drive the "Related" section on every artifact-bearing page:
+
+- The backing API MUST return edges with `{targetKind, targetId,
+  targetLabel, reason}` where `reason` is a short server-derived
+  string (e.g. "shares topic X", "mentioned in artifact Y", "same
+  place Z").
+- The renderer projects edges in the order returned by the server
+  and renders `reason` verbatim. No client-side re-derivation of
+  relationships. No client-side ranking.
+- Cross-links are anchor elements with stable `href` to the
+  corresponding wiki route so deep-linking and back/forward
+  navigation work.
+
+### Annotation Entry Point
+
+- Renders an "Annotate" button on every artifact page.
+- When spec 027 SCOPE-9 endpoints (`SCN-027-71..74`) are reachable,
+  activating the button opens an inline editor scoped to the current
+  artifact. Submit calls the spec 027 endpoints; the artifact page
+  re-fetches to reflect the new annotation.
+- When endpoints are unreachable (probe at page load), the button
+  renders disabled with a "Annotation coming with spec 027 SCOPE-9"
+  affordance. The browse surface itself does not block on this.
+
+### Performance Budget
+
+- **Initial paint (local LAN):** ≤1s for any wiki route, measured
+  from navigation start to first contentful paint of the index or
+  detail body. Validated under TP-073-31 (see scopes.md).
+- **Cross-link "Related" section render:** ≤200ms after initial body
+  paint; if the backing API requires a follow-up call, the section
+  renders a skeleton until the response arrives.
+- **Time view scroll:** initial day window ≤1s; subsequent
+  pagination prefetched.
+
+### Accessibility
+
+- All index lists use semantic `<ul>` / `<li>` with `<a>` cross-links;
+  keyboard tab order is deterministic.
+- Detail pages have a single `<h1>` (entity name), `<h2>` sections
+  for "Related" and entity-specific sub-sections.
+- The "Annotate" button is keyboard-activatable and announces its
+  disabled state via `aria-disabled` when spec 027 SCOPE-9 is
+  unavailable.
+- Time view is a single scrollable region with day headings using
+  `<h2>` so screen readers can jump by heading.
+- No client-side scenario branching; the renderer projects whatever
+  the backing API returns.
+
+### Reuse of Existing Foundations
+
+- **PWA shell, service worker, embed.go** — reused without
+  modification; routes added as additional `.html` + `.js` pairs
+  under `web/pwa/`.
+- **Codegen pipeline** — same pattern as `web/pwa/generated/` used
+  for the assistant schema; extended to knowledge graph schemas.
+- **Auth/session middleware** — unchanged; cookie session same as
+  Section 8.
+- **Storage guard** — extended to cover wiki pages; no bearer/session
+  material persisted client-side.
+
+### Out of Scope
+
+- Native mobile parity (web/PWA only for M2).
+- Server-side graph endpoints not already present.
+- Capture/composer logic.
+- Mutation beyond the spec 027 SCOPE-9 annotation delegation.
+
 ## Superseded Design Decisions
 
 The prior active design treated Android as the only mobile implementation and described a platform-specific mobile module. That architecture is no longer active. The current design requires one shared mobile codebase that produces iPhone/iOS and Android clients, with platform-specific behavior restricted to adapters for secure session handoff, accessibility bridges, safe areas/insets, navigation shell, and packaging.
