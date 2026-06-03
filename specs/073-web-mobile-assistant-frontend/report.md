@@ -389,3 +389,33 @@ Planning-only dispatch. No new audit evidence under this run for SCOPE-073-05 �
 ### Chaos Evidence
 
 Planning-only dispatch. No new chaos evidence under this run for SCOPE-073-05 — chaos will run after implement/test/validate/audit complete. The planned adversarial coverage is captured in `scopes.md` Scope 5 Test Plan: TP-073-29 (cross-link parity) includes an adversarial sibling proving the assertion fails if the client re-derives or re-orders graph edges. Pre-existing chaos evidence for TP-073-10 (retry id reuse) and TP-073-02 (codegen drift) retained verbatim above.
+
+## Plan — 2026-06-03 (Scope 5 upstream-blocker route)
+
+**Agent:** bubbles.plan
+**Outcome:** route_required — Scope 5 (Knowledge Graph Browse Surface) cannot proceed in-repo. Upstream backend JSON API gap formally documented; bug packet filed; status held at `specs_hardened`.
+
+**Verification:** `grep -nE "r\.(Get|Post|Mount)" internal/api/router.go` against the topic/people/place/time/graph keywords confirmed none of the eight wiki-consumed JSON endpoints exist today. The only adjacent surface is `/topics` (server-rendered HTML via `deps.WebHandler.TopicsPage`) which is the wrong shape (HTML, no graph edges, no counts).
+
+**Eight missing JSON endpoints (per Scope 5 SCN-073-B01..B06 consumption):**
+
+| # | Endpoint | Scenario | Candidate Owning Module |
+|---|---|---|---|
+| 1 | `GET /api/topics` (index with counts) | SCN-073-B01 | NEW spec extending `internal/topics` |
+| 2 | `GET /api/topics/{id}` (detail) | SCN-073-B01 | Same as #1 |
+| 3 | `GET /api/people` (index) | SCN-073-B02 | NEW spec under `internal/intelligence` |
+| 4 | `GET /api/people/{id}` (detail) | SCN-073-B02 | Same as #3 |
+| 5 | `GET /api/places` (index) | SCN-073-B03 | NEW spec spanning `internal/knowledge` + maps connector (spec 011) |
+| 6 | `GET /api/places/{id}` (detail) | SCN-073-B03 | Same as #5 |
+| 7 | `GET /api/time?from=&to=` (day-grouped artifacts) | SCN-073-B04 | NEW spec under `internal/knowledge` |
+| 8 | `GET /api/graph/edges?source={kind:id}` (universal `{targetKind,targetId,targetLabel,reason}` cross-link contract) | SCN-073-B05 (also feeds B01..B04 "Related" sections) | NEW spec under `internal/graph` |
+
+**Routing decision:** Per Scope 5's own Uncertainty Declaration and Implementation Plan ("stop and route a finding to the owning spec instead of hand-rolling client types"), this is the prescribed exit path. The wiki PWA contract is server-driven; the client must not synthesize graph edges, derive `reason` strings, or hand-roll fixtures. Until the eight contracts land in `internal/topics` / `internal/intelligence` / `internal/knowledge` / `internal/graph` (operator triage to assign), Scope 5 cannot ship.
+
+**Artifacts touched (planning-only, owner: bubbles.plan):**
+
+- `scopes.md` — inserted `### Scope 5 — Upstream Blocker (Route Required)` between Test Plan and DoD; suffixed all 11 Scope 5 DoD items with "(BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)". No DoD items checked.
+- `state.json` — appended executionHistory entry for this planning run. Status remains `specs_hardened`; ceiling unchanged.
+- `bugs/BUG-073-UPSTREAM-API-GAP/` — new bug packet created (state.json, spec.md, report.md, bug.md). Status: `open`, severity: `blocker`, owner: needs operator triage.
+
+**Next required owner:** null. Operator triage required to assign the eight endpoints to specific upstream spec(s); no autonomous follow-up.
