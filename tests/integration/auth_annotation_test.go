@@ -36,10 +36,20 @@ func (s *stubAnnotationStoreForAuth) CreateFromParsed(_ context.Context, _ strin
 	s.createCalls++
 	return nil, nil
 }
+func (s *stubAnnotationStoreForAuth) CreateFromParsedAs(_ context.Context, _ string, _ annotation.ParsedAnnotation, _ annotation.SourceChannel, _ string) ([]annotation.Annotation, error) {
+	s.createCalls++
+	return nil, nil
+}
 func (s *stubAnnotationStoreForAuth) GetSummary(_ context.Context, _ string) (*annotation.Summary, error) {
 	return &annotation.Summary{}, nil
 }
+func (s *stubAnnotationStoreForAuth) GetSummaryVersion(_ context.Context, _ string) (int64, error) {
+	return 0, nil
+}
 func (s *stubAnnotationStoreForAuth) GetHistory(_ context.Context, _ string, _ int) ([]annotation.Annotation, error) {
+	return nil, nil
+}
+func (s *stubAnnotationStoreForAuth) ListByActor(_ context.Context, _ string, _ int, _ *time.Time) ([]annotation.Annotation, error) {
 	return nil, nil
 }
 func (s *stubAnnotationStoreForAuth) DeleteTag(_ context.Context, _ string, _ string, _ annotation.SourceChannel) error {
@@ -105,6 +115,11 @@ func TestAnnotation_BodyActorSourceInProduction_Rejected(t *testing.T) {
 		TTL:        time.Hour,
 		Issuer:     "smackerel",
 		Now:        time.Now,
+		// Spec 027 scope 9 — annotation endpoints gate on the
+		// `annotation:edit` scope (PLAN-9-03). Issue the token
+		// with the scope so the test still proves body-smuggling
+		// rejection happens BEFORE any store call.
+		Scopes: []string{"annotation:edit"},
 	})
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
@@ -141,6 +156,8 @@ func TestAnnotation_BodyActorIDInProduction_Rejected(t *testing.T) {
 		TTL:        time.Hour,
 		Issuer:     "smackerel",
 		Now:        time.Now,
+		// Spec 027 scope 9 — see Scope-9 comment in the sibling test.
+		Scopes: []string{"annotation:edit"},
 	})
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
