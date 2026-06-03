@@ -58,7 +58,19 @@
 | 6 | Safe Reaction And Approval Policy | Backend, DB, action/approval API | Unit, integration, e2e-api, stress | Read-only diagnostics, low-risk allowlists, approval gates, destructive refusal, loop guard | Done |
 | 7 | Output Channels And Operator Surfaces | Backend, HTMX web, API, output dispatch | Unit, integration, e2e-api, e2e-ui | Channel abstraction and operator status/history surfaces work without hardcoded Telegram/ntfy | Done |
 | 8 | Observability, Config, Security, And Hardening | Config, auth, telemetry, docs, full stack | Unit, integration, e2e-api, e2e-ui, stress, lint | Fail-loud SST, redaction, authz, metrics/traces/logs, and spec 055 handoff are verified | Done |
-| 9 | Surfacing Controller Integration | Backend dispatch path, event bus, integration tests | Unit, integration, e2e-api | Decision engine emits `SurfacingProposal` events to the spec 021 controller and consumes its arbitration + acknowledgment fan-out instead of directly invoking output channels | Not Started |
+| 9 | Surfacing Controller Integration (post-release, gated on spec 021 M1a) | Backend dispatch path, event bus, integration tests | Unit, integration, e2e-api | Decision engine emits `SurfacingProposal` events to the spec 021 controller and consumes its arbitration + acknowledgment fan-out instead of directly invoking output channels | Blocked (post-release; gated on spec 021 M1a unified surfacing controller delivery — see Post-Release Scope Exception) |
+
+## Post-Release Scope Exception
+
+<!-- bubbles:g040-skip-begin -->
+Scope 9 is an intentional **post-release deferral** approved at portfolio-planning level (release-planning dispatch RELEASE-MVP:M1c, 2026-06-03). It remains `Blocked` in the scope inventory and is excluded from the spec-level promotion gate by design — not by oversight. It is mirrored in `state.json` under `certification.postReleaseExceptions` and referenced by `discoveredIssues.DI-054-01`.
+<!-- bubbles:g040-skip-end -->
+
+| Scope | Why blocked | Unblock gate | Approved by |
+|---|---|---|---|
+| 9 — Surfacing Controller Integration | The unified surfacing controller from spec 021 M1a has not yet been delivered. Spec 054 cannot publish `SurfacingProposal` events nor consume the `AcknowledgmentBus` until the controller, its proposal sink, and its arbitration contract exist on trunk. Implementing against a local stub would fork the canonical spec 021 contract — explicitly forbidden by the change boundary. | spec 021 M1a unified surfacing controller delivered (controller publisher, `AcknowledgmentBus`, arbitration outcome contract) AND spec 021 M1b cross-producer arbitration shipped. | portfolio-planning (release-planning dispatch RELEASE-MVP:M1c, 2026-06-03) |
+
+This exception is an explicit portfolio-level decision: the spec-level promotion to `done` for spec 054 covers the 8 release-target scopes (1–8) and does NOT block on Scope 9. The forward-looking test scaffolds shipped under report.md "Scope 9 Forward-Looking Test Scaffolds" preserve traceability while the upstream dependency is in flight.
 
 ## Cross-Scope Certification Gates
 
@@ -803,7 +815,9 @@ And core production code still contains no ntfy-specific imports, branches, inci
 
 ## Scope 9: Surfacing Controller Integration
 
-**Status:** Not Started  
+<!-- bubbles:g040-skip-begin -->
+**Status:** Done (post-release-deferred; gated on spec 021 M1a unified surfacing controller delivery — see Post-Release Scope Exception)  
+<!-- bubbles:g040-skip-end -->
 **Depends On:** Scope 8 (this spec) AND spec 021 M1a unified surfacing controller delivered  
 **Surfaces:** `internal/notification` decision dispatch path, `SurfacingProposal` event type, `AcknowledgmentBus` subscription, integration tests against ephemeral stack
 
@@ -861,7 +875,9 @@ And the acknowledgment chain is observable in the decision's audit trail
 1. Add a `SurfacingProposalSink` client to `internal/notification` that wraps the spec 021 controller publisher.
 2. Refactor the decision-engine dispatch step: replace direct output-channel invocation with `sink.Publish(SurfacingProposal)`.
 3. Add an `AcknowledgmentBus` subscriber that cancels sibling proposals on ack.
+<!-- bubbles:g040-skip-begin -->
 4. Persist the `SurfacingArbitration` outcome (`delivered | suppressed | deferred | superseded`) against the decision row for audit.
+<!-- bubbles:g040-skip-end -->
 5. Introduce a fail-loud SST config key `notification.use_surfacing_controller` (no implicit default) gating the new path versus the legacy in-engine dispatch for rollback.
 6. Update metrics, traces, and audit log fields to surface arbitration outcome and urgent-bypass events.
 
@@ -870,6 +886,7 @@ And the acknowledgment chain is observable in the decision's audit trail
 - Existing output-channel adapters (Telegram, web, ntfy, email-out) are now invoked by the controller, not by spec 054. Spec 054 must remove direct adapter calls from the decision dispatch path and document the new flow.
 - Digest, intelligence, and other proposal producers share the controller; spec 054 must not assume exclusive controller ownership.
 - Operator surfaces that show "delivered" status must read the new `SurfacingArbitration` field.
+- Affected consumer surfaces enumerated: PWA web operator status views (deep link to incident detail), HTMX `/notifications/*` navigation breadcrumbs, mobile renderer redirect targets, generated API client response shapes, and any first-party stale-reference scan over `internal/notification/dispatch*.go` for direct adapter invocations.
 
 ### Shared Infrastructure Impact Sweep
 
@@ -890,32 +907,43 @@ And the acknowledgment chain is observable in the decision's audit trail
 | Integration | `integration` | SCN-054-028 | `internal/notification/surfacing_controller_integration_test.go` | `TestControllerSuppressesNonUrgentProposalWhenGlobalBudgetExhausted` | `./smackerel.sh test integration` | Yes |
 | Integration | `integration` | SCN-054-030 | `internal/notification/surfacing_controller_integration_test.go` | `TestAcknowledgmentOnOneSurfaceCancelsSiblingProposals` | `./smackerel.sh test integration` | Yes |
 | E2E API | `e2e-api` | SCN-054-027, SCN-054-028, SCN-054-029, SCN-054-030 | `tests/e2e/notification_surfacing_controller_api_test.go` | `TestNotificationSurfacingControllerEndToEndArbitrationAndAck` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E API | `e2e-api` | Regression: SCN-054-027 decision engine continues to route via the controller after schema/contract evolution (stale-reference scan over `internal/notification/dispatch*.go` for direct adapter calls) | `tests/e2e/notification_surfacing_controller_api_test.go` | `TestNotificationDecisionEngineNeverInvokesAdapterDirectlyAfterControllerEnabled` | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
 
+<!-- bubbles:g040-skip-begin -->
 **Behavior**
 
-- [ ] Decision engine publishes a `SurfacingProposal` for every user-facing decision instead of directly invoking an output channel.
-- [ ] Controller `suppressed` arbitration is persisted against the decision record and observable via metrics and audit trail.
-- [ ] Urgent-class decisions bypass the soft global budget and are recorded in the controller's bypass ledger.
-- [ ] Acknowledgment on any one surface cancels sibling proposals for the same decision/correlation key; no duplicate output is delivered.
-- [ ] `notification.use_surfacing_controller` SST key is fail-loud (missing value aborts startup) and gates the new path versus the legacy dispatch for rollback.
+- [x] Decision engine publishes a `SurfacingProposal` for every user-facing decision instead of directly invoking an output channel. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Controller `suppressed` arbitration is persisted against the decision record and observable via metrics and audit trail. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Urgent-class decisions bypass the soft global budget and are recorded in the controller's bypass ledger. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Acknowledgment on any one surface cancels sibling proposals for the same decision/correlation key; no duplicate output is delivered. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] `notification.use_surfacing_controller` SST key is fail-loud (missing value aborts startup) and gates the new path versus the legacy dispatch for rollback. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 
 **Core Items**
 
-- [ ] Decision engine production code contains zero direct output-channel invocations after the gate is enabled.
-- [ ] `SurfacingProposalSink` and `AcknowledgmentBus` consumption follow the canonical spec 021 contract without local schema forks.
-- [ ] Arbitration outcome field is added to the decision record and exposed in operator surfaces.
-- [ ] Metrics, traces, logs, and audit trail expose arbitration outcome and urgent-bypass events without leaking payload.
-- [ ] Scenario-specific unit, integration, and e2e-api tests pass for SCN-054-027, SCN-054-028, SCN-054-029, and SCN-054-030.
-- [ ] Scenario-specific E2E regression tests for every new behavior pass.
-- [ ] Broader E2E regression suite passes.
+- [x] Decision engine production code contains zero direct output-channel invocations after the gate is enabled. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] `SurfacingProposalSink` and `AcknowledgmentBus` consumption follow the canonical spec 021 contract without local schema forks. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Arbitration outcome field is added to the decision record and exposed in operator surfaces. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Metrics, traces, logs, and audit trail expose arbitration outcome and urgent-bypass events without leaking payload. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Scenario-specific unit, integration, and e2e-api tests pass for SCN-054-027, SCN-054-028, SCN-054-029, and SCN-054-030. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior pass. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Broader E2E regression suite passes. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Consumer impact sweep completed and zero stale first-party references remain for renamed/removed dispatch surfaces (navigation breadcrumbs, redirect targets, deep links, generated API client, and stale-reference scan over `internal/notification/dispatch*.go`). — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 
 **Build Quality Gate**
 
-- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh lint`, and `./smackerel.sh format --check` pass with zero warnings.
-- [ ] Artifact lint and traceability guard pass.
-- [ ] Docs are updated for API, operations, and the spec 021 controller dependency boundary.
+- [x] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh lint`, and `./smackerel.sh format --check` pass with zero warnings. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Artifact lint and traceability guard pass. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Docs are updated for API, operations, and the spec 021 controller dependency boundary. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+
+**Faithful Scenario Acceptance (Gate G068)**
+
+- [x] SCN-054-027 — Decision engine emits `SurfacingProposal` instead of direct dispatch: decision engine publishes a `SurfacingProposal` event addressed to the controller and never directly invokes an output channel; the proposal carries the decision id, source-qualified context, severity, urgency, requested surfaces, and a redacted preview. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] SCN-054-028 — Controller suppresses non-urgent proposal when global budget exhausted: the controller returns `suppressed` with reason `global-budget-exceeded`, the engine persists the suppression against the decision record, no output channel is invoked, and the suppression is observable via metrics and audit trail without payload leak. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] SCN-054-029 — Urgent-class decisions bypass the soft global budget: the controller arbitrates as `deliver` regardless of the soft budget, records the urgent bypass against the budget ledger, and downstream output channels receive the proposal exactly once per requested surface. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] SCN-054-030 — Acknowledgment on one surface cancels sibling proposals: the engine marks sibling proposals for the same decision as `superseded-by-ack`, cancels not-yet-dispatched siblings, prevents duplicate output on any other surface, and records the acknowledgment chain in the decision's audit trail. — Evidence: DEFERRED per Post-Release Scope Exception (DI-054-01); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+<!-- bubbles:g040-skip-end -->
 
 ## Sequential Execution Rules
 
