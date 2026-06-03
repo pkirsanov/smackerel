@@ -257,6 +257,70 @@
         {"type": "source", "location": "internal/scheduler/jobs.go::deliverAlertBatch (empty list short-circuit)"}
       ],
       "linkedDoD": ["When GetPendingAlerts returns empty, deliverAlertBatch short-circuits without invoking SendDigest or MarkAlertDelivered (Scenario SCN-021-015)"]
+    },
+    {
+      "scenarioId": "SCN-021-016",
+      "name": "Daily nudge budget enforced across all surfaces",
+      "scope": "scope-04",
+      "status": "planned",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/intelligence/surfacing/controller_test.go", "function": "TestController_BudgetExhaustionHoldsNonUrgent"},
+        {"file": "tests/e2e/surfacing_budget_test.go", "function": "TestSurfacingBudget_FiveDispatchedOneDeferred"}
+      ],
+      "evidenceRefs": [
+        {"type": "design", "location": "specs/021-intelligence-delivery/design.md#unified-surfacing-controller"},
+        {"type": "spec", "location": "specs/021-intelligence-delivery/spec.md#cross-surface-surfacing-budget"}
+      ],
+      "linkedDoD": ["Controller.Propose pipeline returns deferred-budget-exhausted when global daily budget is reached", "smackerel_surfacing_nudges_delivered_total stays at the configured cap across all channels"]
+    },
+    {
+      "scenarioId": "SCN-021-017",
+      "name": "Duplicate content deduped across surfaces",
+      "scope": "scope-04",
+      "status": "planned",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/surfacing/dedupe_test.go", "function": "TestDedupe_SameContentKeyAcrossChannels"},
+        {"file": "internal/intelligence/surfacing/integration_test.go", "function": "TestSurfacing_AlertAndDigestCollapseOnSameArtifact"}
+      ],
+      "evidenceRefs": [
+        {"type": "design", "location": "specs/021-intelligence-delivery/design.md#unified-surfacing-controller"},
+        {"type": "spec", "location": "specs/021-intelligence-delivery/spec.md#cross-surface-surfacing-budget"}
+      ],
+      "linkedDoD": ["Content-keyed dedupe collapses cross-channel duplicates within dedupe_window_hours", "smackerel_surfacing_dedupe_total increments per suppressed duplicate"]
+    },
+    {
+      "scenarioId": "SCN-021-018",
+      "name": "Acknowledged item suppresses follow-up nudges",
+      "scope": "scope-04",
+      "status": "planned",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/intelligence/surfacing/suppression_test.go", "function": "TestSuppression_AcknowledgedContentBlocksFollowups"},
+        {"file": "tests/e2e/surfacing_budget_test.go", "function": "TestSurfacingBudget_AnnotationAckSuppresses"}
+      ],
+      "evidenceRefs": [
+        {"type": "design", "location": "specs/021-intelligence-delivery/design.md#unified-surfacing-controller"},
+        {"type": "spec", "location": "specs/021-intelligence-delivery/spec.md#cross-surface-surfacing-budget"}
+      ],
+      "linkedDoD": ["Suppression reads ack/dismiss/not-useful signals from internal/annotation (spec 027)", "smackerel_surfacing_suppression_total{reason=\"acknowledged\"} increments for suppressed follow-ups"]
+    },
+    {
+      "scenarioId": "SCN-021-019",
+      "name": "Urgent event escalates past exhausted budget",
+      "scope": "scope-04",
+      "status": "planned",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/surfacing/escalation_test.go", "function": "TestEscalation_Priority1TimeCriticalExceedsBudget"},
+        {"file": "internal/intelligence/surfacing/escalation_test.go", "function": "TestEscalation_PerChannelSafetyNetStillApplies"}
+      ],
+      "evidenceRefs": [
+        {"type": "design", "location": "specs/021-intelligence-delivery/design.md#unified-surfacing-controller"},
+        {"type": "spec", "location": "specs/021-intelligence-delivery/spec.md#cross-surface-surfacing-budget"}
+      ],
+      "linkedDoD": ["Priority-1 + timeCritical bypasses global budget when last urgent went undelivered today", "smackerel_surfacing_budget_overrides_total{reason=\"urgent_escalation\"} increments per override", "Per-channel safety nets (e.g., alert 2/day cap) remain enforced"]
     }
   ]
 }

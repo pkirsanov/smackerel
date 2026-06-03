@@ -71,6 +71,8 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 6 | Web UI Knowledge Pages | Go web, HTMX templates | e2e-ui: knowledge routes render; unit: template rendering | Done |
 | 7 | Telegram Knowledge Commands | Go telegram | unit: command handlers; e2e-api: Telegram→API round-trip | Done |
 | 8 | Digest Integration & Health | Go digest, Go API | unit: lint→digest; e2e-api: health includes knowledge section | Done |
+| 9 | Calendar-Triggered Briefs | Go scheduler, Go intelligence, CalDAV connector cache | unit: lead-time scheduling + dedupe; integration: calendar event → SurfacingProposal | Not Started |
+| 10 | Reminder & Promise Engine | Go scheduler, Go knowledge (promise store), Go intelligence | unit: promise lifecycle + firing; integration: pending promise → SurfacingProposal on trigger | Not Started |
 
 ---
 
@@ -955,3 +957,188 @@ Scenario: Health endpoint includes knowledge stats
 - [x] Broader E2E regression suite passes → **Phase:** implement — Evidence: `./smackerel.sh test unit` all Go packages `ok`, Python 92 passed; `./smackerel.sh build` succeeds. **Claim Source:** executed
 - [x] All tests pass: `./smackerel.sh test unit` + `./smackerel.sh test e2e` → **Phase:** implement — Evidence: `./smackerel.sh test unit` — all packages `ok` including `internal/api`, `internal/digest`, `internal/knowledge`; e2e test stubs compile (no tests to run without live stack). **Claim Source:** executed
 - [x] Artifact lint clean → **Phase:** implement — Evidence: Go vet clean (build passed); 3 pre-existing Python lint warnings in `ml/tests/test_auth.py` (unrelated to Scope 8 changes). **Claim Source:** executed
+
+---
+
+## Scope 9: Calendar-Triggered Briefs
+
+**Status:** Not Started
+**Priority:** P1 (release-planning MVP M1b)
+**Depends On:** Scope 2 (synthesis pipeline), Scope 8 (briefs/digest integration), spec 021 M1a unified surfacing controller
+**Surfaces:** `internal/scheduler`, `internal/intelligence/briefs.go`, `internal/connector/caldav` (read-only consumer), `SurfacingProposal` event type
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-025-24 — Lead-time scheduler fires a brief before an upcoming calendar event
+  Given the CalDAV connector cache contains a meeting "Quarterly review" starting at 15:00 today
+  And the calendar-brief lead-time policy for category "meeting" is 30 minutes
+  When the scheduler tick at 14:30 evaluates upcoming events
+  Then a calendar-triggered brief job is enqueued for the meeting
+  And the brief is synthesised via the existing intelligence briefs pipeline using the meeting's source-qualified context
+  And the resulting brief is emitted as a SurfacingProposal addressed to the spec 021 unified surfacing controller with proposalSource "calendar-brief"
+  And it is not delivered directly to any output channel
+
+Scenario: SCN-025-25 — Lead-time policy is per category and configurable
+  Given the calendar-brief policy declares lead-time 1 day for category "trip" and 30 minutes for category "meeting"
+  And the CalDAV connector cache contains a trip event starting tomorrow at 09:00 and a meeting starting today at 16:00
+  When the scheduler evaluates upcoming events at 09:00 today
+  Then a brief job for the trip event is enqueued for emission at 09:00 today (24 hours ahead)
+  And a brief job for the meeting event is enqueued for emission at 15:30 today (30 minutes ahead)
+  And both jobs reference the originating CalDAV event id and lead-time policy version
+
+Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposals
+  Given a calendar-triggered brief was already emitted for CalDAV event id "evt-1234" at lead-time 30m
+  And the scheduler re-evaluates the same event within the same lead-time window
+  When the calendar-brief producer prepares a new job
+  Then the producer detects the existing brief by (calDavEventId, leadTimePolicyVersion)
+  And no second SurfacingProposal is enqueued for that event
+  And the duplicate-suppression decision is observable in the brief audit log without leaking event payload
+```
+
+### Implementation Plan
+
+**Files / surfaces to add or modify:**
+
+- `internal/scheduler/calendar_briefs.go` — periodic job that scans CalDAV cache for upcoming events within active lead-time windows and enqueues brief synthesis requests.
+- `internal/intelligence/briefs.go` — reuse existing brief synthesis; add a `briefSource` discriminator (`digest|calendar|promise`) so callers can mark provenance without changing core synthesis behaviour.
+- `internal/connector/caldav` — read-only `ListUpcomingEvents(ctx, horizon)` accessor against the existing cache (no schema change beyond reading already-stored event rows).
+- `internal/knowledge/store.go` — add `RecordCalendarBriefEmission(ctx, calDavEventId, leadTimePolicyVersion, proposalId)` and `LookupCalendarBriefEmission(...)` for dedupe tracking.
+- `internal/api` — no new external endpoint; brief emission flows through the spec 021 `SurfacingProposalSink`.
+- `config/smackerel.yaml` — fail-loud SST keys for `intelligence.calendar_briefs.enabled` (no default) and per-category lead-time map (no default; missing category emits no briefs and logs explicitly).
+
+**Coordination with spec 021 M1a:** every brief MUST be emitted as a `SurfacingProposal` addressed to the unified surfacing controller. This producer MUST NOT call output-channel adapters directly. If `intelligence.surfacing_controller_required=true` and the controller is unreachable, the producer fails loud and the job is requeued.
+
+### Consumer Impact Sweep
+
+- Existing `internal/intelligence/briefs.go` callers (daily digest pipeline) are unchanged in behaviour; new callers attach the `briefSource` discriminator only.
+- CalDAV connector cache schema is read-only from this scope; no migrations.
+- Spec 021 unified surfacing controller receives a new `proposalSource` value `calendar-brief`; spec 021 owns arbitration/budget rules.
+
+### Shared Infrastructure Impact Sweep
+
+- `SurfacingProposalSink` is owned by spec 021; consume the published contract verbatim.
+- Scheduler tick cadence is shared infrastructure — this scope MUST register through the existing scheduler registry, not spin up a new ticker goroutine.
+
+### Change Boundary
+
+- ALLOWED: `internal/scheduler/calendar_briefs.go`, dedupe helpers in `internal/knowledge/store.go`, read-only CalDAV cache accessor, new SST keys, briefs `briefSource` discriminator, tests.
+- FORBIDDEN: edits to spec 021 controller internals, edits to CalDAV connector ingest/write paths, edits to output-channel adapter contracts, edits to the canonical `SurfacingProposal` schema.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File / Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|-----------------|---------------------|---------|-------------|
+| Unit | `unit` | SCN-025-24 | `internal/scheduler/calendar_briefs_test.go` | `TestCalendarBriefScheduler_FiresAtLeadTimeBeforeEvent` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-025-25 | `internal/scheduler/calendar_briefs_test.go` | `TestCalendarBriefScheduler_PerCategoryLeadTimePolicy` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-025-26 | `internal/scheduler/calendar_briefs_test.go` | `TestCalendarBriefScheduler_DedupesByEventIdAndPolicyVersion` | `./smackerel.sh test unit` | No |
+| Integration | `integration` | SCN-025-24, SCN-025-26 | `tests/integration/calendar_briefs_test.go` | `TestCalendarBriefProducer_EmitsSurfacingProposalAndDedupes` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
+| E2E API | `e2e-api` | SCN-025-24 | `tests/e2e/calendar_briefs_e2e_test.go` | `TestCalendarBriefEndToEndFromCalDavCacheToSurfacingProposal` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
+| Regression E2E | `e2e-api` | SCN-025-26 | `tests/e2e/calendar_briefs_e2e_test.go` | `TestCalendarBriefRegression_NoDuplicateProposalsOnReEvaluation` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
+
+### Definition of Done
+
+- [ ] Lead-time scheduler fires calendar-triggered briefs at the configured lead-time before each upcoming CalDAV event.
+- [ ] Per-category lead-time policy is loaded from SST config with fail-loud behaviour and is versioned for dedupe.
+- [ ] Every calendar brief is emitted as a `SurfacingProposal` addressed to the spec 021 unified surfacing controller; zero direct output-channel calls from this producer.
+- [ ] Dedupe by `(calDavEventId, leadTimePolicyVersion)` prevents duplicate proposals across scheduler re-evaluations.
+- [ ] Scheduler job registers through the existing scheduler registry; no ad-hoc goroutines.
+- [ ] Scenario-specific unit, integration, and e2e-api tests for SCN-025-24, SCN-025-25, SCN-025-26 pass.
+- [ ] Broader E2E regression suite passes.
+- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh lint`, `./smackerel.sh format --check` pass with zero warnings.
+- [ ] Artifact lint and traceability guard pass.
+- [ ] Docs updated for the calendar-brief producer and spec 021 surfacing controller dependency boundary.
+
+---
+
+## Scope 10: Reminder & Promise Engine
+
+**Status:** Not Started
+**Priority:** P1 (release-planning MVP M1b)
+**Depends On:** Scope 1 (knowledge store), Scope 2 (synthesis pipeline), Scope 9 (calendar-brief producer pattern), spec 021 M1a unified surfacing controller
+**Surfaces:** `internal/scheduler`, `internal/knowledge` (promise store), `internal/intelligence`, `SurfacingProposal` event type
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-025-27 — User-stated promise is captured and persisted as pending
+  Given the assistant receives a user intent "remind me when the bookshelf order arrives"
+  And the promise is parsed into a trigger condition referencing the bookshelf order artifact and an arrival signal
+  When the reminder & promise engine accepts the promise
+  Then a promise row is persisted with status "pending", trigger condition, source artifact ids, requested-by timestamp, and expiration policy
+  And the persisted promise is observable via the knowledge store and audit trail without leaking payload to other surfaces
+
+Scenario: SCN-025-28 — Pending promise fires when its trigger condition is satisfied
+  Given a pending promise with trigger "bookshelf order arrived"
+  And an arrival event for the bookshelf order is ingested
+  When the scheduler tick re-evaluates pending promises
+  Then the promise transitions to status "fired"
+  And a SurfacingProposal with proposalSource "promise" is published to the spec 021 unified surfacing controller carrying the original promise summary and the triggering artifact id
+  And no output-channel adapter is invoked directly by the promise engine
+
+Scenario: SCN-025-29 — Promise expires when its expiration policy elapses without trigger or acknowledgment
+  Given a pending promise with expiration policy "expire after 30 days if not fired"
+  And 30 days have elapsed since requested-by with no triggering event and no acknowledgment
+  When the scheduler tick evaluates expiration
+  Then the promise transitions to status "expired"
+  And no SurfacingProposal is emitted on expiration
+  And the expiration is recorded against the promise row with reason "policy-elapsed"
+  And the user-visible audit trail reports the expiration without re-prompting the user
+```
+
+### Implementation Plan
+
+**Files / surfaces to add or modify:**
+
+- `internal/db/migrations/0NN_promises.sql` — add `knowledge_promises` table with columns: `id`, `status` (`pending|fired|acknowledged|expired`), `trigger_condition_json`, `source_artifact_ids`, `requested_at`, `expires_at`, `fired_at`, `acknowledged_at`, `proposal_id`, `audit_jsonb`.
+- `internal/knowledge/promises.go` — CRUD + status transitions; transitions are guarded (`pending → fired|expired`, `fired → acknowledged|expired`).
+- `internal/scheduler/promises.go` — periodic tick that (a) re-evaluates pending promises against new ingest signals and (b) advances expired promises to `expired` state.
+- `internal/intelligence/promises.go` — promise → `SurfacingProposal` translator, reusing the synthesis pipeline for human-readable summary fidelity.
+- `internal/api` — no new external endpoint in this scope; promise capture is invoked from the assistant intent surface (consumed via existing intent ingestion path).
+- `config/smackerel.yaml` — fail-loud SST keys for `intelligence.promises.enabled` (no default), `intelligence.promises.default_expiration_days` (no default), `intelligence.promises.max_active_per_user` (no default).
+
+**Coordination with spec 021 M1a:** firings MUST flow through the unified surfacing controller — the promise engine is a `SurfacingProposal` producer, not a dispatcher. Acknowledgment events from spec 021's `AcknowledgmentBus` MUST mark the originating promise as `acknowledged` so it never re-fires.
+
+### Consumer Impact Sweep
+
+- Assistant intent ingestion gains a new "promise capture" classifier path; existing intent paths are unchanged in behaviour.
+- Spec 021 unified surfacing controller receives a new `proposalSource` value `promise`; arbitration/budget remain spec 021's authority.
+- Knowledge store grows a `knowledge_promises` table; existing knowledge tables are untouched.
+
+### Shared Infrastructure Impact Sweep
+
+- `SurfacingProposalSink` and `AcknowledgmentBus` are spec 021 owned; consume the published contracts verbatim.
+- Scheduler tick cadence is shared infrastructure — register through the existing scheduler registry.
+- Migration must be idempotent and rollback-safe (drop table + drop index) per Docker lifecycle governance.
+
+### Change Boundary
+
+- ALLOWED: new `internal/knowledge/promises.go`, new `internal/scheduler/promises.go`, new `internal/intelligence/promises.go`, new migration file, new SST keys, assistant intent → promise-capture classifier hook, tests.
+- FORBIDDEN: edits to spec 021 controller internals, edits to output-channel adapter contracts, edits to the canonical `SurfacingProposal` schema, edits to existing knowledge tables beyond foreign-key references.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File / Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|-----------------|---------------------|---------|-------------|
+| Unit | `unit` | SCN-025-27 | `internal/knowledge/promises_test.go` | `TestPromiseStore_CapturePersistsPendingWithTriggerCondition` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-025-28 | `internal/scheduler/promises_test.go` | `TestPromiseScheduler_FiresPendingPromiseWhenTriggerSatisfied` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-025-29 | `internal/scheduler/promises_test.go` | `TestPromiseScheduler_ExpiresPendingPromiseAfterPolicyElapsed` | `./smackerel.sh test unit` | No |
+| Integration | `integration` | SCN-025-28 | `tests/integration/promises_test.go` | `TestPromiseEngine_PendingToFiredEmitsSurfacingProposal` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
+| Integration | `integration` | SCN-025-29 | `tests/integration/promises_test.go` | `TestPromiseEngine_ExpirationDoesNotEmitProposal` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
+| E2E API | `e2e-api` | SCN-025-27, SCN-025-28 | `tests/e2e/promises_e2e_test.go` | `TestPromiseEndToEndCaptureFireAndAcknowledge` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
+| Regression E2E | `e2e-api` | SCN-025-28 | `tests/e2e/promises_e2e_test.go` | `TestPromiseRegression_AcknowledgedPromiseNeverReFires` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
+
+### Definition of Done
+
+- [ ] User-stated promises are captured with parsed trigger condition, source artifact ids, requested-at, and expiration policy.
+- [ ] Promise lifecycle transitions are guarded (`pending → fired|expired`, `fired → acknowledged|expired`) and are atomically persisted.
+- [ ] Pending promises fire as `SurfacingProposal` addressed to the spec 021 unified surfacing controller; zero direct output-channel calls from this engine.
+- [ ] Expiration policy advances stale pending promises to `expired` without emitting any proposal.
+- [ ] Acknowledgment events from spec 021 `AcknowledgmentBus` mark originating promises `acknowledged` so they never re-fire.
+- [ ] Migration is idempotent and rollback-safe.
+- [ ] SST keys `intelligence.promises.enabled`, `intelligence.promises.default_expiration_days`, `intelligence.promises.max_active_per_user` are fail-loud (missing aborts startup).
+- [ ] Scenario-specific unit, integration, and e2e-api tests for SCN-025-27, SCN-025-28, SCN-025-29 pass.
+- [ ] Broader E2E regression suite passes.
+- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh lint`, `./smackerel.sh format --check` pass with zero warnings.
+- [ ] Artifact lint and traceability guard pass.
+- [ ] Docs updated for the promise engine and spec 021 surfacing controller dependency boundary.

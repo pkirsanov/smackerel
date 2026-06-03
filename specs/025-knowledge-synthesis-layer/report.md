@@ -508,3 +508,89 @@ ok      github.com/smackerel/smackerel/internal/pipeline        0.466s
 ### Verdict
 
 Spec is genuinely done. No drift between `spec.md`, `scopes.md`, `state.json`, and the on-disk implementation. Only artifact-format drift (lint-marker style) was repaired.
+
+---
+
+## 2026-06-03 — Release-Planning Dispatch (MVP M1b)
+
+**Phase Agent:** bubbles.plan (parent-expanded from bubbles.goal release-planning chain)
+**Workflow Mode:** improve-existing (planning-only)
+**Addressed Findings:** RELEASE-MVP:M1b
+**Source:** `docs/releases/mvp/actions.md` "Next Dispatches" section
+
+### Summary
+
+Reopened spec 025 (status `done` → `in_progress`; workflowMode `full-delivery` → `improve-existing`) to add two scheduler-backed synthesis producers as additive scopes:
+
+- **Scope 9 — Calendar-Triggered Briefs**: producers fire at configurable lead-time before upcoming CalDAV events; brief content reuses existing `internal/intelligence/briefs.go`; per-category lead-time SST policy; dedupe by `(calDavEventId, leadTimePolicyVersion)`.
+- **Scope 10 — Reminder & Promise Engine**: user-stated future-intent reminders with lifecycle `pending → fired → acknowledged|expired`; new `knowledge_promises` table; trigger evaluation in `internal/scheduler`; expiration policy does not emit proposals.
+
+Both producers MUST flow through the spec 021 M1a unified surfacing controller — they are `SurfacingProposal` producers, not dispatchers. Direct output-channel invocation is forbidden by the change boundary on both scopes.
+
+### Artifacts Modified
+
+| File | Change |
+|------|--------|
+| `spec.md` | Added `## Calendar-Triggered Briefs` and `## Reminder & Promise Engine` sections with 6 new Gherkin scenarios (SCN-025-24..29). |
+| `design.md` | Added `## Calendar-Triggered Briefs (Architecture)` and `## Reminder & Promise Engine (Architecture)` sections covering producer components, lead-time policy, promise store schema, trigger format, scheduler integration, and explicit spec 021 M1a coordination. |
+| `scopes.md` | Added Scope 9 and Scope 10 (status Not Started) with implementation plan, consumer impact sweep, shared infrastructure impact sweep, change boundary, test plan (unit + integration + e2e-api + regression e2e), and DoD. Updated Scope Summary table. |
+| `scenario-manifest.json` | Added `09-calendar-triggered-briefs` and `10-reminder-promise-engine` scope entries with SCN-025-24..29 (status `planned`). |
+| `state.json` | `status`: done → in_progress; `workflowMode`: full-delivery → improve-existing; `certification.status`: done → in_progress; added two `scopeProgress` entries with `dependsOn` referencing `spec-021-m1a-unified-surfacing-controller`; appended executionHistory entry; refreshed `lastUpdatedAt` and `notes`. |
+| `report.md` | This dispatch entry. |
+
+### Dependencies
+
+- **Hard upstream:** spec 021 M1a unified surfacing controller (`SurfacingProposalSink`, `AcknowledgmentBus`) — Scope 9/10 implementation cannot start until M1a lands.
+- **Read-only consumer:** `internal/connector/caldav` cache (Scope 9).
+- **Reused infrastructure:** `internal/scheduler` registry, `internal/intelligence/briefs.go` synthesis pipeline.
+
+### Constraints Honored
+
+- Smackerel NO-DEFAULTS: all new SST keys (`intelligence.calendar_briefs.*`, `intelligence.promises.*`) are documented as fail-loud, no fallback defaults.
+- No env-specific content added.
+- IDE file tools only; zero shell-write to JSON/markdown.
+- No code changes in this dispatch; new scopes left at `not_started`.
+
+### Verification
+
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/025-knowledge-synthesis-layer`
+**Executed:** YES
+**Phase Agent:** bubbles.plan
+**Evidence:** see "Artifact Lint" section below (appended after run).
+
+### Next Required Owner
+
+`bubbles.implement` — pick up Scope 9 and Scope 10 once spec 021 M1a unified surfacing controller has been delivered and its `SurfacingProposalSink` / `AcknowledgmentBus` contracts are published.
+
+### Artifact Lint Evidence
+
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/025-knowledge-synthesis-layer`
+**Executed:** YES
+**Phase Agent:** bubbles.plan
+**Date:** 2026-06-03
+
+```
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: improve-existing
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' (pre-existing v2-schema warning)
+⚠️  state.json uses deprecated field 'statusDiscipline' (pre-existing v2-schema warning)
+⚠️  state.json uses deprecated field 'scopeLayout' (pre-existing v2-schema warning)
+ℹ️  Workflow mode 'improve-existing' allows status 'done'; current status is 'in_progress'
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+Artifact lint PASSED.
+```
