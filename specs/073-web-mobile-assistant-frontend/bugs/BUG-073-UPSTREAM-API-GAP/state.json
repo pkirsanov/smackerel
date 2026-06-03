@@ -1,0 +1,62 @@
+{
+  "version": 3,
+  "specId": "073-web-mobile-assistant-frontend",
+  "bugId": "BUG-073-UPSTREAM-API-GAP",
+  "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-UPSTREAM-API-GAP",
+  "featureName": "BUG-073-UPSTREAM-API-GAP: Backend JSON APIs for wiki/graph-browse surface (Scope 5 blocker)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "open",
+  "severity": "blocker",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "discovery",
+    "runStartedAt": "2026-06-03T12:00:00Z",
+    "completedPhaseClaims": ["discovery", "documentation"],
+    "executionHistory": [
+      {"phase": "discovery", "agent": "bubbles.plan", "startedAt": "2026-06-03T12:00:00Z", "completedAt": "2026-06-03T12:00:00Z", "outcome": "completed_owned", "summary": "Verified by grep of internal/api/router.go that 8 wiki-consumed JSON endpoints do not exist."},
+      {"phase": "documentation", "agent": "bubbles.plan", "startedAt": "2026-06-03T12:00:00Z", "completedAt": "2026-06-03T12:00:00Z", "outcome": "completed_owned", "summary": "Filed bug.md, spec.md (10 acceptance criteria covering 8 endpoints + auth parity + routing assignment), report.md. Routed to operator for triage."}
+    ]
+  },
+  "certification": {
+    "status": "open",
+    "completedScopes": [],
+    "certifiedCompletedPhases": ["discovery", "documentation"],
+    "scopeProgress": [],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "open bug awaiting operator triage to assign owning upstream spec(s)",
+      "lastUpdatedAt": "2026-06-03T12:00:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "blockedScenarios": [
+    "SCN-073-B01",
+    "SCN-073-B02",
+    "SCN-073-B03",
+    "SCN-073-B04",
+    "SCN-073-B05",
+    "SCN-073-B06"
+  ],
+  "missingEndpoints": [
+    {"endpoint": "GET /api/topics", "scenarios": ["SCN-073-B01"], "candidateOwner": "internal/topics"},
+    {"endpoint": "GET /api/topics/{id}", "scenarios": ["SCN-073-B01"], "candidateOwner": "internal/topics"},
+    {"endpoint": "GET /api/people", "scenarios": ["SCN-073-B02"], "candidateOwner": "internal/intelligence"},
+    {"endpoint": "GET /api/people/{id}", "scenarios": ["SCN-073-B02"], "candidateOwner": "internal/intelligence"},
+    {"endpoint": "GET /api/places", "scenarios": ["SCN-073-B03"], "candidateOwner": "internal/knowledge+spec-011-maps"},
+    {"endpoint": "GET /api/places/{id}", "scenarios": ["SCN-073-B03"], "candidateOwner": "internal/knowledge+spec-011-maps"},
+    {"endpoint": "GET /api/time?from=&to=", "scenarios": ["SCN-073-B04"], "candidateOwner": "internal/knowledge"},
+    {"endpoint": "GET /api/graph/edges?source={kind:id}", "scenarios": ["SCN-073-B05", "SCN-073-B01-related", "SCN-073-B02-related", "SCN-073-B03-related", "SCN-073-B04-related"], "candidateOwner": "internal/graph"}
+  ]
+}
