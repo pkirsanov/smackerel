@@ -143,6 +143,19 @@ bring_up_test_stack() {
   # from CORE_EXTERNAL_URL — no silent default, no hardcoded localhost.
   export SMACKEREL_BASE_URL="$core_url"
 
+  # Spec 077 SCOPE-3 — the auth_login.spec.ts test suite needs the
+  # shared dev token to POST /v1/web/login through the disposable test
+  # stack (AuthConfig.Enabled=false → constant-time compare against
+  # SMACKEREL_AUTH_TOKEN). Sourced from the same SST env file; fail
+  # loud if missing so we never silently skip login coverage.
+  local auth_token
+  auth_token="$(smackerel_env_value "$SMACKEREL_E2E_UI_ENV_FILE" "SMACKEREL_AUTH_TOKEN")"
+  if [[ -z "$auth_token" ]]; then
+    echo "ERROR: SMACKEREL_AUTH_TOKEN missing from $SMACKEREL_E2E_UI_ENV_FILE; cannot drive spec 077 SCOPE-3 login tests." >&2
+    return 1
+  fi
+  export SMACKEREL_AUTH_TOKEN="$auth_token"
+
   # Install the teardown trap BEFORE bringing the stack up so a failed
   # `up` still triggers cleanup.
   trap 'tear_down_test_stack' EXIT

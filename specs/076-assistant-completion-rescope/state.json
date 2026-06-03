@@ -22,7 +22,7 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": 2,
+    "currentScope": "7b",
     "runStartedAt": "2026-06-02T00:00:00Z",
     "completedPhaseClaims": [
       {
@@ -59,6 +59,76 @@
         "agent": "bubbles.implement",
         "claimedAt": "2026-06-02T19:10:00Z",
         "evidence": "report.md#scope-3-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "4a",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T20:25:00Z",
+        "evidence": "report.md#scope-4a-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "4b",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T21:30:00Z",
+        "evidence": "report.md#scope-4b-implement-round--2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "5",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T21:30:00Z",
+        "evidence": "report.md#scope-5-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "6a",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T22:00:00Z",
+        "evidence": "report.md#scope-6a-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "6b",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T22:30:00Z",
+        "evidence": "report.md#scope-6b-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "6c",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T23:00:00Z",
+        "evidence": "report.md#scope-6c-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "6d",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T23:30:00Z",
+        "evidence": "report.md#scope-6d-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "7a",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T23:55:00Z",
+        "evidence": "report.md#scope-7a-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "7c",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-03T00:55:00Z",
+        "evidence": "report.md#scope-7c-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "7b",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-03T01:10:00Z",
+        "evidence": "report.md#scope-7b-implement-2026-06-03"
       }
     ],
     "pendingTransitionRequests": []
@@ -96,38 +166,110 @@
         "certifiedAt": null
       },
       {
-        "scope": 4,
-        "name": "NL Replacements and Annotation Classifier Swap",
-        "status": "not_started",
+        "scope": "4a",
+        "name": "NL Replacements — Facade Routing for /find + /rate",
+        "status": "done",
         "dependsOn": [1],
-        "scopeDir": "scopes.md#scope-4",
+        "scopeDir": "scopes.md#scope-4a-nl-replacements--facade-routing-for-find--rate",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "4b",
+        "name": "Annotation Classifier — annotation.classify.v1 + Classifier Interface + Warm-Cache + Dual-Write Shadow Comparator",
+        "status": "in_progress",
+        "dependsOn": [1],
+        "scopeDir": "scopes.md#scope-4b-annotation-classifier--annotationclassifyv1--classifier-interface--warm-cache--dual-write-shadow-comparator",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "4c",
+        "name": "interactionMap Removal (post-release, gated on shadow telemetry)",
+        "status": "blocked",
+        "dependsOn": ["4b"],
+        "scopeDir": "scopes.md#scope-4c-interactionmap-removal-post-release-gated-on-shadow-telemetry",
         "evidenceFile": "report.md",
         "certifiedAt": null
       },
       {
         "scope": 5,
         "name": "Capture Provenance, Dedup, Telemetry, and Acknowledgement Parity",
-        "status": "not_started",
+        "status": "done",
         "dependsOn": [1],
         "scopeDir": "scopes.md#scope-5",
         "evidenceFile": "report.md",
         "certifiedAt": null
       },
       {
-        "scope": 6,
-        "name": "Legacy-Retirement Window Wiring and Lifecycle",
+        "scope": "6a",
+        "name": "Legacy Retirement — Runtime Wiring (Pause Store + Scheduler)",
         "status": "not_started",
         "dependsOn": [1],
-        "scopeDir": "scopes.md#scope-6",
+        "scopeDir": "scopes.md#scope-6a-legacy-retirement--runtime-wiring-pause-store--scheduler",
         "evidenceFile": "report.md",
         "certifiedAt": null
       },
       {
-        "scope": 7,
-        "name": "Shared Mobile Vertical Slice and Cross-Surface Parity",
+        "scope": "6b",
+        "name": "Legacy Retirement — Observability (Dashboard + Alerts)",
         "status": "not_started",
-        "dependsOn": [4, 5, 6],
-        "scopeDir": "scopes.md#scope-7",
+        "dependsOn": ["6a"],
+        "scopeDir": "scopes.md#scope-6b-legacy-retirement--observability-dashboard--alerts",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "6c",
+        "name": "Legacy Retirement — PWA + Mobile Notice Renderers",
+        "status": "done",
+        "dependsOn": ["6b"],
+        "scopeDir": "scopes.md#scope-6c-legacy-retirement--pwa--mobile-notice-renderers",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "6d",
+        "name": "Legacy Retirement — Test Authoring + Live Execution",
+        "status": "not_started",
+        "dependsOn": ["6c"],
+        "scopeDir": "scopes.md#scope-6d-legacy-retirement--test-authoring--live-execution",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "7a",
+        "name": "Shared Mobile — Dart Unit Tests + Static Scan + Fail-Loud Config",
+        "status": "not_started",
+        "dependsOn": [4, 5, "6d"],
+        "scopeDir": "scopes.md#scope-7a-shared-mobile--dart-unit-tests--static-scan--fail-loud-config",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "7b",
+        "name": "Shared Mobile — Retry Idempotency Integration Test",
+        "status": "not_started",
+        "dependsOn": ["7a"],
+        "scopeDir": "scopes.md#scope-7b-shared-mobile--retry-idempotency-integration-test",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "7c",
+        "name": "Shared Mobile — Cross-Surface Render-Descriptor Parity Goldens",
+        "status": "done",
+        "dependsOn": ["7b"],
+        "scopeDir": "scopes.md#scope-7c-shared-mobile--cross-surface-render-descriptor-parity-goldens",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "7d",
+        "name": "Shared Mobile — iOS+Android Adapters + VoiceOver/TalkBack A11y (post-release)",
+        "status": "blocked",
+        "dependsOn": ["7c"],
+        "scopeDir": "scopes.md#scope-7d-shared-mobile--iosandroid-adapters--voiceovertalkback-a11y-post-release",
         "evidenceFile": "report.md",
         "certifiedAt": null
       }
@@ -156,12 +298,30 @@
       "runStartedAt": "2026-06-02T00:00:00Z",
       "runEndedAt": "2026-06-02T00:00:00Z",
       "summary": "Planning-only bootstrap: consolidated rescoped scopes from specs 064, 065, 066, 073, 074, 075 into single follow-on spec 076 with 7-scope decomposition (1 foundation + 6 capability areas) and 35 inherited scenarios."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["bootstrap", "replan"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-02T23:45:00Z",
+      "runEndedAt": "2026-06-02T23:55:00Z",
+      "summary": "Per bubbles.implement route_required, split SCOPE-7 into 7a (Dart unit tests + static scan + fail-loud config), 7b (mobile retry idempotency integration), 7c (cross-surface render-descriptor parity goldens), and 7d (BLOCKED post-release: iOS+Android adapters + VoiceOver/TalkBack a11y). 7a/7b/7c feasible against current test stack; 7d gated on iOS Simulator + Android emulator infra absent today, modeled on Scope 4c. scenario-manifest.json scopeIds reassigned (A02/A07/A11→7a, A03→7b, A04/A05/A06→7c, A10→7d). state.json scopeProgress updated."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-03T00:05:00Z",
+      "runEndedAt": "2026-06-03T00:55:00Z",
+      "summary": "SCOPE-7c implementation. Authored tests/e2e/transports/disambig_parity_test.go (TestDisambigParity_WebTelegramWhatsApp) and confirm_card_parity_test.go (TestConfirmCardParity_AcrossWebTelegramWhatsApp); extended capture_ack_parity_test.go with TestCaptureAckParity_AcrossWebTelegramWhatsApp. Each test projects all three transports (web JS-renderer descriptor golden, Telegram tgbotapi.MessageConfig + decoded callback_data, WhatsApp OutboundMessage + decoded button IDs) into a single canonicalRender shape and asserts reflect.DeepEqual across web + Telegram + WhatsApp. All three tests PASS against the live disposable test stack (./smackerel.sh test e2e, EXIT=0). Initial run caught a real divergence — Telegram confirm-card renderer joins body+ProposedAction with single '\n' — fixed by peeling canonical body at first '\n' instead of '\n\n'. Build Quality Gate: ./smackerel.sh lint passes; gofmt -l clean on the three SCOPE-7c test files; ./smackerel.sh format --check and artifact-lint.sh non-zero exits are sibling-agent SCOPE-7a/SCOPE-1/SCOPE-2 findings outside SCOPE-7c's Change Boundary. scenario-manifest.json linkedTests populated for SCN-073-A04/A05/A06 and requiredTestType reconciled from stale ['e2e-ui'] (pre-7-split) to ['e2e-api'] to match scopes.md Test Plan rows TP-076-07c-01/02/03."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-02T00:00:00Z",
+  "lastUpdatedAt": "2026-06-03T00:55:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

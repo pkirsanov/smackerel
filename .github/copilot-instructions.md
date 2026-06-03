@@ -47,6 +47,7 @@ Use `./smackerel.sh` for runtime work and the committed Bubbles commands for fra
 | Test unit | `./smackerel.sh test unit` | 10 min |
 | Test integration | `./smackerel.sh test integration` | 10 min |
 | Test e2e | `./smackerel.sh test e2e` | 15 min |
+| Test e2e-ui | `./smackerel.sh test e2e-ui` | 15 min |
 | Test stress | `./smackerel.sh test stress` | 10 min |
 | Up | `./smackerel.sh up` | 5 min |
 | Down | `./smackerel.sh down` | 2 min |
@@ -304,6 +305,7 @@ The future runtime command surface must converge on:
 - `./smackerel.sh test unit`
 - `./smackerel.sh test integration`
 - `./smackerel.sh test e2e`
+- `./smackerel.sh test e2e-ui`
 - `./smackerel.sh test stress`
 - `./smackerel.sh up`
 - `./smackerel.sh down`

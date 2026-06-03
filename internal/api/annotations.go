@@ -58,6 +58,15 @@ type AnnotationHandlers struct {
 	// sets this field at startup; tests omit it (empty default keeps
 	// the legacy dev/test ergonomic).
 	Environment string
+
+	// ShadowComparator wires the spec 076 SCOPE-4b dual-write shadow
+	// comparator: every annotation parse is mirrored to the new
+	// `annotation.classify.v1` classifier path, and divergences emit
+	// telemetry (Prometheus counter + structured log). The primary
+	// (inline interactionMap) result is unaffected; the shadow path
+	// is fire-and-compare for telemetry only. A nil value is a safe
+	// no-op so tests and pre-bridge boot stages can omit wiring.
+	ShadowComparator *annotation.ShadowComparator
 }
 
 // CreateAnnotation handles POST /api/artifacts/{id}/annotations.
@@ -116,6 +125,15 @@ func (h *AnnotationHandlers) CreateAnnotation(w http.ResponseWriter, r *http.Req
 	}
 
 	parsed := annotation.Parse(req.Text)
+
+	// Spec 076 SCOPE-4b — dual-write shadow comparator. The PRIMARY
+	// InteractionType remains the inline interactionMap result above
+	// (parsed.InteractionType); the comparator runs the new
+	// `annotation.classify.v1` path in shadow mode and emits
+	// divergence telemetry. Nil = no-op (bridge not yet wired).
+	if h.ShadowComparator != nil {
+		h.ShadowComparator.Compare(r.Context(), req.Text, annotation.ChannelAPI, parsed.InteractionType)
+	}
 
 	created, err := h.Store.CreateFromParsed(r.Context(), artifactID, parsed, annotation.ChannelAPI)
 	if err != nil {

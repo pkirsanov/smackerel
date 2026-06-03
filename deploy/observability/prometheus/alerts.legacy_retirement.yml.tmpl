@@ -1,0 +1,57 @@
+# Spec 076 SCOPE-6b — Legacy retirement residual-usage alert (SCN-075-A04).
+#
+# This is a TEMPLATE, not a committed-as-is alert rule. The deploy
+# adapter overlay renders it via envsubst alongside the spec 049
+# prometheus.yml.tmpl pipeline, substituting:
+#
+#   ${LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAILY_INVOCATIONS}
+#
+# The value is the same SST key consumed by spec 076 SCOPE-6a's
+# scheduler-driven threshold evaluator job
+# (internal/config/legacy_retirement.go field
+# RollbackThresholdDailyInvocations). Sourcing the threshold from
+# the shared SST key means a single edit to config/smackerel.yaml
+# moves BOTH the evaluator job AND this alert in lockstep — no
+# literal duplication, no drift class.
+#
+# The monitoring-contract test
+# tests/observability/legacy_retirement_monitoring_contract_test.go
+# asserts (a) the rule queries smackerel_legacy_command_residual_total,
+# (b) the rule expression references the
+# ${LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAILY_INVOCATIONS} placeholder,
+# and (c) no literal numeric threshold appears on the right-hand side
+# of the comparison.
+
+groups:
+- name: smackerel-legacy-retirement
+  rules:
+  - alert: SmackerelLegacyRetirementResidualBreach
+    # Rolling-7-day sum of residual invocations per retired command.
+    # The right-hand side is the SST-derived per-day flat-count
+    # rollback threshold consumed by spec 076 SCOPE-6a's evaluator.
+    # When the trailing-7-day sum exceeds even one day's worth of
+    # the rollback budget the alert fires — that level of residual
+    # use after the retirement window opened is enough to warrant
+    # operator review (matches the conservative posture the
+    # evaluator job uses for the percent-active-users gate).
+    expr: |
+      sum by (command) (increase(smackerel_legacy_command_residual_total[7d])) > ${LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAILY_INVOCATIONS}
+    for: 15m
+    labels:
+      severity: warning
+      component: legacy-retirement
+      spec: "076"
+    annotations:
+      summary: "Retired legacy command {{ $labels.command }} still invoked above rollback threshold"
+      description: |
+        Trailing-7-day sum of smackerel_legacy_command_residual_total
+        for command {{ $labels.command }} exceeded the SST-defined
+        rollback-threshold daily invocation budget
+        (legacy_retirement.rollback_threshold_daily_invocations).
+        Spec 076 SCOPE-6a's scheduler-driven evaluator consults the
+        same SST key; this alert is the operator-facing companion.
+        Inspect the legacy retirement dashboard
+        (uid smackerel-legacy-retirement) for the per-bucket
+        breakdown, then decide whether to pause the window (spec 075
+        SCOPE-4 pause-store) or extend the post-window observation
+        budget.

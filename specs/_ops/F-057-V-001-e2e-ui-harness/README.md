@@ -1,11 +1,11 @@
 # F-057-V-001 — Follow-up: `tests/e2e/ui/` browser harness
 
-**Status:** routed
-**Routing Status:** Routed to spec 077 (`specs/077-pwa-browser-test-harness/`) on 2026-06-02. Resolution tracked under spec 077's three-scope plan; execution closes this packet when spec 077 reaches terminal status.
+**Status:** routed_resolved
+**Routing Status:** Routed to spec 077 (`specs/077-pwa-browser-test-harness/`) on 2026-06-02. Spec 077 SCOPE-1a/1b/1c shipped the harness foundation (dispatcher, runner, proof-of-life, isolation guard); SCOPE-2 shipped the discovery convention pin, CI workflow, and docs; SCOPE-3 shipped the first real consumer (`web/pwa/tests/auth_login.spec.ts`) porting spec 057 SCOPE-4 rows 4.1–4.5 with real headless-Chromium driver assertions and a CSP-violation guard. The `./smackerel.sh test e2e-ui` lane is now operator-facing and CI-enforced. See `specs/077-pwa-browser-test-harness/report.md` and `specs/077-pwa-browser-test-harness/scopes.md` for evidence.
 **Severity:** medium
 **Source:** spec 057 (`browser-login-redirect`), validate phase, 2026-05-28
 **Owner (proposed):** infrastructure / engineering quality
-**Routing:** `bubbles.plan` to scaffold a dedicated spec if/when prioritised. **Done 2026-06-02 — see spec 077.**
+**Routing:** `bubbles.plan` to scaffold a dedicated spec if/when prioritised. **Done 2026-06-02 — see spec 077 (SCOPE-1a/1b/1c shipped foundation, SCOPE-2 shipped discovery/CI/docs, SCOPE-3 shipped login + CSP smoke).**
 
 ## Problem
 

@@ -1,20 +1,101 @@
 /**
- * Spec 077 SCOPE-1b — Content-Security-Policy guard skeleton.
+ * Spec 077 SCOPE-3 — Content-Security-Policy guard for the PWA
+ * browser harness.
  *
- * Real CSP-violation assertions land in spec 077 SCOPE-3 (login flow +
- * CSP smoke). This skeleton ships in SCOPE-1b so SCOPE-1c (proof-of-life
- * spec) and SCOPE-3 (first real consumer) can import a stable symbol
- * without circular ordering. The `unknown` parameter shape avoids a
- * compile-time dependency on `@playwright/test` types so this module can
- * be imported by Node-level unit tests that do not have Playwright
- * installed.
+ * `attachCSPGuard(page)` wires console + pageerror + browser-native
+ * `securitypolicyviolation` listeners on the supplied page. Any
+ * captured violation is buffered against the page, and
+ * `assertNoCSPViolations(page)` (typically called at end of a test)
+ * fails the test if the buffer is non-empty.
  *
- * Anchors scenario SCN-077-A10 (the import-compile half of TP-077-01-03)
- * and reserves the contract for SCN-077-A03..A05, SCN-077-A08 (SCOPE-3).
+ * Anchors SCN-077-A05 (TP-077-03-05). The skeleton was shipped in
+ * SCOPE-1b; SCOPE-3 wires the real listeners + the assertion.
+ *
+ * Backwards-compatibility note: the SCOPE-1b skeleton accepted
+ * `unknown` for the page parameter so non-Playwright unit tests
+ * could import it. SCOPE-3 narrows that to `Page` because every
+ * caller in the PWA test suite already imports `@playwright/test`.
  */
-export function attachCSPGuard(_page: unknown): void {
-  // SCOPE-3 will wire `console` + `pageerror` listeners that fail the
-  // test on any CSP violation message. Skeleton intentionally a no-op so
-  // the symbol resolves cleanly for callers that wire it ahead of the
-  // real implementation.
+import type { Page } from "@playwright/test";
+
+type ViolationBucket = string[];
+
+const VIOLATION_BUCKETS = new WeakMap<Page, ViolationBucket>();
+
+const CSP_PATTERN =
+  /content security policy|refused to (load|execute|apply|connect|frame|run)|csp_violation|csp violation/i;
+
+function bucketFor(page: Page): ViolationBucket {
+  let b = VIOLATION_BUCKETS.get(page);
+  if (!b) {
+    b = [];
+    VIOLATION_BUCKETS.set(page, b);
+  }
+  return b;
+}
+
+export function attachCSPGuard(page: Page): void {
+  const bucket = bucketFor(page);
+
+  page.on("console", (msg) => {
+    if (msg.type() !== "error") return;
+    const text = msg.text();
+    if (CSP_PATTERN.test(text)) {
+      bucket.push(`console.error: ${text}`);
+    }
+  });
+
+  page.on("pageerror", (err) => {
+    const text = String(err && err.message ? err.message : err);
+    if (CSP_PATTERN.test(text)) {
+      bucket.push(`pageerror: ${text}`);
+    }
+  });
+
+  // Browser-native CSP violation event. Forwarded into the harness
+  // via an exposed binding so we capture violations the browser
+  // generated against a real CSP header (when one is set in a
+  // future production-mode test variant). exposeBinding throws if
+  // called twice on the same page, so swallow that specific case.
+  page
+    .exposeBinding(
+      "__spec077ReportCSPViolation",
+      (_source, payload: { directive: string; blockedURI: string }) => {
+        bucket.push(
+          `securitypolicyviolation: directive=${payload.directive} blockedURI=${payload.blockedURI}`,
+        );
+      },
+    )
+    .catch(() => undefined);
+
+  page
+    .addInitScript(() => {
+      document.addEventListener("securitypolicyviolation", (event) => {
+        const ev = event as SecurityPolicyViolationEvent;
+        const w = window as unknown as {
+          __spec077ReportCSPViolation?: (p: {
+            directive: string;
+            blockedURI: string;
+          }) => void;
+        };
+        if (typeof w.__spec077ReportCSPViolation === "function") {
+          w.__spec077ReportCSPViolation({
+            directive: ev.violatedDirective || ev.effectiveDirective || "",
+            blockedURI: ev.blockedURI || "",
+          });
+        }
+      });
+    })
+    .catch(() => undefined);
+}
+
+export function assertNoCSPViolations(page: Page): void {
+  const bucket = VIOLATION_BUCKETS.get(page);
+  if (!bucket || bucket.length === 0) return;
+  const msg = bucket.slice().join("\n  ");
+  // Clear so a re-used page does not double-report.
+  bucket.length = 0;
+  throw new Error(
+    `Spec 077 CSP guard captured violation(s) on this page:\n  ${msg}`,
+  );
 }
