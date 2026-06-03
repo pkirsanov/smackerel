@@ -570,6 +570,7 @@ Both producers MUST flow through the spec 021 M1a unified surfacing controller �
 **Date:** 2026-06-03
 
 ```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/025-knowledge-synthesis-layer
 ✅ Required artifact exists: spec.md
 ✅ Required artifact exists: design.md
 ✅ Required artifact exists: uservalidation.md
