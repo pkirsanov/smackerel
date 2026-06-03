@@ -129,19 +129,36 @@
         "agent": "bubbles.implement",
         "claimedAt": "2026-06-03T01:10:00Z",
         "evidence": "report.md#scope-7b-implement-2026-06-03"
+      },
+      {
+        "phase": "spec-review",
+        "scope": "feature",
+        "agent": "bubbles.spec-review",
+        "claimedAt": "2026-06-03T02:00:00Z",
+        "evidence": "report.md#spec-review-phase--2026-06-03",
+        "trustClassification": "MOSTLY_FRESH",
+        "notes": "Retrospective audit satisfying full-delivery specReview: once-before-implement. Two MINOR bookkeeping findings (scopeProgress lag, scopes.md Status duplication); no MAJOR_DRIFT or OBSOLETE; no improve-existing dispatch required."
       }
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "completedScopes": [1, "2a", "2b", "2c", "2d", 3, "4a", "4b", 5, "6a", "6b", "6c", "6d", "7a", "7b", "7c"],
+    "certifiedCompletedPhases": [
+      {
+        "phase": "spec-review",
+        "agent": "bubbles.spec-review",
+        "certifiedAt": "2026-06-03T02:00:00Z",
+        "evidence": "report.md#spec-review-phase--2026-06-03",
+        "trustClassification": "MOSTLY_FRESH"
+      }
+    ],
     "scopeProgress": [
       {
         "scope": 1,
         "name": "Inherited-Behavior Manifest Bootstrap and Foundation Wiring",
-        "status": "in_progress",
+        "status": "done",
         "dependsOn": [],
         "scopeDir": "scopes.md#scope-1",
         "evidenceFile": "report.md",
@@ -150,7 +167,7 @@
       {
         "scope": 2,
         "name": "Open-Knowledge Agent Hardening",
-        "status": "in_progress",
+        "status": "done",
         "dependsOn": [1],
         "scopeDir": "scopes.md#scope-2",
         "evidenceFile": "report.md",
@@ -177,7 +194,7 @@
       {
         "scope": "4b",
         "name": "Annotation Classifier — annotation.classify.v1 + Classifier Interface + Warm-Cache + Dual-Write Shadow Comparator",
-        "status": "in_progress",
+        "status": "done",
         "dependsOn": [1],
         "scopeDir": "scopes.md#scope-4b-annotation-classifier--annotationclassifyv1--classifier-interface--warm-cache--dual-write-shadow-comparator",
         "evidenceFile": "report.md",
@@ -204,7 +221,7 @@
       {
         "scope": "6a",
         "name": "Legacy Retirement — Runtime Wiring (Pause Store + Scheduler)",
-        "status": "not_started",
+        "status": "done",
         "dependsOn": [1],
         "scopeDir": "scopes.md#scope-6a-legacy-retirement--runtime-wiring-pause-store--scheduler",
         "evidenceFile": "report.md",
@@ -213,7 +230,7 @@
       {
         "scope": "6b",
         "name": "Legacy Retirement — Observability (Dashboard + Alerts)",
-        "status": "not_started",
+        "status": "done",
         "dependsOn": ["6a"],
         "scopeDir": "scopes.md#scope-6b-legacy-retirement--observability-dashboard--alerts",
         "evidenceFile": "report.md",
@@ -231,7 +248,7 @@
       {
         "scope": "6d",
         "name": "Legacy Retirement — Test Authoring + Live Execution",
-        "status": "not_started",
+        "status": "done",
         "dependsOn": ["6c"],
         "scopeDir": "scopes.md#scope-6d-legacy-retirement--test-authoring--live-execution",
         "evidenceFile": "report.md",
@@ -240,7 +257,7 @@
       {
         "scope": "7a",
         "name": "Shared Mobile — Dart Unit Tests + Static Scan + Fail-Loud Config",
-        "status": "not_started",
+        "status": "done",
         "dependsOn": [4, 5, "6d"],
         "scopeDir": "scopes.md#scope-7a-shared-mobile--dart-unit-tests--static-scan--fail-loud-config",
         "evidenceFile": "report.md",
@@ -249,7 +266,7 @@
       {
         "scope": "7b",
         "name": "Shared Mobile — Retry Idempotency Integration Test",
-        "status": "not_started",
+        "status": "done",
         "dependsOn": ["7a"],
         "scopeDir": "scopes.md#scope-7b-shared-mobile--retry-idempotency-integration-test",
         "evidenceFile": "report.md",
@@ -321,7 +338,25 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-03T00:55:00Z",
+  "discoveredIssues": [
+    {
+      "id": "DI-076-04",
+      "category": "known-drift",
+      "description": "Scopes 4c (interactionMap removal) and 7d (iOS+Android adapters + a11y) remain status=blocked per planning instruction. Both are explicitly post-release deferrals: 4c is gated on Scope 4b shadow-telemetry evidence collected after release; 7d is gated on iOS Simulator + Android emulator infrastructure not present in the current test environment. scopes.md, scope-inventory, and spec planning all designate them as post-release. The state-transition-guard treats them as in-scope blockers when evaluating spec-level promotion to done; this is a known framework limitation (the guard does not yet recognize post-release-deferred scopes as terminal-for-release). No remediation is owned by this implement pass — promotion handling is owned by bubbles.validate / bubbles.workflow.",
+      "discoveredAt": "2026-06-03T03:00:00Z",
+      "owner": "bubbles.workflow",
+      "status": "acknowledged_known_limitation"
+    },
+    {
+      "id": "DI-076-05",
+      "category": "phase-records-gap",
+      "description": "execution.completedPhaseClaims records 17 per-scope implement claims (SCOPE-1..7c) plus one spec-review claim. Specialist phases (test, regression, simplify, stabilize, security, docs, validate, audit, chaos) were not run as distinct agent phases for this spec — all test/regression evidence was captured inline within implement-phase sections of report.md. Per anti-fabrication policy (evidence-rules.md, critical-requirements.md → Honesty Incentive), bubbles.implement cannot retroactively manufacture phase-claim entries for agents that did not run. Spec-level aggregation of these phases (if required by full-delivery mode certification) must be performed by the owning workflow / validation agents that actually execute the phases, or by an explicit governance decision that inline-implement evidence satisfies the per-phase claim requirement.",
+      "discoveredAt": "2026-06-03T03:00:00Z",
+      "owner": "bubbles.workflow",
+      "status": "open_route_required"
+    }
+  ],
+  "lastUpdatedAt": "2026-06-03T03:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
