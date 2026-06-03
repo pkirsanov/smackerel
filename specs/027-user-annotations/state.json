@@ -2,7 +2,8 @@
   "version": 3,
   "featureDir": "specs/027-user-annotations",
   "featureName": "User Annotations & Interaction Tracking",
-  "status": "specs_hardened",
+  "status": "done",
+  "certifiedAt": "2026-06-03T21:33:19Z",
   "linkedImplementationSpec": "specs/027-user-annotations",
   "linkedPlanningPacket": "specs/027-user-annotations",
   "workflowMode": "improve-existing",
@@ -30,7 +31,8 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "specs_hardened",
+    "status": "done",
+    "certifiedAt": "2026-06-03T21:33:19Z",
     "completedScopes": [
       "DB Migration",
       "Annotation Types & Parser",
@@ -521,6 +523,17 @@
       "runStartedAt": "2026-06-03T20:55:00Z",
       "runEndedAt": "2026-06-03T21:20:00Z",
       "summary": "Promotion attempt blocked by Gate G088 (post-certification spec edit guard). state-transition-guard pre-flip exit=0 (🟡 PERMITTED with 3 non-blocking warnings); state-transition-guard post-flip exit=1 with G088 BLOCK: design.md and scopes.md have uncommitted edits that look post-certification when status=done. Reverted to specs_hardened. Resolution requires committing the bubbles.plan governance-blocker fixes (design.md + scopes.md) so they precede certifiedAt in git history; once committed, re-run validate promotion. Next owner: bubbles.devops or operator to commit specs/027-user-annotations/{design.md,scopes.md} (and the state.json/report.md updates from this validate pass)."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "specs_hardened",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-03T21:33:19Z",
+      "runEndedAt": "2026-06-03T21:33:19Z",
+      "summary": "Final certification; specs_hardened → done. All 16 Scope 9 DoD items closed; planning-truth committed in HEAD prior to flip per G088."
     }
   ],
   "activeBugs": [],
@@ -555,7 +568,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-03T21:20:00Z",
+  "lastUpdatedAt": "2026-06-03T21:33:19Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
