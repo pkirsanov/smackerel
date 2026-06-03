@@ -5,6 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD_SCRIPT="$SCRIPT_DIR/state-transition-guard.sh"
 OWNERSHIP_LINT_SCRIPT="$SCRIPT_DIR/agent-ownership-lint.sh"
 
+# This selftest already exercises the transition guard's own status, artifact,
+# scope, packet, timestamp, lockdown, and deferral checks. The delegated tail
+# gates (G085-G095) each have dedicated selftests in framework-validate, so keep
+# them out of this cumulative fixture suite to avoid repeated heavy scans.
+export BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=1
+
 tmp_root="$(mktemp -d)"
 failures=0
 

@@ -178,7 +178,9 @@ resolve_workflow_status_ceiling_from_registry() {
   [[ -n "$workflow_registry_file" && -f "$workflow_registry_file" ]] || return 1
 
   status_ceiling="$(awk -v mode="$workflow_mode" '
-    $0 ~ "^  " mode ":[[:space:]]*$" { in_mode = 1; next }
+    /^modes:[[:space:]]*$/ { in_modes = 1; next }
+    in_modes && /^[A-Za-z0-9_-]+:[[:space:]]*$/ { exit }
+    in_modes && $0 ~ "^  " mode ":[[:space:]]*$" { in_mode = 1; next }
     in_mode && $0 ~ "^  [[:alnum:]_-]+:[[:space:]]*$" { exit }
     in_mode {
       line = $0
@@ -205,15 +207,14 @@ resolve_workflow_status_ceiling() {
   [[ -n "$workflow_mode" ]] || return 1
   [[ -f "$resolver" ]] || return 1
 
-  if [[ -n "$workflow_registry_file" ]]; then
-    resolved="$(BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
-  else
-    resolved="$(bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
-  fi
-
-  status_ceiling="$(printf '%s\n' "$resolved" | awk -F':[[:space:]]*' '$1 == "statusCeiling" { gsub(/"/, "", $2); print $2; exit }')"
+  status_ceiling="$(resolve_workflow_status_ceiling_from_registry "$workflow_mode" || true)"
   if [[ -z "$status_ceiling" ]]; then
-    status_ceiling="$(resolve_workflow_status_ceiling_from_registry "$workflow_mode" || true)"
+    if [[ -n "$workflow_registry_file" ]]; then
+      resolved="$(BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
+    else
+      resolved="$(bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
+    fi
+    status_ceiling="$(printf '%s\n' "$resolved" | awk -F':[[:space:]]*' '$1 == "statusCeiling" { gsub(/"/, "", $2); print $2; exit }')"
   fi
   [[ -n "$status_ceiling" ]] || return 1
   printf '%s\n' "$status_ceiling"
@@ -3447,6 +3448,11 @@ echo ""
 # evidence model still applies: at least one numbered spec at status
 # `done` demonstrates the installed framework can drive work to
 # certification.
+if [[ "${BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST:-0}" == "1" ]]; then
+  echo "--- Check 26-35: Delegated Tail Gates (selftest fast path) ---"
+  info "State-transition selftest fast path enabled; delegated gates G085-G095 are covered by their dedicated selftests in framework-validate"
+  echo ""
+else
 echo "--- Check 26: Framework Dogfood Evidence Enforcement (Gate G085) ---"
 dog_guard="$SCRIPT_DIR/framework-dogfood-guard.sh"
 if fixture_gate_skip "framework dogfood evidence enforcement (Gate G085)"; then
@@ -3727,6 +3733,7 @@ else
   info "discovered-issue-disposition-guard.sh not present at $discovered_issue_guard; skipping (advisory)"
 fi
 echo ""
+fi
 
 # =============================================================================
 # FINAL VERDICT

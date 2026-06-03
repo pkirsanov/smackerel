@@ -18,35 +18,6 @@ You need to produce or refresh a release packet for a phase of your product — 
 /bubbles.super  I need to plan the next release, where do I start?
 ```
 
-## Canonical Directory Layout (BLOCKING)
-
-Release packets MUST live at this exact location:
-
-```text
-docs/releases/<phase>/
-├── vision.md
-├── features.md
-├── actions.md
-├── business-plan.md
-├── deployment.md
-├── marketing.md
-├── monetization.md
-└── ops-scalability.md
-```
-
-- `<phase>` is the lowercase phase name (e.g., `mvp`, `v1.0`, `v1.5`, `v2.0`) from the `docs/INVESTOR_OVERVIEW.md` Phase Overview table.
-- Exactly 8 docs per phase. NO `state.json`. NO `README.md`. `vision.md` is the entry doc; routing belongs in `actions.md`.
-- The mechanical guard `bubbles/scripts/release-packet-location-guard.sh` rejects any release-packet doc placed elsewhere.
-
-**Forbidden locations** (will fail the guard):
-
-- `specs/_ops/RELEASE-*/` — release packets are NOT ops specs
-- `specs/releases/<phase>/` — release packets do NOT live under `specs/`
-- `docs/RELEASE-*/` or `docs/release-*/` — the canonical parent is `docs/releases/`
-- Anywhere else outside `docs/releases/<phase>/`
-
-See [`skills/bubbles-release-packet-template`](../../skills/bubbles-release-packet-template/SKILL.md) for the full canonical template.
-
 ## Prerequisites — Product Direction Surfaces Trio
 
 `bubbles.releases` REFUSES to produce a release packet for a repo missing the canonical Product Direction Surfaces trio:

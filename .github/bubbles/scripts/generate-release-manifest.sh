@@ -71,7 +71,9 @@ mapfile -t managed_entries < <(bubbles_framework_manifest_entries "$REPO_ROOT" f
 source_only_entries=()
 while IFS= read -r regression_test_path; do
   [[ -f "$regression_test_path" ]] || continue
-  source_only_entries+=("${regression_test_path#$REPO_ROOT/}")
+  regression_relative_path="${regression_test_path#$REPO_ROOT/}"
+  bubbles_manifest_entry_is_tracked "$REPO_ROOT" "$regression_relative_path" || continue
+  source_only_entries+=("$regression_relative_path")
 done < <(find "$REPO_ROOT/tests/regression" -maxdepth 1 -type f -name '*.sh' 2>/dev/null | LC_ALL=C sort)
 
 payload_git_sha=''
