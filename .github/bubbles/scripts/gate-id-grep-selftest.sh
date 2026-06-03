@@ -211,8 +211,8 @@ else
 fi
 
 if grep -Fq "FINDING: unknown-gate-id:" "$unk_strict_log" \
-   && grep -Fq "G099" "$unk_strict_log"; then
-  pass "unknown strict reports unknown-gate-id G099"
+   && grep -Fq "G099" "$unk_strict_log"; then  # fixture token G099 is intentionally unknown
+  pass "unknown strict reports unknown-gate-id G099"  # fixture: G099 is a synthetic unknown gate
 else
   fail "unknown strict missing unknown-gate-id G099 finding"
   sed -n '1,40p' "$unk_strict_log"
