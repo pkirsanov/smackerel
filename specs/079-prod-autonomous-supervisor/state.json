@@ -1,0 +1,70 @@
+{
+  "version": 3,
+  "featureDir": "specs/079-prod-autonomous-supervisor",
+  "featureNumber": "079",
+  "featureName": "Production Autonomous Supervisor",
+  "status": "in_progress",
+  "workflowMode": "spec-scope-hardening",
+  "statusCeiling": "specs_hardened",
+  "executionRuntime": "manual",
+  "releaseTrain": "next",
+  "flagsIntroduced": [],
+  "planningOnly": true,
+  "planningOnlyJustification": "Safety-critical agent that touches prod telemetry and (token-gated) writes into the spec corpus. Implementation MUST NOT begin until the operator ratifies the 7 safety dimensions enumerated in spec.md §11 'Operator Review Required' by completing uservalidation.md and transitioning status to specs_hardened. No downstream Bubbles agent should auto-pick this spec.",
+  "convergenceHealth": {
+    "recapCount": 0,
+    "handoffCount": 0,
+    "summarizeHistoryCount": 0,
+    "turnCount": 1,
+    "snapshotCompleteness": 1.0,
+    "slo": "pass",
+    "note": "executionRuntime=manual; planning-only bootstrap turn"
+  },
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "specDependsOn": [],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": "bubbles.analyst",
+    "currentPhase": "analyze",
+    "currentScope": null,
+    "runStartedAt": "2026-06-03T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "lastEvaluatedAt": null,
+    "evidenceRef": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "reworkQueueArchive": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["bootstrap", "analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-03T00:00:00Z",
+      "runEndedAt": "2026-06-03T00:00:00Z",
+      "summary": "Planning-only bootstrap of spec 079 (prod autonomous supervisor) on release train 'next'. Authored spec.md (Outcome Contract + Product Principle Alignment for P6 + P9 + P1 + P8 + Domain Capability Model + 6 Gherkin scenarios SCN-079-A01..A06 + Operator Review Required section with 7 safety dimensions + explicit deferred-implementation declaration), design.md (3 architecture options, telemetry sources, decision policy, capability-token model, append-only ledger, agent boundaries, self-observability, BODM alignment, open questions), scenario-manifest.json (SCN-079-A01..A06), uservalidation.md template (7-dimension ratification checklist), report.md template. Status held at in_progress; ceiling specs_hardened. scopes.md intentionally NOT authored (bubbles.plan owns it post-ratification). Operator MUST ratify before any downstream agent pickup."
+    }
+  ]
+}

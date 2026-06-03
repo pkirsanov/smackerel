@@ -7,8 +7,35 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/intelligence/surfacing"
 	"github.com/smackerel/smackerel/internal/metrics"
 )
+
+// proposeSurfacing routes a candidate through the unified surfacing
+// controller when one is wired. Returns (permit=true) when the caller
+// MAY proceed with dispatch. When no controller is wired the caller
+// falls back to the legacy direct-dispatch behavior so existing tests
+// without SST keep working.
+func (s *Scheduler) proposeSurfacing(ctx context.Context, cand surfacing.SurfacingCandidate) bool {
+	if s.surfacingController == nil {
+		return true
+	}
+	dec, err := s.surfacingController.Propose(ctx, cand)
+	if err != nil {
+		slog.Warn("surfacing controller error, dropping candidate",
+			"producer", cand.Producer, "channel", cand.Channel, "error", err)
+		return false
+	}
+	switch dec.Kind {
+	case surfacing.DecisionPermit, surfacing.DecisionEscalated:
+		return true
+	default:
+		slog.Info("surfacing candidate held",
+			"producer", cand.Producer, "channel", cand.Channel,
+			"decision", dec.Kind, "reason", dec.Reason)
+		return false
+	}
+}
 
 // AlertTypeIcons maps alert types to emoji icons for Telegram formatting.
 var AlertTypeIcons = map[string]string{
@@ -53,7 +80,12 @@ func (s *Scheduler) doDigestJob() {
 	if pendingRetry && s.bot != nil && pendingDate != "" {
 		d, err := s.digestGen.GetLatest(ctx, pendingDate)
 		if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == pendingDate {
-			if err := deliverDigest(ctx, d.ID, d.DigestText, s.bot.SendDigest, s.digestGen.MarkDelivered); err != nil {
+			if !s.proposeSurfacing(ctx, surfacing.SurfacingCandidate{
+				Producer: surfacing.ProducerDigest, Channel: surfacing.ChannelDigest,
+				ContentKey: "digest:" + pendingDate, Priority: 3, ProposedAt: time.Now(),
+			}) {
+				slog.Info("pending digest retry held by surfacing controller", "date", pendingDate)
+			} else if err := deliverDigest(ctx, d.ID, d.DigestText, s.bot.SendDigest, s.digestGen.MarkDelivered); err != nil {
 				slog.Warn("pending digest retry failed, will try again next cycle", "date", pendingDate, "error", err)
 			} else {
 				slog.Info("pending digest delivered via retry", "date", pendingDate)
@@ -110,6 +142,13 @@ func (s *Scheduler) doDigestJob() {
 				case <-ticker.C:
 					d, err := s.digestGen.GetLatest(pollCtx, today)
 					if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == today {
+						if !s.proposeSurfacing(pollCtx, surfacing.SurfacingCandidate{
+							Producer: surfacing.ProducerDigest, Channel: surfacing.ChannelDigest,
+							ContentKey: "digest:" + today, Priority: 3, ProposedAt: time.Now(),
+						}) {
+							slog.Info("digest delivery held by surfacing controller", "date", today)
+							return
+						}
 						if err := deliverDigest(pollCtx, d.ID, d.DigestText, s.bot.SendDigest, s.digestGen.MarkDelivered); err != nil {
 							slog.Warn("digest delivery failed — will retry next cycle", "date", today, "error", err)
 							s.mu.Lock()
@@ -203,6 +242,16 @@ func (s *Scheduler) doResurfacingJob() {
 		for _, c := range candidates {
 			msg += "- " + c.Title + " (" + c.Reason + ")\n"
 		}
+		contentKey := "resurfacing:"
+		if len(candidates) > 0 {
+			contentKey += candidates[0].ArtifactID
+		}
+		if !s.proposeSurfacing(ctx, surfacing.SurfacingCandidate{
+			Producer: surfacing.ProducerResurfacing, Channel: surfacing.ChannelTelegram,
+			ContentKey: contentKey, Priority: 3, ProposedAt: time.Now(),
+		}) {
+			return
+		}
 		s.bot.SendDigest(msg)
 
 		// Mark delivered artifacts so dormancy scores update and the same
@@ -234,6 +283,13 @@ func (s *Scheduler) doPreMeetingBriefsJob() {
 	} else if len(briefs) > 0 {
 		for _, b := range briefs {
 			if s.bot != nil {
+				if !s.proposeSurfacing(ctx, surfacing.SurfacingCandidate{
+					Producer: surfacing.ProducerPreMeetingBriefs, Channel: surfacing.ChannelTelegram,
+					ContentKey: "brief:" + b.EventID, Priority: 2, TimeCritical: true,
+					ProposedAt: time.Now(),
+				}) {
+					continue
+				}
 				s.bot.SendDigest(b.BriefText)
 			}
 		}
@@ -254,6 +310,12 @@ func (s *Scheduler) doWeeklySynthesisJob() {
 	if err != nil {
 		slog.Error("weekly synthesis failed", "error", err)
 	} else if s.bot != nil && ws.SynthesisText != "" {
+		if !s.proposeSurfacing(ctx, surfacing.SurfacingCandidate{
+			Producer: surfacing.ProducerWeeklySynthesis, Channel: surfacing.ChannelTelegram,
+			ContentKey: "weekly:" + ws.WeekOf, Priority: 3, ProposedAt: time.Now(),
+		}) {
+			return
+		}
 		s.bot.SendDigest(ws.SynthesisText)
 		slog.Info("weekly synthesis delivered", "words", ws.WordCount)
 	}
@@ -276,6 +338,12 @@ func (s *Scheduler) doMonthlyReportJob() {
 	slog.Info("monthly report generated", "month", report.Month, "words", report.WordCount)
 
 	if s.bot != nil && report.ReportText != "" {
+		if !s.proposeSurfacing(ctx, surfacing.SurfacingCandidate{
+			Producer: surfacing.ProducerMonthlyReport, Channel: surfacing.ChannelTelegram,
+			ContentKey: "monthly:" + report.Month, Priority: 3, ProposedAt: time.Now(),
+		}) {
+			return
+		}
 		s.bot.SendDigest(report.ReportText)
 		slog.Info("monthly report delivered via Telegram", "month", report.Month)
 	}
@@ -430,18 +498,32 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		return
 	}
 
-	delivered, failed := deliverAlertBatch(ctx, alerts, s.bot.SendAlertMessage, s.engine.MarkAlertDelivered)
+	delivered, failed := deliverAlertBatch(ctx, alerts, s.bot.SendAlertMessage, s.engine.MarkAlertDelivered, func(a intelligence.Alert) bool {
+		return s.proposeSurfacing(ctx, surfacing.SurfacingCandidate{
+			Producer:     surfacing.ProducerAlerts,
+			Channel:      surfacing.ChannelTelegram,
+			ContentKey:   "alert:" + a.ID,
+			Priority:     a.Priority,
+			TimeCritical: a.Priority == 1,
+			ProposedAt:   time.Now(),
+		})
+	})
 
 	slog.Info("alert delivery sweep complete", "delivered", delivered, "failed", failed, "total", len(alerts))
 }
 
 // deliverAlertBatch iterates over alerts, sends each via sendFn, and marks
 // delivered via markFn. Extracted for unit-testability (SCN-021-001, SCN-021-014).
+// The optional surfacingHook (spec 021 Scope 4) consults the unified
+// surfacing controller before each send; when it returns false the
+// alert is HELD (left pending) so a future sweep can reconsider after
+// the budget rolls over or other producers free a slot.
 func deliverAlertBatch(
 	ctx context.Context,
 	alerts []intelligence.Alert,
 	sendFn func(string) error,
 	markFn func(context.Context, string) error,
+	surfacingHook func(intelligence.Alert) bool,
 ) (delivered, failed int) {
 	for i, a := range alerts {
 		if ctx.Err() != nil {
@@ -451,6 +533,12 @@ func deliverAlertBatch(
 		}
 
 		msg := FormatAlertMessage(string(a.AlertType), a.Title, a.Body)
+
+		if surfacingHook != nil && !surfacingHook(a) {
+			slog.Info("alert delivery held by surfacing controller, will revisit on next sweep",
+				"alert_id", a.ID, "type", a.AlertType)
+			continue
+		}
 
 		if err := sendFn(msg); err != nil {
 			slog.Warn("alert delivery failed, will retry next sweep",

@@ -179,4 +179,6 @@ func spec076MakeAggregateErr(errs []string) error {
 
 type spec076AggregateErr struct{ errs []string }
 
-func (e spec076AggregateErr) Error() string { return "[F076-SST-MISSING] " + strings.Join(e.errs, ", ") }
+func (e spec076AggregateErr) Error() string {
+	return "[F076-SST-MISSING] " + strings.Join(e.errs, ", ")
+}

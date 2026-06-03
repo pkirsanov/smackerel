@@ -11,12 +11,12 @@
 // scenario invariants the spec-076 SCN-076-F01 fail-loud test
 // (`internal/manifest/scenario_manifest_test.go`) verifies:
 //
-//   1. Every entry has a non-empty scenarioId.
-//   2. Every inherited entry has a well-formed inheritsFrom.
-//   3. Every inheritsFrom.scenarioId actually exists in the
-//      predecessor spec's `spec.md` source.
-//   4. The set of inherited scenarios exactly equals the set named in
-//      spec 076 `spec.md` §5 (no extras, no omissions).
+//  1. Every entry has a non-empty scenarioId.
+//  2. Every inherited entry has a well-formed inheritsFrom.
+//  3. Every inheritsFrom.scenarioId actually exists in the
+//     predecessor spec's `spec.md` source.
+//  4. The set of inherited scenarios exactly equals the set named in
+//     spec 076 `spec.md` §5 (no extras, no omissions).
 package manifest
 
 import (
