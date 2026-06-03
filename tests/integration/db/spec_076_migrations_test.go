@@ -133,4 +133,3 @@ func TestSpec076FoundationMigrationsApplyCleanly(t *testing.T) {
 		}
 	}
 }
-
