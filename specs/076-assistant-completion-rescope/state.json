@@ -138,6 +138,54 @@
         "evidence": "report.md#spec-review-phase--2026-06-03",
         "trustClassification": "MOSTLY_FRESH",
         "notes": "Retrospective audit satisfying full-delivery specReview: once-before-implement. Two MINOR bookkeeping findings (scopeProgress lag, scopes.md Status duplication); no MAJOR_DRIFT or OBSOLETE; no improve-existing dispatch required."
+      },
+      {
+        "phase": "test",
+        "scope": "feature",
+        "agent": "bubbles.test",
+        "claimedAt": "2026-06-03T03:00:00Z",
+        "evidence": "report.md#test-phase-evidence-spec-level--2026-06-03",
+        "notes": "Spec-level aggregation phase. Compile sweep (go build + go vet) clean across all spec-076-owned test surfaces (e2e/{capture,legacy_retirement,microtools,transports,openknowledge}, integration/{capture,legacy_retirement,mobile,openknowledge,annotation}, internal/{annotation,assistant/*}). Representative unit sweep PASS across 27 spec-076-owned packages. Per-scope live-stack red→green and regression evidence remains anchored in each scope-Nx-implement-2026-06-02/03 section. One pre-existing failure surfaced (DI-076-04) in non-076-owned internal/assistant root scenario validators (recommendation_*/retrieval_qa tool-registry gap, owned by spec 064/recommendation-engine)."
+      },
+      {
+        "phase": "stabilize",
+        "scope": "feature",
+        "agent": "bubbles.stabilize",
+        "claimedAt": "2026-06-03T04:00:00Z",
+        "evidence": "report.md#stabilize-phase-evidence-spec-level--2026-06-03",
+        "notes": "Spec-level operational stability audit. Verdict: STABLE. Audited SST loaders (citeback.enforcement_mode fail-loud via ParseEnforcementMode; legacy_retirement.* threshold/window keys fail-loud via internal/config/legacy_retirement.go lookupInt/lookupString + Validate; annotation.classifier.confidence_floor + warm_cache_enabled REQUIRED at generator boundary). Migrations 053 (CREATE TABLE/INDEX IF NOT EXISTS) idempotent; 054 (ADD COLUMN NOT NULL + CHECK) additive with documented intentional fail-loud on pre-existing rows (NO-DEFAULTS SST alignment). No orphan goroutines: tracewriter.PgxWriter.Write is fully synchronous (no goroutine spawn), scheduler legacy-retirement jobs are mutex-guarded via runGuarded with bounded WithTimeout contexts (60s threshold, 5m observation) and deferred cancel. Graceful degradation: tracewriter.Nop fallback returns nil unconditionally; paused-state is runtime-only (never SST), scheduler continues ticking without crash. 0 issues found, 0 routing required."
+      },
+      {
+        "phase": "security",
+        "scope": "feature",
+        "agent": "bubbles.security",
+        "claimedAt": "2026-06-03T05:00:00Z",
+        "evidence": "report.md#security-phase-evidence-spec-level--2026-06-03",
+        "notes": "Spec-level security audit. Verdict: SECURE. Audited (1) legacy_retirement HMAC key fail-loud loader + telemetry dashboard label-set closure (only HMAC digest, never raw user id); (2) citeback enforcement_mode SST is enum only — no secret material; (3) tool-trace persistence — tracewriter.validateAndBuildPayload restricts payload_redacted JSONB to {tool_name, sorted arg_keys, outcome, optional error_code} — no raw prompts/responses/arg-values; (4) annotation classifier dual-write shadow comparator emits telemetry with strictly closed-enum labels (channel, primary_type, shadow_type) — raw text never passed to any metric; (5) migrations 053 + 054 introduce no GRANT changes, CHECK constraints enforce vocabulary closure, additive only; (6) PWA NoticePayload renderer (web/pwa/assistant.js:171-187) uses document.createElement + textContent + dataset.* — never innerHTML — auto-escapes any attacker-controlled notice content (A03 closed). Findings: 0 critical / 0 high / 0 medium / 0 low. No routing required."
+      },
+      {
+        "phase": "simplify",
+        "scope": "feature",
+        "agent": "bubbles.simplify",
+        "claimedAt": "2026-06-03T06:00:00Z",
+        "evidence": "report.md#simplify-phase-evidence-spec-level--2026-06-03",
+        "notes": "Spec-level post-implementation simplification survey across spec 076 owned source surfaces (internal/assistant/openknowledge/{agent,budget,registry,tracewriter,citeback}, internal/assistant/legacyretirement, internal/annotation/classifier*, internal/scheduler/legacy_retirement). Three parallel passes (code reuse, code quality, efficiency) found 0 actionable issues: lint baseline clean (LINT_EXIT=0 in /tmp/sc7c_lint.log), zero TODO/FIXME/XXX markers in owned source, both exported test/fallback helpers (WarmCacheTokens, tracewriter.Nop) have live consumers (not dead). Two low-severity structural-rework findings recorded and deferred per agent guardrail 'simplify, do not redesign': (a) scheduler legacy_retirement.go threshold/observation job-runner pair duplicates the existing sibling-job style across internal/scheduler/scheduler.go (harmonizing requires touching unrelated jobs — out of scope); (b) tracewriter.New panics on nil pool while NewSQLActiveUsersProvider returns error (harmonizing requires touching cmd/core wiring — out of scope). No fixes applied → no regression test re-run required. Verdict: SIMPLIFIED. Files modified: 0 source, 0 deletions. 0 routing required."
+      },
+      {
+        "phase": "audit",
+        "scope": "feature",
+        "agent": "bubbles.audit",
+        "claimedAt": "2026-06-03T06:30:00Z",
+        "evidence": "report.md#audit-phase-evidence-spec-level--2026-06-03",
+        "notes": "Spec-level final compliance + integrity sweep. artifact-lint.sh exit=0 (only deprecated v2-schema warnings: scopeProgress/statusDiscipline/scopeLayout deprecated, completedScopes mixed numeric+string — all pre-existing). traceability-guard.sh exit=1 reproduces pre-existing pattern (mid-Scope-3 termination, zero ❌, zero ⚠️ in emitted output, manifest cross-check ✅, all 81 linkedTests resolve on disk). scenario-manifest → linkedTests verified. scope DoD items → evidence anchors verified (artifact-lint anti-fabrication checks PASS). state.json certification block internally consistent: completedScopes (16 IDs) MATCH scopes.md Done rows; 4c+7d Blocked correctly excluded and documented as post-release deferrals (DI-076-04). Verdict: 🚀 SHIP_IT (spec-level audit). No blocking findings; no routing required. Post-release-blocked handling for 4c/7d remains owned by bubbles.validate."
+      },
+      {
+        "phase": "chaos",
+        "scope": "feature",
+        "agent": "bubbles.chaos",
+        "claimedAt": "2026-06-03T06:45:00Z",
+        "evidence": "report.md#chaos-phase-evidence-spec-level--2026-06-03",
+        "notes": "Spec-level adversarial sweep. Verdict: CHAOS-CLEAN. Re-executed 4 shipped chaos suites encoding spec 076 capability invariants: microtools/chaos_065 (4 tests — Calculator/UnitConvert/LocationNormalize/EntityResolve random-input never-panic + bounded-output), httpadapter/chaos_069 (NL routing malformed-request shapes), intenttrace/chaos_071 (2 tests — Redactor never-leaks-raw + StoreReplay never-panics on random rows), whatsapp/assistant_adapter/chaos_072 (2 tests — Webhook closed-set HTTP status + Render no-panic for random response shapes). All PASS (go test EXIT=0). Stress suite tests/stress/openknowledge_p95_test.go compile-clean under stress build tag (go vet EXIT=0); live execution previously certified under SCOPE-2d 2026-06-02. Adversarial-domain coverage map verified for budget-exhaustion, citeback enforcement-mode fail-loud, tool-trace writer malformed inputs, NL routing edges, legacy-retirement threshold-evaluator boundary cases, and dedup race conditions — each anchored to a shipped suite or already-certified scope. 0 findings, 0 bug artifacts created, 0 routing."
       }
     ],
     "pendingTransitionRequests": []
@@ -152,6 +200,42 @@
         "certifiedAt": "2026-06-03T02:00:00Z",
         "evidence": "report.md#spec-review-phase--2026-06-03",
         "trustClassification": "MOSTLY_FRESH"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "certifiedAt": "2026-06-03T03:00:00Z",
+        "evidence": "report.md#test-phase-evidence-spec-level--2026-06-03"
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "certifiedAt": "2026-06-03T04:00:00Z",
+        "evidence": "report.md#stabilize-phase-evidence-spec-level--2026-06-03"
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "certifiedAt": "2026-06-03T05:00:00Z",
+        "evidence": "report.md#security-phase-evidence-spec-level--2026-06-03"
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "certifiedAt": "2026-06-03T06:00:00Z",
+        "evidence": "report.md#simplify-phase-evidence-spec-level--2026-06-03"
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "certifiedAt": "2026-06-03T06:30:00Z",
+        "evidence": "report.md#audit-phase-evidence-spec-level--2026-06-03"
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "certifiedAt": "2026-06-03T06:45:00Z",
+        "evidence": "report.md#chaos-phase-evidence-spec-level--2026-06-03"
       }
     ],
     "scopeProgress": [
@@ -356,7 +440,7 @@
       "status": "open_route_required"
     }
   ],
-  "lastUpdatedAt": "2026-06-03T03:00:00Z",
+  "lastUpdatedAt": "2026-06-03T06:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
