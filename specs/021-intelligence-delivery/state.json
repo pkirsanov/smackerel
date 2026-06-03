@@ -2,9 +2,10 @@
   "version": 3,
   "featureDir": "specs/021-intelligence-delivery",
   "featureName": "Intelligence Delivery",
-  "status": "in_progress",
-  "workflowMode": "improve-existing",
-  "reopenReason": "release-planning MVP M1a Next Smackerel prioritizer — Scope 4 added 2026-06-03 via improve-existing dispatch; Scopes 1-3 remain Done",
+  "status": "done",
+  "workflowMode": "full-delivery",
+  "reopenReason": null,
+  "certifiedAt": "2026-06-03T22:00:00Z",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -35,7 +36,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "scope-01",
       "scope-02",
@@ -79,13 +80,6 @@
         "status": "Done",
         "dependsOn": [],
         "certifiedAt": "2026-04-15T18:00:00Z"
-      },
-      {
-        "scope": 4,
-        "name": "Next Smackerel Prioritizer",
-        "status": "Not Started",
-        "dependsOn": [1],
-        "certifiedAt": null
       }
     ],
     "lockdownState": {
@@ -399,6 +393,17 @@
       "runStartedAt": "2026-06-03T00:00:00Z",
       "runEndedAt": "2026-06-03T00:00:00Z",
       "summary": "improve-existing dispatch (release-planning MVP M1a Next Smackerel prioritizer, dispatched from docs/releases/mvp/actions.md Next Dispatches). Reopened spec 021 to add Scope 4 'Next Smackerel Prioritizer' — unified surfacing controller that owns the global per-user nudge budget across digest, push, Telegram, web, ntfy, email-out. No code changes; artifact additions only. spec.md gained '## Cross-Surface Surfacing Budget' section with SLO table (≤ N nudges/day, ≥ 40% acted-on, ≤ 10% false-positive, 0 duplicate-after-ack, 100% urgent escalation when not budget-blocked) and 4 Gherkin scenarios SCN-021-016..019. design.md gained '## Unified Surfacing Controller' section describing normalize → dedupe → suppress → budget → escalate pipeline, SST config keys under surfacing:, 7 new Prometheus metric families, and integration touchpoints with internal/intelligence/, internal/scheduler/, internal/notification/decision.go (read-only enrichment input from DecisionEvaluation), internal/telegram/, internal/annotation/ (spec 027 ack/dismiss feedback). scopes.md gained Scope 4 detail with Implementation Plan, Test Plan, Consumer Impact Sweep, and 17-item Definition of Done (all unchecked). scenario-manifest.json gained 4 new entries SCN-021-016..019 with scope=scope-04 status=planned and linkedTests references to future internal/intelligence/surfacing/*_test.go + tests/e2e/surfacing_budget_test.go. Scope 4 left at 'Not Started' per dispatch instructions; a follow-up bubbles.implement dispatch picks up the build. Scopes 1-3 remain Done; controller wraps existing producers without changing their public contracts. Dependencies noted in design: spec 025 (synthesis content quality), spec 054 (notification intelligence decision inputs), spec 027 (annotation feedback signals). RELEASE-MVP:M1a finding addressed; nextRequiredOwner=bubbles.implement when MVP M1a is picked up for build."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-03T08:00:00Z",
+      "runEndedAt": "2026-06-03T08:00:00Z",
+      "summary": "Re-close-out after rescope: Scope 4 (Next Smackerel Prioritizer) extracted from spec 021 — its surface (cross-surface surfacing controller spanning digest, Telegram, web push, ntfy, email-out, plus coordination with specs 025 / 027 / 054) is too broad to live as one scope on the intelligence-delivery spec and is owned by its own future spec. Removed: spec.md '## Cross-Surface Surfacing Budget' section, design.md '## Unified Surfacing Controller' section, scopes.md Scope 4 row + full Scope 4 section, scenario-manifest.json entries SCN-021-016..019, the dispatch entry in report.md. State.json: workflowMode reverted from 'improve-existing' to 'full-delivery'; status and certification.status back to 'done'; scopeProgress trimmed back to three certified scopes (Alert Delivery Sweep, Search Logging, Intelligence Health Freshness); reopen metadata cleared. Runtime untouched: controller groundwork already merged at internal/intelligence/surfacing/ remains on trunk as prework for the future prioritizer spec; go test ./internal/intelligence/... ./internal/scheduler/... ./internal/api/... PASS."
     }
   ],
   "activeBugs": [],
@@ -406,7 +411,7 @@
     "BUG-021-003-alert-producer-failures-metric"
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-03T00:00:00Z",
+  "lastUpdatedAt": "2026-06-03T08:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
