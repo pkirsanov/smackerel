@@ -594,6 +594,8 @@ Execute Gate 9 from `agent-common.md`. Use project-specific values from `copilot
    ```
    If mismatch → rebuild required: stop services, rebuild with `--no-cache`, restart (use project CLI from `copilot-instructions.md`).
 
+   **Stack Lifecycle Discipline (NON-NEGOTIABLE — prevents orphan-`up`-restart cycles):** Before invoking the project's start/`up` command, ALWAYS run `STATUS_COMMAND` first. If the stack is already healthy and image-current, DO NOT re-invoke `up` — locks/containers from prior validate dispatches will pile up and block subsequent rounds. If you do need to restart (mismatched image, dirty state), invoke `DOWN_COMMAND` first (which must remove orphans per the contract), then `up`. Every `up` you trigger in this phase MUST be paired with a `down` on both success and failure exit paths before returning control. Per `project-config-contract.md`, `DEV_ALL_COMMAND` is required to be reentrant — if you observe duplicate containers, leaked locks, or `up` blocking on a prior invocation, treat it as a project-config-contract violation and `route_required` to `bubbles.devops` with a `[STACK-DIRTY]` packet rather than retrying.
+
 3. **Feature String Verification** — Verify expected feature strings exist in served bundle:
    ```bash
    # Replace with actual data-testids from the scope

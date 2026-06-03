@@ -22,6 +22,87 @@ capabilities:
     - README.md
     - docs/generated/competitive-capabilities.md
 
+  cross-train-propagation:
+    label: Cross-train propagation
+    state: shipped
+    summary: bubbles.propagate (J-Roc) owns propagation-policy.yaml and propagation-ledger.yaml, routes forward/backport/audit operations across declared release-train edges, and records append-only propagation evidence.
+    ownerSurface: agents/bubbles.propagate.agent.md
+    releaseIntroduced: v5.0.0
+    docsRefs:
+    - docs/recipes/propagate-changes.md
+    - docs/guides/WORKFLOW_MODES.md
+    evidenceRefs:
+    - agents/bubbles.propagate.agent.md
+    - bubbles/scripts/propagation-policy-guard.sh
+    - bubbles/scripts/propagation-policy-guard-selftest.sh
+    - bubbles/workflows.yaml
+    competitorTags:
+    - claude-code
+    - cursor
+    freshnessTargets:
+    - docs/recipes/propagate-changes.md
+    - docs/guides/WORKFLOW_MODES.md
+
+  incident-fastlane:
+    label: Incident fastlane
+    state: shipped
+    summary: incident-fastlane chains stabilize severity classification, train rollback authority, devops execution, validation, and docs while preserving ownership boundaries under production pressure.
+    ownerSurface: bubbles/workflows.yaml
+    releaseIntroduced: v5.0.0
+    docsRefs:
+    - docs/recipes/incident-response.md
+    - docs/guides/WORKFLOW_MODES.md
+    evidenceRefs:
+    - agents/bubbles.stabilize.agent.md
+    - bubbles/workflows.yaml
+    - bubbles/intent-routes.yaml
+    competitorTags:
+    - claude-code
+    - roo-code
+    freshnessTargets:
+    - docs/recipes/incident-response.md
+
+  observability-adapter-contract:
+    label: Observability adapter contract
+    state: shipped
+    summary: traceContracts.liveTelemetryEndpoints selects swappable observability adapters with a four-verb contract; v5 ships none and prometheus reference adapters plus lint/selftest.
+    ownerSurface: bubbles/adapters/observability
+    releaseIntroduced: v5.0.0
+    docsRefs:
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/recipes/observe-production.md
+    evidenceRefs:
+    - bubbles/adapters/observability/none.sh
+    - bubbles/adapters/observability/prometheus.sh
+    - bubbles/scripts/observability-adapter-lint.sh
+    - bubbles/scripts/observability-adapter-lint-selftest.sh
+    competitorTags:
+    - claude-code
+    - roo-code
+    freshnessTargets:
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/recipes/observe-production.md
+
+  framework-self-observation:
+    label: Framework self-observation
+    state: shipped
+    summary: bubbles.retro target: framework analyzes framework events, workflow runs, gate trends, and capability freshness, then writes proposal-first improvement packets under improvements/ without mutating framework files.
+    ownerSurface: bubbles/scripts/retro-framework-health.sh
+    releaseIntroduced: v5.0.0
+    docsRefs:
+    - docs/recipes/framework-health.md
+    - docs/guides/WORKFLOW_MODES.md
+    evidenceRefs:
+    - agents/bubbles.retro.agent.md
+    - bubbles/scripts/retro-framework-health.sh
+    - bubbles/scripts/retro-framework-health-selftest.sh
+    - bubbles/workflows.yaml
+    competitorTags:
+    - claude-code
+    - cursor
+    freshnessTargets:
+    - docs/recipes/framework-health.md
+
   artifact-ownership:
     label: Hard artifact ownership
     state: shipped
