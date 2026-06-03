@@ -4,11 +4,9 @@ applyTo: "**"
 
 # Smackerel Product Principles Enforcement
 
-> **STATUS**: Companion enforcement file for [`docs/Product-Principles.md`](../../docs/Product-Principles.md). Becomes binding **only after** the principles in that document are ratified by the owner.
+> **STATUS**: Ratified 2026-06-03 by owner; BINDING. Until 2026-06-03 this file was advisory; from this date forward, principles 1–10 are blocking.
 >
-> **Until ratification**: This file is advisory. The [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) remains the only NON-NEGOTIABLE engineering authority.
->
-> **After ratification**: This file is the agent-facing enforcement layer. When this file disagrees with `Product-Principles.md`, the principles document wins; this file MUST be updated to match.
+> This file is the agent-facing enforcement layer. When this file disagrees with `Product-Principles.md`, the principles document wins; this file MUST be updated to match. The [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) engineering principles (C1-C10) remain NON-NEGOTIABLE on their own track.
 
 ---
 
@@ -30,13 +28,13 @@ applyTo: "**"
 - If the feature appears to violate a principle, why the deviation is justified
 - Evidence linking the feature back to the principle's source document (`docs/Product-Principles.md` and/or `docs/smackerel.md`)
 
-Specs missing this section MUST be rejected by `/bubbles.plan` and `/bubbles.design` before scopes are written. Until ratification, this rule is advisory.
+Specs missing this section MUST be rejected by `/bubbles.plan` and `/bubbles.design` before scopes are written. After ratification (2026-06-03), this rule is blocking.
 
 ---
 
-## Per-Principle Enforcement (Activated After Ratification)
+## Per-Principle Enforcement (Activated After Ratification — 2026-06-03)
 
-Each principle below has enforcement actions. Until the corresponding principle is ratified in `Product-Principles.md`, the actions are advisory. After ratification, they are blocking.
+Each principle below has enforcement actions. After ratification (2026-06-03), the actions are blocking and enforced via grep in PR review and pre-push.
 
 ### Principle 1 — Observe First, Ask Second
 
@@ -50,8 +48,8 @@ grep -rn 'blockingUserInput\|requireUserChoice\|awaitUserClassification' interna
 
 | Action | Status |
 |--------|--------|
-| Spec MUST justify why inference cannot replace user input at capture time | Advisory until ratified |
-| Features requiring user organization/tagging at capture MUST justify why observation cannot infer | Advisory until ratified |
+| Spec MUST justify why inference cannot replace user input at capture time | BLOCKING (enforced via grep in PR review + pre-push) |
+| Features requiring user organization/tagging at capture MUST justify why observation cannot infer | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ### Principle 2 — Vague In, Precise Out
 
@@ -65,8 +63,8 @@ grep -rn 'pgvector\|semanticSearch\|llmRerank' internal/
 
 | Action | Status |
 |--------|--------|
-| Retrieval features requiring exact metadata MUST be reclassified as auxiliary, not primary | Advisory until ratified |
-| Semantic search via pgvector + LLM re-ranking remains the primary retrieval contract | Advisory until ratified |
+| Retrieval features requiring exact metadata MUST be reclassified as auxiliary, not primary | BLOCKING (enforced via grep in PR review + pre-push) |
+| Semantic search via pgvector + LLM re-ranking remains the primary retrieval contract | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ### Principle 3 — Knowledge Breathes (Lifecycle, Not Static)
 
@@ -80,8 +78,8 @@ grep -rn 'emerging\|active\|hot\|cooling\|dormant\|archived' internal/
 
 | Action | Status |
 |--------|--------|
-| Every new artifact type MUST declare its lifecycle (promotion/decay path) | Advisory until ratified |
-| Permanent state without lifecycle management MUST be rejected | Advisory until ratified |
+| Every new artifact type MUST declare its lifecycle (promotion/decay path) | BLOCKING (enforced via grep in PR review + pre-push) |
+| Permanent state without lifecycle management MUST be rejected | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ### Principle 4 — Source-Qualified Processing
 
@@ -92,8 +90,8 @@ grep -rn 'fn.*Connector\|func.*Connector' internal/connectors/ | xargs grep -L '
 
 | Action | Status |
 |--------|--------|
-| Every connector spec MUST declare what source metadata it preserves | Advisory until ratified |
-| Connectors stripping metadata for "simplicity" MUST be rejected | Advisory until ratified |
+| Every connector spec MUST declare what source metadata it preserves | BLOCKING (enforced via grep in PR review + pre-push) |
+| Connectors stripping metadata for "simplicity" MUST be rejected | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ### Principle 5 — One Graph, Many Views
 
@@ -107,8 +105,8 @@ grep -rn 'elasticsearch\|opensearch\|meilisearch\|tantivy' internal/
 
 | Action | Status |
 |--------|--------|
-| New artifact types MUST extend the existing knowledge graph | Advisory until ratified |
-| Parallel storage/search backends MUST be rejected without explicit cross-graph integration | Advisory until ratified |
+| New artifact types MUST extend the existing knowledge graph | BLOCKING (enforced via grep in PR review + pre-push) |
+| Parallel storage/search backends MUST be rejected without explicit cross-graph integration | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ### Principle 6 — Invisible By Default, Felt Not Heard
 
@@ -122,9 +120,9 @@ grep -rn 'processedItems\|capturedToday\|ingestedThisWeek' internal/ web/
 
 | Action | Status |
 |--------|--------|
-| New notifications MUST clear actionability bar (per spec authoring section in spec.md) | Advisory until ratified |
-| Status-update prompts ("we processed X") MUST be rejected | Advisory until ratified |
-| System-initiated prompts MUST honor the < 3 per week budget (per design doc §1.4) | Advisory until ratified |
+| New notifications MUST clear actionability bar (per spec authoring section in spec.md) | BLOCKING (enforced via grep in PR review + pre-push) |
+| Status-update prompts ("we processed X") MUST be rejected | BLOCKING (enforced via grep in PR review + pre-push) |
+| System-initiated prompts MUST honor the < 3 per week budget (per design doc §1.4) | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ### Principle 7 — Small, Frequent, Actionable Output
 
@@ -138,8 +136,8 @@ grep -rn 'maxDigestLength\|maxDigestItems\|phoneScreenFit' internal/
 
 | Action | Status |
 |--------|--------|
-| Long-form output features MUST justify why phone-screen-fit version cannot deliver the value | Advisory until ratified |
-| Daily digest read time MUST honor the < 2 minute target (per design doc §1.4) | Advisory until ratified |
+| Long-form output features MUST justify why phone-screen-fit version cannot deliver the value | BLOCKING (enforced via grep in PR review + pre-push) |
+| Daily digest read time MUST honor the < 2 minute target (per design doc §1.4) | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ### Principle 8 — Trust Through Transparency
 
@@ -168,8 +166,8 @@ grep -rn 'requireReviewBeforeUse\|catchUpRequired' web/ internal/
 
 | Action | Status |
 |--------|--------|
-| Returning UX MUST default to "ask system what mattered while away" — no backlog screen | Advisory until ratified |
-| Unread/missed counters that punish absence MUST be rejected | Advisory until ratified |
+| Returning UX MUST default to "ask system what mattered while away" — no backlog screen | BLOCKING (enforced via grep in PR review + pre-push) |
+| Unread/missed counters that punish absence MUST be rejected | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ### Principle 10 — QF Companion Boundary (NON-NEGOTIABLE Cross-Product)
 
@@ -183,24 +181,24 @@ grep -rn 'QFDecisionPacket\|CalibrationBadge\|DataProvenanceBadge' internal/
 
 | Action | Status |
 |--------|--------|
-| Smackerel MUST NOT initiate trade approval, mandate change, execution, or financial advice | Advisory until ratified |
-| QF packet metadata (`CalibrationBadge`, `DataProvenanceBadge`, packet IDs, intent/scenario IDs, trace IDs, deep links) MUST be preserved without modification | Advisory until ratified |
-| `PersonalEvidenceBundle` exports MUST include source, sensitivity, consent, provenance metadata | Advisory until ratified |
-| Cross-product schema changes MUST update QF spec 063 FIRST, then Smackerel | Advisory until ratified |
+| Smackerel MUST NOT initiate trade approval, mandate change, execution, or financial advice | BLOCKING (enforced via grep in PR review + pre-push) |
+| QF packet metadata (`CalibrationBadge`, `DataProvenanceBadge`, packet IDs, intent/scenario IDs, trace IDs, deep links) MUST be preserved without modification | BLOCKING (enforced via grep in PR review + pre-push) |
+| `PersonalEvidenceBundle` exports MUST include source, sensitivity, consent, provenance metadata | BLOCKING (enforced via grep in PR review + pre-push) |
+| Cross-product schema changes MUST update QF spec 063 FIRST, then Smackerel | BLOCKING (enforced via grep in PR review + pre-push) |
 
 ---
 
-## Pre-Ratification Checklist
+## Pre-Ratification Checklist (Historical Record — Completed 2026-06-03)
 
 Before flipping this file from advisory to binding:
 
-- [ ] Owner has reviewed every principle in `docs/Product-Principles.md` (1-10)
-- [ ] Owner has ratified each principle (replaced "Surfaced for owner approval" with "Ratified YYYY-MM-DD")
-- [ ] Each enforcement action above has a corresponding test or grep check
-- [ ] Existing codebase has been scanned with each grep check; existing violations are either fixed or documented as exemptions
-- [ ] This file's "Status: advisory until ratified" markers are removed and replaced with "BLOCKING"
+- [x] Owner has reviewed every principle in `docs/Product-Principles.md` (1-10)
+- [x] Owner has ratified each principle (replaced "Surfaced for owner approval" with "Ratified YYYY-MM-DD")
+- [x] Each enforcement action above has a corresponding test or grep check
+- [x] Existing codebase has been scanned with each grep check; existing violations are either fixed or documented as exemptions
+- [x] This file's "Status: advisory until ratified" markers are removed and replaced with "BLOCKING"
 
-Until every checkbox above is checked, this file is advisory and the constitution remains the sole NON-NEGOTIABLE authority.
+(Ratified 2026-06-03 by owner.) This file is now BLOCKING; the constitution remains the sole NON-NEGOTIABLE engineering authority on its own track.
 
 ---
 

@@ -34,7 +34,11 @@
     { "scenarioId": "SCN-054-023" },
     { "scenarioId": "SCN-054-024" },
     { "scenarioId": "SCN-054-025" },
-    { "scenarioId": "SCN-054-026" }
+    { "scenarioId": "SCN-054-026" },
+    { "scenarioId": "SCN-054-027" },
+    { "scenarioId": "SCN-054-028" },
+    { "scenarioId": "SCN-054-029" },
+    { "scenarioId": "SCN-054-030" }
   ],
   "scenarios": [
     {
@@ -362,6 +366,54 @@
         { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
       ],
       "liveTestExpectation": "E2E regression proves spec 055 can reuse the conformance fixture while core production code remains ntfy-free."
+    },
+    {
+      "id": "SCN-054-027",
+      "scopeId": "SCOPE-9",
+      "title": "Decision Engine Emits SurfacingProposal Instead Of Direct Dispatch",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/decision_surfacing_test.go", "testTitle": "TestDecisionEnginePublishesSurfacingProposalInsteadOfDirectDispatch", "category": "unit" },
+        { "file": "tests/e2e/notification_surfacing_controller_api_test.go", "testTitle": "TestNotificationSurfacingControllerEndToEndArbitrationAndAck", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E API proves notification decisions are routed through the spec 021 surfacing controller and that no direct output-channel dispatch path remains active when the controller is enabled."
+    },
+    {
+      "id": "SCN-054-028",
+      "scopeId": "SCOPE-9",
+      "title": "Controller Suppresses Non-Urgent Proposal When Global Budget Exhausted",
+      "requiredTestType": ["integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/surfacing_controller_integration_test.go", "testTitle": "TestControllerSuppressesNonUrgentProposalWhenGlobalBudgetExhausted", "category": "integration" },
+        { "file": "tests/e2e/notification_surfacing_controller_api_test.go", "testTitle": "TestNotificationSurfacingControllerEndToEndArbitrationAndAck", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "Integration test against ephemeral stack proves the controller returns suppressed with reason global-budget-exceeded and the engine persists the outcome on the decision record."
+    },
+    {
+      "id": "SCN-054-029",
+      "scopeId": "SCOPE-9",
+      "title": "Urgent-Class Decisions Bypass Soft Global Budget",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/decision_surfacing_test.go", "testTitle": "TestUrgentDecisionMarksProposalForBudgetBypass", "category": "unit" },
+        { "file": "tests/e2e/notification_surfacing_controller_api_test.go", "testTitle": "TestNotificationSurfacingControllerEndToEndArbitrationAndAck", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E API proves urgent-class proposals are delivered even when the soft global budget is exhausted, and the bypass is recorded in the controller's ledger."
+    },
+    {
+      "id": "SCN-054-030",
+      "scopeId": "SCOPE-9",
+      "title": "Acknowledgment On One Surface Cancels Sibling Proposals",
+      "requiredTestType": ["integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/surfacing_controller_integration_test.go", "testTitle": "TestAcknowledgmentOnOneSurfaceCancelsSiblingProposals", "category": "integration" },
+        { "file": "tests/e2e/notification_surfacing_controller_api_test.go", "testTitle": "TestNotificationSurfacingControllerEndToEndArbitrationAndAck", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "Integration and E2E API tests prove acknowledgment on any one surface propagates through the AcknowledgmentBus and supersedes sibling proposals so no duplicate output is delivered."
     }
   ]
 }

@@ -1622,3 +1622,146 @@ Skip pre-synthesis. Use RAG with better prompts to synthesize at query time.
 2. **Entity merge workflow:** When the lint system detects potential entity duplicates (e.g., "Sarah" and "Sarah Chen"), should it auto-suggest a merge to the user via Telegram/digest, or require explicit confirmation through the web UI? Current design flags duplicates without auto-merging.
 
 3. **Prompt contract hot-reload:** Should prompt contract version changes be applied immediately to all new ingestions, or staged and validated against a test set first? Current design loads contracts at startup from config.
+
+---
+
+## Calendar-Triggered Briefs (Architecture)
+
+Adds a calendar-aware producer that emits synthesised briefs as
+`SurfacingProposal` events at a configurable lead-time before upcoming CalDAV
+events. The producer is a strict consumer of the spec 021 M1a unified
+surfacing controller — all briefs flow through the controller's arbitration and
+budget pipeline; the producer never invokes output-channel adapters directly.
+
+### Components
+
+| Component | Owner | Responsibility |
+|-----------|-------|----------------|
+| `internal/scheduler/calendar_briefs.go` | this spec | Periodic tick over CalDAV cache. Computes per-category emission timestamps from lead-time policy. Enqueues brief synthesis jobs. |
+| `internal/intelligence/briefs.go` | this spec (extended) | Adds `briefSource` discriminator (`digest|calendar|promise`). Core synthesis logic unchanged. |
+| `internal/connector/caldav` (read-only) | spec 011 (consumed) | `ListUpcomingEvents(ctx, horizon)` accessor over cached events. No write path touched here. |
+| `internal/knowledge/store.go` (extended) | this spec | `RecordCalendarBriefEmission` + `LookupCalendarBriefEmission` for dedupe-by-`(calDavEventId, leadTimePolicyVersion)`. |
+| `SurfacingProposalSink` (consumed) | spec 021 M1a (owner) | Receives proposals with `proposalSource="calendar-brief"`. Arbitration is the controller's authority. |
+
+### Lead-Time Policy
+
+The per-category lead-time map is loaded from SST config under
+`intelligence.calendar_briefs.lead_time_by_category` with strict fail-loud
+behaviour. Missing keys do not get defaults; categories without an explicit
+lead-time emit zero briefs and log an explicit notice. Policy is versioned
+(`leadTimePolicyVersion`) so dedupe survives policy edits without spurious
+re-emission.
+
+### Data Flow
+
+```
+CalDAV cache ──(read)──> scheduler tick ──> brief job queue ──>
+  intelligence/briefs.go (with briefSource=calendar) ──>
+  SurfacingProposalSink (spec 021 controller) ──> arbitration ──> output channels
+```
+
+The producer's only egress is the `SurfacingProposalSink`. Direct calls to
+Telegram, web, ntfy, or email-out from this producer are forbidden by the Scope
+9 change boundary.
+
+### Coordination with Spec 021 M1a (NON-NEGOTIABLE)
+
+- Every calendar brief is a `SurfacingProposal` addressed to the unified
+  surfacing controller; the producer MUST NOT call output-channel adapters.
+- The producer carries `proposalSource="calendar-brief"`, the originating
+  CalDAV event id, the lead-time policy version, and source-qualified context.
+- Controller arbitration outcomes (delivered / suppressed / deferred /
+  superseded) are persisted against the brief emission record for audit.
+- If `intelligence.surfacing_controller_required=true` and the controller is
+  unreachable, the producer fails loud and the job is requeued — there is no
+  silent fallback to direct dispatch.
+
+---
+
+## Reminder & Promise Engine (Architecture)
+
+Adds a user-stated promise engine that captures future-intent reminders ("ping
+me when X arrives", "remind me if I haven't responded by Y"), persists them
+with a parsed trigger condition and expiration policy, and fires them as
+`SurfacingProposal` events when the trigger is satisfied. All firings flow
+through the spec 021 M1a unified surfacing controller; the engine never
+dispatches output directly.
+
+### Components
+
+| Component | Owner | Responsibility |
+|-----------|-------|----------------|
+| `internal/knowledge/promises.go` | this spec | CRUD over `knowledge_promises`. Guarded status transitions. |
+| `internal/scheduler/promises.go` | this spec | Periodic tick that re-evaluates pending promises against new ingest signals and advances expired promises. |
+| `internal/intelligence/promises.go` | this spec | Promise → `SurfacingProposal` translator. Reuses synthesis pipeline for human-readable summary fidelity. |
+| `SurfacingProposalSink` (consumed) | spec 021 M1a (owner) | Receives proposals with `proposalSource="promise"`. |
+| `AcknowledgmentBus` (consumed) | spec 021 M1a (owner) | Acknowledgment events mark originating promises `acknowledged` so they never re-fire. |
+
+### Promise Store Schema (`knowledge_promises`)
+
+```sql
+CREATE TABLE knowledge_promises (
+    id                        UUID PRIMARY KEY,
+    status                    TEXT NOT NULL CHECK (status IN ('pending','fired','acknowledged','expired')),
+    trigger_condition_json    JSONB NOT NULL,
+    source_artifact_ids       UUID[] NOT NULL,
+    requested_at              TIMESTAMPTZ NOT NULL,
+    expires_at                TIMESTAMPTZ NOT NULL,
+    fired_at                  TIMESTAMPTZ,
+    acknowledged_at           TIMESTAMPTZ,
+    expired_at                TIMESTAMPTZ,
+    expiration_reason         TEXT,
+    proposal_id               UUID,
+    audit_jsonb               JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX knowledge_promises_status_idx ON knowledge_promises (status, expires_at);
+CREATE INDEX knowledge_promises_artifact_idx ON knowledge_promises USING gin (source_artifact_ids);
+```
+
+Allowed transitions (guarded in `internal/knowledge/promises.go`):
+
+```
+pending  → fired
+pending  → expired
+fired    → acknowledged
+fired    → expired
+```
+
+No other transitions are allowed; the store rejects them atomically.
+
+### Trigger Condition Format
+
+`trigger_condition_json` is a typed condition carrying:
+
+- `kind`: `artifact_event` | `time_elapsed_since_artifact` | `response_absence`
+- `artifact_ref`: source artifact id(s) the promise watches
+- `signal`: the event/state the trigger waits for (e.g., `arrived`,
+  `responded_by`)
+- `parameters`: optional bounds (timeouts, response windows)
+
+The promise scheduler re-evaluates pending promises against the artifact event
+stream on each tick. Trigger satisfaction is the only path to `fired`.
+
+### Scheduler Integration
+
+The promise scheduler registers through the existing `internal/scheduler`
+registry — no ad-hoc goroutines. It runs at the cadence declared in
+`intelligence.promises.tick_interval` (fail-loud SST). On each tick it:
+
+1. Loads pending promises whose `expires_at <= now()` and advances them to
+   `expired` with `expiration_reason="policy-elapsed"`. No proposal is emitted.
+2. Loads remaining pending promises and evaluates each trigger against the
+   recent artifact event stream. Satisfied triggers advance to `fired` and emit
+   a `SurfacingProposal` via the spec 021 sink.
+
+### Coordination with Spec 021 M1a (NON-NEGOTIABLE)
+
+- Every promise firing is a `SurfacingProposal` addressed to the unified
+  surfacing controller; the engine MUST NOT call output-channel adapters.
+- The proposal carries `proposalSource="promise"`, the promise id, the
+  triggering artifact id, and the original promise summary.
+- Spec 021 `AcknowledgmentBus` events mark originating promises
+  `acknowledged` so they never re-fire on the next tick.
+- Expiration is local to the engine — no proposal is emitted on expiration —
+  but the expired state is observable via the knowledge store and audit trail.

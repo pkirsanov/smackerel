@@ -1452,3 +1452,95 @@ stateDiagram-v2
 3. **Prompt contract hot-reload:** Should prompt contract version changes be applied immediately to all new ingestions, or should they be staged and validated against a test set first?
 4. **Knowledge layer backup/export:** Should concept pages be exportable as markdown files (for interop with tools like Obsidian), or is PostgreSQL the sole storage surface?
 5. **Multi-user concept pages:** If Smackerel ever supports multi-user, how are concept page conflicts between users' knowledge handled?
+
+---
+
+## Calendar-Triggered Briefs
+
+The knowledge synthesis layer is extended with a calendar-aware producer that
+fires synthesised briefs at a configurable lead-time before upcoming CalDAV
+calendar events. Briefs are emitted as `SurfacingProposal` events addressed to
+the spec 021 unified surfacing controller; the producer never invokes an output
+channel directly.
+
+### Scenarios
+
+```gherkin
+Scenario: SCN-025-24 — Lead-time scheduler fires a brief before an upcoming calendar event
+  Given the CalDAV connector cache contains a meeting "Quarterly review" starting at 15:00 today
+  And the calendar-brief lead-time policy for category "meeting" is 30 minutes
+  When the scheduler tick at 14:30 evaluates upcoming events
+  Then a calendar-triggered brief job is enqueued for the meeting
+  And the brief is synthesised via the existing intelligence briefs pipeline using the meeting's source-qualified context
+  And the resulting brief is emitted as a SurfacingProposal addressed to the spec 021 unified surfacing controller with proposalSource "calendar-brief"
+  And it is not delivered directly to any output channel
+
+Scenario: SCN-025-25 — Lead-time policy is per category and configurable
+  Given the calendar-brief policy declares lead-time 1 day for category "trip" and 30 minutes for category "meeting"
+  And the CalDAV connector cache contains a trip event starting tomorrow at 09:00 and a meeting starting today at 16:00
+  When the scheduler evaluates upcoming events at 09:00 today
+  Then a brief job for the trip event is enqueued for emission at 09:00 today (24 hours ahead)
+  And a brief job for the meeting event is enqueued for emission at 15:30 today (30 minutes ahead)
+  And both jobs reference the originating CalDAV event id and lead-time policy version
+
+Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposals
+  Given a calendar-triggered brief was already emitted for CalDAV event id "evt-1234" at lead-time 30m
+  And the scheduler re-evaluates the same event within the same lead-time window
+  When the calendar-brief producer prepares a new job
+  Then the producer detects the existing brief by (calDavEventId, leadTimePolicyVersion)
+  And no second SurfacingProposal is enqueued for that event
+  And the duplicate-suppression decision is observable in the brief audit log without leaking event payload
+```
+
+### Acceptance Criteria
+
+- Calendar-triggered briefs MUST flow through the spec 021 unified surfacing controller; no direct output-channel calls from this producer.
+- Lead-time policy MUST be per-category, fail-loud SST (no default), and versioned for dedupe.
+- Dedupe key is `(calDavEventId, leadTimePolicyVersion)`; re-evaluation within the same window MUST NOT enqueue a second proposal.
+- CalDAV connector cache is consumed read-only.
+
+---
+
+## Reminder & Promise Engine
+
+The knowledge synthesis layer is extended with a user-stated promise engine
+that captures future-intent reminders, persists them with a trigger condition
+and expiration policy, and fires them as `SurfacingProposal` events when the
+trigger is satisfied. All firings flow through the spec 021 unified surfacing
+controller; the engine never dispatches output directly.
+
+### Scenarios
+
+```gherkin
+Scenario: SCN-025-27 — User-stated promise is captured and persisted as pending
+  Given the assistant receives a user intent "remind me when the bookshelf order arrives"
+  And the promise is parsed into a trigger condition referencing the bookshelf order artifact and an arrival signal
+  When the reminder & promise engine accepts the promise
+  Then a promise row is persisted with status "pending", trigger condition, source artifact ids, requested-by timestamp, and expiration policy
+  And the persisted promise is observable via the knowledge store and audit trail without leaking payload to other surfaces
+
+Scenario: SCN-025-28 — Pending promise fires when its trigger condition is satisfied
+  Given a pending promise with trigger "bookshelf order arrived"
+  And an arrival event for the bookshelf order is ingested
+  When the scheduler tick re-evaluates pending promises
+  Then the promise transitions to status "fired"
+  And a SurfacingProposal with proposalSource "promise" is published to the spec 021 unified surfacing controller carrying the original promise summary and the triggering artifact id
+  And no output-channel adapter is invoked directly by the promise engine
+
+Scenario: SCN-025-29 — Promise expires when its expiration policy elapses without trigger or acknowledgment
+  Given a pending promise with expiration policy "expire after 30 days if not fired"
+  And 30 days have elapsed since requested-by with no triggering event and no acknowledgment
+  When the scheduler tick evaluates expiration
+  Then the promise transitions to status "expired"
+  And no SurfacingProposal is emitted on expiration
+  And the expiration is recorded against the promise row with reason "policy-elapsed"
+  And the user-visible audit trail reports the expiration without re-prompting the user
+```
+
+### Acceptance Criteria
+
+- Promise lifecycle states are `pending|fired|acknowledged|expired`; transitions are guarded and atomically persisted.
+- Firings MUST be emitted as `SurfacingProposal` to the spec 021 controller; zero direct output-channel calls.
+- Expiration MUST NOT emit a proposal.
+- Acknowledgment events from spec 021 `AcknowledgmentBus` MUST mark the originating promise `acknowledged` so it never re-fires.
+- SST keys are fail-loud: missing config aborts startup.
