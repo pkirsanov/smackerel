@@ -6,7 +6,7 @@
 # The guard always exits 0 today (it emits informational warnings rather
 # than hard failures), so this selftest verifies:
 #   - The guard runs cleanly against a minimal valid spec dir (exit 0)
-#     and emits the expected G044/G045/G046 section banners.
+#     and emits the expected G044/G045/G046 section banners. [former G045/G046 absorbed into G044; banners retained for backward compat]
 #   - When two specs share the same route in design.md, the guard
 #     surfaces the route collision message in --verbose mode (still
 #     exit 0, by design — but the warning text MUST appear).

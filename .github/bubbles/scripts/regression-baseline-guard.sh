@@ -6,8 +6,8 @@
 #
 # Gates enforced:
 #   G044 — regression_baseline_gate (test count comparison)
-#   G045 — cross_spec_regression_gate (cross-spec test execution)
-#   G046 — spec_conflict_detection_gate (route/table/API collision scan)
+# G045 — cross_spec_regression_gate (cross-spec test execution) [former; absorbed into G044]
+# G046 — spec_conflict_detection_gate (route/table/API collision scan) [former; absorbed into G044]
 #
 set -euo pipefail
 

@@ -726,7 +726,7 @@ fi
 echo ""
 
 # =============================================================================
-# CHECK 4: ALL DoD items must be checked [x] — ZERO unchecked allowed
+# CHECK 3A: Policy Snapshot Provenance (Gate G055)
 # =============================================================================
 echo "--- Check 3A: Policy Snapshot Provenance (Gate G055) ---"
 if grep -qE '"policySnapshot"[[:space:]]*:[[:space:]]*\{' "$state_file"; then
@@ -758,9 +758,9 @@ fi
 echo ""
 
 # =============================================================================
-# CHECK 3B: Validate-owned certification state (Gate G056)
+# CHECK 3H: Validate-owned certification state (Gate G056)
 # =============================================================================
-echo "--- Check 3B: Validate Certification State (Gate G056) ---"
+echo "--- Check 3H: Validate Certification State (Gate G056) ---"
 if grep -qE '"certification"[[:space:]]*:[[:space:]]*\{' "$state_file"; then
   pass "state.json contains certification block"
 
@@ -3094,14 +3094,15 @@ fi
 echo ""
 
 # =============================================================================
-# CHECK 20: Enhanced Evidence Similarity Detection (Gate G049)
+# CHECK 20: Enhanced Evidence Similarity Detection (Gate G021)
 # =============================================================================
 # Extends Check 12 by detecting near-duplicate evidence blocks where ≥80%
 # of non-empty lines are shared across different DoD items. This catches
 # copy-paste fabrication where agents change 1-2 lines but keep the bulk
 # of the evidence identical.
+# (Formerly tagged G049 — consolidated into G021 anti_fabrication_gate.)
 # =============================================================================
-echo "--- Check 20: Evidence Similarity Detection (Gate G049) ---"
+echo "--- Check 20: Evidence Similarity Detection (Gate G021) ---"
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
 
@@ -3161,7 +3162,7 @@ for scope_path in "${scope_files[@]}"; do
       overlap_pct=$((shared_lines * 100 / min_lines))
 
       if [[ "$overlap_pct" -ge 80 ]]; then
-        fail "Near-duplicate evidence blocks (${overlap_pct}% line overlap) in $(relative_artifact_path "$scope_path") — blocks $((i+1)) and $((j+1)) of $block_count share $shared_lines of $min_lines lines. LIKELY COPY-PASTE FABRICATION (Gate G049)"
+        fail "Near-duplicate evidence blocks (${overlap_pct}% line overlap) in $(relative_artifact_path "$scope_path") — blocks $((i+1)) and $((j+1)) of $block_count share $shared_lines of $min_lines lines. LIKELY COPY-PASTE FABRICATION (Gate G021)"
         near_dup_found="true"
         break 2
       fi
@@ -3169,7 +3170,7 @@ for scope_path in "${scope_files[@]}"; do
   done
 
   if [[ "$near_dup_found" == "false" ]]; then
-    pass "No near-duplicate evidence blocks in $(relative_artifact_path "$scope_path") (Gate G049)"
+    pass "No near-duplicate evidence blocks in $(relative_artifact_path "$scope_path") (Gate G021)"
   fi
 done
 echo ""

@@ -285,6 +285,21 @@ bubbles_framework_manifest_entries() {
     bubbles_print_manifest_entry "$source_root" "$relative_path"
   done < <(find "$source_root/bubbles/adapters" -type f 2>/dev/null | LC_ALL=C sort)
 
+  # v5.0.1 (H4): JSON Schemas for YAML registries are framework-managed and
+  # installed downstream so strict-parser validation can run there too.
+  while IFS= read -r file_path; do
+    [[ -f "$file_path" ]] || continue
+    relative_path="${file_path#$source_root/}"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
+  done < <(find "$source_root/bubbles/schemas" -type f 2>/dev/null | LC_ALL=C sort)
+
+  # v5.0.1 (H8): pre-push hook source for maintainer installs.
+  while IFS= read -r file_path; do
+    [[ -f "$file_path" ]] || continue
+    relative_path="${file_path#$source_root/}"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
+  done < <(find "$source_root/bubbles/scripts/hooks" -type f 2>/dev/null | LC_ALL=C sort)
+
   while IFS= read -r file_path; do
     [[ -f "$file_path" ]] || continue
     relative_path="${file_path#$source_root/}"

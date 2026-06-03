@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v5.0.0</div>
+  <div class="subtitle">Agent Orchestration System v5.0.1</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -1191,6 +1191,30 @@
     <div class="wf-quote">"(camera crew just watches)"</div>
   </div>
   <div class="workflow-card">
+    <div class="wf-name">simplify-to-doc</div>
+    <div class="wf-alias">→ sunnyvale strip-it-down</div>
+    <div class="wf-desc">Simplify an existing implementation, prove it still works, then sync docs.</div>
+    <div class="wf-quote">"Strip it down to the trailer frame."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">spec-review-to-doc</div>
+    <div class="wf-alias">→ sunnyvale laser-eyes-sweep</div>
+    <div class="wf-desc">Audit specs for freshness, classify trust levels, produce a maintenance report.</div>
+    <div class="wf-quote">"Lasers on the trailer park, boys."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release-planning-to-doc</div>
+    <div class="wf-alias">→ sunnyvale plans-within-plans</div>
+    <div class="wf-desc">Produce or refresh a phase release packet (vision / features / actions / business-plan / deployment / marketing / monetization / ops-scalability); enforces Product Direction Surfaces trio + carry-forward + cross-product coordination.</div>
+    <div class="wf-quote">"Plans within plans within plans."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">idea-to-release-completion</div>
+    <div class="wf-alias">→ sunnyvale rocket-appliance</div>
+    <div class="wf-desc">Full lifecycle: idea → release-packet bootstrap → spec/design/scopes → implement/test/validate/audit/chaos → final packet refresh that flips capability to <code>delivered</code>.</div>
+    <div class="wf-quote">"It ain't rocket appliances, but it works."</div>
+  </div>
+  <div class="workflow-card">
     <div class="wf-name">release-train-cut</div>
     <div class="wf-alias">→ sunnyvale cut-the-train</div>
     <div class="wf-desc">DVS cuts a candidate at a trunk SHA for a named train. Signed candidate artifact, no deployment.</div>
@@ -1510,6 +1534,74 @@
   <div class="workflow-card">
     <div class="wf-name">release train portfolio</div>
     <div class="wf-desc">The set of all declared trains under <code>config/release-trains.yaml</code>. Surfaced by <code>release-train-status-all</code> (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">objective research pass</div>
+    <div class="wf-desc">Brownfield workflows split question generation from codebase research so the research context reports current truth instead of solution-shaped opinions.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">current truth</div>
+    <div class="wf-desc">The short section in <code>design.md</code> produced by an objective research pass that summarizes how the code actually works today.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">design brief</div>
+    <div class="wf-desc">A short top-of-file checkpoint in <code>design.md</code> that lets humans steer the design without reviewing the whole document.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">execution outline</div>
+    <div class="wf-desc">A short top-of-file checkpoint in <code>scopes.md</code> that shows phase order, new signatures, and validation checkpoints before implementation starts.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">horizontal plan</div>
+    <div class="wf-desc">A layer-by-layer plan like DB → service → API → UI that Bubbles tries to rewrite because it hides breakage until too late.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">vertical slice</div>
+    <div class="wf-desc">An implementation sequence that gives you checkpoints through the stack instead of a giant horizontal batch.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">slop tax</div>
+    <div class="wf-desc">Rework signal measured by <code>bubbles.retro</code>: retries, reversions, reopened scopes, and fix-on-fix churn versus forward progress.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">instruction budget</div>
+    <div class="wf-desc">Prompt-size budget for agent surfaces. If the prompt gets too bloated, adherence gets worse; audit it with <code>bubbles lint-budget</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">read the code</div>
+    <div class="wf-desc">Use the short planning artifacts to steer early, then read the implementation and evidence instead of trusting giant plans blindly.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">Liquor Inside / Liquor Outside</div>
+    <div class="wf-desc">Erica's two-location hustle. In Bubbles this is <code>bubbles.sprint</code>: keep multiple goal streams moving under one time budget without dropping either side.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">contextual persona variant</div>
+    <div class="wf-desc">A documented, visually distinct reuse of the same TPB character when the character has a genuinely different narrative mode. Only the variants listed in the persona convention table are allowed.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">product direction surfaces trio</div>
+    <div class="wf-desc">The three canonical product-direction docs every product repo must carry: <code>docs/INVESTOR_OVERVIEW.md</code>, <code>docs/Product-Principles.md</code>, <code>.github/instructions/product-principles.instructions.md</code>. <code>bubbles.setup</code> enforces presence; <code>bubbles.releases</code> refuses to plan without it.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release packet</div>
+    <div class="wf-desc">The 8-doc bundle Sonny "Iron Lung" Smith produces per phase: <code>vision.md</code>, <code>features.md</code>, <code>actions.md</code>, <code>business-plan.md</code>, <code>deployment.md</code>, <code>marketing.md</code>, <code>monetization.md</code>, <code>ops-scalability.md</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">carry-forward table</div>
+    <div class="wf-desc">Mandatory section in every multi-phase repo's <code>features.md</code> — captures capabilities inherited from prior phases so nothing gets quietly dropped.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">vision restatement</div>
+    <div class="wf-desc">Every phase's <code>vision.md</code> MUST be self-contained — no cross-references like "see vision.md in v1.0". Restate inline.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">cross-product coordination</div>
+    <div class="wf-desc">When two repos ship features together, <code>bubbles.releases</code> produces matched plan files in BOTH repos with cross-references and a shared schema-versioning rule.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">surfaced principle</div>
+    <div class="wf-desc">A product principle drafted from existing repo evidence by the <code>bubbles-product-principle-discovery</code> skill, flagged "Surfaced for owner approval — not yet ratified". Owner ratifies; agents do not.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">repo-readiness</div>
@@ -2146,8 +2238,8 @@
 </table>
 
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_START -->
-<!-- ═══════════════════════════════ THE 98 GATES ═══════════════════════════════ -->
-<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 98 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
+<!-- ═══════════════════════════════ THE 101 GATES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 101 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_END -->
 
 <div class="phase-flow">
@@ -2172,7 +2264,7 @@
 
 <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; font-style: italic;">
   <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_START -->
-  "98 gates, boys. That's more security than the trailer park has ever had.
+  "101 gates, boys. That's more security than the trailer park has ever had.
   Something's fucky? We'll find it. That's greasy? We'll clean it.
   Red first, green after. Small scopes. Tiny fix loops.
   Can't defer things either — you can't just NOT do things, Corey!
@@ -2185,10 +2277,10 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v5.0.0 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v5.0.1 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
-  <p>98 Gates • 40 Agents • 55 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
+  <p>101 Gates • 40 Agents • 55 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
   <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
   <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>

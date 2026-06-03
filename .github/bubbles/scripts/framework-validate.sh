@@ -44,6 +44,9 @@ echo
 
 run_check "Repository drift report (informational)" bash "$SCRIPT_DIR/repo-drift-report.sh" --repo-root "$REPO_ROOT"
 run_check "Portable surface agnosticity" bash "$SCRIPT_DIR/agnosticity-lint.sh" --quiet "${agnosticity_targets[@]}"
+run_check "Registry consistency selftest" bash "$SCRIPT_DIR/registry-consistency-selftest.sh"
+run_check "YAML schema validate" bash "$SCRIPT_DIR/yaml-schema-validate.sh"
+run_check "Cheatsheet drift selftest" bash "$SCRIPT_DIR/cheatsheet-drift-selftest.sh"
 run_check "Workflow registry consistency" bash "$SCRIPT_DIR/workflow-registry-consistency.sh" --quiet
 run_check "Mode resolver validate" bash "$SCRIPT_DIR/mode-resolver.sh" --validate
 run_check "Mode resolver selftest" bash "$SCRIPT_DIR/mode-resolver-selftest.sh"
@@ -62,6 +65,7 @@ run_check "Competitive docs selftest" bash "$SCRIPT_DIR/competitive-docs-selftes
 run_check "Interop apply selftest" bash "$SCRIPT_DIR/interop-apply-selftest.sh"
 run_check "Release manifest freshness" bash "$SCRIPT_DIR/generate-release-manifest.sh" --check
 run_check "Release manifest selftest" bash "$SCRIPT_DIR/release-manifest-selftest.sh"
+run_check "Release manifest purity selftest" bash "$SCRIPT_DIR/release-manifest-purity-selftest.sh"
 run_check "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-selftest.sh"
 run_check "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
 run_check "Finding closure selftest" bash "$SCRIPT_DIR/finding-closure-selftest.sh"

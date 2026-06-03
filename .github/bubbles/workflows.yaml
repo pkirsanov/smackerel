@@ -207,6 +207,18 @@ gates:
     name: outcome_contract_gate
     description: >-
       BLOCKING gate for bootstrap and validate phases. spec.md MUST contain a non-empty Outcome Contract section with Intent, Success Signal, Hard Constraints, and Failure Condition fields before the bootstrap phase completes. During validation, the Success Signal MUST be demonstrated in report.md evidence and Hard Constraints MUST be verified as preserved. A feature that passes all process gates but fails to satisfy its declared Intent or violates a Hard Constraint is NOT done. Enforced by artifact-lint.sh (presence check) and bubbles.validate Step 0 (substance check).
+  G071:
+    name: execution_only_validation_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Validation, audit, and verification commands (build, lint, test, guard scripts, artifact lint, traceability guard, implementation reality scan, etc.) MUST be executed via `run_in_terminal` (or equivalent direct tool invocation) in the current session. Reading the files that a script would check, performing equivalent pattern matching, and reporting predicted findings is FABRICATION — even if the predictions turn out to be accurate. The value of validation is that it runs the canonical script with its exact logic, not that an agent approximates that logic by reading files. Enforced behaviorally by bubbles.validate, bubbles.audit, and bubbles.test plus reinforced by tool-call provenance in evidence gates.
+  G072:
+    name: evidence_provenance_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Every evidence block recording the outcome of a command MUST include a `**Claim Source:**` tag with one of three values: `executed` (command actually ran in this session), `interpreted` (command ran but the DoD claim requires inferring meaning from output), or `not-run` (command was not executed — DoD item MUST stay `[ ]` with an Uncertainty Declaration). Evidence labeled `executed` but containing summaries, predictions, or paraphrased output instead of raw terminal text is fabrication. Validate-owned remediation MUST downgrade mislabeled evidence and require re-execution. Enforced by bubbles.validate evidence review plus state-transition-guard.sh Check 12.
+  G073:
+    name: planning_only_source_edit_lockout_gate
+    description: >-
+      ABSOLUTE BLOCKING gate for planning-only workflow modes (spec-scope-hardening, product-to-planning, docs-only, validate-only, audit-only, spec-review-to-doc, and any mode whose statusCeiling is below `done`). When the active workflowMode has a statusCeiling that forbids implementation, source code edits (any change outside spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, docs/**, .github/**) are FORBIDDEN. If a deliverableFiles[] manifest is declared on the spec/scope, edits are restricted to the declared paths. Detected at transition time by comparing git diff against the manifest. Enforced by state-transition-guard.sh Check 3B (Source Code Edit Lockout). Prevents planning-mode runs from quietly editing production code.
   G074:
     name: workflow_mode_consistency_gate
     description: >-
