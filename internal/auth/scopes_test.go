@@ -46,6 +46,24 @@ func TestRegisteredScopeSurfaces_ContainsExtension(t *testing.T) {
 	}
 }
 
+// Spec 027 scope 9 PLAN-9-03 — the `annotation` scope surface must be
+// registered so spec 060's RequireScope middleware accepts the
+// `annotation:edit` and `annotation:read` claims used by the spec 073
+// graph-browse UI.
+func TestRegisteredScopeSurfaces_ContainsAnnotation(t *testing.T) {
+	if !slices.Contains(RegisteredScopeSurfaces, "annotation") {
+		t.Fatalf("RegisteredScopeSurfaces missing 'annotation' (spec 027 scope 9): %v", RegisteredScopeSurfaces)
+	}
+	if !IsRegisteredScopeSurface("annotation") {
+		t.Errorf("IsRegisteredScopeSurface('annotation') = false; expected true")
+	}
+	for _, scope := range []string{"annotation:edit", "annotation:read"} {
+		if err := ValidateScopeName(scope); err != nil {
+			t.Errorf("ValidateScopeName(%q) unexpected err: %v", scope, err)
+		}
+	}
+}
+
 func TestExtractScopeSurface(t *testing.T) {
 	cases := map[string]string{
 		"extension:bookmarks,history": "extension",

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -124,6 +125,37 @@ func (h *AnnotationHandlers) CreateAnnotation(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Spec 027 scope 9 PLAN-9-04 — validate X-Smackerel-Source header.
+	channel, ok := resolveAnnotationSource(w, r)
+	if !ok {
+		return
+	}
+
+	// Spec 027 scope 9 PLAN-9-05 — If-Match precondition for stale-edit
+	// conflict detection. When the header is present we compare it to
+	// the monotonic per-artifact version counter; mismatch returns 409
+	// with the CURRENT summary body and NO annotation row is written.
+	if ifMatch := r.Header.Get("If-Match"); ifMatch != "" {
+		expected, err := strconv.ParseInt(ifMatch, 10, 64)
+		if err != nil {
+			http.Error(w, `{"error":"If-Match must be an integer version"}`, http.StatusBadRequest)
+			return
+		}
+		current, verr := h.Store.GetSummaryVersion(r.Context(), artifactID)
+		if verr != nil {
+			slog.Error("failed to read annotation summary version", "artifact_id", artifactID, "error", verr)
+			http.Error(w, `{"error":"failed to read summary version"}`, http.StatusInternalServerError)
+			return
+		}
+		if expected != current {
+			currentSummary, _ := h.Store.GetSummary(r.Context(), artifactID)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(currentSummary)
+			return
+		}
+	}
+
 	parsed := annotation.Parse(req.Text)
 
 	// Spec 076 SCOPE-4b — dual-write shadow comparator. The PRIMARY
@@ -132,10 +164,15 @@ func (h *AnnotationHandlers) CreateAnnotation(w http.ResponseWriter, r *http.Req
 	// `annotation.classify.v1` path in shadow mode and emits
 	// divergence telemetry. Nil = no-op (bridge not yet wired).
 	if h.ShadowComparator != nil {
-		h.ShadowComparator.Compare(r.Context(), req.Text, annotation.ChannelAPI, parsed.InteractionType)
+		h.ShadowComparator.Compare(r.Context(), req.Text, channel, parsed.InteractionType)
 	}
 
-	created, err := h.Store.CreateFromParsed(r.Context(), artifactID, parsed, annotation.ChannelAPI)
+	// Spec 027 scope 9 PLAN-9-02 — persist the bearer subject as the
+	// annotation's actor_id when a session is present. Empty subject
+	// (legacy/dev test paths without bearer) falls through to the
+	// pre-spec-044 empty-string sentinel maintained by migration 055.
+	actorID := auth.UserIDFromContext(r.Context())
+	created, err := h.Store.CreateFromParsedAs(r.Context(), artifactID, parsed, channel, actorID)
 	if err != nil {
 		slog.Error("failed to create annotations", "artifact_id", artifactID, "error", err)
 		http.Error(w, `{"error":"failed to create annotations"}`, http.StatusInternalServerError)
@@ -145,11 +182,12 @@ func (h *AnnotationHandlers) CreateAnnotation(w http.ResponseWriter, r *http.Req
 	// Spec 044 Scope 02 — log the authenticated principal alongside
 	// the parse outcome so the audit trail records the actor source
 	// even before the schema column lands (deferred follow-up).
-	if sessionUser := auth.UserIDFromContext(r.Context()); sessionUser != "" {
+	if actorID != "" {
 		slog.Info("annotation created",
 			"artifact_id", artifactID,
 			"actor_source", "session",
-			"actor_user_id", sessionUser,
+			"actor_user_id", actorID,
+			"source_channel", string(channel),
 			"created_count", len(created))
 	}
 

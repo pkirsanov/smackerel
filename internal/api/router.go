@@ -92,12 +92,23 @@ func NewRouter(deps *Dependencies) http.Handler {
 
 			// Annotation endpoints (spec 027)
 			if deps.AnnotationHandlers != nil {
-				r.Route("/artifacts/{id}/annotations", func(r chi.Router) {
-					r.Post("/", deps.AnnotationHandlers.CreateAnnotation)
-					r.Get("/", deps.AnnotationHandlers.GetAnnotations)
-					r.Get("/summary", deps.AnnotationHandlers.GetAnnotationSummary)
+				// Spec 027 scope 9 — annotation endpoints require a
+				// per-user bearer (spec 044) AND the `annotation`
+				// scope claim (spec 060). The outer bearerAuthMiddleware
+				// already populated the session; RequireScope gates the
+				// claim. Shared-token / bootstrap sessions bypass the
+				// scope check per RequireScope's source switch.
+				r.Group(func(r chi.Router) {
+					r.Use(auth.RequireScope("annotation:edit"))
+					r.Route("/artifacts/{id}/annotations", func(r chi.Router) {
+						r.Post("/", deps.AnnotationHandlers.CreateAnnotation)
+						r.Get("/", deps.AnnotationHandlers.GetAnnotations)
+						r.Get("/summary", deps.AnnotationHandlers.GetAnnotationSummary)
+					})
+					r.Delete("/artifacts/{id}/tags/{tag}", deps.AnnotationHandlers.DeleteTag)
+					// Spec 027 scope 9 PLAN-9-05 — list-my-annotations.
+					r.Get("/annotations", deps.AnnotationHandlers.ListMyAnnotations)
 				})
-				r.Delete("/artifacts/{id}/tags/{tag}", deps.AnnotationHandlers.DeleteTag)
 				// Internal Telegram message-artifact mapping (spec 027, scope 5)
 				r.Post("/internal/telegram-message-artifact", deps.AnnotationHandlers.RecordTelegramMessageArtifact)
 				r.Get("/internal/telegram-message-artifact", deps.AnnotationHandlers.ResolveTelegramMessageArtifact)

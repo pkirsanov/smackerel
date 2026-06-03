@@ -192,6 +192,13 @@ func (m *PerUserTokenMinter) MintForUser(chatID int64, userID string) (MintedTel
 		TTL:        m.ttl,
 		Issuer:     m.issuer,
 		Now:        m.now,
+		// Spec 027 Scope 9 — annotation routes are gated by
+		// `auth.RequireScope("annotation:edit")`. Telegram replies are
+		// a first-class annotation producer (Telegram-share capture +
+		// inline reply-as-annotation flows), so the per-user PASETO
+		// MUST carry the `annotation:edit` claim or the gated router
+		// rejects the request with 403 `scope_required`.
+		Scopes: []string{"annotation:edit"},
 	})
 	if err != nil {
 		return MintedTelegramToken{}, fmt.Errorf("telegram: mint per-user PASETO: %w", err)

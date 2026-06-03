@@ -30,8 +30,9 @@ var ScopeNameRegex = regexp.MustCompile(`^[a-z][a-z0-9]*:[a-z0-9,_-]+$`)
 // new surface.
 //
 // Spec 060 scope 1 — initial entry is `extension` (consumed by spec
-// 058 OQ-DSN-1).
-var RegisteredScopeSurfaces = []string{"extension"}
+// 058 OQ-DSN-1). Spec 027 scope 9 adds `annotation` (consumed by the
+// spec 073 graph-browse UI; annotation:edit, annotation:read).
+var RegisteredScopeSurfaces = []string{"extension", "annotation"}
 
 // ValidateScopeName returns nil when `scope` matches `ScopeNameRegex`
 // and a non-nil error otherwise. The error wraps the offending value

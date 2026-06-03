@@ -31,10 +31,10 @@ func NewStore(pool *pgxpool.Pool, nc *smacknats.Client) *Store {
 // Create inserts a single annotation event.
 func (s *Store) Create(ctx context.Context, ann *Annotation) error {
 	_, err := s.Pool.Exec(ctx, `
-		INSERT INTO annotations (id, artifact_id, annotation_type, rating, note, tag, interaction_type, source_channel, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO annotations (id, artifact_id, annotation_type, rating, note, tag, interaction_type, source_channel, actor_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`, ann.ID, ann.ArtifactID, ann.AnnotationType, ann.Rating, ann.Note,
-		ann.Tag, ann.InteractionType, ann.SourceChannel, ann.CreatedAt)
+		ann.Tag, ann.InteractionType, ann.SourceChannel, ann.ActorID, ann.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("insert annotation: %w", err)
 	}
@@ -42,8 +42,16 @@ func (s *Store) Create(ctx context.Context, ann *Annotation) error {
 }
 
 // CreateFromParsed creates annotation events from a parsed freeform string.
-// Returns the created annotations.
+// Returns the created annotations. Equivalent to CreateFromParsedAs with
+// an empty actor_id (legacy/non-bearer paths).
 func (s *Store) CreateFromParsed(ctx context.Context, artifactID string, parsed ParsedAnnotation, channel SourceChannel) ([]Annotation, error) {
+	return s.CreateFromParsedAs(ctx, artifactID, parsed, channel, "")
+}
+
+// CreateFromParsedAs is the spec 027 scope 9 variant that persists the
+// bearer subject as actor_id on every event emitted from the parsed
+// input. See AnnotationQuerier.CreateFromParsedAs for the contract.
+func (s *Store) CreateFromParsedAs(ctx context.Context, artifactID string, parsed ParsedAnnotation, channel SourceChannel, actorID string) ([]Annotation, error) {
 	var created []Annotation
 	now := time.Now()
 
@@ -54,6 +62,7 @@ func (s *Store) CreateFromParsed(ctx context.Context, artifactID string, parsed 
 			AnnotationType: TypeRating,
 			Rating:         parsed.Rating,
 			SourceChannel:  channel,
+			ActorID:        actorID,
 			CreatedAt:      now,
 		}
 		if err := s.Create(ctx, &ann); err != nil {
@@ -69,6 +78,7 @@ func (s *Store) CreateFromParsed(ctx context.Context, artifactID string, parsed 
 			AnnotationType:  TypeInteraction,
 			InteractionType: parsed.InteractionType,
 			SourceChannel:   channel,
+			ActorID:         actorID,
 			CreatedAt:       now,
 		}
 		if err := s.Create(ctx, &ann); err != nil {
@@ -84,6 +94,7 @@ func (s *Store) CreateFromParsed(ctx context.Context, artifactID string, parsed 
 			AnnotationType: TypeTagAdd,
 			Tag:            tag,
 			SourceChannel:  channel,
+			ActorID:        actorID,
 			CreatedAt:      now,
 		}
 		if err := s.Create(ctx, &ann); err != nil {
@@ -99,6 +110,7 @@ func (s *Store) CreateFromParsed(ctx context.Context, artifactID string, parsed 
 			AnnotationType: TypeTagRemove,
 			Tag:            tag,
 			SourceChannel:  channel,
+			ActorID:        actorID,
 			CreatedAt:      now,
 		}
 		if err := s.Create(ctx, &ann); err != nil {
@@ -114,6 +126,7 @@ func (s *Store) CreateFromParsed(ctx context.Context, artifactID string, parsed 
 			AnnotationType: TypeNote,
 			Note:           parsed.Note,
 			SourceChannel:  channel,
+			ActorID:        actorID,
 			CreatedAt:      now,
 		}
 		if err := s.Create(ctx, &ann); err != nil {
@@ -152,7 +165,8 @@ func (s *Store) GetHistory(ctx context.Context, artifactID string, limit int) ([
 
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, artifact_id, annotation_type, rating, COALESCE(note, ''),
-		       COALESCE(tag, ''), COALESCE(interaction_type, ''), source_channel, created_at
+		       COALESCE(tag, ''), COALESCE(interaction_type, ''), source_channel,
+		       COALESCE(actor_id, ''), created_at
 		FROM annotations WHERE artifact_id = $1
 		ORDER BY created_at DESC LIMIT $2
 	`, artifactID, limit)
@@ -166,7 +180,7 @@ func (s *Store) GetHistory(ctx context.Context, artifactID string, limit int) ([
 		var a Annotation
 		var rating *int
 		if err := rows.Scan(&a.ID, &a.ArtifactID, &a.AnnotationType, &rating,
-			&a.Note, &a.Tag, &a.InteractionType, &a.SourceChannel, &a.CreatedAt); err != nil {
+			&a.Note, &a.Tag, &a.InteractionType, &a.SourceChannel, &a.ActorID, &a.CreatedAt); err != nil {
 			continue
 		}
 		a.Rating = rating
@@ -175,21 +189,89 @@ func (s *Store) GetHistory(ctx context.Context, artifactID string, limit int) ([
 	return annotations, rows.Err()
 }
 
+// GetSummaryVersion returns the monotonic per-artifact version counter
+// maintained by trg_annotation_summary_version_bump. Absent row → 0
+// (cold-start sentinel; not a fallback default).
+func (s *Store) GetSummaryVersion(ctx context.Context, artifactID string) (int64, error) {
+	var v int64
+	err := s.Pool.QueryRow(ctx, `
+		SELECT version FROM annotation_summary_version WHERE artifact_id = $1
+	`, artifactID).Scan(&v)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("get annotation summary version: %w", err)
+	}
+	return v, nil
+}
+
+// ListByActor returns annotations authored by actorID, most recent
+// first. Backed by idx_annotations_actor_created.
+func (s *Store) ListByActor(ctx context.Context, actorID string, limit int, since *time.Time) ([]Annotation, error) {
+	if actorID == "" {
+		return nil, fmt.Errorf("list by actor: actor_id required")
+	}
+	if limit <= 0 {
+		return nil, fmt.Errorf("list by actor: limit must be > 0")
+	}
+
+	var (
+		rows  pgx.Rows
+		err   error
+		query = `
+			SELECT id, artifact_id, annotation_type, rating, COALESCE(note, ''),
+			       COALESCE(tag, ''), COALESCE(interaction_type, ''), source_channel,
+			       actor_id, created_at
+			FROM annotations
+			WHERE actor_id = $1 AND ($2::timestamptz IS NULL OR created_at >= $2)
+			ORDER BY created_at DESC
+			LIMIT $3
+		`
+	)
+	rows, err = s.Pool.Query(ctx, query, actorID, since, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list by actor: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Annotation
+	for rows.Next() {
+		var a Annotation
+		var rating *int
+		if err := rows.Scan(&a.ID, &a.ArtifactID, &a.AnnotationType, &rating,
+			&a.Note, &a.Tag, &a.InteractionType, &a.SourceChannel, &a.ActorID, &a.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan annotation: %w", err)
+		}
+		a.Rating = rating
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // GetSummary returns the aggregated annotation summary for an artifact.
 func (s *Store) GetSummary(ctx context.Context, artifactID string) (*Summary, error) {
 	var sum Summary
 	sum.ArtifactID = artifactID
 
 	err := s.Pool.QueryRow(ctx, `
-		SELECT current_rating, average_rating, rating_count,
-		       times_used, last_used, COALESCE(tags, '{}'), notes_count,
-		       total_events, last_annotated
-		FROM artifact_annotation_summary WHERE artifact_id = $1
+		SELECT s.current_rating, s.average_rating, s.rating_count,
+		       s.times_used, s.last_used, COALESCE(s.tags, '{}'), s.notes_count,
+		       s.total_events, s.last_annotated,
+		       COALESCE(v.version, 0)
+		FROM artifact_annotation_summary s
+		LEFT JOIN annotation_summary_version v ON v.artifact_id = s.artifact_id
+		WHERE s.artifact_id = $1
 	`, artifactID).Scan(&sum.CurrentRating, &sum.AverageRating, &sum.RatingCount,
 		&sum.TimesUsed, &sum.LastUsed, &sum.Tags, &sum.NotesCount,
-		&sum.TotalEvents, &sum.LastAnnotated)
+		&sum.TotalEvents, &sum.LastAnnotated, &sum.Version)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			// Materialized view may not yet have a row; still try to
+			// surface the version counter if any annotations exist.
+			_ = s.Pool.QueryRow(ctx,
+				`SELECT COALESCE(version, 0) FROM annotation_summary_version WHERE artifact_id = $1`,
+				artifactID).Scan(&sum.Version)
 			return &sum, nil
 		}
 		return nil, fmt.Errorf("get annotation summary: %w", err)

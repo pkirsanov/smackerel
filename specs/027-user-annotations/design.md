@@ -1722,3 +1722,35 @@ which land via the `annotation-editing-api` scope.
   current summary so the UI can reconcile.
 - Without `If-Match`, append semantics are preserved unchanged
   (Telegram path, API path).
+
+### Plan Decisions (2026-06-03, PLAN-9-02/04/05)
+
+- **`actor_id` column (PLAN-9-02).** Migration
+  `055_annotation_actor_and_version.sql` adds
+  `annotations.actor_id TEXT NOT NULL DEFAULT ''` and the partial index
+  `idx_annotations_actor_created (actor_id, created_at DESC) WHERE
+  actor_id <> ''`. The empty-string sentinel covers historical rows
+  written before spec 044 shipped per-user bearer auth; all new writes
+  MUST populate `actor_id` from the bearer's resolved subject
+  (multi-user is reality, single-tenant simplification is forbidden).
+  Same migration drops the legacy `source_channel` DEFAULT so the
+  schema enforces explicit assignment (NO-DEFAULTS SST).
+- **`X-Smackerel-Source` header (PLAN-9-04).** Browser-originated
+  annotation writes from the spec 073 PWA fetch client MUST set
+  `X-Smackerel-Source: web`. The API validates the header against the
+  SST allowlist `{web, extension, telegram, api}` declared under
+  `annotations.source_allowlist` in `config/smackerel.yaml`. Missing
+  header → `400`; unknown value → `400` (fail-loud, no default).
+  Telegram and extension handlers continue to set `source_channel` via
+  their own adapters; the header contract is for browser-originated
+  calls only.
+- **`annotation_summary_version` per-artifact sequence (PLAN-9-05).**
+  Same migration creates table `annotation_summary_version
+  (artifact_id PK → artifacts.id, version BIGINT NOT NULL)` and a
+  row-level trigger on `annotations` (INSERT/UPDATE/DELETE) that
+  upserts and increments `version` by 1 per touch. The summary
+  endpoint sources `version` from this table via LEFT JOIN; an absent
+  row resolves to `version = 0`. The `If-Match` precondition compares
+  against this counter. The counter is per-artifact (matches the
+  summary endpoint shape) and is the single source of truth; no
+  in-process counters and no clock fallbacks.

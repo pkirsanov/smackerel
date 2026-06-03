@@ -201,6 +201,16 @@ annotations:
     rating_max: 0.05 # max boost for rating 5
     usage_max: 0.03 # max boost capped at 10 uses
     usage_cap: 10 # number of uses for full usage boost
+  # Spec 027 scope 9 PLAN-9-04 — source_channel header allowlist for
+  # browser/PWA annotation writes. Closed-set; missing or unknown
+  # header value → 400. Go-side allowlist
+  # (internal/api/annotation_source.go: allowedAnnotationSources)
+  # must stay in lockstep with this list.
+  source_header_name: "X-Smackerel-Source"
+  source_allowlist: ["web", "extension", "telegram", "api"]
+  # Spec 027 scope 9 PLAN-9-05 — upper bound on the
+  # GET /api/annotations?actor=me limit query param.
+  list_my_max_limit: 200
 
 # Spec 021 Scope 4 — Unified Surfacing Controller (Next Smackerel
 # prioritizer). Every value flows through scripts/commands/config.sh

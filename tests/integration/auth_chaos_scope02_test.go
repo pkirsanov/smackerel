@@ -206,6 +206,15 @@ func newChaosS02Deps(t *testing.T, wireBroadcaster bool, subjectPrefix string) *
 
 // issueAndPersist issues a real PASETO + persists it via BearerStore.
 func (c *chaosS02Deps) issueAndPersist(t *testing.T, userID, tokenID string, ttl time.Duration) auth.IssueResult {
+	return c.issueAndPersistWithScopes(t, userID, tokenID, ttl, nil)
+}
+
+// issueAndPersistWithScopes is the spec 027 scope 9 variant that mints
+// a token carrying the given scope claims. Callers that exercise
+// endpoints behind `auth.RequireScope(...)` (e.g. the annotation
+// router) MUST use this to embed the gating scope so the test still
+// reaches the handler logic under test.
+func (c *chaosS02Deps) issueAndPersistWithScopes(t *testing.T, userID, tokenID string, ttl time.Duration, scopes []string) auth.IssueResult {
 	t.Helper()
 	if err := c.store.Enroll(context.Background(), auth.EnrollUserParams{
 		UserID:     userID,
@@ -225,6 +234,7 @@ func (c *chaosS02Deps) issueAndPersist(t *testing.T, userID, tokenID string, ttl
 		TTL:        ttl,
 		Issuer:     "smackerel",
 		Now:        time.Now,
+		Scopes:     scopes,
 	})
 	if err != nil {
 		t.Fatalf("IssueToken(%q): %v", tokenID, err)
@@ -643,7 +653,7 @@ func TestAuthChaos_S02_ConcurrentAnnotationUnderClosure_ActorSourceRejected(t *t
 	cd.deps.AnnotationHandlers = &api.AnnotationHandlers{Store: annStore, Environment: "production"}
 	router := api.NewRouter(cd.deps)
 
-	issued := cd.issueAndPersist(t, "chaos-044-s02-ann-user", "chaos-044-s02-ann-tok", 24*time.Hour)
+	issued := cd.issueAndPersistWithScopes(t, "chaos-044-s02-ann-user", "chaos-044-s02-ann-tok", 24*time.Hour, []string{"annotation:edit"})
 
 	// No artifacts row seed required: the production-mode actor_source
 	// closure (annotations.go CreateAnnotation) rejects the body BEFORE
@@ -1118,11 +1128,30 @@ func (s *chaosS02StubAnnotationStore) CreateFromParsed(_ context.Context, _ stri
 	return nil, nil
 }
 
+// CreateFromParsedAs satisfies the spec 027 scope 9 extension to
+// annotation.AnnotationQuerier. Closure rejection happens BEFORE any
+// store call, so the counter MUST not advance on success paths covered
+// by C2-B05 either.
+func (s *chaosS02StubAnnotationStore) CreateFromParsedAs(_ context.Context, _ string, _ annotation.ParsedAnnotation, _ annotation.SourceChannel, _ string) ([]annotation.Annotation, error) {
+	s.mu.Lock()
+	s.createFromParsed++
+	s.mu.Unlock()
+	return nil, nil
+}
+
 func (s *chaosS02StubAnnotationStore) GetSummary(_ context.Context, _ string) (*annotation.Summary, error) {
 	return &annotation.Summary{}, nil
 }
 
+func (s *chaosS02StubAnnotationStore) GetSummaryVersion(_ context.Context, _ string) (int64, error) {
+	return 0, nil
+}
+
 func (s *chaosS02StubAnnotationStore) GetHistory(_ context.Context, _ string, _ int) ([]annotation.Annotation, error) {
+	return nil, nil
+}
+
+func (s *chaosS02StubAnnotationStore) ListByActor(_ context.Context, _ string, _ int, _ *time.Time) ([]annotation.Annotation, error) {
 	return nil, nil
 }
 

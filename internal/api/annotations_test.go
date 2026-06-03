@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -20,10 +21,19 @@ type stubAnnotationStore struct{}
 func (s *stubAnnotationStore) CreateFromParsed(_ context.Context, _ string, _ annotation.ParsedAnnotation, _ annotation.SourceChannel) ([]annotation.Annotation, error) {
 	return nil, nil
 }
+func (s *stubAnnotationStore) CreateFromParsedAs(_ context.Context, _ string, _ annotation.ParsedAnnotation, _ annotation.SourceChannel, _ string) ([]annotation.Annotation, error) {
+	return nil, nil
+}
 func (s *stubAnnotationStore) GetSummary(_ context.Context, _ string) (*annotation.Summary, error) {
 	return &annotation.Summary{}, nil
 }
+func (s *stubAnnotationStore) GetSummaryVersion(_ context.Context, _ string) (int64, error) {
+	return 0, nil
+}
 func (s *stubAnnotationStore) GetHistory(_ context.Context, _ string, _ int) ([]annotation.Annotation, error) {
+	return nil, nil
+}
+func (s *stubAnnotationStore) ListByActor(_ context.Context, _ string, _ int, _ *time.Time) ([]annotation.Annotation, error) {
 	return nil, nil
 }
 func (s *stubAnnotationStore) DeleteTag(_ context.Context, _, _ string, _ annotation.SourceChannel) error {
@@ -251,6 +261,7 @@ func TestCreateAnnotation_TextAtLimit(t *testing.T) {
 	body, _ := json.Marshal(CreateAnnotationRequest{Text: exactText})
 	req := httptest.NewRequest("POST", "/api/artifacts/art-001/annotations", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Smackerel-Source", "api")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

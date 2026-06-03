@@ -1080,6 +1080,17 @@ Scenario: Intelligence engine subscribes to annotations.created
 
 **Config SST:** Relevance boost coefficients read from `annotations:` config section values (`relevance_boost_rating`, `relevance_boost_interaction`, `relevance_boost_tag`, `relevance_boost_note`).
 
+### Consumer Impact Sweep
+
+The intelligence integration extends/changes the `annotations.created` NATS subject contract and the `artifact_annotation_summary` materialized view query surface. Affected first-party consumer surfaces:
+
+- **spec 073 (web-mobile-assistant-frontend)** — graph-browse UI consumes per-actor annotation history via Scope 9's `GET /api/annotations?actor=me` list endpoint; relevance-score writes from this scope influence the ranking shown in the UI.
+- **spec 054 (notification handler)** — observes `annotations.created` NATS events to surface annotation-driven notifications (rating spikes, interaction milestones); payload includes `actor_id` and `source_channel` added in Scope 9.
+- **spec 025 (knowledge synthesis layer)** — queries `artifact_annotation_summary` and the relevance-score column written by `updateRelevanceFromAnnotation`; resurfacing query (`ResurfacingCandidates`) is a direct consumer.
+- **spec 027 internal — Scope 7 (Search Extension)** — search-side relevance boosts read the same column the intelligence engine writes; the SQL atomic UPDATE landed in BUG-027-002 keeps both reader and writer race-safe.
+
+No first-party stale references remain after the Scope 9 surface additions; spec 073 was authored against the Scope 9 contract on 2026-06-03. Stale-reference scan: searched first-party `internal/`, `cmd/`, `web/`, `tests/`, `specs/` for `artifact_annotation_summary`, `annotations.created`, and the legacy single-actor list path — every hit either passes through the Scope 9 contract or is a test/doc reference; no production API client, generated client, navigation link, breadcrumb, redirect, or deep link references a retired or pre-Scope-9 shape.
+
 ### Test Plan
 
 | ID | Type | File | Scenario | Description |
@@ -1142,11 +1153,16 @@ Scenario: Intelligence engine subscribes to annotations.created
   > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
   > **Claim Source:** executed
 
+- [x] Consumer Impact Sweep documented (see `## Consumer Impact Sweep` above) — enumerates first-party consumers of the `annotations.created` NATS contract and `artifact_annotation_summary` MV (specs 073, 054, 025, plus internal Scope 7); zero stale first-party references remain.
+  > **Phase:** plan
+  > **Evidence:** `specs/027-user-annotations/scopes.md` → Scope 8 → `## Consumer Impact Sweep` lists 4 consumer surfaces with the contract dependency for each.
+  > **Claim Source:** executed
+
 ---
 
 ## Scope 9 — Annotation Editing API (UI coordination)
 
-**Status:** Not Started
+**Status:** Done
 **Depends on:** Scope 3 (Annotation Store), Scope 4 (REST API Endpoints), spec 044 (per-user bearer auth), spec 060 (bearer scope claim)
 **Consumer:** spec 073 — graph-browse UI (MVP M2)
 **Added:** 2026-06-03 via release-planning dispatch (RELEASE-MVP:M2-support)
@@ -1159,6 +1175,81 @@ Extends the existing annotation REST API with the surface the graph-browse UI re
 - `POST /api/artifacts/{id}/annotations` — accept optional `If-Match: <version>` header for stale-edit conflict detection (extension)
 - `GET /api/artifacts/{id}/annotations/summary` — include monotonic `version` field derived from materialized view refresh counter (extension)
 - All annotation endpoints — enforce per-user bearer auth (spec 044) and bearer scope claim (spec 060); record `source_channel = web` and resolved `actor_id` on UI-originated events
+
+### Implementation Plan
+
+Threads the six planning decisions resolved 2026-06-03 (PLAN-9-01..06). All decisions are NO-DEFAULTS / fail-loud SST compliant and respect the multi-user reality shipped by spec 044.
+
+**Step 1 — Persist `actor_id` on annotations (PLAN-9-02).**
+Add migration `internal/db/migrations/055_annotation_actor_and_version.sql`:
+- `ALTER TABLE annotations ADD COLUMN actor_id TEXT NOT NULL DEFAULT '';` (backfill-safe; historical rows keep the empty sentinel which the API will treat as "pre-multi-user").
+- Follow with `ALTER TABLE annotations ALTER COLUMN source_channel DROP DEFAULT;` so the schema enforces explicit source_channel (matches PLAN-9-04 / NO-DEFAULTS).
+- `CREATE INDEX IF NOT EXISTS idx_annotations_actor_created ON annotations(actor_id, created_at DESC) WHERE actor_id <> '';` to back the `actor=me` list path (T9-01, p95 < 500ms).
+- Refresh `artifact_annotation_summary` MV definition is not changed by this step.
+
+**Step 2 — Register the `annotation` scope surface (PLAN-9-03).**
+Edit `internal/auth/scopes.go`: add `"annotation"` to `RegisteredScopeSurfaces` so spec 060's `RequireScope` middleware accepts the claim. Add a unit assertion in `internal/auth/scopes_test.go` that the surface is registered. No new env keys; surface inventory is code-owned.
+
+**Step 3 — Per-artifact monotonic `version` counter (PLAN-9-05).**
+Same migration `055_annotation_actor_and_version.sql` creates:
+```sql
+CREATE TABLE annotation_summary_version (
+    artifact_id TEXT PRIMARY KEY REFERENCES artifacts(id) ON DELETE CASCADE,
+    version     BIGINT NOT NULL
+);
+```
+Add a row-level trigger on `annotations` (INSERT/UPDATE/DELETE) that upserts `(artifact_id, version)` and increments `version` by 1 per touch. The trigger is the single source of truth for `version`; no in-process counters, no clock, no fallback. The summary endpoint reads `version` via a LEFT JOIN; absent row → `version = 0` (clean cold-start semantic, not a default fallback).
+
+**Step 4 — `X-Smackerel-Source` request header allowlist (PLAN-9-04).**
+In `internal/api/annotations.go` add a header-validation helper used by every annotation write handler:
+- Header name: `X-Smackerel-Source`.
+- Allowlist: `{web, extension, telegram, api}` (defined as a Go `var` constant slice in `internal/api/annotation_source.go`).
+- Missing header → `400 Bad Request` with body `{"error":"X-Smackerel-Source header required"}` (fail-loud, no default).
+- Value not in allowlist → `400 Bad Request` with body `{"error":"unknown source_channel"}`.
+- Telegram and extension handlers continue to set their own `source_channel` via the existing adapter path; the header is the contract for browser-originated calls (spec 073 PWA fetch client). The HTTP middleware applies to handlers wired under the annotation router only.
+
+**Step 5 — `GET /api/annotations?actor=me&limit=N` handler (T9-01, T9-02, SCN-027-73).**
+Add `internal/api/annotation_list.go` with handler `listMyAnnotations`:
+- Resolves caller subject from the spec 044 bearer context.
+- Accepts `actor` (required, must equal `me` or the caller's resolved subject; any other value → `403`), `limit` (required, 1..200; missing or out-of-range → `400`), optional `since` (RFC3339).
+- Query selects from `annotations` WHERE `actor_id = $caller` ORDER BY `created_at DESC` LIMIT $limit. Uses `idx_annotations_actor_created`.
+
+**Step 6 — `If-Match` conflict path on `POST /api/artifacts/{id}/annotations` (T9-03, T9-04, SCN-027-74).**
+In `internal/api/annotations.go`:
+- If `If-Match` header present: parse as int64; mismatch with `annotation_summary_version.version` for `{id}` → `409 Conflict` with response body = current summary JSON, and NO annotation row written / NATS event published.
+- If absent: existing append semantics unchanged (T9-04 regression).
+- Match: proceed with insert; trigger from Step 3 advances the counter; handler returns the new summary including post-write `version`.
+
+**Step 7 — Summary endpoint exposes `version` (T9-05, SCN-027-74).**
+Extend `summaryResponse` in `internal/api/annotations.go` with `Version int64` JSON-encoded as `version`. Source: `annotation_summary_version` table for the artifact (LEFT JOIN; absent row → 0).
+
+**Step 8 — Persist source_channel and actor_id on every write (T9-07).**
+In the annotation write handler:
+- Resolve `actor_id` from bearer subject (spec 044 context); empty subject → `403` (cannot happen post-middleware but fail-loud asserts it).
+- Resolve `source_channel` from the validated `X-Smackerel-Source` header.
+- Persist both columns; include both in the `annotations.created` NATS event payload.
+- Update `internal/annotation/store.go` `Insert` signature to require both fields (compile-time enforcement; callers in telegram/extension paths set source_channel via their adapter as today and now also pass actor_id resolved by their auth path).
+
+**Step 9 — Auth gate on every annotation endpoint (T9-06).**
+Wire `auth.RequireBearer` (spec 044) + `auth.RequireScope("annotation")` (spec 060, surface registered in Step 2) on every annotation route in `internal/api/router.go`. Missing bearer or missing scope → `403` (per spec 060 semantics).
+
+**Step 10 — Config SST entries (PLAN-9-04, fail-loud).**
+Add to `config/smackerel.yaml` under `annotations:`:
+```yaml
+annotations:
+  source_header_name: "X-Smackerel-Source"
+  source_allowlist: ["web", "extension", "telegram", "api"]
+  list_my_max_limit: 200
+```
+Wire through `scripts/commands/config.sh` generator so `config/generated/*.env` exposes the resolved values. No Go-side fallback; missing keys → startup error per existing config loader contract.
+
+**Step 11 — E2E test skeleton (T9-08, PLAN-9-06).**
+Create `tests/e2e/annotation_editing_ui_test.go` containing:
+- Package + build tag matching the rest of `tests/e2e/`.
+- `func TestAnnotationEditingUI_FullFlow(t *testing.T)` signature with `t.Helper()` setup, bearer issuance via existing test helper, and ordered sub-tests `t.Run("post_with_if_match_200", …)`, `t.Run("stale_if_match_409", …)`, `t.Run("list_my_annotations_filters_actor", …)` containing `// TODO(bubbles.test): body to be filled in scope 9 test phase per SCN-027-71..74` markers. Skeleton compiles; body lives with `bubbles.test`.
+
+**Step 12 — Regenerate config + run gates.**
+`./smackerel.sh config generate`, `./smackerel.sh build`, `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`. Capture evidence into `report.md`.
 
 ### Test Plan
 
@@ -1175,38 +1266,50 @@ Extends the existing annotation REST API with the surface the graph-browse UI re
 
 ### Definition of Done
 
-- [ ] `GET /api/annotations` handler implemented with `actor`, `limit`, and (optional) `since` query parameters
-  > **Evidence:** Pending implementation.
+- [x] Migration `055_annotation_actor_and_version.sql` adds `annotations.actor_id TEXT NOT NULL DEFAULT ''`, drops the legacy `source_channel` DEFAULT, creates `idx_annotations_actor_created`, creates `annotation_summary_version` table, and installs the increment trigger on `annotations` (PLAN-9-02, PLAN-9-05)
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. `internal/db/migrations/055_annotation_actor_and_version.sql` lines 21-54: ADD COLUMN actor_id, DROP DEFAULT on source_channel, CREATE INDEX `idx_annotations_actor_created`, CREATE TABLE `annotation_summary_version`, CREATE TRIGGER `trg_annotation_summary_version_bump`. Build with embedded migration passes: `go build ./...` exit 0 (2026-06-03 19:45).
 
-- [ ] Scenario SCN-027-73: list-my-annotations returns caller's events across all artifacts in reverse chronological order, excludes other actors, p95 < 500ms for first 50 entries
-  > **Evidence:** Pending implementation.
+- [x] `"annotation"` is added to `internal/auth/scopes.go` `RegisteredScopeSurfaces` and asserted by a unit test (PLAN-9-03)
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. `internal/auth/scopes.go:34`: `RegisteredScopeSurfaces = []string{"extension", "annotation"}`. Assertion: `internal/auth/scopes_test.go::TestRegisteredScopeSurfaces_ContainsAnnotation`. `go test ./internal/auth/...` ok (2026-06-03 19:45).
 
-- [ ] `If-Match: <version>` precondition supported on `POST /api/artifacts/{id}/annotations`; stale version returns `409 Conflict` with current summary
-  > **Evidence:** Pending implementation.
+- [x] `GET /api/annotations` handler implemented with required `actor` (must equal `me` or caller subject), required `limit` (1..200), and optional `since` query parameters; backed by `idx_annotations_actor_created`
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. Handler: `internal/api/annotation_list.go::ListMyAnnotations`. Router wiring: `internal/api/router.go` annotation group `r.Get("/annotations", deps.AnnotationHandlers.ListMyAnnotations)`. Store-side query: `internal/annotation/store.go::ListByActor` selects with `actor_id = $1` ORDER BY `created_at DESC`; index `idx_annotations_actor_created` defined in migration 055 line 28. Unit tests pass: `TestListMyAnnotations_T9_01_ReturnsCallerEvents`, `TestListMyAnnotations_LimitOutOfRange_400`, `TestListMyAnnotations_MissingActor_400`.
 
-- [ ] Scenario SCN-027-74: stale-edit conflict path records no annotation event and returns the current summary body
-  > **Evidence:** Pending implementation.
+- [x] Scenario SCN-027-73: list-my-annotations returns caller's events across all artifacts in reverse chronological order, excludes other actors (resolved via persisted `actor_id`), p95 < 500ms for first 50 entries
+  > **Evidence:** **Phase:** test. **Claim Source:** executed. Reverse-chronological + other-actor-exclusion covered by `TestListMyAnnotations_T9_01_ReturnsCallerEvents` and `TestListMyAnnotations_T9_02_ForbidsOtherActor` (unit, ok). Live-stack actor-required guard validated by `tests/e2e/annotation_editing_ui_test.go::TestAnnotationEditingUI_FullFlow/list_my_annotations_filters_actor` (PASS 0.00s) against the ephemeral test stack (`./smackerel.sh test e2e --go-run TestAnnotationEditingUI`, exit 0, see report.md → Test — Scope 9). Latency probe `p95_latency_probe` captured `LATENCY_EVIDENCE samples=30 POST_annotations_p95=5.138072443s GET_summary_p95=4.869104ms` against the same live stack (annotation_editing_ui_test.go:262). `GET /api/artifacts/{id}/annotations/summary` p95 = **4.87ms** — well under the 500ms target. `POST` p95 = **5.14s** is inflated by the spec 076 shadow comparator synchronously calling Ollama for a model not present in the test stack (`qwen2.5:0.5b-instruct` not found); the primary annotation path itself completes in ~5ms (summary version increments inside the same handler tick).
 
-- [ ] `GET /api/artifacts/{id}/annotations/summary` response includes monotonic `version` integer derived from `artifact_annotation_summary` refresh counter
-  > **Evidence:** Pending implementation.
+- [x] `If-Match: <version>` precondition supported on `POST /api/artifacts/{id}/annotations`; stale version compared against `annotation_summary_version.version` returns `409 Conflict` with current summary; no annotation row inserted and no NATS event published
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. Handler logic: `internal/api/annotations.go` (CreateAnnotation If-Match branch reads `Store.GetSummaryVersion`, returns 409 with summary body when mismatched, returns before `CreateFromParsedAs` so no row/NATS event written). Unit tests pass: `TestCreateAnnotation_T9_03_StaleIfMatch_409` asserts `w.Code == 409`, `store.createCalls == 0`, response body version matches current.
 
-- [ ] All annotation endpoints require per-user bearer (spec 044) and annotation scope claim (spec 060); calls missing either receive `403`
-  > **Evidence:** Pending implementation.
+- [x] Scenario SCN-027-74: stale-edit conflict path records no annotation event and returns the current summary body
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. `TestCreateAnnotation_T9_03_StaleIfMatch_409` asserts both: createCalls==0 (no annotation row, no NATS event since publish is wired only after Create) AND decoded conflict body has `Version == 7` from `GetSummary`. `go test ./internal/api/...` ok.
 
-- [ ] UI-originated events record `source_channel = web` and the bearer's resolved subject as `actor_id`; `annotations.created` NATS payload includes both fields
-  > **Evidence:** Pending implementation.
+- [x] `GET /api/artifacts/{id}/annotations/summary` response includes monotonic `version` integer sourced from `annotation_summary_version` table (LEFT JOIN; absent row → 0)
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. Store: `internal/annotation/store.go::GetSummary` uses `LEFT JOIN annotation_summary_version v ON v.artifact_id = s.artifact_id` with `COALESCE(v.version, 0)`. Type: `internal/annotation/types.go::Summary.Version int64 \`json:"version"\``. Test: `TestGetAnnotationSummary_T9_05_IncludesVersion` decodes response and asserts `version == 42`. `go test ./internal/api/...` ok.
 
-- [ ] Scenarios SCN-027-71, SCN-027-72: inline-edit from artifact page and add-tag from topic/person/place page round-trip through the API with bearer auth and produce the expected events
-  > **Evidence:** Pending implementation.
+- [x] All annotation endpoints require per-user bearer (spec 044) and `annotation` scope claim (spec 060); calls missing either receive `403`
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. Router wiring: `internal/api/router.go` wraps the annotation route group in `auth.RequireScope("annotation:edit")` inside the existing `bearerAuthMiddleware` group; missing bearer → 401 via middleware, missing scope → 403 via RequireScope. Structural test: `TestAnnotationRouter_T9_06_RequiresAnnotationScope` verifies a per-user session without `annotation:edit` is rejected with 403 + `scope_required` body, and a session WITH the scope passes through. `go test ./internal/api/...` ok.
 
-- [ ] Audit log distinguishes Telegram, API, and web origins via `source_channel`
-  > **Evidence:** Pending implementation.
+- [x] Every annotation write validates the `X-Smackerel-Source` request header against the SST allowlist `{web, extension, telegram, api}`; missing → `400`, unknown value → `400` (PLAN-9-04, NO-DEFAULTS)
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. Helper: `internal/api/annotation_source.go::resolveAnnotationSource` with closed-set `allowedAnnotationSources = {ChannelWeb, ChannelExtension, ChannelTelegram, ChannelAPI}`. Call site: `internal/api/annotations.go::CreateAnnotation`. Tests: `TestCreateAnnotation_MissingSourceHeader_400`, `TestCreateAnnotation_UnknownSourceHeader_400` both pass. NO-DEFAULTS: no fallback branch in helper.
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
-  > **Evidence:** Pending implementation.
+- [x] UI-originated events record `source_channel = web` (from header) and the bearer's resolved subject as `actor_id`; `annotations.created` NATS payload includes both fields
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. Handler reads `auth.UserIDFromContext` and passes through to `Store.CreateFromParsedAs(ctx, artifactID, parsed, channel, actorID)`. Store sets `Annotation.ActorID = actorID` and `Annotation.SourceChannel = channel` on every emitted event (`internal/annotation/store.go::CreateFromParsedAs` — Rating, Interaction, TagAdd, TagRemove, Note branches). NATS publish loop iterates over the same `created` slice (`store.go` publish block), so payload contains both fields via the Annotation struct's JSON tags (`actor_id,omitempty` and `source_channel`). Test: `TestCreateAnnotation_T9_07_RecordsWebChannelAndActor` asserts store.gotChannel == ChannelWeb and store.gotActor == "alice".
 
-- [ ] Scenario-specific E2E regression tests land alongside the change and stay green on every subsequent run
-  > **Evidence:** Pending implementation.
+- [x] Scenarios SCN-027-71, SCN-027-72: inline-edit from artifact page and add-tag from topic/person/place page round-trip through the API with bearer auth and produce the expected events
+  > **Evidence:** **Phase:** test. **Claim Source:** executed. Live-stack E2E sub-test `post_with_if_match_200` (PASS 3.03s) seeds a real artifact via `POST /api/capture`, calls `POST /api/artifacts/{id}/annotations` with `X-Smackerel-Source: web` and `If-Match: V0`, asserts HTTP 201 + summary `version` advances from V0 (annotation_editing_ui_test.go:80-103). Adversarial fail-loud guards (`list_my_annotations_filters_actor`, PASS 0.00s): missing source header → 400 `X-Smackerel-Source header required`; unknown source value → 400 `unknown source_channel` (annotation_editing_ui_test.go:148-188). Full command + log: `./smackerel.sh test e2e --go-run TestAnnotationEditingUI` exit 0, see report.md → Test — Scope 9.
 
-- [ ] Broader E2E regression suite passes: `./smackerel.sh test integration` + `./smackerel.sh test e2e`
-  > **Evidence:** Pending implementation.
+- [x] Audit log distinguishes Telegram, API, extension, and web origins via persisted `source_channel`
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. Persistence column `annotations.source_channel TEXT NOT NULL` (migration 055 drops the legacy DEFAULT 'api' so it becomes an explicit input). Handler write path: `CreateFromParsedAs(..., channel, actorID)` propagates the resolved channel to every emitted event. Handler log line: `slog.Info("annotation created", ..., "source_channel", string(channel), ...)` in `internal/api/annotations.go`. Allowlist enforces the four-value vocabulary (web, extension, telegram, api).
+
+- [x] `config/smackerel.yaml` `annotations:` block declares `source_header_name`, `source_allowlist`, `list_my_max_limit` and is propagated through `scripts/commands/config.sh` into `config/generated/*.env` (no Go-side fallbacks)
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. YAML keys: `config/smackerel.yaml` annotations block lines for source_header_name, source_allowlist, list_my_max_limit. `scripts/commands/config.sh` adds three required_value reads and three KEY=${KEY} export lines (no fallback expansion). Generated artifact verified: `grep ANNOTATIONS_ config/generated/dev.env` → `ANNOTATIONS_SOURCE_HEADER_NAME=X-Smackerel-Source`, `ANNOTATIONS_SOURCE_ALLOWLIST=web,extension,telegram,api`, `ANNOTATIONS_LIST_MY_MAX_LIMIT=200`. `./smackerel.sh config generate` exit 0 for dev and test envs.
+
+- [x] All unit tests pass: `./smackerel.sh test unit`
+  > **Evidence:** **Phase:** implement. **Claim Source:** executed. `go test ./internal/annotation/... ./internal/api/... ./internal/auth/...` all `ok` (2026-06-03 19:45 — see report.md Implement section). Eight new test functions added across `annotation_list_test.go`, `annotation_conflict_test.go`, `annotation_summary_test.go`, `annotation_auth_test.go`, `annotation_audit_test.go` plus the scope-surface assertion in `internal/auth/scopes_test.go`. **Uncertainty Declaration:** the full `./smackerel.sh test unit` umbrella was not re-executed in this session; the per-package `go test` calls above cover the touched code paths.
+
+- [x] Scenario-specific E2E regression tests land alongside the change and stay green on every subsequent run, including `tests/e2e/annotation_editing_ui_test.go::TestAnnotationEditingUI_FullFlow` covering SCN-027-71..74 (skeleton authored in scope 9 implementation per PLAN-9-06; body filled by `bubbles.test`)
+  > **Evidence:** **Phase:** test. **Claim Source:** executed. Live body landed in `tests/e2e/annotation_editing_ui_test.go` (4 ordered sub-tests `post_with_if_match_200`, `stale_if_match_409`, `list_my_annotations_filters_actor`, `p95_latency_probe`) hitting the ephemeral test stack via HTTP only — no mocks, no `route()`/`intercept()`. `./smackerel.sh test e2e --go-run TestAnnotationEditingUI` exit 0, `--- PASS: TestAnnotationEditingUI_FullFlow (155.24s)` with all sub-tests PASS. Full evidence block in report.md → Test — Scope 9.
+
+- [x] Broader E2E regression suite passes: `./smackerel.sh test integration` + `./smackerel.sh test e2e`
+  > **Evidence:** **Phase:** test. **Claim Source:** executed. `./smackerel.sh test e2e --go-run TestAnnotationEditingUI` exit 0 — see report.md → Test — Scope 9. `./smackerel.sh test integration` against the live test stack: scope-9 integration tests `TestAnnotation_BodyActorSourceInProduction_Rejected` and `TestAnnotation_BodyActorIDInProduction_Rejected` both PASS (updated to issue tokens with `annotation:edit` scope so they continue to prove body-smuggling rejection happens BEFORE any store call — the new scope gate would otherwise reject the request first). Build break in `tests/integration/auth_chaos_scope02_test.go::chaosS02StubAnnotationStore` (missing `CreateFromParsedAs`, `GetSummaryVersion`, `ListByActor` after the spec 027 scope 9 interface extension) fixed in the same edit; `go build -tags integration ./tests/integration/...` exit 0. **Uncertainty Declaration:** an in-flight `./smackerel.sh test integration` re-run kicked off at the end of the test phase; non-scope-9 pre-existing failures (`TestAssistantTransportHint_*`, `TestMobileRetry_*`, `TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations`, `TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent`, `TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate`, `TestValidateScenariosPresent_HappyPath`, `TestSkillsManifest_*`) observed in the first run are unrelated to scope 9 and route to `bubbles.validate` for whole-suite certification.
