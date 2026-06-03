@@ -3,8 +3,9 @@
   "featureDir": "specs/079-prod-autonomous-supervisor",
   "featureNumber": "079",
   "featureName": "Production Autonomous Supervisor",
-  "status": "in_progress",
+  "status": "specs_hardened",
   "workflowMode": "spec-scope-hardening",
+  "lastUpdatedAt": "2026-06-03T12:00:00Z",
   "statusCeiling": "specs_hardened",
   "executionRuntime": "manual",
   "releaseTrain": "next",
@@ -27,18 +28,31 @@
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.analyst",
-    "currentPhase": "analyze",
+    "currentPhase": "harden",
     "currentScope": null,
-    "runStartedAt": "2026-06-03T00:00:00Z",
-    "completedPhaseClaims": [],
+    "runStartedAt": "2026-06-03T12:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyst",
+        "completedAt": "2026-06-03T12:00:00Z",
+        "summary": "Analyst-owned sections of spec.md authored (Outcome Contract, Actors, Use Cases, Business Scenarios, Competitive Analysis, Domain Capability Model, Operator Review section)."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.analyst",
+        "completedAt": "2026-06-03T12:00:00Z",
+        "summary": "Design hardening completed via principle-derived autonomous ratification (7 safety dimensions + 5 open design questions resolved in uservalidation.md). Authority: product-principles.instructions.md, copilot-instructions.md deployment ownership clauses, smackerel-no-defaults, bubbles-deployment-target-adapter, bubbles-env-pollution-isolation, bubbles-upkeep-operations, bubbles-backup-bcdr-doctrine, knb sibling repo concrete pattern."
+      }
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "lastEvaluatedAt": null,
-    "evidenceRef": null,
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "specs_hardened",
+    "lastEvaluatedAt": "2026-06-03T12:00:00Z",
+    "evidenceRef": "report.md#ratification--2026-06-03-principle-derived",
+    "completedScopes": ["SCOPE-079-01"],
+    "certifiedCompletedPhases": ["analyze", "design"],
     "scopeProgress": [],
     "lockdownState": {
       "active": false,
@@ -65,6 +79,15 @@
       "runStartedAt": "2026-06-03T00:00:00Z",
       "runEndedAt": "2026-06-03T00:00:00Z",
       "summary": "Planning-only bootstrap of spec 079 (prod autonomous supervisor) on release train 'next'. Authored spec.md (Outcome Contract + Product Principle Alignment for P6 + P9 + P1 + P8 + Domain Capability Model + 6 Gherkin scenarios SCN-079-A01..A06 + Operator Review Required section with 7 safety dimensions + explicit deferred-implementation declaration), design.md (3 architecture options, telemetry sources, decision policy, capability-token model, append-only ledger, agent boundaries, self-observability, BODM alignment, open questions), scenario-manifest.json (SCN-079-A01..A06), uservalidation.md template (7-dimension ratification checklist), report.md template. Status held at in_progress; ceiling specs_hardened. scopes.md intentionally NOT authored (bubbles.plan owns it post-ratification). Operator MUST ratify before any downstream agent pickup."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze", "design"],
+      "statusBefore": "in_progress",
+      "statusAfter": "specs_hardened",
+      "runStartedAt": "2026-06-03T12:00:00Z",
+      "runEndedAt": "2026-06-03T12:00:00Z",
+      "summary": "Principle-derived autonomous ratification per operator dispatch 'resolve spec 79 based on project/bubbles design/env principles'. Filled all 7 safety-dimension checkboxes and all 5 open design questions in uservalidation.md by deriving answers from product-principles.instructions.md (P1-P10), copilot-instructions.md (Deployment Ownership Boundary, No Env-Specific Content, Build-Once Deploy-Many, Tailnet-Edge Bind Pattern), smackerel-no-defaults.instructions.md, bubbles-deployment-target-adapter.instructions.md, bubbles-env-pollution-isolation.instructions.md, bubbles-upkeep-operations.instructions.md, bubbles-backup-bcdr-doctrine SKILL, and the knb sibling repo concrete deploy-adapter pattern (sops+age secrets at smackerel/secrets/<env>.enc.env). Updated spec.md §11 framing line. Appended report.md ratification section. Transitioned status in_progress -> specs_hardened (terminal-for-mode for spec-scope-hardening). No foreign-artifact mutations; only touched specs/079-* files."
     }
   ]
 }
