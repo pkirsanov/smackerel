@@ -1051,6 +1051,10 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("LEGACY_RETIREMENT_USER_BUCKET_HMAC_KEY", "test-hmac-key")
 	t.Setenv("LEGACY_RETIREMENT_NOTICE_COPY_PER_COMMAND", `{"/weather":"plain English now","/remind":"plain English now"}`)
 	t.Setenv("LEGACY_RETIREMENT_POST_WINDOW_UNKNOWN_RESPONSE_COPY", `{"/weather":"plain English now","/remind":"plain English now"}`)
+	// Spec 076 SCOPE-6a — runtime wiring SST keys.
+	t.Setenv("LEGACY_RETIREMENT_THRESHOLD_EVALUATOR_INTERVAL_SECONDS", "300")
+	t.Setenv("LEGACY_RETIREMENT_OBSERVATION_CRON_EXPR", "0 4 * * *")
+	t.Setenv("LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAILY_INVOCATIONS", "100")
 
 	// Spec 065 — assistant micro-tools SST.
 	setAllAssistantToolsKeys(t)

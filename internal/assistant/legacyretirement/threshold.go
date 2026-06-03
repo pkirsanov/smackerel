@@ -92,6 +92,13 @@ type ThresholdConfig struct {
 	DaysConsecutive           int
 	ActiveUserWindowDays      int
 	ThresholdEvaluatorUpdater string // updated_by audit label
+	// DailyInvocationsThreshold is the per-day flat-count safety
+	// gate consulted alongside PercentActiveUsers. A day counts as
+	// breaching when EITHER gate fires (pct > PercentActiveUsers OR
+	// per-day invocations > DailyInvocationsThreshold). Zero
+	// disables the flat-count gate (the evaluator then relies on
+	// the percent-of-active-users gate only).
+	DailyInvocationsThreshold int64
 }
 
 // Validate rejects any zero/empty field. The caller is expected to
@@ -179,10 +186,12 @@ func (e *ThresholdEvaluator) Evaluate(ctx context.Context, now time.Time) ([]Thr
 	for _, command := range commands {
 		rows := byCommand[command]
 		distinctByDay := make(map[time.Time]int64, len(rows))
+		invocationsByDay := make(map[time.Time]int64, len(rows))
 		for _, r := range rows {
 			d := r.Day.UTC()
 			d = time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
 			distinctByDay[d] = r.DistinctUsers
+			invocationsByDay[d] = r.Invocations
 		}
 
 		eval := ThresholdEvaluation{Command: command}
@@ -191,7 +200,9 @@ func (e *ThresholdEvaluator) Evaluate(ctx context.Context, now time.Time) ([]Thr
 			day := endDay.AddDate(0, 0, -i)
 			distinct := distinctByDay[day]
 			pct := (float64(distinct) / float64(active)) * 100.0
-			if pct > e.cfg.PercentActiveUsers {
+			pctBreach := pct > e.cfg.PercentActiveUsers
+			countBreach := e.cfg.DailyInvocationsThreshold > 0 && invocationsByDay[day] > e.cfg.DailyInvocationsThreshold
+			if pctBreach || countBreach {
 				eval.BreachingDays = append(eval.BreachingDays, day)
 				ThresholdOverCounter.WithLabelValues(command).Inc()
 			} else {

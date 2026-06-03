@@ -16,16 +16,47 @@ test.describe('QF decision PWA surface', () => {
     await page.goto(SEARCH_HTML);
 
     await expect(page.locator('#qf-result-template')).toHaveCount(1);
-    await expect(page.locator('#qf-result-template .qf-result-title')).toHaveCount(1);
-    await expect(page.locator('#qf-result-template .qf-result-summary')).toHaveCount(1);
-    await expect(page.locator('#qf-result-template .qf-approval-state')).toHaveCount(1);
-    await expect(page.locator('#qf-result-template .qf-packet-id')).toHaveCount(1);
-    await expect(page.locator('#qf-result-template .qf-trace-id')).toHaveCount(1);
-    await expect(page.locator('#qf-result-template .qf-trust-list')).toHaveCount(1);
-    await expect(page.locator('#qf-result-template .qf-open-in-qf')).toHaveCount(1);
-    await expect(page.locator('#qf-result-template .qf-open-detail')).toHaveCount(1);
-    await expect(page.locator('body')).toContainText('QF Companion');
-    await expect(page.locator('body')).toContainText('Read-only');
+    // Spec 077 SCOPE-3 / F-077-3-001 / TP-077-03-08: every descendant
+    // selector below targets markup that lives ONLY inside the inert
+    // <template id="qf-result-template"> document fragment. Playwright
+    // `locator()` does NOT descend into <template>.content, so each of
+    // these assertions previously timed out at 0 elements (or, in the
+    // `toContainText('QF Companion')` case, was structurally
+    // unsatisfiable). Read the template content directly via
+    // page.evaluate so the contract is asserted without instantiating
+    // the template through the search-results JS.
+    const tmplSummary = await page.locator('#qf-result-template').evaluate(
+      (el: Element) => {
+        const tmpl = el as HTMLTemplateElement;
+        const root = tmpl.content;
+        const has = (sel: string) => root.querySelectorAll(sel).length;
+        return {
+          text: root.textContent ?? '',
+          counts: {
+            title: has('.qf-result-title'),
+            summary: has('.qf-result-summary'),
+            approval: has('.qf-approval-state'),
+            packetId: has('.qf-packet-id'),
+            traceId: has('.qf-trace-id'),
+            trustList: has('.qf-trust-list'),
+            openInQF: has('.qf-open-in-qf'),
+            openDetail: has('.qf-open-detail'),
+          },
+        };
+      },
+    );
+    expect(tmplSummary.counts).toEqual({
+      title: 1,
+      summary: 1,
+      approval: 1,
+      packetId: 1,
+      traceId: 1,
+      trustList: 1,
+      openInQF: 1,
+      openDetail: 1,
+    });
+    expect(tmplSummary.text).toContain('QF Companion');
+    expect(tmplSummary.text).toContain('Read-only');
 
     const script = await assetText(page, SEARCH_JS);
     expect(script).toContain('result.qf_card');

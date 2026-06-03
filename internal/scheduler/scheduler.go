@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/robfig/cron/v3"
 
@@ -52,6 +53,14 @@ type Scheduler struct {
 	recommendationWatchSource RecommendationWatchSource
 	recommendationWatchRunner AgentRunner
 	recommendationWatchCron   string
+	// Spec 076 SCOPE-6a — legacy-retirement runtime wiring fields.
+	muLegacyRetirement                sync.Mutex
+	muLegacyRetirementThreshold       sync.Mutex
+	muLegacyRetirementObservation     sync.Mutex
+	legacyRetirementThresholdInterval time.Duration
+	legacyRetirementThresholdFn       LegacyRetirementJobFunc
+	legacyRetirementObservationCron   string
+	legacyRetirementObservationFn     LegacyRetirementJobFunc
 }
 
 // New creates a new scheduler.
@@ -97,6 +106,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 	}
 	s.scheduleRecommendationWatchPoller()
+	s.scheduleLegacyRetirementJobs()
 	s.cron.Start()
 	slog.Info("scheduler started", "digest_cron", cronExpr)
 	return nil

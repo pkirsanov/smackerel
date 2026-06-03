@@ -47,7 +47,8 @@ Map<String, dynamic> renderToDescriptorV1(Map<String, dynamic> response) {
   final dynamic dis = response['disambiguation_prompt'];
   if (dis is Map<String, dynamic>) {
     final String ref = (dis['disambiguation_ref'] ?? '').toString();
-    final List<dynamic> choices = (dis['choices'] as List<dynamic>?) ?? const <dynamic>[];
+    final List<dynamic> choices =
+        (dis['choices'] as List<dynamic>?) ?? const <dynamic>[];
     for (final dynamic c in choices) {
       if (c is! Map<String, dynamic>) continue;
       final dynamic number = c['number'];
@@ -87,6 +88,19 @@ Map<String, dynamic> renderToDescriptorV1(Map<String, dynamic> response) {
       'ref': errCause,
       'label': 'Retry',
     });
+  }
+
+  // Spec 075 / 076 SCOPE-6c — optional legacy-retirement notice rendered
+  // as a one-line text addendum AFTER the primary body. Mirrors the JS
+  // reference at `web/pwa/lib/render_descriptor_v1.js` so the canary
+  // (TP-073-03) holds parity across PWA and mobile.
+  final dynamic notice = response['notice'];
+  if (notice is Map<String, dynamic>) {
+    final dynamic raw = notice['replacement_example'];
+    final String replacement = raw is String ? raw : '';
+    if (replacement.isNotEmpty) {
+      nodes.add(<String, dynamic>{'kind': 'text', 'text': replacement});
+    }
   }
 
   return <String, dynamic>{

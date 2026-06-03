@@ -995,6 +995,7 @@ Current runtime entrypoints:
 - `./smackerel.sh test unit`
 - `./smackerel.sh test integration`
 - `./smackerel.sh test e2e`
+- `./smackerel.sh test e2e-ui`
 - `./smackerel.sh test stress`
 - `./smackerel.sh up`
 - `./smackerel.sh down`

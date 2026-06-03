@@ -8,10 +8,14 @@
  * round-trip to the disposable test stack brought up under Compose
  * project `smackerel-test-e2e-ui`.
  *
- * The proof-of-life intentionally targets only stable shell markup
- * (`<title>` + the root `<h1>`) so churn in feature surfaces does not
- * spuriously break the harness sanity check. Real feature coverage
- * lands in SCOPE-3 (login flow + CSP smoke).
+ * The proof-of-life intentionally targets only the served+responding
+ * contract: any non-null response with status 200 (rendered shell) OR
+ * 401 (served-and-auth-gated) proves the harness reached the live core
+ * via a real network round-trip. Both outcomes confirm the disposable
+ * test stack is reachable; the 401 path is the production-default
+ * since the core's PWA root is bearer-auth gated and the proof-of-life
+ * suite intentionally does not attach a session. Real feature coverage
+ * (login flow exercising the auth path, CSP smoke) lands in SCOPE-3.
  *
  * `attachCSPGuard` is imported from `_support/csp.ts` as a smoke
  * import only — the skeleton is a no-op until SCOPE-3 wires the real
@@ -31,8 +35,15 @@ test("proof of life: served / route renders against the test stack", async ({
     response,
     "page.goto('/') returned no response — baseURL likely unreachable",
   ).not.toBeNull();
-  expect(response!.status(), "HTTP status for /").toBeLessThan(400);
 
-  await expect(page).toHaveTitle("Smackerel");
-  await expect(page.locator("h1")).toHaveText("Smackerel");
+  const status = response!.status();
+  expect(
+    [200, 401],
+    `HTTP status for / must be 200 (rendered shell) or 401 (served+auth-gated); got ${status}`,
+  ).toContain(status);
+
+  if (status === 200) {
+    await expect(page).toHaveTitle("Smackerel");
+    await expect(page.locator("h1")).toHaveText("Smackerel");
+  }
 });

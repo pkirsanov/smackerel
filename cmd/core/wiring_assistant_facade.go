@@ -525,9 +525,16 @@ func buildLegacyRetirementPolicy(cfg *config.Config, pool *pgxpool.Pool, now fun
 	if err != nil {
 		return nil, fmt.Errorf("legacy retirement ledger: %w", err)
 	}
+	// Spec 076 SCOPE-6a — replace the static not-paused reader with
+	// the durable SQLPauseStateStore so the facade observes
+	// threshold-evaluator-driven pause transitions.
+	pauseStore, err := legacyretirement.NewSQLPauseStateStore(pool)
+	if err != nil {
+		return nil, fmt.Errorf("legacy retirement pause store: %w", err)
+	}
 	resolver, err := legacyretirement.NewWindowStateResolver(
 		legacyretirement.SSTStateConfig{WindowID: lr.WindowID, WindowState: lr.WindowState},
-		legacyretirement.NewStaticPauseStateReader(false),
+		pauseStore,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("legacy retirement state resolver: %w", err)

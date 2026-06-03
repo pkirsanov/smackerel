@@ -44,7 +44,7 @@ Commands:
   test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
   test stress [--go-run <regex>] Run live-stack stress smoke test; optionally run only matching Go stress tests
   test e2e-ui [--help|--print-compose-project] Run PWA browser end-to-end UI tests via Playwright against the disposable
-                              Compose project `smackerel-test-e2e-ui` (spec 077; runner wiring lands in SCOPE-1b)
+                              Compose project `smackerel-test-e2e-ui` (spec 077)
   up                          Start the stack for the current environment
   down [--volumes]            Stop the stack; optionally remove named volumes
   status                      Show docker status and health endpoint output
@@ -841,20 +841,30 @@ case "$COMMAND" in
           # tests/unit/cli/ so it does not change behavior for legacy shell
           # tests living directly under tests/unit/. Skipped when --go/--python
           # language filter is set so single-language runs stay focused.
-          shell_unit_dir="$SCRIPT_DIR/tests/unit/cli"
-          if [[ -d "$shell_unit_dir" ]]; then
+          # Spec 077 SCOPE-2 extends the discovery to tests/unit/web/ and
+          # tests/unit/docs/ so the discovery-convention pin (TP-077-02-01),
+          # the doc/CLI parity check (TP-077-02-03), and the no-stub-bodies
+          # check (TP-077-03-06) all auto-discover with no further dispatcher
+          # edits.
+          for shell_unit_dir in \
+              "$SCRIPT_DIR/tests/unit/cli" \
+              "$SCRIPT_DIR/tests/unit/web" \
+              "$SCRIPT_DIR/tests/unit/docs"; do
+            if [[ ! -d "$shell_unit_dir" ]]; then
+              continue
+            fi
             shopt -s nullglob
             shell_unit_tests=("$shell_unit_dir"/*.sh)
             shopt -u nullglob
             if [[ ${#shell_unit_tests[@]} -gt 0 ]]; then
-              echo "[test unit] running ${#shell_unit_tests[@]} shell CLI unit test(s) from tests/unit/cli/"
+              echo "[test unit] running ${#shell_unit_tests[@]} shell unit test(s) from ${shell_unit_dir#$SCRIPT_DIR/}/"
               for shell_unit_test in "${shell_unit_tests[@]}"; do
                 echo "[test unit] -> bash $shell_unit_test"
                 bash "$shell_unit_test"
               done
-              echo "[test unit] shell CLI unit tests finished OK"
+              echo "[test unit] shell unit tests in ${shell_unit_dir#$SCRIPT_DIR/}/ finished OK"
             fi
-          fi
+          done
         fi
         ;;
       integration)

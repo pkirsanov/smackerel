@@ -1,3 +1,5 @@
+import { test } from '@playwright/test';
+
 /**
  * Spec contract: SCN-040-007 — Lifecycle review queue surfaces RAW→export pairs.
  *
@@ -18,7 +20,7 @@
  * Live-stack assertions live in the Go test; if Playwright is added, port the
  * reviewer flow below into a real test(...) block.
  */
-test('lifecycle review queue surfaces RAW→export pairs and rationale', async ({ page }) => {
+test.fixme('lifecycle review queue surfaces RAW→export pairs and rationale', async ({ page }) => {
   // GIVEN: live core + PWA stack from `./smackerel.sh test e2e` with at
   // least one low-confidence raw_export_link seeded.
   await page.goto('/pwa/photo-health-lifecycle.html');

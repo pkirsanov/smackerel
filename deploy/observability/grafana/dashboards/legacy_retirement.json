@@ -1,0 +1,28 @@
+{
+  "__comment_spec": "Spec 076 SCOPE-6b — Legacy retirement observability fragment (SCN-075-A04). Renders the residual-usage telemetry the spec 075 Scope 3 policy increments and the spec 076 Scope 6a threshold evaluator consumes. The panel queries `smackerel_legacy_command_residual_total` (registered in internal/assistant/legacyretirement/telemetry.go) over a rolling 7-day window, broken down by (command, user_bucket). user_bucket is an HMAC digest — no raw user identifiers ever appear on this dashboard. Importable into an existing Grafana instance via the Grafana HTTP API (POST /api/dashboards/db) or via Grafana's filesystem provider. Not wired into deploy/compose.deploy.yml because Grafana is not a project-owned runtime; the deploy adapter overlay binds it.",
+  "title": "Smackerel — Legacy Retirement Residual Telemetry (spec 076)",
+  "uid": "smackerel-legacy-retirement",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["smackerel", "assistant", "legacy-retirement", "spec-076"],
+  "timezone": "browser",
+  "refresh": "5m",
+  "time": { "from": "now-7d", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Residual legacy-command invocations — rolling 7-day count",
+      "description": "spec 076 SCOPE-6b panel for SCN-075-A04. Sum of `smackerel_legacy_command_residual_total` increases over the trailing 7 days, broken down by retired command and HMAC user_bucket. Drives the rollback-threshold alert in alerts.legacy_retirement.yml.tmpl — same metric, same window. user_bucket is privacy-preserving (HMAC-SHA256 hex) per spec 075 SCN-075-A11; raw user identifiers are structurally impossible because the metric's label set is closed.",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (command, user_bucket) (increase(smackerel_legacy_command_residual_total[7d]))",
+          "legendFormat": "{{command}} / {{user_bucket}}"
+        }
+      ]
+    }
+  ]
+}

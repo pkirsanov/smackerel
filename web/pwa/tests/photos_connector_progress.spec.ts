@@ -1,3 +1,5 @@
+import { test } from '@playwright/test';
+
 /**
  * Spec contract: SCN-040-006 — Scan progress and skip states are user-visible (UI surface).
  *
@@ -19,7 +21,7 @@
  * below should be ported into a real `test(...)` block and the Go contract
  * test kept as the broader-regression guard.
  */
-test('connector detail renders progress and skip ledger from live API', async ({ page }) => {
+test.fixme('connector detail renders progress and skip ledger from live API', async ({ page }) => {
   // GIVEN: live core + PWA stack from `./smackerel.sh test e2e`
   // WHEN: opening a connector detail screen
   await page.goto('/pwa/photo-library-detail.html?id=immich');
