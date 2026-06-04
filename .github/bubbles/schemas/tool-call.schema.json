@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pkirsanov/bubbles/schemas/tool-call.schema.json",
+  "title": "Bubbles tool-call evidence log entry",
+  "description": "One JSONL line in .specify/runtime/tool-calls.jsonl. Records a single gate-relevant command invocation with provenance fields the evidence gate can verify deterministically.",
+  "type": "object",
+  "required": ["ts", "sessionId", "cmd", "exitCode"],
+  "additionalProperties": true,
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when the command completed."
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque per-session identifier. Same session = same string across all entries; different sessions MUST differ."
+    },
+    "agent": {
+      "type": "string",
+      "description": "Name of the Bubbles agent (or 'human' / 'ci') that invoked the command."
+    },
+    "spec": {
+      "type": "string",
+      "description": "Spec slug (e.g. '042-feature-name') the command relates to. Empty for framework-level commands."
+    },
+    "scope": {
+      "type": "string",
+      "description": "Scope identifier within the spec, when applicable."
+    },
+    "cmd": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The literal command line executed (post-shell-expansion, pre-redirection). Used for matching against DoD-recorded command claims."
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory at execution time."
+    },
+    "exitCode": {
+      "type": "integer",
+      "description": "Process exit code. Evidence gates treat exitCode=0 as PASS unless the DoD item explicitly expects failure."
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Wall-clock duration in milliseconds. Optional but recommended."
+    },
+    "stdoutHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "sha256 of captured stdout. Used to detect copy-paste fabrication across evidence blocks."
+    },
+    "stderrHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "sha256 of captured stderr."
+    },
+    "stdoutBytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size of captured stdout in bytes."
+    },
+    "stderrBytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size of captured stderr in bytes."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Freeform tags for evidence categorization (e.g. 'test', 'build', 'lint', 'curl', 'psql')."
+    }
+  }
+}
