@@ -1,0 +1,4 @@
+{
+  "type": "commonjs",
+  "//": "Override parent package.json type:module so render_descriptor_v1{,_cli}.js can use CommonJS require/module.exports as their tests + Dart/Node canary expect."
+}
