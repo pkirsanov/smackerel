@@ -212,6 +212,25 @@ annotations:
   # GET /api/annotations?actor=me limit query param.
   list_my_max_limit: 200
 
+# Spec 080 SCOPE-080-01 — Knowledge Graph Public API SST envelope.
+# Every value flows through scripts/commands/config.sh into the
+# generated env file as KNOWLEDGE_GRAPH_API_*; no in-source defaults
+# (smackerel-no-defaults policy). Startup fails loud if any field is
+# missing or non-positive. Consumers: internal/api/graphapi/config.go
+# (the package-local fail-loud loader) and internal/config/
+# knowledge_graph_api.go (the boot-time validator wired into Load()).
+knowledge_graph_api:
+  list_default_limit: 50
+  list_max_limit: 200
+  time_window_max_days: 365
+  edges_default_limit: 100
+  edges_max_limit: 500
+  # cursor_secret_env names the env var that holds the HMAC signing
+  # key used by the opaque cursor codec (graphapi.CursorCodec). The
+  # secret value itself is operator-injected via the spec 052 secret
+  # path; this YAML carries only the env-var NAME, never the secret.
+  cursor_secret_env: "KNOWLEDGE_GRAPH_API_CURSOR_SECRET"
+
 # Spec 021 Scope 4 — Unified Surfacing Controller (Next Smackerel
 # prioritizer). Every value flows through scripts/commands/config.sh
 # into the generated env file as SURFACING_*; no in-source defaults
