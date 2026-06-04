@@ -72,3 +72,44 @@ embedding_rejected_total = Counter(
     "smackerel_ml_embedding_rejected_total",
     "Total embedding requests rejected at the queue cap (spec 050 FR-050-002 backpressure)",
 )
+
+# Spec 046 follow-up F4 (sweep round 13) — NATS consume-loop observability.
+#
+# nats_consume_fetch_errors_total counts non-timeout errors raised by the
+# JetStream pull subscriber's fetch() call in nats_client._consume_loop.
+# Idle-fetch timeouts are NOT counted (they are the normal poll cadence);
+# only transport/stream/auth errors increment this counter. Non-zero values
+# mean the sidecar is hitting reconnect storms, stream-deleted conditions,
+# or auth failures that would otherwise be invisible behind the bare-except
+# previously present in _consume_loop.
+nats_consume_fetch_errors_total = Counter(
+    "smackerel_ml_nats_consume_fetch_errors_total",
+    "Non-timeout errors raised by JetStream pull-subscribe fetch() per subject (spec 046 follow-up F4)",
+    ["subject"],
+)
+
+# Spec 081 FR-081-003 — Python sidecar dead-letter parity with Go.
+#
+# nats_deadletter_total counts messages routed to deadletter.<subject>
+# from the ML sidecar's poison-pill branch (parity with the Go
+# metrics.NATSDeadLetter counter exposed by internal/pipeline/*subscriber.go).
+# Labelled by stream so operators can see which JetStream stream is
+# producing poison messages.
+nats_deadletter_total = Counter(
+    "smackerel_ml_nats_deadletter_total",
+    "Messages routed to deadletter.<subject> from the ML sidecar (spec 081 FR-081-003)",
+    ["stream"],
+)
+
+# nats_deadletter_publish_failures_total counts publish-to-deadletter
+# attempts that failed. On failure the consumer nak()s the original
+# message (rather than term()) so JetStream redelivers and we retry the
+# publish — see design §4 invariant 1 (publish-before-term).
+nats_deadletter_publish_failures_total = Counter(
+    "smackerel_ml_nats_deadletter_publish_failures_total",
+    (
+        "Publish attempts to deadletter.<subject> that failed; "
+        "original msg was nak()ed for redelivery (spec 081 FR-081-003)"
+    ),
+    ["subject"],
+)

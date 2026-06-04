@@ -43,7 +43,7 @@ Implemented runtime capabilities:
 - PWA share target for mobile capture and browser extension (Chrome MV3 / Firefox) for desktop capture
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations through `038_notification_ntfy_source_adapter.sql`; migrations 002-017 remain consolidated into `001_initial_schema.sql`
+- Database migrations through `055_annotation_actor_and_version.sql`; migrations 002-017 remain consolidated into `001_initial_schema.sql`
 - NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
@@ -440,6 +440,12 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/topics/` | Topic extraction and management — topic CRUD, promotion/archival lifecycle, hot topic detection |
 | `internal/web/` | HTMX web UI — search, artifact detail, digest, topics, settings, status, knowledge dashboard (concepts, entities, lint), embedded HTML templates |
 | `internal/recommendation/` | Spec 039 recommendation runtime — reactive engine (`reactive/`), watch evaluator (`watch/`), provider registry (`provider/`), candidate ranking (`rank/`), quality dedupe (`quality/`), policy enforcement (`policy/`), trip dossier composer, persistence store (`store/`) including the `AssertRedactSafe` log/trace redaction guard and `GetWatchAuditCounts` audit-table accessor used by the per-watch operator visibility view |
+| `internal/agent/` | Spec 037 agent bridge — wires the prompt-contract loader, intent router, and tool executor into a single `Bridge` that API, Telegram, scheduler, and pipeline surfaces call via a uniform `Invoke` / `KnownIntents` contract |
+| `internal/assistant/` | Spec 061 assistant capability layer — facade audit boundary (every turn writes one `assistant_turn` audit record), borderline-intent handling, proposal-payload persistence, and confirm-pending lifecycle |
+| `internal/backup/` | Spec 048 backup & restore — pure retention policy (7 daily + 4 weekly), on-disk status contract written by `scripts/commands/backup.sh`, and metrics watcher that exposes the most recent backup outcome for spec 049 alerting |
+| `internal/deploy/` | Build-Once Deploy-Many deployment contracts — static-file tests for `.github/workflows/build.yml` (bundle-hash contract, vuln gate, bundle-secret contract) and the deploy-target compose contract enforcing the tailnet-edge bind invariants |
+| `internal/manifest/` | Spec 076 scenario-manifest schema and loader — typed inherited-scenario manifest (own SCN-076-Fxx entries + `inheritsFrom` references to specs 064/065/066/073/074/075) consumed by traceability tooling |
+| `internal/whatsapp/` | Spec 072 WhatsApp Business Cloud API transport — `assistant_adapter/` implements the canonical `TransportAdapter` contract: webhook ingress, Meta signature verification, generic transport-identity lookup, inbound payload → `AssistantMessage` translation, and outbound text/list/buttons rendering |
 
 ## Database Migrations
 
@@ -453,11 +459,40 @@ Migrations 002–017 were consolidated into `001_initial_schema.sql` during a sc
 | 018 | `018_meal_plans.sql` | Meal planning (spec 036): `meal_plans` + `meal_plan_slots` tables with date range, lifecycle status, slot constraints |
 | 019 | `019_expense_tracking.sql` | Expense tracking (spec 034): `vendor_aliases`, `expense_suggestions`, `expense_suggestion_suppressions` tables, GIN index on artifacts expense metadata |
 | 020 | `020_agent_traces.sql` | Agent trace persistence for prompt/tool execution audit |
-| 021 | `021_drive_schema.sql` | Cloud-drive connection, scan, retrieval, and policy schema |
-| 022 | `022_recommendations.sql` | Recommendation requests, preferences, provider payloads, suppressions, delivery attempts, and audit records |
-| 023-035 | `023_*.sql` through `035_*.sql` | Incremental drive, photo, auth, QF companion, and evidence-export schema additions |
+| 021 | `021_drive_schema.sql` | Cloud-drive connection, scan, retrieval, and policy schema (spec 038) |
+| 022 | `022_recommendations.sql` | Recommendation requests, preferences, provider payloads, suppressions, delivery attempts, and audit records (spec 039) |
+| 023 | `023_drive_connection_expires_at.sql` | Adds `expires_at` to `drive_connections` for token lifecycle tracking |
+| 024 | `024_drive_scan_monitor_read_models.sql` | Drive scan/monitor read-model tables for cursor durability |
+| 025 | `025_photo_libraries.sql` | Cloud photo libraries base schema (spec 040): providers, connections, scans |
+| 026 | `026_photo_scope2_progress.sql` | Photo scope 2 — scan progress and resumable cursors |
+| 027 | `027_recommendation_watch_runtime.sql` | Recommendation watch runtime tables (due-watch scheduling, audit) |
+| 028 | `028_drive_save_back.sql` | Drive Save Service tables: confirmations, save attempts, rules |
+| 029 | `029_photo_scope3_lifecycle_dedupe_removal.sql` | Photo lifecycle, duplicate analysis, and removal-action records |
+| 030 | `030_drive_confirmations_and_share_changes.sql` | Drive low-confidence confirmations and share-change tracking |
+| 031 | `031_photo_scope4_capture_routing_sensitivity.sql` | Photo capture routing and sensitivity policy fields |
+| 032 | `032_photo_reveal_tokens_secret_hash_and_toctou.sql` | Photo reveal-token secret hashing and TOCTOU-safe redemption |
+| 033 | `033_auth_per_user_bearer.sql` | Spec 044 per-user PASETO v4.public bearer auth, sessions, and revocation cache |
+| 034 | `034_qf_decisions_capability.sql` | QF companion (spec 041) capability registration and bridge state |
+| 035 | `035_qf_personal_evidence_exports.sql` | QF `PersonalEvidenceBundle` export records and dispatch state |
 | 036 | `036_notification_intelligence.sql` | Spec 054 notification intelligence schema: `notification_source_instances`, `notification_source_health_events`, `notification_raw_events`, `normalized_notifications`, `notification_classifications`, `notification_incidents`, `notification_incident_events`, `notification_processing_decisions`, `notification_suppressions`, and `notification_delivery_attempts` |
+| 037 | `037_qf_personal_context_consent_tokens.sql` | Spec 041 QF personal-context consent tokens and audit columns |
 | 038 | `038_notification_ntfy_source_adapter.sql` | Spec 055 ntfy source adapter schema: relaxes source-instance secret references only when `auth_mode=none` is explicit, then adds `notification_ntfy_subscription_states`, `notification_ntfy_dead_letters`, and `notification_ntfy_replay_attempts` |
+| 039 | `039_hospitality_counter_applications.sql` | Hospitality counter-applications schema for STR ops |
+| 040 | `040_raw_ingest_dedup.sql` | Raw-ingest dedupe table to guard duplicate capture across sources |
+| 041 | `041_assistant_conversations.sql` | Assistant (spec 061) conversation persistence schema |
+| 042 | `042_assistant_proposal_payload.sql` | Assistant proposal-payload JSONB column for audit replay |
+| 043 | `043_assistant_confirm_pending.sql` | Assistant confirm-pending lifecycle table |
+| 044 | `044_web_user_credentials.sql` | Web user-credential rows for per-user auth surface |
+| 045 | `045_open_knowledge.sql` | Open-knowledge scenario tables and references |
+| 046 | `046_legacy_retirement.sql` | Retirement of legacy artifact columns and unused indexes |
+| 047 | `047_assistant_intent_traces.sql` | Assistant intent-trace persistence for capability audit |
+| 048 | `048_legacy_retirement_residual.sql` | Residual cleanup after migration 046 |
+| 050 | `050_assistant_transport_identities.sql` | Generic transport-identity table for assistant transports (WhatsApp, Telegram, etc.) |
+| 051 | `051_artifact_capture_policy.sql` | Artifact-capture policy fields for capture-as-fallback flow |
+| 052 | `052_capture_as_fallback_pending_clarify.sql` | Pending-clarify state for capture-as-fallback assistant turns |
+| 053 | `053_assistant_tool_traces.sql` | Assistant tool-call trace persistence |
+| 054 | `054_assistant_tool_traces_call_outcome.sql` | Adds `call_outcome` column to tool-trace rows |
+| 055 | `055_annotation_actor_and_version.sql` | Annotation actor and version columns for audit and conflict resolution |
 
 Migration `036_notification_intelligence.sql` is additive and follows the existing application-written ID/timestamp pattern: it uses `CHECK` constraints for enum-like values, JSONB for redaction/rationale envelopes, and no database-side runtime fallback values. Raw source input is stored in `notification_raw_events` before a normalized notification can be processed downstream.
 
@@ -477,6 +512,19 @@ Prompt contracts live in `config/prompt_contracts/` and are mounted into the ML 
 | Recipe Extraction | `recipe-extraction-v1.yaml` | `domain-extraction` | Extract structured recipe data (ingredients, steps, nutrition) from recipe content |
 | Product Extraction | `product-extraction-v1.yaml` | `domain-extraction` | Extract structured product data (price, specs, ratings) from product pages and reviews |
 | Receipt Extraction | `receipt-extraction-v1.yaml` | `domain-extraction` | Extract structured receipt/invoice data (vendor, date, amount, currency, tax, line items, payment method) |
+| Annotation Classify | `annotation-classify-v1.yaml` | `scenario` | Classify freeform user annotations (ratings, tags, interactions, notes) into the canonical annotation schema |
+| Drive Classification | `drive-classification-v1.yaml` | `drive-classification` | Classify extracted drive files into provider-neutral Smackerel domains (spec 038) |
+| Drive Folder Context | `drive-folder-context-v1.yaml` | `drive-folder-context` | Summarize drive folder context for classification refreshes |
+| E2E Ollama Smoke | `e2e-ollama-smoke-v1.yaml` | `scenario` | Minimal smoke contract used by the E2E live-stack Ollama health check |
+| Notification Schedule | `notification-schedule-v1.yaml` | `scenario` | Propose a scheduled reminder; on user confirm, register it with the spec 054 scheduler |
+| Open Knowledge | `open_knowledge.yaml` | `scenario` | Open-knowledge scenario for general retrieval over the user's knowledge graph |
+| Recipe Search | `recipe-search-v1.yaml` | `scenario` | Find recipes in the user's owned knowledge graph and return them with artifact-ID citations |
+| Recommendation Feedback | `recommendation-feedback-v1.yaml` | `scenario` | Record recommendation feedback, suppression state, and preference corrections (spec 039) |
+| Recommendation Reactive | `recommendation-reactive-v1.yaml` | `scenario` | Reactive place recommendation with provider facts, graph signals, policy, quality, and persistence |
+| Recommendation Watch Evaluate | `recommendation-watch-evaluate-v1.yaml` | `scenario` | Evaluate a due recommendation watch and persist a delivery, queue, summarize, or drop decision |
+| Recommendation Why | `recommendation-why-v1.yaml` | `scenario` | Explain an existing recommendation from persisted trace and refs only |
+| Retrieval QA | `retrieval-qa-v1.yaml` | `scenario` | Answer a user question over the user's knowledge graph with artifact-ID citations |
+| Weather Query | `weather-query-v1.yaml` | `scenario` | Answer a current/forecast weather question from an external provider with provider+timestamp attribution |
 
 ### Adding a New Prompt Contract
 

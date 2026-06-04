@@ -113,6 +113,8 @@ new prompt that composes existing tools, not by adding new Go business logic.
 
 ### Container Memory Limits (from docker-compose.yml)
 
+Core runtime services:
+
 | Container | Memory Limit |
 |-----------|-------------|
 | `postgres` (PostgreSQL 16 + pgvector) | 512 MB |
@@ -120,8 +122,13 @@ new prompt that composes existing tools, not by adding new Go business logic.
 | `smackerel-core` (Go API) | 512 MB |
 | `smackerel-ml` (Python ML sidecar) | 2 GB |
 | `ollama` (optional, local LLM) | 8 GB |
-| **Total without Ollama** | **~3.3 GB** |
-| **Total with Ollama** | **~11.3 GB** |
+| **Core total without Ollama** | **~3.3 GB** |
+| **Core total with Ollama** | **~11.3 GB** |
+
+The dev compose file additionally declares limits for observability/auxiliary
+containers (`prometheus` 512 MB, `jaeger` 256 MB, `searxng` 256 MB,
+`stub-providers` 64 MB) that add approximately **~1.1 GB** when started.
+Full stack with Ollama and observability: **~12.3 GB**.
 
 The ML sidecar has a 120-second startup period (`start_period`) for model loading. Expect first requests to take longer while models warm up.
 

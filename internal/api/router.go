@@ -315,7 +315,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 	// the entry point that unauthenticated browser navigations land
 	// on via the content-negotiated 303 in bearerAuthMiddleware.
 	r.Get("/login", deps.HandleLoginPage)
-	r.Handle("/admin_ui_static/*", http.StripPrefix("/", http.FileServer(loginStaticFS())))
+	r.Handle("/admin_ui_static/*", http.StripPrefix("/", http.FileServer(http.FS(loginUIFS))))
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes
 	if deps.WebHandler != nil {

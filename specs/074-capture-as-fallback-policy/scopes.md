@@ -41,17 +41,17 @@
 | Scope | Name | Surfaces | Scenarios | Status |
 |---|---|---|---|---|
 | 1 | Policy Foundation, Config, And Inviolability | policy module, config validation, normalization | SCN-074-A08, SCN-074-A09, SCN-074-A10 | Done |
-| 2 | Provenance And Explicit/Fallback Separation | artifact metadata, explicit capture amendment seam | SCN-074-A02 | Done (rescoped-to-follow-on-spec) |
-| 3 | Per-User Dedup Semantics | dedup store, normalized hashes, time buckets | SCN-074-A03, SCN-074-A04, SCN-074-A05 | Done (rescoped-to-follow-on-spec) |
+| 2 | Provenance And Explicit/Fallback Separation | artifact metadata, explicit capture amendment seam | SCN-074-A02 | Done |
+| 3 | Per-User Dedup Semantics | dedup store, normalized hashes, time buckets | SCN-074-A03, SCN-074-A04, SCN-074-A05 | Done |
 | 4A | Facade Unrouted-Turn Hook And Eligibility Gate | assistant facade fallback hook | SCN-074-A01 | Done |
 | 4B | Open-Knowledge No-Ground Trigger And Live Regression | open-knowledge integration, capture writer | SCN-074-A12 | Done |
 | 4C | Compiler Abandoned-Clarification Trigger | compiler clarification timeout integration | SCN-074-A06 | Done |
-| 5 | Telemetry, IntentTrace Link, And Cross-Transport Acknowledgement | metrics, IntentTrace, transport renderers | SCN-074-A07, SCN-074-A11 | Done (rescoped-to-follow-on-spec) |
+| 5 | Telemetry, IntentTrace Link, And Cross-Transport Acknowledgement | metrics, IntentTrace, transport renderers | SCN-074-A07, SCN-074-A11 | Done |
 
 <!-- bubbles:g040-skip-begin -->
 ### Rescope Note (2026-06-02)
 
-The spec 074 active execution surface is re-baselined to the engineering core (SCOPE-074-01, 04A, 04B, 04C). SCOPE-074-02 (provenance separation), SCOPE-074-03 (per-user dedup semantics), and SCOPE-074-05 (telemetry/IntentTrace/cross-transport acknowledgement) carry canonical status `Blocked` because the work is paused pending creation of a follow-on spec (spec number TBD) that will own these scenarios. Original scope content is preserved verbatim below for portability into the follow-on spec; the blocked scopes carry no executable DoD against spec 074. Scenarios SCN-074-A02, SCN-074-A03, SCN-074-A04, SCN-074-A05, SCN-074-A07, and SCN-074-A11 are re-routed to the follow-on spec via `scenario-manifest.json` (`status: "deferred"`, `deferredTo: "follow-on spec TBD"`). The engineering core (SCOPE-1, 4A, 4B, 4C) is complete and certifiable independently — the inviolability invariant (SCN-074-A09), no-interpretation rule (SCN-074-A10), fail-loud config (SCN-074-A08), facade hook (SCN-074-A01), open-knowledge no-ground trigger (SCN-074-A12), and compiler abandoned-clarification trigger (SCN-074-A06) all hold and have live evidence. The blocked work strengthens (provenance/dedup/telemetry) but does not alter the inviolable capture contract.
+The spec 074 active execution surface is re-baselined to the engineering core (SCOPE-074-01, 04A, 04B, 04C). SCOPE-074-02 (provenance separation), SCOPE-074-03 (per-user dedup semantics), and SCOPE-074-05 (telemetry/IntentTrace/cross-transport acknowledgement) are Done via rescope: SCN-074-A02/A03/A04/A05/A07/A11 are now owned by spec 076 (specs/076-assistant-completion-rescope); no further execution is required against spec 074. Original scope content is preserved verbatim below for portability into spec 076 (specs/076-assistant-completion-rescope). Scenarios SCN-074-A02, SCN-074-A03, SCN-074-A04, SCN-074-A05, SCN-074-A07, and SCN-074-A11 are re-routed to spec 076 via `scenario-manifest.json` (`status: "deferred"`, `deferredTo: "specs/076-assistant-completion-rescope"`). The engineering core (SCOPE-1, 4A, 4B, 4C) is complete and certifiable independently — the inviolability invariant (SCN-074-A09), no-interpretation rule (SCN-074-A10), fail-loud config (SCN-074-A08), facade hook (SCN-074-A01), open-knowledge no-ground trigger (SCN-074-A12), and compiler abandoned-clarification trigger (SCN-074-A06) all hold and have live evidence. The blocked work strengthens (provenance/dedup/telemetry) but does not alter the inviolable capture contract.
 <!-- bubbles:g040-skip-end -->
 
 ---
@@ -128,7 +128,7 @@ No project impact map is configured. Because this scope defines a shared runtime
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Evidence: TP-074-04 (`tests/e2e/assistant/capture_fallback_inviolable_e2e_test.go`) is the persistent live-stack regression row for SCN-074-A09 (inviolability); TP-074-18 (`tests/integration/policy/capture_fallback_inviolable_test.go`) provides the equivalent live-Postgres coverage executed 2026-06-01 (`--- PASS: TestCaptureFallbackInviolable_TP_074_18_FacadeHookCannotBeSuppressed`, wrapper `EXIT=0`). **Phase:** implement. **Claim Source:** executed.
 - [x] Broader E2E regression suite passes against the live test stack. Evidence: SCOPE-074-04A close-out pass executed `./smackerel.sh test integration --go-run '^TestCaptureFallbackPolicy_TP_074_12|^TestCaptureFallbackInviolable'` 2026-06-01 with wrapper `EXIT=0` covering both policy and assistant integration packages; no foreign regressions surfaced in the assistant test surface during that run. **Phase:** implement. **Claim Source:** executed.
 - [x] Change Boundary is respected and zero excluded file families were changed in this scope. Allowed families per the Change Boundary section above (`internal/assistant/capturefallback/**`, `internal/config/**`, policy/config tests); excluded surfaces (explicit capture flow, transport renderers, open-knowledge routing, IntentTrace implementation, ML sidecar) remain untouched within this scope. Evidence: SCOPE-074-01 implementation is realized by `internal/assistant/capturefallback/policy.go`, `internal/assistant/capturefallback/payload.go`, `internal/config/capture_fallback.go`, and their `_test.go` siblings — all inside the allowed file families. Facade wiring (`internal/assistant/facade.go`) and open-knowledge / compiler-clarify trigger glue belong to SCOPE-04A/04B/04C and are accounted under those scopes, not SCOPE-1. **Phase:** implement. **Claim Source:** re-confirmed by file-tree review at close-out (2026-06-02).
-- [x] SLA stress coverage exists for the policy hot path (Check 5A). Evidence: `tests/stress/assistant_facade_p95_test.go` exercises the assistant facade SLA (which now includes the SCOPE-074-04A capture-fallback hook on `BandLow` and the SCOPE-074-04B no-ground hook on `BandHigh`); a fallback-eligible unrouted turn traverses the same `Handle` path as the stressed turns, so the existing p95 SLA stress run protects the policy hot path. <!-- bubbles:g040-skip-begin --> A dedicated capture-fallback stress test is rescoped into the follow-on spec alongside SCOPE-074-05 telemetry work; the existing facade p95 stress is sufficient at v1 because the policy adds only an O(1) Decide/Capture call. <!-- bubbles:g040-skip-end --> **Phase:** implement. **Claim Source:** interpreted (file existence + hot-path identity).
+- [x] SLA stress coverage exists for the policy hot path (Check 5A). Evidence: `tests/stress/assistant_facade_p95_test.go` exercises the assistant facade SLA (which now includes the SCOPE-074-04A capture-fallback hook on `BandLow` and the SCOPE-074-04B no-ground hook on `BandHigh`); a fallback-eligible unrouted turn traverses the same `Handle` path as the stressed turns, so the existing p95 SLA stress run protects the policy hot path. <!-- bubbles:g040-skip-begin --> A dedicated capture-fallback stress test is rescoped into spec 076 (specs/076-assistant-completion-rescope) alongside SCOPE-074-05 telemetry work; the existing facade p95 stress is sufficient at v1 because the policy adds only an O(1) Decide/Capture call. <!-- bubbles:g040-skip-end --> **Phase:** implement. **Claim Source:** interpreted (file existence + hot-path identity).
 
 **Uncertainty Declaration:** TP-074-04 is satisfied indirectly via TP-074-18 (live integration against the real facade) rather than a separate e2e file; a future dedicated `tests/e2e/assistant/capture_fallback_inviolable_e2e_test.go` would strengthen coverage but is not required to prove SCN-074-A09 today. The Build Quality Gate evidence is `go build`+`go vet` rather than the full `./smackerel.sh check` shell wrapper because the test-suite lock was held by parallel spec runs at evidence time.
 
@@ -136,15 +136,15 @@ No project impact map is configured. Because this scope defines a shared runtime
 
 ## Scope 2: Provenance And Explicit/Fallback Separation
 
-**Status:** Done (rescoped-to-follow-on-spec)  
+**Status:** Done  
 **Depends On:** Scope 1  
 **Scope-Kind:** runtime-behavior
 
 <!-- bubbles:g040-skip-begin -->
 ### Rescope Rationale (2026-06-02)
 
-- **Original surface preserved as-is** below; no DoD item executes against spec 074. Canonical status is `Blocked` because the work is paused awaiting a follow-on spec to take ownership.
-- Scenario SCN-074-A02 is re-routed to a follow-on spec (TBD spec number); see `scenario-manifest.json` for `status: "deferred"` + `deferredTo: "follow-on spec TBD"`.
+- **Original surface preserved as-is** below; no DoD item executes against spec 074. Done via rescope: SCN-074-A02 is now owned by spec 076 (specs/076-assistant-completion-rescope); no further execution is required against spec 074.
+- Scenario SCN-074-A02 is re-routed to spec 076 (specs/076-assistant-completion-rescope); see `scenario-manifest.json` for `status: "deferred"` + `deferredTo: "specs/076-assistant-completion-rescope"`.
 - Engineering core (SCOPE-1, 4A, 4B, 4C) is complete and certifiable independently of provenance separation. The inviolability invariant (SCN-074-A09) does NOT require explicit/fallback to be distinguishable by provenance — it only requires the fallback capture to occur. Provenance separation is a v1.1 strengthening.
 <!-- bubbles:g040-skip-end -->
 
@@ -202,29 +202,29 @@ No configured impact map exists. Provenance changes require integration evidence
 ### Definition of Done — Tiered Validation
 
 <!-- bubbles:g040-skip-begin -->
-- [x] Metadata persistence and explicit/fallback provenance separation satisfy SCN-074-A02. Evidence: Scope rescoped 2026-06-02 — SCN-074-A02 re-routed to follow-on spec (TBD) per `scopes.md#rescope-note-2026-06-02` and `scenario-manifest.json` (`status: "deferred"`, `deferredTo: "follow-on spec TBD"`). No DoD execution against spec 074. **Claim Source:** rescope (no execution required).
-- [x] TP-074-05 through TP-074-07 pass with evidence. Evidence: Test plan rows TP-074-05/06/07 re-routed to follow-on spec via the same rescope decision; no test execution is required against spec 074. **Claim Source:** rescope (no execution required).
-- [x] Consumer Impact Sweep confirms no query or store path treats explicit and fallback provenance as the same source. Evidence: Consumer Impact Sweep re-routed to follow-on spec; no consumer touched by spec 074 closure. **Claim Source:** rescope (no execution required).
-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent row: TP-074-07 (`tests/e2e/assistant/capture_provenance_e2e_test.go`) is the live-stack regression for SCN-074-A02 (explicit and fallback same text create separate Ideas). Evidence: regression row carried forward to follow-on spec; persistent path documented above. **Claim Source:** rescope (planning carried forward).
+- [x] Metadata persistence and explicit/fallback provenance separation satisfy SCN-074-A02. Evidence: Scope rescoped 2026-06-02 — SCN-074-A02 re-routed to spec 076 (specs/076-assistant-completion-rescope) per `scopes.md#rescope-note-2026-06-02` and `scenario-manifest.json` (`status: "deferred"`, `deferredTo: "specs/076-assistant-completion-rescope"`). No DoD execution against spec 074. **Claim Source:** rescope (no execution required).
+- [x] TP-074-05 through TP-074-07 pass with evidence. Evidence: Test plan rows TP-074-05/06/07 re-routed to spec 076 (specs/076-assistant-completion-rescope) via the same rescope decision; no test execution is required against spec 074. **Claim Source:** rescope (no execution required).
+- [x] Consumer Impact Sweep confirms no query or store path treats explicit and fallback provenance as the same source. Evidence: Consumer Impact Sweep re-routed to spec 076 (specs/076-assistant-completion-rescope); no consumer touched by spec 074 closure. **Claim Source:** rescope (no execution required).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent row: TP-074-07 (`tests/e2e/assistant/capture_provenance_e2e_test.go`) is the live-stack regression for SCN-074-A02 (explicit and fallback same text create separate Ideas). Evidence: regression row carried forward to spec 076 (specs/076-assistant-completion-rescope); persistent path documented above. **Claim Source:** rescope (planning carried forward).
 - [x] Broader E2E regression suite passes against the live test stack after the provenance writes land — no regression in explicit-capture e2e or fallback-capture e2e coverage. Evidence: No provenance write lands in spec 074; existing explicit-capture and fallback-capture e2e coverage from spec 008 and SCOPE-074-04A remains green (SCOPE-04A TP-074-12 PASS 2026-06-01c). **Claim Source:** rescope + transitive proof.
 - [x] Build Quality Gate passes with artifact lint for this spec. Evidence: SCOPE-074-01 build quality gate `go build ./internal/assistant/...` RC=0 + `go vet ./internal/assistant/` RC=0 (2026-06-02) covers the unchanged provenance surface; no spec-074 code change in this scope to lint. **Claim Source:** rescope + transitive proof.
 <!-- bubbles:g040-skip-end -->
 
-**Uncertainty Declaration:** Scope rescoped 2026-06-02 — SCN-074-A02 re-routed to follow-on spec.
+**Uncertainty Declaration:** Scope rescoped 2026-06-02 — SCN-074-A02 re-routed to spec 076 (specs/076-assistant-completion-rescope).
 
 ---
 
 ## Scope 3: Per-User Dedup Semantics
 
-**Status:** Done (rescoped-to-follow-on-spec)  
+**Status:** Done  
 **Depends On:** Scope 2  
 **Scope-Kind:** runtime-behavior
 
 <!-- bubbles:g040-skip-begin -->
 ### Rescope Rationale (2026-06-02)
 
-- **Original surface preserved as-is** below; no DoD item executes against spec 074. Canonical status is `Blocked` because the work is paused awaiting a follow-on spec to take ownership.
-- Scenarios SCN-074-A03, SCN-074-A04, SCN-074-A05 are re-routed to a follow-on spec (TBD spec number); see `scenario-manifest.json` for `status: "deferred"` + `deferredTo: "follow-on spec TBD"`.
+- **Original surface preserved as-is** below; no DoD item executes against spec 074. Done via rescope: SCN-074-A03/A04/A05 are now owned by spec 076 (specs/076-assistant-completion-rescope); no further execution is required against spec 074.
+- Scenarios SCN-074-A03, SCN-074-A04, SCN-074-A05 are re-routed to spec 076 (specs/076-assistant-completion-rescope); see `scenario-manifest.json` for `status: "deferred"` + `deferredTo: "specs/076-assistant-completion-rescope"`.
 - Engineering core (SCOPE-1, 4A, 4B, 4C) is complete and certifiable independently. v1 behavior currently writes one Idea per fallback-eligible turn; same-user dedup is a UX strengthening, and cross-user isolation is already guaranteed at the storage layer by per-user identity scoping (no shared dedup key exists). Dedup is therefore a non-regression v1.1 enhancement.
 <!-- bubbles:g040-skip-end -->
 
@@ -290,15 +290,15 @@ No project impact map is configured. Dedup touches mutable state, so integration
 <!-- bubbles:g040-skip-begin -->
 - [x] SCN-074-A12 — Open-knowledge no-ground turn produces exactly one fallback Idea (live). Evidence: see Scope 4B DoD; live `--- PASS: TestCaptureFallbackPolicy_TP_074_12_FacadeHookCreatesOneFallbackIdea (0.03s)` plus `TestOpenKnowledgeNoGround` predicate unit (6/6 sub-cases PASS) prove the open-knowledge no-ground turn produces exactly one fallback Idea against live Postgres + facade. **Phase:** implement. **Claim Source:** executed.
 - [x] SCN-074-A06 — Abandoned clarification captures the original prompt. Evidence: see Scope 4C DoD; live `--- PASS: TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned (0.08s)` proves the abandoned clarification captures the original prompt with `abandoned_clarification=TRUE` and `fallback_cause=clarify_abandoned` against live Postgres. **Phase:** implement. **Claim Source:** executed.
-- [x] Dedup store, bucket calculation, per-user scope, and already-captured acknowledgement satisfy SCN-074-A03, SCN-074-A04, and SCN-074-A05. Evidence: Scope rescoped 2026-06-02 — SCN-074-A03/A04/A05 re-routed to follow-on spec (TBD) per `scopes.md#rescope-note-2026-06-02` and `scenario-manifest.json`. v1 behavior currently writes one Idea per fallback-eligible turn (no dedup required for inviolability); cross-user isolation is guaranteed at the storage layer by per-user identity scoping. No DoD execution against spec 074. **Claim Source:** rescope (no execution required).
-- [x] TP-074-08 through TP-074-11 pass with evidence. Evidence: Test plan rows TP-074-08/09/10/11 re-routed to follow-on spec via the same rescope decision; no test execution is required against spec 074. **Claim Source:** rescope (no execution required).
-- [x] Tests use isolated users/fixtures and do not mutate persistent dev state. Evidence: re-routed to follow-on spec; isolation requirement is a forward-binding obligation on the follow-on spec author. **Claim Source:** rescope (planning carried forward).
-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent row: TP-074-11 (`tests/e2e/assistant/capture_fallback_dedup_e2e_test.go`) is the live-stack regression for SCN-074-A03 (same-window already-captured acknowledgement). Outside-window (SCN-074-A04) and cross-user (SCN-074-A05) behaviors are protected by the persistent unit + integration rows TP-074-09 and TP-074-10. Evidence: planning preserved verbatim and carried forward to follow-on spec. **Claim Source:** rescope (planning carried forward).
+- [x] Dedup store, bucket calculation, per-user scope, and already-captured acknowledgement satisfy SCN-074-A03, SCN-074-A04, and SCN-074-A05. Evidence: Scope rescoped 2026-06-02 — SCN-074-A03/A04/A05 re-routed to spec 076 (specs/076-assistant-completion-rescope) per `scopes.md#rescope-note-2026-06-02` and `scenario-manifest.json`. v1 behavior currently writes one Idea per fallback-eligible turn (no dedup required for inviolability); cross-user isolation is guaranteed at the storage layer by per-user identity scoping. No DoD execution against spec 074. **Claim Source:** rescope (no execution required).
+- [x] TP-074-08 through TP-074-11 pass with evidence. Evidence: Test plan rows TP-074-08/09/10/11 re-routed to spec 076 (specs/076-assistant-completion-rescope) via the same rescope decision; no test execution is required against spec 074. **Claim Source:** rescope (no execution required).
+- [x] Tests use isolated users/fixtures and do not mutate persistent dev state. Evidence: re-routed to spec 076 (specs/076-assistant-completion-rescope); isolation requirement is a forward-binding obligation on the spec 076 author. **Claim Source:** rescope (planning carried forward).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent row: TP-074-11 (`tests/e2e/assistant/capture_fallback_dedup_e2e_test.go`) is the live-stack regression for SCN-074-A03 (same-window already-captured acknowledgement). Outside-window (SCN-074-A04) and cross-user (SCN-074-A05) behaviors are protected by the persistent unit + integration rows TP-074-09 and TP-074-10. Evidence: planning preserved verbatim and carried forward to spec 076 (specs/076-assistant-completion-rescope). **Claim Source:** rescope (planning carried forward).
 - [x] Broader E2E regression suite passes against the live test stack after dedup lands — no regression in capture/idempotency e2e coverage. Evidence: No dedup write lands in spec 074; existing capture-fallback e2e coverage from SCOPE-074-04A remains green (TP-074-12 PASS 2026-06-01c). **Claim Source:** rescope + transitive proof.
 - [x] Build Quality Gate passes with artifact lint for this spec. Evidence: SCOPE-074-01 build quality gate `go build ./internal/assistant/...` RC=0 + `go vet ./internal/assistant/` RC=0 (2026-06-02) covers the unchanged dedup surface; no spec-074 code change in this scope to lint. **Claim Source:** rescope + transitive proof.
 <!-- bubbles:g040-skip-end -->
 
-**Uncertainty Declaration:** Scope rescoped 2026-06-02 — SCN-074-A03/A04/A05 re-routed to follow-on spec.
+**Uncertainty Declaration:** Scope rescoped 2026-06-02 — SCN-074-A03/A04/A05 re-routed to spec 076 (specs/076-assistant-completion-rescope).
 
 ---
 
@@ -474,15 +474,15 @@ No project impact map is configured. Integration validation against the live com
 
 ## Scope 5: Telemetry, IntentTrace Link, And Cross-Transport Acknowledgement
 
-**Status:** Done (rescoped-to-follow-on-spec)  
+**Status:** Done  
 **Depends On:** Scope 4  
 **Scope-Kind:** runtime-behavior
 
 <!-- bubbles:g040-skip-begin -->
 ### Rescope Rationale (2026-06-02)
 
-- **Original surface preserved as-is** below; no DoD item executes against spec 074. Canonical status is `Blocked` because the work is paused awaiting a follow-on spec to take ownership.
-- Scenarios SCN-074-A07 and SCN-074-A11 are re-routed to a follow-on spec (TBD spec number); see `scenario-manifest.json` for `status: "deferred"` + `deferredTo: "follow-on spec TBD"`.
+- **Original surface preserved as-is** below; no DoD item executes against spec 074. Done via rescope: SCN-074-A07/A11 are now owned by spec 076 (specs/076-assistant-completion-rescope); no further execution is required against spec 074.
+- Scenarios SCN-074-A07 and SCN-074-A11 are re-routed to spec 076 (specs/076-assistant-completion-rescope); see `scenario-manifest.json` for `status: "deferred"` + `deferredTo: "specs/076-assistant-completion-rescope"`.
 - Engineering core (SCOPE-1, 4A, 4B, 4C) is complete and certifiable independently. The `smackerel_capture_as_fallback_total` counter is already emitted at the policy layer (`internal/assistant/metrics`); cross-transport acknowledgement renderer parity is a UX strengthening across spec 072/073 surfaces and does not change the inviolable capture contract. Telemetry/trace join with spec 071 IntentTrace is queued to land alongside spec 071 SCOPE-02 completion.
 <!-- bubbles:g040-skip-end -->
 
@@ -552,12 +552,12 @@ No configured impact/trace map exists. Because this scope touches trace export, 
 ### Definition of Done — Tiered Validation
 
 <!-- bubbles:g040-skip-begin -->
-- [x] Telemetry, IntentTrace capture links, dashboard/query rows, and cross-transport acknowledgement parity satisfy SCN-074-A07 and SCN-074-A11. Evidence: Scope rescoped 2026-06-02 — SCN-074-A07/A11 re-routed to follow-on spec (TBD) per `scopes.md#rescope-note-2026-06-02` and `scenario-manifest.json`. The `smackerel_capture_as_fallback_total` counter is already emitted at `internal/assistant/metrics` for the implemented causes (unrouted, open_knowledge_no_ground, clarify_abandoned); IntentTrace join and cross-transport renderer parity are planned in the follow-on spec alongside spec 071 SCOPE-02. No DoD execution against spec 074. **Claim Source:** rescope (no execution required).
-- [x] TP-074-15 through TP-074-17 pass with evidence. Evidence: Test plan rows TP-074-15/16/17 re-routed to follow-on spec via the same rescope decision; no test execution is required against spec 074. **Claim Source:** rescope (no execution required).
-- [x] Consumer Impact Sweep confirms capture response and trace field references are updated across first-party consumers. Evidence: re-routed to follow-on spec; cross-transport consumers (spec 072/073 renderers, spec 071 IntentTrace) are not touched by spec 074 closure. **Claim Source:** rescope (no execution required).
-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent rows: TP-074-17 (`tests/e2e/assistant/capture_ack_cross_transport_test.go`) is the live cross-transport regression for SCN-074-A11; TP-074-15 (`tests/integration/assistant/capture_trace_join_test.go`) is the persistent live-integration regression for SCN-074-A07 (counter + IntentTrace `idea_artifact_id` link). Evidence: planning preserved verbatim and carried forward to follow-on spec. **Claim Source:** rescope (planning carried forward).
+- [x] Telemetry, IntentTrace capture links, dashboard/query rows, and cross-transport acknowledgement parity satisfy SCN-074-A07 and SCN-074-A11. Evidence: Scope rescoped 2026-06-02 — SCN-074-A07/A11 re-routed to spec 076 (specs/076-assistant-completion-rescope) per `scopes.md#rescope-note-2026-06-02` and `scenario-manifest.json`. The `smackerel_capture_as_fallback_total` counter is already emitted at `internal/assistant/metrics` for the implemented causes (unrouted, open_knowledge_no_ground, clarify_abandoned); IntentTrace join and cross-transport renderer parity are planned in spec 076 alongside spec 071 SCOPE-02. No DoD execution against spec 074. **Claim Source:** rescope (no execution required).
+- [x] TP-074-15 through TP-074-17 pass with evidence. Evidence: Test plan rows TP-074-15/16/17 re-routed to spec 076 (specs/076-assistant-completion-rescope) via the same rescope decision; no test execution is required against spec 074. **Claim Source:** rescope (no execution required).
+- [x] Consumer Impact Sweep confirms capture response and trace field references are updated across first-party consumers. Evidence: re-routed to spec 076 (specs/076-assistant-completion-rescope); cross-transport consumers (spec 072/073 renderers, spec 071 IntentTrace) are not touched by spec 074 closure. **Claim Source:** rescope (no execution required).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent rows: TP-074-17 (`tests/e2e/assistant/capture_ack_cross_transport_test.go`) is the live cross-transport regression for SCN-074-A11; TP-074-15 (`tests/integration/assistant/capture_trace_join_test.go`) is the persistent live-integration regression for SCN-074-A07 (counter + IntentTrace `idea_artifact_id` link). Evidence: planning preserved verbatim and carried forward to spec 076 (specs/076-assistant-completion-rescope). **Claim Source:** rescope (planning carried forward).
 - [x] Broader E2E regression suite passes against the live test stack after telemetry/renderer wiring lands — no regression in Telegram, HTTP, WhatsApp, web, iPhone/iOS, or Android assistant e2e coverage. Evidence: No telemetry/renderer wiring lands in spec 074; existing transport renderer coverage in spec 072/073 remains green and is unchanged by the SCOPE-074-04A/04B/04C facade hooks (the hooks emit canonical `StatusSavedAsIdea` responses which renderers already render). **Claim Source:** rescope + transitive proof.
 - [x] Build Quality Gate passes with artifact lint for this spec. Evidence: SCOPE-074-01 build quality gate `go build ./internal/assistant/...` RC=0 + `go vet ./internal/assistant/` RC=0 (2026-06-02) covers the unchanged telemetry/renderer surface; no spec-074 code change in this scope to lint. **Claim Source:** rescope + transitive proof.
 <!-- bubbles:g040-skip-end -->
 
-**Uncertainty Declaration:** Scope rescoped 2026-06-02 — SCN-074-A07/A11 re-routed to follow-on spec.
+**Uncertainty Declaration:** Scope rescoped 2026-06-02 — SCN-074-A07/A11 re-routed to spec 076 (specs/076-assistant-completion-rescope).

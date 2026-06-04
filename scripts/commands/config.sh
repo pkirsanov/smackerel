@@ -546,6 +546,9 @@ NATS_MONITOR_PORT="$(required_value infrastructure.nats.monitor_port)"
 # Spec 046 FR-046-001 — ML sidecar reconnect contract (SST-owned).
 NATS_MAX_RECONNECT_ATTEMPTS="$(required_value infrastructure.nats.client.max_reconnect_attempts)"
 NATS_RECONNECT_TIME_WAIT_SECONDS="$(required_value infrastructure.nats.client.reconnect_time_wait_seconds)"
+# Spec 081 FR-081-001 / FR-081-002 — Python sidecar consumer contract.
+NATS_CONSUMER_MAX_DELIVER="$(required_value infrastructure.nats.consumer.max_deliver)"
+NATS_CONSUMER_ACK_WAIT_SECONDS="$(required_value infrastructure.nats.consumer.ack_wait_seconds)"
 # Spec 046 FR-046-002 — NATS server payload + JetStream storage ceilings.
 NATS_MAX_PAYLOAD_BYTES="$(required_value infrastructure.nats.max_payload_bytes)"
 NATS_MAX_FILE_STORE_BYTES="$(required_value infrastructure.nats.max_file_store_bytes)"
@@ -1603,6 +1606,8 @@ NATS_MONITOR_HOST_PORT=${NATS_MONITOR_HOST_PORT}
 NATS_VOLUME_NAME=${NATS_VOLUME_NAME}
 NATS_MAX_RECONNECT_ATTEMPTS=${NATS_MAX_RECONNECT_ATTEMPTS}
 NATS_RECONNECT_TIME_WAIT_SECONDS=${NATS_RECONNECT_TIME_WAIT_SECONDS}
+NATS_CONSUMER_MAX_DELIVER=${NATS_CONSUMER_MAX_DELIVER}
+NATS_CONSUMER_ACK_WAIT_SECONDS=${NATS_CONSUMER_ACK_WAIT_SECONDS}
 NATS_MAX_PAYLOAD_BYTES=${NATS_MAX_PAYLOAD_BYTES}
 NATS_MAX_FILE_STORE_BYTES=${NATS_MAX_FILE_STORE_BYTES}
 NATS_MAX_MEM_STORE_BYTES=${NATS_MAX_MEM_STORE_BYTES}

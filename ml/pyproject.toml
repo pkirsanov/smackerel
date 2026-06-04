@@ -49,4 +49,5 @@ select = ["E", "F", "I", "W"]
 [tool.pytest.ini_options]
 markers = [
     "live_ollama: opt-in smoke test that hits a real Ollama instance via OLLAMA_URL",
+    "integration: live-stack integration test (requires ./smackerel.sh test integration env)",
 ]

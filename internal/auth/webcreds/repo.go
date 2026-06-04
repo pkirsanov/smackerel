@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode"
@@ -163,8 +164,13 @@ func (r *PostgresRepo) VerifyAndTouch(ctx context.Context, username, password st
 		username,
 	); err != nil {
 		// Login itself succeeded; failing to bump last_login_at is a
-		// telemetry miss, not an auth failure. Return nil and log via
-		// caller observability.
+		// telemetry miss, not an auth failure. Warn (never log the
+		// username itself — use its length as a non-identifying signal)
+		// and return nil so the caller still sees a successful verify.
+		slog.Warn("webcreds: last_login_at update failed",
+			"username_len", len(username),
+			"err", err,
+		)
 		return nil
 	}
 	return nil
