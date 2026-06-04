@@ -18,6 +18,7 @@ bubbles/scripts/capability-freshness-selftest.sh
 bubbles/scripts/capability-ledger-selftest.sh
 bubbles/scripts/cheatsheet-drift-selftest.sh
 bubbles/scripts/cli.sh
+bubbles/scripts/code-search.sh
 bubbles/scripts/compaction-discipline-guard-selftest.sh
 bubbles/scripts/compaction-discipline-guard.sh
 bubbles/scripts/competitive-docs-selftest.sh
@@ -29,6 +30,7 @@ bubbles/scripts/convergence-cap-guard.sh
 bubbles/scripts/delivery-implementation-delta-guard-selftest.sh
 bubbles/scripts/delivery-implementation-delta-guard.sh
 bubbles/scripts/developer-profile.sh
+bubbles/scripts/diff-evidence-guard.sh
 bubbles/scripts/discovered-issue-disposition-guard.sh
 bubbles/scripts/docs-registry-effective.sh
 bubbles/scripts/docs-registry-resolve.sh
@@ -39,6 +41,7 @@ bubbles/scripts/edit-lint-gate-selftest.sh
 bubbles/scripts/edit-lint-gate.sh
 bubbles/scripts/env-pollution-scan-selftest.sh
 bubbles/scripts/env-pollution-scan.sh
+bubbles/scripts/evidence-tool-log-bridge.sh
 bubbles/scripts/finding-closure-selftest.sh
 bubbles/scripts/framework-dogfood-guard-selftest.sh
 bubbles/scripts/framework-dogfood-guard.sh
@@ -46,6 +49,7 @@ bubbles/scripts/framework-validate.sh
 bubbles/scripts/fun-mode.sh
 bubbles/scripts/gate-id-grep-selftest.sh
 bubbles/scripts/gate-id-grep.sh
+bubbles/scripts/gate-meta.sh
 bubbles/scripts/generate-capability-ledger-docs.sh
 bubbles/scripts/generate-framework-stats.sh
 bubbles/scripts/generate-release-manifest.sh
@@ -71,6 +75,7 @@ bubbles/scripts/interop-registry.sh
 bubbles/scripts/is-terminal-for-mode.sh
 bubbles/scripts/mode-resolver-selftest.sh
 bubbles/scripts/mode-resolver.sh
+bubbles/scripts/model-tier-advisory.sh
 bubbles/scripts/observability-adapter-lint-selftest.sh
 bubbles/scripts/observability-adapter-lint.sh
 bubbles/scripts/orchestrator-persistence-lint-selftest.sh
@@ -129,6 +134,8 @@ bubbles/scripts/strict-terminal-status-guard.sh
 bubbles/scripts/super-surface-selftest.sh
 bubbles/scripts/test-impact-plan-selftest.sh
 bubbles/scripts/test-impact-plan.sh
+bubbles/scripts/tool-log-selftest.sh
+bubbles/scripts/tool-log.sh
 bubbles/scripts/trace-contract-guard-selftest.sh
 bubbles/scripts/trace-contract-guard.sh
 bubbles/scripts/traceability-guard-selftest.sh
@@ -153,6 +160,10 @@ bubbles/adapters/observability/none.sh
 bubbles/adapters/observability/prometheus.sh
 bubbles/schemas/adoption-profiles.schema.json
 bubbles/schemas/capability-ledger.schema.json
+bubbles/schemas/propagation-policy.schema.json
+bubbles/schemas/result-envelope.schema.json
+bubbles/schemas/scenario-manifest.schema.json
+bubbles/schemas/tool-call.schema.json
 bubbles/schemas/workflows.schema.json
 bubbles/scripts/hooks/pre-push.sh
 templates/AGENTS.md.tmpl
