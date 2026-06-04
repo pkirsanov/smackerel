@@ -3,7 +3,8 @@
   "featureDir": "specs/073-web-mobile-assistant-frontend",
   "featureNumber": "073",
   "featureName": "Web/Mobile Assistant Frontend Client",
-  "status": "specs_hardened",
+  "status": "done",
+  "certifiedAt": "2026-06-04T05:20:00Z",
   "workflowMode": "improve-existing",
   "statusCeiling": "done",
   "statusCeilingRationale": "Lifted 2026-06-04 from specs_hardened to done. Upstream blockers cleared: spec 080 (knowledge graph public API) and spec 027 Scope 9 (annotation editing API) both done.",
@@ -35,8 +36,8 @@
     "validation": { "mode": "certification-required", "source": "repo-default" }
   },
   "certification": {
-    "status": "specs_hardened",
-    "completedAt": "2026-06-04T04:46:10Z",
+    "status": "done",
+    "completedAt": "2026-06-04T05:20:00Z",
     "evidenceRef": "report.md#code-diff-evidence",
     "completedScopes": [
       "SCOPE-073-01",
@@ -95,11 +96,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.chaos",
-    "currentPhase": "chaos",
-    "currentScope": "SCOPE-073-04",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "finalize",
+    "currentScope": "SCOPE-073-05",
     "runStartedAt": "2026-06-01T21:30:00Z",
-    "lastUpdatedAt": "2026-06-04T04:46:10Z",
+    "lastUpdatedAt": "2026-06-04T05:20:00Z",
     "completedPhaseClaims": [
       "analyze",
       "design",
@@ -395,6 +396,17 @@
         "runStartedAt": "2026-06-04T05:00:00Z",
         "runEndedAt": "2026-06-04T05:10:00Z",
         "summary": "Post-implementation spec freshness review for improve-existing workflow: spec.md (## Knowledge Graph Browse Surface), design.md (## Graph Browse UI Architecture), and scopes.md (Scope 5) all match shipped implementation under web/pwa/wiki*; SCN-073-B01..B06 trace from spec.md through DoD to e2e tests in tests/e2e/wiki/. Trust classification: trusted."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "statusBefore": "specs_hardened",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-04T05:15:00Z",
+        "runEndedAt": "2026-06-04T05:20:00Z",
+        "recordedAt": "2026-06-04T05:20:00Z",
+        "summary": "Final certification; specs_hardened \u2192 done. All 60 governance findings resolved across 3 plan rounds + 1 implement round. Scope 5 shipped. Pre-existing CommonJS canary regression fixed."
       }
     ]
   }
