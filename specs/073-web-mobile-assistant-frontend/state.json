@@ -36,7 +36,7 @@
   },
   "certification": {
     "status": "specs_hardened",
-    "completedAt": "2026-06-02T07:30:00Z",
+    "completedAt": "2026-06-04T04:46:10Z",
     "evidenceRef": "report.md#code-diff-evidence",
     "completedScopes": [
       "SCOPE-073-01",
@@ -60,7 +60,8 @@
       "audit",
       "chaos",
       "harden",
-      "gaps"
+      "gaps",
+      "spec-review"
     ],
     "scopeProgress": {
       "SCOPE-073-01": {"status": "done", "dodChecked": 10, "dodTotal": 10, "evidenceRef": "report.md#scope-073-01-scope-1-row-verification-bubblesimplement-2026-06-01"},
@@ -98,7 +99,7 @@
     "currentPhase": "chaos",
     "currentScope": "SCOPE-073-04",
     "runStartedAt": "2026-06-01T21:30:00Z",
-    "lastUpdatedAt": "2026-06-02T07:30:00Z",
+    "lastUpdatedAt": "2026-06-04T04:46:10Z",
     "completedPhaseClaims": [
       "analyze",
       "design",
@@ -114,7 +115,8 @@
       "audit",
       "chaos",
       "harden",
-      "gaps"
+      "gaps",
+      "spec-review"
     ],
     "completedScopes": [
       "SCOPE-073-01",
@@ -382,6 +384,17 @@
         "runStartedAt": "2026-06-04T01:05:00Z",
         "runEndedAt": "2026-06-04T01:05:00Z",
         "summary": "Gaps coverage executed implicitly via Scope 5 upstream-blocker enumeration and bubbles.implement gap-fill passes; recorded under parent-expansion per Gate G022."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "provenanceMode": "specialist",
+        "expansionEvidenceRef": "report.md#spec-review--2026-06-04",
+        "statusBefore": "specs_hardened",
+        "statusAfter": "specs_hardened",
+        "runStartedAt": "2026-06-04T05:00:00Z",
+        "runEndedAt": "2026-06-04T05:10:00Z",
+        "summary": "Post-implementation spec freshness review for improve-existing workflow: spec.md (## Knowledge Graph Browse Surface), design.md (## Graph Browse UI Architecture), and scopes.md (Scope 5) all match shipped implementation under web/pwa/wiki*; SCN-073-B01..B06 trace from spec.md through DoD to e2e tests in tests/e2e/wiki/. Trust classification: trusted."
       }
     ]
   }
