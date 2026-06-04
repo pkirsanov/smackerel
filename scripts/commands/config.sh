@@ -835,6 +835,34 @@ EXTENSION_INGEST_DEFAULT_DEDUP_WINDOW_SECONDS="$(required_value extension.ingest
 EXTENSION_INGEST_ACCEPTED_CONTENT_TYPES="$(required_json_value extension.ingest.accepted_content_types)"
 EXTENSION_INGEST_REQUIRED_TOKEN_SCOPE="$(required_value extension.ingest.required_token_scope)"
 
+# Knowledge Graph Public API (spec 080 SCOPE-080-01 SST-owned; no generator defaults)
+KNOWLEDGE_GRAPH_API_LIST_DEFAULT_LIMIT="$(required_value knowledge_graph_api.list_default_limit)"
+KNOWLEDGE_GRAPH_API_LIST_MAX_LIMIT="$(required_value knowledge_graph_api.list_max_limit)"
+KNOWLEDGE_GRAPH_API_TIME_WINDOW_MAX_DAYS="$(required_value knowledge_graph_api.time_window_max_days)"
+KNOWLEDGE_GRAPH_API_EDGES_DEFAULT_LIMIT="$(required_value knowledge_graph_api.edges_default_limit)"
+KNOWLEDGE_GRAPH_API_EDGES_MAX_LIMIT="$(required_value knowledge_graph_api.edges_max_limit)"
+KNOWLEDGE_GRAPH_API_CURSOR_SECRET_ENV="$(required_value knowledge_graph_api.cursor_secret_env)"
+
+# Spec 080 SCOPE-080-02 — auto-generate the cursor HMAC secret for
+# dev/test envs when it is not yet present in the environment. Prod
+# operators inject the real secret via the spec 052 secret path; the
+# generator never invents one for prod. Mirrors the SMACKEREL_AUTH_TOKEN
+# dev/test ergonomic above (reuse existing value across regens; mint a
+# fresh one only when no existing value is found).
+KNOWLEDGE_GRAPH_API_CURSOR_SECRET="${KNOWLEDGE_GRAPH_API_CURSOR_SECRET:-}"
+if [[ ( "$TARGET_ENV" == "test" || "$TARGET_ENV" == "dev" ) && -z "$KNOWLEDGE_GRAPH_API_CURSOR_SECRET" ]]; then
+  EXISTING_ENV_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
+  EXISTING_SECRET=""
+  if [[ -f "$EXISTING_ENV_FILE" ]]; then
+    EXISTING_SECRET="$(awk -F= '/^KNOWLEDGE_GRAPH_API_CURSOR_SECRET=/ { sub(/^KNOWLEDGE_GRAPH_API_CURSOR_SECRET=/, ""); print; exit }' "$EXISTING_ENV_FILE" 2>/dev/null || true)"
+  fi
+  if [[ -n "$EXISTING_SECRET" ]]; then
+    KNOWLEDGE_GRAPH_API_CURSOR_SECRET="$EXISTING_SECRET"
+  else
+    KNOWLEDGE_GRAPH_API_CURSOR_SECRET="$(openssl rand -hex 32 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(32))')"
+  fi
+fi
+
 # Unified surfacing controller (spec 021 Scope 4 SST-owned; no generator defaults)
 SURFACING_DAILY_NUDGE_BUDGET="$(required_value surfacing.daily_nudge_budget)"
 SURFACING_SUPPRESSION_WINDOW_HOURS="$(required_value surfacing.suppression_window_hours)"
@@ -1705,6 +1733,13 @@ EXTENSION_INGEST_MAX_BODY_BYTES=${EXTENSION_INGEST_MAX_BODY_BYTES}
 EXTENSION_INGEST_DEFAULT_DEDUP_WINDOW_SECONDS=${EXTENSION_INGEST_DEFAULT_DEDUP_WINDOW_SECONDS}
 EXTENSION_INGEST_ACCEPTED_CONTENT_TYPES=${EXTENSION_INGEST_ACCEPTED_CONTENT_TYPES}
 EXTENSION_INGEST_REQUIRED_TOKEN_SCOPE=${EXTENSION_INGEST_REQUIRED_TOKEN_SCOPE}
+KNOWLEDGE_GRAPH_API_LIST_DEFAULT_LIMIT=${KNOWLEDGE_GRAPH_API_LIST_DEFAULT_LIMIT}
+KNOWLEDGE_GRAPH_API_LIST_MAX_LIMIT=${KNOWLEDGE_GRAPH_API_LIST_MAX_LIMIT}
+KNOWLEDGE_GRAPH_API_TIME_WINDOW_MAX_DAYS=${KNOWLEDGE_GRAPH_API_TIME_WINDOW_MAX_DAYS}
+KNOWLEDGE_GRAPH_API_EDGES_DEFAULT_LIMIT=${KNOWLEDGE_GRAPH_API_EDGES_DEFAULT_LIMIT}
+KNOWLEDGE_GRAPH_API_EDGES_MAX_LIMIT=${KNOWLEDGE_GRAPH_API_EDGES_MAX_LIMIT}
+KNOWLEDGE_GRAPH_API_CURSOR_SECRET_ENV=${KNOWLEDGE_GRAPH_API_CURSOR_SECRET_ENV}
+KNOWLEDGE_GRAPH_API_CURSOR_SECRET=${KNOWLEDGE_GRAPH_API_CURSOR_SECRET}
 SURFACING_DAILY_NUDGE_BUDGET=${SURFACING_DAILY_NUDGE_BUDGET}
 SURFACING_SUPPRESSION_WINDOW_HOURS=${SURFACING_SUPPRESSION_WINDOW_HOURS}
 SURFACING_DEDUPE_WINDOW_HOURS=${SURFACING_DEDUPE_WINDOW_HOURS}

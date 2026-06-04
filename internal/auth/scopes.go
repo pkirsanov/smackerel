@@ -18,10 +18,12 @@ import (
 // ScopeNameRegex is the wire-format validator for individual scope
 // strings. The form `<surface>:<capabilities>` is the spec 060
 // invariant; the surface must start with a lowercase letter and
-// contain only lowercase alphanumerics; the capability tail accepts
-// lowercase alphanumerics plus `,`, `_`, and `-` (the `,` supports
-// the comma-separated capability list `bookmarks,history`).
-var ScopeNameRegex = regexp.MustCompile(`^[a-z][a-z0-9]*:[a-z0-9,_-]+$`)
+// contain lowercase alphanumerics plus `-` (the hyphen supports
+// multi-word surfaces such as `knowledge-graph` introduced by spec
+// 080 SCOPE-080-01); the capability tail accepts lowercase
+// alphanumerics plus `,`, `_`, and `-` (the `,` supports the
+// comma-separated capability list `bookmarks,history`).
+var ScopeNameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9,_-]+$`)
 
 // RegisteredScopeSurfaces is the closed-set allowlist of scope
 // surfaces accepted by `ValidateScopeName` without the
@@ -31,8 +33,10 @@ var ScopeNameRegex = regexp.MustCompile(`^[a-z][a-z0-9]*:[a-z0-9,_-]+$`)
 //
 // Spec 060 scope 1 — initial entry is `extension` (consumed by spec
 // 058 OQ-DSN-1). Spec 027 scope 9 adds `annotation` (consumed by the
-// spec 073 graph-browse UI; annotation:edit, annotation:read).
-var RegisteredScopeSurfaces = []string{"extension", "annotation"}
+// spec 073 graph-browse UI; annotation:edit, annotation:read). Spec
+// 080 SCOPE-080-01 adds `knowledge-graph` (consumed by the 8
+// read-only Knowledge Graph Public API endpoints; knowledge-graph:read).
+var RegisteredScopeSurfaces = []string{"extension", "annotation", "knowledge-graph"}
 
 // ValidateScopeName returns nil when `scope` matches `ScopeNameRegex`
 // and a non-nil error otherwise. The error wraps the offending value

@@ -1,0 +1,159 @@
+{
+  "version": 2,
+  "specId": "080",
+  "featureDir": "specs/080-knowledge-graph-public-api",
+  "generatedBy": "bubbles.analyst bootstrap",
+  "generatedAt": "2026-06-03T22:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-080-01",
+      "name": "List topics returns counts and pagination cursor",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-02",
+      "name": "Topic detail returns explainable cross-links",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-03",
+      "name": "List people derived from intelligence layer",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-04",
+      "name": "Person detail returns timeline and related rows",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-05",
+      "name": "List places merges maps-connector and artifact-derived",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-06",
+      "name": "Place detail returns location and linked artifacts",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-07",
+      "name": "Time window groups artifacts by day",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-08",
+      "name": "Graph edges return explainable cross-links",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-09",
+      "name": "Missing bearer token returns 401",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-10",
+      "name": "Bearer without knowledge-graph:read scope returns 403",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-11",
+      "name": "Malformed cursor returns 400",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-12",
+      "name": "Time window over 365 days returns 400",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-13",
+      "name": "Time window with missing \"to\" returns 400",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-14",
+      "name": "Unknown source kind on /api/graph/edges returns 400",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    },
+    {
+      "scenarioId": "SCN-080-15",
+      "name": "Limit above configured max is rejected",
+      "scope": null,
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [],
+      "evidenceRefs": [{ "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }],
+      "linkedDoD": []
+    }
+  ]
+}

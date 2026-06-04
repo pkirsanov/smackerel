@@ -282,6 +282,13 @@ type Config struct {
 	// SURFACING_* env vars; fail-loud SST per smackerel-no-defaults.
 	Surfacing SurfacingConfig
 
+	// Spec 080 SCOPE-080-01 — Knowledge Graph Public API SST envelope.
+	// Sourced from `knowledge_graph_api.*` in config/smackerel.yaml
+	// via KNOWLEDGE_GRAPH_API_* env vars; fail-loud SST per
+	// smackerel-no-defaults. Consumed by internal/api/graphapi at
+	// handler-mount time (scopes 02-04).
+	KnowledgeGraphAPI KnowledgeGraphAPIConfig
+
 	// BUG-020-008 — fail-loud int env parsing. Populated by Load() after
 	// the cfg literal initializes; each entry is the error string produced
 	// by mustParseIntEnv for one of the 8 SST-required int env vars
@@ -953,6 +960,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Surfacing = surfacingCfg
+
+	knowledgeGraphAPICfg, err := loadKnowledgeGraphAPIConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.KnowledgeGraphAPI = knowledgeGraphAPICfg
 
 	recommendationsCfg, err := loadRecommendationsConfig()
 	if err != nil {

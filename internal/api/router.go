@@ -114,6 +114,58 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Get("/internal/telegram-message-artifact", deps.AnnotationHandlers.ResolveTelegramMessageArtifact)
 			}
 
+			// Spec 080 SCOPE-080-02 — Knowledge Graph Public API
+			// topics + people endpoints. Mirror the spec 027 scope 9
+			// annotation pattern: per-user bearer auth (outer
+			// bearerAuthMiddleware) AND the `knowledge-graph:read`
+			// scope claim. Shared-token / bootstrap sessions bypass
+			// the scope check per RequireScope's source switch.
+			if deps.TopicsHandlers != nil || deps.PeopleHandlers != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(auth.RequireScope("knowledge-graph:read"))
+					if deps.TopicsHandlers != nil {
+						r.Route("/topics", func(r chi.Router) {
+							r.Get("/", deps.TopicsHandlers.ListTopics)
+							r.Get("/{id}", deps.TopicsHandlers.GetTopic)
+						})
+					}
+					if deps.PeopleHandlers != nil {
+						r.Route("/people", func(r chi.Router) {
+							r.Get("/", deps.PeopleHandlers.ListPeople)
+							r.Get("/{id}", deps.PeopleHandlers.GetPerson)
+						})
+					}
+				})
+			}
+
+			// Spec 080 SCOPE-080-03 — places + time endpoints. Same
+			// per-user bearer + scope claim pattern as scope 02.
+			if deps.PlacesHandlers != nil || deps.TimeHandlers != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(auth.RequireScope("knowledge-graph:read"))
+					if deps.PlacesHandlers != nil {
+						r.Route("/places", func(r chi.Router) {
+							r.Get("/", deps.PlacesHandlers.ListPlaces)
+							r.Get("/{id}", deps.PlacesHandlers.GetPlace)
+						})
+					}
+					if deps.TimeHandlers != nil {
+						r.Get("/time", deps.TimeHandlers.GetTime)
+					}
+				})
+			}
+
+			// Spec 080 SCOPE-080-04 — graph edges handler.
+			// GET /api/graph/edges?source=kind:id behind the same
+			// per-user bearer + knowledge-graph:read scope claim as
+			// scopes 02/03.
+			if deps.EdgesHandlers != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(auth.RequireScope("knowledge-graph:read"))
+					r.Get("/graph/edges", deps.EdgesHandlers.ListEdges)
+				})
+			}
+
 			// Knowledge layer endpoints (Scope 3)
 			r.Route("/knowledge", func(r chi.Router) {
 				r.Get("/concepts", deps.KnowledgeConceptsHandler)

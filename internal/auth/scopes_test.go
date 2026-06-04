@@ -64,6 +64,22 @@ func TestRegisteredScopeSurfaces_ContainsAnnotation(t *testing.T) {
 	}
 }
 
+// Spec 080 SCOPE-080-01 — the `knowledge-graph` scope surface must be
+// registered so the spec 060 RequireScope middleware accepts the
+// `knowledge-graph:read` claim that gates the 8 Knowledge Graph
+// Public API endpoints (SCN-080-09 / SCN-080-10).
+func TestRegisteredScopeSurfaces_ContainsKnowledgeGraph(t *testing.T) {
+	if !slices.Contains(RegisteredScopeSurfaces, "knowledge-graph") {
+		t.Fatalf("RegisteredScopeSurfaces missing 'knowledge-graph' (spec 080 SCOPE-080-01): %v", RegisteredScopeSurfaces)
+	}
+	if !IsRegisteredScopeSurface("knowledge-graph") {
+		t.Errorf("IsRegisteredScopeSurface('knowledge-graph') = false; expected true")
+	}
+	if err := ValidateScopeName("knowledge-graph:read"); err != nil {
+		t.Errorf("ValidateScopeName(%q) unexpected err: %v", "knowledge-graph:read", err)
+	}
+}
+
 func TestExtractScopeSurface(t *testing.T) {
 	cases := map[string]string{
 		"extension:bookmarks,history": "extension",

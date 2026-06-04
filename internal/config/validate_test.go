@@ -964,6 +964,13 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("SURFACING_SUPPRESSION_WINDOW_HOURS", "4")
 	t.Setenv("SURFACING_DEDUPE_WINDOW_HOURS", "6")
 	t.Setenv("SURFACING_URGENT_ESCALATION_ENABLED", "true")
+	// Spec 080 SCOPE-080-01 — knowledge_graph_api.* SST keys.
+	t.Setenv("KNOWLEDGE_GRAPH_API_LIST_DEFAULT_LIMIT", "50")
+	t.Setenv("KNOWLEDGE_GRAPH_API_LIST_MAX_LIMIT", "200")
+	t.Setenv("KNOWLEDGE_GRAPH_API_TIME_WINDOW_MAX_DAYS", "365")
+	t.Setenv("KNOWLEDGE_GRAPH_API_EDGES_DEFAULT_LIMIT", "100")
+	t.Setenv("KNOWLEDGE_GRAPH_API_EDGES_MAX_LIMIT", "500")
+	t.Setenv("KNOWLEDGE_GRAPH_API_CURSOR_SECRET_ENV", "KNOWLEDGE_GRAPH_API_CURSOR_SECRET")
 
 	// Spec 064 SCOPE-03 — open-ended knowledge agent SST baselines.
 	// Defaults mirror config/smackerel.yaml (enabled=false ships) so
