@@ -1,6 +1,6 @@
 # BUG-073-UPSTREAM-API-GAP: Spec 073 Scope 5 blocked by missing backend JSON APIs
 
-**Status:** Open
+**Status:** Resolved — Upstream resolution shipped: spec 080 (commit 98c16290) + spec 027 Scope 9 (commit e6ccdb2a). Both upstream specs certified done.
 **Severity:** Blocker (Scope 5 cannot proceed in-repo)
 **Reported:** 2026-06-03
 **Reporter:** bubbles.plan (via owner directive)
