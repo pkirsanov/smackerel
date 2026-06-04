@@ -14,6 +14,7 @@ import (
 	"github.com/smackerel/smackerel/internal/api"
 	extensiondevices "github.com/smackerel/smackerel/internal/api/admin/extensiondevices"
 	extensioningest "github.com/smackerel/smackerel/internal/api/connectors/extension"
+	"github.com/smackerel/smackerel/internal/api/graphapi"
 	"github.com/smackerel/smackerel/internal/assistant/capturefallback"
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
@@ -345,6 +346,31 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 	deps.AnnotationHandlers = &api.AnnotationHandlers{
 		Store:       annotationStore,
 		Environment: cfg.Environment,
+	}
+
+	// Spec 080 SCOPE-080-02 — wire Knowledge Graph Public API
+	// topics + people handlers. LoadConfig reads the
+	// KNOWLEDGE_GRAPH_API_* env vars (SCOPE-080-01 SST envelope);
+	// LoadCursorSecret resolves the operator-injected HMAC secret.
+	// If either fails (e.g. the cursor secret env var is not set on
+	// this deployment), we log a warning and leave the handlers nil
+	// so the router skips mounting /api/topics + /api/people; that
+	// keeps unrelated services unaffected when the secret is
+	// genuinely absent in the operator's bundle.
+	if gaCfg, err := graphapi.LoadConfig(); err != nil {
+		slog.Warn("graphapi config load failed; /api/topics + /api/people will not be mounted", "error", err)
+	} else if secret, err := gaCfg.LoadCursorSecret(); err != nil {
+		slog.Warn("graphapi cursor secret unavailable; /api/topics + /api/people will not be mounted", "error", err)
+	} else if codec, err := graphapi.NewCursorCodec(secret); err != nil {
+		slog.Warn("graphapi cursor codec construction failed; /api/topics + /api/people will not be mounted", "error", err)
+	} else {
+		limits := gaCfg.Limits()
+		deps.TopicsHandlers = graphapi.NewTopicsHandlers(svc.pg.Pool, limits, codec)
+		deps.PeopleHandlers = graphapi.NewPeopleHandlers(svc.pg.Pool, limits, codec)
+		deps.PlacesHandlers = graphapi.NewPlacesHandlers(svc.pg.Pool, limits, codec)
+		deps.TimeHandlers = graphapi.NewTimeHandlers(svc.pg.Pool, limits)
+		deps.EdgesHandlers = graphapi.NewEdgesHandlers(svc.pg.Pool, limits, codec)
+		slog.Info("graphapi handlers wired", "list_default", limits.ListDefault, "list_max", limits.ListMax)
 	}
 
 	// Spec 044 Scope 02 — wire the per-user bearer-auth subsystem.

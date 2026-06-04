@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/api/graphapi"
 	"github.com/smackerel/smackerel/internal/assistant/capturefallback"
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
@@ -280,6 +281,21 @@ type Dependencies struct {
 	// Source: runtime.trusted_proxies in smackerel.yaml via
 	// RUNTIME_TRUSTED_PROXIES (comma-separated CIDRs).
 	TrustedProxies []string
+
+	// Spec 080 SCOPE-080-02 — Knowledge Graph Public API handlers.
+	// nil when the graphapi cursor secret is not provisioned (the
+	// router mounts the routes only when both are non-nil).
+	TopicsHandlers *graphapi.TopicsHandlers
+	PeopleHandlers *graphapi.PeopleHandlers
+	// Spec 080 SCOPE-080-03 — places + time handlers. Nil when the
+	// graphapi cursor secret / config is not provisioned (router
+	// mounts the routes only when non-nil).
+	PlacesHandlers *graphapi.PlacesHandlers
+	TimeHandlers   *graphapi.TimeHandlers
+	// Spec 080 SCOPE-080-04 — graph edges handler. Nil when the
+	// graphapi cursor secret / config is not provisioned (router
+	// mounts /api/graph/edges only when non-nil).
+	EdgesHandlers *graphapi.EdgesHandlers
 }
 
 // DBHealthChecker is the interface for database health checks.
