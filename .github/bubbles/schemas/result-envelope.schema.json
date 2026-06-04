@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pkirsanov/bubbles/schemas/result-envelope.schema.json",
+  "title": "Bubbles agent RESULT-ENVELOPE (machine-readable, v5.1 / M3)",
+  "description": "Structured form of the markdown RESULT-ENVELOPE every Bubbles agent emits. Workflow agent parses the JSON instead of grepping prose. Markdown envelope MUST still be emitted alongside for human readability — JSON envelope is additive, not a replacement.",
+  "type": "object",
+  "required": ["agent", "outcome"],
+  "additionalProperties": false,
+  "properties": {
+    "agent": {
+      "type": "string",
+      "pattern": "^bubbles\\.[a-z][a-z0-9-]*$",
+      "description": "Fully-qualified agent name. Example: 'bubbles.implement'."
+    },
+    "spec": {
+      "type": "string",
+      "description": "Spec slug (e.g. '042-foo'). Empty for framework-level invocations."
+    },
+    "scope": {
+      "type": "string",
+      "description": "Scope identifier within the spec."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "completed_owned",
+        "completed_diagnostic",
+        "route_required",
+        "blocked"
+      ],
+      "description": "One of the four canonical outcomes from Gate G063 (concrete_result_gate)."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-sentence human-readable summary."
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "References to evidence: report.md anchors, tool-log session ids, file paths, commit SHAs."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "owner", "summary"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "severity": { "type": "string", "enum": ["info", "warn", "blocker"] },
+          "owner": {
+            "type": "string",
+            "description": "Agent name responsible for closing this finding."
+          },
+          "summary": { "type": "string", "minLength": 1 },
+          "scopeRef": { "type": "string" },
+          "dodRef": { "type": "string" },
+          "scenarioRef": { "type": "string" }
+        }
+      }
+    },
+    "addressedFindings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "IDs from a prior packet's findings[] that this invocation closed."
+    },
+    "unresolvedFindings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "IDs from a prior packet's findings[] that this invocation could not close. MUST be empty when outcome=completed_owned."
+    },
+    "nextOwner": {
+      "type": "string",
+      "description": "Required when outcome=route_required. Agent name expected to act next."
+    },
+    "blocker": {
+      "type": "object",
+      "required": ["reason"],
+      "additionalProperties": true,
+      "properties": {
+        "reason": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string" },
+        "missingInput": { "type": "string" }
+      },
+      "description": "Required when outcome=blocked. Describes concretely what prevents progress."
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "target": { "type": "string" },
+        "intent": { "type": "string" },
+        "preferredWorkflowMode": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string" }
+      },
+      "description": "Optional continuation envelope for advisory/read-only surfaces."
+    },
+    "toolCalls": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Session ids from tool-calls.jsonl that prove this invocation's claims. Read by v5.2 evidence gate."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "route_required" } } },
+      "then": { "required": ["nextOwner"] }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "blocked" } } },
+      "then": { "required": ["blocker"] }
+    }
+  ]
+}

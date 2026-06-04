@@ -39,18 +39,23 @@ from jsonschema.exceptions import SchemaError
 repo_root = Path(sys.argv[1])
 schemas_dir = Path(sys.argv[2])
 
+# (yaml_path_rel, schema_filename, optional)
 pairs = [
-    ("bubbles/workflows.yaml", "workflows.schema.json"),
-    ("bubbles/capability-ledger.yaml", "capability-ledger.schema.json"),
-    ("bubbles/adoption-profiles.yaml", "adoption-profiles.schema.json"),
+    ("bubbles/workflows.yaml", "workflows.schema.json", False),
+    ("bubbles/capability-ledger.yaml", "capability-ledger.schema.json", False),
+    ("bubbles/adoption-profiles.yaml", "adoption-profiles.schema.json", False),
+    # v5.1 / M9 additions — present only when project uses these surfaces.
+    ("propagation-policy.yaml", "propagation-policy.schema.json", True),
+    ("config/propagation-policy.yaml", "propagation-policy.schema.json", True),
 ]
 
 failures = 0
-for yaml_rel, schema_name in pairs:
+for yaml_rel, schema_name, optional in pairs:
     yaml_path = repo_root / yaml_rel
     schema_path = schemas_dir / schema_name
     if not yaml_path.exists():
-        print(f"yaml-schema-validate: SKIP  {yaml_rel} (not present)")
+        if not optional:
+            print(f"yaml-schema-validate: SKIP  {yaml_rel} (not present)")
         continue
     if not schema_path.exists():
         print(f"yaml-schema-validate: SKIP  {yaml_rel} (no schema at {schema_path})")
@@ -81,6 +86,37 @@ for yaml_rel, schema_name in pairs:
         failures += 1
         continue
     print(f"yaml-schema-validate: PASS  {yaml_rel}")
+
+# v5.1 / M9: scenario-manifest.json — repo-wide scan under specs/**.
+scenario_schema = schemas_dir / "scenario-manifest.schema.json"
+if scenario_schema.exists():
+    with open(scenario_schema) as f:
+        schema = json.load(f)
+    validator = Draft7Validator(schema)
+    found = 0
+    failed_here = 0
+    for manifest in repo_root.glob("specs/*/scenario-manifest.json"):
+        found += 1
+        try:
+            with open(manifest) as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"yaml-schema-validate: FAIL  {manifest.relative_to(repo_root)} — JSON parse error: {e}")
+            failures += 1
+            failed_here += 1
+            continue
+        errs = list(validator.iter_errors(data))
+        if errs:
+            print(f"yaml-schema-validate: FAIL  {manifest.relative_to(repo_root)} — {len(errs)} validation error(s)")
+            for e in errs[:10]:
+                loc = "/".join(str(p) for p in e.absolute_path) or "<root>"
+                print(f"  {loc}: {e.message[:200]}")
+            failures += 1
+            failed_here += 1
+    if found and not failed_here:
+        print(f"yaml-schema-validate: PASS  specs/*/scenario-manifest.json ({found} file(s))")
+    elif not found:
+        print("yaml-schema-validate: SKIP  specs/*/scenario-manifest.json (none present)")
 
 if failures:
     sys.exit(1)

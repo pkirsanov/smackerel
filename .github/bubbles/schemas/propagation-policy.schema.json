@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pkirsanov/bubbles/schemas/propagation-policy.schema.json",
+  "title": "Bubbles propagation-policy.yaml (v5.1 / M9)",
+  "description": "Cross-train propagation policy. Lives at repo root or under config/. Owned by bubbles.propagate (J-Roc). Enforced by Gates G121/G122/G123.",
+  "type": "object",
+  "required": ["version", "trains", "defaultFlow", "backportRequiresApproval"],
+  "additionalProperties": true,
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "trains": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "defaultFlow": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "receivingTrainValidationMode"],
+        "additionalProperties": true,
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "receivingTrainValidationMode": {
+            "type": "string",
+            "enum": ["full", "scoped", "none"],
+            "description": "Validation level required on the receiving train after propagation."
+          },
+          "validationSkipReason": {
+            "type": "string",
+            "description": "Required when receivingTrainValidationMode=none."
+          }
+        }
+      }
+    },
+    "backportRequiresApproval": {
+      "type": "boolean",
+      "description": "When true, reverse-edge propagation (backport) requires explicit approvalToken from receiving train owner."
+    },
+    "ledgerPath": {
+      "type": "string",
+      "description": "Relative path to the propagation-ledger.yaml/jsonl. Default: 'propagation-ledger.yaml'."
+    }
+  }
+}

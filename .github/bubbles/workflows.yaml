@@ -943,6 +943,30 @@ modeDefaults:
     enableMicroFixLoops: true
     inheritedRequiredGates: [ G036, G037, G038, G040, G042, G047, G048, G051, G052, G053, G063, G064, G066, G074, G075, G076, G077, G079, G080, G081, G093 ]
 
+  # v5.1 (M7): model-tier floor advisory. Per-phase minimum model capability
+  # the host client should report via BUBBLES_ACTIVE_MODEL. Advisory only in
+  # v5.1 (warning); v6 S9 promotes to blocking. Operators may override per
+  # mode under modes.<name>.modelFloor.<phase>.
+  #
+  # Tiers (low → high): haiku-class < sonnet-class < opus-class.
+  # Defaults are intentionally conservative: planning/audit/design/security
+  # phases get sonnet-class floor; mechanical phases (test runners,
+  # report-only) have no floor.
+  modelFloor:
+    default: ""
+    analyze: sonnet-class
+    design: sonnet-class
+    plan: sonnet-class
+    implement: sonnet-class
+    test: ""
+    validate: sonnet-class
+    audit: sonnet-class
+    security: opus-class
+    chaos: sonnet-class
+    review: sonnet-class
+    retro: sonnet-class
+    spec-review: sonnet-class
+
 # Batch Execution Parameter (NON-NEGOTIABLE)
 #
 # `batch: true|false` is a UNIVERSAL parameter for delivery modes.

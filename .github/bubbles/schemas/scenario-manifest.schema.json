@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pkirsanov/bubbles/schemas/scenario-manifest.schema.json",
+  "title": "Bubbles scenario-manifest.json (v5.1 / M9)",
+  "description": "Per-spec scenario-contract manifest. Lives at specs/<feature>/scenario-manifest.json. Records every Gherkin scenario with required-test-type, linked tests, evidence references, and lockdown status. Read by state-transition-guard.sh Check 3C (Gate G057).",
+  "type": "object",
+  "required": ["schemaVersion", "scenarios"],
+  "additionalProperties": true,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "spec": { "type": "string" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "requiredTestType"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^SCN-[A-Z0-9]+-[0-9]+$",
+            "description": "Stable scenario identifier (e.g. SCN-042-001). Persists across reword/renumber."
+          },
+          "title": { "type": "string", "minLength": 1 },
+          "requiredTestType": {
+            "type": "string",
+            "enum": ["unit", "functional", "integration", "ui-unit", "e2e-api", "e2e-ui", "stress", "load"],
+            "description": "Canonical test taxonomy classification — see agent-common.md."
+          },
+          "scopeRef": { "type": "string" },
+          "linkedTests": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Paths or test identifiers proving this scenario."
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "report.md anchors or tool-log session ids with raw output."
+          },
+          "lockdown": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "state": { "type": "string", "enum": ["unlocked", "locked", "invalidated", "replaced"] },
+              "approvedBy": { "type": "string" },
+              "approvedAt": { "type": "string", "format": "date-time" },
+              "replacedBy": { "type": "string" }
+            }
+          },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}
