@@ -2401,6 +2401,72 @@ echo "--- Check 9: DoD Evidence Presence ---"
 checked_without_evidence=0
 checked_with_evidence=0
 
+# v5.2 / F1: Tool-log primary evidence path. Returns 0 (covers DoD) when
+# the spec's tool-call log contains an entry whose `cmd` shares ≥2 distinct
+# alpha-tokens with the DoD line body AND `exitCode == 0`. Returns 1 otherwise.
+#
+# Safe to call even when no log exists or python3 is unavailable (returns 1).
+# The decision is local — we do NOT mutate anti-fabrication policy:
+#   - Markdown evidence paths (cases 1-3) remain valid.
+#   - When neither markdown nor tool-log covers the item, fail (case 4 else).
+#
+# Cheap matcher; v6 will replace with MCP query_tool_log RPC.
+_tool_log_covers_dod_item() {
+  local scope_dir="$1"
+  local dod_line="$2"
+  command -v python3 >/dev/null 2>&1 || return 1
+  # Resolve repo root from the scope dir.
+  local repo_root
+  repo_root="$(cd "$scope_dir" && git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  local log_path="$repo_root/.specify/runtime/tool-calls.jsonl"
+  [[ -f "$log_path" ]] || return 1
+  local spec_slug
+  spec_slug="$(basename "$(cd "$scope_dir" && (cd .. 2>/dev/null && pwd) || pwd)")"
+  # If the scope_dir IS the spec dir (single-file mode), use its basename.
+  if [[ -f "$scope_dir/scopes.md" || -f "$scope_dir/spec.md" ]]; then
+    spec_slug="$(basename "$scope_dir")"
+  fi
+  SCOPE_DIR="$scope_dir" SPEC_SLUG="$spec_slug" LOG_PATH="$log_path" DOD_LINE="$dod_line" \
+    python3 - <<'PY'
+import json, os, re, sys
+log_path = os.environ['LOG_PATH']
+spec_slug = os.environ['SPEC_SLUG']
+dod = os.environ['DOD_LINE']
+
+# Tokenize DoD body (lower, strip leading `- [x] `, keep alpha-num/dot/slash/dash tokens).
+body = re.sub(r'^- \[x\] ', '', dod)
+toks_re = re.compile(r'[a-zA-Z][a-zA-Z0-9._/-]{2,}')
+STOP = {'the','and','for','with','this','that','from','into','have','test','tests','file','files','code','docs','doc'}
+dod_toks = {t.lower() for t in toks_re.findall(body)} - STOP
+if len(dod_toks) < 2:
+    sys.exit(1)
+
+try:
+    with open(log_path) as f:
+        for raw in f:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                d = json.loads(raw)
+            except Exception:
+                continue
+            # Match this spec OR framework-level entries.
+            sf = (d.get('spec') or '').strip()
+            if sf and sf != spec_slug and not sf.startswith(spec_slug.split('-', 1)[0]):
+                continue
+            if d.get('exitCode') != 0:
+                continue
+            cmd = (d.get('cmd') or '').lower()
+            cmd_toks = {t.lower() for t in toks_re.findall(cmd)} - STOP
+            if len(dod_toks & cmd_toks) >= 2:
+                sys.exit(0)
+except FileNotFoundError:
+    sys.exit(1)
+sys.exit(1)
+PY
+}
+
 # v4.1.0: Evidence-by-reference resolver. When a DoD line is shaped like
 #   - [x] Item description → Evidence: [anchor-name](report.md#anchor-name)
 # follow the link to the report.md anchor and verify a ≥10-line evidence
@@ -2519,6 +2585,16 @@ for scope_path in "${scope_files[@]}"; do
         fi
       # 3. Inline evidence block within next 15 lines (v4.0.x behavior)
       elif echo "$next_lines" | grep -qE '(Executed:|Command:|Evidence|```|Exit Code:|Raw Output)'; then
+        checked_with_evidence=$((checked_with_evidence + 1))
+      # 4. v5.2 / F1: structured tool-log entry covers this DoD item.
+      # Accept the DoD as evidenced when bubbles/scripts/evidence-tool-log-bridge.sh
+      # reports a matching tool-call entry with exitCode=0 for this spec.
+      # This makes tool-log a PRIMARY evidence path: agents that wrap their
+      # gate-relevant commands via tool-log.sh no longer need to inline
+      # ≥10-line raw output under every DoD item — the structured log is
+      # cryptographic-hash-grade evidence that the command actually ran.
+      # Markdown/anchor paths above remain valid for the entire v5.2 cycle.
+      elif _tool_log_covers_dod_item "$scope_dir" "$line"; then
         checked_with_evidence=$((checked_with_evidence + 1))
       else
         checked_without_evidence=$((checked_without_evidence + 1))

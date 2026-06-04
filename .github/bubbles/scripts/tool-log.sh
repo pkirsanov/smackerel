@@ -115,6 +115,30 @@ STDERR_BYTES="$(wc -c < "$STDERR_CAP" | tr -d ' ')"
 
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# v5.2 schema v2 — framework provenance fields. Resolved best-effort:
+# - VERSION file in bubbles repo (when installed in a downstream repo, this
+#   resolves to .github/bubbles/.version via the resolver below).
+# - Git SHA of the bubbles framework checkout.
+FRAMEWORK_VERSION=""
+FRAMEWORK_SHA=""
+if [[ -f "$REPO_ROOT/.github/bubbles/.version" ]]; then
+  FRAMEWORK_VERSION="$(tr -d '[:space:]' < "$REPO_ROOT/.github/bubbles/.version" 2>/dev/null || true)"
+elif [[ -f "$REPO_ROOT/VERSION" ]]; then
+  FRAMEWORK_VERSION="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION" 2>/dev/null || true)"
+fi
+if [[ -f "$REPO_ROOT/.github/bubbles/.install-source.json" ]] && command -v python3 >/dev/null 2>&1; then
+  FRAMEWORK_SHA="$(python3 -c "
+import json
+try:
+    print(json.load(open('$REPO_ROOT/.github/bubbles/.install-source.json')).get('sourceGitSha', '') or '')
+except Exception:
+    pass
+" 2>/dev/null || true)"
+fi
+if [[ -z "$FRAMEWORK_SHA" ]] && [[ -d "$REPO_ROOT/.git" ]]; then
+  FRAMEWORK_SHA="$(git -C "$REPO_ROOT" rev-parse --verify HEAD 2>/dev/null || true)"
+fi
+
 # JSON encoder — use python3 for correctness (handles special chars in cmd / cwd).
 TAGS_RAW="$TAGS_RAW" \
 TS="$TS" \
@@ -130,11 +154,21 @@ STDOUT_HASH="$STDOUT_HASH" \
 STDERR_HASH="$STDERR_HASH" \
 STDOUT_BYTES="$STDOUT_BYTES" \
 STDERR_BYTES="$STDERR_BYTES" \
+FRAMEWORK_VERSION="$FRAMEWORK_VERSION" \
+FRAMEWORK_SHA="$FRAMEWORK_SHA" \
 python3 - >> "$LOG_FILE" <<'PY'
 import json, os
 tags_raw = os.environ.get('TAGS_RAW', '').strip()
 tags = [t.strip() for t in tags_raw.split(',') if t.strip()] if tags_raw else []
+framework = {"name": "bubbles"}
+fv = os.environ.get('FRAMEWORK_VERSION', '').strip()
+if fv:
+    framework["version"] = fv
+fs = os.environ.get('FRAMEWORK_SHA', '').strip()
+if fs:
+    framework["sourceGitSha"] = fs
 record = {
+    "schemaVersion": 2,
     "ts": os.environ['TS'],
     "sessionId": os.environ['SESSION_ID'],
     "agent": os.environ['AGENT_NAME'],
@@ -149,6 +183,7 @@ record = {
     "stdoutBytes": int(os.environ['STDOUT_BYTES']),
     "stderrBytes": int(os.environ['STDERR_BYTES']),
     "tags": tags,
+    "framework": framework,
 }
 print(json.dumps(record, separators=(',', ':')))
 PY
