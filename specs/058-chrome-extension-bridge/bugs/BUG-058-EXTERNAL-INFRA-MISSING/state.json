@@ -1,0 +1,50 @@
+{
+  "version": 3,
+  "specId": "058-chrome-extension-bridge",
+  "bugId": "BUG-058-EXTERNAL-INFRA-MISSING",
+  "featureDir": "specs/058-chrome-extension-bridge/bugs/BUG-058-EXTERNAL-INFRA-MISSING",
+  "featureName": "BUG-058-EXTERNAL-INFRA-MISSING: Four external-infrastructure gaps blocking spec 058 completion",
+  "workflowMode": "bugfix-fastlane",
+  "status": "open",
+  "severity": "blocker",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "discovery",
+    "runStartedAt": "2026-06-03T00:00:00Z",
+    "completedPhaseClaims": ["discovery", "documentation"],
+    "executionHistory": [
+      {"phase": "discovery", "agent": "bubbles.plan", "startedAt": "2026-06-03T00:00:00Z", "completedAt": "2026-06-03T00:00:00Z", "outcome": "completed_owned", "summary": "Verified the four external-infrastructure gaps: (1) extensions/chrome-bridge/test/e2e/ missing (Playwright harness from F-057-V-001); (2) live-Postgres integration harness not wired into ./smackerel.sh test integration; (3) shared HTMX admin scaffolding does not exist (JSON handler for /v1/admin/extension/devices is mounted but no HTMX surface); (4) SCN-058-019 sideload walkthrough is manual-only with no automation path."},
+      {"phase": "documentation", "agent": "bubbles.plan", "startedAt": "2026-06-03T00:00:00Z", "completedAt": "2026-06-03T00:00:00Z", "outcome": "completed_owned", "summary": "Filed bug.md, spec.md (5 acceptance criteria covering 4 blockers + unblock signal), report.md. Routed to operator for per-blocker triage. Spec 058 transitioned from done_with_concerns to blocked in same run."}
+    ]
+  },
+  "certification": {
+    "status": "open",
+    "completedScopes": [],
+    "certifiedCompletedPhases": ["discovery", "documentation"],
+    "scopeProgress": [],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "open bug awaiting operator triage to assign owning resolution path for each of the four external-infrastructure blockers",
+      "lastUpdatedAt": "2026-06-03T00:00:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "blockers": [
+    {"id": "BLOCKER-1-PLAYWRIGHT-HARNESS", "summary": "F-057-V-001 Playwright harness not in repo", "affectedDoD": ["SCN-058-010 e2e-ui", "SCN-058-011 e2e-ui", "SCN-058-012 e2e-ui", "SCN-058-013 e2e-ui", "SCN-058-014 e2e-ui", "SCN-058-015 e2e-ui", "bookmark roundtrip p95 60s", "auth_failure.spec.ts"], "evidence": "extensions/chrome-bridge/test/e2e/ does not exist (verified 2026-06-03)", "resolutionPath": "Land Playwright harness under extensions/chrome-bridge/test/e2e/ via the 057 follow-up scope; then author bookmark_roundtrip.spec.ts + auth_failure.spec.ts.", "owner": "needs operator triage", "status": "open"},
+    {"id": "BLOCKER-2-LIVE-POSTGRES-INTEGRATION", "summary": "Live-Postgres integration test harness deferred", "affectedDoD": ["Scope 2 PostgresDedupStore.ResolveOrPublish race-loss path", "Scope 5 admin devices view live aggregation"], "evidence": "./smackerel.sh test integration does not stand up a Postgres-backed harness; Scope 2/5 coverage is unit-tier with in-memory fakes", "resolutionPath": "Wire ephemeral Postgres-backed harness (testcontainers or isolated compose project) into ./smackerel.sh test integration honoring bubbles-test-environment-isolation; add deferred Scope 2/5 follow-up rows.", "owner": "needs operator triage", "status": "open"},
+    {"id": "BLOCKER-3-HTMX-ADMIN-SCAFFOLDING", "summary": "HTMX admin scaffolding generalization missing", "affectedDoD": ["/admin/auth/tokens HTMX page", "/admin/extension/devices HTMX surface (JSON handler is mounted today)"], "evidence": "No shared HTMX admin layout / nav fragment / auth gating helper exists in repo; Scope 5 explicitly deferred the HTMX rendering layer", "resolutionPath": "Land shared HTMX admin scaffolding (layout, auth gating helper, nav fragment) in a dedicated spec; add per-page partials for tokens and devices on top.", "owner": "needs operator triage", "status": "open"},
+    {"id": "BLOCKER-4-SIDELOAD-AUTOMATION", "summary": "SCN-058-019 sideload-by-docs walkthrough automation", "affectedDoD": ["SCN-058-019 manual operator walkthrough"], "evidence": "Only the 8-step runbook in docs/Operations.md exists; no automated verification path", "resolutionPath": "Operator decision: (a) accept manual-only permanently and close as wontfix-automated/doc-validated, OR (b) build CI-side Chrome MV3 sideload smoke harness that loads signed zip, verifies cosign, asserts badge matrix.", "owner": "needs operator decision", "status": "open"}
+  ]
+}
