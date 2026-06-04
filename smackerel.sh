@@ -1534,11 +1534,18 @@ case "$COMMAND" in
           ollama_test_request_seed="$(smackerel_env_value "$env_file" "OLLAMA_TEST_REQUEST_SEED")"
           ollama_test_request_num_predict="$(smackerel_env_value "$env_file" "OLLAMA_TEST_REQUEST_NUM_PREDICT")"
           ollama_host_port="$(smackerel_env_value "$env_file" "OLLAMA_HOST_PORT")"
-          ollama_pull_url="http://127.0.0.1:${ollama_host_port}"
+          ollama_container_port="$(smackerel_env_value "$env_file" "OLLAMA_CONTAINER_PORT")"
+          # F-001/F-005 (BUG-003): host-side pull script runs OUTSIDE the
+          # compose network and MUST reach Ollama via the published host
+          # port; the in-network test container MUST reach Ollama via the
+          # compose service DNS name + container port. One variable for both
+          # surfaces silently broke whichever surface wasn't loopback.
+          ollama_host_url="http://127.0.0.1:${ollama_host_port}"
+          ollama_network_url="http://ollama:${ollama_container_port}"
 
           set +e
           e2e_run_child env \
-            OLLAMA_URL="$ollama_pull_url" \
+            OLLAMA_URL="$ollama_host_url" \
             OLLAMA_TEST_MODEL="$ollama_test_model" \
             OLLAMA_TEST_PULL_TIMEOUT_SECONDS="$ollama_pull_timeout" \
             bash "$SCRIPT_DIR/scripts/commands/ollama-test-pull.sh"
@@ -1561,11 +1568,12 @@ case "$COMMAND" in
               -v smackerel-gobuild-cache:/root/.cache/go-build \
               -w /workspace \
               -e "CORE_EXTERNAL_URL=http://smackerel-core:${core_container_port}" \
+              -e "CORE_URL=http://smackerel-core:${core_container_port}" \
               -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
               -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
               -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
               -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
-              -e "OLLAMA_URL=$ollama_pull_url" \
+              -e "OLLAMA_URL=$ollama_network_url" \
               -e "OLLAMA_TEST_MODEL=$ollama_test_model" \
               -e "OLLAMA_TEST_PULL_TIMEOUT_SECONDS=$ollama_pull_timeout" \
               -e "OLLAMA_TEST_REQUEST_TEMPERATURE=$ollama_test_request_temperature" \

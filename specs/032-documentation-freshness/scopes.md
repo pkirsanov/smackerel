@@ -130,6 +130,7 @@ Scenario: SCN-DOCFRESH-002 Development docs list every Go package and prompt con
 ### Definition of Done
 
 - [x] Every Go package under internal/ listed with description — **Phase:** implement — All 24 packages listed in `Go Packages (internal/)` table with one-line descriptions sourced from actual package code (count updated post-Stabilize/Improve passes)
+  <!-- Superseded by docs/Development.md as of 2026-06-04: inventory grew beyond 24 packages; docs/Development.md Go Packages table is the live source of truth. -->
   > Evidence:
   ```
   $ find internal -mindepth 1 -maxdepth 1 -type d | wc -l
@@ -161,6 +162,7 @@ Scenario: SCN-DOCFRESH-002 Development docs list every Go package and prompt con
   internal/web
   ```
 - [x] All 17 migrations listed with purpose — **Phase:** implement — `Database Migrations` table updated to reflect 4 actual migration files on disk after schema squash (001 initial, 018 meal plans, 019 expense tracking, 020 agent traces); originally claimed 17 migrations from spec text but on-disk count is now authoritative
+  <!-- Superseded by docs/Development.md as of 2026-06-04: migration count has grown to 38 (001 + 018-055 minus 049); docs/Development.md Database Migrations table is the live source of truth. -->
   > Evidence:
   ```
   $ ls internal/db/migrations/
@@ -168,6 +170,7 @@ Scenario: SCN-DOCFRESH-002 Development docs list every Go package and prompt con
   018_meal_plans.sql      020_agent_traces.sql
   ```
 - [x] All 7 prompt contracts listed with type and purpose — **Phase:** implement — `Prompt Contracts` table with 8 contracts (count updated after recipe-extraction added), plus `Adding a New Prompt Contract` guide
+  <!-- Superseded by docs/Development.md as of 2026-06-04: prompt-contract count has grown to 21; docs/Development.md Prompt Contracts table is the live source of truth. -->
   > Evidence:
   ```
   $ ls config/prompt_contracts/

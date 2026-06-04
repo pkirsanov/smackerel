@@ -240,6 +240,18 @@ var ListsCompleted = prometheus.NewCounterVec(
 	[]string{"list_type"},
 )
 
+// ListEventsPublishFailed counts NATS publish failures emitted by the list store,
+// labeled by subject (e.g. lists.created, lists.completed). Increments alongside
+// the existing slog.Warn publish-failure sites so operators can alert on
+// telemetry drift between the store and downstream consumers.
+var ListEventsPublishFailed = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_list_events_publish_failed_total",
+		Help: "NATS publish failures for list lifecycle events, by subject",
+	},
+	[]string{"subject"},
+)
+
 // DriveConfirmationsTotal counts spec 038 Scope 6 drive confirmation
 // resolutions by terminal status (committed, rerouted, no_save, expired,
 // already_resolved) and the channel that delivered the user choice
@@ -508,6 +520,7 @@ func init() {
 		ListGenerationLatency,
 		ListItemStatusChanges,
 		ListsCompleted,
+		ListEventsPublishFailed,
 		DriveConfirmationsTotal,
 		DrivePolicyDecisionsTotal,
 		DriveRuleConflictsTotal,

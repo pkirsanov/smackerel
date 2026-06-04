@@ -75,9 +75,11 @@ class TestNATSClientInit:
         client._nc = mock_nc
         assert client.is_connected is True
 
-    def test_init_empty_failure_counts(self):
+    def test_init_no_failure_counts_attribute(self):
+        """Spec 081 FR-081-004 — _failure_counts removed; num_delivered
+        is the sole source of truth for poison-pill detection."""
         client = NATSClient("nats://localhost:4222")
-        assert client._failure_counts == {}
+        assert not hasattr(client, "_failure_counts")
 
 
 # ---------------------------------------------------------------------------

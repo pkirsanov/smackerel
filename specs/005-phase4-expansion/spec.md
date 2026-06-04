@@ -79,6 +79,22 @@ Phase 4 expands Smackerel's awareness into physical space (location history, tri
 - Location-context tagging on captures (SC-E19) — deferred to future phase
 - Nearby saved place notifications (SC-E20) — deferred to future phase
 
+### Deferred Behaviors (GAP-005-G1 — sweep round 12 triage)
+
+The following scenarios were listed in the original Phase 4 scope but are not
+exercised by real behavior tests at certification. They are deferred to a
+follow-up feature spec when the behavior becomes a priority. Citation:
+`state.json::discoveredIssues[GAP-005-G1]`.
+
+- SCN-005-008b Post-trip route linking — Maps-to-trip linking not exercised by behavior test; deferred to a follow-up feature spec.
+- SCN-005-008c Explicit trip creation from capture input — capture-text trip-entity creation path not exercised by behavior test; deferred to a follow-up feature spec.
+- SCN-005-008d Trip detection with incomplete signals — partial-signal trip-entity creation path not exercised by behavior test; deferred to a follow-up feature spec.
+- SCN-005-011 Meeting pattern detection — recurring-meeting pattern detection not exercised by behavior test; deferred to a follow-up feature spec.
+- SCN-005-011b Gift-list memory — preference-signal extraction and gift-list storage not exercised by behavior test; deferred to a follow-up feature spec.
+- SCN-005-011c People data deletion — person-deletion-with-artifact-unlink path not exercised by behavior test; deferred to a follow-up feature spec.
+- SCN-005-013 Trail detail with linked captures — linked-capture rendering on trail detail not exercised by behavior test; deferred to a follow-up feature spec.
+- SCN-005-013b Trail with no linked captures renders cleanly — empty-captures rendering path not exercised by behavior test; deferred to a follow-up feature spec.
+
 ---
 
 ## Requirements
