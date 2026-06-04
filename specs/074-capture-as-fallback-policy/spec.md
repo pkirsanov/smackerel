@@ -20,6 +20,10 @@ labeling, Idea-artifact shape, lifecycle state, and observability.
 [spec 064 — Open-Ended Knowledge Agent](../064-open-ended-knowledge-agent/spec.md),
 [spec 066 — Legacy Keyword Surface Retirement](../066-legacy-keyword-surface-retirement/spec.md),
 [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md).
+**Downstream Consumers (informational, not depends-on):**
+[spec 069 — Assistant HTTP Transport](../069-assistant-http-transport/spec.md)
+references this policy as inviolable. These specs are downstream
+consumers that reference this policy; this spec does not depend on them.
 **Amends:** [spec 003](../003-phase2-ingestion/spec.md) (adds the
 fallback Idea-artifact provenance label and dedup contract),
 [spec 008](../008-telegram-share-capture/spec.md) (clarifies that

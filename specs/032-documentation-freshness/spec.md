@@ -86,8 +86,8 @@ Scenario: Prompt contract documentation
 
 - [ ] README.md contains system requirements section (minimum/recommended RAM, disk, Docker version)
 - [ ] docs/Development.md lists all Go packages under internal/ with one-line descriptions
-- [ ] docs/Development.md lists all migrations (001-017) with purpose
-- [ ] docs/Development.md lists all prompt contracts with purpose and format guide
+- [ ] docs/Development.md lists every migration on disk with purpose
+- [ ] docs/Development.md lists every prompt contract on disk with purpose and format guide
 - [ ] docs/Operations.md exists with sections: deployment, connector management, troubleshooting, TLS setup, backup/restore
 - [ ] docs/Operations.md includes error-message troubleshooting lookup table
 - [ ] Browser extension and PWA installation documented

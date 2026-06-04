@@ -35,7 +35,7 @@
       "evidenceRefs": ["report.md#scope-2-execution-evidence"],
       "liveSystemExpectation": "explicit and fallback capture runtime paths must remain distinct",
       "status": "deferred",
-      "deferredTo": "follow-on spec TBD"
+      "deferredTo": "specs/076-assistant-completion-rescope"
     },
     {
       "scenarioId": "SCN-074-A03",
@@ -51,7 +51,7 @@
       "evidenceRefs": ["report.md#scope-3-execution-evidence"],
       "liveSystemExpectation": "live e2e-api row must return already-captured acknowledgement",
       "status": "deferred",
-      "deferredTo": "follow-on spec TBD"
+      "deferredTo": "specs/076-assistant-completion-rescope"
     },
     {
       "scenarioId": "SCN-074-A04",
@@ -66,7 +66,7 @@
       "evidenceRefs": ["report.md#scope-3-execution-evidence"],
       "liveSystemExpectation": "unit/integration rows must prove outside-window new bucket behavior",
       "status": "deferred",
-      "deferredTo": "follow-on spec TBD"
+      "deferredTo": "specs/076-assistant-completion-rescope"
     },
     {
       "scenarioId": "SCN-074-A05",
@@ -81,7 +81,7 @@
       "evidenceRefs": ["report.md#scope-3-execution-evidence"],
       "liveSystemExpectation": "integration row must use two isolated users and separate artifacts",
       "status": "deferred",
-      "deferredTo": "follow-on spec TBD"
+      "deferredTo": "specs/076-assistant-completion-rescope"
     },
     {
       "scenarioId": "SCN-074-A06",
@@ -111,7 +111,7 @@
       "evidenceRefs": ["report.md#scope-5-execution-evidence"],
       "liveSystemExpectation": "integration rows must inspect real metric/trace/artifact linkage",
       "status": "deferred",
-      "deferredTo": "follow-on spec TBD"
+      "deferredTo": "specs/076-assistant-completion-rescope"
     },
     {
       "scenarioId": "SCN-074-A08",
@@ -169,7 +169,7 @@
       "evidenceRefs": ["report.md#scope-5-execution-evidence"],
       "liveSystemExpectation": "cross-transport e2e row must cover Telegram, HTTP, WhatsApp, web, iPhone/iOS, and Android renderers",
       "status": "deferred",
-      "deferredTo": "follow-on spec TBD"
+      "deferredTo": "specs/076-assistant-completion-rescope"
     },
     {
       "scenarioId": "SCN-074-A12",

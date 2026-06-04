@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -10,6 +11,37 @@ import (
 
 	"github.com/smackerel/smackerel/internal/list"
 )
+
+// maxListRequestBodyBytes caps every JSON body the list API accepts. 64 KiB is
+// far above any legitimate request (title + a small handful of fields) and
+// prevents an unbounded body from exhausting server memory before json.Decode
+// can reject it.
+const maxListRequestBodyBytes = 64 << 10
+
+// maxAddItemContentLen and maxCreateListTitleLen cap user-supplied free-text
+// fields server-side. Stable error codes let callers distinguish overflow from
+// generic 400s.
+const (
+	maxAddItemContentLen  = 4096
+	maxCreateListTitleLen = 256
+)
+
+// decodeListBody applies the body-size cap, decodes the JSON, and maps
+// http.MaxBytesError to 413 with a stable error code. Returns false if the
+// response was already written.
+func decodeListBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxListRequestBodyBytes)
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, `{"error":"request body exceeds 65536 bytes","code":"body_too_large"}`, http.StatusRequestEntityTooLarge)
+			return false
+		}
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return false
+	}
+	return true
+}
 
 // CreateListRequest is the JSON body for POST /api/lists.
 type CreateListRequest struct {
@@ -42,13 +74,16 @@ type ListHandlers struct {
 // CreateListHandler handles POST /api/lists.
 func (h *ListHandlers) CreateListHandler(w http.ResponseWriter, r *http.Request) {
 	var req CreateListRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+	if !decodeListBody(w, r, &req) {
 		return
 	}
 
 	if req.Title == "" {
 		http.Error(w, `{"error":"title is required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Title) > maxCreateListTitleLen {
+		http.Error(w, `{"error":"title exceeds 256 characters","code":"title_too_long"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -145,13 +180,16 @@ func (h *ListHandlers) AddItemHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddItemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+	if !decodeListBody(w, r, &req) {
 		return
 	}
 
 	if req.Content == "" {
 		http.Error(w, `{"error":"content is required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Content) > maxAddItemContentLen {
+		http.Error(w, `{"error":"content exceeds 4096 characters","code":"content_too_long"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -177,8 +215,15 @@ func (h *ListHandlers) CheckItemHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req CheckItemRequest
+	r.Body = http.MaxBytesReader(w, r.Body, maxListRequestBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// Default to "done" if no body
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, `{"error":"request body exceeds 65536 bytes","code":"body_too_large"}`, http.StatusRequestEntityTooLarge)
+			return
+		}
+		// Default to "done" when the body is empty or malformed (back-compat:
+		// the legacy check endpoint accepts an empty POST).
 		req.Status = "done"
 	}
 
@@ -237,8 +282,7 @@ func (h *ListHandlers) UpdateListHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req UpdateListRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+	if !decodeListBody(w, r, &req) {
 		return
 	}
 
