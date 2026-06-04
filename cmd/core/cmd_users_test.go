@@ -34,6 +34,9 @@ func (r *memRepo) UpsertPassword(_ context.Context, username, password string, c
 	if err := webcreds.ValidateUsername(username); err != nil {
 		return err
 	}
+	if _, err := webcreds.Hash(password); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	_, exists := r.users[username]
@@ -203,7 +206,7 @@ func TestRunUsersCommand_UnknownSubcommand(t *testing.T) {
 	// runUsersCommand needs DATABASE_URL; we don't exercise it directly
 	// here. Instead verify the dispatcher's usage path through args=[].
 	// (Full dispatch with DB is exercised by SCOPE-4 deploy verification.)
-	if MinPasswordLength != 12 {
-		t.Fatalf("expected MinPasswordLength=12, got %d", MinPasswordLength)
+	if webcreds.MinPasswordLength != 12 {
+		t.Fatalf("expected webcreds.MinPasswordLength=12, got %d", webcreds.MinPasswordLength)
 	}
 }

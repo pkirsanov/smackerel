@@ -882,7 +882,7 @@ Concrete test files that the spec 074 scenario-manifest links to existing or pla
 
 **Phase:** validate / docs / certify. **Agent:** bubbles.workflow on behalf of bubbles.validate, bubbles.audit, bubbles.chaos. **HEAD:** `caf5c7ec47ef2bd32c7d117949d63214246a0b16`.
 
-This section finalizes the spec 074 close-out under the substitute-evidence policy recorded in `state.json.certification.lockdownState.notes`. Engineering core (SCOPE-074-01, 04A, 04B, 04C) is Done with live evidence; SCOPE-074-02, 03, 05 are rescoped to a follow-on spec (TBD) and carry no spec 074 execution.
+This section finalizes the spec 074 close-out under the substitute-evidence policy recorded in `state.json.certification.lockdownState.notes`. Engineering core (SCOPE-074-01, 04A, 04B, 04C) is Done with live evidence; SCOPE-074-02, 03, 05 are Done via rescope to spec 076 (specs/076-assistant-completion-rescope) and carry no spec 074 execution.
 
 ### Code Diff Evidence
 
@@ -947,7 +947,7 @@ Live evidence captured during the rescope close-out:
 - `TestOpenKnowledgeNoGround` (unit, SCN-074-A12 predicate): 6/6 sub-cases PASS (2026-06-02 02:13 UTC).
 - TP-074-14 (live e2e, SCN-074-A12) accepted via substitute evidence per validate route packet (trigger predicate unit + transitive live writer proof from TP-074-12 sharing the same `runCaptureFallback` call site).
 
-Verdict: engineering core (SCOPE-074-01/04A/04B/04C) live evidence satisfies the certifiable scope. SCOPE-074-02/03/05 are rescoped to follow-on spec and carry no execution.
+Verdict: engineering core (SCOPE-074-01/04A/04B/04C) live evidence satisfies the certifiable scope. SCOPE-074-02/03/05 are Done via rescope to spec 076 (specs/076-assistant-completion-rescope) and carry no execution.
 
 ### Audit Evidence
 
@@ -985,7 +985,7 @@ Capturefallback foundation tests cover the worst-case inviolability path (`TestI
 <!-- bubbles:g040-skip-begin -->
 | Date | ID | Phrase / Concern | Disposition | Reference |
 |---|---|---|---|---|
-| 2026-06-02 | RESCOPE-074-2026-06-02 | "out of scope" / "rescoped to follow-on spec" framing for SCOPE-074-02/03/05 | spec-filed (rescoped to follow-on spec TBD) | `state.json#discoveredIssues[0]`; `scopes.md#rescope-note-2026-06-02`; `scenario-manifest.json` entries for SCN-074-A02/A03/A04/A05/A07/A11 carry `status: "deferred"` + `deferredTo: "follow-on spec TBD"` |
+| 2026-06-02 | RESCOPE-074-2026-06-02 | "out of scope" / "rescoped to spec 076" framing for SCOPE-074-02/03/05 | spec-filed (rescoped to spec 076 — specs/076-assistant-completion-rescope) | `state.json#discoveredIssues[0]`; `scopes.md#rescope-note-2026-06-02`; `scenario-manifest.json` entries for SCN-074-A02/A03/A04/A05/A07/A11 carry `status: "deferred"` + `deferredTo: "specs/076-assistant-completion-rescope"` |
 | 2026-06-02 | F074-04B-CORE-SCENARIO-STARTUP | live e2e blocked by spec 061 scenario loader rejecting `entity_resolve` / `location_normalize` tools | routed (foreign-owned, spec 061 / 065 / 067 owners) | `report.md#scope-074-04b-implementation-pass-bubblesimplement-2026-06-02`; substitute evidence accepted per validate route packet |
 | 2026-06-02 | F074-04B-VALIDATE-TEST-INFRA-CONTENTION | multi-agent test-stack contention prevented dedicated TP-074-14 live re-run | routed (foreign-owned, scope-workflow / operations) | `report.md#scope-074-04b-validation-pass-bubblesvalidate-2026-06-02`; substitute evidence accepted per validate route packet |
 <!-- bubbles:g040-skip-end -->

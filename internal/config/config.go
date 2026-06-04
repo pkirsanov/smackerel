@@ -404,6 +404,14 @@ type Config struct {
 	NATSMaxMemStoreBytes         int64
 	NATSStreamMaxBytes           map[string]int64
 
+	// Spec 081 FR-081-001 / FR-081-002 — Python sidecar consumer
+	// contract. Go core does not consume these at runtime (the
+	// ml/app/nats_client.py reads them directly via os.environ), but
+	// they are SST-required so the requiredVars()/Validate() path
+	// fail-loud at boot if the env file is missing them.
+	NATSConsumerMaxDeliverRaw     string
+	NATSConsumerAckWaitSecondsRaw string
+
 	// Spec 048 — Backup and Restore Automation. SST-compliant; populated
 	// from BACKUP_* env vars produced by `./smackerel.sh config generate`.
 	// BackupLocalDir is the host-side staging directory `./smackerel.sh
@@ -686,6 +694,10 @@ func Load() (*Config, error) {
 		NATSMaxFileStoreBytesRaw:     os.Getenv("NATS_MAX_FILE_STORE_BYTES"),
 		NATSMaxMemStoreBytesRaw:      os.Getenv("NATS_MAX_MEM_STORE_BYTES"),
 		NATSStreamMaxBytesJSON:       os.Getenv("NATS_STREAM_MAX_BYTES_JSON"),
+
+		// Spec 081 — Python sidecar consumer contract (SST-required).
+		NATSConsumerMaxDeliverRaw:     os.Getenv("NATS_CONSUMER_MAX_DELIVER"),
+		NATSConsumerAckWaitSecondsRaw: os.Getenv("NATS_CONSUMER_ACK_WAIT_SECONDS"),
 
 		// Spec 048 — Backup and Restore Automation. Raw env strings
 		// here; integer parsing happens below so the loader can fail
@@ -1651,6 +1663,11 @@ func (c *Config) requiredVars() []struct {
 		{"NATS_MAX_FILE_STORE_BYTES", c.NATSMaxFileStoreBytesRaw},
 		{"NATS_MAX_MEM_STORE_BYTES", c.NATSMaxMemStoreBytesRaw},
 		{"NATS_STREAM_MAX_BYTES_JSON", c.NATSStreamMaxBytesJSON},
+		// Spec 081 FR-081-001 / FR-081-002 — Python sidecar consumer
+		// contract. Consumed by ml/app/nats_client.py; required at
+		// boot so the env file emits them without drift.
+		{"NATS_CONSUMER_MAX_DELIVER", c.NATSConsumerMaxDeliverRaw},
+		{"NATS_CONSUMER_ACK_WAIT_SECONDS", c.NATSConsumerAckWaitSecondsRaw},
 		// Spec 048 FR-048-001 / FR-048-002 — backup and restore
 		// automation envelope. Every key is required; missing values
 		// fail-loud here with the rest of the envelope. Retention

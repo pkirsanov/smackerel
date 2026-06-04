@@ -1,0 +1,63 @@
+{
+  "version": 2,
+  "specId": "081",
+  "featureDir": "specs/081-nats-python-sidecar-hardening-parity",
+  "generatedBy": "bubbles.analyst bootstrap",
+  "generatedAt": "2026-06-04T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-081-01",
+      "name": "ConsumerConfig threaded from SST env vars",
+      "scope": "SCOPE-081-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        { "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" },
+        { "type": "fr", "location": "spec.md#9-functional-requirements" }
+      ],
+      "linkedDoD": ["SCOPE-081-01:D01-1", "SCOPE-081-01:D01-2", "SCOPE-081-01:D01-4"],
+      "linkedFRs": ["FR-081-001", "FR-081-002"]
+    },
+    {
+      "scenarioId": "SCN-081-02",
+      "name": "Missing SST consumer key fails loud at startup",
+      "scope": "SCOPE-081-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        { "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }
+      ],
+      "linkedDoD": ["SCOPE-081-01:D01-3", "SCOPE-081-01:D01-5", "SCOPE-081-01:D01-11"],
+      "linkedFRs": ["FR-081-001", "FR-081-002"]
+    },
+    {
+      "scenarioId": "SCN-081-03",
+      "name": "Poison message routed to deadletter.<subject> before term",
+      "scope": "SCOPE-081-01",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        { "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" },
+        { "type": "design", "location": "design.md#4-algorithm-poison-pill-branch" }
+      ],
+      "linkedDoD": ["SCOPE-081-01:D01-8", "SCOPE-081-01:D01-9", "SCOPE-081-01:D01-10", "SCOPE-081-01:D01-12", "SCOPE-081-01:D01-14"],
+      "linkedFRs": ["FR-081-004"]
+    },
+    {
+      "scenarioId": "SCN-081-04",
+      "name": "Process-local _failure_counts removed; num_delivered is source of truth",
+      "scope": "SCOPE-081-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        { "type": "spec", "location": "spec.md#7-business-scenarios-gherkin" }
+      ],
+      "linkedDoD": ["SCOPE-081-01:D01-6", "SCOPE-081-01:D01-7"],
+      "linkedFRs": ["FR-081-003"]
+    }
+  ]
+}

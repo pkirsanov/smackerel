@@ -96,8 +96,18 @@ fi
 # Verify the model is actually present in the daemon's catalog. /api/pull
 # may return 200 even if the underlying registry pull silently dropped a
 # layer (unlikely, but the verification keeps the contract honest).
+#
+# F-004 (BUG-003): substring grep against the raw response was too loose
+# (e.g. matched a prefix of the requested tag in another entry's name).
+# Use jq for strict JSON equality on the .models[].name field. jq is
+# required infrastructure on the test stack; fail loud if missing.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ollama-test-pull: jq is required to verify /api/tags strictly but was not found on PATH" >&2
+  exit 4
+fi
+
 if ! curl --silent --show-error --fail --max-time 30 "${ollama_url}/api/tags" \
-    | grep -q "\"name\":\"${test_model}\""; then
+    | jq -e --arg m "$test_model" '(.models // []) | map(.name) | index($m) != null' >/dev/null; then
   echo "ollama-test-pull: model $test_model missing from ${ollama_url}/api/tags after successful pull" >&2
   exit 4
 fi

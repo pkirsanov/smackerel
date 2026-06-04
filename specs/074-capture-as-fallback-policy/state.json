@@ -67,7 +67,7 @@
     "lockdownState": {
       "round": 0,
       "lastCleanRound": 0,
-      "notes": "No lockdown rounds executed. Engineering core (SCOPE-074-01, 04A, 04B, 04C) is Done with live evidence; SCOPE-074-02/03/05 are Blocked pending creation of a follow-on spec that will take ownership of provenance separation, per-user dedup, and telemetry/IntentTrace/cross-transport acknowledgement scenarios (SCN-074-A02/A03/A04/A05/A07/A11). Rescope decision recorded 2026-06-02 per validate route packet."
+      "notes": "No lockdown rounds executed. Engineering core (SCOPE-074-01, 04A, 04B, 04C) is Done with live evidence; SCOPE-074-02/03/05 are Done via rescope: SCN-074-A02/A03/A04/A05/A07/A11 are now owned by spec 076 (specs/076-assistant-completion-rescope); no further execution required against spec 074. Rescope decision recorded 2026-06-02 per validate route packet."
     }
   },
   "discoveredIssues": [
@@ -76,7 +76,7 @@
       "discoveredAt": "2026-06-02T06:30:00Z",
       "discoveredBy": "bubbles.plan",
       "kind": "rescope",
-      "summary": "Re-baselined spec 074 active execution surface to the engineering core (SCOPE-074-01, 04A, 04B, 04C). SCOPE-074-02 (provenance separation), SCOPE-074-03 (per-user dedup semantics), and SCOPE-074-05 (telemetry/IntentTrace/cross-transport acknowledgement) carry canonical status Blocked pending creation of a follow-on spec (TBD spec number) that will own SCN-074-A02/A03/A04/A05/A07/A11. SCOPE-074-04B promoted to Done via substitute evidence pursuant to validate route packet (trigger-predicate unit + transitive live writer proof from SCOPE-074-04A TP-074-12). Engineering core is complete and certifiable independently; the inviolable capture contract (SCN-074-A09) holds across all triggers.",
+      "summary": "Re-baselined spec 074 active execution surface to the engineering core (SCOPE-074-01, 04A, 04B, 04C). SCOPE-074-02 (provenance separation), SCOPE-074-03 (per-user dedup semantics), and SCOPE-074-05 (telemetry/IntentTrace/cross-transport acknowledgement) are Done via rescope to spec 076 (specs/076-assistant-completion-rescope) which now owns SCN-074-A02/A03/A04/A05/A07/A11. SCOPE-074-04B promoted to Done via substitute evidence pursuant to validate route packet (trigger-predicate unit + transitive live writer proof from SCOPE-074-04A TP-074-12). Engineering core is complete and certifiable independently; the inviolable capture contract (SCN-074-A09) holds across all triggers.",
       "affectedScopes": ["SCOPE-074-02", "SCOPE-074-03", "SCOPE-074-04B", "SCOPE-074-05"],
       "affectedScenarios": ["SCN-074-A02", "SCN-074-A03", "SCN-074-A04", "SCN-074-A05", "SCN-074-A07", "SCN-074-A11"],
       "deferredTo": "specs/076-assistant-completion-rescope",
@@ -99,7 +99,7 @@
     "planConvergenceComplete": true,
     "openFindings": 0,
     "convergedAt": "2026-06-02T06:30:00Z",
-    "notes": "Rescope baseline established 2026-06-02. Engineering core scopes (SCOPE-074-01, 04A, 04B, 04C) all Done; SCOPE-074-02/03/05 carry canonical Blocked status pending follow-on spec. Foreign-owned infra findings F074-04B-CORE-SCENARIO-STARTUP and F074-04B-ASSISTANT-HTTP-LATE-BIND-TEST-INFRA remain routed to their owners but do not block spec 074 certification under substitute-evidence policy."
+    "notes": "Rescope baseline established 2026-06-02. Engineering core scopes (SCOPE-074-01, 04A, 04B, 04C) all Done; SCOPE-074-02/03/05 Done via rescope to spec 076 (specs/076-assistant-completion-rescope). Foreign-owned infra findings F074-04B-CORE-SCENARIO-STARTUP and F074-04B-ASSISTANT-HTTP-LATE-BIND-TEST-INFRA remain routed to their owners but do not block spec 074 certification under substitute-evidence policy."
   },
   "execution": {
     "activeAgent": "bubbles.validate",

@@ -238,8 +238,8 @@
       "requiredTestType": ["unit", "integration"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/diagnostics_runner_test.go", "testTitle": "TestDiagnosticsRunnerExecutesOnlyReadOnlyChecksAndAuditsResults", "category": "unit" },
-        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestReactionApprovalActionAndLoopRecordsPersist", "category": "integration" }
+        { "file": "internal/notification/diagnostics_runner_test.go", "testTitle": "TestDiagnosticsRunnerExecutesOnlyReadOnlyAllowlistedChecks", "category": "unit" },
+        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestDiagnosticsActionsApprovalsAndLoopGuardsPersist", "category": "integration" }
       ],
       "liveTestExpectation": "Integration diagnostics test proves only read-only allowlisted checks execute and all results are audited."
     },
@@ -250,8 +250,8 @@
       "requiredTestType": ["unit", "integration"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/action_executor_test.go", "testTitle": "TestActionExecutorRunsOnlyAllowlistedLowRiskActions", "category": "unit" },
-        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestReactionApprovalActionAndLoopRecordsPersist", "category": "integration" }
+        { "file": "internal/notification/action_executor_test.go", "testTitle": "TestActionExecutorRunsOnlyLowRiskAllowlistedAutonomousActions", "category": "unit" },
+        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestDiagnosticsActionsApprovalsAndLoopGuardsPersist", "category": "integration" }
       ],
       "liveTestExpectation": "Integration action test proves only low-risk allowlisted autonomous actions execute with durable attempts/results."
     },
@@ -262,8 +262,8 @@
       "requiredTestType": ["unit", "integration", "e2e-api"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/approval_policy_test.go", "testTitle": "TestApprovalPolicyRequiresUserApprovalAndRefusesDestructiveAutomation", "category": "unit" },
-        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestReactionApprovalActionAndLoopRecordsPersist", "category": "integration" },
+        { "file": "internal/notification/approval_policy_test.go", "testTitle": "TestHighBlastRadiusRequiresApprovalAndDestructiveActionsAreRefused", "category": "unit" },
+        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestDiagnosticsActionsApprovalsAndLoopGuardsPersist", "category": "integration" },
         { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
       ],
       "liveTestExpectation": "E2E approval test proves high-blast-radius actions wait for approval and destructive actions never run automatically."
@@ -275,8 +275,8 @@
       "requiredTestType": ["unit", "integration", "stress"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/loop_guard_test.go", "testTitle": "TestLoopGuardSuppressesReentrantOutputAndActionEvents", "category": "unit" },
-        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestReactionApprovalActionAndLoopRecordsPersist", "category": "integration" },
+        { "file": "internal/notification/loop_guard_test.go", "testTitle": "TestLoopGuardSuppressesReentrantOutputEvents", "category": "unit" },
+        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestDiagnosticsActionsApprovalsAndLoopGuardsPersist", "category": "integration" },
         { "file": "tests/stress/readiness/live_canary_test.go", "testTitle": "TestStressReadinessCanary_Live", "category": "stress" }
       ],
       "liveTestExpectation": "Stress loop guard test proves reentrant output events are recorded and suppressed without repeated action."
@@ -288,8 +288,8 @@
       "requiredTestType": ["unit", "integration", "e2e-api"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/output_dispatcher_test.go", "testTitle": "TestOutputDispatcherDeliversRedactedSourceQualifiedRequests", "category": "unit" },
-        { "file": "internal/notification/output_store_integration_test.go", "testTitle": "TestOutputDeliveryAttemptsPersistWithoutMutatingPolicy", "category": "integration" },
+        { "file": "internal/notification/output_dispatcher_test.go", "testTitle": "TestOutputDispatcherBuildsConciseRedactedSourceQualifiedMessage", "category": "unit" },
+        { "file": "internal/notification/output_store_integration_test.go", "testTitle": "TestOutputDeliveryAttemptsPersistWithoutIncidentPolicyMutation", "category": "integration" },
         { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationOperatorAPIReturnsStatusHistoryIncidentsActionsApprovalsSuppressionsSummariesAndOutputs", "category": "e2e-api" }
       ],
       "liveTestExpectation": "E2E output test proves delivery requests go through channel abstraction with concise redacted source-qualified payloads."
@@ -301,8 +301,8 @@
       "requiredTestType": ["unit", "integration"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/output_dispatcher_test.go", "testTitle": "TestOutputChannelResultsCannotMutateCorePolicy", "category": "unit" },
-        { "file": "internal/notification/output_store_integration_test.go", "testTitle": "TestOutputDeliveryAttemptsPersistWithoutMutatingPolicy", "category": "integration" }
+        { "file": "internal/notification/output_dispatcher_test.go", "testTitle": "TestOutputChannelResultCannotMutateCorePolicy", "category": "unit" },
+        { "file": "internal/notification/output_store_integration_test.go", "testTitle": "TestOutputDeliveryAttemptsPersistWithoutIncidentPolicyMutation", "category": "integration" }
       ],
       "liveTestExpectation": "Integration delivery result test proves output channels update delivery attempts only."
     },
@@ -314,7 +314,7 @@
       "regressionRequired": true,
       "linkedTests": [
         { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationOperatorAPIReturnsStatusHistoryIncidentsActionsApprovalsSuppressionsSummariesAndOutputs", "category": "e2e-api" },
-        { "file": "internal/api/notifications_pipeline.go", "testTitle": "operator notification routes are wired through authenticated handlers", "category": "e2e-ui" }
+        { "file": "tests/e2e/notification_operator_web_test.go", "testTitle": "TestNotificationOperatorPagesShowRedactedStatusAndIncidentTimeline", "category": "e2e-ui" }
       ],
       "liveTestExpectation": "E2E UI/API tests prove operator pages expose redacted status, history, incidents, actions, approvals, suppressions, summaries, and outputs."
     },
@@ -337,9 +337,9 @@
       "requiredTestType": ["unit", "e2e-api", "e2e-ui"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/redaction_test.go", "testTitle": "TestNotificationRedactionCoversLogsAPIRawPreviewsDiagnosticsActionsAndDeliveries", "category": "unit" },
+        { "file": "internal/notification/redaction_test.go", "testTitle": "TestNotificationRedactorRemovesSecretsFromLogsAPIAndDeliveryPayloads", "category": "unit" },
         { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" },
-        { "file": "internal/api/notifications.go", "testTitle": "notification API responses are redacted and source-qualified", "category": "e2e-ui" }
+        { "file": "tests/e2e/notification_security_web_test.go", "testTitle": "TestNotificationWebSurfacesAreRedactedAndAuthProtected", "category": "e2e-ui" }
       ],
       "liveTestExpectation": "E2E security web test proves redaction and source-qualified observability across logs, traces, metrics, API, and web payloads."
     },
@@ -362,7 +362,7 @@
       "requiredTestType": ["unit", "e2e-api"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/no_ntfy_core_dependency_test.go", "testTitle": "TestCoreNotificationPackageHasNoNtfyProductionDependency", "category": "unit" },
+        { "file": "internal/notification/no_ntfy_core_dependency_test.go", "testTitle": "TestCoreNotificationPackageHasNoNtfySpecificProductionDependency", "category": "unit" },
         { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
       ],
       "liveTestExpectation": "E2E regression proves spec 055 can reuse the conformance fixture while core production code remains ntfy-free."

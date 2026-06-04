@@ -42,7 +42,7 @@ func (d *Dependencies) HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	next := sanitizeNext(r.URL.Query().Get("next"))
 
 	data := loginPageData{
-		AuthEnabled: d.AuthConfig.Enabled || d.AuthToken != "",
+		AuthEnabled: d.loginAuthEnabled(),
 		Next:        next,
 	}
 
@@ -57,11 +57,4 @@ func (d *Dependencies) HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
 	}
-}
-
-// loginStaticFS exposes login.js and login.css for the /admin_ui_static/
-// route. Centralised so the router can mount it without re-declaring
-// the embed.
-func loginStaticFS() http.FileSystem {
-	return http.FS(loginUIFS)
 }

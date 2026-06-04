@@ -32,7 +32,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -100,11 +99,14 @@ func liveDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// ollamaReachable probes <OLLAMA_URL>/api/tags with a short timeout.
-// Returns true if Ollama responds 200, false otherwise. NEVER calls
-// t.Skip; if env vars are missing it returns false and the caller
-// decides what to do.
-func ollamaReachable(t *testing.T, ollamaURL string) bool {
+// ollamaReachability probes <OLLAMA_URL>/api/tags with a short timeout
+// and returns a distinguishing error: nil on HTTP 200, a connect-class
+// error wrapped with "ollama unreachable", or an HTTP-class error
+// wrapped with "ollama responded HTTP %d at %s" plus up to 200 chars
+// of the response body. Collapsing both classes into a single boolean
+// (F-003) hides the difference between "daemon down / DNS wrong" and
+// "daemon up but returning 5xx".
+func ollamaReachability(t *testing.T, ollamaURL string) error {
 	t.Helper()
 	u, err := url.Parse(ollamaURL)
 	if err != nil {
@@ -114,12 +116,25 @@ func ollamaReachable(t *testing.T, ollamaURL string) bool {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(probeURL)
 	if err != nil {
-		var nErr *net.OpError
-		_ = nErr // we accept any error class as "not reachable"
-		return false
+		return fmt.Errorf("ollama unreachable at %s: %w", probeURL, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	return resp.StatusCode == http.StatusOK
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
+	return fmt.Errorf(
+		"ollama responded HTTP %d at %s: %s",
+		resp.StatusCode, probeURL, strings.TrimSpace(string(body)),
+	)
+}
+
+// ollamaReachable preserves the boolean shape for the down-path branch
+// in TestOllamaUnreachable_FailsLoudly, which only needs to know
+// whether the daemon is reachable+healthy (HTTP 200). Callers that
+// need diagnostic detail MUST use ollamaReachability directly.
+func ollamaReachable(t *testing.T, ollamaURL string) bool {
+	return ollamaReachability(t, ollamaURL) == nil
 }
 
 // postInvoke POSTs an agent invocation and returns the parsed response
@@ -216,14 +231,14 @@ func TestAgentHappyPath_PlanToolSynthesis(t *testing.T) {
 	ollamaURL := mustEnv(t, "OLLAMA_URL")
 	pool := liveDB(t)
 
-	if !ollamaReachable(t, ollamaURL) {
+	if err := ollamaReachability(t, ollamaURL); err != nil {
 		t.Fatalf(
-			"e2e_ollama: OLLAMA_URL %q is unreachable. This test requires "+
-				"a live Ollama with the SST-pinned model. Start the test stack "+
-				"with `SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh up` and verify "+
+			"e2e_ollama: %v. This test requires a live Ollama with the "+
+				"SST-pinned model. Start the test stack with "+
+				"`SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh up` and verify "+
 				"`scripts/commands/ollama-test-pull.sh` (respects "+
 				"OLLAMA_TEST_PULL_TIMEOUT_SECONDS).",
-			ollamaURL,
+			err,
 		)
 	}
 
@@ -304,11 +319,11 @@ func TestAgentHappyPath_DeterministicOutput(t *testing.T) {
 	ollamaURL := mustEnv(t, "OLLAMA_URL")
 	pool := liveDB(t)
 
-	if !ollamaReachable(t, ollamaURL) {
+	if err := ollamaReachability(t, ollamaURL); err != nil {
 		t.Fatalf(
-			"e2e_ollama: OLLAMA_URL %q is unreachable; cannot assert determinism "+
-				"against a missing model server.",
-			ollamaURL,
+			"e2e_ollama: %v; cannot assert determinism against an unhealthy "+
+				"model server.",
+			err,
 		)
 	}
 

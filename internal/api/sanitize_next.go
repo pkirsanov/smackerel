@@ -53,7 +53,7 @@ func sanitizeNext(raw string) string {
 		return sanitizeNextDefault
 	}
 	// 5. Reject login-loop on the path component only.
-	if u.Path == "/login" {
+	if u.Path == loginPath {
 		return sanitizeNextDefault
 	}
 	return decoded

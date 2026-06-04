@@ -3,6 +3,30 @@
   "featureDir": "specs/046-nats-production-hardening",
   "featureName": "NATS Production Hardening",
   "status": "done",
+  "discoveredIssues": [
+    {
+      "id": "FOLLOWUP-046-PY-SIDECAR",
+      "source": "stochastic-quality-sweep round 13 (harden-to-doc) findings F1+F2+F3",
+      "severity": "medium",
+      "summary": "ML Python sidecar NATS consumers lack the hardening parity that spec 022/046 gave the Go subscribers: no max_deliver/ack_wait bounds (F1), process-local poison counter leaks and resets on restart (F2), and msg.term() discards payloads instead of publishing to deadletter.<subject> (F3).",
+      "disposition": "new-follow-up-spec",
+      "decision": "Bundle F1+F2+F3 into a single new follow-up spec rather than reopening certified spec 046. All three findings touch ml/app/nats_client.py and share dependencies (F2 swap to msg.metadata.num_delivered only works once F1 sets max_deliver; F3 deadletter payload publish lives in the same poison-pill code path).",
+      "rationale": "Spec 046 is certified done across 12 phases. Reopening a certified spec is heavier than authoring a new bounded one and breaks the certification audit trail. A new follow-up spec (~Scope 3 equivalent: SST keys + ConsumerConfig threading + num_delivered swap + deadletter publish + integration test) is the cleaner unit of work and matches the Smackerel pattern of capability parity across Go and Python adapters as a first-class spec.",
+      "nextOwner": "bubbles.analyst",
+      "action": "Draft new spec specs/NNN-nats-python-sidecar-hardening-parity/ covering: (a) SST keys infrastructure.nats.consumer.max_deliver and infrastructure.nats.consumer.ack_wait_seconds emitted through scripts/commands/config.sh; (b) thread into ml/app/nats_client.subscribe_all via ConsumerConfig(max_deliver=..., ack_wait=...); (c) replace _failure_counts in-process dict with NATS-native msg.metadata.num_delivered; (d) publish original payload to deadletter.<subject> with {original_subject, num_delivered, last_error, sidecar_instance, terminated_at} headers before msg.term(), mirroring Go's publishSynthesisToDeadLetter; (e) integration test asserting redelivery bound + deadletter entry + no _failure_counts growth. Cite spec 022 + spec 046 as substrate; cite this discoveredIssue (FOLLOWUP-046-PY-SIDECAR) as origin.",
+      "bundles": ["F1", "F2", "F3"],
+      "status": "resolved",
+      "decidedAt": "2026-06-04T00:00:00Z",
+      "resolvedAt": "2026-06-04T00:00:00Z",
+      "resolutionRefs": [
+        "specs/081-nats-python-sidecar-hardening-parity/spec.md",
+        "specs/081-nats-python-sidecar-hardening-parity/design.md",
+        "specs/081-nats-python-sidecar-hardening-parity/scopes.md"
+      ],
+      "resolutionSummary": "Bundled F1+F2+F3 into new follow-up spec 081 (NATS Python Sidecar Hardening Parity). Analyst bootstrap complete; implementation, testing, validation pending under spec 081's own DoD.",
+      "routingRecord": "specs/_ops/sweep-round-013-harden-046/routing.md"
+    }
+  ],
   "currentPhase": "done",
   "workflowMode": "full-delivery",
   "planningStatus": "scoped",

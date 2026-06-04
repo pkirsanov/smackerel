@@ -5,10 +5,12 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
 
 import httpx
 import nats
 from nats.aio.client import Client as NATSConn
+from nats.js.api import ConsumerConfig
 from nats.js.client import JetStreamContext
 
 # HL-RESCAN-013 / Gate G028 (NO-DEFAULTS / fail-loud SST policy) — re-use
@@ -19,7 +21,14 @@ from nats.js.client import JetStreamContext
 # dev-mode auth-bypass signal honoured by both verify_auth() and the
 # NATS server's no-auth dev mode).
 from .auth import _AUTH_TOKEN
-from .metrics import llm_tokens_used, processing_latency, sanitize_model
+from .metrics import (
+    llm_tokens_used,
+    nats_consume_fetch_errors_total,
+    nats_deadletter_publish_failures_total,
+    nats_deadletter_total,
+    processing_latency,
+    sanitize_model,
+)
 from .url_validator import validate_fetch_url
 from .validation import (
     PayloadValidationError,
@@ -121,6 +130,63 @@ SUBJECT_RESPONSE_MAP = {
 CRITICAL_SUBJECTS = {"artifacts.process", "search.embed", "synthesis.extract", "photos.classify", "photos.embed"}
 
 
+# Spec 081 FR-081-003 / design §3.1 — subject → JetStream stream lookup.
+# Mirrors internal/nats/client.go::AllStreams subject bindings so the
+# Smackerel-Original-Stream header on dead-letter messages matches the
+# Go envelope byte-for-byte. Missing entry MUST fail loud at module
+# import (fail-loud parity with the SST philosophy).
+SUBJECT_TO_STREAM = {
+    "artifacts.process": "ARTIFACTS",
+    "search.embed": "SEARCH",
+    "search.rerank": "SEARCH",
+    "digest.generate": "DIGEST",
+    "keep.sync.request": "KEEP",
+    "keep.ocr.request": "KEEP",
+    "learning.classify": "INTELLIGENCE",
+    "content.analyze": "INTELLIGENCE",
+    "monthly.generate": "INTELLIGENCE",
+    "quickref.generate": "INTELLIGENCE",
+    "seasonal.analyze": "INTELLIGENCE",
+    "synthesis.extract": "SYNTHESIS",
+    "synthesis.crosssource": "SYNTHESIS",
+    "domain.extract": "DOMAIN",
+    "photos.classify": "PHOTOS",
+    "photos.ocr": "PHOTOS",
+    "photos.embed": "PHOTOS",
+    "photos.lifecycle": "PHOTOS",
+    "photos.dedupe": "PHOTOS",
+    "photos.sensitivity": "PHOTOS",
+    "photos.aesthetic": "PHOTOS",
+    "photos.removal.review": "PHOTOS",
+    "agent.invoke.request": "AGENT",
+    "drive.extract.request": "DRIVE",
+    "drive.classify.request": "DRIVE",
+}
+
+_missing_stream_subjects = [s for s in SUBSCRIBE_SUBJECTS if s not in SUBJECT_TO_STREAM]
+if _missing_stream_subjects:
+    raise RuntimeError(
+        "SUBJECT_TO_STREAM is missing entries for subjects "
+        f"{_missing_stream_subjects} — every SUBSCRIBE_SUBJECTS entry MUST "
+        "resolve to the JetStream stream declared in "
+        "internal/nats/client.go::AllStreams (spec 081 design §3.1)."
+    )
+
+
+def _utf8_truncate(s: str, max_bytes: int) -> str:
+    """Truncate a string to at most max_bytes when UTF-8 encoded.
+
+    Mirrors the Go-side stringutil.TruncateUTF8 invariant: never split
+    a multi-byte codepoint at the tail. Implementation: encode, slice
+    on byte boundary, decode with errors='ignore' which drops any
+    partial trailing codepoint.
+    """
+    encoded = s.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return s
+    return encoded[:max_bytes].decode("utf-8", errors="ignore")
+
+
 class NATSClient:
     """Manages NATS JetStream connection and subscriptions for the ML sidecar."""
 
@@ -130,7 +196,12 @@ class NATSClient:
         self._js: JetStreamContext | None = None
         self._subscriptions: list = []
         self._tasks: list[asyncio.Task] = []
-        self._failure_counts: dict[int, int] = {}  # msg seq -> nak count
+        # Spec 081 FR-081-001 — populated by subscribe_all() from the
+        # SST-required NATS_CONSUMER_MAX_DELIVER / _ACK_WAIT_SECONDS
+        # env vars. Cached on the instance so _consume_loop can read
+        # max_deliver without re-reading env on every message.
+        self._consumer_max_deliver: int | None = None
+        self._consumer_ack_wait_seconds: int | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -213,6 +284,51 @@ class NATSClient:
         if not self._js:
             raise RuntimeError("NATS not connected")
 
+        # Spec 081 FR-081-001 / FR-081-002 — read consumer contract ONCE
+        # at the top of subscribe_all (design §4.1); cache on the
+        # instance and thread a single ConsumerConfig(...) into every
+        # pull_subscribe call. No per-subject overrides; no re-reads
+        # inside _consume_loop. Mirrors the spec 046 fail-loud pattern
+        # in connect().
+        try:
+            raw_max_deliver = os.environ["NATS_CONSUMER_MAX_DELIVER"]
+        except KeyError as exc:
+            raise RuntimeError(
+                "NATS_CONSUMER_MAX_DELIVER is required (spec 081 FR-081-001) — "
+                "set infrastructure.nats.consumer.max_deliver in "
+                "config/smackerel.yaml and run `./smackerel.sh config generate`."
+            ) from exc
+        try:
+            max_deliver = int(raw_max_deliver)
+        except ValueError as exc:
+            raise RuntimeError(f"NATS_CONSUMER_MAX_DELIVER must be an integer; got {raw_max_deliver!r}") from exc
+        if max_deliver < 1:
+            raise RuntimeError(f"NATS_CONSUMER_MAX_DELIVER must be >= 1; got {max_deliver}")
+
+        try:
+            raw_ack_wait = os.environ["NATS_CONSUMER_ACK_WAIT_SECONDS"]
+        except KeyError as exc:
+            raise RuntimeError(
+                "NATS_CONSUMER_ACK_WAIT_SECONDS is required (spec 081 FR-081-002) — "
+                "set infrastructure.nats.consumer.ack_wait_seconds in "
+                "config/smackerel.yaml and run `./smackerel.sh config generate`."
+            ) from exc
+        try:
+            ack_wait_seconds = int(raw_ack_wait)
+        except ValueError as exc:
+            raise RuntimeError(f"NATS_CONSUMER_ACK_WAIT_SECONDS must be an integer; got {raw_ack_wait!r}") from exc
+        if ack_wait_seconds < 1:
+            raise RuntimeError(f"NATS_CONSUMER_ACK_WAIT_SECONDS must be >= 1; got {ack_wait_seconds}")
+
+        self._consumer_max_deliver = max_deliver
+        self._consumer_ack_wait_seconds = ack_wait_seconds
+
+        # nats-py expects ack_wait as nanoseconds (Go-style time.Duration).
+        consumer_config = ConsumerConfig(
+            max_deliver=max_deliver,
+            ack_wait=ack_wait_seconds * 1_000_000_000,
+        )
+
         max_attempts = 30
         base_delay = 1.0  # seconds
         max_delay = 15.0
@@ -224,6 +340,7 @@ class NATSClient:
                     sub = await self._js.pull_subscribe(
                         subject,
                         durable=f"smackerel-ml-{subject.replace('.', '-')}",
+                        config=consumer_config,
                     )
                     break
                 except Exception as exc:
@@ -269,7 +386,14 @@ class NATSClient:
         while True:
             try:
                 msgs = await sub.fetch(batch=5, timeout=5)
-            except Exception:
+            except nats.errors.TimeoutError:
+                # Normal idle-poll cadence: no work in the stream right now.
+                continue
+            except Exception as fetch_err:
+                # Spec 046 follow-up F4: transport/stream/auth errors must be
+                # observable, not masked as ordinary idle timeouts.
+                nats_consume_fetch_errors_total.labels(subject=subject).inc()
+                logger.error("NATS fetch failed on subject=%s err=%s", subject, fetch_err)
                 await asyncio.sleep(1)
                 continue
 
@@ -513,19 +637,76 @@ class NATSClient:
                     await msg.ack()  # Don't redeliver malformed messages
                 except Exception as e:
                     logger.error("Error processing %s message: %s", subject, e, exc_info=True)
-                    seq = msg.metadata.sequence.stream if msg.metadata else 0
-                    self._failure_counts[seq] = self._failure_counts.get(seq, 0) + 1
-                    if self._failure_counts[seq] >= 5:
-                        logger.critical(
-                            "Poison pill detected on %s (seq=%d, failures=%d) — terminating message",
-                            subject,
-                            seq,
-                            self._failure_counts[seq],
-                        )
-                        await msg.term()
-                        del self._failure_counts[seq]
-                    else:
-                        await msg.nak()
+                    await self._handle_poison(subject, msg, e)
+
+    async def _handle_poison(self, subject: str, msg, exc: Exception) -> None:
+        """Handle a handler exception per spec 081 design §4.
+
+        Drives the poison-pill decision off msg.metadata.num_delivered
+        (JetStream redelivery counter — the single source of truth, no
+        local counter). On exhaustion (num_delivered >= max_deliver):
+        publish the original payload + canonical 6-header envelope to
+        deadletter.<subject>, THEN term() — only after the publish
+        succeeds. If publish fails: nak() so JetStream redelivers and
+        we retry the publish (publish-before-term invariant; design §4
+        invariant 1). Otherwise: nak() for normal redelivery.
+        """
+        max_deliver = self._consumer_max_deliver
+        if max_deliver is None:
+            # subscribe_all() always populates this; if we get here it
+            # means something subscribed without going through it. Fall
+            # back to nak() to let JetStream keep redelivering rather
+            # than silently term()ing without dead-letter forensics.
+            await msg.nak()
+            return
+
+        md = msg.metadata
+        num_delivered = md.num_delivered if md is not None else 0
+
+        if num_delivered < max_deliver:
+            await msg.nak()
+            return
+
+        # Exhausted: build canonical envelope and publish to dead-letter.
+        dl_subject = "deadletter." + subject
+        original_stream = SUBJECT_TO_STREAM[subject]
+        headers: dict[str, str] = {
+            "Smackerel-Original-Subject": subject,
+            "Smackerel-Original-Stream": original_stream,
+            "Smackerel-Failed-At": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "Smackerel-Delivery-Count": str(num_delivered),
+        }
+        last_err = _utf8_truncate(str(exc), 256)
+        if last_err:  # parity with Go `if lastError != ""`
+            headers["Smackerel-Last-Error"] = last_err
+        consumer = ""
+        if md is not None:
+            consumer = getattr(md, "consumer", "") or ""
+        if not consumer:
+            consumer = f"smackerel-ml-{subject.replace('.', '-')}"
+        if consumer:  # parity with Go `if md.Consumer != ""`
+            headers["Smackerel-Original-Consumer"] = consumer
+
+        try:
+            await self._js.publish(dl_subject, msg.data, headers=headers)
+        except Exception as pub_err:
+            logger.error(
+                "dead-letter publish failed; nak for retry subject=%s err=%s",
+                subject,
+                pub_err,
+            )
+            nats_deadletter_publish_failures_total.labels(subject=subject).inc()
+            await msg.nak()
+            return  # MUST NOT term() — preserve forensic evidence
+
+        nats_deadletter_total.labels(stream=original_stream).inc()
+        logger.warning(
+            "ml message routed to dead-letter subject=%s dl_subject=%s num_delivered=%d",
+            subject,
+            dl_subject,
+            num_delivered,
+        )
+        await msg.term()
 
     async def _handle_artifact_process(
         self,

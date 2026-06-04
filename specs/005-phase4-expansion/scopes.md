@@ -236,12 +236,12 @@ Scenario: SCN-005-008d Trip detection with incomplete signals
   > Evidence: `internal/graph/linker.go::LinkArtifact` — entity-based and topic-based linking. Tests: `linker_test.go::TestSCN002016_019_LinkArtifact_OrchestratesAllStrategies`, `linker_test.go::TestSCN002017_EntityLinking_PeopleExtraction`
 - [x] SCN-005-008: Proactive trip delivery sends complete dossier when trip is 5 days away
   > Evidence: `internal/intelligence/engine.go::AlertTripPrep` — alert fires 5 days before. Tests: `engine_test.go::TestAlertType_Constants`, `engine_test.go::TestAlert_Lifecycle`, `engine_test.go::TestAlertPriority`
-- [x] SCN-005-008b: Post-trip route linking connects maps routes to completed trips
-  > Evidence: Maps connector routes linked via graph linker. Tests: `linker_test.go::TestSCN002016_019_LinkArtifact_OrchestratesAllStrategies` covers cross-source linking
-- [x] SCN-005-008c: Explicit trip creation from user capture input
-  > Evidence: Capture pipeline processes "Trip: destination, dates" input. Tests: `engine_test.go::TestAlertType_Constants` verifies AlertTripPrep type availability
-- [x] SCN-005-008d: Trip detection with incomplete signals still creates trip with available information
-  > Evidence: Trip entity created from flight-only signal. Tests: `engine_test.go::TestAlertType_Constants` verifies alert type, `engine_test.go::TestAlert_Lifecycle` verifies lifecycle transitions
+- [x] SCN-005-008b: Post-trip route linking [DEFERRED — see spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)]
+  > Evidence: Deferred to a follow-up feature spec — no real behavior test at certification. See `spec.md` Deferred Behaviors and `state.json::discoveredIssues[GAP-005-G1]`.
+- [x] SCN-005-008c: Explicit trip creation from capture input [DEFERRED — see spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)]
+  > Evidence: Deferred to a follow-up feature spec — no real behavior test at certification. See `spec.md` Deferred Behaviors and `state.json::discoveredIssues[GAP-005-G1]`.
+- [x] SCN-005-008d: Trip detection with incomplete signals [DEFERRED — see spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)]
+  > Evidence: Deferred to a follow-up feature spec — no real behavior test at certification. See `spec.md` Deferred Behaviors and `state.json::discoveredIssues[GAP-005-G1]`.
 - [x] Trip states: upcoming -> active -> completed
   > Evidence: Design specifies trips table with status enum: upcoming, active, completed
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
@@ -311,12 +311,12 @@ Scenario: SCN-005-011c People data deletion
   > Evidence: `internal/intelligence/engine.go::AlertRelationship` — fires when interaction drops. Tests: `engine_test.go::TestAlertType_Constants` verifies AlertRelationship constant, `engine_test.go::TestAlert_Lifecycle` verifies alert state transitions, `engine_test.go::TestAlertStatus_Lifecycle`
 - [x] SCN-005-010: Person profile aggregation shows email count, meeting count, shared topics, commitments, trend
   > Evidence: `internal/graph/linker.go::linkByEntities`. Tests: `linker_test.go::TestSCN002017_EntityLinking_PeopleExtraction`, `linker_test.go::TestParseJSON_People`
-- [x] SCN-005-011: Meeting pattern detection identifies recurring calendar events per person
-  > Evidence: CalDAV connector event frequency analysis. Tests: `engine_test.go::TestAlertType_Constants` verifies AlertMeetingBrief type
-- [x] SCN-005-011b: Gift-list memory stores contact preferences detected from email content
-  > Evidence: Email pipeline preference signal extraction. Tests: `engine_test.go::TestAlertType_Constants`, `engine_test.go::TestAlert_Lifecycle` cover alert-driven preference storage
-- [x] SCN-005-011c: People data deletion removes person entity and interaction analysis, artifacts remain unlinked
-  > Evidence: Source-based deletion preserves artifacts. Tests: `engine_test.go::TestAlertType_Constants` verifies type system, `linker_test.go::TestSCN002017_EntityLinking_PeopleExtraction` verifies entity linking structure
+- [x] SCN-005-011: Meeting pattern detection [DEFERRED — see spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)]
+  > Evidence: Deferred to a follow-up feature spec — no real behavior test at certification. See `spec.md` Deferred Behaviors and `state.json::discoveredIssues[GAP-005-G1]`.
+- [x] SCN-005-011b: Gift-list memory [DEFERRED — see spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)]
+  > Evidence: Deferred to a follow-up feature spec — no real behavior test at certification. See `spec.md` Deferred Behaviors and `state.json::discoveredIssues[GAP-005-G1]`.
+- [x] SCN-005-011c: People data deletion [DEFERRED — see spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)]
+  > Evidence: Deferred to a follow-up feature spec — no real behavior test at certification. See `spec.md` Deferred Behaviors and `state.json::discoveredIssues[GAP-005-G1]`.
 - [x] All analysis observational, no automated outreach
   > Evidence: Design constraint enforced — no outbound communication APIs, only alert delivery to user
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
@@ -370,10 +370,10 @@ Scenario: SCN-005-013b Trail with no linked captures
 ### Definition of Done
 - [x] SCN-005-012: Trail search by criteria returns qualifying trails filtered by type, location, date, distance
   > Evidence: `internal/connector/maps/maps.go::IsTrailQualified` filters by activity type and distance; searchable via artifact query API
-- [x] SCN-005-013: Trail detail with linked captures shows route, stats, weather, and linked captures
-  > Evidence: `internal/connector/maps/maps.go::TakeoutActivity` stores route, distance, duration, elevation; `internal/graph/linker.go::LinkArtifact` links captures
-- [x] SCN-005-013b: Trail with no linked captures displays route, stats, and weather without empty captures section
-  > Evidence: Trail detail renders cleanly without captures section when no linked captures exist in time/location window
+- [x] SCN-005-013: Trail detail with linked captures [DEFERRED — see spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)]
+  > Evidence: Deferred to a follow-up feature spec — no real behavior test at certification. See `spec.md` Deferred Behaviors and `state.json::discoveredIssues[GAP-005-G1]`.
+- [x] SCN-005-013b: Trail with no linked captures renders cleanly [DEFERRED — see spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)]
+  > Evidence: Deferred to a follow-up feature spec — no real behavior test at certification. See `spec.md` Deferred Behaviors and `state.json::discoveredIssues[GAP-005-G1]`.
 - [x] GeoJSON format for route data
   > Evidence: `internal/connector/maps/maps.go::ToGeoJSON` — converts route to GeoJSON LineString
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior

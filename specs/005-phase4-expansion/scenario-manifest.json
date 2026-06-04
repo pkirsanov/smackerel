@@ -177,7 +177,9 @@
       "scenarioId": "SCN-005-008b",
       "name": "Post-trip route linking",
       "scope": "03-trip-dossier",
-      "status": "active",
+      "status": "deferred",
+      "deferredTo": "future-feature-spec",
+      "deferralRef": "spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)",
       "requiredTestType": ["integration"],
       "linkedTests": [
         {"file": "internal/graph/linker_test.go", "function": "TestLinkByEntities"}
@@ -190,7 +192,9 @@
       "scenarioId": "SCN-005-008c",
       "name": "Explicit trip creation",
       "scope": "03-trip-dossier",
-      "status": "active",
+      "status": "deferred",
+      "deferredTo": "future-feature-spec",
+      "deferralRef": "spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)",
       "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
@@ -203,7 +207,9 @@
       "scenarioId": "SCN-005-008d",
       "name": "Trip detection with incomplete signals",
       "scope": "03-trip-dossier",
-      "status": "active",
+      "status": "deferred",
+      "deferredTo": "future-feature-spec",
+      "deferralRef": "spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)",
       "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
@@ -244,7 +250,9 @@
       "scenarioId": "SCN-005-011",
       "name": "Meeting pattern detection",
       "scope": "04-people-intelligence",
-      "status": "active",
+      "status": "deferred",
+      "deferredTo": "future-feature-spec",
+      "deferralRef": "spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)",
       "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
@@ -257,7 +265,9 @@
       "scenarioId": "SCN-005-011b",
       "name": "Gift-list memory",
       "scope": "04-people-intelligence",
-      "status": "active",
+      "status": "deferred",
+      "deferredTo": "future-feature-spec",
+      "deferralRef": "spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)",
       "requiredTestType": ["unit", "integration"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
@@ -270,7 +280,9 @@
       "scenarioId": "SCN-005-011c",
       "name": "People data deletion",
       "scope": "04-people-intelligence",
-      "status": "active",
+      "status": "deferred",
+      "deferredTo": "future-feature-spec",
+      "deferralRef": "spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)",
       "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
@@ -299,7 +311,9 @@
       "scenarioId": "SCN-005-013",
       "name": "Trail detail with linked captures",
       "scope": "05-trail-journal",
-      "status": "active",
+      "status": "deferred",
+      "deferredTo": "future-feature-spec",
+      "deferralRef": "spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)",
       "requiredTestType": ["unit", "integration"],
       "linkedTests": [
         {"file": "internal/connector/maps/maps_test.go", "function": "TestToGeoJSON"},
@@ -315,7 +329,9 @@
       "scenarioId": "SCN-005-013b",
       "name": "Trail with no linked captures",
       "scope": "05-trail-journal",
-      "status": "active",
+      "status": "deferred",
+      "deferredTo": "future-feature-spec",
+      "deferralRef": "spec.md Non-Goals / Deferred Behaviors (GAP-005-G1)",
       "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/connector/maps/maps_test.go", "function": "TestIsTrailQualified"}

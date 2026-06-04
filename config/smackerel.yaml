@@ -1582,6 +1582,15 @@ infrastructure:
     client:
       reconnect_time_wait_seconds: 2
       max_reconnect_attempts: -1
+    # Spec 081 FR-081-001 / FR-081-002 — Python sidecar consumer
+    # contract (parity with Go spec 022 Operational Resilience). The
+    # ML sidecar reads these via NATS_CONSUMER_MAX_DELIVER and
+    # NATS_CONSUMER_ACK_WAIT_SECONDS in ml/app/nats_client.py and
+    # threads ConsumerConfig(max_deliver=..., ack_wait=...) into every
+    # pull_subscribe call. Missing/empty values fail loud at startup.
+    consumer:
+      max_deliver: 5
+      ack_wait_seconds: 120
     # Spec 046 FR-046-003 — per-stream MaxBytes caps. Every JetStream
     # stream Smackerel creates MUST have a bounded MaxBytes; unbounded
     # streams are an explicit failure condition. The Go core reads this

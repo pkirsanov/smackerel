@@ -4,6 +4,46 @@
   "featureName": "Phase 4: Expansion",
   "status": "done",
   "workflowMode": "full-delivery",
+  "discoveredIssues": [
+    {
+      "id": "GAP-005-G1",
+      "source": "stochastic-quality-sweep round 12 (gaps-to-doc)",
+      "severity": "medium",
+      "summary": "DoD evidence for SCN-005-008b/008c/008d/011/011b/011c/013/013b cites constant-existence tests (TestAlertType_Constants, TestAlert_Lifecycle) as behavior coverage; no Test* matches the scenario verbs under internal/intelligence/.",
+      "disposition": "new-follow-up",
+      "decision": "Option (b): demote the 8 scenarios to Non-Goals/Deferred via bubbles.analyst, mirroring the established R-406/R-407/SC-E11/E18/E19/E20 deferral pattern.",
+      "rationale": "Spec 005 is a certified phase aggregator. Authoring real behavior tests for already-shipped Phase 4 scenarios would require a full plan/implement/test reopen cycle with no product value beyond evidence honesty. Demotion makes the DoD evidence truthful without rework and matches established phase-spec precedent already accepted by audit.",
+      "nextOwner": "bubbles.analyst",
+      "action": "Open analyst follow-up packet to add SCN-005-008b/008c/008d/011/011b/011c/013/013b to spec.md Non-Goals (or Deferred Behaviors) with one-line per-scenario rationale citing GAP-005-G1; update scopes.md DoD evidence rows to reference the deferral instead of the constant-existence tests.",
+      "status": "resolved",
+      "decidedAt": "2026-06-04T00:00:00Z",
+      "resolvedAt": "2026-06-04T00:00:00Z",
+      "resolutionRefs": [
+        "specs/005-phase4-expansion/spec.md#deferred-behaviors-gap-005-g1--sweep-round-12-triage",
+        "specs/005-phase4-expansion/scopes.md (DoD rows for SCN-005-008b/008c/008d/011/011b/011c/013/013b marked [DEFERRED])",
+        "specs/005-phase4-expansion/scenario-manifest.json (8 scenarios status=deferred, deferredTo=future-feature-spec)"
+      ],
+      "routingRecord": "specs/_ops/sweep-round-012-gap-005/routing.md"
+    },
+    {
+      "id": "GAP-005-G2",
+      "source": "stochastic-quality-sweep round 12 (gaps-to-doc)",
+      "severity": "low",
+      "summary": "uservalidation.md is the bootstrap stub on a certified phase spec.",
+      "disposition": "close-as-policy",
+      "decision": "Option (b) in the routing record: document explicit phase-spec user-validation policy (defers to constituent feature specs and docs/releases/ packets).",
+      "rationale": "Phase specs aggregate constituent feature specs (007-017 connectors) and release packets under docs/releases/; per-scope user acceptance lives in those constituents. Back-filling per-scope acceptance into the phase aggregator would duplicate evidence and create a second source of truth that drifts.",
+      "nextOwner": "bubbles.docs",
+      "action": "Append a `## Phase-Spec User Validation Policy` block to specs/005-phase4-expansion/uservalidation.md pointing readers to the constituent feature specs and docs/releases/ packets that hold real user-validation evidence; cite GAP-005-G2.",
+      "status": "resolved",
+      "decidedAt": "2026-06-04T00:00:00Z",
+      "resolvedAt": "2026-06-04T00:00:00Z",
+      "resolutionRefs": [
+        "specs/005-phase4-expansion/uservalidation.md#phase-spec-user-validation-policy"
+      ],
+      "routingRecord": "specs/_ops/sweep-round-012-gap-005/routing.md"
+    }
+  ],
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",

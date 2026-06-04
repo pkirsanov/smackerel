@@ -53,6 +53,45 @@ type webLoginRequest struct {
 	Token string `json:"token"`
 }
 
+// authCookieName is the single source of truth for the session cookie name.
+const authCookieName = "auth_token"
+
+// loginPath is the canonical login page URL (used for redirects and
+// login-loop detection in next-sanitisation).
+const loginPath = "/login"
+
+// isFormContentType reports whether the request body is
+// application/x-www-form-urlencoded (ignoring parameters / case).
+func isFormContentType(r *http.Request) bool {
+	ct := strings.ToLower(strings.TrimSpace(
+		strings.SplitN(r.Header.Get("Content-Type"), ";", 2)[0]))
+	return ct == "application/x-www-form-urlencoded"
+}
+
+// authCookie builds the session cookie. When clear is true the cookie
+// is shaped for logout (empty value + MaxAge=-1); otherwise it carries
+// the supplied token value. design.md §10.4 attributes are preserved.
+func (d *Dependencies) authCookie(value string, clear bool) *http.Cookie {
+	c := &http.Cookie{
+		Name:     authCookieName,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   strings.EqualFold(d.Environment, "production"),
+	}
+	if clear {
+		c.MaxAge = -1
+	}
+	return c
+}
+
+// loginAuthEnabled reports whether any login flow is available — either
+// per-user PASETO (AuthConfig.Enabled) or the shared dev token.
+func (d *Dependencies) loginAuthEnabled() bool {
+	return d.AuthConfig.Enabled || d.AuthToken != ""
+}
+
 // webLoginResponse is the JSON body returned on successful login. The
 // cookie is the load-bearing artifact; the JSON body is informational.
 type webLoginResponse struct {
@@ -76,10 +115,7 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 	// callers remains byte-for-byte identical. Branching is driven by
 	// Content-Type; form-encoded requests get a 303 + cookie response,
 	// JSON requests get the existing JSON body response.
-	isForm := strings.HasPrefix(
-		strings.ToLower(strings.TrimSpace(strings.SplitN(r.Header.Get("Content-Type"), ";", 2)[0])),
-		"application/x-www-form-urlencoded",
-	)
+	isForm := isFormContentType(r)
 
 	// Reject requests when no auth token is configured at all (pure
 	// dev-bypass mode). The login flow has nothing to validate against
@@ -171,43 +207,44 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 		token = req.Token
 	}
 
-	if credentialVerified {
-		// Skip token verify — credentials already passed. Cookie
-		// value is the shared AuthToken; expiresAt stays empty
-		// (the cookie itself has no Max-Age per existing semantics).
-	} else if d.AuthConfig.Enabled {
-		// Production / per-user PASETO path.
-		parsed, err := auth.VerifyAndParse(token, d.AuthVerifyOptions)
-		if err != nil {
-			if isForm {
-				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+	// Token-verify branch. When credentials were already verified above
+	// the cookie value is the shared AuthToken and expiresAt stays empty
+	// (the cookie itself has no Max-Age per existing semantics).
+	if !credentialVerified {
+		if d.AuthConfig.Enabled {
+			// Production / per-user PASETO path.
+			parsed, err := auth.VerifyAndParse(token, d.AuthVerifyOptions)
+			if err != nil {
+				if isForm {
+					d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+					return
+				}
+				writeError(w, http.StatusUnauthorized, "invalid_token",
+					"token failed validation")
 				return
 			}
-			writeError(w, http.StatusUnauthorized, "invalid_token",
-				"token failed validation")
-			return
-		}
-		if d.RevocationCache != nil && d.RevocationCache.IsRevoked(parsed.TokenID) {
-			if isForm {
-				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+			if d.RevocationCache != nil && d.RevocationCache.IsRevoked(parsed.TokenID) {
+				if isForm {
+					d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+					return
+				}
+				writeError(w, http.StatusUnauthorized, "revoked_token",
+					"token has been revoked")
 				return
 			}
-			writeError(w, http.StatusUnauthorized, "revoked_token",
-				"token has been revoked")
-			return
-		}
-		userID = parsed.UserID
-		expiresAt = parsed.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
-	} else {
-		// Dev/test shared-token path (constant-time compare).
-		if subtle.ConstantTimeCompare([]byte(token), []byte(d.AuthToken)) != 1 {
-			if isForm {
-				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+			userID = parsed.UserID
+			expiresAt = parsed.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
+		} else {
+			// Dev/test shared-token path (constant-time compare).
+			if subtle.ConstantTimeCompare([]byte(token), []byte(d.AuthToken)) != 1 {
+				if isForm {
+					d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+					return
+				}
+				writeError(w, http.StatusUnauthorized, "invalid_token",
+					"token does not match shared dev token")
 				return
 			}
-			writeError(w, http.StatusUnauthorized, "invalid_token",
-				"token does not match shared dev token")
-			return
 		}
 	}
 
@@ -217,15 +254,7 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 	// Secure is set in production deployments (TLS) and dropped in
 	// dev/test where the test stack runs over plain HTTP on
 	// 127.0.0.1.
-	cookie := &http.Cookie{
-		Name:     "auth_token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   strings.EqualFold(d.Environment, "production"),
-	}
-	http.SetCookie(w, cookie)
+	http.SetCookie(w, d.authCookie(token, false))
 
 	if isForm {
 		// Spec 057 Scope 3 — server-side re-sanitisation of the hidden
@@ -251,21 +280,12 @@ func (d *Dependencies) HandleWebLogout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST required")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "auth_token",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   strings.EqualFold(d.Environment, "production"),
-		MaxAge:   -1,
-	})
+	http.SetCookie(w, d.authCookie("", true))
 	// Spec 057 Scope 3 — form POSTs from the logout button redirect to
 	// /login so the user lands on a usable page. JSON callers (spec 044
 	// PWA contract) keep the existing JSON body response.
-	ct := strings.ToLower(strings.TrimSpace(strings.SplitN(r.Header.Get("Content-Type"), ";", 2)[0]))
-	if ct == "application/x-www-form-urlencoded" {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	if isFormContentType(r) {
+		http.Redirect(w, r, loginPath, http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, struct {
@@ -284,7 +304,7 @@ func (d *Dependencies) renderLoginError(w http.ResponseWriter, _ *http.Request, 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusUnauthorized)
 	data := loginPageData{
-		AuthEnabled: d.AuthConfig.Enabled || d.AuthToken != "",
+		AuthEnabled: d.loginAuthEnabled(),
 		Next:        next,
 		Error:       msg,
 	}
