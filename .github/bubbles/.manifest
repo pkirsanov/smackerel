@@ -103,6 +103,7 @@ bubbles/scripts/regression-quality-guard.sh
 bubbles/scripts/release-check.sh
 bubbles/scripts/release-manifest-purity-selftest.sh
 bubbles/scripts/release-manifest-selftest.sh
+bubbles/scripts/release-packet-location-guard.sh
 bubbles/scripts/release-train-backfill-planner.sh
 bubbles/scripts/release-train-flag-audit-selftest.sh
 bubbles/scripts/release-train-flag-audit.sh
@@ -136,6 +137,7 @@ bubbles/scripts/test-impact-plan-selftest.sh
 bubbles/scripts/test-impact-plan.sh
 bubbles/scripts/tool-log-selftest.sh
 bubbles/scripts/tool-log.sh
+bubbles/scripts/top-level-runtime-routing-selftest.sh
 bubbles/scripts/trace-contract-guard-selftest.sh
 bubbles/scripts/trace-contract-guard.sh
 bubbles/scripts/traceability-guard-selftest.sh
@@ -273,6 +275,8 @@ docs/recipes/upkeep-monthly.md
 docs/recipes/ux-single-file-sweep.md
 docs/recipes/validation-latency-budgets.md
 docs/v4.1.0-delivered-pending-activation.md
+docs/v5.2-design.md
+docs/v6-mcp-design.md
 bubbles/workflows.yaml
 bubbles/agnosticity-allowlist.txt
 bubbles/action-risk-registry.yaml
@@ -438,6 +442,7 @@ skills/bubbles-observability-adapter/SKILL.md
 skills/bubbles-product-principle-discovery/SKILL.md
 skills/bubbles-propagation-policy/SKILL.md
 skills/bubbles-quality-gates-catalog/SKILL.md
+skills/bubbles-release-packet-template/SKILL.md
 skills/bubbles-release-train-model/SKILL.md
 skills/bubbles-repo-readiness/SKILL.md
 skills/bubbles-result-envelope/SKILL.md

@@ -66,7 +66,8 @@ Concrete lookup examples (from `workflows.yaml` defaults). Use the nested form o
 
 **1c. Execute the mapped child workflow mode (MODE TARGET IS ALWAYS THE RESOLVED MODE).** The parent must run `specs/{spec} mode: {mapped-mode}` for the selected round. Use one of these execution models:
   - **Nested child workflow:** invoke `bubbles.workflow` via `runSubagent` when the child runtime can itself access `agent`/`runSubagent`.
-  - **Parent-expanded child mode:** when the nested child runtime lacks `agent`/`runSubagent`, keep execution in the current workflow runtime and invoke the same phase owners directly according to the resolved mode's phase contract. Record `executionModel: parent-expanded-child-mode` in the round ledger.
+  - **Parent-expanded child mode:** when the nested child runtime lacks `agent`/`runSubagent` AND the resolved mode does NOT have `requiresTopLevelRuntime: true`, keep execution in the current workflow runtime and invoke the same phase owners directly according to the resolved mode's phase contract. Record `executionModel: parent-expanded-child-mode` in the round ledger.
+  - **Top-level-runtime escalation:** when the resolved mode has `requiresTopLevelRuntime: true` (fan-out modes like `stochastic-quality-sweep`, `retro-quality-sweep`, `iterate`, `autonomous-goal`, `autonomous-sprint`, `idea-to-release-completion`) and the current runtime is a subagent without `runSubagent`, the runtime MUST stop and emit a `route_required` result envelope with `routingReason: "top-level-runtime-required"` and `nextOwner: "user-session"`. It MUST NOT attempt parent-expanded execution — a single agent cannot legitimately be `bubbles.bug` + `bubbles.implement` + `bubbles.test` + `bubbles.validate` + `bubbles.audit` + `bubbles.docs` in one turn without violating role separation and anti-fabrication. The top-level session is the only legitimate dispatcher for these modes. See **Top-level-runtime modes** section below.
 
 The selected execution model must still give the mapped mode ownership of the FULL chain: trigger -> finding-owned planning -> implementation -> tests -> validation -> audit -> docs -> finalize/certification for that spec.
 
@@ -77,13 +78,13 @@ The selected execution model must still give the mapped mode ownership of the FU
   
   A mapped mode that returns a findings list without having executed the planning + delivery chain for those findings is a **malformed result** — treat the round as `NON_TERMINAL` and re-execute or escalate.
 
-**⚠️ TWO KNOWN DISPATCH FAILURE MODES (BOTH FORBIDDEN):**
+**⚠️ FOUR KNOWN DISPATCH FAILURE MODES (ALL FORBIDDEN):**
 
-| ❌ Failure Mode 1: Default-to-implement | ❌ Failure Mode 2: Direct-trigger-agent only | ❌ Failure Mode 3: Recursive-tool blocker | ✅ CORRECT |
-|------------------------------------------|-----------------------------------------------|---------------------------------------------|------------|
-| `runSubagent("bubbles.implement", ...)` | `runSubagent("bubbles.chaos", ...)` as the whole round | nested `bubbles.workflow` reports missing `runSubagent`, parent stops | execute `specs/X mode: chaos-hardening` |
-| Skips the trigger probe entirely; only runs implementation | Runs only the trigger probe; skips implementation and quality chain | Stops before the mapped mode can run its phase owners | Full mapped mode: trigger -> plan -> implement -> test -> validate -> audit -> docs -> finalize |
-| **All specs get the same treatment regardless of trigger** | **Findings from trigger have no delivery path** | **One-level runtimes deadlock recursive orchestration** | **Use nested workflow when supported, otherwise parent-expand the mapped mode** |
+| ❌ Failure Mode 1: Default-to-implement | ❌ Failure Mode 2: Direct-trigger-agent only | ❌ Failure Mode 3: Recursive-tool blocker | ❌ Failure Mode 4: Silent parent-expansion of fan-out mode | ✅ CORRECT |
+|------------------------------------------|-----------------------------------------------|---------------------------------------------|--------------------------------------------------------------|------------|
+| `runSubagent("bubbles.implement", ...)` | `runSubagent("bubbles.chaos", ...)` as the whole round | nested `bubbles.workflow` reports missing `runSubagent`, parent stops | subagent runtime resolves `stochastic-quality-sweep` / `iterate` / `autonomous-*` and tries to play every specialist role in one turn | execute `specs/X mode: chaos-hardening` from the runtime that can legitimately dispatch it |
+| Skips the trigger probe entirely; only runs implementation | Runs only the trigger probe; skips implementation and quality chain | Stops before the mapped mode can run its phase owners | Forges cross-role transitions; produces evidence without real specialist provenance | Full mapped mode: trigger -> plan -> implement -> test -> validate -> audit -> docs -> finalize |
+| **All specs get the same treatment regardless of trigger** | **Findings from trigger have no delivery path** | **One-level runtimes deadlock recursive orchestration** | **Anti-fabrication invariant broken; fan-out modes need true per-finding specialist dispatch** | **Use nested workflow when supported; parent-expand for single-spec modes only; route to top-level session for `requiresTopLevelRuntime: true` modes** |
 
 **1d. WAIT for the mapped mode to return a terminal `## RESULT-ENVELOPE`.** Do NOT proceed to the next round until the mapped mode completes. Do NOT narrate what it "would do" — actually execute it and wait.
 
@@ -114,7 +115,8 @@ After all rounds complete:
 - **No standalone trigger execution by the parent.** The parent MUST NOT execute the trigger phase as the entire round or build a manual trigger-specific fix cycle when a mapped child workflow mode exists. Parent-expanded execution is allowed only when it follows the resolved mode's phase contract end to end.
 - **No direct trigger-agent-only dispatch (Failure Mode 2).** The parent MUST NOT invoke the trigger agent (e.g., `bubbles.chaos`, `bubbles.harden`, `bubbles.gaps`, `bubbles.simplify`, `bubbles.security`) as the whole round. EVERY round MUST execute the mapped child workflow mode from `triggerWorkflowModes`. Direct trigger-agent-only invocation runs only the probe phase and skips the implementation-and-quality chain that the mapped mode provides.
 - **No default-to-implement fallback (Failure Mode 1).** The parent MUST NOT collapse all triggers into `bubbles.implement` invocations. Each trigger has a specific child workflow mode that includes the trigger probe, implementation, testing, validation, audit, and docs. Dispatching `bubbles.implement` directly skips the trigger probe entirely and gives every spec identical treatment regardless of its assigned trigger.
-- **No recursive-tool deadlock (Failure Mode 3).** If a nested `bubbles.workflow` child reports that it lacks `runSubagent`, the parent MUST NOT stop the sweep while the parent still has `runSubagent`. Re-run the round in `parent-expanded-child-mode` and continue the mapped workflow phase contract.
+- **No recursive-tool deadlock (Failure Mode 3).** If a nested `bubbles.workflow` child reports that it lacks `runSubagent` AND the resolved mode does NOT have `requiresTopLevelRuntime: true`, the parent MUST NOT stop the sweep while the parent still has `runSubagent`. Re-run the round in `parent-expanded-child-mode` and continue the mapped workflow phase contract.
+- **No silent parent-expansion of `requiresTopLevelRuntime: true` modes (Failure Mode 4).** If the resolved mode declares `requiresTopLevelRuntime: true` AND the current runtime is a subagent, the runtime MUST emit `route_required` with `routingReason: "top-level-runtime-required"`. Attempting parent-expanded execution would force one agent to play every specialist role per finding, which IS fabrication of cross-role transitions. See **Top-level-runtime modes** section below.
 - **No summary-only finish.** A stochastic sweep MUST NOT end in summary-only output while any touched spec or any round remains non-terminal.
 - **No docs/finalize duplication.** The parent MUST NOT rerun a bespoke docs/finalize tail per spec after the mapped mode completes — the mapped mode owns that whether nested or parent-expanded.
 - **No narrative-only mapped-mode results.** If the mapped mode returns without concrete evidence and a `## RESULT-ENVELOPE`, treat the result as incomplete and the round as NON_TERMINAL.
@@ -127,6 +129,37 @@ After all rounds complete:
 - Non-terminal rounds must preserve workflow-owned continuation with `preferredWorkflowMode: stochastic-quality-sweep`.
 - Follow-ups like "fix all found", "fix everything found", "address rest", "fix the rest", "resolve remaining findings" are workflow continuation — preserve the active mode and target from the continuation envelope.
 - Do NOT collapse stochastic sweep continuation into raw specialist advice like "run `/bubbles.implement`".
+
+### Top-level-runtime modes (Failure Mode 4 prevention)
+
+Some workflow modes are **fan-out modes**: they dispatch multiple child workflows per round or per finding, and each child workflow itself spans multiple specialist agents (`bubbles.bug` → `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs`). These modes are marked in `bubbles/workflows.yaml` with `constraints.requiresTopLevelRuntime: true`:
+
+- `stochastic-quality-sweep` — N rounds × N findings per round
+- `retro-quality-sweep` — same shape, retro-driven hotspot selection
+- `iterate` — priority-driven multi-item loop
+- `autonomous-goal` — convergence loop with remediation child workflows per finding
+- `autonomous-sprint` — multi-goal sprint wrapping autonomous-goal per goal
+- `idea-to-release-completion` — full lifecycle dispatching specialists across both planning and delivery
+
+**Rule (NON-NEGOTIABLE).** A subagent runtime that lacks `runSubagent` cannot legitimately execute these modes. The only legitimate dispatcher is the top-level session runtime that owns the operator turn and has full tool access. When a `requiresTopLevelRuntime: true` mode is requested in a subagent runtime:
+
+1. The runtime MUST NOT attempt parent-expanded execution.
+2. The runtime MUST emit a `route_required` result envelope with:
+   - `routingReason: "top-level-runtime-required"`
+   - `nextOwner: "user-session"`
+   - `preferredWorkflowMode: <the original mode>`
+   - `unresolvedFindings: []` (the dispatch never started)
+3. The top-level session MUST receive that envelope and re-execute the mode in its own turn, where `runSubagent` is available and per-finding specialist dispatch is legitimate.
+
+**Why parent-expansion is forbidden for these modes.** Parent-expanded execution means one agent plays every phase owner in sequence within a single turn. For single-spec modes (`bugfix-fastlane`, `harden-to-doc`, `gaps-to-doc`, etc.) that is acceptable because the phase chain is sequential and finite. For fan-out modes the per-finding chain `bubbles.bug` → `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` repeats N times across heterogeneous findings; collapsing all of that into one agent's turn is indistinguishable from fabricating role transitions and produces evidence with no real specialist provenance. The anti-fabrication invariant (each role's output is attributable to the specialist that produced it) cannot be preserved.
+
+**How the top-level session detects a `requiresTopLevelRuntime` mode.** When the operator requests a sweep/iterate/autonomous-* mode, the orchestrator checks the resolved mode's constraints. If `requiresTopLevelRuntime: true`, the top-level session keeps `runSubagent` itself and dispatches one specialist per finding per round, rather than dispatching `bubbles.workflow` as a subagent (which would land in a child runtime without `runSubagent`).
+
+**Selftest.** `bubbles/scripts/top-level-runtime-routing-selftest.sh` asserts:
+- Every mode listed above has `requiresTopLevelRuntime: true` in `workflows.yaml`.
+- No mode lacking this flag has the constraint set spuriously.
+- A fixture that simulates a subagent runtime resolving a `requiresTopLevelRuntime: true` mode produces a `route_required` envelope (not `completed_owned` with inline expansion).
+- A fixture resolving a mode WITHOUT the flag still allows parent-expansion (backward-compatible).
 
 ### Phase 0.95: Full-Delivery Convergence Loop
 

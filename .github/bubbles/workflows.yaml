@@ -2033,6 +2033,12 @@ modes:
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G013, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G032, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 5
     constraints:
+      # Fan-out mode: full lifecycle dispatches multiple specialists across both
+      # planning and delivery, plus mapped remediation children per finding.
+      # Cannot run as a subagent because subagents lack the runSubagent tool.
+      # MUST run in the top-level session runtime. See
+      # workflow-execution-loops.md → Top-level-runtime modes.
+      requiresTopLevelRuntime: true
       requireProductDirectionTrio: true
       requireBusinessAnalysis: true
       requireUXDesign: true
@@ -2079,6 +2085,12 @@ modes:
     phaseOrder: [ select, retro, simplify, harden, gaps, implement, test, regression, stabilize, devops, security, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
+      # Fan-out mode: dispatches multiple specialists per hotspot/finding via mapped
+      # child workflow modes. Cannot run as a subagent because subagents lack the
+      # runSubagent tool needed to dispatch their own children. MUST run in the
+      # top-level session runtime that owns the operator turn. See
+      # workflow-execution-loops.md → Top-level-runtime modes.
+      requiresTopLevelRuntime: true
       requireExistingImplementation: true
       retroModes: [ hotspots, coupling, busfactor ]
       sequentialSpecCompletion: true
@@ -2101,6 +2113,13 @@ modes:
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 5
     constraints:
+      # Fan-out mode: each round dispatches a mapped child workflow that itself
+      # spans multiple specialist agents (bug → implement → test → validate →
+      # audit → docs). Cannot run as a subagent because subagents lack the
+      # runSubagent tool needed to dispatch their own children. MUST run in the
+      # top-level session runtime that owns the operator turn. See
+      # workflow-execution-loops.md → Top-level-runtime modes.
+      requiresTopLevelRuntime: true
       # Stochastic round execution model — NOT sequential phaseOrder.
       # The orchestrator runs N rounds, each round:
       #   1. Pick a random spec from the spec pool
@@ -2167,6 +2186,13 @@ modes:
     phaseOrder: [ discover, select, analyze, bootstrap, harden, gaps, simplify, stabilize, devops, security, regression, bug, implement, test, docs, validate, audit, chaos, finalize ]
     requiredGates: [ G002 ]
     constraints:
+      # Fan-out mode: each iteration auto-selects and dispatches a delivery child
+      # workflow (full-delivery / bugfix-fastlane / chaos-hardening / ...) that
+      # itself spans multiple specialist agents. Cannot run as a subagent because
+      # subagents lack the runSubagent tool needed to dispatch their own children.
+      # MUST run in the top-level session runtime that owns the operator turn. See
+      # workflow-execution-loops.md → Top-level-runtime modes.
+      requiresTopLevelRuntime: true
       # Iterate round execution model — priority-driven, NOT random.
       # Each round:
       #   1. bubbles.iterate picks the highest-priority work item across all specs
@@ -2221,6 +2247,13 @@ modes:
     phaseOrder: [ discover, analyze, bootstrap, implement, test, validate, audit, chaos, harden, gaps, security, regression, simplify, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
+      # Fan-out mode: convergence loop dispatches remediationWorkflowModes per
+      # finding (chaos-hardening / harden-to-doc / gaps-to-doc / ...). Each
+      # mapped child workflow spans multiple specialists. Cannot run as a
+      # subagent because subagents lack the runSubagent tool. MUST run in the
+      # top-level session runtime. See workflow-execution-loops.md →
+      # Top-level-runtime modes.
+      requiresTopLevelRuntime: true
       convergenceLoopExecution: true
       maxConvergenceIterations: 10
       maxIdenticalFailureRetries: 3
@@ -2262,6 +2295,12 @@ modes:
     phaseOrder: [ discover, select, analyze, bootstrap, implement, test, validate, audit, chaos, harden, gaps, security, regression, simplify, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
+      # Fan-out mode: each goal runs the autonomous-goal convergence loop, which
+      # itself dispatches remediation child workflows per finding. Cannot run as
+      # a subagent because subagents lack the runSubagent tool. MUST run in the
+      # top-level session runtime. See workflow-execution-loops.md →
+      # Top-level-runtime modes.
+      requiresTopLevelRuntime: true
       sprintExecution: true
       requireTimeBudget: true
       defaultTimeBudgetMinutes: 240

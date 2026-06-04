@@ -248,6 +248,18 @@ Backward compatibility:
 
 If registry and this file conflict, registry phase/gate policy wins and the conflict must be reported.
 
+## Top-Level Runtime Requirement (NON-NEGOTIABLE)
+
+`bubbles.iterate` is a fan-out orchestrator: each iteration auto-selects and dispatches a delivery child workflow (`bugfix-fastlane`, `full-delivery`, `chaos-hardening`, `harden-to-doc`, etc.) that itself spans multiple specialist agents per finding. `bubbles/workflows.yaml` declares `constraints.requiresTopLevelRuntime: true` for this mode.
+
+**Routing rule.** If this agent is invoked in a subagent runtime that lacks `runSubagent`, it MUST NOT attempt parent-expanded execution (one agent playing every specialist role for every iteration would forge cross-role transitions and break the anti-fabrication invariant). Instead it MUST emit a `route_required` result envelope with:
+
+- `routingReason: "top-level-runtime-required"`
+- `nextOwner: "user-session"`
+- `preferredWorkflowMode: "iterate"`
+
+The top-level session is the only legitimate runtime for `iterate` because it owns `runSubagent` and can dispatch a real specialist per iteration. See [workflow-execution-loops.md](bubbles_shared/workflow-execution-loops.md) → Top-level-runtime modes and Failure Mode 4 for the full rule.
+
 ## Diagnostic Review Escalation Policy (MANDATORY)
 
 `bubbles.iterate` MAY invoke `bubbles.code-review` or `bubbles.system-review`, but ONLY when it cannot determine a defensible next executable work item from existing artifacts.
