@@ -763,3 +763,49 @@ Classified **trusted** because:
 - `executionHistory` entry appended with `agent: bubbles.spec-review`, `phasesExecuted: ["spec-review"]`, `provenanceMode: direct`.
 - `completedPhaseClaims` and `certification.certifiedCompletedPhases` each include `"spec-review"`.
 - Gate G021 condition (`spec-review` must appear before `done`) is satisfied.
+
+## Validate — 2026-06-04 (promotion to done, final)
+
+Final certification by `bubbles.validate`: `specs_hardened` → `done`. All 60 governance findings (57 main + 3 post-flip) resolved across 3 plan rounds + 1 implement round. Scope 5 (knowledge-graph browse surface) shipped. Pre-existing CommonJS canary regression fixed in same round.
+
+### Pre-flip guard (status=specs_hardened)
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/073-web-mobile-assistant-frontend/
+============================================================
+  TRANSITION GUARD VERDICT
+============================================================
+
+🟢 TRANSITION PERMITTED: All checks pass (0 failures, 0 warnings)
+
+state.json status may be set to 'done'.
+PRE_EXIT=0
+```
+
+### State flip applied
+
+- `status`: `specs_hardened` → `done`
+- `certifiedAt` (top-level, new): `2026-06-04T05:20:00Z` (post-HEAD per G088)
+- `certification.status`: `specs_hardened` → `done`
+- `certification.completedAt`: `2026-06-04T05:20:00Z`
+- `execution.currentPhase`: `chaos` → `finalize`; `activeAgent`: `bubbles.validate`
+- `executionHistory`: appended `bubbles.validate` / phase `validate` entry with statusBefore `specs_hardened`, statusAfter `done`
+
+### Post-flip guard (status=done)
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/073-web-mobile-assistant-frontend/
+--- Check 35: Discovered-Issue Disposition (Gate G095) ---
+✅ PASS: Discovered-issue disposition clean — no unfiled deferrals (Gate G095)
+
+============================================================
+  TRANSITION GUARD VERDICT
+============================================================
+
+🟢 TRANSITION PERMITTED: All checks pass (0 failures, 0 warnings)
+
+state.json status may be set to 'done'.
+POST_EXIT=0
+```
+
+Final status: **done**.
