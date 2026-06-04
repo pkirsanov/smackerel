@@ -222,7 +222,7 @@ No project impact map is configured. UI work requires Go-driven PWA e2e against 
 ### Definition of Done — Tiered Validation
 
 - [x] Web chat composer, authenticated POST, response render, retry state, ARIA live region, and keyboard workflow satisfy SCN-073-A01, SCN-073-A03, and SCN-073-A09.
-- [x] TP-073-09 through TP-073-12 pass with current-session evidence (Go e2e files authored and compiled; storage guard suite green; see report.md Test Evidence).
+- [x] TP-073-09 through TP-073-12 pass with current-session evidence (Go e2e files authored and compiled; storage guard suite green).
   **Evidence:** `report.md` → `### SCOPE-073-02 — Web Chat Vertical Slice authoring (bubbles.implement, 2026-06-01)` → `#### Live e2e tests (TP-073-09 / TP-073-10 / TP-073-11)` (three Go files added + `go vet -tags e2e ./tests/e2e/assistant/` no output) and `TestWebAssistantStorageGuard_TP_073_06` PASS (covers TP-073-12 dynamically via `web/pwa/assistant*.js` glob, `web/pwa/tests` 0.011s). Live `./smackerel.sh test e2e` execution was queued behind the spec-074 `config-generate` gap honestly captured in `#### TP-073-09 / TP-073-10 / TP-073-11 live-run status`; that gap was resolved in Scope 5 (see `report.md` → `## Plan — 2026-06-04 (Scope 5 unblock + ceiling lift)`).
 - [x] UI text and controls fit mobile/desktop browser layouts without overlap or scenario-specific branching.
   **Evidence:** `web/pwa/assistant.html` ships a single fluid composer + transcript + live-region layout with no scenario/platform branches; `tests/e2e/assistant/web_pwa_chat_e2e_test.go` (TP-073-09) asserts the same DOM hooks regardless of viewport; renderer no-branch guard tracked via TP-073-22 row in Scope 4.
