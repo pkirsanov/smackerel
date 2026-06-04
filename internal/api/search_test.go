@@ -57,6 +57,36 @@ func TestSearchHandler_EmptyQuery(t *testing.T) {
 	}
 }
 
+func TestSearchHandler_ControlCharsOnlyReturns400NotPanic(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	body := `{"query": "\u0000\u0001\u0002"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 (post-sanitize empty), got %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Error.Code != "EMPTY_QUERY" {
+		t.Errorf("expected EMPTY_QUERY, got %q", resp.Error.Code)
+	}
+	if resp.Error.Code == "SEARCH_FAILED" {
+		t.Fatalf("ADVERSARIAL FAILURE: control-char-only query reached search engine and 500'd (chaos finding C-003 regressed)")
+	}
+}
+
 func TestSearchHandler_InvalidJSON(t *testing.T) {
 	deps := &Dependencies{
 		DB:        &mockDB{healthy: true},
