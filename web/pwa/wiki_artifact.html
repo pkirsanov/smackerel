@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Artifact — Smackerel Wiki</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/wiki.html" class="logo-link" aria-label="Back to Wiki"><img src="/pwa/icon.svg" alt="Smackerel" class="logo"></a>
+  <h1 id="wiki-artifact-heading">Artifact</h1>
+  <p class="subtitle">Knowledge graph view of one artifact.</p>
+  <!-- Spec 073 SCOPE-073-05 — SCN-073-B05 + SCN-073-B06. Consumes /api/graph/edges and (when reachable) /api/annotations. -->
+
+  <section id="wiki-artifact-detail" class="card" aria-labelledby="wiki-artifact-heading" aria-busy="true" data-endpoint="/api/graph/edges">
+    <p id="wiki-artifact-status" class="status info" role="status" aria-live="polite">Loading artifact...</p>
+    <p id="wiki-artifact-id" class="wiki-artifact-id" hidden></p>
+    <div class="wiki-related-block">
+      <h3>Related</h3>
+      <div id="wiki-artifact-related" data-related="edges"></div>
+    </div>
+    <div class="wiki-related-block">
+      <h3>Annotations</h3>
+      <div id="wiki-annotation-entry" data-section="annotation-entry"></div>
+    </div>
+  </section>
+
+  <p class="footer"><a href="/pwa/wiki.html">Back to wiki</a></p>
+  <script type="module" src="/pwa/wiki_artifact.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Places — Smackerel Wiki</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/wiki.html" class="logo-link" aria-label="Back to Wiki"><img src="/pwa/icon.svg" alt="Smackerel" class="logo"></a>
+  <h1 id="wiki-places-heading">Places</h1>
+  <p class="subtitle">Places derived from the maps connector and artifact-derived locations.</p>
+  <!-- Spec 073 SCOPE-073-05 — SCN-073-B03. Consumes /api/places. -->
+
+  <section id="wiki-places-index" class="card" aria-labelledby="wiki-places-heading" aria-busy="true" data-endpoint="/api/places">
+    <p id="wiki-places-status" class="status info" role="status" aria-live="polite">Loading places...</p>
+    <ul id="wiki-places-list" class="wiki-list" role="list" hidden></ul>
+  </section>
+
+  <section id="wiki-place-detail" class="card" aria-labelledby="wiki-place-detail-heading" hidden>
+    <h2 id="wiki-place-detail-heading"></h2>
+    <p id="wiki-place-status" class="status info" role="status" aria-live="polite">Loading place...</p>
+    <p id="wiki-place-location" class="wiki-place-location" hidden></p>
+    <div class="wiki-related-block">
+      <h3>Linked artifacts</h3>
+      <div id="wiki-place-artifacts" data-related="artifacts"></div>
+    </div>
+    <div class="wiki-related-block">
+      <h3>Graph edges (Related)</h3>
+      <div id="wiki-place-edges" data-related="edges"></div>
+    </div>
+  </section>
+
+  <p class="footer"><a href="/pwa/wiki.html">Back to wiki</a></p>
+  <script type="module" src="/pwa/wiki_places.js"></script>
+</body>
+</html>
