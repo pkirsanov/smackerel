@@ -677,4 +677,42 @@ Triggered by `specs/_spec-review-report.md` MINOR_DRIFT entry for spec 058. Re-v
 
 Retrospective spec-review complete. Trust level **MOSTLY_FRESH**. No MAJOR_DRIFT or OBSOLETE findings; no `bubbles.workflow mode=improve-existing` dispatch required. The `specReview: once-before-implement` policy obligation for full-delivery mode is hereby satisfied retroactively. Spec remains `done_with_concerns` (Playwright-harness-blocked concerns unchanged); no status promotion attempted.
 
+## Status Transition — 2026-06-03 (done_with_concerns → blocked)
+
+**Trigger.** Operator declared `done_with_concerns` invalid in this repo's
+governance regime. Specs must be either `done` or `blocked`. The honest status
+for spec 058 is `blocked` because DoD-required e2e-ui + live-Postgres
+integration tiers cannot be authored from this repo today — they depend on
+external infrastructure that has not landed.
+
+**Status before:** `done_with_concerns` (with `legacyStatusCompatibility: true`).
+**Status after:** `blocked` (legacy compatibility flag removed; honest terminal status).
+
+**Scopes untouched.** All five scopes remain `done` in `certification.scopeProgress`
+— the unit-tier behavioral coverage for SCN-058-001..021 is real, committed,
+and green. Only the top-level spec status semantics change.
+
+**Blockers (mirrored into `state.json.blockingDependencies[]` and filed
+individually under `bugs/BUG-058-EXTERNAL-INFRA-MISSING/`).**
+
+| # | Blocker | Affected DoD surface | Resolution path |
+|---|---|---|---|
+| 1 | **F-057-V-001 Playwright harness not in repo** | SCN-058-010..015 e2e-ui rows, bookmark roundtrip E2E p95 60s, `auth_failure.spec.ts` | Land Playwright harness under `extensions/chrome-bridge/test/e2e/` via the 057 follow-up scope, then author `bookmark_roundtrip.spec.ts` + `auth_failure.spec.ts`. |
+| 2 | **Live-Postgres integration test harness deferred** | `PostgresDedupStore.ResolveOrPublish` race-loss path, Scope 2/5 live-stack rows | Wire a Postgres-backed integration harness (testcontainers or compose-based) into `./smackerel.sh test integration` and add the deferred Scope 2/5 follow-up rows. |
+| 3 | **HTMX admin scaffolding generalization missing** | `/admin/auth/tokens` HTMX page + analogous `/admin/extension/devices` HTMX surface (JSON handler is mounted today) | Land the shared HTMX admin scaffolding (layout, auth gating helper, nav fragment) in a dedicated spec, then add the per-page partials for tokens and devices. |
+| 4 | **SCN-058-019 sideload-by-docs walkthrough automation** | Manual operator scenario; only the runbook in `docs/Operations.md` exists | Operator decision — either accept manual-only status permanently (close as `wontfix-automated, doc-validated`) or build a CI-side Chrome MV3 sideload smoke harness. |
+
+**What is preserved as evidence.** Unit-tier coverage of all 21 SCN-058-NNN
+scenarios is the behavioral source of truth and remains green (Go unit suites
++ vitest 39/39). The `## Close-Out 2026-05-28`, `## Deferred DoD Items`, and
+`## Discovered Issues` sections above remain authoritative; this transition
+adds honest top-level semantics on top of them, it does not rewrite them.
+
+**Unblock signal.** When the four blockers above are individually resolved
+(tracked in `bugs/BUG-058-EXTERNAL-INFRA-MISSING/`), this spec can transition
+back to `in_progress` and complete the deferred DoD rows, then to `done`.
+
+**Next required owner.** `null` — operator triage required on the four
+blockers. No autonomous follow-up.
+
 

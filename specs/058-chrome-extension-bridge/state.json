@@ -2,8 +2,14 @@
   "version": 3,
   "featureDir": "specs/058-chrome-extension-bridge",
   "featureName": "Chrome Extension Bridge (Live Bookmarks + Browser History)",
-  "status": "done_with_concerns",
-  "legacyStatusCompatibility": true,
+  "status": "blocked",
+  "blockedReason": "F-057-V-001 Playwright harness not in repo + live-Postgres integration test harness deferred + HTMX admin scaffolding generalization missing. Unit-tier behavioral coverage is complete for all SCN-058-001..021 scenarios, but DoD-required e2e-ui (Playwright) and live-stack integration tiers cannot be authored from this repo today. See report.md ## Close-Out 2026-05-28 + ## Deferred DoD Items + ## Status Transition — 2026-06-03.",
+  "blockingDependencies": [
+    {"id": "F-057-V-001", "summary": "Playwright e2e-ui harness not present in repo; blocks SCN-058-010..015 e2e-ui rows, bookmark roundtrip p95, auth-failure spec.", "resolutionPath": "Land Playwright harness under extensions/chrome-bridge/test/e2e/ via the 057 follow-up scope, then author bookmark_roundtrip.spec.ts + auth_failure.spec.ts."},
+    {"id": "LIVE-POSTGRES-INTEGRATION-HARNESS", "summary": "Live-Postgres integration test harness for the ingest dedup contract (PostgresDedupStore.ResolveOrPublish race-loss path) is deferred — current coverage is unit-tier only.", "resolutionPath": "Wire a Postgres-backed integration harness (testcontainers or compose-based) into ./smackerel.sh test integration and add the deferred Scope 2/5 follow-up rows."},
+    {"id": "HTMX-ADMIN-SCAFFOLDING", "summary": "HTMX admin /admin/auth/tokens page (and the analogous /admin/extension/devices HTMX surface) requires admin scaffolding generalization that does not yet exist in the repo; only the JSON handler is mounted today.", "resolutionPath": "Land the shared HTMX admin scaffolding (layout, auth gating helper, nav fragment) in a dedicated spec, then add the per-page partials for tokens and devices."},
+    {"id": "MANUAL-SIDELOAD-WALKTHROUGH-AUTOMATION", "summary": "SCN-058-019 sideload-by-docs walkthrough is a manual operator scenario with no automation path; the runbook in docs/Operations.md is the only artifact.", "resolutionPath": "Either accept manual-only status permanently (close as 'wontfix-automated, doc-validated') or build a CI-side Chrome MV3 sideload smoke harness — operator decision required."}
+  ],
   "certifiedAt": "2026-05-28T15:40:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
@@ -146,6 +152,15 @@
       {
         "agent": "bubbles.plan",
         "phasesExecuted": ["plan"],
+        "runStartedAt": "2026-06-03T00:00:00Z",
+        "runCompletedAt": "2026-06-03T00:00:00Z",
+        "statusBefore": "done_with_concerns",
+        "statusAfter": "blocked",
+        "summary": "Operator declared done_with_concerns invalid in this governance regime (must be done or blocked). Transitioned to blocked honestly: external dependencies (Playwright harness from F-057-V-001, live-Postgres integration test infrastructure, HTMX admin scaffolding generalization, manual sideload walkthrough automation) prevent completion of DoD e2e-ui + integration tiers. Unit-tier coverage of all 21 SCN-058-001..021 scenarios is preserved as evidence of behavioral correctness; the spec is unblocked when the external infrastructure ships. Filed specs/058-chrome-extension-bridge/bugs/BUG-058-EXTERNAL-INFRA-MISSING/ to track the 4 blockers individually. Removed legacyStatusCompatibility flag (no longer needed — blocked is the honest top-level status). certification.status set to blocked; scopeProgress untouched (all 5 scopes are genuinely shipped at unit tier). Added blockedReason + blockingDependencies[] enumerating the 4 blockers with resolution paths."
+      },
+      {
+        "agent": "bubbles.plan-legacy-discharge",
+        "phasesExecuted": ["plan"],
         "runStartedAt": "2026-05-28T19:00:00Z",
         "runCompletedAt": "2026-05-28T19:30:00Z",
         "statusBefore": "done_with_concerns",
@@ -155,7 +170,7 @@
     ]
   },
   "certification": {
-    "status": "done_with_concerns",
+    "status": "blocked",
     "certifiedAt": "2026-05-28T15:40:00Z",
     "lastEvaluatedAt": "2026-06-03T00:00:00Z",
     "evidenceRefs": [
