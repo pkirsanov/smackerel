@@ -50,8 +50,10 @@ bubbles/scripts/fun-mode.sh
 bubbles/scripts/gate-id-grep-selftest.sh
 bubbles/scripts/gate-id-grep.sh
 bubbles/scripts/gate-meta.sh
+bubbles/scripts/gates-registry-selftest.sh
 bubbles/scripts/generate-capability-ledger-docs.sh
 bubbles/scripts/generate-framework-stats.sh
+bubbles/scripts/generate-gates-block.sh
 bubbles/scripts/generate-release-manifest.sh
 bubbles/scripts/governance-index-lint-selftest.sh
 bubbles/scripts/governance-index-lint.sh
@@ -115,6 +117,7 @@ bubbles/scripts/repo-drift-report-selftest.sh
 bubbles/scripts/repo-drift-report.sh
 bubbles/scripts/repo-readiness.sh
 bubbles/scripts/report-section-autofix.sh
+bubbles/scripts/result-envelope-validate.sh
 bubbles/scripts/retro-convergence-health-selftest.sh
 bubbles/scripts/retro-convergence-health.sh
 bubbles/scripts/retro-framework-health-selftest.sh
@@ -149,6 +152,7 @@ bubbles/scripts/trust-metadata.sh
 bubbles/scripts/upkeep-calendar-selftest.sh
 bubbles/scripts/upkeep-calendar.sh
 bubbles/scripts/v4.1.0-selftest.sh
+bubbles/scripts/v5.2-selftest.sh
 bubbles/scripts/validation-latency-report-selftest.sh
 bubbles/scripts/validation-latency-report.sh
 bubbles/scripts/value-selection-lint-selftest.sh

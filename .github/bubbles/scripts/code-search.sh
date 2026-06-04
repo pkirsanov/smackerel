@@ -77,7 +77,31 @@ run_with_cap() {
   fi
 }
 
-if command -v rg >/dev/null 2>&1; then
+# v5.2 / F6: auto-select backend on first call, cache the choice to
+# .specify/runtime/code-search.tool so subsequent calls skip the
+# `command -v rg` probe. The cache is per-repo and survives restarts.
+# Manual override: export BUBBLES_CODE_SEARCH_BACKEND=rg|grep before invocation.
+SEARCH_BACKEND="${BUBBLES_CODE_SEARCH_BACKEND:-}"
+if [[ -z "$SEARCH_BACKEND" ]]; then
+  # Locate runtime cache. Best-effort repo root.
+  CS_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  CS_CACHE_DIR="$CS_REPO_ROOT/.specify/runtime"
+  CS_CACHE_FILE="$CS_CACHE_DIR/code-search.tool"
+  if [[ -f "$CS_CACHE_FILE" ]]; then
+    SEARCH_BACKEND="$(tr -d '[:space:]' < "$CS_CACHE_FILE" 2>/dev/null || echo '')"
+  fi
+  if [[ -z "$SEARCH_BACKEND" ]]; then
+    if command -v rg >/dev/null 2>&1; then
+      SEARCH_BACKEND="rg"
+    else
+      SEARCH_BACKEND="grep"
+    fi
+    # Persist (best-effort; OK to fail if dir is read-only).
+    mkdir -p "$CS_CACHE_DIR" 2>/dev/null && echo "$SEARCH_BACKEND" > "$CS_CACHE_FILE" 2>/dev/null || true
+  fi
+fi
+
+if [[ "$SEARCH_BACKEND" == "rg" ]] && command -v rg >/dev/null 2>&1; then
   # rg path — fastest and most agent-friendly.
   rg_args=(--line-number --no-heading --color=never)
   if [[ "${#kind_globs[@]}" -gt 0 ]]; then

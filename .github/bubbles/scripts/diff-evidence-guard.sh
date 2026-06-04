@@ -66,6 +66,55 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 0
 fi
 
+# v5.2 / F2: Auto-enable strict mode for new specs.
+#
+# Promotion rules (auto-strict when ANY of these is true):
+#   - state.json.modernization.diffEvidence == "enforce"
+#   - spec's first commit is on/after the v5.2 cutoff date (2026-06-04)
+# Manual opt-out for old specs that need a one-time exemption:
+#   - state.json.modernization.diffEvidence == "advisory"
+# Manual flag overrides everything (--strict, env var still respected).
+DIFF_EVIDENCE_CUTOFF="2026-06-04"
+if [[ "$STRICT" != "1" ]] && [[ -f "$SPEC_DIR/state.json" ]]; then
+  AUTO_DECISION="$(python3 - <<PY
+import json, sys, subprocess
+try:
+    d = json.load(open("$SPEC_DIR/state.json"))
+except Exception:
+    print("unknown"); sys.exit(0)
+mod = (d.get('modernization') or {})
+choice = (mod.get('diffEvidence') or '').strip().lower()
+if choice == 'enforce':
+    print('enforce'); sys.exit(0)
+if choice == 'advisory':
+    print('advisory'); sys.exit(0)
+# Auto-decision via spec creation date.
+try:
+    first = subprocess.check_output(
+        ['git', '-C', "$REPO_ROOT", 'log', '--diff-filter=A', '--format=%cI', '--', "$SPEC_DIR"],
+        stderr=subprocess.DEVNULL, text=True,
+    ).strip().splitlines()
+    if first:
+        first_date = first[-1][:10]  # YYYY-MM-DD
+        if first_date >= "$DIFF_EVIDENCE_CUTOFF":
+            print('enforce'); sys.exit(0)
+        print('advisory'); sys.exit(0)
+except Exception:
+    pass
+print('unknown')
+PY
+)"
+  case "$AUTO_DECISION" in
+    enforce)
+      STRICT=1
+      echo "diff-evidence-guard: auto-promoted to strict (v5.2 / F2: spec created on/after $DIFF_EVIDENCE_CUTOFF or state.json declares enforce)"
+      ;;
+    advisory|unknown)
+      : # leave STRICT=0
+      ;;
+  esac
+fi
+
 # Resolve baseSha.
 BASE_SHA="$BASE_SHA_OVERRIDE"
 if [[ -z "$BASE_SHA" ]] && [[ -f "$SPEC_DIR/state.json" ]]; then
