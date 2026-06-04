@@ -30,3 +30,26 @@ See `bug.md` for the full endpoint table and `spec.md` for acceptance criteria.
 ## Next Required Owner
 
 null — operator triage required. No autonomous follow-up.
+
+## Resolution — 2026-06-04
+
+Bug resolved. Upstream blockers cleared:
+
+- **spec 080 (Knowledge Graph Public API)** shipped at commit `98c16290`,
+  status `done`. All 8 required JSON endpoints are live and scope-gated by
+  the `knowledge-graph:read` claim:
+  - `GET /api/topics`, `GET /api/topics/{id}`
+  - `GET /api/people`, `GET /api/people/{id}`
+  - `GET /api/places`, `GET /api/places/{id}`
+  - `GET /api/time?from=&to=`
+  - `GET /api/graph/edges?source={kind:id}`
+- **spec 027 Scope 9 (Annotation Editing API)** shipped at commit
+  `e6ccdb2a`, status `done`. The SCN-073-B06 inline annotation entry point
+  wires to real endpoints (`SCN-027-71..74`).
+
+Spec 073 Scope 5 unblocked: status flipped Not started → In progress;
+DoD "BLOCKED on upstream API gap" suffixes removed; planning-side ceiling
+on the parent spec lifted specs_hardened → done. Scope 5 is now ready for
+`bubbles.implement` dispatch under the existing Implementation Plan and
+Test Plan (TP-073-25..31) in
+[`../../scopes.md`](../../scopes.md#scope-5-knowledge-graph-browse-surface-graph-browse-surface).

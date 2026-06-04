@@ -5,7 +5,9 @@
   "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-UPSTREAM-API-GAP",
   "featureName": "BUG-073-UPSTREAM-API-GAP: Backend JSON APIs for wiki/graph-browse surface (Scope 5 blocker)",
   "workflowMode": "bugfix-fastlane",
-  "status": "open",
+  "status": "resolved",
+  "resolvedAt": "2026-06-04T00:00:00Z",
+  "resolution": "spec 080 shipped at commit 98c16290; spec 027 Scope 9 shipped at commit e6ccdb2a. All 8 endpoints live, scope-gated by knowledge-graph:read.",
   "severity": "blocker",
   "execution": {
     "activeAgent": null,

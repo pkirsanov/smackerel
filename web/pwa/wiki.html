@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Wiki — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Wiki</h1>
+  <p class="subtitle">Browse your knowledge graph: topics, people, places, and time.</p>
+  <!-- Spec 073 SCOPE-073-05 — landing page. Consumes spec 080 read APIs. -->
+
+  <nav aria-label="Wiki sections" class="wiki-landing">
+    <ul role="list" class="wiki-landing-list">
+      <li><a class="btn" href="/pwa/wiki_topics.html" data-wiki-section="topics">Topics</a></li>
+      <li><a class="btn" href="/pwa/wiki_people.html" data-wiki-section="people">People</a></li>
+      <li><a class="btn" href="/pwa/wiki_places.html" data-wiki-section="places">Places</a></li>
+      <li><a class="btn" href="/pwa/wiki_time.html" data-wiki-section="time">Time</a></li>
+    </ul>
+  </nav>
+
+  <p class="footer"><a href="/pwa/">Back to home</a></p>
+  <script type="module" src="/pwa/wiki.js"></script>
+</body>
+</html>

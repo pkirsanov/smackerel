@@ -46,6 +46,13 @@ func guardedPaths(t *testing.T, root string) []string {
 		t.Fatalf("glob assistant*.js: %v", err)
 	}
 	paths = append(paths, matches...)
+	// Spec 073 SCOPE-073-05 TP-073-30 — extend coverage to the
+	// knowledge-graph wiki browse surface (web/pwa/wiki*.js).
+	wikiMatches, err := filepath.Glob(filepath.Join(root, "web", "pwa", "wiki*.js"))
+	if err != nil {
+		t.Fatalf("glob wiki*.js: %v", err)
+	}
+	paths = append(paths, wikiMatches...)
 	// web/pwa/generated/ — Scope 1c committed artifacts.
 	genDir := filepath.Join(root, "web", "pwa", "generated")
 	if err := filepath.Walk(genDir, func(p string, info os.FileInfo, err error) error {
