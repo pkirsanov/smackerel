@@ -2,11 +2,26 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/pkirsanov/bubbles/schemas/tool-call.schema.json",
   "title": "Bubbles tool-call evidence log entry",
-  "description": "One JSONL line in .specify/runtime/tool-calls.jsonl. Records a single gate-relevant command invocation with provenance fields the evidence gate can verify deterministically.",
+  "description": "One JSONL line in .specify/runtime/tool-calls.jsonl. Records a single gate-relevant command invocation with provenance fields the evidence gate can verify deterministically. Schema v2 (v5.2) adds schemaVersion + framework provenance; readers MUST accept both v1 (no schemaVersion) and v2 entries.",
   "type": "object",
   "required": ["ts", "sessionId", "cmd", "exitCode"],
   "additionalProperties": true,
   "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "enum": [1, 2],
+      "description": "Record schema version. Absent or 1 = v5.1 shape. 2 = v5.2 shape (includes framework field). Readers MUST accept both. v3+ will be additive over v2."
+    },
+    "framework": {
+      "type": "object",
+      "description": "Bubbles framework provenance at time of record (v2+). Lets the evidence gate detect cross-version log entries.",
+      "properties": {
+        "name": { "type": "string", "description": "Always 'bubbles' for entries written by the framework's tool-log.sh." },
+        "version": { "type": "string", "description": "Bubbles framework VERSION at record time (e.g. '5.2.0')." },
+        "sourceGitSha": { "type": "string", "description": "Git SHA of the bubbles framework checkout that produced this entry, when resolvable." }
+      },
+      "additionalProperties": true
+    },
     "ts": {
       "type": "string",
       "format": "date-time",
