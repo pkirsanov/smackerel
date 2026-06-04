@@ -139,8 +139,67 @@ if active_rank >= floor_rank:
     sys.exit(0)
 
 # Below floor — advisory warning.
-print(f"model-tier: WARN — active model '{active}' is below floor '{floor}' for mode={mode} phase={phase}")
-print("  Advisory only in v5.1; v6 S9 will make this blocking.")
+# v5.2 / F7: also write a durable, auditable entry to the tool-call log
+# so warnings survive past the operator's scrollback and are queryable
+# alongside command evidence. Schema v2 entry with tag 'model-tier-warning'.
+import json, os, subprocess, datetime, hashlib, getpass
+warn_msg = f"model-tier: WARN — active model '{active}' is below floor '{floor}' for mode={mode} phase={phase}"
+print(warn_msg)
+print("  Advisory only in v5.1+; v6 S9 will make this blocking.")
 print("  Recommended: re-run this phase with a model at or above the declared floor.")
+
+# Best-effort durable write to tool-call log.
+try:
+    repo_root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.DEVNULL, text=True).strip()
+except Exception:
+    repo_root = os.getcwd()
+log_dir = os.path.join(repo_root, '.specify', 'runtime')
+log_path = os.environ.get('BUBBLES_TOOL_LOG_FILE') or os.path.join(log_dir, 'tool-calls.jsonl')
+try:
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    # Framework provenance — same shape tool-log.sh writes.
+    framework = {"name": "bubbles"}
+    v_file = os.path.join(repo_root, '.github', 'bubbles', '.version')
+    if not os.path.exists(v_file):
+        v_file = os.path.join(repo_root, 'VERSION')
+    if os.path.exists(v_file):
+        try:
+            framework["version"] = open(v_file).read().strip()
+        except Exception:
+            pass
+    cmd_label = f"model-tier-advisory check --mode {mode} --phase {phase}"
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    record = {
+        "schemaVersion": 2,
+        "ts": now_utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        "sessionId": os.environ.get('BUBBLES_SESSION_ID') or f"model-tier-{now_utc.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}",
+        "agent": os.environ.get('BUBBLES_AGENT_NAME', 'model-tier-advisory'),
+        "spec": os.environ.get('BUBBLES_SPEC', ''),
+        "scope": os.environ.get('BUBBLES_SCOPE', ''),
+        "cmd": cmd_label,
+        "cwd": os.getcwd(),
+        "exitCode": 0,
+        "durationMs": 0,
+        # Hash payload deterministically so identical warnings collapse for analysis.
+        "stdoutHash": hashlib.sha256(warn_msg.encode()).hexdigest(),
+        "stderrHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",  # sha256("")
+        "stdoutBytes": len(warn_msg),
+        "stderrBytes": 0,
+        "tags": ["model-tier-warning"],
+        "framework": framework,
+        "modelTier": {
+            "mode": mode,
+            "phase": phase,
+            "floor": floor,
+            "active": active,
+            "severity": "warn",
+        },
+    }
+    with open(log_path, 'a') as f:
+        f.write(json.dumps(record, separators=(',', ':')) + '\n')
+except Exception as e:
+    # Non-fatal — advisory should never break a workflow because of log I/O.
+    print(f"  (model-tier: tool-log entry skipped: {e})")
+
 sys.exit(0)
 PY
