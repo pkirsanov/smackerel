@@ -3,7 +3,8 @@
   "featureDir": "specs/080-knowledge-graph-public-api",
   "featureNumber": "080",
   "featureName": "Knowledge Graph Public API",
-  "status": "in_progress",
+  "status": "done",
+  "certifiedAt": "2026-06-04T02:30:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "releaseTrain": "next",
@@ -34,8 +35,8 @@
     "validation": { "mode": "certification-required", "source": "repo-default" }
   },
   "certification": {
-    "status": "in_progress",
-    "completedAt": null,
+    "status": "done",
+    "completedAt": "2026-06-04T02:30:00Z",
     "evidenceRef": "report.md",
     "completedScopes": [
       "SCOPE-080-01",
@@ -113,8 +114,8 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-06-03T22:30:00Z",
     "lastUpdatedAt": "2026-06-03T23:30:00Z",
@@ -319,6 +320,16 @@
         "runStartedAt": "2026-06-03T23:10:00Z",
         "runEndedAt": "2026-06-03T23:30:00Z",
         "summary": "Plan-owned governance cleanup: canonical scope statuses, evidence anchors on every DoD, regression/consumer-impact/shared-infra/change-boundary DoD rows, Gherkin-fidelity items for SCN-080-05/10/15, scopeProgress v2 schema, completedPhaseClaims with provenance, Code Diff Evidence in report.md."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-04T02:30:00Z",
+        "runEndedAt": "2026-06-04T02:30:00Z",
+        "recordedAt": "2026-06-04T02:30:00Z",
+        "summary": "Final certification; in_progress → done. All 19 governance blockers resolved by bubbles.plan; 4 ceremony-of-done findings (Validation/Audit/Chaos Evidence sections, D03-12 evidence, terminal-output signals) addressed in fix-cycle; implementation committed at HEAD."
       }
     ]
   }
