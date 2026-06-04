@@ -4,5 +4,5 @@ package pwa
 
 import "embed"
 
-//go:embed *.html *.css *.js *.json *.svg lib
+//go:embed *.html *.css *.js *.json *.svg lib generated
 var StaticFiles embed.FS
