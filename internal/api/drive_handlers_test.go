@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,11 +22,12 @@ import (
 // assert that the HTTP layer round-trips ANY provider through the neutral
 // surface — i.e. that the endpoint truly is provider-neutral.
 type fakeDriveProvider struct {
-	id              string
-	disp            string
-	caps            drive.Capabilities
-	scope           drive.Scope
-	beginConnectErr error
+	id                 string
+	disp               string
+	caps               drive.Capabilities
+	scope              drive.Scope
+	beginConnectErr    error
+	finalizeConnectErr error
 }
 
 func (f *fakeDriveProvider) ID() string          { return f.id }
@@ -40,6 +42,9 @@ func (f *fakeDriveProvider) BeginConnect(_ context.Context, _ drive.AccessMode, 
 	return "", "", drive.ErrNotImplemented
 }
 func (f *fakeDriveProvider) FinalizeConnect(_ context.Context, _ string, _ string) (string, error) {
+	if f.finalizeConnectErr != nil {
+		return "", f.finalizeConnectErr
+	}
 	return "", drive.ErrNotImplemented
 }
 func (f *fakeDriveProvider) Disconnect(_ context.Context, _ string) error {
@@ -302,6 +307,52 @@ func TestDriveHandlersGetSkippedBlockedRejectsNonUUID(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "INVALID_CONNECTION_ID") {
 		t.Fatalf("body missing INVALID_CONNECTION_ID error code; body=%s", rec.Body.String())
+	}
+}
+
+// TestDriveHandlersOAuthCallbackDoesNotLeakProviderError is an adversarial
+// regression test for chaos finding C-004. The OAuthCallback handler
+// MUST redirect to /pwa/connectors.html with a stable error string
+// ("authorization failed") when FinalizeConnect fails, and MUST NOT
+// reflect the raw provider error into the redirect URL where the user
+// agent can see it. Server-side logs may include the raw error; the
+// redirect Location header may not.
+func TestDriveHandlersOAuthCallbackDoesNotLeakProviderError(t *testing.T) {
+	reg := drive.NewRegistry()
+	// Inject a scary error that would mimic an upstream provider/db leak:
+	// the response URL must not contain ANY substring from this message.
+	scaryErr := fmt.Errorf("oauth2: token endpoint returned 401 - database connection refused: SQLSTATE 08006 host=internal.db.example.com user=svc_oauth")
+	reg.Register(&fakeDriveProvider{
+		id:                 "google",
+		disp:               "Google Drive",
+		finalizeConnectErr: scaryErr,
+	})
+	h := NewDriveHandlersWithPool(reg, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/connectors/drive/oauth/callback?state=s1&code=c1", nil)
+	rec := httptest.NewRecorder()
+
+	h.OAuthCallback(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302; body=%s", rec.Code, rec.Body.String())
+	}
+	loc := rec.Header().Get("Location")
+	if loc == "" {
+		t.Fatalf("missing Location header")
+	}
+	if !strings.Contains(loc, "/pwa/connectors.html") {
+		t.Fatalf("redirect target = %q, want /pwa/connectors.html prefix", loc)
+	}
+	if !strings.Contains(loc, "error=authorization+failed") {
+		t.Fatalf("redirect missing stable 'authorization failed' marker; loc=%q", loc)
+	}
+	// Adversarial: raw provider/db substrings MUST NOT appear in the redirect Location.
+	forbidden := []string{"SQLSTATE", "08006", "database", "oauth2:", "token endpoint", "internal.db", "svc_oauth", "401"}
+	for _, sub := range forbidden {
+		if strings.Contains(loc, sub) {
+			t.Fatalf("ADVERSARIAL FAILURE: redirect Location leaks raw provider error substring %q; loc=%q", sub, loc)
+		}
 	}
 }
 
