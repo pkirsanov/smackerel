@@ -26,7 +26,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 - `config/prompt_contracts/drive-classification-v1.yaml`: extraction+folder context to `{topic,sensitivity,audience,classification,confidence,evidence}`.
 - `config/prompt_contracts/drive-folder-context-v1.yaml`: folder summary to `{topic,audience,sensitivity_prior,expected_classification}`.
 - `internal/drive/retrieve`: `RetrieveRequest`, `RetrieveCandidate`, and `RetrieveDelivery` exactly as declared in design section 6.
-- `internal/drive/tools.go`: registered tools `drive_search`, `drive_get_file`, `drive_save_file`, `drive_list_rules`.
+- `internal/drive/tools/tools.go` (originally planned at internal/drive/tools.go; relocated into the `internal/drive/tools/` subpackage to avoid an import cycle with `internal/drive/save` and `internal/drive/rules` — see Scope DoD evidence): registered tools `drive_search`, `drive_get_file`, `drive_save_file`, `drive_list_rules`.
 
 ### Validation Checkpoints
 
@@ -118,7 +118,7 @@ Scenario: SCN-038-003 A second provider registers without downstream branching
 ### Implementation Plan
 
 - Add the `drive:` SST schema to `config/smackerel.yaml` and update the config generator so generated runtime artifacts carry required drive values without defaults.
-- Add fail-loud config validation in `internal/config/loader.go` for drive enablement, classification, scan, monitor, policy, Telegram limits, rate limits, and provider fields.
+- Add fail-loud config validation in `internal/config/drive.go` and `internal/config/config.go::Validate()` (originally planned as a single internal/config/loader.go entry point; the loader logic was split across the per-domain `internal/config/drive.go` family and the main `Validate()` aggregator in `internal/config/config.go`) for drive enablement, classification, scan, monitor, policy, Telegram limits, rate limits, and provider fields.
 - Add `DRIVE` stream and subject constants to `config/nats_contract.json`; wire Go and Python startup validation to generated subject names.
 - Create drive migrations for `drive_connections`, `drive_files`, `drive_folders`, `drive_cursors`, `drive_rules`, `drive_save_requests`, `drive_folder_resolutions`, and `drive_rule_audit`.
 - Add `internal/drive/provider.go`, provider registry, capability model, and concrete `internal/drive/google/` scaffold that calls the real provider adapter behind the fixture boundary in tests.
@@ -1711,7 +1711,7 @@ Scenario: SCN-038-021 Drive agent tools enforce contracts and policy
 
 ### Change Boundary
 
-- Allowed file families: `internal/drive/retrieve/`, `internal/drive/tools.go`, scenario-agent tool registration/allowlist files, Telegram retrieval handlers, retrieval API tests, drive e2e tests.
+- Allowed file families: `internal/drive/retrieve/`, `internal/drive/tools/tools.go` (originally planned at internal/drive/tools.go; relocated into the `internal/drive/tools/` subpackage — see DoD evidence), scenario-agent tool registration/allowlist files, Telegram retrieval handlers, retrieval API tests, drive e2e tests.
 - Excluded surfaces: Telegram capture save flow, provider connection/auth, extraction/classification workers, non-drive agent tools beyond registry integration points.
 
 ### Test Plan
@@ -1723,7 +1723,7 @@ Scenario: SCN-038-021 Drive agent tools enforce contracts and policy
 | SCN-038-019 | Regression E2E UI | `tests/e2e/drive/drive_telegram_retrieve_ui_test.go` | `TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels` | `./smackerel.sh test e2e` | Yes |
 | SCN-038-020 | unit | `internal/drive/retrieve/sensitive_delivery_test.go` | `TestSensitiveRetrievalNeverReturnsTelegramBytes` | `./smackerel.sh test unit` | No |
 | SCN-038-020 | Regression E2E API | `tests/e2e/drive/drive_retrieve_e2e_test.go` | `TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly` | `./smackerel.sh test e2e` | Yes |
-| SCN-038-021 | unit | `internal/drive/tools_test.go` | `TestDriveToolsRegisterWithPolicyAndTraceContracts` | `./smackerel.sh test unit` | No |
+| SCN-038-021 | unit | `internal/drive/tools/tools_test.go` (originally planned at internal/drive/tools_test.go; relocated alongside the `tools.go` subpackage — see DoD evidence) | `TestDriveToolsRegisterWithPolicyAndTraceContracts` | `./smackerel.sh test unit` | No |
 | SCN-038-021 | Regression E2E API | `tests/e2e/drive/drive_agent_tools_e2e_test.go` | `TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy` | `./smackerel.sh test e2e` | Yes |
 | SCN-038-021 | Canary | `tests/integration/drive/drive_tools_canary_test.go` | `TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace` | `./smackerel.sh test integration` | Yes |
 

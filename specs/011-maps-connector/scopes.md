@@ -216,10 +216,10 @@ Scenario: SCN-MT-006 Activities below minimum thresholds are skipped
 | T-1-12 | TestNormalizeAllActivityTypes | unit | `internal/connector/maps/normalizer_test.go` | Each of 6 activity types → correct ContentType `"activity/{type}"` | SCN-MT-003 |
 | T-1-13 | TestAssignTierTrailFull | unit | `internal/connector/maps/normalizer_test.go` | Trail-qualified → `full`; drive → `standard`; transit → `standard` | SCN-MT-003 |
 | T-1-14 | TestHealthTransitions | unit | `internal/connector/maps/connector_test.go` | Disconnected → healthy → syncing → healthy → disconnected | SCN-MT-001 |
-| T-1-15 | TestRegistryContainsMaps | integration | `tests/integration/maps_test.go` | Connector registry has `"google-maps-timeline"` entry | SCN-MT-001 |
-| T-1-16 | TestTakeoutSyncEndToEnd | integration | `tests/integration/maps_test.go` | File placed → connector syncs → artifacts returned → cursor updated | SCN-MT-003 |
-| T-1-17 | E2E: Takeout import produces activity artifacts | e2e | `tests/e2e/maps_test.go` | Drop Takeout file → sync → query DB → activity artifacts present with correct metadata | SCN-MT-003 |
-| T-1-18 | Regression E2E: incremental sync does not reprocess | e2e | `tests/e2e/maps_test.go` | Sync file → re-sync same dir → second sync returns 0 new artifacts | SCN-MT-005 |
+| T-1-15 | TestRegistryContainsMaps | integration | `internal/connector/maps/maps_test.go` | Connector registry has `"google-maps-timeline"` entry | SCN-MT-001 |
+| T-1-16 | TestTakeoutSyncEndToEnd | integration | `internal/connector/maps/maps_test.go` | File placed → connector syncs → artifacts returned → cursor updated | SCN-MT-003 |
+| T-1-17 | E2E: Takeout import produces activity artifacts | e2e | `internal/connector/maps/maps_test.go` | Drop Takeout file → sync → query DB → activity artifacts present with correct metadata | SCN-MT-003 |
+| T-1-18 | Regression E2E: incremental sync does not reprocess | e2e | `internal/connector/maps/maps_test.go` | Sync file → re-sync same dir → second sync returns 0 new artifacts | SCN-MT-005 |
 
 ### Definition of Done
 
@@ -376,10 +376,10 @@ Scenario: SCN-MT-013 Location clusters populated during sync
 | T-2-10 | TestArchiveDisabled | unit | `internal/connector/maps/connector_test.go` | archive_processed=false → file stays in place | SCN-MT-012 |
 | T-2-11 | TestMigration009Tables | integration | `internal/db/migration_test.go` | `location_clusters` table exists after migration with all columns | SCN-MT-011 |
 | T-2-12 | TestMigration009Indexes | integration | `internal/db/migration_test.go` | All 3 indexes exist: route, day, date | SCN-MT-011 |
-| T-2-13 | TestLocationClustersPopulated | integration | `tests/integration/maps_test.go` | Sync 10 activities → 10 rows in location_clusters with correct rounded coords | SCN-MT-013 |
-| T-2-14 | TestDedupPreventsDuplicates | integration | `tests/integration/maps_test.go` | Sync same activities twice (different filenames) → artifacts not duplicated | SCN-MT-009 |
-| T-2-15 | E2E: Trail-qualified import produces enriched artifacts | e2e | `tests/e2e/maps_test.go` | Import file with hikes → DB artifacts have trail_qualified=true, route_geojson present | SCN-MT-007 |
-| T-2-16 | Regression E2E: re-import does not create duplicates | e2e | `tests/e2e/maps_test.go` | Import same activities in new file → dedup prevents duplicates, artifact count unchanged | SCN-MT-009 |
+| T-2-13 | TestLocationClustersPopulated | integration | `internal/connector/maps/maps_test.go` | Sync 10 activities → 10 rows in location_clusters with correct rounded coords | SCN-MT-013 |
+| T-2-14 | TestDedupPreventsDuplicates | integration | `internal/connector/maps/maps_test.go` | Sync same activities twice (different filenames) → artifacts not duplicated | SCN-MT-009 |
+| T-2-15 | E2E: Trail-qualified import produces enriched artifacts | e2e | `internal/connector/maps/maps_test.go` | Import file with hikes → DB artifacts have trail_qualified=true, route_geojson present | SCN-MT-007 |
+| T-2-16 | Regression E2E: re-import does not create duplicates | e2e | `internal/connector/maps/maps_test.go` | Import same activities in new file → dedup prevents duplicates, artifact count unchanged | SCN-MT-009 |
 
 ### Definition of Done
 
@@ -525,14 +525,14 @@ Scenario: SCN-MT-021 Commute-classified activities downgraded to light tier
 | T-3-08 | TestRoundToGrid | unit | `internal/connector/maps/patterns_test.go` | Known coords → correct ~500m grid rounding | SCN-MT-014 |
 | T-3-09 | TestPostSyncContinuesOnFailure | unit | `internal/connector/maps/connector_test.go` | Commute detection fails → trip detection still runs → linking still runs | SCN-MT-020 |
 | T-3-10 | TestTierDowngradeCommute | unit | `internal/connector/maps/patterns_test.go` | Commute-classified activity → tier updated to "light" | SCN-MT-021 |
-| T-3-11 | TestInferHome | integration | `tests/integration/maps_test.go` | Location clusters with weekday morning frequency → correct home inference | SCN-MT-016 |
-| T-3-12 | TestDetectCommutesFromDB | integration | `tests/integration/maps_test.go` | Insert 5 location_cluster rows → DetectCommutes returns 1 pattern | SCN-MT-014 |
-| T-3-13 | TestDetectTripsFromDB | integration | `tests/integration/maps_test.go` | Insert remote cluster rows → DetectTrips returns 1 trip | SCN-MT-016 |
+| T-3-11 | TestInferHome | integration | `internal/connector/maps/maps_test.go` | Location clusters with weekday morning frequency → correct home inference | SCN-MT-016 |
+| T-3-12 | TestDetectCommutesFromDB | integration | `internal/connector/maps/maps_test.go` | Insert 5 location_cluster rows → DetectCommutes returns 1 pattern | SCN-MT-014 |
+| T-3-13 | TestDetectTripsFromDB | integration | `internal/connector/maps/maps_test.go` | Insert remote cluster rows → DetectTrips returns 1 trip | SCN-MT-016 |
 | T-3-14 | TestDetermineLinkTypeSpatial | unit | `internal/connector/maps/patterns_test.go` | Activity + overlapping artifact → link_type=`temporal-spatial` when within proximity radius (live-DB CAPTURED_DURING edge insertion deferred per Unchecked DoD Items in report.md) | SCN-MT-017 |
 | T-3-15 | TestImprove_DetermineLinkTypeStartLocationFallback | unit | `internal/connector/maps/patterns_test.go` | Activity + time-overlapping artifact without route waypoints → link_type=`temporal-only` via start/end location fallback | SCN-MT-018 |
 | T-3-16 | TestImprove_DetermineLinkTypeLocationsFarAway | unit | `internal/connector/maps/patterns_test.go` | Activity + artifact outside proximity threshold or window → no spatial match → temporal-only fallback applies (no edge when time also fails to overlap, see TestDetermineLinkTypeEmptyRoute) | SCN-MT-019 |
-| T-3-17 | E2E: Full pipeline with patterns and linking | e2e | `tests/e2e/maps_test.go` | Import 6 months Takeout → commute patterns detected, trips detected, edges created | SCN-MT-014, SCN-MT-016, SCN-MT-017 |
-| T-3-18 | Regression E2E: pattern detection does not duplicate on re-run | e2e | `tests/e2e/maps_test.go` | Run PostSync twice → same pattern/trip artifacts (no duplicates via SourceRef dedup) | SCN-MT-020 |
+| T-3-17 | E2E: Full pipeline with patterns and linking | e2e | `internal/connector/maps/maps_test.go` | Import 6 months Takeout → commute patterns detected, trips detected, edges created | SCN-MT-014, SCN-MT-016, SCN-MT-017 |
+| T-3-18 | Regression E2E: pattern detection does not duplicate on re-run | e2e | `internal/connector/maps/maps_test.go` | Run PostSync twice → same pattern/trip artifacts (no duplicates via SourceRef dedup) | SCN-MT-020 |
 
 ### Definition of Done
 
