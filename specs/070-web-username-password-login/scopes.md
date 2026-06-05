@@ -30,14 +30,14 @@
   `Verify(phc, pw) error`
 - `internal/auth/webcreds/repo.go`: interface `Repo` with
   `UpsertPassword`, `VerifyAndTouch`, `List`, `Get`
-- `internal/auth/webcreds/repo_postgres.go`: pgx-backed impl
+- `internal/auth/webcreds/repo.go` (originally planned at internal/auth/webcreds/repo_postgres.go; the pgx-backed implementation is in `repo.go` next to the in-memory test double; `repo_pg_test.go` exercises the pgx-backed path live): pgx-backed impl
 - Tests per design §7.1 + §7.2
 
 ### Test Plan
 | Type | File | Description | Command |
 |------|------|-------------|---------|
 | unit | `internal/auth/webcreds/hasher_test.go` | round-trip, wrong pw, tamper, invalid PHC | `go test ./internal/auth/webcreds/...` |
-| unit | `internal/auth/webcreds/timing_test.go` | unknown-vs-known timing parity | same |
+| unit | `internal/auth/webcreds/hasher_test.go` (originally planned at internal/auth/webcreds/timing_test.go; the unknown-vs-known timing parity assertion lives in `hasher_test.go` alongside the other Argon2id hashing assertions because timing parity is a property of the hasher contract) | unknown-vs-known timing parity | same |
 | integration | `internal/auth/webcreds/repo_pg_test.go` | upsert/verify/last_login_at against test PG | `./smackerel.sh test integration` |
 
 ### Definition of Done
@@ -104,7 +104,7 @@
   created_at + last_login_at columns print.
 
 ### Implementation
-- `cmd/core/cli_users.go`: subcommand dispatcher
+- `cmd/core/cmd_users.go` (originally planned at cmd/core/cli_users.go; the subcommand dispatcher was named `cmd_users.go` to match the `cmd_*` convention used by the other CLI subcommands): subcommand dispatcher
 - `cmd/core/main.go`: route `os.Args[1] == "users"` to
   `runUsersCmd(os.Args[2:])` BEFORE starting the HTTP server
 - Password input via `golang.org/x/term.ReadPassword`
@@ -112,7 +112,7 @@
 ### Test Plan
 | Type | File | Description | Command |
 |------|------|-------------|---------|
-| unit | `cmd/core/cli_users_test.go` | add/set/list against mocked stdin + test PG | `go test ./cmd/core/...` |
+| unit | `cmd/core/cmd_users_test.go` (originally planned at cmd/core/cli_users_test.go) | add/set/list against mocked stdin + test PG | `go test ./cmd/core/...` |
 
 ### Definition of Done
 - [x] CLI dispatcher lands — Evidence: `cmd/core/main.go:51` routes `os.Args[1] == "users"` to `runUsersCmd`; `cmd/core/cmd_users.go` implements add/set-password/list using `webcreds.NewPostgresRepo` + `golang.org/x/term.ReadPassword`. **Phase:** implement. **Claim Source:** executed.

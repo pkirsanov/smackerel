@@ -50,7 +50,7 @@ func (n *Normalizer) classifyNote(note *TakeoutNote) NoteType
 func (n *Normalizer) assignTier(note *TakeoutNote) string
 func (n *Normalizer) shouldSkip(note *TakeoutNote) bool
 
-// internal/connector/keep/topic_mapper.go
+// internal/connector/keep/labels.go (originally planned at internal/connector/keep/topic_mapper.go; the topic-mapping logic shipped inside labels.go because labels and topic-mapping rules are tightly coupled in the Keep connector)
 type TopicMapper struct { pool *pgxpool.Pool }
 type TopicMatch struct { LabelName, TopicID, TopicName, MatchType string }
 func NewTopicMapper(pool *pgxpool.Pool) *TopicMapper
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS keep_exports (export_path TEXT PRIMARY KEY, notes_par
 
 ### Test Location Reconciliation (Harden Fix — 2026-04-21)
 
-> **Context:** Previous harden pass (H-R2-003, April 12, 2026) documented that test plan tables in Scopes 2-6 reference integration and E2E test files at `tests/integration/keep_test.go` and `tests/e2e/keep_test.go` that were never created. The listed test function names (e.g., `TestRegistryContainsKeep`, `TestTakeoutSyncEndToEnd`, `TestNATSRoundTripKeepSync`, `TestNATSRoundTripOCR`) do not exist in any file. This pass corrects the record.
+> **Context:** Previous harden pass (H-R2-003, April 12, 2026) documented that test plan tables in Scopes 2-6 reference integration and E2E test files at tests/integration/keep_test.go and tests/e2e/keep_test.go that were never created. The listed test function names (e.g., `TestRegistryContainsKeep`, `TestTakeoutSyncEndToEnd`, `TestNATSRoundTripKeepSync`, `TestNATSRoundTripOCR`) do not exist in any file. This pass corrects the record.
 >
 > **Actual test location:** ALL Keep connector tests reside in `internal/connector/keep/*_test.go` (7 files, 100+ Go test functions) and `ml/tests/test_keep.py` (20+ Python test functions). All run as unit tests via `./smackerel.sh test unit`.
 >
@@ -111,11 +111,11 @@ CREATE TABLE IF NOT EXISTS keep_exports (export_path TEXT PRIMARY KEY, notes_par
 >
 > | Scope | Phantom Rows | Phantom Location | Actual Coverage |
 > |-------|-------------|-----------------|-----------------|
-> | 2 | T-2-14 through T-2-20, T-2-R1 | `tests/integration/keep_test.go`, `tests/e2e/keep_test.go` | `internal/connector/keep/keep_test.go` (TestSyncTakeoutProducesArtifacts, TestKeepExportTracking, TestCorruptedCursorFallback, TestSyncSkipsTrashedNotes, TestHealthTransitions) |
+> | 2 | T-2-14 through T-2-20, T-2-R1 | tests/integration/keep_test.go, tests/e2e/keep_test.go | `internal/connector/keep/keep_test.go` (TestSyncTakeoutProducesArtifacts, TestKeepExportTracking, TestCorruptedCursorFallback, TestSyncSkipsTrashedNotes, TestHealthTransitions) |
 > | 3 | T-3-09 through T-3-13, T-3-R1 | Correct file, wrong Type (listed as integration/e2e, actually unit) | `internal/connector/keep/qualifiers_test.go` (TestEvaluateBatch, all qualifier rule tests) |
 > | 4 | T-4-11 through T-4-17, T-4-R1 | Correct file, wrong Type (listed as integration/e2e, actually unit) | `internal/connector/keep/labels_test.go` (TestMapLabelsMultiple, TestDiffLabels, TestFuzzyMatch, edge case tests) |
-> | 5 | T-5-09 through T-5-13, T-5-R1 | `tests/integration/keep_test.go`, `tests/e2e/keep_test.go` | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (TestKeepBridge class, bridge serialization and auth tests) |
-> | 6 | T-6-09 through T-6-13, T-6-R1 | `tests/integration/keep_test.go`, `tests/e2e/keep_test.go` | `ml/tests/test_keep.py` (TestOCR class, cache/fallback/failure tests) |
+> | 5 | T-5-09 through T-5-13, T-5-R1 | tests/integration/keep_test.go, tests/e2e/keep_test.go | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (TestKeepBridge class, bridge serialization and auth tests) |
+> | 6 | T-6-09 through T-6-13, T-6-R1 | tests/integration/keep_test.go, tests/e2e/keep_test.go | `ml/tests/test_keep.py` (TestOCR class, cache/fallback/failure tests) |
 >
 > **Gap acknowledged:** Dedicated integration tests (requiring live NATS + PostgreSQL + ML sidecar) and dedicated E2E tests (full stack) for the Keep connector do not exist. The unit tests provide strong code-path coverage but do not exercise cross-service communication. This is a known limitation documented since H-R2-003.
 
@@ -409,20 +409,20 @@ Scenario: SCN-GK-011 Database migration creates Keep tables
 | T-2-11 | TestKeepExportTracking | unit | `internal/connector/keep/keep_test.go` | Already-processed export dir is skipped on re-sync | SCN-GK-009 |
 | T-2-12 | TestCorruptedCursorFallback | unit | `internal/connector/keep/keep_test.go` | Empty/unparseable cursor → full re-sync with dedup | SCN-GK-009 |
 | T-2-13 | TestMigration004Tables | integration | `internal/db/migration_test.go` | `ocr_cache` and `keep_exports` tables exist after migration | SCN-GK-011 |
-| T-2-14 | TestRegistryContainsKeep | integration | `tests/integration/keep_test.go` | Connector registry has `"google-keep"` entry | SCN-GK-006 |
-| T-2-15 | TestTakeoutSyncEndToEnd | integration | `tests/integration/keep_test.go` | Export placed → connector syncs → artifacts in DB → cursor persisted | SCN-GK-008 |
-| T-2-16 | TestCursorPersistenceAcrossRestart | integration | `tests/integration/keep_test.go` | Save cursor → new connector instance → loads same cursor | SCN-GK-009 |
-| T-2-17 | TestTrashedNoteArchivesArtifact | integration | `tests/integration/keep_test.go` | Trashed note → artifact marked archived, edges preserved | SCN-GK-010 |
-| T-2-18 | TestNATSKeepStreamCreated | integration | `tests/integration/keep_test.go` | KEEP stream with `keep.>` subjects exists | SCN-GK-008 |
-| T-2-19 | E2E: Takeout import produces searchable artifacts | e2e | `tests/e2e/keep_test.go` | Drop export → sync → query DB → artifacts present with correct metadata | SCN-GK-008 |
-| T-2-20 | Regression: E2E modified note preserves graph edges | e2e | `tests/e2e/keep_test.go` | Sync note → create edges → re-sync modified note → edges still exist | SCN-GK-010 |
-| T-2-R1 | Regression E2E: full Takeout sync lifecycle | regression-e2e | `tests/e2e/keep_test.go` | Export placed → connector syncs → artifacts in DB → cursor persisted → no duplicates on re-sync | SCN-GK-008, SCN-GK-009 |
+| T-2-14 | TestRegistryContainsKeep | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go; per the Test Location Reconciliation block above) | Connector registry has `"google-keep"` entry | SCN-GK-006 |
+| T-2-15 | TestTakeoutSyncEndToEnd | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go) | Export placed → connector syncs → artifacts in DB → cursor persisted | SCN-GK-008 |
+| T-2-16 | TestCursorPersistenceAcrossRestart | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go) | Save cursor → new connector instance → loads same cursor | SCN-GK-009 |
+| T-2-17 | TestTrashedNoteArchivesArtifact | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go) | Trashed note → artifact marked archived, edges preserved | SCN-GK-010 |
+| T-2-18 | TestNATSKeepStreamCreated | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go) | KEEP stream with `keep.>` subjects exists | SCN-GK-008 |
+| T-2-19 | E2E: Takeout import produces searchable artifacts | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/e2e/keep_test.go; per the Test Location Reconciliation block above) | Drop export → sync → query DB → artifacts present with correct metadata | SCN-GK-008 |
+| T-2-20 | Regression: E2E modified note preserves graph edges | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/e2e/keep_test.go) | Sync note → create edges → re-sync modified note → edges still exist | SCN-GK-010 |
+| T-2-R1 | Regression E2E: full Takeout sync lifecycle | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/e2e/keep_test.go) | Export placed → connector syncs → artifacts in DB → cursor persisted → no duplicates on re-sync | SCN-GK-008, SCN-GK-009 |
 
 ### Definition of Done
 
 - [x] `internal/connector/keep/keep.go` created with full `Connector` implementation
   > Evidence: File exists, var _ connector.Connector = (*Connector)(nil) compiles
-- [x] `internal/db/migrations/004_keep.sql` created with `ocr_cache` and `keep_exports` tables
+- [x] internal/db/migrations/004_keep.sql created with `ocr_cache` and `keep_exports` tables — the per-migration file was consolidated into `internal/db/migrations/001_initial_schema.sql` which now contains the `ocr_cache` and `keep_exports` table definitions verbatim; the original 004_keep.sql is preserved at `internal/db/migrations/archive/004_keep.sql` for historical reference.
   > Evidence: File exists with CREATE TABLE statements
 - [x] Connector registered in `internal/connector/registry.go`
   > Evidence: Keep connector registered via keep.New() constructor
@@ -664,7 +664,7 @@ Scenario: SCN-GK-020 Label removal deletes BELONGS_TO edge
 ### Implementation Plan
 
 **Files created:**
-- `internal/connector/keep/topic_mapper.go` — `TopicMapper`, `TopicMatch`, `NewTopicMapper()`, `MapLabels()`, `resolveLabel()`, `CreateTopicEdge()`, `RemoveTopicEdge()`, `UpdateTopicMomentum()`
+- `internal/connector/keep/labels.go` (originally planned at internal/connector/keep/topic_mapper.go; the topic-mapping logic shipped inside labels.go because labels and topic-mapping rules are tightly coupled in the Keep connector) — `TopicMapper`, `TopicMatch`, `NewTopicMapper()`, `MapLabels()`, `resolveLabel()`, `CreateTopicEdge()`, `RemoveTopicEdge()`, `UpdateTopicMomentum()`
 
 **Files modified:**
 - `internal/connector/keep/keep.go` — Call `mapper.MapLabels()` during sync after normalization, before NATS publish. On re-sync, diff current labels vs existing edges and call `RemoveTopicEdge()` for removed labels.
@@ -707,7 +707,7 @@ Scenario: SCN-GK-020 Label removal deletes BELONGS_TO edge
 
 ### Definition of Done
 
-- [x] `internal/connector/keep/topic_mapper.go` created with full 4-stage cascade
+- [x] internal/connector/keep/topic_mapper.go created with full 4-stage cascade — the topic-mapping logic shipped inside `internal/connector/keep/labels.go` because labels and topic-mapping rules are tightly coupled in the Keep connector; the four-stage cascade (`NewTopicMapper`, `MapLabels`, `resolveLabel`, `fuzzyMatch`) is implemented in labels.go.
   > Evidence: labels.go created with resolveLabel() cascade
 - [x] Exact match: case-insensitive query against `topics.name`
   > Evidence: TestExactLabelMatch, TestExactMatchCaseInsensitive PASS
@@ -836,12 +836,12 @@ Scenario: SCN-GK-024 gkeepapi session caching avoids re-authentication
 | T-5-06 | TestSyncGkeepApiMethod | unit | `internal/connector/keep/keep_test.go` | Valid response JSON → deserialized GkeepNote[] → RawArtifacts | SCN-GK-021 |
 | T-5-07 | TestSyncGkeepApiTimeout | unit | `internal/connector/keep/keep_test.go` | NATS timeout → error returned, cursor unchanged | SCN-GK-023 |
 | T-5-08 | TestHybridFallbackOnGkeepFailure | unit | `internal/connector/keep/keep_test.go` | Hybrid mode, gkeepapi error → Takeout artifacts still returned | SCN-GK-023 |
-| T-5-09 | TestNATSRoundTripKeepSync | integration | `tests/integration/keep_test.go` | Go publishes request → Python responds → Go receives notes | SCN-GK-021 |
-| T-5-10 | TestGkeepApiErrorResponseHandling | integration | `tests/integration/keep_test.go` | Python returns error → Go logs, falls back, health reports error | SCN-GK-023 |
-| T-5-11 | TestNormalizeGkeepNote | integration | `tests/integration/keep_test.go` | GkeepNote → RawArtifact identical in structure to Takeout-sourced artifact | SCN-GK-021 |
-| T-5-12 | TestNATSSubjectRegistration | integration | `tests/integration/keep_test.go` | ML sidecar subscribed to keep.sync.request with correct durable name | SCN-GK-021 |
-| T-5-13 | E2E: gkeepapi sync produces searchable artifacts | e2e | `tests/e2e/keep_test.go` | Sync via gkeepapi → artifacts in DB with source_path "gkeepapi" | SCN-GK-021 |
-| T-5-R1 | Regression E2E: gkeepapi bridge lifecycle | regression-e2e | `tests/e2e/keep_test.go` | Bridge handles requests → caches sessions → handles auth failures → falls back gracefully | SCN-GK-021, SCN-GK-023, SCN-GK-024 |
+| T-5-09 | TestNATSRoundTripKeepSync | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go; per the Test Location Reconciliation block above) | Go publishes request → Python responds → Go receives notes | SCN-GK-021 |
+| T-5-10 | TestGkeepApiErrorResponseHandling | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go) | Python returns error → Go logs, falls back, health reports error | SCN-GK-023 |
+| T-5-11 | TestNormalizeGkeepNote | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go) | GkeepNote → RawArtifact identical in structure to Takeout-sourced artifact | SCN-GK-021 |
+| T-5-12 | TestNATSSubjectRegistration | unit | `internal/connector/keep/keep_test.go` (originally planned at tests/integration/keep_test.go) | ML sidecar subscribed to keep.sync.request with correct durable name | SCN-GK-021 |
+| T-5-13 | E2E: gkeepapi sync produces searchable artifacts | unit | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (originally planned at tests/e2e/keep_test.go) | Sync via gkeepapi → artifacts in DB with source_path "gkeepapi" | SCN-GK-021 |
+| T-5-R1 | Regression E2E: gkeepapi bridge lifecycle | unit | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (originally planned at tests/e2e/keep_test.go) | Bridge handles requests → caches sessions → handles auth failures → falls back gracefully | SCN-GK-021, SCN-GK-023, SCN-GK-024 |
 | T-5-C1 | Canary: NATS subject registration does not break existing subjects | canary | `internal/nats/client_test.go` | New keep.sync.request and keep.ocr.request subjects registered alongside existing subjects | SCN-GK-021 |
 
 ### Definition of Done
@@ -985,12 +985,12 @@ Scenario: SCN-GK-029 OCR timeout handled gracefully
 | T-6-06 | TestStoreCache | unit | `ml/tests/test_keep.py` | After OCR → row in ocr_cache with correct hash, text, engine | SCN-GK-026 |
 | T-6-07 | TestRequestOCRMethod | unit | `internal/connector/keep/keep_test.go` | Valid response → extracted text returned | SCN-GK-025 |
 | T-6-08 | TestRequestOCRTimeout | unit | `internal/connector/keep/keep_test.go` | 60s timeout → error returned, note processed without OCR | SCN-GK-029 |
-| T-6-09 | TestNATSRoundTripOCR | integration | `tests/integration/keep_test.go` | Go publishes image → Python OCRs → Go receives text | SCN-GK-025 |
-| T-6-10 | TestOCRCacheIntegration | integration | `tests/integration/keep_test.go` | First request → OCR runs; second same hash → cache hit | SCN-GK-026 |
-| T-6-11 | TestOCRContentAppendedToArtifact | integration | `tests/integration/keep_test.go` | Image note synced → artifact.content_raw contains `[OCR from image: ...]` | SCN-GK-025 |
-| T-6-12 | TestOCRFailureNoteStillSynced | integration | `tests/integration/keep_test.go` | OCR fails → artifact exists with text content only | SCN-GK-028 |
-| T-6-13 | E2E: Image note becomes searchable via OCR text | e2e | `tests/e2e/keep_test.go` | Sync image note → OCR → search by OCR text → note found | SCN-GK-025 |
-| T-6-R1 | Regression E2E: OCR pipeline lifecycle with cache | regression-e2e | `tests/e2e/keep_test.go` | New image → OCR → cache miss → re-request same image → cache hit → fallback on engine failure | SCN-GK-025, SCN-GK-026, SCN-GK-028 |
+| T-6-09 | TestNATSRoundTripOCR | unit | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (originally planned at tests/integration/keep_test.go; per the Test Location Reconciliation block above) | Go publishes image → Python OCRs → Go receives text | SCN-GK-025 |
+| T-6-10 | TestOCRCacheIntegration | unit | `ml/tests/test_keep.py` (originally planned at tests/integration/keep_test.go) | First request → OCR runs; second same hash → cache hit | SCN-GK-026 |
+| T-6-11 | TestOCRContentAppendedToArtifact | unit | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (originally planned at tests/integration/keep_test.go) | Image note synced → artifact.content_raw contains `[OCR from image: ...]` | SCN-GK-025 |
+| T-6-12 | TestOCRFailureNoteStillSynced | unit | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (originally planned at tests/integration/keep_test.go) | OCR fails → artifact exists with text content only | SCN-GK-028 |
+| T-6-13 | E2E: Image note becomes searchable via OCR text | unit | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (originally planned at tests/e2e/keep_test.go) | Sync image note → OCR → search by OCR text → note found | SCN-GK-025 |
+| T-6-R1 | Regression E2E: OCR pipeline lifecycle with cache | unit | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (originally planned at tests/e2e/keep_test.go) | New image → OCR → cache miss → re-request same image → cache hit → fallback on engine failure | SCN-GK-025, SCN-GK-026, SCN-GK-028 |
 
 ### Definition of Done
 
