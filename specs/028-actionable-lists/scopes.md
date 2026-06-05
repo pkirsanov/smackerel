@@ -108,7 +108,7 @@ Scope 1 (DB + Types)
 - `SubjectListsCreated = "lists.created"`
 - `SubjectListsCompleted = "lists.completed"`
 
-**SQL (`internal/db/migrations/017_actionable_lists.sql`):**
+**SQL (`internal/db/migrations/001_initial_schema.sql` lines 545-588; originally shipped as 017_actionable_lists.sql; consolidated into 001 during the migrations 002-017 schema squash documented in [docs/Development.md](../../docs/Development.md#L454); historical file preserved at `internal/db/migrations/archive/017_actionable_lists.sql`):**
 - `CREATE TABLE lists (...)` — as defined in design.md
 - `CREATE TABLE list_items (...)` — as defined in design.md
 
@@ -129,7 +129,7 @@ Scope 1 (DB + Types)
 ```gherkin
 Scenario: List tables created by migration
   Given the database is running with migrations through 015
-  When migration 017_actionable_lists.sql is applied
+  When the actionable_lists migration (shipped as `017_actionable_lists.sql`, now consolidated into `001_initial_schema.sql`) is applied
   Then a "lists" table exists with columns id, list_type, title, status, source_artifact_ids, source_query, domain, total_items, checked_items, created_at, updated_at, completed_at
   And a "list_items" table exists with columns id, list_id, content, category, status, substitution, source_artifact_ids, is_manual, quantity, unit, normalized_name, sort_order, checked_at, notes, created_at, updated_at
   And list_items.list_id has a foreign key to lists.id with ON DELETE CASCADE

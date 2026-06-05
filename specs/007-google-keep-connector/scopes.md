@@ -8,7 +8,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ### Change Boundary
 
-**Allowed surfaces:** `internal/connector/keep/` (new package), `internal/db/migrations/004_keep.sql` (new file), `internal/nats/client.go` (add constants), `ml/app/keep_bridge.py` (new file), `ml/app/ocr.py` (new file), `ml/app/nats_client.py` (add subjects), `config/smackerel.yaml` (add connector section).
+**Allowed surfaces:** `internal/connector/keep/` (new package), `internal/db/migrations/001_initial_schema.sql` (originally shipped as 004_keep.sql; consolidated into 001 during the migrations 002-017 schema squash documented in [docs/Development.md](../../docs/Development.md#L454); historical file preserved at `internal/db/migrations/archive/004_keep.sql`), `internal/nats/client.go` (add constants), `ml/app/keep_bridge.py` (new file), `ml/app/ocr.py` (new file), `ml/app/nats_client.py` (add subjects), `config/smackerel.yaml` (add connector section).
 
 **Excluded surfaces:** No changes to existing connector implementations (RSS, IMAP, CalDAV, Browser, YouTube, Maps, Bookmarks). No changes to existing pipeline processors, search API, digest API, health API, or web handlers. No changes to existing NATS stream configurations (ARTIFACTS, SEARCH, DIGEST). No schema changes to existing database tables.
 
@@ -85,7 +85,7 @@ async def store_cache(image_hash: str, text: str) -> None
 ```
 
 ```sql
--- internal/db/migrations/004_keep.sql
+-- internal/db/migrations/001_initial_schema.sql (originally `004_keep.sql`; see archive)
 CREATE TABLE IF NOT EXISTS ocr_cache (image_hash TEXT PRIMARY KEY, extracted_text TEXT NOT NULL, ocr_engine TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS keep_exports (export_path TEXT PRIMARY KEY, notes_parsed INTEGER DEFAULT 0, notes_failed INTEGER DEFAULT 0, processed_at TIMESTAMPTZ DEFAULT NOW());
 ```
@@ -375,7 +375,7 @@ Scenario: SCN-GK-011 Database migration creates Keep tables
 
 **Files created:**
 - `internal/connector/keep/keep.go` — `Connector` struct implementing `connector.Connector`, `KeepConfig`, `SyncMode`, `New()`, `Connect()`, `Sync()`, `Health()`, `Close()`, `syncTakeout()`, `parseKeepConfig()`
-- `internal/db/migrations/004_keep.sql` — `ocr_cache` and `keep_exports` tables
+- `internal/db/migrations/001_initial_schema.sql` lines 284-294 (originally 004_keep.sql; consolidated into 001 during the migrations 002-017 schema squash; archive copy at `internal/db/migrations/archive/004_keep.sql`) — `ocr_cache` and `keep_exports` tables
 
 **Files modified:**
 - `internal/connector/registry.go` — Register `"google-keep"` connector factory

@@ -61,7 +61,7 @@ TelegramConfig.AssemblyWindowSeconds int
 TelegramConfig.AssemblyMaxMessages int
 TelegramConfig.MediaGroupWindowSeconds int
 
-// internal/db/migrations/004_conversation_fields.sql
+// internal/db/migrations/001_initial_schema.sql (originally `005_conversation_fields.sql`; consolidated)
 ALTER TABLE artifacts ADD COLUMN participants JSONB
 ALTER TABLE artifacts ADD COLUMN message_count INTEGER
 ALTER TABLE artifacts ADD COLUMN source_chat TEXT
@@ -581,7 +581,7 @@ Scenario: SC-TSC13a Conversation validation rejects invalid payloads
 **Modified file: `internal/extract/extract.go`**
 - Add `ContentTypeConversation ContentType = "conversation"` constant
 
-**New file: `internal/db/migrations/004_conversation_fields.sql`**
+**Originally new file: 005_conversation_fields.sql (now consolidated into `internal/db/migrations/001_initial_schema.sql`; archive copy at `internal/db/migrations/archive/005_conversation_fields.sql` — the spec was authored citing 004_* but the file shipped as 005_* before the squash)**
 - `ALTER TABLE artifacts ADD COLUMN participants JSONB`
 - `ALTER TABLE artifacts ADD COLUMN message_count INTEGER`
 - `ALTER TABLE artifacts ADD COLUMN source_chat TEXT`
@@ -626,8 +626,8 @@ Scenario: SC-TSC13a Conversation validation rejects invalid payloads
   - Evidence: `internal/pipeline/processor.go`
 - [x] `ContentTypeConversation` constant added to `extract.go`
   - Evidence: `internal/extract/extract.go` line 27
-- [x] Database migration `005_conversation_fields.sql` created and applies cleanly
-  - Evidence: `internal/db/migrations/005_conversation_fields.sql`
+- [x] Database migration 005_conversation_fields.sql created and applies cleanly
+  - Evidence: `internal/db/migrations/001_initial_schema.sql` (originally 005_conversation_fields.sql; consolidated into 001 during the migrations 002-017 schema squash documented in [docs/Development.md](../../docs/Development.md#L454); historical file preserved at `internal/db/migrations/archive/005_conversation_fields.sql`)
 - [x] New columns (participants, message_count, source_chat, timeline) populated correctly during pipeline processing
   - Evidence: `internal/pipeline/processor.go`
 - [x] ML sidecar uses conversation-specific prompt template for `content_type == "conversation"`
