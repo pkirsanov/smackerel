@@ -87,7 +87,7 @@ Scenario: SCN-039-003 Config validation fails loud on missing required keys
 - Scaffold packages: `internal/recommendation/{provider,location,dedupe,graph,rank,policy,quality,store,tools}` with interfaces only (no live behavior). Keep handler routing wired but returning `not_implemented` until Scope 02.
 - Add typed `Recommendations` config struct on `internal/config.Config` with fail-loud `Validate()` that names every missing required key (no fallbacks, no defaults — per SST policy).
 - Update `config/smackerel.yaml` with the documented `recommendations:` block; secret fields use empty-string values per SST policy. `./smackerel.sh config generate` must produce `config/generated/dev.env` and `config/generated/test.env` with no committed secrets.
-- Register an in-process fixture provider in `internal/recommendation/provider/fixture.go` (test-only build tag) so integration tests can drive scenarios without external network.
+- Register an in-process fixture provider in `internal/recommendation/provider/fixture_integration.go` (originally planned at internal/recommendation/provider/fixture.go; the test-only fixture provider was named `fixture_integration.go` to match the `_integration` build-tag convention) so integration tests can drive scenarios without external network.
 - Extend the existing `/status` template (`internal/web/templates.go`) to render a recommendation provider health block sourced from the registry and `recommendation_provider_runtime_state`.
 - Wire `POST /api/recommendations/requests` to return `status: "no_providers"` when registry is empty, persisting a `recommendation_requests` row + `agent_traces` row with no provider calls.
 
@@ -475,7 +475,7 @@ Not applicable: additive routes; consent shape is new (no prior consumers).
 
 #### Change Boundary
 
-- Allowed file families: `internal/recommendation/**`, `internal/api/recommendations.go`, `internal/web/recommendations.go` + templates, `internal/telegram/{watches.go,recommendations.go}`, `internal/scheduler/recommendations.go` (new file or additive section), `config/prompt_contracts/recommendation-watch-evaluate-v1.yaml`.
+- Allowed file families: `internal/recommendation/**`, `internal/api/recommendations.go`, `internal/web/recommendations.go` + templates, `internal/telegram/{watches.go,recommendations.go}`, `internal/scheduler/recommendation_watches.go` (originally planned at internal/scheduler/recommendations.go; the scheduler job was named `recommendation_watches.go` to reflect the watch-evaluation surface it owns), `config/prompt_contracts/recommendation-watch-evaluate-v1.yaml`.
 - Excluded surfaces: other connectors' scheduler code, other features.
 
 ### Test Plan
@@ -606,7 +606,7 @@ Scenario: SCN-039-045 Operator can filter recommendation traces
 
 #### Change Boundary
 
-- Allowed file families: `internal/recommendation/{policy,quality}/**`, `internal/web/templates/trip_dossier/**`, `internal/web/admin_traces.go` (additive filter only), `internal/api/recommendations.go` (providers endpoint).
+- Allowed file families: `internal/recommendation/{policy,quality}/**`, `internal/web/templates/trip_dossier/**`, `internal/web/agent_admin.go` (additive filter only; originally planned at internal/web/admin_traces.go but the agent-trace admin UI lives in the existing `agent_admin.go` and the server-side filter on `agent_traces.scenario_id` lives in `internal/agent/store.go` — documented as a planning-text narrowness deviation in `report.md` Decision Record), `internal/api/recommendations.go` (providers endpoint).
 - Excluded surfaces: scheduler, watch persistence, other features' templates.
 
 ### Test Plan
@@ -753,7 +753,7 @@ Scenario: SCN-039-045 Operator can filter recommendation traces
   ?? tests/e2e/{admin_agent_traces_recommendations,recommendations_policy_regression,recommendations_providers}_test.go
   ?? tests/integration/recommendation_{policy,quality}_test.go
   ```
-  Excluded surfaces (scheduler, watch persistence, other features' templates) — NONE touched. The Change Boundary text named `internal/web/admin_traces.go`, but that file does not exist; the implementation plan separately mandated server-side filter on `agent_traces.scenario_id` which lives in `internal/agent/store.go` and the trace UI in `internal/web/agent_admin.go`. Documented as planning-text narrowness deviation in `report.md` Decision Record.
+  Excluded surfaces (scheduler, watch persistence, other features' templates) — NONE touched. The Change Boundary text named internal/web/admin_traces.go, but that file does not exist; the implementation plan separately mandated server-side filter on `agent_traces.scenario_id` which lives in `internal/agent/store.go` and the trace UI in `internal/web/agent_admin.go`. Documented as planning-text narrowness deviation in `report.md` Decision Record.
 - [x] Broader E2E regression suite passes
   **Phase:** implement
   **Command:** `cd <home>/smackerel && ./smackerel.sh test e2e 2>&1 | tail -5`

@@ -71,6 +71,17 @@ import (
 // internal/assistant/types.go → internal/assistant/contracts/response.go)
 // plus bare-text rephrasings for fixtures split into .input/.descriptor.json
 // pairs and deferred aggregator/dashboard files carried forward to follow-ons.
+// 2026-06-05 (session 3 tier-3 batch): tightened to 356 after fixes
+// across 3 specs (039, 041, 054) — closing 9 broken paths via renames
+// (internal/recommendation/provider/fixture.go → fixture_integration.go,
+// internal/scheduler/recommendations.go → scheduler/recommendation_watches.go,
+// internal/web/admin_traces.go → internal/web/agent_admin.go,
+// internal/web/render/qf_packet_view.go → internal/api/qf_render.go,
+// internal/digest/render/qf_packet_tile.go → internal/digest/generator.go,
+// tests/e2e/notification_{ingest,manual_ingest,operator}_api_test.go →
+// internal/api/notifications_pipeline.go + tests/e2e/notification_operator_web_test.go)
+// plus bare-text rephrasings for the 038_qf_callback_signing_keys.sql
+// migration that was not created (SST config-only was chosen).
 //
 // Lowering protocol:
 //  1. Pick a spec (or set of specs) to clean.
@@ -79,7 +90,7 @@ import (
 //  3. Re-run this test; it will report the new actual count.
 //  4. Lower this constant to match (or below) the new actual count.
 //  5. Commit both changes together so the ratchet stays tight.
-const maxAllowedBrokenPaths = 365
+const maxAllowedBrokenPaths = 356
 
 var pathRegex = regexp.MustCompile("`((?:internal|cmd|tests|ml|web|deploy|config|scripts)/[\\w/.-]+\\.(go|py|md|yaml|yml|json|js|ts|tsx|dart|sh|sql|toml))`")
 
