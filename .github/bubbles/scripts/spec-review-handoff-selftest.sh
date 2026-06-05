@@ -10,11 +10,25 @@ else
   REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 
-SPEC_REVIEW_AGENT="$REPO_ROOT/agents/bubbles.spec-review.agent.md"
-WORKFLOW_AGENT="$REPO_ROOT/agents/bubbles.workflow.agent.md"
-ORCHESTRATION_CORE="$REPO_ROOT/agents/bubbles_shared/workflow-orchestration-core.md"
-INPUT_BOOTSTRAP="$REPO_ROOT/agents/bubbles_shared/workflow-input-bootstrap.md"
-WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
+# Asset roots: framework source repo carries agents/ + bubbles/ at the repo
+# root; downstream installs carry them under .github/. Resolve once so the
+# selftest works from either tree.
+if [[ -d "$REPO_ROOT/agents" ]]; then
+  AGENTS_ROOT="$REPO_ROOT/agents"
+else
+  AGENTS_ROOT="$REPO_ROOT/.github/agents"
+fi
+if [[ -f "$REPO_ROOT/bubbles/workflows.yaml" ]]; then
+  BUBBLES_ROOT="$REPO_ROOT/bubbles"
+else
+  BUBBLES_ROOT="$REPO_ROOT/.github/bubbles"
+fi
+
+SPEC_REVIEW_AGENT="$AGENTS_ROOT/bubbles.spec-review.agent.md"
+WORKFLOW_AGENT="$AGENTS_ROOT/bubbles.workflow.agent.md"
+ORCHESTRATION_CORE="$AGENTS_ROOT/bubbles_shared/workflow-orchestration-core.md"
+INPUT_BOOTSTRAP="$AGENTS_ROOT/bubbles_shared/workflow-input-bootstrap.md"
+WORKFLOWS_FILE="$BUBBLES_ROOT/workflows.yaml"
 
 failures=0
 checks=0
