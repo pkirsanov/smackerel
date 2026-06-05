@@ -38,7 +38,7 @@ spec-064 close-out boundary.
   introduced; `pii-scan.sh` clean. (Executed; close-out captured in
   `report.md`.)
 - [x] SLA stress coverage: assistant agent loop carries explicit
-  stress test row under `tests/stress/openknowledge_agent_load_test.go`
+  stress test row under `tests/stress/openknowledge_p95_test.go` (originally planned at tests/stress/openknowledge_agent_load_test.go; the stress harness was named `openknowledge_p95_test.go` to match the p95-budget assertion convention used by the other stress tests in this package)
   scope (rescoped — see successor spec planning row); shipped scopes
   exercise budget caps via unit cases that bound iteration / token /
   USD growth under load.
@@ -117,7 +117,7 @@ registry_test.go, doc.go}`.
 
 **Files:** `config/smackerel.yaml`, `internal/config/openknowledge.go`,
 `internal/config/openknowledge_test.go`,
-`internal/config/loader.go` (wiring),
+`internal/config/assistant.go` + `internal/assistant/openknowledge/registry.go` (wiring; originally planned at internal/config/loader.go; the openknowledge config wiring is split between the per-domain `internal/config/assistant.go` SST schema and the runtime registry under `internal/assistant/openknowledge/`),
 `config/generated/{dev,test}.env` (regenerated artifact),
 `scripts/commands/config.sh` (additions if any).
 
@@ -467,9 +467,9 @@ core within window; test binary builds + vets clean.
 **Goal:** Render UX-packet response shapes, citation footnotes, and
 refusal taxonomy strings.
 
-**Files:** `internal/telegram/openknowledge_render.go` + `_test.go`,
-`internal/telegram/handler.go` (wire),
-`tests/integration/openknowledge_telegram_test.go`.
+**Files:** `internal/telegram/assistant_adapter/render_openknowledge.go` + `_test.go` (originally planned at internal/telegram/openknowledge_render.go; the renderer ships inside the `assistant_adapter` subpackage alongside the other render-* surfaces for the Telegram assistant adapter),
+`internal/telegram/bot.go` (wire; originally planned at internal/telegram/handler.go; the Telegram handler dispatch lives inline in `bot.go` rather than a separate handler.go file),
+`tests/integration/openknowledge/` package + `tests/integration/openknowledge_persistence_test.go` + `tests/integration/openknowledge_searxng_test.go` + `tests/integration/openknowledge_internal_retrieval_test.go` (originally planned as a single tests/integration/openknowledge_telegram_test.go; the integration coverage was split into per-concern files under `tests/integration/openknowledge/` and per-feature files at the package root).
 
 **Tests:** unit (snapshot of each response shape + each refusal
 category); integration (real Telegram webhook contract test against
@@ -535,7 +535,7 @@ live core).
 plus redacted trace logging.
 
 **Files (local stub + packet):**
-`internal/assistant/openknowledge/metrics.go` + `_test.go`; route
+`internal/assistant/openknowledge/metrics/metrics.go` + `_test.go` (originally planned at internal/assistant/openknowledge/metrics.go; the metrics handler ships as a `metrics/` subpackage rather than a single metrics.go file because the openknowledge package needed to expose per-component metrics registration); route
 packet to `specs/049-...` for dashboards/alerts.
 
 **Tests:** unit (metric increments, log redaction of API keys + URLs

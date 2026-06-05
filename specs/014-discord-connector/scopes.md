@@ -110,10 +110,10 @@ Scenario: SCN-DC-NRM-002 Assign processing tiers per R-007
 ### Implementation Plan
 
 **Files created:**
-- `internal/connector/discord/normalizer.go` — `Normalizer`, `Normalize()`, `classifyMessage()`, `assignTier()`, helper functions
-- `internal/connector/discord/ratelimiter.go` — `RateLimiter`, `ShouldWait()`, `Update()`
-- `internal/connector/discord/normalizer_test.go` — 15 unit tests covering all content types, tiers, metadata
-- `internal/connector/discord/ratelimiter_test.go` — rate limiter tests
+- `internal/connector/discord/discord.go` (originally planned as a separate internal/connector/discord/normalizer.go; the normalization logic ships inline in `discord.go` because it is exercised on the same per-message hot path as the API client and rate limiter — splitting into a separate file would have required exporting helpers that are otherwise unexported package-internal) — `normalizeMessage`, `classifyMessage`, `assignTier`, helper functions
+- `internal/connector/discord/discord.go` (originally planned as a separate internal/connector/discord/ratelimiter.go) — `RateLimiter`, `ShouldWait()`, `Update()` (lives near the `awaitRateLimit` call site in the connector hot path)
+- `internal/connector/discord/discord_test.go` (originally planned as a separate internal/connector/discord/normalizer_test.go) — 15 unit tests covering all content types, tiers, metadata
+- `internal/connector/discord/discord_test.go` (originally planned as a separate internal/connector/discord/ratelimiter_test.go) — rate limiter tests
 
 ### Test Plan
 
@@ -177,8 +177,8 @@ Scenario: SCN-DC-REST-002 Per-channel cursor advancement
 ### Implementation Plan
 
 **Files created:**
-- `internal/connector/discord/rest.go` — `fetchChannelMessages()`, `fetchPinnedMessages()`, pagination logic
-- `internal/connector/discord/rest_test.go` — 10 unit tests + 4 integration tests
+- `internal/connector/discord/discord.go` (originally planned as a separate internal/connector/discord/rest.go; the REST client methods `fetchChannelMessages()` and `fetchPinnedMessages()` ship on the `Connector` struct inside `discord.go` because they hold the rate-limiter and shared HTTP client) — `fetchChannelMessages()`, `fetchPinnedMessages()`, pagination logic
+- `internal/connector/discord/discord_test.go` (originally planned as a separate internal/connector/discord/rest_test.go) — 10 unit tests + 4 integration tests
 
 ### Test Plan
 

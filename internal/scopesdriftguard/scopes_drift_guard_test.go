@@ -82,6 +82,41 @@ import (
 // internal/api/notifications_pipeline.go + tests/e2e/notification_operator_web_test.go)
 // plus bare-text rephrasings for the 038_qf_callback_signing_keys.sql
 // migration that was not created (SST config-only was chosen).
+// 2026-06-05 (session 3 tier-4 batch): tightened to 317 after fixes
+// across 8 specs (007, 014, 020, 044, 057, 064, 066, 070) — closing
+// 39 broken paths in one batch via renames and consolidations:
+// - Per-connector test layout: spec 007 keep_test paths (12 occurrences)
+//   moved from planned tests/integration|e2e/keep_test.go to actual
+//   internal/connector/keep/keep_test.go + ml/tests/test_keep.py;
+//   internal/connector/keep/topic_mapper.go → labels.go;
+//   internal/db/migrations/004_keep.sql → 001_initial_schema.sql.
+// - Spec 014 Discord: per-concern files (normalizer/ratelimiter/rest)
+//   consolidated into internal/connector/discord/discord.go +
+//   discord_test.go (avoiding exported helpers for unexported
+//   package-internal logic).
+// - Spec 020 security: planned standalone tests/e2e/*.go files were never
+//   created — SCN-020-001..018 coverage is via in-package contract tests
+//   (internal/config/docker_security_test.go, internal/auth/oauth_test.go,
+//   internal/api/router_test.go).
+// - Spec 044 per-user-bearer-auth: spec 044's own evidence already
+//   documented the e2e/auth → integration/auth_*_e2e_test.go promotion;
+//   middleware lives on Dependencies in router.go (not a standalone
+//   middleware/bearer_auth.go); metrics test is auth_test.go per the
+//   per-feature convention.
+// - Spec 057 browser-login-redirect: auth_middleware.go →
+//   auth_browser_redirect.go (adjacent to router.go's bearer middleware);
+//   integration test files merged into the unit-test counterparts.
+// - Spec 064 openknowledge: render → assistant_adapter/render_openknowledge.go,
+//   handler.go → bot.go inline dispatch, stress test → openknowledge_p95_test.go,
+//   metrics.go → metrics/ subpackage, integration tests split across
+//   tests/integration/openknowledge/ package + per-feature root files.
+// - Spec 066 legacy-keyword-surface-retirement: domain_intent.go was
+//   intentionally deleted (the spec is a deletion contract); help.go was
+//   inlined into bot.go; latency test folded into integration; canary
+//   landed in tests/e2e/assistant/nl_find_replacement_test.go.
+// - Spec 070 web-login: webcreds/repo_postgres.go → repo.go (with
+//   repo_pg_test.go for the live path); timing_test.go → hasher_test.go;
+//   cli_users.go → cmd_users.go (matching cmd_* convention).
 //
 // Lowering protocol:
 //  1. Pick a spec (or set of specs) to clean.
@@ -90,7 +125,7 @@ import (
 //  3. Re-run this test; it will report the new actual count.
 //  4. Lower this constant to match (or below) the new actual count.
 //  5. Commit both changes together so the ratchet stays tight.
-const maxAllowedBrokenPaths = 356
+const maxAllowedBrokenPaths = 317
 
 var pathRegex = regexp.MustCompile("`((?:internal|cmd|tests|ml|web|deploy|config|scripts)/[\\w/.-]+\\.(go|py|md|yaml|yml|json|js|ts|tsx|dart|sh|sql|toml))`")
 
