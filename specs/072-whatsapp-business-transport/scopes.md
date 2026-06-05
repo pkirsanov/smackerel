@@ -375,7 +375,7 @@ No project impact map is configured. Runtime registration changes require integr
 | Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
 |---|---|---|---|---|---|---|
 | TP-072-14 | SCN-072-A07 | integration | `tests/integration/assistant/transport_disable_test.go` | Planned: disabling WhatsApp leaves Telegram and HTTP healthy | `./smackerel.sh test integration` | Yes |
-| TP-072-15 | SCN-072-A07 | e2e-api | `tests/e2e/assistant/whatsapp_disable_e2e_test.go` | Planned regression E2E: disabling WhatsApp leaves Telegram and HTTP live endpoints healthy | `./smackerel.sh test e2e` | Yes |
+| TP-072-15 | SCN-072-A07 | e2e-api | `tests/e2e/assistant/transport_disable_e2e_test.go` (spec authored as `whatsapp_disable_e2e_test.go` but the file shipped under the generic `transport_disable_e2e_test.go` name since it covers the disable contract for ALL transports including WhatsApp) | Planned regression E2E: disabling WhatsApp leaves Telegram and HTTP live endpoints healthy | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done — Tiered Validation
 
@@ -385,7 +385,7 @@ No project impact map is configured. Runtime registration changes require integr
   - **Evidence:** TP-072-14 integration PASS (`TestWhatsAppTransportDisable_TP_072_14`); see [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
 - [x] Scenario-specific regression for independent disable (TP-072-14) is added under `tests/integration/assistant/transport_disable_test.go` and broader E2E regression suite (`./smackerel.sh test e2e`) passes after Scope 4 changes.
   - **Evidence:** TP-072-14 PASS via `./smackerel.sh test integration` (RC=0); `./smackerel.sh test e2e` RC=0. See [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are added and live in the repo (TP-072-15 under `tests/e2e/assistant/whatsapp_disable_e2e_test.go` covers SCN-072-A07 live).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are added and live in the repo (TP-072-15 under `tests/e2e/assistant/transport_disable_e2e_test.go` covers SCN-072-A07 live; spec authored the file as `whatsapp_disable_e2e_test.go` but it shipped under the generic `transport_disable_e2e_test.go` name).
   - **Evidence:** TP-072-15 PASS via `./smackerel.sh test e2e` (RC=0). See [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
 - [x] Broader E2E regression suite passes for this scope (`./smackerel.sh test e2e` runs all live e2e rows successfully).
   - **Evidence:** `./smackerel.sh test e2e` RC=0. See [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
