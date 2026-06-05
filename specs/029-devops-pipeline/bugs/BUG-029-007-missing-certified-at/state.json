@@ -1,0 +1,244 @@
+{
+  "spec": "BUG-029-007-missing-certified-at",
+  "parentSpec": "029-devops-pipeline",
+  "status": "done",
+  "certifiedAt": "2026-06-05T22:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "workflowMode": "bugfix-fastlane",
+  "executionModel": "parent-expanded-child-mode",
+  "stochasticSweep": {
+    "sweepId": "sweep-2026-06-05-r20",
+    "round": 7,
+    "trigger": "regression",
+    "mappedChildWorkflowMode": "regression-to-doc"
+  },
+  "discovered": "2026-06-05",
+  "resolved": "2026-06-05",
+  "baselineHead": "e05aef1b",
+  "completedPhaseClaims": [
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs"
+  ],
+  "certifiedCompletedPhases": [
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs"
+  ],
+  "completedPhaseClaimDetails": [
+    {
+      "phase": "bootstrap",
+      "agent": "bubbles.bug",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "8-artifact bugfix-fastlane packet authored under specs/029-devops-pipeline/bugs/BUG-029-007-missing-certified-at/ (bug.md + spec.md + design.md + scopes.md + scenario-manifest.json + report.md + state.json + uservalidation.md)."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Applied the artifact mutation set to specs/029-devops-pipeline/ (state.json top-level certifiedAt + bubbles.spec-review CURRENT executionHistory entry + resolvedBugs entry + report.md subsection) via IDE replace_string_in_file + create_file. Zero source code touched."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Scenario-first red→green tdd proof via state-transition-guard.sh re-runs: red=1 BLOCK pre-mutation (G088 missing certifiedAt), green=0 BLOCKs post-mutation. Full red→green block in BUG-029-007/report.md Test Evidence section."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "BUG-029-007 changes zero runtime behavior; the existing persistent regression cover for spec 029's runtime surface (internal/deploy/ci_workflow_no_parallel_publish_test.go, internal/deploy/build_workflow_vuln_gate_contract_test.go, internal/deploy/compose_contract_test.go, internal/api/health_test.go::TestHealthHandler_VersionAndCommitHash, internal/deploy/dev_compose_default_fallback_test.go) stays GREEN by construction at HEAD e05aef1b."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Artifact-only reconcile produces zero net new abstractions, dead branches, or duplication; existing simplify cover for spec 029's runtime surface remains GREEN by construction."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Zero runtime change — stability characteristics of spec 029 surface (CI workflow, build workflow, deploy compose, dev compose, ML sidecar image, health handler) are unchanged at HEAD e05aef1b."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Artifact-only reconcile introduces no new attack surface, no secret leak, no dependency change; gitleaks pre-commit policy verified to pass on staged paths (all under specs/029-devops-pipeline/)."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Three guards green for both packet and parent spec: state-transition-guard.sh 0 BLOCKs, artifact-lint.sh PASSED, traceability-guard.sh PASSED. Full block in BUG-029-007/report.md Validation Evidence section."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Pre-commit git diff --cached --name-status confirms ONLY paths under specs/029-devops-pipeline/ are staged; closure commit uses bubbles(029/bug-029-007) structured prefix. Full block in BUG-029-007/report.md Audit Evidence section."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Recertification Evidence subsection appended to specs/029-devops-pipeline/report.md (G053 closure for this reconcile). BUG-029-007 packet's own report.md captures the full reconcile-sweep narrative."
+    }
+  ],
+  "executionHistory": [
+    {
+      "phase": "bootstrap",
+      "agent": "bubbles.bug",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Authored 8-artifact bugfix-fastlane packet for BUG-029-007-missing-certified-at."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Applied state.json top-level certifiedAt + bubbles.spec-review CURRENT executionHistory entry + resolvedBugs entry mutations on parent spec 029; appended Recertification Evidence subsection to parent spec 029 report.md."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Red→green scenario-first tdd proof: state-transition-guard.sh red=1 BLOCK pre-mutation, green=0 BLOCKs post-mutation."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Persistent regression cover for spec 029 runtime surface stays GREEN by construction (zero runtime change). go test ./internal/deploy/... ./internal/api/... passed at probe time."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Reconcile-no-change: artifact mutations reduce gate drift without introducing abstractions or duplication."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Reconcile-no-change: runtime stability characteristics of spec 029 surface are unchanged at HEAD e05aef1b."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Reconcile-no-change: zero new attack surface, no secrets in staged paths (verified by gitleaks pre-commit)."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Three guards green for packet + parent: state-transition-guard 0 BLOCKs, artifact-lint PASSED, traceability-guard PASSED."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "git diff --cached --name-status confirms staged paths are 100% under specs/029-devops-pipeline/; closure commit prefix bubbles(029/bug-029-007)."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-05T22:00:00Z",
+      "evidence": "Parent spec 029 report.md gained Recertification Evidence subsection; packet report.md captures full reconcile narrative."
+    }
+  ],
+  "scenarioCoverage": {
+    "totalScenarios": 5,
+    "coveredScenarios": 5,
+    "fidelity": "5/5"
+  },
+  "completedScopes": [
+    "scope-1-recertify-spec-029-and-add-top-level-certifiedat-single-scope-bugfix-fastlane"
+  ],
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "bubbles-fastlane-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-05T22:00:00Z",
+    "completedScopes": [
+      "scope-1-recertify-spec-029-and-add-top-level-certifiedat-single-scope-bugfix-fastlane"
+    ],
+    "certifiedCompletedPhases": [
+      "bootstrap",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Recertify Spec 029 And Add Top-Level certifiedAt (Single-Scope Bugfix-Fastlane)",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "rollback": "Pure git revert restores the 1 G088 BLOCK; zero runtime impact."
+}
