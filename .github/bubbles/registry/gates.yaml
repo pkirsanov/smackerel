@@ -1,0 +1,396 @@
+gates:
+  G001:
+    name: artifact_gate
+    description: Required artifacts exist for current feature/bug context.
+  G002:
+    name: scope_definition_gate
+    description: Active scope contains scenarios, implementation plan, test plan, and DoD.
+  G003:
+    name: test_integrity_gate
+    description: Test classifications match execution reality.
+  G004:
+    name: test_execution_gate
+    description: Required tests executed and passing.
+  G005:
+    name: evidence_gate
+    description: Raw execution evidence is captured per policy.
+  G006:
+    name: docs_sync_gate
+    description: Feature and managed docs are updated, published where required, and coherent.
+  G007:
+    name: validation_gate
+    description: Validation checks pass and regressions are addressed.
+  G008:
+    name: audit_gate
+    description: Audit verdict is acceptable.
+  G009:
+    name: chaos_gate
+    description: Required chaos rounds complete without unresolved failures.
+  G010:
+    name: user_validation_gate
+    description: uservalidation checklist is updated according to policy.
+  G011:
+    name: session_gate
+    description: Session and feature state are updated for resume.
+  G012:
+    name: final_promotion_gate
+    description: All mode-required gates pass in current session.
+  G013:
+    name: priority_selection_gate
+    description: Highest-value next work item is selected with explicit rationale. Enforced by bubbles.workflow agent behavior (value-first scoring output), not by script. Agent MUST emit selection rationale per the bubbles.workflow output requirements.
+  G014:
+    name: bootstrap_readiness_gate
+    description: For new/underspecified work, design/spec/scopes are ready before implementation.
+  G015:
+    name: scenario_depth_gate
+    description: Spec/design/scopes contain detailed user stories and Gherkin scenarios covering declared use cases/models/algorithms.
+  G016:
+    name: gherkin_e2e_coverage_gate
+    description: Every required Gherkin scenario maps to specific E2E tests and expected assertions, every new/changed/fixed behavior has scenario-specific persistent E2E regression coverage tied to the planned behavior, and DoD explicitly includes high-quality E2E items aligned with scenario/use-case coverage including scenario-specific regression E2E items for each changed behavior plus a broader regression suite pass. Consolidates former G017 (dod_e2e_expansion_gate).
+  G018:
+    name: dod_completion_gate
+    description: A spec cannot be promoted to done while any DoD checkbox remains unchecked.
+  G019:
+    name: sequential_spec_completion_gate
+    description: Previous spec in batch MUST be fully complete (done/blocked) with ALL gates passed before starting next spec. No parallel or premature advancement.
+  G020:
+    name: cross_agent_verification_gate
+    description: Each specialist agent's output MUST be verified by the orchestrator before advancing to the next phase. Verification includes checking that commands were actually executed (not fabricated), evidence exists, and exit codes are real.
+  G021:
+    name: anti_fabrication_gate
+    description: Detect and block fabricated evidence. Applies heuristics - evidence sections with fewer than 10 lines, evidence that matches expected output templates verbatim, DoD items batch-checked without sequential execution, timestamps that are impossible (all identical or out of order), and copy-pasted evidence where identical or near-identical terminal output blocks (≥80% similarity) appear across multiple DoD items within the same scope. Consolidates former G049 (evidence_clone_detection_gate). Enforced by state-transition-guard.sh Check 12 (enhanced).
+  G022:
+    name: specialist_completion_gate
+    description: ALL specialist agents required by the mode (test, docs, validate, audit, chaos) MUST have executed and returned verifiable results before spec promotion. Missing specialist execution is a BLOCKING failure.
+  G023:
+    name: state_transition_guard_gate
+    description: MANDATORY mechanical enforcement gate. The state-transition-guard.sh script MUST be executed and exit with code 0 before ANY state.json status transition to "done". This gate verifies DoD completion, scope status consistency, certification/execution phase coherence, specialist phases, timestamp plausibility, test file existence, evidence depth, template placeholders, policy provenance, scenario manifest integrity, transition/rework packet closure, framework ownership/result contract integrity, artifact lint, and artifact freshness isolation in one blocking pass. Agents MUST NOT write "status":"done" without this gate passing.
+  G024:
+    name: all_scopes_done_before_spec_done_gate
+    description: ABSOLUTE BLOCKING gate. A spec CANNOT be marked "done" in state.json until EVERY scope in scopes.md has status "Done". Zero scopes with "Not Started", "In Progress", or "Blocked" are allowed. This is a hard dependency — no override, no workaround, no exception. Agents MUST verify by running grep for non-Done scope statuses and confirming zero matches before writing "done" to state.json.
+  G025:
+    name: per_dod_item_raw_evidence_gate
+    description: ABSOLUTE BLOCKING gate. EVERY DoD item marked [x] MUST have raw terminal output evidence (≥10 lines) recorded INLINE directly beneath it in scopes.md. Items without evidence are INVALID even if checked. Each item MUST be individually validated — batch-checking is forbidden. Test-related DoD items MUST show real test execution covering ALL scenarios (Gherkin, error paths, boundary conditions, parameter permutations) with 100% business logic coverage. Tests MUST be real (no internal mocks, real test DBs, real assertions that fail if feature is broken). Agents MUST verify each [x] item has evidence before marking scope Done.
+  G026:
+    name: sla_stress_coverage_gate
+    description: Scopes defining latency SLAs (p95, p99, response time targets) MUST have stress tests in the Test Plan and DoD, executed and passing with evidence.
+  G027:
+    name: phase_scope_coherence_gate
+    description: ABSOLUTE BLOCKING gate. Execution and certification phase records claiming implementation phases (implement, test) MUST have matching non-empty completedScopes AND Done scope artifacts. Claiming 6-7 lifecycle phases complete while completedScopes is empty or partial = FABRICATION. Guard script Check 15 enforces mechanically.
+  G028:
+    name: implementation_reality_scan_gate
+    description: ABSOLUTE BLOCKING gate. Source files referenced in scope artifacts MUST NOT contain stub/fake/hardcoded data patterns. Public handlers/endpoints/workflows returning literal collections, status-only payloads, or placeholder success without real delegation are BLOCKING. Frontend hooks calling getSimulationData() or containing zero API/query/client transport signals are BLOCKING. Live-system tests using request interception are BLOCKING unless reclassified out of live categories. Production code MUST NOT contain default/fallback values that mask missing configuration or hide failures — patterns like unwrap_or(), unwrap_or_default(), || "default", ?? "fallback", os.getenv("K", "default"), ${VAR:-default} are FORBIDDEN; all config MUST fail-fast if missing. Consolidates former G030 (no_defaults_no_fallbacks_gate). Enforced by implementation-reality-scan.sh (Scans 5 and 16) via guard script.
+  G029:
+    name: integration_completeness_gate
+    description: Every implemented artifact (endpoint, library, page, service, migration, proto) MUST be wired into the running system with at least one real consumer. Backend endpoints consumed by frontends or documented external-only. Libraries imported by consumers. Frontend using real APIs (no stubs/mocks/hardcoded data). Renamed/removed interfaces must leave zero stale first-party consumers behind. Verified by grep-based consumer checks.
+  G031:
+    name: findings_artifact_update_gate
+    description: Agent findings recorded in scope artifacts (scopes.md/state.json) before verdict.
+  G032:
+    name: business_analysis_gate
+    description: spec.md contains actors, use cases, business scenarios, and UI wireframes (when applicable). Competitive analysis is documented. Requirements are traceable and testable. Gate passes if spec.md has the required sections or if scope explicitly does not need business analysis (backend-infra work, bug fixes, etc.).
+  G033:
+    name: design_readiness_gate
+    description: ABSOLUTE BLOCKING gate for the implement phase. design.md MUST exist and contain substantive technical design (not stubs/placeholders). scopes.md MUST exist with at least one scope containing Gherkin scenarios, a Test Plan, and a Definition of Done. When this gate fails, the workflow MUST auto-escalate by invoking bubbles.design → bubbles.plan before proceeding to implement. This gate prevents implementation from starting with only spec.md. For bugfix-fastlane mode, the bootstrap phase now runs design and planning agents; the gate still applies but bug artifacts may be lighter-weight than feature artifacts.
+  G034:
+    name: security_gate
+    description: Security scan clean — no critical or high severity vulnerabilities. Dependency audit passed, code review found no injection/XSS/SSRF/auth-bypass findings above medium severity. When this gate fails, the workflow MUST route to bubbles.implement to fix security findings before proceeding.
+  G035:
+    name: vertical_slice_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. When a scope produces BOTH frontend AND backend code, the vertical slice MUST be complete — every frontend API call MUST map to a .route()-wired backend handler, every backend handler MUST be registered in the service router, gateway/proxy forwarding rules MUST exist for all service endpoints, and E2E tests MUST exercise the full stack (frontend → gateway → service → data store). Every backend service endpoint referenced in scope artifacts MUST have a corresponding gateway/proxy forwarding rule — unreachable endpoints represent incomplete vertical wiring. Applies conditionally — pure-backend or pure-frontend scopes are exempt. Consolidates former G050 (gateway_route_forwarding_gate). Detection: cross-reference frontend fetch/useQuery/dio calls against backend router .route() registrations and gateway forwarding config.
+  G036:
+    name: red_green_traceability_gate
+    description: New or changed behavior MUST show red→green evidence. Agents MUST capture failing targeted test or reproduction evidence before accepting a fix, then capture passing evidence after the change. Docs-only and artifact-only work are exempt.
+  G037:
+    name: scope_size_discipline_gate
+    description: Scopes and DoD items MUST stay small, isolated, and single-outcome by default. Optional time-budget hints like maxScopeMinutes and maxDodMinutes tighten the limit further. Mixed-purpose scopes MUST be split unless explicitly justified.
+  G038:
+    name: failure_recovery_containment_gate
+    description: Narrow failures MUST be handled by narrow repair loops first. Compile, lint, validation, and test failures must be fixed with the smallest viable context before broader reruns or escalations are allowed. Self-healing fix loops MUST NOT stack — maxDepth=1, a fix attempt NEVER triggers another fix loop. maxRetries=3 per failure, maxTotalRetries=5 per phase. Context narrows on each retry (full → file → function). If a fix introduces a NEW error, it counts against the same retry budget. No recursion, no nesting. Consolidates former G039 (self_healing_containment_gate).
+  G040:
+    name: incomplete_work_language_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Scope artifacts (scopes.md or scopes/*/scope.md) and report files MUST NOT contain deferral language indicating incomplete work (deferred, defer to, future scope, future work, follow-up, followup, out of scope, not in scope, will address later, revisit later, separate ticket, separate issue, punt, punted, postpone, postponed, skip for now, not implemented yet, not yet implemented, placeholder, temporary workaround) NOR pseudo-completion language indicating work claimed done but not finished (Next Steps headings, Recommended routing/resolution, Ready for /bubbles., Re-run /bubbles.validate, Commit the fix, Record DoD evidence, Run full E2E suite, [PENDING]). Consolidates former G065 (pseudo_completion_language_gate). Mechanically enforced by state-transition-guard.sh Check 18 and artifact-lint.sh. When this gate fails, the agent MUST either complete the deferred work NOW or remove the DoD item with justification.
+  G041:
+    name: dod_format_integrity_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Prevents agents from bypassing DoD completion checks by reformatting checkbox items, inventing non-canonical scope statuses, or rewriting DoD item text. FOUR enforcement layers: (1) DoD FORMAT — Only '- [ ] ' and '- [x] ' are valid DoD item formats inside Definition of Done sections. Patterns like '- (deferred) ...', '- ~~...~~', '- *deferred* ...', or '- Text without checkbox' are FORBIDDEN manipulations. (2) SCOPE STATUS — Only four canonical statuses are valid: 'Not Started', 'In Progress', 'Done', 'Blocked'. Invented statuses like 'Deferred', 'Deferred — Planned Improvement', 'Skipped', 'N/A' are FORBIDDEN. (3) DoD ITEM DELETION — Removing DoD items to pass checkbox validation is structural fabrication. If a prior workflow phase added DoD items, they MUST remain as checkboxes until legitimately completed with evidence or explicitly removed with documented justification in the same commit. (4) DoD TEXT REWRITING — Modifying the behavioral claim in a DoD item's text description to match what was delivered instead of what the Gherkin scenario specified is CONTENT FABRICATION, semantically equivalent to deleting the original item and inventing a new one. Only bubbles.plan may modify DoD item text. Mechanically enforced by state-transition-guard.sh Checks 4A, 4B, and 22.
+  G042:
+    name: artifact_ownership_enforcement_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Agents MUST respect artifact ownership boundaries. Business requirements in spec.md belong to bubbles.analyst, UX sections of spec.md belong to bubbles.ux, design.md belongs to bubbles.design, and scopes.md/report.md/uservalidation.md planning structure belongs to bubbles.plan. Diagnostic agents such as bubbles.validate, bubbles.harden, bubbles.gaps, bubbles.stabilize, bubbles.security, bubbles.code-review, and bubbles.system-review MUST route required artifact changes to the owning specialist instead of editing foreign-owned artifacts directly. When work crosses a registered ownership boundary, the active agent MUST delegate to the owning specialist declared in bubbles/agent-capabilities.yaml or bubbles/agent-ownership.yaml. Only owning planning or execution specialists may modify their owned surfaces — diagnostic, certification, and routing agents MUST NOT perform foreign-owned remediation inline. Tiny fixes remain allowed only through orchestrator dispatch to the correct owner using a narrow packet. Consolidates former G054 (capability_delegation_gate) and G062 (owner_only_remediation_gate). Enforced by agent-ownership-lint.sh.
+  G043:
+    name: consumer_trace_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. When routes, paths, endpoints, contracts, identifiers, symbols, links, breadcrumbs, redirects, or UI targets are renamed, removed, moved, replaced, or deprecated, agents MUST inventory and update every first-party consumer and prove zero stale references remain across navigation, breadcrumbs, redirects, API clients, generated clients, docs, config, deep links, and tests. Planning artifacts MUST include a Consumer Impact Sweep plus consumer-facing regression coverage.
+  G044:
+    name: comprehensive_regression_gate
+    description: >-
+      BLOCKING gate. Three-phase regression safety: (1) Before implementation, scan the new/changed spec's requirements against all done/in-progress specs for conflicts (route/endpoint collisions, overlapping UI routes, contradictory business rules, shared table mutations, breaking API contract changes). If a conflict is detected, it MUST be resolved before implementation proceeds. (2) Before implementation starts, capture a test baseline snapshot (total tests, pass count, fail count, skip count per category). After implementation + test phases, rerun the FULL test suite and compare against the baseline — gate fails if any previously-passing test now fails or total pass count decreased. (3) After completing a spec/scope, tests belonging to OTHER already-completed specs (state.json status: done) MUST be re-executed — gate fails if any done-spec's tests now fail due to the current change. Consolidates former G045 (cross_spec_regression_gate) and G046 (spec_conflict_detection_gate). Evidence: before/after comparison table in report.md. Enforced by regression-baseline-guard.sh and the regression agent's cross-spec impact scan.
+  G047:
+    name: idor_auth_bypass_gate
+    description: >-
+      BLOCKING gate. Handlers/endpoints that perform authorization decisions MUST extract user identity exclusively from authenticated context (auth headers, JWT claims, session middleware) — NEVER from request body, query parameters, or URL path parameters that the caller controls. Detection patterns are project-configurable via .github/bubbles-project.yaml (scans.idor.bodyIdentityPatterns, scans.idor.authContextPatterns, scans.idor.handlerFilePatterns) with sensible generic defaults. This is an IDOR (Insecure Direct Object Reference) vulnerability — OWASP A01 Broken Access Control. Enforced by implementation-reality-scan.sh Scan 7 and bubbles.security Phase 3.2.
+  G048:
+    name: silent_decode_failure_gate
+    description: >-
+      BLOCKING gate. Deserialization/decode operations on stored data (database rows, protobuf messages, serialized blobs) MUST NOT silently discard failures. Detection patterns are project-configurable via .github/bubbles-project.yaml (scans.silentDecode.patterns, scans.silentDecode.errorHandling) with sensible generic defaults covering common anti-patterns across languages. Silent decode failures cause data corruption to go undetected — corrupted rows are silently dropped instead of surfaced. REQUIRED: decode failures MUST be logged with row identifier and error context, OR propagated as errors. Enforced by implementation-reality-scan.sh Scan 8.
+  G051:
+    name: test_env_dependency_gate
+    description: >-
+      BLOCKING gate. Test suites MUST NOT have silent dependencies on environment variables that cause failures when those variables are absent. Detection patterns are project-configurable via .github/bubbles-project.yaml (scans.testEnvDependency.patterns) with sensible generic defaults. When pre-existing test failures are caused by environmental dependencies, they MUST be fixed with either (a) proper test setup that provides required env vars, or (b) fail-fast with a clear skip message explaining the missing dependency. Tests that intermittently pass/fail based on environment state are unreliable and BLOCKING. Enforced by state-transition-guard.sh Check 19.
+  G052:
+    name: artifact_freshness_guard_gate
+    description: >-
+      BLOCKING gate. When stale requirements, UX, design decisions, or scopes are preserved for history, they MUST be isolated from active truth. Superseded or suppressed sections in spec/design artifacts must remain in an appendix-style boundary and must not be followed by active-looking headings. Superseded scope sections MUST NOT retain executable markers such as status blocks, Test Plan tables, DoD headings, or DoD checkboxes. Enforced by artifact-freshness-guard.sh and re-run by state-transition-guard.sh Check 13A.
+  G053:
+    name: implementation_delta_evidence_gate
+    description: >-
+      BLOCKING gate. Implementation-bearing workflows MUST prove runtime or integration delivery with git-backed code-diff evidence in report artifacts. The evidence must show at least one non-artifact source, runtime, config, or contract file path. Specs that only changed `spec.md`, `design.md`, or docs cannot be promoted as delivered implementation. Enforced by state-transition-guard.sh Check 13B.
+  G055:
+    name: policy_provenance_gate
+    description: >-
+      BLOCKING gate for control-plane-aware workflows. Active execution modes such as grill, tdd, autoCommit, lockdown, and regression strictness MUST be recorded together with provenance (`user-request`, `repo-default`, `workflow-forced`, or `spec-lockdown`) in state metadata.
+  G056:
+    name: validate_certification_gate
+    description: >-
+      BLOCKING gate. Completion certification state belongs exclusively to bubbles.validate. Other agents may submit execution claims or transition requests but MUST NOT directly certify scope/spec completion, invalidation, or lockdown state.
+  G057:
+    name: scenario_manifest_gate
+    description: >-
+      BLOCKING gate for scenario-contract-aware specs. Every changed user-visible or externally observable behavior MUST map to stable scenario IDs in scenario-manifest.json, and each scenario MUST map to real live-system BDD coverage plus report evidence. Validate-owned certification MUST replay or otherwise directly verify the linked live-system scenario proof for active SCN-* contracts before completion is certified. uservalidation.md remains a human acceptance surface and MUST NOT be toggled to mirror automation outcomes.
+  G058:
+    name: lockdown_gate
+    description: >-
+      BLOCKING gate. Locked scenarios MUST NOT change without an approval record routed through bubbles.grill plus a validate-certified invalidation or replacement path.
+  G059:
+    name: regression_contract_gate
+    description: >-
+      BLOCKING gate. Scenario-linked regression tests for non-invalidated behavior are protected contracts. They MUST NOT be weakened, removed, or repointed to new behavior until the owning scenario contract has been invalidated and replaced.
+  G060:
+    name: scenario_tdd_gate
+    description: >-
+      BLOCKING gate whenever TDD is active. For changed scenarios, targeted failing proof MUST exist before the implementation is accepted as green. Broader suites are not a substitute for the narrow red-to-green path.
+  G061:
+    name: rework_packet_gate
+    description: >-
+      BLOCKING gate for route-required findings. Diagnostic or certification phases that reopen work MUST emit structured transition or rework packets tied to concrete scenarios, DoD items, and owning specialists instead of narrative-only handoff text.
+  G063:
+    name: concrete_result_gate
+    description: >-
+      BLOCKING gate. Every agent or child-workflow invocation MUST end with a concrete result shape: completed_owned, completed_diagnostic, route_required, or blocked. Narrative-only findings or generic advice are invalid. Route-required and blocked outcomes MUST include owner, reason, and scope/scenario/DoD references.
+  G064:
+    name: child_workflow_depth_gate
+    description: >-
+      BLOCKING gate. Only orchestrators may invoke child workflow modes, and workflow nesting depth MUST NOT exceed 1. Non-orchestrator agents may emit packets but may not recursively spawn workflow execution. In runtimes that do not expose nested agent delegation, the active orchestrator MUST parent-expand the resolved child workflow mode instead of spawning a recursive child runtime or blocking solely on the child's missing agent tool.
+  G067:
+    name: shared_infrastructure_blast_radius_gate
+    description: >-
+      BLOCKING gate. When a scope touches high-fan-out shared test or bootstrap infrastructure (fixtures, harnesses, global setup, auth/login/session bootstrap, storage/session injection, ordering/timing contracts), planning artifacts MUST include a Shared Infrastructure Impact Sweep, an independent canary suite entry that validates downstream contracts before broad suite reruns, and a rollback or restore path. Agents MUST NOT rewrite such infrastructure wholesale unless the blast radius, downstream contract surfaces, and recovery path are explicitly planned and verified. Enforced by state-transition-guard.sh Check 8C.
+  G066:
+    name: phase_claim_provenance_gate
+    description: >-
+      BLOCKING gate. Phase claims in completedPhaseClaims must have matching agent provenance in executionHistory. An agent may only record its own phase name; cross-phase impersonation is fabrication. Enforced by state-transition-guard.sh Check 6B.
+  G069:
+    name: collateral_change_containment_gate
+    description: >-
+      BLOCKING gate. Mixed-purpose cleanup is forbidden for narrow repairs and risky refactors. Scopes that refactor, simplify, or repair high-fan-out infrastructure MUST declare a Change Boundary listing allowed file families and excluded surfaces that must remain untouched, and they MUST prove zero unrelated file families were changed as part of the fix loop. Opportunistic cleanups, unrelated handler/test edits, or broad repo sweeps bundled into the same repair path are blocking failures. Enforced by state-transition-guard.sh Check 8D.
+  G068:
+    name: dod_gherkin_content_fidelity_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. DoD items MUST faithfully represent the behavioral claims of their source Gherkin scenarios. If a scope's Gherkin scenarios specify behavior X (e.g., "mock structs are removed and replaced with real test DB calls") but the DoD items describe behavior Y (e.g., "all files tagged for future migration"), the DoD has drifted from the spec and the scope MUST NOT be marked Done. This gate prevents execution agents from silently rewriting DoD item descriptions to match what was delivered instead of what was planned. Detection: cross-reference significant words from each Gherkin scenario against DoD item text using fuzzy matching. If a scenario's key behavioral claim has no corresponding DoD item preserving that claim, the gate fails. Enforced by traceability-guard.sh (Gherkin-to-DoD pass) and state-transition-guard.sh Check 22.
+  G070:
+    name: outcome_contract_gate
+    description: >-
+      BLOCKING gate for bootstrap and validate phases. spec.md MUST contain a non-empty Outcome Contract section with Intent, Success Signal, Hard Constraints, and Failure Condition fields before the bootstrap phase completes. During validation, the Success Signal MUST be demonstrated in report.md evidence and Hard Constraints MUST be verified as preserved. A feature that passes all process gates but fails to satisfy its declared Intent or violates a Hard Constraint is NOT done. Enforced by artifact-lint.sh (presence check) and bubbles.validate Step 0 (substance check).
+  G071:
+    name: execution_only_validation_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Validation, audit, and verification commands (build, lint, test, guard scripts, artifact lint, traceability guard, implementation reality scan, etc.) MUST be executed via `run_in_terminal` (or equivalent direct tool invocation) in the current session. Reading the files that a script would check, performing equivalent pattern matching, and reporting predicted findings is FABRICATION — even if the predictions turn out to be accurate. The value of validation is that it runs the canonical script with its exact logic, not that an agent approximates that logic by reading files. Enforced behaviorally by bubbles.validate, bubbles.audit, and bubbles.test plus reinforced by tool-call provenance in evidence gates.
+  G072:
+    name: evidence_provenance_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Every evidence block recording the outcome of a command MUST include a `**Claim Source:**` tag with one of three values: `executed` (command actually ran in this session), `interpreted` (command ran but the DoD claim requires inferring meaning from output), or `not-run` (command was not executed — DoD item MUST stay `[ ]` with an Uncertainty Declaration). Evidence labeled `executed` but containing summaries, predictions, or paraphrased output instead of raw terminal text is fabrication. Validate-owned remediation MUST downgrade mislabeled evidence and require re-execution. Enforced by bubbles.validate evidence review plus state-transition-guard.sh Check 12.
+  G073:
+    name: planning_only_source_edit_lockout_gate
+    description: >-
+      ABSOLUTE BLOCKING gate for planning-only workflow modes (spec-scope-hardening, product-to-planning, docs-only, validate-only, audit-only, spec-review-to-doc, and any mode whose statusCeiling is below `done`). When the active workflowMode has a statusCeiling that forbids implementation, source code edits (any change outside spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, docs/**, .github/**) are FORBIDDEN. If a deliverableFiles[] manifest is declared on the spec/scope, edits are restricted to the declared paths. Detected at transition time by comparing git diff against the manifest. Enforced by state-transition-guard.sh Check 3B (Source Code Edit Lockout). Prevents planning-mode runs from quietly editing production code.
+  G074:
+    name: workflow_mode_consistency_gate
+    description: >-
+      BLOCKING gate. The top-level state.json `workflowMode` and `policySnapshot.workflowMode` MUST agree. These two fields are written by independent code paths and any divergence indicates that one was fabricated or that an agent silently switched modes mid-spec without an audit trail. Enforced by state-transition-guard.sh Check 2B.
+  G075:
+    name: scope_index_parity_gate
+    description: >-
+      BLOCKING gate (per-scope-directory layout only). The status column of `scopes/_index.md` MUST match the `**Status:**` line of every linked `scopes/NN-name/scope.md`. Fabricated batch promotions historically updated individual scope.md files to "Done" while leaving _index.md showing "In Progress"; this gate detects that drift. Enforced by state-transition-guard.sh Check 5B.
+  G076:
+    name: phantom_scope_detection_gate
+    description: >-
+      BLOCKING gate. Every entry in `state.json` `completedScopes` (and `certification.completedScopes`) MUST map to a real scope artifact on disk. Phantom entries that name scopes with no corresponding directory or `## Scope N:` heading are a documented fabrication pattern (e.g. QF 042's "scope-15-stochastic-sweep-remediation"). Enforced by state-transition-guard.sh Check 5C.
+  G077:
+    name: execution_history_plausibility_gate
+    description: >-
+      BLOCKING gate. `executionHistory` entries MUST have plausible `runStartedAt`/`runCompletedAt` timestamps. The gate fails when (a) consecutive entries are spaced at exactly identical intervals (e.g., 3 or more 15-minute gaps), (b) any non-trivial entry has zero duration, or (c) entries overlap in time (sequential agent execution is impossible if runs overlap). It also enforces lockdown round consistency: `certification.lockdownState.round` MUST be ≤ the number of implement-phase runs in executionHistory, and `lastCleanRound` MUST NOT exceed `round`. Enforced by state-transition-guard.sh Checks 7A and 7B.
+  G078:
+    name: batch_promotion_limit_gate
+    description: >-
+      BLOCKING CI gate. A single git commit (or push range) MUST NOT promote more than one spec's `state.json` `status` to "done" without explicit override. Mass promotions are a documented fabrication pattern (QF 2026-03-15 batch promoted 33 specs in commit 4dde8526; QF 2026-03-31 batch promoted 17 specs in commit ec7fba88). Enforced by `bubbles/scripts/batch-promotion-lint.sh` and the `state-transition-guard` GitHub Actions workflow.
+  G079:
+    name: impact_aware_validation_plan_gate
+    description: >-
+      ADVISORY-UNTIL-CONFIGURED gate. When a project supplies `.github/bubbles-project.yaml` or `bubbles-project.yaml` with `testImpact`, planning and test phases MUST use `bubbles/scripts/test-impact-plan.sh` to derive impacted components, required test categories, always-run checks, and full-suite triggers from changed paths. The plan may narrow the first validation pass, but it NEVER removes final completion gates, scenario-specific E2E obligations, full-suite requirements declared by the scope, or any user-requested broader validation. Missing project config is a clean no-op unless the caller uses `--require-config`.
+  G080:
+    name: trace_contract_evidence_gate
+    description: >-
+      ADVISORY-UNTIL-CONFIGURED gate. When a project supplies `.github/bubbles-project.yaml` or `bubbles-project.yaml` with `traceContracts`, validation phases SHOULD run `bubbles/scripts/trace-contract-guard.sh` against actual trace/log evidence for the relevant workflow. The guard checks required span strings, attributes, invariants, and red-flag absence. Missing trace contracts are a clean no-op unless the caller uses `--require-config`; missing required trace evidence is a validation gap, not a substitute for implementation or test proof.
+  G081:
+    name: build_once_deploy_many_integrity_gate
+    description: >-
+      ADVISORY-UNLESS-DEPLOYMENT-SCOPE gate. When a project ships immutable artifacts to multiple environments, deployment surfaces MUST preserve Build-Once Deploy-Many invariants: image references pin by digest, CI stops at registry/config-bundle publication, per-target adapters consume artifacts without rebuilding, signatures and bundle hashes are verified before apply, rollback is pointer-swap only, bundles are deterministic, and each target owns its own manifest pointer. Framework docs and deployment-target skills define the portable invariant; downstream product repos decide when it is blocking in project policy.
+  G082:
+    name: convergence_cap_enforcement_gate
+    description: >-
+      BLOCKING gate. Maximum 10 convergence iterations per spec per session for orchestrator agents (bubbles.workflow, bubbles.goal, bubbles.iterate, bubbles.sprint). The cap value lives in `bubbles/workflows.yaml` under `maxConvergenceIterations` (default 10). Enforced mechanically by `bubbles/scripts/convergence-cap-guard.sh`, which reads `.specify/memory/bubbles.session.json` `convergenceLoops[]` entries keyed by (specDir, agent) and fails when any entry for the spec under inspection has `iterationCount` greater than the cap. State-transition-guard.sh invokes this guard as Check 23. Exceeding the cap MUST emit a `blocked` RESULT-ENVELOPE with finding `G082`. Hermetic selftest: `bubbles/scripts/convergence-cap-guard-selftest.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G083:
+    name: context_compaction_discipline_gate
+    description: >-
+      BLOCKING gate. Enforces the in-loop compaction rule from `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline": orchestrator agents (bubbles.workflow, bubbles.goal, bubbles.iterate, bubbles.sprint) MUST keep the trailing transition-packet log inside per-spec budgets. The eligible slice — all envelopes for a spec EXCEPT the latest 2 (kept raw on purpose) — MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Thresholds are framework constants (NOT workflows.yaml-configurable). Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh`, which reads `.specify/memory/bubbles.session.json` `envelopesReceived[]` (schema `{specDir, agent, receivedAt, rawSizeBytes, incomingMessage, compactedAt, rawPointer}`). The guard exits 0 (pass), 1 (violation — count or size breach with uncompacted eligible entries), or 2 (malformed/missing structured fields). State-transition-guard.sh invokes this guard as Check 24. Exceeding either threshold without compaction MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` against the over-budget envelopes (it stamps `compactedAt` additively). Hermetic selftest: `bubbles/scripts/compaction-discipline-guard-selftest.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G084:
+    name: pre_existing_deferral_block_gate
+    description: >-
+      BLOCKING gate. Forbids hiding pre-existing failures behind "out of session scope", "carried forward", or similar deferral language anywhere in a spec's `scope.md` or `report.md` artifacts. Enforced mechanically by `bubbles/scripts/pre-existing-deferral-guard.sh`, which recursively scans every `scopes/*/scope.md` and `scopes/*/report.md` under the spec directory for two classes of marker. (1) Forbidden phrases (case-insensitive substring match): "pre-existing failure", "pre-existing test failure", "carried forward", "out of session scope", "previous-session failure", "not introduced by this spec". (2) Forbidden deferral markers (colon-anchored, case-sensitive): `TODO:`, `FIXME:`, `HACK:`, `STUB:`. Three exempt H2 subsections — `## Superseded Decisions`, `## Historical Notes`, and `## Out of Scope` — are skipped so historical traceability is preserved. Content inside inline backticks (\`...\`) and inside fenced code blocks (```...```) is also stripped so enumeration prose and captured raw terminal output never self-trigger. The guard exits 0 (no active markers), 1 (at least one active marker — promotion to `done` blocked), or 2 (missing/invalid specDir argument). State-transition-guard.sh invokes this guard as Check 25. Any active hit MUST be remediated inline (fix the deferred failure, not the language); never emit a `done` RESULT-ENVELOPE while a hit remains. Hermetic selftest: `bubbles/scripts/pre-existing-deferral-guard-selftest.sh`. Persistent regression: `tests/regression/test_03_pre_existing_deferral_guard.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G085:
+    name: framework_dogfood_evidence_gate
+    description: >-
+      BLOCKING gate. The Bubbles framework MUST prove it can drive work to certification under the same chain it imposes on consumers, but the Bubbles source repository itself MUST NOT keep persistent repo-local `specs/` execution packets. In the source repo, dogfood evidence comes from `framework-validate.sh`, hermetic selftests, `bubbles/release-manifest.json`, and downstream or fixture specs. Enforced mechanically by `bubbles/scripts/framework-dogfood-guard.sh`, which detects the canonical source checkout, fails if `specs/` exists there, and verifies the validation/release evidence surfaces are present. When run against downstream or hermetic fixture repositories, the guard keeps the numbered-spec evidence model: at least one `specs/[0-9]*-*/state.json` must have top-level `.status == "done"`. The guard exits 0 (source no-specs evidence clean or downstream done spec exists), 1 (source contains `specs/` / missing evidence surfaces / downstream zero done specs), or 2 (malformed input, missing repo root, malformed downstream state JSON, or jq unavailable where spec counting is required). State-transition-guard.sh invokes this guard as Check 26. Hermetic selftest: `bubbles/scripts/framework-dogfood-guard-selftest.sh`. Persistent regression: `tests/regression/test_04_framework_dogfooding.sh`. Wired into `bubbles/scripts/framework-validate.sh`. Cross-references: G082 (convergence cap), G083 (compaction discipline), G084 (pre-existing deferral) — G082/G083/G084 keep individual execution packets honest; G085 keeps the framework evidence model honest without storing source-repo specs.
+  G086:
+    name: orchestrator_persistence_lint_gate
+    description: >-
+      BLOCKING gate. Orchestrator prompt files MUST make autonomous persistence the default operating mode: after any non-terminal phase, automatically continue to the next phase, stopping only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced mechanically by `bubbles/scripts/orchestrator-persistence-lint.sh`, which scans exactly `agents/bubbles.goal.agent.md`, `agents/bubbles.workflow.agent.md`, `agents/bubbles.iterate.agent.md`, and `agents/bubbles.sprint.agent.md` for forbidden continuation-prompt phrases outside explicit FORBIDDEN examples and for the required persistence-default language. The guard exits 0 (clean), 1 (findings), or 2 (missing/unreadable target files or invalid invocation). State-transition-guard.sh invokes this guard as Check 27. Hermetic selftest: `bubbles/scripts/orchestrator-persistence-lint-selftest.sh`. Persistent regression: `tests/regression/test_05_orchestrator_persistence.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G087:
+    name: planning_packet_implementation_linkage_gate
+    description: >-
+      BLOCKING gate. Hardened planning packets MUST NOT remain orphaned from implementation. For any `state.json` with top-level `status == "specs_hardened"` and `planningOnly != true`, `linkedImplementationSpec` MUST point to a real spec directory containing `state.json`. If the linked implementation spec is `status == "done"`, its `linkedPlanningPacket` MUST point back to the hardened planning packet. `planningOnly:true` is allowed only with a non-empty `planningOnlyJustification`. Dangling implementation pointers fail, and implementation targets with `status == "archived"` are invalid active targets; the owner must relink to a non-archived implementation spec or classify the packet as planning-only with justification. Enforced mechanically by `bubbles/scripts/planning-packet-linkage-guard.sh`, which exits 0 (clean), 1 (G087 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 29. Hermetic selftest: `bubbles/scripts/planning-packet-linkage-guard-selftest.sh`. Persistent regression: `tests/regression/test_10_planning_packet_linkage.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G088:
+    name: post_certification_spec_edit_gate
+    description: >-
+      BLOCKING gate. Certified specs MUST NOT silently change planning truth after certification. For any `state.json` with top-level `status == "done"` or legacy read-only `status == "done_with_concerns"`, top-level `certifiedAt` MUST be present and parseable, and commits after `certifiedAt` touching `spec.md`, `design.md`, `scopes.md`, `scopes/_index.md`, or `scopes/*/scope.md` are violations unless the spec is demoted out of done, carries `requiresRevalidation:true`, or has been recertified by a current `bubbles.spec-review` with a newer `certifiedAt`. G092 compatibility boundary: legacy `done_with_concerns` is read-only only; any touched or recertified legacy spec must migrate to `done` plus observations or `blocked`. Enforced mechanically by `bubbles/scripts/post-cert-spec-edit-guard.sh`, which exits 0 (clean), 1 (G088 findings), or 2 (runtime error / malformed date / git inspection error). State-transition-guard.sh invokes this guard as Check 30. Hermetic selftest: `bubbles/scripts/post-cert-spec-edit-guard-selftest.sh`. Persistent regression: `tests/regression/test_11_post_cert_spec_edit.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G089:
+    name: inter_spec_dependency_gate
+    description: >-
+      BLOCKING gate. Explicit inter-spec dependencies MUST point to real, stable specs. For any `state.json` `specDependsOn[]` entry, the dependency path MUST resolve to a spec directory containing `state.json`, dependency status MUST be `done` unless the dependency is an old untouched legacy read-only `done_with_concerns` state with `legacyStatusCompatibility:true` or the current spec carries `requiresRevalidation:true`, and dependency cycles MUST fail. G092 compatibility boundary: newly certified or recertified `done_with_concerns` dependencies are not stable; recertification must write `done` plus observations or `blocked`. Demoted dependencies are propagated by `bubbles/scripts/inter-spec-dependency-revalidation.sh`, which additively marks direct and transitive dependents with `requiresRevalidation:true`. Enforced mechanically by `bubbles/scripts/inter-spec-dependency-guard.sh`, which exits 0 (clean), 1 (G089 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 31. Hermetic selftest: `bubbles/scripts/inter-spec-dependency-guard-selftest.sh`. Persistent regression: `tests/regression/test_12_inter_spec_dependency.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G090:
+    name: retro_convergence_health_evidence_gate
+    description: >-
+      BLOCKING gate. Retrospectives MUST surface a Convergence Health section backed by session data rather than narrative impressions. Enforced mechanically by `bubbles/scripts/retro-convergence-health.sh`, which reads `.specify/memory/bubbles.session.json` or an explicit transcript/session-store export, computes the legacy R7 metrics (`avgLoopIterations`, `maxConvergenceIterations`, `compactionFrequency`, `preExistingDeferralCount`, `snapshotCompleteness`) plus the retro output schema `convergenceHealth: {recapCount, handoffCount, summarizeHistoryCount, turnCount, slo}`, and exits 0 for `pass`/`degraded`, 1 for `failed`, or 2 for usage/runtime errors. More than 2 combined recap/handoff invocations is a P0 convergence regression and forces `slo: failed`. State-transition-guard.sh invokes this guard as Check 33. Hermetic selftest: `bubbles/scripts/retro-convergence-health-selftest.sh`. Persistent regression: `tests/regression/test_07_retro_convergence_health.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G091:
+    name: planning_workflow_chain_gate
+    description: >-
+      BLOCKING gate. Delivery-capable planning, bootstrap, and fallback paths MUST preserve the ordered canonical planning chain `bubbles.analyst -> bubbles.ux -> bubbles.design -> bubbles.plan`. UX is mandatory even for framework/operator/non-UI work because non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling. Enforced mechanically by `bubbles/scripts/planning-workflow-chain-guard.sh`, which scans `modeTemplates.delivery-quality-constraints`, `autoEscalation.inlineActions`, delivery-capable `bootstrapAgents`, `improvementPreludeProfiles`, and active prompt/shared workflow prose for unmarked design-to-plan shortcuts. The guard exits 0 (clean), 1 (G091 findings), or 2 (missing/malformed input). State-transition-guard.sh invokes this guard as Check 28. Hermetic selftest: `bubbles/scripts/planning-workflow-chain-guard-selftest.sh`. Persistent regression: `tests/regression/test_15_planning_workflow_chain.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G092:
+    name: strict_terminal_status_gate
+    description: >-
+      BLOCKING gate. New delivery certification writes MUST use only `done` or `blocked` as terminal statuses. Non-blocking notes live in `observations[]`, `certification.observations[]`, or an equivalent non-status collection and never alter terminal status, waive gates, or satisfy missing evidence. Legacy `done_with_concerns` is read-only compatibility only for old untouched specs; when touched or recertified, it MUST migrate to `done` plus observations if all gates pass, or `blocked` when required work remains. High-severity or remediation-required observations cannot accompany `done`. Enforced mechanically by `bubbles/scripts/strict-terminal-status-guard.sh`, which exits 0 (clean), 1 (G092 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 32. Hermetic selftest: `bubbles/scripts/strict-terminal-status-guard-selftest.sh`. Persistent regression: `tests/regression/test_16_strict_terminal_status.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G093:
+    name: delivery_implementation_delta_gate
+    description: >-
+      BLOCKING gate. Done-ceiling delivery modes MUST prove real implementation/runtime/config/contract/test/docs delta outside planning bookkeeping paths (`specs/**` and `.specify/**`) before certification can reach `done`. G053 remains the Code Diff Evidence shape check; G093 consumes git diff paths and/or G053-compatible report Code Diff Evidence, classifies changed paths as planning-only/source/runtime/config/contract/test/docs/other, and blocks spec-only delivery runs with a blocked RESULT-ENVELOPE that includes changed-path classification plus next-owner routing to implementation/test/docs or a below-done planning-only downgrade. Planning-only and docs-only modes with status ceilings below `done` are exempt from G093; `specs_hardened` planning packets remain governed by G087 linkage. Enforced mechanically by `bubbles/scripts/delivery-implementation-delta-guard.sh`, which exits 0 (clean or lower-ceiling exemption), 1 (G093 delivery delta violation), or 2 (runtime error / malformed input / bad refs). State-transition-guard.sh invokes this guard as Check 29B after G087 and before final promotion. Hermetic selftest: `bubbles/scripts/delivery-implementation-delta-guard-selftest.sh`. Persistent regression: `tests/regression/test_17_delivery_implementation_delta.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G094:
+    name: capability_foundation_gate
+    description: >-
+      BLOCKING gate. Capability-first design applies when proportionality triggers are present: a brand-new capability with no existing foundation, the second or later concrete implementation/provider/component/variant, adapter/provider/strategy/plugin/channel/driver/connector/variant language, or shared UI/data/contract surface across two or more screens/features/services. Detection uses keyword scans across planning artifacts plus `## Concrete Implementations` entry counts. When applicable, spec.md MUST contain `## Domain Capability Model` or a non-empty `### Single-Capability Justification`; design.md MUST contain `## Capability Foundation`, `## Concrete Implementations`, and `### Variation Axes` with at least two axes, or a non-empty `### Single-Implementation Justification`; multi-screen/reusable UI work MUST include `### UI Primitives` or a non-empty `### Single-Screen Justification`; and split designs MUST plan a `foundation:true` scope that overlay/provider scopes reference in `Depends On`. Specs with `state.json.createdAt` earlier than 2026-05-25 are grandfathered until touched or recertified. Enforced mechanically by `bubbles/scripts/capability-foundation-guard.sh`, which exits 0 (clean/not applicable/grandfathered), 1 (G094 findings), or 2 (malformed input). State-transition-guard.sh invokes this guard as Check 34. Hermetic selftest: `bubbles/scripts/capability-foundation-guard-selftest.sh`. Persistent regression: `tests/regression/test_18_capability_foundation_gate.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G095:
+    name: discovered_issue_disposition_gate
+    description: >-
+      BLOCKING gate. Every issue an agent observes during work MUST have an explicit disposition (`fixed-in-session`, `bug-filed`, `spec-filed`, `ops-filed`, or `routed`). Saying "pre-existing", "unrelated", "out of scope", or "not my session" without filing a corresponding artifact is forbidden and counts as fabrication. Enforced mechanically by `bubbles/scripts/discovered-issue-disposition-guard.sh`, which scans the active spec's `report.md` and the most recent RESULT-ENVELOPE narrative (when supplied) for forbidden deferral phrases. When a forbidden phrase is detected, the guard requires either (a) the same paragraph to cite a concrete artifact reference (`specs/.../bug.md`, `specs/.../spec.md`, `transitionRequests` entry, ops ticket URL), or (b) a `## Discovered Issues` section in `report.md` whose most recent `Observed` row is today. The guard exits 0 (clean), 1 (G095 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 35. Hermetic selftest: `bubbles/scripts/discovered-issue-disposition-guard-selftest.sh`. See `agents/bubbles_shared/operating-baseline.md` → "Discovered-Issue Disposition" for the full disposition table and report.md shape.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # RELEASE TRAIN + UPKEEP GATES (G110-G120)
+  # Introduced with bubbles.train (DVS) and bubbles.upkeep (Treena Lahey).
+  # Enforced by bubbles/scripts/release-train-guard.sh and
+  # bubbles/scripts/env-pollution-scan.sh, plus per-mode constraints in the
+  # release-train-* and upkeep-* workflow modes.
+  # ─────────────────────────────────────────────────────────────────────────
+  G110:
+    name: release_train_discipline_gate
+    description: >-
+      BLOCKING gate. Every spec under `specs/` in `in_progress` or any train-related terminal status (`train_cut`, `train_promoted`) MUST declare `releaseTrain: <id>` in `state.json` referring to an existing train id in `config/release-trains.yaml`. GRANDFATHER CLAUSE: pre-existing `done` / `specs_hardened` / `delivered_pending_activation` specs without `releaseTrain` are WARN only (operators backfill at their pace). Every train MUST have valid `phase` (`active|maintained|frozen|retired`) and `target_slot` (`prod|staging|home-lab|none`). Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
+  G111:
+    name: flag_default_off_on_other_trains_gate
+    description: >-
+      BLOCKING gate. For every spec with `state.json.flagsIntroduced: [<flag>...]` on `releaseTrain: <owning-train>`, each flag MUST be default-OFF in every OTHER train's `config/feature-flags.<train>.yaml` bundle (`flag: false`). Default-ON allowed only in the owning train. Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
+  G112:
+    name: backup_evidence_required_gate
+    description: >-
+      BLOCKING gate. `release-train-promote` MUST verify a recent successful `backup` ledger entry within the cadence declared in `config/upkeep-calendar.yaml`. Enforced via mode constraint + read of `/srv/backups/upkeep-ledger.jsonl` (knb-side). Owned by `bubbles.train` (read) + `bubbles.upkeep` (write).
+  G113:
+    name: restore_drill_evidence_gate
+    description: >-
+      BLOCKING gate. `release-train-promote` MUST verify a recent successful `restore-test` ledger entry within the cadence declared in `config/upkeep-calendar.yaml`. Failed restore-drill blocks next promote for that product. Owned by `bubbles.upkeep`.
+  G114:
+    name: bcdr_evidence_gate
+    description: >-
+      BLOCKING gate for `prod`-slot promotes. `release-train-promote` to `prod` MUST verify a recent successful quarterly `bcdr-drill` ledger entry. WARNING (not blocking) when `OFFSITE_BACKEND=local-only` because true BCDR requires backups not on the source host. Owned by `bubbles.upkeep`.
+  G115:
+    name: env_pollution_isolation_gate
+    description: >-
+      BLOCKING gate. Test code (integration, e2e-api, e2e-ui, stress, load, chaos) MUST NEVER write to prod monitoring (prometheus pushgateway labeled `env=prod|home-lab`, loki tenant `prod|home-lab`), prod backup paths (`/srv/backups/*`), knb manifest pointers (`<product>/<target>/manifest.yaml`), or train config (`config/release-trains.yaml`, `config/feature-flags.<train>.yaml`). Enforced by `bubbles/scripts/env-pollution-scan.sh`. Owned by `bubbles.upkeep` (policy) + every agent (no-write discipline).
+  G116:
+    name: offsite_backup_required_for_prod_trains_gate
+    description: >-
+      Conditional BLOCKING gate. When `config/release-trains.yaml` declares `offsite_required: true` for a train shipping to `prod` slot, `release-train-promote` MUST verify `OFFSITE_BACKEND` is NOT `local-only`. WARNING when `offsite_required: false` (default). Operator flips the switch when USB drives or cloud offsite become available. Owned by `bubbles.train` (gate) + `bubbles.upkeep` (offsite verification).
+  G117:
+    name: audit_trail_immutable_gate
+    description: >-
+      BLOCKING gate. `/srv/backups/upkeep-ledger.jsonl` is append-only. Rewriting, deleting, or editing past entries is forbidden. Manifest commits via `bubbles.train` follow the same discipline — promote/rollback/retire operations write atomic forward commits, never force-push or rewrite history. Owned by `bubbles.upkeep` (ledger) + `bubbles.train` (manifest).
+  G118:
+    name: backup_retention_declared_gate
+    description: >-
+      BLOCKING gate. Every train in `config/release-trains.yaml` MUST declare a `retention` field (string, e.g. `7d-daily,4w-weekly,12m-monthly`). Defaults declared under `defaults.retention` apply when per-train `retention` is omitted. Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
+  G119:
+    name: secret_rotation_recorded_gate
+    description: >-
+      BLOCKING gate. Every `upkeep-secret-rotation` ledger entry MUST record old/new key-id HASHES (e.g. `sha256:<first-12-chars>`), NEVER the secret values themselves. Engine refuses to write entries containing high-entropy strings that match secret-value heuristics. Owned by `bubbles.upkeep`.
+  G120:
+    name: pii_classification_declared_gate
+    description: >-
+      BLOCKING gate. Every train in `config/release-trains.yaml` MUST declare a `pii` field (`none|pseudonymized|encrypted-only`). Defaults declared under `defaults.pii` apply when per-train `pii` is omitted. Backup ledger entries inherit the train's PII classification. Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # CROSS-TRAIN PROPAGATION GATES (G121-G123)
+  # Introduced with bubbles.propagate (J-Roc). Enforced by
+  # bubbles/scripts/propagation-policy-guard.sh.
+  # ─────────────────────────────────────────────────────────────────────────
+  G121:
+    name: propagation_policy_declared_gate
+    description: >-
+      BLOCKING gate. When a repo runs a `propagate-forward` / `propagate-backport` / `propagate-audit` workflow, `propagation-policy.yaml` (root or `config/`) MUST exist, parse, and reference only trains declared in `config/release-trains.yaml`. Enforced by `bubbles/scripts/propagation-policy-guard.sh`. Owned by `bubbles.propagate`.
+  G122:
+    name: propagation_validation_required_gate
+    description: >-
+      BLOCKING gate. Every edge in `defaultFlow[]` MUST declare `receivingTrainValidationMode` (`validate-only|full-delivery|none`). Edges using `none` MUST declare `validationSkipReason`. Forward and backport operations MUST route the receiving train through the declared validation mode before recording the ledger entry. Owned by `bubbles.propagate`.
+  G123:
+    name: propagation_ledger_recorded_gate
+    description: >-
+      BLOCKING gate. Every successful forward/backport operation MUST append one JSONL line to `propagation-ledger.yaml` (or path declared in policy). Ledger is append-only; rewriting past entries is forbidden (G117 audit-trail-immutable applies). Backport entries MUST include `approvalToken` referencing the human approval. Owned by `bubbles.propagate`.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # INCIDENT FASTLANE GATE (G124)
+  # Introduced with the incident-fastlane workflow mode + severity tagging
+  # in bubbles.stabilize.
+  # ─────────────────────────────────────────────────────────────────────────
+  G124:
+    name: incident_severity_declared_gate
+    description: >-
+      BLOCKING gate for the `incident-fastlane` workflow mode. bubbles.stabilize MUST classify each finding with a severity tag (`incident`/`high`/`medium`/`low`) before the verdict is recorded. At least one `incident` finding REQUIRES emitting a `route_required` packet to `bubbles.train` with `action: rollback` — stabilize MUST NOT perform rollback inline. Owned by `bubbles.stabilize` (classification) + `bubbles.train` (rollback authority).
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # FRAMEWORK SELF-OBSERVATION GATE (G125)
+  # Introduced with `bubbles.retro target: framework` and the
+  # `framework-health` workflow mode.
+  # ─────────────────────────────────────────────────────────────────────────
+  G125:
+    name: framework_health_evidence_gate
+    description: >-
+      BLOCKING gate for the `framework-health` workflow mode. `bubbles.retro target: framework` MUST emit an improvement proposal under `improvements/IMP-NNN-<slug>.md` referencing the input data sources analyzed (`.specify/runtime/framework-events.jsonl`, `workflow-runs.json`, `bubbles/capability-ledger.yaml`). The proposal MUST NOT auto-mutate `bubbles/*`, `agents/*`, or `bubbles/workflows.yaml` — proposal-first, human reviewed. Enforced by `bubbles/scripts/retro-framework-health.sh` writing only to `improvements/`. Owned by `bubbles.retro`.
