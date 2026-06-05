@@ -1824,7 +1824,7 @@ Scenario: SCN-002-078 Entity linking upserts people without error
 
 ### Definition of Done
 - [x] Migration adds UNIQUE index on people.name
-  > Evidence: `internal/db/migrations/001_initial_schema.sql:102` — `CREATE UNIQUE INDEX IF NOT EXISTS idx_people_name_unique ON people(name)` (originally shipped as `012_people_name_unique.sql`; consolidated into 001 during the migrations 002-017 schema squash documented in [docs/Development.md](../../docs/Development.md#L454); historical file preserved at `internal/db/migrations/archive/012_people_name_unique.sql`).
+  > Evidence: `internal/db/migrations/001_initial_schema.sql:102` — `CREATE UNIQUE INDEX IF NOT EXISTS idx_people_name_unique ON people(name)` (originally shipped as 012_people_name_unique.sql; consolidated into 001 during the migrations 002-017 schema squash documented in [docs/Development.md](../../docs/Development.md#L454); historical file preserved at `internal/db/migrations/archive/012_people_name_unique.sql`).
 - [x] Migration handles pre-existing duplicates by re-parenting edges and merging interaction counts
   > Evidence: `internal/db/migrations/archive/012_people_name_unique.sql` — DO block finds duplicates, re-parents edges, deletes duplicate rows. The consolidated `001_initial_schema.sql` does not include the dedup DO block because the consolidated baseline assumes a fresh DB; the dedup logic in the archived 012 file remains the authoritative reference for any operator running it standalone.
 - [x] Migration file is embedded in Go binary

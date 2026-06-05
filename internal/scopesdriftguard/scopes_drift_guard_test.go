@@ -50,6 +50,8 @@ import (
 //
 // Baseline 2026-06-05: 405 broken paths across 45 specs (after excluding
 // archive/, NNNN placeholders, and <template> tokens).
+// 2026-06-05 (session 3): tightened to 399 after bulk-fix of migration
+// consolidation drift across specs 002, 007, 008, 011, 025, 027, 028.
 //
 // Lowering protocol:
 //  1. Pick a spec (or set of specs) to clean.
@@ -58,7 +60,7 @@ import (
 //  3. Re-run this test; it will report the new actual count.
 //  4. Lower this constant to match (or below) the new actual count.
 //  5. Commit both changes together so the ratchet stays tight.
-const maxAllowedBrokenPaths = 405
+const maxAllowedBrokenPaths = 399
 
 var pathRegex = regexp.MustCompile("`((?:internal|cmd|tests|ml|web|deploy|config|scripts)/[\\w/.-]+\\.(go|py|md|yaml|yml|json|js|ts|tsx|dart|sh|sql|toml))`")
 

@@ -66,7 +66,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - `SubjectAnnotationsCreated = "annotations.created"`
 
 **SQL:**
-- `internal/db/migrations/016_user_annotations.sql` — `annotations` table, `telegram_message_artifacts` table, `artifact_annotation_summary` materialized view
+- `internal/db/migrations/001_initial_schema.sql` lines 491-510 (originally 016_user_annotations.sql; consolidated into 001 during the migrations 002-017 schema squash documented in [docs/Development.md](../../docs/Development.md#L454); historical file preserved at `internal/db/migrations/archive/016_user_annotations.sql`) — `annotations` table, `telegram_message_artifacts` table, `artifact_annotation_summary` materialized view
 
 **Config:**
 - `config/smackerel.yaml` — `annotations:` section with matview timeout, limits, relevance boost coefficients
@@ -150,7 +150,7 @@ Scenario: Annotations cascade on artifact deletion
 ### Implementation Plan
 
 **Files to create:**
-- `internal/db/migrations/016_user_annotations.sql` — enum types, `annotations` table, `telegram_message_artifacts` table, `artifact_annotation_summary` materialized view, all indexes
+- `internal/db/migrations/001_initial_schema.sql` (originally 016_user_annotations.sql; consolidated; archive at `internal/db/migrations/archive/016_user_annotations.sql`) — enum types, `annotations` table, `telegram_message_artifacts` table, `artifact_annotation_summary` materialized view, all indexes
 
 **Files to modify:**
 - None — pure additive migration
