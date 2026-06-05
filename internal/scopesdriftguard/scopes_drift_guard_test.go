@@ -117,33 +117,55 @@ import (
 //   - Spec 070 web-login: webcreds/repo_postgres.go → repo.go (with
 //     repo_pg_test.go for the live path); timing_test.go → hasher_test.go;
 //     cli_users.go → cmd_users.go (matching cmd_* convention).
+//
 // 2026-06-05 (session 3 tier-5 batch): tightened to 284 after fixes
 // across 4 specs (008, 058, 059, 076) — closing 33 broken paths in
 // one batch via consolidations:
-// - Spec 008 telegram-share-capture: 22 occurrences of planned
-//   tests/e2e/telegram_*_test.go redirected to actual
-//   internal/telegram/{share,forward,assembly,media,bot}_test.go
-//   per-feature test files (in-process bot harness exercises the same
-//   capture-to-artifact path the planned e2e files would have driven).
-// - Spec 058 chrome-extension-bridge: internal/api/admin/devices.go →
-//   internal/api/admin/extensiondevices/ sub-package (per the existing
-//   DoD note about admin-namespace extensibility); planned
-//   _integration_test.go files folded into the unit test counterparts;
-//   tests/e2e/extension_*_e2e_test.go consolidated into package-level
-//   live-router tests; tests/docs/*.sh shell tests replaced by the
-//   regression-baseline-guard infrastructure.
-// - Spec 059 google-keep-live-mode: tests/integration/keep_*_test.go +
-//   tests/e2e/connectors/keep_*_smoke_test.go consolidated into the
-//   package-level internal/connector/keep/keep_{bridge,breaker}_test.go;
-//   ml/tests/test_keep_bridge.py split into per-concern files
-//   (test_keep_bridge_handshake.py + test_keep_bridge_warnings.py);
-//   tests/integration/ml_sidecar_boot_test.go → ml/tests/test_nats_consumer_config.py.
-// - Spec 076 assistant-completion-rescope: internal/agent/tools/microtools/
-//   {location,calculator}/ sub-packages → flat files in the shared
-//   microtools/ package; internal/annotation/interaction_map.go (never
-//   created) → inline in parser.go; internal/assistant/wiring.go →
-//   cmd/core/wiring_assistant_facade.go + wiring_legacy_alias.go;
-//   tests/e2e/mobile/a11y_floor_test.go → tests/e2e/assistant/web_pwa_accessibility_e2e_test.go.
+//   - Spec 008 telegram-share-capture: 22 occurrences of planned
+//     tests/e2e/telegram_*_test.go redirected to actual
+//     internal/telegram/{share,forward,assembly,media,bot}_test.go
+//     per-feature test files (in-process bot harness exercises the same
+//     capture-to-artifact path the planned e2e files would have driven).
+//   - Spec 058 chrome-extension-bridge: internal/api/admin/devices.go →
+//     internal/api/admin/extensiondevices/ sub-package (per the existing
+//     DoD note about admin-namespace extensibility); planned
+//     _integration_test.go files folded into the unit test counterparts;
+//     tests/e2e/extension_*_e2e_test.go consolidated into package-level
+//     live-router tests; tests/docs/*.sh shell tests replaced by the
+//     regression-baseline-guard infrastructure.
+//   - Spec 059 google-keep-live-mode: tests/integration/keep_*_test.go +
+//     tests/e2e/connectors/keep_*_smoke_test.go consolidated into the
+//     package-level internal/connector/keep/keep_{bridge,breaker}_test.go;
+//     ml/tests/test_keep_bridge.py split into per-concern files
+//     (test_keep_bridge_handshake.py + test_keep_bridge_warnings.py);
+//     tests/integration/ml_sidecar_boot_test.go → ml/tests/test_nats_consumer_config.py.
+//   - Spec 076 assistant-completion-rescope: internal/agent/tools/microtools/
+//     {location,calculator}/ sub-packages → flat files in the shared
+//     microtools/ package; internal/annotation/interaction_map.go (never
+//     created) → inline in parser.go; internal/assistant/wiring.go →
+//     cmd/core/wiring_assistant_facade.go + wiring_legacy_alias.go;
+//     tests/e2e/mobile/a11y_floor_test.go → tests/e2e/assistant/web_pwa_accessibility_e2e_test.go.
+//
+// 2026-06-05 (session 3 tier-6 batch): tightened to 270 after fixes
+// in spec 025 (knowledge-synthesis-layer) — closing 14 broken paths
+// via path redirects and post-release-deferred annotations:
+//   - scripts/commands/config-generate.sh → scripts/commands/config.sh
+//     (the `./smackerel.sh config generate` dispatch was consolidated
+//     into the per-domain `config.sh` script during the runtime CLI
+//     refactor); 2 occurrences (files-to-modify + DoD evidence row).
+//   - internal/db/migrations/014_knowledge_layer.sql →
+//     internal/db/migrations/001_initial_schema.sql (consolidated into
+//     the initial schema during the migrations 002-017 squash; historical
+//     file preserved at internal/db/migrations/archive/).
+//   - Scope 9 (calendar-triggered briefs) + Scope 10 (reminder & promise
+//     engine) file-family references annotated `(post-release-deferred)`
+//     since both scopes are gated on spec-021-m1a unified surfacing
+//     controller per the existing Post-Release Scope Exception (DI-025-05).
+//     Covers internal/scheduler/calendar_briefs.go,
+//     internal/scheduler/calendar_briefs_test.go,
+//     tests/integration/calendar_briefs_test.go, and
+//     tests/e2e/calendar_briefs_e2e_test.go references in the
+//     implementation plan, change boundary, and test plan tables.
 //
 // Lowering protocol:
 //  1. Pick a spec (or set of specs) to clean.
@@ -152,7 +174,7 @@ import (
 //  3. Re-run this test; it will report the new actual count.
 //  4. Lower this constant to match (or below) the new actual count.
 //  5. Commit both changes together so the ratchet stays tight.
-const maxAllowedBrokenPaths = 284
+const maxAllowedBrokenPaths = 270
 
 var pathRegex = regexp.MustCompile("`((?:internal|cmd|tests|ml|web|deploy|config|scripts)/[\\w/.-]+\\.(go|py|md|yaml|yml|json|js|ts|tsx|dart|sh|sql|toml))`")
 

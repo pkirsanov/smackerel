@@ -134,7 +134,7 @@ Scenario: Prompt contract is loaded from YAML and validated
 - `config/smackerel.yaml` — add `knowledge:` section
 - `config/prompt_contracts/ingest-synthesis-v1.yaml` — first prompt contract
 - `config/prompt_contracts/cross-source-connection-v1.yaml` — cross-source contract
-- `scripts/commands/config-generate.sh` — emit KNOWLEDGE_* env vars
+- `scripts/commands/config.sh` (originally planned at scripts/commands/config-generate.sh; the `./smackerel.sh config generate` dispatch was consolidated into the per-domain `config.sh` script during the runtime CLI refactor) — emit KNOWLEDGE_* env vars
 - `internal/config/config.go` — parse knowledge config section (fail-loud on missing)
 
 **Config SST:** All knowledge config values originate from `config/smackerel.yaml` → `config generate` → env vars. No hardcoded defaults in Go.
@@ -160,7 +160,7 @@ Scenario: Prompt contract is loaded from YAML and validated
 - [x] knowledge_layer migration (shipped as `014_knowledge_layer.sql`, consolidated into `001_initial_schema.sql`) creates all 3 tables, 4 artifact columns, all indexes
   > **Phase:** implement
   > **Note:** Implemented as `014_knowledge_layer.sql` (design said 012 but repo had 012+013 already).
-  > **Evidence:** `internal/db/migrations/014_knowledge_layer.sql` creates `knowledge_concepts` (with UNIQUE on title_normalized, gin trgm on title, gin on source_artifact_ids, btree on updated_at), `knowledge_entities` (with UNIQUE on name_normalized+entity_type, gin trgm on name, btree on people_id and updated_at), `knowledge_lint_reports` (with btree on run_at), 4 ALTER TABLE columns on artifacts (synthesis_status, synthesis_at, synthesis_error, synthesis_retry_count), and partial index on synthesis_status.
+  > **Evidence:** `internal/db/migrations/001_initial_schema.sql` (originally scoped as internal/db/migrations/014_knowledge_layer.sql; consolidated into the initial schema during the migration squash) creates `knowledge_concepts` (with UNIQUE on title_normalized, gin trgm on title, gin on source_artifact_ids, btree on updated_at), `knowledge_entities` (with UNIQUE on name_normalized+entity_type, gin trgm on name, btree on people_id and updated_at), `knowledge_lint_reports` (with btree on run_at), 4 ALTER TABLE columns on artifacts (synthesis_status, synthesis_at, synthesis_error, synthesis_retry_count), and partial index on synthesis_status.
   > **Claim Source:** executed
 
 - [x] Concept page can be created and retrieved by ID and by normalized title (case-insensitive), with unique title constraint enforced
@@ -187,7 +187,7 @@ Scenario: Prompt contract is loaded from YAML and validated
   > **Evidence:** Both files created with version, type, description, system_prompt, extraction_schema (JSON Schema with required/properties/types/enum constraints), validation_rules (max_concepts/entities/relationships/contradictions), token_budget, temperature. Verified via LoadContract unit tests.
   > **Claim Source:** executed
 
-- [x] `scripts/commands/config-generate.sh` emits all KNOWLEDGE_* env vars
+- [x] `scripts/commands/config.sh` (originally planned at scripts/commands/config-generate.sh; consolidated into the per-domain `config.sh` script during the runtime CLI refactor) emits all KNOWLEDGE_* env vars
   > **Phase:** implement
   > **Evidence:** `./smackerel.sh config generate` produces `config/generated/dev.env` containing all 12 KNOWLEDGE_* env vars: KNOWLEDGE_ENABLED=true, KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS=30, KNOWLEDGE_LINT_CRON=0 3 * * *, KNOWLEDGE_LINT_STALE_DAYS=90, KNOWLEDGE_CONCEPT_MAX_TOKENS=4000, KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD=0.7, KNOWLEDGE_MAX_SYNTHESIS_RETRIES=3, plus 5 KNOWLEDGE_PROMPT_CONTRACT_* vars.
   > **Claim Source:** executed — `grep KNOWLEDGE config/generated/dev.env` → 12 lines
@@ -1018,7 +1018,7 @@ Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposal
 
 **Files / surfaces to add or modify:**
 
-- `internal/scheduler/calendar_briefs.go` — periodic job that scans CalDAV cache for upcoming events within active lead-time windows and enqueues brief synthesis requests.
+- internal/scheduler/calendar_briefs.go (post-release-deferred; this scope is one of the two `SurfacingProposal` producers that hard-depends on spec 021 M1a) — periodic job that scans CalDAV cache for upcoming events within active lead-time windows and enqueues brief synthesis requests.
 - `internal/intelligence/briefs.go` — reuse existing brief synthesis; add a `briefSource` discriminator (`digest|calendar|promise`) so callers can mark provenance without changing core synthesis behaviour.
 - `internal/connector/caldav` — read-only `ListUpcomingEvents(ctx, horizon)` accessor against the existing cache (no schema change beyond reading already-stored event rows).
 - `internal/knowledge/store.go` — add `RecordCalendarBriefEmission(ctx, calDavEventId, leadTimePolicyVersion, proposalId)` and `LookupCalendarBriefEmission(...)` for dedupe tracking.
@@ -1040,19 +1040,19 @@ Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposal
 
 ### Change Boundary
 
-- **Allowed file families:** `internal/scheduler/calendar_briefs.go`, dedupe helpers in `internal/knowledge/store.go`, read-only CalDAV cache accessor, new SST keys, briefs `briefSource` discriminator, tests.
+- **Allowed file families:** internal/scheduler/calendar_briefs.go (post-release-deferred), dedupe helpers in `internal/knowledge/store.go`, read-only CalDAV cache accessor, new SST keys, briefs `briefSource` discriminator, tests.
 - **Excluded surfaces:** edits to spec 021 controller internals, edits to CalDAV connector ingest/write paths, edits to output-channel adapter contracts, edits to the canonical `SurfacingProposal` schema.
 
 ### Test Plan
 
 | Test Type | Category | Scenario Mapping | File / Location | Expected Test Title | Command | Live System |
 |-----------|----------|------------------|-----------------|---------------------|---------|-------------|
-| Unit | `unit` | SCN-025-24 | `internal/scheduler/calendar_briefs_test.go` | `TestCalendarBriefScheduler_FiresAtLeadTimeBeforeEvent` | `./smackerel.sh test unit` | No |
-| Unit | `unit` | SCN-025-25 | `internal/scheduler/calendar_briefs_test.go` | `TestCalendarBriefScheduler_PerCategoryLeadTimePolicy` | `./smackerel.sh test unit` | No |
-| Unit | `unit` | SCN-025-26 | `internal/scheduler/calendar_briefs_test.go` | `TestCalendarBriefScheduler_DedupesByEventIdAndPolicyVersion` | `./smackerel.sh test unit` | No |
-| Integration | `integration` | SCN-025-24, SCN-025-26 | `tests/integration/calendar_briefs_test.go` | `TestCalendarBriefProducer_EmitsSurfacingProposalAndDedupes` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
-| E2E API | `e2e-api` | SCN-025-24 | `tests/e2e/calendar_briefs_e2e_test.go` | `TestCalendarBriefEndToEndFromCalDavCacheToSurfacingProposal` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
-| Regression E2E | `e2e-api` | SCN-025-26 | `tests/e2e/calendar_briefs_e2e_test.go` | `TestCalendarBriefRegression_NoDuplicateProposalsOnReEvaluation` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
+| Unit | `unit` | SCN-025-24 | internal/scheduler/calendar_briefs_test.go (post-release-deferred) | `TestCalendarBriefScheduler_FiresAtLeadTimeBeforeEvent` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-025-25 | internal/scheduler/calendar_briefs_test.go (post-release-deferred) | `TestCalendarBriefScheduler_PerCategoryLeadTimePolicy` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-025-26 | internal/scheduler/calendar_briefs_test.go (post-release-deferred) | `TestCalendarBriefScheduler_DedupesByEventIdAndPolicyVersion` | `./smackerel.sh test unit` | No |
+| Integration | `integration` | SCN-025-24, SCN-025-26 | tests/integration/calendar_briefs_test.go (post-release-deferred) | `TestCalendarBriefProducer_EmitsSurfacingProposalAndDedupes` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
+| E2E API | `e2e-api` | SCN-025-24 | tests/e2e/calendar_briefs_e2e_test.go (post-release-deferred) | `TestCalendarBriefEndToEndFromCalDavCacheToSurfacingProposal` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
+| Regression E2E | `e2e-api` | SCN-025-26 | tests/e2e/calendar_briefs_e2e_test.go (post-release-deferred) | `TestCalendarBriefRegression_NoDuplicateProposalsOnReEvaluation` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
 
 ### Definition of Done
 
@@ -1115,10 +1115,10 @@ Scenario: SCN-025-29 — Promise expires when its expiration policy elapses with
 
 **Files / surfaces to add or modify:**
 
-- `internal/db/migrations/0NN_promises.sql` — add `knowledge_promises` table with columns: `id`, `status` (`pending|fired|acknowledged|expired`), `trigger_condition_json`, `source_artifact_ids`, `requested_at`, `expires_at`, `fired_at`, `acknowledged_at`, `proposal_id`, `audit_jsonb`.
-- `internal/knowledge/promises.go` — CRUD + status transitions; transitions are guarded (`pending → fired|expired`, `fired → acknowledged|expired`).
-- `internal/scheduler/promises.go` — periodic tick that (a) re-evaluates pending promises against new ingest signals and (b) advances expired promises to `expired` state.
-- `internal/intelligence/promises.go` — promise → `SurfacingProposal` translator, reusing the synthesis pipeline for human-readable summary fidelity.
+- internal/db/migrations/0NN_promises.sql (post-release-deferred; this scope's promise engine is the second of the two `SurfacingProposal` producers that hard-depends on spec 021 M1a) — add `knowledge_promises` table with columns: `id`, `status` (`pending|fired|acknowledged|expired`), `trigger_condition_json`, `source_artifact_ids`, `requested_at`, `expires_at`, `fired_at`, `acknowledged_at`, `proposal_id`, `audit_jsonb`.
+- internal/knowledge/promises.go (post-release-deferred) — CRUD + status transitions; transitions are guarded (`pending → fired|expired`, `fired → acknowledged|expired`).
+- internal/scheduler/promises.go (post-release-deferred) — periodic tick that (a) re-evaluates pending promises against new ingest signals and (b) advances expired promises to `expired` state.
+- internal/intelligence/promises.go (post-release-deferred) — promise → `SurfacingProposal` translator, reusing the synthesis pipeline for human-readable summary fidelity.
 - `internal/api` — no new external endpoint in this scope; promise capture is invoked from the assistant intent surface (consumed via existing intent ingestion path).
 - `config/smackerel.yaml` — fail-loud SST keys for `intelligence.promises.enabled` (no default), `intelligence.promises.default_expiration_days` (no default), `intelligence.promises.max_active_per_user` (no default).
 
@@ -1138,20 +1138,20 @@ Scenario: SCN-025-29 — Promise expires when its expiration policy elapses with
 
 ### Change Boundary
 
-- **Allowed file families:** new `internal/knowledge/promises.go`, new `internal/scheduler/promises.go`, new `internal/intelligence/promises.go`, new migration file, new SST keys, assistant intent → promise-capture classifier hook, tests.
+- **Allowed file families:** new internal/knowledge/promises.go (post-release-deferred), new internal/scheduler/promises.go (post-release-deferred), new internal/intelligence/promises.go (post-release-deferred), new migration file, new SST keys, assistant intent → promise-capture classifier hook, tests.
 - **Excluded surfaces:** edits to spec 021 controller internals, edits to output-channel adapter contracts, edits to the canonical `SurfacingProposal` schema, edits to existing knowledge tables beyond foreign-key references.
 
 ### Test Plan
 
 | Test Type | Category | Scenario Mapping | File / Location | Expected Test Title | Command | Live System |
 |-----------|----------|------------------|-----------------|---------------------|---------|-------------|
-| Unit | `unit` | SCN-025-27 | `internal/knowledge/promises_test.go` | `TestPromiseStore_CapturePersistsPendingWithTriggerCondition` | `./smackerel.sh test unit` | No |
-| Unit | `unit` | SCN-025-28 | `internal/scheduler/promises_test.go` | `TestPromiseScheduler_FiresPendingPromiseWhenTriggerSatisfied` | `./smackerel.sh test unit` | No |
-| Unit | `unit` | SCN-025-29 | `internal/scheduler/promises_test.go` | `TestPromiseScheduler_ExpiresPendingPromiseAfterPolicyElapsed` | `./smackerel.sh test unit` | No |
-| Integration | `integration` | SCN-025-28 | `tests/integration/promises_test.go` | `TestPromiseEngine_PendingToFiredEmitsSurfacingProposal` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
-| Integration | `integration` | SCN-025-29 | `tests/integration/promises_test.go` | `TestPromiseEngine_ExpirationDoesNotEmitProposal` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
-| E2E API | `e2e-api` | SCN-025-27, SCN-025-28 | `tests/e2e/promises_e2e_test.go` | `TestPromiseEndToEndCaptureFireAndAcknowledge` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
-| Regression E2E | `e2e-api` | SCN-025-28 | `tests/e2e/promises_e2e_test.go` | `TestPromiseRegression_AcknowledgedPromiseNeverReFires` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
+| Unit | `unit` | SCN-025-27 | internal/knowledge/promises_test.go (post-release-deferred) | `TestPromiseStore_CapturePersistsPendingWithTriggerCondition` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-025-28 | internal/scheduler/promises_test.go (post-release-deferred) | `TestPromiseScheduler_FiresPendingPromiseWhenTriggerSatisfied` | `./smackerel.sh test unit` | No |
+| Unit | `unit` | SCN-025-29 | internal/scheduler/promises_test.go (post-release-deferred) | `TestPromiseScheduler_ExpiresPendingPromiseAfterPolicyElapsed` | `./smackerel.sh test unit` | No |
+| Integration | `integration` | SCN-025-28 | tests/integration/promises_test.go (post-release-deferred) | `TestPromiseEngine_PendingToFiredEmitsSurfacingProposal` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
+| Integration | `integration` | SCN-025-29 | tests/integration/promises_test.go (post-release-deferred) | `TestPromiseEngine_ExpirationDoesNotEmitProposal` | `./smackerel.sh test integration` | Yes (ephemeral stack) |
+| E2E API | `e2e-api` | SCN-025-27, SCN-025-28 | tests/e2e/promises_e2e_test.go (post-release-deferred) | `TestPromiseEndToEndCaptureFireAndAcknowledge` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
+| Regression E2E | `e2e-api` | SCN-025-28 | tests/e2e/promises_e2e_test.go (post-release-deferred) | `TestPromiseRegression_AcknowledgedPromiseNeverReFires` | `./smackerel.sh test e2e` | Yes (ephemeral stack) |
 
 ### Definition of Done
 
