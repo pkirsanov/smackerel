@@ -360,7 +360,7 @@ Scenario: Domain extraction result handler records failure
 ### Implementation Plan
 
 **Files to create:**
-- `internal/nats/domain_subjects.go` — `SubjectDomainExtract`, `SubjectDomainExtracted` constants (or add to existing client.go)
+- `internal/nats/client.go` — `SubjectDomainExtract`, `SubjectDomainExtracted` constants (originally planned at internal/nats/domain_subjects.go; the constants were added to the shared `client.go` instead of being broken into a per-domain subjects file)
 
 **Files to modify:**
 - `config/nats_contract.json` — add `domain.extract` and `domain.extracted` entries + DOMAIN stream
@@ -883,7 +883,7 @@ Scenario: SearchResult includes domain_data when present
 - `internal/api/search.go` — add `parseDomainIntent`, `addDomainFilters`, integrate into search pipeline, add `DomainData` to `SearchResult`, add `Domain`/`Ingredient` to `SearchFilters`
 
 **Files to create:**
-- `internal/api/domain_search.go` — (optional, if search.go is too large) domain intent parsing and filter functions
+- `internal/api/search.go` — domain intent parsing and filter functions (originally optional-planned as a separate internal/api/domain_search.go file; the domain-intent parsing and filter functions ended up consolidated into the existing search handler instead)
 
 **Design reference:** `design.md` § "Search Extension"
 
