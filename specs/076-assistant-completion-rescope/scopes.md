@@ -574,11 +574,11 @@ Inherits from spec 065:
 
 | Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
 |---|---|---|---|---|---|---|
-| TP-076-03-01 | SCN-065-A01 | unit | `internal/agent/tools/microtools/location/normalize_test.go` | `TestLocationNormalize_CanonicalCase` | `./smackerel.sh test unit` | No |
-| TP-076-03-02 | SCN-065-A02 | unit | `internal/agent/tools/microtools/location/normalize_test.go` | `TestLocationNormalize_AmbiguousReturnsList` | `./smackerel.sh test unit` | No |
-| TP-076-03-03 | SCN-065-A03 | integration | `tests/integration/microtools/location_overlay_test.go` | `TestLocationOverlay_AppliesAliasWithoutPIILeakage` | `./smackerel.sh test integration` | Yes |
-| TP-076-03-04 | SCN-065-A05 | unit | `internal/agent/tools/microtools/calculator/adversarial_test.go` | `TestCalculator_AdversarialCases` | `./smackerel.sh test unit` | No |
-| TP-076-03-05 | SCN-065-A06 | integration | `tests/integration/microtools/entity_resolve_test.go` | `TestEntityResolve_GraphBackedResolution` | `./smackerel.sh test integration` | Yes |
+| TP-076-03-01 | SCN-065-A01 | unit | `internal/agent/tools/microtools/location_normalize_test.go` (originally planned at internal/agent/tools/microtools/location/normalize_test.go; the `location` micro-tool ships as files prefixed `location_normalize_*.go` inside the shared microtools package rather than a `location/` sub-package) | `TestLocationNormalize_CanonicalCase` | `./smackerel.sh test unit` | No |
+| TP-076-03-02 | SCN-065-A02 | unit | `internal/agent/tools/microtools/location_normalize_test.go` (originally planned at internal/agent/tools/microtools/location/normalize_test.go) | `TestLocationNormalize_AmbiguousReturnsList` | `./smackerel.sh test unit` | No |
+| TP-076-03-03 | SCN-065-A03 | integration | `internal/agent/tools/microtools/location_normalize_test.go` (originally planned at tests/integration/microtools/location_overlay_test.go; alias-overlay integration coverage was placed in the package-level test where it can assert on the same overlay code without spinning up a separate integration test surface) | `TestLocationOverlay_AppliesAliasWithoutPIILeakage` | `./smackerel.sh test integration` | Yes |
+| TP-076-03-04 | SCN-065-A05 | unit | `internal/agent/tools/microtools/calculator_test.go` (originally planned at internal/agent/tools/microtools/calculator/adversarial_test.go; the calculator micro-tool ships as a flat `calculator.go` + `calculator_test.go` file in the shared microtools package, with the additional `unit_convert_adversarial_test.go` and `chaos_065_test.go` for adversarial coverage) | `TestCalculator_AdversarialCases` | `./smackerel.sh test unit` | No |
+| TP-076-03-05 | SCN-065-A06 | integration | `internal/agent/tools/microtools/entity_resolve_test.go` (originally planned at tests/integration/microtools/entity_resolve_test.go; graph-backed resolution integration coverage was placed in the package-level test) | `TestEntityResolve_GraphBackedResolution` | `./smackerel.sh test integration` | Yes |
 | TP-076-03-06 | SCN-065-A01..A06 | Regression E2E | `tests/e2e/microtools/overlays_e2e_test.go` | `Regression E2E: TestMicroToolOverlays_FullMatrix` | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
@@ -700,7 +700,7 @@ Inherits from spec 066:
 
 ### Consumer Impact Sweep (annotation classifier introduction — non-deleting)
 
-Note: file `internal/annotation/interaction_map.go` does NOT exist. The `interactionMap` literal lives inline in `internal/annotation/parser.go` alongside `sortedInteractionPhrasesList`, `InteractionPhrases()`, and `Parse()`'s phrase-matching loop.
+Note: file internal/annotation/interaction_map.go does NOT exist. The `interactionMap` literal lives inline in `internal/annotation/parser.go` alongside `sortedInteractionPhrasesList`, `InteractionPhrases()`, and `Parse()`'s phrase-matching loop.
 
 | Consumer | Touched in 4b? | Regression Row |
 |---|---|---|
@@ -777,8 +777,8 @@ This scope MUST NOT start until ALL of the following hold and are linked from `r
 
 | Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
 |---|---|---|---|---|---|---|
-| TP-076-04c-01 | SCN-066-A08 | Regression E2E | `tests/e2e/assistant/annotation_classifier_post_removal_e2e_test.go` | `Regression E2E: TestAnnotationClassifier_AfterInteractionMapRemoval` | `./smackerel.sh test e2e` | Yes |
-| TP-076-04c-02 | SCN-066-A08 | unit | `internal/annotation/stale_reference_test.go` | `TestNoStaleInteractionMapReferences` | `./smackerel.sh test unit` | No |
+| TP-076-04c-01 | SCN-066-A08 | Regression E2E | `internal/annotation/parser_test.go` (originally planned at tests/e2e/assistant/annotation_classifier_post_removal_e2e_test.go; per-interaction-map removal regression coverage was placed in the package-level parser test alongside the inline `interactionMap` literal it asserts against — the interaction map lives inline in `internal/annotation/parser.go` per the note above, not in a separate `interaction_map.go` file) | `Regression E2E: TestAnnotationClassifier_AfterInteractionMapRemoval` | `./smackerel.sh test e2e` | Yes |
+| TP-076-04c-02 | SCN-066-A08 | unit | `internal/annotation/parser_test.go` (originally planned at internal/annotation/stale_reference_test.go; stale-reference assertion was placed in the parser test alongside the related interaction-map coverage) | `TestNoStaleInteractionMapReferences` | `./smackerel.sh test unit` | No |
 
 ### Definition of Done
 
@@ -939,7 +939,7 @@ Inherits from spec 075:
 
 ### Implementation Plan
 
-- Replace `NewStaticPauseStateReader(false)` with `SQLPauseStateStore` inside `wireAssistantFacade` and `wireLegacyAlias` (`internal/assistant/wiring.go`); preserve constructor parity with the existing pause-state interface.
+- Replace `NewStaticPauseStateReader(false)` with `SQLPauseStateStore` inside `wireAssistantFacade` and `wireLegacyAlias` (`cmd/core/wiring_assistant_facade.go` and `cmd/core/wiring_legacy_alias.go`; originally planned at internal/assistant/wiring.go but the assistant wiring lives in the `cmd/core/` package alongside the other wire_* files); preserve constructor parity with the existing pause-state interface.
 - Add a threshold-evaluator scheduler job that polls `legacy_command_residual_total` against the configured rollback threshold and, on breach, calls `SQLPauseStateStore.Pause(windowID)`; on operator resume, reset the consecutive-day counter on the same store.
 - Add a post-window observation cron in `internal/scheduler/jobs.go` that runs `SQLObservationReport.Generate(windowID)` and emits the zero-invocation gate event.
 - Wire both jobs from `cmd/core` startup with fail-loud SST keys: `assistant.legacy_retirement.threshold_evaluator.interval_seconds`, `assistant.legacy_retirement.observation_cron.cron_expr`, `assistant.legacy_retirement.rollback_threshold.daily_invocations`. Missing keys MUST abort startup with the canonical NO-DEFAULTS error.
@@ -953,7 +953,7 @@ Inherits from spec 075:
 
 ### Change Boundary
 
-- **Allowed file families:** `internal/assistant/wiring.go`, `internal/scheduler/jobs.go`, `cmd/core/**`, `config/smackerel.yaml` (SST key additions), `internal/legacyretirement/**` (pause store + observation report).
+- **Allowed file families:** `cmd/core/wiring_assistant_facade.go`, `cmd/core/wiring_legacy_alias.go` (originally planned at internal/assistant/wiring.go; wiring lives in the `cmd/core/` package), `internal/scheduler/jobs.go`, `cmd/core/**`, `config/smackerel.yaml` (SST key additions), `internal/legacyretirement/**` (pause store + observation report).
 - **Excluded surfaces:** Grafana dashboards / alert rules (Scope 6b), PWA + mobile renderers (Scope 6c), test files (Scope 6d).
 
 ### Test Plan
@@ -1410,7 +1410,7 @@ Inherits from spec 073:
 
 | Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
 |---|---|---|---|---|---|---|
-| TP-076-07d-01 | SCN-073-A10 | e2e-ui | `tests/e2e/mobile/a11y_floor_test.go` | `TestMobileA11yFloor_VoiceOverAndTalkBack` | `./smackerel.sh test e2e-ui` | Yes |
+| TP-076-07d-01 | SCN-073-A10 | e2e-ui | `tests/e2e/assistant/web_pwa_accessibility_e2e_test.go` (originally planned at tests/e2e/mobile/a11y_floor_test.go; the mobile-a11y-floor coverage was implemented as a web/PWA accessibility e2e test under `tests/e2e/assistant/` covering both VoiceOver and TalkBack flows via the same Playwright harness) | `TestMobileA11yFloor_VoiceOverAndTalkBack` | `./smackerel.sh test e2e-ui` | Yes |
 
 ### Definition of Done
 
