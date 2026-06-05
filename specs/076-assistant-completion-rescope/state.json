@@ -503,7 +503,13 @@
       "description": "execution.completedPhaseClaims records 17 per-scope implement claims (SCOPE-1..7c) plus one spec-review claim. Specialist phases (test, regression, simplify, stabilize, security, docs, validate, audit, chaos) were not run as distinct agent phases for this spec — all test/regression evidence was captured inline within implement-phase sections of report.md. Per anti-fabrication policy (evidence-rules.md, critical-requirements.md → Honesty Incentive), bubbles.implement cannot retroactively manufacture phase-claim entries for agents that did not run. Spec-level aggregation of these phases (if required by full-delivery mode certification) must be performed by the owning workflow / validation agents that actually execute the phases, or by an explicit governance decision that inline-implement evidence satisfies the per-phase claim requirement.",
       "discoveredAt": "2026-06-03T03:00:00Z",
       "owner": "bubbles.workflow",
-      "status": "open_route_required"
+      "status": "resolved",
+      "resolvedAt": "2026-06-05T02:35:00Z",
+      "resolutionNote": "Stale. certification.certifiedCompletedPhases now lists all 11 specialist phases (implement, spec-review, test, regression, stabilize, security, simplify, docs, validate, audit, chaos). Spec is status=done / certification.status=done since 2026-06-03. artifact-lint.sh passes. The gap was addressed when validate/audit aggregated the inline-implement evidence into the certification ledger; this DI was never re-checked and went stale.",
+      "resolutionRefs": [
+        "specs/076-assistant-completion-rescope/state.json#certification.certifiedCompletedPhases",
+        "artifact-lint.sh PASSED 2026-06-05"
+      ]
     }
   ],
   "lastUpdatedAt": "2026-06-03T06:30:00Z",
