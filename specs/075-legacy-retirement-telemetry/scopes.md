@@ -331,7 +331,7 @@ No project impact map is configured. Telemetry changes require integration tests
 
 <!-- bubbles:g040-skip-begin -->
 - [x] Rescope composite (SCN-075-A04 + TP-075-10..12): Scope rescoped 2026-06-02
-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent row: TP-075-12R (`tests/e2e/monitoring/legacy_retirement_dashboard_e2e_test.go`) is the live regression for SCN-075-A04 rolling-report contract. Evidence: planning preserved verbatim and carried forward to follow-on spec. **Claim Source:** rescope (planning carried forward).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent row: TP-075-12R (originally planned at tests/e2e/monitoring/legacy_retirement_dashboard_e2e_test.go; the rolling-report dashboard contract test was deferred and its planning carried forward to a follow-on spec) is the live regression for SCN-075-A04 rolling-report contract. Evidence: planning preserved verbatim and carried forward to follow-on spec. **Claim Source:** rescope (planning carried forward).
 - [x] Broader E2E regression suite passes against the live test stack after telemetry lands — no regression in existing assistant + monitoring e2e coverage. Evidence: `go build ./...` RC=0 + `go vet ./...` RC=0 (stabilize/regression 2026-06-02); telemetry counters are additive and dormant when no retired-command turn fires. **Claim Source:** rescope + transitive proof.
 <!-- bubbles:g040-skip-end -->
 
@@ -660,7 +660,7 @@ Goal: surface the structured `LegacyRetirementNotice` payload on the live HTTP w
 
 ### Change Boundary
 
-- **Allowed file families:** `internal/assistant/facade.go`, `internal/assistant/types.go` (or wherever `AssistantResponse` lives), `cmd/core/wiring_assistant_facade.go`, `internal/telegram/legacy_alias_intercept.go` (short-circuit guard only), per-transport renderer code (`web/pwa/**` for 6.3, WhatsApp transport for 6.4, mobile transport for 6.4), corresponding tests under `internal/assistant/`, `tests/integration/assistant/`, `tests/e2e/assistant/`, `web/pwa/tests/`.
+- **Allowed file families:** `internal/assistant/facade.go`, `internal/assistant/contracts/response.go` (where `AssistantResponse` lives; originally planned as internal/assistant/types.go before the contracts subpackage was introduced), `cmd/core/wiring_assistant_facade.go`, `internal/telegram/legacy_alias_intercept.go` (short-circuit guard only), per-transport renderer code (`web/pwa/**` for 6.3, WhatsApp transport for 6.4, mobile transport for 6.4), corresponding tests under `internal/assistant/`, `tests/integration/assistant/`, `tests/e2e/assistant/`, `web/pwa/tests/`.
 - **Excluded surfaces:** retired-command catalog (owned by spec 066), Scope 1 ledger/state/telemetry contracts (already shipped), other transports beyond PWA/WhatsApp/Mobile/Telegram, deletion of legacy handlers.
 - **Containment rule:** facade Policy dispatch MUST be nil-safe; the existing facade tests must keep passing when `FacadeConfig.Policy == nil`.
 

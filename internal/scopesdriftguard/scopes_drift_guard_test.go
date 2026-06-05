@@ -63,6 +63,14 @@ import (
 // tests/integration/*_test.go → internal/connector/*/...,
 // internal/drive/tools.go → internal/drive/tools/tools.go) plus
 // bare-text rephrasings for the planned-but-relocated artifacts.
+// 2026-06-05 (session 3 tier-2 batch): tightened to 365 after fixes
+// across 5 specs (021, 026, 028, 073, 075) — closing 10 broken paths
+// via renames (e2e/alert_delivery_test.go → notification_ntfy_source_api_test.go,
+// e2e/health_freshness_test.go → internal/api/health_test.go,
+// internal/nats/domain_subjects.go → internal/nats/client.go,
+// internal/assistant/types.go → internal/assistant/contracts/response.go)
+// plus bare-text rephrasings for fixtures split into .input/.descriptor.json
+// pairs and deferred aggregator/dashboard files carried forward to follow-ons.
 //
 // Lowering protocol:
 //  1. Pick a spec (or set of specs) to clean.
@@ -71,7 +79,7 @@ import (
 //  3. Re-run this test; it will report the new actual count.
 //  4. Lower this constant to match (or below) the new actual count.
 //  5. Commit both changes together so the ratchet stays tight.
-const maxAllowedBrokenPaths = 375
+const maxAllowedBrokenPaths = 365
 
 var pathRegex = regexp.MustCompile("`((?:internal|cmd|tests|ml|web|deploy|config|scripts)/[\\w/.-]+\\.(go|py|md|yaml|yml|json|js|ts|tsx|dart|sh|sql|toml))`")
 
