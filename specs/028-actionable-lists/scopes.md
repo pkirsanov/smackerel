@@ -12,8 +12,8 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 1. **Scope 1 — DB Migration & List Types** — Migration `017_actionable_lists.sql` + Go types for lists, list items, aggregation sources, and list item seeds. Foundation for all subsequent scopes.
 2. **Scope 2 — List Store (CRUD)** — `internal/list/store.go` with CreateList, GetList, ListLists, UpdateItemStatus, AddManualItem, CompleteList, ArchiveList, denormalized counter updates, NATS event publication.
-3. **Scope 3 — Aggregator Interface & Recipe Aggregator** — `internal/list/aggregator.go` interface + `internal/list/recipe_aggregator.go` with ingredient parsing, unit normalization, quantity merging, category assignment, name normalization.
-4. **Scope 4 — Reading & Comparison Aggregators** — `internal/list/reading_aggregator.go` for article lists + `internal/list/compare_aggregator.go` for product comparison tables. Demonstrates domain extensibility.
+3. **Scope 3 — Aggregator Interface & Recipe Aggregator** — `internal/list/types.go` Aggregator interface (originally planned at internal/list/aggregator.go; the interface was co-located with the other list types in `types.go`) + `internal/list/recipe_aggregator.go` with ingredient parsing, unit normalization, quantity merging, category assignment, name normalization.
+4. **Scope 4 — Reading & Comparison Aggregators** — `internal/list/reading_aggregator.go` for article lists + the comparison aggregator (originally planned at internal/list/compare_aggregator.go; the comparison-table aggregator was deferred and its planning carried forward to a follow-on spec, with `reading_aggregator.go` shipping in this spec as the second domain demonstrating extensibility). Demonstrates domain extensibility.
 5. **Scope 5 — List Generator** — `internal/list/generator.go` that resolves artifact IDs (from explicit IDs, tag filters, search queries), batch-fetches domain_data, selects the correct aggregator, runs aggregation, and persists via Store.
 6. **Scope 6 — REST API Endpoints** — Chi route group `/api/lists` with all CRUD and item-level operations. Wires Generator and Store into Dependencies.
 7. **Scope 7 — Telegram /list Command & Inline Keyboard** — `/list` command parser, list display formatting, inline keyboard for item check/skip/substitute, callback handler, message editing on state change.
@@ -73,7 +73,7 @@ Scope 1 (DB + Types)
 - `func (a *ReadingAggregator) Aggregate(sources []AggregationSource) ([]ListItemSeed, error)`
 - `func estimateReadTime(contentLength int) int` — minutes, based on 200 WPM
 
-**Go (`internal/list/compare_aggregator.go`):**
+**Go (originally planned at internal/list/compare_aggregator.go; the comparison-table aggregator was deferred and its planning carried forward to a follow-on spec):**
 - `type CompareAggregator struct`
 - `func (a *CompareAggregator) Aggregate(sources []AggregationSource) ([]ListItemSeed, error)`
 
