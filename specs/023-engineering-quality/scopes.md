@@ -71,7 +71,7 @@ Scenario: SCN-023-03 Dead checkAuth method is removed
 - `internal/api/digest.go` — replace `d.DigestGen.(*digest.Generator)` cast with direct `d.DigestGen.GetLatest()` call
 - `cmd/core/main.go` — update `&api.Dependencies{...}` construction to use new typed fields (same concrete types, now interface-satisfied)
 
-**Interface definitions (in `internal/api/health.go` or a new `internal/api/interfaces.go`):**
+**Interface definitions (in `internal/api/health.go` — the spec considered a separate internal/api/interfaces.go file but landed everything in health.go to avoid splitting the api-package surface; the interfaces below all live in health.go today):**
 - `Pipeliner` — `Process(ctx, *pipeline.ProcessRequest) (*pipeline.ProcessResult, error)`
 - `Searcher` — `Search(ctx, req SearchRequest) ([]SearchResult, int, string, error)`
 - `DigestGenerator` — `GetLatest(ctx, date) (*digest.Digest, error)`
