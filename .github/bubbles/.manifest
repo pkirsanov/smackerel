@@ -153,6 +153,7 @@ bubbles/scripts/upkeep-calendar-selftest.sh
 bubbles/scripts/upkeep-calendar.sh
 bubbles/scripts/v4.1.0-selftest.sh
 bubbles/scripts/v5.2-selftest.sh
+bubbles/scripts/v5.3-selftest.sh
 bubbles/scripts/validation-latency-report-selftest.sh
 bubbles/scripts/validation-latency-report.sh
 bubbles/scripts/value-selection-lint-selftest.sh

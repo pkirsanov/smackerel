@@ -1,8 +1,8 @@
 {
-  "installedVersion": "5.2.1",
+  "installedVersion": "5.3.0",
   "installMode": "local-source",
   "sourceRef": "main",
-  "sourceGitSha": "065ccdf74d72b25e7fcec0b433a876634d697169",
+  "sourceGitSha": "26a1fa60cec8e0f0bfe242fe561e526763dcffb3",
   "sourceDirty": false,
-  "installedAt": "2026-06-05T00:51:30Z"
+  "installedAt": "2026-06-05T02:02:00Z"
 }

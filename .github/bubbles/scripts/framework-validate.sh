@@ -8,7 +8,28 @@ else
   REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 
+# v5.3 / G1: install-mode detection. Many selftests below were authored
+# inside the framework source repo and assume `install.sh`, `VERSION`, or
+# the framework's own `README.md`/`docs/` layout are present. From a
+# downstream install tree (which only carries `.github/bubbles/...`), those
+# assertions cannot hold. Detect the install mode once here and use it to
+# drive run_check_self_only below.
+#
+# Override: BUBBLES_FRAMEWORK_VALIDATE_MODE=source|downstream forces a mode
+# (useful for selftests that synthesize either tree).
+INSTALL_MODE="${BUBBLES_FRAMEWORK_VALIDATE_MODE:-}"
+if [[ -z "$INSTALL_MODE" ]]; then
+  if [[ -f "$REPO_ROOT/install.sh" && -f "$REPO_ROOT/VERSION" && -f "$REPO_ROOT/bubbles/scripts/cli.sh" ]]; then
+    INSTALL_MODE="source"
+  elif [[ -f "$REPO_ROOT/.github/bubbles/.install-source.json" ]]; then
+    INSTALL_MODE="downstream"
+  else
+    INSTALL_MODE="unknown"
+  fi
+fi
+
 failures=0
+skipped=0
 
 declare -a agnosticity_targets=(
   "CHANGELOG.md"
@@ -38,8 +59,29 @@ run_check() {
   echo
 }
 
+# Wrapper for selftests that only make sense when run inside the framework
+# source tree (those that invoke install.sh, walk VERSION, or assert the
+# framework's own README/docs layout). When INSTALL_MODE != "source", emit
+# a SKIP line instead of running them so downstream framework-validate
+# exits 0 with explicit accounting instead of FAIL'ing on
+# expected-to-be-missing files.
+run_check_self_only() {
+  local label="$1"
+  shift
+
+  if [[ "$INSTALL_MODE" != "source" ]]; then
+    echo "==> $label"
+    echo "SKIP: $label (framework-source-only; install-mode=$INSTALL_MODE)"
+    skipped=$((skipped + 1))
+    echo
+    return 0
+  fi
+  run_check "$label" "$@"
+}
+
 echo "Bubbles Framework Validation"
 echo "Repository: $REPO_ROOT"
+echo "Install mode: $INSTALL_MODE"
 echo
 
 run_check "Repository drift report (informational)" bash "$SCRIPT_DIR/repo-drift-report.sh" --repo-root "$REPO_ROOT"
@@ -52,6 +94,9 @@ run_check "Gates registry drift (v5.2 / F4)" bash "$SCRIPT_DIR/generate-gates-bl
 run_check "Gates registry selftest (v5.2 / F4)" bash "$SCRIPT_DIR/gates-registry-selftest.sh"
 run_check "Result-envelope validate (v5.2 / F5, advisory)" bash "$SCRIPT_DIR/result-envelope-validate.sh"
 run_check "v5.2 aggregate selftest (F1, F3, F6, F7)" bash "$SCRIPT_DIR/v5.2-selftest.sh"
+if [[ -x "$SCRIPT_DIR/v5.3-selftest.sh" ]]; then
+  run_check "v5.3 downstream-install selftest (G1)" bash "$SCRIPT_DIR/v5.3-selftest.sh"
+fi
 run_check "Workflow registry consistency" bash "$SCRIPT_DIR/workflow-registry-consistency.sh" --quiet
 run_check "Mode resolver validate" bash "$SCRIPT_DIR/mode-resolver.sh" --validate
 run_check "Mode resolver selftest" bash "$SCRIPT_DIR/mode-resolver-selftest.sh"
@@ -64,15 +109,15 @@ fi
 run_check "Instruction budget lint" bash "$SCRIPT_DIR/instruction-budget-lint.sh" "$agents_dir"
 run_check "Agent ownership lint" bash "$SCRIPT_DIR/agent-ownership-lint.sh"
 run_check "Action risk registry lint" bash "$SCRIPT_DIR/action-risk-registry-lint.sh"
-run_check "Capability ledger selftest" bash "$SCRIPT_DIR/capability-ledger-selftest.sh"
-run_check "Capability freshness selftest" bash "$SCRIPT_DIR/capability-freshness-selftest.sh"
-run_check "Competitive docs selftest" bash "$SCRIPT_DIR/competitive-docs-selftest.sh"
-run_check "Interop apply selftest" bash "$SCRIPT_DIR/interop-apply-selftest.sh"
-run_check "Release manifest freshness" bash "$SCRIPT_DIR/generate-release-manifest.sh" --check
-run_check "Release manifest selftest" bash "$SCRIPT_DIR/release-manifest-selftest.sh"
-run_check "Release manifest purity selftest" bash "$SCRIPT_DIR/release-manifest-purity-selftest.sh"
-run_check "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-selftest.sh"
-run_check "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
+run_check_self_only "Capability ledger selftest" bash "$SCRIPT_DIR/capability-ledger-selftest.sh"
+run_check_self_only "Capability freshness selftest" bash "$SCRIPT_DIR/capability-freshness-selftest.sh"
+run_check_self_only "Competitive docs selftest" bash "$SCRIPT_DIR/competitive-docs-selftest.sh"
+run_check_self_only "Interop apply selftest" bash "$SCRIPT_DIR/interop-apply-selftest.sh"
+run_check_self_only "Release manifest freshness" bash "$SCRIPT_DIR/generate-release-manifest.sh" --check
+run_check_self_only "Release manifest selftest" bash "$SCRIPT_DIR/release-manifest-selftest.sh"
+run_check_self_only "Release manifest purity selftest" bash "$SCRIPT_DIR/release-manifest-purity-selftest.sh"
+run_check_self_only "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-selftest.sh"
+run_check_self_only "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
 run_check "Finding closure selftest" bash "$SCRIPT_DIR/finding-closure-selftest.sh"
 run_check "Super surface selftest" bash "$SCRIPT_DIR/super-surface-selftest.sh"
 run_check "Workflow delegation selftest" bash "$SCRIPT_DIR/workflow-delegation-selftest.sh"
@@ -102,7 +147,7 @@ run_check "Test impact plan selftest" bash "$SCRIPT_DIR/test-impact-plan-selftes
 run_check "Trace contract guard selftest" bash "$SCRIPT_DIR/trace-contract-guard-selftest.sh"
 
 if [[ -x "$SCRIPT_DIR/runtime-lease-selftest.sh" ]]; then
-  run_check "Runtime lease selftest" bash "$SCRIPT_DIR/runtime-lease-selftest.sh"
+  run_check_self_only "Runtime lease selftest" bash "$SCRIPT_DIR/runtime-lease-selftest.sh"
 fi
 
 if [[ -x "$SCRIPT_DIR/context-compactor-selftest.sh" ]]; then
@@ -202,8 +247,12 @@ if [[ -x "$SCRIPT_DIR/intent-routes-lint.sh" && -f "$REPO_ROOT/bubbles/intent-ro
 fi
 
 if [[ "$failures" -gt 0 ]]; then
-  echo "Framework validation failed with $failures failing check(s)."
+  echo "Framework validation failed with $failures failing check(s)$([[ "$skipped" -gt 0 ]] && echo " ($skipped self-only check(s) skipped under install-mode=$INSTALL_MODE)")."
   exit 1
+fi
+
+if [[ "$skipped" -gt 0 ]]; then
+  echo "Framework validation passed ($skipped self-only check(s) skipped under install-mode=$INSTALL_MODE). Run from a framework-source tree to execute them."
 fi
 
 echo "Framework validation passed."
