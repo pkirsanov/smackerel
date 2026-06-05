@@ -330,7 +330,7 @@ Scenario: SCN-056-010 — Archive-only mode does not construct the API client
 
 ### Change Boundary (risky refactor — dispatcher edit)
 
-**Allowed:** `internal/connector/twitter/twitter.go` (dispatcher only), `internal/connector/twitter/twitter_test.go` (regression additions). The planned new testdata fixture `internal/connector/twitter/testdata/api/hybrid_overlap.json` (originally listed here) was not required — the hybrid-overlap regression assertion is fully covered by inline test fixtures in `internal/connector/twitter/twitter_test.go`.
+**Allowed:** `internal/connector/twitter/twitter.go` (dispatcher only), `internal/connector/twitter/twitter_test.go` (regression additions). The planned new testdata fixture internal/connector/twitter/testdata/api/hybrid_overlap.json (originally listed here) was not required — the hybrid-overlap regression assertion is fully covered by inline test fixtures in `internal/connector/twitter/twitter_test.go`.
 
 **Excluded:** all other files; no signature changes to the `connector.Connector` interface; no changes to `archive.go`, `threads.go`, `normalizer.go`.
 

@@ -502,7 +502,7 @@ Scenario: SCN-037-021 In-flight invocation completes against the version it star
 - DB migrations: `agent_traces` and `agent_tool_calls` per design §6.1, with all four indexes.
 - New `internal/agent/tracer.go`: `Begin`, `RecordTurn`, `RecordToolCall`, `RecordRejection`, `RecordToolError`, `RecordReturnInvalid`, `End`. Writes denormalized snapshot in `tool_calls jsonb[]` plus normalized rows.
 - New `internal/agent/replay.go`: load trace, build fake registry from fixtures keyed by `sha256(canonicalize(arguments))`, replay loop, structured diff.
-- New `cmd/core/cmd_agent_replay.go`: `smackerel agent replay <trace_id>` subcommand (PASS exit 0, FAIL exit 1, ERROR exit 2).
+- New `cmd/core/cmd_agent.go` `replay` subcommand: `smackerel agent replay <trace_id>` (PASS exit 0, FAIL exit 1, ERROR exit 2). Originally planned as a standalone cmd/core/cmd_agent_replay.go file; consolidated into the shared `cmd_agent.go` dispatcher alongside the other `agent` subcommands.
 - Hot-reload swap: in-flight invocations hold a pointer to the scenario record they began with (BS-019).
 - Async trace write: ordering preserved per `trace_id` but does not block the executor's hot path.
 
@@ -511,7 +511,7 @@ Scenario: SCN-037-021 In-flight invocation completes against the version it star
 | Layer | Scenario | File | Type |
 |-------|----------|------|------|
 | unit | Tracer redacts and serializes correctly; denormalized snapshot matches normalized rows | `internal/agent/tracer_test.go` | unit |
-| integration | Real PostgreSQL; happy-path invocation produces queryable trace; all indexes used per `EXPLAIN` | `tests/integration/agent/tracer_test.go` | integration |
+| integration | Real PostgreSQL; happy-path invocation produces queryable trace; all indexes used per `EXPLAIN` | `internal/agent/tracer_test.go` (covers unit + integration paths in one file; originally planned as a separate tests/integration/agent/tracer_test.go but the live-stack PostgreSQL exercises are gated by the `integration` build tag inside the same file) | integration |
 | integration | Hot-reload mid-flight; in-flight uses old version, new uses new version (BS-019) | `tests/integration/agent/hotreload_test.go` | integration |
 | live-stack e2e | Run a real scenario end-to-end; replay against same fixtures returns PASS exit 0 (SCN-037-019 BS-013 happy) | `tests/e2e/agent/replay_pass_test.go` | e2e-api |
 | live-stack e2e | Mutate scenario prompt; replay returns FAIL with structured diff exit 1 (SCN-037-020 BS-013 sad) | `tests/e2e/agent/replay_fail_test.go` | e2e-api |
