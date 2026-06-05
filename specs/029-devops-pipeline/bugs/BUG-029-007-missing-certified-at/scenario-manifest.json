@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-029-007-missing-certified-at",
+  "parentSpec": "029-devops-pipeline",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane artifact-only reconcile; scenarios drive guard-verification proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "state-transition-guard.sh re-runs captured in report.md: red at 1 BLOCK (G088 missing certifiedAt) pre-mutation, green at 0 BLOCKs post-mutation."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-029-007-001",
+      "scope": "Scope 1",
+      "title": "state-transition-guard goes from 1 BLOCK to 0 BLOCKs at HEAD",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-30-post-cert-spec-edit-gate"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-recertify-spec-029-and-add-top-level-certifiedat-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Check 30 emits 0 BLOCKs for spec 029 after the BUG-029-007 mutation set is applied.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-007-002",
+      "scope": "Scope 1",
+      "title": "Top-level certifiedAt is parseable RFC3339 UTC AFTER the OPS-001 edit",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/post-cert-spec-edit-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/post-cert-spec-edit-guard.sh", "function": "manual:certifiedAt-parse-and-ordering"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-recertify-spec-029-and-add-top-level-certifiedat-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "post-cert-spec-edit-guard.sh exits 0 with PASS line citing certifiedAt=2026-06-05T22:00:00Z; the OPS-001 commit 19b31c0a is classified as PRE-certification.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-007-003",
+      "scope": "Scope 1",
+      "title": "bubbles.spec-review CURRENT entry satisfies the guard's CURRENT-detection logic",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/post-cert-spec-edit-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/post-cert-spec-edit-guard.sh", "function": "manual:CURRENT-detection-jq-filter"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-recertify-spec-029-and-add-top-level-certifiedat-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "post-cert-spec-edit-guard.sh PASS line includes currentSpecReview=2026-06-05T22:00:00Z (latest_current_review_epoch >= certified_epoch).",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-007-004",
+      "scope": "Scope 1",
+      "title": "Persistent regression cover stays GREEN by construction",
+      "requiredTestType": "regression-e2e",
+      "testFiles": [
+        "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+        "internal/deploy/build_workflow_vuln_gate_contract_test.go",
+        "internal/deploy/compose_contract_test.go",
+        "internal/deploy/dev_compose_default_fallback_test.go",
+        "internal/api/health_test.go"
+      ],
+      "linkedTests": [
+        {"file": "internal/deploy/ci_workflow_no_parallel_publish_test.go", "function": "TestCIWorkflow_NoParallelPublishPath_PostBUG029004"},
+        {"file": "internal/deploy/ci_workflow_no_parallel_publish_test.go", "function": "TestCIWorkflow_AdversarialDockerPushReintroduced"},
+        {"file": "internal/deploy/ci_workflow_no_parallel_publish_test.go", "function": "TestCIWorkflow_AdversarialGhcrTaggingReintroduced"},
+        {"file": "internal/deploy/ci_workflow_no_parallel_publish_test.go", "function": "TestCIWorkflow_AdversarialGhcrLoginReintroduced"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_VersionAndCommitHash"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_VersionVisibleWithAuth"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_VersionHiddenWithoutAuth"},
+        {"file": "internal/deploy/dev_compose_default_fallback_test.go", "function": "TestDevComposeContract_NoUnauthorizedDefaultFallbacks"},
+        {"file": "internal/deploy/dev_compose_default_fallback_test.go", "function": "TestDevComposeContract_FailLoudVolumeMounts"},
+        {"file": "internal/deploy/dev_compose_default_fallback_test.go", "function": "TestComposeEnvOverrides_ContainerInternalConstants"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-recertify-spec-029-and-add-top-level-certifiedat-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "go test -count=1 -run 'TestCIWorkflow|TestBuildWorkflow|TestComposeContract|TestDevCompose|TestVersionHandler|TestHealthHandler' ./internal/deploy/... ./internal/api/... returns ok with 0 failures at HEAD e05aef1b + post-mutation HEAD.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-007-005",
+      "scope": "Scope 1",
+      "title": "Closure commit boundary is strict",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-17-commit-prefix-allowlist"}
+      ],
+      "evidenceRefs": [
+        "report.md#audit-evidence",
+        "scopes.md#scope-1-recertify-spec-029-and-add-top-level-certifiedat-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "state-transition-guard.sh Check 17 enforces commit prefix; pre-commit `git diff --cached --name-status` shows ONLY paths under specs/029-devops-pipeline/; commit prefix is bubbles(029/bug-029-007); workspace pre-existing dirty paths under other specs are intentionally left alone.",
+      "changeType": "added"
+    }
+  ]
+}

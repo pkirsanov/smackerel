@@ -417,3 +417,73 @@ All BUG-029-006 mutations are staged exclusively under `specs/029-devops-pipelin
 - **Validation:** `bubbles.validate` re-runs `internal/deploy/*_test.go` + `internal/api/health_test.go` + `ml/tests/` (173 pytest) against HEAD `495f1753` — ALL GREEN. BUG-029-006 alters zero runtime behavior.
 - **Audit:** `bubbles.audit` confirms 38→0 BLOCK drop via `state-transition-guard.sh`, plus PASSED artifact-lint and traceability-guard against both `specs/029-devops-pipeline/` and `specs/029-devops-pipeline/bugs/BUG-029-006-reconcile-artifact-drift/`. Zero unrelated paths staged.
 - **Chaos:** scenario-first tdd discipline — BUG-029-006's 6 Gherkin scenarios were authored BEFORE the parent spec mutations, and `state-transition-guard.sh` was the executable red→green proof (38 BLOCKs red → 0 BLOCKs green). The adversarial cases at `internal/deploy/ci_workflow_no_parallel_publish_test.go::TestCIWorkflow_Adversarial*` continue to red-fail the moment any parallel-publish regression is reintroduced into `.github/workflows/ci.yml`.
+
+---
+
+### BUG-029-007 Recertification Evidence (Sweep Round 7 of 20)
+
+**Discovered:** 2026-06-05 (stochastic-quality-sweep `sweep-2026-06-05-r20`, trigger=`regression`, mapped child workflow=`regression-to-doc`, executionModel=`parent-expanded-child-mode`)
+**Closure HEAD baseline:** `e05aef1b` (HEAD at probe time)
+**Closure date:** 2026-06-05
+**Status:** resolved
+
+#### Finding
+
+`state-transition-guard.sh specs/029-devops-pipeline` returned 1 🔴 BLOCK at Check 30 / Gate G088 (Post-Certification Spec Edit Detection): `post-cert-spec-edit-guard: G088 requires top-level certifiedAt for certified spec specs/029-devops-pipeline (status=done)`. Root cause: spec 029's `state.json` lacked a top-level `certifiedAt` field, AND the workspace-wide OPS-001 banner-sweep commit `19b31c0a9a67d38443e47a5823cd7baf42654094` ("bubbles(ops/OPS-001): sweep spec.md status banners across 54 certified specs", 2026-05-28T05:07:50+00:00) had touched `specs/029-devops-pipeline/spec.md` after the BUG-029-006 reconcile (2026-05-24T18:12:35Z) brought spec 029 to `status: done`. The OPS-001 edit was cosmetic — it inserted the canonical `**Status:** Done (certified per state.json)` banner after the H1 — and changed zero planning truth, but G088 mechanically requires either fresh recertification or `requiresRevalidation: true` whenever any commit touches `spec.md|design.md|scopes.md|scopes/_index.md|scopes/*/scope.md` after the recorded `certifiedAt`.
+
+#### Functional Regression Surface (zero drift)
+
+The persistent regression cover for spec 029 was re-run against HEAD `e05aef1b` and confirmed GREEN:
+
+```text
+$ go test -count=1 -run 'TestCIWorkflow|TestBuildWorkflow|TestComposeContract|TestDevCompose|TestVersionHandler|TestHealthHandler' ./internal/deploy/... ./internal/api/... 2>&1 | tail -5
+ok      github.com/smackerel/smackerel/internal/deploy  0.044s
+ok      github.com/smackerel/smackerel/internal/api     1.322s
+ok      github.com/smackerel/smackerel/internal/api/admin/extensiondevices     0.009s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/api/connectors/extension       0.013s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/api/graphapi    0.016s [no tests to run]
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+`internal/deploy/ci_workflow_no_parallel_publish_test.go`, `internal/deploy/build_workflow_vuln_gate_contract_test.go`, `internal/deploy/compose_contract_test.go`, `internal/deploy/dev_compose_default_fallback_test.go`, and `internal/api/health_test.go` all GREEN at HEAD `e05aef1b`.
+
+#### Reconcile Mutation
+
+- `specs/029-devops-pipeline/state.json` gained top-level `"certifiedAt": "2026-06-05T22:00:00Z"` and `"certifiedBy": "bubbles.workflow"`.
+- `state.json::executionHistory` gained a new entry with `agent: "bubbles.spec-review"`, `reviewStatus: "CURRENT"`, `runCompletedAt: "2026-06-05T22:00:00Z"`, satisfying `post-cert-spec-edit-guard.sh`'s CURRENT-detection jq filter.
+- `state.json::resolvedBugs[]` gained an entry for `BUG-029-007-missing-certified-at` with `sweepRound: 7`, `trigger: "regression"`, `mappedChildMode: "regression-to-doc"`.
+- `state.json::lastUpdatedAt` advanced from `2026-05-24T00:00:00Z` to `2026-06-05T22:00:00Z`.
+
+#### bubbles.spec-review CURRENT Verification Summary
+
+Parent-expanded `bubbles.spec-review` cross-checked spec 029's 7 scopes' planning truth (`spec.md`/`design.md`/`scopes.md`) against the live runtime surfaces at HEAD `e05aef1b`:
+
+| Scope | Planning truth surface | Live runtime surface | Verdict |
+|-------|------------------------|----------------------|---------|
+| 1 — CI Workflow | `.github/workflows/ci.yml` | 199 lines; action SHAs pinned; lint-and-test + build + integration jobs intact | CURRENT |
+| 2 — Image Versioning | `Dockerfile` | Multi-stage build with `VERSION`/`COMMIT_HASH`/`BUILD_TIME` LDFLAGS | CURRENT |
+| 3 — Branch Protection | `docs/Branch_Protection.md` | Branch protection rules documented for `main` | CURRENT |
+| 4 — Build Metadata | `internal/api/health.go` + `internal/api/version.go` | ldflags wiring + OCI labels in health response | CURRENT |
+| 5 — ML Image Optimization | `ml/Dockerfile` | Multi-stage CPU-only torch wheel build | CURRENT |
+| 6 — env_file Migration | `docker-compose.yml` + `scripts/commands/config.sh` | env_file directive; SST-managed vars only | CURRENT |
+| 7 — GHCR Publish | `.github/workflows/build.yml` + `deploy/compose.deploy.yml` | spec 047 Build-Once Deploy-Many overlay intact; cosign keyless + SBOM + SLSA + Trivy gate | CURRENT |
+
+#### Red→Green Phase Summary
+
+| Phase | Surface | Pre-mutation (red) | Post-mutation (green) |
+|-------|---------|-------------------|----------------------|
+| post-cert-spec-edit-guard | spec 029 | exit 2: "G088 requires top-level certifiedAt" | exit 0: PASS with certifiedAt=2026-06-05T22:00:00Z + currentSpecReview=2026-06-05T22:00:00Z |
+| state-transition-guard | spec 029 | 1 BLOCK Check 30 / G088 + 2 WARN | 0 BLOCKs + 2 WARN (unchanged, not in BUG-029-007's mutation surface) |
+| state-transition-guard | BUG-029-007 packet | n/a (new packet) | 0 BLOCKs at HEAD `e05aef1b` + working-tree mutations |
+| artifact-lint | spec 029 + BUG-029-007 packet | n/a | PASSED |
+| traceability-guard | spec 029 + BUG-029-007 packet | n/a | PASSED |
+| Go contract tests | `internal/deploy/*_test.go` + `internal/api/health_test.go` | GREEN (was already passing) | GREEN |
+
+Full red→green block and per-scenario evidence in `specs/029-devops-pipeline/bugs/BUG-029-007-missing-certified-at/report.md`.
+
+### Validation, Audit, Regression Evidence (BUG-029-007)
+
+- **Validation:** `bubbles.validate` confirms 1→0 G088 BLOCK drop via `state-transition-guard.sh` against `specs/029-devops-pipeline`; `artifact-lint.sh` and `traceability-guard.sh` PASSED for both parent spec and BUG packet.
+- **Audit:** `bubbles.audit` confirms `git diff --cached --name-status` lists ONLY paths under `specs/029-devops-pipeline/`; closure commit prefix `bubbles(029/bug-029-007)`; workspace pre-existing dirty paths under other specs (003, 009, 016, 037, 067, bookmarks, weather, tests/integration/policy) are NOT staged and intentionally left alone.
+- **Regression:** `bubbles.regression` re-runs `internal/deploy/{ci_workflow_no_parallel_publish,build_workflow_vuln_gate_contract,compose_contract,dev_compose_default_fallback}_test.go` + `internal/api/health_test.go` against HEAD `e05aef1b` — ALL GREEN. BUG-029-007 changes zero runtime behavior; persistent regression cover stays GREEN by construction.

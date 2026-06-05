@@ -3,6 +3,8 @@
   "featureDir": "specs/029-devops-pipeline",
   "featureName": "DevOps Pipeline",
   "status": "done",
+  "certifiedAt": "2026-06-05T22:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -264,6 +266,18 @@
       "runEndedAt": "2026-05-24T00:00:00Z",
       "summary": "Sweep round 23 reconcile security: ran live-surface probe across spec 029's surfaces \u2014 ZERO new security findings. The GHCR publish path (spec 047 overlay) is cosign keyless-signed + Rekor-attested + SBOM/SLSA + Trivy-gated. The env_file pipeline does not embed secrets in compose (env_file at runtime only). The Dockerfile build args (SMACKEREL_VERSION/COMMIT/BUILD_TIME) are public release metadata. ExecutionModel: parent-expanded-specialist (no code changes \u2014 spec 029's security posture is already validated).",
       "executionModel": "parent-expanded-specialist"
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "reviewStatus": "CURRENT",
+      "runStartedAt": "2026-06-05T22:00:00Z",
+      "runCompletedAt": "2026-06-05T22:00:00Z",
+      "runEndedAt": "2026-06-05T22:00:00Z",
+      "executionModel": "parent-expanded-specialist",
+      "summary": "Sweep round 7 of 20 reconcile spec-review (BUG-029-007 closure): cross-checked spec 029's 7 scopes' planning truth (spec.md/design.md/scopes.md) against the live runtime surfaces (.github/workflows/ci.yml, .github/workflows/build.yml, Dockerfile, ml/Dockerfile, docker-compose.yml, deploy/compose.deploy.yml, scripts/commands/config.sh, docs/Branch_Protection.md, docs/Deployment.md, docs/Operations.md, internal/api/health.go, internal/deploy/*) at HEAD e05aef1b \u2014 all CURRENT. Persistent regression cover (internal/deploy/ci_workflow_no_parallel_publish_test.go, internal/deploy/build_workflow_vuln_gate_contract_test.go, internal/deploy/compose_contract_test.go, internal/deploy/dev_compose_default_fallback_test.go, internal/api/health_test.go, ml/tests/) stays GREEN by construction. artifact-lint.sh and traceability-guard.sh both PASSED for specs/029-devops-pipeline. Closes BUG-029-007 (G088 missing top-level certifiedAt after OPS-001 banner-sweep post-cert edit at 19b31c0a 2026-05-28T05:07:50+00:00). ExecutionModel: parent-expanded-specialist (state-transition-guard.sh Gate G088 closure)."
     }
   ],
   "activeBugs": [],
@@ -280,10 +294,23 @@
       "trigger": "devops",
       "mappedChildMode": "devops-to-doc",
       "summary": "Sweep round 23 of sweep-2026-05-23-r30 (trigger=devops, mapped child workflow=devops-to-doc) found zero functional devops drift but 38 state-transition-guard.sh BLOCKs caused by legacy artifact governance drift. Reconcile path: artifact-only mutations under spec 029 plus full BUG-029-006 packet. Closed all 38 BLOCKs (G057\u00d71, G060\u00d71, G026\u00d73, G022\u00d75, G022-ext\u00d71, G016\u00d722, G053\u00d71, Check 17\u00d71, G040\u00d73). Zero runtime behavior changed; persistent regression cover at internal/deploy/*_test.go + internal/api/health_test.go + ml/tests/ stays GREEN at HEAD 495f1753."
+    },
+    {
+      "bugId": "BUG-029-007-missing-certified-at",
+      "path": "specs/029-devops-pipeline/bugs/BUG-029-007-missing-certified-at",
+      "status": "resolved",
+      "resolvedAt": "2026-06-05T22:00:00Z",
+      "workflowMode": "bugfix-fastlane",
+      "executionModel": "parent-expanded-child-mode",
+      "sweepId": "sweep-2026-06-05-r20",
+      "sweepRound": 7,
+      "trigger": "regression",
+      "mappedChildMode": "regression-to-doc",
+      "summary": "Sweep round 7 of 20 (trigger=regression, mapped child workflow=regression-to-doc) closed 1 state-transition-guard.sh BLOCK (Check 30 / Gate G088 missing top-level certifiedAt after OPS-001 banner-sweep post-cert edit at 19b31c0a 2026-05-28T05:07:50+00:00). Reconcile path: state.json top-level certifiedAt=2026-06-05T22:00:00Z + bubbles.spec-review CURRENT executionHistory entry + parent report.md Recertification Evidence subsection + BUG-029-007 packet (8 artifacts). Zero runtime behavior changed; persistent regression cover at internal/deploy/{ci_workflow_no_parallel_publish,build_workflow_vuln_gate_contract,compose_contract,dev_compose_default_fallback}_test.go + internal/api/health_test.go + ml/tests/ stays GREEN at HEAD e05aef1b."
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T00:00:00Z",
+  "lastUpdatedAt": "2026-06-05T22:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
