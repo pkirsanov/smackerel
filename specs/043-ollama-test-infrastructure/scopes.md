@@ -25,7 +25,7 @@ Each scope ends with a working state. Test plan rows must reference real test fi
 |---|------|----------|-------|-------------|--------|
 | 1 | Config + Compose Foundation | `config/smackerel.yaml`, `scripts/commands/config.sh`, `docker-compose.yml` | unit, integration | 12 SST keys live; ollama service uses `${OLLAMA_IMAGE}`; zero hardcoded values | [x] Done |
 | 2 | Happy-Path Test + Pull Script | `tests/e2e/agent/`, `scripts/commands/ollama-test-pull.sh` | e2e, adversarial | `TestAgentHappyPath_PlanToolSynthesis` runs against live Ollama; deterministic output; fail-loud on unavailable | [ ] Not started |
-| 3 | Wire Into `./smackerel.sh test e2e` + Cross-Spec Closure | `scripts/commands/test.sh`, `specs/037-llm-agent-tools/state.json`, `specs/037-llm-agent-tools/scopes.md` | e2e, smoke | `SMACKEREL_TEST_OLLAMA=1` gate; spec 037 deferred-infra modifier dropped; MIT-037-OLLAMA-001 marked resolved | [ ] Not started |
+| 3 | Wire Into `./smackerel.sh test e2e` + Cross-Spec Closure | `scripts/runtime/go-e2e.sh` (originally planned as `scripts/commands/test.sh`; runtime CLI refactor moved e2e dispatch to per-language scripts under `scripts/runtime/`), `specs/037-llm-agent-tools/state.json`, `specs/037-llm-agent-tools/scopes.md` | e2e, smoke | `SMACKEREL_TEST_OLLAMA=1` gate; spec 037 deferred-infra modifier dropped; MIT-037-OLLAMA-001 marked resolved | [ ] Not started |
 
 ---
 
@@ -209,7 +209,7 @@ Scenario: SCN-OLLAMA-007 Closing this spec closes MIT-037-OLLAMA-001 and unblock
 
 ### Implementation Plan (no code)
 
-- Update `scripts/commands/test.sh` (or wherever `./smackerel.sh test e2e` dispatches) to detect `SMACKEREL_TEST_OLLAMA=1` env-var and:
+- Update the `./smackerel.sh test e2e` dispatch (now at `scripts/runtime/go-e2e.sh` — originally planned at `scripts/commands/test.sh` but the runtime CLI refactor moved it to per-language scripts under `scripts/runtime/`) to detect `SMACKEREL_TEST_OLLAMA=1` env-var and:
   - Add `--profile ollama` to the compose-up call.
   - Run `scripts/commands/ollama-test-pull.sh` after compose readiness probe.
   - Run the e2e suite including `tests/e2e/agent/`.

@@ -52,6 +52,10 @@ import (
 // archive/, NNNN placeholders, and <template> tokens).
 // 2026-06-05 (session 3): tightened to 399 after bulk-fix of migration
 // consolidation drift across specs 002, 007, 008, 011, 025, 027, 028.
+// 2026-06-05 (session 3 quick-win batch): tightened to 394 after fixes
+// across 10 specs (023, 031, 043, 056, 060, 065, 071, 072, 077, 080) —
+// each closing 1 broken path via renames/rephrasings + the new
+// internal/auth/docs_test.go for spec 060 SCN-060-019/020.
 //
 // Lowering protocol:
 //  1. Pick a spec (or set of specs) to clean.
@@ -60,7 +64,7 @@ import (
 //  3. Re-run this test; it will report the new actual count.
 //  4. Lower this constant to match (or below) the new actual count.
 //  5. Commit both changes together so the ratchet stays tight.
-const maxAllowedBrokenPaths = 399
+const maxAllowedBrokenPaths = 394
 
 var pathRegex = regexp.MustCompile("`((?:internal|cmd|tests|ml|web|deploy|config|scripts)/[\\w/.-]+\\.(go|py|md|yaml|yml|json|js|ts|tsx|dart|sh|sql|toml))`")
 

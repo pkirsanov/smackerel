@@ -75,9 +75,9 @@ Scenario: SCN-LST-006 Test cleanup helpers register t.Cleanup callbacks and emit
   $ grep -nE '^  test:|smackerel-test|47001|47004' config/smackerel.yaml | head -10
   ```
 - [x] `./smackerel.sh test integration` starts test stack, runs shell health check, then runs Go integration tests with `--network host` and SST-derived env vars — **Phase:** implement
-  Evidence: `scripts/commands/test.sh` integration target
+  Evidence: `scripts/runtime/go-integration.sh` (the `./smackerel.sh test integration` dispatch was migrated from the originally-planned `scripts/commands/test.sh` to the per-language scripts under `scripts/runtime/` during the runtime CLI refactor; the `--network host` + SST env-var wiring is now in `go-integration.sh`)
   ```
-  $ grep -nE 'test integration|integration_test|--network host' scripts/commands/test.sh | head -5
+  $ grep -nE 'test integration|integration_test|--network host' scripts/runtime/go-integration.sh | head -5
   ```
 - [x] Scenario "SCN-LST-006 Test cleanup helpers register t.Cleanup callbacks and emit unique IDs": Test cleanup via `t.Cleanup()` and `cleanupArtifact`/`cleanupList`/`cleanupAnnotation` helpers in `tests/integration/helpers_test.go` — **Phase:** implement
   Evidence: `tests/integration/helpers_test.go` cleanup helpers

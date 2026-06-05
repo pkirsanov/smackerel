@@ -255,7 +255,7 @@ Scenario: SCN-077-A07 — Harness uses the disposable test stack, never the pers
 ```gherkin
 Scenario: SCN-077-A02 — New .spec.ts under web/pwa/tests is auto-discovered
   Given the harness is wired per Scope 1
-  When a new file `web/pwa/tests/foo_auto_discovered.spec.ts` containing a single passing test is added
+  When a new file `web/pwa/tests/<new-spec-name>.spec.ts` containing a single passing test is added
   And `./smackerel.sh test e2e-ui` runs
   Then the new test is executed without any change to `playwright.config.ts` or `smackerel.sh`
 
