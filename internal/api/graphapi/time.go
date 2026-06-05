@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"sort"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -86,7 +88,7 @@ func (h *TimeHandlers) GetTime(w http.ResponseWriter, r *http.Request) {
 	}
 	if to.Sub(from) > time.Duration(maxDays)*24*time.Hour {
 		WriteError(w, http.StatusBadRequest, CodeInvalidWindow, "window",
-			"time window exceeds the configured maximum of "+itoa(maxDays)+" days")
+			"time window exceeds the configured maximum of "+strconv.Itoa(maxDays)+" days")
 		return
 	}
 
@@ -119,41 +121,8 @@ func groupByDayUTC(rows []TimeArtifact) []TimeDay {
 		out[i].Artifacts = append(out[i].Artifacts, r)
 	}
 	// Date strings are zero-padded, so lexicographic == chronological.
-	sortTimeDays(out)
+	sort.Slice(out, func(i, j int) bool { return out[i].Date < out[j].Date })
 	return out
-}
-
-func sortTimeDays(days []TimeDay) {
-	// Simple insertion sort — typical N is small (≤ TimeWindowMaxDays).
-	for i := 1; i < len(days); i++ {
-		j := i
-		for j > 0 && days[j-1].Date > days[j].Date {
-			days[j-1], days[j] = days[j], days[j-1]
-			j--
-		}
-	}
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	buf := [20]byte{}
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
 }
 
 // pgxTimeSource is the production TimeSource backed by Postgres.

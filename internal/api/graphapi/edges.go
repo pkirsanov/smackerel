@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -130,8 +131,7 @@ func parseEdgesPagination(r *http.Request, limits Limits, codec *CursorCodec) (l
 	q := r.URL.Query()
 	reqLimit := 0
 	if raw := q.Get("limit"); raw != "" {
-		var n int
-		_, scanErr := fmt.Sscanf(raw, "%d", &n)
+		n, scanErr := strconv.Atoi(raw)
 		if scanErr != nil {
 			return 0, 0, ErrLimitExceeded.WithField("limit")
 		}
