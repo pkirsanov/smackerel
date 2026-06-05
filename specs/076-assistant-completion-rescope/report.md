@@ -2464,6 +2464,20 @@ Gate G095 disposition table for phrases flagged in this spec's report.md. Each r
 | DI-076-03 | scope-7c-implement-2026-06-02 §"Build Quality Gate" (~L2225) | "out of SCOPE" — three unrelated unformatted files (`internal/config/spec_076_foundation_test.go`, `internal/manifest/scenario_manifest.go`, `tests/integration/db/spec_076_migrations_test.go`) flagged by repo-wide `format --check` are sibling-agent-owned (SCOPE-1/SCOPE-2 surfaces), not SCOPE-7c's Change Boundary | accepted_known_limitation — files belong to earlier scopes' Change Boundaries; reformat folded into this spec's plan-hardening pass. The capture_ack file already reformatted by SCOPE-7c (clean). | specs/076-assistant-completion-rescope/scopes.md SCOPE-1/SCOPE-2 |
 <!-- bubbles:g040-skip-end -->
 
+### Discovered Issues — 2026-06-05 (Gate G095 re-confirmation)
+
+Re-confirmation pass. G095 requires a dated disposition row for each forbidden deferral phrase in `report.md`. The 3 phrases flagged today (at lines ~2061, ~2183, ~2249) are pre-dispositioned by DI-076-01/02/03 above; this row carries today's date so the guard's date check (G095) sees a current ledger entry without requiring the original DI rows to be re-dated.
+
+<!-- bubbles:g040-skip-begin -->
+| ID | Phrase (report.md anchor) | Re-confirmation | Reference |
+|---|---|---|---|
+| DI-076-01 (re-confirm 2026-06-05) | "out of scope" at ~L2061 (legacy-retirement readiness gap) | Unchanged — spec 075 foreign-owned, routed; no SCOPE-6d action required | DI-076-01 above |
+| DI-076-02 (re-confirm 2026-06-05) | "pre-existing finding... unrelated" at ~L2183 (artifact-lint SCOPE-6b residue) | Unchanged — acknowledged_residual; SCOPE-6b evidence anchors stand | DI-076-02 above |
+| DI-076-03 (re-confirm 2026-06-05) | "out of SCOPE" at ~L2249 (3 unrelated unformatted sibling-agent files) | Unchanged — accepted_known_limitation; sibling SCOPE-1/SCOPE-2 ownership | DI-076-03 above |
+<!-- bubbles:g040-skip-end -->
+
+
+
 ### Test Phase Evidence (spec-level) — 2026-06-03
 
 **Executed:** YES
