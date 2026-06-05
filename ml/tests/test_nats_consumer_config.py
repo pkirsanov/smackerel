@@ -87,8 +87,11 @@ def test_subscribe_all_threads_consumer_config(monkeypatch):
         cfg = call.kwargs.get("config")
         assert isinstance(cfg, ConsumerConfig), f"pull_subscribe called without ConsumerConfig: {call.kwargs}"
         assert cfg.max_deliver == 5
-        # nats-py represents ack_wait in nanoseconds (Go time.Duration shape).
-        assert cfg.ack_wait == 120 * 1_000_000_000
+        # nats-py ConsumerConfig.ack_wait is a float in SECONDS; the
+        # library performs the seconds→nanoseconds conversion before sending
+        # the JSON to JetStream. Pre-multiplying by 1e9 here used to overflow
+        # int64 on the wire (err_code=10025 "invalid JSON").
+        assert cfg.ack_wait == 120.0
 
     assert client._consumer_max_deliver == 5
     assert client._consumer_ack_wait_seconds == 120
