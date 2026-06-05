@@ -188,19 +188,28 @@
       {
         "id": "DI-058-01-playwright-uds",
         "parent": "DI-058-01",
-        "status": "open",
+        "status": "partially_resolved",
         "severity": "low",
         "owner": "bubbles.plan",
-        "lastVerifiedAt": "2026-06-03",
-        "note": "Playwright-harness-gated DoD rows still pending: F-057-V-001 extension Playwright harness, HTMX admin page, live post-merge cosign verify-blob. Confirmed 2026-06-03: no extensions/chrome-bridge/test/e2e/ directory."
+        "lastVerifiedAt": "2026-06-05",
+        "note": "Cross-cutting Playwright harness DISCHARGED 2026-06-05 via spec 077 SCOPE-3 (F-057-V-001 resolved). web/pwa/tests/ + web/pwa/playwright.config.ts + ./smackerel.sh test e2e-ui dispatcher wired to disposable Compose project smackerel-test-e2e-ui. Remaining: MV3-extension-specific harness under extensions/chrome-bridge/test/e2e/ (drives Chrome extension with MV3 sideload + service worker + page-context capture). Tracked by BUG-058-EXTERNAL-INFRA-MISSING BLOCKER-1 (status: partially_resolved); likely scoped together with BLOCKER-4 MV3 sideload automation."
       },
       {
         "id": "DI-058-03",
-        "status": "open",
+        "status": "partially_resolved",
         "severity": "low",
         "owner": "bubbles.plan",
-        "lastVerifiedAt": "2026-06-03",
-        "note": "Playwright spec files bookmark_roundtrip.spec.ts and auth_failure.spec.ts still absent from repo. Blocked on F-057-V-001."
+        "lastVerifiedAt": "2026-06-05",
+        "note": "bookmark_roundtrip.spec.ts and auth_failure.spec.ts still absent from extensions/chrome-bridge/test/e2e/ (verified 2026-06-05). However, the cross-cutting blocker F-057-V-001 was DISCHARGED 2026-06-05 — Playwright harness now exists under web/pwa/tests/ for the PWA surface; MV3-extension-specific specs remain pending. Tracked by BUG-058-EXTERNAL-INFRA-MISSING BLOCKER-1 residual + BLOCKER-4."
+      },
+      {
+        "id": "DI-058-08",
+        "status": "resolved",
+        "severity": "low",
+        "resolvedAt": "2026-06-05",
+        "owner": "bubbles.goal",
+        "note": "BUG-058-EXTERNAL-INFRA-MISSING BLOCKER-2 (live-Postgres integration harness for Scope 2 PostgresDedupStore.ResolveOrPublish race-loss + Scope 5 admin devices aggregation) RESOLVED 2026-06-05. Three live tests authored and PASS against the live test stack: tests/integration/extension_dedup_race_test.go (TestPostgresDedupStore_ResolveOrPublish_RaceLossReturnsWinnerArtifact + TestPostgresDedupStore_ResolveOrPublish_FastPathHitIncrementsCount) + tests/integration/extension_admin_devices_test.go (TestExtensionDevices_AggregateDevices_LiveAggregationRespectsContract). Same session also fixed a pre-existing ML sidecar regression in ml/app/nats_client.py (double-conversion of ack_wait to nanoseconds caused JetStream subscribe to fail err_code=10025).",
+        "evidenceRef": "specs/058-chrome-extension-bridge/bugs/BUG-058-EXTERNAL-INFRA-MISSING/bug.md#reconcile-2026-06-05-bubblesgoal"
       },
       {
         "id": "DI-058-07",
