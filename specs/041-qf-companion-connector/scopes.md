@@ -1070,7 +1070,7 @@ Scenario: SCN-SM-041-024 Failure Handling Drops 4xx Without Retry Retries 5xx Wi
 ### Implementation Plan
 
 - Introduce a `Scope 6` packet engagement signal exporter under `internal/connector/qfdecisions/engagement.go` with a typed `PacketEngagementSignal` envelope mirroring design.md §Source Surfaces and §Signal Envelope and a `Buffer` struct holding a bounded in-memory ring with the 10s timer and 100-event flush thresholds.
-- Wire engagement capture hooks into the three render surfaces (`internal/web/render/qf_packet_view.go` or the existing trust-render integration point, `internal/digest/render/qf_packet_tile.go`, and `internal/telegram/render/qf_packet_message.go`) so opened/dwell/dismissed/snoozed/deep_linked/shared events flow into the exporter without changing the visible rendering, the trust-object filter, the signed-link branch, the preferred-surface routing decision, or the artifact metadata.
+- Wire engagement capture hooks into the three render surfaces (`internal/api/qf_render.go` — originally planned as a separate internal/web/render/qf_packet_view.go but the QF web packet rendering ships from the API package, `internal/digest/generator.go` — originally planned as a separate internal/digest/render/qf_packet_tile.go but the QF tile renders inline inside the digest generator's `getQFPackets` flow, and `internal/telegram/render/qf_packet_message.go`) so opened/dwell/dismissed/snoozed/deep_linked/shared events flow into the exporter without changing the visible rendering, the trust-object filter, the signed-link branch, the preferred-surface routing decision, or the artifact metadata.
 - Read the user's `engagement_telemetry` privacy preference at event-capture time (not flush time) using the existing privacy-settings reader; bypass the buffer entirely when the preference is `off` so consent state reflects what was true when the user acted.
 - Gate the entire exporter on the persisted Scope 2 capability response field `engagement_signal_supported`; when `false`, the exporter MUST disable the buffer at construction time so zero signals are captured, enqueued, or flushed.
 - Generate the `signal_id` as a UUIDv7 at event-capture time so QF can use it verbatim as an idempotency key on HTTP 201, HTTP 200 repeat, and HTTP 409 reuse responses.
@@ -1084,8 +1084,8 @@ Scenario: SCN-SM-041-024 Failure Handling Drops 4xx Without Retry Retries 5xx Wi
 
 - `internal/connector/qfdecisions/engagement.go` and `engagement_test.go` (exporter type, buffer, flush worker, failure handling, audit/metric emission, capability gate)
 - `internal/connector/qfdecisions/connector.go` call-site wiring only (construct the exporter when the capability response is loaded; pass it to render surfaces; shut it down on connector stop)
-- `internal/web/render/qf_packet_view.go` (or the existing trust-render integration point) capture hooks only (event taps; never modifies rendered content)
-- `internal/digest/render/qf_packet_tile.go` capture hooks only
+- `internal/api/qf_render.go` capture hooks only (event taps; never modifies rendered content; originally planned at internal/web/render/qf_packet_view.go but the QF web packet rendering ships from the API package)
+- `internal/digest/generator.go` capture hooks only (originally planned at internal/digest/render/qf_packet_tile.go but the QF tile renders inline inside the digest generator's `getQFPackets` flow)
 - `internal/telegram/render/qf_packet_message.go` capture hooks only
 - `internal/connector/qfdecisions/metrics.go` (no new vector — `QFEngagementSignalAttemptsTotal` is already registered in Scope 5; this scope only verifies the existing label set covers the documented event/surface/status/reason matrix and extends it if a label value is missing)
 - `tests/integration/qf_engagement_signal_test.go`
@@ -1130,7 +1130,7 @@ Allowed file families:
 
 - `internal/connector/qfdecisions/engagement.go` and `engagement_test.go` for the exporter type, buffer, flush worker, failure handling, audit/metric emission, consent gate, and capability gate only.
 - `internal/connector/qfdecisions/connector.go` call-site wiring only (construct exporter; pass to render surfaces; shut down on connector stop).
-- `internal/web/render/qf_packet_view.go` (or the existing trust-render integration point), `internal/digest/render/qf_packet_tile.go`, and `internal/telegram/render/qf_packet_message.go` capture-hook additions only (event taps; never modifies rendered content).
+- `internal/api/qf_render.go` (originally planned at internal/web/render/qf_packet_view.go; QF web packet rendering ships from the API package), `internal/digest/generator.go` (originally planned at internal/digest/render/qf_packet_tile.go; QF tile renders inline inside the digest generator's `getQFPackets` flow), and `internal/telegram/render/qf_packet_message.go` capture-hook additions only (event taps; never modifies rendered content).
 - `internal/connector/qfdecisions/metrics.go` only if a label value enumerated in design.md §Failure Handling is missing from the existing `QFEngagementSignalAttemptsTotal` declaration.
 - `tests/integration/qf_engagement_signal_test.go` and `tests/e2e/qf_engagement_signal_test.go`.
 - `docs/Operations.md` Scope 6 subsection only.
@@ -1424,7 +1424,7 @@ Scenario: SCN-SM-041-030 Signature Failure Recorded As Diagnostic Without Sendin
 
 - Add a callback signer under `internal/connector/qfdecisions/callback.go` with a `CallbackEnvelope` type carrying `callback_id`, `trace_id`, `packet_id`, `action`, `nonce`, `expires_at`, `surface`, plus the populated `signature` and `key_id` fields.
 - Add an in-process HMAC key store under `internal/connector/qfdecisions/callback_keystore.go` loaded from SST-managed configuration at connector startup; each key entry carries `key_id`, `secret` (resolved via NO-DEFAULTS `${VAR:?error}` env reference), and `not_before`. Configuration is rejected at startup if no key has `not_before <= now`.
-- Add a database migration `internal/db/migrations/038_qf_callback_signing_keys.sql` ONLY if the key store needs persistent rotation state; if SST-managed config alone is sufficient for the per-release rotation cadence, document the decision in `docs/Operations.md` and skip the migration. The default for MVP is config-only with the SST contract enforced fail-loud.
+- Add a database migration internal/db/migrations/038_qf_callback_signing_keys.sql ONLY if the key store needs persistent rotation state; if SST-managed config alone is sufficient for the per-release rotation cadence, document the decision in `docs/Operations.md` and skip the migration. The default for MVP is config-only with the SST contract enforced fail-loud. **Decision shipped:** SST config-only; no qf_callback_signing_keys.sql migration was created (slot 038 was used for `internal/db/migrations/038_notification_ntfy_source_adapter.sql` instead).
 - Implement canonical payload composition as `callback_id|trace_id|packet_id|action|nonce|expires_at|surface` (pipe-delimited, no whitespace, no trailing pipe); compute HMAC-SHA256 using the newest `not_before`-valid key and emit lower-case hex.
 - Implement signature failure handling: missing active key, malformed canonical payload, and `expires_at` outside the 60-second tolerance abort signing locally; no callback is sent over the network for any of these conditions. Each failure emits `smackerel_qf_callback_signature_failures_total{reason}` with the documented vocabulary plus a Cross-Product Audit Envelope v1 record.
 - Wire callback emission into the Scope 3 Telegram render surface (`internal/telegram/render/qf_packet_message.go`) so signed envelopes can be POSTed to the QF callback endpoint via the Scope 1 QF client transport. Pre-MVP QF responds `CALLBACK_DEFERRED_TO_V1` for every submission; the connector MUST parse the rejection without retrying.
@@ -1437,7 +1437,7 @@ Scenario: SCN-SM-041-030 Signature Failure Recorded As Diagnostic Without Sendin
 
 - `internal/connector/qfdecisions/callback.go` and `callback_test.go` (signer, envelope, signature failure handling, audit/metric emission)
 - `internal/connector/qfdecisions/callback_keystore.go` and `callback_keystore_test.go` (in-process key store, SST-driven loader, newest-valid-key selection, no-active-key fail-loud)
-- `internal/db/migrations/038_qf_callback_signing_keys.sql` ONLY if persistent rotation state is required; otherwise document the decision in `docs/Operations.md` and skip the migration.
+- internal/db/migrations/038_qf_callback_signing_keys.sql ONLY if persistent rotation state is required; otherwise document the decision in `docs/Operations.md` and skip the migration. **Decision shipped:** config-only; no migration created.
 - `internal/telegram/render/qf_packet_message.go` callback-emission wiring only (signed POST through the Scope 1 QF client transport; never modifies rendered content)
 - `internal/connector/qfdecisions/connector.go` call-site wiring only (construct keystore + signer at connector start; shut down on connector stop)
 - `internal/metrics/metrics.go` only if a label value enumerated in design.md §Callback Signing And Telemetry is missing from the existing `QFCallbackSignatureFailuresTotal`/`QFCallbackAttemptsTotal` declarations.
@@ -1486,7 +1486,7 @@ Allowed file families:
 
 - `internal/connector/qfdecisions/callback.go` and `callback_test.go` for the signer, envelope, signature-failure handling, audit/metric emission, and pre-MVP rejection parsing only.
 - `internal/connector/qfdecisions/callback_keystore.go` and `callback_keystore_test.go` for the in-process key store, SST-driven loader, newest-valid-key selection, and fail-loud empty-key-set handling only.
-- `internal/db/migrations/038_qf_callback_signing_keys.sql` only if persistent rotation state is required.
+- internal/db/migrations/038_qf_callback_signing_keys.sql only if persistent rotation state is required. **Decision shipped:** config-only; no migration created.
 - `internal/telegram/render/qf_packet_message.go` for callback-emission wiring only (no rendered-content changes).
 - `internal/connector/qfdecisions/connector.go` call-site wiring only (construct keystore + signer at connector start; shut down on connector stop).
 - `internal/metrics/metrics.go` only if a label value is missing from the existing callback metric declarations.
