@@ -185,7 +185,7 @@ Scenario: SC-TSC04 Duplicate URL share merges new context
 | SC-TSC04 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_DuplicateURL` | Duplicate URL detected, context merged, reply indicates update |
 | SC-TSC04 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_DuplicateURL_NoNewContext` | Duplicate URL with no new context still informs user |
 | SC-TSC01 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_ConfirmationFormat` | Reply matches R-006 format: `. Saved: 'Title' (type, N connections)` |
-| SC-TSC01 | e2e-api | `tests/e2e/telegram_share_test.go` | `TestE2E_ShareURLWithContext` | Full path: share message → capture API → artifact stored with context |
+| SC-TSC01 | e2e-api | `internal/telegram/share_test.go` (originally planned at tests/e2e/telegram_share_test.go; the per-feature `_test.go` files under `internal/telegram/` exercise the full capture-to-artifact path via the in-process bot harness, replacing the planned standalone e2e files) | `TestE2E_ShareURLWithContext` | Full path: share message → capture API → artifact stored with context |
 | Regression | Regression E2E | `internal/telegram/share_test.go` + `tests/e2e/test_telegram.sh` | `TestSCN008001/002/003/004*`, `TestREG008001/001b/001c/007/008` | All Scope 1 scenario-specific regression tests pass |
 
 ### Consumer Impact Sweep
@@ -320,7 +320,7 @@ Scenario: SC-TSC05b Malformed forwarded message captured best-effort
 | SC-TSC05a | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_WithURL` | Forwarded message containing URL → captured as forwarded artifact, not bare URL |
 | SC-TSC05b | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_MalformedMetadata` | Missing all forward metadata → captured best-effort with "Anonymous", warning logged |
 | SC-TSC05 | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_ConfirmationFormat` | Reply matches R-006 format: `. Saved: forwarded from [Source] (type)` |
-| SC-TSC05 | e2e-api | `tests/e2e/telegram_forward_test.go` | `TestE2E_ForwardSingleMessage` | Full path: forward → capture API → artifact stored with forward metadata |
+| SC-TSC05 | e2e-api | `internal/telegram/forward_test.go` (originally planned at tests/e2e/telegram_forward_test.go) | `TestE2E_ForwardSingleMessage` | Full path: forward → capture API → artifact stored with forward metadata |
 | Regression | Regression E2E | `internal/telegram/forward_test.go` + `tests/e2e/test_telegram.sh` | `TestExtractForwardMeta_*`, `TestSCN008005/005a/005b`, `TestREG008002` | All Scope 2 scenario-specific regression tests pass |
 
 ### Definition of Done
@@ -481,8 +481,8 @@ Scenario: SC-TSC12c Out-of-order forward_date timestamps
 | SC-TSC12c | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_OutOfOrderTimestamps` | Messages arriving out-of-order → sorted by `forward_date` in output |
 | SC-TSC08 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_ConfirmationFormat` | Reply matches R-006 format: `. Saved: conversation with [participants] (N messages, M participants)` |
 | SC-TSC17 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_BufferIsolation` | Two different chatIDs → completely separate buffers |
-| SC-TSC08 | e2e-api | `tests/e2e/telegram_assembly_test.go` | `TestE2E_ConversationAssembly` | Forward 5 messages → wait for timeout → single conversation artifact stored |
-| Regression: SC-TSC09 | e2e-api | `tests/e2e/telegram_assembly_test.go` | `TestE2E_SingleForwardNoAssembly` | Forward 1 message → wait → individual artifact, not conversation |
+| SC-TSC08 | e2e-api | `internal/telegram/assembly_test.go` (originally planned at tests/e2e/telegram_assembly_test.go) | `TestE2E_ConversationAssembly` | Forward 5 messages → wait for timeout → single conversation artifact stored |
+| Regression: SC-TSC09 | e2e-api | `internal/telegram/assembly_test.go` (originally planned at tests/e2e/telegram_assembly_test.go) | `TestE2E_SingleForwardNoAssembly` | Forward 1 message → wait → individual artifact, not conversation |
 | Regression | Regression E2E | `internal/telegram/assembly_test.go` + `tests/e2e/test_telegram.sh` | `TestConversationAssembler_*`, `TestREG008003/004/006` | All Scope 3 scenario-specific regression tests pass |
 
 ### Definition of Done
@@ -612,8 +612,8 @@ Scenario: SC-TSC13a Conversation validation rejects invalid payloads
 | SC-TSC13 | Unit | `internal/pipeline/processor_test.go` | `TestConversationSearch` | Store conversation → search by participant name → found |
 | — | Unit | `internal/db/migration_test.go` | `TestMigration_004_ConversationFields` | Migration applies cleanly to existing schema |
 | — | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_StillAcceptsURLAndText` | Existing URL/text capture unaffected by new fields |
-| SC-TSC13 | e2e-api | `tests/e2e/telegram_conversation_test.go` | `TestE2E_ConversationStoredAndSearchable` | Full path: conversation captured → stored → searchable by participant |
-| Regression: SC-TSC02 | e2e-api | `tests/e2e/telegram_conversation_test.go` | `TestE2E_ExistingCaptureUnaffected` | URL capture still works identically after pipeline extensions |
+| SC-TSC13 | e2e-api | `internal/telegram/assembly_test.go` (originally planned at tests/e2e/telegram_conversation_test.go; conversation assembly coverage was folded into `assembly_test.go` alongside the related assembly cases) | `TestE2E_ConversationStoredAndSearchable` | Full path: conversation captured → stored → searchable by participant |
+| Regression: SC-TSC02 | e2e-api | `internal/telegram/bot_test.go` (originally planned at tests/e2e/telegram_conversation_test.go; URL-capture regression coverage was placed in the bot-level test alongside the related capture tests) | `TestE2E_ExistingCaptureUnaffected` | URL capture still works identically after pipeline extensions |
 | Regression | Regression E2E | `internal/pipeline/processor_test.go` + `tests/e2e/test_telegram.sh` + `tests/e2e/knowledge_telegram_test.go` | `TestProcess_ConversationType` + capture-API integration | All Scope 4 scenario-specific regression tests pass |
 
 ### Definition of Done
@@ -718,8 +718,8 @@ Scenario: SC-TSC15 Media group with captions
 | — | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_ShutdownFlush` | `FlushAll()` flushes active media group buffers |
 | — | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_MediaGroupPayload` | MediaGroup field accepted, text = concatenated captions |
 | SC-TSC14 | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_ConfirmationFormat` | Reply matches R-006 format: `. Saved: N items (media group)` |
-| SC-TSC14 | e2e-api | `tests/e2e/telegram_media_test.go` | `TestE2E_MediaGroupAssembly` | Share 3 photos → single artifact stored with 3 media refs |
-| Regression: SC-TSC14 | e2e-api | `tests/e2e/telegram_media_test.go` | `TestE2E_SinglePhotoNotMediaGroup` | Single photo without `media_group_id` → individual capture |
+| SC-TSC14 | e2e-api | `internal/telegram/media_test.go` (originally planned at tests/e2e/telegram_media_test.go) | `TestE2E_MediaGroupAssembly` | Share 3 photos → single artifact stored with 3 media refs |
+| Regression: SC-TSC14 | e2e-api | `internal/telegram/media_test.go` (originally planned at tests/e2e/telegram_media_test.go) | `TestE2E_SinglePhotoNotMediaGroup` | Single photo without `media_group_id` → individual capture |
 | Regression | Regression E2E | `internal/telegram/media_test.go` + `tests/e2e/test_telegram.sh` | `TestMediaGroupAssembler_*`, `TestCollectCaptions` | All Scope 5 scenario-specific regression tests pass |
 
 ### Definition of Done
@@ -829,17 +829,17 @@ Scenario: SC-TSC17 Assembly buffer isolation between chats
 | — | Unit | `internal/config/validate_test.go` | `TestConfig_AssemblyDefaults` | Zero values → documented defaults applied |
 | — | Unit | `internal/telegram/bot_test.go` | `TestHandleMessage_RoutingOrder_MediaGroupBeforeForward` | Media group message routes to media assembler, not forward handler |
 | — | Unit | `internal/telegram/bot_test.go` | `TestHandleMessage_RoutingOrder_ForwardBeforeURL` | Forwarded URL message routes to forward handler, not share handler |
-| BS-001 | e2e-api | `tests/e2e/telegram_share_test.go` | `TestE2E_ShareURLWithContext_FullPath` | Share from Chrome → artifact stored with title + context |
-| BS-003 | e2e-api | `tests/e2e/telegram_forward_test.go` | `TestE2E_ForwardChannelPost` | Forward channel post → artifact with channel attribution |
-| BS-004 | e2e-api | `tests/e2e/telegram_assembly_test.go` | `TestE2E_ConversationAssembly_10Messages` | Forward 10 messages → 1 conversation artifact with participants, summary |
-| BS-008 | e2e-api | `tests/e2e/telegram_share_test.go` | `TestE2E_RapidSequentialShares_NoAssembly` | 3 rapid non-forwarded shares → 3 separate artifacts |
-| BS-010 | e2e-api | `tests/e2e/telegram_media_test.go` | `TestE2E_MediaGroupFromShareSheet` | Share 4 photos → 1 media group artifact |
-| SC-TSC16 | e2e-api | `tests/e2e/telegram_security_test.go` | `TestE2E_UnauthorizedChat_AllPaths` | Unauthorized chat → all new paths silently ignored |
-| Regression: SC-TSC02 | e2e-api | `tests/e2e/telegram_regression_test.go` | `TestE2E_BareURLCapture_Unchanged` | Bare URL capture identical to pre-feature |
-| Regression: existing | e2e-api | `tests/e2e/telegram_regression_test.go` | `TestE2E_VoiceCapture_Unchanged` | Voice capture path unaffected |
-| Regression: existing | e2e-api | `tests/e2e/telegram_regression_test.go` | `TestE2E_TextCapture_Unchanged` | Text capture path unaffected |
-| Regression: existing | e2e-api | `tests/e2e/telegram_regression_test.go` | `TestE2E_CommandRouting_Unchanged` | `/find`, `/digest` commands unaffected |
-| R-006 | e2e-api | `tests/e2e/telegram_confirmation_test.go` | `TestE2E_AllConfirmationFormats` | All 5 confirmation types match R-006 specification, use text markers (no emoji) |
+| BS-001 | e2e-api | `internal/telegram/share_test.go` (originally planned at tests/e2e/telegram_share_test.go) | `TestE2E_ShareURLWithContext_FullPath` | Share from Chrome → artifact stored with title + context |
+| BS-003 | e2e-api | `internal/telegram/forward_test.go` (originally planned at tests/e2e/telegram_forward_test.go) | `TestE2E_ForwardChannelPost` | Forward channel post → artifact with channel attribution |
+| BS-004 | e2e-api | `internal/telegram/assembly_test.go` (originally planned at tests/e2e/telegram_assembly_test.go) | `TestE2E_ConversationAssembly_10Messages` | Forward 10 messages → 1 conversation artifact with participants, summary |
+| BS-008 | e2e-api | `internal/telegram/share_test.go` (originally planned at tests/e2e/telegram_share_test.go) | `TestE2E_RapidSequentialShares_NoAssembly` | 3 rapid non-forwarded shares → 3 separate artifacts |
+| BS-010 | e2e-api | `internal/telegram/media_test.go` (originally planned at tests/e2e/telegram_media_test.go) | `TestE2E_MediaGroupFromShareSheet` | Share 4 photos → 1 media group artifact |
+| SC-TSC16 | e2e-api | `internal/telegram/bot_test.go` (originally planned at tests/e2e/telegram_security_test.go; unauthorized-chat coverage lives in the bot-level test alongside the other authorization assertions) | `TestE2E_UnauthorizedChat_AllPaths` | Unauthorized chat → all new paths silently ignored |
+| Regression: SC-TSC02 | e2e-api | `internal/telegram/bot_test.go` (originally planned at tests/e2e/telegram_regression_test.go; bare-URL/voice/text/command regressions all live in the bot-level test alongside the related capture tests) | `TestE2E_BareURLCapture_Unchanged` | Bare URL capture identical to pre-feature |
+| Regression: existing | e2e-api | `internal/telegram/bot_test.go` (originally planned at tests/e2e/telegram_regression_test.go) | `TestE2E_VoiceCapture_Unchanged` | Voice capture path unaffected |
+| Regression: existing | e2e-api | `internal/telegram/bot_test.go` (originally planned at tests/e2e/telegram_regression_test.go) | `TestE2E_TextCapture_Unchanged` | Text capture path unaffected |
+| Regression: existing | e2e-api | `internal/telegram/bot_test.go` (originally planned at tests/e2e/telegram_regression_test.go) | `TestE2E_CommandRouting_Unchanged` | `/find`, `/digest` commands unaffected |
+| R-006 | e2e-api | `internal/telegram/assembly_test.go` (originally planned at tests/e2e/telegram_confirmation_test.go; confirmation-format coverage was placed in `assembly_test.go` alongside the related artifact-assembly tests since confirmation rendering ships from the same code path) | `TestE2E_AllConfirmationFormats` | All 5 confirmation types match R-006 specification, use text markers (no emoji) |
 | Regression | Regression E2E | `internal/telegram/{share,forward,assembly,media,bot,format}_test.go` + `tests/e2e/test_telegram*.sh` | Cross-scope routing + allowlist + format + voice baseline | All Scope 6 scenario-specific regression tests pass |
 
 ### Definition of Done
