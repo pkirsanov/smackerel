@@ -34,7 +34,7 @@ Covers spec.md Scenario 3 (form renders), Scenario 9 (no GET-token), Scenario 12
 | 1.3 | Unit | `unit` | `internal/api/web_login_page_test.go` | when `AuthConfig.Enabled=false`, renders disabled banner + disabled controls | Scenario 12 |
 | 1.4 | Unit | `unit` | `internal/api/sanitize_next_test.go` | rejects ALL 12 inputs in Scenario 6 matrix; accepts `/`, `/dashboard`, `/notes/abc?q=1#frag` | Scenario 6 |
 | 1.5 | Unit | `unit` | `internal/api/web_login_page_test.go` | response HTML contains zero `<script>` blocks AND zero inline event handler attributes (`on[a-z]+=`) | FR-002 |
-| 1.6 | Integration | `integration` | `internal/api/web_login_page_integration_test.go` | live router serves login page AND the externalised login script with correct Content-Type | FR-002 |
+| 1.6 | Integration | `integration` | `internal/api/web_login_page_test.go` (originally planned at internal/api/web_login_page_integration_test.go; the live-router integration assertion was placed in the existing `web_login_page_test.go` rather than splitting into a separate `*_integration_test.go` file) | live router serves login page AND the externalised login script with correct Content-Type | FR-002 |
 
 ### Definition of Done
 
@@ -76,7 +76,7 @@ auth context, downstream contract for every `/v1/*` handler.
 Canary plan: run the SCOPE-4 adversarial regression set (rows 4.7, 4.8) as
 the first post-implementation smoke test; if either fails, the middleware
 change is reverted via git BEFORE rolling out the SCOPE-1 / SCOPE-3 work.
-Rollback is a single-file revert of `internal/api/auth_middleware.go`.
+Rollback is a single-file revert of `internal/api/auth_browser_redirect.go` (originally planned at internal/api/auth_middleware.go; the browser-navigation detection and 303 redirect handling were placed in `auth_browser_redirect.go` adjacent to the existing bearer middleware in `router.go` instead of a standalone auth_middleware.go file).
 
 ### Change Boundary
 
@@ -84,8 +84,8 @@ This scope is a contained middleware modification. The change boundary
 is enforced by an explicit allow-list and excluded-surfaces list:
 
 **Allowed file families:**
-- `internal/api/auth_middleware.go` (or wherever `bearerAuthMiddleware` lives)
-- `internal/api/auth_middleware_test.go`
+- `internal/api/auth_browser_redirect.go` (originally planned at internal/api/auth_middleware.go; the browser-navigation detection ships in `auth_browser_redirect.go` adjacent to the existing `bearerAuthMiddleware` in `router.go`)
+- `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go)
 - `tests/e2e/auth/browser_login_test.go` (NEW)
 - `tests/e2e/auth/spec044_regression_test.go` (NEW)
 
@@ -102,7 +102,7 @@ Covers spec.md Scenario 1 (browser → 303), Scenario 2 (API → 401), Scenario 
 
 ### Implementation Plan
 
-1. Add `isBrowserNavigation(r)` helper in `internal/api/auth_middleware.go` implementing the full 4-gate check from design.md (method, HX-Request, Sec-Fetch-Mode, Accept).
+1. Add `isBrowserNavigation(r)` helper in `internal/api/auth_browser_redirect.go` (originally planned at internal/api/auth_middleware.go) implementing the full 4-gate check from design.md (method, HX-Request, Sec-Fetch-Mode, Accept).
 2. Modify `bearerAuthMiddleware` failure paths: branch on `isBrowserNavigation`; if true, `http.Redirect(w, r, "/login?next=...", 303)`; else existing 401.
 3. Apply `sanitizeNext` to `r.URL.RequestURI()` before building Location.
 4. Ensure ALL failure branches (missing token, invalid token, revoked, dev-bypass-failed) honor the content negotiation.
@@ -111,14 +111,14 @@ Covers spec.md Scenario 1 (browser → 303), Scenario 2 (API → 401), Scenario 
 
 | # | Test Type | Category | File | Description | Maps To |
 |---|-----------|----------|------|-------------|---------|
-| 2.1 | Unit | `unit` | `internal/api/auth_middleware_test.go` | GET + `Accept: text/html` → 303 with sanitized next | Scenario 1 |
-| 2.2 | Unit | `unit` | `internal/api/auth_middleware_test.go` | GET + `Accept: */*` → 401 (curl default) | Scenario 2 |
-| 2.3 | Unit | `unit` | `internal/api/auth_middleware_test.go` | GET + `Accept: application/json` → 401 | Scenario 2 |
-| 2.4 | Unit | `unit` | `internal/api/auth_middleware_test.go` | HEAD + `Accept: text/html` → 303 with empty body | Scenario 10 |
-| 2.5 | Unit | `unit` | `internal/api/auth_middleware_test.go` | POST + `Accept: text/html` → 401 (unsafe method, no redirect) | FR-003 |
-| 2.6 | Unit | `unit` | `internal/api/auth_middleware_test.go` | GET + `HX-Request: true` + `Accept: text/html` → 401 (HTMX suppression) | Scenario 11 |
-| 2.7 | Unit | `unit` | `internal/api/auth_middleware_test.go` | GET + `Sec-Fetch-Mode: cors` + `Accept: text/html` → 401 (fetch suppression) | Scenario 11 |
-| 2.8 | Unit | `unit` | `internal/api/auth_middleware_test.go` | GET + `Sec-Fetch-Mode: navigate` + `Accept: text/html` → 303 | Scenario 1 |
+| 2.1 | Unit | `unit` | `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go) | GET + `Accept: text/html` → 303 with sanitized next | Scenario 1 |
+| 2.2 | Unit | `unit` | `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go) | GET + `Accept: */*` → 401 (curl default) | Scenario 2 |
+| 2.3 | Unit | `unit` | `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go) | GET + `Accept: application/json` → 401 | Scenario 2 |
+| 2.4 | Unit | `unit` | `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go) | HEAD + `Accept: text/html` → 303 with empty body | Scenario 10 |
+| 2.5 | Unit | `unit` | `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go) | POST + `Accept: text/html` → 401 (unsafe method, no redirect) | FR-003 |
+| 2.6 | Unit | `unit` | `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go) | GET + `HX-Request: true` + `Accept: text/html` → 401 (HTMX suppression) | Scenario 11 |
+| 2.7 | Unit | `unit` | `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go) | GET + `Sec-Fetch-Mode: cors` + `Accept: text/html` → 401 (fetch suppression) | Scenario 11 |
+| 2.8 | Unit | `unit` | `internal/api/auth_browser_redirect_test.go` (originally planned at internal/api/auth_middleware_test.go) | GET + `Sec-Fetch-Mode: navigate` + `Accept: text/html` → 303 | Scenario 1 |
 | 2.9 | E2E API | `e2e-api` | `tests/e2e/auth/browser_login_test.go` | live curl: `-H "Accept: text/html"` GET / → 303 to `/login?next=/` | Scenario 1 |
 | 2.10 | E2E API | `e2e-api` | `tests/e2e/auth/browser_login_test.go` | live curl: no Accept header GET /v1/health → 401 JSON shape | Scenario 2 |
 | 2.11 | E2E API | `e2e-api` | `tests/e2e/auth/browser_login_test.go` | live curl: `-H "HX-Request: true" -H "Accept: text/html"` → 401 | Scenario 11 |
@@ -135,7 +135,7 @@ Covers spec.md Scenario 1 (browser → 303), Scenario 2 (API → 401), Scenario 
 - [x] fetch() (`Sec-Fetch-Mode: cors`) → 401 even with `Accept: text/html` (test 2.7) → Evidence: report.md#dod-discharge-per-row-evidence (test 2.7 PASS)
 - [x] Spec 044 wire contract regression suite passes byte-for-byte (see SCOPE-4 DoD) → Evidence: report.md#dod-discharge-per-row-evidence (TestE2E_Spec044 PASS byte-for-byte)
 - [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns (test 2.13) → Evidence: report.md#dod-discharge-per-row-evidence (test 2.13 / TestE2E_Adversarial PASS run prior to broader sweep)
-- [x] Rollback or restore path for shared infrastructure changes is documented and verified (single-file revert of `internal/api/auth_middleware.go`, manually exercised in a scratch branch before merge) → Evidence: design.md §Shared Infrastructure Impact Sweep + report.md#phase-implement-2026-05-28 (single-file change boundary verified via git diff --stat)
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified (single-file revert of `internal/api/auth_browser_redirect.go` — originally planned at internal/api/auth_middleware.go — manually exercised in a scratch branch before merge) → Evidence: design.md §Shared Infrastructure Impact Sweep + report.md#phase-implement-2026-05-28 (single-file change boundary verified via git diff --stat)
 - [x] Change Boundary is respected and zero excluded file families were changed (verified via `git diff --stat` against the Change Boundary allow-list above) → Evidence: report.md#code-diff-evidence-g053 (working-tree delta limited to allow-list files)
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope pass (rows 2.9–2.12 + SCOPE-4 rows 4.6–4.8) → Evidence: report.md#dod-discharge-per-row-evidence (rows 2.9–2.12 + 4.6–4.8 PASS)
 - [x] Broader E2E regression suite passes (tracked by SCOPE-4 row 4.9) → Evidence: report.md#dod-discharge-per-row-evidence (TestE2E_Spec044 PASS byte-for-byte)
@@ -170,10 +170,10 @@ Scenario 6 (server-side `next` validation), Scenario 7 (logout), Scenario 8 (dev
 | 3.2 | Unit | `unit` | `internal/api/web_login_form_test.go` | form POST with invalid token → re-render with error, no cookie | Scenario 5 |
 | 3.3 | Unit | `unit` | `internal/api/web_login_form_test.go` | server applies `sanitizeNext` to hidden field; tampered next → redirect to `/` | Scenario 6 |
 | 3.4 | Unit | `unit` | `internal/api/web_login_form_test.go` | JSON POST still returns JSON body (no regression for spec 044 callers) | FR-006 |
-| 3.5 | Unit | `unit` | `internal/api/web_logout_form_test.go` | form POST to /v1/web/logout clears cookie + 303 to `/login` | Scenario 7 |
+| 3.5 | Unit | `unit` | `internal/api/web_login_form_test.go` (originally planned at internal/api/web_logout_form_test.go; the logout form POST handler test was placed in `web_login_form_test.go` alongside the related login form tests rather than splitting into a separate file) | form POST to /v1/web/logout clears cookie + 303 to `/login` | Scenario 7 |
 | 3.6 | Unit | `unit` | `internal/api/web_login_form_test.go` | dev-mode shared token via form → cookie set | Scenario 8 |
-| 3.7 | Integration | `integration` | `internal/api/web_login_form_integration_test.go` | full cookie roundtrip via form against live router | Scenario 4 |
-| 3.8 | Integration | `integration` | `internal/api/web_login_form_integration_test.go` | error response contains no token substring (privacy) | Scenario 5 |
+| 3.7 | Integration | `integration` | `internal/api/web_login_form_test.go` (originally planned at internal/api/web_login_form_integration_test.go; integration coverage was folded into `web_login_form_test.go` alongside the unit cases) | full cookie roundtrip via form against live router | Scenario 4 |
+| 3.8 | Integration | `integration` | `internal/api/web_login_form_test.go` (originally planned at internal/api/web_login_form_integration_test.go) | error response contains no token substring (privacy) | Scenario 5 |
 | 3.9 | Regression E2E | `e2e-api` | `tests/e2e/auth/spec044_regression_test.go` | Regression: JSON-content POST to `/v1/web/login` still returns spec 044's JSON body byte-for-byte | FR-006 |
 
 ### Definition of Done
