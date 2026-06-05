@@ -1823,12 +1823,12 @@ Scenario: SCN-002-078 Entity linking upserts people without error
 | 2 | Regression E2E: people.name unique constraint migration stays green under `./smackerel.sh test unit` baseline + framework guards | Regression E2E | internal/db/migration_test.go | SCN-002-078 |
 
 ### Definition of Done
-- [x] Migration `012_people_name_unique.sql` adds UNIQUE index on people.name
-  > Evidence: `internal/db/migrations/012_people_name_unique.sql` — `CREATE UNIQUE INDEX IF NOT EXISTS idx_people_name_unique ON people(name)`
+- [x] Migration adds UNIQUE index on people.name
+  > Evidence: `internal/db/migrations/001_initial_schema.sql:102` — `CREATE UNIQUE INDEX IF NOT EXISTS idx_people_name_unique ON people(name)` (originally shipped as `012_people_name_unique.sql`; consolidated into 001 during the migrations 002-017 schema squash documented in [docs/Development.md](../../docs/Development.md#L454); historical file preserved at `internal/db/migrations/archive/012_people_name_unique.sql`).
 - [x] Migration handles pre-existing duplicates by re-parenting edges and merging interaction counts
-  > Evidence: `012_people_name_unique.sql` — DO block finds duplicates, re-parents edges, deletes duplicate rows
+  > Evidence: `internal/db/migrations/archive/012_people_name_unique.sql` — DO block finds duplicates, re-parents edges, deletes duplicate rows. The consolidated `001_initial_schema.sql` does not include the dedup DO block because the consolidated baseline assumes a fresh DB; the dedup logic in the archived 012 file remains the authoritative reference for any operator running it standalone.
 - [x] Migration file is embedded in Go binary
-  > Evidence: `internal/db/migration_test.go::TestMigration012_PeopleNameUnique` passes
+  > Evidence: `internal/db/migration_test.go::TestMigration012_PeopleNameUnique` passes (test name retains the historical scope identifier; it verifies the `idx_people_name_unique` constraint exists in the embedded migrations regardless of source file location).
 - [x] SCN-002-078: Entity linking ON CONFLICT (name) upsert now has a matching unique constraint
   > Evidence: migration adds `idx_people_name_unique`; `internal/graph/linker.go::findOrCreatePeople` ON CONFLICT (name) is now valid
 - [x] All existing tests pass
