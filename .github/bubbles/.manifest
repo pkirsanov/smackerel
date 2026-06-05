@@ -171,6 +171,7 @@ bubbles/schemas/result-envelope.schema.json
 bubbles/schemas/scenario-manifest.schema.json
 bubbles/schemas/tool-call.schema.json
 bubbles/schemas/workflows.schema.json
+bubbles/registry/gates.yaml
 bubbles/scripts/hooks/pre-push.sh
 templates/AGENTS.md.tmpl
 templates/agents.md.tmpl

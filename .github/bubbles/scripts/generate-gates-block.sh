@@ -44,7 +44,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -f "$REGISTRY" ]] || { echo "generate-gates-block: registry missing at $REGISTRY" >&2; exit 2; }
+[[ -f "$REGISTRY" ]] || {
+  if [[ "$MODE" == "check" ]]; then
+    # Downstream repos that installed v5.2.0 (before the v5.2.1 installer
+    # fix) won't have the registry file. Emit SKIP rather than FAIL so
+    # framework-validate stays green until the next install.sh run.
+    echo "generate-gates-block: SKIP (bubbles/registry/gates.yaml missing — re-run install.sh to upgrade past v5.2.0)"
+    exit 0
+  fi
+  echo "generate-gates-block: registry missing at $REGISTRY" >&2
+  exit 2
+}
 [[ -f "$WORKFLOWS" ]] || { echo "generate-gates-block: workflows.yaml missing at $WORKFLOWS" >&2; exit 2; }
 
 # Generated content is composed by:

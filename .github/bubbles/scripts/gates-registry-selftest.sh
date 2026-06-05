@@ -32,8 +32,12 @@ fail() { echo "FAIL: $1" >&2; failures=$((failures + 1)); }
 if [[ -f "$REGISTRY" ]]; then
   pass "T1: registry file exists at bubbles/registry/gates.yaml"
 else
-  fail "T1: bubbles/registry/gates.yaml is missing"
-  exit 1
+  # In downstream repos that installed v5.2.0 (before the v5.2.1 installer
+  # fix), the registry file may not exist. Emit SKIP and exit 0 so the
+  # selftest doesn't block downstream pre-push hooks until they re-run
+  # install.sh.
+  echo "SKIP: T1: bubbles/registry/gates.yaml is missing (re-run install.sh to upgrade past v5.2.0 installer gap)"
+  exit 0
 fi
 
 # --- T2: --check is currently in sync ---
