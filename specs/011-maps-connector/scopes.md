@@ -8,7 +8,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ### Change Boundary
 
-**Allowed surfaces:** `internal/connector/maps/` (new files: `connector.go`, `normalizer.go`, `patterns.go`), `internal/db/migrations/009_maps.sql` (new file), `config/smackerel.yaml` (add maps connector section), `cmd/core/main.go` (register maps connector).
+**Allowed surfaces:** `internal/connector/maps/` (new files: `connector.go`, `normalizer.go`, `patterns.go`), `internal/db/migrations/001_initial_schema.sql` (originally shipped as 009_maps.sql; consolidated into 001 during the migrations 002-017 schema squash documented in [docs/Development.md](../../docs/Development.md#L454); historical file preserved at `internal/db/migrations/archive/009_maps.sql`), `config/smackerel.yaml` (add maps connector section), `cmd/core/main.go` (register maps connector).
 
 **Excluded surfaces:** No changes to existing parsing utilities (`internal/connector/maps/maps.go`). No changes to other connector implementations (RSS, IMAP, CalDAV, Browser, YouTube, Keep, Bookmarks). No changes to existing pipeline processors, search API, digest API, health API, or web handlers. No changes to existing NATS stream configurations. No schema changes to existing database tables (`artifacts`, `edges`, `sync_state`).
 
@@ -58,7 +58,7 @@ func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) 
 ```
 
 ```sql
--- internal/db/migrations/009_maps.sql
+-- internal/db/migrations/001_initial_schema.sql (originally `009_maps.sql`; see archive)
 CREATE TABLE IF NOT EXISTS location_clusters (
     id TEXT PRIMARY KEY, source_ref TEXT NOT NULL,
     start_cluster_lat DOUBLE PRECISION NOT NULL, start_cluster_lng DOUBLE PRECISION NOT NULL,
@@ -346,7 +346,7 @@ Scenario: SCN-MT-013 Location clusters populated during sync
 - `internal/connector/maps/connector.go` — Add `archiveFile()` implementation, integrate `location_clusters` insertion during Sync, add `pool` field for DB access
 
 **Files created:**
-- `internal/db/migrations/009_maps.sql` — `location_clusters` table with 3 indexes
+- `internal/db/migrations/001_initial_schema.sql` lines 321-339 (originally 009_maps.sql; consolidated into 001 during the migrations 002-017 schema squash; archive copy at `internal/db/migrations/archive/009_maps.sql`) — `location_clusters` table with 3 indexes
 
 **Files modified (existing):**
 - `internal/db/migrate.go` — `009_maps.sql` auto-included via `embed.FS`

@@ -43,7 +43,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - `class SynthesisConsumer` — NATS consumer for `synthesis.extract`, `synthesis.crosssource`
 - `def validate_extraction(output, schema) -> (bool, str)`
 
-**SQL (`internal/db/migrations/012_knowledge_layer.sql`):**
+**SQL (`internal/db/migrations/001_initial_schema.sql` lines 438-490; originally shipped as 014_knowledge_layer.sql — the spec was authored citing 012_* but the file shipped as 014_* before the migrations 002-017 schema squash; historical file preserved at `internal/db/migrations/archive/014_knowledge_layer.sql`):**
 - `CREATE TABLE knowledge_concepts` / `knowledge_entities` / `knowledge_lint_reports`
 - `ALTER TABLE artifacts ADD COLUMN synthesis_status, synthesis_at, synthesis_error, synthesis_retry_count`
 
@@ -104,7 +104,7 @@ Unblock gates:
 ```gherkin
 Scenario: Knowledge layer tables are created by migration
   Given the database has the existing schema through migration 011
-  When migration 012_knowledge_layer.sql is applied
+  When the knowledge_layer migration (shipped as `014_knowledge_layer.sql`, now consolidated into `001_initial_schema.sql`) is applied
   Then tables knowledge_concepts, knowledge_entities, knowledge_lint_reports exist
   And artifacts table has columns synthesis_status, synthesis_at, synthesis_error, synthesis_retry_count
   And all required indexes exist
@@ -127,7 +127,7 @@ Scenario: Prompt contract is loaded from YAML and validated
 ### Implementation Plan
 
 **Files/surfaces to modify:**
-- `internal/db/migrations/012_knowledge_layer.sql` — new migration file
+- `internal/db/migrations/001_initial_schema.sql` lines 438-490 (originally shipped as 014_knowledge_layer.sql; spec was authored citing 012_* but the file shipped as 014_* before the migrations 002-017 schema squash; historical file preserved at `internal/db/migrations/archive/014_knowledge_layer.sql`) — knowledge layer migration
 - `internal/knowledge/store.go` — new package: KnowledgeStore type with CRUD methods
 - `internal/knowledge/contract.go` — PromptContract loader from YAML
 - `internal/knowledge/types.go` — shared types (ConceptPage, EntityProfile, LintFinding, etc.)
@@ -157,7 +157,7 @@ Scenario: Prompt contract is loaded from YAML and validated
 
 ### Definition of Done
 
-- [x] Migration 012_knowledge_layer.sql creates all 3 tables, 4 artifact columns, all indexes
+- [x] knowledge_layer migration (shipped as `014_knowledge_layer.sql`, consolidated into `001_initial_schema.sql`) creates all 3 tables, 4 artifact columns, all indexes
   > **Phase:** implement
   > **Note:** Implemented as `014_knowledge_layer.sql` (design said 012 but repo had 012+013 already).
   > **Evidence:** `internal/db/migrations/014_knowledge_layer.sql` creates `knowledge_concepts` (with UNIQUE on title_normalized, gin trgm on title, gin on source_artifact_ids, btree on updated_at), `knowledge_entities` (with UNIQUE on name_normalized+entity_type, gin trgm on name, btree on people_id and updated_at), `knowledge_lint_reports` (with btree on run_at), 4 ALTER TABLE columns on artifacts (synthesis_status, synthesis_at, synthesis_error, synthesis_retry_count), and partial index on synthesis_status.
