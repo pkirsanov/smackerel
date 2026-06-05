@@ -4,7 +4,7 @@
   "featureNumber": "080",
   "featureName": "Knowledge Graph Public API",
   "status": "done",
-  "certifiedAt": "2026-06-05T20:50:00Z",
+  "certifiedAt": "2026-06-05T22:30:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "releaseTrain": "next",
@@ -36,10 +36,10 @@
   },
   "certification": {
     "status": "done",
-    "completedAt": "2026-06-05T20:50:00Z",
+    "completedAt": "2026-06-05T22:30:00Z",
     "originalCompletedAt": "2026-06-04T02:30:00Z",
-    "recertifiedAt": "2026-06-05T20:50:00Z",
-    "recertificationReason": "Stochastic quality sweep Round 5 (stabilize trigger): post-cert scopes.md drift-cleanup edits on 2026-06-05 (commits 8cd272dc + 28711074) re-pointed three scope file references (auth/scope_middleware.go landing site + connector test relocations) without changing spec behavior; re-certified after artifact-lint + state-transition-guard + race-enabled unit tests + build all green.",
+    "recertifiedAt": "2026-06-05T22:30:00Z",
+    "recertificationReason": "Stochastic quality sweep Rounds 5 + 8: (Round 5 / stabilize trigger 2026-06-05T20:50:00Z) post-cert scopes.md drift-cleanup edits on 2026-06-05 (commits 8cd272dc + 28711074) re-pointed three scope file references (auth/scope_middleware.go landing site + connector test relocations) without changing spec behavior; (Round 8 / simplify trigger 2026-06-05T22:30:00Z) in-session stdlib-alignment refactor removed 32 lines of hand-rolled stdlib reinvention across internal/api/graphapi/{time.go,edges.go} (F1 hand-rolled itoa\u2192strconv.Itoa, F2 hand-rolled insertion sort\u2192sort.Slice, F3 fmt.Sscanf\u2192strconv.Atoi); zero wire-contract / behavior change; full graphapi race-enabled test suite (60+ tests) green pre\u2192post; re-certified after artifact-lint + state-transition-guard + race-enabled unit tests + build all green.",
     "observations": [
       { "id": "OBS-080-001", "severity": "low", "recordedAt": "2026-06-05T20:50:00Z", "summary": "Two preexisting advisory warnings carried over from original cert: (a) Test Plan paths heuristic flags 'no concrete test file paths' in scope Test Plan tables despite concrete paths existing in evidence blocks; (b) 16 of 43 report.md evidence blocks lack the dual terminal-output signal heuristic threshold. Both are heuristic warnings, not blockers; Code Diff Evidence + live-stack integration/e2e logs in earlier report sections satisfy the underlying intent. Tracked for cross-spec consideration; no spec 080 action required." }
     ],
@@ -124,7 +124,7 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-06-03T22:30:00Z",
-    "lastUpdatedAt": "2026-06-05T20:50:00Z",
+    "lastUpdatedAt": "2026-06-05T22:30:00Z",
     "completedPhaseClaims": [
       {
         "phase": "select",
@@ -293,6 +293,46 @@
         "completedAt": "2026-06-05T20:50:00Z",
         "evidenceRef": "report.md#stochastic-sweep-round-5--stabilize-trigger--2026-06-05",
         "notes": "Re-certification validation after stabilize-trigger remediation: artifact-lint.sh PASSED; discovered-issue-disposition-guard.sh PASSED; state-transition-guard re-run is the closure step before commit. certifiedAt bumped 2026-06-04T02:30:00Z -> 2026-06-05T20:50:00Z (after 8cd272dc + 28711074 post-cert scopes.md drift commits) so G088 inspection window is clean."
+      },
+      {
+        "phase": "simplify",
+        "scope": null,
+        "agent": "bubbles.workflow",
+        "completedAt": "2026-06-05T22:30:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-8--simplify-trigger--2026-06-05",
+        "notes": "Stochastic quality sweep Round 8 (simplify trigger) -- parent-expanded simplify-to-doc child mode. Simplify probe surfaced 3 over-engineering / stdlib-reinvention findings against internal/api/graphapi/: F1 hand-rolled 21-line itoa(int) in time.go vs stdlib strconv.Itoa already imported in sibling files; F2 hand-rolled insertion sort sortTimeDays in time.go vs idiomatic sort.Slice; F3 fmt.Sscanf(raw, '%d', &n) in edges.go vs strconv.Atoi used by sibling parseListPagination. Remediation: multi_replace_string_in_file transaction across time.go + edges.go -- imports updated, call sites switched to stdlib equivalents, hand-rolled helpers deleted. Net delta: -30 lines time.go, -2 lines edges.go."
+      },
+      {
+        "phase": "test",
+        "scope": null,
+        "agent": "bubbles.workflow",
+        "completedAt": "2026-06-05T22:30:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-8--simplify-trigger--2026-06-05",
+        "notes": "Round 8 test phase: go build ./... exit 0; go vet ./internal/api/graphapi/... exit 0; go test ./internal/api/graphapi/... -race -count=1 -v PASS (60+ tests across topics_test, people_test, places_test, time_test, edges_test, cursor_test, errors_test, limits_test, config_test). Behavior preserved across all 8 endpoints; tests cover all three simplified code paths directly (TestTimeHandler_WindowOver365Days_400_SCN080_12 covers strconv.Itoa substitution; TestTimeHandler_GroupsByDay_SCN080_07 + TestGroupByDayUTC_Empty cover sort.Slice substitution; TestEdgesHandler_NextCursorRoundTrip covers strconv.Atoi substitution)."
+      },
+      {
+        "phase": "validate",
+        "scope": null,
+        "agent": "bubbles.workflow",
+        "completedAt": "2026-06-05T22:30:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-8--simplify-trigger--2026-06-05",
+        "notes": "Round 8 validate phase: ./smackerel.sh lint exit 0 (gofmt + golangci-lint + web validation clean); artifact-lint.sh PASSED (48 evidence blocks legitimate; all required specialist phases recorded); state-transition-guard.sh TRANSITION PERMITTED -- all 35 checks PASS including G088 post-certification spec edit detection (pre-bump window now closing) and G095 discovered-issue disposition; 2 warnings = same pre-existing heuristic Test-Plan-paths + dual-terminal-output advisories already recorded under certification.observations[].OBS-080-001."
+      },
+      {
+        "phase": "audit",
+        "scope": null,
+        "agent": "bubbles.workflow",
+        "completedAt": "2026-06-05T22:30:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-8--simplify-trigger--2026-06-05",
+        "notes": "Round 8 audit phase: mechanical post-implementation review of 3 simplifications. (1) No wire-contract change: all 8 endpoint shapes unchanged; strconv.Itoa byte-identical to itoa for non-negative int; sort.Slice equal to insertion sort for date-asc comparator; strconv.Atoi same int/error class as fmt.Sscanf('%d') for decimal input. (2) No SST regression: no env var, config key, or smackerel.yaml field touched. (3) No NO-DEFAULTS regression: pure stdlib substitutions, no fallback values added. (4) No security regression: no new input surface, no auth-middleware or error-envelope change. (5) No spec-artifact mutation: only source code changed (time.go, edges.go); spec.md/design.md/scopes.md/scenario-manifest.json unchanged. (6) Test coverage preserved: 60+ graphapi tests PASS race-enabled."
+      },
+      {
+        "phase": "docs",
+        "scope": null,
+        "agent": "bubbles.workflow",
+        "completedAt": "2026-06-05T22:30:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-8--simplify-trigger--2026-06-05",
+        "notes": "Round 8 docs phase: appended 'Stochastic Sweep Round 8 -- Simplify Trigger -- 2026-06-05' section to report.md with full per-phase evidence (select, simplify probe + remediation, test, validate, audit, docs, finalize); extended state.json certification.recertificationReason to document Round 8 simplify context; bumped certifiedAt + recertifiedAt + completedAt + lastUpdatedAt to 2026-06-05T22:30:00Z; carried-forward pre-existing OBS-080-001 advisory; no new observations."
       }
     ],
     "pendingTransitionRequests": [],
@@ -370,6 +410,16 @@
         "runEndedAt": "2026-06-05T20:50:00Z",
         "recordedAt": "2026-06-05T20:50:00Z",
         "summary": "Stochastic quality sweep Round 5 of 20 (stabilize trigger) executed in parent-expanded child-mode form for stabilize-to-doc. Baseline green (build, race-enabled graphapi unit tests, lint, vet). Stabilize probe surfaced 3 blocking governance findings (G013, G088, G095) + 2 advisory warnings against the already-certified surface. Remediation: report.md evidence-block consolidation, report.md inline disposition citations, state.json re-certification with observations[] block and updated certifiedAt. Result: artifact-lint PASSED + discovered-issue-disposition-guard PASSED + state-transition-guard expected clean post-bump. No code changes; spec 080 remains shipped and unblocking spec 073 Scope 5."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["select", "simplify", "test", "validate", "audit", "docs", "finalize"],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-05T22:10:00Z",
+        "runEndedAt": "2026-06-05T22:30:00Z",
+        "recordedAt": "2026-06-05T22:30:00Z",
+        "summary": "Stochastic quality sweep Round 8 of 20 (simplify trigger) executed in parent-expanded child-mode form for simplify-to-doc. Baseline green (build, race-enabled graphapi unit tests). Simplify probe surfaced 3 over-engineering / stdlib-reinvention findings against internal/api/graphapi/: F1 hand-rolled itoa(int) in time.go -> strconv.Itoa; F2 hand-rolled insertion sort sortTimeDays in time.go -> sort.Slice; F3 fmt.Sscanf in edges.go -> strconv.Atoi. Remediation: one multi_replace_string_in_file transaction across time.go + edges.go (-32 lines net). Post-simplify: go build + go vet + go test -race + ./smackerel.sh lint + artifact-lint.sh + state-transition-guard.sh all green. Re-certified done 2026-06-05T22:30:00Z (extending Round 5 recertificationReason); no new observations; OBS-080-001 carried forward. Spec 080 remains shipped and unblocking spec 073 Scope 5."
       }
     ]
   }
