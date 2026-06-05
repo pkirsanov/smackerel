@@ -323,10 +323,14 @@ class NATSClient:
         self._consumer_max_deliver = max_deliver
         self._consumer_ack_wait_seconds = ack_wait_seconds
 
-        # nats-py expects ack_wait as nanoseconds (Go-style time.Duration).
+        # nats-py ConsumerConfig.ack_wait is `Optional[float]` in seconds; the
+        # library performs the seconds→nanoseconds conversion before sending
+        # the JSON to JetStream. Passing pre-multiplied nanoseconds here
+        # overflows int64 on the wire and the server rejects the create with
+        # err_code=10025 ("invalid JSON").
         consumer_config = ConsumerConfig(
             max_deliver=max_deliver,
-            ack_wait=ack_wait_seconds * 1_000_000_000,
+            ack_wait=float(ack_wait_seconds),
         )
 
         max_attempts = 30

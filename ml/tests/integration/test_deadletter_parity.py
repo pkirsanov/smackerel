@@ -76,7 +76,7 @@ def test_poison_message_publishes_to_deadletter_subject():
                 durable=f"spec081-test-consumer-{run_id}",
                 config=ConsumerConfig(
                     max_deliver=max_deliver,
-                    ack_wait=1_000_000_000,  # 1s — keep redelivery fast for the test
+                    ack_wait=1.0,  # 1s — keep redelivery fast for the test
                 ),
             )
 
