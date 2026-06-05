@@ -75,7 +75,7 @@ Scenario: SCN-LST-006 Test cleanup helpers register t.Cleanup callbacks and emit
   $ grep -nE '^  test:|smackerel-test|47001|47004' config/smackerel.yaml | head -10
   ```
 - [x] `./smackerel.sh test integration` starts test stack, runs shell health check, then runs Go integration tests with `--network host` and SST-derived env vars — **Phase:** implement
-  Evidence: `scripts/runtime/go-integration.sh` (the `./smackerel.sh test integration` dispatch was migrated from the originally-planned `scripts/commands/test.sh` to the per-language scripts under `scripts/runtime/` during the runtime CLI refactor; the `--network host` + SST env-var wiring is now in `go-integration.sh`)
+  Evidence: `scripts/runtime/go-integration.sh` (the `./smackerel.sh test integration` dispatch was migrated from the originally-planned scripts/commands/test.sh to the per-language scripts under `scripts/runtime/` during the runtime CLI refactor; the `--network host` + SST env-var wiring is now in `go-integration.sh`)
   ```
   $ grep -nE 'test integration|integration_test|--network host' scripts/runtime/go-integration.sh | head -5
   ```
@@ -421,7 +421,7 @@ This section enumerates the file surfaces that spec 031 (Live Stack Testing) is 
 - E2E test files: `tests/e2e/**/*.go` (capture_process_search and live-stack-pipeline siblings only)
 - Stress test files: `tests/stress/**/*.go` (only the ML readiness SLA stress test introduced by BUG-031-006:Scope-3)
 - ML readiness implementation surface: `internal/api/ml_readiness.go`, `internal/api/health.go` (additive only — existing helpers, no behavioral change to other API handlers)
-- Live-stack test runtime scripts: `scripts/runtime/go-integration.sh`, `scripts/runtime/go-e2e.sh`, `scripts/runtime/go-stress.sh`, and `scripts/commands/test.sh` (only the `test integration` / `test e2e` / `test stress` targets, only to wire the live-stack test stack and SST-derived env vars)
+- Live-stack test runtime scripts: `scripts/runtime/go-integration.sh`, `scripts/runtime/go-e2e.sh`, `scripts/runtime/go-stress.sh` (the dispatch was migrated from the originally-planned scripts/commands/test.sh to per-language scripts under `scripts/runtime/` during the runtime CLI refactor; only the `test integration` / `test e2e` / `test stress` targets, only to wire the live-stack test stack and SST-derived env vars)
 - Spec 031 planning artifacts: `specs/031-live-stack-testing/{spec.md,design.md,scopes.md,report.md,uservalidation.md,state.json,scenario-manifest.json}`
 - Spec 031 bug folders: `specs/031-live-stack-testing/bugs/**` (all governance artifacts for BUG-031-001 .. BUG-031-006)
 

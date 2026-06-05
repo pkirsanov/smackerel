@@ -56,6 +56,13 @@ import (
 // across 10 specs (023, 031, 043, 056, 060, 065, 071, 072, 077, 080) —
 // each closing 1 broken path via renames/rephrasings + the new
 // internal/auth/docs_test.go for spec 060 SCN-060-019/020.
+// 2026-06-05 (session 3 mid-tier batch): tightened to 375 after fixes
+// across 8 specs (009, 011, 012, 013, 037, 038, 052, 081) — closing
+// 19 broken paths via renames (cmd/smackerel-core → cmd/core,
+// internal/nats/subscriber.go → internal/pipeline/subscriber.go,
+// tests/integration/*_test.go → internal/connector/*/...,
+// internal/drive/tools.go → internal/drive/tools/tools.go) plus
+// bare-text rephrasings for the planned-but-relocated artifacts.
 //
 // Lowering protocol:
 //  1. Pick a spec (or set of specs) to clean.
@@ -64,7 +71,7 @@ import (
 //  3. Re-run this test; it will report the new actual count.
 //  4. Lower this constant to match (or below) the new actual count.
 //  5. Commit both changes together so the ratchet stays tight.
-const maxAllowedBrokenPaths = 394
+const maxAllowedBrokenPaths = 375
 
 var pathRegex = regexp.MustCompile("`((?:internal|cmd|tests|ml|web|deploy|config|scripts)/[\\w/.-]+\\.(go|py|md|yaml|yml|json|js|ts|tsx|dart|sh|sql|toml))`")
 

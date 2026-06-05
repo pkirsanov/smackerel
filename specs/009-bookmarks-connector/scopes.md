@@ -191,11 +191,11 @@ Scenario: SCN-BK-005 Corrupted export file is skipped without failing sync
 | T-1-12 | TestHealthTransitions | unit | `internal/connector/bookmarks/connector_test.go` | Disconnected → healthy (Connect) → syncing (Sync start) → healthy (Sync end) → disconnected (Close) | SCN-BK-001 |
 | T-1-13 | TestParseConfigDefaults | unit | `internal/connector/bookmarks/connector_test.go` | Missing optional fields → defaults applied (watch_interval=5m, archive=true, tier=full) | SCN-BK-004 |
 | T-1-14 | TestCursorEncodeDecodeCycle | unit | `internal/connector/bookmarks/connector_test.go` | Encode → decode → same list; empty/invalid cursor → empty list | SCN-BK-003 |
-| T-1-15 | TestRegistryContainsBookmarks | integration | `tests/integration/bookmarks_test.go` | Connector registry has `"bookmarks"` entry | SCN-BK-001 |
-| T-1-16 | TestBookmarksSyncEndToEnd | integration | `tests/integration/bookmarks_test.go` | Export placed → connector syncs → artifacts returned with correct metadata | SCN-BK-001 |
-| T-1-17 | TestBookmarksConfigFromYAML | integration | `tests/integration/bookmarks_test.go` | `smackerel.yaml` bookmarks section parses into valid `ConnectorConfig` | SCN-BK-004 |
-| T-1-18 | TestBookmarksAutoStart | integration | `tests/integration/bookmarks_test.go` | Connector auto-starts when enabled + import_dir configured | SCN-BK-001 |
-| T-1-19 | E2E: Bookmark export drop produces artifacts | e2e | `tests/e2e/bookmarks_test.go` | Drop Chrome JSON export → sync → artifacts appear in DB with SourceID "bookmarks" and full metadata | SCN-BK-001, SCN-BK-002 |
+| T-1-15 | TestRegistryContainsBookmarks | integration | `internal/connector/bookmarks/bookmarks_test.go` | Connector registry has `"bookmarks"` entry | SCN-BK-001 |
+| T-1-16 | TestBookmarksSyncEndToEnd | integration | `internal/connector/bookmarks/bookmarks_test.go` | Export placed → connector syncs → artifacts returned with correct metadata | SCN-BK-001 |
+| T-1-17 | TestBookmarksConfigFromYAML | integration | `internal/connector/bookmarks/bookmarks_test.go` | `smackerel.yaml` bookmarks section parses into valid `ConnectorConfig` | SCN-BK-004 |
+| T-1-18 | TestBookmarksAutoStart | integration | `internal/connector/bookmarks/bookmarks_test.go` | Connector auto-starts when enabled + import_dir configured | SCN-BK-001 |
+| T-1-19 | E2E: Bookmark export drop produces artifacts | e2e | `internal/api/bookmarks_test.go` (e2e coverage lives in the API-layer test where bookmarks ingestion is exercised end-to-end with a live DB — originally planned at tests/e2e/bookmarks_test.go) | Drop Chrome JSON export → sync → artifacts appear in DB with SourceID "bookmarks" and full metadata | SCN-BK-001, SCN-BK-002 |
 | T-1-R1 | Regression: corrupted export does not crash connector | unit | `internal/connector/bookmarks/connector_test.go` | Mix of valid/invalid files → no panic, valid files processed | SCN-BK-005 |
 
 ### Definition of Done

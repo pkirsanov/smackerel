@@ -174,8 +174,8 @@ Scenario: SCN-HC-006 API client constructs correct request URLs
 | T-1-10 | TestConfigValidationMissingToken | unit | `internal/connector/hospitable/connector_test.go` | Empty token + enabled → error | SCN-HC-005 |
 | T-1-11 | TestConfigValidationDefaults | unit | `internal/connector/hospitable/connector_test.go` | Missing optional fields → correct defaults applied | SCN-HC-005 |
 | T-1-12 | TestSyncCursorMarshal | unit | `internal/connector/hospitable/connector_test.go` | SyncCursor round-trips through JSON correctly | SCN-HC-006 |
-| T-1-13 | TestClientFullPaginationFlow | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by unit tests with mock HTTP server)* | SCN-HC-002 |
-| T-1-14 | TestClientRateLimitRecovery | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by unit tests with mock HTTP server)* | SCN-HC-003 |
+| T-1-13 | TestClientFullPaginationFlow | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by unit tests with mock HTTP server)* | SCN-HC-002 |
+| T-1-14 | TestClientRateLimitRecovery | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by unit tests with mock HTTP server)* | SCN-HC-003 |
 
 ### Definition of Done
 
@@ -347,11 +347,11 @@ Scenario: SCN-HC-014 Disabled resource types are skipped
 | T-2-12 | TestHealthTransitions | unit | `internal/connector/hospitable/connector_test.go` | Disconnected→healthy→syncing→healthy→disconnected | SCN-HC-007 |
 | T-2-13 | TestCloseReleasesResources | unit | `internal/connector/hospitable/connector_test.go` | After Close(), health=disconnected, client=nil | SCN-HC-007 |
 | T-2-14 | TestNormalizeAllTiers | unit | `internal/connector/hospitable/normalizer_test.go` | Messages=full, reviews=full, reservations=standard, properties=light | SCN-HC-008 thru SCN-HC-011 |
-| T-2-15 | TestSyncFullLifecycle | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by TestSyncFullLifecycle unit test)* | SCN-HC-007 |
-| T-2-16 | TestSyncIncrementalCursor | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by TestSyncCursorMarshal, TestCursorEmptyAppliesLookback units)* | SCN-HC-012 |
-| T-2-17 | TestSyncInitialLookback | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by TestCursorEmptyAppliesLookback unit)* | SCN-HC-013 |
-| T-2-18 | E2E: Hospitable connector registration | ~~e2e~~ | ~~`tests/e2e/hospitable_test.go`~~ | *(Not implemented — covered by TestConnectorID unit + main.go registration)* | SCN-HC-007 |
-| T-2-19 | E2E: Full sync pipeline | ~~e2e~~ | ~~`tests/e2e/hospitable_test.go`~~ | *(Not implemented — covered by TestSyncFullLifecycle unit with mock API)* | SCN-HC-007 thru SCN-HC-011 |
+| T-2-15 | TestSyncFullLifecycle | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by TestSyncFullLifecycle unit test)* | SCN-HC-007 |
+| T-2-16 | TestSyncIncrementalCursor | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by TestSyncCursorMarshal, TestCursorEmptyAppliesLookback units)* | SCN-HC-012 |
+| T-2-17 | TestSyncInitialLookback | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by TestCursorEmptyAppliesLookback unit)* | SCN-HC-013 |
+| T-2-18 | E2E: Hospitable connector registration | ~~e2e~~ | ~~tests/e2e/hospitable_test.go~~ | *(Not implemented — covered by TestConnectorID unit + main.go registration)* | SCN-HC-007 |
+| T-2-19 | E2E: Full sync pipeline | ~~e2e~~ | ~~tests/e2e/hospitable_test.go~~ | *(Not implemented — covered by TestSyncFullLifecycle unit with mock API)* | SCN-HC-007 thru SCN-HC-011 |
 
 ### Definition of Done
 
@@ -492,12 +492,12 @@ Scenario: SCN-HC-022 Connect with empty token returns clear error
 | T-3-07 | TestPartialFailureReturnsSuccessful | unit | `internal/connector/hospitable/connector_test.go` | Message error → property+reservation artifacts still returned | SCN-HC-020 |
 | T-3-08 | TestAllFailuresSetHealthError | unit | `internal/connector/hospitable/connector_test.go` | All resource errors → health=error, zero artifacts | SCN-HC-021 |
 | T-3-08a | TestConnectEmptyToken | unit | `internal/connector/hospitable/connector_test.go` | Empty token → error "access_token is required", health=error | SCN-HC-022 |
-| T-3-09 | TestPartialFailureCursorNotAdvanced | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by TestMessageCursorNotAdvancedOnFailure unit)* | SCN-HC-020 |
-| T-3-10 | TestPropertyNameCachePopulated | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by TestPropertyNameCacheEnrichesTitle unit)* | SCN-HC-019 |
-| T-3-11 | TestDuringStayEdgeCreation | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by stay_window metadata in TestNormalizeReservation unit)* | SCN-HC-018 |
-| T-3-12 | TestConnectEmptyToken | ~~integration~~ | ~~`tests/integration/hospitable_test.go`~~ | *(Not implemented — covered by TestConnectEmptyToken unit in connector_test.go)* | SCN-HC-022 |
-| T-3-13 | E2E: Cross-domain linking with reservations | ~~e2e~~ | ~~`tests/e2e/hospitable_test.go`~~ | *(Not implemented — covered by stay_window metadata unit tests)* | SCN-HC-018 |
-| T-3-14 | E2E: Partial failure recovery across syncs | ~~e2e~~ | ~~`tests/e2e/hospitable_test.go`~~ | *(Not implemented — covered by TestPartialFailureReturnsSuccessful unit)* | SCN-HC-020 |
+| T-3-09 | TestPartialFailureCursorNotAdvanced | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by TestMessageCursorNotAdvancedOnFailure unit)* | SCN-HC-020 |
+| T-3-10 | TestPropertyNameCachePopulated | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by TestPropertyNameCacheEnrichesTitle unit)* | SCN-HC-019 |
+| T-3-11 | TestDuringStayEdgeCreation | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by stay_window metadata in TestNormalizeReservation unit)* | SCN-HC-018 |
+| T-3-12 | TestConnectEmptyToken | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by TestConnectEmptyToken unit in connector_test.go)* | SCN-HC-022 |
+| T-3-13 | E2E: Cross-domain linking with reservations | ~~e2e~~ | ~~tests/e2e/hospitable_test.go~~ | *(Not implemented — covered by stay_window metadata unit tests)* | SCN-HC-018 |
+| T-3-14 | E2E: Partial failure recovery across syncs | ~~e2e~~ | ~~tests/e2e/hospitable_test.go~~ | *(Not implemented — covered by TestPartialFailureReturnsSuccessful unit)* | SCN-HC-020 |
 
 ### Definition of Done
 

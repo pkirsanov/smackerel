@@ -203,7 +203,7 @@ Greenfield foundation — no renames, no removals. New surfaces added:
 - **Allowed file families:** `internal/auth/scopes.go`,
   `internal/auth/scopes_test.go`, `internal/api/graphapi/**`,
   `internal/auth/scope_middleware.go` (only the `RequireScope` helper
-  wiring; spec authored the path as `internal/api/middleware/scope.go`
+  wiring; spec authored the path as internal/api/middleware/scope.go
   but the helper actually shipped at `internal/auth/scope_middleware.go`
   per the existing auth-package layout),
   `internal/config/{config,validate,validate_test,knowledge_graph_api,knowledge_graph_api_test}.go`,

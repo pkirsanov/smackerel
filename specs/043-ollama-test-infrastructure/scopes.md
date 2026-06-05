@@ -25,7 +25,7 @@ Each scope ends with a working state. Test plan rows must reference real test fi
 |---|------|----------|-------|-------------|--------|
 | 1 | Config + Compose Foundation | `config/smackerel.yaml`, `scripts/commands/config.sh`, `docker-compose.yml` | unit, integration | 12 SST keys live; ollama service uses `${OLLAMA_IMAGE}`; zero hardcoded values | [x] Done |
 | 2 | Happy-Path Test + Pull Script | `tests/e2e/agent/`, `scripts/commands/ollama-test-pull.sh` | e2e, adversarial | `TestAgentHappyPath_PlanToolSynthesis` runs against live Ollama; deterministic output; fail-loud on unavailable | [ ] Not started |
-| 3 | Wire Into `./smackerel.sh test e2e` + Cross-Spec Closure | `scripts/runtime/go-e2e.sh` (originally planned as `scripts/commands/test.sh`; runtime CLI refactor moved e2e dispatch to per-language scripts under `scripts/runtime/`), `specs/037-llm-agent-tools/state.json`, `specs/037-llm-agent-tools/scopes.md` | e2e, smoke | `SMACKEREL_TEST_OLLAMA=1` gate; spec 037 deferred-infra modifier dropped; MIT-037-OLLAMA-001 marked resolved | [ ] Not started |
+| 3 | Wire Into `./smackerel.sh test e2e` + Cross-Spec Closure | `scripts/runtime/go-e2e.sh` (originally planned as scripts/commands/test.sh; runtime CLI refactor moved e2e dispatch to per-language scripts under `scripts/runtime/`), `specs/037-llm-agent-tools/state.json`, `specs/037-llm-agent-tools/scopes.md` | e2e, smoke | `SMACKEREL_TEST_OLLAMA=1` gate; spec 037 deferred-infra modifier dropped; MIT-037-OLLAMA-001 marked resolved | [ ] Not started |
 
 ---
 
@@ -209,7 +209,7 @@ Scenario: SCN-OLLAMA-007 Closing this spec closes MIT-037-OLLAMA-001 and unblock
 
 ### Implementation Plan (no code)
 
-- Update the `./smackerel.sh test e2e` dispatch (now at `scripts/runtime/go-e2e.sh` — originally planned at `scripts/commands/test.sh` but the runtime CLI refactor moved it to per-language scripts under `scripts/runtime/`) to detect `SMACKEREL_TEST_OLLAMA=1` env-var and:
+- Update the `./smackerel.sh test e2e` dispatch (now at `scripts/runtime/go-e2e.sh` — originally planned at scripts/commands/test.sh but the runtime CLI refactor moved it to per-language scripts under `scripts/runtime/`) to detect `SMACKEREL_TEST_OLLAMA=1` env-var and:
   - Add `--profile ollama` to the compose-up call.
   - Run `scripts/commands/ollama-test-pull.sh` after compose readiness probe.
   - Run the e2e suite including `tests/e2e/agent/`.
@@ -225,7 +225,7 @@ Scenario: SCN-OLLAMA-007 Closing this spec closes MIT-037-OLLAMA-001 and unblock
 | ID | Test Type | Location | Trace ID | Assertion |
 |----|-----------|----------|----------|-----------|
 | T3-01 | e2e | `tests/e2e/agent/happy_path_test.go` | SCN-OLLAMA-007 | When `SMACKEREL_TEST_OLLAMA=1`, `./smackerel.sh test e2e` starts Ollama profile + runs `TestAgentHappyPath_PlanToolSynthesis` to completion |
-| T3-02 | smoke | `scripts/commands/test.sh` | SCN-OLLAMA-007 | When `SMACKEREL_TEST_OLLAMA` is unset, e2e suite runs without Ollama profile (no startup attempt; agent happy_path test compiled out via build tag) |
+| T3-02 | smoke | `scripts/runtime/go-e2e.sh` (originally planned as scripts/commands/test.sh; runtime CLI refactor) | SCN-OLLAMA-007 | When `SMACKEREL_TEST_OLLAMA` is unset, e2e suite runs without Ollama profile (no startup attempt; agent happy_path test compiled out via build tag) |
 | T3-03 | spec-state | `specs/037-llm-agent-tools/state.json` | SCN-OLLAMA-007 | MIT-037-OLLAMA-001 entry has `status: resolved` and `closureSpec: 043-ollama-test-infrastructure` after Scope 3 closure commit |
 | T3-04 | spec-trace | `specs/037-llm-agent-tools/scopes.md` | SCN-OLLAMA-007 | `bash .github/bubbles/scripts/traceability-guard.sh specs/037-llm-agent-tools` returns PASSED after deferred-infra modifier removal |
 

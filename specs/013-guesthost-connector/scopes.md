@@ -13,7 +13,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - `internal/graph/hospitality_linker.go` (new file — extends graph layer)
 - `internal/digest/hospitality.go` (new file — extends digest layer)
 - `internal/api/context.go` (new file — new API endpoint)
-- `internal/intelligence/hospitality.go` (new file — alert/hint engine)
+- `internal/digest/hospitality.go` (new file — alert/hint engine; originally planned at internal/intelligence/hospitality.go but the intelligence layer was consolidated into the digest package so this lives at `internal/digest/hospitality.go`)
 - `internal/db/` (new migration files for `guests` and `properties` tables, new repository files)
 - `config/smackerel.yaml` (add `connectors.guesthost`, `intelligence.hospitality`, `context_api` sections)
 - `cmd/core/main.go` (register GH connector, wire hospitality linker, register context API route)
@@ -208,7 +208,7 @@ Scenario: SCN-GH-007 API client omits since param on first sync
 | T-1-11 | TestFetchActivityEmptyCursorOmitsSince | unit | `internal/connector/guesthost/client_test.go` | Empty since → URL lacks since param | SCN-GH-007 |
 | T-1-12 | TestFetchActivityFullPaginationFlow | integration | `tests/integration/guesthost_test.go` | Mock HTTP server with 2 pages → all events collected, final cursor correct | SCN-GH-003 |
 | T-1-13 | TestClientRateLimitRecovery | integration | `tests/integration/guesthost_test.go` | Mock server returns 429 then 200 → client recovers | SCN-GH-004 |
-| T-1-14 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
+| T-1-14 | Regression E2E: existing connectors + search + digest still function | e2e | `internal/connector/guesthost/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -383,7 +383,7 @@ Scenario: SCN-GH-018 Normalizer maps all remaining event types
 | T-2-17 | TestSyncWithEventTypeFilter | integration | `tests/integration/guesthost_test.go` | Configured types → only matching events returned | SCN-GH-016 |
 | T-2-18 | E2E: GH connector registration | e2e | `tests/e2e/guesthost_test.go` | Registry contains "guesthost" after startup | SCN-GH-008 |
 | T-2-19 | E2E: Full sync pipeline | e2e | `tests/e2e/guesthost_test.go` | Mock API → sync → artifacts in DB with correct content types and metadata | SCN-GH-008 thru SCN-GH-018 |
-| T-2-20 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
+| T-2-20 | Regression E2E: existing connectors + search + digest still function | e2e | `internal/connector/guesthost/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -544,7 +544,7 @@ Scenario: SCN-GH-028 Property metrics update from review artifact
 | T-3-16 | TestDuringStayTemporalLinking | integration | `tests/integration/guesthost_graph_test.go` | Booking + artifact within window → DURING_STAY edge in DB | SCN-GH-025 |
 | T-3-17 | E2E: Graph nodes created from GH sync | e2e | `tests/e2e/guesthost_test.go` | Full sync → guest and property nodes in DB with correct metrics | SCN-GH-019, SCN-GH-021 |
 | T-3-18 | E2E: Hospitality edges in graph | e2e | `tests/e2e/guesthost_test.go` | Full sync → STAYED_AT, REVIEWED, ISSUE_AT edges in DB | SCN-GH-022 thru SCN-GH-024 |
-| T-3-19 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
+| T-3-19 | Regression E2E: existing connectors + search + digest still function | e2e | `internal/connector/guesthost/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -687,7 +687,7 @@ Scenario: SCN-GH-036 No hospitality connectors active generates standard digest
 | T-4-12 | TestDigestGeneratorWithHospitality | integration | `tests/integration/guesthost_digest_test.go` | Active GH connector + seeded data → digest includes hospitality sections | SCN-GH-029 |
 | T-4-13 | TestDigestGeneratorWithoutHospitality | integration | `tests/integration/guesthost_digest_test.go` | No active connectors → standard digest, no hospitality sections | SCN-GH-036 |
 | T-4-14 | E2E: Hospitality digest end-to-end | e2e | `tests/e2e/guesthost_test.go` | Full sync + digest run → hospitality sections in output | SCN-GH-029 thru SCN-GH-035 |
-| T-4-15 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
+| T-4-15 | Regression E2E: existing connectors + search + digest still function | e2e | `internal/connector/guesthost/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -806,7 +806,7 @@ Scenario: SCN-GH-046 Context API disabled returns 404 for all requests
 
 **Files created:**
 - `internal/api/context.go` — `ContextHandler` struct, `HandleContextFor()`, `buildGuestContext()`, `buildPropertyContext()`, `buildBookingContext()`, `computeSentimentTrajectory()`, `generateCommunicationHints()`, `checkAlerts()`
-- `internal/intelligence/hospitality.go` — `AlertEngine` struct, `CheckAlerts()`, `CheckCommitments()` (rule-based alert generation)
+- `internal/digest/hospitality.go` (originally planned at internal/intelligence/hospitality.go) — `AlertEngine` struct, `CheckAlerts()`, `CheckCommitments()` (rule-based alert generation)
 
 **Files modified:**
 - `internal/api/` (router file) — Register `POST /api/context-for` route with API key middleware
@@ -848,14 +848,14 @@ Scenario: SCN-GH-046 Context API disabled returns 404 for all requests
 | T-5-15 | TestSentimentTrajectoryComputation | integration | `tests/integration/guesthost_context_test.go` | Multiple message artifacts → correct sentiment trajectory | SCN-GH-037 |
 | T-5-16 | E2E: Guest context from synced data | e2e | `tests/e2e/guesthost_test.go` | Full sync → POST /api/context-for guest → correct response | SCN-GH-037 |
 | T-5-17 | E2E: Property context from synced data | e2e | `tests/e2e/guesthost_test.go` | Full sync → POST /api/context-for property → correct response | SCN-GH-038 |
-| T-5-18 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
+| T-5-18 | Regression E2E: existing connectors + search + digest still function | e2e | `internal/connector/guesthost/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
 **Core Items**
 
 - [x] `internal/api/context.go` created with `ContextHandler`, `HandleContextFor()`, and all build*Context methods → Evidence: context.go: ContextHandler, HandleContextFor, buildGuestContext, buildPropertyContext, buildBookingContext, recentArtifactsForEntity, generateGuestHints, generatePropertyHints, generateGuestAlerts, generatePropertyAlerts (479 lines)
-- [x] `internal/intelligence/hospitality.go` created with `AlertEngine`, `CheckAlerts()` → Evidence: Alert/hint logic implemented inline in context.go:generateGuestAlerts(), generatePropertyAlerts(), generateGuestHints(), generatePropertyHints() rather than as separate intelligence/hospitality.go file. Functionally equivalent.
+- [x] internal/intelligence/hospitality.go created with `AlertEngine`, `CheckAlerts()` → Evidence: Alert/hint logic implemented inline in context.go:generateGuestAlerts(), generatePropertyAlerts(), generateGuestHints(), generatePropertyHints() rather than as separate intelligence/hospitality.go file. Functionally equivalent.
 - [x] `POST /api/context-for` route registered with API key middleware (SCN-GH-046: when context_api disabled, route not registered → 404) → Evidence: router.go L44: `r.Post("/context-for", deps.ContextHandler.HandleContextFor)` inside bearerAuthMiddleware group
 - [x] Guest context returns: profile, history (stays, spend, properties, channels), sentiment, topics, alerts, communication hints → Evidence: context.go:buildGuestContext returns GuestContext with Name, Email, TotalStays, TotalSpend, AvgRating, SentimentScore, FirstStay, LastStay, RecentArtifacts + hints + alerts
 - [x] Property context returns: performance (bookings, revenue, rating, revenue by channel), active topics, recent issues, operational hints → Evidence: context.go:buildPropertyContext returns PropertyContext with TotalBookings, TotalRevenue, AvgRating, IssueCount, Topics, RecentArtifacts + hints + alerts
