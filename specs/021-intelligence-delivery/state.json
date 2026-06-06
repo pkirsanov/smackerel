@@ -5,7 +5,7 @@
   "status": "done",
   "workflowMode": "full-delivery",
   "reopenReason": null,
-  "certifiedAt": "2026-06-06T12:00:00Z",
+  "certifiedAt": "2026-06-06T13:00:00Z",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -404,6 +404,18 @@
       "runStartedAt": "2026-06-03T08:00:00Z",
       "runEndedAt": "2026-06-03T08:00:00Z",
       "summary": "Re-close-out after rescope: Scope 4 (Next Smackerel Prioritizer) extracted from spec 021 — its surface (cross-surface surfacing controller spanning digest, Telegram, web push, ntfy, email-out, plus coordination with specs 025 / 027 / 054) is too broad to live as one scope on the intelligence-delivery spec and is owned by its own future spec. Removed: spec.md '## Cross-Surface Surfacing Budget' section, design.md '## Unified Surfacing Controller' section, scopes.md Scope 4 row + full Scope 4 section, scenario-manifest.json entries SCN-021-016..019, the dispatch entry in report.md. State.json: workflowMode reverted from 'improve-existing' to 'full-delivery'; status and certification.status back to 'done'; scopeProgress trimmed back to three certified scopes (Alert Delivery Sweep, Search Logging, Intelligence Health Freshness); reopen metadata cleared. Runtime untouched: controller groundwork already merged at internal/intelligence/surfacing/ remains on trunk as prework for the future prioritizer spec; go test ./internal/intelligence/... ./internal/scheduler/... ./internal/api/... PASS."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T13:00:00Z",
+      "runEndedAt": "2026-06-06T13:00:00Z",
+      "summary": "Post-sweep drift-guard remediation recert. The scopesdriftguard ratchet test (internal/scopesdriftguard) was failing at 271 broken file references vs ceiling 270 (pre-existing on origin/main, not introduced by the sweep). Root cause for spec 021: the round-12 gaps note documented the never-authored, deferred live-stack e2e test using a backtick code-path form (tests/e2e/alert_delivery_test.go) which the drift guard's path regex counts as a broken file reference. Fix: de-backticked both occurrences in scopes.md to plain prose (the file was never created on disk, so a backtick code-reference was itself the drift); full meaning and the deferred/never-authored explanation preserved. Verification: go test ./internal/scopesdriftguard/... now GREEN (271 -> 270, ceiling 270). No spec.md / design.md / scenario-manifest.json / runtime / test changes; scopes.md prose-only edit. Spec 021 status remains done with no behavior change. certifiedAt bumped to 2026-06-06T13:00:00Z after the edit to satisfy Gate G088."
     }
   ],
   "activeBugs": [],
@@ -411,7 +423,7 @@
     "BUG-021-003-alert-producer-failures-metric"
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-03T08:00:00Z",
+  "lastUpdatedAt": "2026-06-06T13:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
