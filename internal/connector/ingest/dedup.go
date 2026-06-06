@@ -24,8 +24,23 @@ import (
 const dedupKeySeparator = "\x00"
 
 // ComputeDedupKey returns the SHA-256 digest of the canonical dedup
-// tuple. The tuple is (url, contentType, deviceID, bucket) joined by
-// explicit null bytes. Spec 058 design §2.3.
+// tuple. The tuple is (ownerUserID, url, contentType, deviceID, bucket)
+// joined by explicit null bytes, with ownerUserID written FIRST as the
+// outermost namespace. Spec 058 design §2.3.
+//
+// Owner isolation (BUG-058-DEDUP-KEY-OWNER-ISOLATION): because
+// ownerUserID is part of the preimage and dedup_key is the
+// raw_ingest_dedup PRIMARY KEY, two DIFFERENT authenticated owners that
+// emit an identical (url, contentType, deviceID, bucket) tuple
+// deterministically get DIFFERENT keys — and therefore SEPARATE rows and
+// SEPARATE artifacts. One owner can never suppress another owner's
+// capture, nor receive another owner's artifact_id, via a shared
+// source_device_id. Within a single owner the url/content_type/device/
+// bucket components still vary the key exactly as before (the "Chrome
+// Sync" single-owner-multi-device case is unchanged). ownerUserID is the
+// server-authoritative session subject; callers MUST NOT pass a
+// client-supplied value, and an empty ownerUserID is a caller bug (the
+// ingest handler rejects it fail-loud before reaching here).
 //
 // Bucket semantics (the caller computes the bucket):
 //   - bookmarks: 0 always (window is bypassed; one row per
@@ -33,8 +48,10 @@ const dedupKeySeparator = "\x00"
 //   - history (and other time-bucketed types): floor(captured_at_unix /
 //     window_seconds), where window_seconds is clamped to [60, 86400]
 //     by the caller before being passed in here.
-func ComputeDedupKey(url, contentType, deviceID string, bucket int64) []byte {
+func ComputeDedupKey(ownerUserID, url, contentType, deviceID string, bucket int64) []byte {
 	h := sha256.New()
+	h.Write([]byte(ownerUserID))
+	h.Write([]byte(dedupKeySeparator))
 	h.Write([]byte(url))
 	h.Write([]byte(dedupKeySeparator))
 	h.Write([]byte(contentType))

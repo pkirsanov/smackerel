@@ -803,4 +803,44 @@ planning truth, so it does not require recertification. Spec 058 remains
 `blocked` on the four external-infra gaps tracked in
 `bugs/BUG-058-EXTERNAL-INFRA-MISSING/`.
 
+## BUG-058-DEDUP-KEY-OWNER-ISOLATION Closure (2026-06-06)
+
+The Round-18 finding **F2** (dedup_key omits owner_user_id → cross-tenant
+collapse) is **RESOLVED** via `bubbles-workflow mode: bubbles.workflow` /
+`bugfix-fastlane` (parent-expanded — the active runtime lacks `runSubagent`).
+The operator ratified the contract decision: **dedup MUST be per-owner** (it is
+never correct for user B to receive user A's `artifact_id`).
+
+**Fix:** `owner_user_id` is written FIRST into the `ComputeDedupKey` SHA-256
+preimage (the outermost namespace), so two owners that share a
+`(url, content_type, source_device_id, bucket)` tuple deterministically get
+DIFFERENT keys → DIFFERENT `raw_ingest_dedup` rows → SEPARATE artifacts. The
+single caller (`internal/api/connectors/extension/ingest.go`) passes the
+server-authenticated `auth.Session.UserID` and rejects an empty owner fail-loud
+(`owner_required`; no fallback). **No schema migration** was added —
+`dedup_key` stays `BYTEA PRIMARY KEY` and the `ON CONFLICT (dedup_key)` /
+`WHERE dedup_key` SQL is unchanged; the owner enters only via the hash preimage.
+
+**Contract-truth note:** the design §2.3 `CREATE TABLE` SQL comment
+`-- SHA-256(url || content_type || source_device_id || bucket)` describes the
+PRE-BUG-058 preimage and is superseded by this fix; the authoritative
+owner-inclusive contract is the `ComputeDedupKey` doc comment in
+`internal/connector/ingest/dedup.go` and
+`bugs/BUG-058-DEDUP-KEY-OWNER-ISOLATION/design.md`. This closure touches only
+`report.md` + `state.json` (bookkeeping) on the parent — no parent
+planning-truth (`spec.md`/`design.md`/`scopes.md`) edit — so no parent
+recertification is required. Spec 058 remains `blocked` on the four
+external-infra gaps in `bugs/BUG-058-EXTERNAL-INFRA-MISSING/`.
+
+**Evidence:** unit `TestComputeDedupKey_VariesByOwner` + store
+`TestDedupStore_CrossOwnerIsolation` are a genuine red→green pair (FAIL before
+the preimage change, PASS after); handler `TestIngest_RejectsItemWithoutOwner`
+proves the fail-loud guard; live-Postgres
+`TestPostgresDedupStore_CrossOwnerIsolation` (CI-run, skips locally without a
+DB) proves two owners → two rows + two artifact_ids; the single-owner-multi-
+device `TestComputeDedupKey_VariesByDevice` (Chrome Sync) is preserved.
+`go build ./...`, `go vet`, and `go test -race` are green;
+`internal/connector/ingest` 12/12 and `internal/api/connectors/extension` 40/40.
+Full evidence in `bugs/BUG-058-DEDUP-KEY-OWNER-ISOLATION/report.md`.
+
 

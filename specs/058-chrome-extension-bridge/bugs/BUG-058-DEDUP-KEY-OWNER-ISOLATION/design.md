@@ -14,6 +14,14 @@ key contract (parent `design.md` §2.3 "Resolved Decisions"). It MUST be
 ratified before `bubbles.implement` changes the keyer — the chaos round did
 NOT change the keyer unilaterally.
 
+**Decision (ratified 2026-06-06):** The operator ratified per-owner dedup
+namespacing — it is never correct for owner B to receive owner A's
+`artifact_id`. Delivered via `bubbles-workflow mode: bugfix-fastlane`
+(parent-expanded). Parent `design.md` §2.3 is amended to state the
+owner-inclusive preimage; OQ-2 is resolved (global dedup was an oversight, not
+an intentional storage optimization). The implementation, tests, and red→green
+evidence are in [report.md](report.md).
+
 ## Proposed Change
 
 Prepend `owner_user_id` to the dedup key preimage:
