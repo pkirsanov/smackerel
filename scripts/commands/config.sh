@@ -4,6 +4,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG_FILE="$REPO_ROOT/config/smackerel.yaml"
+# Generated-output directory for the non-bundle env render (env file, nats.conf,
+# token read-back). Defaults to the canonical $REPO_ROOT/config/generated. Test
+# harnesses that run config.sh concurrently (e.g.
+# scripts/commands/config_home_lab_runtime_env_test.sh under `go test ./...`)
+# set SMACKEREL_GENERATED_DIR to a private temp dir so parallel generations do
+# not race on the shared output path. Mirrors the BUNDLE_OUTPUT_DIR idiom below.
+[[ -n "${SMACKEREL_GENERATED_DIR:-}" ]] || SMACKEREL_GENERATED_DIR="$REPO_ROOT/config/generated"
 TARGET_ENV="dev"
 EMIT_BUNDLE=false
 BUNDLE_OUTPUT_DIR=""
@@ -670,7 +677,7 @@ SMACKEREL_AUTH_TOKEN="$(required_value runtime.auth_token)"
 # below) so existing client tokens stay valid. The YAML stays "" to preserve
 # the spec 051 contract (TestBundleSecretContract_AdversarialA4_OptOutDetector).
 if [[ "$TARGET_ENV" == "test" && -z "$SMACKEREL_AUTH_TOKEN" ]]; then
-  EXISTING_ENV_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
+  EXISTING_ENV_FILE="$SMACKEREL_GENERATED_DIR/${TARGET_ENV}.env"
   EXISTING_TOKEN=""
   if [[ -f "$EXISTING_ENV_FILE" ]]; then
     EXISTING_TOKEN="$(awk -F= '/^SMACKEREL_AUTH_TOKEN=/ { sub(/^SMACKEREL_AUTH_TOKEN=/, ""); print; exit }' "$EXISTING_ENV_FILE" 2>/dev/null || true)"
@@ -682,7 +689,7 @@ if [[ "$TARGET_ENV" == "test" && -z "$SMACKEREL_AUTH_TOKEN" ]]; then
   fi
 fi
 if [[ "$TARGET_ENV" == "dev" && -z "$SMACKEREL_AUTH_TOKEN" ]]; then
-  EXISTING_ENV_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
+  EXISTING_ENV_FILE="$SMACKEREL_GENERATED_DIR/${TARGET_ENV}.env"
   EXISTING_TOKEN=""
   if [[ -f "$EXISTING_ENV_FILE" ]]; then
     EXISTING_TOKEN="$(awk -F= '/^SMACKEREL_AUTH_TOKEN=/ { sub(/^SMACKEREL_AUTH_TOKEN=/, ""); print; exit }' "$EXISTING_ENV_FILE" 2>/dev/null || true)"
@@ -854,7 +861,7 @@ KNOWLEDGE_GRAPH_API_CURSOR_SECRET_ENV="$(required_value knowledge_graph_api.curs
 # fresh one only when no existing value is found).
 KNOWLEDGE_GRAPH_API_CURSOR_SECRET="${KNOWLEDGE_GRAPH_API_CURSOR_SECRET:-}"
 if [[ ( "$TARGET_ENV" == "test" || "$TARGET_ENV" == "dev" ) && -z "$KNOWLEDGE_GRAPH_API_CURSOR_SECRET" ]]; then
-  EXISTING_ENV_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
+  EXISTING_ENV_FILE="$SMACKEREL_GENERATED_DIR/${TARGET_ENV}.env"
   EXISTING_SECRET=""
   if [[ -f "$EXISTING_ENV_FILE" ]]; then
     EXISTING_SECRET="$(awk -F= '/^KNOWLEDGE_GRAPH_API_CURSOR_SECRET=/ { sub(/^KNOWLEDGE_GRAPH_API_CURSOR_SECRET=/, ""); print; exit }' "$EXISTING_ENV_FILE" 2>/dev/null || true)"
@@ -1546,9 +1553,9 @@ if [[ -z "${SMACKEREL_ML_IMAGE+set}" ]]; then
   SMACKEREL_ML_IMAGE=""
 fi
 
-mkdir -p "$REPO_ROOT/config/generated"
+mkdir -p "$SMACKEREL_GENERATED_DIR"
 
-OUTPUT_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
+OUTPUT_FILE="$SMACKEREL_GENERATED_DIR/${TARGET_ENV}.env"
 
 # Spec 045 BUG-045-001 Scope 2 / DD-2 — write to a TEMP env file first,
 # then run the config-validate binary against the TEMP file BEFORE the
@@ -2208,7 +2215,7 @@ echo "Generated $OUTPUT_FILE"
 # Generate NATS config file with resolved auth token and monitor port.
 # NATS does not support env var substitution in config files, so values
 # are resolved from the SST at generation time.
-NATS_CONF_FILE="$REPO_ROOT/config/generated/nats.conf"
+NATS_CONF_FILE="$SMACKEREL_GENERATED_DIR/nats.conf"
 
 # Build NATS auth section only when a token is set
 NATS_AUTH_SECTION=""
@@ -2258,7 +2265,7 @@ echo "Generated $NATS_CONF_FILE"
 # build time even before config-generate runs.
 # ─────────────────────────────────────────────────────────────────────
 PROM_TMPL_FILE="$REPO_ROOT/config/prometheus/prometheus.yml.tmpl"
-PROM_OUT_FILE="$REPO_ROOT/config/generated/prometheus.yml"
+PROM_OUT_FILE="$SMACKEREL_GENERATED_DIR/prometheus.yml"
 
 [[ -f "$PROM_TMPL_FILE" ]] || {
   echo "ERROR: Prometheus template not found: $PROM_TMPL_FILE" >&2

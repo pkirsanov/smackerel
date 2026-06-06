@@ -41,10 +41,11 @@
 # scripts/commands/config.sh makes Sub-test 1 fail because the home-lab
 # bundle reverts to SMACKEREL_ENV=development.
 #
-# Output isolation: config.sh hardcodes its output path to
-# $REPO_ROOT/config/generated/${TARGET_ENV}.env, so this script backs up any
-# pre-existing dev.env / test.env / home-lab.env files BEFORE running and
-# restores them after, leaving the operator's working state untouched.
+# Output isolation: config.sh writes the env file to
+# ${SMACKEREL_GENERATED_DIR:-$REPO_ROOT/config/generated}/${TARGET_ENV}.env.
+# This test exports SMACKEREL_GENERATED_DIR to a private temp dir so it never
+# touches the operator's working state and never races with other
+# config-generating tests under `go test ./...`.
 #
 # This script is invoked by
 # internal/config/sst_loader_home_lab_runtime_env_test.go under
@@ -62,7 +63,14 @@ fi
 
 LIVE_YAML="$REPO_ROOT/config/smackerel.yaml"
 CONFIG_SH="$REPO_ROOT/scripts/commands/config.sh"
-GENERATED_DIR="$REPO_ROOT/config/generated"
+# Isolate generated output into a private temp dir so this test never races
+# with other config-generating tests on the shared $REPO_ROOT/config/generated
+# path under `go test ./...`. config.sh honors SMACKEREL_GENERATED_DIR for the
+# env file, nats.conf, prometheus.yml, and the token read-back path; REPO_ROOT
+# and all real inputs (yaml, cmd/config-validate via go run) stay live so the
+# BUG-051-001 regression fidelity is preserved.
+GENERATED_DIR="$(mktemp -d)"
+export SMACKEREL_GENERATED_DIR="$GENERATED_DIR"
 
 if [[ ! -f "$LIVE_YAML" ]]; then
   echo "FATAL: $LIVE_YAML not found" >&2
@@ -73,36 +81,15 @@ if [[ ! -f "$CONFIG_SH" ]]; then
   exit 1
 fi
 
-# -----------------------------------------------------------------------
-# Backup pre-existing generated env files so we can restore them at exit.
-# -----------------------------------------------------------------------
-BACKUP_DIR="$(mktemp -d)"
-for env_name in dev test home-lab; do
-  src="$GENERATED_DIR/${env_name}.env"
-  if [[ -f "$src" ]]; then
-    cp "$src" "$BACKUP_DIR/${env_name}.env"
-  fi
-done
-
 TMP_YAML="$(mktemp)"
 
-restore_generated() {
+cleanup() {
   local rc=$?
-  for env_name in dev test home-lab; do
-    src="$BACKUP_DIR/${env_name}.env"
-    dst="$GENERATED_DIR/${env_name}.env"
-    if [[ -f "$src" ]]; then
-      cp "$src" "$dst"
-    else
-      # The file did not exist before our run; remove any artifact we created.
-      rm -f "$dst"
-    fi
-  done
-  rm -rf "$BACKUP_DIR"
+  rm -rf "$GENERATED_DIR"
   rm -f "$TMP_YAML"
   exit "$rc"
 }
-trap restore_generated EXIT INT TERM
+trap cleanup EXIT INT TERM
 
 # -----------------------------------------------------------------------
 # Build the temp yaml with a non-default Postgres password so Sub-tests
