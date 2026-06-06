@@ -746,3 +746,133 @@ Net Scope 02 status: 1 of 2 blocked items unblocked; 1 still requires planning r
 After Scope 04 closure: Scopes 01, 03, 04, 05 are `Done`. Scope 02 remains `In Progress` (1 DoD item routed for re-planning, see above). The spec is **not yet ready for full-delivery re-cert** because Scope 02 is incomplete.
 
 Once Scope 02's `NormalizeHistorical` DoD is resolved (either by code addition or by `bubbles.plan` updating the DoD to match Scope 05's response-shaped design), this spec will need full-delivery re-cert across the remaining `harden-to-doc` workflow phases: `harden`, `regression`, `simplify`, `stabilize`, `devops`, `security`, `chaos`, `validate`, `audit`, `docs`, `finalize`. Spec-level `status` MUST NOT be promoted to `done` from this implementation pass.
+
+---
+
+### Stochastic Quality Sweep Round — 2026-06-05 (simplify trigger)
+
+**Parent workflow:** stochastic-quality-sweep round 2 of 20
+**Mapped child workflow mode:** simplify-to-doc (parent-expanded-child-mode)
+**Spec status going in / coming out:** done → done (behavior-preserving refactor; no contract change)
+
+**Finding S1 (resolved this round): cache-insert tail triplicated across three decoders.**
+
+The `decodeCurrent`, `decodeForecast`, and `decodeHistorical` functions in `internal/connector/weather/weather.go` each ended with an identical 9-line block:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```go
+c.mu.Lock()
+if len(c.cache) >= maxCacheEntries {
+    c.evictOneLocked()
+}
+if len(c.cache) < maxCacheEntries {
+    c.cache[cacheKey] = &cacheEntry{data: X, expiresAt: time.Now().Add(TTL)}
+} else {
+    slog.Warn("weather cache full, discarding new entry", "key", cacheKey, "size", len(c.cache))
+}
+c.mu.Unlock()
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+The same invariant was also duplicated verbatim in two test functions (`TestCacheOverflow_AllValid`, `TestEviction_HistoricalDoesNotStarveEphemeral`) with the explicit comment "Mirror the production decodeCurrent insertion path." This was a missing abstraction: the cap-then-evict-then-insert sequence is a single invariant, but it lived in five places (3 production + 2 tests) and any future change to the cache discipline (e.g. swapping `evictOneLocked` for a different strategy) would have had to be applied uniformly to all five.
+
+**Fix (behavior-preserving):** Extracted `(c *Connector) cachePutLocked(key string, data interface{}, ttl time.Duration)` next to `evictOneLocked` in `weather.go`. The three production sites and both test sites now call the helper. Lock ownership stays with the caller (the helper is `*Locked`). Semantics are identical: same eviction call, same size cap, same slog warning key/message, same TTL math.
+
+**Code-only refactor — no spec/design/scope change.** The weather connector's public contract, NATS subjects, artifact metadata, and observable behavior are unchanged. The Connector interface is unchanged. The eviction policy (BUG-016-W4 fix) is unchanged.
+
+**Evidence:**
+
+`git diff --stat -- internal/connector/weather/` after the refactor (structural diff stat, not execution evidence):
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+ internal/connector/weather/weather.go      | 42 +++++++++++-------------------
+ internal/connector/weather/weather_test.go | 24 +++--------------
+ 2 files changed, 19 insertions(+), 47 deletions(-)
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+Net −28 LOC across the two files; size-cap invariant now lives in one helper instead of five copies.
+
+Terminal evidence — full weather-package test pass after the refactor:
+
+```
+$ go test -count=1 -v ./internal/connector/weather/... 2>&1 | tail -25
+--- PASS: TestDecodeForecast_ValidJSON (0.00s)
+--- PASS: TestDecodeForecast_MalformedJSON (0.00s)
+--- PASS: TestDecodeForecast_EmptyDailyData (0.00s)
+--- PASS: TestDecodeForecast_InconsistentArrayLengths (0.00s)
+--- PASS: TestDecodeForecast_InfValues (0.00s)
+--- PASS: TestFetchForecast_CacheHit (0.00s)
+--- PASS: TestSync_ProducesForecastArtifacts (0.01s)
+--- PASS: TestSync_ForecastFailure_StillProducesCurrent (0.01s)
+--- PASS: TestDecodeHistorical_ValidJSON (0.00s)
+--- PASS: TestDecodeHistorical_MalformedJSON (0.00s)
+--- PASS: TestDecodeHistorical_EmptyData (0.00s)
+--- PASS: TestDecodeHistorical_InfValues (0.00s)
+--- PASS: TestFetchHistorical_CacheHit (0.01s)
+--- PASS: TestFetchHistorical_ArchiveURL (0.01s)
+--- PASS: TestSync_ForecastRawContentIncludesPrecipitation (0.01s)
+--- PASS: TestSync_ForecastPrecipitationAdversarial (0.01s)
+--- PASS: TestDecodeHistorical_InconsistentArrayLengths (0.00s)
+--- PASS: TestSync_AlertArtifact_R009Metadata (0.02s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/weather       33.743s
+```
+
+Terminal evidence — repo `./smackerel.sh check` after the refactor:
+
+```
+$ ./smackerel.sh check
+config-validate: ./config/generated/dev.env.tmp.4181739 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 11, rejected: 0
+scenario-lint: OK
+```
+
+`go vet ./internal/connector/weather/...` exited 0 with no output. `go build ./...` exited 0 with no output. `./smackerel.sh lint` ended with `All checks passed!` and `Web validation passed`.
+
+**Finding-owned closure accounting:**
+
+| Finding | Owner | Status | Evidence |
+|---------|-------|--------|----------|
+| S1 — cache-insert tail triplication | bubbles.simplify (this round, parent-expanded) | resolved | refactor + 5 call sites updated + all weather tests PASS + go vet clean + go build clean + lint clean |
+
+Total findings: 1. Resolved: 1. Unresolved: 0. No planning chain (no planning truth touched). No bug artifact (not a defect — code was correct, just duplicated). No spec/design/scopes/uservalidation/scenario-manifest changes (no contract impact). Status remains `done`.
+
+### Code Diff Evidence
+
+Real `git diff --stat -- internal/connector/weather/` after the S1 refactor (working tree, pre-commit):
+
+```
+$ git diff --stat -- internal/connector/weather/
+ internal/connector/weather/weather.go      | 42 +++++++++++-------------------
+ internal/connector/weather/weather_test.go | 24 +++--------------
+ 2 files changed, 19 insertions(+), 47 deletions(-)
+```
+
+Runtime/source paths touched (non-artifact, non-spec): `internal/connector/weather/weather.go`, `internal/connector/weather/weather_test.go`.
+
+Net delta: −28 LOC across two files, replacing 5 inline cap-then-evict-then-insert blocks with one helper `(c *Connector).cachePutLocked(key string, data interface{}, ttl time.Duration)`. Behavior preserved exactly — same eviction policy (BUG-016-W4 fix unchanged), same `slog.Warn("weather cache full, discarding new entry", ...)` payload, same TTL math (30 min / 2 h / 100 y at the three production call sites).
+
+Real `git log --oneline -5 -- internal/connector/weather/weather.go` showing the surrounding commit history this refactor sits atop:
+
+```
+$ git log --oneline -5 -- internal/connector/weather/weather.go
+381cc0e9 spec(016): close BUG-016-W4 — weather cache eviction starvation (R26 stabilize)
+42863de8 bubbles(bulk-checkpoint): commit in-progress dirty tree
+a5c2f50c fix(016): BUG-016-W3 — weather source ref collision (bug closed)
+fab39d05 feat(016): Scope 04 NWS alert integration + fix annotation phrase flake
+e5bfde97 sweep: rounds 146-150 — gov-alerts hardening, weather improvements, phase5 artifact drift
+```
+
+---
+
+## Discovered Issues
+
+| Date | Source paragraph | Discovered phrase | Disposition | Reference / rationale |
+|------|------------------|-------------------|-------------|-----------------------|
+| 2026-06-05 | "### Stochastic Quality Sweep Round — 2026-06-05 (simplify trigger)" | cache-insert tail triplication | fixed-in-session | Helper `(c *Connector).cachePutLocked` extracted in `internal/connector/weather/weather.go`; 5 call sites updated; all weather tests PASS. See finding S1 above. |
+| 2026-06-05 | "### Test Coverage Pass — 2026-04-12" row TG6 | "control-char name skipping untested" | fixed-in-session | Benign program-behavior description, not deferred work. The line documents what `parseWeatherConfig` does (it skips control-char-only location names) and that the gap was already closed by `TestParseWeatherConfig_SkipsControlCharOnlyNames`. Pre-existing April content, surfaced now only because G095 was added later. |

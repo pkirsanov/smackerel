@@ -31,7 +31,10 @@ package agent_integration
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -41,10 +44,39 @@ import (
 	"github.com/smackerel/smackerel/internal/agent/embedder/sidecar"
 )
 
+// resolveScenarioDir is the BUG-CHAOS-20260605-001 fail-loud resolver.
+// It accepts the raw AGENT_SCENARIO_DIR value, resolves it to an
+// absolute path via filepath.Abs against the current process cwd, and
+// verifies the resulting path is an existing directory. It returns
+// an error (never calls t.Fatalf) so callers can use it both for the
+// live tests AND for the adversarial regression test that asserts
+// fail-loud semantics directly.
+func resolveScenarioDir(raw string) (string, error) {
+	if raw == "" {
+		return "", fmt.Errorf("AGENT_SCENARIO_DIR is empty")
+	}
+	abs, err := filepath.Abs(raw)
+	if err != nil {
+		return "", fmt.Errorf("resolve AGENT_SCENARIO_DIR=%q to absolute: %w", raw, err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("AGENT_SCENARIO_DIR=%q (resolved %q) is not reachable: %w", raw, abs, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("AGENT_SCENARIO_DIR=%q (resolved %q) is not a directory", raw, abs)
+	}
+	return abs, nil
+}
+
 func TestOpenKnowledgeRouting_FallbackToOpenKnowledge(t *testing.T) {
-	scenarioDir := os.Getenv("AGENT_SCENARIO_DIR")
-	if scenarioDir == "" {
+	rawScenarioDir := os.Getenv("AGENT_SCENARIO_DIR")
+	if rawScenarioDir == "" {
 		t.Skip("integration: AGENT_SCENARIO_DIR not set — live stack not available")
+	}
+	scenarioDir, err := resolveScenarioDir(rawScenarioDir)
+	if err != nil {
+		t.Fatalf("integration: %v", err)
 	}
 	sidecarURL := os.Getenv("ML_SIDECAR_URL")
 	if sidecarURL == "" {
@@ -142,9 +174,13 @@ func TestOpenKnowledgeRouting_FallbackToOpenKnowledge(t *testing.T) {
 // bridge tool (open_knowledge_invoke) is in allowed_tools and the
 // substrate prompt references it by name.
 func TestOpenKnowledgeRouting_ScenarioHealthProbe(t *testing.T) {
-	scenarioDir := os.Getenv("AGENT_SCENARIO_DIR")
-	if scenarioDir == "" {
+	rawScenarioDir := os.Getenv("AGENT_SCENARIO_DIR")
+	if rawScenarioDir == "" {
 		t.Skip("integration: AGENT_SCENARIO_DIR not set")
+	}
+	scenarioDir, err := resolveScenarioDir(rawScenarioDir)
+	if err != nil {
+		t.Fatalf("integration: %v", err)
 	}
 	registered, rejected, fatal := agent.DefaultLoader().Load(scenarioDir, "*.yaml")
 	if fatal != nil {
@@ -200,4 +236,113 @@ func parseIntEnv(key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+// TestOpenKnowledgeRouting_RelativeAGENT_SCENARIO_DIRResolvesAgainstRepoRoot
+// is the BUG-CHAOS-20260605-001 adversarial regression. It proves
+// both contracts of resolveScenarioDir:
+//
+//  1. Happy path — a relative path supplied from a foreign cwd that
+//     resolves (via filepath.Abs against the current process cwd)
+//     to the real repo's config/prompt_contracts tree returns the
+//     same canonical absolute path as the original anchor and
+//     contains the open_knowledge.yaml scenario.
+//
+//  2. Adversarial path — the SST-shipped bare value
+//     "config/prompt_contracts" from a foreign cwd resolves to a
+//     non-existent directory and MUST produce a non-nil error
+//     whose message names BOTH the raw value and the resolved
+//     absolute path. Reverting the fix to raw-passthrough would
+//     turn this into a silent zero-scenarios load (the original
+//     bug) and the assertion would fail.
+//
+// The test anchors the real repo location via runtime.Caller(0) so
+// it works both bare (`go test`) and inside the smackerel.sh test
+// container (where the repo is mounted at /workspace).
+func TestOpenKnowledgeRouting_RelativeAGENT_SCENARIO_DIRResolvesAgainstRepoRoot(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Skip("runtime.Caller(0) unavailable — cannot anchor against repo root")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", "..", ".."))
+	realConfigAbs := filepath.Join(repoRoot, "config", "prompt_contracts")
+	if info, err := os.Stat(realConfigAbs); err != nil || !info.IsDir() {
+		t.Skipf("repo config/prompt_contracts not present at %s — likely running outside repo: %v", realConfigAbs, err)
+	}
+
+	tempDir := t.TempDir()
+	prevWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd before chdir: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("chdir %s: %v", tempDir, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(prevWd); err != nil {
+			t.Logf("chdir back to %s: %v", prevWd, err)
+		}
+	})
+
+	relFromTemp, err := filepath.Rel(tempDir, realConfigAbs)
+	if err != nil {
+		t.Fatalf("filepath.Rel(%s, %s): %v", tempDir, realConfigAbs, err)
+	}
+
+	t.Run("happy_path_relative_resolves_to_existing_config_dir", func(t *testing.T) {
+		got, err := resolveScenarioDir(relFromTemp)
+		if err != nil {
+			t.Fatalf("resolveScenarioDir(%q) error: %v", relFromTemp, err)
+		}
+		wantCanon, err := filepath.EvalSymlinks(realConfigAbs)
+		if err != nil {
+			t.Fatalf("EvalSymlinks(%s): %v", realConfigAbs, err)
+		}
+		gotCanon, err := filepath.EvalSymlinks(got)
+		if err != nil {
+			t.Fatalf("EvalSymlinks(%s): %v", got, err)
+		}
+		if gotCanon != wantCanon {
+			t.Fatalf("resolveScenarioDir(%q) = %q (canon %q); want canonical %q",
+				relFromTemp, got, gotCanon, wantCanon)
+		}
+		scenarioFile := filepath.Join(got, "open_knowledge.yaml")
+		if _, err := os.Stat(scenarioFile); err != nil {
+			t.Fatalf("expected open_knowledge.yaml at resolved path %s: %v", scenarioFile, err)
+		}
+	})
+
+	t.Run("adversarial_relative_to_nonexistent_dir_fails_loud", func(t *testing.T) {
+		const raw = "config/prompt_contracts"
+		_, err := resolveScenarioDir(raw)
+		if err == nil {
+			t.Fatalf("resolveScenarioDir(%q) from cwd=%q expected fail-loud error, got nil", raw, tempDir)
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, raw) {
+			t.Errorf("error message missing raw value %q: %s", raw, msg)
+		}
+		expectedResolved := filepath.Join(tempDir, raw)
+		if !strings.Contains(msg, expectedResolved) {
+			t.Errorf("error message missing resolved path %q: %s", expectedResolved, msg)
+		}
+	})
+
+	t.Run("adversarial_path_pointing_at_file_fails_loud", func(t *testing.T) {
+		scenarioFile := filepath.Join(realConfigAbs, "open_knowledge.yaml")
+		if _, err := os.Stat(scenarioFile); err != nil {
+			t.Skipf("open_knowledge.yaml not present at %s: %v", scenarioFile, err)
+		}
+		relFile, err := filepath.Rel(tempDir, scenarioFile)
+		if err != nil {
+			t.Fatalf("filepath.Rel(%s, %s): %v", tempDir, scenarioFile, err)
+		}
+		_, err = resolveScenarioDir(relFile)
+		if err == nil {
+			t.Fatalf("resolveScenarioDir(%q) expected fail-loud error for non-directory, got nil", relFile)
+		}
+		if !strings.Contains(err.Error(), "is not a directory") {
+			t.Errorf("error message missing 'is not a directory' marker: %s", err)
+		}
+	})
 }

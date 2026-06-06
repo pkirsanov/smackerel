@@ -650,7 +650,7 @@ Scenario: SCN-037-027 Tool Detail View shows side-effect class and allowlisted-b
   - **Phase:** implement
   - **Claim Source:** executed
   - **Evidence:** Shared render layer at [internal/agent/render/render.go](internal/agent/render/render.go#L1) (~570 LOC) declares an `outcomeRegistry` keyed by every constant in [internal/agent/executor.go](internal/agent/executor.go#L54-L89) (11 classes — covers the 9 from spec UX plus `provider-error` and `input-schema-violation`). [TestBuildOutcomeView_AllClassesRenderRequiredFields](internal/agent/render/render_test.go#L1) iterates `AllOutcomeClasses()` and asserts every required field per class is present and non-empty: `ok github.com/smackerel/smackerel/internal/agent/render 0.014s`.
-- [x] Load-time rejection section visible in scenario catalog
+- [x] Scenario SCN-037-026 (Scenario Catalog surfaces load-time rejections BS-009/010/011): Load-time rejection section visible in scenario catalog
   - **Phase:** implement
   - **Claim Source:** executed
   - **Evidence:** Catalog template renders rejected files in [internal/web/agent_admin_templates.go](internal/web/agent_admin_templates.go#L160) (`agent_scenarios_index.html` "Rejected" section iterating `.Rejected`); CLI mirror at [cmd/core/cmd_agent_admin.go](cmd/core/cmd_agent_admin.go#L1) (`runAgentScenariosList` prints rejection table). Verified by `TestOperatorUI_ScenarioCatalogShowsRejections` injecting a `LoadError{Path:"/tmp/bad.yaml", Message:"missing required field id"}` and asserting both fields appear in the served HTML: PASS.
@@ -773,7 +773,7 @@ Scenario: SCN-037-033 Adding a new scenario requires zero Go changes (BS-001)
 
 ### Definition of Done
 
-- [x] Scheduler and pipeline surfaces call `Executor.Run` (no regex/switch routers)
+- [x] Scenario SCN-037-031 (Scheduler/pipeline call into the agent): Scheduler and pipeline surfaces call `Executor.Run` (no regex/switch routers)
 - [x] `cmd/scenario-lint` wired into `./smackerel.sh check`
 - [x] Scenario SCN-037-032 (CI rejects forbidden-pattern regression): Forbidden-pattern guard active in CI
 - [x] Scenario SCN-037-033 (Adding a new scenario requires zero Go changes BS-001): BS-001 zero-Go-change live-stack test authored and compiles + skips cleanly when DATABASE_URL is unset (verified 2026-04-26)
