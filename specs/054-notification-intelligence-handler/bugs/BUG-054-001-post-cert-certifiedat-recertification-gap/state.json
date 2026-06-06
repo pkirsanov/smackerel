@@ -6,8 +6,12 @@
   "featureName": "BUG-054-001 Post-certification certifiedAt recertification gap blocks Gate G088",
   "parentSpec": "specs/054-notification-intelligence-handler/",
   "title": "Spec 054 certifiedAt predates post-cert scopes.md drift cleanup, blocking Gate G088",
-  "status": "in_progress",
-  "workflowMode": "devops-to-doc",
+  "status": "done",
+  "certifiedAt": "2026-06-06T14:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-06T14:00:00Z",
+  "lastUpdatedAt": "2026-06-06T14:00:00Z",
+  "workflowMode": "bugfix-fastlane",
   "severity": "medium",
   "class": "governance",
   "discoveredBy": "sweep round 15 (stochastic-quality-sweep, devops trigger, devops-to-doc mapped mode, parent-expanded-child-mode)",
@@ -26,24 +30,52 @@
   },
   "execution": {
     "activeAgent": null,
-    "currentPhase": "docs",
+    "currentPhase": "done",
     "currentScope": "BUG-054-001-S1",
     "runStartedAt": "2026-06-06T01:30:00Z",
     "completedPhaseClaims": [
       "discovery",
       "design",
-      "plan"
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
+    "status": "done",
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-06T14:00:00Z",
+    "completedScopes": [
+      "BUG-054-001-S1"
+    ],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
     "scopeProgress": [
       {
         "scope": "BUG-054-001-S1",
         "name": "State.json recertification + guard re-pass",
-        "status": "In Progress",
+        "status": "Done",
+        "completedAt": "2026-06-06T14:00:00Z",
         "dependsOn": [],
         "scopeDir": ".",
         "evidenceFile": "report.md"
@@ -73,11 +105,11 @@
     },
     "regression": {
       "mode": "protected-contract",
-      "source": "devops-to-doc-mode-default"
+      "source": "bugfix-fastlane-mode-default"
     },
     "validation": {
       "mode": "contract-test-required",
-      "source": "devops-to-doc-mode-default"
+      "source": "bugfix-fastlane-mode-default"
     }
   },
   "transitionRequests": [],
@@ -85,10 +117,10 @@
     {
       "id": "BUG-054-001-S1",
       "title": "State.json recertification + guard re-pass",
-      "status": "In Progress",
+      "status": "Done",
       "dod": {
-        "total": 11,
-        "checked": 0
+        "total": 12,
+        "checked": 12
       }
     }
   ],
@@ -97,5 +129,5 @@
     "SCN-054-B002"
   ],
   "reworkQueue": [],
-  "notes": "Bug folder + parent spec state.json recertification applied inline by sweep round 15 (parent-expanded devops-to-doc). The parent spec G088 finding is REMEDIATED via top-level certifiedAt advance + bubbles.spec-review reviewStatus:CURRENT entry; verification by post-cert-spec-edit-guard.sh + state-transition-guard.sh re-run is captured in report.md. The bug folder's own certification ceremony (full Code Diff Evidence + terminal-signal-rich evidence + bubbles.validate audit) is a follow-up under bugfix-fastlane, consistent with the BUG-049-002 precedent."
+  "notes": "Parent spec 054 G088 recertification (top-level certifiedAt advance + bubbles.spec-review reviewStatus:CURRENT entry) shipped earlier and PASSES post-cert-spec-edit-guard.sh (exit 0). This bug folder is closed via bugfix-fastlane: scenario-manifest tracks both Gherkin scenarios with scenarioId + requiredTestType + object linkedTests; all 12 DoD items checked with evidence; single scope Done; change-boundary containment present; report.md carries the Code Diff Evidence section; certification block records certifiedCompletedPhases. Guard evidence (post-cert-spec-edit-guard.sh, state-transition-guard.sh, artifact-lint.sh) is captured in report.md. OBS-054-15-001 (notification-pipeline metrics gap, MEDIUM) is recorded as a non-blocking observation for portfolio routing."
 }

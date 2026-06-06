@@ -6,13 +6,25 @@
   "featureName": "BUG-049-003 Twitter API alert metric name + runbook docs drift",
   "parentSpec": "specs/049-monitoring-stack/",
   "title": "Twitter API alert references wrong metric name + missing operator runbook entries",
-  "status": "in_progress",
-  "workflowMode": "harden-to-doc",
+  "status": "done",
+  "certifiedAt": "2026-06-06T14:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "workflowMode": "bugfix-fastlane",
+  "executionModel": "parent-expanded-child-mode",
   "severity": "medium",
   "class": "governance",
   "discoveredBy": "sweep round 10 (stochastic-quality-sweep, harden trigger, harden-to-doc mapped mode, parent-expanded-child-mode)",
   "discoveredAtHead": "a697e0db800bfefa8d027d846b7a82f63a9d530b",
   "createdAt": "2026-06-05T23:09:53Z",
+  "resolved": "2026-06-06",
+  "baselineHead": "af7abce3",
+  "stochasticSweep": {
+    "sweepId": "sweep-2026-06-05-r20",
+    "round": 10,
+    "totalRounds": 20,
+    "trigger": "harden",
+    "mappedChildWorkflowMode": "harden-to-doc"
+  },
   "parentWorkflow": {
     "mode": "stochastic-quality-sweep",
     "round": 10,
@@ -26,71 +38,208 @@
   },
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "implement",
+    "currentPhase": "docs",
     "currentScope": "BUG-049-003-S1",
-    "runStartedAt": "2026-06-05T23:09:53Z",
+    "runStartedAt": "2026-06-06T13:40:00Z",
     "completedPhaseClaims": [
-      "discovery",
-      "design",
-      "plan"
+      "bootstrap",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
     ],
-    "pendingTransitionRequests": [],
-    "executionHistory": [
-      {
-        "agent": "bubbles.workflow",
-        "phase": "discovery",
-        "phasesExecuted": ["discovery"],
-        "timestamp": "2026-06-05T23:09:53Z",
-        "completedAt": "2026-06-05T23:09:53Z",
-        "outcome": "finding_captured",
-        "summary": "Harden trigger ran ./smackerel.sh test unit --go --go-run 'TestMonitoring|...' and surfaced TestMonitoringAlertsContract_LiveFile + TestMonitoringDocsContract_LiveFile failures against spec 056 amendments to alerts.yml and docs/Operations.md."
-      },
-      {
-        "agent": "bubbles.workflow",
-        "phase": "design",
-        "phasesExecuted": ["design"],
-        "timestamp": "2026-06-05T23:09:53Z",
-        "completedAt": "2026-06-05T23:09:53Z",
-        "outcome": "fix_designed",
-        "summary": "Data-only fix: rename smackerel_connector_twitter_api_retries -> smackerel_connector_twitter_api_retries_total (3 occurrences) in alerts.yml; add 2 rows to docs/Operations.md Alert Runbook table. Existing contract tests serve as regression mechanism."
-      },
-      {
-        "agent": "bubbles.workflow",
-        "phase": "plan",
-        "phasesExecuted": ["plan"],
-        "timestamp": "2026-06-05T23:09:53Z",
-        "completedAt": "2026-06-05T23:09:53Z",
-        "outcome": "scope_planned",
-        "summary": "Single scope BUG-049-003-S1 with 10 DoD items + 8 test plan rows + SCN-049-B005/B006 scenarios."
-      }
-    ]
+    "pendingTransitionRequests": []
   },
-  "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "scopeProgress": [
-      {
-        "scope": "BUG-049-003-S1",
-        "name": "Alert metric correction + operator runbook coverage",
-        "status": "In Progress",
-        "dependsOn": [],
-        "scopeDir": ".",
-        "evidenceFile": "report.md"
-      }
-    ],
-    "lockdownState": {
-      "active": false,
-      "lockedScenarioIds": []
+  "completedPhaseClaims": [
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs"
+  ],
+  "certifiedCompletedPhases": [
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs"
+  ],
+  "completedPhaseClaimDetails": [
+    {
+      "phase": "bootstrap",
+      "agent": "bubbles.bug",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Aligned the 7-artifact bug packet (spec.md + design.md + scopes.md + scenario-manifest.json + report.md + uservalidation.md + state.json) under specs/049-monitoring-stack/bugs/BUG-049-003-twitter-alert-metric-and-docs-drift/; the harden-trigger finding from stochastic sweep round 10 was captured against config/prometheus/alerts.yml + docs/Operations.md."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Data-only fix shipped in commit af7abce3: config/prometheus/alerts.yml renamed smackerel_connector_twitter_api_retries -> smackerel_connector_twitter_api_retries_total (3 occurrences: header comment, TwitterAPIRetryStorm expr, description); docs/Operations.md Alert Runbook gained 2 rows (TwitterAPIRateLimitChronicExhaustion, TwitterAPIRetryStorm). Verified via grep + git show af7abce3 captured in report.md ### Code Diff Evidence."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "go test ./internal/deploy/ -run 'TestMonitoringAlertsContract_LiveFile|TestMonitoringDocsContract_LiveFile' -count=1 -v -> both PASS (Exit 0). The pre-fix RED state was the two LiveFile contract failures the harden trigger surfaced; post-fix GREEN captured in report.md sections T-BUG-049-003-001 and T-BUG-049-003-002."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "go test ./internal/deploy/ -run 'TestMonitoring|TestComposeContract_LiveFile|TestComposeResourceContract|TestFilesystemContract' -count=1 -v -> 32/32 sub-tests PASS (Exit 0), including the 5 adversarial monitoring sub-tests that re-block fabricated-metric, missing-required-alert, and missing-docs-mention drift. Captured in report.md section T-BUG-049-003-003."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "The data-only correction collapses a metric-name mismatch; it introduces zero new abstractions, dead branches, or duplication. No simplification debt created on the alerts.yml or Operations.md surfaces."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Zero runtime-binary change — alerts.yml and Operations.md are config/docs surfaces consumed by Prometheus and operators. Stability characteristics of the monitoring stack are unchanged at HEAD af7abce3."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "No new attack surface, no secret, no dependency change; the edit touches a Prometheus metric identifier and operator runbook prose only. gitleaks/PII policy clean on the staged bug-folder paths."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Guards green for the bug packet and parent: bug-folder state-transition-guard 0 BLOCKs at terminal status done, parent state-transition-guard PERMITTED, artifact-lint PASSED for both. Captured in report.md Validation Evidence."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "git show af7abce3 confirms the alerts.yml + Operations.md delivery delta; the bug-folder ceremony edits are confined to specs/049-monitoring-stack/bugs/BUG-049-003-twitter-alert-metric-and-docs-drift/. Cross-commit attribution documented: implementation shipped in af7abce3 (commit body names BUG-049-003), ceremony close-out staged for the parent batch commit."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "docs/Operations.md Alert Runbook now names both Twitter alerts (TestMonitoringDocsContract_LiveFile enforces this); report.md captures the full reconcile narrative plus Code Diff Evidence for the af7abce3 delivery delta."
     }
+  ],
+  "executionHistory": [
+    {
+      "phase": "bootstrap",
+      "agent": "bubbles.bug",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:40:00Z",
+      "completedAt": "2026-06-06T13:40:00Z",
+      "evidence": "Authored/aligned the 7-artifact bugfix-fastlane packet for BUG-049-003 from the sweep round 10 harden-trigger finding."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:43:00Z",
+      "completedAt": "2026-06-06T13:43:00Z",
+      "evidence": "Confirmed the data-only delivery delta (alerts.yml _total rename x3 + Operations.md +2 runbook rows) shipped in commit af7abce3."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:46:30Z",
+      "completedAt": "2026-06-06T13:46:30Z",
+      "evidence": "TestMonitoringAlertsContract_LiveFile + TestMonitoringDocsContract_LiveFile both PASS (Exit 0) against the corrected surfaces."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:49:00Z",
+      "completedAt": "2026-06-06T13:49:00Z",
+      "evidence": "Broader monitoring + hardening contract suite green: 32/32 sub-tests PASS (Exit 0), adversarial sub-tests included."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:51:20Z",
+      "completedAt": "2026-06-06T13:51:20Z",
+      "evidence": "Rename collapses a name mismatch; no new abstractions or duplication introduced."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:53:00Z",
+      "completedAt": "2026-06-06T13:53:00Z",
+      "evidence": "Config/docs-only change; monitoring stack runtime stability unchanged at HEAD af7abce3."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:55:30Z",
+      "completedAt": "2026-06-06T13:55:30Z",
+      "evidence": "No new attack surface, no secret, no dependency change; gitleaks/PII clean on staged bug-folder paths."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:57:00Z",
+      "completedAt": "2026-06-06T13:57:00Z",
+      "evidence": "Bug-folder + parent state-transition-guard green; artifact-lint PASSED for both."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:58:30Z",
+      "completedAt": "2026-06-06T13:58:30Z",
+      "evidence": "Delivery delta attributed to af7abce3; ceremony edits confined to the BUG-049-003 folder."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T13:59:30Z",
+      "completedAt": "2026-06-06T13:59:30Z",
+      "evidence": "Operations.md runbook coverage verified by TestMonitoringDocsContract_LiveFile; report.md reconcile narrative complete."
+    }
+  ],
+  "scenarioCoverage": {
+    "totalScenarios": 2,
+    "coveredScenarios": 2,
+    "fidelity": "2/2"
   },
+  "completedScopes": [
+    "scope-bug-049-003-s1-alert-metric-correction-operator-runbook-coverage"
+  ],
   "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
     "grill": {
       "mode": "off",
       "source": "repo-default"
     },
     "tdd": {
-      "mode": "off",
-      "source": "repo-default"
+      "mode": "scenario-first",
+      "source": "bubbles-fastlane-default"
     },
     "autoCommit": {
       "mode": "off",
@@ -102,22 +251,23 @@
     },
     "regression": {
       "mode": "protected-contract",
-      "source": "harden-to-doc-mode-default"
+      "source": "bubbles-fastlane-default"
     },
     "validation": {
-      "mode": "contract-test-required",
-      "source": "harden-to-doc-mode-default"
+      "mode": "certification-required",
+      "source": "bubbles-fastlane-default"
     }
   },
   "transitionRequests": [],
+  "reworkQueue": [],
   "scopes": [
     {
       "id": "BUG-049-003-S1",
       "title": "Alert metric correction + operator runbook coverage",
-      "status": "In Progress",
+      "status": "Done",
       "dod": {
-        "total": 10,
-        "checked": 0
+        "total": 11,
+        "checked": 11
       }
     }
   ],
@@ -125,34 +275,39 @@
     "SCN-049-B005",
     "SCN-049-B006"
   ],
-  "reworkQueue": [],
-  "executionHistory": [
-    {
-      "agent": "bubbles.workflow",
-      "phase": "discovery",
-      "phasesExecuted": ["discovery"],
-      "timestamp": "2026-06-05T23:09:53Z",
-      "completedAt": "2026-06-05T23:09:53Z",
-      "outcome": "finding_captured",
-      "summary": "Harden trigger ran ./smackerel.sh test unit --go --go-run 'TestMonitoring|...' and surfaced TestMonitoringAlertsContract_LiveFile + TestMonitoringDocsContract_LiveFile failures against spec 056 amendments to alerts.yml and docs/Operations.md."
-    },
-    {
-      "agent": "bubbles.workflow",
-      "phase": "design",
-      "phasesExecuted": ["design"],
-      "timestamp": "2026-06-05T23:09:53Z",
-      "completedAt": "2026-06-05T23:09:53Z",
-      "outcome": "fix_designed",
-      "summary": "Data-only fix: rename smackerel_connector_twitter_api_retries -> smackerel_connector_twitter_api_retries_total (3 occurrences) in alerts.yml; add 2 rows to docs/Operations.md Alert Runbook table. Existing contract tests serve as regression mechanism."
-    },
-    {
-      "agent": "bubbles.workflow",
-      "phase": "plan",
-      "phasesExecuted": ["plan"],
-      "timestamp": "2026-06-05T23:09:53Z",
-      "completedAt": "2026-06-05T23:09:53Z",
-      "outcome": "scope_planned",
-      "summary": "Single scope BUG-049-003-S1 with 10 DoD items + 8 test plan rows + SCN-049-B005/B006 scenarios."
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-06T14:00:00Z",
+    "completedScopes": [
+      "scope-bug-049-003-s1-alert-metric-correction-operator-runbook-coverage"
+    ],
+    "certifiedCompletedPhases": [
+      "bootstrap",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "scopeProgress": [
+      {
+        "scope": "BUG-049-003-S1",
+        "name": "Alert metric correction + operator runbook coverage",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
     }
-  ]
+  },
+  "rollback": "Pure git revert of af7abce3's alerts.yml + Operations.md hunks restores the 2 contract-test failures (TestMonitoringAlertsContract_LiveFile + TestMonitoringDocsContract_LiveFile); zero runtime-binary impact (data-only config/docs surfaces)."
 }

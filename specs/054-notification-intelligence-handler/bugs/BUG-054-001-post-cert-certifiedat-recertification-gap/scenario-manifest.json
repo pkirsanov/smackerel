@@ -1,21 +1,34 @@
 {
   "version": 3,
+  "schemaVersion": "1.0",
   "specId": "054-notification-intelligence-handler",
+  "spec": "BUG-054-001-post-cert-certifiedat-recertification-gap",
+  "parentSpec": "054-notification-intelligence-handler",
   "bugId": "BUG-054-001",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane artifact-only recertification; both scenarios drive guard-verification proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "post-cert-spec-edit-guard.sh re-runs captured in report.md: red at exit 1 (G088 post-cert edit without recert) pre-mutation, green at exit 0 (PASS with certifiedAt + currentSpecReview) post-mutation."
+  },
   "scenarios": [
     {
-      "id": "SCN-054-B001",
-      "title": "Spec 054 G088 PASSES after recertification",
+      "scenarioId": "SCN-054-B001",
       "scope": "BUG-054-001-S1",
+      "title": "Spec 054 G088 PASSES after recertification",
+      "requiredTestType": "guard-verification",
       "given": "specs/054-notification-intelligence-handler/state.json with status \"done\", a top-level certifiedAt on or after the latest post-cert edit on scopes.md (2026-06-05T16:15:45Z), and a bubbles.spec-review executionHistory entry with reviewStatus \"CURRENT\" whose runCompletedAt is on or before that certifiedAt",
       "when": "bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/054-notification-intelligence-handler is invoked",
       "then": "the guard exits 0; it reports \"PASS Gate G088 (post_certification_spec_edit_gate)\"; the message annotates certifiedAt and currentSpecReview with the new recertification timestamp",
+      "testFiles": [
+        ".github/bubbles/scripts/post-cert-spec-edit-guard.sh",
+        ".github/bubbles/scripts/state-transition-guard.sh"
+      ],
       "linkedTests": [
-        "T-BUG-054-001-001",
-        "T-BUG-054-001-002",
-        "T-BUG-054-001-003",
-        "T-BUG-054-001-004",
-        "T-BUG-054-001-005"
+        {"file": ".github/bubbles/scripts/post-cert-spec-edit-guard.sh", "function": "manual:G088-pass-after-recertification"},
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-30-post-cert-spec-edit-gate"}
       ],
       "evidenceRefs": [
         "report.md#t-bug-054-001-001",
@@ -25,21 +38,29 @@
         "report.md#t-bug-054-001-005",
         "report.md#state-json-diff",
         "report.md#spec-review-recertification"
-      ]
+      ],
+      "liveTestExpectation": "post-cert-spec-edit-guard.sh specs/054-notification-intelligence-handler exits 0 with a PASS line citing certifiedAt=2026-06-06T01:30:00Z and currentSpecReview=2026-06-06T01:29:00Z; state-transition-guard.sh Check 30 emits PASS Gate G088 for spec 054.",
+      "changeType": "added"
     },
     {
-      "id": "SCN-054-B002",
-      "title": "Adversarial — a future post-cert planning-truth edit still trips G088",
+      "scenarioId": "SCN-054-B002",
       "scope": "BUG-054-001-S1",
+      "title": "Adversarial — a future post-cert planning-truth edit still trips G088",
+      "requiredTestType": "guard-verification",
       "given": "specs/054-notification-intelligence-handler/state.json with status \"done\" and the new certifiedAt set at the moment of this recertification",
       "when": "a hypothetical post-cert edit lands on spec.md, design.md, or scopes.md after that certifiedAt, and neither requiresRevalidation:true nor a fresh bubbles.spec-review CURRENT entry is recorded",
       "then": "post-cert-spec-edit-guard.sh exits non-zero; it names the offending commit, file, and subject in its diagnostic output",
+      "testFiles": [
+        ".github/bubbles/scripts/post-cert-spec-edit-guard.sh"
+      ],
       "linkedTests": [
-        "T-BUG-054-001-006"
+        {"file": ".github/bubbles/scripts/post-cert-spec-edit-guard.sh", "function": "manual:post-cert-edit-without-recert-exits-nonzero"}
       ],
       "evidenceRefs": [
         "report.md#t-bug-054-001-006"
-      ]
+      ],
+      "liveTestExpectation": "A subsequent post-cert edit on spec.md/design.md/scopes.md landing after certifiedAt, without requiresRevalidation:true or a fresh bubbles.spec-review CURRENT entry, makes post-cert-spec-edit-guard.sh exit non-zero and name the offending commit, file, and subject.",
+      "changeType": "added"
     }
   ]
 }

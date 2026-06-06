@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 ## Scope BUG-054-001-S1: State.json recertification + guard re-pass
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 **Scope-Kind:** contract-only
@@ -91,7 +91,7 @@ Scenario: SCN-054-B002 Adversarial — a future post-cert planning-truth edit st
 
 ### Definition of Done
 
-- [ ] **SCN-054-B001:** The post-cert commit `48ad42a79caa` on
+- [x] **SCN-054-B001:** The post-cert commit `48ad42a79caa` on
       `scopes.md` is inspected and confirmed as planning-text Test Plan
       File/Location pointer drift across 4 rows (SCN-054-004,
       SCN-054-005, SCN-054-006, SCN-054-022) that does NOT change
@@ -99,62 +99,61 @@ Scenario: SCN-054-B002 Adversarial — a future post-cert planning-truth edit st
       IDs, test function names, or any business logic; the verdict is
       recorded in `report.md` under "Spec-Review (Recertification)".
       (Evidence: see [report.md](report.md) under `## Spec-Review (Recertification)`.)
-- [ ] **SCN-054-B001:** `specs/054-notification-intelligence-handler/state.json`
+- [x] **SCN-054-B001:** `specs/054-notification-intelligence-handler/state.json`
       top-level `certifiedAt` is advanced to `"2026-06-06T01:30:00Z"`
       (or any RFC3339 timestamp on or after `2026-06-05T16:15:45Z`,
       whichever the actual edit applies), and the same value is mirrored
       to `certification.certifiedAt`.
       (Evidence: see [report.md](report.md) under `## State.json Diff` and `### T-BUG-054-001-001`.)
-- [ ] **SCN-054-B001:** `specs/054-notification-intelligence-handler/state.json`
+- [x] **SCN-054-B001:** `specs/054-notification-intelligence-handler/state.json`
       top-level `executionHistory[]` carries a `bubbles.spec-review`
       entry with `reviewStatus: "CURRENT"` whose `runCompletedAt` is
       on or before the new `certifiedAt`, so G088's
       `latest_current_review_epoch <= certified_epoch` PASS branch can
       fire.
       (Evidence: see [report.md](report.md) under `## State.json Diff` and `### T-BUG-054-001-001`.)
-- [ ] **SCN-054-B001 / T-BUG-054-001-001:** `bash
+- [x] **SCN-054-B001 / T-BUG-054-001-001:** `bash
       .github/bubbles/scripts/post-cert-spec-edit-guard.sh
       specs/054-notification-intelligence-handler` exits 0 with a PASS
       message that annotates the new `certifiedAt` and the
       `currentSpecReview` timestamp.
       (Evidence: see [report.md](report.md) section `### T-BUG-054-001-001`.)
-- [ ] **SCN-054-B001 / T-BUG-054-001-002:** `bash
+- [x] **SCN-054-B001 / T-BUG-054-001-002:** `bash
       .github/bubbles/scripts/state-transition-guard.sh
       specs/054-notification-intelligence-handler` exits 0; Check 30
       (Gate G088) prints `PASS: Post-certification spec edit guard
       satisfied`.
       (Evidence: see [report.md](report.md) section `### T-BUG-054-001-002`.)
-- [ ] **SCN-054-B001 / T-BUG-054-001-003:** `bash
+- [x] **SCN-054-B001 / T-BUG-054-001-003:** `bash
       .github/bubbles/scripts/artifact-lint.sh
       specs/054-notification-intelligence-handler` PASSES.
       (Evidence: see [report.md](report.md) section `### T-BUG-054-001-003`.)
-- [ ] **SCN-054-B001 / T-BUG-054-001-004:** `timeout 600 bash
+- [x] **SCN-054-B001 / T-BUG-054-001-004:** `timeout 600 bash
       .github/bubbles/scripts/traceability-guard.sh
       specs/054-notification-intelligence-handler` PASSES with 0
       warnings.
       (Evidence: see [report.md](report.md) section `### T-BUG-054-001-004`.)
-- [ ] **SCN-054-B001 / T-BUG-054-001-005:** `bash
+- [x] **SCN-054-B001 / T-BUG-054-001-005:** `bash
       .github/bubbles/scripts/artifact-lint.sh
       specs/054-notification-intelligence-handler/bugs/BUG-054-001-post-cert-certifiedat-recertification-gap`
       PASSES.
       (Evidence: see [report.md](report.md) section `### T-BUG-054-001-005`.)
-- [ ] **SCN-054-B002 / T-BUG-054-001-006:** `report.md` cites the
+- [x] **SCN-054-B002 / T-BUG-054-001-006:** `report.md` cites the
       literal lines in `.github/bubbles/scripts/post-cert-spec-edit-guard.sh`
       that exit non-zero on post-cert edits without a CURRENT
       spec-review entry, proving the adversarial branch is still
       enforced by the framework guard.
       (Evidence: see [report.md](report.md) section `### T-BUG-054-001-006`.)
-- [ ] SCN-054-B001 Spec 054 G088 PASSES after recertification —
+- [x] SCN-054-B001 Spec 054 G088 PASSES after recertification —
       scenario faithfully covered by DoD items above plus the
       [scenario-manifest.json](scenario-manifest.json) `linkedTests`
       and `evidenceRefs` entries.
-- [ ] SCN-054-B002 Adversarial G088 still rejects a future post-cert
+- [x] SCN-054-B002 Adversarial G088 still rejects a future post-cert
       edit without recertification — scenario faithfully covered by
       the source-citation DoD item above plus the
       [scenario-manifest.json](scenario-manifest.json) `linkedTests`
       and `evidenceRefs` entries.
-- [ ] Change Boundary is respected and zero excluded file families were
-      changed.
+- [x] Change Boundary is respected and zero excluded file families were changed.
       (Evidence: the only edit outside this bug folder is the single
       data-only patch to
       `specs/054-notification-intelligence-handler/state.json`
