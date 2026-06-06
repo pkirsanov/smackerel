@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "spec": "specs/_ops/OPS-002-g088-certifiedat-backfill",
+  "tdd": {
+    "mode": "exempt",
+    "rationale": "Artifact-only governance remediation; zero runtime code. The deliverable is a faithful state.json schema backfill (one spec) plus a tracked classification of the remainder.",
+    "redGreenEvidence": "Red: post-cert-spec-edit-guard.sh specs/018-financial-markets-connector fails ('G088 requires top-level certifiedAt'). Green: same guard PASSES after the historical certifiedAt is surfaced to top-level. analysis.py reproduces the CLEAN-BACKFILL/NEEDS-RECERT/NO-SOURCE classification deterministically."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-OPS-002-1",
+      "scope": 1,
+      "title": "Clean historical backfill clears G088 with no review claim",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/018-financial-markets-connector/state.json"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/_ops/OPS-002-g088-certifiedat-backfill/report.md",
+          "function": "manual:post-cert-spec-edit-guard-spec-018"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-002-g088-certifiedat-backfill/report.md#clean-backfill-execution-spec-018"
+      ],
+      "liveTestExpectation": "bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/018-financial-markets-connector exits 0 (PASS) after the top-level certifiedAt is surfaced from the historical lastUpdatedAt source.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-002-2",
+      "scope": 1,
+      "title": "Review-gated recert is tracked, not fabricated",
+      "requiredTestType": ["review-discipline"],
+      "testFiles": [
+        "specs/_ops/OPS-002-g088-certifiedat-backfill/report.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/_ops/OPS-002-g088-certifiedat-backfill/report.md",
+          "function": "manual:tracked-remediation-queue"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-002-g088-certifiedat-backfill/report.md#anti-fabrication-boundary"
+      ],
+      "liveTestExpectation": "Zero certifiedAt writes for NEEDS-RECERT/NO-SOURCE specs in this packet; git diff --name-only shows only spec 018 + the OPS-002 folder changed.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-002-3",
+      "scope": 1,
+      "title": "Classification inventory is reproducible",
+      "requiredTestType": ["tool-verification"],
+      "testFiles": [
+        "specs/_ops/OPS-002-g088-certifiedat-backfill/analysis.py"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/_ops/OPS-002-g088-certifiedat-backfill/report.md",
+          "function": "manual:analysis-py-classified-inventory"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-002-g088-certifiedat-backfill/report.md#classified-inventory"
+      ],
+      "liveTestExpectation": "python3 specs/_ops/OPS-002-g088-certifiedat-backfill/analysis.py deterministically prints CLEAN-BACKFILL / NEEDS-RECERT / NO-SOURCE counts matching the committed inventory.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    }
+  ]
+}
