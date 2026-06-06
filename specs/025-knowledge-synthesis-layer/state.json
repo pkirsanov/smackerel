@@ -4,7 +4,8 @@
   "featureName": "Knowledge Synthesis Layer (LLM Wiki Pattern)",
   "status": "done",
   "workflowMode": "improve-existing",
-  "certifiedAt": "2026-06-03T12:00:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "requiresRevalidation": false,
   "phaseStubs": {
     "harden": {
@@ -319,6 +320,16 @@
       "runStartedAt": "2026-06-03T00:00:00Z",
       "runFinishedAt": "2026-06-03T00:00:00Z",
       "summary": "Release-planning dispatch (docs/releases/mvp/actions.md MVP M1b, addressedFindings RELEASE-MVP:M1b). Reopened spec 025 for additive planning-only refinement (workflowMode improve-existing). Added 'Calendar-Triggered Briefs' and 'Reminder & Promise Engine' sections to spec.md (6 new Gherkin scenarios SCN-025-24..29). Added 'Calendar-Triggered Briefs (Architecture)' and 'Reminder & Promise Engine (Architecture)' sections to design.md covering producer/store schema, scheduler integration, and explicit coordination with spec 021 M1a unified surfacing controller (both producers MUST flow THROUGH the controller, not around it). Added Scope 9 'Calendar-Triggered Briefs' and Scope 10 'Reminder & Promise Engine' to scopes.md (status Not Started) with full implementation plan, consumer/shared-infra impact sweeps, change boundary, test plan (unit + integration + e2e-api + regression e2e), and DoD. Added SCN-025-24..29 to scenario-manifest.json under new scope entries 09-calendar-triggered-briefs and 10-reminder-promise-engine (status planned). Hard dependency: spec 021 M1a controller MUST land before Scope 9/10 implementation. nextRequiredOwner=bubbles.implement (after M1a lands). No code changes."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits after the 2026-06-03T12:00Z certifiedAt: 3f7c0649 (scopes.md — migration path reconciliation 012_knowledge_layer.sql -> 001_initial_schema.sql; category b) and 0fe2e720 (scopes.md — tier-6 drift cleanup, config-generate.sh -> config.sh path + evidence text; category b). Also confirmed the original promote-to-done close-out 74c594bf (scopes.md — scopes 9/10 Not Started -> Done (post-release-deferred) per Post-Release Scope Exception DI-025-05; deferral, not a new obligation; category a). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
@@ -344,7 +355,7 @@
       "status": "acknowledged_known_limitation"
     }
   ],
-  "lastUpdatedAt": "2026-06-03T07:30:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

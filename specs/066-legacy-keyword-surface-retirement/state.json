@@ -4,7 +4,9 @@
   "featureNumber": "066",
   "featureName": "Legacy Keyword Surface Retirement",
   "status": "done",
-  "certifiedAt": "2026-06-02T23:59:59Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -239,6 +241,16 @@
         "runStartedAt": "2026-06-02T04:33:00Z",
         "runEndedAt": "2026-06-02T04:35:00Z",
         "summary": "Portfolio stabilize sweep (065/066/067/069/074/075). go build ./... RC=0 + go vet ./... RC=0 — keyword-retirement surfaces compile clean. No new stability findings. See report.md ## Stabilize Pass (bubbles.stabilize, 2026-06-02)."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 403daea4 (2026-06-02T07:00:22Z) is the promotion commit itself (state.json status in_progress to done, 22s after certification.completedAt) shipping Telegram retirement core Scopes 1/2/4 and rescoping Scopes 3+5 to spec 076 (scopes.md ~280 lines, design.md +33 documenting the annotation Classifier handed to spec 076) (category a); b1c46991 (2026-06-05) tier-4 drift cleanup reconciled stale file references to shipped paths (scopes.md +9/-9, category b). No post-promotion requirement/scenario/DoD semantic change, no scope reset, no DoD un-check; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
       }
     ]
   }

@@ -193,12 +193,24 @@
       "executionModel": "parent-expanded-child-mode",
       "workflowMode": "harden-to-doc",
       "summary": "Sweep round 16 harden probe (parent-expanded harden-to-doc child mode). ZERO new findings — spec 022 remains fully hardened across all dimensions previously addressed by H-006..H-009, IMP-022-R29-001..003, IMP-022-R30-001..003, STB-022-001, and MIT-022-TRACE-001. Probe dimensions executed: (1) Race detector clean on all 022-owned packages — internal/scheduler 6.195s, cmd/core 1.646s, internal/api 18.872s, internal/pipeline 1.992s, internal/nats 5.114s, internal/db 0.030s. (2) go vet clean on internal/scheduler, internal/nats, internal/db, internal/pipeline, cmd/core, internal/api. (3) Zero TODO/FIXME/HACK/STUB/XXX markers across 022 owned files (scheduler.go, jobs.go, lifecycle.go, shutdown.go, nats/client.go, synthesis_subscriber.go, capture.go, search.go, postgres.go, backup.sh). (4) Zero context.TODO() in hot paths; zero panic/os.Exit in 022 hot paths. (5) SST validation complete — DB_MAX_CONNS, DB_MIN_CONNS, SHUTDOWN_TIMEOUT_S, ML_HEALTH_CACHE_TTL_S, ML_READINESS_TIMEOUT_S all fail-loud on missing/invalid (config.go:880-927); cross-validation DBMinConns≤DBMaxConns (config.go:930-933). (6) DB Healthy() bounded by 2s context (postgres.go:76-82). (7) ML health cache verified — coalesced concurrent probes via healthProbeMu.TryLock (search.go:481), detached context for probe (search.go:497-505), zero-TTL fail-visible guard (search.go:466-470), double-check after lock acquisition (search.go:487-489), dedicated health HTTP client with bounded transport pool (search.go:520-532). (8) shutdownAll verified — overall deadline at totalTimeout prevents step budgets from summing past Docker stop_grace_period (shutdown.go:43-46); each step checks deadline before+during execution (shutdown.go:148-152, 161-163); parallel subscriber Stop via WaitGroup (STB-022-001, shutdown.go:99-114). (9) Scheduler concurrency intact — 14 original mutexes (muDigest, muHourly, muDaily, muWeekly, muMonthly, muBriefs, muAlerts, muAlertProd, muResurface, muLookups, muSubs, muRelCool, muKnowledgeLint, muMealPlanComplete) all wired via runGuarded (jobs.go:34/154/169/190/224/246/264/286/303/354/364/392/403/484); 2 additional mutexes from spec 039 (muRecommendationWatchPoll, muWatchPoller) also properly guarded via runGuarded (recommendation_watches.go:60); Scheduler.Stop bounded by 5s+5s with stopOnce idempotency (lifecycle.go:11-32). (10) DEADLETTER stream verified — LimitsPolicy, 30d MaxAge, 10000 MaxMsgs (nats/client.go:131, 208-211); spec 046 MaxBytes enforcement fail-loud for missing streamCaps entry (nats/client.go:188-200). (11) Dead-letter routing uniformly applied across all 3 subscribers — ResultSubscriber.publishToDeadLetter (subscriber.go:321-365), SynthesisResultSubscriber.publishSynthesisToDeadLetter (synthesis_subscriber.go:505-544), DomainResultSubscriber dead-letter (domain_subscriber.go:227-274); all 5 headers (Smackerel-Original-Subject, Smackerel-Original-Stream, Smackerel-Failed-At, Smackerel-Delivery-Count, Smackerel-Last-Error) consistent across all three. (12) Capture DB_UNAVAILABLE 4 sites including post-processing re-check (capture.go:60, 133, 247, 300). (13) Docker stop_grace_period: smackerel-core 30s with SHUTDOWN_TIMEOUT_S=25s (5s slack); smackerel-ml 15s. (14) Backup.sh verified — Gate G028 fail-loud on every BACKUP_* env key, redact_secrets helper mirrors internal/backup/status.go forbiddenSecretSubstrings, sourced credentials never echoed. Outcome: zero remediation work required; harden trigger returned clean for sweep round 16. Status/certification fields untouched."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: fb2a4266 (spec.md + design.md — added forward 'Successor Notice'/'Design Successor Note' cross-refs noting spec 064/067/068/069 reuse 022's resilience primitives; notes explicitly state 022's resilience semantics 'remain authoritative'; category b), 19b31c0a (spec.md — inserted canonical 'Done (certified per state.json)' status banner; category b). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-23T00:00:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
