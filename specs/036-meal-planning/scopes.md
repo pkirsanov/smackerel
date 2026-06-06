@@ -162,7 +162,7 @@ Scenario: SCN-036-005 — Configurable meal times stored in config (BS-013)
 
 ### Definition of Done
 
-- [x] `config/smackerel.yaml` contains `meal_planning:` section with enabled, default_servings, meal_types, meal_times, calendar_sync, auto_complete_past_plans, auto_complete_cron
+- [x] Scenario SCN-036-005 (Configurable meal times stored in config): `config/smackerel.yaml` contains `meal_planning:` section with enabled, default_servings, meal_types, meal_times, calendar_sync, auto_complete_past_plans, auto_complete_cron
 
     ```bash
     $ grep -n '^meal_planning:' config/smackerel.yaml
@@ -181,7 +181,7 @@ Scenario: SCN-036-005 — Configurable meal times stored in config (BS-013)
     $ ls config/generated/dev.env config/generated/test.env
     config/generated/dev.env  config/generated/test.env
     ```
-- [x] `internal/config/config.go` defines `MealPlanConfig` struct with fail-loud validation for all required fields
+- [x] Scenario SCN-036-003 (Fail-loud on missing required config when enabled): `internal/config/config.go` defines `MealPlanConfig` struct with fail-loud validation for all required fields
 
     ```bash
     $ grep -n 'MealPlanEnabled\|MealPlanDefaultServings\|MealPlanMealTypes' internal/config/config.go | head -5
@@ -356,7 +356,7 @@ Scenario: SCN-036-017 — Batch slot creation for repeating recipes
     === RUN   TestActivatePlan_ForceIgnoresOverlap
     --- PASS: TestActivatePlan_ForceIgnoresOverlap (0.00s)
     ```
-- [x] Batch slot creation creates one slot per day with batch_flag=true
+- [x] Scenario SCN-036-017 (Batch slot creation for repeating recipes): Batch slot creation creates one slot per day with batch_flag=true
 
     ```bash
     $ go test -count=1 -run 'TestAddBatchSlots' -v ./internal/mealplan/ 2>&1 | grep -E 'PASS|RUN'
@@ -650,7 +650,7 @@ Scenario: SCN-036-037 — "repeat last week" via Telegram (UX-5.1, BS-006)
     internal/telegram/mealplan_commands.go:265: func (h *MealPlanCommandHandler) handleSlotAssign(...)
     internal/telegram/mealplan_commands.go:306: func (h *MealPlanCommandHandler) handleBatchSlotAssign(...)
     ```
-- [x] Daily query ("what's for dinner?") and weekly overview ("meal plan") with formatted responses per UX-2.1/UX-2.2
+- [x] Scenario SCN-036-030 (Daily what's-for-dinner query resolves via plan): Daily query ("what's for dinner?") and weekly overview ("meal plan") with formatted responses per UX-2.1/UX-2.2
 
     ```bash
     $ grep -nE 'handleDailyQuery|handleWeeklyMealQuery|handlePlanView' internal/telegram/mealplan_commands.go
@@ -674,7 +674,7 @@ Scenario: SCN-036-037 — "repeat last week" via Telegram (UX-5.1, BS-006)
     internal/telegram/mealplan_commands.go:184: // "shopping list for plan"
     internal/telegram/mealplan_commands.go:468: func (h *MealPlanCommandHandler) handlePlanShoppingList(...)
     ```
-- [x] Plan repeat via "repeat last week's plan"
+- [x] Scenario SCN-036-037 (Repeat last week via Telegram): Plan repeat via "repeat last week's plan"
 
     ```bash
     $ grep -nE 'handlePlanRepeat|repeat last week' internal/telegram/mealplan_commands.go
@@ -829,7 +829,7 @@ Scenario: SCN-036-043 — Regeneration without force returns 409 when list exist
     internal/mealplan/shopping.go:195: SourceQuery: sourceQuery,
     internal/mealplan/shopping.go:298: if l.SourceQuery == sourceQuery && l.Status != list.StatusArchived {
     ```
-- [x] Missing domain_data recipes skipped with user-visible note in scaling summary
+- [x] Scenario SCN-036-041 (Recipe with missing domain_data is skipped): Missing domain_data recipes skipped with user-visible note in scaling summary
 
     ```bash
     $ grep -nE 'domain_data|skipped|scaling summary' internal/mealplan/shopping.go | head -5
@@ -908,7 +908,7 @@ Scenario: SCN-036-047 — API POST /api/meal-plans/{id}/copy creates shifted pla
 
 ### Definition of Done
 
-- [x] CopyPlan creates new draft plan with all slot dates shifted by dayOffset
+- [x] Scenario SCN-036-044 (Copy plan to new week with date shift): CopyPlan creates new draft plan with all slot dates shifted by dayOffset
 
     ```bash
     $ grep -nE 'CopyPlan|dayOffset' internal/mealplan/service.go | head -6
@@ -1015,7 +1015,7 @@ Scenario: SCN-036-052 — Individual event sync failures do not abort batch
 
 ### Definition of Done
 
-- [x] CalDAV bridge maps plan slots to VEVENTs per design §6.2 field mapping
+- [x] Scenario SCN-036-048 (Create CalDAV events from plan slots): CalDAV bridge maps plan slots to VEVENTs per design §6.2 field mapping
 
     ```bash
     $ ls -la internal/mealplan/calendar.go internal/mealplan/calendar_test.go
@@ -1058,7 +1058,7 @@ Scenario: SCN-036-052 — Individual event sync failures do not abort batch
     $ grep -n 'DeletePlanEvents' internal/mealplan/calendar.go internal/mealplan/service.go internal/api/mealplan.go 2>&1 | head -5
     internal/mealplan/calendar.go:70: func (b *CalendarBridge) DeletePlanEvents(ctx context.Context, plan PlanWithSlots) {
     ```
-- [x] CalDAV-disabled returns 422 with actionable message
+- [x] Scenario SCN-036-050 (CalDAV not configured returns 422): CalDAV-disabled returns 422 with actionable message
 
     ```bash
     $ grep -n 'MEAL_PLAN_CALDAV_NOT_CONFIGURED' internal/api/mealplan.go
@@ -1121,7 +1121,7 @@ Scenario: SCN-036-056 — Auto-complete cron schedule from config
 
 ### Definition of Done
 
-- [x] `Service.AutoCompletePastPlans` queries active plans with end_date < CURRENT_DATE and transitions to "completed"
+- [x] Scenario SCN-036-053 (Auto-complete transitions past active plans to completed): `Service.AutoCompletePastPlans` queries active plans with end_date < CURRENT_DATE and transitions to "completed"
 
     ```bash
     $ grep -n 'AutoCompletePastPlans' internal/mealplan/service.go internal/mealplan/store.go
@@ -1139,7 +1139,7 @@ Scenario: SCN-036-056 — Auto-complete cron schedule from config
     internal/scheduler/scheduler.go:177: func (s *Scheduler) SetMealPlanAutoComplete(svc MealPlanAutoCompleter, cronExpr string) {
     internal/scheduler/jobs.go:451: func (s *Scheduler) runMealPlanAutoCompleteJob() {
     ```
-- [x] Job only registered when `meal_planning.auto_complete_past_plans` is true
+- [x] Scenario SCN-036-055 (Auto-complete disabled via config): Job only registered when `meal_planning.auto_complete_past_plans` is true
 
     ```bash
     $ grep -n 'MealPlanAutoComplete\b' cmd/core/services.go internal/scheduler/scheduler.go | head -5
@@ -1152,7 +1152,7 @@ Scenario: SCN-036-056 — Auto-complete cron schedule from config
     internal/scheduler/jobs.go: ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
     internal/scheduler/jobs.go:459: n, err := s.mealPlanSvc.AutoCompletePastPlans(ctx)
     ```
-- [x] Future-dated active plans are not affected
+- [x] Scenario SCN-036-054 (Auto-complete skips plans with future end_date): Future-dated active plans are not affected
 
     ```bash
     $ grep -n 'CURRENT_DATE\|end_date <' internal/mealplan/store.go | head -3

@@ -3,7 +3,7 @@
   "featureDir": "specs/036-meal-planning",
   "featureName": "Meal Planning Calendar",
   "status": "done",
-  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedAt": "2026-06-06T23:00:00Z",
   "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
@@ -41,6 +41,16 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T18:10:00Z",
+      "runEndedAt": "2026-06-06T18:10:00Z",
+      "summary": "reconcile-to-doc Round 12 recert (G088). Post-cert planning edits reviewed and CURRENT: scopes.md tagged 12 Done-scope DoD bullets (SCN-036-003,005,017,030,037,041,044,048,050,053,054,055) with their Scenario SCN-036-NNN trace IDs to restore Gate G068 fidelity after the traceability-guard v3.8.0 fuzzy-tokenizer change (claim text preserved verbatim; cat-b scope-neutral); report.md reconciled 8 stale _Not started._ per-scope stubs to the consolidated Done evidence and added a BUG-036-002 reconciliation note. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged (internal/mealplan, api, telegram, scheduler, config all green); traceability-guard RESULT PASSED, 56/56 DoD fidelity. Tracked under bugs/BUG-036-002-g068-fuzzy-tokenizer-regression. certifiedAt advanced to 2026-06-06T18:10:00Z for Gate G088; requiresRevalidation NOT set."
+    },
     {
       "agent": "bubbles.spec-review",
       "phasesExecuted": ["spec-review"],
@@ -179,9 +189,9 @@
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": ["BUG-036-002"],
   "failures": [],
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-06T18:10:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

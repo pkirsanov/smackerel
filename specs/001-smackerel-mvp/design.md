@@ -432,7 +432,7 @@ Examples:
 
 ```
 Light theme:
-  Foreground:  #2C2C2C (warm black -- not pure #000)
+  Foreground:  #1a1a18 (warm near-black -- matches templates.go --fg)
   Background:  #FAFAF8 (warm white -- not pure #FFF)
   Subtle:      #B0ADA8 (warm gray for secondary text)
   Surface:     #F0EFED (card/panel background)

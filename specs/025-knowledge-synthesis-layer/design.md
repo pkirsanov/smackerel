@@ -273,7 +273,7 @@ No schema change required. The existing `edges` table uses TEXT for `edge_type` 
 
 ### Migration Strategy
 
-**Migration file:** `internal/db/migrations/014_knowledge_layer.sql`
+**Migration file:** `internal/db/migrations/001_initial_schema.sql` (lines 438-490; originally shipped as `014_knowledge_layer.sql`, consolidated into the initial schema during the migrations 002-017 squash — historical file preserved at `internal/db/migrations/archive/014_knowledge_layer.sql`)
 
 - Migration creates all three new tables and adds columns to `artifacts`
 - Down migration drops the new tables and columns (data loss acceptable for knowledge layer)
@@ -1442,7 +1442,7 @@ KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY=digest-assembly-v1
 
 ### Migration File
 
-`internal/db/migrations/014_knowledge_layer.sql`:
+`internal/db/migrations/001_initial_schema.sql` (lines 438-490; originally shipped as `014_knowledge_layer.sql`, now consolidated into the initial schema — historical file at `internal/db/migrations/archive/014_knowledge_layer.sql`):
 - Creates `knowledge_concepts`, `knowledge_entities`, `knowledge_lint_reports` tables
 - Adds `synthesis_status`, `synthesis_at`, `synthesis_error`, `synthesis_retry_count` columns to `artifacts`
 - Creates all required indexes

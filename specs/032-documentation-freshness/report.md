@@ -471,3 +471,33 @@ Spec 032 is documentation-only — Scopes 1-4 cover updates to `README.md`, `doc
 
 **Residual (not in implement authority):**
 - All 4 scopes (README System Requirements, Development.md Update, Operations Runbook, TLS Setup Guide) lack Gherkin scenarios. Adding new Gherkin scenarios is bubbles.plan ownership (per agent rule: "MUST NOT add new Gherkin scenarios"). Routing to bubbles.plan recommended if Gherkin coverage is desired for documentation scopes; otherwise, the trace-guard "no Gherkin scenarios to trace" failures are an acceptable artifact of this spec's documentation-only nature.
+
+---
+
+## DevOps Pass (2026-06-06)
+
+**Trigger:** `devops-to-doc` child workflow from stochastic-quality-sweep Round 1 (parent-expanded; runtime lacked `runSubagent`).
+
+### Probe Summary
+
+| Check | Documented | Actual on disk | Match |
+|-------|-----------|----------------|-------|
+| Internal Go packages | 32 (Go Packages table) | 33 (`find internal -mindepth 1 -maxdepth 1 -type d`) | **DRIFT** — `internal/scopesdriftguard/` (added 2026-06-05) undocumented |
+| Migration files | 38 (`001` + `018`–`055` minus `049`) | 38 | OK |
+| Prompt contracts | 21 | 21 | OK |
+| Doc-freshness automation | none | none (design Risk #1 mitigation never built) | **GAP** |
+
+### Findings
+
+| # | Finding | Category | Severity | Resolution |
+|---|---------|----------|----------|------------|
+| F1 | `internal/scopesdriftguard/` exists on disk but is absent from the `docs/Development.md` Go Packages table (33 dirs vs 32 documented), violating spec 032's "lists all Go packages under internal/" acceptance criterion. | Documentation drift | Medium | Documented `internal/scopesdriftguard/` (and the new guard package `internal/docfreshness/`) in the Go Packages table. |
+| F2 | No mechanical doc-freshness guard exists; the design's Risk #1 mitigation ("CI freshness check comparing documented packages to `go list ./...`") was never built, so F1-class drift was invisible. | DevOps / doc-freshness automation gap | Medium | Added `internal/docfreshness/doc_freshness_test.go` — a fail-loud Go contract test asserting every `internal/` package, migration, and prompt contract is documented in `docs/Development.md`, with an adversarial anti-tautology case. Runs under `./smackerel.sh test unit --go` + CI with no new CLI/CI surface. |
+
+Both findings are tracked and closed under [`bugs/BUG-003-development-doc-inventory-drift/`](bugs/BUG-003-development-doc-inventory-drift/).
+
+### Verification
+
+- `./smackerel.sh test unit --go --go-run 'TestDocFreshness'` — BEFORE the doc rows: `34 packages on disk, 2 undocumented: docfreshness, scopesdriftguard` (FAIL); AFTER: `34/0, 38/0, 21/0` (`ok internal/docfreshness`).
+- `./smackerel.sh format --check` — exit 0 (gofmt clean).
+- `./smackerel.sh lint` — exit 0 (`go vet ./...` clean, ruff `All checks passed!`, web validation passed).
