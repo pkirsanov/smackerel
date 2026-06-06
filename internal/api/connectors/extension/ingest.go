@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -41,6 +42,24 @@ const (
 	dedupWindowMinSeconds = 60
 	dedupWindowMaxSeconds = 86400
 )
+
+// sourceDeviceIDRe enforces the spec 058 design §2.3 source_device_id
+// contract at the server trust boundary: lowercase alphanumerics and
+// hyphens only. The design's request flow (§3.2) requires the handler
+// to "validate each ... Metadata field"; this is that enforcement for
+// source_device_id, which would otherwise flow UNCHECKED into the
+// dedup-key preimage (ingest.ComputeDedupKey) and the stored device id
+// surfaced by the admin devices view. Enforcing the charset here (the
+// options-page validator is the client-side mirror) blocks null-byte /
+// control-char / whitespace / case / unicode injection at the boundary.
+//
+// Length bound: 64. The design body text says "1–32 chars", but the
+// design's OWN auto-generated fallback is "auto-<uuidv4>" = 41 chars,
+// so a 32 cap would reject conforming clients. 64 admits both the
+// operator-set (≤32) and auto (41) forms while still bounding the
+// input so a hostile client cannot bloat the stored device id or the
+// dedup-key preimage with an unbounded string.
+var sourceDeviceIDRe = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
 
 // ArtifactPublisher is the interface satisfied by
 // pipeline.RawArtifactPublisher. Declared locally to keep the
@@ -174,6 +193,14 @@ func (h *Handler) processItem(ctx context.Context, item connector.RawArtifact) I
 	deviceID := readMetadataString(item.Metadata, "source_device_id")
 	if deviceID == "" {
 		out.Error = "metadata.source_device_id_required"
+		return out
+	}
+	// Trust-boundary enforcement of the spec 058 design §2.3
+	// source_device_id charset/length contract. Without this, a
+	// malformed (or hostile) device id flows straight into the
+	// dedup-key preimage and the admin devices view.
+	if !sourceDeviceIDRe.MatchString(deviceID) {
+		out.Error = "metadata.source_device_id_invalid"
 		return out
 	}
 
