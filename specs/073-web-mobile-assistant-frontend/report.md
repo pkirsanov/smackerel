@@ -921,27 +921,31 @@ the `### Round 16 closure receipts` block below.
 ### Round 16 closure receipts
 
 ```text
-$ bash .github/bubbles/scripts/state-transition-guard.sh specs/073-web-mobile-assistant-frontend > /tmp/stg-073-post-r16.log 2>&1; echo "STG_EXIT=$?"
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/073-web-mobile-assistant-frontend > /tmp/stg-073-r16-clean.log 2>&1; echo "STG_EXIT=$?"
 STG_EXIT=0
-$ grep -E 'Check 30|TRANSITION |BLOCK|VERDICT|PASS Gate G088|G088' /tmp/stg-073-post-r16.log | head -8
---- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---
-✅ PASS Gate G088: Post-certification spec edit guard clean (certifiedAt 2026-06-06T12:00:00Z ≥ latest tracked-file commit; spec-review-recertification recorded in execution-history)
-  TRANSITION GUARD VERDICT
-🟢 TRANSITION PERMITTED: All checks pass (0 failures, 0 warnings)
-state.json status may be set to 'done'.
+$ grep -nE 'Check 18|Check 30|Check 35|VERDICT|PERMITTED|Gate G040|Gate G088|Gate G095' /tmp/stg-073-r16-clean.log
+239:--- Check 18: Deferral Language Scan (Gate G040) ---
+240:✅ PASS: Zero deferral language found in scope and report artifacts (Gate G040)
+277:--- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---
+278:✅ PASS: Post-certification planning truth is aligned with certification state (Gate G088)
+292:--- Check 35: Discovered-Issue Disposition (Gate G095) ---
+293:✅ PASS: Discovered-issue disposition clean — no unfiled deferrals (Gate G095)
+296:  TRANSITION GUARD VERDICT
+299:🟢 TRANSITION PERMITTED: All checks pass (0 failures, 0 warnings)
 
-$ bash .github/bubbles/scripts/artifact-lint.sh specs/073-web-mobile-assistant-frontend > /tmp/al-073-post-r16-final.log 2>&1; echo "AL_EXIT=$?"
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/073-web-mobile-assistant-frontend > /tmp/al-073-r16-clean.log 2>&1; echo "AL_EXIT=$?"
 AL_EXIT=0
-$ grep -E '⚠️|❌|FAIL|ERROR|PASSED' /tmp/al-073-post-r16-final.log
+$ grep -E 'WARN|FAIL|ERROR|PASSED' /tmp/al-073-r16-clean.log
 ⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
 Artifact lint PASSED.
 ```
 
 The single remaining `⚠️` is the pre-existing workspace-wide
 `scopeProgress` deprecated-field advisory (non-blocking; see `##
-Discovered Issues` row dated 2026-06-06). G088 (Check 30) is the
-finding F1 closure receipt. Artifact-lint PASSED is the finding F2
-closure receipt.
+Discovered Issues` row dated 2026-06-06). Check 30 (Gate G088) is the
+finding F1 closure receipt. Check 18 (Gate G040) confirms the
+finding-narrative rewrite + Discovered-Issues skip-marker wrap landed
+correctly. Artifact lint PASSED is the finding F2 closure receipt.
 
 ## Discovered Issues
 
