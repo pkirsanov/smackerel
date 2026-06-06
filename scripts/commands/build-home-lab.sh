@@ -18,6 +18,7 @@
 # Outputs:
 #   ghcr.io/pkirsanov/smackerel-core@sha256:<digest>  (pushed, signed, attested)
 #   ghcr.io/pkirsanov/smackerel-ml@sha256:<digest>    (pushed, signed, attested)
+#   ghcr.io/pkirsanov/smackerel-config-bundles:home-lab-<sourceSha> (pushed, signed)
 #   dist/local-build-manifests/local-build-manifest-<sourceSha>.yaml
 #
 # Exit codes:
@@ -67,6 +68,7 @@ bhl_require_cmd syft
 bhl_require_cmd trivy
 bhl_require_cmd git
 bhl_require_cmd sha256sum
+bhl_require_cmd oras
 
 # Required env.
 : "${OPERATOR_COSIGN_KEY:=$HOME/.config/knb/operator-keys/cosign-operator.key}"
@@ -95,6 +97,19 @@ BUILT_BY="$(git config user.email || echo 'unknown@local')"
 
 CORE_REGISTRY='ghcr.io/pkirsanov/smackerel-core'
 ML_REGISTRY='ghcr.io/pkirsanov/smackerel-ml'
+BUNDLE_REGISTRY='ghcr.io/pkirsanov/smackerel-config-bundles'
+BUNDLE_ENV='home-lab'
+BUNDLE_TAG="${BUNDLE_ENV}-${SOURCE_SHA}"
+BUNDLE_REF="${BUNDLE_REGISTRY}:${BUNDLE_TAG}"
+# Hardware tier baked into the home-lab config bundle. Mirrors the CI
+# home-lab->tier mapping in .github/workflows/build.yml
+# (SMACKEREL_HARDWARE_TIER: matrix.env == 'home-lab' && 'accel'). config.sh
+# bakes the tier's interactive-model params into the bundle's app.env, so the
+# local-built home-lab bundle MUST use the same tier CI uses; otherwise the
+# same sourceSha would yield a different bundle (breaking build-once-deploy-many
+# determinism) and the accel-tier home-lab host would receive the wrong
+# interactive model.
+BUNDLE_HARDWARE_TIER='accel'
 
 DIST_DIR="$REPO_ROOT/dist/local-build-manifests"
 mkdir -p "$DIST_DIR"
@@ -186,9 +201,44 @@ for ref in "$CORE_IMAGE_REF" "$ML_IMAGE_REF"; do
   echo "  attested: $ref (sbom: $sbom_path)"
 done
 
-# Step 7: emit local-build-manifest.
+# Step 7: generate deterministic config bundle.
+# config.sh is invoked directly (NOT via smackerel.sh) so the operator's local
+# .smackerel.local.env (sourced by smackerel.sh) cannot clobber the pinned
+# SMACKEREL_HARDWARE_TIER. The home-lab bundle MUST bake the 'accel' tier to
+# stay byte-identical to the CI home-lab bundle for the same sourceSha.
 echo
-echo "[7/7] emit local-build-manifest"
+echo "[7/9] config bundle generate (scripts/commands/config.sh --bundle)"
+BUNDLE_OUT_DIR="$REPO_ROOT/dist/config-bundles"
+mkdir -p "$BUNDLE_OUT_DIR"
+SMACKEREL_HARDWARE_TIER="$BUNDLE_HARDWARE_TIER" bash "$REPO_ROOT/scripts/commands/config.sh" \
+  --env "$BUNDLE_ENV" --bundle --source-sha "$SOURCE_SHA" \
+  --output-dir "$BUNDLE_OUT_DIR" \
+  || bhl_fail F017-BUILD-03 "config bundle generation failed"
+BUNDLE_FILE="$BUNDLE_OUT_DIR/config-bundle-${BUNDLE_ENV}-${SOURCE_SHA}.tar.gz"
+[[ -f "$BUNDLE_FILE" ]] \
+  || bhl_fail F017-BUILD-03 "expected bundle not produced at $BUNDLE_FILE"
+BUNDLE_SHA256="$(sha256sum "$BUNDLE_FILE" | awk '{print $1}')"
+echo "  bundle:  $BUNDLE_FILE"
+echo "  sha256:  $BUNDLE_SHA256"
+
+# Step 8: oras push bundle + cosign sign bundle reference.
+# Push form mirrors .github/workflows/build.yml (layer mediatype only, no
+# --artifact-type) so the knb adapter's `oras pull` restores the original
+# config-bundle-<env>-<sourceSha>.tar.gz filename it locates via find.
+echo
+echo "[8/9] oras push bundle + cosign sign"
+BUNDLE_BASENAME="$(basename "$BUNDLE_FILE")"
+(cd "$BUNDLE_OUT_DIR" && oras push "$BUNDLE_REF" \
+  "${BUNDLE_BASENAME}:application/vnd.smackerel.config-bundle.v1+gzip" >/dev/null 2>&1) \
+  || bhl_fail F017-BUILD-03 "oras push failed for $BUNDLE_REF (check ghcr.io auth)"
+cosign sign --yes --key "$OPERATOR_COSIGN_KEY" "$BUNDLE_REF" >/dev/null 2>&1 \
+  || bhl_fail F017-BUILD-05 "cosign sign failed for bundle $BUNDLE_REF"
+echo "  pushed:  $BUNDLE_REF"
+echo "  signed:  $BUNDLE_REF"
+
+# Step 9: emit local-build-manifest.
+echo
+echo "[9/9] emit local-build-manifest"
 {
   echo "---"
   echo "buildManifestVersion: 1"
@@ -201,6 +251,11 @@ echo "[7/7] emit local-build-manifest"
   echo "images:"
   echo "  smackerel-core: \"$CORE_IMAGE_REF\""
   echo "  smackerel-ml: \"$ML_IMAGE_REF\""
+  echo "configBundle:"
+  echo "  ref: \"$BUNDLE_REF\""
+  echo "  tag: \"$BUNDLE_TAG\""
+  echo "  env: \"$BUNDLE_ENV\""
+  echo "  sha256: \"$BUNDLE_SHA256\""
   echo "signatures:"
   echo "  images: cosign-key-operator"
   echo "  operatorPubkeyPath: \"$OPERATOR_COSIGN_PUBKEY\""
