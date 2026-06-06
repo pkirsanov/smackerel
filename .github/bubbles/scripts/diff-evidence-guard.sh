@@ -66,14 +66,30 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 0
 fi
 
-# v5.2 / F2: Auto-enable strict mode for new specs.
+# v6.0 / B2: diff-evidence-guard is default-on for ALL specs.
 #
-# Promotion rules (auto-strict when ANY of these is true):
-#   - state.json.modernization.diffEvidence == "enforce"
-#   - spec's first commit is on/after the v5.2 cutoff date (2026-06-04)
-# Manual opt-out for old specs that need a one-time exemption:
-#   - state.json.modernization.diffEvidence == "advisory"
-# Manual flag overrides everything (--strict, env var still respected).
+# Promotion rules (auto-strict when ALL of these are true):
+#   - state.json.modernization.diffEvidence is NOT "advisory"
+#
+# v5.2 / F2 (superseded): auto-strict only for specs created on/after the
+#   2026-06-04 cutoff. Kept here as a fallback when state.json has no
+#   modernization block AND the spec predates the cutoff — those specs
+#   stay advisory until their state.json is touched (grandfather clause).
+#
+# v6.0 / B2 (current): explicit opt-out only.
+#   - state.json.modernization.diffEvidence == "advisory" → advisory mode
+#   - state.json.modernization.diffEvidence == "enforce"  → strict mode
+#   - state.json.modernization MISSING or empty           → strict mode
+#                                                          (was advisory in v5.x
+#                                                          unless post-cutoff)
+# Manual --strict / BUBBLES_DIFF_EVIDENCE_GUARD_STRICT=1 still works for
+# operators who want to force the gate on an otherwise-advisory spec.
+#
+# Grandfather clause: specs created before the v5.2 cutoff that have NO
+# state.json.modernization block keep their v5 advisory behavior, because
+# they were authored under the older policy and may legitimately lack the
+# diff-traceable path-claims that B2 expects. Touching state.json (any
+# write) demotes them to the v6 policy automatically.
 DIFF_EVIDENCE_CUTOFF="2026-06-04"
 if [[ "$STRICT" != "1" ]] && [[ -f "$SPEC_DIR/state.json" ]]; then
   AUTO_DECISION="$(python3 - <<PY
@@ -84,33 +100,38 @@ except Exception:
     print("unknown"); sys.exit(0)
 mod = (d.get('modernization') or {})
 choice = (mod.get('diffEvidence') or '').strip().lower()
-if choice == 'enforce':
-    print('enforce'); sys.exit(0)
 if choice == 'advisory':
     print('advisory'); sys.exit(0)
-# Auto-decision via spec creation date.
+if choice == 'enforce':
+    print('enforce'); sys.exit(0)
+# v6.0 / B2: default-on. v5.x grandfather clause: pre-cutoff specs with
+# no explicit choice AND no modernization block stay advisory.
+has_mod_block = bool(mod)
 try:
     first = subprocess.check_output(
         ['git', '-C', "$REPO_ROOT", 'log', '--diff-filter=A', '--format=%cI', '--', "$SPEC_DIR"],
         stderr=subprocess.DEVNULL, text=True,
     ).strip().splitlines()
-    if first:
-        first_date = first[-1][:10]  # YYYY-MM-DD
-        if first_date >= "$DIFF_EVIDENCE_CUTOFF":
-            print('enforce'); sys.exit(0)
-        print('advisory'); sys.exit(0)
+    first_date = first[-1][:10] if first else ""
 except Exception:
-    pass
-print('unknown')
+    first_date = ""
+if first_date and first_date < "$DIFF_EVIDENCE_CUTOFF" and not has_mod_block:
+    # Pre-cutoff spec with no modernization block — v5 grandfather.
+    print('advisory'); sys.exit(0)
+# Everything else: v6 default-on.
+print('enforce')
 PY
 )"
   case "$AUTO_DECISION" in
     enforce)
       STRICT=1
-      echo "diff-evidence-guard: auto-promoted to strict (v5.2 / F2: spec created on/after $DIFF_EVIDENCE_CUTOFF or state.json declares enforce)"
+      echo "diff-evidence-guard: enforcing (v6.0 / B2 default; opt out via state.json.modernization.diffEvidence=\"advisory\")"
       ;;
-    advisory|unknown)
-      : # leave STRICT=0
+    advisory)
+      echo "diff-evidence-guard: advisory mode (state.json.modernization.diffEvidence=\"advisory\" OR v5 grandfather)"
+      ;;
+    unknown)
+      : # leave STRICT=0 — state.json unparseable; do not promote
       ;;
   esac
 fi
@@ -212,7 +233,7 @@ for sf in scope_files:
         paths = PATH_CLAIM_RE.findall(body)
         if not paths:
             continue
-        claims.append((Path(sf).relative_to(repo_root), i, body, paths))
+        claims.append((str(Path(sf).resolve()).removeprefix(repo_root.rstrip('/') + '/'), i, body, paths))
 
 if not claims:
     print(f"diff-evidence-guard: PASS (no DoD path-claims to verify in $(echo "${SCOPE_FILES[@]}" | wc -w) scope file(s); baseSha={base_sha[:12]})")
@@ -233,7 +254,7 @@ print(f"  baseSha: {base_sha[:12]}..HEAD")
 print(f"  {len(mismatches)} DoD item(s) claim path changes NOT present in diff:")
 for sf, ln, body, p in mismatches[:20]:
     body_short = (body[:80] + '…') if len(body) > 80 else body
-    print(f"    {sf}:{ln}: claims `{p}` but path is not in git diff")
+    print(f"    {sf}:{ln}: claims '{p}' but path is not in git diff")
     print(f"      → {body_short}")
 if len(mismatches) > 20:
     print(f"    … {len(mismatches) - 20} more")

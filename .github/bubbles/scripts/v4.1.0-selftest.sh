@@ -23,6 +23,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WORKFLOWS="$REPO_ROOT/bubbles/workflows.yaml"
+# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml.
+# scopeKinds + lockdownContract stay in workflows.yaml. MODES points at the
+# registry (fallback to workflows.yaml for pre-split repos with inline modes).
+MODES="$REPO_ROOT/bubbles/workflows/modes.yaml"
+[[ -f "$MODES" ]] || MODES="$WORKFLOWS"
 GUARD="$SCRIPT_DIR/state-transition-guard.sh"
 RCH="$SCRIPT_DIR/retro-convergence-health.sh"
 
@@ -56,11 +61,11 @@ note() { printf '[v4.1.0-selftest] %s\n' "$*"; }
 ok()   { note "PASS  test-$1: $2"; pass=$((pass+1)); }
 ko()   { note "FAIL  test-$1: $2"; fail=$((fail+1)); }
 
-# ---- Test 1: ceiling string present in workflows.yaml ---------------------
-if grep -qE '(^|[^_-])delivered_pending_activation' "$WORKFLOWS"; then
-  ok 1 "delivered_pending_activation ceiling string present in workflows.yaml"
+# ---- Test 1: ceiling string present in the modes registry ----------------
+if grep -qE '(^|[^_-])delivered_pending_activation' "$MODES"; then
+  ok 1 "delivered_pending_activation ceiling string present in modes registry"
 else
-  ko 1 "delivered_pending_activation ceiling string MISSING from workflows.yaml"
+  ko 1 "delivered_pending_activation ceiling string MISSING from modes registry"
 fi
 
 # ---- Test 2: scopeKinds taxonomy declares 6 kinds -------------------------
@@ -91,7 +96,7 @@ fi
 # ---- Test 4: 3 new modes present ------------------------------------------
 new_modes="$(python3 -c "
 import yaml
-d=yaml.safe_load(open('$WORKFLOWS'))
+d=yaml.safe_load(open('$MODES'))
 m=d.get('modes') or {}
 present=[k for k in ('adapter-readiness-to-packet','dark-launch-shipped','migration-shipped-pending-cutover') if k in m and m[k].get('statusCeiling')=='delivered_pending_activation']
 print(','.join(sorted(present)))

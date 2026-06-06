@@ -1,0 +1,7 @@
+{
+  "uri": "bubbles://workflows/intent-routes.yaml",
+  "name": "Bubbles intent routes",
+  "description": "Operator-facing natural-language → workflow-mode routing table (bubbles/intent-routes.yaml). Owned by bubbles.super agent. Documents which English phrases route to which mode.",
+  "mimeType": "application/yaml",
+  "path": "bubbles/intent-routes.yaml"
+}

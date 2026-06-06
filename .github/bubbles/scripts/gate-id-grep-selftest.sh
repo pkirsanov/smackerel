@@ -8,7 +8,7 @@
 #   - duplicate-adjacent fixture -> default FAILS, strict FAILS
 #   - unknown-G099 fixture       -> default PASSES (no dupes),
 #                                   strict FAILS on the unknown ID
-#                                   (G099 is in the canonical < G100 range
+#                                   (G099 is in the framework range < G900
 #                                   but is NOT defined in workflows.yaml)
 #
 # Asserts:
@@ -21,8 +21,8 @@
 #   - unknown   default exits 0 (defaults ignore unknown IDs)
 #   - unknown   strict  exits 1 and prints
 #       "FINDING: unknown-gate-id:" with G099 mentioned
-#   - G100+ references in the clean fixture do NOT trigger findings
-#     under --strict (custom-gate allowlist works)
+#   - G900+ references in the clean fixture do NOT trigger findings
+#     under --strict (project-local custom-gate allowlist works)
 #
 # Cleans up on exit.
 
@@ -70,7 +70,7 @@ cat > "$clean_root/agents/clean-doc.md" <<'EOF'
 # clean-doc
 
 Mentions canonical gates G028 and G044 in a normal sentence,
-plus a custom local gate G100 that should always be allowed.
+plus a project-local custom gate G900 that should always be allowed.
 EOF
 
 set +e
@@ -100,7 +100,7 @@ clean_strict_rc=$?
 set -e
 
 if [[ "$clean_strict_rc" -eq 0 ]]; then
-  pass "clean strict exits 0 (G100+ allowed)"
+  pass "clean strict exits 0 (G900+ allowed)"
 else
   fail "clean strict expected exit 0, got $clean_strict_rc"
   sed -n '1,40p' "$clean_strict_log"
@@ -173,7 +173,7 @@ cat > "$unk_root/instructions/unknown-doc.instructions.md" <<'EOF'
 # unknown-doc
 
 References an unknown gate ID G099 that is NOT in workflows.yaml
-(G099 is in the canonical < G100 range so it is NOT auto-allowed).
+(G099 is in the framework range < G900 so it is NOT auto-allowed).
 Also references canonical G028 normally.
 EOF
 

@@ -48,7 +48,7 @@ AGENT_MANUAL="$ROOT_DIR/../docs/guides/AGENT_MANUAL.md"
 SUPER_RECIPE="$ROOT_DIR/../docs/recipes/ask-the-super-first.md"
 
 check_pattern "$SUPER_AGENT" 'Source repo: `ls agents/bubbles\.\*\.agent\.md`; downstream repo: `ls \.github/agents/bubbles\.\*\.agent\.md`' "Super agent discovers source and downstream agent inventories"
-check_pattern "$SUPER_AGENT" 'source repo `bubbles/workflows\.yaml`, downstream repo `\.github/bubbles/workflows\.yaml`' "Super agent discovers workflow registry by repo posture"
+check_pattern "$SUPER_AGENT" 'source repo `bubbles/workflows/modes\.yaml`, downstream repo `\.github/bubbles/workflows/modes\.yaml`' "Super agent discovers workflow registry by repo posture"
 check_pattern "$SUPER_AGENT" 'Source repo: `ls skills/\*/SKILL\.md`; downstream repo: `ls \.github/skills/\*/SKILL\.md`' "Super agent discovers source and downstream skills"
 check_pattern "$SUPER_AGENT" 'Source repo: `ls instructions/\*\.md`; downstream repo: `ls \.github/instructions/\*\.instructions\.md`' "Super agent discovers source and downstream instructions"
 check_pattern "$SUPER_AGENT" 'docs/CATALOG\.md' "Super agent uses the recipe catalog as a feature map"

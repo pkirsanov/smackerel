@@ -9,7 +9,7 @@ Use `autoCommit` to get structured git history that tracks scope-by-scope progre
 One commit per completed scope. Clean, reviewable, revertable.
 
 ```
-/bubbles.workflow  full-delivery for 042 autoCommit: scope
+/bubbles.workflow implement action:full-delivery target:spec for 042 autoCommit: scope
 ```
 
 After each scope reaches Done (all DoD items checked with evidence), the agent runs:
@@ -23,7 +23,7 @@ git commit -m "bubbles(042/01): database-schema — Done ..."
 One commit per validated DoD item. Maximum granularity.
 
 ```
-/bubbles.workflow  full-delivery for 042 autoCommit: dod
+/bubbles.workflow implement action:full-delivery target:spec for 042 autoCommit: dod
 ```
 
 ## What You Get
@@ -48,7 +48,7 @@ git diff def5678..abc1234  # exact diff for scope 02
 
 For feature branches:
 ```
-/bubbles.workflow  full-delivery for 042 autoCommit: scope gitIsolation: true
+/bubbles.workflow implement action:full-delivery target:spec for 042 autoCommit: scope gitIsolation: true
 ```
 
 This creates a branch, commits per scope, and you merge when complete.

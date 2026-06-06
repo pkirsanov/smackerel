@@ -26,4 +26,5 @@ Execute workflow modes round-by-round with synchronous dispatch-and-wait, no rep
 - `agents/bubbles_shared/workflow-fix-cycle-protocol.md` — fix-cycle round semantics, finding-set closure
 - `agents/bubbles_shared/workflow-orchestration-core.md` — dispatcher contract
 - `agents/bubbles_shared/workflow-delegation-core.md` — natural-language routing + work selection ownership
-- `bubbles/workflows.yaml` — per-mode loop policy, execution options, gate wiring
+- `bubbles/workflows/modes.yaml` — per-mode loop policy (requiredGates, phaseRelevance, triggerWorkflowModes)
+- `bubbles/workflows.yaml` — execution options + gate/phase wiring (resolver composes both files)

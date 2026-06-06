@@ -24,7 +24,7 @@ Typical signals:
 Use this when the product story is still basically correct, but artifact state or scope status drifted from reality.
 
 ```text
-/bubbles.workflow  reconcile-to-doc for booking
+/bubbles.workflow improve action:reconcile-stale-state finalize:docs for booking
 ```
 
 ### Improve an existing feature
@@ -32,7 +32,7 @@ Use this when the product story is still basically correct, but artifact state o
 Use this when the existing feature is fundamentally right and you want competitive or quality improvements without rewriting the product story.
 
 ```text
-/bubbles.workflow  improve-existing for booking
+/bubbles.workflow improve target:existing-feature action:analyze-and-harden for booking
 ```
 
 ### Redesign an existing feature

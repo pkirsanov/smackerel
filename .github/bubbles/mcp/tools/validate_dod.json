@@ -1,0 +1,22 @@
+{
+  "name": "validate_dod",
+  "description": "Run the Bubbles state-transition guard against a spec dir. Validates DoD evidence (markdown OR tool-log), scope status, transition gates, and returns the full guard output (stdout + stderr + exit code) verbatim. Use when an agent claims a spec/scope is 'done' and you need machine-verifiable proof.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "spec_dir": {
+        "type": "string",
+        "description": "Spec directory relative to repo root, e.g. 'specs/045-foo'."
+      },
+      "revert_on_fail": {
+        "type": "boolean",
+        "description": "If true, the guard reverts the spec's state.json from 'done' on failure.",
+        "default": false
+      }
+    },
+    "required": ["spec_dir"]
+  },
+  "script": "state-transition-guard.sh",
+  "argsTemplate": ["${spec_dir}"],
+  "successExitCodes": [0]
+}

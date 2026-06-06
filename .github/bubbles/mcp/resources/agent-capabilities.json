@@ -1,0 +1,7 @@
+{
+  "uri": "bubbles://agent-capabilities.yaml",
+  "name": "Bubbles agent-capabilities manifest",
+  "description": "Per-agent capability declaration (bubbles/agent-capabilities.yaml): which workflow modes each agent owns, which subagent tool exposure they require, which top-level-runtime constraints apply.",
+  "mimeType": "application/yaml",
+  "path": "bubbles/agent-capabilities.yaml"
+}
