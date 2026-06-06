@@ -3,6 +3,8 @@
   "featureDir": "specs/033-mobile-capture",
   "featureName": "Mobile & Browser Capture Surfaces",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -22,6 +24,7 @@
   },
   "certification": {
     "status": "done",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "1",
       "2",
@@ -177,6 +180,16 @@
       "runStartedAt": "2026-05-23T00:00:00Z",
       "runEndedAt": "2026-05-24T00:50:00Z",
       "summary": "SQS round 9 devops trigger (parent-expanded-child-mode, mappedMode=devops-to-doc): probed CI/CD/build/deploy/observability surfaces for spec 033. Found 1 finding (DEVOPS-033-003 — extension manifest parity not lint-protected); two historical GAP-F bugs (F01 Firefox missing alarms+host patterns, F03 mismatched CSP object-src) were closed by hand with no machine-checked contract preventing the next drift. Routed to BUG-033-001-extension-manifest-parity-not-lint-protected/ and closed end-to-end. Added internal/web/extension_parity_contract_test.go (511 LOC, package web) with 1 live-file test + 1 baseline-sanity test + 7 adversarial sub-tests (one per parity surface: missing-alarms, missing-host-pattern, mismatched-CSP-object-src, mismatched-name, mismatched-version, mismatched-description, extra-perm-in-chrome). Focused run 0.029s, full internal/web/... gate 0.083s, zero regressions. artifact-lint PASS; traceability-guard PASS; state-transition-guard verdict TRANSITION PERMITTED. Spec 033 status unchanged: done. PWA cache-busting and extension version parity confirmed non-findings (already correct). Spec 055 WIP boundary preserved via path-limited git add."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edit: 19b31c0a (OPS-001 banner sweep: inserted canonical '**Status:** Done (certified per state.json)' banner after the spec.md H1, +2 lines). Pure status-banner reconciliation; no requirement, SCN scenario, or DoD item altered; implementation unchanged. Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
     }
   ],
   "activeBugs": [],
@@ -191,7 +204,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T00:50:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

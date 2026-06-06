@@ -3,6 +3,8 @@
   "featureDir": "specs/038-cloud-drives-integration",
   "featureName": "Cloud Drives Integration",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -40,6 +42,7 @@
   },
   "certification": {
     "status": "done",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "Scope 1: Drive Foundation",
       "Scope 2: Scan And Monitor",
@@ -979,12 +982,22 @@
         "audit: spec 038 status / certification.* / scopeProgress / completedScopes / certifiedCompletedPhases ALL UNTOUCHED — spec 038 stays at done; only executionHistory appended with this closure entry; lastUpdatedAt bumped.",
         "docs: closure narrative captured in specs/044-per-user-bearer-auth/report.md → Scope 02 Implement Evidence section; this state.json entry references that location."
       ]
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edits: 19b31c0a (OPS-001 banner sweep: spec.md '> **Status:** Draft (analyst-owned requirements sections only)' -> 'Done') and 28711074 (mid-tier drift cleanup: scopes.md reconciled internal/drive/tools.go -> internal/drive/tools/tools.go subpackage (avoids import cycle with internal/drive/save and rules), internal/drive/tools_test.go -> internal/drive/tools/tools_test.go, and internal/config/loader.go -> internal/config/drive.go + internal/config/config.go::Validate() per-domain layout, with explanatory parentheticals). Both reconcile documentation paths to shipped code; SCN-038 scenario refs, test function names, and DoD semantics unchanged; implementation unchanged. Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-10T14:30:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",

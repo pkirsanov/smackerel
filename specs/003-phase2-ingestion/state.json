@@ -3,6 +3,8 @@
   "featureDir": "specs/003-phase2-ingestion",
   "featureName": "Phase 2: Passive Ingestion",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -30,6 +32,7 @@
   },
   "certification": {
     "status": "done",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "1",
       "2",
@@ -406,12 +409,22 @@
       ],
       "scopesCompleted": [],
       "summary": "Stochastic-quality-sweep R4/20 regression sweep (parent-expanded child mode). Trigger=regression. 0 test regressions across 26 spec-003 owned Go packages; cross-spec regression baseline guard PASSED. Found 3 planning-truth drift findings (REG-003-R04-01/02/03): Connector interface declared 6 methods including phantom GetState; ConnectorConfig declared fields SourceID/Schedule/ProcessingRules that do not exist; SyncState field names diverged from state.go; QualifierConfig listed phantom MinDwellTime that belongs to spec 010. All three closed by docs-side repair in spec.md R-201, design.md (architecture table + Connector interface + SyncState/ConnectorConfig/QualifierConfig data blocks), and scopes.md New Types & Signatures list. Reconciliation notes added. No code change; implementation was certified-correct. Spec 003 status remains done with strengthened doc-truth coherence."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edit: af7abce3 (docs(sweep): governance recerts \u2014 stochastic-quality-sweep R4 'reconcile Connector/ConnectorConfig/SyncState design drift') reconciled spec.md R-201, design.md (architecture table + Connector interface + SyncState/ConnectorConfig/QualifierConfig blocks), and scopes.md New Types & Signatures to match the already-shipped Go API in internal/connector/connector.go + state.go (removed phantom GetState method and SourceID/Schedule/ProcessingRules fields and the MinDwellTime qualifier that belongs to spec 010; renamed SyncState fields to match state.go). Documentation-reconciliation toward shipped code: zero source files changed, no SCN scenario or DoD item altered, implementation certified-correct and unchanged (the executionHistory R4 entry itself records 'No code change; implementation was certified-correct'). Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-05T00:00:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

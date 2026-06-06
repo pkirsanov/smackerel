@@ -4,6 +4,9 @@
   "featureNumber": "061",
   "featureName": "Conversational Assistant (Transport-Agnostic)",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -117,6 +120,16 @@
       "SCOPE-10"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: fb2a4266 (2026-06-01) reconciled the spec.md status banner from in_progress to done (certified per state.json) and added an additive Architectural Position block carving successor work to specs 064/065/066/067/068/069 while affirming 061 shipped what it specified; design.md (+14) added a matching successor cross-ref note. Category (b) incidental reconciliation. No new 061 obligation, scenario rewrite, or DoD reset; implementation unchanged. certifiedAt set to 2026-06-06T17:00:00Z for Gate G088."
+      },
       {
         "round": 101,
         "agent": "bubbles.implement",

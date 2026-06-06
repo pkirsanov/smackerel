@@ -3,6 +3,8 @@
   "featureDir": "specs/042-tailnet-edge-bind-pattern",
   "featureName": "Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:30:00Z",
+  "certifiedBy": "bubbles.workflow",
   "currentPhase": null,
   "workflowMode": "bugfix-fastlane",
   "execution": {
@@ -119,7 +121,7 @@
       "audit"
     ],
     "certifierAgent": "bubbles.validate",
-    "certifiedAt": "2026-05-09T07:14:00Z",
+    "certifiedAt": "2026-06-06T17:30:00Z",
     "auditorAgent": "bubbles.audit",
     "auditedAt": "2026-05-09T07:30:00Z",
     "auditVerdict": "SHIP_IT",
@@ -128,7 +130,7 @@
     "scopeProgress": [
       {
         "scope": 1,
-        "name": "Compose contract + Go unit lint test + SST clarifying comment",
+        "name": "Fail-loud compose contract and mechanical guard",
         "status": "Done",
         "dependsOn": [],
         "scopeDir": null,
@@ -138,7 +140,7 @@
       },
       {
         "scope": 2,
-        "name": "Copilot guardrail + Operations doc",
+        "name": "Operator docs and agent guardrails",
         "status": "Done",
         "dependsOn": [1],
         "scopeDir": null,
@@ -432,12 +434,32 @@
       "outcome": "completed_diagnostic",
       "evidenceRef": "report.md#stochastic-sweep--devops-pass-r08",
       "notes": "Stochastic sweep R8/10 (sweep-2026-05-24-r10) parent-expanded-child-mode invocation of devops-to-doc. Probe scope: live deploy/compose.deploy.yml SST fail-loud form on all 4 host-bind sites (smackerel-core L128 + smackerel-ml L185 + ollama L243 + prometheus L315), Pattern P1 enforcement on postgres+nats (no ports:), TestComposeContract* contract test (11/11 adversarial cases green: TestComposeContract_LiveFile + TestComposeContract_AdversarialLiteralBind + TestComposeContract_AdversarialInfraHasPorts + TestComposeContract_AdversarialMultiPortsBypass + TestComposeContract_AdversarialMLMultiPortsBypass + TestComposeContract_AdversarialNetworkModeHostBypass + TestComposeContract_AdversarialOllamaLiteralBind + TestComposeContract_AdversarialDefaultFallbackBind + TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms — go test ... 0.009s), workspace-wide drift scan for forbidden ${HOST_BIND_ADDRESS:-127.0.0.1} default-fallback and spec 020 literal 127.0.0.1: bind (zero regressions in runtime/config/CI/scripts), .github/workflows/build.yml bubbles G074 compliance (no SSH, no apply, cosign keyless before bundle gen, Trivy gate before sign with ignore-unfixed:true + limit-severities-for-sarif:true per spec 047 R13, bundle determinism verification, per-env bundle-sha artifact emission per BUG-047-001/DEVOPS-HL-002), scripts/deploy/promote.sh mandatory --config-bundle-sha=<sha256-hex> with ^[0-9a-f]{64}$ format validation, scripts/deploy/rollback.sh pure pointer-swap, scripts/commands/config.sh L609 required_value(runtime.host_bind_address) fail-loud, docs/Operations.md + docs/Deployment.md + docs/Development.md SST form references aligned. Verdict: spec 042 SST/devops contract FULLY INTACT; ZERO new devops-domain findings produced by the probe. Spec status preserved at done; no bug packet spawned; sweep ledger R8 records findings=0, bugsSpawned=0, status=completed_owned. Out-of-scope pre-existing baseline drift acknowledged in report.md §Out-of-Scope Pre-Existing Baseline Drift (2 BLOCKs on state-transition-guard at round entry: artifact-lint evidence-block weak-signals + 38 G040 deferral hits in report.md) — these are artifact-integrity drift on the already-done spec, not devops/SST contract drift, candidates for a separate validate-to-doc packet analogous to BUG-020-006/BUG-014-003/BUG-053-001 patterns from this sweep. Modified files: report.md (Round 8 documentary section appended, G040-sentinel-wrapped narrative for the out-of-scope baseline disclosure) + state.json (this executionHistory entry + lastUpdatedAt). Sweep ledger appended at .specify/memory/sweep-2026-05-24-r10.json rounds[7]."
+    },
+    {
+      "phase": "spec-review",
+      "agent": "bubbles.spec-review",
+      "scope": null,
+      "runStartedAt": "2026-06-06T17:20:00Z",
+      "runCompletedAt": "2026-06-06T17:25:00Z",
+      "reviewStatus": "CURRENT",
+      "outcome": "completed_diagnostic",
+      "evidenceRef": "report.md#reconciliation-recertification--bubblesspec-review--2026-06-06",
+      "notes": "Reconcile-to-doc recertification (parent-expanded). The 2026-05-25 reconciliation commit 15e1c453 flipped the HOST_BIND_ADDRESS contract to fail-loud and reset Scope 1 + Scope 2 to 'Not started' (26 unchecked DoD items) but never recorded the re-verification, leaving the certified 'done' status inconsistent with the scope statuses. This pass re-verified every DoD item against shipped+tested code/docs with real command evidence: deploy/compose.deploy.yml L128/L190 use the fail-loud ${HOST_BIND_ADDRESS:?...} form; postgres/nats have no ports: block; 'go test -count=1 -v ./internal/deploy/ -run Compose' ok 0.040s (LiveFile + adversarial LiteralBind/DefaultFallbackBind/InfraHasPorts/NetworkModeHostBypass/Multi+MLMultiPortsBypass/OllamaLiteralBind/PrometheusLiteralBindAndFallbackForms all PASS); 'docker compose -f deploy/compose.deploy.yml config' without HOST_BIND_ADDRESS exits 1 with 'HOST_BIND_ADDRESS must be set by deploy adapter'; render with HOST_BIND_ADDRESS=127.0.0.1 binds core 127.0.0.1:41001 + ml 127.0.0.1:41002 with no infra ports (exit 0); ./smackerel.sh check EXIT=0; ./smackerel.sh config generate EXIT=0 with HOST_BIND_ADDRESS=127.0.0.1 at config/generated/dev.env:75 + test.env:75; config/smackerel.yaml L27-40 + .github/copilot-instructions.md L221-242,L482 + docs/Operations.md DevOps-Access section document the fail-loud form and Pattern P1. All 26 DoD items re-ticked with inline evidence; both scopes restored to Done. One non-042 caveat: './smackerel.sh test unit --go' full-suite exit is currently 1 from internal/assistant (tool-registry/scenario-loader, committed state, different spec) + tests/unit/clients (cross-language canary needs node+dart, not installed on this host) — both OUTSIDE Scope 1's change boundary, tracked separately. reviewStatus CURRENT. See bugs/BUG-042-001-scope-status-reconciliation."
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-042-001-scope-status-reconciliation",
+      "title": "Certified-done spec with Not-started scopes (scope-status reconciliation)",
+      "discoveredBy": "OPS-002 G088 review",
+      "resolved": "2026-06-06",
+      "closureMode": "bugfix-fastlane",
+      "summary": "scopes.md declared Scope 1 + Scope 2 'Not started' with 26 unchecked DoD items while state.json was 'done' (root cause: 2026-05-25 commit 15e1c453 flipped HOST_BIND_ADDRESS to fail-loud and reset both scopes without recording re-verification). Re-verified all 26 DoD items against shipped+tested code/docs with real command evidence, re-ticked them, restored both scopes to Done, recertified (top-level certifiedAt + bubbles.spec-review CURRENT entry), and brought artifact-lint to PASSED. One non-042 caveat disclosed: ./smackerel.sh test unit --go full-suite red from internal/assistant + tests/unit/clients (outside Scope 1 boundary). No DoD item force-ticked. See bugs/BUG-042-001-scope-status-reconciliation/."
+    }
+  ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-25T04:35:00Z",
+  "lastUpdatedAt": "2026-06-06T17:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
