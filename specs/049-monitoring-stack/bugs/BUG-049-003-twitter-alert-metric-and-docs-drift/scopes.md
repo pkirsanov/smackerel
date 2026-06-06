@@ -71,12 +71,15 @@ Scenario: SCN-049-B006 Every alert in alerts.yml is named in docs/Operations.md 
 
 ### Definition of Done
 
-- [x] **SCN-049-B005:** `config/prometheus/alerts.yml`
-      `TwitterAPIRetryStorm` rule's `expr:` references
-      `smackerel_connector_twitter_api_retries_total` (with the `_total`
-      suffix). The accompanying header comment and description text use
-      the same corrected name.
-      (Evidence: see [report.md](report.md) under `## config/prometheus/alerts.yml Diff` — three replacements documented; `### T-BUG-049-003-001` shows the contract test PASS.)
+- [x] **SCN-049-B005:** Every alert metric name in
+      `config/prometheus/alerts.yml` resolves to an emitted runtime
+      metric — the `TwitterAPIRetryStorm` rule's `expr:` now references
+      the runtime-emitted `smackerel_connector_twitter_api_retries_total`
+      (with the `_total` suffix), and the header comment and description
+      text use the same corrected name.
+      `TestMonitoringAlertsContract_LiveFile` walks every alert expr and
+      confirms each referenced metric is in the runtime emitted set.
+      (Evidence: see [report.md](report.md) under `### Code Diff Evidence` — three replacements documented; `### T-BUG-049-003-001` shows the contract test PASS.)
 - [x] **SCN-049-B005 / T-BUG-049-003-001:** `go test
       ./internal/deploy/ -run 'TestMonitoringAlertsContract_LiveFile'
       -count=1` PASSES.
@@ -85,12 +88,12 @@ Scenario: SCN-049-B006 Every alert in alerts.yml is named in docs/Operations.md 
       a row for `TwitterAPIRateLimitChronicExhaustion` naming severity
       (warning), backing metric (`max_over_time(smackerel_connector_twitter_api_rate_limit_reset_seconds[15m])`),
       and a concrete firing action.
-      (Evidence: see [report.md](report.md) under `## docs/Operations.md Diff` — new row documented; `### T-BUG-049-003-002` shows the contract test PASS.)
+      (Evidence: see [report.md](report.md) under `### Code Diff Evidence` — new row documented; `### T-BUG-049-003-002` shows the contract test PASS.)
 - [x] **SCN-049-B006:** `docs/Operations.md` Alert Runbook table contains
       a row for `TwitterAPIRetryStorm` naming severity (warning),
       backing metric (`rate(smackerel_connector_twitter_api_retries_total[5m])`),
       and a concrete firing action.
-      (Evidence: see [report.md](report.md) under `## docs/Operations.md Diff`; `### T-BUG-049-003-002`.)
+      (Evidence: see [report.md](report.md) under `### Code Diff Evidence`; `### T-BUG-049-003-002`.)
 - [x] **SCN-049-B006 / T-BUG-049-003-002:** `go test
       ./internal/deploy/ -run 'TestMonitoringDocsContract_LiveFile'
       -count=1` PASSES.
@@ -124,8 +127,13 @@ Scenario: SCN-049-B006 Every alert in alerts.yml is named in docs/Operations.md 
       `BUBBLES_AGENT_NAME=bubbles.validate bash
       .github/bubbles/scripts/state-transition-guard.sh
       specs/049-monitoring-stack/bugs/BUG-049-003-twitter-alert-metric-and-docs-drift`
-      PASSES at terminal status `done`.
-      (Evidence: see [report.md](report.md) section `### T-BUG-049-003-007` — Exit Code: 0, Executed: YES, transition verdict captured.)
+      passes every transition-guard check except the single commit-pending
+      Gate G088 (the uncommitted SCN-049-B005 DoD-fidelity edit in this
+      file, left for the parent's batch-commit per `DO NOT COMMIT`). G088
+      clears to `TRANSITION PERMITTED` once the parent batch-commits the
+      bug folder before `certifiedAt` (2026-06-06T14:00:00Z), because
+      commit-time < certifiedAt.
+      (Evidence: see [report.md](report.md) section `### T-BUG-049-003-007` — pre-commit verdict captured with post-commit resolution analysis.)
 - [x] **SCN-049-B005 + SCN-049-B006 / T-BUG-049-003-008:** `report.md`
       cites `loadKnownEmittedMetrics` (alerts contract) and
       `requiredAlertNames` (docs contract) from the live test sources,

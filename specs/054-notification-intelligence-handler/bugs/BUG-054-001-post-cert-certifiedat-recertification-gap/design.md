@@ -222,3 +222,39 @@ is:
 will show the exact 3-region patch on the parent state.json. A `git
 diff --name-only` on a clean clone would list only the files in
 "Allowed" above.
+
+## Capability Foundation
+
+### Single-Implementation Justification
+
+This bug introduces **no reusable capability, provider, adapter,
+strategy, plugin, channel, driver, connector, or variant** and shares
+**no UI or cross-feature surface**. The capability-foundation
+proportionality triggers fire only because the bug's narrative cites
+the parent spec's domain language (the notification-intelligence
+*handler* and its output *channel* terminology) — not because this bug
+adds a second implementation of anything.
+
+The change is a **single, concrete, data-only recertification** with
+exactly one realization: advancing the certification ledger on
+`specs/054-notification-intelligence-handler/state.json` so the
+already-shipped Gate G088 recertification is internally consistent, and
+recording the bug-folder closure ceremony. There is:
+
+- **One enforcement contract** — Gate G088
+  (`.github/bubbles/scripts/post-cert-spec-edit-guard.sh`), which is
+  framework-owned and unchanged by this bug.
+- **One artifact surface** — the certification block / `certifiedAt` /
+  `executionHistory` fields, which have a single canonical schema.
+- **Zero variation axes** — there is no second connector, no second
+  output channel, no second persistence backend, and no alternate
+  recertification strategy to abstract behind a foundation. Inventing a
+  "recertification provider" abstraction for a one-time governance
+  repair would be over-engineering and is explicitly rejected.
+
+Because the work is a single concrete implementation against a single
+fixed framework contract, the full Capability Foundation / Concrete
+Implementations / Variation Axes split does not apply. This
+Single-Implementation Justification is the design-ownership record the
+capability-foundation guard (Gate G094) requires for proportional,
+single-implementation work.
