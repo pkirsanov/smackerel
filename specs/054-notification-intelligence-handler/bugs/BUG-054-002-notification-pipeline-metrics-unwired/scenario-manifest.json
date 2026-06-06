@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-054-002-notification-pipeline-metrics-unwired",
+  "parentSpec": "054-notification-intelligence-handler",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real-code observability fix; adversarial unit tests drive the increment/registration/redaction proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "delivery_attempts_total emit disabled → TestNotificationDeliveryAttemptsIncrementsOnDispatch RED (= 0, want 1); emit restored → GREEN. Full block in report.md Test Evidence."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-054-002-001",
+      "scope": "Scope 1",
+      "title": "All 6 notification metric families register with bounded labels",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/notification/metrics_emit_test.go"],
+      "linkedTests": [
+        {"file": "internal/notification/metrics_emit_test.go", "function": "TestNotificationMetricFamiliesRegisteredWithBoundedLabels"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "All 6 smackerel_notification_* families appear in DefaultGatherer.Gather() after the emit sites are exercised, each carrying only its bounded-label allowlist.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-054-002-002",
+      "scope": "Scope 1",
+      "title": "ingest_total increments on a rejected raw event",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/notification/metrics_emit_test.go"],
+      "linkedTests": [
+        {"file": "internal/notification/metrics_emit_test.go", "function": "TestNotificationIngestTotalIncrementsOnRejectedRawEvent"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Service.Process nil-pool reject path increments smackerel_notification_ingest_total{source_type=ingest_fixture,source_form=webhook,status=rejected} by exactly 1; removing the ingest .Inc() turns the test RED.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-054-002-003",
+      "scope": "Scope 1",
+      "title": "delivery_attempts_total increments on dispatch (success and failure)",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/notification/metrics_emit_test.go"],
+      "linkedTests": [
+        {"file": "internal/notification/metrics_emit_test.go", "function": "TestNotificationDeliveryAttemptsIncrementsOnDispatch"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "OutputDispatcher.Dispatch increments delivery_attempts_total{channel=dashboard,status=success} and {channel=unconfigured,status=failure} by 1 each; RED-proven (disabling emit → = 0, want 1).",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-054-002-004",
+      "scope": "Scope 1",
+      "title": "action_attempts_total increments on a decision",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/notification/metrics_emit_test.go"],
+      "linkedTests": [
+        {"file": "internal/notification/metrics_emit_test.go", "function": "TestNotificationActionAttemptsIncrementsOnDecide"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "DecisionEngine.Decide increments action_attempts_total{action_class=no_action,status=suppressed} by exactly 1; removing the Decide .Inc() turns the test RED.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-054-002-005",
+      "scope": "Scope 1",
+      "title": "normalization_errors_total increments on an invalid raw event",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/notification/metrics_emit_test.go"],
+      "linkedTests": [
+        {"file": "internal/notification/metrics_emit_test.go", "function": "TestNotificationNormalizationErrorsIncrementsOnInvalidRawEvent"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Normalizer.Normalize error path increments normalization_errors_total{source_type=normalize_fixture,error_kind=missing_observed_at} by exactly 1; error_kind is a bounded classification, never the raw error string.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-054-002-006",
+      "scope": "Scope 1",
+      "title": "dedupe_total increments on a reaction-loop suppression",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/notification/metrics_emit_test.go"],
+      "linkedTests": [
+        {"file": "internal/notification/metrics_emit_test.go", "function": "TestNotificationDedupeTotalIncrementsOnLoopSuppression"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "LoopGuard.Evaluate increments dedupe_total{source_type=dedupe_fixture,suppression_kind=reaction_loop} by exactly 1; removing the loop-guard .Inc() turns the test RED.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-054-002-007",
+      "scope": "Scope 1",
+      "title": "No notification metric label leaks payload content (SCN-054-024)",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/notification/metrics_emit_test.go"],
+      "linkedTests": [
+        {"file": "internal/notification/metrics_emit_test.go", "function": "TestNotificationMetricsDoNotLeakPayloadInLabels"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Injecting SUPERSECRET-PAYLOAD-MARKER through delivery/normalize/ingest leaves no notification-metric label value containing the marker; any payload-derived label turns the test RED.",
+      "changeType": "added"
+    }
+  ]
+}

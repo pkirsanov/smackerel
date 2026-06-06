@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 const (
@@ -68,8 +70,11 @@ func NewDecisionEngine(policy DecisionPolicy) (DecisionEngine, error) {
 	return DecisionEngine{policy: policy}, nil
 }
 
-func (e DecisionEngine) Decide(notification NormalizedNotification, classification Classification, incident Incident, enrichments []EnrichmentRef, suppressions []Suppression) DecisionEvaluation {
-	decision := DecisionEvaluation{ID: "decision_" + strings.TrimPrefix(hashParts("decision", notification.ID, incident.ID, strconv.Itoa(incident.PersistenceCount)), "sha256:"), NotificationID: notification.ID, IncidentID: incident.ID, ThresholdInputs: map[string]any{"persistence_count": incident.PersistenceCount, "classification_confidence": classification.Confidence}, RiskAssessment: map[string]any{"risk_level": incident.RiskLevel}, Rationale: "decision chosen from severity, persistence, uncertainty, risk, suppressions, and enrichment references"}
+func (e DecisionEngine) Decide(notification NormalizedNotification, classification Classification, incident Incident, enrichments []EnrichmentRef, suppressions []Suppression) (decision DecisionEvaluation) {
+	defer func() {
+		metrics.NotificationActionAttempts.WithLabelValues(string(decision.Type), notificationActionStatus(decision)).Inc()
+	}()
+	decision = DecisionEvaluation{ID: "decision_" + strings.TrimPrefix(hashParts("decision", notification.ID, incident.ID, strconv.Itoa(incident.PersistenceCount)), "sha256:"), NotificationID: notification.ID, IncidentID: incident.ID, ThresholdInputs: map[string]any{"persistence_count": incident.PersistenceCount, "classification_confidence": classification.Confidence}, RiskAssessment: map[string]any{"risk_level": incident.RiskLevel}, Rationale: "decision chosen from severity, persistence, uncertainty, risk, suppressions, and enrichment references"}
 	if len(suppressions) > 0 {
 		decision.Type = DecisionNoAction
 		decision.ReasonCodes = []string{"suppressed"}
@@ -102,6 +107,25 @@ func (e DecisionEngine) Decide(notification NormalizedNotification, classificati
 	decision.Type = DecisionRecordOnly
 	decision.ReasonCodes = []string{"below_threshold"}
 	return decision
+}
+
+// notificationActionStatus derives a BOUNDED status label for
+// metrics.NotificationActionAttempts from the decision's action flags. The
+// vocabulary is fixed to {approval_required, diagnostics, output_required,
+// suppressed, recorded} so action-attempt cardinality stays bounded.
+func notificationActionStatus(d DecisionEvaluation) string {
+	switch {
+	case d.RequiresApproval:
+		return "approval_required"
+	case d.RequiresDiagnostics:
+		return "diagnostics"
+	case d.RequiresOutput:
+		return "output_required"
+	case d.Type == DecisionNoAction:
+		return "suppressed"
+	default:
+		return "recorded"
+	}
 }
 
 type DecisionEvaluation struct {

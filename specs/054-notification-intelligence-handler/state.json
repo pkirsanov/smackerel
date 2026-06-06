@@ -538,21 +538,31 @@
       "summary": "Sweep round 15 of 20 (stochastic-quality-sweep, devops trigger, devops-to-doc mapped child mode, parent-expanded-child-mode execution; subagent runtime lacks runSubagent). DevOps probe surfaced 1 BLOCKING + 1 MEDIUM observation against spec 054: (1) BLOCKING: state-transition-guard Check 30 (Gate G088 post_certification_spec_edit_gate) failed because certifiedAt 2026-06-03T23:59:59Z predated the post-cert scopes.md drift-cleanup commit 48ad42a79caa (2026-06-05T16:15:45Z). REMEDIATED inline via this round's parent state.json edit (certifiedAt advance + bubbles.spec-review reviewStatus:CURRENT entry); bookkept under BUG-054-001. (2) MEDIUM OBSERVATION: Scope 8 DoD '[x] Metrics and traces expose source-qualified pipeline stages' is supported indirectly by SCN-054-024 (redaction policy when metrics export) but internal/notification/ has zero prometheus emit sites; the redaction test passes vacuously. The behavior is NOT a runtime regression (the system functions correctly), but the implementation plan in Scope 8 ('Add metrics and traces for source ingest, normalization, classification, correlation, decisions, diagnostics, actions, approvals, suppressions, deliveries, failures, retries, and loop guard suppressions') is not concretely wired in code. Tracked as OBS-054-15-001 for a future round targeting harden/gaps/devops triggers; deferred (no bug filed) because remediation requires substantive new prometheus metric definitions in internal/metrics/ plus emit sites across the pipeline plus contract tests, which is design+delivery work that exceeds a single sweep round's safe budget. Verification: post-cert-spec-edit-guard.sh exits 0 with PASS message naming new certifiedAt + currentSpecReview; state-transition-guard.sh runs without Check 30 BLOCK. Evidence captured in bugs/BUG-054-001-post-cert-certifiedat-recertification-gap/report.md."
     }
   ],
-  "activeBugs": [
+  "activeBugs": [],
+  "resolvedBugs": [
     {
       "bugId": "BUG-054-001",
       "title": "Post-cert certifiedAt recertification gap blocks Gate G088",
       "folder": "specs/054-notification-intelligence-handler/bugs/BUG-054-001-post-cert-certifiedat-recertification-gap",
-      "status": "in_progress",
+      "status": "done",
       "severity": "medium",
       "class": "governance",
       "discoveredBy": "sweep round 15 (stochastic-quality-sweep, devops trigger, devops-to-doc mapped mode, parent-expanded-child-mode)",
-      "parentImpact": "REMEDIATED — parent state.json certifiedAt advanced + bubbles.spec-review reviewStatus:CURRENT entry recorded. Bug folder ceremony deferred to follow-up bugfix-fastlane round, matching BUG-049-002 precedent."
+      "resolution": "Bug folder driven through full bugfix-fastlane ceremony to done; parent state.json certifiedAt advanced + bubbles.spec-review reviewStatus:CURRENT entry recorded."
+    },
+    {
+      "bugId": "BUG-054-002",
+      "title": "Notification pipeline Prometheus metrics declared in design but never wired",
+      "folder": "specs/054-notification-intelligence-handler/bugs/BUG-054-002-notification-pipeline-metrics-unwired",
+      "status": "done",
+      "severity": "medium",
+      "class": "observability",
+      "discoveredBy": "sweep round 15 observation OBS-054-15-001 (stochastic-quality-sweep, devops trigger)",
+      "resolution": "Wired 6 source-qualified smackerel_notification_* pipeline-stage metrics (ingest, normalization_errors, dedupe, action_attempts, delivery_attempts, processing_duration) at real emit sites across service.go/normalizer.go/reaction_logic.go/decision.go/output_logic.go with bounded-enum labels (no payload/PII leak); 7 adversarial tests in internal/notification/metrics_emit_test.go (delivery RED-proven). Makes Scope 8 DoD 'Metrics and traces expose source-qualified pipeline stages without leaking secrets' genuinely true. Remaining 6 design.md metrics (health/lag gauges, classification histogram, incident gauges, action_failures) explicitly deferred with rationale in the bug — no dead metrics declared."
     }
   ],
-  "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-06T01:30:00Z",
+  "lastUpdatedAt": "2026-06-06T15:00:00Z",
   "completedAt": "2026-06-06T01:30:00Z",
   "artifacts": {
     "spec": "spec.md",
