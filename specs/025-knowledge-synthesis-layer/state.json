@@ -4,7 +4,7 @@
   "featureName": "Knowledge Synthesis Layer (LLM Wiki Pattern)",
   "status": "done",
   "workflowMode": "improve-existing",
-  "certifiedAt": "2026-06-06T23:00:00Z",
+  "certifiedAt": "2026-06-07T00:30:00Z",
   "certifiedBy": "bubbles.workflow",
   "requiresRevalidation": false,
   "phaseStubs": {
@@ -351,6 +351,16 @@
       "runEndedAt": "2026-06-06T18:15:00Z",
       "runCompletedAt": "2026-06-06T18:15:00Z",
       "summary": "Gate G088 recert for the round-17 gaps-to-doc documentation edits. Reviewed the post-cert planning-truth edits: scopes.md (migration Gherkin precondition reconciled + Post-Release guard-behavior note), design.md (two migration-file references reconciled to 001_initial_schema.sql), and state.json DI-025-05 description (guard-behavior accuracy). All are documentation-accuracy reconciliations (category b) — no requirement, scenario, DoD, or implementation semantic change; implementation unchanged; 29 scenarios and 125 DoD items unchanged. Scopes 9/10 remain documented post-release deferrals, not force-closed. certifiedAt advanced to 2026-06-06T18:15:00Z. requiresRevalidation stays false; edits are left uncommitted in the working tree, so traceability-guard still reports the 6 documented deferred-scope failures and G088 reports an honest postCertEdits handoff until the operator commits."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-07T00:30:00Z",
+      "runEndedAt": "2026-06-07T00:30:00Z",
+      "summary": "Gate G088 recert for a single drift-lint edit to scopes.md. The post-cert sweep recerts (round-17) had backticked three intentionally-not-yet-authored test-file paths (internal/scheduler/calendar_briefs_test.go, internal/knowledge/promises_test.go, internal/scheduler/promises_test.go) inside the Post-Release guard-behavior prose paragraph, which tripped the scopes-path-ref drift ratchet (internal/scopesdriftguard TestScopesPathRefDrift_NonIncreasing: 273 broken refs vs ceiling 270). De-backticked those three references so the prose matches the Test Plan table convention (the same files are already listed un-backticked there because Scopes 9/10 are post-release-deferred per DI-025-05 and the files do not exist yet by design). Cosmetic lint only — no requirement, scenario, DoD, or implementation semantic change; 29 scenarios and 125 DoD items unchanged; Scopes 9/10 remain documented post-release deferrals. Drift ratchet back to 270 (PASS). certifiedAt advanced to 2026-06-07T00:30:00Z for Gate G088. requiresRevalidation stays false."
     }
   ],
   "activeBugs": [],
