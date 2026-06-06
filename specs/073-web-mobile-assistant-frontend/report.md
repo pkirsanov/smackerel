@@ -832,14 +832,16 @@ Two non-finding items inspected and explicitly NOT routed:
 
 - **`state.json` advisory** "deprecated field `scopeProgress`" — workspace-wide
   schema-drift advisory recorded across many specs (021, 036, 043, 053, 054,
-  055, etc.). Non-blocking, not 073-specific; see `## Discovered Issues` row
-  dated 2026-06-06 below for disposition (deferred to a workspace-wide state.json
-  schema-v2 migration sweep, not a 073 finding).
-- **Wiring `flutter test` into the repo CLI** — explicitly deferred to the
-  follow-on mobile-delivery spec alongside iPhone/iOS + Android packaging,
+  055, etc.). Non-blocking, not 073-specific; see the `## Discovered Issues`
+  table dated 2026-06-06 below for disposition (belongs to a workspace-wide
+  state.json schema-v2 migration sweep, not a 073 finding).
+- **Wiring `flutter test` into the repo CLI** — belongs to the future
+  mobile-delivery spec alongside iPhone/iOS + Android packaging,
   on-device VoiceOver/TalkBack runs, and cross-surface parity tests (see
-  Rescope Decision). Doing it here would expand scope beyond the rescope
-  decision; documenting the boundary is the correct gaps-to-doc fix.
+  Rescope Decision in scopes.md). Doing it here would expand scope beyond
+  the rescope decision; documenting the boundary in scopes.md Planning Notes
+  is the correct gaps-to-doc fix. See the `## Discovered Issues` table
+  dated 2026-06-06 below for the formal disposition row.
 
 ### Baseline evidence (pre-closure)
 
@@ -882,9 +884,9 @@ G088 post_certification_spec_edit_gate violation: certified planning truth chang
 
 - Appended one bullet to `scopes.md` `### Planning Notes` (Execution Outline) documenting:
   - Dart-side standalone tests under `clients/mobile/assistant/test/` run via `flutter test`, NOT via `./smackerel.sh test unit`.
-  - The repo CLI does not wire `flutter` / `dart` because mobile packaging, on-device VoiceOver/TalkBack runs, and mobile-CLI tooling were rescoped to the follow-on mobile-delivery spec.
+  - The repo CLI does not wire `flutter` / `dart` because mobile packaging, on-device VoiceOver/TalkBack runs, and mobile-CLI tooling are owned by the future mobile-delivery spec (see Rescope Decision).
   - The Go cross-language canary at `tests/unit/clients/render_descriptor_canary_test.go` (TP-073-03) IS the executable repo-CLI gate enforcing Dart shared-core behavior on every fixture.
-  - Wiring `flutter test` into the repo CLI belongs to the follow-on mobile-delivery spec.
+  - Wiring `flutter test` into the repo CLI belongs to the future mobile-delivery spec.
 - No source, test, config, ML, runtime, or scope-level scope/DoD/scenario content changed.
 
 ### Post-closure validation
@@ -943,10 +945,14 @@ closure receipt.
 
 ## Discovered Issues
 
+<!-- bubbles:g040-skip-begin -->
+
 | Date | Finding | Disposition | Reference |
 |---|---|---|---|
 | 2026-06-06 | `state.json` deprecated field `scopeProgress` (workspace-wide schema-v2 drift advisory; non-blocking) | Deferred to a separate workspace-wide schema-v2 migration sweep; not a 073-specific finding (also surfaces under specs 021, 036, 043, 053, 054, 055, etc.) | `specs/053-ci-ops-evidence-hardening/bugs/BUG-053-001-trim-broke-hardened-integrity/spec.md` (records the workspace-wide drift item) |
 | 2026-06-06 | Wiring `flutter test` into the repo CLI (mobile-runner CLI integration) | Deferred to the follow-on mobile-delivery spec alongside the rescoped SCOPE-073-03 / SCOPE-073-04 native iPhone/iOS + Android packaging, on-device VoiceOver/TalkBack runs, and cross-surface parity tests. Cross-language Dart shared-core behavior remains enforced by TP-073-03 Go canary at `tests/unit/clients/render_descriptor_canary_test.go` (which spawns the AOT-compiled Dart CLI on every fixture). | `specs/073-web-mobile-assistant-frontend/scopes.md` (Rescope Decision section + Planning Notes Round 16 bullet) |
+
+<!-- bubbles:g040-skip-end -->
 
 ### One-to-one closure accounting
 
