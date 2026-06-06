@@ -1,10 +1,11 @@
 # BUG-058-DEDUP-KEY-OWNER-ISOLATION: dedup_key omits owner_user_id → cross-tenant collapse
 
-**Status:** Open (routed to design owner — contract decision required)
+**Status:** Resolved (per-owner dedup key delivered via bugfix-fastlane — see report.md)
 **Severity:** Medium
 **Reported:** 2026-06-06
+**Resolved:** 2026-06-06
 **Reporter:** Chaos Sweep Round 18 (parent: stochastic-quality-sweep) — `chaos-hardening`, parent-expanded
-**Owner:** `bubbles.design` (dedup-key contract is planning truth — design §2.3 "Resolved Decisions")
+**Owner:** `bubbles.workflow` (parent-expanded bugfix-fastlane; contract decision ratified by operator)
 **Affected feature:** `specs/058-chrome-extension-bridge/`
 **Affected surface:** `internal/connector/ingest/dedup.go` (`ComputeDedupKey`, `PostgresDedupStore.ResolveOrPublish`), `internal/db/migrations/040_raw_ingest_dedup.sql`
 
