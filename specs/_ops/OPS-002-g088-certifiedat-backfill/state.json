@@ -1,0 +1,116 @@
+{
+  "version": 3,
+  "featureDir": "specs/_ops/OPS-002-g088-certifiedat-backfill",
+  "featureName": "OPS-002: Gate G088 top-level certifiedAt backlog remediation",
+  "status": "specs_hardened",
+  "certifiedAt": "2026-06-06T16:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "workflowMode": "spec-scope-hardening",
+  "planningOnly": true,
+  "planningOnlyJustification": "Portfolio-wide governance remediation. The deliverable is a reproducible classification of the G088 certifiedAt backlog plus one faithful schema backfill (spec 018 state.json). The bulk recert is per-spec, review-gated work and CANNOT be promoted to a delivery without fabricating certification reviews; Gate G093 correctly blocks promotion past statusCeiling=specs_hardened for this metadata-only packet.",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-06-06T15:30:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": [
+          "discovery",
+          "documentation",
+          "design",
+          "plan",
+          "implement",
+          "test",
+          "validate",
+          "audit",
+          "docs"
+        ],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "missing",
+        "statusAfter": "specs_hardened",
+        "runStartedAt": "2026-06-06T15:30:00Z",
+        "runEndedAt": "2026-06-06T16:00:00Z",
+        "summary": "Promoted the recurring stochastic-sweep G088 finding into a tracked ops packet. Authored analysis.py (read-only classifier), classified the portfolio (66/78 done specs fail G088: 45 missing top-level certifiedAt, 21 stale; the 45 split into 1 clean-backfill / 38 needs-recert / 6 no-source), executed the single faithful clean backfill (spec 018 state.json: surfaced historical lastUpdatedAt 2026-05-24T22:00:00Z to top-level certifiedAt; post-cert-spec-edit-guard PASS), and recorded the review-gated remainder. Deliberately did NOT bulk-recertify: the post-cert planning commits are a mix of benign housekeeping and substantive work, so a blanket CURRENT spec-review recert would fabricate reviews and violate the anti-fabrication policy. Terminates at specs_hardened per the OPS-001 precedent; the per-spec recert is tracked follow-on work matching the sweep's own recommendation."
+      }
+    ]
+  },
+  "policySnapshot": {
+    "workflowMode": "spec-scope-hardening",
+    "tdd": {
+      "mode": "exempt",
+      "source": "ops-artifact-only"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "certification": {
+    "status": "specs_hardened",
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-06T16:00:00Z",
+    "completedScopes": [
+      "Scope 1"
+    ],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Classify the G088 backlog and execute the clean-backfill slice",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-06-06T16:00:00Z",
+  "scopeLayout": "single-file",
+  "notes": "Per-spec faithful recert precedents: BUG-029-007, BUG-024-004, BUG-049-002, BUG-054-001."
+}
