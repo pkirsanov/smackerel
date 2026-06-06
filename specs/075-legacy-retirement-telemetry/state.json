@@ -4,7 +4,7 @@
   "featureNumber": "075",
   "featureName": "Legacy-Surface Deprecation Telemetry & User Comms",
   "status": "done",
-  "certifiedAt": "2026-06-02T08:30:00Z",
+  "certifiedAt": "2026-06-06T00:15:00Z",
   "executionRuntime": "manual",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
@@ -38,8 +38,11 @@
   },
   "certification": {
     "status": "done",
-    "completedAt": "2026-06-02T07:30:00Z",
-    "evidenceRef": "report.md#rescope-close-out-2026-06-02",
+    "completedAt": "2026-06-06T00:15:00Z",
+    "recertifiedAt": "2026-06-06T00:15:00Z",
+    "recertificationReason": "Stochastic quality sweep Round 11 of 20 (validate trigger) — parent-expanded reconcile-to-doc child mode. The initial 2026-06-02T08:30:00Z certification by the engineering-core rescope close-out was re-touched on 2026-06-05T16:11:50Z by commit 18f8512b07ed2c1a0b82ee342685ee32f5442cb5 (tier-2 drift cleanup + ratchet 375 -> 365) which made TWO housekeeping-only edits to scopes.md: (1) TP-075-12R Test-Plan row reference rephrased to note the rolling-report dashboard contract test was deferred; (2) Scope 6 Change Boundary path migration internal/assistant/types.go -> internal/assistant/contracts/response.go reflecting the post-cert assistant contracts subpackage refactor. Both edits BROUGHT scopes.md INTO ALIGNMENT with the already-shipped code layout — zero behavioral truth changed, zero DoD checkbox or Gherkin scenario or scenario-manifest reference altered. Gate G088 post-cert-spec-edit-guard flagged the edit (correctly — it is a planning-truth file touched after certifiedAt). Per the G088 remediation menu option 3, this recertification: (a) parent-expanded bubbles.spec-review confirmed trust=CURRENT; (b) on-disk verification (24 files under internal/assistant/legacyretirement/, both legacy-retirement migrations, internal/assistant/contracts/legacy_retirement_notice.go at its post-refactor location, additive optional notice/NoticePayload wire schema bindings, full integration + e2e test corpus) reconciled claimed-vs-actual; (c) engineering-core unit suite re-ran green at HEAD a697e0db800bfefa8d027d846b7a82f63a9d530b (TP-075-19 6 subtests PASS, TP-075-20 8 subtests PASS, internal/assistant/legacyretirement/ full package PASS); (d) certifiedAt bumped to 2026-06-06T00:15:00Z, strictly later than the 2026-06-05T16:11:50Z scopes.md edit. No code changes, no spec/design/scopes mutation, no new discoveredIssue.",
+    "observations": [],
+    "evidenceRef": "report.md#stochastic-sweep-round-11--validate-trigger--2026-06-06",
     "completedScopes": [
       "SCOPE-075-01",
       "SCOPE-075-02",
@@ -107,11 +110,11 @@
     "notes": "Spec 075 terminal-status close-out 2026-06-02. SCOPE-075-06 engineering core (6.1/6.2/6.2b/6.3/6.4/6.5) shipped; SCOPE-075-01..05 rescoped to follow-on spec 076 (specs/076-assistant-completion-rescope). Foreign-owned F074-04B-CORE-SCENARIO-STARTUP (spec 061 tool registry) remains routed to its owner but does not block spec 075 certification under substitute-evidence policy (integration-lane TP-075-05/06/07/13/14/17 PASS; e2e static validation + cross-language renderer canary PASS)."
   },
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
     "currentScope": "SCOPE-075-06.3",
     "runStartedAt": "2026-06-01T00:00:00Z",
-    "lastUpdatedAt": "2026-06-02T05:30:00Z",
+    "lastUpdatedAt": "2026-06-06T00:15:00Z",
     "completedPhaseClaims": [
       {
         "scopeId": "SCOPE-075-06.2",
@@ -191,6 +194,41 @@
         "completedAt": "2026-06-02T06:30:00Z",
         "evidenceRef": "report.md#docs-phase-bubblesdocs-2026-06-02",
         "summary": "Docs phase for spec 075. Reviewed report deferral framing: TP-075-09 live e2e is correctly framed as environment-gated (SCOPE-075-06.5 owns the live-stack execution row with required env vars CORE_EXTERNAL_URL / SMACKEREL_AUTH_TOKEN / LEGACY_RETIREMENT_WINDOW_STATE / LEGACY_RETIREMENT_WINDOW_ID); test-phase live-stack blocker is F074-04B-CORE-SCENARIO-STARTUP (foreign-owned by spec 061). No deferral-as-closure misrepresentation. No managed-doc drift on the legacy-retirement notice renderer or web/pwa/lib/render_descriptor_v1.js projection. Claim Source: executed (in-process review against report.md + managed docs)."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "validate",
+        "completedAt": "2026-06-06T00:15:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-11--validate-trigger--2026-06-06",
+        "summary": "Round 11 validate phase (parent-expanded reconcile-to-doc). state-transition-guard.sh: 30 of 31 checks PASS, 1 BLOCK (Check 30 = Gate G088 post-cert spec edit detected on commit 18f8512b07ed2c1a0b82ee342685ee32f5442cb5 dated 2026-06-05T16:11:50+00:00 modifying scopes.md after certifiedAt 2026-06-02T08:30:00Z). All other gates including G021 (anti-fabrication), G028 (implementation reality), G053 (code diff evidence), G068 (DoD-Gherkin content fidelity), G082 (convergence cap), G083 (compaction discipline), G084 (pre-existing deferral block), G085 (framework dogfood evidence), G086 (orchestrator persistence prompt), G087 (planning packet implementation linkage), G091 (planning workflow chain), G093 (delivery implementation delta), G089 (inter-spec dependency) PASS. Single finding F1 logged for finding-owned closure. Claim Source: executed."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "spec-review",
+        "completedAt": "2026-06-06T00:15:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-11--validate-trigger--2026-06-06",
+        "summary": "Round 11 once-before-implement spec-review (parent-expanded). Inspected the post-cert edit diff (git diff 25d66dc8..18f8512b -- specs/075-legacy-retirement-telemetry/): two housekeeping-only text adjustments inside scopes.md (TP-075-12R reference rephrased to note rolling-report dashboard test was deferred; Scope 6 Change Boundary path migration internal/assistant/types.go -> internal/assistant/contracts/response.go). Neither edit changed any DoD checkbox, Gherkin scenario, scope status, scenario-manifest reference, or behavioral contract. Trust classification: CURRENT (re-confirmed). spec.md 2026-05-31, design.md 2026-05-31, scopes.md 2026-06-05 housekeeping-only all consistent with in-flight legacy-retirement telemetry surfaces. No drift handoff required. Spec is trustworthy for recertification. Claim Source: executed (diff inspection + on-disk artifact reconciliation against 24 files under internal/assistant/legacyretirement/, both legacy_retirement migrations, internal/assistant/contracts/legacy_retirement_notice.go at post-refactor location, additive optional notice/NoticePayload wire schema bindings, integration + e2e test corpus)."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "test",
+        "completedAt": "2026-06-06T00:15:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-11--validate-trigger--2026-06-06",
+        "summary": "Round 11 test phase (regression re-run of engineering-core unit suite at HEAD a697e0db800bfefa8d027d846b7a82f63a9d530b). go test -count=1 -run 'LegacyRetirement|FacadeLegacyRetirement|BuildLegacyRetirementPolicy' ./internal/assistant/... ./internal/assistant/legacyretirement/... ./cmd/core/... RC=0. TP-075-19 6 subtests PASS at 0.231s (TestFacadeLegacyRetirement_OpenNoticeAttachesPayload, _OpenDedupSuppressed, _PausedPreservesLegacyServing, _ClosedShortCircuitsWithCanonicalResponse, _NoMatchPassthrough, _NilPolicyIsPassthrough). TP-075-20 8 subtests PASS at 0.203s (TestBuildLegacyRetirementPolicy_ValidConfigWiresNonNilPolicy + 7 fail-loud branches). internal/assistant/legacyretirement/ full package PASS at 0.032s. Behavior preserved; zero regression introduced by the housekeeping drift cleanup. Claim Source: executed."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "audit",
+        "completedAt": "2026-06-06T00:15:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-11--validate-trigger--2026-06-06",
+        "summary": "Round 11 audit phase: mechanical post-implementation review of the recertification decision. (1) No wire-contract change: wire schema, TurnResponse.Notice, generated PWA + Flutter bindings, httpadapter.RenderJSON projection all unchanged. (2) No SST regression: no legacy_retirement.* config key added/removed/relaxed; no NO-DEFAULTS fallback introduced; fail-loud branches (TP-075-20 8 subtests) still pass. (3) No security regression: no new input surface; HMAC user-bucket privacy contract (privacy_test.go) unchanged; no auth-middleware or error-envelope change. (4) No spec-artifact mutation: spec.md, design.md, scopes.md, scenario-manifest.json, test-plan.json, uservalidation.md all unchanged by this round (the post-cert edit being closed was a prior commit, not a Round 11 edit). (5) No discoveredIssues mutation: existing RESCOPE-075-2026-06-02 and F074-04B-CORE-SCENARIO-STARTUP entries preserved verbatim. (6) Recertification meets G088 remediation menu option 3 (bubbles.spec-review recertification + certifiedAt bump to a timestamp strictly later than the latest scopes.md edit). (7) Test coverage preserved. Audit verdict: SECURE / CLEAN. Claim Source: executed (interpreted static review)."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "docs",
+        "completedAt": "2026-06-06T00:15:00Z",
+        "evidenceRef": "report.md#stochastic-sweep-round-11--validate-trigger--2026-06-06",
+        "summary": "Round 11 docs phase: appended 'Stochastic Sweep Round 11 — Validate Trigger — 2026-06-06' section to report.md under bubbles:g040-skip-begin/end markers with full per-phase evidence (select, bootstrap, validate, spec-review, test, implement no-op, regression/simplify/stabilize/devops/security/chaos no-op, audit, docs, finalize), findings ledger (F1), and outcome statement. Extended state.json certification with recertifiedAt, recertificationReason documenting Round 11 validate context, and observations: []. Bumped certifiedAt, certification.completedAt, execution.lastUpdatedAt to 2026-06-06T00:15:00Z. Appended 5 execution.completedPhaseClaims[] entries (validate, spec-review, test, audit, docs) attributed to bubbles.workflow with evidenceRef pointing at this Round 11 anchor. No managed-doc drift outside spec 075's own artifacts. Claim Source: executed."
       }
     ],
     "completedScopes": ["SCOPE-075-01", "SCOPE-075-02", "SCOPE-075-03", "SCOPE-075-04", "SCOPE-075-05", "SCOPE-075-06", "SCOPE-075-06.1", "SCOPE-075-06.2"],
@@ -284,6 +322,15 @@
         "runStartedAt": "2026-06-02T04:33:00Z",
         "runEndedAt": "2026-06-02T04:35:00Z",
         "summary": "Portfolio stabilize sweep (065/066/067/069/074/075). go build ./... RC=0 + go vet ./... RC=0. Telemetry/SST + render_descriptor_v1.js cross-language renderer canary compile clean. SCOPE-075-06.5 live-stack DoD remains environment-gated. See report.md ## Stabilize Pass (bubbles.stabilize, 2026-06-02)."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["select", "bootstrap", "validate", "spec-review", "test", "audit", "docs", "finalize"],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T00:00:00Z",
+        "runEndedAt": "2026-06-06T00:15:00Z",
+        "summary": "Stochastic quality sweep Round 11 of 20 (validate trigger) executed in parent-expanded child-mode form for reconcile-to-doc. Baseline reconciliation (on-disk verification of 24 files under internal/assistant/legacyretirement/ + both legacy_retirement migrations + internal/assistant/contracts/legacy_retirement_notice.go + additive optional notice/NoticePayload wire schema bindings + full integration + e2e test corpus; engineering-core unit suite green at HEAD a697e0db800bfefa8d027d846b7a82f63a9d530b). Validate probe surfaced 1 reconciliation drift finding: F1 = Gate G088 post-certification spec edit by commit 18f8512b07ed2c1a0b82ee342685ee32f5442cb5 (tier-2 drift cleanup on 2026-06-05T16:11:50Z; two housekeeping-only edits to scopes.md = TP-075-12R Test-Plan rephrase + Scope 6 Change Boundary path migration internal/assistant/types.go -> internal/assistant/contracts/response.go; both edits BROUGHT scopes.md INTO ALIGNMENT with already-shipped code reality). Remediation per G088 menu option 3: parent-expanded bubbles.spec-review reconfirmed trust=CURRENT; state.json certifiedAt bumped to 2026-06-06T00:15:00Z (strictly later than the 2026-06-05T16:11:50Z scopes.md edit); certification.recertifiedAt + certification.recertificationReason added; certification.observations: []; 5 completedPhaseClaims appended; this executionHistory entry appended. No code changes; no spec/design/scopes mutation; no new discoveredIssue. One-to-one closure: 1 finding raised, 1 finding closed, 0 unresolved. Spec 075 engineering core remains certified done."
       }
     ]
   }

@@ -553,3 +553,237 @@ RC=0
 ### Verdict
 
 🟢 **CLOSE-OUT COMPLETE** — SCOPE-075-06 engineering core (facade Policy dispatch + construction wiring + wire-schema notice propagation + PWA/WhatsApp/Mobile renderers + Telegram interceptor short-circuit + live-stack integration TPs) delivered; SCOPE-075-01..05 inherited by follow-on spec TBD; status transitioned to `done` after re-running the state-transition guard.gacy_closed_response_test.go` (SCN-075-A07/A08).
+
+<!-- bubbles:g040-skip-begin -->
+## Stochastic Sweep Round 11 — Validate Trigger — 2026-06-06
+
+**Agent:** bubbles.workflow (subagent invocation by stochastic-quality-sweep parent)
+**Execution model:** parent-expanded-child-mode (resolved mapped child workflow mode `reconcile-to-doc`; nested `runSubagent` unavailable in subagent runtime → mode executed inline via direct phase-owner invocation per the workflow execution loops contract)
+**Round:** 11 of 20
+**Trigger:** validate
+**Spec:** specs/075-legacy-retirement-telemetry (re-touched per stochastic random selection; previously certified `done` 2026-06-02T08:30:00Z by the engineering-core rescope close-out)
+**Outcome:** completed_owned — 1 validate-trigger finding (F1: Gate G088 post-certification spec edit by commit 18f8512b) closed by parent-expanded `bubbles.spec-review` recertification with refreshed `certifiedAt`; full legacy-retirement engineering-core unit suite remained green pre→post; re-certified as `done` 2026-06-06T00:15:00Z.
+
+### Phase: select
+
+Round inputs supplied by parent stochastic sweep (fixed round selection: spec=075, trigger=validate, mapped child mode=`reconcile-to-doc`). No re-selection performed.
+
+### Phase: bootstrap
+
+Per `reconcile-to-doc` constraints (`requireArtifactStateReconciliation: true`, `validateClaimsBeforeImplementation: true`, `specReviewDefault: once-before-implement`), bootstrap pass verified spec/design/scopes are present and the on-disk implementation backs every active DoD claim.
+
+On-disk verification (claimed-vs-actual reconciliation):
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+$ ls internal/assistant/legacyretirement/ | wc -l
+24
+
+$ ls internal/db/migrations/ | grep -i legacy
+046_legacy_retirement.sql
+048_legacy_retirement_residual.sql
+
+$ ls internal/assistant/contracts/ | grep -i legacy
+legacy_retirement_notice.go
+
+$ ls tests/e2e/assistant/ | grep -i legacy
+legacy_closed_response_test.go
+legacy_cross_transport_dedup_e2e_test.go
+legacy_privacy_e2e_test.go
+legacy_retirement_http_test.go
+legacy_retirement_notice_test.go
+legacy_retirement_pause_e2e_test.go
+legacy_retirement_report_e2e_test.go
+
+$ ls tests/integration/assistant/ | grep -i legacy
+legacy_observation_report_test.go
+legacy_replacement_test.go
+legacy_retirement_consumer_trace_test.go
+legacy_retirement_foundation_test.go
+legacy_retirement_mobile_renderer_test.go
+legacy_retirement_notice_test.go
+legacy_retirement_threshold_test.go
+legacy_retirement_whatsapp_renderer_test.go
+legacy_telegram_short_circuit_test.go
+
+$ grep -c 'notice' internal/assistant/schema/assistant_turn_v1.json
+1
+
+$ grep -c 'NoticePayload' internal/assistant/schema/types.go
+3
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+All claimed implementation surfaces (24 files under `internal/assistant/legacyretirement/`, both legacy-retirement migrations, `internal/assistant/contracts/legacy_retirement_notice.go` at its post-refactor location, the additive optional `notice`/`NoticePayload` wire schema bindings, and the full integration + e2e test corpus) exist exactly as scopes.md claims. No drift in claimed-vs-actual implementation; the prior `bubbles.spec-review` trust classification (`CURRENT`, recorded 2026-06-02T05:00:00Z) is reconfirmed by direct on-disk inspection at HEAD a697e0db.
+
+### Phase: validate (first pass — claim-versus-actual reconciliation)
+
+Ran `state-transition-guard.sh` to certify the current spec state against all 31 anti-fabrication and reconciliation checks. Result: 30/31 PASS, 1 BLOCK (G088). All other gates including G021 (anti-fabrication), G028 (implementation reality), G053 (code diff evidence), G068 (DoD-Gherkin content fidelity), G082 (convergence cap), G085 (framework dogfood evidence), G087 (planning packet implementation linkage), G091 (planning workflow chain), and G093 (delivery implementation delta) PASS.
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+$ BUBBLES_AGENT_NAME=bubbles.validate bash .github/bubbles/scripts/state-transition-guard.sh specs/075-legacy-retirement-telemetry
+... 30 checks PASS ...
+--- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---
+🔴 BLOCK: Post-certification spec edit guard failed — Gate G088. Run 'bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/075-legacy-retirement-telemetry' for full diagnostic
+ℹ️  INFO: Certified specs MUST have top-level certifiedAt and no later planning truth commits
+ℹ️  INFO: Tracked files: spec.md, design.md, scopes.md, scopes/_index.md, scopes/*/scope.md
+ℹ️  INFO: Remediation: demote status, set requiresRevalidation:true, or complete bubbles.spec-review recertification and update certifiedAt after the edit
+--- Check 31: Inter-Spec Dependency Enforcement (Gate G089) ---
+✅ PASS: Inter-spec dependencies are stable or explicitly flagged for revalidation (Gate G089)
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+Post-cert guard diagnostic (the only finding):
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+$ BUBBLES_AGENT_NAME=bubbles.validate bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/075-legacy-retirement-telemetry
+G088 post_certification_spec_edit_gate violation: certified planning truth changed after certifiedAt
+  spec: specs/075-legacy-retirement-telemetry
+  status: done
+  certifiedAt: 2026-06-02T08:30:00Z
+  trackedFiles: 3
+  postCertEdits: 1
+  remediation: demote status out of done, set requiresRevalidation:true, or complete a current bubbles.spec-review recertification and update certifiedAt after the edit
+  commits/files:
+    - commit=18f8512b07ed2c1a0b82ee342685ee32f5442cb5 date=2026-06-05T16:11:50+00:00 file=specs/075-legacy-retirement-telemetry/scopes.md subject=fix(specs/021,026,028,073,075): tier-2 drift cleanup + ratchet 375 -> 365
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+Findings ledger (one-to-one closure tracking):
+
+| ID | Class | Description | Closure path |
+|----|-------|-------------|--------------|
+| F1 | Gate G088 post-certification spec edit | Commit `18f8512b` (tier-2 drift cleanup on 2026-06-05T16:11:50Z) edited `scopes.md` after `certifiedAt: 2026-06-02T08:30:00Z`. The two edits were pure housekeeping: (a) TP-075-12R Test-Plan reference rephrased to note the rolling-report dashboard contract test was deferred (the implementation was already deferred during the rescope close-out; this only updated the stale text), and (b) Scope 6 Change Boundary path migration `internal/assistant/types.go` → `internal/assistant/contracts/response.go` reflecting the assistant contracts subpackage refactor that happened after spec 075's certifiedAt. Both edits BROUGHT scopes.md INTO ALIGNMENT with the actual code layout — no behavioral truth changed. Per the G088 remediation menu, the correct closure is `bubbles.spec-review` recertification + `certifiedAt` bump. | Parent-expanded `bubbles.spec-review` (Phase: spec-review) + state.json `certifiedAt` bump (Phase: finalize). |
+
+No other findings discovered. F1 is the sole reconciliation drift this round must close.
+
+### Phase: spec-review (parent-expanded `bubbles.spec-review` recertification — once-before-implement)
+
+Per `reconcile-to-doc` constraint `specReviewDefault: once-before-implement`, ran a fresh trust audit of spec.md, design.md, scopes.md against the current code surface at HEAD a697e0db.
+
+Drift inspection of the post-cert edit commit (`18f8512b`):
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+$ git diff 25d66dc8..18f8512b -- specs/075-legacy-retirement-telemetry/
+diff --git a/specs/075-legacy-retirement-telemetry/scopes.md b/specs/075-legacy-retirement-telemetry/scopes.md
+@@ -331,7 +331,7 @@
+-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent row: TP-075-12R (`tests/e2e/monitoring/legacy_retirement_dashboard_e2e_test.go`) is the live regression for SCN-075-A04 rolling-report contract. ...
++- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are planned and tracked. Persistent row: TP-075-12R (originally planned at tests/e2e/monitoring/legacy_retirement_dashboard_e2e_test.go; the rolling-report dashboard contract test was deferred and its planning carried forward to a follow-on spec) ...
+@@ -660,7 +660,7 @@
+-- **Allowed file families:** `internal/assistant/facade.go`, `internal/assistant/types.go` (or wherever `AssistantResponse` lives), `cmd/core/wiring_assistant_facade.go`, ...
++- **Allowed file families:** `internal/assistant/facade.go`, `internal/assistant/contracts/response.go` (where `AssistantResponse` lives; originally planned as internal/assistant/types.go before the contracts subpackage was introduced), `cmd/core/wiring_assistant_facade.go`, ...
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+Both edits are descriptive text adjustments that reconcile stale spec language with already-shipped code reality. Neither changes any DoD checkbox, Gherkin scenario, scope status, scenario-manifest reference, or behavioral contract.
+
+Trust classification: **CURRENT** (re-confirmed). spec.md (2026-05-31), design.md (2026-05-31), scopes.md (2026-06-05 housekeeping-only) all consistent with in-flight legacy-retirement telemetry surfaces. No redundant/superseded active sections detected. Safe to use as authoritative source of truth.
+
+No drift handoff required. Spec is trustworthy for recertification.
+
+### Phase: test (regression — engineering-core unit suite at HEAD)
+
+Re-ran the spec 075 engineering-core unit suite to prove the implementation has not regressed since the 2026-06-02 certification.
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+$ go test -count=1 -run 'LegacyRetirement|FacadeLegacyRetirement|BuildLegacyRetirementPolicy' ./internal/assistant/... ./internal/assistant/legacyretirement/... ./cmd/core/...
+ok      github.com/smackerel/smackerel/internal/assistant       0.406s
+ok      github.com/smackerel/smackerel/internal/assistant/legacyretirement     0.060s [no tests to run]
+... (all other assistant subpackages PASS) ...
+ok      github.com/smackerel/smackerel/cmd/core 0.203s
+RC=0
+
+$ go test -count=1 ./internal/assistant/legacyretirement/...
+ok      github.com/smackerel/smackerel/internal/assistant/legacyretirement     0.032s
+RC=0
+
+$ go test -count=1 -v ./internal/assistant/ -run 'LegacyRetirement'
+=== RUN   TestFacadeLegacyRetirement_OpenNoticeAttachesPayload
+=== RUN   TestFacadeLegacyRetirement_OpenDedupSuppressed
+=== RUN   TestFacadeLegacyRetirement_PausedPreservesLegacyServing
+=== RUN   TestFacadeLegacyRetirement_ClosedShortCircuitsWithCanonicalResponse
+=== RUN   TestFacadeLegacyRetirement_NoMatchPassthrough
+=== RUN   TestFacadeLegacyRetirement_NilPolicyIsPassthrough
+--- PASS: TestFacadeLegacyRetirement_OpenNoticeAttachesPayload (0.01s)
+--- PASS: TestFacadeLegacyRetirement_ClosedShortCircuitsWithCanonicalResponse (0.01s)
+--- PASS: TestFacadeLegacyRetirement_NilPolicyIsPassthrough (0.01s)
+--- PASS: TestFacadeLegacyRetirement_NoMatchPassthrough (0.01s)
+--- PASS: TestFacadeLegacyRetirement_PausedPreservesLegacyServing (0.01s)
+--- PASS: TestFacadeLegacyRetirement_OpenDedupSuppressed (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/internal/assistant       0.231s
+
+$ go test -count=1 -v ./cmd/core/ -run 'BuildLegacyRetirementPolicy'
+=== RUN   TestBuildLegacyRetirementPolicy_ValidConfigWiresNonNilPolicy
+--- PASS: TestBuildLegacyRetirementPolicy_ValidConfigWiresNonNilPolicy (0.00s)
+=== RUN   TestBuildLegacyRetirementPolicy_NilConfigErrors
+--- PASS: TestBuildLegacyRetirementPolicy_NilConfigErrors (0.00s)
+=== RUN   TestBuildLegacyRetirementPolicy_NilPoolErrors
+--- PASS: TestBuildLegacyRetirementPolicy_NilPoolErrors (0.00s)
+=== RUN   TestBuildLegacyRetirementPolicy_NilClockErrors
+--- PASS: TestBuildLegacyRetirementPolicy_NilClockErrors (0.00s)
+=== RUN   TestBuildLegacyRetirementPolicy_EmptyWindowIDErrors
+--- PASS: TestBuildLegacyRetirementPolicy_EmptyWindowIDErrors (0.00s)
+=== RUN   TestBuildLegacyRetirementPolicy_EmptyHMACKeyErrors
+--- PASS: TestBuildLegacyRetirementPolicy_EmptyHMACKeyErrors (0.00s)
+=== RUN   TestBuildLegacyRetirementPolicy_EmptyNoticeCopyErrors
+--- PASS: TestBuildLegacyRetirementPolicy_EmptyNoticeCopyErrors (0.00s)
+=== RUN   TestBuildLegacyRetirementPolicy_InvalidWindowStateErrors
+--- PASS: TestBuildLegacyRetirementPolicy_InvalidWindowStateErrors (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/cmd/core 0.203s
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+TP-075-19 (6 subtests — facade dispatch 5 branches + nil-Policy passthrough): PASS at 0.231s.
+TP-075-20 (8 subtests — wiring helper happy path + 7 fail-loud branches): PASS at 0.203s.
+`internal/assistant/legacyretirement/` full suite (TestPolicy_*, TestThresholdEvaluator_*, TestPrometheusResidualTelemetry_*, TestClassifyToken_*, TestConfigCatalog_*, TestNewPolicy_*, observation-report tests, etc.): PASS at 0.032s.
+
+Verdict: behavior preserved. Zero regression introduced by the housekeeping drift cleanup.
+
+### Phase: implement (no-op — no code surface affected by F1)
+
+The G088 finding is pure documentation reconciliation (stale path references in scopes.md text). The on-disk implementation under `internal/assistant/legacyretirement/`, `cmd/core/wiring_assistant_facade.go`, `internal/assistant/contracts/`, `internal/assistant/httpadapter/`, `internal/assistant/schema/`, the migrations, the renderers, and the test corpus is unchanged at HEAD a697e0db relative to the certifiedAt commit. No `bubbles.implement` work is required to close F1.
+
+### Phase: regression / simplify / stabilize / devops / security / chaos (no-op — substitute-evidence transitive proof)
+
+No source code changed in this round. All `requireFindingOwnedPlanningWorkflow` planning chain agents (`bubbles.analyst`, `bubbles.ux`, `bubbles.design`, `bubbles.plan`) are skipped per the skill rule "only when planning truth is created/repaired" — F1's closure path explicitly does NOT modify spec.md/design.md/scopes.md (the existing scopes.md text is correct and current). Regression coverage from the unit suite above transitively certifies these phases against the unchanged engineering-core surface.
+
+### Phase: audit (mechanical post-implementation review of the recertification)
+
+Audit of the F1 closure decision:
+
+1. **No wire-contract change:** wire schema `internal/assistant/schema/assistant_turn_v1.json` (optional `notice` field), `TurnResponse.Notice` in `internal/assistant/schema/types.go`, generated PWA bindings, generated Flutter bindings, and `httpadapter.RenderJSON` projection all unchanged.
+2. **No SST regression:** no `legacy_retirement.*` config key added, removed, or relaxed; no NO-DEFAULTS fallback introduced; fail-loud branches (TP-075-20 8 subtests) still pass.
+3. **No security regression:** no new input surface; HMAC user-bucket privacy contract (`privacy_test.go`) unchanged; no auth-middleware or error-envelope change.
+4. **No spec-artifact mutation:** spec.md, design.md, scopes.md, scenario-manifest.json, test-plan.json, uservalidation.md all unchanged by this round (the post-cert edit being closed was a prior commit, not a Round 11 edit); only state.json (recertification metadata) and report.md (this Round 11 evidence section) are updated by this round.
+5. **No discoveredIssues mutation:** existing RESCOPE-075-2026-06-02 and F074-04B-CORE-SCENARIO-STARTUP entries preserved verbatim with their `status: routed`/`status: resolved` and `closedAt` timestamps unchanged. No new discoveredIssue added (F1 is closed inline by the recertification itself — it is not a deferred bug or foreign-blocker).
+6. **Recertification meets G088 remediation menu requirement (option 3):** parent-expanded `bubbles.spec-review` confirmed trust classification CURRENT; `certifiedAt` bumped to a timestamp strictly later (2026-06-06T00:15:00Z) than the latest scopes.md edit (2026-06-05T16:11:50Z by commit 18f8512b).
+7. **Test coverage preserved:** engineering-core unit suite (TP-075-19, TP-075-20, full legacyretirement package) PASS at HEAD a697e0db.
+
+Audit verdict: SECURE / CLEAN. Recertification is mechanical and evidence-backed.
+
+### Phase: docs (this report.md Round 11 section + state.json recertification metadata)
+
+Appended this "Stochastic Sweep Round 11 — Validate Trigger — 2026-06-06" section under `bubbles:g040-skip-begin/end` markers with full per-phase evidence (select, bootstrap, validate, spec-review, test, implement no-op, regression/simplify/stabilize/devops/security/chaos no-op, audit, docs, finalize), the findings ledger (F1), and outcome statement. Extended `state.json.certification` with `recertifiedAt: 2026-06-06T00:15:00Z`, `recertificationReason` documenting the Round 11 validate context, and `observations: []` (no new observations). Bumped `certifiedAt`, `certification.completedAt`, `execution.lastUpdatedAt` to 2026-06-06T00:15:00Z. Appended 5 `execution.completedPhaseClaims[]` entries (validate, spec-review, test, audit, docs) attributed to `bubbles.workflow` with `evidenceRef` pointing at this Round 11 anchor. Appended Round 11 entry to `execution.executionHistory[]`.
+
+### Phase: finalize (one-to-one closure accounting + verdict)
+
+Findings ledger one-to-one accounting:
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| F1 — Gate G088 post-certification spec edit by commit 18f8512b | **CLOSED** | (a) Parent-expanded `bubbles.spec-review` reconfirmed trust=CURRENT; (b) housekeeping-only nature of the post-cert edit verified by `git diff 25d66dc8..18f8512b -- specs/075-legacy-retirement-telemetry/`; (c) engineering-core unit suite (TP-075-19 6 subtests + TP-075-20 8 subtests + full legacyretirement package) PASS; (d) `state.json.certifiedAt` and `certification.completedAt` bumped to 2026-06-06T00:15:00Z (strictly later than the latest scopes.md edit at 2026-06-05T16:11:50Z); (e) `certification.recertifiedAt` and `certification.recertificationReason` added documenting Round 11 closure. G088 remediation menu option 3 satisfied. |
+
+1 finding raised, 1 finding closed, 0 findings unresolved.
+
+### Verdict
+
+🟢 **RECONCILIATION COMPLETE** — spec 075 engineering core remains certified `done` after Round 11 reconciliation. The G088 post-certification spec edit by commit `18f8512b` (tier-2 drift cleanup housekeeping) is closed by mechanical recertification: parent-expanded `bubbles.spec-review` confirmed trust=CURRENT, on-disk implementation backs every active DoD claim, unit suite green at HEAD `a697e0db`, and `certifiedAt`/`recertifiedAt` are now strictly later than the housekeeping edit. No code changes; no spec/design/scopes mutation; no new discoveredIssue. Outcome: `completed_owned`.
+
+stochastic-quality-sweep sweep-2026-06-06-r20 round 11 of 20.
+<!-- bubbles:g040-skip-end -->
