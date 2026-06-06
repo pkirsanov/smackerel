@@ -3,6 +3,9 @@
   "featureDir": "specs/018-financial-markets-connector",
   "featureName": "Financial Markets Connector",
   "status": "done",
+  "certifiedAt": "2026-05-24T22:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "certifiedAtBackfillNote": "OPS-002 G088 schema backfill: top-level certifiedAt surfaced from the existing certification (certification.status=done; faithful historical value = lastUpdatedAt 2026-05-24T22:00:00Z, which is after the last planning-truth commit 2026-05-24T20:49Z). No planning truth edited after this timestamp; no fresh review claimed. Pure schema-shape migration so Gate G088 can read the field.",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": null,
