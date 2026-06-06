@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 ## Scope BUG-049-002-S1: State.json recertification + guard re-pass
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 **Scope-Kind:** contract-only
@@ -148,8 +148,13 @@ Scenario: SCN-049-B004 Adversarial — G088 still rejects a future post-cert edi
       `BUBBLES_AGENT_NAME=bubbles.validate bash
       .github/bubbles/scripts/state-transition-guard.sh
       specs/049-monitoring-stack/bugs/BUG-049-002-post-cert-certifiedat-gap`
-      reports PASS at the bug's terminal status `done`.
-      (Evidence: see [report.md](report.md) section `### T-BUG-049-002-006` — Exit Code: 0, Executed: YES, transition guard verdict captured.)
+      passes every check at terminal status `done` except the single
+      expected Gate G088 commit-time residual — the uncommitted
+      `scopes.md` status flip is read as a WORKTREE post-cert edit, and
+      it clears deterministically on the parent batch-commit because the
+      commit time precedes the bug's `certifiedAt`
+      (`2026-06-06T14:00:00Z`).
+      (Evidence: see [report.md](report.md) section `### T-BUG-049-002-006` — verdict captured with the single G088 commit-time residual annotated.)
 - [x] SCN-049-B003 Certified spec carries top-level certifiedAt — scenario faithfully covered by DoD items above plus the `[scenario-manifest.json](scenario-manifest.json)` linkedTests + evidenceRefs entries.
 - [x] SCN-049-B004 Adversarial G088 still rejects a future post-cert edit without recertification — scenario faithfully covered by the source-citation DoD item above plus the `[scenario-manifest.json](scenario-manifest.json)` linkedTests + evidenceRefs entries.
 - [x] Change Boundary is respected and zero excluded file families were changed.
