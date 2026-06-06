@@ -26,6 +26,15 @@ import (
 	_ "github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/weather"
 
+	// Spec 039 recommendation tools + spec 065/076 microtools register their
+	// handlers at package-init (mirroring cmd/core wiring_agent.go and
+	// wiring_assistant_skills.go). The prompt_contracts scenarios
+	// recommendation-*-v1.yaml and retrieval-qa-v1.yaml reference
+	// recommendation_* and entity_resolve, so these imports are required for
+	// the loader to accept those scenarios here.
+	_ "github.com/smackerel/smackerel/internal/agent/tools/microtools"
+	_ "github.com/smackerel/smackerel/internal/recommendation/tools"
+
 	// Spec 064 SCOPE-12 — substrate-bridge tool open_knowledge_invoke
 	// registers itself at package-init so the open_knowledge scenario
 	// passes loader allow_tools validation here.
