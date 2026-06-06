@@ -61,11 +61,11 @@ Phase 2 adds the three highest-value passive sources (Gmail, YouTube, Google Cal
 ## Requirements
 
 ### R-201: Connector Framework
-- Generic connector interface: `connect()`, `sync()`, `get_sync_state()`, `update_cursor()`
-- Each connector has: source_id, enabled flag, cron schedule, sync cursor, source qualifiers config, processing rules
+- Generic connector interface: `ID()`, `Connect(ctx, config)`, `Sync(ctx, cursor)`, `Health(ctx)`, `Close()` (sync state is read/written via the external `StateStore`, not via methods on `Connector`; cursor is returned from `Sync()` itself rather than via a separate `update_cursor()` call)
+- Each connector has: source_id (`Connector.ID()`), enabled flag, cron schedule, sync cursor, source qualifiers config, processing tier
 - Cursor-based incremental sync — only process items newer than the cursor
-- Sync state persistence: last_sync timestamp, cursor value, items_synced count, error_count, last_error
-- Error handling: log errors, increment error_count, continue sync on non-fatal errors, surface persistent errors in health check
+- Sync state persistence: last_sync timestamp, cursor value, items_synced count, errors_count, last_error (managed by `connector.StateStore` against the `sync_state` table)
+- Error handling: log errors, increment errors_count, continue sync on non-fatal errors, surface persistent errors in health check
 - Rate limit handling: exponential backoff with jitter, respect API quota headers
 
 ### R-202: Gmail Connector

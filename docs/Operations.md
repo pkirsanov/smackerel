@@ -602,6 +602,138 @@ The `qf-decisions` connector is governed as a companion read surface for Quantit
 
 Smackerel operators must not use this connector to approve trades, alter QF mandates, submit execution requests, or rewrite QF-provided decision content.
 
+### Google Maps Timeline Connector Operations (Spec 011)
+
+The `google-maps-timeline` connector ingests Google Takeout Semantic Location
+History exports as activity artifacts (walks, hikes, cycles, drives, transit,
+runs), with trail-qualified activities (≥2km walk/hike/run/cycle) producing
+enriched trail journal entries, GeoJSON route storage, dedup via
+date+location-cluster hash, archive-after-processing, commute/trip detection,
+and temporal-spatial linking. The connector is import-only — it makes no
+external API calls and reads only the files placed in its configured
+`import_dir`. Source code lives at `internal/connector/maps/`; schema lives at
+`internal/db/migrations/001_initial_schema.sql:321-339` (location_clusters
+table), consolidated from the historical
+`internal/db/migrations/archive/009_maps.sql`.
+
+| Operation | Requirement |
+|-----------|-------------|
+| Enablement | The connector ships disabled (`connectors.google-maps-timeline.enabled: false` in `config/smackerel.yaml`). Enable it only after the operator has populated `import_dir` and granted privacy consent for source `maps` (see "Privacy Consent Opt-In" below). |
+| Required config when enabled | `import_dir` (must exist, must be a directory, must NOT be a symlink that can be retargeted), `sync_schedule` (cron string consumed by the supervisor), `watch_interval` (per-cycle scan interval, defaults to `5m` in `config/smackerel.yaml`), `archive_processed` (boolean — when `true`, processed files are moved into the `<import_dir>/archive/` subdirectory), `min_distance_m`, `min_duration_min`, `clustering.location_radius_m`, and the commute/trip/link tuning under the same connector key. All required values must be provided via `config/smackerel.yaml`; missing or zero/negative values fail loudly at `Connect()` time via `parseMapsConfig`. There are no Go-side fallback defaults. |
+| Container mount | `deploy/compose.deploy.yml` and `docker-compose.yml` mount the host import directory read-only at `/data/maps-import` via the fail-loud `${MAPS_IMPORT_DIR:?Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up}:/data/maps-import:ro` form. The deploy adapter MUST set `MAPS_IMPORT_DIR` explicitly in `app.env`; missing or empty values abort Compose at substitution time. |
+| Connector health | `HealthDisconnected` (before `Connect()` succeeds), `HealthHealthy` (after `Connect()` and between sync cycles), `HealthSyncing` (during an active `Sync()` call), `HealthError` (import directory unreachable, consent check failed, oversized/unparseable file outside the per-cycle tolerance, or panic during sync — panics are recovered and reflected in health). |
+| Observability — sync counts | Inherited from `internal/connector/supervisor.go`: each cycle emits `smackerel_connector_sync_total{connector="google-maps-timeline",status="success|error"}` and the connector-generic `connector_sync_failure_rate_high_24h` alert covers it. |
+| Observability — structured logs | `slog.Info` on connect (`"google maps timeline connector connected"`), per-cycle (`"google maps timeline sync complete"`), and post-sync (`"post-sync patterns complete"`). `slog.Warn` for oversized files (>50MB warning, >200MB hard skip), unparseable files (skipped and marked processed to prevent retry loops), failed location-cluster inserts, pattern-detection step failures. No PII, no raw coordinates dumped. |
+| Secret management | N/A — the connector is file-import only. No API keys, no OAuth, no `MAPS_*_TOKEN`/`MAPS_*_SECRET` env vars in any Compose surface. |
+| Rollback | Disable: set `connectors.google-maps-timeline.enabled: false`, regenerate config, restart — the supervisor skips the connector on next cycle. Image rollback: `./smackerel.sh deploy-target <target> rollback` (pointer-swap, no rebuild). Schema rollback is not required — the `location_clusters` table is additive only. |
+
+#### Privacy Consent Opt-In (R-401 Enforcement)
+
+The Maps connector enforces opt-in consent at sync time. Until the operator
+records explicit consent in the `privacy_consent` table for source `maps`, each
+sync cycle logs `"maps sync skipped: user has not consented to maps data
+collection"` and returns zero artifacts with the cursor unchanged. There is no
+operator-facing API or UI for this preference yet; opt-in is performed via a
+direct database write:
+
+```bash
+# Connect to PostgreSQL (password supplied via PGPASSWORD env or ~/.pgpass; never inline)
+psql "postgres://smackerel@127.0.0.1:42001/smackerel"
+
+# Grant consent for source 'maps'
+INSERT INTO privacy_consent (source_id, consented, consented_at)
+VALUES ('maps', TRUE, NOW())
+ON CONFLICT (source_id) DO UPDATE SET consented = TRUE, consented_at = NOW();
+
+# Verify
+SELECT source_id, consented, consented_at FROM privacy_consent WHERE source_id = 'maps';
+```
+
+To revoke consent, set `consented = FALSE` for the same row; the connector
+honors the change on its next sync cycle without restart.
+
+#### End-To-End Operator Walkthrough
+
+1. **Export from Google Takeout.** Visit `https://takeout.google.com/`, select
+   only the **Location History** product, request a `.zip` export.
+2. **Extract the Semantic Location History.** After download, unzip the archive
+   and locate the directory `Takeout/Location History (Timeline)/Semantic
+   Location History/`. The directory contains per-month folders (e.g.,
+   `2026/`) with files named like `2026_APRIL.json`. The connector consumes
+   `*.json` files anywhere under `import_dir` (it descends into
+   subdirectories).
+3. **Place files in `import_dir`.** Copy the JSON files (or the entire
+   `Semantic Location History` subtree) into the host directory referenced by
+   `MAPS_IMPORT_DIR`. The directory must already exist and be readable by the
+   container user. In dev, the conventional path is
+   `data/maps-import/` at the repo root (mounted at `/data/maps-import:ro`
+   inside the container).
+4. **Grant consent (one-time).** Run the SQL `INSERT` above. Skip this step if
+   consent is already recorded.
+5. **Enable the connector and restart.** Edit `config/smackerel.yaml` and set
+   `connectors.google-maps-timeline.enabled: true`. Then run:
+
+   ```bash
+   ./smackerel.sh config generate
+   ./smackerel.sh down
+   ./smackerel.sh up
+   ```
+
+6. **Trigger an immediate sync (optional).** The supervisor runs the connector
+   on its `sync_schedule` cron, but operators can force a cycle:
+
+   ```bash
+   curl -X POST -H "Authorization: Bearer <token>" \
+     http://127.0.0.1:40001/settings/connectors/google-maps-timeline/sync
+   ```
+
+7. **Verify ingestion succeeded.** Check connector health, sync counts, and
+   container logs:
+
+   ```bash
+   # Per-connector health
+   curl --max-time 5 -H "Authorization: Bearer <token>" \
+     http://127.0.0.1:40001/api/health | jq '.connectors."google-maps-timeline"'
+
+   # Sync counts (expected to increment on success)
+   curl --max-time 5 http://127.0.0.1:40001/metrics 2>/dev/null | \
+     grep 'smackerel_connector_sync_total{connector="google-maps-timeline"'
+
+   # Container log lines for the most recent sync
+   ./smackerel.sh logs core 2>&1 | \
+     grep -E 'google maps timeline (connector connected|sync complete)|post-sync patterns complete'
+   ```
+
+   On a successful sync the logs include `"google maps timeline sync complete"`
+   with `new_files`, `artifacts`, `trail_qualified`, and `errors` fields, plus
+   `"post-sync patterns complete"` with `commute_patterns`, `trip_events`, and
+   `links_created` fields.
+
+8. **Confirm artifacts are searchable.** Activity artifacts appear under
+   source `google-maps-timeline` and are searchable via the standard query
+   surface. Trail-qualified hikes (≥2km walk/hike/run/cycle) include the
+   `trail_journal` enrichment tier; routes are stored as GeoJSON LineString
+   metadata.
+
+#### Cursor And Re-Ingestion
+
+The cursor is a pipe-delimited list of processed filenames pruned to entries
+that still exist under `import_dir`. To re-process every file from scratch,
+clear the cursor row for this connector (see "Reset a Connector's Sync
+Cursor" below) and either remove archived copies or set
+`archive_processed: false`. Re-ingestion is safe — the dedup hash on
+date+location-cluster prevents duplicate artifacts.
+
+#### Failure Modes And Operator Responses
+
+| Symptom | Likely Cause | Operator Action |
+|---------|--------------|-----------------|
+| Health stuck on `disconnected` | `import_dir` does not exist, is not a directory, is a symlink that fails `EvalSymlinks`, or `Connect()` was never called. | Verify `MAPS_IMPORT_DIR` host path exists, is a real directory, and the resolved path is reachable by the container user; restart the stack. |
+| Health flaps to `error` immediately after a sync | Per-file errors equal artifact count (e.g., every file is unparseable). | Inspect logs for `"permanently unparseable takeout file, skipping"` warnings; remove or fix the offending JSON; the connector marks unparseable files as processed to avoid infinite retry. |
+| `sync_count` stays zero, log says `"maps sync skipped: user has not consented to maps data collection"` | `privacy_consent` row missing or `consented = FALSE`. | Apply the consent SQL `INSERT` shown above. |
+| Log warns `"skipping oversized takeout file"` | A single JSON file exceeds the 200MB hard limit. | Split the export by month, re-export a smaller window from Takeout, or temporarily raise the limit in source (requires a code change and re-deploy — not configurable today). |
+| Archive directory `archive/` not appearing | `archive_processed: false` (the shipped default). | Set `archive_processed: true` if archival is desired; processed files are moved into `<import_dir>/archive/` on a per-cycle basis after successful processing. Filename collisions are resolved by suffixing `_1`, `_2`, etc. |
+
 ### Notification Intelligence Operations (Spec 054)
 
 The Notification Intelligence Handler is the source-neutral layer for
@@ -904,8 +1036,8 @@ fix the redaction path before reconnecting the source adapter.
 If a connector is stuck or you want to re-sync from scratch, clear its cursor in the database. This requires the stack to be running:
 
 ```sql
--- Connect to PostgreSQL
--- psql "postgres://smackerel:smackerel@127.0.0.1:42001/smackerel"
+-- Connect to PostgreSQL (password via PGPASSWORD env or ~/.pgpass; never inline)
+-- psql "postgres://smackerel@127.0.0.1:42001/smackerel"
 
 -- View current cursors
 SELECT connector_id, cursor, last_sync_at FROM sync_state;
@@ -1517,6 +1649,8 @@ email distribution) is deploy-adapter overlay scope.
 | `SmackerelMLEmbeddingStarvation` | warning | `rate(smackerel_ml_embedding_rejected_total[5m])` | ThreadPoolExecutor rejecting work — raise `services.ml.embedding_workers/queue_max` or scale CPU envelope. |
 | `SmackerelAlertDeliveryFailing` | critical | `rate(smackerel_alert_delivery_failures_total[15m])` | Operator notifications failing — check Telegram bot token + chat mapping. |
 | `SmackerelBackupStale` | warning | `smackerel_artifacts_ingested_total` | No ingestion for 24h — connectors stuck or backup pipeline silent. |
+| `TwitterAPIRateLimitChronicExhaustion` | warning | `max_over_time(smackerel_connector_twitter_api_rate_limit_reset_seconds[15m])` | Twitter API rate-limit reset window above 60s sustained for 30m — verify bearer-token tier, reduce SST `services.connectors.twitter.poll_seconds`, or narrow active source lists. |
+| `TwitterAPIRetryStorm` | warning | `rate(smackerel_connector_twitter_api_retries_total[5m])` | Twitter retry rate ≥ 0.2/s for 10m — check connector logs for the failing endpoint/reason, verify Tailscale connectivity to `api.twitter.com`, inspect `smackerel_connector_twitter_api_requests_total{status}` for 5xx / 429 patterns. |
 
 ### Metrics Access Boundary
 
