@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 const (
@@ -38,15 +40,33 @@ func (s *Service) ReportSourceHealth(ctx context.Context, report SourceHealthRep
 	return s.Store.RecordSourceHealth(ctx, report)
 }
 
+// notificationStageDurationMs returns the elapsed time since start in
+// fractional milliseconds, used to observe per-stage pipeline latency into
+// metrics.NotificationProcessingDuration. Microsecond resolution keeps fast
+// in-memory stages from collapsing to a zero observation.
+func notificationStageDurationMs(start time.Time) float64 {
+	return float64(time.Since(start).Microseconds()) / 1000.0
+}
+
 func (s *Service) Process(ctx context.Context, envelope SourceEventEnvelope, now time.Time) (PipelineResult, error) {
 	if now.IsZero() {
 		return PipelineResult{}, fmt.Errorf("notification service: timestamp is required")
 	}
+	pipelineStart := time.Now()
+	defer func() {
+		metrics.NotificationProcessingDuration.WithLabelValues("total").Observe(notificationStageDurationMs(pipelineStart))
+	}()
+	ingestStart := time.Now()
 	raw, err := s.Store.CreateRawEvent(ctx, envelope, now)
+	metrics.NotificationProcessingDuration.WithLabelValues("ingest").Observe(notificationStageDurationMs(ingestStart))
 	if err != nil {
+		metrics.NotificationIngestTotal.WithLabelValues(envelope.SourceType, string(envelope.SourceForm), "rejected").Inc()
 		return PipelineResult{}, err
 	}
+	metrics.NotificationIngestTotal.WithLabelValues(envelope.SourceType, string(envelope.SourceForm), "accepted").Inc()
+	normalizeStart := time.Now()
 	normalized, err := s.Normalizer.Normalize(raw, envelope)
+	metrics.NotificationProcessingDuration.WithLabelValues("normalize").Observe(notificationStageDurationMs(normalizeStart))
 	if err != nil {
 		return PipelineResult{RawEvent: raw, Receipt: IngestReceipt{SourceType: raw.SourceType, SourceInstanceID: raw.SourceInstanceID, SourceForm: raw.SourceForm, RawEventID: raw.ID, Accepted: false, Status: "normalization_failed"}}, err
 	}
@@ -74,6 +94,9 @@ func (s *Service) Process(ctx context.Context, envelope SourceEventEnvelope, now
 	if err != nil {
 		return PipelineResult{RawEvent: raw, Notification: normalized, Classification: classification, Incident: incident}, err
 	}
+	for _, suppression := range suppressions {
+		metrics.NotificationDedupeTotal.WithLabelValues(normalized.SourceType, suppression.Kind).Inc()
+	}
 	loopOrigins, err := s.Store.ListLoopOrigins(ctx, now.Add(-loopGuardWindow), 100)
 	if err != nil {
 		return PipelineResult{RawEvent: raw, Notification: normalized, Classification: classification, Incident: incident}, err
@@ -87,7 +110,9 @@ func (s *Service) Process(ctx context.Context, envelope SourceEventEnvelope, now
 		}
 		suppressions = append(suppressions, createdSuppression)
 	}
+	decideStart := time.Now()
 	decision := s.Decider.Decide(normalized, classification, incident, nil, suppressions)
+	metrics.NotificationProcessingDuration.WithLabelValues("decide").Observe(notificationStageDurationMs(decideStart))
 	decisionRecord := decision.Record()
 	decisionRecord.CreatedAt = now
 	if err := s.Store.CreateDecision(ctx, decisionRecord); err != nil {

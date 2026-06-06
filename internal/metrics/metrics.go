@@ -495,6 +495,92 @@ var QFPersonalContextReadsTotal = prometheus.NewCounterVec(
 	[]string{"outcome", "sensitivity_tier"},
 )
 
+// --- Notification Intelligence Handler (Spec 054) ---
+//
+// Source-qualified pipeline-stage observability for the notification handler
+// (ingest → normalize → dedupe → decide/action → deliver, plus per-stage
+// latency). Every label below is a BOUNDED enum or a known source identifier;
+// NONE derive from RawPayload, title, body, or any free-text notification
+// content. SCN-054-024 (observability must not leak secrets) is satisfied by
+// construction: the only "source"-shaped label is `source_type` (a registered
+// adapter type) and `source_form` (the SourceForm enum), never a payload value.
+
+// NotificationIngestTotal counts raw notification events accepted or rejected
+// at the ingest boundary. `source_type` is the registered adapter type;
+// `source_form` is the bounded SourceForm enum (stream/webhook/polling/queue/
+// file_drop/api_pull/manual); `status` is bounded to {accepted, rejected}.
+var NotificationIngestTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_notification_ingest_total",
+		Help: "Notification raw events ingested by source type, source form, and accepted/rejected status",
+	},
+	[]string{"source_type", "source_form", "status"},
+)
+
+// NotificationNormalizationErrors counts normalization failures by
+// `source_type` and a BOUNDED `error_kind` classification
+// (missing_raw_event_id / missing_source_identity / missing_observed_at /
+// source_event_id_derivation / other). The raw error string is NEVER used as a
+// label value — only the bounded classification.
+var NotificationNormalizationErrors = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_notification_normalization_errors_total",
+		Help: "Notification normalization failures by source type and bounded error kind",
+	},
+	[]string{"source_type", "error_kind"},
+)
+
+// NotificationDedupeTotal counts suppression decisions applied to a
+// notification by `source_type` and the bounded `suppression_kind`
+// (dedupe / reaction_loop). Exact-dedupe suppressions are counted from the
+// store-found suppression set in the pipeline; reaction-loop suppressions are
+// counted at the loop-guard decision site.
+var NotificationDedupeTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_notification_dedupe_total",
+		Help: "Notification suppression decisions by source type and bounded suppression kind",
+	},
+	[]string{"source_type", "suppression_kind"},
+)
+
+// NotificationActionAttempts counts decision/action outcomes by the bounded
+// `action_class` (the DecisionType enum: no_action / record_only / diagnostics
+// / autonomous_handling / user_escalation / approval_request) and a bounded
+// `status` derived from the decision flags
+// (suppressed / approval_required / diagnostics / output_required / recorded).
+var NotificationActionAttempts = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_notification_action_attempts_total",
+		Help: "Notification decision/action attempts by bounded action class and status",
+	},
+	[]string{"action_class", "status"},
+)
+
+// NotificationDeliveryAttempts counts output-channel delivery attempts by the
+// bounded `channel` (the configured output-channel id, e.g. dashboard) and a
+// bounded `status` {success, failure}. The notification payload is never a
+// label value.
+var NotificationDeliveryAttempts = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_notification_delivery_attempts_total",
+		Help: "Notification output delivery attempts by channel and success/failure status",
+	},
+	[]string{"channel", "status"},
+)
+
+// NotificationProcessingDuration records per-stage notification pipeline
+// latency in milliseconds. `stage` is bounded to
+// {ingest, normalize, decide, total}. Buckets span sub-millisecond in-memory
+// stages through multi-second store-bound stages.
+var NotificationProcessingDuration = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "smackerel_notification_processing_duration_ms",
+		Help:    "Notification pipeline processing latency in milliseconds by bounded stage",
+		Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500},
+	},
+	[]string{"stage"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -559,6 +645,15 @@ func init() {
 		BackupLastSuccessUnixtime,
 		BackupSizeBytes,
 		BackupRunsTotal,
+		// Spec 054 notification-intelligence-handler pipeline metrics.
+		// Source-qualified pipeline-stage observability; bounded labels
+		// only (no RawPayload/title/body in any label value).
+		NotificationIngestTotal,
+		NotificationNormalizationErrors,
+		NotificationDedupeTotal,
+		NotificationActionAttempts,
+		NotificationDeliveryAttempts,
+		NotificationProcessingDuration,
 	)
 }
 

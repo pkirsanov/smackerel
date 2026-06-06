@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 type Normalizer struct{}
@@ -14,7 +16,12 @@ func NewNormalizer() Normalizer {
 	return Normalizer{}
 }
 
-func (n Normalizer) Normalize(raw RawEventRecord, envelope SourceEventEnvelope) (NormalizedNotification, error) {
+func (n Normalizer) Normalize(raw RawEventRecord, envelope SourceEventEnvelope) (result NormalizedNotification, err error) {
+	defer func() {
+		if err != nil {
+			metrics.NotificationNormalizationErrors.WithLabelValues(raw.SourceType, normalizationErrorKind(err)).Inc()
+		}
+	}()
 	if raw.ID == "" {
 		return NormalizedNotification{}, fmt.Errorf("normalize notification: raw event id is required")
 	}
@@ -84,6 +91,27 @@ func (n Normalizer) Normalize(raw RawEventRecord, envelope SourceEventEnvelope) 
 		PayloadHash:         raw.PayloadHash,
 		CreatedAt:           now,
 	}, nil
+}
+
+// normalizationErrorKind maps a normalization error to a BOUNDED error_kind
+// label value so metrics.NotificationNormalizationErrors never embeds a raw
+// (potentially free-text) error string as label cardinality.
+func normalizationErrorKind(err error) string {
+	if err == nil {
+		return "none"
+	}
+	switch msg := err.Error(); {
+	case strings.Contains(msg, "raw event id"):
+		return "missing_raw_event_id"
+	case strings.Contains(msg, "source identity"):
+		return "missing_source_identity"
+	case strings.Contains(msg, "observed_at"):
+		return "missing_observed_at"
+	case strings.Contains(msg, "source event id") || strings.Contains(msg, "source_event_id"):
+		return "source_event_id_derivation"
+	default:
+		return "other"
+	}
 }
 
 func (n NormalizedNotification) PolicyInputContainsSourceSpecificField(field string) bool {

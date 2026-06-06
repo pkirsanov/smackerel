@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 const (
@@ -51,13 +53,20 @@ func NewOutputDispatcher(channels []OutputChannel) OutputDispatcher {
 	return OutputDispatcher{channels: byID}
 }
 
-func (d OutputDispatcher) Dispatch(ctx context.Context, request DeliveryRequest) (DeliveryResult, error) {
+func (d OutputDispatcher) Dispatch(ctx context.Context, request DeliveryRequest) (result DeliveryResult, err error) {
+	defer func() {
+		status := "failure"
+		if err == nil && result.Status != "failed" {
+			status = "success"
+		}
+		metrics.NotificationDeliveryAttempts.WithLabelValues(request.Channel, status).Inc()
+	}()
 	channel, ok := d.channels[request.Channel]
 	if !ok {
 		return DeliveryResult{Status: "failed", ErrorKind: "channel_not_configured", ErrorRedacted: "output channel is not configured"}, fmt.Errorf("output channel %q is not configured", request.Channel)
 	}
 	request.Message = BuildDeliveryMessage(request)
-	result, err := channel.Deliver(ctx, request)
+	result, err = channel.Deliver(ctx, request)
 	if err != nil {
 		return result, err
 	}
