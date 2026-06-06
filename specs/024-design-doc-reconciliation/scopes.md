@@ -14,14 +14,14 @@
 ### Validation Checkpoints
 
 - After Scope 1: `grep -n "OpenClaw" docs/smackerel.md | grep -v "SUPERSEDED" | grep -v "## 4\."` returns zero hits; `grep -n "SQLite\|LanceDB" docs/smackerel.md | grep -v "SUPERSEDED"` returns zero hits; §14 DDL uses PostgreSQL types
-- After Scope 2: All ✅ in §21.3 correspond to committed code; 15 connectors represented in §22; §19 references Docker Compose + PostgreSQL; `git diff --stat` shows only `docs/smackerel.md` changed
+- After Scope 2: All ✅ in §21.3 correspond to committed code; 16 connectors represented in §22; §19 references Docker Compose + PostgreSQL; `git diff --stat` shows only `docs/smackerel.md` changed
 
 ## Scope Summary
 
 | # | Name | Surfaces | Key Tests | DoD Summary | Status |
 |---|------|----------|-----------|-------------|--------|
 | 1 | OpenClaw + Storage Reconciliation | docs/smackerel.md (§2,§4,§6,§7,§8,§14,§17,§18) | Grep validation, manual review | Zero unmarked OpenClaw/SQLite/LanceDB refs | Done |
-| 2 | Competitive Matrix + Phased Plan + Connectors | docs/smackerel.md (§19,§21.3,§22,§24) | Grep validation, connector count, git diff | Honest claims, accurate plan, 15 connectors listed | Done |
+| 2 | Competitive Matrix + Phased Plan + Connectors | docs/smackerel.md (§19,§21.3,§22,§24) | Grep validation, connector count, git diff | Honest claims, accurate plan, 16 connectors listed | Done |
 
 ---
 
@@ -211,7 +211,7 @@ Scenario: SCN-024-04 Competitive matrix distinguishes implemented vs planned
   When the reconciliation is applied
   Then only actually implemented features retain ✅
   And aspirational features use a distinct planned indicator (🔜)
-  And connector counts match the 15 committed connectors
+  And connector counts match the 16 committed connectors
 
 Scenario: SCN-024-05 Phased plan reflects actual technology and delivery state
   Given §19 references OpenClaw setup and SQLite/LanceDB
@@ -220,10 +220,10 @@ Scenario: SCN-024-05 Phased plan reflects actual technology and delivery state
   And completed phases are marked as delivered
   And current phase is identified
 
-Scenario: SCN-024-06 Connector ecosystem accurately lists all 15 connectors
+Scenario: SCN-024-06 Connector ecosystem accurately lists all 16 connectors
   Given §22 lists connectors by category
   When the reconciliation is applied
-  Then all 15 committed connectors are represented (alerts, bookmarks, browser, caldav, discord, guesthost, hospitable, imap, keep, maps, markets, rss, twitter, weather, youtube)
+  Then all 16 committed connectors are represented (alerts, bookmarks, browser, caldav, discord, guesthost, hospitable, imap, keep, maps, markets, qfdecisions, rss, twitter, weather, youtube)
   And connectors not implemented (Notion, Obsidian, Slack) are marked as planned
   And email connectors note IMAP-based implementation
 ```
@@ -247,7 +247,7 @@ Scenario: SCN-024-06 Connector ecosystem accurately lists all 15 connectors
 |------|------|---------|-------------------|
 | Manual | `docs/smackerel.md` § 21.3: each ✅ verified against committed code directories | Honest competitive claims | SCN-024-04 |
 | Manual | `docs/smackerel.md` § 19 phase tasks reference correct technology | Accurate phased plan | SCN-024-05 |
-| Count | `docs/smackerel.md` § 22: 15 committed connectors represented | Connector accuracy | SCN-024-06 |
+| Count | `docs/smackerel.md` § 22: 16 committed connectors represented | Connector accuracy | SCN-024-06 |
 | Grep | `grep -c "✅ Committed" docs/smackerel.md` for connector table entries | Connector status markers | SCN-024-06 |
 | Grep | `grep -n "Notion\|Obsidian" docs/smackerel.md` → all marked as planned | No false committed claims | SCN-024-06 |
 | Validation | `git diff --stat` shows only `docs/smackerel.md` | No code files modified (AC-8) | All |
@@ -285,8 +285,8 @@ Scenario: SCN-024-06 Connector ecosystem accurately lists all 15 connectors
   ```
   $ awk '/^## 19\./{s=1} /^## 20\./{s=0} s' docs/smackerel.md | grep -cE 'Delivered|In Progress'
   ```
-- [x] Scenario SCN-024-06 (Connector ecosystem accurately lists all 15 connectors): §22 accounts for all 15 committed connectors by name
-  Evidence: `internal/connector/` contains 15 committed packages
+- [x] Scenario SCN-024-06 (Connector ecosystem accurately lists all 16 connectors): §22 accounts for all 16 committed connectors by name
+  Evidence: `internal/connector/` contains 16 committed packages
   ```
   $ ls internal/connector/ | grep -vE '^(_|README|.*_test.go)' | head -20
   ```

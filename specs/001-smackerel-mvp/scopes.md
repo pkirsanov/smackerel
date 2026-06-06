@@ -155,7 +155,7 @@ Scenario: SCN-001-018 Navigation and UI chrome icons exist
 Scenario: SCN-001-005 Light theme renders correctly
   Given the user visits the web UI in light mode
   When the page loads
-  Then background is warm white (#FAFAF8), text is warm black (#2C2C2C)
+  Then background is warm white (#FAFAF8), text is warm near-black (#1a1a18)
   And all elements use the monochrome palette with no accent colors
 
 Scenario: SCN-001-006 Dark theme renders correctly
@@ -198,7 +198,7 @@ Scenario: SCN-001-009 No accent colors anywhere
 
 | # | Test | Type | File | Scenario |
 |---|------|------|------|----------|
-| 1 | Light theme palette: warm white bg (#FAFAF8), warm black fg (#2C2C2C) | Functional | internal/web/handler_test.go | SCN-001-005 |
+| 1 | Light theme palette: warm white bg (#FAFAF8), warm near-black fg (#1a1a18) | Functional | internal/web/handler_test.go | SCN-001-005 |
 | 2 | Dark theme palette: warm near-black bg (#1A1A18), off-white fg (#e8e8e4) | Functional | internal/web/handler_test.go | SCN-001-006 |
 | 3 | Dark mode auto-detects via prefers-color-scheme media query | Functional | internal/web/handler_test.go | SCN-001-006 |
 | 4 | Manual dark mode toggle persists selection in localStorage | Functional | internal/web/handler_test.go | SCN-001-006 |

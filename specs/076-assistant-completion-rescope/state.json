@@ -25,9 +25,8 @@
     "specs/074-capture-as-fallback-policy",
     "specs/075-legacy-retirement-telemetry"
   ],
-  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedAt": "2026-06-06T23:00:00Z",
   "certifiedBy": "bubbles.workflow",
-  "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
@@ -494,6 +493,16 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed the single post-cert planning-truth commit 64a42616 (2026-06-05, 'tier-5 drift cleanup + ratchet 317 -> 284'). scopes.md only (11 insertions / 11 deletions, all 1:1 path swaps): the Scope-3 microtools Test Plan 'File/Location' column redirected 5 planned test paths to actual shipped locations (location_normalize_test.go / calculator_test.go / entity_resolve_test.go flat files instead of microtools/{location,calculator}/ sub-packages and tests/integration/microtools/*); the Scope-4c Test Plan rows redirected to internal/annotation/parser_test.go (interactionMap ships inline per the spec's own NOTE, not a separate interaction_map.go/stale_reference_test.go); the Scope-6 Implementation Plan + Change Boundary file families redirected internal/assistant/wiring.go to cmd/core/wiring_assistant_facade.go + wiring_legacy_alias.go; each annotated '(originally planned at ...)'. Category (b) incidental reconciliation (path/reference drift cleanup): no scope reset, 0 unchecked DoD, no NEW requirement/scenario/DoD semantic change, implementation surface unchanged. The pre-existing post-release deferrals for scopes 4c/7d (DI-076-04 known-drift, recorded at the 2026-06-03 close-out) were NOT touched by this commit. No post-promotion contract change. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T18:00:00Z",
+      "runEndedAt": "2026-06-06T18:00:00Z",
+      "summary": "Round 2/20 stochastic-quality-sweep (gaps-to-doc, parent-expanded-child-mode). Gaps probe found two genuine design.md contradictions (NOT the documented DI-076-04 4c/7d deferrals): (G01) the Security/Compliance section referenced `assistant_capture_dedup.normalized_text_hash` as a live HMAC-keyed store, but the same document's Data Model + 'Superseded Design Decisions' sections withdraw that table and grep confirms it exists nowhere in first-party code — corrected to the shipped `artifact_capture_policy.normalized_text_hash` column (migration 051); (G02) Capability Area 3 claimed the work 'deletes internal/annotation/interaction_map.go', but no such file exists (interactionMap is an inline literal in internal/annotation/parser.go, confirmed by file_search + grep) and its removal is the post-release-deferred Scope 4c (DI-076-04) — corrected to state the inline literal remains in place and annotation.classify.v1 ships alongside it. design.md-only edits; zero code/scenario/scope/DoD change; implementation surface unchanged. reviewStatus CURRENT. certifiedAt advanced to 2026-06-06T18:00:00Z for Gate G088. The pre-existing STG baseline (1 G095 report.md deferral-disposition failure + 3 warnings) predates this edit, is unchanged by it, and is outside this round's gaps mandate."
     }
   ],
   "activeBugs": [],
@@ -523,7 +532,7 @@
       ]
     }
   ],
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-06T18:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

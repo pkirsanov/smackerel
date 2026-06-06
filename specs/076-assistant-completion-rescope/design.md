@@ -93,7 +93,13 @@ already at `internal/agent/tools/microtools/`.
   swap `annotation.interactionMap` for the `annotation.classify.v1`
   compiled-intent scenario; warm-cache consistency wired into the
   facade's cache layer; new SST keys `assistant.annotation.classifier.*`
-  are fail-loud; deletes `internal/annotation/interaction_map.go`.
+  are fail-loud. The legacy `interactionMap` is an inline literal in
+  `internal/annotation/parser.go` (there is no separate
+  `interaction_map.go` file); its removal is the post-release-deferred
+  Scope 4c (DI-076-04), gated on the Scope 4b dual-write shadow
+  comparator emitting zero-divergence telemetry across a full release
+  window — so this composition ships `annotation.classify.v1` alongside
+  the still-present inline literal, not in place of it.
 
 ### Capability Area 4 — Mobile Chat & Cross-Surface Parity (073 scopes 03, 04)
 
@@ -219,8 +225,12 @@ WhatsApp.
 
 - HMAC user bucket key remains in `legacy_retirement.user_bucket_hmac_key`
   (fail-loud).
-- `assistant_capture_dedup.normalized_text_hash` is HMAC-keyed so the
-  dedup store cannot be reversed to original text.
+- `artifact_capture_policy.normalized_text_hash` is HMAC-keyed so the
+  shipped fallback-dedup store (migration 051) cannot be reversed to
+  original text. (Earlier drafts named a withdrawn
+  `assistant_capture_dedup` table — see "Superseded Design Decisions"
+  above; the dedup hash lives on the shipped `artifact_capture_policy`
+  row family.)
 - `assistant_tool_traces.payload_redacted` is the redacted INFO log path
   already shipped under 064 SCOPE-14.
 

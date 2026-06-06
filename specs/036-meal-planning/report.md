@@ -56,35 +56,35 @@ None. No regressions detected.
 
 ## Scope 01: Config & Migration
 
-_Not started._
+Done. Evidence consolidated in the **Completion Statement** table, **Test Evidence**, and the per-DoD evidence blocks in [scopes.md](scopes.md) (Scope 01).
 
 ## Scope 02: Plan Store & Service
 
-_Not started._
+Done. Evidence consolidated in the **Completion Statement** table, **Test Evidence**, and the per-DoD evidence blocks in [scopes.md](scopes.md) (Scope 02).
 
 ## Scope 03: Plan API Endpoints
 
-_Not started._
+Done. Evidence consolidated in the **Completion Statement** table, **Test Evidence**, and the per-DoD evidence blocks in [scopes.md](scopes.md) (Scope 03).
 
 ## Scope 04: Telegram Plan Commands
 
-_Not started._
+Done. Evidence consolidated in the **Completion Statement** table, **Test Evidence**, and the per-DoD evidence blocks in [scopes.md](scopes.md) (Scope 04).
 
 ## Scope 05: Shopping List Bridge
 
-_Not started._
+Done. Evidence consolidated in the **Completion Statement** table, **Test Evidence**, and the per-DoD evidence blocks in [scopes.md](scopes.md) (Scope 05).
 
 ## Scope 06: Plan Copy & Templates
 
-_Not started._
+Done. Evidence consolidated in the **Completion Statement** table, **Test Evidence**, and the per-DoD evidence blocks in [scopes.md](scopes.md) (Scope 06).
 
 ## Scope 07: CalDAV Calendar Sync
 
-_Not started._
+Done. Evidence consolidated in the **Completion Statement** table, **Test Evidence**, and the per-DoD evidence blocks in [scopes.md](scopes.md) (Scope 07).
 
 ## Scope 08: Auto-Complete Lifecycle
 
-_Not started._
+Done. Evidence consolidated in the **Completion Statement** table, **Test Evidence**, and the per-DoD evidence blocks in [scopes.md](scopes.md) (Scope 08).
 
 ---
 
@@ -274,5 +274,34 @@ The traceability-guard residual failures for those rows
 (`mapped row references no existing concrete test file` for SCN-036-057
 through SCN-036-089 in Blocked scopes) are expected and tracked under
 BUG-036-001 as implementation-pending, not fidelity gaps.
+
+## Reconciliation — 2026-06-06 (BUG-036-002, reconcile-to-doc Round 12)
+
+A `reconcile-to-doc` pass validated spec 036's claimed completion against the
+on-disk implementation (`internal/mealplan/`, `internal/api/mealplan.go`,
+`internal/telegram/mealplan_commands.go`, `internal/scheduler/`, migration
+`018_meal_plans.sql`) and the framework guards. The shipped scopes 01–08
+implementation matched every Completion Statement claim. Two artifact-fidelity
+drifts were found and reconciled (artifact-only; no production code changed):
+
+1. **G068 trace-ID regression (guard-failing).** `traceability-guard.sh`
+   reported `RESULT: FAILED (13 failures, 0 warnings)` — 12 Done-scope Gherkin
+   scenarios (SCN-036-003, 005, 017, 030, 037, 041, 044, 048, 050, 053, 054,
+   055) had no faithful DoD item carrying their trace ID. Root cause: the
+   guard's documented v3.8.0 fuzzy-tokenizer tightening (min significant-word
+   length 4→3, trimmed stop-word list) flipped these previously fuzzy-passing,
+   un-prefixed scenarios to G068-unmapped; BUG-036-001 had only prefixed the
+   scenarios that were unmapped at its time. Reconciled by tagging each
+   covering DoD bullet in `scopes.md` with its `Scenario SCN-036-NNN (...)`
+   trace ID (claim text preserved). Post-fix guard: `RESULT: PASSED
+   (0 warnings)`, `DoD fidelity: 56 scenarios checked, 56 mapped, 0 unmapped`.
+
+2. **Per-scope `_Not started._` stubs (evidence drift).** The Scope 01–08
+   sections above carried vestigial `_Not started._` template stubs that
+   contradicted the certified-Done Completion Statement. Reconciled to point at
+   the consolidated evidence. Scopes 09–15 remain legitimately Parked under
+   spec 037; they were not force-closed.
+
+Tracked under [bugs/BUG-036-002-g068-fuzzy-tokenizer-regression](bugs/BUG-036-002-g068-fuzzy-tokenizer-regression/bug.md).
 
 

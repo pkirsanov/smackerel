@@ -3,9 +3,9 @@
   "featureDir": "specs/017-gov-alerts-connector",
   "featureName": "Government Alerts Connector",
   "status": "done",
-  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedAt": "2026-06-06T18:00:00Z",
   "certifiedBy": "bubbles.workflow",
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-06T18:00:00Z",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.validate",
@@ -186,6 +186,29 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert (no-source reconstruction). Reconstructed original certification moment from git: after a 2026-04-10 done->validated->done cycle and a 2026-04-11 reopen to in-progress (fe31f4ba), the final certification is commit 0d1a7b1d (2026-04-12T12:20:16Z) in_progress->done ('feat(017): implement proactive delivery + travel alerts - all 6 scopes done'); verified no later state.json status reset. Reviewed 6 post-cert planning edits to THIS spec, all category (b) incidental reconciliation: ee6b7ca0 (2026-04-14 scopes.md scope-summary table Not Started/In Progress->Done for scopes 3/4/5, catch-up to certified state); e5bfde97 (2026-04-22 scopes.md added Gherkin SCN-GA-NWS/TSUN scenario docs with CHECKED [x] DoD + evidence for already-shipped behavior); c363141c (2026-04-24 scopes.md evidence reconcile, balanced, no reset); 2fe092b5 (2026-05-09 DoD-trace-prefix + Test Plan path wiring, 46/53 trace failures); e2b69220 (2026-05-24 +2-line SCN-GA-NWS-002 DoD-trace bullet, G068 regression); 19b31c0a (2026-05-28 spec.md Status banner->Done). No post-promotion requirement/scenario/DoD semantic change; current scopes.md all-Done with 0 unchecked DoD; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "reconcile"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T18:00:00Z",
+      "runFinishedAt": "2026-06-06T18:00:00Z",
+      "summary": "Reconcile-to-doc (stochastic sweep round 4 of 20, trigger validate, parent-expanded-child-mode). Full claimed-vs-implemented reconciliation: all functional claims substantiated — connector interface, 7 source parsers (USGS/NWS/NOAA/volcano/InciWeb/AirNow/GDACS), haversineKm proximity (L543), claimAlert dedup helper (L436), CAP severity classifiers (classifyEarthquakeSeverity L693/mapNWSSeverity L913/classifyNWSEventType L929), mergedLocations 2x travel radius (L1690), maybeNotify NATS routing (L1735), alerts.notify+ALERTS contract (nats_contract.json L136/L373), connectors.go wiring (L50/L56/L355/L378), zero os.Getenv, gov-alerts config L458. go test ./internal/connector/alerts/ green (176 tests pass, 2.624s). Both child bugs BUG-017-001/002 remain done. One info-level finding RECON-017-R4-001: report.md 2026-04-23 evidence snapshots (alerts.go 1815->1800, alerts_test.go 5256->5264, +retry_test.go 116) drifted due to cross-spec edits (7e4353a3 BUG-022-003 429/Retry-After spec-022-owned; e69f0476 digest fix). Reconciled by appending dated 2026-06-06 reconciliation report; historical evidence blocks preserved (no fabrication). No code/test/config changes."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T18:00:00Z",
+      "runEndedAt": "2026-06-06T18:00:00Z",
+      "summary": "Post-reconcile spec-review for the R4 reconcile-to-doc touch. spec.md/design.md/scopes.md planning truth unchanged this round; only report.md gained a dated reconciliation report and state.json was recertified. Verified scopes.md remains all-Done with 0 unchecked DoD, all 6 scopes + 7 phases intact, implementation matches claims (176 tests green). No superseded/redundant content vs adjacent connector specs (016-weather, 019-connector-wiring, 022). certifiedAt advanced to 2026-06-06T18:00:00Z for Gate G088; requiresRevalidation NOT set (spec remains done)."
     }
   ]
 }

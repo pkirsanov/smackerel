@@ -439,6 +439,89 @@ $ ./smackerel.sh lint
 
 ---
 
+## Validate Reconciliation Sweep (2026-06-06) — Stochastic Quality Sweep R11
+
+**Trigger:** validate (reconcile-to-doc)
+**Execution model:** parent-expanded-child-mode (orchestrator runtime lacks runSubagent; reconcile-to-doc is single-spec, not requiresTopLevelRuntime)
+**Purpose:** Re-verify all 4 scope DoD claims (icon system, monochrome palette, connector framework, product testing) against actual on-disk code and running tests; reconcile any residual planning-vs-reality drift.
+
+### Validation Method
+
+1. Verified every claimed structure exists on disk via grep: icon maps (`Source/Artifact/Status/Action/Navigation`), 8 marker constants, `Connector`/`Registry`/`OAuth2Provider`/`StateStore`/`Backoff`/`Supervisor` types, `robfig/cron/v3` import.
+2. Ran targeted unit tests for every package spec 001 claims — all green.
+3. Cross-referenced the SCN-001-005/006 palette acceptance scenarios against shipped `internal/web/templates.go` CSS variables and confirmed zero `#2C2C2C` in `internal/web/**`.
+
+### Targeted Test Evidence (this session)
+
+```
+$ go test -count=1 ./internal/web/icons/... ./internal/telegram/... ./internal/connector/... ./internal/auth/... ./internal/scheduler/... ./internal/web/...
+ok      github.com/smackerel/smackerel/internal/web/icons       0.026s
+ok      github.com/smackerel/smackerel/internal/telegram        28.649s
+ok      github.com/smackerel/smackerel/internal/telegram/render 0.150s
+ok      github.com/smackerel/smackerel/internal/connector       55.334s
+ok      github.com/smackerel/smackerel/internal/connector/imap  0.084s
+ok      github.com/smackerel/smackerel/internal/connector/caldav        0.055s
+ok      github.com/smackerel/smackerel/internal/connector/rss   0.406s
+ok      github.com/smackerel/smackerel/internal/connector/youtube       0.018s
+ok      github.com/smackerel/smackerel/internal/connector/bookmarks     0.100s
+ok      github.com/smackerel/smackerel/internal/connector/browser       0.075s
+ok      github.com/smackerel/smackerel/internal/connector/maps  0.449s
+ok      github.com/smackerel/smackerel/internal/auth    33.290s
+ok      github.com/smackerel/smackerel/internal/scheduler       5.087s
+ok      github.com/smackerel/smackerel/internal/web     0.319s
+GOTEST_RC=0
+```
+
+```
+$ go test -count=1 -v -run 'TestAllIcons_Count|TestSourceIcons_Count|...|TestNavigationIcons_Count|TestAllIcons_ValidSVG|TestAllIcons_NoEmoji|TestAllIcons_NoColorFills' ./internal/web/icons/
+--- PASS: TestAllIcons_Count (0.00s)
+--- PASS: TestSourceIcons_Count (0.00s)
+--- PASS: TestArtifactIcons_Count (0.00s)
+--- PASS: TestStatusIcons_Count (0.00s)
+--- PASS: TestActionIcons_Count (0.00s)
+--- PASS: TestNavigationIcons_Count (0.00s)
+--- PASS: TestAllIcons_ValidSVG (0.01s)   [32 per-icon subtests all PASS]
+--- PASS: TestAllIcons_NoEmoji (0.00s)
+--- PASS: TestAllIcons_NoColorFills (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/web/icons       0.025s
+ICONS_RC=0
+
+$ go test -count=1 -v -run 'TestMarkerConstants' ./internal/telegram/
+--- PASS: TestMarkerConstants_Unique (0.00s)
+--- PASS: TestMarkerConstants_NoEmoji (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/telegram        0.050s
+MARKERS_RC=0
+```
+
+### Findings (1)
+
+| # | ID | Severity | Finding | Resolution |
+|---|-----|----------|---------|------------|
+| 1 | V-001-003 | Low | SCN-001-005 light-theme foreground was specified as `#2C2C2C` in `design.md` palette, `scopes.md` Gherkin, and `scopes.md` test plan, but the shipped+certified implementation uses `--fg: #1a1a18` (verified: zero `#2C2C2C` in `internal/web/**`). Same drift class as the dark-theme `#E8E6E3→#e8e8e4` fix from 2026-04-17, which corrected only the dark foreground and left the light foreground. The DoD evidence already honestly cited `#1a1a18`. | Reconciled `design.md` + `scopes.md` (Gherkin + test plan) `#2C2C2C → #1a1a18` to match shipped code. No code change (implementation already correct); documentation-only. |
+
+### Scope-by-Scope Verification
+
+| Scope | Claimed | Verified | Delta |
+|-------|---------|----------|-------|
+| 01 — Monochrome Icon System | icons 8/8/4/4/8 = 32, 8 markers | category-count tests PASS; 32 valid-SVG subtests PASS; markers unique/no-emoji PASS | Clean |
+| 02 — Design System CSS | light `#fafaf8`/`#1a1a18`, dark `#1a1a18`/`#e8e8e4`, toggle, system fonts | `templates.go` CSS vars + `prefers-color-scheme` + `toggleTheme()`/localStorage verified; `internal/web` tests PASS | Light-fg hex narrative reconciled (`#2C2C2C → #1a1a18`) |
+| 03 — Generic Connector Framework | Connector/Registry/OAuth2Provider/StateStore/Backoff/Supervisor + cron | all types grep-verified; connector+auth+scheduler packages PASS | Clean |
+| 04 — Product-Level Testing | E2E + stress scripts | `tests/e2e/*.sh` + `tests/stress/test_search_stress.sh` exist | Clean |
+
+### Files Changed
+- `specs/001-smackerel-mvp/design.md` — Light-theme foreground `#2C2C2C → #1a1a18` (matches `templates.go --fg`)
+- `specs/001-smackerel-mvp/scopes.md` — SCN-001-005 Gherkin + test-plan row `#2C2C2C → #1a1a18`
+- `specs/001-smackerel-mvp/report.md` — Added this reconciliation evidence section
+- `specs/001-smackerel-mvp/state.json` — Recertified (`certifiedAt → 2026-06-06T18:10:00Z`, `bubbles.spec-review` CURRENT entry)
+
+### Conclusion
+
+Spec 001 status **confirmed done**. All 4 scopes verified green against real on-disk code and passing tests. One residual light-theme foreground hex drift reconciled (documentation-only; implementation unchanged, no `requiresRevalidation`). No overclaims, no claimed-but-missing implementation, no scope-status drift.
+
+---
+
 ## Validate Reconciliation Sweep (2026-04-14) — Stochastic Quality Sweep R09
 
 **Trigger:** validate (reconcile-to-doc)

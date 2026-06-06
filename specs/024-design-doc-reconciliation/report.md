@@ -585,3 +585,71 @@ Push is owned by the parent stochastic-quality-sweep workflow / operator step pe
 
 PII redaction: zero `/home/<user>/...` paths in this section's evidence blocks. Commit subject prefix `bubbles(024/bug-024-004):` satisfies Check 17 structured commit gate. Parent spec 024 status stays `done` end-to-end; no scope re-opening, no schema migration, no runtime change.
 
+## BUG-024-005 Harden-Sweep Resolution (2026-06-06)
+
+Sweep round 7 of 20 (`sweep-2026-06-06-r20b`, trigger `harden`, mapped child mode `harden-to-doc`, executionModel `parent-expanded-child-mode`) ran the harden probe over spec 024. All 5 framework guards were GREEN at baseline; the probe surfaced **2 latent (guard-invisible) findings** — residual reconciliation drift from the BUG-024-002/003/004 series — and closed both via the BUG-024-005 packet:
+
+- **F1 (LOW)** — this `state.json` carried a duplicate top-level `lastUpdatedAt` (header `2026-06-06T00:00:00Z` + legacy `2026-05-25T00:00:00Z` after `failures[]`). JSON last-wins silently shadowed the intended value; no guard detects duplicate keys. **Closed:** removed the legacy key; recertified `certifiedAt`/`lastUpdatedAt` → `2026-06-06T18:00:00Z`.
+- **F2 (MEDIUM)** — `scopes.md` Scope 2 body + `SCN-024-04`/`SCN-024-06` still claimed "15 connectors" and listed 15 names omitting `qfdecisions`, contradicting `spec.md` R-006 (16), `scenario-manifest.json` (16), `docs/smackerel.md` §22.7 (16), the live registry (16), and `scopes.md`'s own BUG-024-002 addenda. **Closed:** reconciled 8 substantive sites to 16 + inserted `qfdecisions`; preserved 7 historical "15" references verbatim.
+
+### Code Diff Evidence
+
+| File | Change | SCN coverage |
+|------|--------|--------------|
+| `specs/024-design-doc-reconciliation/state.json` | Removed legacy duplicate `lastUpdatedAt`; recert `certifiedAt`/`lastUpdatedAt` → `2026-06-06T18:00:00Z`; +17 harden-sweep `executionHistory` (incl. `bubbles.spec-review` CURRENT); +`resolvedBugs[]` BUG-024-005 | BUG-024-005-SCN-001/002/005 |
+| `specs/024-design-doc-reconciliation/scopes.md` | 8 substantive Scope-2 sites 15→16; `qfdecisions` inserted in SCN-024-06 body; 7 historical "15" preserved | BUG-024-005-SCN-003/004 |
+| `specs/024-design-doc-reconciliation/report.md` | This section | BUG-024-005-SCN-005 |
+| `specs/024-design-doc-reconciliation/bugs/BUG-024-005-scopes-connector-count-and-state-dup-key/` | 8 new packet artifacts | all |
+
+### Git-Backed Proof
+
+```text
+$ python3 -c "import json; raw=open('specs/024-design-doc-reconciliation/state.json').read(); print('lastUpdatedAt count:', raw.count('\"lastUpdatedAt\"'))"
+lastUpdatedAt count: 1   # pre-fix was 2
+
+$ python3 -c "import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); print(d['certifiedAt'], d['lastUpdatedAt'], d['status'], 'requiresRevalidation' in d)"
+2026-06-06T18:00:00Z 2026-06-06T18:00:00Z done False
+
+$ grep -cE '16 (connectors|committed)' specs/024-design-doc-reconciliation/scopes.md
+8
+$ grep -c 'markets, qfdecisions, rss' specs/024-design-doc-reconciliation/scopes.md
+1
+
+$ bash ~/smackerel/.github/bubbles/scripts/artifact-lint.sh specs/024-design-doc-reconciliation 2>&1 | tail -1
+Artifact lint PASSED.
+$ bash ~/smackerel/.github/bubbles/scripts/artifact-freshness-guard.sh specs/024-design-doc-reconciliation 2>&1 | tail -1
+RESULT: PASS (0 failures, 0 warnings)
+$ bash ~/smackerel/.github/bubbles/scripts/traceability-guard.sh specs/024-design-doc-reconciliation 2>&1 | tail -1
+RESULT: PASSED (0 warnings)
+$ bash ~/smackerel/.github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | grep -E 'Check 22|Gate G068'
+--- Check 22: DoD-Gherkin Content Fidelity (Gate G068) ---
+✅ PASS: All 6 Gherkin scenarios have faithful DoD items (Gate G068)
+
+$ go test -run TestConnectorCountContract -v ./internal/deploy/... 2>&1 | grep -cE '^--- PASS'
+4
+```
+
+### Honest G088 / STG Pre-Commit Handoff State
+
+Because the round hard rule forbids committing, the uncommitted `scopes.md` worktree edit is reported by G088 as `postCertEdits=1` — the **designed pre-commit handoff**, reported honestly (not faked green). The recert (`certifiedAt=2026-06-06T18:00:00Z` + `bubbles.spec-review` CURRENT) makes the parent's commit of the working tree (before 18:00:00Z) pass G088.
+
+```text
+$ bash ~/smackerel/.github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/024-design-doc-reconciliation
+G088 post_certification_spec_edit_gate violation: certified planning truth changed after certifiedAt
+  spec: specs/024-design-doc-reconciliation
+  status: done
+  certifiedAt: 2026-06-06T18:00:00Z
+  trackedFiles: 3
+  postCertEdits: 1
+  commits/files:
+    - commit=WORKTREE date=uncommitted file=specs/024-design-doc-reconciliation/scopes.md subject=uncommitted planning truth edit
+$ bash ~/smackerel/.github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | tail -1
+🔴 TRANSITION BLOCKED: 1 failure(s), 3 warning(s)
+```
+
+The single STG failure is exclusively the G088 worktree edit; the other 34 checks pass. After the parent commits before `certifiedAt=2026-06-06T18:00:00Z`, `git log --since` is empty and the worktree is clean → G088 PASS.
+
+### Push Status
+
+NOT committed, NOT pushed — all changes left in the working tree for the parent stochastic-quality-sweep / operator. The single atomic commit (subject prefix `bubbles(024/bug-024-005):`) and pre-push validation are owned by that downstream step and run as part of the next push, not inside Round 7. PII redaction: zero `/home/<user>/...` paths in this section's evidence blocks. Parent spec 024 status stays `done` end-to-end; no runtime/schema/NATS/docs-product change.
+

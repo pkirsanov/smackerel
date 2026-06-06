@@ -1311,3 +1311,92 @@ ok      github.com/smackerel/smackerel/internal/connector/alerts        1.334s
 
 Closed `done` on 2026-05-24. Spec 017 parent status remains `done`. Underlying NWS severity + event-type classification behavior was already delivered (commit `3793f32f feat(017): implement NWS weather alerts source + complete scopes 3-4`, 2026-04-11) and continuously verified by `TestMapNWSSeverity` + `TestClassifyNWSEventType`; the only gap was documentation linkage under the tightened v3.8.0 G068 matcher.
 
+---
+
+## Reconciliation Report — 2026-06-06 (R4 — Stochastic Sweep)
+
+**Trigger:** `validate` → mapped mode `reconcile-to-doc`
+**Mode:** `reconcile-to-doc` (parent-expanded child mode; runtime lacks `runSubagent`)
+**Execution model:** `parent-expanded-child-mode`
+**Round context:** stochastic-quality-sweep, round 4 of 20, trigger `validate`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Fresh claimed-vs-implemented reconciliation of the Government Alerts connector against current on-disk reality. **Every functional claim remains substantiated** — connector interface, all 7 source parsers, proximity filtering, lifecycle dedup, CAP severity classification, proactive NATS routing, travel-radius expansion, Config-SST compliance, and registry wiring all match the spec/scopes claims. The full alerts package test suite is green (`go test ./internal/connector/alerts/` → ok, 176 test functions pass). Both child bugs (BUG-017-001, BUG-017-002) remain `done`.
+
+One info-level evidence-snapshot drift was found and is reconciled by this dated report (see Findings). The drift is **not** a spec-017 implementation gap — it is the natural consequence of two later commits owned by **other** specs editing the shared `internal/connector/alerts/alerts.go` file after spec 017's 2026-04-12 certification.
+
+### Reconciliation Matrix (verified 2026-06-06)
+
+| Claim | Source | Actual (on-disk) | Verdict |
+|-------|--------|------------------|---------|
+| Connector interface (ID/Connect/Sync/Health/Close) | scopes.md Scope 4 | `alerts.go` — all 5 methods present, registered | **Match** |
+| `claimAlert()` dedup helper (R02 simplify) | state.json simplify entry | `alerts.go` L436 `claimAlert(id, now) bool` | **Match** |
+| USGS GeoJSON parser | scopes.md Scope 2 | `fetchUSGSEarthquakes()` L464 | **Match** |
+| NWS JSON-LD/CAP parser | scopes.md Scope 3 | `fetchNWSAlerts()` L831 | **Match** |
+| NOAA Tsunami Atom/XML parser | scopes.md Scope 5 | `fetchTsunamiAlerts()` L1044 | **Match** |
+| USGS Volcano JSON parser | scopes.md Scope 5 | `fetchVolcanoAlerts()` L1167 | **Match** |
+| InciWeb Wildfire RSS parser | scopes.md Scope 5 | `fetchWildfireAlerts()` L1309 | **Match** |
+| AirNow AQI JSON parser | scopes.md Scope 5 | `fetchAirNowAQI()` L1421 | **Match** |
+| GDACS RSS parser | scopes.md Scope 5 | `fetchGDACSAlerts()` L1574 | **Match** |
+| Haversine proximity filter | scopes.md Scope 1 | `haversineKm()` L543 | **Match** |
+| CAP severity classification | scopes.md Scope 1/3 | `classifyEarthquakeSeverity()` L693, `mapNWSSeverity()` L913, `classifyNWSEventType()` L929 | **Match** |
+| Travel-radius expansion (2x) | scopes.md Scope 6 | `mergedLocations()` L1690 | **Match** |
+| Proactive notification routing | scopes.md Scope 6 | `maybeNotify()` L1735 | **Match** |
+| `alerts.notify` NATS subject + ALERTS stream | scopes.md Scope 6 | `nats_contract.json` L136 (subject) / L373 (stream) | **Match** |
+| Registry wiring + NATSAlertNotifier | report.md Audit | `cmd/core/connectors.go` L50 register, L56 list, L355 notifier, L378 Connect | **Match** |
+| Config SST: zero `os.Getenv` in alerts.go | Config SST | `grep os.Getenv` → no matches | **Match** |
+| `gov-alerts` config section | scopes.md Scope 4 | `config/smackerel.yaml` L458 | **Match** |
+| All alerts unit tests pass | report.md | `go test ./internal/connector/alerts/` → ok, 2.624s | **Match** |
+| Child bugs closed | bugs/ | BUG-017-001 `done`, BUG-017-002 `done` (full 6-artifact sets) | **Match** |
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| RECON-017-R4-001 | Doc Staleness (cross-spec) | Info | The 2026-04-23 Validation/Audit Evidence blocks captured `wc -l alerts.go` = 1815, `alerts_test.go` = 5256 (total 7071) and an `ls -la` listing of only `alerts.go` + `alerts_test.go`. Current on-disk reality is `alerts.go` = 1800, `alerts_test.go` = 5264, plus a new `retry_test.go` = 116 (total 7180). The deltas are caused by two later commits owned by **other** specs: `6bc604ad` (R02 simplify 1815→1788, spec 017's own sweep) then `7e4353a3` (BUG-022-003 uniform 429/Retry-After across HTTP connectors — **spec 022-owned**, added `retry_test.go` and adjusted `alerts.go`) and `e69f0476` (digest pipeline + NWS restore fix). The 2026-04-23 blocks were accurate point-in-time records and are intentionally left unaltered (rewriting captured terminal output would be fabrication). `retry_test.go` is a spec-022 artifact, not a spec-017 inventory gap. | Reconciled here |
+
+### Cross-Spec Drift Provenance
+
+```
+$ git --no-pager log --oneline -5 -- internal/connector/alerts/
+7e4353a3 bubbles(022/bug-022-003): uniform 429/Retry-After handling across HTTP connectors
+e69f0476 fix(digest+gov-alerts): unblock daily digest pipeline + restore NWS
+6bc604ad spec(017): simplify — extract claimAlert dedup helper (sweep R02)
+e5bfde97 sweep: rounds 146-150 — gov-alerts hardening, weather improvements, phase5 artifact drift
+fb8a3d3e sweep: stochastic quality sweep rounds 51-67 — batch 3
+
+$ head -7 internal/connector/alerts/retry_test.go
+// BUG-022-003 — per-source 429/Retry-After regression tests for the gov-alerts
+// connector. Each test stands up an httptest server that returns 429 on hit 1 ...
+```
+
+### Validation Evidence (2026-06-06, real capture)
+
+```
+$ wc -l internal/connector/alerts/alerts.go internal/connector/alerts/alerts_test.go internal/connector/alerts/retry_test.go
+  1800 internal/connector/alerts/alerts.go
+  5264 internal/connector/alerts/alerts_test.go
+   116 internal/connector/alerts/retry_test.go
+  7180 total
+
+$ grep -c '^func Test' internal/connector/alerts/alerts_test.go
+175
+$ grep -c '^func Test' internal/connector/alerts/retry_test.go
+1
+
+$ go test ./internal/connector/alerts/ -count=1
+ok      github.com/smackerel/smackerel/internal/connector/alerts        2.624s
+$ go test ./internal/connector/alerts/ -count=1 -v | grep -c '^--- PASS'
+176
+
+$ grep -n 'os.Getenv' internal/connector/alerts/alerts.go
+(no matches — Config SST clean)
+```
+
+### Disposition
+
+No code, test, or config changes required — all functional claims are substantiated and the implementation is green. The single info-level evidence-snapshot drift (RECON-017-R4-001) is reconciled by this dated report, which records current verified truth and attributes the LOC/file-inventory deltas to cross-spec edits (spec 022 BUG-022-003 + digest fix). Historical evidence blocks are preserved as point-in-time records. Spec 017 parent status remains `done`; certification refreshed (`certifiedAt` → 2026-06-06T18:00:00Z) to reflect this reconciliation touch.
+

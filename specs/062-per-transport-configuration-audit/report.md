@@ -710,3 +710,119 @@ parity mechanically — drift in either direction fails the unit suite.
 run: `ok github.com/smackerel/smackerel/internal/assistant/transportconfig
 0.054s`. E2E: `--- PASS: TestHTTPAdapter_MissingRequiredKey_FailsLoud
 (21.04s)`.
+
+---
+
+## Stabilize Sweep Re-Probe — 2026-06-06 (Stochastic Quality Sweep Round 6/20)
+
+**Trigger:** `stabilize` → mapped child mode `stabilize-to-doc`
+**Execution model:** `parent-expanded-child-mode` (runtime lacks `runSubagent`; `stabilize-to-doc` is single-spec and not `requiresTopLevelRuntime`)
+**Verdict:** CLEAN — no new stabilize findings. The surface is a synchronous
+boot-time configuration registry (read-only package-level data) plus one
+subprocess fail-loud e2e test. Independent re-probe under the race detector,
+flake-repeat, and code review confirms it is genuinely stable. No work was
+invented; this addendum records the re-probe evidence only (no planning
+truth was edited, so no recertification is required).
+
+### Stabilize Re-Probe Evidence
+
+**Phase:** stabilize
+**Agent:** bubbles.workflow (parent-expanded stabilize-to-doc)
+**Claim Source:** executed
+**Executed:** YES
+
+Probe dimensions: race conditions, flake-prone timing, goroutine leaks,
+resource leaks, performance regressions, config/doc drift, reliability
+ordering, observability.
+
+**(1) Race detector — registry package (1×):**
+
+```
+$ go version && echo "=== race + 1x ===" && go test -race -count=1 ./internal/assistant/transportconfig/...
+go version go1.25.10 linux/amd64
+=== race + 1x ===
+ok      github.com/smackerel/smackerel/internal/assistant/transportconfig      1.230s
+```
+
+**(2) Flake-repeat under race — registry package (50×):**
+
+```
+$ go test -race -count=50 ./internal/assistant/transportconfig/...
+ok      github.com/smackerel/smackerel/internal/assistant/transportconfig      8.425s
+=== exit: 0 ===
+```
+
+**(3) Per-test breakdown under race (SCN-062-A01..A04, A06):**
+
+```
+$ go test -race -v -count=1 ./internal/assistant/transportconfig/...
+--- PASS: TestRegistry_DocSync (0.00s)                 # SCN-062-A06 doc↔registry parity
+--- PASS: TestRegistry_RequiredEntriesHaveFailLoud (0.03s)  # SCN-062-A03 owning pkgs consume registry
+--- PASS: TestRegistry_NoForbiddenFallbacks (0.06s)    # SCN-062-A04 no `:-` fallbacks
+--- PASS: TestRegistry_CoversYAMLNamespaces (0.11s)    # SCN-062-A01 YAML keys covered
+--- PASS: TestRegistry_NoOrphanedEntries (0.09s)       # SCN-062-A02 no orphan entries
+ok      github.com/smackerel/smackerel/internal/assistant/transportconfig      1.336s
+```
+
+**(4) Race detector — four owning adapter packages + render sibling:**
+
+```
+$ go test -race -count=1 ./internal/assistant/httpadapter/... \
+    ./internal/whatsapp/assistant_adapter/... \
+    ./internal/telegram/assistant_adapter/... ./internal/telegram/...
+ok      github.com/smackerel/smackerel/internal/assistant/httpadapter          1.674s
+ok      github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter     1.982s
+ok      github.com/smackerel/smackerel/internal/telegram/assistant_adapter     1.117s
+ok      github.com/smackerel/smackerel/internal/telegram                       29.674s
+ok      github.com/smackerel/smackerel/internal/telegram/render                1.165s
+=== owning_pkg_race_exit=0 ===
+```
+
+**(5) Flake-repeat — fail-loud subprocess e2e (SCN-062-A05, 5×):**
+
+```
+$ go test -tags e2e -count=5 -v -run TestHTTPAdapter_MissingRequiredKey_FailsLoud ./tests/e2e/
+--- PASS: TestHTTPAdapter_MissingRequiredKey_FailsLoud (33.49s)   # incl. in-test `go build`
+--- PASS: TestHTTPAdapter_MissingRequiredKey_FailsLoud (2.50s)
+--- PASS: TestHTTPAdapter_MissingRequiredKey_FailsLoud (2.62s)
+--- PASS: TestHTTPAdapter_MissingRequiredKey_FailsLoud (4.47s)
+--- PASS: TestHTTPAdapter_MissingRequiredKey_FailsLoud (5.12s)
+ok      github.com/smackerel/smackerel/tests/e2e        48.348s
+=== e2e_failloud_exit=0 ===
+```
+
+Per-iteration wall time (2.5–5.1s, build-cached) is dominated by the fresh
+in-test `go build`; the launched subprocess fails loud and exits in well
+under one second versus the 15s harness timeout (3×–6× margin). No flakiness
+across 5 consecutive iterations.
+
+### Stabilize Code-Review Findings (no defects)
+
+- **Reliability / ordering:** the four `ValidateTransportConfig()` calls run
+  at the top of `run()` in `cmd/core/main.go` (lines 83–93) — before
+  `config.Load()` and before any listener, connector, or service is built.
+  A missing required key aborts startup before any transport accepts traffic,
+  satisfying the spec NFR "fail-loud checks MUST execute before any transport
+  begins accepting traffic."
+- **Goroutine leak:** the e2e harness goroutine `go func(){ done <- cmd.Wait() }()`
+  sends on a buffered channel (cap 1); on the timeout path the test calls
+  `cmd.Process.Kill()`, which unblocks `cmd.Wait()` so the goroutine completes
+  and the process is reaped even though `t.Fatalf` already fired. No leak, no
+  zombie.
+- **Resource leak:** `loadEnvFile` closes its handle via `defer f.Close()`;
+  the subprocess binary is built into `t.TempDir()` (Go auto-cleans). No
+  descriptor or temp-file leak.
+- **Performance:** the registry is package-level constant data built once at
+  `init()`; the boot check is `os.LookupEnv` over ~36 entries executed once
+  per process boot. Zero request-path cost; no regression surface.
+- **Config/doc drift:** mechanically guarded and currently green — SCN-062-A01
+  (`TestRegistry_CoversYAMLNamespaces`) + A02 (`TestRegistry_NoOrphanedEntries`)
+  enforce registry↔YAML parity, SCN-062-A06 (`TestRegistry_DocSync`) enforces
+  registry↔docs parity, all run by default under `go test ./...`.
+- **Observability:** a boot-gate failure propagates to
+  `slog.Error("fatal startup error", ...)` + `os.Exit(1)` carrying the registry
+  `FailLoudMsg`. Appropriate for a synchronous boot gate (the process never
+  starts on failure, so no runtime metric is warranted). No observability gap.
+
+**Findings:** 0 total / 0 resolved / 0 unresolved. No planning truth touched;
+`state.json` unchanged (no recertification required per the evidence-only rule).
