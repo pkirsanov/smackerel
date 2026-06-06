@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "specId": "049-monitoring-stack/bugs/BUG-049-002-post-cert-certifiedat-gap",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-049-B003",
+      "title": "Certified spec carries top-level certifiedAt",
+      "scope": "BUG-049-002-S1",
+      "requiredTestType": "contract-guard",
+      "linkedTests": [
+        ".github/bubbles/scripts/post-cert-spec-edit-guard.sh",
+        ".github/bubbles/scripts/state-transition-guard.sh",
+        ".github/bubbles/scripts/artifact-lint.sh",
+        ".github/bubbles/scripts/traceability-guard.sh",
+        "internal/deploy/monitoring_scrape_contract_test.go"
+      ],
+      "evidenceRefs": [
+        "report.md#t-bug-049-002-001",
+        "report.md#t-bug-049-002-002",
+        "report.md#t-bug-049-002-003",
+        "report.md#t-bug-049-002-004",
+        "report.md#t-bug-049-002-005",
+        "report.md#t-bug-049-002-006",
+        "report.md#t-bug-049-002-007"
+      ],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-049-B004",
+      "title": "Adversarial — G088 still rejects a future post-cert edit without recertification",
+      "scope": "BUG-049-002-S1",
+      "requiredTestType": "source-citation",
+      "linkedTests": [
+        ".github/bubbles/scripts/post-cert-spec-edit-guard.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#t-bug-049-002-008"
+      ],
+      "regressionProtected": true
+    }
+  ]
+}

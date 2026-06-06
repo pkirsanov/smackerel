@@ -1,0 +1,100 @@
+{
+  "version": 3,
+  "specId": "049-monitoring-stack",
+  "bugId": "BUG-049-002",
+  "featureDir": "specs/049-monitoring-stack/bugs/BUG-049-002-post-cert-certifiedat-gap",
+  "featureName": "BUG-049-002 Post-certification certifiedAt gap blocks Gate G088",
+  "parentSpec": "specs/049-monitoring-stack/",
+  "title": "Spec 049 state.json missing top-level certifiedAt blocks Gate G088",
+  "status": "in_progress",
+  "workflowMode": "devops-to-doc",
+  "severity": "medium",
+  "class": "governance",
+  "discoveredBy": "sweep round 10 (stochastic-quality-sweep, harden trigger, harden-to-doc mapped mode, parent-expanded-child-mode)",
+  "discoveredAtHead": "a697e0db800bfefa8d027d846b7a82f63a9d530b",
+  "createdAt": "2026-06-05T23:09:53Z",
+  "parentWorkflow": {
+    "mode": "stochastic-quality-sweep",
+    "round": 10,
+    "totalRounds": 20,
+    "executionModel": "parent-expanded-child-mode",
+    "mappedMode": "harden-to-doc",
+    "trigger": "harden",
+    "findingLens": "Gate G088 post_certification_spec_edit_gate",
+    "findingSurface": "specs/049-monitoring-stack/state.json (missing top-level certifiedAt)",
+    "findingHead": "a697e0db800bfefa8d027d846b7a82f63a9d530b"
+  },
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "docs",
+    "currentScope": "BUG-049-002-S1",
+    "runStartedAt": "2026-06-05T23:09:53Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "design",
+      "plan"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "scopeProgress": [
+      {
+        "scope": "BUG-049-002-S1",
+        "name": "State.json recertification + guard re-pass",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-contract",
+      "source": "devops-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "contract-test-required",
+      "source": "devops-to-doc-mode-default"
+    }
+  },
+  "transitionRequests": [],
+  "scopes": [
+    {
+      "id": "BUG-049-002-S1",
+      "title": "State.json recertification + guard re-pass",
+      "status": "Done",
+      "dod": {
+        "total": 11,
+        "checked": 11
+      }
+    }
+  ],
+  "scenarios": [
+    "SCN-049-B003",
+    "SCN-049-B004"
+  ],
+  "reworkQueue": []
+}

@@ -385,12 +385,33 @@
       ],
       "scopesCompleted": [],
       "summary": "Spec review: spec.md, design.md, scopes.md aligned with implementation. All 36 scenarios mapped in scenario-manifest.json. Outcome contract satisfied."
+    },
+    {
+      "id": "16",
+      "agent": "bubbles.workflow",
+      "workflowMode": "regression-to-doc",
+      "startedAt": "2026-06-05T00:00:00Z",
+      "completedAt": "2026-06-05T00:00:00Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "phasesExecuted": [
+        "select",
+        "bootstrap",
+        "regression",
+        "test",
+        "validate",
+        "audit",
+        "docs",
+        "finalize"
+      ],
+      "scopesCompleted": [],
+      "summary": "Stochastic-quality-sweep R4/20 regression sweep (parent-expanded child mode). Trigger=regression. 0 test regressions across 26 spec-003 owned Go packages; cross-spec regression baseline guard PASSED. Found 3 planning-truth drift findings (REG-003-R04-01/02/03): Connector interface declared 6 methods including phantom GetState; ConnectorConfig declared fields SourceID/Schedule/ProcessingRules that do not exist; SyncState field names diverged from state.go; QualifierConfig listed phantom MinDwellTime that belongs to spec 010. All three closed by docs-side repair in spec.md R-201, design.md (architecture table + Connector interface + SyncState/ConnectorConfig/QualifierConfig data blocks), and scopes.md New Types & Signatures list. Reconciliation notes added. No code change; implementation was certified-correct. Spec 003 status remains done with strengthened doc-truth coherence."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-07T14:30:00Z",
+  "lastUpdatedAt": "2026-06-05T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

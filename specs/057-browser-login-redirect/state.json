@@ -2,7 +2,7 @@
   "specId": "057-browser-login-redirect",
   "status": "done",
   "completedAt": "2026-05-28T15:20:00Z",
-  "certifiedAt": "2026-05-28T15:20:00Z",
+  "certifiedAt": "2026-06-06T00:41:07Z",
   "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
@@ -26,7 +26,7 @@
   },
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-05-28T15:20:00Z",
+    "certifiedAt": "2026-06-06T00:41:07Z",
     "certifiedBy": "bubbles.workflow",
     "certifiedCompletedPhases": ["spec-review", "implement", "test", "regression", "simplify", "stabilize", "security", "docs", "validate", "audit", "chaos"],
     "completedScopes": [
@@ -261,7 +261,21 @@
     ],
     "notes": "All scope-required unit tests PASS (in-process). All e2e-api tests PASS against the live test stack (CORE_EXTERNAL_URL injected to in-network Go runner). Spec 044 regression sweep PASS byte-for-byte. validate phase: artifact-lint/traceability/reality-scan/G053/G040/G084/G095 all PASS. plan phase 2026-05-28T08:15Z: F-057-V-003 DISCHARGED, F-057-V-001 DISCHARGED. plan phase 2026-05-28T08:20Z: F-057-A-001 DISCHARGED (Notes block wrapped in g040-skip markers, Check 18 PASS), F-057-A-002 DISCHARGED (certification.completedScopes split across multiple lines, Check 5 & G027 PASS), G022 skip-justifications for regression/simplify/stabilize/docs/chaos documented in plan executionHistory entry. audit + security phases 2026-05-28T07:57Z: real security review PASS, spec compliance PASS, code quality PASS, independent test verification VERIFIED. validate phase 2026-05-28T09:18Z (certification pre-flight): re-ran artifact-lint + state-transition-guard -> 🟡 TRANSITION PERMITTED with 4 non-blocking warnings; added retroactive spec-review phase claim with equivalence rationale; recorded F-057-T-003 as low-severity observation routed to bubbles.bug. Certification NOT issued: Check 17 strict-mode commit requires a structured spec(057) git commit touching the feature dir before status may flip to done -- outside validate scope. New done_with_concerns writes forbidden by Gate G092. Routed to user / next workflow step (commit the spec) so that re-run flips Check 17 to PASS and certification can be issued."
   },
+  "executionHistory": [
+    {
+      "agent": "bubbles.spec-review",
+      "phase": "spec-review-recertification",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "timestamp": "2026-06-06T00:41:07Z",
+      "completedAt": "2026-06-06T00:41:07Z",
+      "runStartedAt": "2026-06-06T00:41:00Z",
+      "runCompletedAt": "2026-06-06T00:41:07Z",
+      "outcome": "post_cert_documentation_fidelity_drift_cleanup_ratified",
+      "summary": "Stochastic-sweep Round 13 (gaps trigger, mapped child mode gaps-to-doc). Inspected post-cert edit b1c46991 (2026-06-05T16:30:57Z) which was a tier-4 drift cleanup batch touching scopes.md. The edit updated planned file-path references to actual shipped paths: internal/api/auth_middleware.go -> internal/api/auth_browser_redirect.go, auth_middleware_test.go -> auth_browser_redirect_test.go, web_logout_form_test.go consolidated into web_login_form_test.go, web_login_form_integration_test.go consolidated into web_login_form_test.go, web_login_page_integration_test.go consolidated into web_login_page_test.go. These are documentation-fidelity reconciliations that align prose with shipped reality; they do not change FR-001..FR-008, SCN-001..SCN-012, DoD items, or test contracts. Implementation files at internal/api/auth_browser_redirect.go, internal/api/sanitize_next.go, internal/api/web_login_page.go, internal/api/web_login.go, and the test files internal/api/auth_browser_redirect_test.go, internal/api/sanitize_next_test.go, internal/api/web_login_page_test.go, internal/api/web_login_form_test.go all match the spec/design surface. Verdict: CURRENT. Top-level certifiedAt advanced to 2026-06-06T00:41:07Z, closing G088 violation."
+    }
+  ],
   "createdAt": "2026-05-28T00:00:00Z",
-  "updatedAt": "2026-05-28T15:20:00Z",
-  "lastUpdatedAt": "2026-05-28T15:20:00Z"
+  "updatedAt": "2026-06-06T00:41:07Z",
+  "lastUpdatedAt": "2026-06-06T00:41:07Z"
 }

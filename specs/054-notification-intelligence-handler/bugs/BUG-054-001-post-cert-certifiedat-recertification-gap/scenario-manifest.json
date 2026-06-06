@@ -1,0 +1,45 @@
+{
+  "version": 3,
+  "specId": "054-notification-intelligence-handler",
+  "bugId": "BUG-054-001",
+  "scenarios": [
+    {
+      "id": "SCN-054-B001",
+      "title": "Spec 054 G088 PASSES after recertification",
+      "scope": "BUG-054-001-S1",
+      "given": "specs/054-notification-intelligence-handler/state.json with status \"done\", a top-level certifiedAt on or after the latest post-cert edit on scopes.md (2026-06-05T16:15:45Z), and a bubbles.spec-review executionHistory entry with reviewStatus \"CURRENT\" whose runCompletedAt is on or before that certifiedAt",
+      "when": "bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/054-notification-intelligence-handler is invoked",
+      "then": "the guard exits 0; it reports \"PASS Gate G088 (post_certification_spec_edit_gate)\"; the message annotates certifiedAt and currentSpecReview with the new recertification timestamp",
+      "linkedTests": [
+        "T-BUG-054-001-001",
+        "T-BUG-054-001-002",
+        "T-BUG-054-001-003",
+        "T-BUG-054-001-004",
+        "T-BUG-054-001-005"
+      ],
+      "evidenceRefs": [
+        "report.md#t-bug-054-001-001",
+        "report.md#t-bug-054-001-002",
+        "report.md#t-bug-054-001-003",
+        "report.md#t-bug-054-001-004",
+        "report.md#t-bug-054-001-005",
+        "report.md#state-json-diff",
+        "report.md#spec-review-recertification"
+      ]
+    },
+    {
+      "id": "SCN-054-B002",
+      "title": "Adversarial — a future post-cert planning-truth edit still trips G088",
+      "scope": "BUG-054-001-S1",
+      "given": "specs/054-notification-intelligence-handler/state.json with status \"done\" and the new certifiedAt set at the moment of this recertification",
+      "when": "a hypothetical post-cert edit lands on spec.md, design.md, or scopes.md after that certifiedAt, and neither requiresRevalidation:true nor a fresh bubbles.spec-review CURRENT entry is recorded",
+      "then": "post-cert-spec-edit-guard.sh exits non-zero; it names the offending commit, file, and subject in its diagnostic output",
+      "linkedTests": [
+        "T-BUG-054-001-006"
+      ],
+      "evidenceRefs": [
+        "report.md#t-bug-054-001-006"
+      ]
+    }
+  ]
+}

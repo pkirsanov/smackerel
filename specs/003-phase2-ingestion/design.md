@@ -49,7 +49,7 @@ Phase 2 builds on the Phase 1 foundation to add passive ingestion from the four 
 | YouTube | REST API (no generic protocol) | YouTube has no standard protocol; API-specific connector required |
 | Bookmarks | Chrome JSON file import + Netscape HTML format | Standard export formats cover Chrome, Firefox, Edge, Safari |
 | Auth | Shared OAuth2 module with provider adapters | Google OAuth covers Gmail IMAP + Calendar + YouTube in one consent screen |
-| Connector framework | Interface-based plugin system in Go | Each connector implements `Connector` interface: `Connect()`, `Sync()`, `GetState()` |
+| Connector framework | Interface-based plugin system in Go | Each connector implements `Connector` interface: `ID()`, `Connect()`, `Sync()`, `Health()`, `Close()`; sync state is owned by external `StateStore` |
 | Scheduling | Go cron library (robfig/cron) in smackerel-core | Embedded, no external scheduler dependency |
 
 ---
@@ -88,52 +88,63 @@ internal/connector/bookmarks/
 ### Connector Interface
 
 ```go
+// Source of truth: internal/connector/connector.go
+// Sync state is intentionally NOT exposed via a method on Connector. It is
+// owned by connector.StateStore (state.go) and read/written against the
+// sync_state table. This separates per-instance sync behavior from
+// cross-connector persistence concerns.
 type Connector interface {
     // ID returns the unique source identifier (R-201: source_id)
     ID() string
-    
+
     // Connect establishes connection with credentials (R-201: connect())
     Connect(ctx context.Context, config ConnectorConfig) error
-    
+
     // Sync performs incremental sync from cursor (R-201: sync())
-    // Returns: artifacts, new cursor, error
+    // Returns: artifacts, new cursor, error. The returned cursor replaces
+    // any previous update_cursor() concept — callers persist it via StateStore.
     Sync(ctx context.Context, cursor string) ([]RawArtifact, string, error)
-    
-    // GetState returns current sync state (R-201: get_sync_state())
-    GetState(ctx context.Context) SyncState
-    
+
     // Health reports connector health for status page and digest alerts
     Health(ctx context.Context) HealthStatus
-    
+
     // Close releases resources
     Close() error
 }
 
-// SyncState persists to the sync_cursors table (aligns with 001 SyncCursor model)
+// SyncState persists to the sync_state table (managed by connector.StateStore).
+// Field names match internal/connector/state.go exactly.
 type SyncState struct {
-    ConnectorID  string    // matches Connector.ID()
-    CursorValue  string    // opaque: IMAP UID, CalDAV sync-token, YouTube page token
-    LastSyncAt   time.Time
-    ItemsSynced  int64     // cumulative
-    ErrorCount   int       // consecutive errors (reset on success)
-    LastError    string    // most recent error message, empty if none
+    SourceID    string // matches Connector.ID()
+    Enabled     bool
+    LastSync    string // RFC3339 timestamp, optional
+    SyncCursor  string // opaque: IMAP UID, CalDAV sync-token, YouTube page token
+    ItemsSynced int    // cumulative
+    ErrorsCount int    // consecutive errors (reset on success)
+    LastError   string // most recent error message, empty if none
 }
 
+// ConnectorConfig is passed to Connect(). Source of truth: internal/connector/connector.go.
+// Note: there is no SourceID field here — connector identity comes from Connector.ID().
 type ConnectorConfig struct {
-    SourceID        string
-    AuthType        string            // "oauth2", "imap_basic", "api_key", "file"
-    Credentials     map[string]string // provider-specific credentials
-    Schedule        string            // cron expression
-    Qualifiers      QualifierConfig   // source-specific qualifier rules
-    ProcessingRules ProcessingRules   // tier assignment rules
+    AuthType       string            // "oauth2", "api_key", "token", "none"
+    Credentials    map[string]string // provider-specific credentials
+    SyncSchedule   string            // cron expression
+    Enabled        bool
+    ProcessingTier string            // "full" | "standard" | "light" | "metadata"
+    Qualifiers     map[string]any    // source-specific qualifier rules (parsed by each connector)
+    SourceConfig   map[string]any    // connector-specific extra settings
 }
 
+// QualifierConfig is a per-connector concrete type. Email/IMAP fields live in
+// internal/connector/imap/imap.go::QualifierConfig. Browser-history qualifiers
+// (e.g. MinDwellTime) belong to spec 010 (browser history connector) and are
+// NOT part of the IMAP QualifierConfig.
 type QualifierConfig struct {
-    PrioritySenders []string          // email
-    SkipLabels      []string          // email
-    PriorityLabels  []string          // email
-    MinDwellTime    int               // browser (seconds)
-    SkipDomains     []string          // browser
+    PrioritySenders []string // email
+    SkipLabels      []string // email
+    PriorityLabels  []string // email
+    SkipDomains     []string // email
 }
 ```
 

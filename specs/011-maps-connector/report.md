@@ -375,3 +375,102 @@ RESULT: PASSED (0 warnings)
 - **Findings closed this round:** 6/6 (GAPS-T01..06).
 - **Bugs spawned:** 0 (planning-artifact fidelity fix only).
 - **Spec 011 certification status:** unchanged (`done`).
+
+## Stochastic Quality Sweep — DevOps Probe (2026-06-06, round 18)
+
+**Workflow:** `mode: devops-to-doc` (parent-expanded child workflow mode — subagent runtime lacks nested `runSubagent`).
+**Owner:** `bubbles.workflow` (orchestrator) executing parent-expanded `devops-to-doc` phase contract; docs phase delivers DEVOPS-D02 closure logged but unexecuted in round 7.
+**Execution model:** `parent-expanded-child-mode`.
+
+### DevOps Probe Coverage (Re-Verification + New Surface Sweep)
+
+| Surface | Result |
+|---|---|
+| Connector registration / supervisor wiring | UNCHANGED — `cmd/core/connectors.go:39+154-155`, `internal/connector/supervisor.go` integration intact |
+| Container env contract (`MAPS_IMPORT_DIR`) | OK — `docker-compose.yml:107` env declaration + `docker-compose.yml:128` fail-loud `${MAPS_IMPORT_DIR:?Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up}:/data/maps-import:ro` mount preserved |
+| Deploy compose (`deploy/compose.deploy.yml`) | No regression — Maps requires no infra-side service/port changes; tailnet-edge bind invariants intact |
+| CI/CD workflows (`.github/workflows/`) | No Maps-specific paths needed (generic build/test/lint covers `internal/connector/maps/...` transitively); `build.yml` Build-Once Deploy-Many signs the smackerel-core image which contains the maps connector code |
+| Image hygiene / Cosign-signed images | OK — `build.yml` cosign keyless + Rekor + SBOM + SLSA provenance still apply generically |
+| Observability — Prometheus metrics | OK — `smackerel_connector_sync_total{connector="google-maps-timeline",status="success\|error"}` inherited from supervisor; generic `connector_sync_failure_rate_high_24h` alert in `config/prometheus/alerts.yml:83` covers it |
+| Observability — structured logs | OK — `slog.Info`/`Warn`/`Error` with bounded keys; zero PII / coordinate dumps in connector.go |
+| Manifest divergence (`deploy/contract.yaml`, target manifests) | OK — Maps adds no new ports, volumes outside `MAPS_IMPORT_DIR`, secrets, or capabilities |
+| Secret-rotation surface | N/A (still) — zero secrets; file-import only |
+| SST / no-defaults compliance | OK — `parseMapsConfig` (connector.go:621+) explicitly fail-loud; zero `os.Getenv` / `\|\|` / `??` defaults |
+| Privacy consent enforcement (R-401) | OK — `checkPrivacyConsent(ctx, pool, "maps")` at `connector.go:179` aborts sync if `privacy_consent.consented = FALSE` |
+| Backup ledger references (`docs/Operations.md` line ≈1306) | OK — `data/maps-import/` still listed in the Backup table |
+| Rollback procedure | OK — `connectors.google-maps-timeline.enabled: false` + `./smackerel.sh deploy-target <target> rollback` (pointer-swap); schema is additive only |
+| Operator-facing runbook (`docs/Operations.md`) | **NEW THIS ROUND** — `### Google Maps Timeline Connector Operations (Spec 011)` subsection authored (closes DEVOPS-D02) |
+
+### Findings & Closure
+
+| Finding ID | Severity | Origin | Disposition |
+|---|---|---|---|
+| DEVOPS-D02 | low (concern) — carryover from round 7 | Round 7 logged "`docs/Operations.md` lacks Maps-specific operator runbook" and emitted a route-to-`bubbles.docs` packet, but no subsequent run authored the section. Re-verified at round 18: line 1306 of `docs/Operations.md` only references `data/maps-import/` in the Backup table, and there was no per-connector runbook subsection under `## Connector Management` (which sits at line 556). | **CLOSED IN-ROUND.** Authored `### Google Maps Timeline Connector Operations (Spec 011)` subsection at `docs/Operations.md` line 605, placed between QF Decisions (line 590) and Notification Intelligence (now line 749). Contents: operations table, privacy-consent opt-in SQL block (with correct table name `privacy_consent` and source ID `maps` from `connector.go:179`), 8-step end-to-end Takeout-to-Smackerel walkthrough, cursor-and-re-ingestion sub-section, and a 5-row failure-mode-to-operator-response table. Uses `<token>` placeholders and `127.0.0.1` only (no PII / no real secrets). Correct archive subdirectory name (`<import_dir>/archive/`, matching `connector.go:548` `archiveFile`). |
+
+### Findings Surfaced (Out-Of-Scope For DevOps Trigger — Recorded For Sweep Parent Awareness)
+
+The Round 18 baseline `state-transition-guard.sh specs/011-maps-connector` run produces several 🔴 BLOCK findings that were not flagged when this spec was originally certified `done` in April 2026 (guard rules have tightened since: Gates G022, G053, G055, G056, regression-E2E planning, change-boundary, consumer-impact-sweep, G040 deferral language). These are **pre-existing technical debt** and require a dedicated `harden-gaps-to-doc` or `improve-existing` workflow targeting spec 011 — they are NOT in scope for a devops-trigger sweep round and not introduced by Round 18 changes. Status remains `done` since no transition is attempted; the guard only fires on a status transition request.
+
+| Pre-Existing Baseline Observation | Owner / Disposition |
+|---|---|
+| `policySnapshot` missing `grill`, `tdd`, `autoCommit`, `lockdown`, `regression`, `validation` keys (Gate G055) | `bubbles.workflow` retrospective rebuild during a future `improve-existing` round |
+| `certification.scopeProgress` and `certification.lockdownState` missing (Gate G056) | Same as above |
+| `completedPhaseClaims` lacks specialist provenance for 13 phases (Gate G022 — phase impersonation) | Historical artifact; iter-10 trace-cleanup updated phases without backfilling provenance metadata |
+| `executionHistory` zero-duration entries for 14 historical phases | Historical artifact; original delivery used same-day stub timestamps |
+| Per-scope DoD missing scenario-specific + broader E2E regression coverage items (4 violations) | `bubbles.harden` + `bubbles.regression` retroactive planning round |
+| Scope 02 "renames/removes interfaces" Consumer Impact Sweep missing (3 violations) | Same as above (guard heuristic on scope description text) |
+| Refactor change-boundary DoD item missing (1 violation) | Same |
+| `### Code Diff Evidence` block missing from report.md (Gate G053) | Same |
+| 22 FAKE_INTEGRATION heuristic hits in `internal/connector/maps/connector.go` (Gate G028) | False-positive cluster — the connector legitimately reads file paths and database rows; needs heuristic refinement OR per-line `bubbles:g028-skip` annotations |
+| 5 deferral-language hits in `scopes.md` (Gate G040) | Historical retrospective text describing originally-deferred-then-implemented work; canonical remediation is `bubbles:g040-skip-begin/end` sentinels in a dedicated hygiene round |
+
+### DevOps Probe Evidence
+
+```text
+$ ls -la ~/smackerel/data/maps-import/
+total 4
+-rw-r--r-- 1 philipk philipk 0 .gitkeep
+(maps-import dir present, mountable at /data/maps-import via MAPS_IMPORT_DIR)
+
+$ grep -n "MAPS_IMPORT_DIR" docker-compose.yml
+107:      MAPS_IMPORT_DIR: /data/maps-import
+128:      - ${MAPS_IMPORT_DIR:?Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up}:/data/maps-import:ro
+
+$ grep -n "google-maps-timeline" config/smackerel.yaml | head -3
+334:  google-maps-timeline:
+337:    import_dir: "" # path to directory containing Google Takeout Semantic Location History JSON files
+
+$ grep -n "location_clusters" internal/db/migrations/001_initial_schema.sql | head -4
+321:CREATE TABLE IF NOT EXISTS location_clusters (
+337:CREATE INDEX IF NOT EXISTS idx_location_clusters_route ON location_clusters (start_cluster_lat, start_cluster_lng, end_cluster_lat, end_cluster_lng);
+338:CREATE INDEX IF NOT EXISTS idx_location_clusters_day ON location_clusters (day_of_week, departure_hour);
+339:CREATE INDEX IF NOT EXISTS idx_location_clusters_date ON location_clusters (activity_date);
+
+$ grep -n "smackerel_connector_sync_total" config/prometheus/alerts.yml | head -1
+83:        sources unreachable. Check `smackerel_connector_sync_total` per
+
+$ grep -n "checkPrivacyConsent" internal/connector/maps/connector.go
+173:	// GAP-005-F1: Check privacy_consent before syncing (R-401 opt-in enforcement).
+179:		consented, err := checkPrivacyConsent(ctx, pool, "maps")
+834:func checkPrivacyConsent(ctx context.Context, pool *pgxpool.Pool, sourceID string) (bool, error) {
+840:		`SELECT consented FROM privacy_consent WHERE source_id = $1`,
+
+$ grep -n "^### Google Maps Timeline Connector Operations" docs/Operations.md
+605:### Google Maps Timeline Connector Operations (Spec 011)
+
+$ grep -n "^#### Privacy Consent Opt-In\|^#### End-To-End Operator Walkthrough\|^#### Cursor And Re-Ingestion\|^#### Failure Modes" docs/Operations.md
+630:#### Privacy Consent Opt-In (R-401 Enforcement)
+655:#### End-To-End Operator Walkthrough
+718:#### Cursor And Re-Ingestion
+727:#### Failure Modes And Operator Responses
+```
+
+### Round Outcome
+
+- **Devops surface coverage:** complete across CI/CD, container env contract, deploy compose, image hygiene, observability (metrics + logs), manifest divergence, secret-rotation, SST/no-defaults, privacy-consent enforcement, backup ledger, rollback procedure, and operator runbook.
+- **Findings closed this round:** 1/1 (DEVOPS-D02 — Maps operator runbook in `docs/Operations.md`).
+- **Bugs spawned:** 0 (docs-only content authoring; spec/design/scopes untouched; no planning truth created or repaired).
+- **Pre-existing baseline observations recorded but NOT closed this round:** 10 (Gates G022/G028/G040/G053/G055/G056/regression-E2E/consumer-impact/change-boundary). These need a dedicated `harden-gaps-to-doc` or `improve-existing` workflow against spec 011 and are not in scope for a devops trigger.
+- **Spec 011 certification status:** unchanged (`done`). No transition attempted; status-transition guard not triggered.
+- **Terminal-discipline preserved:** all edits via IDE `replace_string_in_file` / `multi_replace_string_in_file`; zero shell redirection or heredoc writes.
+- **Framework file immutability honored:** zero edits to `.github/bubbles/scripts/`, `.github/agents/bubbles_shared/`, `.github/bubbles/workflows.yaml`, `.github/instructions/bubbles-*`.

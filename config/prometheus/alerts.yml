@@ -159,7 +159,7 @@ groups:
 # chronically rate-limiting or returning sustained retryable errors.
 # Metrics: smackerel_connector_twitter_api_rate_limit_reset_seconds
 # (gauge, seconds until next reset) and
-# smackerel_connector_twitter_api_retries{reason} (counter).
+# smackerel_connector_twitter_api_retries_total{reason} (counter).
 # ─────────────────────────────────────────────────────────────────────
 - name: smackerel-connector-twitter
   rules:
@@ -180,7 +180,7 @@ groups:
         narrow active source lists.
   - alert: TwitterAPIRetryStorm
     expr: |
-      sum by (endpoint, reason) (rate(smackerel_connector_twitter_api_retries{connector="twitter"}[5m])) > 0.2
+      sum by (endpoint, reason) (rate(smackerel_connector_twitter_api_retries_total{connector="twitter"}[5m])) > 0.2
     for: 10m
     labels:
       severity: warning
@@ -188,7 +188,7 @@ groups:
     annotations:
       summary: "Twitter API retry rate >0.2/s on {{ $labels.endpoint }} ({{ $labels.reason }})"
       description: |
-        smackerel_connector_twitter_api_retries is incrementing faster
+        smackerel_connector_twitter_api_retries_total is incrementing faster
         than 0.2/s for endpoint {{ $labels.endpoint }} with reason
         {{ $labels.reason }} over 10 minutes. Likely causes: upstream
         5xx, sustained 429, or a connectivity issue between the home

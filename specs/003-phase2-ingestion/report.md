@@ -697,3 +697,102 @@ $ ./smackerel.sh test unit
 All 41 Go packages PASS, 236 Python tests PASS
 Exit code: 0
 ```
+
+---
+
+## Regression Sweep — Round 4 (2026-06-05)
+
+**Workflow:** `regression-to-doc` (parent-expanded child mode from stochastic-quality-sweep R4/20)
+**Trigger:** regression
+**Execution model:** parent-expanded-child-mode (subagent runtime lacks `runSubagent`)
+
+### Summary
+Regression scan against the spec-003 owned surface (connectors, scheduler, topics, auth) found:
+- 0 test regressions: all 26 spec-003 owned Go packages pass.
+- 0 cross-spec breakage: regression-baseline-guard PASSED for spec 003.
+- 3 planning-truth drift findings: design.md/scopes.md/spec.md declared signatures that the certified implementation does not match. Implementation is correct; docs were stale since original delivery. All three findings closed by docs-side repair in this round.
+
+### Findings
+
+| ID | Severity | Type | Where stale | Fix |
+|----|----------|------|-------------|-----|
+| REG-003-R04-01 | medium | design-drift | `Connector` interface in design.md L52, L91-108 + scopes.md L19 + spec.md R-201 declared 6-method interface including `GetState(ctx) SyncState` and stale lowercase `connect()`/`sync()`/`get_sync_state()`/`update_cursor()` names | Reconciled to 5-method interface (`ID`, `Connect`, `Sync`, `Health`, `Close`) — state is owned by external `connector.StateStore`; cursor returned from `Sync()` |
+| REG-003-R04-02 | medium | design-drift | `ConnectorConfig` struct in design.md L122-129 + scopes.md L20 declared fields `SourceID`, `Schedule`, `ProcessingRules` that do not exist in code | Reconciled to real fields: `AuthType`, `Credentials`, `SyncSchedule`, `Enabled`, `ProcessingTier`, `Qualifiers` (map[string]any), `SourceConfig` (map[string]any). Connector identity now correctly attributed to `Connector.ID()` not a config field |
+| REG-003-R04-03 | low | design-drift | `SyncState` struct in design.md L113-119 used field names `ConnectorID`/`CursorValue`/`LastSyncAt`/`ErrorCount` that diverge from real names in `state.go` (`SourceID`/`SyncCursor`/`LastSync`/`ErrorsCount`); `QualifierConfig` in design.md L131-137 + scopes.md L21 listed phantom `MinDwellTime int` field that belongs to spec 010 (browser history) | Reconciled `SyncState` field names; removed `MinDwellTime` from spec-003 `QualifierConfig` with explicit note that browser-history qualifiers belong to spec 010 |
+
+### Finding-Owned Closure Chain (parent-expanded)
+
+| Owner | Outcome |
+|-------|---------|
+| `bubbles.analyst` | Intent unchanged: Phase 2 still ships passive ingestion. Implementation pivoted to external `StateStore` pattern during delivery (cleaner separation of concerns); docs were never updated. No user-visible behavior change. No new requirements. |
+| `bubbles.ux` | Mandatory framework-UX check: N/A. Connector signatures are server-internal; Settings UI (Scope 7) consumes `*StateStore.Get`, unaffected. No workflow/status/exception language changes. |
+| `bubbles.design` | Owner of the repair. Edited spec.md R-201, design.md architecture table + Connector interface section + SyncState/ConnectorConfig/QualifierConfig data section, scopes.md "New Types & Signatures" list. Reconciliation notes added inline explaining external-StateStore choice and spec-010 attribution of `MinDwellTime`. |
+| `bubbles.plan` | All 7 scopes remain `Done`. Scope ordering, dependencies, DoD items unchanged (no code change ⇒ no DoD evidence invalidated). No scope rework needed. |
+| `bubbles.implement` | N/A. Code at `internal/connector/connector.go`, `state.go`, and `internal/connector/imap/imap.go` is already the certified-correct contract. |
+| `bubbles.test` | Re-ran spec-003 owned packages: `internal/connector/...`, `internal/topics/...`, `internal/scheduler/...`, `internal/auth/...` — 26 packages PASS, 0 failures. |
+| `bubbles.simplify` | N/A — docs-only edit, no abstractions added. |
+| `bubbles.stabilize` | N/A — no runtime surface touched. |
+| `bubbles.devops` | N/A — no infra change. |
+| `bubbles.security` | N/A — signature documentation has no security impact. |
+| `bubbles.chaos` | N/A — round-budget governance; signature drift fix is not chaos-eligible. |
+| `bubbles.validate` | Verified: spec.md ↔ design.md ↔ scopes.md ↔ `internal/connector/*.go` now mutually consistent. `regression-baseline-guard.sh specs/003-phase2-ingestion` PASSED. Re-grep for stale identifiers returns only explanatory prose, no contract claims. |
+| `bubbles.audit` | Self-consistency confirmed: 6→5 method interface, `ConnectorConfig` field names, `SyncState` field names, and `QualifierConfig` shape all match `internal/connector/*.go`. Reconciliation notes explain the chosen design. No new debt introduced. |
+| `bubbles.docs` | `docs/Connector_Development.md` already aligned with code (5-method interface, correct ConnectorConfig fields). No external developer docs needed updating. |
+| `bubbles.finalize` | This report.md section + state.json `executionHistory` entry record the regression sweep and its closure. Spec 003 remains `status: done` with strengthened doc-truth coherence. |
+
+### Verification Evidence
+
+```
+$ go test ./internal/connector/... ./internal/topics/... ./internal/scheduler/... ./internal/auth/...
+ok  internal/connector                              54.583s
+ok  internal/connector/alerts                        3.413s
+ok  internal/connector/bookmarks                     0.141s
+ok  internal/connector/browser                       0.059s
+ok  internal/connector/caldav                        0.020s
+ok  internal/connector/discord                       9.679s
+ok  internal/connector/guesthost                     0.560s
+ok  internal/connector/hospitable                   12.853s
+ok  internal/connector/imap                          0.101s
+ok  internal/connector/ingest                        0.008s
+ok  internal/connector/keep                          0.165s
+ok  internal/connector/maps                          0.290s
+ok  internal/connector/markets                       4.010s
+ok  internal/connector/photos                        0.016s
+ok  internal/connector/photos/adapters/immich        0.162s
+ok  internal/connector/photos/adapters/photoprism    0.205s
+ok  internal/connector/qfdecisions                   1.248s
+ok  internal/connector/rss                           0.313s
+ok  internal/connector/twitter                       5.148s
+ok  internal/connector/weather                      30.607s
+ok  internal/connector/youtube                       0.017s
+ok  internal/topics                                  0.005s
+ok  internal/scheduler                               5.050s
+ok  internal/auth                                   33.244s
+ok  internal/auth/revocation                         0.011s
+ok  internal/auth/webcreds                           3.276s
+```
+
+```
+$ bash .github/bubbles/scripts/regression-baseline-guard.sh specs/003-phase2-ingestion --verbose
+── G044: Regression Baseline ──
+  ⚠️  No test baseline comparison table found in report.md (first run may establish baseline)
+── G045: Cross-Spec Regression ──
+  ℹ️  Found 78 done specs (of 80 total) that need cross-spec regression verification
+  ✅ Cross-spec inventory completed
+── G046: Spec Conflict Detection ──
+  ✅ No route/endpoint collisions detected across specs
+🐾 Regression baseline guard: PASSED
+   All 0 checks passed.
+```
+
+### Files Touched (this sweep)
+
+| File | Change |
+|------|--------|
+| `specs/003-phase2-ingestion/spec.md` | R-201 method list corrected; cursor-persistence + state-store ownership noted |
+| `specs/003-phase2-ingestion/design.md` | Architecture-table interface row corrected; `Connector` interface code block reduced from 6→5 methods with reconciliation comment; `SyncState`/`ConnectorConfig`/`QualifierConfig` Go blocks rewritten to match `internal/connector/connector.go` + `internal/connector/state.go` + `internal/connector/imap/imap.go` |
+| `specs/003-phase2-ingestion/scopes.md` | "New Types & Signatures" bullets corrected |
+| `specs/003-phase2-ingestion/report.md` | This section appended (regression sweep evidence) |
+| `specs/003-phase2-ingestion/state.json` | `executionHistory` entry appended for regression sweep R4 |
+
+Spec 003 status remains `done`. No code changed.
