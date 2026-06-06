@@ -961,8 +961,8 @@ closure receipt.
 | F1 — G088 post-cert spec edit (scopes.md citation drift) | bubbles.spec-review (parent-expanded) | state.json: `certifiedAt` + `certification.completedAt` bumped to 2026-06-06T12:00:00Z; `spec-review-recertification` appended to certifiedCompletedPhases + completedPhaseClaims; statusCeilingRationale updated; executionHistory entry added | TP-073-03 cross-language canary PASS (3.562s) on fixtures unchanged by the citation drift; post-edit state-transition-guard captured below | CLOSED (one-to-one) |
 | F2 — Dart-test runner-boundary planning-truth misalignment | bubbles.plan (parent-expanded) | scopes.md `### Planning Notes` — new "Mobile test-runner boundary (gaps-to-doc Round 16 clarification — 2026-06-06)" bullet; executionHistory entry added | post-edit artifact-lint captured below; TP-073-03 still green; web/pwa Go-side tests still green; flutter test mobile suite still green | CLOSED (one-to-one) |
 
-No findings remain unaddressed. No `route_required` follow-up emitted.
-The two route-required follow-up triggers normally surfaced by
+No findings remain unaddressed. No `route_required` packet emitted.
+The two route-required triggers normally surfaced by
 gaps-to-doc — "test-plan-row claims diverge from runner" and "G088
 post-cert edit" — are both addressed inline within this round.
 
