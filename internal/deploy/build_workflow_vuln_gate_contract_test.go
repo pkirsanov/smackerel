@@ -189,6 +189,12 @@ func assertVulnGateContract(doc *workflowDoc, raw []byte) error {
 		"severityThreshold: CRITICAL,HIGH",
 		"gateBlocksOn: CRITICAL,HIGH-with-upstream-fix",
 		"ignoreUnfixed: true",
+		// FR-047-003 requires the attestation to record ALL THREE
+		// deployability policy fields. The human-readable rationale anchors
+		// WHY unfixed advisory CVEs do not block deploy; dropping it would
+		// leave the manifest unable to prove the policy intent. Enforced so
+		// the third policy field cannot drift away from the other two.
+		"ignoreUnfixedRationale:",
 		"evidenceArtifact: trivy-scan-reports-",
 		"specReference: specs/047-ci-image-vulnerability-gate/spec.md",
 	}
@@ -822,4 +828,80 @@ func TestVulnGateContract_AdversarialLimitSeveritiesForSarifFalse(t *testing.T) 
 		t.Fatalf("expected limit-severities-for-sarif=false violation, got: %v", err)
 	}
 	t.Logf("adversarial OK: trivy step with limit-severities-for-sarif: false is rejected with: %v", err)
+}
+
+// TestVulnGateContract_AdversarialMissingIgnoreUnfixedRationaleManifestKey
+// proves the contract test would catch a regression where the workflow
+// steps keep the correct flags but the build-manifest heredoc drops the
+// `ignoreUnfixedRationale` field.
+//
+// FR-047-003 (spec.md) requires the vulnerabilityScan attestation to record
+// ALL THREE deployability policy fields — `gateBlocksOn`, `ignoreUnfixed`,
+// AND `ignoreUnfixedRationale` — "so the manifest proves which CVE class
+// blocked or did not block deploy". Before this test the contract enforced
+// only the first two; an operator could delete the rationale from the
+// manifest heredoc (the human-readable justification for why unfixed
+// advisory CVEs do NOT block deploy) and the drift gate would stay green,
+// silently violating FR-047-003. This regression test anchors the third
+// policy field to the same drift contract as the other two.
+func TestVulnGateContract_AdversarialMissingIgnoreUnfixedRationaleManifestKey(t *testing.T) {
+	doc := &workflowDoc{
+		Jobs: map[string]struct {
+			Steps []struct {
+				Name string                 `yaml:"name"`
+				ID   string                 `yaml:"id"`
+				Uses string                 `yaml:"uses"`
+				With map[string]interface{} `yaml:"with"`
+				Run  string                 `yaml:"run"`
+			} `yaml:"steps"`
+		}{
+			"build-images": {
+				Steps: []struct {
+					Name string                 `yaml:"name"`
+					ID   string                 `yaml:"id"`
+					Uses string                 `yaml:"uses"`
+					With map[string]interface{} `yaml:"with"`
+					Run  string                 `yaml:"run"`
+				}{
+					{Name: "Build and push smackerel-core"},
+					{Name: "Build and push smackerel-ml"},
+					{
+						Name: "Trivy vulnerability scan — smackerel-core",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
+						},
+					},
+					{
+						Name: "Trivy vulnerability scan — smackerel-ml",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
+						},
+					},
+					{Name: "Cosign keyless sign — core"},
+				},
+			},
+		},
+	}
+	// Adversarial raw: manifest heredoc carries gateBlocksOn + ignoreUnfixed
+	// but is MISSING the `ignoreUnfixedRationale` field that FR-047-003
+	// requires the attestation to record.
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	err := assertVulnGateContract(doc, raw)
+	if err == nil {
+		t.Fatal("expected adversarial doc (missing ignoreUnfixedRationale manifest key) to fail contract, but it passed")
+	}
+	if !strings.Contains(err.Error(), "ignoreUnfixedRationale") {
+		t.Fatalf("expected missing-ignoreUnfixedRationale-manifest-key violation, got: %v", err)
+	}
+	t.Logf("adversarial OK: build-manifest heredoc missing ignoreUnfixedRationale is rejected with: %v", err)
 }

@@ -70,6 +70,17 @@ def _run_lifespan(auth_token: str, environment: str, caplog) -> list[logging.Log
 
         importlib.reload(main_mod)
 
+        # app.main runs `logging.basicConfig(..., force=True)` at module import
+        # time (intentional for the real sidecar bootstrap). importlib.reload
+        # re-runs it, and force=True removes/closes every handler on the root
+        # logger — including pytest's caplog LogCaptureHandler. Without
+        # re-arming it, the WARN/ERROR records the lifespan emits below reach
+        # stdout (visible in captured output) but never land in caplog.records,
+        # so the assertions see [] (and the no-warning test passes vacuously).
+        # Re-attach pytest's capture handler to the root logger so caplog
+        # observes exactly what the production code emits.
+        logging.getLogger().addHandler(caplog.handler)
+
         # Patch module bindings AFTER reload so imported constants/classes are overridden.
         with (
             patch.object(main_mod, "_AUTH_TOKEN", auth_token),

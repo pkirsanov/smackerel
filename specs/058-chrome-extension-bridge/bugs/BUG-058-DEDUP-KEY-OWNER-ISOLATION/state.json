@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "058-chrome-extension-bridge",
+  "bugId": "BUG-058-DEDUP-KEY-OWNER-ISOLATION",
+  "featureDir": "specs/058-chrome-extension-bridge/bugs/BUG-058-DEDUP-KEY-OWNER-ISOLATION",
+  "featureName": "BUG-058-DEDUP-KEY-OWNER-ISOLATION: dedup_key omits owner_user_id, enabling cross-tenant dedup collapse",
+  "workflowMode": "product-to-delivery",
+  "status": "open",
+  "severity": "medium",
+  "reportedAt": "2026-06-06T18:15:00Z",
+  "reporter": "chaos-sweep-round-18 (stochastic-quality-sweep / chaos-hardening, parent-expanded)",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "discovery",
+    "runStartedAt": "2026-06-06T18:15:00Z",
+    "completedPhaseClaims": ["discovery", "documentation"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.chaos",
+        "startedAt": "2026-06-06T18:15:00Z",
+        "completedAt": "2026-06-06T18:15:00Z",
+        "outcome": "completed_owned",
+        "summary": "Chaos probe of the spec 058 dedup surface found that ComputeDedupKey (internal/connector/ingest/dedup.go:36) omits owner_user_id and raw_ingest_dedup.dedup_key (migration 040) is a global PRIMARY KEY. ResolveOrPublish UPDATE/INSERT both key on dedup_key alone with no owner predicate, so two authenticated owners sharing a (url, content_type, source_device_id, bucket) tuple collapse onto one row: the second owner's publish is skipped and the first owner's artifact_id is returned. Verified by code reading at HEAD; live-Postgres reproduction needs the integration harness (BLOCKER-2, resolved 2026-06-05)."
+      },
+      {
+        "phase": "documentation",
+        "agent": "bubbles.chaos",
+        "startedAt": "2026-06-06T18:15:00Z",
+        "completedAt": "2026-06-06T18:15:00Z",
+        "outcome": "route_required",
+        "summary": "Filed bug.md (mechanism + reproduction + recommended design-owned fix + open questions), spec.md (5 acceptance criteria), report.md. Routed to bubbles.design because the dedup key tuple is planning truth (design §2.3) and the sibling BUG-058-EXTERNAL-INFRA-MISSING explicitly scopes the dedup keyer as a stable contract. Not fixed in-round; the Round-18 charset hardening (F1) narrows but does not resolve this."
+      }
+    ]
+  },
+  "certification": {
+    "status": "open",
+    "completedScopes": [],
+    "certifiedCompletedPhases": ["discovery", "documentation"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "blockers": [
+    {
+      "id": "FINDING-DEDUP-OWNER-ISOLATION",
+      "summary": "dedup_key omits owner_user_id; global PRIMARY KEY allows cross-tenant dedup collapse when two owners share a source_device_id value",
+      "affectedDoD": [
+        "Scope 2 dedup contract (ComputeDedupKey owner isolation)",
+        "Scope 2 PostgresDedupStore.ResolveOrPublish cross-owner row separation"
+      ],
+      "evidence": "internal/connector/ingest/dedup.go:36 ComputeDedupKey(url, contentType, deviceID, bucket) has no owner_user_id; internal/db/migrations/040_raw_ingest_dedup.sql:13 dedup_key BYTEA PRIMARY KEY (global); ResolveOrPublish UPDATE WHERE dedup_key=$1 and INSERT ON CONFLICT (dedup_key) have no owner predicate. Round-18 confirming probe TestComputeDedupKey_SeparatorInjectionResistance PASS (separator hygiene intact). Cross-owner reproduction documented in bug.md; needs live-Postgres harness to execute.",
+      "resolutionPath": "bubbles.design amends design §2.3 to include owner_user_id in the dedup key tuple; bubbles.plan adds SCN-058-022 + Scope 2 DoD; bubbles.implement prepends owner_user_id to the ComputeDedupKey preimage (no schema change) and updates the caller + keyer unit tests; bubbles.test adds the cross-owner unit twin and re-runs tests/integration/extension_dedup_race_test.go; bubbles.validate recertifies Scope 2.",
+      "owner": "bubbles.design",
+      "status": "open"
+    }
+  ]
+}

@@ -113,3 +113,30 @@ func TestPassthroughDedupStore_RejectsNilPublish(t *testing.T) {
 		t.Fatal("expected error when publish callback is nil")
 	}
 }
+
+// TestComputeDedupKey_SeparatorInjectionResistance is the Chaos Sweep
+// Round 18 (2026-06-06) adversarial extension of the boundary-collision
+// test. It attempts to FORGE a key collision by smuggling the \x00
+// separator byte across field boundaries — the classic injection
+// attack on delimiter-joined keys. With an explicit per-field separator
+// these MUST NOT collide, even when the attacker controls url + device
+// (content_type is allowlist-pinned by the ingest handler, but the
+// keyer itself must stay injection-resistant regardless).
+func TestComputeDedupKey_SeparatorInjectionResistance(t *testing.T) {
+	// Move the separator across the url/device boundary under a fixed
+	// content_type + bucket: ("a\x00", dev="b") vs ("a", dev="\x00b").
+	k1 := ComputeDedupKey("a\x00", "bookmark", "b", 0)
+	k2 := ComputeDedupKey("a", "bookmark", "\x00b", 0)
+	if bytes.Equal(k1, k2) {
+		t.Fatal("separator injection across the url/device boundary forged a collision")
+	}
+	// Attempt to absorb the content_type anchor into the url with an
+	// injected separator: (url="x", ct="bookmark") vs
+	// (url="x\x00bookmark", ct=""). Not reachable through the ingest
+	// allowlist, but the keyer MUST still distinguish them.
+	k3 := ComputeDedupKey("x", "bookmark", "dev", 0)
+	k4 := ComputeDedupKey("x\x00bookmark", "", "dev", 0)
+	if bytes.Equal(k3, k4) {
+		t.Fatal("separator injection absorbing the content_type anchor forged a collision")
+	}
+}

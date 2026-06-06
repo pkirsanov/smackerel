@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 3,
+  "bugId": "BUG-036-002",
+  "feature": "036-meal-planning",
+  "title": "G068 fuzzy-tokenizer regression",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "createdAt": "2026-06-06T18:00:00Z",
+  "updatedAt": "2026-06-06T18:10:00Z",
+  "lastUpdatedAt": "2026-06-06T18:10:00Z",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "done",
+    "completedPhases": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "completedAt": "2026-06-06T18:08:00Z",
+    "certifiedBy": "bubbles.bug (artifact-only fidelity playbook; no production code changed)"
+  },
+  "policySnapshot": {
+    "playbook": "BUG-036-001 dod-scenario-fidelity-gap",
+    "boundary": "specs/036-meal-planning/scopes.md (DoD trace-ID prefixes), specs/036-meal-planning/report.md (stub reconciliation + evidence note), and this bug folder",
+    "forbidden": [
+      "production code under internal/, cmd/, ml/, web/, docker-compose.yml, Dockerfile, config/smackerel.yaml",
+      "sibling specs",
+      "spec 036 status / ceiling / scope-status mutation",
+      "DoD claim semantic rewriting",
+      "force-closing Parked Scopes 09-15",
+      "framework scripts under .github/bubbles/"
+    ]
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "phase": "discovery",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-06-06T18:00:00Z",
+      "outcome": "Reproduced traceability-guard RESULT: FAILED (13 failures, 0 warnings) on specs/036-meal-planning during reconcile-to-doc Round 12. DoD fidelity 56 checked, 44 mapped, 12 unmapped."
+    },
+    {
+      "phase": "documentation",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-06-06T18:02:00Z",
+      "outcome": "Created bug folder with bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json."
+    },
+    {
+      "phase": "analysis",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-06-06T18:03:00Z",
+      "outcome": "Root-caused to guard v3.8.0 fuzzy-tokenizer tightening (min word length 4->3, trimmed stop-words) flipping 12 previously fuzzy-passing un-prefixed Done-scope scenarios to G068-unmapped. Mapped each to its faithful covering DoD bullet."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-06-06T18:05:00Z",
+      "outcome": "Tagged 12 covering DoD bullets in scopes.md with Scenario SCN-036-NNN trace IDs (claim text preserved). Reconciled 8 _Not started._ stubs in report.md."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-06-06T18:06:00Z",
+      "outcome": "Re-ran traceability-guard.sh: RESULT PASSED (0 warnings), 56/56 DoD fidelity. Ran 5 Go packages backing reconciled scenarios: all ok (impl unchanged)."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-06-06T18:07:00Z",
+      "outcome": "artifact-lint.sh specs/036-meal-planning: Artifact lint PASSED."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-06-06T18:08:00Z",
+      "outcome": "git diff scoped to specs/036-meal-planning/: only report.md and scopes.md changed; zero .go/.py/.sql; 12 trace-ID prefixes added; Parked Scopes 09-15 untouched."
+    },
+    {
+      "phase": "finalize",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-06-06T18:10:00Z",
+      "outcome": "Bug closed done. Spec 036 recertified (certifiedAt 2026-06-06T18:10:00Z, spec-review CURRENT entry). No commit/push (left in working tree)."
+    }
+  ]
+}

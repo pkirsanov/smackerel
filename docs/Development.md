@@ -446,6 +446,8 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/deploy/` | Build-Once Deploy-Many deployment contracts — static-file tests for `.github/workflows/build.yml` (bundle-hash contract, vuln gate, bundle-secret contract) and the deploy-target compose contract enforcing the tailnet-edge bind invariants |
 | `internal/manifest/` | Spec 076 scenario-manifest schema and loader — typed inherited-scenario manifest (own SCN-076-Fxx entries + `inheritsFrom` references to specs 064/065/066/073/074/075) consumed by traceability tooling |
 | `internal/whatsapp/` | Spec 072 WhatsApp Business Cloud API transport — `assistant_adapter/` implements the canonical `TransportAdapter` contract: webhook ingress, Meta signature verification, generic transport-identity lookup, inbound payload → `AssistantMessage` translation, and outbound text/list/buttons rendering |
+| `internal/scopesdriftguard/` | Test-only contract guard — ratchets the count of broken `path` references in `specs/*/scopes.md` against the filesystem so new traceability drift fails CI. Contains only `scopes_drift_guard_test.go` (no runtime code). |
+| `internal/docfreshness/` | Test-only contract guard (spec 032 / BUG-003) — asserts `docs/Development.md` documents every `internal/` Go package, every `internal/db/migrations/*.sql`, and every `config/prompt_contracts/*.yaml`, so documentation-inventory drift fails the Go unit suite and CI. Contains only `doc_freshness_test.go` (no runtime code). |
 
 ## Database Migrations
 

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "bugId": "BUG-003-development-doc-inventory-drift",
+  "parentSpec": "032-documentation-freshness",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-032-D12",
+      "title": "Every internal/ Go package is documented and the guard enforces it",
+      "scopeId": "1",
+      "requiredTestType": "go-contract",
+      "regressionRequired": true,
+      "linkedTests": ["T-DOCFRESH-001"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#before-fix-red", "report.md#after-fix-green"],
+      "specSource": "spec 032 acceptance criteria: docs/Development.md lists all Go packages under internal/",
+      "redGreenProbe": "./smackerel.sh test unit --go --go-run 'TestDocFreshness_AllInternalPackagesDocumented'"
+    },
+    {
+      "scenarioId": "SCN-032-D13",
+      "title": "Every migration and prompt contract is documented and the guard enforces it",
+      "scopeId": "1",
+      "requiredTestType": "go-contract",
+      "regressionRequired": true,
+      "linkedTests": ["T-DOCFRESH-002"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#after-fix-green"],
+      "specSource": "spec 032 acceptance criteria: docs/Development.md lists every migration and every prompt contract on disk",
+      "redGreenProbe": "./smackerel.sh test unit --go --go-run 'TestDocFreshness_AllMigrationsDocumented|TestDocFreshness_AllPromptContractsDocumented'"
+    },
+    {
+      "scenarioId": "SCN-032-D14",
+      "title": "The guard is not tautological and detects an undocumented item",
+      "scopeId": "1",
+      "requiredTestType": "go-contract",
+      "regressionRequired": true,
+      "linkedTests": ["T-DOCFRESH-003"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#regression-evidence"],
+      "specSource": "bubbles-bug-template adversarial-regression requirement (NON-NEGOTIABLE)",
+      "redGreenProbe": "./smackerel.sh test unit --go --go-run 'TestDocFreshness_AdversarialUndocumentedItemsDetected'"
+    }
+  ]
+}
