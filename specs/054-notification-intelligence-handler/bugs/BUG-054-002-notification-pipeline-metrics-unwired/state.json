@@ -1,0 +1,245 @@
+{
+  "spec": "BUG-054-002-notification-pipeline-metrics-unwired",
+  "parentSpec": "054-notification-intelligence-handler",
+  "status": "done",
+  "certifiedAt": "2026-06-06T15:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "workflowMode": "bugfix-fastlane",
+  "executionModel": "parent-expanded-child-mode",
+  "stochasticSweep": {
+    "sweepId": "sweep-2026-06-06-obs",
+    "round": 15,
+    "trigger": "observation",
+    "observationId": "OBS-054-15-001",
+    "mappedChildWorkflowMode": "bugfix-fastlane"
+  },
+  "discovered": "2026-06-06",
+  "resolved": "2026-06-06",
+  "baselineHead": "46def326",
+  "completedPhaseClaims": [
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs"
+  ],
+  "certifiedCompletedPhases": [
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs"
+  ],
+  "completedPhaseClaimDetails": [
+    {
+      "phase": "bootstrap",
+      "agent": "bubbles.bug",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "8-artifact bugfix-fastlane packet authored under specs/054-notification-intelligence-handler/bugs/BUG-054-002-notification-pipeline-metrics-unwired/ (bug.md + spec.md + design.md + scopes.md + scenario-manifest.json + report.md + state.json + uservalidation.md)."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Declared 6 smackerel_notification_* metric vars + init() registration in internal/metrics/metrics.go (+95 lines) and wired each at a real live emit site across internal/notification/{service,normalizer,decision,output_logic,reaction_logic}.go (+74/-5 lines) via IDE replace_string_in_file/multi_replace_string_in_file. Bounded-enum labels only; 6 design.md metrics deferred (no dead declarations)."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Authored 7 adversarial unit tests in internal/notification/metrics_emit_test.go (registration+bounded-labels, ingest, delivery, action, normalization, dedupe, redaction-safety). Scenario-first red->green proof: delivery emit disabled -> TestNotificationDeliveryAttemptsIncrementsOnDispatch RED (= 0, want 1); restored -> GREEN. Full red->green block in BUG-054-002/report.md Test Evidence."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "go test ./internal/metrics/... ./internal/notification/... -count=1 -v all GREEN (ok internal/metrics, ok internal/notification, ok internal/notification/source/ntfy); zero FAIL lines; 7 new TestNotification* tests pass with no collateral failures. Additive observability; existing pipeline behavior unchanged."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Single-exit named-return + defer pattern avoids per-branch .Inc() duplication in Normalize/Decide/Dispatch; only 3 small helpers introduced (normalizationErrorKind, notificationActionStatus, notificationStageDurationMs), each reused across emit/return paths. No dead code or speculative generality."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "go build ./... exit 0; go vet ./internal/notification/... ./internal/metrics/... exit 0. New internal/notification -> internal/metrics import introduces no cycle (metrics does not import notification). prometheus *Vec emits are goroutine-safe."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "SCN-054-024 enforced: every label value is a bounded enum or known source/channel identifier; none derives from RawPayload/Title/Body. TestNotificationMetricsDoNotLeakPayloadInLabels drives SUPERSECRET-PAYLOAD-MARKER through delivery/normalize/ingest and asserts no label leaks it; TestNotificationMetricFamiliesRegisteredWithBoundedLabels rejects any label outside each family's bounded allowlist."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Packet guards green: artifact-lint.sh PASSED and state-transition-guard.sh 0 BLOCKs for specs/054-notification-intelligence-handler/bugs/BUG-054-002-notification-pipeline-metrics-unwired. Full block in BUG-054-002/report.md Validation Evidence section."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "git status --short confirms the change set is confined to the 7 source/test files (internal/metrics/metrics.go + 5 internal/notification/*.go + internal/notification/metrics_emit_test.go) plus this packet directory. Unrelated externally-modified .github/bubbles/** framework files are NOT staged/reverted/touched. Per task contract this packet does NOT commit; orchestrator commits."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Deferred-metrics rationale (6 design.md metrics not wired) documented in bug.md Root Cause + report.md Summary for a future separately-scoped fix. No docs/ managed-doc mutation required for additive observability."
+    }
+  ],
+  "executionHistory": [
+    {
+      "phase": "bootstrap",
+      "agent": "bubbles.bug",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "Authored 8-artifact bugfix-fastlane packet for BUG-054-002-notification-pipeline-metrics-unwired."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "Declared 6 smackerel_notification_* metrics in internal/metrics/metrics.go and wired real emit sites in internal/notification/{service,normalizer,decision,output_logic,reaction_logic}.go."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "7 adversarial unit tests in internal/notification/metrics_emit_test.go; red->green proof via delivery emit disable/restore captured in report.md."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "go test ./internal/metrics/... ./internal/notification/... -count=1 -v all GREEN; zero collateral failures."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "Named-return + defer single-exit emit; 3 small reused helpers; no dead code."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "go build ./... exit 0; go vet exit 0; no import cycle."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "Bounded-label allowlist + payload-marker redaction test; SCN-054-024 satisfied."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "artifact-lint PASSED + state-transition-guard 0 BLOCKs for the BUG-054-002 packet."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "git status confirms change set confined to 7 source/test files + packet dir; framework files untouched; no commit per task contract."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-06T15:00:00Z",
+      "evidence": "Deferred-metrics rationale documented in bug.md + report.md."
+    }
+  ],
+  "scenarioCoverage": {
+    "totalScenarios": 7,
+    "coveredScenarios": 7,
+    "fidelity": "7/7"
+  },
+  "completedScopes": [
+    "scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+  ],
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "bubbles-fastlane-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-06T15:00:00Z",
+    "completedScopes": [
+      "scope-1-wire-the-6-core-notification-pipeline-metrics-single-scope-bugfix-fastlane"
+    ],
+    "certifiedCompletedPhases": [
+      "bootstrap",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Wire The 6 Core Notification Pipeline Metrics (Single-Scope Bugfix-Fastlane)",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "rollback": "Pure git revert of the 7 source/test files removes the 6 smackerel_notification_* families and their emits, restoring the pre-fix observability gap (zero behavior change to the notification pipeline)."
+}
