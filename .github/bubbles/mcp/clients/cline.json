@@ -1,0 +1,16 @@
+{
+  "//": "Sample Cline (VS Code extension) config. Cline reads MCP servers from cline_mcp_settings.json. Copy the `bubbles` entry into yours.",
+  "mcpServers": {
+    "bubbles": {
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/.github/bubbles/mcp/server.py"
+      ],
+      "env": {
+        "BUBBLES_MCP_LOG_LEVEL": "INFO"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}

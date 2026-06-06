@@ -163,6 +163,12 @@ if [[ ! -r "$WORKFLOWS" ]]; then
   exit 2
 fi
 
+# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml,
+# beside workflows.yaml. modeTemplates parsing stays on $WORKFLOWS; the per-mode
+# block parser (check_modes) reads $MODES. Fall back to $WORKFLOWS for pre-split
+# repos that still embed an inline modes: block.
+MODES="$(dirname "$WORKFLOWS")/workflows/modes.yaml"
+[[ -f "$MODES" ]] || MODES="$WORKFLOWS"
 FINDING_COUNT=0
 DELIVERY_CAPABLE_MODES=0
 BOOTSTRAP_CHAINS_CHECKED=0
@@ -391,7 +397,7 @@ check_modes() {
       next
     }
     in_modes && file != "" { print >> file }
-  ' "$WORKFLOWS"
+  ' "$MODES"
 
   local mode_file mode
   for mode_file in "$mode_dir"/*.block; do

@@ -19,7 +19,7 @@ Code changed, documentation is stale.
 Or documentation-only mode:
 
 ```
-/bubbles.workflow  docs-only for 042-catalog-assistant
+/bubbles.workflow docs target:managed-docs action:maintain for 042-catalog-assistant
 ```
 
 ## What Gets Updated

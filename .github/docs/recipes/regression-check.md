@@ -54,7 +54,7 @@ Steve French prowls automatically after every implementation.
 Use the stochastic quality sweep with regression as a trigger:
 
 ```
-/bubbles.workflow  stochastic-quality-sweep triggerAgents: regression maxRounds: 5
+/bubbles.workflow validate action:stochastic scope:portfolio triggerAgents: regression maxRounds: 5
 ```
 
 Steve French prowls randomly across specs, looking for interference that targeted checks might miss.

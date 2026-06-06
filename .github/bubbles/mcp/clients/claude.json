@@ -1,0 +1,14 @@
+{
+  "//": "Sample Claude Desktop config. Copy the `bubbles` entry into your claude_desktop_config.json under `mcpServers`. NOTE: Claude Desktop does not expand workspace variables — substitute the absolute path to server.py manually.",
+  "mcpServers": {
+    "bubbles": {
+      "command": "python3",
+      "args": [
+        "/absolute/path/to/your/repo/.github/bubbles/mcp/server.py"
+      ],
+      "env": {
+        "BUBBLES_MCP_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}

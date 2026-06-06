@@ -39,7 +39,7 @@ Look up the agent's role and load the matching profile from `agents/bubbles_shar
 - **bug** — reproduction evidence, adversarial regression test (would fail if bug reintroduced)
 
 ## Mode ceiling pre-flight (Gate G073)
-Before ANY non-spec file edit, check `state.json.workflowMode` → `bubbles/workflows.yaml` → `statusCeiling`:
+Before ANY non-spec file edit, check `state.json.workflowMode` → `bubbles/workflows/modes.yaml` → `statusCeiling`:
 
 | `statusCeiling` | Files you may edit |
 |-----------------|--------------------|

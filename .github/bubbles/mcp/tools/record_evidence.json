@@ -1,0 +1,39 @@
+{
+  "name": "record_evidence",
+  "description": "Wrap a shell command and append a structured tool-call entry to .specify/runtime/tool-calls.jsonl. The wrapped command's stdout/stderr stream through to the caller (preserved exit code), AND a JSONL row records argv, exit code, duration, stdout/stderr hashes. This is the v5.1 / v6 primary evidence path — wrap every gate-relevant command (test runs, lints, builds) via this tool so the state-transition-guard can accept the log entry as DoD evidence without needing inline ≥10-line markdown.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "command": {
+        "type": "string",
+        "description": "Executable name (e.g. 'cargo', 'pytest', 'bash')."
+      },
+      "args": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Argument list for the wrapped command.",
+        "default": []
+      },
+      "spec": {
+        "type": "string",
+        "description": "Spec slug (sets BUBBLES_SPEC env var on the wrapped run).",
+        "default": ""
+      },
+      "scope": {
+        "type": "string",
+        "description": "Scope identifier (sets BUBBLES_SCOPE env var).",
+        "default": ""
+      },
+      "tags": {
+        "type": "string",
+        "description": "Comma-separated tags (sets BUBBLES_TOOL_LOG_TAGS env var).",
+        "default": ""
+      }
+    },
+    "required": ["command"]
+  },
+  "script": "tool-log.sh",
+  "argsTemplate": ["--", "${command}"],
+  "successExitCodes": [0],
+  "timeoutSeconds": 600
+}

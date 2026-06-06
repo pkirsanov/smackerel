@@ -73,4 +73,5 @@ The follow-up ticket MUST cite the sweep PR. That backlinks the discovery and pr
 - [`bubbles.ux` agent](../../agents/bubbles.ux.agent.md) — ASCII wireframes, interaction flows, accessibility patterns, design system compliance.
 - [`bubbles.simplify` agent](../../agents/bubbles.simplify.agent.md) — for invisible refactors that emerge from a sweep.
 - [Quality Sweep recipe](quality-sweep.md) — broader cousin for non-UX surfaces.
-- [`bubbles/workflows.yaml`](../../bubbles/workflows.yaml) — workflow modes including the Change Boundary discipline (state-transition-guard Check 8D).
+- [`bubbles/workflows/modes.yaml`](../../bubbles/workflows/modes.yaml) — the canonical workflow-mode registry (v6.1 split this out of `workflows.yaml`).
+- [`bubbles/workflows.yaml`](../../bubbles/workflows.yaml) — gates + phases, including the Change Boundary discipline (state-transition-guard Check 8D).

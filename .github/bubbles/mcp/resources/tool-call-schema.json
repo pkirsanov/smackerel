@@ -1,0 +1,7 @@
+{
+  "uri": "bubbles://schemas/tool-call",
+  "name": "Tool-call JSONL schema",
+  "description": "JSON Schema for entries in .specify/runtime/tool-calls.jsonl. v2 schema includes schemaVersion + framework block. Used by state-transition-guard.sh to validate tool-log entries before accepting them as DoD evidence.",
+  "mimeType": "application/json",
+  "path": "bubbles/schemas/tool-call.schema.json"
+}

@@ -65,7 +65,7 @@ That uses `bubbles.spec-review` as a pre-implementation hook, then continues the
 ## Full Workflow — Audit All Specs Then Report
 
 ```text
-/bubbles.workflow  spec-review-to-doc for all
+/bubbles.workflow review target:specs action:freshness-audit finalize:docs for all
 ```
 
 Runs the `spec-review-to-doc` workflow mode: select specs → audit freshness → produce trust report → sync docs.

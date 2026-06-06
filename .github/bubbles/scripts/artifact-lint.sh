@@ -95,6 +95,14 @@ resolve_workflow_registry_file() {
 }
 
 workflow_registry_file="$(resolve_workflow_registry_file || true)"
+# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml.
+# Prefer it for the raw modes: awk parse; fall back to workflows.yaml for
+# pre-split repos that still embed an inline modes: block.
+workflow_modes_file=""
+if [[ -n "$workflow_registry_file" ]]; then
+  workflow_modes_file="$(dirname "$workflow_registry_file")/workflows/modes.yaml"
+  [[ -f "$workflow_modes_file" ]] || workflow_modes_file="$workflow_registry_file"
+fi
 
 failures=0
 dod_total_checkboxes=0
@@ -165,7 +173,7 @@ resolve_workflow_status_ceiling_from_registry() {
   local status_ceiling=""
 
   [[ -n "$workflow_mode" ]] || return 1
-  [[ -n "$workflow_registry_file" && -f "$workflow_registry_file" ]] || return 1
+  [[ -n "$workflow_modes_file" && -f "$workflow_modes_file" ]] || return 1
 
   status_ceiling="$(awk -v mode="$workflow_mode" '
     /^modes:[[:space:]]*$/ { in_modes = 1; next }
@@ -182,7 +190,7 @@ resolve_workflow_status_ceiling_from_registry() {
         exit
       }
     }
-  ' "$workflow_registry_file")"
+  ' "$workflow_modes_file")"
 
   [[ -n "$status_ceiling" ]] || return 1
   printf '%s\n' "$status_ceiling"
@@ -199,10 +207,13 @@ resolve_workflow_status_ceiling() {
 
   status_ceiling="$(resolve_workflow_status_ceiling_from_registry "$workflow_mode" || true)"
   if [[ -z "$status_ceiling" ]]; then
+    # v7: resolves a PERSISTED workflowMode from an existing artifact, so
+    # grandfather the stored (possibly v5-name) registry key — the resolver
+    # rejects bare v5 names only for NEW operator input.
     if [[ -n "$workflow_registry_file" ]]; then
-      resolved="$(BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
+      resolved="$(BUBBLES_MODE_GRANDFATHER=1 BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
     else
-      resolved="$(bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
+      resolved="$(BUBBLES_MODE_GRANDFATHER=1 bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
     fi
     status_ceiling="$(printf '%s\n' "$resolved" | awk -F':[[:space:]]*' '$1 == "statusCeiling" { gsub(/"/, "", $2); print $2; exit }')"
   fi

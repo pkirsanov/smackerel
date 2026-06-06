@@ -184,22 +184,22 @@ gates:
     name: child_workflow_depth_gate
     description: >-
       BLOCKING gate. Only orchestrators may invoke child workflow modes, and workflow nesting depth MUST NOT exceed 1. Non-orchestrator agents may emit packets but may not recursively spawn workflow execution. In runtimes that do not expose nested agent delegation, the active orchestrator MUST parent-expand the resolved child workflow mode instead of spawning a recursive child runtime or blocking solely on the child's missing agent tool.
-  G067:
-    name: shared_infrastructure_blast_radius_gate
-    description: >-
-      BLOCKING gate. When a scope touches high-fan-out shared test or bootstrap infrastructure (fixtures, harnesses, global setup, auth/login/session bootstrap, storage/session injection, ordering/timing contracts), planning artifacts MUST include a Shared Infrastructure Impact Sweep, an independent canary suite entry that validates downstream contracts before broad suite reruns, and a rollback or restore path. Agents MUST NOT rewrite such infrastructure wholesale unless the blast radius, downstream contract surfaces, and recovery path are explicitly planned and verified. Enforced by state-transition-guard.sh Check 8C.
   G066:
     name: phase_claim_provenance_gate
     description: >-
       BLOCKING gate. Phase claims in completedPhaseClaims must have matching agent provenance in executionHistory. An agent may only record its own phase name; cross-phase impersonation is fabrication. Enforced by state-transition-guard.sh Check 6B.
-  G069:
-    name: collateral_change_containment_gate
+  G067:
+    name: shared_infrastructure_blast_radius_gate
     description: >-
-      BLOCKING gate. Mixed-purpose cleanup is forbidden for narrow repairs and risky refactors. Scopes that refactor, simplify, or repair high-fan-out infrastructure MUST declare a Change Boundary listing allowed file families and excluded surfaces that must remain untouched, and they MUST prove zero unrelated file families were changed as part of the fix loop. Opportunistic cleanups, unrelated handler/test edits, or broad repo sweeps bundled into the same repair path are blocking failures. Enforced by state-transition-guard.sh Check 8D.
+      BLOCKING gate. When a scope touches high-fan-out shared test or bootstrap infrastructure (fixtures, harnesses, global setup, auth/login/session bootstrap, storage/session injection, ordering/timing contracts), planning artifacts MUST include a Shared Infrastructure Impact Sweep, an independent canary suite entry that validates downstream contracts before broad suite reruns, and a rollback or restore path. Agents MUST NOT rewrite such infrastructure wholesale unless the blast radius, downstream contract surfaces, and recovery path are explicitly planned and verified. Enforced by state-transition-guard.sh Check 8C.
   G068:
     name: dod_gherkin_content_fidelity_gate
     description: >-
       ABSOLUTE BLOCKING gate. DoD items MUST faithfully represent the behavioral claims of their source Gherkin scenarios. If a scope's Gherkin scenarios specify behavior X (e.g., "mock structs are removed and replaced with real test DB calls") but the DoD items describe behavior Y (e.g., "all files tagged for future migration"), the DoD has drifted from the spec and the scope MUST NOT be marked Done. This gate prevents execution agents from silently rewriting DoD item descriptions to match what was delivered instead of what was planned. Detection: cross-reference significant words from each Gherkin scenario against DoD item text using fuzzy matching. If a scenario's key behavioral claim has no corresponding DoD item preserving that claim, the gate fails. Enforced by traceability-guard.sh (Gherkin-to-DoD pass) and state-transition-guard.sh Check 22.
+  G069:
+    name: collateral_change_containment_gate
+    description: >-
+      BLOCKING gate. Mixed-purpose cleanup is forbidden for narrow repairs and risky refactors. Scopes that refactor, simplify, or repair high-fan-out infrastructure MUST declare a Change Boundary listing allowed file families and excluded surfaces that must remain untouched, and they MUST prove zero unrelated file families were changed as part of the fix loop. Opportunistic cleanups, unrelated handler/test edits, or broad repo sweeps bundled into the same repair path are blocking failures. Enforced by state-transition-guard.sh Check 8D.
   G070:
     name: outcome_contract_gate
     description: >-
@@ -394,3 +394,14 @@ gates:
     name: framework_health_evidence_gate
     description: >-
       BLOCKING gate for the `framework-health` workflow mode. `bubbles.retro target: framework` MUST emit an improvement proposal under `improvements/IMP-NNN-<slug>.md` referencing the input data sources analyzed (`.specify/runtime/framework-events.jsonl`, `workflow-runs.json`, `bubbles/capability-ledger.yaml`). The proposal MUST NOT auto-mutate `bubbles/*`, `agents/*`, or `bubbles/workflows.yaml` — proposal-first, human reviewed. Enforced by `bubbles/scripts/retro-framework-health.sh` writing only to `improvements/`. Owned by `bubbles.retro`.
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # MODEL-TIER FLOOR GATE (G126)
+  # Introduced with v6.1 / S9 (review R4). Promotes the v5.1 model-tier
+  # advisory to blocking for high-stakes phases. Enforced by
+  # bubbles/scripts/model-tier-advisory.sh.
+  # ──────────────────────────────────────────────────────────────────────────
+  G126:
+    name: model_tier_floor_gate
+    description: >-
+      BLOCKING gate for high-stakes phases. When a mode declares a `modelFloor` for a phase listed in `modeDefaults.modelFloorEnforcedPhases` (default: audit, security, validate), the active model reported via `BUBBLES_ACTIVE_MODEL` MUST meet or exceed that floor. `model-tier-advisory.sh check` exits non-zero (blocking) for an enforced phase when the active model is known and below floor, and remains advisory (warning, exit 0) for all other phases. It NEVER false-blocks when the model identifier is unknown or no floor is declared, so new model releases are not penalized. Tiers (low → high): haiku-class < sonnet-class < opus-class. Enforced by `bubbles/scripts/model-tier-advisory.sh` (with `--enforce` or list-driven) and its hermetic selftest `model-tier-advisory-selftest.sh`. Owned by `bubbles.workflow` (calls the check before each enforced phase).

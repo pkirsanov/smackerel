@@ -26,6 +26,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source fun mode support
 source "$SCRIPT_DIR/fun-mode.sh"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# BUG-001 reliability helpers (R1), extracted to guard-lib.sh as the first step
+# of the guard split. bubbles_run_with_timeout / bubbles_pruned_find convert
+# hangs (untimed sub-guards, unbounded whole-repo find walks over .git /
+# node_modules / target / build caches) into bounded, observable failures.
+# ─────────────────────────────────────────────────────────────────────────────
+source "$SCRIPT_DIR/guard-lib.sh"
+
 feature_dir="${1:-}"
 revert_on_fail="false"
 
@@ -95,6 +103,15 @@ resolve_workflow_registry_file() {
 }
 
 workflow_registry_file="$(resolve_workflow_registry_file || true)"
+# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml,
+# beside workflows.yaml. Prefer it for the raw modes: awk parse below; fall
+# back to workflows.yaml for pre-split repos that still embed an inline modes:
+# block. (The mode-resolver fallback path also composes modes.yaml on its own.)
+workflow_modes_file=""
+if [[ -n "$workflow_registry_file" ]]; then
+  workflow_modes_file="$(dirname "$workflow_registry_file")/workflows/modes.yaml"
+  [[ -f "$workflow_modes_file" ]] || workflow_modes_file="$workflow_registry_file"
+fi
 is_test_fixture_dir="false"
 case "$feature_abs" in
   "$guard_repo_root/tests/fixtures/"*|"$script_repo_root/tests/fixtures/"*)
@@ -175,7 +192,7 @@ resolve_workflow_status_ceiling_from_registry() {
   local status_ceiling=""
 
   [[ -n "$workflow_mode" ]] || return 1
-  [[ -n "$workflow_registry_file" && -f "$workflow_registry_file" ]] || return 1
+  [[ -n "$workflow_modes_file" && -f "$workflow_modes_file" ]] || return 1
 
   status_ceiling="$(awk -v mode="$workflow_mode" '
     /^modes:[[:space:]]*$/ { in_modes = 1; next }
@@ -192,7 +209,7 @@ resolve_workflow_status_ceiling_from_registry() {
         exit
       }
     }
-  ' "$workflow_registry_file")"
+  ' "$workflow_modes_file")"
 
   [[ -n "$status_ceiling" ]] || return 1
   printf '%s\n' "$status_ceiling"
@@ -209,10 +226,13 @@ resolve_workflow_status_ceiling() {
 
   status_ceiling="$(resolve_workflow_status_ceiling_from_registry "$workflow_mode" || true)"
   if [[ -z "$status_ceiling" ]]; then
+    # v7: this resolves a PERSISTED workflowMode from an existing artifact, so
+    # grandfather the (possibly v5-name) registry key — the resolver rejects
+    # bare v5 names only for NEW operator input, not for stored modes.
     if [[ -n "$workflow_registry_file" ]]; then
-      resolved="$(BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
+      resolved="$(BUBBLES_MODE_GRANDFATHER=1 BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
     else
-      resolved="$(bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
+      resolved="$(BUBBLES_MODE_GRANDFATHER=1 bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
     fi
     status_ceiling="$(printf '%s\n' "$resolved" | awk -F':[[:space:]]*' '$1 == "statusCeiling" { gsub(/"/, "", $2); print $2; exit }')"
   fi
@@ -726,464 +746,37 @@ fi
 echo ""
 
 # =============================================================================
-# CHECK 3A: Policy Snapshot Provenance (Gate G055)
+# CHECKS 3A, 3H, 3C, 3D, 3E, 3F: v3 control-plane gates — policy provenance
+# (G055), validate certification (G056), scenario manifest (G057),
+# lockdown/regression contracts (G058/G059), scenario-first TDD (G060), and
+# transition/rework packet closure (G061/G063). Extracted to a guards/ fragment
+# (M4 split) and sourced in this shell scope (byte-identical). Check 3G stays
+# inline because it carries the BUG-001 timeout wrapper.
 # =============================================================================
-echo "--- Check 3A: Policy Snapshot Provenance (Gate G055) ---"
-if grep -qE '"policySnapshot"[[:space:]]*:[[:space:]]*\{' "$state_file"; then
-  pass "state.json contains policySnapshot"
-
-  missing_policy_entries=0
-  for policy_name in grill tdd autoCommit lockdown regression validation; do
-    if grep -qE "\"$policy_name\"[[:space:]]*:[[:space:]]*\{" "$state_file"; then
-      pass "policySnapshot records $policy_name"
-    else
-      fail "policySnapshot missing $policy_name entry (Gate G055)"
-      missing_policy_entries=$((missing_policy_entries + 1))
-    fi
-  done
-
-  source_hits="$(grep -cE '"source"[[:space:]]*:[[:space:]]*"(user-request|repo-default|workflow-forced|spec-lockdown)"' "$state_file" || true)"
-  if [[ "$source_hits" -ge 3 ]]; then
-    pass "policySnapshot records allowed provenance values"
-  else
-    fail "policySnapshot does not record enough valid provenance fields (Gate G055)"
-  fi
-
-  if [[ "$missing_policy_entries" -eq 0 ]]; then
-    pass "policySnapshot covers the control-plane defaults required for this run"
-  fi
-else
-  fail "state.json missing policySnapshot — control-plane provenance cannot be verified (Gate G055)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 3H: Validate-owned certification state (Gate G056)
-# =============================================================================
-echo "--- Check 3H: Validate Certification State (Gate G056) ---"
-if grep -qE '"certification"[[:space:]]*:[[:space:]]*\{' "$state_file"; then
-  pass "state.json contains certification block"
-
-  certification_status="$(json_nested_string "certification" "status" "$state_file" || true)"
-
-  if [[ -n "$certification_status" ]]; then
-    if [[ -n "$state_status" && "$certification_status" != "$state_status" ]]; then
-      fail "Top-level status ('$state_status') does not match certification.status ('$certification_status') (Gate G056)"
-    else
-      pass "Top-level status matches certification.status ($certification_status)"
-    fi
-  else
-    fail "certification block is missing status field (Gate G056)"
-  fi
-
-  # v4.1.0: G056 schema loosening. Accept presence of the field with any
-  # value type (array, object, null, empty). Pre-v4.1.0 the grep patterns
-  # required `: [` or `: {` literal starts, which fired false positives
-  # whenever the certifying agent (bubbles.validate) emitted `null` or
-  # `[]` / `{}` placeholders before the first scope landed. Field
-  # presence is what the gate must enforce; the field's structural
-  # content is checked by other gates (G024, G026, G027, etc.).
-  if grep -qE '"certifiedCompletedPhases"[[:space:]]*:' "$state_file"; then
-    pass "certification block records certifiedCompletedPhases (any value type)"
-  else
-    fail "certification block missing certifiedCompletedPhases (Gate G056)"
-  fi
-
-  if grep -qE '"scopeProgress"[[:space:]]*:' "$state_file"; then
-    pass "certification block records scopeProgress (any value type)"
-  else
-    fail "certification block missing scopeProgress (Gate G056)"
-  fi
-
-  if grep -qE '"lockdownState"[[:space:]]*:' "$state_file"; then
-    pass "certification block records lockdownState (any value type)"
-  else
-    fail "certification block missing lockdownState (Gate G056)"
-  fi
-else
-  fail "state.json missing certification block — validate-owned promotion state cannot be verified (Gate G056)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 3C: Scenario contract manifest (Gate G057)
-# =============================================================================
-echo "--- Check 3C: Scenario Manifest Integrity (Gate G057) ---"
-gherkin_scenario_count="$(count_gherkin_scenarios)"
-if [[ "$gherkin_scenario_count" -gt 0 ]]; then
-  if [[ -f "$scenario_manifest_file" ]]; then
-    pass "Scenario manifest exists: $(relative_artifact_path "$scenario_manifest_file")"
-
-    manifest_scenario_count="$(grep -cE '"scenarioId"[[:space:]]*:' "$scenario_manifest_file" || true)"
-    manifest_test_type_count="$(grep -cE '"requiredTestType"[[:space:]]*:' "$scenario_manifest_file" || true)"
-    manifest_linked_test_count="$(grep -cE '"linkedTests"[[:space:]]*:' "$scenario_manifest_file" || true)"
-    manifest_evidence_count="$(grep -cE '"evidenceRefs"[[:space:]]*:' "$scenario_manifest_file" || true)"
-
-    if [[ "$manifest_scenario_count" -lt "$gherkin_scenario_count" ]]; then
-      fail "scenario-manifest.json only tracks $manifest_scenario_count scenarios but resolved scopes define $gherkin_scenario_count Gherkin scenarios (Gate G057)"
-    else
-      pass "scenario-manifest.json covers at least as many scenarios as the scope artifacts ($manifest_scenario_count >= $gherkin_scenario_count)"
-    fi
-
-    if [[ "$manifest_test_type_count" -lt "$gherkin_scenario_count" ]]; then
-      fail "scenario-manifest.json is missing requiredTestType entries for one or more scenarios (Gate G057)"
-    else
-      pass "scenario-manifest.json records required live test types"
-    fi
-
-    if [[ "$manifest_linked_test_count" -eq 0 ]]; then
-      fail "scenario-manifest.json is missing linkedTests entries (Gate G057)"
-    else
-      pass "scenario-manifest.json records linkedTests"
-    fi
-
-    if [[ "$manifest_evidence_count" -eq 0 ]]; then
-      fail "scenario-manifest.json is missing evidenceRefs entries (Gate G057)"
-    else
-      pass "scenario-manifest.json records evidenceRefs"
-    fi
-  else
-    fail "Resolved scopes define Gherkin scenarios but scenario-manifest.json is missing (Gate G057)"
-  fi
-else
-  info "No Gherkin scenarios found in resolved scope artifacts — scenario manifest check skipped"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 3D: Lockdown and regression contract protection (G058/G059)
-# =============================================================================
-echo "--- Check 3D: Lockdown And Regression Contracts (G058/G059) ---"
-locked_scenario_count=0
-changed_contract_count=0
-if [[ -f "$scenario_manifest_file" ]]; then
-  locked_scenario_count="$(grep -cE '"lockdown"[[:space:]]*:[[:space:]]*true' "$scenario_manifest_file" || true)"
-  changed_contract_count="$(grep -cE '"changeType"[[:space:]]*:[[:space:]]*"(changed|replacement|removed)"' "$scenario_manifest_file" || true)"
-  regression_required_count="$(grep -cE '"regressionRequired"[[:space:]]*:[[:space:]]*true' "$scenario_manifest_file" || true)"
-
-  if [[ "$regression_required_count" -gt 0 ]]; then
-    pass "scenario-manifest.json marks $regression_required_count regression-protected scenario contract(s)"
-  else
-    info "No regression-protected scenarios marked in scenario-manifest.json"
-  fi
-
-  if [[ "$locked_scenario_count" -gt 0 && "$changed_contract_count" -gt 0 ]]; then
-    if [[ -f "$lockdown_approvals_file" ]]; then
-      pass "Lockdown approvals artifact exists: $(relative_artifact_path "$lockdown_approvals_file")"
-    else
-      fail "Locked scenario changes require lockdown-approvals.json (Gate G058)"
-    fi
-
-    if [[ -f "$invalidation_ledger_file" ]]; then
-      pass "Invalidation ledger exists: $(relative_artifact_path "$invalidation_ledger_file")"
-    else
-      fail "Locked scenario changes require invalidation-ledger.json (Gate G058)"
-    fi
-
-    if [[ -f "$lockdown_approvals_file" ]]; then
-      if grep -qE '"approvedVia"[[:space:]]*:[[:space:]]*"bubbles\.grill"' "$lockdown_approvals_file"; then
-        pass "Lockdown approval was captured through bubbles.grill"
-      else
-        fail "lockdown-approvals.json is missing approvedVia=bubbles.grill (Gate G058)"
-      fi
-    fi
-
-    if [[ -f "$invalidation_ledger_file" ]]; then
-      if grep -qE '"invalidatedBy"[[:space:]]*:[[:space:]]*"bubbles\.validate"' "$invalidation_ledger_file"; then
-        pass "Invalidation ledger records validate-owned invalidation"
-      else
-        fail "invalidation-ledger.json is missing invalidatedBy=bubbles.validate (Gate G058/G059)"
-      fi
-    fi
-  else
-    info "No locked scenario replacements detected — lockdown approval and invalidation artifacts not required"
-  fi
-else
-  info "Scenario manifest not present — lockdown/regression contract checks depend on Gate G057"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 3E: Scenario-first TDD evidence (Gate G060)
-# =============================================================================
-echo "--- Check 3E: Scenario-first TDD Evidence (Gate G060) ---"
-effective_tdd_mode="$({
-  python3 -c "
-import json
-try:
-    with open('$state_file') as f:
-        data = json.load(f)
-    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
-    print(tdd.get('mode', '') or '')
-except Exception:
-    print('')
-" 2>/dev/null
-} || echo "")"
-
-if [[ -z "$effective_tdd_mode" && ( "$state_workflow_mode" == "bugfix-fastlane" || "$state_workflow_mode" == "chaos-hardening" ) ]]; then
-  effective_tdd_mode="scenario-first"
-fi
-
-# Per-packet exemption support (per upstream fix proposal — artifact-only fastlanes)
-# Read policySnapshot.tdd.exempt + exemptReason from state.json.
-tdd_exempt="$({
-  python3 -c "
-import json
-try:
-    with open('$state_file') as f:
-        data = json.load(f)
-    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
-    print('true' if tdd.get('exempt') is True else 'false')
-except Exception:
-    print('false')
-" 2>/dev/null
-} || echo "false")"
-
-tdd_exempt_reason="$({
-  python3 -c "
-import json
-try:
-    with open('$state_file') as f:
-        data = json.load(f)
-    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
-    r = tdd.get('exemptReason', '') or ''
-    print(r.strip())
-except Exception:
-    print('')
-" 2>/dev/null
-} || echo "")"
-
-# Eligible modes for opt-in exemption (artifact-only fastlanes + always-exempt docs/reconcile)
-tdd_exemption_eligible_modes="docs-only reconcile-to-doc validate-to-doc gaps-to-doc devops-to-doc bugfix-fastlane chaos-hardening stabilize-to-doc audit-to-doc"
-tdd_forbidden_reasons="n/a none exempt no tests skip skipped tbd todo"
-
-if [[ "$effective_tdd_mode" == "scenario-first" ]]; then
-  if [[ "$tdd_exempt" == "true" ]]; then
-    # Validate exemption: mode eligible, reason present, reason substantive
-    mode_eligible="false"
-    for m in $tdd_exemption_eligible_modes; do
-      if [[ "$state_workflow_mode" == "$m" ]]; then
-        mode_eligible="true"
-        break
-      fi
-    done
-
-    if [[ "$mode_eligible" != "true" ]]; then
-      fail "policySnapshot.tdd.exempt=true is not allowed for workflow mode '$state_workflow_mode' — exemption only permitted for: $tdd_exemption_eligible_modes (Gate G060)"
-    elif [[ -z "$tdd_exempt_reason" ]]; then
-      fail "policySnapshot.tdd.exempt=true requires a non-empty exemptReason (Gate G060)"
-    elif [[ "${#tdd_exempt_reason}" -lt 20 ]]; then
-      fail "policySnapshot.tdd.exemptReason must be at least 20 characters describing why no runtime test surface exists (Gate G060). Got: '$tdd_exempt_reason'"
-    else
-      # Reject stop-word reasons
-      reason_lc="$(echo "$tdd_exempt_reason" | tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | xargs)"
-      is_stop_word="false"
-      for sw in $tdd_forbidden_reasons; do
-        if [[ "$reason_lc" == "$sw" ]]; then
-          is_stop_word="true"
-          break
-        fi
-      done
-      if [[ "$is_stop_word" == "true" ]]; then
-        fail "policySnapshot.tdd.exemptReason is a stop-word ('$tdd_exempt_reason') — provide a substantive explanation (Gate G060)"
-      else
-        pass "Scenario-first TDD exempted under mode '$state_workflow_mode' — INFO[G060-EXEMPT] reason: $tdd_exempt_reason"
-      fi
-    fi
-  else
-    tdd_evidence_found="false"
-    for artifact_path in "${scope_files[@]}" "${report_files[@]}"; do
-      [[ -f "$artifact_path" ]] || continue
-      if grep -qiE 'red[[:space:]-]*green|failing targeted|red evidence|green evidence|scenario-first|tdd' "$artifact_path"; then
-        tdd_evidence_found="true"
-        break
-      fi
-    done
-
-    if [[ "$tdd_evidence_found" == "true" ]]; then
-      pass "Scenario-first TDD evidence is recorded in the scope/report artifacts"
-    else
-      fail "Effective TDD mode is scenario-first but no red→green evidence markers were found in scope/report artifacts (Gate G060)"
-    fi
-  fi
-else
-  info "Effective TDD mode is '${effective_tdd_mode:-off}' — scenario-first evidence check not required"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 3F: Transition and rework packet closure (Gate G061)
-# =============================================================================
-echo "--- Check 3F: Transition And Rework Packets (Gate G061) ---"
-pending_transition_failures=0
-
-# Use python to inspect transitionRequests properly: allow status=="open" entries
-# ONLY when they carry routedTo + (routedToCommit|routedToSpec|routedToTicket) + productAction=="none"
-# (and crossRepoFollowUp:true when routed to an external/upstream owner).
-tr_analysis="$({
-  python3 -c "
-import json, re, sys
-try:
-    with open('$state_file') as f:
-        data = json.load(f)
-    trs = data.get('transitionRequests', []) or []
-    if not isinstance(trs, list):
-        trs = []
-    blocking = []
-    routed_open = []
-    for tr in trs:
-        if not isinstance(tr, dict):
-            continue
-        status = (tr.get('status') or '').strip()
-        tr_id = tr.get('id') or tr.get('transitionRequestId') or '<unknown>'
-        if status in ('', 'closed', 'resolved', 'done', 'cancelled', 'rejected'):
-            continue
-        if status == 'open':
-            routed_to = (tr.get('routedTo') or '').strip()
-            routed_commit = (tr.get('routedToCommit') or '').strip()
-            routed_spec = (tr.get('routedToSpec') or '').strip()
-            routed_ticket = (tr.get('routedToTicket') or '').strip()
-            product_action = (tr.get('productAction') or '').strip()
-            cross_repo = bool(tr.get('crossRepoFollowUp'))
-            problems = []
-            if not routed_to:
-                problems.append('missing routedTo')
-            if not (routed_commit or routed_spec or routed_ticket):
-                problems.append('missing routedToCommit/Spec/Ticket')
-            if product_action != 'none':
-                problems.append(f'productAction is \"{product_action}\" not \"none\"')
-            if routed_commit and not re.fullmatch(r'[0-9a-f]{7,40}', routed_commit):
-                problems.append(f'routedToCommit not a hex SHA: {routed_commit}')
-            if routed_ticket and not re.match(r'https?://', routed_ticket):
-                problems.append('routedToTicket not a URL')
-            looks_external = bool(re.search(r'upstream|external|bubbles\\.', routed_to, re.I))
-            if looks_external and not cross_repo:
-                problems.append('routed externally but crossRepoFollowUp is not true')
-            if problems:
-                blocking.append((tr_id, status, problems))
-            else:
-                routed_open.append((tr_id, routed_to))
-        else:
-            blocking.append((tr_id, status, ['status is not open/closed/resolved']))
-    for tr_id, status, probs in blocking:
-        print(f'BLOCK\\t{tr_id}\\t{status}\\t{\"; \".join(probs)}')
-    for tr_id, routed_to in routed_open:
-        print(f'OK\\t{tr_id}\\t{routed_to}')
-except Exception as e:
-    print(f'ERR\\t{e}')
-" 2>/dev/null
-} || true)"
-
-if echo "$tr_analysis" | grep -q '^ERR'; then
-  # Fall back to legacy check if state.json is malformed
-  if grep -A6 '"transitionRequests"' "$state_file" | grep -qE '"TR-|"transitionRequestId"'; then
-    fail "state.json still contains non-empty transitionRequests — validation routing is not complete (Gate G061)"
-    pending_transition_failures=$((pending_transition_failures + 1))
-  else
-    pass "state.json transitionRequests queue is empty"
-  fi
-else
-  if echo "$tr_analysis" | grep -q '^BLOCK'; then
-    while IFS=$'\t' read -r marker tr_id status probs; do
-      [[ "$marker" == "BLOCK" ]] || continue
-      fail "transitionRequest $tr_id (status=$status) lacks routing fields: $probs (Gate G061)"
-      pending_transition_failures=$((pending_transition_failures + 1))
-    done <<< "$tr_analysis"
-  fi
-  if echo "$tr_analysis" | grep -q '^OK'; then
-    while IFS=$'\t' read -r marker tr_id routed_to; do
-      [[ "$marker" == "OK" ]] || continue
-      pass "transitionRequest $tr_id is open-but-routed to '$routed_to' (Gate G061 allowance)"
-    done <<< "$tr_analysis"
-  fi
-  if [[ -z "$tr_analysis" ]]; then
-    pass "state.json transitionRequests queue is empty"
-  fi
-fi
-
-rework_nonempty="$({
-  python3 -c "
-import json
-try:
-    with open('$state_file') as f:
-        data = json.load(f)
-    rq = data.get('reworkQueue', []) or []
-    print('true' if isinstance(rq, list) and len(rq) > 0 else 'false')
-except Exception:
-    print('false')
-" 2>/dev/null
-} || echo "false")"
-if [[ "$rework_nonempty" == "true" ]]; then
-  fail "state.json still contains non-empty reworkQueue entries — open rework remains (Gate G061)"
-  pending_transition_failures=$((pending_transition_failures + 1))
-else
-  pass "state.json reworkQueue is empty"
-fi
-
-if [[ -f "$transition_requests_file" ]]; then
-  if grep -qE '"status"[[:space:]]*:[[:space:]]*"(pending-validation|route_required|blocked|open)"' "$transition_requests_file"; then
-    fail "transition-requests.json contains unresolved transition packets (Gate G061)"
-    pending_transition_failures=$((pending_transition_failures + 1))
-  else
-    pass "transition-requests.json contains no unresolved packets"
-  fi
-
-  if grep -qE '"evidenceRefs"[[:space:]]*:[[:space:]]*\[[[:space:]]*\]' "$transition_requests_file"; then
-    fail "transition-requests.json contains a packet without evidenceRefs (Gate G061)"
-    pending_transition_failures=$((pending_transition_failures + 1))
-  else
-    pass "transition packets include evidenceRefs"
-  fi
-fi
-
-if [[ -f "$rework_queue_file" ]]; then
-  if grep -qE '"status"[[:space:]]*:[[:space:]]*"(open|pending|route_required|blocked)"' "$rework_queue_file"; then
-    fail "rework-queue.json contains unresolved rework packets (Gate G061)"
-    pending_transition_failures=$((pending_transition_failures + 1))
-  else
-    pass "rework-queue.json contains no unresolved rework packets"
-  fi
-
-  if ! grep -qE '"owner"[[:space:]]*:[[:space:]]*"bubbles\.[A-Za-z0-9.-]+"' "$rework_queue_file"; then
-    fail "rework-queue.json is missing a concrete owning specialist for one or more packets (Gate G063)"
-    pending_transition_failures=$((pending_transition_failures + 1))
-  else
-    pass "rework packets record a concrete owning specialist"
-  fi
-
-  if ! grep -qE '"reason"[[:space:]]*:[[:space:]]*"[^"]+"' "$rework_queue_file"; then
-    fail "rework-queue.json is missing packet reasons (Gate G063)"
-    pending_transition_failures=$((pending_transition_failures + 1))
-  else
-    pass "rework packets record concrete reasons"
-  fi
-
-  if ! grep -qE '"(scenarioIds|dodItems)"[[:space:]]*:[[:space:]]*\[' "$rework_queue_file"; then
-    fail "rework-queue.json is missing scenarioIds or dodItems references (Gate G063)"
-    pending_transition_failures=$((pending_transition_failures + 1))
-  else
-    pass "rework packets record scenario or DoD references"
-  fi
-fi
-
-if [[ "$pending_transition_failures" -eq 0 ]]; then
-  pass "Transition and rework routing is closed"
-fi
-echo ""
+source "$SCRIPT_DIR/guards/control-plane-checks.sh"
 
 # =============================================================================
 # CHECK 3G: Framework ownership/result contract integrity (G042/G063/G064)
 # =============================================================================
 echo "--- Check 3G: Framework Ownership And Result Contract (G042/G063/G064) ---"
 if [[ -x "$framework_ownership_lint_script" || -f "$framework_ownership_lint_script" ]]; then
-  if bash "$framework_ownership_lint_script" >/tmp/bubbles-agent-ownership-lint.$$ 2>&1; then
-    pass "Framework ownership lint passed — artifact ownership enforcement, concrete result contract, and child workflow policy are internally consistent"
+  _c3g_start=$(date +%s)
+  _c3g_rc=0
+  bubbles_run_with_timeout 30 bash "$framework_ownership_lint_script" >/tmp/bubbles-agent-ownership-lint.$$ 2>&1 || _c3g_rc=$?
+  _c3g_elapsed=$(( $(date +%s) - _c3g_start ))
+  if [[ "$_c3g_rc" -eq 124 ]]; then
+    fail "Framework ownership lint TIMED OUT after 30s (BUG-001 guard) — G042/G063/G064 not certified. Inspect $framework_ownership_lint_script for an unbounded walk."
+  elif [[ "$_c3g_rc" -eq 0 ]]; then
+    pass "Framework ownership lint passed — artifact ownership enforcement, concrete result contract, and child workflow policy are internally consistent (${_c3g_elapsed}s)"
   else
     fail "Framework ownership lint failed — G042/G063/G064 cannot be certified during state transition"
     while IFS= read -r lint_line; do
       [[ -n "$lint_line" ]] || continue
       echo "   → $lint_line"
     done < /tmp/bubbles-agent-ownership-lint.$$
+  fi
+  if (( _c3g_elapsed > 30 )); then
+    warn "Check 3G wall-clock ${_c3g_elapsed}s exceeded the 30s budget"
   fi
   rm -f /tmp/bubbles-agent-ownership-lint.$$
 else
@@ -2160,7 +1753,7 @@ if [[ ${#test_files_in_plan[@]} -gt 0 ]]; then
     if [[ -f "$test_path" ]]; then
       pass "Test file exists: $test_path"
     elif [[ "$test_path" != */* ]]; then
-      unique_match="$({ find "$feature_dir/../.." -type f -name "$test_path" 2>/dev/null; } || true)"
+      unique_match="$({ bubbles_pruned_find "$feature_dir/../.." -type f -name "$test_path" -print 2>/dev/null; } || true)"
       unique_match_count="$({ printf '%s\n' "$unique_match" | grep -c .; } || true)"
       if [[ "$unique_match_count" -eq 1 ]]; then
         warn "Test Plan uses basename-only path '$test_path'; uniquely resolved to $(echo "$unique_match" | sed "s#^$feature_dir/../..##")"
@@ -2180,219 +1773,12 @@ else
   warn "No concrete test file paths found in Test Plan across resolved scope files (all may be placeholders)"
 fi
 
-# CHECK 8A: Scenario-specific regression E2E coverage is planned
 # =============================================================================
-echo "--- Check 8A: Scenario-Specific Regression E2E Coverage ---"
-missing_regression_e2e=0
-
-for scope_index in "${!scope_analysis_files[@]}"; do
-  scope_path="${scope_analysis_files[$scope_index]}"
-  [[ -f "$scope_path" ]] || continue
-  scope_label="$(scope_analysis_label "$scope_index")"
-
-  # v4.1.0: Scope-Kind opt-out. The default kind is `runtime-behavior`
-  # which enforces the full 3 E2E DoD/Test-Plan rows. Other kinds
-  # (contract-only, deploy-pointer, ci-config, docs-only, bootstrap)
-  # legitimately do not produce live-runtime E2E evidence at ship time
-  # and are exempted here. Authors opt in by adding either:
-  #   `Scope-Kind: <kind>`         (plain markdown line near top)
-  #   `**Scope-Kind:** <kind>`     (bold-key form — most common in templates)
-  #   `**Scope-Kind**: <kind>`     (bold-then-colon form)
-  # Default behavior (no header) = runtime-behavior = full E2E enforcement
-  # (v4.0.x compatible).
-  scope_kind="$(head -n 80 "$scope_path" \
-    | grep -iE '^(\*\*)?Scope-Kind(\*\*)?[[:space:]]*:[[:space:]]*(\*\*)?[[:space:]]*' \
-    | head -n 1 \
-    | sed -E 's/^(\*\*)?Scope-Kind(\*\*)?[[:space:]]*:[[:space:]]*(\*\*)?[[:space:]]*//I' \
-    | sed -E 's/[[:space:]]*(\*\*)?[[:space:]]*$//' \
-    | sed -E 's/[[:space:]]+$//' \
-    | tr '[:upper:]' '[:lower:]' || true)"
-  if [[ -z "$scope_kind" ]]; then
-    scope_kind="runtime-behavior"
-  fi
-  case "$scope_kind" in
-    contract-only|deploy-pointer|ci-config|docs-only|bootstrap)
-      info "Scope-Kind '$scope_kind' for $scope_label — E2E regression rows not required (v4.1.0 scopeKinds opt-out)"
-      continue
-      ;;
-    runtime-behavior|"")
-      # Fall through to full E2E enforcement (default).
-      ;;
-    *)
-      warn "Scope-Kind '$scope_kind' for $scope_label is not a recognised v4.1.0 scopeKinds entry — enforcing default runtime-behavior E2E rules"
-      ;;
-  esac
-
-  if grep -Eiq '^\- \[(x| )\] Scenario-specific E2E regression tests? for (EVERY|every) new/changed/fixed behavior' "$scope_path"; then
-    pass "Scope DoD includes scenario-specific regression E2E requirement: $scope_label"
-  else
-    fail "Scope is missing DoD item for scenario-specific regression E2E coverage: $scope_label"
-    missing_regression_e2e=$((missing_regression_e2e + 1))
-  fi
-
-  if grep -Eiq '^\- \[(x| )\] Broader E2E regression suite passes' "$scope_path"; then
-    pass "Scope DoD includes broader E2E regression suite requirement: $scope_label"
-  else
-    fail "Scope is missing DoD item for broader E2E regression suite coverage: $scope_label"
-    missing_regression_e2e=$((missing_regression_e2e + 1))
-  fi
-
-  if grep -Eiq '^\|.*Regression E2E' "$scope_path" || grep -Eiq '^\|.*e2e-(api|ui).*(\||`).*Regression:' "$scope_path"; then
-    pass "Scope Test Plan includes explicit regression E2E row(s): $scope_label"
-  else
-    fail "Scope Test Plan is missing explicit scenario-specific regression E2E row(s): $scope_label"
-    missing_regression_e2e=$((missing_regression_e2e + 1))
-  fi
-done
-
-if [[ "$missing_regression_e2e" -gt 0 ]]; then
-  fail "$missing_regression_e2e regression E2E planning requirement(s) missing — every runtime-behavior feature/fix/change needs persistent scenario-specific E2E regression coverage"
-fi
-echo ""
-
-# CHECK 8B: Consumer trace planning for renames/removals
+# CHECKS 8A-8D: regression-E2E planning, consumer trace (G043), shared-infra
+# blast-radius (G067), and change-boundary containment (G069). Extracted to a
+# guards/ fragment (M4 split) and sourced in this shell scope (byte-identical).
 # =============================================================================
-echo "--- Check 8B: Consumer Trace Planning For Renames/Removals ---"
-rename_scope_hits=0
-missing_consumer_trace=0
-
-for scope_index in "${!scope_analysis_files[@]}"; do
-  scope_path="${scope_analysis_files[$scope_index]}"
-  [[ -f "$scope_path" ]] || continue
-  scope_label="$(scope_analysis_label "$scope_index")"
-
-  if grep -Eiq '\b(rename|renamed|remove|removed|move|moved|replace|replaced|deprecat(e|ed)|migration)\b.*\b(route|path|endpoint|contract|api|url|slug|identifier|symbol|link|breadcrumb|navigation|redirect)\b|\b(route|path|endpoint|contract|api|url|slug|identifier|symbol|link|breadcrumb|navigation|redirect)\b.*\b(rename|renamed|remove|removed|move|moved|replace|replaced|deprecat(e|ed)|migration)\b' "$scope_path"; then
-    rename_scope_hits=$((rename_scope_hits + 1))
-
-    if grep -Eiq 'Consumer Impact Sweep' "$scope_path"; then
-      pass "Scope includes Consumer Impact Sweep section: $scope_label"
-    else
-      fail "Scope renames/removes interfaces but has no Consumer Impact Sweep section: $scope_label"
-      missing_consumer_trace=$((missing_consumer_trace + 1))
-    fi
-
-    if grep -Eiq '^\- \[(x| )\] .*consumer impact sweep.*zero stale first-party references remain' "$scope_path"; then
-      pass "Scope DoD includes consumer impact sweep completion item: $scope_label"
-    else
-      fail "Scope renames/removes interfaces but is missing DoD item for consumer impact sweep: $scope_label"
-      missing_consumer_trace=$((missing_consumer_trace + 1))
-    fi
-
-    if grep -Eiq 'navigation|breadcrumb|redirect|API client|generated client|deep link|stale-reference' "$scope_path"; then
-      pass "Scope lists affected consumer surfaces for rename/removal work: $scope_label"
-    else
-      fail "Scope renames/removes interfaces but does not enumerate affected consumer surfaces: $scope_label"
-      missing_consumer_trace=$((missing_consumer_trace + 1))
-    fi
-  fi
-done
-
-if [[ "$rename_scope_hits" -eq 0 ]]; then
-  info "No rename/removal scope patterns detected — consumer trace planning check not applicable"
-elif [[ "$missing_consumer_trace" -gt 0 ]]; then
-  fail "$missing_consumer_trace consumer-trace planning requirement(s) missing for rename/removal scope(s)"
-fi
-echo ""
-
-# CHECK 8C: Shared infrastructure blast-radius planning
-# =============================================================================
-echo "--- Check 8C: Shared Infrastructure Blast-Radius Planning ---"
-shared_scope_hits=0
-missing_shared_infra_requirements=0
-
-for scope_index in "${!scope_analysis_files[@]}"; do
-  scope_path="${scope_analysis_files[$scope_index]}"
-  [[ -f "$scope_path" ]] || continue
-  scope_label="$(scope_analysis_label "$scope_index")"
-
-  if grep -Eiq '\b(shared|global|common|core)\b.*\b(fixture|fixtures|harness|setup|bootstrap|test helper|test infrastructure)\b|\b(auth|login|session|password reset|token refresh|tenant context|role detection|storage injection|init script|addinitscript)\b.*\b(fixture|fixtures|harness|setup|bootstrap|contract|flow)\b|\b(auth fixture|login fixture|global setup|playwright setup|bootstrap helper|shared test helper)\b' "$scope_path"; then
-    shared_scope_hits=$((shared_scope_hits + 1))
-
-    if grep -Eiq 'Shared Infrastructure Impact Sweep' "$scope_path"; then
-      pass "Scope includes Shared Infrastructure Impact Sweep section: $scope_label"
-    else
-      fail "Scope touches shared fixture/bootstrap infrastructure but has no Shared Infrastructure Impact Sweep section: $scope_label"
-      missing_shared_infra_requirements=$((missing_shared_infra_requirements + 1))
-    fi
-
-    if grep -Eiq '^\- \[(x| )\] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns' "$scope_path"; then
-      pass "Scope DoD includes shared-infrastructure canary item: $scope_label"
-    else
-      fail "Scope touches shared fixture/bootstrap infrastructure but is missing the canary DoD item: $scope_label"
-      missing_shared_infra_requirements=$((missing_shared_infra_requirements + 1))
-    fi
-
-    if grep -Eiq '^\- \[(x| )\] Rollback or restore path for shared infrastructure changes is documented and verified' "$scope_path"; then
-      pass "Scope DoD includes rollback/restore item for shared infrastructure: $scope_label"
-    else
-      fail "Scope touches shared fixture/bootstrap infrastructure but is missing the rollback/restore DoD item: $scope_label"
-      missing_shared_infra_requirements=$((missing_shared_infra_requirements + 1))
-    fi
-
-    if grep -Eiq '^\|.*Canary:' "$scope_path" || grep -Eiq '^\|.*Fixture Canary' "$scope_path"; then
-      pass "Scope Test Plan includes explicit canary row(s): $scope_label"
-    else
-      fail "Scope touches shared fixture/bootstrap infrastructure but lacks an explicit canary Test Plan row: $scope_label"
-      missing_shared_infra_requirements=$((missing_shared_infra_requirements + 1))
-    fi
-
-    if grep -Eiq 'ordering|timing|storage|session|context|role|bootstrap contract|downstream contract|blast radius' "$scope_path"; then
-      pass "Scope enumerates downstream contract surfaces for shared infrastructure work: $scope_label"
-    else
-      fail "Scope touches shared fixture/bootstrap infrastructure but does not enumerate downstream contract surfaces: $scope_label"
-      missing_shared_infra_requirements=$((missing_shared_infra_requirements + 1))
-    fi
-  fi
-done
-
-if [[ "$shared_scope_hits" -eq 0 ]]; then
-  info "No shared fixture/bootstrap scope patterns detected — blast-radius planning check not applicable"
-elif [[ "$missing_shared_infra_requirements" -gt 0 ]]; then
-  fail "$missing_shared_infra_requirements shared-infrastructure planning requirement(s) missing"
-fi
-echo ""
-
-# CHECK 8D: Change boundary containment for risky refactors
-# =============================================================================
-echo "--- Check 8D: Change Boundary Containment ---"
-boundary_scope_hits=0
-missing_change_boundary=0
-
-for scope_path in "${scope_files[@]}"; do
-  [[ -f "$scope_path" ]] || continue
-
-  if grep -Eiq '\b(refactor|refactoring|simplify|simplification|cleanup|repair|hotspot)\b|Shared Infrastructure Impact Sweep' "$scope_path"; then
-    boundary_scope_hits=$((boundary_scope_hits + 1))
-
-    if grep -Eiq 'Change Boundary' "$scope_path"; then
-      pass "Scope includes Change Boundary section: ${scope_path#$feature_dir/}"
-    else
-      fail "Scope is a refactor/repair but has no Change Boundary section: ${scope_path#$feature_dir/}"
-      missing_change_boundary=$((missing_change_boundary + 1))
-    fi
-
-    if grep -Eiq '^\- \[(x| )\] Change Boundary is respected and zero excluded file families were changed' "$scope_path"; then
-      pass "Scope DoD includes change-boundary containment item: ${scope_path#$feature_dir/}"
-    else
-      fail "Scope is a refactor/repair but is missing the change-boundary DoD item: ${scope_path#$feature_dir/}"
-      missing_change_boundary=$((missing_change_boundary + 1))
-    fi
-
-    if grep -Eiq 'Allowed file families|Included file families|Excluded surfaces|Untouched surfaces' "$scope_path"; then
-      pass "Scope enumerates allowed and excluded surfaces for the change boundary: ${scope_path#$feature_dir/}"
-    else
-      fail "Scope is a refactor/repair but does not enumerate allowed and excluded surfaces: ${scope_path#$feature_dir/}"
-      missing_change_boundary=$((missing_change_boundary + 1))
-    fi
-  fi
-done
-
-if [[ "$boundary_scope_hits" -eq 0 ]]; then
-  info "No refactor/repair scope patterns detected — change-boundary check not applicable"
-elif [[ "$missing_change_boundary" -gt 0 ]]; then
-  fail "$missing_change_boundary change-boundary containment requirement(s) missing"
-fi
-echo ""
+source "$SCRIPT_DIR/guards/planning-checks.sh"
 
 # =============================================================================
 # CHECK 9: Evidence depth — DoD [x] items must have evidence blocks
@@ -2769,7 +2155,7 @@ echo ""
 echo "--- Check 13: Artifact Lint ---"
 lint_script="$SCRIPT_DIR/artifact-lint.sh"
 if [[ -f "$lint_script" ]]; then
-  if BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$lint_script" "$feature_dir" > /dev/null 2>&1; then
+  if BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bubbles_run_with_timeout 60 bash "$lint_script" "$feature_dir" > /dev/null 2>&1; then
     pass "Artifact lint passes (exit 0)"
   elif [[ "$is_test_fixture_dir" == "true" ]]; then
     warn "Artifact lint subprocess failed for tests/fixtures target after direct guard artifact checks passed; not blocking fixture acceptance"
@@ -2787,7 +2173,7 @@ echo ""
 echo "--- Check 13A: Artifact Freshness Isolation (Gate G052) ---"
 freshness_guard_script="$SCRIPT_DIR/artifact-freshness-guard.sh"
 if [[ -f "$freshness_guard_script" ]]; then
-  if bash "$freshness_guard_script" "$feature_dir" > /dev/null 2>&1; then
+  if bubbles_run_with_timeout 60 bash "$freshness_guard_script" "$feature_dir" > /dev/null 2>&1; then
     pass "Artifact freshness guard passes (exit 0)"
   else
     fail "Artifact freshness guard FAILED — run 'bash bubbles/scripts/artifact-freshness-guard.sh $feature_dir' for details"
@@ -2963,7 +2349,7 @@ if [[ -f "$reality_scan_script" ]]; then
   esac
 
   if [[ "$run_reality_scan" == "true" ]]; then
-    reality_output="$(bash "$reality_scan_script" "$feature_dir" --verbose 2>&1 || true)"
+    reality_output="$(bubbles_run_with_timeout 120 bash "$reality_scan_script" "$feature_dir" --verbose 2>&1 || true)"
     reality_exit="$?"
 
     # Show condensed output
@@ -3421,98 +2807,11 @@ fi
 echo ""
 
 # =============================================================================
-# CHECK 23: Convergence Cap Enforcement (Gate G082)
+# CHECKS 23-25: convergence cap (G082), compaction discipline (G083),
+# pre-existing deferral block (G084). Extracted to a guards/ fragment (M4 split)
+# and sourced in this shell scope so behavior is byte-identical.
 # =============================================================================
-# Mechanical wrapper around bubbles/scripts/convergence-cap-guard.sh.
-# The guard reads `.specify/memory/bubbles.session.json` and checks every
-# `convergenceLoops[]` entry whose `specDir` matches the spec under
-# inspection. If the highest observed `iterationCount` exceeds
-# `maxConvergenceIterations` (default 10, from `bubbles/workflows.yaml`),
-# the guard exits 1 and this check fails. Missing session.json, missing
-# convergenceLoops[], or entries scoped to other specs all pass cleanly.
-echo "--- Check 23: Convergence Cap Enforcement (Gate G082) ---"
-conv_guard="$SCRIPT_DIR/convergence-cap-guard.sh"
-if fixture_gate_skip "convergence cap enforcement (Gate G082)"; then
-  :
-elif [[ -x "$conv_guard" ]]; then
-  if run_guard_in_feature_repo bash "$conv_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
-    pass "Convergence cap not exceeded (Gate G082)"
-  else
-    fail "Convergence cap exceeded — Gate G082 violation. Run 'bash $conv_guard $feature_dir' for full diagnostic"
-    info "maxConvergenceIterations lives in bubbles/workflows.yaml (default 10)"
-    info "Orchestrator agents (workflow, goal, iterate, sprint) MUST emit a 'blocked' RESULT-ENVELOPE with finding G082 when the cap is reached"
-  fi
-else
-  info "convergence-cap-guard.sh not present at $conv_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 24: Compaction Discipline Enforcement (Gate G083)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/compaction-discipline-guard.sh.
-# The guard reads `.specify/memory/bubbles.session.json`, isolates
-# `envelopesReceived[]` entries whose `specDir` matches the spec under
-# inspection, sorts by `receivedAt`, drops the latest 2 (kept raw by
-# policy), then checks the eligible slice for BOTH `count <= 3` AND
-# `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope
-# carries a `compactedAt` timestamp. Thresholds are framework constants
-# (NOT workflows.yaml-configurable). Missing session.json or no
-# envelopesReceived[] entries for this spec both pass cleanly.
-echo "--- Check 24: Compaction Discipline Enforcement (Gate G083) ---"
-comp_guard="$SCRIPT_DIR/compaction-discipline-guard.sh"
-if fixture_gate_skip "compaction discipline enforcement (Gate G083)"; then
-  :
-elif [[ -x "$comp_guard" ]]; then
-  if run_guard_in_feature_repo bash "$comp_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
-    pass "Compaction discipline respected (Gate G083)"
-  else
-    fail "Compaction discipline violation — Gate G083. Run 'bash $comp_guard $feature_dir' for full diagnostic"
-    info "Eligible slice (envelopes except latest 2) MUST satisfy count<=3 AND rawSizeBytes<=8192 UNLESS each over-budget envelope has compactedAt"
-    info "Orchestrator agents MUST run bubbles/scripts/context-compactor.sh on over-budget envelopes (additively stamps compactedAt) BEFORE the next dispatch"
-    info "Thresholds are framework constants; see agents/bubbles_shared/operating-baseline.md → 'Context Compaction Discipline'"
-  fi
-else
-  info "compaction-discipline-guard.sh not present at $comp_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 25: Pre-Existing Deferral Block Enforcement (Gate G084)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/pre-existing-deferral-guard.sh.
-# The guard recursively scans every `scope.md` and `report.md` under
-# `<feature_dir>/scopes/*/` for two classes of pre-existing deferral
-# markers:
-#   - Forbidden phrases (case-insensitive substring):
-#       "pre-existing failure", "pre-existing test failure",
-#       "carried forward", "out of session scope",
-#       "previous-session failure", "not introduced by this spec"
-#   - Forbidden markers (colon-anchored, case-sensitive):
-#       TODO:  FIXME:  HACK:  STUB:
-# H2 subsections named `## Superseded Decisions`, `## Historical Notes`,
-# and `## Out of Scope` are exempt (allowed to discuss historical
-# deferrals for traceability). Inline `...` backticked spans and
-# ```fenced code blocks``` are also exempt so the guard never
-# self-triggers when the language is used as enumeration prose or
-# captured raw terminal output. Any active hit produces exit 1 and
-# blocks promotion to `done`.
-echo "--- Check 25: Pre-Existing Deferral Block Enforcement (Gate G084) ---"
-pre_guard="$SCRIPT_DIR/pre-existing-deferral-guard.sh"
-if [[ -x "$pre_guard" ]]; then
-  if run_guard_in_feature_repo bash "$pre_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
-    pass "No active pre-existing-deferral markers in scope.md / report.md (Gate G084)"
-  else
-    fail "Pre-existing deferral marker detected — Gate G084. Run 'bash $pre_guard $feature_dir' for full diagnostic"
-    info "Forbidden phrases: 'pre-existing failure', 'pre-existing test failure', 'carried forward', 'out of session scope', 'previous-session failure', 'not introduced by this spec'"
-    info "Forbidden markers (colon-anchored): TODO:  FIXME:  HACK:  STUB:"
-    info "Move historical language under '## Superseded Decisions', '## Historical Notes', or '## Out of Scope', OR wrap enumeration prose in inline backticks"
-    info "Pre-existing failures MUST be fixed inline; deferring to a follow-up session is forbidden by Gate G084"
-  fi
-else
-  info "pre-existing-deferral-guard.sh not present at $pre_guard; skipping (advisory)"
-fi
-echo ""
+source "$SCRIPT_DIR/guards/tail-convergence-gates.sh"
 
 # =============================================================================
 # CHECK 26: Framework Dogfood Evidence Enforcement (Gate G085)
@@ -3530,286 +2829,11 @@ if [[ "${BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST:-0}" == "1" ]]; then
   info "State-transition selftest fast path enabled; delegated gates G085-G095 are covered by their dedicated selftests in framework-validate"
   echo ""
 else
-echo "--- Check 26: Framework Dogfood Evidence Enforcement (Gate G085) ---"
-dog_guard="$SCRIPT_DIR/framework-dogfood-guard.sh"
-if fixture_gate_skip "framework dogfood evidence enforcement (Gate G085)"; then
-  :
-elif [[ -x "$dog_guard" ]]; then
-  if run_guard_in_script_repo bash "$dog_guard" --repo-root "$script_repo_root" --quiet > /dev/null 2>&1; then
-    pass "Framework dogfood evidence contract is satisfied (Gate G085)"
-  else
-    fail "Framework dogfood evidence contract failed — Gate G085. Run 'bash $dog_guard' for full diagnostic"
-    info "Bubbles source requirement: no persistent specs/ tree; use framework validation, selftests, release manifest, and downstream/fixture specs as evidence"
-    info "Downstream/fixture requirement: at least one specs/[0-9]*-*/state.json has top-level \"status\": \"done\""
-    info "Recipe: docs/recipes/framework-dogfood.md"
-    info "Cross-references: G082 (convergence cap), G083 (compaction discipline), G084 (pre-existing deferral)"
-  fi
-else
-  info "framework-dogfood-guard.sh not present at $dog_guard; skipping (advisory)"
-fi
-echo ""
-
 # =============================================================================
-# CHECK 27: Orchestrator Persistence Prompt Lint (Gate G086)
+# CHECKS 26-35: delegated tail gates G085-G095. Extracted to a guards/ fragment
+# (M4 split) and sourced inside this else branch so behavior is byte-identical.
 # =============================================================================
-# Mechanical wrapper around bubbles/scripts/orchestrator-persistence-lint.sh.
-# The guard scans the 4 orchestrator prompt files and rejects language
-# that makes continuation depend on a fresh user prompt. Orchestrators
-# must default to persistence after non-terminal phases, stopping only
-# for convergence achieved, max iterations reached, user requests stop,
-# or fundamental impossibility.
-echo "--- Check 27: Orchestrator Persistence Prompt Lint (Gate G086) ---"
-persistence_guard="$SCRIPT_DIR/orchestrator-persistence-lint.sh"
-if fixture_gate_skip "orchestrator persistence prompt lint (Gate G086)"; then
-  :
-elif [[ -x "$persistence_guard" ]]; then
-  if run_guard_in_script_repo bash "$persistence_guard" --root "$script_repo_root" --quiet > /dev/null 2>&1; then
-    pass "Orchestrator prompt files satisfy persistence-default lint (Gate G086)"
-  else
-    fail "Orchestrator persistence prompt lint failed — Gate G086. Run 'bash $persistence_guard' for full diagnostic"
-    info "Target files: agents/bubbles.goal.agent.md, agents/bubbles.workflow.agent.md, agents/bubbles.iterate.agent.md, agents/bubbles.sprint.agent.md"
-    info "Required default: after non-terminal phases, automatically continue to the next phase"
-    info "Stop reasons: convergence achieved, max iterations reached, user requests stop, fundamental impossibility"
-  fi
-else
-  info "orchestrator-persistence-lint.sh not present at $persistence_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 28: Planning Workflow Chain Enforcement (Gate G091)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/planning-workflow-chain-guard.sh.
-# Delivery-capable planning/bootstrap/fallback paths MUST preserve the ordered
-# canonical chain: bubbles.analyst -> bubbles.ux -> bubbles.design ->
-# bubbles.plan. UX is mandatory even for framework/operator/non-UI work;
-# non-UI UX defines workflow behavior, status language, blocked envelopes,
-# and exception handling.
-echo "--- Check 28: Planning Workflow Chain Enforcement (Gate G091) ---"
-planning_chain_guard="$SCRIPT_DIR/planning-workflow-chain-guard.sh"
-if fixture_gate_skip "planning workflow chain enforcement (Gate G091)"; then
-  :
-elif [[ -x "$planning_chain_guard" ]]; then
-  planning_chain_repo_root="$script_repo_root"
-  if bash "$planning_chain_guard" --root "$planning_chain_repo_root" --quiet > /dev/null 2>&1; then
-    pass "Planning workflow chain preserves analyst -> ux -> design -> plan (Gate G091)"
-  else
-    fail "Planning workflow chain guard failed — Gate G091. Run 'bash $planning_chain_guard --root $planning_chain_repo_root' for full diagnostic"
-    info "Required chain: bubbles.analyst -> bubbles.ux -> bubbles.design -> bubbles.plan"
-    info "Targets: workflows.yaml delivery constraints, inline auto-escalations, bootstrapAgents, improvementPreludeProfiles, and prompt/shared fallback prose"
-    info "UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling"
-  fi
-else
-  info "planning-workflow-chain-guard.sh not present at $planning_chain_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 29: Planning Packet Implementation Linkage (Gate G087)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/planning-packet-linkage-guard.sh.
-# Hardened planning packets (`state.status == specs_hardened`) must either
-# link to a real implementation spec with state.json or classify themselves
-# as planning-only with a non-empty justification. If the linked
-# implementation spec is done, it must point back with linkedPlanningPacket.
-# Archived implementation targets are not valid active implementation links.
-echo "--- Check 29: Planning Packet Implementation Linkage (Gate G087) ---"
-planning_linkage_guard="$SCRIPT_DIR/planning-packet-linkage-guard.sh"
-if fixture_gate_skip "planning packet implementation linkage (Gate G087)"; then
-  :
-elif [[ -x "$planning_linkage_guard" ]]; then
-  if run_guard_in_feature_repo bash "$planning_linkage_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
-    pass "Planning packet implementation linkage is coherent (Gate G087)"
-  else
-    fail "Planning packet implementation linkage failed — Gate G087. Run 'bash $planning_linkage_guard $feature_dir' for full diagnostic"
-    info "specs_hardened packets with planningOnly != true MUST set linkedImplementationSpec to a real spec directory with state.json"
-    info "If the linked implementation spec is done, linkedPlanningPacket MUST point back to the planning packet"
-    info "planningOnly:true requires a non-empty planningOnlyJustification; archived implementation targets must be relinked or classified planning-only"
-  fi
-else
-  info "planning-packet-linkage-guard.sh not present at $planning_linkage_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 29B: Delivery Implementation Delta (Gate G093)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/delivery-implementation-delta-guard.sh.
-# G053 owns Code Diff Evidence shape; G087 owns planning packet linkage; G093
-# owns status-ceiling-aware path classification for done-ceiling delivery modes.
-echo "--- Check 29B: Delivery Implementation Delta (Gate G093) ---"
-delivery_delta_guard="$SCRIPT_DIR/delivery-implementation-delta-guard.sh"
-if fixture_gate_skip "delivery implementation delta (Gate G093)"; then
-  :
-elif [[ -x "$delivery_delta_guard" ]]; then
-  if run_guard_in_feature_repo bash "$delivery_delta_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
-    pass "Delivery implementation delta is present or mode ceiling exempts it (Gate G093)"
-  else
-    fail "Delivery implementation delta guard failed — Gate G093. Run 'bash $delivery_delta_guard $feature_dir' for changed-path classification and owner routing"
-    info "Done-ceiling delivery modes MUST show implementation/runtime/config/contract/test/docs delta outside specs/ and .specify/"
-    info "Spec-only delivery output must route to implementation/test/docs work, or downgrade to a below-done planning-only workflow governed by G087"
-    info "G053 remains the Code Diff Evidence shape check; G093 is the delivery-mode status-level path gate"
-  fi
-else
-  info "delivery-implementation-delta-guard.sh not present at $delivery_delta_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 30: Post-Certification Spec Edit Detection (Gate G088)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/post-cert-spec-edit-guard.sh.
-# Certified specs (`state.status == done` or legacy read-only
-# `done_with_concerns`) must carry
-# top-level certifiedAt and must not have later planning-truth commits touching
-# spec.md, design.md, scopes.md, scopes/_index.md, or per-scope scope.md files
-# unless the spec is demoted, explicitly requires revalidation, or has been
-# recertified by current spec review with a newer certifiedAt.
-echo "--- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---"
-post_cert_guard="$SCRIPT_DIR/post-cert-spec-edit-guard.sh"
-if fixture_gate_skip "post-certification spec edit detection (Gate G088)"; then
-  :
-elif [[ -x "$post_cert_guard" ]]; then
-  if run_guard_in_feature_repo bash "$post_cert_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
-    pass "Post-certification planning truth is aligned with certification state (Gate G088)"
-  else
-    fail "Post-certification spec edit guard failed — Gate G088. Run 'bash $post_cert_guard $feature_dir' for full diagnostic"
-    info "Certified specs MUST have top-level certifiedAt and no later planning truth commits"
-    info "Tracked files: spec.md, design.md, scopes.md, scopes/_index.md, scopes/*/scope.md"
-    info "Remediation: demote status, set requiresRevalidation:true, or complete bubbles.spec-review recertification and update certifiedAt after the edit"
-  fi
-else
-  info "post-cert-spec-edit-guard.sh not present at $post_cert_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 31: Inter-Spec Dependency Enforcement (Gate G089)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/inter-spec-dependency-guard.sh.
-# Explicit specDependsOn[] entries must resolve to real specs with stable
-# states (done, with legacy read-only done_with_concerns accepted only for
-# untouched old specs), unless the current spec has already been flagged with
-# requiresRevalidation:true. Cycles are always blocking.
-echo "--- Check 31: Inter-Spec Dependency Enforcement (Gate G089) ---"
-inter_spec_dependency_guard="$SCRIPT_DIR/inter-spec-dependency-guard.sh"
-if fixture_gate_skip "inter-spec dependency enforcement (Gate G089)"; then
-  :
-elif [[ -x "$inter_spec_dependency_guard" ]]; then
-  if run_guard_in_feature_repo bash "$inter_spec_dependency_guard" "$feature_dir" --repo-root "$guard_repo_root" --quiet > /dev/null 2>&1; then
-    pass "Inter-spec dependencies are stable or explicitly flagged for revalidation (Gate G089)"
-  else
-    fail "Inter-spec dependency guard failed — Gate G089. Run 'bash $inter_spec_dependency_guard $feature_dir' for full diagnostic"
-    info "Every specDependsOn[] path MUST resolve to a spec directory containing state.json"
-    info "Dependency statuses allowed without revalidation: done; legacy read-only done_with_concerns remains compatible only until touched or recertified"
-    info "If a dependency is demoted, run inter-spec-dependency-revalidation.sh on that dependency so dependents carry requiresRevalidation:true"
-    info "Dependency cycles are always blocking"
-  fi
-else
-  info "inter-spec-dependency-guard.sh not present at $inter_spec_dependency_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 32: Strict Terminal Status Enforcement (Gate G092)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/strict-terminal-status-guard.sh.
-# New delivery certification writes may use only `done` or `blocked` as
-# terminal statuses. Legacy done_with_concerns remains readable only for old,
-# untouched specs until recertification migrates to done plus observations or
-# blocked. High/remediation-required observations cannot accompany done.
-echo "--- Check 32: Strict Terminal Status Enforcement (Gate G092) ---"
-strict_terminal_status_guard="$SCRIPT_DIR/strict-terminal-status-guard.sh"
-if fixture_gate_skip "strict terminal status enforcement (Gate G092)"; then
-  :
-elif [[ -x "$strict_terminal_status_guard" ]]; then
-  if run_guard_in_script_repo bash "$strict_terminal_status_guard" "$feature_dir" --repo-root "$script_repo_root" --quiet > /dev/null 2>&1; then
-    pass "Terminal certification statuses are strict (Gate G092)"
-  else
-    fail "Strict terminal status guard failed — Gate G092. Run 'bash $strict_terminal_status_guard $feature_dir' for full diagnostic"
-    info "Valid new terminal delivery statuses: done, blocked"
-    info "Non-blocking notes belong in observations[] / certification.observations[], not status"
-    info "Legacy done_with_concerns is read-only only; touched or recertified specs migrate to done+observations or blocked"
-    info "High/remediation-required observations block done"
-  fi
-else
-  info "strict-terminal-status-guard.sh not present at $strict_terminal_status_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 33: Retro Convergence Health Evidence (Gate G090)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/retro-convergence-health.sh.
-# Retrospectives must compute convergence health from session data. More than
-# 2 combined recap/handoff invocations is a P0 convergence regression and
-# fails the gate with slo=failed.
-echo "--- Check 33: Retro Convergence Health Evidence (Gate G090) ---"
-retro_convergence_health="$SCRIPT_DIR/retro-convergence-health.sh"
-if fixture_gate_skip "retro convergence health evidence (Gate G090)"; then
-  :
-elif [[ -f "$retro_convergence_health" ]]; then
-  retro_repo_root="$script_repo_root"
-  if bash "$retro_convergence_health" "$feature_dir" --repo-root "$retro_repo_root" --schema full > /dev/null 2>&1; then
-    pass "Retro convergence health SLO is pass/degraded (Gate G090)"
-  else
-    fail "Retro convergence health failed — Gate G090. Run 'bash $retro_convergence_health $feature_dir --repo-root $retro_repo_root' for full diagnostic"
-    info "Required retro schema: convergenceHealth: {recapCount, handoffCount, summarizeHistoryCount, turnCount, slo}"
-    info "P0 regression threshold: recapCount + handoffCount MUST be <= 2"
-    info "Snapshot completeness threshold: snapshotCompleteness MUST be 1.0"
-  fi
-else
-  info "retro-convergence-health.sh not present at $retro_convergence_health; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 34: Capability Foundation Enforcement (Gate G094)
-# =============================================================================
-# Mechanical wrapper around bubbles/scripts/capability-foundation-guard.sh.
-# New specs that trigger capability-first proportionality must model the
-# domain capability, technical foundation, concrete implementations,
-# variation axes, UI primitives where applicable, and foundation-before-
-# overlay scope ordering. Older specs are grandfathered by state.json
-# createdAt so framework upgrades do not retroactively block closed work.
-echo "--- Check 34: Capability Foundation Enforcement (Gate G094) ---"
-capability_foundation_guard="$SCRIPT_DIR/capability-foundation-guard.sh"
-if [[ -x "$capability_foundation_guard" ]]; then
-  if run_guard_in_feature_repo bash "$capability_foundation_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
-    pass "Capability foundation requirements are satisfied, not applicable, or grandfathered (Gate G094)"
-  else
-    fail "Capability foundation guard failed — Gate G094. Run 'bash $capability_foundation_guard $feature_dir' for full diagnostic"
-    info "Proportionality triggers: new capability, N>=2 implementation/provider/component/variant, adapter/provider/strategy/plugin/channel/driver/connector/variant language, or shared surfaces"
-    info "Required sections: spec.md Domain Capability Model or Single-Capability Justification; design.md Capability Foundation / Concrete Implementations / Variation Axes or Single-Implementation Justification"
-    info "When multiple screens share UI behavior, spec.md must include UI Primitives or Single-Screen Justification"
-    info "When design splits foundation and concrete implementations, scopes must tag foundation:true and overlay scopes must Depends On the foundation"
-  fi
-else
-  info "capability-foundation-guard.sh not present at $capability_foundation_guard; skipping (advisory)"
-fi
-echo ""
-
-# =============================================================================
-# CHECK 35: Discovered-Issue Disposition (Gate G095)
-# =============================================================================
-# Every issue an agent observes during work MUST have an explicit disposition.
-# "Pre-existing", "unrelated", "out of scope", "known issue", "skipping",
-# "will fix later", "not my session" without a filed BUG/spec/ops/routed
-# disposition is forbidden and counts as fabrication.
-echo "--- Check 35: Discovered-Issue Disposition (Gate G095) ---"
-discovered_issue_guard="$SCRIPT_DIR/discovered-issue-disposition-guard.sh"
-if [[ -x "$discovered_issue_guard" ]]; then
-  if bash "$discovered_issue_guard" "$feature_dir" > /dev/null 2>&1; then
-    pass "Discovered-issue disposition clean — no unfiled deferrals (Gate G095)"
-  else
-    fail "Discovered-issue disposition guard failed — Gate G095. Run 'bash $discovered_issue_guard $feature_dir' for full diagnostic"
-    info "Remediation: for every forbidden deferral phrase, either cite a concrete artifact (BUG-NNN, TR-NNN, spec path, ops URL) in the same paragraph, OR add a row to '## Discovered Issues' in report.md dated today with disposition + reference"
-    info "See agents/bubbles_shared/operating-baseline.md → 'Discovered-Issue Disposition' for the disposition table"
-  fi
-else
-  info "discovered-issue-disposition-guard.sh not present at $discovered_issue_guard; skipping (advisory)"
-fi
-echo ""
+source "$SCRIPT_DIR/guards/tail-delegated-gates.sh"
 fi
 
 # =============================================================================
@@ -3906,7 +2930,7 @@ if [[ "$failures" -gt 0 ]]; then
     echo "ADDED: failure record with timestamp $now_utc"
   fi
 
-  # ── Run project-defined custom gates (G100+) ───────────────────────
+  # ── Run project-defined custom gates (G900+) ───────────────────────
   PROJECT_CONFIG=".github/bubbles-project.yaml"
   if [[ -f "$PROJECT_CONFIG" ]]; then
     echo ""
