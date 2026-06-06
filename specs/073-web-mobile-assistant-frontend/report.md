@@ -809,3 +809,162 @@ POST_EXIT=0
 ```
 
 Final status: **done**.
+
+---
+
+## Gaps-to-Doc — Round 16 (2026-06-06)
+
+**Sweep context:** Stochastic-quality-sweep Round 16 of 20. Trigger
+`gaps`; mapped child workflow mode `gaps-to-doc`; executed in
+parent-expanded mode (subagent runtime lacks `runSubagent`). Owner of
+this section: `bubbles.workflow` parent-expanding `gaps-to-doc` and
+invoking phase-owners directly. Status ceiling `done` (inherited from
+`delivery-quality-constraints`); no demotion.
+
+### Findings discovered
+
+| # | Class | Severity | Description | Closure owner |
+|---|---|---|---|---|
+| F1 | post-certification-spec-edit (Gate G088) | BLOCKING (state-transition-guard exit 1, Check 30) | `scopes.md` was edited at commit `18f8512b07ed2c1a0b82ee342685ee32f5442cb5` (2026-06-05T16:11:50Z) — a citation-only drift cleanup that updated two evidence bullets to rename `tests/fixtures/assistant_response_v1/confirm_accept_decline.json` → `.input.json` + `.descriptor.json` (and the same for `capture_acknowledgement`). The fixture rename was historically applied on disk before the citation; this commit only updated the prose pointer. `certifiedAt` was `2026-06-04T05:20:00Z`, older than the post-cert edit, so G088 blocked. | `bubbles.spec-review` (recertification) |
+| F2 | implementation-vs-test-plan command drift (planning-truth misalignment) | DOC | Scope 1 Test Plan rows TP-073-01, TP-073-04, plus the Dart-side projections of TP-073-06 and TP-073-07 list `./smackerel.sh test unit` as the executable command. The repo CLI in `scripts/runtime/` (specifically `go-unit.sh`, `web-assistant-codegen-check.sh`, etc.) does NOT wire `flutter` or `dart`, so the standalone Dart tests under `clients/mobile/assistant/test/*.dart` only run when `flutter test` is invoked manually. The cross-language canary at `tests/unit/clients/render_descriptor_canary_test.go` (TP-073-03) does run via `./smackerel.sh test unit` and exercises the Dart shared-core via subprocess on every fixture, so the executable shared-core gate is preserved — but the Test Plan Command column was misleadingly presented as if all Dart tests run via the repo CLI. | `bubbles.plan` (Planning Notes clarification) |
+
+Two non-finding items inspected and explicitly NOT routed:
+
+- **`state.json` advisory** "deprecated field `scopeProgress`" — workspace-wide
+  schema-drift advisory recorded across many specs (021, 036, 043, 053, 054,
+  055, etc.). Non-blocking, not 073-specific; see `## Discovered Issues` row
+  dated 2026-06-06 below for disposition (deferred to a workspace-wide state.json
+  schema-v2 migration sweep, not a 073 finding).
+- **Wiring `flutter test` into the repo CLI** — explicitly deferred to the
+  follow-on mobile-delivery spec alongside iPhone/iOS + Android packaging,
+  on-device VoiceOver/TalkBack runs, and cross-surface parity tests (see
+  Rescope Decision). Doing it here would expand scope beyond the rescope
+  decision; documenting the boundary is the correct gaps-to-doc fix.
+
+### Baseline evidence (pre-closure)
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/073-web-mobile-assistant-frontend > /tmp/stg-073.log 2>&1; echo "STG_EXIT=$?"
+STG_EXIT=1
+$ grep -E 'Check 30|TRANSITION |BLOCK' /tmp/stg-073.log | head -10
+--- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---
+🔴 BLOCK: Post-certification spec edit guard failed — Gate G088. Run 'bash ~/smackerel/.github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/073-web-mobile-assistant-frontend' for full diagnostic
+  TRANSITION GUARD VERDICT
+🔴 TRANSITION BLOCKED: 1 failure(s), 0 warning(s)
+
+$ bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/073-web-mobile-assistant-frontend 2>&1 | head -20
+G088 post_certification_spec_edit_gate violation: certified planning truth changed after certifiedAt
+  spec: specs/073-web-mobile-assistant-frontend
+  status: done
+  certifiedAt: 2026-06-04T05:20:00Z
+  trackedFiles: 3
+  postCertEdits: 1
+  commits/files:
+    - commit=18f8512b07ed2c1a0b82ee342685ee32f5442cb5 date=2026-06-05T16:11:50+00:00 file=specs/073-web-mobile-assistant-frontend/scopes.md subject=fix(specs/021,026,028,073,075): tier-2 drift cleanup + ratchet 375 -> 365
+```
+
+### Closure actions
+
+**F1 — G088 recertification (owner: `bubbles.spec-review`, parent-expanded).**
+
+- Verified post-cert edit is non-substantive: `git show 18f8512b -- specs/073-web-mobile-assistant-frontend/scopes.md` shows two changed evidence bullets only (fixture path citation rename); no scope status, scenario, DoD, change-boundary, or test-plan-command change.
+- Re-ran TP-073-03 cross-language canary to confirm the shared-core gate still passes after the citation drift:
+  ```text
+  $ go test ./tests/unit/clients/... -run TestRenderDescriptorV1_CrossLanguageCanary -v 2>&1 | tail -6
+  PASS
+  ok      github.com/smackerel/smackerel/tests/unit/clients       3.562s
+  ```
+- Bumped `state.json` `certifiedAt` (top-level) and `certification.completedAt` from `2026-06-04T05:20:00Z` to `2026-06-06T12:00:00Z` (after the post-cert edit timestamp 2026-06-05T16:11:50Z).
+- Appended `spec-review-recertification` to `certification.certifiedCompletedPhases` and `execution.completedPhaseClaims`.
+- Updated `statusCeilingRationale` to record the recertification ground (citation-only post-cert edit + Round 16 planning-note clarification).
+
+**F2 — Mobile runner-boundary planning note (owner: `bubbles.plan`, parent-expanded).**
+
+- Appended one bullet to `scopes.md` `### Planning Notes` (Execution Outline) documenting:
+  - Dart-side standalone tests under `clients/mobile/assistant/test/` run via `flutter test`, NOT via `./smackerel.sh test unit`.
+  - The repo CLI does not wire `flutter` / `dart` because mobile packaging, on-device VoiceOver/TalkBack runs, and mobile-CLI tooling were rescoped to the follow-on mobile-delivery spec.
+  - The Go cross-language canary at `tests/unit/clients/render_descriptor_canary_test.go` (TP-073-03) IS the executable repo-CLI gate enforcing Dart shared-core behavior on every fixture.
+  - Wiring `flutter test` into the repo CLI belongs to the follow-on mobile-delivery spec.
+- No source, test, config, ML, runtime, or scope-level scope/DoD/scenario content changed.
+
+### Post-closure validation
+
+```text
+$ go test ./tests/unit/clients/... -run TestRenderDescriptorV1_CrossLanguageCanary -v 2>&1 | tail -12
+=== RUN   TestRenderDescriptorV1_CrossLanguageCanary
+=== RUN   TestRenderDescriptorV1_CrossLanguageCanary/capture_acknowledgement
+=== RUN   TestRenderDescriptorV1_CrossLanguageCanary/confirm_accept_decline
+=== RUN   TestRenderDescriptorV1_CrossLanguageCanary/disambiguation
+=== RUN   TestRenderDescriptorV1_CrossLanguageCanary/error_retry
+=== RUN   TestRenderDescriptorV1_CrossLanguageCanary/text_only
+=== RUN   TestRenderDescriptorV1_CrossLanguageCanary/unknown_shape
+=== RUN   TestRenderDescriptorV1_CrossLanguageCanary/with_sources
+--- PASS: TestRenderDescriptorV1_CrossLanguageCanary (0.55s)
+PASS
+ok      github.com/smackerel/smackerel/tests/unit/clients       3.562s
+
+$ go test ./web/pwa/tests/... 2>&1 | tail -3
+ok      github.com/smackerel/smackerel/web/pwa/tests    1.289s
+
+$ go vet -tags e2e ./tests/e2e/wiki/... ./tests/e2e/assistant/... 2>&1; echo "GOVET_EXIT=$?"
+GOVET_EXIT=0
+
+$ cd clients/mobile/assistant && flutter test 2>&1 | tail -2
+00:10 +19: All tests passed!
+```
+
+Post-edit state-transition-guard + artifact-lint receipts captured under
+the `### Round 16 closure receipts` block below.
+
+### Round 16 closure receipts
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/073-web-mobile-assistant-frontend > /tmp/stg-073-post-r16.log 2>&1; echo "STG_EXIT=$?"
+STG_EXIT=0
+$ grep -E 'Check 30|TRANSITION |BLOCK|VERDICT|PASS Gate G088|G088' /tmp/stg-073-post-r16.log | head -8
+--- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---
+✅ PASS Gate G088: Post-certification spec edit guard clean (certifiedAt 2026-06-06T12:00:00Z ≥ latest tracked-file commit; spec-review-recertification recorded in execution-history)
+  TRANSITION GUARD VERDICT
+🟢 TRANSITION PERMITTED: All checks pass (0 failures, 0 warnings)
+state.json status may be set to 'done'.
+
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/073-web-mobile-assistant-frontend > /tmp/al-073-post-r16-final.log 2>&1; echo "AL_EXIT=$?"
+AL_EXIT=0
+$ grep -E '⚠️|❌|FAIL|ERROR|PASSED' /tmp/al-073-post-r16-final.log
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+Artifact lint PASSED.
+```
+
+The single remaining `⚠️` is the pre-existing workspace-wide
+`scopeProgress` deprecated-field advisory (non-blocking; see `##
+Discovered Issues` row dated 2026-06-06). G088 (Check 30) is the
+finding F1 closure receipt. Artifact-lint PASSED is the finding F2
+closure receipt.
+
+## Discovered Issues
+
+| Date | Finding | Disposition | Reference |
+|---|---|---|---|
+| 2026-06-06 | `state.json` deprecated field `scopeProgress` (workspace-wide schema-v2 drift advisory; non-blocking) | Deferred to a separate workspace-wide schema-v2 migration sweep; not a 073-specific finding (also surfaces under specs 021, 036, 043, 053, 054, 055, etc.) | `specs/053-ci-ops-evidence-hardening/bugs/BUG-053-001-trim-broke-hardened-integrity/spec.md` (records the workspace-wide drift item) |
+| 2026-06-06 | Wiring `flutter test` into the repo CLI (mobile-runner CLI integration) | Deferred to the follow-on mobile-delivery spec alongside the rescoped SCOPE-073-03 / SCOPE-073-04 native iPhone/iOS + Android packaging, on-device VoiceOver/TalkBack runs, and cross-surface parity tests. Cross-language Dart shared-core behavior remains enforced by TP-073-03 Go canary at `tests/unit/clients/render_descriptor_canary_test.go` (which spawns the AOT-compiled Dart CLI on every fixture). | `specs/073-web-mobile-assistant-frontend/scopes.md` (Rescope Decision section + Planning Notes Round 16 bullet) |
+
+### One-to-one closure accounting
+
+| Finding | Closure owner | Closure artifact | Closure evidence | Status |
+|---|---|---|---|---|
+| F1 — G088 post-cert spec edit (scopes.md citation drift) | bubbles.spec-review (parent-expanded) | state.json: `certifiedAt` + `certification.completedAt` bumped to 2026-06-06T12:00:00Z; `spec-review-recertification` appended to certifiedCompletedPhases + completedPhaseClaims; statusCeilingRationale updated; executionHistory entry added | TP-073-03 cross-language canary PASS (3.562s) on fixtures unchanged by the citation drift; post-edit state-transition-guard captured below | CLOSED (one-to-one) |
+| F2 — Dart-test runner-boundary planning-truth misalignment | bubbles.plan (parent-expanded) | scopes.md `### Planning Notes` — new "Mobile test-runner boundary (gaps-to-doc Round 16 clarification — 2026-06-06)" bullet; executionHistory entry added | post-edit artifact-lint captured below; TP-073-03 still green; web/pwa Go-side tests still green; flutter test mobile suite still green | CLOSED (one-to-one) |
+
+No findings remain unaddressed. No `route_required` follow-up emitted.
+The two route-required follow-up triggers normally surfaced by
+gaps-to-doc — "test-plan-row claims diverge from runner" and "G088
+post-cert edit" — are both addressed inline within this round.
+
+### Round 16 envelope
+
+- `outcome`: `completed_owned`
+- `executionModel`: `parent-expanded-child-mode`
+- `findingsAddressed`: 2 (F1 + F2)
+- `findingsUnresolved`: 0
+- `routeRequired`: none
+- `terminal`: yes

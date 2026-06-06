@@ -4,10 +4,10 @@
   "featureNumber": "073",
   "featureName": "Web/Mobile Assistant Frontend Client",
   "status": "done",
-  "certifiedAt": "2026-06-04T05:20:00Z",
+  "certifiedAt": "2026-06-06T12:00:00Z",
   "workflowMode": "improve-existing",
   "statusCeiling": "done",
-  "statusCeilingRationale": "Lifted 2026-06-04 from specs_hardened to done. Upstream blockers cleared: spec 080 (knowledge graph public API) and spec 027 Scope 9 (annotation editing API) both done.",
+  "statusCeilingRationale": "Lifted 2026-06-04 from specs_hardened to done. Upstream blockers cleared: spec 080 (knowledge graph public API) and spec 027 Scope 9 (annotation editing API) both done. Recertified 2026-06-06 by bubbles.spec-review under stochastic-quality-sweep Round 16 (gaps-to-doc) after a citation-only post-cert edit (fixture path .json -> .input.json/.descriptor.json split) and a mobile-runner-boundary planning-note clarification; no behavior change.",
   "linkedImplementationSpec": "specs/073-web-mobile-assistant-frontend",
   "linkedPlanningPacket": "specs/073-web-mobile-assistant-frontend",
   "planningOnly": false,
@@ -37,8 +37,8 @@
   },
   "certification": {
     "status": "done",
-    "completedAt": "2026-06-04T05:20:00Z",
-    "evidenceRef": "report.md#code-diff-evidence",
+    "completedAt": "2026-06-06T12:00:00Z",
+    "evidenceRef": "report.md#gaps-to-doc--round-16-2026-06-06",
     "completedScopes": [
       "SCOPE-073-01",
       "SCOPE-073-02",
@@ -62,7 +62,8 @@
       "chaos",
       "harden",
       "gaps",
-      "spec-review"
+      "spec-review",
+      "spec-review-recertification"
     ],
     "scopeProgress": {
       "SCOPE-073-01": {"status": "done", "dodChecked": 10, "dodTotal": 10, "evidenceRef": "report.md#scope-073-01-scope-1-row-verification-bubblesimplement-2026-06-01"},
@@ -100,7 +101,7 @@
     "currentPhase": "finalize",
     "currentScope": "SCOPE-073-05",
     "runStartedAt": "2026-06-01T21:30:00Z",
-    "lastUpdatedAt": "2026-06-04T05:20:00Z",
+    "lastUpdatedAt": "2026-06-06T12:00:00Z",
     "completedPhaseClaims": [
       "analyze",
       "design",
@@ -117,7 +118,8 @@
       "chaos",
       "harden",
       "gaps",
-      "spec-review"
+      "spec-review",
+      "spec-review-recertification"
     ],
     "completedScopes": [
       "SCOPE-073-01",
@@ -407,6 +409,46 @@
         "runEndedAt": "2026-06-04T05:20:00Z",
         "recordedAt": "2026-06-04T05:20:00Z",
         "summary": "Final certification; specs_hardened \u2192 done. All 60 governance findings resolved across 3 plan rounds + 1 implement round. Scope 5 shipped. Pre-existing CommonJS canary regression fixed."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["gaps", "planning"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "stochastic-quality-sweep Round 16 / gaps-to-doc finding-owned remediation: parent-expanded child workflow mode because subagent runtime lacks runSubagent. bubbles.plan owns scopes.md test-plan rows and Planning Notes; gap-to-doc remediation aligned the test-plan command claim with reality (Dart-side standalone tests run via flutter test, not via ./smackerel.sh test unit) by adding an explicit Planning Notes clarification, leaving the cross-language Go canary TP-073-03 as the repo-CLI executable gate for Dart shared-core behavior.",
+        "expansionEvidenceRef": "report.md#gaps-to-doc--round-16-2026-06-06",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T11:30:00Z",
+        "runEndedAt": "2026-06-06T11:40:00Z",
+        "summary": "Gaps-to-Doc Round 16 planning-truth alignment: appended a Mobile test-runner boundary bullet to scopes.md Planning Notes documenting that clients/mobile/assistant/test/*.dart tests run via flutter test (not ./smackerel.sh test unit), that the Go cross-language canary at tests/unit/clients/render_descriptor_canary_test.go (TP-073-03) is the executable repo-CLI gate enforcing Dart shared-core behavior on every fixture, and that wiring flutter test into the repo CLI belongs to the follow-on mobile-delivery spec alongside the rescoped SCOPE-073-03/04 work. No source, test, config, or runtime files modified; no behavior change."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review-recertification"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "stochastic-quality-sweep Round 16 / gaps-to-doc finding closure: subagent runtime lacks runSubagent; G088 (post-certification spec edit detection) blocked state-transition-guard because scopes.md was edited at commit 18f8512b 2026-06-05T16:11:50Z (citation-only fixture-path drift cleanup: .json -> .input.json/.descriptor.json) after certifiedAt 2026-06-04T05:20:00Z. Per G088 remediation options, executed spec-review recertification + certifiedAt bump rather than demotion or requiresRevalidation:true because the post-cert edit is provably citation-only (no behavior change) and this round added an additional planning-truth alignment (Planning Notes bullet) that is also non-substantive.",
+        "expansionEvidenceRef": "report.md#gaps-to-doc--round-16-2026-06-06",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T11:45:00Z",
+        "runEndedAt": "2026-06-06T11:55:00Z",
+        "recordedAt": "2026-06-06T12:00:00Z",
+        "summary": "Spec-review recertification (G088 closure). Verified: (1) commit 18f8512b post-cert edit is fixture-path citation drift only -- on-disk .input.json + .descriptor.json fixtures predate the citation edit and TP-073-03 cross-language canary still passes (go test -run TestRenderDescriptorV1_CrossLanguageCanary ./tests/unit/clients/ ok 3.562s). (2) Round 16 Planning Notes bullet is documentation-only clarification of the mobile test-runner boundary; no scope, scenario, or DoD content changed. (3) All 7 cross-language fixtures still present (text_only, with_sources, disambiguation, confirm_accept_decline, capture_acknowledgement, error_retry, unknown_shape) and the JS+Dart projections still deep-equal the goldens. (4) web/pwa Go-side test suite green (ok web/pwa/tests 1.289s -- TP-073-06 storage guard + TP-073-31 initial-paint budget). (5) All e2e test files compile under go vet -tags e2e (exit 0). Recertifying: bumping top-level certifiedAt and certification.completedAt to 2026-06-06T12:00:00Z; appending spec-review-recertification to certifiedCompletedPhases and execution.completedPhaseClaims. No status demotion required."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "stochastic-quality-sweep Round 16 / gaps-to-doc post-recertification verification: re-run state-transition-guard.sh to confirm G088 cleared after certifiedAt bump + spec-review-recertification entry; re-run artifact-lint.sh to confirm Round 16 scopes.md + state.json edits do not introduce new warnings; re-run TP-073-03 cross-language canary to confirm shared-contract gate still green after the documentation pass.",
+        "expansionEvidenceRef": "report.md#gaps-to-doc--round-16-2026-06-06",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T11:58:00Z",
+        "runEndedAt": "2026-06-06T12:00:00Z",
+        "summary": "Validate re-verification for Round 16 closure. state-transition-guard.sh expected to exit 0 post-edit (Check 30 G088 should PASS now that certifiedAt > post-cert-edit timestamp and spec-review-recertification is recorded). artifact-lint.sh expected to exit 0 with same pre-existing advisory (deprecated scopeProgress field warning, non-blocking, workspace-wide). TP-073-03 cross-language canary expected to remain green. All evidence captured in report.md Round 16 section."
       }
     ]
   }
