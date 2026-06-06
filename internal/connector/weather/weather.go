@@ -595,19 +595,7 @@ func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*Current
 	}
 
 	c.mu.Lock()
-	// Evict one entry if cache is at capacity. evictOneLocked prefers
-	// expired entries and falls back to the entry with the latest
-	// expiresAt, which biases eviction away from short-TTL current/forecast
-	// entries when long-TTL historical entries have saturated the cache.
-	if len(c.cache) >= maxCacheEntries {
-		c.evictOneLocked()
-	}
-	// Only cache if there is room after eviction to enforce the size limit.
-	if len(c.cache) < maxCacheEntries {
-		c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(30 * time.Minute)}
-	} else {
-		slog.Warn("weather cache full, discarding new entry", "key", cacheKey, "size", len(c.cache))
-	}
+	c.cachePutLocked(cacheKey, cw, 30*time.Minute)
 	c.mu.Unlock()
 
 	return cw, nil
@@ -702,14 +690,7 @@ func (c *Connector) decodeForecast(body io.ReadCloser, cacheKey string) ([]Forec
 	}
 
 	c.mu.Lock()
-	if len(c.cache) >= maxCacheEntries {
-		c.evictOneLocked()
-	}
-	if len(c.cache) < maxCacheEntries {
-		c.cache[cacheKey] = &cacheEntry{data: forecast, expiresAt: time.Now().Add(2 * time.Hour)}
-	} else {
-		slog.Warn("weather cache full, discarding new entry", "key", cacheKey, "size", len(c.cache))
-	}
+	c.cachePutLocked(cacheKey, forecast, 2*time.Hour)
 	c.mu.Unlock()
 
 	return forecast, nil
@@ -808,17 +789,24 @@ func (c *Connector) decodeHistorical(body io.ReadCloser, cacheKey string) (*Curr
 
 	// Cache permanently — 100 years expiry as "never".
 	c.mu.Lock()
+	c.cachePutLocked(cacheKey, cw, 100*365*24*time.Hour)
+	c.mu.Unlock()
+
+	return cw, nil
+}
+
+// cachePutLocked inserts an entry, evicting one first if at capacity.
+// Must be called with c.mu held. Centralises the size-cap invariant so
+// callers cannot accidentally exceed maxCacheEntries.
+func (c *Connector) cachePutLocked(key string, data interface{}, ttl time.Duration) {
 	if len(c.cache) >= maxCacheEntries {
 		c.evictOneLocked()
 	}
 	if len(c.cache) < maxCacheEntries {
-		c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(100 * 365 * 24 * time.Hour)}
-	} else {
-		slog.Warn("weather cache full, discarding new entry", "key", cacheKey, "size", len(c.cache))
+		c.cache[key] = &cacheEntry{data: data, expiresAt: time.Now().Add(ttl)}
+		return
 	}
-	c.mu.Unlock()
-
-	return cw, nil
+	slog.Warn("weather cache full, discarding new entry", "key", key, "size", len(c.cache))
 }
 
 // evictOneLocked removes one cache entry to make room for a new insertion.

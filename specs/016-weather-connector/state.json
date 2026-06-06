@@ -3,6 +3,7 @@
   "featureDir": "specs/016-weather-connector",
   "featureName": "Weather Connector",
   "status": "done",
+  "certifiedAt": "2026-04-25T01:18:30Z",
   "workflowMode": "harden-to-doc",
   "execution": {
     "activeAgent": null,
@@ -313,6 +314,15 @@
       "completedAt": "2026-04-25T01:18:30Z",
       "outcome": "promoted_to_done",
       "evidence": "Chaos now PASSED against live test stack 'smackerel-test' (4/4 scenarios). All required phases have real passing evidence. Promoted state.json status in_progress -> done and certification.status in_progress -> done. Removed chaos from skippedPhaseClaims/skippedPhases and removed chaosBlocker."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.workflow",
+      "startedAt": "2026-06-05T19:35:00Z",
+      "completedAt": "2026-06-05T19:42:00Z",
+      "outcome": "passed",
+      "trigger": "stochastic-quality-sweep round 2 of 20 (simplify) — parent-expanded-child-mode of simplify-to-doc",
+      "evidence": "Finding S1 (resolved): cache-insert tail triplicated across decodeCurrent/decodeForecast/decodeHistorical and mirrored verbatim in two tests (TestCacheOverflow_AllValid, TestEviction_HistoricalDoesNotStarveEphemeral) with comment 'Mirror the production decodeCurrent insertion path'. Extracted (c *Connector).cachePutLocked(key, data, ttl) helper next to evictOneLocked; 3 production sites + 2 test sites now call the helper. git diff --stat -- internal/connector/weather/ → 2 files changed, 19 insertions(+), 47 deletions(-) (net -28 LOC). Behavior-preserving: same eviction call, same size cap, same slog warning key/message, same TTL math. go vet ./internal/connector/weather/... clean; go test -count=1 ./internal/connector/weather/... → ok 33.743s (all TestDecode*, TestFetch*, TestSync_*, TestEvictOneLocked_PrefersExpired, TestCacheOverflow_AllValid, TestEviction_HistoricalDoesNotStarveEphemeral PASS); go build ./... clean; ./smackerel.sh check → Config in sync with SST, env_file drift guard OK, scenario-lint OK; ./smackerel.sh lint → All checks passed!, Web validation passed. No spec/design/scopes/uservalidation/scenario-manifest change (no contract impact). Status remains done."
     }
   ],
   "activeBugs": [],
@@ -328,7 +338,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T19:35:00Z",
+  "lastUpdatedAt": "2026-06-05T19:42:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

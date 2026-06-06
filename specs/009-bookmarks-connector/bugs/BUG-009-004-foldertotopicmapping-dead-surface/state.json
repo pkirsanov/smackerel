@@ -1,0 +1,147 @@
+{
+  "version": 3,
+  "specId": "009-bookmarks-connector",
+  "bugId": "BUG-009-004-foldertotopicmapping-dead-surface",
+  "featureDir": "specs/009-bookmarks-connector/bugs/BUG-009-004-foldertotopicmapping-dead-surface",
+  "featureName": "BUG-009-004: FolderToTopicMapping dead exported surface (simplify R6)",
+  "workflowMode": "simplify-to-doc",
+  "status": "done",
+  "certifiedAt": "2026-06-05T21:50:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-05T21:50:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-06-05T21:00:00Z",
+    "completedPhaseClaims": [
+      "select",
+      "bootstrap",
+      "simplify",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "executionHistory": [
+      {
+        "phase": "select",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-06-05T21:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Stochastic-quality-sweep round 6 of 20 random pick selected specs/009-bookmarks-connector with trigger `simplify` mapped via workflows.yaml `triggerWorkflowModes.simplify: simplify-to-doc`. Executed parent-expanded child workflow mode because the active workflow runtime lacked recursive `runSubagent` for `bubbles.workflow`; expansion preserves the mapped child mode's phaseOrder [select, simplify, test, validate, audit, docs, finalize] and statusCeiling=done contract from bubbles/workflows.yaml lines 1883-1909."
+      },
+      {
+        "phase": "bootstrap",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-06-05T21:02:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Created the BUG-009-004 folder with all 7 required artifacts before any spec/design edits: spec.md, design.md, scopes.md, scenario-manifest.json, report.md, uservalidation.md, state.json. Bug packet shape follows the precedent established by BUG-009-001/002/003 under sibling sweep rounds. Pre-bootstrap planning artifacts in parent spec 009 were already certified `done` since 2026-04-09 with multiple post-cert sweeps (R10, R16, R24, R30, R5 stabilize 2026-06-04, simplify R5 cleanup 2026-06-05), so the bootstrap surface for this round is the bug folder + 8 targeted edits to spec.md/design.md."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-06-05T21:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Parent-expanded simplify probe scanned internal/connector/bookmarks/ end-to-end (213+637+219+207 = 1276 source lines + 995+2044+709+77 = 3825 test lines). Two findings surfaced: F-SIMPLIFY-R6-001 (LOW: extractBookmarks 1-line shim wrapper with single caller — inlined directly; out of scope for this bug) and F-SIMPLIFY-R6-002 (MEDIUM: FolderToTopicMapping exported dead code + 8-site spec/design drift — this bug). Verified IsKnown is NOT dead (live integration test consumers in tests/integration/bookmarks_dedup_test.go) and intentionally excluded from scope. Probe confirmed production folder→topic flow is TopicMapper.MapFolder (segment-split + per-segment exact/fuzzy/create cascade), which is fundamentally different from the deleted utility's flatten algorithm."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-06-05T21:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Finding-owned planning: authored spec.md (classification + 1-finding reproduction with grep transcripts + 9 acceptance criteria), design.md (Current Truth from 10 codebase facts including the IsKnown vs FolderToTopicMapping distinction, root cause [spec 003 utility seed superseded during spec 009 implementation], 5-step fix approach, honest adversarial fidelity scoping), scopes.md (single Scope 1 with 3 SCN-BK-FIX-004-NNN Gherkin scenarios + 10-row Test Plan + 9 DoD bullets with inline evidence)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-06-05T21:20:00Z",
+        "outcome": "completed_owned",
+        "evidence": "F-SIMPLIFY-R6-001: Inlined extractBookmarksDepth(node, '', &bookmarks, 0) directly at bookmarks.go line 52; deleted the extractBookmarks shim function. F-SIMPLIFY-R6-002: Deleted FolderToTopicMapping function from bookmarks.go (~10 lines) and 3 dedicated tests from bookmarks_test.go (TestFolderToTopicMapping ~17 lines, TestFolderToTopicMapping_Backslash ~6 lines, TestFolderToTopicMapping_MultiLevel ~20 lines). Updated spec.md in 4 reference sites (Goal #2, ASCII diagram, R-005, UC-001 step 10) and design.md in 4 reference sites (Design Brief, Component Design, Data Flow step 8, Component Design §2) to name TopicMapper.MapFolder. Added TestSimplifyR6_FolderToTopicMapping_Removed to topics_test.go with three layers of coverage (compile-pin, runtime-pin, algorithmic-intent documentation). Net diff: -60 lines source + -43 lines test + +67 lines new test + ~25 lines spec/design rewrites. Boundary: bookmarks.go, bookmarks_test.go, topics_test.go, parent spec.md, parent design.md only. No change to dedup.go, connector.go, topics.go production source."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-06-05T21:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Full bookmarks package suite: 44 PASS, 0 FAIL, exit 0 in 1.183s with -race -count=1. New TestSimplifyR6_FolderToTopicMapping_Removed PASS in 0.024s. Consumer regression sweep across all 22 connector packages + scheduler: all PASS, exit 0. Build verification: go build ./... exit 0 (zero compilation errors confirms zero production consumers of the deleted exported function). Adversarial fidelity transcript captured: synthetic Go program demonstrates 4 of 5 multi-segment fixtures distinguish flatten (1 segment) vs split (N segments) algorithms. Honest scoping recorded: the new test catches deletion/signature-change of MapFolder + nil-pool early-return changes with high confidence but does NOT directly catch internal flatten-rewrite of MapFolder; that coverage is delegated to integration tests at tests/integration/bookmarks_topics_test.go (T-2-13..T-2-19)."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-06-05T21:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "go vet ./internal/connector/bookmarks/... exit 0. gofmt -l internal/connector/bookmarks/ empty output (after fixing one alignment issue in the new test's table comments). ./smackerel.sh lint exit 0 (LINT_EXIT=0). Grep verification: zero matches for 'FolderToTopicMapping' across internal/connector/bookmarks/*.go (function + 3 tests gone). Grep verification: zero matches for 'FolderToTopicMapping' across specs/009-bookmarks-connector/{spec.md,design.md,scopes.md} (all 8 planning-truth references gone). Grep verification: 6 matches for 'TopicMapper.MapFolder' across spec.md (3) + design.md (3) — all 8 rewritten reference sites correctly name the production mechanism. Spec 003 historical evidence (specs/003-phase2-ingestion/*) intentionally preserved untouched."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-06-05T21:40:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Boundary preserved: only bookmarks.go, bookmarks_test.go, topics_test.go modified in code; spec.md + design.md modified in planning truth. No change to connector.go, dedup.go, topics.go production source. No change to NATS contract, DB schema, migrations, or Connector interface. Public API surface reduced by exactly 1 exported function (FolderToTopicMapping) which had zero production consumers (proven by go build ./... exit 0). Adversarial guard test embedded in topics_test.go documents the F-SIMPLIFY-R6-002 invariant inline. Findings-ledger one-to-one accounting: 2 findings discovered, 2 findings closed (F-SIMPLIFY-R6-001 inline, F-SIMPLIFY-R6-002 via this bug), 0 unresolved. Both findings have terminal closure with executable test/grep evidence."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-06-05T21:45:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug folder artifacts complete: spec.md, design.md, scopes.md, scenario-manifest.json (3 scenarios), report.md, uservalidation.md, state.json. Parent spec 009 report.md will receive simplify R6 cross-reference and parent state.json will receive an executionHistory entry capturing this round + a re-certification timestamp preserving originalCompletedAt. Done in the same finalize step."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-06-05T21:50:00Z",
+        "outcome": "completed_owned",
+        "evidence": "All 9 DoD bullets in scopes.md Scope 1 checked [x] with inline raw evidence. 3 SCN-BK-FIX-004-NNN scenarios mapped to TestSimplifyR6_FolderToTopicMapping_Removed unit test + 7 verification/regression steps (grep, build, full suite, consumer sweep, vet, gofmt, lint). One-to-one finding closure achieved (F-SIMPLIFY-R6-001 + F-SIMPLIFY-R6-002 both closed). Bug status transitions in_progress → done. Parent spec 009 re-certified at 2026-06-05T21:50:00Z (originalCompletedAt: 2026-04-09T01:40:00Z preserved from initial certification; intermediate re-certifications at 2026-06-04T02:30:00Z and 2026-06-05T20:50:00Z noted in parent executionHistory)."
+      }
+    ]
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "active", "source": "delivery-lockdown" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "failures": [],
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-01"],
+    "certifiedCompletedPhases": [
+      "select",
+      "bootstrap",
+      "simplify",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Delete dead exported FolderToTopicMapping surface and reconcile spec/design planning truth",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-06-05T21:50:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": true,
+      "lockedScenarioIds": [
+        "SCN-BK-FIX-004-001",
+        "SCN-BK-FIX-004-002",
+        "SCN-BK-FIX-004-003"
+      ]
+    }
+  }
+}

@@ -81,11 +81,6 @@ var stringKeyedMapShortDecl = regexp.MustCompile(`(?:^|\s)([A-Za-z_][A-Za-z0-9_]
 // same baseline machinery covers both languages.
 var exceptionAnnotation = regexp.MustCompile(`(?://|#)\s*smackerel:policy-exception\s+(.+)$`)
 
-// SourceException is one parsed source annotation.
-type SourceException struct {
-	Exception
-}
-
 // parseExceptionAnnotation extracts an Exception from a `//
 // smackerel:policy-exception ...` line. Returns ok=false if the
 // line is not an annotation. Returns a partially-populated Exception
@@ -193,28 +188,6 @@ func KeywordRoutingGuard(repo Root, baseline *Baseline, now time.Time, cfg Polic
 	if err != nil {
 		return nil, fmt.Errorf("keyword-routing: walk %s: %w", apiRoot, err)
 	}
-	return scanRegexRoutingFiles(files, repo, baseline, now, cfg)
-}
-
-// KeywordMapGuard scans internal/telegram/ and internal/annotation/
-// for forbidden free-text keyword maps (G067-A04).
-func KeywordMapGuard(repo Root, baseline *Baseline, now time.Time, cfg PolicyConfig) ([]Violation, error) {
-	var files []string
-	for _, sub := range []string{"telegram", "annotation"} {
-		fs, err := listGoFiles(filepath.Join(string(repo), "internal", sub))
-		if err != nil {
-			return nil, fmt.Errorf("keyword-map: walk internal/%s: %w", sub, err)
-		}
-		files = append(files, fs...)
-	}
-	sort.Strings(files)
-	return scanKeywordMapFiles(files, repo, baseline, now, cfg)
-}
-
-// scanRegexRoutingFiles is the file-list-driven implementation
-// behind KeywordRoutingGuard. Exposed for tests that plant fixtures
-// in a temp dir.
-func scanRegexRoutingFiles(files []string, repo Root, baseline *Baseline, now time.Time, cfg PolicyConfig) ([]Violation, error) {
 	var out []Violation
 	for _, path := range files {
 		data, err := os.ReadFile(path)
@@ -256,9 +229,18 @@ func scanRegexRoutingFiles(files []string, repo Root, baseline *Baseline, now ti
 	return out, nil
 }
 
-// scanKeywordMapFiles is the file-list-driven implementation behind
-// KeywordMapGuard.
-func scanKeywordMapFiles(files []string, repo Root, baseline *Baseline, now time.Time, cfg PolicyConfig) ([]Violation, error) {
+// KeywordMapGuard scans internal/telegram/ and internal/annotation/
+// for forbidden free-text keyword maps (G067-A04).
+func KeywordMapGuard(repo Root, baseline *Baseline, now time.Time, cfg PolicyConfig) ([]Violation, error) {
+	var files []string
+	for _, sub := range []string{"telegram", "annotation"} {
+		fs, err := listGoFiles(filepath.Join(string(repo), "internal", sub))
+		if err != nil {
+			return nil, fmt.Errorf("keyword-map: walk internal/%s: %w", sub, err)
+		}
+		files = append(files, fs...)
+	}
+	sort.Strings(files)
 	var out []Violation
 	for _, path := range files {
 		data, err := os.ReadFile(path)

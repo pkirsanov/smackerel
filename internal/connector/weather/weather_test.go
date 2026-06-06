@@ -239,17 +239,9 @@ func TestCacheOverflow_AllValid(t *testing.T) {
 	}
 	c.mu.Unlock()
 
-	// Attempt to add another entry — mirror production code path.
+	// Attempt to add another entry — exercise the production helper directly.
 	c.mu.Lock()
-	if len(c.cache) >= maxCacheEntries {
-		c.evictOneLocked()
-	}
-	if len(c.cache) < maxCacheEntries {
-		c.cache["overflow"] = &cacheEntry{
-			data:      &CurrentWeather{Temperature: 99},
-			expiresAt: time.Now().Add(time.Hour),
-		}
-	}
+	c.cachePutLocked("overflow", &CurrentWeather{Temperature: 99}, time.Hour)
 	c.mu.Unlock()
 
 	c.mu.RLock()
@@ -293,18 +285,10 @@ func TestEviction_HistoricalDoesNotStarveEphemeral(t *testing.T) {
 	}
 	c.mu.Unlock()
 
-	// Mirror the production decodeCurrent insertion path.
+	// Exercise the production decodeCurrent insertion path via the helper.
 	const currentKey = "current-50.0000-10.0000"
 	c.mu.Lock()
-	if len(c.cache) >= maxCacheEntries {
-		c.evictOneLocked()
-	}
-	if len(c.cache) < maxCacheEntries {
-		c.cache[currentKey] = &cacheEntry{
-			data:      &CurrentWeather{Temperature: 22.0, Description: "Clear sky"},
-			expiresAt: time.Now().Add(currentTTL),
-		}
-	}
+	c.cachePutLocked(currentKey, &CurrentWeather{Temperature: 22.0, Description: "Clear sky"}, currentTTL)
 	c.mu.Unlock()
 
 	c.mu.RLock()

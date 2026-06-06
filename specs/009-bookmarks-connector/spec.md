@@ -43,7 +43,7 @@ Browser History is classified as Medium priority in the Source Priority Matrix (
 ## Goals
 
 1. **Full bookmark ingestion** — Parse and ingest bookmarks from Chrome JSON export files and Netscape HTML export files using the existing `ParseChromeJSON()` and `ParseNetscapeHTML()` utilities in `internal/connector/bookmarks/`
-2. **Folder-to-topic mapping** — Map bookmark folder paths to knowledge graph topics using the existing `FolderToTopicMapping()` utility, treating folder hierarchy as user-created taxonomy
+2. **Folder-to-topic mapping** — Map bookmark folder paths to knowledge graph topics via the `TopicMapper` cascade in `internal/connector/bookmarks/topics.go` (segment-split on `/`, then per-segment exact / pg_trgm-fuzzy / create-emerging resolution against the `topics` table), treating folder hierarchy as user-created taxonomy
 3. **Incremental sync via directory watching** — Watch a configured import directory for new export files; only process new files and deduplicate by URL across imports
 4. **Rich metadata preservation** — Capture and store bookmark folder path, title, URL, added date, and source format (Chrome/Netscape) as structured metadata on each artifact
 5. **Processing pipeline integration** — Route all bookmarked URLs through the standard processing pipeline (content fetch, summarize, extract entities, generate embeddings, link to knowledge graph) via NATS JetStream with `full` processing tier
@@ -106,7 +106,6 @@ Browser (Chrome/Firefox/Edge/Safari)
 │  │  - ParseChromeJSON()                   │  │
 │  │  - ParseNetscapeHTML()                 │  │
 │  │  - ToRawArtifacts()                    │  │
-│  │  - FolderToTopicMapping()              │  │
 │  └──────────────┬─────────────────────────┘  │
 │                 │                             │
 │  ┌──────────────▼─────────────────────────┐  │
@@ -199,12 +198,12 @@ Deduplication operates at the URL level:
 
 Bookmark folder hierarchies map to knowledge graph topics:
 
-- Use the existing `bookmarks.FolderToTopicMapping()` for folder name normalization
+- Folder paths are resolved by the `TopicMapper.MapFolder` cascade in `internal/connector/bookmarks/topics.go` (split on `/`, then per-segment exact / pg_trgm-fuzzy / create-emerging against the `topics` table)
 - Folder paths like `Bookmarks Bar / Tech / Distributed Systems` create or match topics at each level
-- For each bookmark, create `BELONGS_TO` edges from the bookmark's artifact to its folder topic(s)
-- If a matching topic already exists in the knowledge graph (case-insensitive, fuzzy match), link to it rather than creating a duplicate
+- For each bookmark, create `BELONGS_TO` edges from the bookmark's artifact to its leaf (most-specific) folder topic
+- If a matching topic already exists in the knowledge graph (case-insensitive exact match wins, otherwise pg_trgm `similarity > 0.4` fuzzy match), link to it rather than creating a duplicate
 - Bookmarks with no folder assignment (root-level) are processed without topic links
-- Nested folders create hierarchical topic relationships (e.g., "Tech" → parent of "Distributed Systems")
+- Nested folders create hierarchical topic relationships (e.g., "Tech" → parent of "Distributed Systems") via `CHILD_OF` edges created between consecutive segments
 
 ### R-006: Metadata Preservation
 
@@ -348,7 +347,7 @@ Health checks MUST include:
   7. URLs are deduplicated against existing artifacts in the store
   8. New artifacts are published to NATS JetStream for pipeline processing
   9. Pipeline fetches content for each URL, runs readability extraction, summarization, entity extraction, and embedding generation
-  10. Folder paths are mapped to knowledge graph topics via `FolderToTopicMapping()`
+  10. Folder paths are mapped to knowledge graph topics via the `TopicMapper.MapFolder` cascade in `topics.go` (segment-split + per-segment exact/fuzzy/create resolution)
   11. Connector records sync state with list of processed files
 - **Alternative Flows:**
   - Export file is corrupted → log error, skip file, report in health status

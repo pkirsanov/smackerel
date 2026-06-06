@@ -1,0 +1,257 @@
+{
+  "version": 3,
+  "featureDir": "specs/064-open-ended-knowledge-agent/bugs/BUG-CHAOS-20260605-001",
+  "parentFeatureDir": "specs/064-open-ended-knowledge-agent",
+  "featureName": "Open-Knowledge Routing Tests Resolve AGENT_SCENARIO_DIR To Absolute",
+  "bugId": "BUG-CHAOS-20260605-001",
+  "status": "done",
+  "workflowMode": "chaos-hardening",
+  "certifiedAt": "2026-06-05T22:48:00Z",
+  "execution": {
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
+    "currentScope": "final-certification",
+    "runStartedAt": "2026-06-05T21:45:00Z",
+    "completedPhaseClaims": [
+      "chaos",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "docs",
+      "audit",
+      "validate"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "scope-1-abs-resolve-scenario-dir"
+    ],
+    "certifiedCompletedPhases": [
+      "chaos",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "docs",
+      "audit",
+      "validate"
+    ],
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1-abs-resolve-scenario-dir",
+        "scope": 1,
+        "title": "Resolve AGENT_SCENARIO_DIR to absolute in routing tests",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "scenarioIds": [
+          "SCN-BUG-CHAOS-20260605-001-001"
+        ],
+        "evidenceRefs": [
+          "report.md#deterministic-red-evidence",
+          "report.md#implementation-evidence",
+          "report.md#after-fix-evidence",
+          "report.md#adversarial-regression-evidence",
+          "report.md#wrapper-path-still-green",
+          "report.md#code-diff-evidence",
+          "report.md#validation-evidence",
+          "report.md#audit-evidence",
+          "report.md#chaos-evidence"
+        ],
+        "certifiedAt": "2026-06-05T22:48:00Z"
+      }
+    ],
+    "certifiedAt": "2026-06-05T22:48:00Z",
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "observations": [
+      {
+        "id": "OBS-BUG-CHAOS-20260605-001-001-finding-source",
+        "severity": "low",
+        "summary": "Bug packet originates from Round 9 of the stochastic-quality-sweep on spec 064; root finding OBS-037-CHAOS1-X1 was recorded by Round 1 and routed to spec 064 by the chaos sweep parent.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      },
+      {
+        "id": "OBS-BUG-CHAOS-20260605-001-002-wrapper-still-active",
+        "severity": "low",
+        "summary": "The smackerel.sh wrapper rewrite at smackerel.sh:913-918 remains defense-in-depth. The test-side resolver no longer depends on it, but the wrapper rewrite stays so the in-container Go test always receives an absolute path even if a future test forgets the resolver helper.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      },
+      {
+        "id": "OBS-BUG-CHAOS-20260605-001-003-no-product-runtime-change",
+        "severity": "low",
+        "summary": "Fix is strictly test-only. internal/agent/loader.go and the internal/assistant/openknowledge/** runtime are unchanged; spec 064's product behavior is unaffected.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      }
+    ]
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "workflowMode": {
+      "mode": "chaos-hardening",
+      "source": "bubbles.chaos"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "missing",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T21:45:00Z",
+      "completedAt": "2026-06-05T21:50:00Z",
+      "summary": "Round 9 of the stochastic-quality-sweep (parent-expanded chaos-hardening) recorded OBS-064-CHAOS9-X1 by reproducing OBS-037-CHAOS1-X1 inside spec 064. Bare `go test` against tests/integration/agent with the SST-shipped relative AGENT_SCENARIO_DIR fails with a misleading 'open_knowledge scenario absent' message. Bug artifact filed; fix routed to implement."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T21:50:00Z",
+      "completedAt": "2026-06-05T22:15:00Z",
+      "summary": "Added resolveScenarioDir(raw) (string, error) helper to tests/integration/agent/openknowledge_routing_test.go. Rewrote TestOpenKnowledgeRouting_FallbackToOpenKnowledge and TestOpenKnowledgeRouting_ScenarioHealthProbe to call it. Added TestOpenKnowledgeRouting_RelativeAGENT_SCENARIO_DIRResolvesAgainstRepoRoot with three sub-tests covering happy-path resolution, adversarial nonexistent target, and adversarial path-pointing-at-a-file. No product runtime touched."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": [
+        "test"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T22:15:00Z",
+      "completedAt": "2026-06-05T22:25:00Z",
+      "summary": "Ran the adversarial regression test (all three sub-tests pass), the after-fix reproduction (fails loud with raw + resolved path in message), and the wrapper-equivalent absolute-path invocation with sourced test.env (passes). Ran go vet and go build with -tags=integration; no new issues from this change. Pre-existing pendingFacade vet warning in tests/integration/assistant/http_pending_state_test.go is unrelated and was committed at 200824ac."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": [
+        "regression"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T22:25:00Z",
+      "completedAt": "2026-06-05T22:30:00Z",
+      "summary": "Regression phase: the adversarial regression test (three sub-tests) covers three distinct failure modes the bug could regress into. Reverting the fix to raw-passthrough would cause the adversarial_relative_to_nonexistent_dir_fails_loud sub-test to fail (helper would return nil instead of an error naming the resolved path). Reverting only the IsDir check would fail adversarial_path_pointing_at_file_fails_loud. The wrapper path (absolute AGENT_SCENARIO_DIR) still passes — confirmed via sourced test.env invocation."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": [
+        "simplify"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T22:30:00Z",
+      "completedAt": "2026-06-05T22:33:00Z",
+      "summary": "Simplify phase: the new resolveScenarioDir helper IS the simplification — it extracts the previously-inline raw env passthrough into a reusable, defensive helper. No further simplification opportunities found in this test-only change boundary. Confirmed via grep against tests/integration/agent/ that the two callers now use the helper and no dead code remains."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T22:33:00Z",
+      "completedAt": "2026-06-05T22:35:00Z",
+      "summary": "Stabilize phase: the new test functions are pure-helper-style with deterministic chdir + filepath.Rel arithmetic and no flaky external dependencies. Repeated invocations (count=1 each, run three times back-to-back during chaos verification) produced identical PASS outcomes."
+    },
+    {
+      "agent": "bubbles.devops",
+      "phasesExecuted": [
+        "devops"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T22:35:00Z",
+      "completedAt": "2026-06-05T22:36:30Z",
+      "summary": "DevOps phase: no devops surface touched. The smackerel.sh:913-918 wrapper rewrite remains as defense-in-depth. No docker compose, deploy adapter, CI workflow, or runtime image change introduced by this bug fix. Confirmed via git diff --stat HEAD against the change boundary."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": [
+        "security"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T22:36:30Z",
+      "completedAt": "2026-06-05T22:38:00Z",
+      "summary": "Security phase: no secret-handling, auth, or product runtime surface touched. The helper rejects non-directory inputs (filesystem traversal probe negative) and fails loud on bad input — no fallback or silent-skip path that could mask a misconfigured AGENT_SCENARIO_DIR. NO-DEFAULTS / fail-loud SST policy preserved."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": [
+        "docs"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T22:38:00Z",
+      "completedAt": "2026-06-05T22:40:00Z",
+      "summary": "Docs phase: this bug packet (bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json) IS the documentation. No parent docs/ surface required update — the fix is test-only and the runtime/operator-facing contract is unchanged."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": [
+        "audit"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-05T22:40:00Z",
+      "completedAt": "2026-06-05T22:42:00Z",
+      "summary": "Re-ran the bug-packet artifact lint, the parent traceability guard for specs/064-open-ended-knowledge-agent, and the parent state-transition guard sweep for the bug folder. Confirmed change-boundary mechanically respected by git diff. Confirmed smackerel-no-defaults policy preserved (resolver fails loud on missing/bad input; no fallback). Confirmed Bubbles anti-fabrication policy preserved (every report evidence claim carries an executed command + raw output + exit code captured in this session)."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "startedAt": "2026-06-05T22:42:00Z",
+      "completedAt": "2026-06-05T22:48:00Z",
+      "summary": "Validate certified the bug as done. Adversarial regression covers three distinct failure modes the bug could regress into (raw passthrough returning nil, raw passthrough returning error without resolved path, missing IsDir check). Wrapper path still passes. Spec 064 runtime unchanged."
+    }
+  ]
+}

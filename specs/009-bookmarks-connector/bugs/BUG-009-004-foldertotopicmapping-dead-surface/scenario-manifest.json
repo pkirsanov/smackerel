@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "featureDir": "specs/009-bookmarks-connector/bugs/BUG-009-004-foldertotopicmapping-dead-surface",
+  "generatedAt": "2026-06-05T21:30:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BK-FIX-004-001",
+      "scope": "01-delete-dead-foldertotopicmapping-and-reconcile-spec-design",
+      "title": "Production folder→topic resolution remains unchanged after the dead utility is removed",
+      "gherkin": {
+        "given": "the bookmarks package source after F-SIMPLIFY-R6-002 has been applied (FolderToTopicMapping function deleted from bookmarks.go and 3 dead tests deleted from bookmarks_test.go)",
+        "when": "grep is run for 'FolderToTopicMapping' across '*.go' files in internal/connector/bookmarks",
+        "then": "exactly zero matches are returned, TopicMapper.MapFolder remains the single production folder→topic entry point, and the full bookmarks-package test suite passes (44 PASS, 0 FAIL)"
+      },
+      "linkedTests": [
+        {
+          "file": "internal/connector/bookmarks/topics_test.go",
+          "function": "TestSimplifyR6_FolderToTopicMapping_Removed",
+          "type": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-004-foldertotopicmapping-dead-surface/scopes.md",
+          "anchor": "T-BK-FIX-004-02"
+        },
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-004-foldertotopicmapping-dead-surface/report.md",
+          "anchor": "Adversarial Fidelity Transcript"
+        }
+      ],
+      "requiredTestType": ["unit", "regression-e2e"],
+      "status": "passed"
+    },
+    {
+      "scenarioId": "SCN-BK-FIX-004-002",
+      "scope": "01-delete-dead-foldertotopicmapping-and-reconcile-spec-design",
+      "title": "Spec and design planning truth reflects the actual TopicMapper.MapFolder mechanism",
+      "gherkin": {
+        "given": "the spec 009 planning artifacts after F-SIMPLIFY-R6-002 has been applied (4 references in spec.md and 4 references in design.md rewritten to name TopicMapper.MapFolder)",
+        "when": "grep is run for 'FolderToTopicMapping' across 'specs/009-bookmarks-connector/spec.md', 'design.md', and 'scopes.md'",
+        "then": "exactly zero matches are returned; all eight rewritten reference sites name 'TopicMapper.MapFolder' or describe the split + per-segment exact/fuzzy/create resolution; historical spec 003 evidence rows referencing 'FolderToTopicMapping' are intentionally preserved untouched"
+      },
+      "linkedTests": [
+        {
+          "file": "internal/connector/bookmarks/topics_test.go",
+          "function": "TestSimplifyR6_FolderToTopicMapping_Removed",
+          "type": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-004-foldertotopicmapping-dead-surface/scopes.md",
+          "anchor": "T-BK-FIX-004-03"
+        }
+      ],
+      "requiredTestType": ["unit"],
+      "status": "passed"
+    },
+    {
+      "scenarioId": "SCN-BK-FIX-004-003",
+      "scope": "01-delete-dead-foldertotopicmapping-and-reconcile-spec-design",
+      "title": "Adversarial guard test pins the split-not-flatten algorithmic intent",
+      "gherkin": {
+        "given": "the new TestSimplifyR6_FolderToTopicMapping_Removed test in topics_test.go with three layers of coverage (compile-pin via direct MapFolder call, runtime-pin via nil-pool assertion, and inline algorithmic-intent reproduction via the same strings.Split + non-empty-trim loop visible in topics.go::MapFolder)",
+        "when": "go test -count=1 -run TestSimplifyR6_FolderToTopicMapping_Removed ./internal/connector/bookmarks/... is invoked",
+        "then": "the test PASSES, directly calls TopicMapper.MapFolder with a nil pool to compile-pin the signature, reproduces the same strings.Split + non-empty-trim segmentation logic visible in topics.go::MapFolder for 6 paths including leading/trailing-slash edge cases, and the test's failure diagnostic names 'F-SIMPLIFY-R6-002 invariant' as the grep target for future reviewers"
+      },
+      "linkedTests": [
+        {
+          "file": "internal/connector/bookmarks/topics_test.go",
+          "function": "TestSimplifyR6_FolderToTopicMapping_Removed",
+          "type": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-004-foldertotopicmapping-dead-surface/scopes.md",
+          "anchor": "T-BK-FIX-004-01"
+        },
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-004-foldertotopicmapping-dead-surface/report.md",
+          "anchor": "Adversarial Fidelity Transcript"
+        }
+      ],
+      "requiredTestType": ["unit"],
+      "status": "passed"
+    }
+  ]
+}

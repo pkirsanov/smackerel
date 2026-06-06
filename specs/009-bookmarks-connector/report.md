@@ -736,3 +736,108 @@ ok      github.com/smackerel/smackerel/internal/connector/bookmarks     (cached)
 ... (21 connector packages + scheduler all PASS) ...
 ok      github.com/smackerel/smackerel/internal/scheduler       5.069s
 ```
+
+## Simplify R6 — FolderToTopicMapping dead surface removal + extractBookmarks shim inline
+
+**Sweep:** stochastic-quality-sweep round 6 of 20 (2026-06-05). **Trigger:** `simplify`. **Mapped child workflow mode:** `simplify-to-doc` (parent-expanded; subagent runtime lacked recursive `runSubagent` for `bubbles.workflow`, so the resolved mode's phaseOrder + statusCeiling=done contract was executed inline). **Bug:** [BUG-009-004-foldertotopicmapping-dead-surface](bugs/BUG-009-004-foldertotopicmapping-dead-surface/spec.md) — status `done`.
+
+The simplify probe of `internal/connector/bookmarks/` (1276 source lines + 3825 test lines across `bookmarks.go`, `connector.go`, `dedup.go`, `topics.go`) surfaced two findings: one micro-fix and one moderate planning-truth-drift finding that required a tracked bug.
+
+**Findings:**
+
+| ID | Severity | Description | Status | Disposition |
+|---|---|---|---|---|
+| F-SIMPLIFY-R6-001 | LOW | `extractBookmarks` in `bookmarks.go` was a one-line shim wrapper over `extractBookmarksDepth` with exactly one caller (line 52); pure unnecessary abstraction. | Fixed | Inlined directly; no bug spawned (private, unexported, zero spec/design contract impact). |
+| F-SIMPLIFY-R6-002 | MEDIUM | Exported `FolderToTopicMapping(folder string) string` in `bookmarks.go` was documented in 4 places in `spec.md` and 4 places in `design.md` as the primary folder→topic mechanism, and exercised by 3 dedicated unit tests (`TestFolderToTopicMapping`, `TestFolderToTopicMapping_Backslash`, `TestFolderToTopicMapping_MultiLevel`) — yet production never called it. The actual production folder→topic path is `TopicMapper.MapFolder` in `topics.go`, which implements a fundamentally different algorithm (segment-split + per-segment exact / pg_trgm-fuzzy / create-emerging cascade) producing hierarchical topics with `CHILD_OF` edges. The deleted utility flattened folder paths into a single string. | Fixed | Spawned BUG-009-004 with full 7-artifact set; deleted function + 3 dead tests; rewrote 8 stale spec/design reference sites to name `TopicMapper.MapFolder`; added adversarial guard test in `topics_test.go`. |
+
+**Fix scope (boundary):**
+
+- `internal/connector/bookmarks/bookmarks.go` — delete `FolderToTopicMapping` function (lines 143–152) + inline `extractBookmarks` shim into `ParseChromeJSON` call site (line 52 → direct call to `extractBookmarksDepth(node, "", &bookmarks, 0)`). Net: −16 lines.
+- `internal/connector/bookmarks/bookmarks_test.go` — delete 3 dead unit tests for the removed function. Net: −47 lines.
+- `internal/connector/bookmarks/topics_test.go` — add `TestSimplifyR6_FolderToTopicMapping_Removed` adversarial guard test with three layers of regression coverage. Net: +65 lines.
+- `specs/009-bookmarks-connector/spec.md` — surgical rewrite of 4 reference sites (Goal #2, ASCII diagram, R-005, UC-001 step 10) to name `TopicMapper.MapFolder` and describe the segment-split cascade. Net: +13/-13 (text-content rewrite).
+- `specs/009-bookmarks-connector/design.md` — surgical rewrite of 4 reference sites (Design Brief "Current State", Component Design, Data Flow step 8, Component Design §2). Net: +9/-9 (text-content rewrite).
+
+No change to: `connector.go`, `dedup.go`, `topics.go` production source; `IsKnown` exported method (live integration test consumers); spec 003 historical evidence rows; all other connector packages; scheduler; supervisor.
+
+**Code Diff Evidence:**
+
+```
+$ git diff --stat HEAD -- internal/connector/bookmarks/ specs/009-bookmarks-connector/spec.md specs/009-bookmarks-connector/design.md
+ internal/connector/bookmarks/bookmarks.go      | 18 +------
+ internal/connector/bookmarks/bookmarks_test.go | 47 -------------------
+ internal/connector/bookmarks/topics_test.go    | 65 ++++++++++++++++++++++++++
+ specs/009-bookmarks-connector/design.md        |  9 ++--
+ specs/009-bookmarks-connector/spec.md          | 13 +++---
+ 5 files changed, 77 insertions(+), 75 deletions(-)
+```
+
+**Adversarial fidelity proof:** Synthetic Go program at simplify R6 demonstrated the algorithmic difference between the deleted flatten algorithm and the production split algorithm:
+
+```
+flatten("Tech/Go/Libraries") = 1 segments, want 3  [FAIL]
+split  ("Tech/Go/Libraries") = 3 segments, want 3  [PASS]
+flatten("a/b/c/d") = 1 segments, want 4  [FAIL]
+split  ("a/b/c/d") = 4 segments, want 4  [PASS]
+flatten("single") = 1 segments, want 1  [PASS]
+split  ("single") = 1 segments, want 1  [PASS]
+flatten("/leading/slash") = 1 segments, want 2  [FAIL]
+split  ("/leading/slash") = 2 segments, want 2  [PASS]
+flatten("trailing/slash/") = 1 segments, want 2  [FAIL]
+split  ("trailing/slash/") = 2 segments, want 2  [PASS]
+```
+
+4 of 5 multi-segment fixtures distinguish flatten (1 segment) vs split (N segments). The new `TestSimplifyR6_FolderToTopicMapping_Removed` test embeds the same fixtures inline (plus the production-relevant `"Bookmarks Bar/Tech/Distributed Systems"` path), pinning the production hierarchical-topic contract documented in R-005. Full transcript and scope-of-confidence analysis in [BUG-009-004 report](bugs/BUG-009-004-foldertotopicmapping-dead-surface/report.md).
+
+**Verification:**
+
+```
+$ go build ./...
+$ echo build_exit=$?
+build_exit=0
+$ go test ./internal/connector/bookmarks/... -race -count=1
+ok      github.com/smackerel/smackerel/internal/connector/bookmarks     1.183s
+$ go test ./internal/connector/... ./internal/scheduler/...
+ok      github.com/smackerel/smackerel/internal/connector       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/alerts        (cached)
+ok      github.com/smackerel/smackerel/internal/connector/bookmarks     0.131s
+ok      github.com/smackerel/smackerel/internal/connector/browser       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/caldav        (cached)
+ok      github.com/smackerel/smackerel/internal/connector/discord       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/guesthost     (cached)
+ok      github.com/smackerel/smackerel/internal/connector/hospitable    (cached)
+ok      github.com/smackerel/smackerel/internal/connector/imap  (cached)
+ok      github.com/smackerel/smackerel/internal/connector/ingest        (cached)
+ok      github.com/smackerel/smackerel/internal/connector/keep  (cached)
+ok      github.com/smackerel/smackerel/internal/connector/maps  (cached)
+ok      github.com/smackerel/smackerel/internal/connector/markets       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/photos        (cached)
+ok      github.com/smackerel/smackerel/internal/connector/photos/adapters/immich (cached)
+ok      github.com/smackerel/smackerel/internal/connector/photos/adapters/photoprism    (cached)
+ok      github.com/smackerel/smackerel/internal/connector/qfdecisions   (cached)
+ok      github.com/smackerel/smackerel/internal/connector/rss   (cached)
+ok      github.com/smackerel/smackerel/internal/connector/twitter       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/weather       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/youtube       (cached)
+ok      github.com/smackerel/smackerel/internal/scheduler       (cached)
+$ go vet ./internal/connector/bookmarks/...
+$ echo vet_exit=$?
+vet_exit=0
+$ gofmt -l internal/connector/bookmarks/
+$ echo fmt_exit=$? fmt_output_above_or_none
+fmt_exit=0 fmt_output_above_or_none
+$ ./smackerel.sh lint > /dev/null 2>&1 ; echo "LINT_EXIT=$?"
+LINT_EXIT=0
+$ grep -rn 'FolderToTopicMapping' --include='*.go' internal/connector/bookmarks/
+$ echo grep_exit=$?
+grep_exit=1
+$ grep -rn 'FolderToTopicMapping' specs/009-bookmarks-connector/spec.md specs/009-bookmarks-connector/design.md specs/009-bookmarks-connector/scopes.md
+$ echo grep_exit=$?
+grep_exit=1
+```
+
+The strongest evidence: `go build ./...` exits 0 after deleting an exported function. This is unambiguous proof of zero production consumers — Go's linker would reject the build otherwise.
+
+**Re-certification:** Parent spec 009 `state.json::certifiedAt` bumped from `2026-04-09T01:40:00Z` (preserved as `originalCompletedAt`) to `2026-06-05T22:00:00Z`. Gate G088 triggered the bump because this round modified spec.md and design.md (8 surgical reference-site rewrites) which were certified planning truth. Intermediate re-certifications by prior sweep rounds at 2026-06-04T02:30:00Z and 2026-06-05T20:50:00Z are noted in `state.json::executionHistory`. `originalCompletedAt` preserves the canonical initial 2026-04-09 sign-off date.
+
+**Known scan disposition (G028 FAKE_INTEGRATION carry-over):** The implementation-reality-scan continues to flag 2 lines in `bookmarks.go` (lines 41 and 47, both `return nil, fmt.Errorf(...)` inside `ParseChromeJSON`) as FAKE_INTEGRATION heuristic false-positives. These are legitimate Go error-return idioms that pre-date simplify R6 by many cycles (original 2026-04-09 certification). Simplify R6 did NOT touch any line flagged by the scan — verified by `git diff HEAD -- internal/connector/bookmarks/bookmarks.go | grep -E '^(\+|-).*return nil'` returning empty output. Disposition same as spec 009 R10 close-out (state.json executionHistory at 2026-05-25T17:30:00Z) and BUG-009-002 R30 close-out. Tracked as `observations[OBS-009-SIMP-R6-001]` in state.json with severity `low`, `blocking: false`.

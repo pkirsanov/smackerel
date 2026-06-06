@@ -49,7 +49,7 @@ func ParseChromeJSON(data []byte) ([]Bookmark, error) {
 
 	for _, bar := range roots {
 		if node, ok := bar.(map[string]interface{}); ok {
-			extractBookmarks(node, "", &bookmarks)
+			extractBookmarksDepth(node, "", &bookmarks, 0)
 		}
 	}
 
@@ -138,22 +138,6 @@ func ToRawArtifacts(bookmarks []Bookmark) []connector.RawArtifact {
 		})
 	}
 	return artifacts
-}
-
-// FolderToTopicMapping converts bookmark folder names to topic names.
-func FolderToTopicMapping(folder string) string {
-	if folder == "" {
-		return ""
-	}
-	// Normalize: lowercase, trim, replace separators
-	topic := strings.ToLower(strings.TrimSpace(folder))
-	topic = strings.ReplaceAll(topic, "/", " ")
-	topic = strings.ReplaceAll(topic, "\\", " ")
-	return topic
-}
-
-func extractBookmarks(node map[string]interface{}, folder string, out *[]Bookmark) {
-	extractBookmarksDepth(node, folder, out, 0)
 }
 
 func extractBookmarksDepth(node map[string]interface{}, folder string, out *[]Bookmark, depth int) {

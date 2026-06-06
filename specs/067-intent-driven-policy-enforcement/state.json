@@ -82,11 +82,11 @@
     }
   },
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
-    "currentScope": "scope-4",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "simplify",
+    "currentScope": "scope-3",
     "runStartedAt": "2026-05-31T00:00:00Z",
-    "lastUpdatedAt": "2026-06-02T05:30:00Z",
+    "lastUpdatedAt": "2026-06-05T00:00:00Z",
     "completedPhaseClaims": [
       {
         "agent": "bubbles.implement",
@@ -183,6 +183,13 @@
         "completedAt": "2026-06-02T06:43:00Z",
         "evidenceRef": "specs/067-intent-driven-policy-enforcement/scopes.md#scope-1-policy-guard-foundation-and-exception-ratchet",
         "summary": "Chaos pass for spec 067. Scope is filesystem-only CI guard surface — no runtime services, no network, no message bus, no DB writes. Chaos surface reduces to (a) malformed/missing baseline file, (b) malformed scenario YAML, (c) malformed policy config, (d) source tree mutation while guard runs. (a) covered by TestLoadBaselineFailsLoudOnMissingFile + TestPolicyExceptionGuardRejectsExpiredException; (b) covered by TestPrincipleAlignmentGuardReportsMissingBlockWithPolicySource + TestScenarioPromptCapGuardReportsScenarioCountAndConfiguredCap; (c) covered by TestPolicyConfigRequiresScenarioPromptMaxLines (fail-loud on missing SST key); (d) inherently safe — scanner is read-only and re-runs deterministically. No chaos-injection harness is meaningful for a pure-static guard. Claim Source: interpreted (chaos surface analysis vs. existing adversarial integration tests). Verdict: CHAOS_RESILIENT (by construction; no runtime chaos surface)."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "simplify",
+        "completedAt": "2026-06-05T00:00:00Z",
+        "evidenceRef": "specs/067-intent-driven-policy-enforcement/report.md#simplify-pass--round-3--stochastic-quality-sweep-2026-06-05",
+        "summary": "Round 3 of stochastic-quality-sweep — parent-expanded simplify-to-doc child mode. Removed dead `SourceException` struct in tests/integration/policy/keyword_routing_guard.go (RND3-S1). Inlined 4 `scan*Files` helpers whose 'Exposed for fixture tests' comments were false (no test calls them): RND3-S2 (scanRegexRoutingFiles, scanKeywordMapFiles) and RND3-S3 (scanPythonNoDefaultsFiles, scanGoNoDefaultsFiles). Kept `policy.Guard` interface and the relTo/relToRepo path-helper pair (RND3-N1) — both are documented contracts whose removal would require planning-chain repair beyond simplify-to-doc scope. Net -42 LOC (12 insertions, 42 deletions across 2 files). 27/27 integration tests + 4/4 e2e tests PASS (same as pre-simplify baseline). go vet -tags=integration clean. No public API change. No new defaults. No spec/design/scopes/scenario-manifest mutation. Claim Source: executed (test logs in report.md Round 3 section)."
       }
     ],
     "completedScopes": ["scope-1", "scope-2", "scope-3", "scope-4"],

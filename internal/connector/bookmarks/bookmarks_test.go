@@ -68,25 +68,6 @@ func TestParseNetscapeHTML(t *testing.T) {
 	}
 }
 
-func TestFolderToTopicMapping(t *testing.T) {
-	tests := []struct {
-		folder   string
-		expected string
-	}{
-		{"Tech/Go", "tech go"},
-		{"Reading", "reading"},
-		{"", ""},
-		{"  Mixed Case  ", "mixed case"},
-	}
-
-	for _, tt := range tests {
-		got := FolderToTopicMapping(tt.folder)
-		if got != tt.expected {
-			t.Errorf("FolderToTopicMapping(%q) = %q, want %q", tt.folder, got, tt.expected)
-		}
-	}
-}
-
 func TestToRawArtifacts(t *testing.T) {
 	bookmarks := []Bookmark{
 		{Title: "Test", URL: "https://example.com", Folder: "Tech"},
@@ -249,13 +230,6 @@ func TestExtractBookmarks_MaxDepth(t *testing.T) {
 	// The bookmark at depth > maxExtractDepth should be unreachable
 	if len(bookmarks) != 0 {
 		t.Errorf("expected 0 bookmarks (depth exceeded), got %d", len(bookmarks))
-	}
-}
-
-func TestFolderToTopicMapping_Backslash(t *testing.T) {
-	got := FolderToTopicMapping("Tech\\Go")
-	if got != "tech go" {
-		t.Errorf("FolderToTopicMapping(\"Tech\\\\Go\") = %q, want \"tech go\"", got)
 	}
 }
 
@@ -577,27 +551,6 @@ func TestToRawArtifacts_FolderMetadata(t *testing.T) {
 	}
 	if folder, ok := artifacts[1].Metadata["folder"].(string); !ok || folder != "" {
 		t.Errorf("artifacts[1] folder = %v, want empty string", artifacts[1].Metadata["folder"])
-	}
-}
-
-// T-PARSE-005: FolderToTopicMapping with multi-level slash paths.
-func TestFolderToTopicMapping_MultiLevel(t *testing.T) {
-	tests := []struct {
-		folder   string
-		expected string
-	}{
-		{"Tech/Go/Libraries", "tech go libraries"},
-		{"a/b/c/d", "a b c d"},
-		{"single", "single"},
-		{"/leading/slash", " leading slash"},
-		{"trailing/slash/", "trailing slash "},
-	}
-
-	for _, tt := range tests {
-		got := FolderToTopicMapping(tt.folder)
-		if got != tt.expected {
-			t.Errorf("FolderToTopicMapping(%q) = %q, want %q", tt.folder, got, tt.expected)
-		}
 	}
 }
 

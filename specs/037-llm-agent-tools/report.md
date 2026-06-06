@@ -815,3 +815,127 @@ Implementation reality at HEAD ab6fc4f (unchanged by this closure):
 - USER WIP: `.github/instructions/bubbles-deployment-target.instructions.md`, `.github/skills/bubbles-deployment-target-adapter/SKILL.md`, `docs/Home_Lab_Deployment_Plan.md`, `docs/Home_Lab_Master_Deployment_Plan.md`, `.github/bubbles/scripts/pii-scan.sh`, `.gitleaks.toml`.
 - All other framework files in `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/`.
 
+---
+
+## Chaos Round 1 (Stochastic Quality Sweep, 2026-06-05) — CLEAN
+
+**Workflow:** stochastic-quality-sweep parent → chaos-hardening child workflow mode (round 1 of 20).
+**Execution model:** parent-expanded-child-mode (subagent runtime lacks `runSubagent`; `chaos-hardening` is single-spec delivery with `requiresTopLevelRuntime: false`, so parent-expansion is allowed).
+**Mapped trigger:** `chaos` → `chaos-hardening` per `bubbles/workflows.yaml` `triggerWorkflowModes[chaos]`.
+**Reproducibility seed:** `CHAOS_SEED=1717619200`.
+
+### Probes Executed (new file: `tests/stress/agent/chaos_round1_test.go`, build tag `stress`)
+
+| Probe | Sub-cases | Result | Notes |
+|-------|-----------|--------|-------|
+| `TestChaos_037_BodyBoundaryAndMalformed` | 10 | 10 PASS / 0 FAIL | Body-size LimitReader contract + JSON parse gate. Covers zero-byte body, empty object, null body, JSON array, malformed JSON, binary garbage, control chars, deeply nested (200-level) structured_context, exactly 64 KiB body, over-64-KiB body. Two envelope shapes observed and asserted (pre-agent `{error, field}` vs agent-ran `{outcome, trace_id, detail}`). No 5xx leakage. |
+| `TestChaos_037_ConcurrentBurst` | 1 | PASS | 200 concurrent POSTs at `/v1/agent/invoke` (using non-existent `scenario_id` to short-circuit at routing). All 200 returned 200 in 117ms wallclock; no transport errors; server stayed responsive after burst. Throttle headroom (`middleware.Throttle(100)` is in-flight cap, not RPM) was sufficient because routing-stage rejection is fast. |
+| `TestChaos_037_AuthBoundaryChaos` | 13 | 12 PASS / 1 client-rejection asserted | Auth surface probed with: missing header, empty Bearer, wrong token, extra spaces, no Bearer prefix, Basic / Digest schemes, embedded newlines (Go HTTP client rejects this client-side — asserted), Unicode RLO control, 4 KiB token, lowercase/uppercase Bearer (RFC 7235 case-insensitive scheme — accepted), double Bearer (rejected). Every malformed shape → 401; every valid-scheme variant → 200. No 5xx leakage. |
+| `TestChaos_037_ReplayCLIErrorPaths` | 8 | 7 PASS / 1 SKIP | `smackerel agent replay` exit-code contract probed with non-existent UUID, empty trace_id, SQL-injection-shape, 8 KiB trace_id, NUL byte (skipped — `exec.Command` cannot pass NUL in args at OS level), Unicode RLO control, whitespace-only, path-traversal-shape. Every case → exit `ERROR=2` (never `PASS=0`, never `FAIL=1`). Implementation note: harness builds `./cmd/core` into a temp dir and exec's it directly — `go run` would translate inner exit `2` into wrapper exit `1` and mask the contract under test. |
+
+**Total chaos sub-cases:** 32. **PASS:** 31. **SKIP:** 1 (OS-level). **FAIL:** 0. **Findings against spec 037:** 0.
+
+### Cross-Spec Observation (NOT spec 037; routed to owner, NOT fixed inline)
+
+- `tests/integration/agent/openknowledge_routing_test.go:TestOpenKnowledgeRouting_ScenarioHealthProbe` fails with `open_knowledge scenario absent from scenario dir` when invoked with a *relative* `AGENT_SCENARIO_DIR` (e.g., `config/prompt_contracts`) because `go test` changes `cwd` to the test package directory at runtime.
+- The test passes with an absolute path (verified via `AGENT_SCENARIO_DIR="$(pwd)/config/prompt_contracts"`).
+- **Owner:** spec 064 (`Open-Ended Knowledge Agent`) — the test file's leading comment declares it as Spec 064 SCOPE-12.
+- **Suggested fix (NOT applied here):** either (a) detect zero-length `registered + rejected` and `t.Skipf` with a meaningful message, (b) resolve the env value to an absolute path inside the test, or (c) the loader could return an explicit error when the directory does not contain any matching files. Choice belongs to spec 064's owners.
+
+### Observation Notes (NOT findings)
+
+1. For an explicit `scenario_id` that does not match any registered scenario, the response envelope carries `outcome="unknown-intent"` together with `trace_id=""` (empty). This is consistent with the design (no scenario fired → no trace was recorded), but a downstream consumer that branches on "outcome implies trace" may be surprised. Not blocking; flagged for awareness.
+2. `userreply.MalformedRequestResponse(field)` sets `error: "missing_field"` even when `field` semantically describes a different class (e.g., `field: "body_invalid_json"` for unparseable JSON). The `field` value carries the precise class; the top-level `error` is a single bucket. Not blocking; flagged for awareness.
+
+### Baseline Test Suites Re-Run Against Live Test Stack (clean)
+
+- `./smackerel.sh check` → PASS (scenario-lint registered 11 / rejected 0).
+- `go test -count=1 ./internal/agent/...` → all packages PASS (`internal/agent` 0.118s, `internal/agent/render` 0.028s, `internal/agent/userreply` 0.014s, plus `embedder/sidecar`, `tools/microtools`, `tools/notification`, `tools/retrieval`, `tools/weather`).
+- `go test -tags=integration -count=1 ./tests/integration/agent/...` → 9.555s OK (16 tests).
+- `go test -tags=e2e -count=1 ./tests/e2e/agent/...` → 8.341s OK.
+- `go test -tags=stress -count=1 ./tests/stress/agent/...` (existing + new chaos) → 8.223s OK (5 tests total: 4 new chaos + BS-018 concurrency).
+- `gofmt -l tests/stress/agent/chaos_round1_test.go` → empty (clean).
+- `go vet -tags=stress ./tests/stress/agent/...` → empty (clean).
+- `./smackerel.sh format --check` → PASS (61 files formatted).
+
+### Files Touched (chaos round 1)
+
+- `tests/stress/agent/chaos_round1_test.go` — NEW. 4 chaos test functions, ~470 LOC, build tag `stress`. Becomes a permanent regression guard for the four attack surfaces.
+- `specs/037-llm-agent-tools/report.md` — this section.
+
+### Files NOT Touched (chaos round 1)
+
+- `internal/agent/**`, `internal/api/**`, `internal/agent/userreply/**` — no production code change (chaos found nothing requiring remediation).
+- `specs/037-llm-agent-tools/spec.md`, `design.md`, `scopes.md`, `uservalidation.md`, `state.json` — chaos agent ownership boundary (per `agents/bubbles.chaos.agent.md`: "MUST NOT edit spec.md, design.md, scopes.md, uservalidation.md, or state.json certification fields").
+- `tests/integration/agent/openknowledge_routing_test.go` — cross-spec ownership boundary (owned by spec 064).
+
+### Round Verdict
+
+`completed_owned` — zero findings against spec 037; net-positive regression coverage added; baseline test surfaces remain green; spec status remains `done`.
+
+## Gap-Cycle Round 14 (Stochastic Quality Sweep, 2026-06-06) — 2 G068 FINDINGS CLOSED + 1 OBSERVATION
+
+**Workflow:** stochastic-quality-sweep parent → `gaps-to-doc` child workflow mode (round 14 of 20).
+**Execution model:** parent-expanded-child-mode (subagent runtime lacks `runSubagent`; `gaps-to-doc` is single-spec delivery with `requiresTopLevelRuntime: false`, so parent-expansion is allowed per `agents/bubbles_shared/workflow-fix-cycle-protocol.md`).
+**Mapped trigger:** `gaps` → `gaps-to-doc` per `bubbles/workflows.yaml` `triggerWorkflowModes[gaps]`.
+
+### Baseline (pre-fix) — Gate G068 DoD Content Fidelity
+
+- **Phase:** validate. **Claim Source:** executed. Command: `bash .github/bubbles/scripts/traceability-guard.sh specs/037-llm-agent-tools 2>&1 | tail -25`
+- **Pre-fix result:** `RESULT: FAILED (3 failures, 0 warnings)`
+- **Findings:**
+  - `Scope 8: Operator UI (CLI + Web) Gherkin scenario has no faithful DoD item preserving its behavioral claim: SCN-037-026 Scenario Catalog surfaces load-time rejections (BS-009/010/011)`
+  - `Scope 10: Migration Hooks & CI Linter Wiring Gherkin scenario has no faithful DoD item preserving its behavioral claim: SCN-037-031 Scheduler/pipeline call into the agent`
+  - `DoD content fidelity gap: 2 Gherkin scenario(s) have no matching DoD item — DoD may have been rewritten to match delivery instead of the spec (Gate G068)`
+
+### Gap Classification (per `agents/bubbles.gaps.agent.md`)
+
+| Finding | Class | Implementation status | Disposition |
+|---------|-------|----------------------|-------------|
+| SCN-037-026 ↔ Scope 8 DoD untagged | 🔵 UNDOCUMENTED (DoD item lacks trace id; behavior is implemented + tested) | DELIVERED — `tests/e2e/agent/operator_ui_test.go::TestOperatorUI_ScenarioCatalogShowsRejections` verifies the catalog rejection surface | Artifact-only DoD tag repair |
+| SCN-037-031 ↔ Scope 10 DoD untagged | 🔵 UNDOCUMENTED (DoD item lacks trace id; behavior is implemented + tested) | DELIVERED — `tests/integration/agent/scheduler_bridge_test.go::TestScope10_SchedulerBridge_FiresExecutorWithSchedulerSource` and `tests/integration/agent/pipeline_bridge_test.go::TestScope10_PipelineBridge_FiresExecutorWithPipelineSource` verify the bridge surfaces | Artifact-only DoD tag repair |
+
+Both findings are exactly the same class as BUG-037-002 (artifact-only traceability fidelity) — implementation, tests, and inline evidence are all complete; only the SCN-037-NNN trace-id prefix was missing from the DoD bullet text. No source code, no test code, and no behavioral claim changed.
+
+### Remediation (parent-expanded `bubbles.plan` role)
+
+- **Phase:** implement. **Claim Source:** executed. Tool: `multi_replace_string_in_file` (no shell redirection).
+- Scope 8 DoD bullet rewritten from `- [x] Load-time rejection section visible in scenario catalog` to `- [x] Scenario SCN-037-026 (Scenario Catalog surfaces load-time rejections BS-009/010/011): Load-time rejection section visible in scenario catalog`. Inline evidence sub-bullets preserved verbatim.
+- Scope 10 DoD bullet rewritten from `- [x] Scheduler and pipeline surfaces call \`Executor.Run\` (no regex/switch routers)` to `- [x] Scenario SCN-037-031 (Scheduler/pipeline call into the agent): Scheduler and pipeline surfaces call \`Executor.Run\` (no regex/switch routers)`. Surrounding DoD bullets and Inline Evidence section preserved verbatim.
+
+### Post-fix Validation (parent-expanded `bubbles.validate` role)
+
+- **Phase:** validate. **Claim Source:** executed. Command: `bash .github/bubbles/scripts/traceability-guard.sh specs/037-llm-agent-tools`
+- **Post-fix result:** `RESULT: PASSED (0 warnings)` — `DoD fidelity scenarios: 33 (mapped: 33, unmapped: 0)`
+- **Phase:** validate. **Claim Source:** executed. Command: `bash .github/bubbles/scripts/artifact-lint.sh specs/037-llm-agent-tools`
+- **Post-fix result:** `Artifact lint PASSED.` — anti-fabrication evidence checks all green; required specialist phase records (implement/test/docs/validate/audit/chaos/spec-review) all present.
+
+### Audit (parent-expanded `bubbles.audit` role)
+
+- DoD bullet edits add trace-id prefixes only; behavioral claims preserved verbatim. No DoD item was marked `[x]` from `[ ]`, no item was added, no item was removed. Per-scope checkbox counts unchanged in both Scope 8 (5 items) and Scope 10 (6 items).
+- No `spec.md`, `design.md`, source, test, migration, or config files touched.
+- `state.json.certification.status`, `state.json.certification.completedScopes`, `state.json.certification.certifiedCompletedPhases`, `state.json.certification.scopeProgress`, and top-level `state.json.status` preserved unchanged (only `execution.executionHistory` append + `lastUpdatedAt` bump).
+- Universal Finding-Owned Closure Rule satisfied: every G068 finding from the baseline is closed and accounted for in the post-fix validation evidence.
+
+### Observation Routed Up (NOT closed in this round)
+
+- **OBS-037-G088-CERTIFIEDAT-NULL:** Spec 037 has `status: done` and `certification.status: done` but `certifiedAt: null` at both top-level and inside `certification`. Gate G088 (`post-cert-spec-edit-guard.sh`) therefore exits with code 2 (`G088 requires top-level certifiedAt for certified spec specs/037-llm-agent-tools (status=done)`) and cannot evaluate post-cert edit history. This is a state-metadata observation, not a planning-truth or behavioral defect, and falls outside `bubbles.gaps` artifact ownership (`state.json` certification fields belong to `bubbles.workflow` / `bubbles.validate` per `agents/bubbles.gaps.agent.md` Artifact Ownership). Routed up to the stochastic-quality-sweep parent for handling — likely needs a separate bug packet or a finalize/certification-owner pass to backfill `certifiedAt` from execution evidence (e.g., the 2026-04-25T22:30:00Z Scope 10 implement close-out plus the 2026-05-08 G041 reconciliation set the latest credible certification timestamp). NOT silently invented in this round.
+
+### Files Touched (gap-cycle round 14)
+
+- `specs/037-llm-agent-tools/scopes.md` (two DoD bullets prefixed with `Scenario SCN-037-NNN (...)` tag; inline evidence preserved)
+- `specs/037-llm-agent-tools/state.json` (executionHistory append + lastUpdatedAt bump only)
+- `specs/037-llm-agent-tools/report.md` (this closure section)
+
+### Files NOT Touched (gap-cycle round 14)
+
+- `specs/037-llm-agent-tools/spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json`
+- All source code (`internal/agent/**`, `internal/web/agent_admin*.go`, `internal/scheduler/agent_bridge.go`, `internal/pipeline/agent_bridge.go`, `cmd/core/cmd_agent*.go`, `ml/app/**`)
+- All test files (test reality unchanged — same passing suites referenced by the unchanged inline evidence)
+- All framework files (`.github/bubbles/**`, `.github/agents/**`, `.github/instructions/**`, `.github/skills/**`)
+- `state.json` `status`, `certification.status`, `certification.completedScopes`, `certification.certifiedCompletedPhases`, `certification.scopeProgress`, `policySnapshot` (preserved per artifact ownership boundary)
+
+### Round Verdict
+
+`completed_owned` — 2 G068 findings closed via artifact-only DoD tag repair; 1 observation routed up; spec status remains `done`; traceability guard now PASSES (33/33 scenarios mapped to DoD); artifact-lint PASSES; no implementation change.
+
