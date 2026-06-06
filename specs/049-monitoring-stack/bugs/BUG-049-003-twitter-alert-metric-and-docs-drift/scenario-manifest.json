@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "specId": "049-monitoring-stack/bugs/BUG-049-003-twitter-alert-metric-and-docs-drift",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-049-B005",
+      "title": "Every alert metric name resolves to an emitted runtime metric",
+      "scope": "BUG-049-003-S1",
+      "requiredTestType": "contract",
+      "linkedTests": [
+        "internal/deploy/monitoring_alerts_contract_test.go",
+        "config/prometheus/alerts.yml",
+        "internal/metrics/metrics.go"
+      ],
+      "evidenceRefs": [
+        "report.md#t-bug-049-003-001",
+        "report.md#t-bug-049-003-003",
+        "report.md#t-bug-049-003-008"
+      ],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-049-B006",
+      "title": "Every alert in alerts.yml is named in docs/Operations.md Alert Runbook",
+      "scope": "BUG-049-003-S1",
+      "requiredTestType": "contract",
+      "linkedTests": [
+        "internal/deploy/monitoring_docs_contract_test.go",
+        "docs/Operations.md",
+        "config/prometheus/alerts.yml"
+      ],
+      "evidenceRefs": [
+        "report.md#t-bug-049-003-002",
+        "report.md#t-bug-049-003-003",
+        "report.md#t-bug-049-003-004",
+        "report.md#t-bug-049-003-005",
+        "report.md#t-bug-049-003-006",
+        "report.md#t-bug-049-003-007"
+      ],
+      "regressionProtected": true
+    }
+  ]
+}

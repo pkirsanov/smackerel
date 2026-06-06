@@ -16,10 +16,10 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 7. **Scope 07 — Settings UI Connectors**: Connector cards, OAuth connect/disconnect flows, manual sync triggers, bookmark upload
 
 ### New Types & Signatures
-- `Connector` interface: `ID()`, `Connect(ctx, config)`, `Sync(ctx, cursor)`, `GetState(ctx)`, `Health(ctx)`, `Close()`
-- `SyncState` struct: `ConnectorID`, `CursorValue`, `LastSyncAt`, `ItemsSynced`, `ErrorCount`, `LastError`
-- `ConnectorConfig` struct: `SourceID`, `AuthType`, `Credentials`, `Schedule`, `Qualifiers`, `ProcessingRules`
-- `QualifierConfig` struct: `PrioritySenders`, `SkipLabels`, `PriorityLabels`, `MinDwellTime`, `SkipDomains`
+- `Connector` interface: `ID()`, `Connect(ctx, config)`, `Sync(ctx, cursor)`, `Health(ctx)`, `Close()` — sync state persistence lives on the external `connector.StateStore`, not on `Connector` itself; the new cursor is returned from `Sync()`
+- `SyncState` struct (in `internal/connector/state.go`): `SourceID`, `Enabled`, `LastSync`, `SyncCursor`, `ItemsSynced`, `ErrorsCount`, `LastError`
+- `ConnectorConfig` struct: `AuthType`, `Credentials`, `SyncSchedule`, `Enabled`, `ProcessingTier`, `Qualifiers` (map[string]any parsed per-connector), `SourceConfig` (map[string]any extras); identity comes from `Connector.ID()`, not a config field
+- `QualifierConfig` struct (per-connector concrete type; IMAP variant in `internal/connector/imap/imap.go`): `PrioritySenders`, `SkipLabels`, `PriorityLabels`, `SkipDomains` (browser-history qualifiers like `MinDwellTime` belong to spec 010, not this spec)
 - IMAP connector: `imap.Connector` with `gmail_adapter.go` for XOAUTH2
 - CalDAV connector: `caldav.Connector` with `google_adapter.go` for OAuth2
 - YouTube connector: `youtube.Connector` with engagement qualifiers
