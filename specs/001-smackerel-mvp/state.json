@@ -3,7 +3,7 @@
   "featureDir": "specs/001-smackerel-mvp",
   "featureName": "Smackerel MVP",
   "status": "done",
-  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedAt": "2026-06-06T23:00:00Z",
   "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
@@ -386,12 +386,22 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: fb2a4266 (2026-06-01) added a Successor Notice cross-ref banner to spec.md pointing at specs 061/064/068/069 and explicitly keeping this spec done (incidental reconciliation, category b); 2c35588a (2026-04-17) re-certification close-out that normalized dark-theme hex #E8E6E3->#e8e8e4 in design.md/scopes.md to match templates.go, replaced fabricated emoji test refs with TestMarkerConstants_NoEmoji, and appended a Known Gaps & Limitations section (promote-to-done close-out, category a). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T18:10:00Z",
+      "runEndedAt": "2026-06-06T18:10:00Z",
+      "summary": "Stochastic Quality Sweep R11 (reconcile-to-doc, validate trigger; parent-expanded-child-mode). Re-verified all 4 scope DoD claims against on-disk code: icons 8/8/4/4/8=32 (TestAllIcons_Count + category counts + 32 ValidSVG subtests PASS), 8 telegram markers (TestMarkerConstants_Unique/NoEmoji PASS), connector framework types (Connector/Registry/OAuth2Provider/StateStore/Backoff/Supervisor + robfig/cron) grep-verified and connector+auth+scheduler+web packages green (GOTEST_RC=0). Reconciled 1 residual light-theme foreground drift: SCN-001-005 specified #2C2C2C in design.md/scopes.md but shipped templates.go uses --fg:#1a1a18 (same drift class as the 2026-04-17 dark-theme #E8E6E3->#e8e8e4 fix, which left the light foreground untouched). Updated design.md palette + scopes.md Gherkin/test-plan #2C2C2C->#1a1a18 to match certified code. Documentation-only; implementation unchanged; requiresRevalidation NOT set. certifiedAt advanced to 2026-06-06T18:10:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-06T18:10:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

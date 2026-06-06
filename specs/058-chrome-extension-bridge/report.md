@@ -715,4 +715,92 @@ back to `in_progress` and complete the deferred DoD rows, then to `done`.
 **Next required owner.** `null` — operator triage required on the four
 blockers. No autonomous follow-up.
 
+## Chaos Sweep — Round 18 (2026-06-06)
+
+Parent: `stochastic-quality-sweep` round 18 of 20, trigger `chaos`, mapped
+child mode `chaos-hardening`, executed parent-expanded
+(`executionModel: parent-expanded-child-mode`). Adversarial / boundary /
+malformed-input / concurrency probing of the chrome-extension bridge ingest +
+dedup + admin surface. Nothing committed; changes left in the working tree.
+
+### Finding F1 (RESOLVED in-lane) — server did not enforce the source_device_id contract
+
+Design §2.3 constrains `source_device_id` to `[a-z0-9-]` and §3.2 requires the
+handler to "validate each ... Metadata field", but `processItem`
+(`internal/api/connectors/extension/ingest.go`) only checked non-empty. Any
+device id — null-byte / control-char / whitespace / uppercase / unicode /
+unbounded-length — flowed unchecked into the `ComputeDedupKey` preimage and the
+admin devices view.
+
+Fix: added `sourceDeviceIDRe = ^[a-z0-9-]{1,64}$` trust-boundary validation
+(per-item rejection `metadata.source_device_id_invalid`). The 64 length bound
+admits the design's own `auto-<uuidv4>` fallback (41 chars) while bounding
+input. Red→green proof.
+
+RED (pre-fix) — all 11 adversarial device ids were ACCEPTED:
+
+```
+--- FAIL: TestIngest_RejectsMalformedSourceDeviceID/null_byte
+    device id "lap\x00top" MUST be rejected ...; got {Outcome:accepted ArtifactID:art-2}
+  (+10 more: separator_injection, uppercase, space, tab, newline, unicode, slash, dot, underscore, over_64_chars)
+```
+
+GREEN (post-fix), under -race:
+
+```
+--- PASS: TestIngest_RejectsMalformedSourceDeviceID (0.01s)
+--- PASS: TestIngest_AcceptsValidSourceDeviceIDForms (0.00s)
+        [non-tautology guard: laptop, work-desktop, auto-<uuidv4>, 64×'a' still accepted]
+```
+
+### Hardening probes (CLEAN — permanent regression guards)
+
+Added under `-race`; all PASS on current code (confirming robustness of the
+existing type-handling, batch-structural, streaming-cap, concurrency, and
+keyer paths):
+
+```
+--- PASS: TestIngest_MetadataTypeConfusion_GracefulRejection (number/bool/array/object/null → treated as missing, no panic)
+--- PASS: TestIngest_NullArrayElement_RejectedPerItem_NeighborsPreserved
+--- PASS: TestIngest_UnknownFieldInItem_FailsWholeBatch (DisallowUnknownFields is batch-fatal, not per-item)
+--- PASS: TestIngest_BodyOverCap_UnknownContentLength_Returns413 (MaxBytesReader path; Content-Length = -1)
+--- PASS: TestIngest_ConcurrentRequests_NoRace (16×8 concurrent POSTs)
+--- PASS: TestComputeDedupKey_SeparatorInjectionResistance (null-byte injection cannot forge a collision)
+```
+
+Full target-package regression, race-enabled:
+
+```
+ok  github.com/smackerel/smackerel/internal/api/connectors/extension
+ok  github.com/smackerel/smackerel/internal/connector/ingest
+ok  github.com/smackerel/smackerel/internal/api/admin/extensiondevices
+ok  github.com/smackerel/smackerel/internal/config
+```
+
+`gofmt` clean; `go vet` clean; `go build ./...` clean.
+
+### Finding F2 (ROUTED) — dedup_key omits owner_user_id (cross-tenant collapse)
+
+`ComputeDedupKey` omits `owner_user_id` and `raw_ingest_dedup.dedup_key` is a
+global `PRIMARY KEY`, so two authenticated owners sharing a `source_device_id`
+value (e.g. both `laptop`) collapse onto one dedup row — the second owner's
+capture is suppressed and the first owner's `artifact_id` is returned. This is
+a planning-truth (design §2.3) change owned by `bubbles.design`; it is filed
+and routed, not changed unilaterally. The F1 charset fix narrows but does not
+resolve it. See `bugs/BUG-058-DEDUP-KEY-OWNER-ISOLATION/` (artifact-lint
+PASSED).
+
+### Files changed (working tree, uncommitted)
+
+- `internal/api/connectors/extension/ingest.go` — `sourceDeviceIDRe` + validation (F1 fix)
+- `internal/api/connectors/extension/ingest_test.go` — F1 adversarial twin + non-tautology guard + 5 hardening probes
+- `internal/connector/ingest/dedup_test.go` — separator-injection resistance probe
+- `bugs/BUG-058-DEDUP-KEY-OWNER-ISOLATION/` — new routed bug packet (F2)
+- this `report.md` evidence section
+
+This section is execution evidence only — it does not change spec/design/scope
+planning truth, so it does not require recertification. Spec 058 remains
+`blocked` on the four external-infra gaps tracked in
+`bugs/BUG-058-EXTERNAL-INFRA-MISSING/`.
+
 

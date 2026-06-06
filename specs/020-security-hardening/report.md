@@ -717,3 +717,51 @@ diff on `main` touching real runtime/source/config files
 through artifact-only edits; the artifact-only baseline drift sweep
 (BUG-020-006) intentionally produces zero runtime delta.
 
+## DevOps Probe (2026-06-06) — Stochastic Quality Sweep R5
+
+**Mode:** `devops-to-doc` (parent-expanded child mode; runtime lacks
+`runSubagent`). **Trigger:** `devops` → mapped child mode `devops-to-doc`.
+**Round:** 5 of 20. **HEAD at probe time:** `c5e16160`.
+
+Read-only probe of the spec-020-owned DevOps surface — CI/CD config,
+deploy scripts, container/image hardening, secret handling, env-contract,
+compose security, and dev↔deploy manifest divergence. **Verdict: CLEAN —
+zero findings.** No runtime, config, or planning-truth change was required;
+this section is the doc deliverable of the `-to-doc` round.
+
+### Surfaces Examined
+
+| Surface | Finding | Evidence |
+|---------|---------|----------|
+| Compose host-bind (dev) | CLEAN | `docker-compose.yml` binds every host-forwarded port to `127.0.0.1:` (postgres/nats/core/ml/ollama). Guarded by `TestDockerCompose_AllPortsBindLocalhost`. |
+| Compose host-bind (deploy) | CLEAN | `deploy/compose.deploy.yml` uses fail-loud `${HOST_BIND_ADDRESS:?…}` for core/ml/ollama/prometheus; postgres/nats carry NO `ports:` block (Pattern P1). Guarded by `internal/deploy/compose_contract_test.go` + `monitoring_bind_contract_test.go`. |
+| Container capability hardening | CLEAN | `cap_drop: [ALL]` on nats/core/ml (+`DAC_READ_SEARCH` only for nats); `no-new-privileges:true` on all five services. Guarded by `TestDockerCompose_CapDropAll` + `TestDockerCompose_NoNewPrivileges`. |
+| Read-only root + tmpfs | CLEAN | `read_only: true` + explicit tmpfs allowlist on core/ml/ollama in both compose files. Guarded by `compose_filesystem_contract_test.go`. |
+| Image non-root | CLEAN | `USER smackerel` after `COPY --from=builder` in `Dockerfile` and `ml/Dockerfile`. Guarded by `TestDockerfile_CoreRunsAsNonRoot` + `TestDockerfile_MLRunsAsNonRoot`. |
+| Secret handling — NATS (SEC-006) | CLEAN | Auth token via mounted `nats.conf` (not `--auth` CLI arg → not in `docker ps`); token double-quoted + backslash/quote-escaped (CWE-74); generated file `chmod 0600`. Guarded by `TestDockerCompose_NATSUsesConfigFile`, `TestNATSConfGenerator_EscapesSpecialCharsInToken`, `TestNATSConf_GeneratedFile_TokenProperlyQuoted`. |
+| Secret handling — bundle | CLEAN | Production-class target (`home-lab`) emits `__SECRET_PLACEHOLDER__<KEY>__` markers in `app.env`/`nats.conf`, so the deterministic `chmod 0644` bundle copy carries NO real secrets; adapter substitutes at apply time (spec 052). |
+| Secret handling — image context | CLEAN | `.dockerignore` excludes `config/generated/`, `.git`, `specs/`, `tests/`. Guarded by `TestDockerignore_ExcludesSecrets`. |
+| env-contract (NO-DEFAULTS SST) | CLEAN | Image/build-arg/env-file/mount substitutions use fail-loud `${VAR:?…}` / `${VAR?…}` forms; no `${VAR:-default}` fallbacks on the spec-020 surface (Gate G028). |
+| CI/CD — supply chain | CLEAN | `build.yml`: Trivy CRITICAL/HIGH gate before signing, cosign keyless sign by digest, syft SBOM + SLSA provenance (Rekor-logged), all third-party actions pinned to full commit SHA, `go mod verify`. |
+| CI/CD — secret scanning | CLEAN | `gitleaks.yml` full-history scan on push+PR, pinned action SHA, `permissions: contents: read`. |
+| Manifest divergence (dev↔deploy) | CLEAN | No security-relevant divergence: both compose files apply identical cap/priv/read-only hardening. Deploy adds log rotation + SST resource limits + Pattern-P1 infra-port removal — all intentional deploy-only deltas, none weakening dev. |
+
+### Test Evidence
+
+```
+$ go test ./internal/config/ ./internal/deploy/ -run 'Docker|NATS|Compose|Bind|Filesystem|CSP' -count=1
+ok      github.com/smackerel/smackerel/internal/config  0.062s
+ok      github.com/smackerel/smackerel/internal/deploy  0.031s
+
+$ go test ./internal/api/ -run 'RealIP|TrustedProxy|Auth|Security|RateLimit|OAuth|Web' -count=1
+ok      github.com/smackerel/smackerel/internal/api     1.085s
+```
+
+36 DevOps contract-test functions guard this surface
+(`docker_security_test.go` 15, `compose_contract_test.go` 10,
+`compose_filesystem_contract_test.go` 6, `monitoring_bind_contract_test.go`
+5) — all green. Per the sweep contract, a genuinely clean surface is a
+valid CLEAN result; no work was invented. The supersession of the literal
+`127.0.0.1` host-bind prescription by spec 042 (recorded in `state.json`
+`supersessions`) was re-confirmed consistent with the live deploy compose.
+
