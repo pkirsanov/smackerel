@@ -48,7 +48,12 @@ func TestSSTLoader_HomeLabEmitsProductionRuntimeEnv_BUG051001(t *testing.T) {
 	scriptPath := filepath.Join(repoRoot, "scripts", "commands", "config_home_lab_runtime_env_test.sh")
 
 	cmd := exec.Command("bash", scriptPath)
-	cmd.Env = append(cmd.Environ(), "REPO_ROOT="+repoRoot)
+	// REPO_ROOT lets config.sh resolve the repo without re-deriving it; an
+	// explicit SMACKEREL_HARDWARE_TIER keeps the test hermetic w.r.t. the
+	// ambient shell (config.sh requires the tier and is normally fed it by
+	// the smackerel.sh wrapper, which this direct exec bypasses). Mirrors the
+	// sibling sst_loader_test.go cmd.Env.
+	cmd.Env = append(cmd.Environ(), "REPO_ROOT="+repoRoot, "SMACKEREL_HARDWARE_TIER=cpu")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("BUG-051-001 SST-loader shell test failed: %v\n--- output ---\n%s\n--- end ---", err, string(out))
