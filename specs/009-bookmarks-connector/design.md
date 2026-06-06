@@ -11,7 +11,7 @@
 
 ### Current State
 
-Smackerel has a working connector framework in `internal/connector/` with a `Connector` interface (ID, Connect, Sync, Health, Close), a thread-safe `Registry`, a crash-recovering `Supervisor`, cursor-persisting `StateStore`, exponential `Backoff`, and operational connectors (RSS, IMAP, YouTube, CalDAV, Keep, browser, maps). A bookmark parsing utility package already exists at `internal/connector/bookmarks/bookmarks.go` with `ParseChromeJSON()`, `ParseNetscapeHTML()`, `ToRawArtifacts()`, and `FolderToTopicMapping()`. These parsers are standalone functions — there is no `Connector` implementation wrapping them.
+Smackerel has a working connector framework in `internal/connector/` with a `Connector` interface (ID, Connect, Sync, Health, Close), a thread-safe `Registry`, a crash-recovering `Supervisor`, cursor-persisting `StateStore`, exponential `Backoff`, and operational connectors (RSS, IMAP, YouTube, CalDAV, Keep, browser, maps). A bookmark parsing utility package already exists at `internal/connector/bookmarks/bookmarks.go` with `ParseChromeJSON()`, `ParseNetscapeHTML()`, and `ToRawArtifacts()`. These parsers are standalone functions — there is no `Connector` implementation wrapping them. Folder→topic resolution is delivered by `TopicMapper.MapFolder` in `internal/connector/bookmarks/topics.go` (segment-split + per-segment exact/fuzzy/create resolution against the `topics` table).
 
 ### Target State
 
@@ -43,7 +43,7 @@ Add a `Connector` implementation in `internal/connector/bookmarks/` that wraps t
 - URL-based dedup: normalized URL (lowercase scheme+host, strip trailing slash, remove `utm_*`/`ref`/`fbclid`/`gclid` tracking params) checked against existing artifacts with `source_id: "bookmarks"`
 - Format detection: `.json` → `ParseChromeJSON()`, `.html`/`.htm` → `ParseNetscapeHTML()`
 - No OAuth needed — connector auto-starts on registration (unlike Keep/Gmail/YouTube)
-- Folder-to-topic mapping reuses existing `FolderToTopicMapping()` with hierarchical topic creation
+- Folder-to-topic mapping is delivered by the `TopicMapper.MapFolder` cascade in `internal/connector/bookmarks/topics.go` (segment-split + per-segment exact/fuzzy/create resolution against the `topics` table) with hierarchical `CHILD_OF` edge creation between consecutive segments
 - Archive processed files to `archive/` subdirectory (configurable)
 - No new database migration required
 
@@ -117,7 +117,7 @@ Add a `Connector` implementation in `internal/connector/bookmarks/` that wraps t
 5. Convert parsed `[]Bookmark` to `[]RawArtifact` via `ToRawArtifacts()`
 6. Enrich each `RawArtifact` with full metadata (folder path, source format, import file)
 7. Deduplicate by normalized URL against previously synced bookmarks
-8. Map folder paths to knowledge graph topics via `FolderToTopicMapping()` — create or match topics, create `BELONGS_TO` edges
+8. Map folder paths to knowledge graph topics via `TopicMapper.MapFolder` (split on `/`, resolve each segment via case-insensitive exact match → pg_trgm fuzzy match → create-emerging) — create or match topics, create `BELONGS_TO` edges to the leaf and `CHILD_OF` edges between segments
 9. Publish new artifacts to `artifacts.process` on NATS JetStream
 10. Pipeline fetches URL content via readability extractor, runs LLM summarization, entity extraction, embedding generation
 11. Graph linker creates similarity, temporal, and entity edges
@@ -362,8 +362,9 @@ The existing file is used as-is. No modifications needed. It provides:
 - `ParseChromeJSON(data []byte) ([]Bookmark, error)` — parses Chrome's JSON format with recursive folder traversal
 - `ParseNetscapeHTML(data []byte) ([]Bookmark, error)` — parses Netscape HTML format via regex extraction
 - `ToRawArtifacts(bookmarks []Bookmark) []connector.RawArtifact` — converts `[]Bookmark` to `[]RawArtifact` with `SourceID: "bookmarks"`, `SourceRef: URL`, `ContentType: "url"`
-- `FolderToTopicMapping(folder string) string` — normalizes folder names to topic names (lowercase, trim, replace separators)
 - `Bookmark` struct — `Title`, `URL`, `Folder`, `AddedAt`
+
+Folder→topic resolution is delivered by `TopicMapper.MapFolder` in `topics.go` (see §3 below), not by a helper in `bookmarks.go`.
 
 ### 3. `internal/connector/bookmarks/topics.go` — Folder-to-Topic Mapping
 

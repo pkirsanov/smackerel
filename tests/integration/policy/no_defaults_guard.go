@@ -116,12 +116,6 @@ func PythonNoDefaultsGuard(repo Root, baseline *Baseline, now time.Time, cfg Pol
 	if err != nil {
 		return nil, fmt.Errorf("no-defaults-python: walk %s: %w", root, err)
 	}
-	return scanPythonNoDefaultsFiles(files, repo, baseline, now, cfg)
-}
-
-// scanPythonNoDefaultsFiles is the file-list-driven implementation
-// behind PythonNoDefaultsGuard. Exposed for fixture tests.
-func scanPythonNoDefaultsFiles(files []string, repo Root, baseline *Baseline, now time.Time, cfg PolicyConfig) ([]Violation, error) {
 	var out []Violation
 	for _, path := range files {
 		data, err := os.ReadFile(path)
@@ -172,12 +166,6 @@ func GoNoDefaultsGuard(repo Root, baseline *Baseline, now time.Time, cfg PolicyC
 	if err != nil {
 		return nil, fmt.Errorf("no-defaults-go: walk %s: %w", root, err)
 	}
-	return scanGoNoDefaultsFiles(files, repo, baseline, now, cfg)
-}
-
-// scanGoNoDefaultsFiles is the file-list-driven implementation
-// behind GoNoDefaultsGuard.
-func scanGoNoDefaultsFiles(files []string, repo Root, baseline *Baseline, now time.Time, cfg PolicyConfig) ([]Violation, error) {
 	var out []Violation
 	const window = 6
 	for _, path := range files {
