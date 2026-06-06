@@ -3,6 +3,8 @@
   "featureDir": "specs/035-recipe-enhancements",
   "featureName": "Recipe Enhancements \u2014 Serving Scaler & Cook Mode",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -181,6 +183,16 @@
   "reworkQueue": [],
   "executionHistory": [
     {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Post-cert planning edits reviewed: fb2a4266 (design.md/spec.md successor notes — serving scaler/cook mode stay active; legacy /recipe /cook superseded as primary entry by spec 066; unit normalization migrates to spec 065 unit_convert) cat-b; 19b31c0a (spec.md status banner) cat-b. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt set to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
       "agent": "bubbles.analyst",
       "phasesExecuted": [
         "analyze"
@@ -303,7 +315,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-13T00:00:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

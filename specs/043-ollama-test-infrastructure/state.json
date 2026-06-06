@@ -4,6 +4,8 @@
   "featureNumber": "043",
   "featureName": "ollama-test-infrastructure",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -191,6 +193,17 @@
       "timestamp": "2026-05-10T03:30:00Z",
       "summary": "BUG-002 (P0) discovered and resolved post-closure (second post-closure bug after BUG-001). Symptom: services.ollama.healthcheck in docker-compose.yml line 182 (and deploy/compose.deploy.yml line 199) calls wget, but the ollama/ollama:0.23.2 image (re-pinned by BUG-001 fix ea2af19a) ships neither wget nor curl \u2014 only the in-image /usr/bin/ollama CLI. Container starts and ollama serves on :11434, but every healthcheck invocation exits 127 with `executable file not found in $PATH`. `docker compose up -d --wait` therefore reports `container smackerel-test-ollama-1 is unhealthy` and `--wait-timeout` elapses, returning exit code 124. Pre-fix repro: `docker exec smackerel-test-ollama-1 wget --spider http://localhost:11434/api/tags` exits 127 OCI runtime exec failed; `./smackerel.sh test integration` fails at the docker compose up step with EXIT=124. Discovered while running spec 044 validate phase. Fix: replaced `[\"CMD-SHELL\", \"wget --no-verbose --tries=1 --spider http://localhost:${OLLAMA_CONTAINER_PORT}/api/tags || exit 1\"]` with `[\"CMD\", \"ollama\", \"list\"]` in both compose surfaces (docker-compose.yml + deploy/compose.deploy.yml); inline comment uses SST key names (OLLAMA_IMAGE, OLLAMA_HOST, OLLAMA_CONTAINER_PORT) instead of literals to satisfy the SST grep guard. interval/timeout/retries/start_period preserved (10s/5s/5/30s). Added NEW adversarial healthcheck-binary guard tests/integration/ollama_healthcheck_test.go (build tag integration, 363 lines): one helper assertOllamaHealthcheckUsesInImageBinary that parses YAML, extracts services.ollama.healthcheck.test first command token (handles both CMD form and CMD-SHELL form via shell-string field-split), enforces in-image-binary allowlist {ollama, /usr/bin/ollama, /bin/ollama} and forbidden-binaries set {wget, curl, /usr/bin/wget, /usr/bin/curl, /bin/wget, /bin/curl}, errors name the offending binary AND the pinned image AND suggest the fix. Four tests: TestOllamaHealthcheck_LiveFiles (parses both production compose files; fail-loud); TestOllamaHealthcheck_AdversarialMissingBinary (synthetic CMD wget \u2014 proves rejection); TestOllamaHealthcheck_AdversarialMissingBinaryCurl (synthetic CMD curl \u2014 proves coverage of curl too); TestOllamaHealthcheck_AdversarialCMDShellWrappedWget (synthetic CMD-SHELL wget \u2014 proves validator handles both forms). Zero t.Skip-family calls; fail-loud paths use t.Fatalf. Bug folder: specs/043-ollama-test-infrastructure/bugs/BUG-002-ollama-healthcheck-uses-missing-wget/ \u2014 7 artifacts (spec, design, scopes, uservalidation, report, scenario-manifest, state) + 2 SCN-BUG-002-001/002 scenarios. Bug status: done. Bug certification: done (workflowMode=bugfix-fastlane; 4 specialist phases implement+test+validate+audit recorded). Validation: ./smackerel.sh check EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint registered=5/0); ./smackerel.sh test unit EXIT=0 (72 Go packages ok with ZERO FAIL lines + Python 417 PASS in 14.78s); go test -count=1 -tags=integration -v -run 'TestOllamaHealthcheck' ./tests/integration/ EXIT=0 (4 PASS / 0 FAIL); ./smackerel.sh test integration EXIT=0 with banner `\u2714 Container smackerel-test-ollama-1 Healthy 12.6s` (vs pre-fix `\u2718 unhealthy / EXIT=124`) and 159 PASS / 0 FAIL across all integration packages; artifact-lint specs/043-ollama-test-infrastructure/bugs/BUG-002-ollama-healthcheck-uses-missing-wget EXIT=0 (no warnings, no failures, all 11 evidence blocks legitimate). Live: docker exec smackerel-test-ollama-1 ollama list exits 0 with daemon up, exits 1 with bad OLLAMA_HOST \u2014 real liveness signal. Spec 044 validate phase unblocked. Parent spec 043 status, currentPhase, certification.* unchanged \u2014 only this executionHistory entry appended. Files modified: docker-compose.yml (healthcheck block + audit-trail comment), deploy/compose.deploy.yml (healthcheck block + audit-trail comment), tests/integration/ollama_healthcheck_test.go (NEW 363 lines), specs/043-ollama-test-infrastructure/bugs/BUG-002-ollama-healthcheck-uses-missing-wget/* (NEW 7 artifacts)."
     }
+    ,
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit fb2a4266 (2026-06-01 'spec 064: open-ended knowledge agent + supporting work'): only changes to this spec are an +10-line 'Successor Notice' added to spec.md and a +7-line 'Design Successor Note' added to design.md, both pointing the assistant E2E surface to spec 069 while explicitly stating Ollama orchestration, deterministic model pull, isolated test volume, and test-stack lifecycle stay owned by this spec. Pure cross-reference/successor notes; category b. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    }
   ],
   "policySnapshot": {
     "workflowMode": {
@@ -223,7 +236,7 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-10T01:30:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "completedScopes": [
     "01",
     "02",

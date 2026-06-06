@@ -124,12 +124,24 @@
       "runStartedAt": "2026-05-08T00:00:00Z",
       "runEndedAt": "2026-05-08T00:00:00Z",
       "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Added concrete file paths to scope 1/2/3 Test Plan rows (internal/api/health_test.go, internal/api/router.go, internal/api/capture.go, internal/api/intelligence_test.go, internal/config/validate_test.go, internal/connector/sync_interval_test.go); tagged DoD bullets for SCN-023-01/02/04/06/07 with 'Scenario SCN-023-NN (title):' prefix; appended trace-guard remediation section to report.md describing coverage in internal/config/validate_test.go, internal/api/intelligence_test.go, internal/connector/sync_interval_test.go. trace-guard PASSED (0 warnings)."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 6860f5b8 (scopes.md — trace-guard DoD-prefix 'Scenario SCN-023-NN:' on existing bullets + Test Plan file-path corrections citing existing health_test.go/router_test.go/etc.; category b), fb2a4266 (design.md — 'Design Successor Note' that spec 067 augments the quality-guard catalog; note states 023 'stays done' and 'remain authoritative'; category b), 8cd272dc (scopes.md — single broken path 'internal/api/interfaces.go' rewritten to actual landing site internal/api/health.go; that commit's spec-060 doc-presence tests landed in spec 060, not 023; category b). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-08T00:00:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

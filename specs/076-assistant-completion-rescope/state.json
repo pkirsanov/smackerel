@@ -25,7 +25,8 @@
     "specs/074-capture-as-fallback-policy",
     "specs/075-legacy-retirement-telemetry"
   ],
-  "certifiedAt": "2026-06-03T09:00:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.implement",
@@ -483,6 +484,16 @@
       "runStartedAt": "2026-06-03T00:05:00Z",
       "runEndedAt": "2026-06-03T00:55:00Z",
       "summary": "SCOPE-7c implementation. Authored tests/e2e/transports/disambig_parity_test.go (TestDisambigParity_WebTelegramWhatsApp) and confirm_card_parity_test.go (TestConfirmCardParity_AcrossWebTelegramWhatsApp); extended capture_ack_parity_test.go with TestCaptureAckParity_AcrossWebTelegramWhatsApp. Each test projects all three transports (web JS-renderer descriptor golden, Telegram tgbotapi.MessageConfig + decoded callback_data, WhatsApp OutboundMessage + decoded button IDs) into a single canonicalRender shape and asserts reflect.DeepEqual across web + Telegram + WhatsApp. All three tests PASS against the live disposable test stack (./smackerel.sh test e2e, EXIT=0). Initial run caught a real divergence — Telegram confirm-card renderer joins body+ProposedAction with single '\n' — fixed by peeling canonical body at first '\n' instead of '\n\n'. Build Quality Gate: ./smackerel.sh lint passes; gofmt -l clean on the three SCOPE-7c test files; ./smackerel.sh format --check and artifact-lint.sh non-zero exits are sibling-agent SCOPE-7a/SCOPE-1/SCOPE-2 findings outside SCOPE-7c's Change Boundary. scenario-manifest.json linkedTests populated for SCN-073-A04/A05/A06 and requiredTestType reconciled from stale ['e2e-ui'] (pre-7-split) to ['e2e-api'] to match scopes.md Test Plan rows TP-076-07c-01/02/03."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed the single post-cert planning-truth commit 64a42616 (2026-06-05, 'tier-5 drift cleanup + ratchet 317 -> 284'). scopes.md only (11 insertions / 11 deletions, all 1:1 path swaps): the Scope-3 microtools Test Plan 'File/Location' column redirected 5 planned test paths to actual shipped locations (location_normalize_test.go / calculator_test.go / entity_resolve_test.go flat files instead of microtools/{location,calculator}/ sub-packages and tests/integration/microtools/*); the Scope-4c Test Plan rows redirected to internal/annotation/parser_test.go (interactionMap ships inline per the spec's own NOTE, not a separate interaction_map.go/stale_reference_test.go); the Scope-6 Implementation Plan + Change Boundary file families redirected internal/assistant/wiring.go to cmd/core/wiring_assistant_facade.go + wiring_legacy_alias.go; each annotated '(originally planned at ...)'. Category (b) incidental reconciliation (path/reference drift cleanup): no scope reset, 0 unchecked DoD, no NEW requirement/scenario/DoD semantic change, implementation surface unchanged. The pre-existing post-release deferrals for scopes 4c/7d (DI-076-04 known-drift, recorded at the 2026-06-03 close-out) were NOT touched by this commit. No post-promotion contract change. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
@@ -512,7 +523,7 @@
       ]
     }
   ],
-  "lastUpdatedAt": "2026-06-03T06:30:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

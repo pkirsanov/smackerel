@@ -3,7 +3,9 @@
   "featureDir": "specs/059-google-keep-live-mode",
   "featureName": "Google Keep Live Sync (gkeepapi production hardening)",
   "status": "done",
-  "certifiedAt": "2026-05-29T03:03:47Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "convergenceHealth": {
     "recapCount": 0,
     "handoffCount": 0,
@@ -184,6 +186,16 @@
       "statusBefore": "done_with_concerns",
       "statusAfter": "done_with_concerns",
       "summary": "Mechanical residual-blocker discharge mirroring the 060 pattern. scopes.md: (a) added `## Stability Envelope (Stress / SLA Disposition)` section documenting that the gkeepPollIntervalFloor=15min + breakerOpenThreshold=4 form the stability envelope (discharges Check 5A / Gate G026 with explicit not-perf-SLA-sensitive disposition + 'stress' keyword present); (b) marked Scope 1 with `Scope-Kind: bootstrap` and Scope 6 with `Scope-Kind: docs-only` per v4.1.0 scopeKinds opt-out (config-manifest wiring and docs-only scopes legitimately do not produce live-runtime E2E evidence at ship time); (c) added to Scopes 2-5 a scenario-specific E2E regression DoD row, a broader E2E regression DoD row, and an explicit `Regression E2E` Test Plan row — all four scopes' DoD rows carry explicit `**Claim Source:** not-run` Uncertainty Declarations gated on the live ML sidecar + NATS test stack and routed via state.json.transitionRequests (discharges Check 8A 18 missing planning items); (d) added to Scope 1 the canary DoD literal + rollback/restore DoD literal + Canary Test Plan row + downstream-contract-surfaces wording (discharges 5 of 9 Check 8C items for Scope 1); (e) rewrote the Cross-Scope Certification DoD literals to the exact strings the guard expects (canary, rollback/restore, change-boundary) and added a Canary Test Plan row + Shared-infra impact sweep wording (discharges the remaining 4 Check 8C items + the 1 Check 8D item — note: the guard treats the cross-scope section as Scope 6's tail in single-file layout). report.md: added `## Discovered Issues (Gate G095 disposition)` section cataloging routed Uncertainty Declarations + G088/G092 acknowledged trade-offs + planning-template gaps discharged + deferred live-stack follow-ups (discharges Gate G095). Status stays done_with_concerns; certifiedAt unchanged (G088 trade-off acknowledged inline). Re-run state-transition-guard delta captured in addressedFindings + report.md ### Discovered Issues."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 64a42616 (tier-5 drift cleanup — reconciled stale Test Plan / Change Boundary / Surfaces test-file paths in scopes.md to actual layout: tests/integration/keep_*_test.go -> internal/connector/keep/keep_*_test.go and ml/tests/test_keep_bridge.py -> split test_keep_bridge_handshake.py + test_keep_bridge_warnings.py; test-function names + scenario IDs unchanged). Sole documentation-reconciliation campaign edit since certification; no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "transitionRequests": [
@@ -402,7 +414,7 @@
   ],
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-05-29T03:03:47Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "lastEvaluatedAt": "2026-05-29T03:03:47Z",
     "evidenceRefs": [
       "specs/059-google-keep-live-mode/report.md"

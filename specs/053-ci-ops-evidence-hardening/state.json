@@ -32,7 +32,7 @@
   "certification": {
     "status": "done",
     "lastSpecialistVerdict": "FULL-DELIVERY-RECERTIFIED-POST-SPEC-REVIEW-2026-05-27T04:43:41Z",
-    "certifiedAt": "2026-05-27T04:43:41Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "certifiedBy": "bubbles.workflow",
     "completedScopes": [
       "Scope 1: G068 Fidelity Proof-Or-Close",
@@ -470,6 +470,16 @@
       "trustLevel": "CURRENT",
       "runCompletedAt": "2026-05-27T04:10:34Z",
       "summary": "Post-certification spec-review recertification validated the active planning truth in spec.md/design.md/scopes.md against current implementation context and classified trust as CURRENT. Worktree planning-truth edits remain present, so requiresRevalidation is true; spec was demoted from done to blocked for truthful gate alignment until validate-owned certification timestamp refresh runs after planning truth is stabilized in git. See spec-review.md."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 19b31c0a (OPS-001 spec.md status-banner sweep adding a Status Done certified-per-state.json line to spec.md). Sole documentation-reconciliation campaign edit since certification; no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
@@ -486,9 +496,10 @@
     }
   ],
   "failures": [],
-  "certifiedAt": "2026-05-27T04:43:41Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "completedAt": "2026-05-27T04:43:41Z",
-  "lastUpdatedAt": "2026-05-27T04:43:41Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",

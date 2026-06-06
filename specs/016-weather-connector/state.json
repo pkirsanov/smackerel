@@ -3,7 +3,8 @@
   "featureDir": "specs/016-weather-connector",
   "featureName": "Weather Connector",
   "status": "done",
-  "certifiedAt": "2026-04-25T01:18:30Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "harden-to-doc",
   "execution": {
     "activeAgent": null,
@@ -323,6 +324,16 @@
       "outcome": "passed",
       "trigger": "stochastic-quality-sweep round 2 of 20 (simplify) — parent-expanded-child-mode of simplify-to-doc",
       "evidence": "Finding S1 (resolved): cache-insert tail triplicated across decodeCurrent/decodeForecast/decodeHistorical and mirrored verbatim in two tests (TestCacheOverflow_AllValid, TestEviction_HistoricalDoesNotStarveEphemeral) with comment 'Mirror the production decodeCurrent insertion path'. Extracted (c *Connector).cachePutLocked(key, data, ttl) helper next to evictOneLocked; 3 production sites + 2 test sites now call the helper. git diff --stat -- internal/connector/weather/ → 2 files changed, 19 insertions(+), 47 deletions(-) (net -28 LOC). Behavior-preserving: same eviction call, same size cap, same slog warning key/message, same TTL math. go vet ./internal/connector/weather/... clean; go test -count=1 ./internal/connector/weather/... → ok 33.743s (all TestDecode*, TestFetch*, TestSync_*, TestEvictOneLocked_PrefersExpired, TestCacheOverflow_AllValid, TestEviction_HistoricalDoesNotStarveEphemeral PASS); go build ./... clean; ./smackerel.sh check → Config in sync with SST, env_file drift guard OK, scenario-lint OK; ./smackerel.sh lint → All checks passed!, Web validation passed. No spec/design/scopes/uservalidation/scenario-manifest change (no contract impact). Status remains done."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 2fe092b5 (added Test Plan table + scenario-ID DoD prefixes to scopes.md, trace-guard reconciliation), c4168db7 (authored Gherkin Use-Case blocks + Test Plan tables formalizing already-shipped weather normalize/connector/NWS/enrich behavior to close trace-guard residuals), fb2a4266 (additive design.md + spec.md successor/amends cross-reference notes pointing to specs 065/068; weather connector itself unchanged, spec stays done), 19b31c0a (OPS-001 spec.md status-banner sweep). All documentation-reconciliation campaign edits; no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
@@ -338,7 +349,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-05T19:42:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

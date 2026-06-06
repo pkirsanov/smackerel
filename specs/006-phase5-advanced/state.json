@@ -3,6 +3,8 @@
   "featureDir": "specs/006-phase5-advanced",
   "featureName": "Phase 5: Advanced Intelligence",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -687,12 +689,22 @@
       ],
       "scopesCompleted": [],
       "summary": "R10 devops finding F1 closure (sweep-2026-05-24-r10 FINAL ROUND). docs/Operations.md extended with: (a) 5 new rows in `Key Metrics → Go Core` table for smackerel_intelligence_latency_seconds, smackerel_intelligence_errors_total, smackerel_alerts_produced_total, smackerel_alerts_delivered_total, smackerel_alert_delivery_failures_total matching internal/metrics/metrics.go definitions verbatim; (b) new section `Scheduled Intelligence Jobs (Spec 006 Phase 5)` enumerating 5 cron jobs (synthesis 0 2 * * *, resurfacing 0 8 * * *, monthly report 0 3 1 * *, subscription detection 0 3 * * 1, frequent lookup detection 0 4 * * *) with R-NNN linkage, runtime entrypoint per internal/scheduler/jobs.go (Scheduler.runXxxJob → engine.XxxYyy(ctx) + helper calls + per-tick timeout), and observation surface (which Prometheus metric + structured log line indicates success/failure); (c) Failure-recovery note (stateless re-entrant batch sweeps, missed runs catch up on next tick); (d) Related-shared-scheduler-jobs note attributing pre-meeting briefs / weekly synthesis / alert delivery sweep / daily alert production / relationship cooling alert production to spec 004 + spec 021. Zero runtime/test/deploy/security/connector surface touched. Closure surface: 1 file modified (docs/Operations.md), 2 parent files modified (state.json + report.md), 1 sweep ledger entry appended (.specify/memory/sweep-2026-05-24-r10.json). No bug packet spawned — finding is documentary-only and closure is proportional to a single docs section addition (matches R8 lightweight pattern). Commit prefix bubbles(006/sweep-r10-devops-pass) closes Check 17."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit fb2a4266 (2026-06-01, 'spec 064: open-ended knowledge agent + supporting work'): added a single 14-line 'Successor Notice' cross-ref banner to spec.md ONLY (no scopes.md/design.md), pointing at spec 069 (assistant HTTP transport) and explicitly stating advanced-intelligence semantics -- expertise modeling, learning trajectories, serendipity signals -- remain owned by this spec, which stays done; only the delivery surface is reshaped. Incidental reconciliation (category b): no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-25T05:45:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

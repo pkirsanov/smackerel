@@ -4,7 +4,8 @@
   "featureName": "Bundle Secret Injection Contract",
   "status": "done",
   "workflowMode": "full-delivery",
-  "certifiedAt": "2026-05-27T02:04:16Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "validate",
@@ -332,6 +333,16 @@
       "statusBefore": "done_with_concerns",
       "statusAfter": "done_with_concerns",
       "summary": "Docs-phase publish + commit + push for spec 052 close-out at HEAD d1e74a1f. PROVENANCE: parent-expanded full-delivery docs invocation per Gate G022 after bubbles.validate r2 (2026-05-15T10:00) flipped certification to done_with_concerns and routed nextRequiredOwner=bubbles.docs. PHASE 0b DRIFT SCAN: cross-referenced design.md §9 (Documentation Impact table) against the 4 primary managed-doc surfaces — README.md (placeholder discipline + 3-layer L1/L2/L3 + add-new-managed-secret recipe at lines 263, 267-268, 306), docs/Architecture.md (Secret Boundary (spec 052) at line 17), docs/Deployment.md (Bundle Secret Injection (spec 052) at line 57 with cross-refs at lines 51/54/61/62/134/171), docs/Operations.md (Bundle Secret Substitution at line 317 + UC-052-004 Operator Secret Rotation at line 330 + UC-052-005 Auditor Inspection at line 409). All 4 managed docs already updated by the spec 052 close-out commit d1e74a1f; ZERO drift detected on the primary managed-doc surface. Capability_Ledger.md does not exist in smackerel (only in guesthost); design.md §9 row marked 'if applicable' so this is N/A. Cross-spec close-out: specs/047-ci-image-vulnerability-gate/report.md F-047-B Surfaced Findings annotated **RESOLVED** by spec 052 close-out commit d1e74a1f at lines 2145-2147 (annotation added by validate-r1 at 2026-05-15T08:30; verified intact this docs invocation). NON-BLOCKING OBSERVATION: design.md §9 row 1 also calls for an informational footnote in specs/051-postgres-password-managed-secret/design.md (no FR change). The footnote is currently absent. Per docs-phase agent contract foreign artifacts (spec 051 design.md is foreign-owned by bubbles.design) must not be edited directly. The footnote is informational, not in the user's task brief verification list, and does not block spec 052 close-out. WORKING-TREE CONTAMINATION HANDLING: working tree contains 4 in-flight concurrent streams (BUG-020-002, BUG-020-003, spec 041, BUG-042-006) + bubbles framework updates + doc-plan updates + skill updates alongside spec 052/047 deltas; per user constraint these MUST NOT be touched. Selective stage path applied: only specs/047-ci-image-vulnerability-gate/report.md + specs/052-bundle-secret-injection-contract/{report.md,scopes.md,state.json}. PII scan: bash .github/bubbles/scripts/pii-scan.sh against staged diff (clean). FINAL GUARD: bash .github/bubbles/scripts/state-transition-guard.sh specs/052-bundle-secret-injection-contract exit 0 with 2 pre-existing WARNs (no completedAt timestamps + no concrete test paths in Test Plan; both documented non-blockers from prior validate/audit/chaos entries). COMMIT: per user task brief verbatim message ('spec(052): scope 4 close-out — runtime defense, F-047-B resolution, certified done_with_concerns' + body covering specialist chain + 6 concerns + spec 047 reference + artifact refs); NO --no-verify flag. PUSH: git push origin main with hooks enabled. CHANGES APPLIED: state.json (this entry + paired completedPhaseClaims entry + lastUpdatedAt 2026-05-15T10:00 → 2026-05-15T11:00); zero source code modifications; zero scope status flips; zero DoD-item flips; preserved all 6 done_with_concerns annotations + spec.md / design.md / scopes.md / report.md / uservalidation.md / scenario-manifest.json verbatim except for the docs-phase narrative additions to state.json. Per Gate G022 + completion-governance.md, this entry records the docs-phase claim with explicit provenance to commit d1e74a1f."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 28711074 (mid-tier drift cleanup — reconciled stale cmd/smackerel-core/main.go path references to cmd/core/main.go in scopes.md Consumer Impact Sweep prose + A14 DoD note after binary package consolidation; runtime symbols + scenario IDs unchanged), 19b31c0a (OPS-001 spec.md status-banner sweep adding Status Done line). All documentation-reconciliation campaign edits; no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
@@ -399,7 +410,7 @@
       "rationale": "The cross-scope live broader e2e regression for the full secret-injection chain is the post-push CI matrix on HEAD d1e74a1f; deferred to operator decision 3c. The in-repo proxy `./smackerel.sh test unit --go` IS green this validate session."
     }
   ],
-  "lastUpdatedAt": "2026-05-27T01:58:30Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

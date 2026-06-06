@@ -3,6 +3,8 @@
   "featureDir": "specs/014-discord-connector",
   "featureName": "Discord Connector",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.workflow",
@@ -28,6 +30,7 @@
   },
   "certification": {
     "status": "done",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "1",
       "2",
@@ -330,6 +333,16 @@
       "startedAt": "2026-05-25T15:45:00Z",
       "completedAt": "2026-05-25T18:00:00Z",
       "summary": "BUG-014-003 closure executed: 6-artifact bug packet authored at specs/014-discord-connector/bugs/BUG-014-003-governance-baseline-drift/. Parent scopes.md updated with 18 regression E2E DoD/Test Plan lines + 1 SCN-DC-THR-001 fidelity DoD bullet + 13 g040-skip sentinel pairs + 12 evidence blocks. Parent report.md updated with ### Code Diff Evidence section + ### TDD Evidence section + 6 g040-skip sentinel pairs. Parent state.json updated with 8->13 phase claim extension + 13 executionHistory provenance entries + resolvedBugs[] BUG-014-003 entry. state-transition-guard.sh re-run on parent: 0 BLOCKs. artifact-lint + traceability-guard PASSED. Zero runtime / config / CI / deploy / framework / docs file modifications. Parent spec status=done ceiling preserved."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edits: 19b31c0a (OPS-001 banner sweep: spec.md '> **Status:** Draft' -> 'Done') and b1c46991 (tier-4 drift cleanup: scopes.md 'Files created' reconciled internal/connector/discord/normalizer.go, ratelimiter.go, and rest.go plus their _test.go files -> internal/connector/discord/discord.go and discord_test.go because the helpers are package-internal and ship inline on the connector hot path, with explanatory parentheticals). Both reconcile documentation file paths to the shipped layout; function names, SCN-DC scenario refs, test counts (15 unit; 10 unit + 4 integration), and DoD semantics unchanged; implementation unchanged. Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
     }
   ],
   "activeBugs": [],
@@ -380,7 +393,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-25T18:00:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
