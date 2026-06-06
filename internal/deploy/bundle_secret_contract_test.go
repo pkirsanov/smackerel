@@ -47,8 +47,8 @@
 // REPO_ROOT under `t.TempDir()` whose `scripts/commands/config.sh` and/or
 // `config/smackerel.yaml` are tampered byte copies, and whose other paths
 // (`config/prometheus/`, `config/prompt_contracts/`, `config/assistant/`,
-// `config/nats_contract.json`, `deploy/`) are symlinked to the live repo so
-// the loader's other inputs remain unchanged.
+// `config/searxng/`, `config/nats_contract.json`, `deploy/`) are symlinked to
+// the live repo so the loader's other inputs remain unchanged.
 
 package deploy
 
@@ -148,6 +148,12 @@ func setupTestRepoRoot(t *testing.T, configShOverride []byte, smackerelYamlOverr
 		filepath.Join(tmpRoot, "config", "prompt_contracts"))
 	symlink(filepath.Join(repoRoot, "config", "assistant"),
 		filepath.Join(tmpRoot, "config", "assistant"))
+	// config/searxng/settings.yml is required by config.sh --bundle (the bundle
+	// stage copies it into <stage>/config/searxng/settings.yml; its absence makes
+	// the loader exit 1 with "searxng settings file not found"). Symlink it like
+	// the other config dirs so the sandbox bundle generation succeeds.
+	symlink(filepath.Join(repoRoot, "config", "searxng"),
+		filepath.Join(tmpRoot, "config", "searxng"))
 	symlink(filepath.Join(repoRoot, "config", "nats_contract.json"),
 		filepath.Join(tmpRoot, "config", "nats_contract.json"))
 

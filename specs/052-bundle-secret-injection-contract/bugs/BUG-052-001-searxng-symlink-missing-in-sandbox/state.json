@@ -1,0 +1,76 @@
+{
+  "spec": "BUG-052-001-searxng-symlink-missing-in-sandbox",
+  "parentSpec": "052-bundle-secret-injection-contract",
+  "status": "done",
+  "certifiedAt": "2026-06-06T06:30:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "workflowMode": "bugfix-fastlane",
+  "executionModel": "parent-expanded-child-mode",
+  "discovered": "2026-06-06",
+  "resolved": "2026-06-06",
+  "baselineHead": "d76cb034",
+  "severity": "high",
+  "origin": {
+    "surfacedBy": "stochastic-quality-sweep",
+    "round": 17,
+    "findingId": "F-047-R17-A",
+    "routedFromSpec": "047-ci-image-vulnerability-gate"
+  },
+  "scopes": [
+    {
+      "id": "Scope 1",
+      "title": "Add config/searxng symlink to bundle-secret sandbox",
+      "status": "Done"
+    }
+  ],
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "audit",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "completedScopes": [
+      "Scope 1"
+    ]
+  },
+  "completedPhaseClaimDetails": [
+    {
+      "phase": "implement",
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Added config/searxng symlink to the bundle-secret sandbox helper in internal/deploy/bundle_secret_contract_test.go plus a doc-comment update enumerating the symlinked config inputs. Zero runtime/source/cert files touched. See BUG-052-001/report.md Code Diff Evidence."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Red-green proof: go test -run TestBundleSecretContract ./internal/deploy/... was FAIL (5 sub-tests, 'searxng settings file not found', RC=1) before the symlink and ok (56.014s, RC=0) after. See BUG-052-001/report.md Test Evidence."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "go build ./... and go vet ./internal/deploy/... both clean (RC=0). Adversarial guarantees preserved - only the sandbox symlink + doc comment changed; zero assertion lines touched. See BUG-052-001/report.md Validation Evidence."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Change Boundary verified via git diff --name-only: only internal/deploy/bundle_secret_contract_test.go changed; config.sh, config/searxng/settings.yml, and spec 052 certification fields unchanged. See BUG-052-001/report.md Audit Evidence."
+    }
+  ],
+  "resolution": "Symlink config/searxng into the sandbox REPO_ROOT so config.sh --bundle finds config/searxng/settings.yml (required since commit a7774fff). Restores a green internal/deploy package and unblocks code pushes.",
+  "lastUpdatedAt": "2026-06-06T06:30:00Z"
+}
