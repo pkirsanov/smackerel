@@ -205,11 +205,25 @@ func (h *Handler) processItem(ctx context.Context, item connector.RawArtifact) I
 	}
 
 	bucket := computeBucket(item.ContentType, item.CapturedAt, item.Metadata, h.cfg.DefaultDedupWindowSeconds)
-	key := ingest.ComputeDedupKey(item.URL, item.ContentType, deviceID, bucket)
+
+	// owner_user_id is the server-authenticated session subject
+	// (ownerUserID reads auth.Session.UserID — NEVER a client-supplied
+	// field). It is the OUTERMOST namespace of the dedup-key preimage so
+	// two distinct owners that share a (url, content_type,
+	// source_device_id, bucket) tuple resolve to SEPARATE artifacts
+	// (BUG-058-DEDUP-KEY-OWNER-ISOLATION). An empty owner would re-open
+	// that cross-tenant collapse, so it is a fail-loud per-item rejection —
+	// there is no fallback owner id (smackerel-no-defaults).
+	owner := ownerUserID(ctx)
+	if owner == "" {
+		out.Error = "owner_required"
+		return out
+	}
+	key := ingest.ComputeDedupKey(owner, item.URL, item.ContentType, deviceID, bucket)
 
 	row := ingest.DedupRow{
 		Key:            key,
-		OwnerUserID:    ownerUserID(ctx),
+		OwnerUserID:    owner,
 		SourceID:       item.SourceID,
 		ContentType:    item.ContentType,
 		SourceDeviceID: deviceID,

@@ -152,6 +152,40 @@ func TestIngest_PerItemRejection_PreservesNeighbors(t *testing.T) {
 	}
 }
 
+// TestIngest_RejectsItemWithoutOwner is the BUG-058-DEDUP-KEY-OWNER-ISOLATION
+// fail-loud guard: a request whose session carries an EMPTY UserID passes the
+// ServeHTTP session-presence check but MUST be rejected per-item before the
+// dedup keyer runs — an empty owner namespace would re-open the cross-tenant
+// collapse this bug fixes. There is no fallback owner id (smackerel-no-defaults).
+func TestIngest_RejectsItemWithoutOwner(t *testing.T) {
+	h, pub := newTestHandler(t)
+	items := []connector.RawArtifact{
+		makeValidItem("bookmark", "laptop", "https://a.example/1", "ce-1"),
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/connectors/extension/ingest", bytes.NewReader(mustJSON(t, items)))
+	// Session present (passes the ServeHTTP 401 guard) but UserID empty.
+	req = req.WithContext(auth.WithSession(req.Context(), auth.Session{UserID: "", Source: auth.SessionSourcePerUserToken}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (per-item rejection, not a transport error), got %d", rec.Code)
+	}
+	var resp ingestResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 outcome, got %d", len(resp.Items))
+	}
+	if resp.Items[0].Outcome != "rejected" || resp.Items[0].Error != "owner_required" {
+		t.Fatalf("expected rejected/owner_required; got %+v", resp.Items[0])
+	}
+	if pub.calls() != 0 {
+		t.Fatalf("empty-owner item MUST NOT be published; got %d publishes", pub.calls())
+	}
+}
+
 func TestIngest_RejectsBatchOver256(t *testing.T) {
 	h, pub := newTestHandler(t)
 	items := make([]connector.RawArtifact, 257)

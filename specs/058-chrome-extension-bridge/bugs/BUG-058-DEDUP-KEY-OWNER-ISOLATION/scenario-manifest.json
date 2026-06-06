@@ -1,0 +1,94 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-058-DEDUP-KEY-OWNER-ISOLATION",
+  "parentSpec": "058-chrome-extension-bridge",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real code fix; scenarios drive the cross-tenant isolation red\u2192green proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "go test re-runs captured in report.md '## Test Evidence': RED = TestComputeDedupKey_VariesByOwner + TestDedupStore_CrossOwnerIsolation FAIL with owner absent from the preimage; GREEN = both PASS after owner_user_id is written first into the preimage."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-058-022",
+      "scope": "Scope 1",
+      "title": "Dedup key varies by owner_user_id (cross-tenant divergence + same-owner determinism)",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/connector/ingest/dedup_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/ingest/dedup_test.go", "function": "TestComputeDedupKey_VariesByOwner"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-owner-namespaced-dedup-key"
+      ],
+      "liveTestExpectation": "Two owners with identical (url, content_type, device, bucket) produce DIFFERENT keys; the same owner with identical inputs produces the SAME key.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-023",
+      "scope": "Scope 1",
+      "title": "Store-level cross-tenant isolation: owner B gets its own artifact, same-owner repeat dedups",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/connector/ingest/dedup_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/ingest/dedup_test.go", "function": "TestDedupStore_CrossOwnerIsolation"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-owner-namespaced-dedup-key"
+      ],
+      "liveTestExpectation": "Owner A publishes (isDup=false, art-A); owner B same tuple publishes (isDup=false, art-B, NOT art-A); owner A repeat dedups (isDup=true, art-A).",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-024",
+      "scope": "Scope 1",
+      "title": "Handler fail-loud rejection of an empty owner (no fallback owner id)",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/api/connectors/extension/ingest_test.go"],
+      "linkedTests": [
+        {"file": "internal/api/connectors/extension/ingest_test.go", "function": "TestIngest_RejectsItemWithoutOwner"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-owner-namespaced-dedup-key"
+      ],
+      "liveTestExpectation": "A session with empty UserID passes the ServeHTTP 401 guard but the item is rejected with error 'owner_required' and never published.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-025",
+      "scope": "Scope 1",
+      "title": "Live-Postgres cross-owner isolation: two owners resolve to two distinct rows + artifact_ids",
+      "requiredTestType": "integration",
+      "testFiles": ["tests/integration/extension_dedup_owner_isolation_test.go"],
+      "linkedTests": [
+        {"file": "tests/integration/extension_dedup_owner_isolation_test.go", "function": "TestPostgresDedupStore_CrossOwnerIsolation"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "Against live Postgres: owner A and owner B with an identical tuple produce two distinct raw_ingest_dedup rows and two distinct artifact_ids, neither publish skipped. Runs in CI (DATABASE_URL set); skips locally otherwise.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-026",
+      "scope": "Scope 1",
+      "title": "Regression: single-owner-multi-device (Chrome Sync) keys still diverge",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/connector/ingest/dedup_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/ingest/dedup_test.go", "function": "TestComputeDedupKey_VariesByDevice"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-owner-namespaced-dedup-key"
+      ],
+      "liveTestExpectation": "For one owner, two distinct devices still produce DIFFERENT keys \u2014 the legitimate same-owner-multi-device case is preserved (no regression).",
+      "changeType": "preserved"
+    }
+  ]
+}

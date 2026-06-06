@@ -4,16 +4,20 @@
   "bugId": "BUG-058-DEDUP-KEY-OWNER-ISOLATION",
   "featureDir": "specs/058-chrome-extension-bridge/bugs/BUG-058-DEDUP-KEY-OWNER-ISOLATION",
   "featureName": "BUG-058-DEDUP-KEY-OWNER-ISOLATION: dedup_key omits owner_user_id, enabling cross-tenant dedup collapse",
-  "workflowMode": "product-to-delivery",
-  "status": "open",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
   "severity": "medium",
   "reportedAt": "2026-06-06T18:15:00Z",
   "reporter": "chaos-sweep-round-18 (stochastic-quality-sweep / chaos-hardening, parent-expanded)",
+  "certifiedAt": "2026-06-06T22:30:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-06T22:30:00Z",
+  "lastUpdatedAt": "2026-06-06T22:30:00Z",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "discovery",
+    "currentPhase": "finalize",
     "runStartedAt": "2026-06-06T18:15:00Z",
-    "completedPhaseClaims": ["discovery", "documentation"],
+    "completedPhaseClaims": ["discovery", "documentation", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
     "executionHistory": [
       {
         "phase": "discovery",
@@ -30,13 +34,104 @@
         "completedAt": "2026-06-06T18:15:00Z",
         "outcome": "route_required",
         "summary": "Filed bug.md (mechanism + reproduction + recommended design-owned fix + open questions), spec.md (5 acceptance criteria), report.md. Routed to bubbles.design because the dedup key tuple is planning truth (design §2.3) and the sibling BUG-058-EXTERNAL-INFRA-MISSING explicitly scopes the dedup keyer as a stable contract. Not fixed in-round; the Round-18 charset hardening (F1) narrows but does not resolve this."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:00:00Z",
+        "completedAt": "2026-06-06T22:05:00Z",
+        "outcome": "completed_owned",
+        "summary": "Operator ratified per-owner dedup namespacing (it is never correct for owner B to receive owner A's artifact_id). Single bugfix-fastlane scope; SCN-058-022..026 authored in scenario-manifest.json."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:05:00Z",
+        "completedAt": "2026-06-06T22:15:00Z",
+        "outcome": "completed_owned",
+        "summary": "owner_user_id written FIRST into the ComputeDedupKey preimage (5-arg signature); single caller internal/api/connectors/extension/ingest.go passes the server-authenticated owner with a fail-loud empty-owner guard (owner_required). No schema migration (dedup_key stays BYTEA PRIMARY KEY)."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:15:00Z",
+        "completedAt": "2026-06-06T22:22:00Z",
+        "outcome": "completed_owned",
+        "summary": "Scenario-first red->green: TestComputeDedupKey_VariesByOwner + TestDedupStore_CrossOwnerIsolation FAIL with owner absent from preimage, PASS after. Added TestIngest_RejectsItemWithoutOwner (handler fail-loud) + tests/integration/extension_dedup_owner_isolation_test.go (live-Postgres, CI-run). go build ./... + go vet + go test -race green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:22:00Z",
+        "completedAt": "2026-06-06T22:24:00Z",
+        "outcome": "completed_owned",
+        "summary": "All pre-existing ingest + extension keyer tests preserved; TestComputeDedupKey_VariesByDevice (Chrome Sync single-owner-multi-device canary) still PASS. ingest 12/12, extension 40/40."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:24:00Z",
+        "completedAt": "2026-06-06T22:25:00Z",
+        "outcome": "completed_owned",
+        "summary": "Additive preimage write + one localized caller guard; no new abstractions or dead branches."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:25:00Z",
+        "completedAt": "2026-06-06T22:26:00Z",
+        "outcome": "completed_owned",
+        "summary": "Deterministic keyer; -race clean; no new perf hot path."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:26:00Z",
+        "completedAt": "2026-06-06T22:27:00Z",
+        "outcome": "completed_owned",
+        "summary": "Owner namespace is the server-authoritative auth.Session.UserID (never client-supplied); empty owner is fail-loud; the cross-tenant artifact_id disclosure vector is closed at the source. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:27:00Z",
+        "completedAt": "2026-06-06T22:29:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED; state-transition-guard 0 BLOCKs for the packet. Evidence in report.md Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:29:00Z",
+        "completedAt": "2026-06-06T22:30:00Z",
+        "outcome": "completed_owned",
+        "summary": "Diff confined to keyer + caller + their tests + one new integration test; no migration; no .github/bubbles changes."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-06T22:30:00Z",
+        "completedAt": "2026-06-06T22:30:00Z",
+        "outcome": "completed_owned",
+        "summary": "Keyer doc comment documents the owner-isolation guarantee; parent design §2.3 amended + parent report closure note + resolvedBugs entry."
       }
     ]
   },
   "certification": {
-    "status": "open",
-    "completedScopes": [],
-    "certifiedCompletedPhases": ["discovery", "documentation"]
+    "status": "done",
+    "certifiedAt": "2026-06-06T22:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Owner-namespaced dedup key", "status": "Done", "completedDoD": 12, "totalDoD": 12, "completedAt": "2026-06-06T22:30:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane single-scope preimage-namespacing fix; no convergence loop required",
+      "lastUpdatedAt": "2026-06-06T22:30:00Z"
+    }
   },
   "policySnapshot": {
     "grill": {"value": "off", "source": "repo-default"},
@@ -50,18 +145,20 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "blockers": [
+  "resolvedFindings": [
     {
       "id": "FINDING-DEDUP-OWNER-ISOLATION",
-      "summary": "dedup_key omits owner_user_id; global PRIMARY KEY allows cross-tenant dedup collapse when two owners share a source_device_id value",
-      "affectedDoD": [
-        "Scope 2 dedup contract (ComputeDedupKey owner isolation)",
-        "Scope 2 PostgresDedupStore.ResolveOrPublish cross-owner row separation"
-      ],
-      "evidence": "internal/connector/ingest/dedup.go:36 ComputeDedupKey(url, contentType, deviceID, bucket) has no owner_user_id; internal/db/migrations/040_raw_ingest_dedup.sql:13 dedup_key BYTEA PRIMARY KEY (global); ResolveOrPublish UPDATE WHERE dedup_key=$1 and INSERT ON CONFLICT (dedup_key) have no owner predicate. Round-18 confirming probe TestComputeDedupKey_SeparatorInjectionResistance PASS (separator hygiene intact). Cross-owner reproduction documented in bug.md; needs live-Postgres harness to execute.",
-      "resolutionPath": "bubbles.design amends design §2.3 to include owner_user_id in the dedup key tuple; bubbles.plan adds SCN-058-022 + Scope 2 DoD; bubbles.implement prepends owner_user_id to the ComputeDedupKey preimage (no schema change) and updates the caller + keyer unit tests; bubbles.test adds the cross-owner unit twin and re-runs tests/integration/extension_dedup_race_test.go; bubbles.validate recertifies Scope 2.",
-      "owner": "bubbles.design",
-      "status": "open"
+      "summary": "dedup_key omitted owner_user_id; global PRIMARY KEY allowed cross-tenant dedup collapse when two owners shared a source_device_id value",
+      "resolution": "owner_user_id folded FIRST into the ComputeDedupKey preimage (no schema change); the single caller passes the server-authenticated owner with a fail-loud empty-owner guard; unit (VariesByOwner) + store (CrossOwnerIsolation) + handler (RejectsItemWithoutOwner) + live-Postgres (TestPostgresDedupStore_CrossOwnerIsolation, CI-run) regression cover added. TestComputeDedupKey_VariesByDevice preserved.",
+      "evidence": "report.md Test Evidence (red->green); internal/connector/ingest/dedup.go ComputeDedupKey(ownerUserID, url, contentType, deviceID, bucket); internal/api/connectors/extension/ingest.go owner guard.",
+      "status": "resolved"
     }
-  ]
+  ],
+  "sweep": {
+    "sweepId": "sweep-2026-06-06-r18",
+    "round": 18,
+    "trigger": "chaos",
+    "mappedWorkflowMode": "chaos-hardening",
+    "executionModel": "parent-expanded-child-mode"
+  }
 }
