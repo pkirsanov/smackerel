@@ -1,0 +1,101 @@
+{
+  "version": 3,
+  "specId": "054-notification-intelligence-handler",
+  "bugId": "BUG-054-001",
+  "featureDir": "specs/054-notification-intelligence-handler/bugs/BUG-054-001-post-cert-certifiedat-recertification-gap",
+  "featureName": "BUG-054-001 Post-certification certifiedAt recertification gap blocks Gate G088",
+  "parentSpec": "specs/054-notification-intelligence-handler/",
+  "title": "Spec 054 certifiedAt predates post-cert scopes.md drift cleanup, blocking Gate G088",
+  "status": "in_progress",
+  "workflowMode": "devops-to-doc",
+  "severity": "medium",
+  "class": "governance",
+  "discoveredBy": "sweep round 15 (stochastic-quality-sweep, devops trigger, devops-to-doc mapped mode, parent-expanded-child-mode)",
+  "discoveredAtHead": "31e964957823eaff18d2ee4ae9bfe0a8b59a1cdb",
+  "createdAt": "2026-06-06T01:30:00Z",
+  "parentWorkflow": {
+    "mode": "stochastic-quality-sweep",
+    "round": 15,
+    "totalRounds": 20,
+    "executionModel": "parent-expanded-child-mode",
+    "mappedMode": "devops-to-doc",
+    "trigger": "devops",
+    "findingLens": "Gate G088 post_certification_spec_edit_gate",
+    "findingSurface": "specs/054-notification-intelligence-handler/state.json (certifiedAt 2026-06-03T23:59:59Z predates post-cert commit 48ad42a79caa on scopes.md at 2026-06-05T16:15:45Z)",
+    "findingHead": "31e964957823eaff18d2ee4ae9bfe0a8b59a1cdb"
+  },
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "docs",
+    "currentScope": "BUG-054-001-S1",
+    "runStartedAt": "2026-06-06T01:30:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "design",
+      "plan"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "scopeProgress": [
+      {
+        "scope": "BUG-054-001-S1",
+        "name": "State.json recertification + guard re-pass",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-contract",
+      "source": "devops-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "contract-test-required",
+      "source": "devops-to-doc-mode-default"
+    }
+  },
+  "transitionRequests": [],
+  "scopes": [
+    {
+      "id": "BUG-054-001-S1",
+      "title": "State.json recertification + guard re-pass",
+      "status": "In Progress",
+      "dod": {
+        "total": 11,
+        "checked": 0
+      }
+    }
+  ],
+  "scenarios": [
+    "SCN-054-B001",
+    "SCN-054-B002"
+  ],
+  "reworkQueue": [],
+  "notes": "Bug folder + parent spec state.json recertification applied inline by sweep round 15 (parent-expanded devops-to-doc). The parent spec G088 finding is REMEDIATED via top-level certifiedAt advance + bubbles.spec-review reviewStatus:CURRENT entry; verification by post-cert-spec-edit-guard.sh + state-transition-guard.sh re-run is captured in report.md. The bug folder's own certification ceremony (full Code Diff Evidence + terminal-signal-rich evidence + bubbles.validate audit) is a follow-up under bugfix-fastlane, consistent with the BUG-049-002 precedent."
+}

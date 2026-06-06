@@ -1,0 +1,158 @@
+{
+  "version": 3,
+  "specId": "049-monitoring-stack",
+  "bugId": "BUG-049-003",
+  "featureDir": "specs/049-monitoring-stack/bugs/BUG-049-003-twitter-alert-metric-and-docs-drift",
+  "featureName": "BUG-049-003 Twitter API alert metric name + runbook docs drift",
+  "parentSpec": "specs/049-monitoring-stack/",
+  "title": "Twitter API alert references wrong metric name + missing operator runbook entries",
+  "status": "in_progress",
+  "workflowMode": "harden-to-doc",
+  "severity": "medium",
+  "class": "governance",
+  "discoveredBy": "sweep round 10 (stochastic-quality-sweep, harden trigger, harden-to-doc mapped mode, parent-expanded-child-mode)",
+  "discoveredAtHead": "a697e0db800bfefa8d027d846b7a82f63a9d530b",
+  "createdAt": "2026-06-05T23:09:53Z",
+  "parentWorkflow": {
+    "mode": "stochastic-quality-sweep",
+    "round": 10,
+    "totalRounds": 20,
+    "executionModel": "parent-expanded-child-mode",
+    "mappedMode": "harden-to-doc",
+    "trigger": "harden",
+    "findingLens": "Spec 049 contract regression — alerts + docs drift introduced by spec 056",
+    "findingSurface": "config/prometheus/alerts.yml + docs/Operations.md Alert Runbook",
+    "findingHead": "a697e0db800bfefa8d027d846b7a82f63a9d530b"
+  },
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "implement",
+    "currentScope": "BUG-049-003-S1",
+    "runStartedAt": "2026-06-05T23:09:53Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "design",
+      "plan"
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.workflow",
+        "phase": "discovery",
+        "phasesExecuted": ["discovery"],
+        "timestamp": "2026-06-05T23:09:53Z",
+        "completedAt": "2026-06-05T23:09:53Z",
+        "outcome": "finding_captured",
+        "summary": "Harden trigger ran ./smackerel.sh test unit --go --go-run 'TestMonitoring|...' and surfaced TestMonitoringAlertsContract_LiveFile + TestMonitoringDocsContract_LiveFile failures against spec 056 amendments to alerts.yml and docs/Operations.md."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "design",
+        "phasesExecuted": ["design"],
+        "timestamp": "2026-06-05T23:09:53Z",
+        "completedAt": "2026-06-05T23:09:53Z",
+        "outcome": "fix_designed",
+        "summary": "Data-only fix: rename smackerel_connector_twitter_api_retries -> smackerel_connector_twitter_api_retries_total (3 occurrences) in alerts.yml; add 2 rows to docs/Operations.md Alert Runbook table. Existing contract tests serve as regression mechanism."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "plan",
+        "phasesExecuted": ["plan"],
+        "timestamp": "2026-06-05T23:09:53Z",
+        "completedAt": "2026-06-05T23:09:53Z",
+        "outcome": "scope_planned",
+        "summary": "Single scope BUG-049-003-S1 with 10 DoD items + 8 test plan rows + SCN-049-B005/B006 scenarios."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "scopeProgress": [
+      {
+        "scope": "BUG-049-003-S1",
+        "name": "Alert metric correction + operator runbook coverage",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-contract",
+      "source": "harden-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "contract-test-required",
+      "source": "harden-to-doc-mode-default"
+    }
+  },
+  "transitionRequests": [],
+  "scopes": [
+    {
+      "id": "BUG-049-003-S1",
+      "title": "Alert metric correction + operator runbook coverage",
+      "status": "In Progress",
+      "dod": {
+        "total": 10,
+        "checked": 0
+      }
+    }
+  ],
+  "scenarios": [
+    "SCN-049-B005",
+    "SCN-049-B006"
+  ],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.workflow",
+      "phase": "discovery",
+      "phasesExecuted": ["discovery"],
+      "timestamp": "2026-06-05T23:09:53Z",
+      "completedAt": "2026-06-05T23:09:53Z",
+      "outcome": "finding_captured",
+      "summary": "Harden trigger ran ./smackerel.sh test unit --go --go-run 'TestMonitoring|...' and surfaced TestMonitoringAlertsContract_LiveFile + TestMonitoringDocsContract_LiveFile failures against spec 056 amendments to alerts.yml and docs/Operations.md."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phase": "design",
+      "phasesExecuted": ["design"],
+      "timestamp": "2026-06-05T23:09:53Z",
+      "completedAt": "2026-06-05T23:09:53Z",
+      "outcome": "fix_designed",
+      "summary": "Data-only fix: rename smackerel_connector_twitter_api_retries -> smackerel_connector_twitter_api_retries_total (3 occurrences) in alerts.yml; add 2 rows to docs/Operations.md Alert Runbook table. Existing contract tests serve as regression mechanism."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phase": "plan",
+      "phasesExecuted": ["plan"],
+      "timestamp": "2026-06-05T23:09:53Z",
+      "completedAt": "2026-06-05T23:09:53Z",
+      "outcome": "scope_planned",
+      "summary": "Single scope BUG-049-003-S1 with 10 DoD items + 8 test plan rows + SCN-049-B005/B006 scenarios."
+    }
+  ]
+}
