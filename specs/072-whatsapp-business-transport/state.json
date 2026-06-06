@@ -4,7 +4,9 @@
   "featureNumber": "072",
   "featureName": "WhatsApp Business Webhook Adapter",
   "status": "done",
-  "certifiedAt": "2026-06-02T06:15:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "executionRuntime": "manual",
   "convergenceHealth": {
     "recapCount": 0,
@@ -228,6 +230,16 @@
         "runStartedAt": "2026-06-02T05:50:00Z",
         "runEndedAt": "2026-06-02T05:50:00Z",
         "summary": "Final certification of spec 072 to status=done / certification.status=done. All 14 TP-072 rows previously executed PASS on the disposable stack (bubbles.validate 2026-06-02T03:15 + bubbles.test 2026-06-02T04:09 re-execution); all 4 scopes have status=Done with 38/38 DoD items [x] backed by executed evidence in report.md (Scope 1..4 Execution Evidence sections + Build Quality Gate). Specialist provenance complete across analyze/design/plan/implement/test/validate/security/stabilize/simplify/audit/chaos/regression/docs/spec-review. Populated certification.scopeProgress (4 entries, all Done, certifiedAt 2026-06-02T03:15Z mirroring validate certification window) and certification.lockdownState ({active:false, lockedScenarioIds:[]}) to close Gate G056. Populated convergenceHealth.handoffCount=12 (executionHistory entries) and turnCount=14 (TP-072 rows). transitionRequests/reworkQueue empty. Stabilize findings S-072-1 (single-replica idempotency) and S-072-2 (hardcoded WebhookMaxBodyBytes/IdempotencyCacheCapacity — SST zero-defaults gap) remain open as forward planning items routed to bubbles.plan per spec-review verdict; they do not invalidate the shipped v1 contract. Claim Source: executed (state.json field population this session; underlying test/security/audit/chaos/spec-review evidence executed in prior sessions and cited)."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits to THIS spec: bf111c61 (2026-06-02T06:07Z finalize-certification close-out, ~17min after faithful cert ts 05:50Z; flipped all 4 scopes from Not Started to Done with [x] executed evidence, removed the planning-pass Uncertainty Declaration blocks, added the Scope 4 Consumer Impact Sweep; category a) and 8cd272dc (2026-06-05 quick-win drift cleanup; reconciled the shipped test-file path whatsapp_disable_e2e_test.go to transport_disable_e2e_test.go in the TP-072-15 row and matching DoD line; DoD checkboxes unchanged; category b). No post-promotion requirement/scenario/DoD semantic change; current scopes.md has 0 non-Done scopes and 0 unchecked DoD; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
       }
     ]
   }

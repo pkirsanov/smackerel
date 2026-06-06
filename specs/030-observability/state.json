@@ -3,6 +3,8 @@
   "featureDir": "specs/030-observability",
   "featureName": "Observability",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -227,11 +229,22 @@
         "executionModel": "parent-expanded-child-mode",
         "completedAt": "2026-05-23T22:42:00Z",
         "summary": "Round 11 chaos-phase backfill for strict-guard Check 6B impersonation: spec 030 surface (metric registration + exposition + trace primitives) re-exercised under degraded-input chaos via `TestExtractTraceID_Malformed`, `TestExtractTraceID_TooFewParts`, `TestExtractTraceID_TooManyParts` (graceful empty-string returns), `TestSanitizeModel` parametric coverage (13 cases including 'other' bucket), `TestHandler_ReturnsPrometheusFormat` against an empty default registry. All chaos cases PASS 2026-05-24; no panics, no crashes, no unhandled error paths. closureSpec: 030-observability. closureSegment: r11-chaos-backfill."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edit: 19b31c0a (OPS-001 banner sweep: inserted canonical '**Status:** Done (certified per state.json)' banner after the spec.md H1, +2 lines). Pure status-banner reconciliation; no requirement, SCN scenario, or DoD item altered; implementation unchanged. Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
       }
     ]
   },
   "certification": {
     "status": "done",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "1",
       "2",
@@ -355,7 +368,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T03:25:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",

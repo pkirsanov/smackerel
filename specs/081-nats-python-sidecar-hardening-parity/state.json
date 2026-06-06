@@ -4,7 +4,9 @@
   "featureNumber": "081",
   "featureName": "NATS Python Sidecar Hardening Parity",
   "status": "done",
-  "certifiedAt": "2026-06-04T20:36:05Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "releaseTrain": "next",
@@ -240,6 +242,16 @@
         "statusAfter": "done",
         "outcome": "audit_complete_final_promotion",
         "summary": "Final-promotion audit attempt 2 — VERDICT: SHIP_IT. All 14 findings from the 20:30Z REWORK_REQUIRED cycle closed by bubbles.plan: Cat A (G022) chaos+docs added to certification.certifiedCompletedPhases[] alongside preserved execution.phaseStubs.{chaos,docs} (dual-record convention); Cat B ### Validation Evidence + ### Chaos Evidence sections inserted in report.md with all required markers (**Executed:** YES, **Command:**, **Phase Agent:**); Cat C ### Audit Evidence section gained 3 structured markers (line 466); Cat D commit-verification fenced block extended to 17 lines. Pre-promotion gates exit 0: artifact-lint (status=not_started); traceability-guard (0 warnings); state-transition-guard (TRANSITION PERMITTED with 2 informational warnings). Promoted: status=done, certification.status=done, completedAt=2026-06-04T20:36:05Z. Post-promotion gates exit 0 (final state): artifact-lint at status=done with 0 errors (all 14 prior findings cleared); state-transition-guard at status=done TRANSITION PERMITTED with 1 informational warning. ONE NEW FINDING surfaced + addressed: Gate G088 required top-level certifiedAt field at status=done which the user task list omitted; added as mirror of certification.completedAt per repo schema convention (specs 075-078 all set it). References commit 6912eb5e576138c12d7a0922e7cbfc739856a1b4."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 28711074 (mid-tier drift cleanup — reconciled stale internal/nats/subscriber.go + synthesis_subscriber.go path references to internal/pipeline/ in scopes.md T-081-U3 Test Plan row + canonical-envelope note after pipeline-package consolidation; 6-header dead-letter set + scenario IDs unchanged). Sole documentation-reconciliation campaign edit since certification; no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
       }
     ]
   },

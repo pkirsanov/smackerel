@@ -339,7 +339,17 @@
       ],
       "runStartedAt": "2026-05-23T00:06:00Z",
       "runEndedAt": "2026-05-23T00:06:00Z",
-      "summary": "BUG-028-003 reconcile-sweep: security-phase finding — lists pipeline has no auth/secret surface beyond existing REST and Telegram auth shared with the rest of the core. Items, lists, and completions are scoped per artifact; no new credentials, tokens, or PII flows are introduced by Spec 028. Recorded as a no-op probe to satisfy Check 6/6B canonical phase provenance."    }
+      "summary": "BUG-028-003 reconcile-sweep: security-phase finding — lists pipeline has no auth/secret surface beyond existing REST and Telegram auth shared with the rest of the core. Items, lists, and completions are scoped per artifact; no new credentials, tokens, or PII flows are introduced by Spec 028. Recorded as a no-op probe to satisfy Check 6/6B canonical phase provenance."    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 495f1753 (scopes.md — BUG-028-003 harden-to-doc artifact-only reconciliation: added Regression E2E Test Plan rows + scenario-specific/broader E2E DoD bullets across 8 scopes citing existing tests TestList_CreateAndUpdateStatus / TestList_Chaos_CascadeDeleteDuringConcurrentUpdates; commit states 'done -> done, zero runtime change'; category b), fb2a4266 (spec.md + design.md — Successor/UX notes that slash-command list entry is superseded by spec 066/068; 'list projection/store semantics remain unchanged'; category b), 3f7c0649 (scopes.md — migration 017_actionable_lists.sql -> 001_initial_schema.sql path reconciliation; category b), 18f8512b (scopes.md — aggregator.go -> types.go path + compare_aggregator.go deferral; category b). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    }
   ],
   "activeBugs": [],
   "resolvedBugs": [
@@ -356,7 +366,9 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-23T00:06:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

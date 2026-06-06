@@ -3,7 +3,8 @@
   "featureDir": "specs/027-user-annotations",
   "featureName": "User Annotations & Interaction Tracking",
   "status": "done",
-  "certifiedAt": "2026-06-03T21:33:19Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "linkedImplementationSpec": "specs/027-user-annotations",
   "linkedPlanningPacket": "specs/027-user-annotations",
   "workflowMode": "improve-existing",
@@ -32,7 +33,7 @@
   },
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-06-03T21:33:19Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "DB Migration",
       "Annotation Types & Parser",
@@ -534,6 +535,16 @@
       "runStartedAt": "2026-06-03T21:33:19Z",
       "runEndedAt": "2026-06-03T21:33:19Z",
       "summary": "Final certification; specs_hardened → done. All 16 Scope 9 DoD items closed; planning-truth committed in HEAD prior to flip per G088."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edit: 3f7c0649 (reconcile stale migration-NNN evidence: scopes.md reconciled 2 references from internal/db/migrations/016_user_annotations.sql -> internal/db/migrations/001_initial_schema.sql lines 491-510, reflecting the migrations 002-017 schema squash documented in docs/Development.md; historical file preserved at internal/db/migrations/archive/016_user_annotations.sql). Table and materialized-view names (annotations, telegram_message_artifacts, artifact_annotation_summary), SCN refs, and DoD semantics unchanged; implementation unchanged. Top-level certifiedAt advanced from 2026-06-03T21:33:19Z to 2026-06-06T17:00:00Z to satisfy Gate G088 past the post-cert evidence reconciliation."
     }
   ],
   "activeBugs": [],
@@ -568,7 +579,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-03T21:33:19Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

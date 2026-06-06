@@ -4,6 +4,9 @@
   "featureNumber": "070",
   "featureName": "Web Username/Password Login",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -38,7 +41,7 @@
     "lockdownState": "n/a-full-delivery-certified",
     "completedScopes": ["SCOPE-1", "SCOPE-2", "SCOPE-3"],
     "certifierAgent": "bubbles.validate",
-    "certifiedAt": "2026-06-01T23:30:00Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "auditVerdict": "passed-with-known-drift",
     "auditNote": "SCOPE-1/2/3 implemented and verified with executed unit + integration evidence (see report.md). SCOPE-4 is operator-action (CI green + promote.sh apply/verify + users add CLI in live container + browser login smoke + cookie persistence) that no in-process agent can perform. Per BUG-045-002 precedent, SCOPE-4 DoD items are recorded as certification.unresolvedFindings with explicit operator acceptance criteria. The implementation code SCOPE-4 exercises is complete and gated by the unit + integration test matrix.",
     "unresolvedFindings": [
@@ -94,7 +97,17 @@
       {"phase": "implement", "scope": "SCOPE-1", "agent": "bubbles.implement", "completedAt": "2026-06-01T23:15:00Z", "evidenceRef": "report.md#scope-1-unit-evidence"},
       {"phase": "implement", "scope": "SCOPE-2", "agent": "bubbles.implement", "completedAt": "2026-06-01T23:15:00Z", "evidenceRef": "report.md#scope-2-evidence"},
       {"phase": "implement", "scope": "SCOPE-3", "agent": "bubbles.implement", "completedAt": "2026-06-01T23:15:00Z", "evidenceRef": "report.md#scope-3-evidence"},
-      {"phase": "implement", "scope": "SCOPE-4", "agent": "bubbles.implement", "completedAt": null, "evidenceRef": "report.md#scope-4-evidence", "note": "deferred operator-action — live deploy + browser smoke"}
+      {"phase": "implement", "scope": "SCOPE-4", "agent": "bubbles.implement", "completedAt": null, "evidenceRef": "report.md#scope-4-evidence", "note": "deferred operator-action — live deploy + browser smoke"},
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits to THIS spec: 75f2e2be (2026-06-01T23:34Z round-2 convergence close-out, ~4min after faithful cert ts 23:30Z; flipped scopes 1-3 from Not Started to Done with [x] DoD evidence and deferred SCOPE-4 to operator-action, consistent with certification.unresolvedFindings OP-070-SCOPE4-* and auditVerdict passed-with-known-drift; category a plus b deferral) and b1c46991 (2026-06-05 tier-4 drift cleanup; reconciled planned-to-shipped file paths repo_postgres.go to repo.go, timing_test.go to hasher_test.go, cli_users.go to cmd_users.go; DoD checkboxes unchanged; category b). SCOPE-4 deferral and its 6 operator-action unchecked DoD predate done and are documented known-drift, not a post-promotion reset. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+      }
     ]
   }
 }

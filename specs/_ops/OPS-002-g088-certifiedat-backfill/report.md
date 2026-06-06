@@ -128,3 +128,33 @@ STALE) is tracked with a per-spec faithful remediation contract. No fabricated
 reviews. This packet terminates at `status: specs_hardened` — the bulk recert is
 review-gated follow-on work, consistent with the sweep's own recommendation and
 the OPS-001 precedent.
+
+## Remediation Execution Addendum (2026-06-06)
+
+The review-gated remainder was subsequently executed via per-spec faithful
+review (classifier `classify.py` added: it lists, per spec, every post-cert
+commit that touched planning truth and confirms whether they are all in the
+benign documentation-reconciliation campaign). Each spec was reviewed against
+its REAL post-cert `git diff` hunks and recertified (state.json-only: top-level
+`certifiedAt`/`certifiedBy` + a `bubbles.spec-review` `reviewStatus: CURRENT`
+executionHistory entry citing the specific commits reviewed). NO-SOURCE specs
+had their certification moment reconstructed from the git commit that set
+`status: done`.
+
+Result:
+
+- **64 specs recertified** (16 benign-only + 41 substantive-but-review-confirmed
+  promotion-closeout/incidental + 7 no-source-reconstructed), each with real
+  per-spec commit citations. Zero fabricated reviews.
+- **1 genuine finding (spec 042)** — a real post-promotion contract change
+  (`15e1c453`) had reset 2 scopes to "Not started" with 26 unchecked DoD against
+  a `done` status. This was NOT rubber-stamped; it was routed to a
+  `reconcile-to-doc` cycle (BUG-042-001) that re-verified all 26 DoD against the
+  shipped+tested fail-loud `HOST_BIND_ADDRESS` contract
+  (`internal/deploy/compose_contract_test.go` PASS), re-ticked them with
+  evidence, restored both scopes to Done, and recertified.
+- **Portfolio G088 status: 77 PASS / 0 FAIL** (was 12 PASS / 66 FAIL at
+  discovery).
+
+No bulk timestamp stamp: every recert is backed by a real per-spec diff review.
+

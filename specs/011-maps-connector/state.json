@@ -3,6 +3,9 @@
   "featureDir": "specs/011-maps-connector",
   "featureName": "Maps Timeline Connector",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "full-delivery",
   "policySnapshot": {
     "workflowMode": "full-delivery",
@@ -208,6 +211,18 @@
         "runStartedAt": "2026-06-06T00:00:00Z",
         "runCompletedAt": "2026-06-06T00:00:00Z",
         "summary": "Stochastic-quality-sweep round 18/20 \u2014 devops trigger \u2192 devops-to-doc, parent-expanded child workflow mode execution (subagent runtime lacks nested runSubagent; devops-to-doc is single-spec / not requiresTopLevelRuntime). Re-probed full devops surface for new drift since round 7: (1) container env contract \u2014 docker-compose.yml:107 + line 128 fail-loud ${MAPS_IMPORT_DIR:?Gate G028 / HL-RESCAN-012}:/data/maps-import:ro intact; (2) deploy compose unchanged (no infra port/volume regressions); (3) CI/CD workflows generic (no Maps-specific paths needed); (4) Build-Once Deploy-Many image signing (cosign keyless + SBOM + SLSA) covers maps connector transitively via smackerel-core image; (5) Prometheus metric smackerel_connector_sync_total{connector=\"google-maps-timeline\",status=\"success|error\"} inherited from supervisor + generic connector_sync_failure_rate_high_24h alert (config/prometheus/alerts.yml:83); (6) structured logs slog.Info/Warn/Error with bounded keys, no PII; (7) manifest divergence none; (8) secret-rotation N/A (zero secrets, file-import); (9) SST/no-defaults compliance preserved (parseMapsConfig fail-loud, zero os.Getenv); (10) privacy_consent R-401 enforcement at connector.go:179 (checkPrivacyConsent for source 'maps') intact; (11) rollback (enabled:false + deploy-target rollback + additive-only schema) preserved. Findings: DEVOPS-D02 (carryover from round 7) \u2014 docs/Operations.md operator runbook gap, route to bubbles.docs emitted in round 7 but never executed \u2014 CLOSED IN-ROUND by authoring '### Google Maps Timeline Connector Operations (Spec 011)' subsection at docs/Operations.md line 605 (between QF Decisions and Notification Intelligence), with operations table, R-401 privacy-consent SQL opt-in block (correct table privacy_consent + source_id 'maps'), 8-step end-to-end Takeout-to-Smackerel walkthrough, cursor/re-ingestion guidance, and 5-row failure-mode-to-operator-response table; correct archive subdirectory name <import_dir>/archive/ matching connector.go:548 archiveFile; uses <token> placeholders and 127.0.0.1 only (no PII / no real secrets). Also surfaced (out-of-scope for devops trigger, recorded for sweep parent): pre-existing baseline state-transition-guard findings on spec 011 (Gates G022/G028/G040/G053/G055/G056/regression-E2E/consumer-impact/change-boundary) accumulated since original 2026-04 certification due to tightened guard rules \u2014 these need a dedicated harden-gaps-to-doc or improve-existing workflow against spec 011, NOT a devops-trigger sweep round. Spec 011 certification status unchanged (done); no transition attempted; state-transition guard not triggered. Terminal-discipline preserved \u2014 IDE replace_string_in_file / multi_replace_string_in_file only, zero shell redirection or heredoc writes. Framework file immutability honored \u2014 zero edits to .github/bubbles/scripts/, .github/agents/bubbles_shared/, .github/bubbles/workflows.yaml, .github/instructions/bubbles-*."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": [
+          "spec-review"
+        ],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert (no-source reconstruction). Reconstructed original certification moment from git: commit b4a6780e (2026-04-09T16:15:36Z) transitioned status in_progress->done ('feat(011): deliver maps connector scopes 2-3 + delivery-lockdown certification'); status held done thereafter. Reviewed 7 post-cert planning edits to THIS spec, all category (b) incidental reconciliation: 7621814a (2026-04-09 same-day artifact-lint scopes.md reconcile, no status/DoD reset); c97ceb91 (2026-04-21 scopes.md evidence reword implement->test-to-doc + test-count refresh); 5cb31145 (2026-05-08 16 trace-failure DoD-trace-prefix on still-checked bullets); 69524036 (2026-05-24 six G068 DoD-trace prefixes on still-checked [x] SCN-MT-004/005/008/010/012/013 bullets); 19b31c0a (2026-05-28 spec.md Status banner Draft->Done); 3f7c0649 (2026-06-05 scopes.md migration path 009_maps.sql->consolidated 001 Allowed-surfaces reconcile); 28711074 (2026-06-05 Test Plan path corrections tests/ -> internal/connector/maps/maps_test.go). No post-promotion requirement/scenario/DoD semantic change; current scopes.md all-Done with 0 unchecked DoD; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
       }
     ]
   },

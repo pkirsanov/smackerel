@@ -3,6 +3,8 @@
   "featureDir": "specs/036-meal-planning",
   "featureName": "Meal Planning Calendar",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -39,6 +41,16 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Post-cert planning edits reviewed: 8168ad64 (scopes.md reclassified Scopes 09-15 from active to Parked, deferred pending spec 037; added Shared Planning Expectations + Parked Scope Queue docs — scope deferral) cat-b; 19b31c0a (spec.md status banner) cat-b; fb2a4266 (design.md/spec.md successor notes — meal plan storage/shopping-list/CalDAV stay active; /meal_plan superseded by specs 066/068) cat-b. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt set to 2026-06-06T17:00:00Z for Gate G088."
+    },
     {
       "agent": "bubbles.analyst",
       "phasesExecuted": ["analyze"],
@@ -169,7 +181,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-08T00:00:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

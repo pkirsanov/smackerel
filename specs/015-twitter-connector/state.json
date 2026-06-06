@@ -408,6 +408,16 @@
       "startedAt": "2026-05-24T01:30:00Z",
       "completedAt": "2026-05-24T01:35:00Z",
       "summary": "Stochastic-quality-sweep round 25 of 30 → child mode gaps-to-doc, parent-expanded-child-mode. BUG-015-002 reconcile-artifact-drift closure: state-transition-guard baseline 39 BLOCKs reduced to 2 residual BLOCKs (1 G028 rollup over 17 implementation-reality-scan return-nil false positives on twitter.go because the connector reads a local archive directory and the heuristic looks for HTTP/RPC/SDK substrings that legitimately do not appear; 1 G061 rollup over empty reworkQueue layout false positive). Both residuals follow the established framework-immutability + round-6 precedent (010-browser-history-connector closed completed_owned with 28 residual BLOCKs). BUG-015-002 status: resolved. Spec 015 status: done (unchanged). Sweep round 25 closure commit prefix: bubbles(015/bug-015-002). No source code edits."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 4626c2a5 (scopes.md — certification close-out flipping all 6 scopes Not Started -> Done; subject 'Spec certifications: 014, 015, 017, 019, 020, 023'; category a), ca618dce (scopes.md — evidence-text refinement on already-checked DoD items after 4 code gaps were fixed in twitter.go (thread_position, quote classification, child URL artifacts, multi-part archive); obligations pre-existed; category b), 2fe092b5 + c4168db7 (scopes.md — DoD-trace-prefix + 21 authored Gherkin scenarios SCN-TW-{ARC,THR,NRM,CONN,LNK,API} documenting existing tested behavior to close trace-guard residuals, citing existing twitter_test.go; commit states 'No DoD content rewriting, only prefixes'; category b), 3b4fe6a4 (scopes.md — BUG-015-002 artifact-only Regression E2E/Stress/TDD sections citing existing tests; 'No production code changes'; category b), 42419f44 (spec.md + design.md — spec-056 Extension Pointer banner; API/hybrid code lives in spec 056; category b), 19b31c0a (spec.md — Status banner Draft -> Done; category b). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "policySnapshot": {
@@ -439,7 +449,9 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T01:35:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "resolvedBugs": [
     {
       "bugId": "BUG-015-002-reconcile-artifact-drift",
@@ -462,7 +474,7 @@
   ],
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-04-17T00:00:00Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "certifiedBy": "bubbles.validate",
     "completedScopes": [
       "scope-01",

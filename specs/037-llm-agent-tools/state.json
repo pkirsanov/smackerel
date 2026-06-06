@@ -3,6 +3,8 @@
   "featureDir": "specs/037-llm-agent-tools",
   "featureName": "LLM Scenario Agent & Tool Registry",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -111,6 +113,16 @@
     ],
     "pendingTransitionRequests": [],
     "executionHistory": [
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Post-cert planning edits reviewed: bd72f76d (scopes.md 2 DoD bullets reworded with scenario-ID prefixes SCN-037-026/SCN-037-031; both remain [x], cite existing scheduler/pipeline Executor.Run behavior) cat-b (sweep trace-tag fidelity). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt set to 2026-06-06T17:00:00Z for Gate G088."
+      },
       {
         "agent": "bubbles.analyst",
         "phasesExecuted": [
@@ -319,5 +331,5 @@
   "policySnapshot": {
     "workflowMode": "full-delivery"
   },
-  "lastUpdatedAt": "2026-06-06T00:00:00Z"
+  "lastUpdatedAt": "2026-06-06T17:00:00Z"
 }

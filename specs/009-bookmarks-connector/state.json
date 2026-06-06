@@ -3,7 +3,7 @@
   "featureDir": "specs/009-bookmarks-connector",
   "featureName": "Bookmarks Connector",
   "status": "done",
-  "certifiedAt": "2026-06-05T22:00:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
   "originalCompletedAt": "2026-04-09T01:40:00Z",
   "certifiedBy": "bubbles.workflow",
   "requiresRevalidation": false,
@@ -348,6 +348,16 @@
       "startedAt": "2026-06-05T21:00:00Z",
       "completedAt": "2026-06-05T22:00:00Z",
       "summary": "Stochastic-quality-sweep round 6 of 20 (trigger simplify, parent-expanded simplify-to-doc child workflow mode, statusCeiling done). Simplify probe of internal/connector/bookmarks/ (1276 source lines + 3825 test lines) surfaced 2 findings: F-SIMPLIFY-R6-001 (LOW: extractBookmarks 1-line shim wrapper with single caller — inlined directly in bookmarks.go; no bug spawned, unexported, no spec/design contract impact) and F-SIMPLIFY-R6-002 (MEDIUM: FolderToTopicMapping exported dead code + 8-site spec/design drift). For F-SIMPLIFY-R6-002 spawned specs/009-bookmarks-connector/bugs/BUG-009-004-foldertotopicmapping-dead-surface/ with full 7-artifact set (spec, design, scopes, scenario-manifest with 3 SCN-BK-FIX-004-NNN scenarios, report, uservalidation, state). Fix: deleted FolderToTopicMapping function from bookmarks.go (-10 lines) and 3 dedicated dead tests from bookmarks_test.go (-47 lines: TestFolderToTopicMapping, TestFolderToTopicMapping_Backslash, TestFolderToTopicMapping_MultiLevel); added TestSimplifyR6_FolderToTopicMapping_Removed in topics_test.go (+65 lines) with three layers of regression coverage (compile-pin on TopicMapper.MapFolder signature via direct call, runtime-pin on nil-pool early-return contract, inline algorithmic-intent reproduction of strings.Split + non-empty-trim loop). Rewrote 4 spec.md reference sites (Goal #2, ASCII diagram, R-005, UC-001 step 10) + 4 design.md reference sites (Design Brief, Component Design, Data Flow step 8, Component Design §2) to name TopicMapper.MapFolder. Total diff: 5 files, +78 insertions, -74 deletions, net +4 lines. Verification: go build ./... exit 0 (zero production consumers — strongest possible dead-code proof), bookmarks package suite 44 PASS / 0 FAIL with -race -count=1, consumer regression sweep across all 22 connector packages + scheduler green, go vet clean, gofmt clean, ./smackerel.sh lint exit 0. Synthetic adversarial proof captured showing 4 of 5 multi-segment fixtures distinguish flatten (1 segment) vs split (N segments) algorithms. Known scan disposition: G028 implementation-reality-scan flags 2 FAKE_INTEGRATION FPs at bookmarks.go:41/47 (return nil, fmt.Errorf inside ParseChromeJSON) — both lines pre-date simplify R6 and were NOT touched by this round; same disposition as R10 close-out (state.json executionHistory at 2026-05-25T17:30:00Z). G088 post-cert spec edit triggered by the 8 planning-truth rewrites in parent spec.md + design.md; remediated by certifiedAt bump from 2026-04-09T01:40:00Z (preserved as originalCompletedAt) to 2026-06-05T22:00:00Z."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Faithful cert ts was the prior recertedAt 2026-06-05T22:00Z; the only post-cert planning edit is bd72f76d (2026-06-06T04:38:31Z, 'refactor(sweep): connector simplifications, dead-code removal, test hardening'), which touched 009 design.md (9 lines) + spec.md (13 lines) ONLY (no scopes.md), reconciling the remaining stale FolderToTopicMapping() references (Goal #2, design Current/Target State, sync step 8) to the real production TopicMapper.MapFolder cascade in internal/connector/bookmarks/topics.go after deleting the dead exported helper (BUG-009-004). The folder->topic mapping product goal is preserved; only the named-helper attribution is corrected to match the implementation. Incidental reconciliation (category b): no requirement/scenario/DoD semantic change; behavior unchanged (bookmarks suite green per commit). certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "policySnapshot": {
@@ -379,7 +389,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-05T22:00:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "observations": [
     {
       "id": "OBS-009-SIMP-R6-001",
@@ -405,7 +415,7 @@
   ],
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-06-05T22:00:00Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "originalCompletedAt": "2026-04-09T01:40:00Z",
     "completedScopes": [
       "scope-01",

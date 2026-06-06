@@ -4,7 +4,8 @@
   "featureName": "Notification Source ntfy Adapter",
   "status": "done",
   "workflowMode": "full-delivery",
-  "certifiedAt": "2026-05-26T14:15:13Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "execution": {
     "activeAgent": "bubbles.validate",
     "currentPhase": "validate",
@@ -28,7 +29,7 @@
   },
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-05-26T14:15:13Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "scope-1-config-and-source-identity",
       "scope-2-event-mapping-and-core-ingest",
@@ -439,6 +440,16 @@
       "startedAt": "2026-05-26T14:15:13Z",
       "completedAt": "2026-05-26T14:15:13Z",
       "summary": "Completed final parent promotion after commit ebff7226 stabilized the recertified planning truth in git. Parent artifact-lint passed, traceability guard passed with 0 warnings, pre-promotion post-cert-spec-edit guard passed for blocked state, and state-transition guard permitted done with one non-blocking warning before validate-owned certification metadata was refreshed. Post-edit guard reruns are recorded by the current validate invocation."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit fb2a4266 (2026-06-01 'spec 064: open-ended knowledge agent + supporting work'): only change to this spec is an +11-line 'Design Successor Note' prepended to design.md that points future outbound channels to the spec 061/069 TransportAdapter contract while explicitly stating 'This spec stays done' and 'This spec still owns ntfy-specific source ingestion'. Pure cross-reference/successor note; category b. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
@@ -456,7 +467,7 @@
       "summary": "Three replay calls for one replay-eligible ntfy dead-letter produced three accepted raw event IDs while replay_attempt_rows remained 1."
     }
   ],
-  "lastUpdatedAt": "2026-05-26T14:15:13Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",

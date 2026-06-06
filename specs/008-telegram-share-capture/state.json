@@ -3,6 +3,8 @@
   "featureDir": "specs/008-telegram-share-capture",
   "featureName": "Telegram Share & Chat Capture",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -292,12 +294,22 @@
       "runStartedAt": "2026-05-12T16:40:00Z",
       "runEndedAt": "2026-05-12T16:42:00Z",
       "summary": "Gaps-to-doc Round 5 finalization. All 6 gap findings closed via finding-owned closure protocol (planning + delivery chain executed inline as artifact edits, parent-expanded child mode because nested runtime lacked runSubagent). Spec 008 remains in done state with strengthened governance posture: persistent regression coverage now explicitly mapped (was implicit), DoD-Gherkin fidelity restored for SC-TSC05/06, finalize phase provenance satisfied, deferral language eliminated from scopes.md and report.md. The structured commit with prefix spec(008) for Check 17 will be made by the calling stochastic-quality-sweep parent at round closure."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed 2 post-cert planning edits. fb2a4266 (2026-06-01, 'spec 064...') added 'Successor Notice' cross-ref banners to spec.md (13 lines) + design.md (10 lines) stating capture/threading/conversation-artifact semantics remain owned by this spec and only the /find retrieval entry path moves to compiled NL (specs 061/066/068) -- banner-only (category b). 20902fda (2026-05-12, 'spec(008): close gaps-to-doc round 5 governance findings') touched scopes.md ONLY (+48/-38; commit states 'Code surface unchanged, artifact-only round'): restored canonical regression-evidence DoD items pointing at real internal/telegram/*_test.go + tests/e2e/test_telegram*.sh, added faithful G068 DoD text for existing SC-TSC05/SC-TSC06, and replaced G040 deferral language with a persistent-regression-coverage mapping (category b). No new/reworded product scenario, no requirement change, code unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-12T16:42:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md", "scenarioManifest": "scenario-manifest.json" },
   "notes": "Telegram share-to-submit for capturing items via mobile share sheet, and sharing Telegram chat conversations into Smackerel."

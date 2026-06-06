@@ -3,6 +3,9 @@
   "featureDir": "specs/017-gov-alerts-connector",
   "featureName": "Government Alerts Connector",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.validate",
@@ -171,6 +174,18 @@
       "runStartedAt": "2026-05-24T00:00:00Z",
       "runFinishedAt": "2026-05-24T00:13:00Z",
       "summary": "Regression-to-doc (stochastic sweep-2026-05-23-r30 Round 12, parent-expanded child workflow): REG-017-001 found and fixed via BUG-017-002. Framework upgrade on 2026-05-12 (commit 3037eb8c) tightened traceability-guard.sh G068 matcher (word-length floor 4->3, trimmed stop list). Under v3.8.0, Scope 03 SCN-GA-NWS-002 lost faithful DoD mapping (existing bullets scored 2/3 required overlap and lacked trace ID). Artifact-only fix: inserted 1 scenario-prefix DoD bullet for SCN-GA-NWS-002 into scopes.md Scope 03 between existing 'Event types classified' and '17 unit tests pass' bullets. All other bullets byte-identical. Underlying behavior (mapNWSSeverity + classifyNWSEventType) was already delivered since 2026-04-11 and continuously tested. Post-fix: traceability-guard PASS (13/13 mapped, 0 unmapped), artifact-lint PASS (parent + bug), go test PASS (175 tests, 7.358s), race subset clean (1.334s). Spec status preserved (done); certification preserved."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert (no-source reconstruction). Reconstructed original certification moment from git: after a 2026-04-10 done->validated->done cycle and a 2026-04-11 reopen to in-progress (fe31f4ba), the final certification is commit 0d1a7b1d (2026-04-12T12:20:16Z) in_progress->done ('feat(017): implement proactive delivery + travel alerts - all 6 scopes done'); verified no later state.json status reset. Reviewed 6 post-cert planning edits to THIS spec, all category (b) incidental reconciliation: ee6b7ca0 (2026-04-14 scopes.md scope-summary table Not Started/In Progress->Done for scopes 3/4/5, catch-up to certified state); e5bfde97 (2026-04-22 scopes.md added Gherkin SCN-GA-NWS/TSUN scenario docs with CHECKED [x] DoD + evidence for already-shipped behavior); c363141c (2026-04-24 scopes.md evidence reconcile, balanced, no reset); 2fe092b5 (2026-05-09 DoD-trace-prefix + Test Plan path wiring, 46/53 trace failures); e2b69220 (2026-05-24 +2-line SCN-GA-NWS-002 DoD-trace bullet, G068 regression); 19b31c0a (2026-05-28 spec.md Status banner->Done). No post-promotion requirement/scenario/DoD semantic change; current scopes.md all-Done with 0 unchecked DoD; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ]
 }

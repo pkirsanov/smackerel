@@ -3,6 +3,8 @@
   "featureDir": "specs/001-smackerel-mvp",
   "featureName": "Smackerel MVP",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -374,12 +376,22 @@
       ],
       "scopesCompleted": [],
       "summary": "Re-certification: Fixed spec/code color mismatch (#E8E6E3 \u2192 #e8e8e4 in design.md, scopes.md). Fixed fabricated test function references (TestContainsEmoji \u2192 TestMarkerConstants_NoEmoji). Documented known gaps (missing negative scenarios, E2E limitations). Enriched report.md with actual test function names. Added knownGaps to scenario-manifest.json."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: fb2a4266 (2026-06-01) added a Successor Notice cross-ref banner to spec.md pointing at specs 061/064/068/069 and explicitly keeping this spec done (incidental reconciliation, category b); 2c35588a (2026-04-17) re-certification close-out that normalized dark-theme hex #E8E6E3->#e8e8e4 in design.md/scopes.md to match templates.go, replaced fabricated emoji test refs with TestMarkerConstants_NoEmoji, and appended a Known Gaps & Limitations section (promote-to-done close-out, category a). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T00:00:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

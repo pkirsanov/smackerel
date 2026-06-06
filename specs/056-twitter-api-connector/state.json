@@ -11,7 +11,8 @@
   "specDependsOn": [
     "specs/015-twitter-connector"
   ],
-  "certifiedAt": "2026-05-28T00:00:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": null,
@@ -37,7 +38,7 @@
   "certification": {
     "status": "done",
     "lastSpecialistVerdict": "FULL-DELIVERY-CERTIFIED-2026-05-28T00:00:00Z",
-    "certifiedAt": "2026-05-28T00:00:00Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "certifiedBy": "bubbles.goal",
     "completedScopes": [
       "Scope 01: API Client Foundation",
@@ -280,6 +281,16 @@
       "statusAfter": "done",
       "provenanceMode": "specialist",
       "summary": "Promoted spec 056 to done under full-delivery mode. All 5 scopes Done with real test PASS evidence. Top-level status + certification.status promoted to done."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit 2667745b (2026-05-27 'spec(056): promote to done under full-delivery'): only change to this spec is scopes.md scope-status flips to Done plus a <!-- bubbles:g040-skip-begin --> marker wrapping the already-documented NC-2 search-endpoint out-of-scope note. This is the promote-to-done close-out, committed 8 min after the faithful cert moment 2026-05-27T21:30:00Z (executionHistory statusAfter==done, bubbles.goal); category a. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
@@ -292,7 +303,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-27T21:30:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

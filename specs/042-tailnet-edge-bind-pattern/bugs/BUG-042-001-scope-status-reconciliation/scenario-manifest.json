@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-042-001-scope-status-reconciliation",
+  "parentSpec": "042-tailnet-edge-bind-pattern",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane artifact-only reconcile; scenarios drive guard-verification + evidence-fidelity proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "artifact-lint.sh re-runs captured in report.md: red at FAILED/43 issues pre-mutation (status done invalid: DoD contains unchecked items), green at PASSED post-mutation."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-042-001-001",
+      "scope": "Scope 1",
+      "title": "scopes.md DoD goes from 26 unchecked to 0 unchecked and both scopes restored to Done",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/artifact-lint.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/artifact-lint.sh", "function": "manual:dod-completion-gate"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-042-scope-statuses-and-recertify-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "grep -cE '^- \\[ \\] ' specs/042-tailnet-edge-bind-pattern/scopes.md returns 0; both Scope 1 and Scope 2 carry **Status:** Done; artifact-lint DoD completion gate passes.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-042-001-002",
+      "scope": "Scope 1",
+      "title": "Parent state.json gains top-level certifiedAt + bubbles.spec-review CURRENT entry",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/post-cert-spec-edit-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/post-cert-spec-edit-guard.sh", "function": "manual:certifiedAt-and-CURRENT-review-detection"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-042-scope-statuses-and-recertify-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "jq -r '.certifiedAt' parent state.json returns 2026-06-06T17:30:00Z; a bubbles.spec-review executionHistory entry with reviewStatus=CURRENT and runCompletedAt<=certifiedAt is present; post-cert-spec-edit-guard committed-history check (git log --since=certifiedAt) is clean.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-042-001-003",
+      "scope": "Scope 1",
+      "title": "Parent artifact-lint goes from FAILED to PASSED",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/artifact-lint.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/artifact-lint.sh", "function": "manual:report-section-and-evidence-legitimacy"}
+      ],
+      "evidenceRefs": [
+        "report.md#validation-evidence",
+        "scopes.md#scope-1-reconcile-spec-042-scope-statuses-and-recertify-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "artifact-lint.sh specs/042-tailnet-edge-bind-pattern exits 0 (PASSED): DoD completion gate green, ### Validation Evidence + ### Audit Evidence headings present, historical report.md evidence wrapped in sanctioned evidence-legitimacy-skip markers, no narrative summary phrases.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-042-001-004",
+      "scope": "Scope 1",
+      "title": "Persistent compose-contract regression cover stays GREEN by construction",
+      "requiredTestType": "regression-e2e",
+      "testFiles": [
+        "internal/deploy/compose_contract_test.go"
+      ],
+      "linkedTests": [
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_LiveFile"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialLiteralBind"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialDefaultFallbackBind"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialInfraHasPorts"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialNetworkModeHostBypass"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialMultiPortsBypass"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialMLMultiPortsBypass"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-042-scope-statuses-and-recertify-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "go test -count=1 -v ./internal/deploy/ -run 'Compose' returns ok with 0 failures; the fail-loud HOST_BIND_ADDRESS contract + infra-no-ports + network_mode-host adversarial coverage stays GREEN by construction since BUG-042-001 changes zero runtime behaviour.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-042-001-005",
+      "scope": "Scope 1",
+      "title": "Every re-ticked DoD item is backed by real shipped+tested evidence (no force-tick)",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/artifact-lint.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/artifact-lint.sh", "function": "manual:dod-evidence-presence-and-anti-fabrication"}
+      ],
+      "evidenceRefs": [
+        "report.md#audit-evidence",
+        "scopes.md#scope-1-reconcile-spec-042-scope-statuses-and-recertify-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Each of the 26 parent DoD items carries an inline Evidence reference to a real command/file; the single item whose whole-repo gate is red (./smackerel.sh test unit --go full suite) is disclosed as a non-042 caveat (internal/assistant + tests/unit/clients) rather than force-ticked.",
+      "changeType": "added"
+    }
+  ]
+}

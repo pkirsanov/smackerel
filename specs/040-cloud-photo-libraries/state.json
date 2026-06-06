@@ -3,6 +3,8 @@
   "featureDir": "specs/040-cloud-photo-libraries",
   "featureName": "Cloud Photo Libraries (Immich, Google Photos, Amazon Photos, ...)",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -780,12 +782,22 @@
         "docs: report.md Simplify Phase Stochastic Sweep Round 3 Evidence (2026-05-12) section appended (+231 lines) with applied/deferred tables, S1+S2 detail blocks, 6 verification evidence fences, per-scenario coverage table, files-changed table, pre-existing-conditions acknowledgement, and RESULT-ENVELOPE.",
         "finalize: stochastic-sweep round 3 closure — completed_owned, no findings requiring planning workflow (simplification IS the work; behavior-preservation proven by all-green test matrix); nextRequiredOwner=null."
       ]
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 22f592c5 (synced cosmetic Scope Summary table Scopes 3/4/5 Not Started -> Done in scopes.md to match already-complete per-scope sections, SR-040-F1 close-out), 9f9f6ded (deleted dead tls_skip_verify line from design.md provider config example, MIT-040-S-005 close-out), a93cbeb0 (documented already-shipped reveal-token sha256 hash + FOR UPDATE/consumed_at TOCTOU hardening in design.md, MIT-040-S-001/S-007 close-out), 19b31c0a (OPS-001 spec.md status-banner sweep). All documentation-reconciliation / promote-to-done close-out edits; no requirement/scenario/DoD semantic change; implementation unchanged. top-level certifiedAt added and set to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-12T16:30:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",

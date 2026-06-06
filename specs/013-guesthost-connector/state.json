@@ -3,6 +3,8 @@
   "featureDir": "specs/013-guesthost-connector",
   "featureName": "GuestHost Connector & Hospitality Intelligence",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -127,11 +129,22 @@
         "runStartedAt": "2026-05-13T00:00:00Z",
         "runEndedAt": "2026-05-13T00:00:00Z",
         "summary": "Chaos-hardening R20 (stochastic-quality-sweep FINAL ROUND, seed 20260513): Probed Sync cursor-advancement adversarially. Found 2 high-severity cursor poisoning vectors not covered by prior CHAOS-013-001/002/003. CHAOS-013-R20-001: future-cursor poisoning (single year-9999 event permanently advanced cursor, dropping all real subsequent events). CHAOS-013-R20-002: cursor regression (server returning only stale events rewound cursor backwards, forcing perpetual re-fetch). Both fixed in connector.go with maxAllowedCursor=now+1h clamp and explicit before-sinceTime regression guard. 5 adversarial regression tests added (2 red\u2192green failure-mode tests + 3 belt-and-braces non-over-aggressiveness tests). All 26 regression_test.go tests pass; 0 internal/ regressions. report.md updated with R20 chaos section and other-surfaces-probed table."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edits: 19b31c0a (OPS-001 banner sweep: spec.md '> **Status:** Draft' -> 'Done') and 28711074 (mid-tier drift cleanup: scopes.md reconciled internal/intelligence/hospitality.go -> internal/digest/hospitality.go (intelligence layer consolidated into the digest package) and tests/e2e/regression_test.go -> internal/connector/guesthost/regression_test.go (per-connector test layout), with explanatory parentheticals). Both reconcile documentation paths to shipped code; SCN-GH scenario refs, test types, and DoD evidence semantics unchanged; implementation unchanged. Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
       }
     ]
   },
   "certification": {
     "status": "done",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "1",
       "2",
@@ -226,6 +239,6 @@
       "status": "done"
     }
   ],
-  "lastUpdatedAt": "2026-05-25T09:04:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "notes": "2026-05-25: Stabilize-to-doc R5 (stochastic-quality-sweep sweep-2026-05-25-r10). Probed 11 stabilize surfaces against the GuestHost connector + hospitality-graph pipeline. Single finding F1: HospitalityLinker counter mutations (IncrementStay, IncrementBookings, UpdateIssueCount) called unconditionally on every LinkArtifact invocation; combined with NATS artifacts.processed at-least-once delivery (AckPolicy=AckExplicitPolicy, AckWait=30s, MaxDeliver>1), counters silently drifted upward on AckWait expiry, crash-before-ack, or Nak retry. Closed via BUG-013-001-hospitality-linker-counter-idempotency: migration 039_hospitality_counter_applications.sql introduced per-(artifact_id, op_kind) dedup ledger; tryClaimCounterApplication helper added to hospitality_linker.go using WITH ins AS (INSERT ON CONFLICT DO NOTHING RETURNING 1) SELECT EXISTS (SELECT 1 FROM ins); three counter mutators gated behind the claim. Three persistent build-tagged integration regression tests added in tests/integration/guesthost_counter_idempotency_test.go (booking idempotency on 3 redeliveries, task issue delta idempotency on 3 redeliveries, dedup-ledger inverse on 3 distinct artifacts × 2 deliveries each — proves ledger is correctly keyed on (artifact_id, op_kind)). All tests PASS against live test stack (0.20s + 0.11s + 0.42s). Race-mode unit regression on internal/graph clean (1.049s). Spec 013 parent state-transition-guard 45 BLOCKs are PRE-EXISTING carry-forward drift (G060/G068 Gherkin fidelity, G022 reserved-phase impersonation in pre-G022 executionHistory entries, G028 stub integration tests, G053 missing Code Diff Evidence in parent report, G040 deferral language; G041 missing bubbles(013/...) commit prefix — the R5 commit satisfies this prefix going forward). All 45 pre-date the gate tightening and the R5 round itself; R5 introduces ZERO new BLOCKs on the bug packet. 2026-05-13: Chaos-hardening R20 (stochastic-quality-sweep FINAL ROUND, seed 20260513). Adversarial probe of Sync cursor logic uncovered 2 high-severity cursor poisoning vectors (future-cursor poisoning via year-9999 event; cursor regression via stale events). Both fixed mechanically in connector.go with maxAllowedCursor clamp and sinceTime-regression guard. 5 adversarial regression tests added. All internal/ packages green. 2026-04-21: Security-to-doc sweep (stochastic child). Full OWASP scan of guesthost connector surface. All controls verified. Verdict: CLEAN."
 }

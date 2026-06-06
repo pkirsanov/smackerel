@@ -4,6 +4,8 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "currentPhase": "done",
   "workflowMode": "full-delivery",
   "execution": {
@@ -1185,6 +1187,16 @@
         "stateTransitionGuardDryRunVerdict": "TRANSITION_PERMITTED_WITH_1_WARNING",
         "stateTransitionGuardDryRunWarning": "No concrete test file paths found in Test Plan across resolved scope files (advisory non-blocking)"
       }
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit 6d4ff9d4 (2026-05-12 00:52 'finalize(044): SPEC-LEVEL — promote spec 044 per-user bearer auth to Done'): the only change to this spec's planning truth is spec.md flipping '### Status: In Progress -> Done' (the promotion act, F11). Committed 22 min after the faithful cert moment 2026-05-12T00:30:34Z (executionHistory statusAfter==done, bubbles.iterate). The F1-F14 finalize gate suite passed with 0 unchecked DoD and all 4 scopes Done; category a. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "policySnapshot": {
@@ -1262,5 +1274,5 @@
       "resolutionEvidence": "Resolved by spec 044 Scope 04 implement: scenario-manifest.json now ships 12 entries (added SCN-AUTH-012 covering F02 wiring + auth metrics with 20 evidence references; promoted SCN-AUTH-002 plannedFile to live file: internal/metrics/auth_test.go; promoted SCN-AUTH-011 three plannedFile entries to live). traceability-guard.sh now returns RESULT: PASSED (0 warnings) with 12 scenarios checked, 12 mapped to DoD, 0 unmapped. Verified by `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` exit=0."
     }
   ],
-  "lastUpdatedAt": "2026-05-12T00:30:34Z"
+  "lastUpdatedAt": "2026-06-06T17:00:00Z"
 }

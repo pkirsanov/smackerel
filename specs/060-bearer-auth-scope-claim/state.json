@@ -4,7 +4,9 @@
   "featureNumber": "060",
   "featureName": "Bearer Auth Scope Claim & RequireScope Middleware (Spec 044 Amendment)",
   "status": "done",
-  "certifiedAt": "2026-05-29T18:10:54Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "full-delivery",
   "convergenceHealth": {
     "recapCount": 0,
@@ -28,7 +30,7 @@
   },
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-05-29T18:10:54Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "lastEvaluatedAt": "2026-05-29T18:10:54Z",
     "evidenceRefs": [
       "specs/060-bearer-auth-scope-claim/report.md"
@@ -296,6 +298,16 @@
         "statusAfter": "done",
         "recertificationCertifiedAt": "2026-05-29T18:10:54Z",
         "summary": "Formally accepted two inbound cross-spec packets from spec 061 (Conversational Assistant): packet-060-read-scopes.md (assistant.skill.retrieval + assistant.skill.weather, routed 2026-05-30 by bubbles.implement during spec 061 SCOPE-05 full-delivery convergence round 4) and packet-060-write-scope.md (assistant.skill.notifications.write owner-only, routed 2026-05-28 by bubbles.implement during spec 061 SCOPE-08 substrate landing). Verdict: artifact-only acceptance with contract translation. Translated dotted packet names to spec 060's <surface>:<capability> wire form: assistant:retrieval, assistant:weather, assistant:notifications-write. NO spec 060 source code, tests, or migrations modified — spec 060 has no grant DB; per-token scope issuance is operator-controlled via auth enroll --scope; default-deny is enforced architecturally by auth.RequireScope's missing-scope=mismatch invariant (BS-002 adversarial regression). Surface registration (adding 'assistant' to RegisteredScopeSurfaces in internal/auth/scopes.go) deferred to spec 061's commits per spec 060's documented 'surface registration lands with introducing spec' pattern. Adversarial regression coverage for the write-scope default-deny path is owned by spec 061's notification_execute route tests (inherits BS-002 base contract free). Updated both packet headers to status=accepted. Appended 'Accepted Cross-Spec Packets (Spec 061)' section to report.md with full contract translation, deferred-work list, verification commands. Bumped certifiedAt mirrors from 2026-05-29T01:32:08Z to 2026-05-29T18:10:54Z to clear G088 post-cert-spec-edit-guard. Unblocks: spec 061 SCOPE-05 DoD #11 (read packet acceptance), SCOPE-06/07 e2e wiring (read scopes), SCOPE-08 BS-004 e2e (write scope) — spec 061 owner now owns the surface-registration + RequireScope wiring commits."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: fb2a4266 (2026-06-01) added additive forward-reference Successor Notice banners to spec.md (+8) and design.md (+8) pointing at spec 069 as a new consumer of auth.RequireScope; spec 060 explicitly remains the authority for scope-claim syntax. Category (b) incidental cross-ref. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
       }
     ]
   }

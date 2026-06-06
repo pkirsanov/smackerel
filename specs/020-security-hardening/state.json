@@ -329,12 +329,24 @@
       "runStartedAt": "2026-05-23T01:00:00Z",
       "runEndedAt": "2026-05-23T01:30:00Z",
       "summary": "Stochastic-quality-sweep sweep-2026-05-23-r30 round 15, parent-expanded child workflow mode security-to-doc. Security probe surfaced F-SEC-R30-001 (HIGH, CWE-290 / CWE-345): OAuth start/callback per-IP rate limit (R-004) bypassable via X-Forwarded-For / X-Real-IP / True-Client-IP because chi.middleware.RealIP was applied unconditionally at router root and httprate.LimitByIP keyed on the rewritten r.RemoteAddr. Same root cause weakened spec 044 /v1/web/login brute-force protection and polluted slog remote_addr audit fields. Spawned specs/020-security-hardening/bugs/BUG-020-005-oauth-rate-limit-bypass-via-forwarded-headers/ with full 6-artifact set. Fixed via SST-gated trusted-proxy middleware: added runtime.trusted_proxies to config/smackerel.yaml (empty SST default → secure-by-default), JSON-array→CSV bridge in scripts/commands/config.sh, RuntimeTrustedProxies in internal/config/config.go, TrustedProxies in api.Dependencies (internal/api/health.go), wired in cmd/core/wiring.go, new internal/api/realip.go implementing CIDR-allowlist-gated middleware (empty-allowlist identity short-circuit, one-time net.ParseCIDR at construction with slog.Error+drop on malformed entries, per-request peer check, header order True-Client-IP → X-Real-IP → XFF leftmost), and one-line router.go swap r.Use(deps.trustedProxyRealIPMiddleware()). Added 6 adversarial regression tests in internal/api/router_test.go covering the three SCN-SEC-FIX-005-NNN scenarios; adversarial-fidelity proof recorded — reverting router.go line 24 to r.Use(middleware.RealIP) makes 2 router tests FAIL with concrete bypass diagnostics, restoring returns all 6 to PASS. go vet clean, gofmt clean, internal/api and internal/config packages green."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 11cafad7 (scopes.md — BUG-020-006 governance-baseline-drift, artifact-only: 'Status: Done' -> 'Doc Lifecycle: Locked', added Change Boundary + Shared-Infra/Consumer Impact Sweeps + DoD items restating existing scenarios SCN-020-004/012/017 against existing passing tests; commit states 'Zero runtime, test, configuration, or CI/CD files touched'; category b), e99ac3f4 (spec.md + design.md — BUG-020-007 spec-042 supersession pointer for the host-bind prescription; code already matched 042; category b), fb2a4266 (spec.md + design.md — Successor Notice that spec 069 adds one route behind 020's existing auth boundary; 'This spec stays done'; category b), b1c46991 (scopes.md — tier-4 test-path reconciliation, planned-but-never-created e2e files -> actual in-package contract tests; category b). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-23T01:30:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

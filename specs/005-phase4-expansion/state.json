@@ -3,6 +3,8 @@
   "featureDir": "specs/005-phase4-expansion",
   "featureName": "Phase 4: Expansion",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "discoveredIssues": [
     {
@@ -407,12 +409,22 @@
       ],
       "scopesCompleted": [],
       "summary": "Spec review: verified spec.md, design.md, scopes.md aligned with implementation. All 23 scenarios mapped. 5/5 scopes Done. Transition guard and artifact lint pass."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Faithful cert ts is the stale lastUpdatedAt 2026-04-07T15:55Z, so the whole delivery/lockdown lifecycle appears post-cert. Reviewed each: 545fe713 (2026-04-08) big scopes.md delivery (+136/-69) and ab9df8cc (2026-04-10 'feat(004,005,006): deliver all remaining scopes — lockdown complete') delivering Trip Dossier + People Intelligence scopes — promote-to-done close-outs (category a); 35f2bfcf (2026-04-10 'audit(004,005): reset falsely-done scopes') flipped partial scopes done->in_progress during the audit lifecycle (category a); 2c35588a (2026-04-17 re-cert remediation) marked R-406/R-407 + SC-E11/E18/E19/E20 DEFERRED in Non-Goals, corrected dwell threshold >3min->>=5min to match impl, and enriched scopes.md DoD with real engine_test.go/linker_test.go refs (category b reconciliation); fb2a4266 (2026-06-01) Successor Notice cross-ref banner on spec.md (category b); 6912eb5e (2026-06-04 sweep round-12) closed GAP-005-G1 by demoting 8 already-shipped scenarios (SCN-005-008b/008c/008d/011/011b/011c/013/013b) to a Deferred Behaviors Non-Goals block + matching scopes.md DoD [DEFERRED] markers per state.json discoveredIssues[GAP-005-G1] (category b). All edits are delivery close-outs or scope-reduction/spec-to-impl reconciliation; no post-promotion obligation was added that requires implementation re-verification. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-07T15:55:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

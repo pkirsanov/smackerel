@@ -3,6 +3,8 @@
   "featureDir": "specs/012-hospitable-connector",
   "featureName": "Hospitable Connector",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -287,6 +289,16 @@
       "startedAt": "2026-04-22T00:00:00Z",
       "completedAt": "2026-04-22T00:10:00Z",
       "summary": "reconcile-to-doc (stochastic child): Full state reconciliation. Verified: 7 source files present (types.go, client.go, connector.go, normalizer.go, connector_test.go, normalizer_test.go, chaos_test.go). SST pipeline fully wired (config.sh 15 HOSPITABLE_* vars, config.go 14 fields, connectors.go auto-start block). All Go packages pass, 257 Python tests pass. Lint clean. Config check in sync. Build succeeds (both images cached). All 5 scopes Done, 0 unchecked DoD items, 30 scenarios in manifest. No state drift detected. Claimed completion matches actual artifacts and code."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edits: 19b31c0a (OPS-001 banner sweep: spec.md '> **Status:** Draft' -> 'Done') and 28711074 (mid-tier drift cleanup: removed inner backticks from 13 already-struck-through ~~tests/integration/hospitable_test.go~~ and ~~tests/e2e/hospitable_test.go~~ 'Not implemented' cells in scopes.md so the drift scanner stops counting never-shipped test paths). Both are documentation-reconciliation edits; T-1/T-2/T-3 test IDs, SCN-HC scenario refs, descriptions, and DoD semantics unchanged; implementation unchanged. Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
     }
   ],
   "policySnapshot": {
@@ -318,9 +330,10 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-22T00:10:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "certification": {
     "status": "done",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "completedScopes": [
       "scope-01",
       "scope-02",

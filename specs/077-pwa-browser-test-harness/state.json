@@ -23,7 +23,8 @@
     "specs/073-web-mobile-assistant-frontend",
     "specs/075-legacy-retirement-telemetry"
   ],
-  "certifiedAt": "2026-06-02T23:45:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.implement",
@@ -239,12 +240,22 @@
       "runStartedAt": "2026-06-02T22:00:00Z",
       "runEndedAt": "2026-06-02T22:00:00Z",
       "summary": "Resolved F-077-1c-002 by revising proof-of-life contract to accept HTTP 200 OR 401 (served-and-auth-gated proof). Updated web/pwa/tests/proof_of_life.spec.ts, scopes.md#scope-1c (Gherkin SCN-077-A01, Implementation Plan, success line). Investigated F-077-3-001 (qf_decisions_surface.spec.ts:15 fails because template content is invisible to body toContainText) — routed as Known Drift under scopes.md#scope-3 with new TP-077-03-08 row and matching DoD checkbox. State.json reworkQueue updated: F-077-1c-001 superseded, F-077-1c-002 resolved, F-077-3-001 routed."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 8cd272dc (quick-win drift cleanup — replaced a literal example filename web/pwa/tests/foo_auto_discovered.spec.ts with the generic placeholder <new-spec-name>.spec.ts in the SCN-077-A02 auto-discovery Gherkin scenario). Sole documentation-reconciliation campaign edit since certification; scenario intent (auto-discovery) unchanged; no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-02T23:45:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

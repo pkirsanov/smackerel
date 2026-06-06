@@ -3,6 +3,9 @@
   "featureDir": "specs/019-connector-wiring",
   "featureName": "Connector Wiring \u2014 Register 5 Unwired Connectors",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.validate",
@@ -85,6 +88,18 @@
         "statusAfter": "done",
         "timestamp": "2026-05-08T00:00:00Z",
         "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Replaced 5 wildcard *_test.go paths with concrete files (internal/connector/discord/discord_test.go, twitter/twitter_test.go, weather/weather_test.go, alerts/alerts_test.go, markets/markets_test.go) in scopes.md Test Plan; tagged DoD bullets for SCN-019-002, SCN-019-003 with 'Scenario SCN-019-NNN (title):' prefix; added concrete-path mentions in report.md scenario-coverage table. trace-guard PASSED (0 warnings)."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": [
+          "spec-review"
+        ],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert (no-source reconstruction). Reconstructed original certification moment from git: commit e2dcb391 (2026-04-10T18:33:53Z) in_progress->done ('delivery-lockdown: certify specs 019, 021, 023 done'); status held done thereafter. Reviewed 12 post-cert planning edits to THIS spec, all category (b) incidental reconciliation: 7f6f1834 (2026-04-10 design.md+scopes.md sweep); 52d9a4ce (2026-04-11 design.md 1-line); 80bda251 (2026-04-12 scopes.md scope-status labels 'Planning complete'/'[x] In Progress'->Done); ee6b7ca0 (2026-04-14 spec.md health-endpoint connector count 14->15 + balanced design/scopes rewording, DoD stays [x]); 9e879807 (2026-04-15 design.md); 4626c2a5 (2026-04-17 spec.md/scopes.md balanced); 344338e9 (2026-04-22 design.md+scopes.md); 466d2f1c (2026-04-22 scopes.md 4-line); c363141c (2026-04-24 scopes.md evidence reconcile, balanced); 6860f5b8 (2026-05-08 DoD-trace-prefix + scenario-manifest + Test Plan paths); d203d0b9 (2026-05-24 +2-line SCN-019-004/005 G068 fidelity bullets); 19b31c0a (2026-05-28 spec.md Status banner->Done). No post-promotion requirement/scenario/DoD semantic change; current scopes.md all-Done with 0 unchecked DoD; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
       }
     ]
   },

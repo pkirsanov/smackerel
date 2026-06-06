@@ -5,7 +5,9 @@
   "featureName": "Capture-as-Fallback Cross-Cutting Policy",
   "status": "done",
   "executionRuntime": "manual",
-  "certifiedAt": "2026-06-02T08:00:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -43,7 +45,7 @@
   "certification": {
     "status": "done",
     "completedAt": "2026-06-02T07:30:00Z",
-    "certifiedAt": "2026-06-02T08:00:00Z",
+    "certifiedAt": "2026-06-06T17:00:00Z",
     "evidenceRef": "report.md#rescope-close-out-2026-06-02",
     "completedScopes": [
       "SCOPE-074-01",
@@ -245,6 +247,16 @@
         "runStartedAt": "2026-06-02T04:33:00Z",
         "runEndedAt": "2026-06-02T04:35:00Z",
         "summary": "Portfolio stabilize sweep (065/066/067/069/074/075). go build ./... RC=0 + go vet ./... RC=0 — capture-as-fallback package compiles clean. No new stability findings introduced; pre-existing routed foreign-owned findings remain owned by their specialists. See report.md ## Stabilize Pass (bubbles.stabilize, 2026-06-02)."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert. Reviewed the single post-cert planning-truth commit 6912eb5e (2026-06-04, stochastic-quality-sweep round 10 'spec 074 reconcile'). scopes.md: scopes 2/3/5 reconciled from 'Done (rescoped-to-follow-on-spec)' to 'Done' in the summary table and per-scope **Status:** lines, and stale Rescope-Note/Rationale 'Blocked' / 'follow-on spec (TBD)' pointers (inside bubbles:g040-skip blocks) resolved to 'Done via rescope' with concrete spec 076 (specs/076-assistant-completion-rescope) ownership; DoD evidence + Uncertainty Declarations had the same TBD->spec-076 pointer swap. spec.md: added a 4-line informational 'Downstream Consumers (informational, not depends-on)' note pointing to spec 069. Category (b) incidental reconciliation (cross-ref/pointer + DoD-fidelity): every DoD item stayed [x] (0 unchecked), all 7 scopes stayed Done, no NEW requirement/scenario/DoD semantic change, implementation surface unchanged. No post-promotion contract change. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
       }
     ]
   }

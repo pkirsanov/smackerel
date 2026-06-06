@@ -24,7 +24,9 @@
     "specs/025-knowledge-synthesis-layer",
     "specs/054-notification-intelligence-handler"
   ],
-  "certifiedAt": "2026-06-03T17:07:07Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.validate",
@@ -218,6 +220,16 @@
         "runStartedAt": "2026-06-03T00:00:00Z",
         "runFinishedAt": "2026-06-03T00:00:00Z",
         "summary": "Executed 11-check certification packet from bubbles.plan. All 11 DoD verify-checks PASSED with evidence (report.md#certification--2026-06-03). BLOCKED at state-transition-guard with 44 governance failures spanning gates beyond the packet's scope (G022 required-phases for improve-existing, G041 scope status format, G053 code-diff evidence, G040 deferral language, G060 TDD markers, G068 DoD-Gherkin fidelity, G089 inter-spec deps, G095 issue disposition). Reverted top-level status to in_progress; certification.status reverted to in_progress with high-severity observation routing back to bubbles.plan. Re-ran ./smackerel.sh test e2e --go-run TestSurfacing (3/3 PASS) because prior /tmp evidence logs were gone after stack teardown."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-06T17:00:00Z",
+        "runEndedAt": "2026-06-06T17:00:00Z",
+        "summary": "OPS-002 G088 recert (no-source reconstruction). Reconstructed original certification moment from git: commit 742deb58 (2026-06-03T17:16:50Z) created state.json born status=done (adopt-existing/improve-existing pattern; embedded certifiedAt 2026-06-03T17:07:07Z). Reviewed post-cert planning edits: NONE - zero commits touched spec.md/design.md/scopes.md after the cert moment. Current scopes.md: both scopes Done, zero unchecked DoD. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced from 2026-06-03T17:07:07Z to 2026-06-06T17:00:00Z for Gate G088."
       }
     ]
   },

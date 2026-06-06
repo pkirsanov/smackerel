@@ -3,6 +3,8 @@
   "featureDir": "specs/032-documentation-freshness",
   "featureName": "Documentation Freshness",
   "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -109,6 +111,16 @@
   "reworkQueue": [],
   "executionHistory": [
     {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Post-cert planning edits reviewed: c1f6d83e/391d9504/41257109/8df9de58/1cd253a8 (2026-04-17..18 original spec/design/scopes authoring + scope-status close-out) cat-a; c27f027a (scopes.md 1-line evidence reword) cat-b; c363141c (scopes.md added grep/find Evidence blocks under existing [x] DoDs + package count 21->24 reconcile) cat-b; c4168db7 (scopes.md added SCN-DOCFRESH Gherkin scenarios + Test Plan rows documenting existing docs to close trace-guard residuals; existing [x] DoDs prefixed) cat-b; 19b31c0a (spec.md status banner) cat-b; 6912eb5e (scopes.md Superseded-by-docs/Development.md source-of-truth notes; reworded pre-existing [ ] doc items) cat-b. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt set to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
       "phase": "audit",
       "agent": "bubbles.audit",
       "outcome": "completed",
@@ -165,7 +177,7 @@
   ],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T00:00:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

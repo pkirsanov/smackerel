@@ -3,7 +3,8 @@
   "featureDir": "specs/041-qf-companion-connector",
   "featureName": "QF Companion Connector",
   "status": "done",
-  "certifiedAt": "2026-05-26T22:05:53Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
   "requiresRevalidation": false,
   "currentPhase": "validate",
   "workflowMode": "full-delivery",
@@ -354,6 +355,16 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Post-cert planning edits reviewed: 48ad42a7 (scopes.md render-surface path reconciliation — qf_packet_view.go->internal/api/qf_render.go, qf_packet_tile.go->internal/digest/generator.go; capture-hook contract and visible rendering unchanged) cat-b; 19b31c0a (spec.md status banner) cat-b. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
     {
       "agent": "bubbles.plan",
       "phasesExecuted": [
@@ -1207,7 +1218,7 @@
       "status": "open"
     }
   ],
-  "lastUpdatedAt": "2026-05-23T04:15:00Z",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "executionHistorySchemaNote": "On 2026-05-21T07:30Z (approx) the operator manually reset state.json.executionHistory back to the R5 baseline (last preserved entry 2026-05-18T14:30Z) before committing the 39ca4fcb closeout. The reset dropped per-round executionHistory entries for rounds R6-R13 that had landed on origin/main between 2026-05-18T16:19Z and 2026-05-18T21:11Z. The bubbles.validate drift-repair reconciliation on 2026-05-21T08:15:38Z chose STRATEGY-COMPRESS over STRATEGY-RESTORE: rather than fabricating per-round entries the agent never authored, a single compressed entry was appended to executionHistory citing all 8 missing commit SHAs (c60b9fd7, 0adb6342, fb5a3f38, fa53db9e, 251a8dcf, ae1fed59, ab8fc871, 39ca4fcb) plus the closeout. Full per-round state.json snapshots remain recoverable via `git show <SHA>:specs/041-qf-companion-connector/state.json` against any of those 8 SHAs.",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",

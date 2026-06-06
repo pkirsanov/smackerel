@@ -283,6 +283,16 @@
       "startedAt": "2026-05-23T00:00:00Z",
       "completedAt": "2026-05-23T00:15:00Z",
       "summary": "Stochastic quality sweep sweep-2026-05-23-r30 round 6, gaps trigger → gaps-to-doc child workflow (parent-expanded; nested runSubagent unavailable, phase owners executed inline). Gaps probe ran traceability-guard.sh and state-transition-guard.sh against spec/design/scopes/tests. Identified 3 actionable G068 DoD-Gherkin content-fidelity gaps: GAP-R6-001 SCN-BH-005 Copy-then-read strategy handles locked file with retry, GAP-R6-002 SCN-BH-007 Long social media read gets individual processing, GAP-R6-003 SCN-BH-010 Content fetch failure produces metadata-only artifact. Closed all 3 by prepending 'Scenario SCN-BH-XXX (<title>):' prefix to existing DoD bullets (same pattern Iter 9 / R-010-V1 used for SCN-BH-001/002/003/004/008) and corrected SCN-BH-005 evidence reference to cite the real test name TestCopyHistoryFileFrom_RetryOnFailure plus the Sync() retry-loop code location connector.go:190-209 (replacing fabricated TestCopyHistoryFile_RetryFails reference). Verified: traceability-guard.sh now RESULT: PASSED (11/11 fidelity); artifact-lint PASSED; go test ./internal/connector/browser/... ok 0.053s; state-transition-guard moved 32→28 failures (closed 3 individual G068 + 1 aggregate G068). Residual 28 failures are pre-existing systemic governance-evolution items unchanged from R1 reconciliationNote (Check 14/15 E2E regression + shared-infra DoD predating those gates, Check 13 refactor change-boundary DoD predating gate, Check 12 G053 Code Diff Evidence section postdating certification, Check 16 G028 false-positive FAKE_INTEGRATION on legitimate Go fmt.Errorf returns, Check 17 historical commits lacking spec(010) prefix, Check 18 G040 deferral language accurately describing env-gated test pattern shared with sibling connectors 007/009/011). Per R1/R54/R66/R91/R92/R93/devops/harden/improve precedent these require a dedicated full-delivery reconciliation cycle, not a single sweep round. Status remains 'done'."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": ["spec-review"],
+      "reviewStatus": "CURRENT",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 700171b2 (scopes.md — prepended 'Scenario SCN-BH-005/007/010 (<title>):' prefixes to three existing DoD bullets and corrected SCN-BH-005 evidence to the real test TestCopyHistoryFileFrom_RetryOnFailure; G068 DoD-Gherkin fidelity, behavioral claim preserved verbatim; category b), 19b31c0a (spec.md — Status banner Draft -> Done; category b). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
     }
   ],
   "policySnapshot": {
@@ -296,7 +306,9 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-23T00:15:00Z",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
   "certification": {
     "status": "done",
     "completedScopes": ["1", "2"],
