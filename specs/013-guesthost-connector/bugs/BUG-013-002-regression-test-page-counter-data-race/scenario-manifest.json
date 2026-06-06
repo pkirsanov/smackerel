@@ -1,0 +1,26 @@
+{
+  "bug": "BUG-013-002-regression-test-page-counter-data-race",
+  "parentSpec": "013-guesthost-connector",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-013-002-1",
+      "scope": 1,
+      "title": "Race-free page counter under -race",
+      "requiredTestType": ["regression"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/guesthost/regression_test.go",
+          "function": "TestFetchActivityContextCancelledBetweenPages"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/013-guesthost-connector/bugs/BUG-013-002-regression-test-page-counter-data-race/report.md#test-evidence--before-fix-gate-0-reproduction--race-fails",
+        "specs/013-guesthost-connector/bugs/BUG-013-002-regression-test-page-counter-data-race/report.md#after-fix-race-passes-logic-preserved"
+      ],
+      "liveTestExpectation": "go test -race -run '^TestFetchActivityContextCancelledBetweenPages$' ./internal/connector/guesthost/ exits 0 (was a DATA RACE / FAIL before the atomic.Int32 fix).",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "fixed"
+    }
+  ]
+}

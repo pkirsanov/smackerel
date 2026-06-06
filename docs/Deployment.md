@@ -278,14 +278,16 @@ that:
 - **every Trivy step sets `ignore-unfixed: true`** (block on FIXABLE
   CRITICAL/HIGH only — flipping to `false` is rejected),
 - the build manifest carries the full vulnerabilityScan attestation
-  block including `gateBlocksOn: CRITICAL,HIGH-with-upstream-fix` and
-  `ignoreUnfixed: true`.
+  block including `gateBlocksOn: CRITICAL,HIGH-with-upstream-fix`,
+  `ignoreUnfixed: true`, and the `ignoreUnfixedRationale` field (all
+  three FR-047-003 deployability policy fields are drift-protected).
 
 Adding a new image to the matrix without a corresponding scan step,
 or flipping `ignore-unfixed` back to `false` on either Trivy step, or
-omitting the `ignoreUnfixed: true` line from the build-manifest
-heredoc — any of these fails the contract test and blocks merge.
-Matrix coverage AND threshold-tuning policy cannot drift silently.
+omitting the `ignoreUnfixed: true` line or the `ignoreUnfixedRationale`
+field from the build-manifest heredoc — any of these fails the contract
+test and blocks merge. Matrix coverage AND threshold-tuning policy
+cannot drift silently.
 
 ---
 

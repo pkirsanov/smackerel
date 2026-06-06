@@ -1,0 +1,59 @@
+{
+  "version": 3,
+  "specId": "013-guesthost-connector",
+  "bugId": "BUG-013-002-regression-test-page-counter-data-race",
+  "featureDir": "specs/013-guesthost-connector/bugs/BUG-013-002-regression-test-page-counter-data-race",
+  "featureName": "BUG-013-002: Data race in TestFetchActivityContextCancelledBetweenPages page counter (regression R19)",
+  "workflowMode": "regression-to-doc",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-06-06T18:15:00Z",
+    "completedPhaseClaims": ["regression", "implement", "test", "validate", "audit", "docs"],
+    "executionHistory": [
+      {"phase": "regression", "agent": "bubbles.workflow", "startedAt": "2026-06-06T18:15:00Z", "completedAt": "2026-06-06T18:18:00Z", "outcome": "completed_owned"},
+      {"phase": "implement", "agent": "bubbles.workflow", "startedAt": "2026-06-06T18:18:00Z", "completedAt": "2026-06-06T18:20:00Z", "outcome": "completed_owned"},
+      {"phase": "test", "agent": "bubbles.workflow", "startedAt": "2026-06-06T18:20:00Z", "completedAt": "2026-06-06T18:26:00Z", "outcome": "completed_owned"},
+      {"phase": "validate", "agent": "bubbles.workflow", "startedAt": "2026-06-06T18:26:00Z", "completedAt": "2026-06-06T18:28:00Z", "outcome": "completed_owned"},
+      {"phase": "audit", "agent": "bubbles.workflow", "startedAt": "2026-06-06T18:28:00Z", "completedAt": "2026-06-06T18:29:00Z", "outcome": "completed_owned"},
+      {"phase": "docs", "agent": "bubbles.workflow", "startedAt": "2026-06-06T18:29:00Z", "completedAt": "2026-06-06T18:31:00Z", "outcome": "completed_owned"}
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-06T18:31:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["regression", "implement", "test", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Make the regression-test page counter race-free via atomic access", "status": "Done", "completedDoD": 13, "totalDoD": 13, "completedAt": "2026-06-06T18:31:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "regression-to-doc single-file test-synchronization fix; no convergence loop required",
+      "lastUpdatedAt": "2026-06-06T18:31:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "protected-scenarios", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "sweep": {
+    "sweepId": "stochastic-quality-sweep-r19",
+    "round": 19,
+    "totalRounds": 20,
+    "trigger": "regression",
+    "mappedWorkflowMode": "regression-to-doc",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
