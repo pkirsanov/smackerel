@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "featureDir": "specs/064-open-ended-knowledge-agent/bugs/BUG-CHAOS-20260605-001",
+  "generatedAt": "2026-06-05T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-CHAOS-20260605-001-001",
+      "scope": "scope-1-abs-resolve-scenario-dir",
+      "title": "Relative AGENT_SCENARIO_DIR resolves against process cwd before loading",
+      "gherkin": {
+        "given": "AGENT_SCENARIO_DIR is set to a repo-relative path such as `config/prompt_contracts`",
+        "when": "TestOpenKnowledgeRouting_ScenarioHealthProbe or TestOpenKnowledgeRouting_FallbackToOpenKnowledge runs from the test package working directory",
+        "then": "the test resolves the value to an absolute path via filepath.Abs, asserts the resulting path is an existing directory, and either loads the open_knowledge scenario successfully OR fails with an error string that names both the supplied relative path and the resolved absolute path"
+      },
+      "behaviorClass": "integration",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/agent/openknowledge_routing_test.go",
+          "testId": "TestOpenKnowledgeRouting_ScenarioHealthProbe"
+        },
+        {
+          "file": "tests/integration/agent/openknowledge_routing_test.go",
+          "testId": "TestOpenKnowledgeRouting_FallbackToOpenKnowledge"
+        },
+        {
+          "file": "tests/integration/agent/openknowledge_routing_test.go",
+          "testId": "TestOpenKnowledgeRouting_RelativeAGENT_SCENARIO_DIRResolvesAgainstRepoRoot"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#deterministic-red-evidence",
+        "report.md#after-fix-evidence",
+        "report.md#adversarial-regression-evidence",
+        "report.md#wrapper-path-still-green"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
