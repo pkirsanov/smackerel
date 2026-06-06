@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 const (
@@ -149,6 +151,7 @@ func (g LoopGuard) Evaluate(envelope SourceEventEnvelope, origins []LoopOrigin) 
 	for _, origin := range origins {
 		if key == origin.Key() && (g.window <= 0 || envelope.ObservedAt.Sub(origin.EmittedAt) <= g.window) {
 			now := envelope.ObservedAt
+			metrics.NotificationDedupeTotal.WithLabelValues(envelope.SourceType, SuppressionReactionLoop).Inc()
 			return &Suppression{SourceInstanceID: envelope.SourceInstanceID, Kind: SuppressionReactionLoop, Scope: map[string]any{"origin_decision_id": origin.DecisionID, "output_channel": origin.OutputChannel}, Reason: "source event matches prior handler output loop metadata", StartsAt: now, CreatedAt: now}
 		}
 	}
