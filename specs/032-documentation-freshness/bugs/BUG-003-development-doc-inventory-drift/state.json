@@ -1,0 +1,76 @@
+{
+  "version": 3,
+  "featureDir": "specs/032-documentation-freshness/bugs/BUG-003-development-doc-inventory-drift",
+  "parentFeatureDir": "specs/032-documentation-freshness",
+  "featureName": "BUG-003: docs/Development.md inventory drift with no freshness guard",
+  "bugId": "BUG-003-development-doc-inventory-drift",
+  "status": "done",
+  "certifiedAt": "2026-06-06T18:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "currentPhase": "finalize",
+  "workflowMode": "devops-to-doc",
+  "planningStatus": "complete",
+  "lastUpdatedAt": "2026-06-06T18:00:00Z",
+  "lastCertifiedAt": "2026-06-06T18:00:00Z",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "currentScope": "Scope 1",
+    "runStartedAt": "2026-06-06T17:30:00Z",
+    "runCompletedAt": "2026-06-06T18:00:00Z",
+    "completedPhaseClaims": [
+      {"phase": "devops", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:30:00Z", "summary": "DevOps probe of spec 032 managed docs vs on-disk reality: found internal/scopesdriftguard/ (added 2026-06-05) absent from docs/Development.md Go Packages table (33 dirs on disk vs 32 documented) and no mechanical freshness guard (the design's deferred Risk #1 mitigation). Migrations (38) and prompt contracts (21) verified already fresh."},
+      {"phase": "design", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:35:00Z", "summary": "Decisions D-001..D-006: remediate the concrete drift and deliver the deferred freshness control as a Go contract test (mirrors internal/scopesdriftguard + internal/deploy compose contract test) rather than a new CLI subcommand or CI-workflow edit — runs under ./smackerel.sh test unit --go and CI with zero new surface. Fail-loud, no defaults."},
+      {"phase": "scope", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:38:00Z", "summary": "Single scope: document internal/scopesdriftguard/ + internal/docfreshness/ in docs/Development.md and add internal/docfreshness/doc_freshness_test.go. Three scenarios SCN-032-D12/D13/D14 mapped 1:1 to T-DOCFRESH-001/002/003 with the adversarial anti-tautology case as regression."},
+      {"phase": "implement", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:45:00Z", "summary": "Authored internal/docfreshness/doc_freshness_test.go (test-only package, runtime.Caller(0) repo-root pattern, recursive Go-source package detection matching the spec 032 find-probe). Added the two missing Go Packages rows to docs/Development.md. Fixed a transient gopls-injected duplicate package clause; gofmt-canonical via ./smackerel.sh format."},
+      {"phase": "test", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:50:00Z", "summary": "Red->green: BEFORE the doc rows the guard reported '34 packages on disk, 2 undocumented: docfreshness, scopesdriftguard' and FAILED; AFTER the rows it reported '34/0, 38/0, 21/0' and passed (ok internal/docfreshness). Captured in report.md Before/After."},
+      {"phase": "regression", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:52:00Z", "summary": "Adversarial anti-tautology test TestDocFreshness_AdversarialUndocumentedItemsDetected builds a synthetic repo, asserts each scan reports exactly its synthetic missing item, and asserts the green path passes once documented. PASS. Persistent under go test ./..."},
+      {"phase": "validate", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:54:00Z", "summary": "F1 (drift) and F2 (missing automation) both closed one-to-one. Guard enforces all three inventories under the Go unit suite + CI; ./smackerel.sh test unit --go --go-run TestDocFreshness exit 0."},
+      {"phase": "audit", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:56:00Z", "summary": "./smackerel.sh format --check exit 0 (gofmt clean) and ./smackerel.sh lint exit 0 (go vet ./... clean, ruff All checks passed!, web validation passed). Only changed Go file: internal/docfreshness/doc_freshness_test.go."},
+      {"phase": "chaos", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:57:00Z", "summary": "Chaos surface is the adversarial synthetic-repo perturbation in the guard test, which would re-detect any neutering of the freshness checks. Verified zero runtime/source/config/CI files modified via git status."},
+      {"phase": "simplify", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:57:30Z", "summary": "No simplification opportunity — the guard is one ~230-line test file with pure shared helpers (scanInternalPackages, listFilesWithSuffix, undocumented); no duplication introduced."},
+      {"phase": "stabilize", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:58:00Z", "summary": "No runtime instability surface — change is a test-only Go file plus two documentation rows; product runtime byte-identical to pre-bug HEAD."},
+      {"phase": "security", "agent": "bubbles.workflow", "timestamp": "2026-06-06T17:58:30Z", "summary": "No secrets, no network, no PII; the guard only reads repo files. No /home/ paths in evidence (redacted). gofmt/go vet clean."},
+      {"phase": "docs", "agent": "bubbles.workflow", "timestamp": "2026-06-06T18:00:00Z", "summary": "Wrote bug spec/design/scopes/report/uservalidation/state/scenario-manifest; added a DevOps-sweep evidence breadcrumb to the parent report.md. No parent planning-truth edit, so no parent recertification required."}
+    ],
+    "executionHistory": [
+      {"agent": "bubbles.workflow", "phase": "devops", "phasesExecuted": ["devops", "design", "scope"], "timestamp": "2026-06-06T17:30:00Z", "completedAt": "2026-06-06T17:40:00Z", "outcome": "planning_artifacts_created"},
+      {"agent": "bubbles.workflow", "phase": "implement", "phasesExecuted": ["implement", "test", "regression"], "timestamp": "2026-06-06T17:45:00Z", "completedAt": "2026-06-06T17:52:00Z", "outcome": "fix_implemented_red_green"},
+      {"agent": "bubbles.workflow", "phase": "validate", "phasesExecuted": ["validate", "audit", "chaos", "simplify", "stabilize", "security"], "timestamp": "2026-06-06T17:54:00Z", "completedAt": "2026-06-06T17:59:00Z", "outcome": "all_dod_satisfied"},
+      {"agent": "bubbles.workflow", "phase": "docs", "phasesExecuted": ["docs"], "timestamp": "2026-06-06T18:00:00Z", "completedAt": "2026-06-06T18:00:00Z", "outcome": "bug_certified_done"}
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedAt": "2026-06-06T18:00:00Z",
+    "completedScopes": [
+      "Scope 1: Document the drifted package and add a fail-loud doc-freshness guard"
+    ],
+    "scopeProgress": [
+      {"scope": "1", "status": "done", "completedAt": "2026-06-06T18:00:00Z", "dodTotal": 9, "dodChecked": 9}
+    ],
+    "lockdownState": {"state": "lockdown-complete", "round": 1, "lastCleanRound": 1},
+    "certifiedCompletedPhases": [
+      "devops", "design", "scope", "implement", "test", "regression",
+      "validate", "audit", "chaos", "simplify", "stabilize", "security", "docs"
+    ]
+  },
+  "policySnapshot": {
+    "workflowMode": "devops-to-doc",
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": false, "source": "repo-default", "mode": "off"},
+    "autoCommit": {"value": "off", "source": "workflow-forced"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "validate-required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"},
+    "specReview": {"value": "off", "source": "repo-default"}
+  },
+  "modernization": {
+    "diffEvidence": "advisory",
+    "diffEvidenceReason": "DevOps stochastic-quality-sweep Round 1 leaves changes uncommitted for the parent batch-commit; diff-evidence enforcement runs at parent commit time against the committed diff."
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

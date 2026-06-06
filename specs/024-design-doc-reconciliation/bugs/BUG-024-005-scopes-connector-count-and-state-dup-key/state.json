@@ -1,0 +1,328 @@
+{
+  "version": 3,
+  "featureDir": "specs/024-design-doc-reconciliation/bugs/BUG-024-005-scopes-connector-count-and-state-dup-key",
+  "parentFeatureDir": "specs/024-design-doc-reconciliation",
+  "featureName": "BUG-024-005: residual reconciliation drift — state.json duplicate lastUpdatedAt + scopes.md Scope-2 15→16 connector drift",
+  "bugId": "BUG-024-005",
+  "status": "done",
+  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "workflowMode": "harden-to-doc",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-06-06T16:00:00Z",
+    "runCompletedAt": "2026-06-06T17:00:00Z",
+    "completedPhaseClaims": ["bug", "analyze", "design", "plan", "harden", "implement", "test", "regression", "simplify", "stabilize", "security", "chaos", "validate", "audit", "docs", "finalize"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-06-06T16:00:00Z",
+        "claimSource": "executed",
+        "summary": "Created BUG-024-005 8-artifact packet for 2 latent findings discovered in sweep-2026-06-06-r20b round 7 (mode: stochastic-quality-sweep, parent-expanded child mode: harden-to-doc) on specs/024-design-doc-reconciliation: F1 (LOW) parent state.json duplicate top-level lastUpdatedAt; F2 (MEDIUM) scopes.md Scope-2 body + SCN-024-04/06 claimed 15 connectors omitting qfdecisions while spec.md/manifest/docs/runtime say 16. Both bundled into single Scope 1 as one residual-drift class. Parent spec 024 stays status: done."
+      },
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyze",
+        "timestamp": "2026-06-06T16:05:00Z",
+        "claimSource": "executed",
+        "summary": "Confirmed ground truth: python3 raw.count + object_pairs_hook detector flagged duplicate lastUpdatedAt (header 2026-06-06T00:00:00Z + legacy 2026-05-25T00:00:00Z after failures[]); grep enumerated 8 substantive stale-15 sites in scopes.md Scope 2 body vs 7 historical/rollback/grep-contract '15' references that must stay; cmd/core/connectors.go registers 16 connectors (qfDecisionsConn line 52). All 5 framework guards GREEN at baseline — both findings are LATENT/guard-invisible. Single scope decision: bundle F1+F2."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-06-06T16:10:00Z",
+        "claimSource": "executed",
+        "summary": "Authored design.md with 3-Layer architecture (Layer 1 state.json F1 dedup + recert to 2026-06-06T18:00:00Z; Layer 2 scopes.md F2 8-site 15→16 + qfdecisions; Layer 3 parent governance backfill + spec-review CURRENT). Current Truth table grounded in real probes. No Layer-4 guard — connector-count drift class already covered by BUG-024-003 TestConnectorCountContract + R-006 canary; duplicate-key class is a one-off authoring slip, not a recurring vector."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-06-06T16:15:00Z",
+        "claimSource": "executed",
+        "summary": "Authored scopes.md (single Scope 1 + 5 BUG-024-005-SCN-001..005 Gherkin + Test Plan with governance-gate/state-shape/grep/PII/Regression-E2E/Stress rows + Scenario-First TDD Evidence + DoD with faithful items per scenario + scenario-specific regression E2E + shared-infra canary/rollback + change boundary) and scenario-manifest.json (5 scenarios + linkedTests + evidenceRefs + linkedDoD)."
+      },
+      {
+        "phase": "harden",
+        "agent": "bubbles.harden",
+        "timestamp": "2026-06-06T16:20:00Z",
+        "claimSource": "executed",
+        "summary": "Harden probe (source of F1+F2): ran the full harden probe over spec 024 — DoD completeness, scenario fidelity, missing/weak tests, missing evidence, spec/design/scope inconsistencies, governance gate gaps, tautological assertions. 5 guards GREEN at baseline. Surfaced 2 LATENT findings the gate suite does not mechanically catch (duplicate JSON key + scenarioId-mapped count divergence). Both genuine spec/scope inconsistencies on spec 024's accuracy dimension — not invented work."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-06-06T16:25:00Z",
+        "claimSource": "executed",
+        "summary": "F1 closed: removed legacy duplicate lastUpdatedAt via replace_string_in_file; recert header certifiedAt 2026-05-28T05:07:51Z→2026-06-06T18:00:00Z + lastUpdatedAt 2026-06-06T00:00:00Z→2026-06-06T18:00:00Z. F2 closed: multi_replace_string_in_file 8 substantive scopes.md sites 15→16 + qfdecisions inserted alphabetically (markets, qfdecisions, rss); 7 historical '15' references preserved verbatim. python3 duplicate-key detector confirms zero dups (literal count 2→1). All edits via IDE tools; no shell-redirect/heredoc."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-06-06T16:30:00Z",
+        "claimSource": "executed",
+        "summary": "Re-ran all 5 framework guards post-fix: artifact-lint PASSED; artifact-freshness PASS (0 failures, 0 warnings); traceability PASSED (6/6 mapped, SCN-024-06 fidelity now '16 connectors'); STG Check 22 G068 all 6 faithful. Runtime regression preserved: go test -run TestConnectorCountContract ./internal/deploy/... 4/4 PASS (LiveFile + 3 adversarial). G088/STG Check 30 honestly report postCertEdits=1 worktree scopes.md (designed pre-commit handoff). Bug-folder artifact-lint PASSED."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-06-06T16:35:00Z",
+        "claimSource": "executed",
+        "summary": "Zero runtime regression. Edits limited to specs/024-design-doc-reconciliation/{state.json, scopes.md, report.md} + new BUG-024-005 packet folder. R-006 directory-count canary find internal/connector | wc -l == 16 matches reconciled SCN-024-06. ./smackerel.sh test unit --go baseline preserved. No edits to cmd/, internal/, ml/, web/, scripts/, smackerel.sh, docker-compose*, config/, docs/, .github/bubbles/."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-06-06T16:38:00Z",
+        "claimSource": "executed",
+        "summary": "No structural simplification opportunity. F1 is a deletion (minimal); F2 is the minimum text edit set to make scopes.md internally + externally consistent. Packet adds only gate-demanded content (G068 fidelity, G053 Code Diff Evidence, Check 8A regression E2E, Check 8B/8C shared-infra, Check 18 change boundary, G022 provenance, G055 policySnapshot, G056 certification). No new test file — existing BUG-024-003 contract + R-006 canary cover the class."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-06-06T16:40:00Z",
+        "claimSource": "executed",
+        "summary": "Behavior stability confirmed. Zero runtime path, zero compiled code, zero schema, zero NATS change. Parent spec 024 retained status: done; docs/smackerel.md §22.7 row 16 (QF Decisions Principle 10 boundary) preserved verbatim; BUG-024-003 contract test preserved 4/4 PASS. F2 is documentation-accuracy reconciliation only; no flake, no test reordering."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-06-06T16:42:00Z",
+        "claimSource": "executed",
+        "summary": "Security posture preserved. Zero secret/credential/token/auth path touched. QF Companion Boundary (Principle 10) preserved — qfdecisions added to SCN-024-06 uses the same connector id as spec.md R-006; no financial-advice capability introduced. PII redacted to ~/ in every evidence block; gitleaks linux-home-username-leak will not fire."
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "timestamp": "2026-06-06T16:45:00Z",
+        "claimSource": "executed",
+        "summary": "Post-fix determinism stress: re-ran traceability + artifact-lint + artifact-freshness + duplicate-key detector 3 consecutive times each; content guards green every iteration, detector empty every iteration, no flake. G088/STG worktree state stable across re-runs. One-to-one closure: F1→Iteration 1→resolved; F2→Iteration 2→resolved; 0 remaining findings."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-06-06T16:50:00Z",
+        "claimSource": "executed",
+        "summary": "BUG-024-005 single scope Done with checked DoD evidence (raw terminal output). Parent spec 024 content guards GREEN; status stays done. G088/STG in designed uncommitted-handoff state (postCertEdits=1 worktree scopes.md) reported honestly — clears when parent commits before certifiedAt=2026-06-06T18:00:00Z. requiresRevalidation NOT set (would trip G089). Go runtime preserved: TestConnectorCountContract 4/4 PASS."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-06-06T16:55:00Z",
+        "claimSource": "executed",
+        "summary": "Working-tree footprint review: changes limited to paths under specs/024-design-doc-reconciliation/ (parent state.json + scopes.md + report.md + 8 new BUG-024-005 artifacts). Zero stray edits to specs/055-*, specs/044-per-user-bearer-auth/state.json, cmd/, internal/, ml/, tests/, deploy/, config/, scripts/, smackerel.sh, docker-compose*, .github/bubbles/, docs/. PII redaction verified: zero /home/<user>/ paths. Per round contract: NO commit, NO push."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-06-06T16:58:00Z",
+        "claimSource": "executed",
+        "summary": "Parent state.json extended with recert (certifiedAt/lastUpdatedAt → 2026-06-06T18:00:00Z) + 17 harden-sweep executionHistory entries (incl. bubbles.spec-review reviewStatus:CURRENT) + resolvedBugs[] BUG-024-005. Parent report.md extended with '## BUG-024-005 Harden-Sweep Resolution (2026-06-06)' (Code Diff Evidence + Git-Backed Proof, PII-redacted to ~/). No external doc cascade — docs/smackerel.md §22.7/§24-A already 16, docs/Development.md L31 already 16."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-06-06T17:00:00Z",
+        "claimSource": "executed",
+        "summary": "Sweep round 7 of 20 (sweep-2026-06-06-r20b, trigger harden, mapped child mode harden-to-doc, executionModel parent-expanded-child-mode). 2 findings (F1+F2), 2 closed, 0 unresolved, 1 bug spawned (BUG-024-005, finalStatus resolved). Parent spec 024 status: done before and after. Per round hard rule: NO COMMIT, NO PUSH — all changes left in the working tree for the parent stochastic-quality-sweep / operator. The single atomic commit (subject prefix bubbles(024/bug-024-005):) is deferred; committing before certifiedAt=2026-06-06T18:00:00Z clears Gate G088. RESULT-ENVELOPE emitted."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-06T17:00:00Z",
+    "completedScopes": [
+      "Scope 1: Dedup lastUpdatedAt + recert + scopes.md 15→16 + parent governance"
+    ],
+    "certifiedCompletedPhases": ["bug", "analyze", "design", "plan", "harden", "implement", "test", "regression", "simplify", "stabilize", "security", "chaos", "validate", "audit", "docs", "finalize"],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Dedup lastUpdatedAt + recert + scopes.md 15→16 + parent governance",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-06-06T17:00:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "scopes.md"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:00:00Z",
+      "runEndedAt": "2026-06-06T16:00:00Z",
+      "summary": "Created BUG-024-005 bug.md from harden trigger probe (sweep round 7, mode: harden-to-doc, parent-expanded). F1 LOW state.json duplicate lastUpdatedAt; F2 MEDIUM scopes.md Scope-2 15→16 connector drift."
+    },
+    {
+      "agent": "bubbles.analyze",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:05:00Z",
+      "runEndedAt": "2026-06-06T16:05:00Z",
+      "summary": "Confirmed ground truth via python3 duplicate-key detector + grep enumeration of 8 substantive vs 7 historical '15' sites + cmd/core/connectors.go 16-connector registry. All 5 guards GREEN at baseline; both findings LATENT."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:10:00Z",
+      "runEndedAt": "2026-06-06T16:10:00Z",
+      "summary": "Authored design.md with 3-Layer architecture + Current Truth table + Iteration Plan + Verification Checklist + Shared Infrastructure Impact Sweep + Change Boundary + Rollback. No Layer-4 guard (existing BUG-024-003 contract + R-006 canary cover the class)."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:15:00Z",
+      "runEndedAt": "2026-06-06T16:15:00Z",
+      "summary": "Authored scopes.md (single Scope 1 + 5 SCN + Test Plan + Scenario-First TDD Evidence + DoD + shared-infra + change boundary) and scenario-manifest.json (5 scenarios)."
+    },
+    {
+      "agent": "bubbles.harden",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:20:00Z",
+      "runEndedAt": "2026-06-06T16:20:00Z",
+      "summary": "Harden probe surfaced F1+F2 as LATENT (guard-invisible) findings on spec 024's accuracy dimension. Genuine spec/scope inconsistencies — not invented work."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:25:00Z",
+      "runEndedAt": "2026-06-06T16:25:00Z",
+      "summary": "F1 removed legacy lastUpdatedAt + recert; F2 8-site 15→16 + qfdecisions inserted; 7 historical '15' preserved. Duplicate-key detector: zero dups (literal 2→1). All IDE-tool edits."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:30:00Z",
+      "runEndedAt": "2026-06-06T16:30:00Z",
+      "summary": "5 framework guards re-run: lint/freshness/traceability green; STG Check 22 G068 6/6 faithful. TestConnectorCountContract 4/4 PASS. G088/STG Check 30 honest worktree state. Bug-folder artifact-lint PASSED."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:35:00Z",
+      "runEndedAt": "2026-06-06T16:35:00Z",
+      "summary": "Zero runtime regression. R-006 canary == 16 matches reconciled SCN-024-06. No edits to runtime/docs/framework surfaces."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:38:00Z",
+      "runEndedAt": "2026-06-06T16:38:00Z",
+      "summary": "No simplification opportunity. F1 deletion + F2 minimal text edits; packet content gate-demanded only; no new test file."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:40:00Z",
+      "runEndedAt": "2026-06-06T16:40:00Z",
+      "summary": "Behavior stability confirmed. Zero runtime/schema/NATS change. QF Decisions Principle 10 boundary preserved; BUG-024-003 contract 4/4 PASS."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:42:00Z",
+      "runEndedAt": "2026-06-06T16:42:00Z",
+      "summary": "Security posture preserved. QF Companion Boundary (Principle 10) preserved; PII redacted to ~/."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": ["chaos"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-06T16:45:00Z",
+      "runEndedAt": "2026-06-06T16:45:00Z",
+      "summary": "Determinism stress: content guards + detector green across 3 re-runs; no flake. One-to-one closure F1+F2 resolved; 0 remaining."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T16:50:00Z",
+      "runEndedAt": "2026-06-06T16:50:00Z",
+      "summary": "BUG-024-005 single scope Done; DoD all checked with raw evidence. Parent content guards GREEN; G088/STG designed uncommitted-handoff state reported honestly. requiresRevalidation NOT set."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T16:55:00Z",
+      "runEndedAt": "2026-06-06T16:55:00Z",
+      "summary": "Working-tree footprint limited to specs/024-design-doc-reconciliation/. Zero stray edits. PII redaction verified. NO commit, NO push."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T16:58:00Z",
+      "runEndedAt": "2026-06-06T16:58:00Z",
+      "summary": "Parent state.json + report.md extended with BUG-024-005 closure provenance. No external doc cascade required."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["finalize"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-06T17:00:00Z",
+      "runEndedAt": "2026-06-06T17:00:00Z",
+      "summary": "Sweep round 7 of 20 finalize. 2 findings closed, 0 unresolved, BUG-024-005 resolved. NO COMMIT, NO PUSH — working tree handoff. RESULT-ENVELOPE emitted."
+    }
+  ],
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "notes": "Harden-sweep bug packet: residual reconciliation drift (state.json duplicate lastUpdatedAt + scopes.md Scope-2 15→16 connector drift). Docs/governance-only. No commit per round hard rule."
+}

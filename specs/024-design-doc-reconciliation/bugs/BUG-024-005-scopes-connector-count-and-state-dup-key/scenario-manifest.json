@@ -1,0 +1,129 @@
+{
+  "bugId": "BUG-024-005-scopes-connector-count-and-state-dup-key",
+  "version": 1,
+  "generatedAt": "2026-06-06T16:15:00Z",
+  "parentSpec": "specs/024-design-doc-reconciliation",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-024-005-SCN-001",
+      "scope": "scope-1",
+      "title": "state.json has a single top-level lastUpdatedAt",
+      "requiredTestType": "state-shape",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; raw=open('specs/024-design-doc-reconciliation/state.json').read(); assert raw.count('\\\"lastUpdatedAt\\\"')==1\"  # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 object_pairs_hook duplicate-key detector reports no duplicate-key sets  # exits 0",
+          "type": "json-shape-check"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/state.json:8",
+        "specs/024-design-doc-reconciliation/bugs/BUG-024-005-scopes-connector-count-and-state-dup-key/report.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: state.json has a single top-level lastUpdatedAt; duplicate-key detector reports none — Scenario 'BUG-024-005-SCN-001 state.json has a single top-level lastUpdatedAt'."
+    },
+    {
+      "scenarioId": "BUG-024-005-SCN-002",
+      "scope": "scope-1",
+      "title": "state.json is recertified for the planning-truth edit",
+      "requiredTestType": "state-shape",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert d['certifiedAt']=='2026-06-06T18:00:00Z' and d['lastUpdatedAt']=='2026-06-06T18:00:00Z' and 'requiresRevalidation' not in d\"  # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert any(e.get('agent')=='bubbles.spec-review' and e.get('reviewStatus')=='CURRENT' for e in d['executionHistory'])\"  # exits 0",
+          "type": "json-shape-check"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/state.json:5-8",
+        ".github/bubbles/scripts/post-cert-spec-edit-guard.sh:303-336"
+      ],
+      "linkedDoD": "Scope 1 DoD: certifiedAt/lastUpdatedAt == 2026-06-06T18:00:00Z; bubbles.spec-review CURRENT entry present; requiresRevalidation absent; status done — Scenario 'BUG-024-005-SCN-002 state.json is recertified for the planning-truth edit'."
+    },
+    {
+      "scenarioId": "BUG-024-005-SCN-003",
+      "scope": "scope-1",
+      "title": "scopes.md Scope 2 connector count is reconciled to 16",
+      "requiredTestType": "doc",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/scopes.md",
+          "function": "grep -nE '15 (connectors|committed)' specs/024-design-doc-reconciliation/scopes.md  # only historical/rollback/grep-contract lines remain",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/scopes.md",
+          "function": "grep -n 'markets, qfdecisions, rss' specs/024-design-doc-reconciliation/scopes.md  # >= 1 (SCN-024-06 body lists qfdecisions)",
+          "type": "grep-validation"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/scopes.md:223-226",
+        "cmd/core/connectors.go:52",
+        "docs/smackerel.md:2370"
+      ],
+      "linkedDoD": "Scope 1 DoD: 8 substantive Scope 2 sites = 16; SCN-024-06 body lists qfdecisions; 7 historical '15' references preserved verbatim — Scenario 'BUG-024-005-SCN-003 scopes.md Scope 2 connector count is reconciled to 16'."
+    },
+    {
+      "scenarioId": "BUG-024-005-SCN-004",
+      "scope": "scope-1",
+      "title": "DoD-Gherkin fidelity (G068) stays green",
+      "requiredTestType": "governance-gate",
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/traceability-guard.sh",
+          "function": "bash .github/bubbles/scripts/traceability-guard.sh specs/024-design-doc-reconciliation  # exits 0 RESULT: PASSED",
+          "type": "framework-guard"
+        },
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "go test -run TestConnectorCountContract ./internal/deploy/...  # exits 0, 4/4 PASS",
+          "type": "go-test"
+        }
+      ],
+      "evidenceRefs": [
+        ".github/bubbles/scripts/traceability-guard.sh",
+        "internal/deploy/docs_connector_count_contract_test.go"
+      ],
+      "linkedDoD": "Scope 1 DoD: traceability PASSED; STG Check 22 (G068) all 6 scenarios faithful; lint + freshness green; TestConnectorCountContract 4/4 PASS — Scenario 'BUG-024-005-SCN-004 DoD-Gherkin fidelity (G068) stays green'."
+    },
+    {
+      "scenarioId": "BUG-024-005-SCN-005",
+      "scope": "scope-1",
+      "title": "Parent governance backfill recorded; nothing committed",
+      "requiredTestType": "doc-and-state-shape",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert any('BUG-024-005' in (b.get('bugId') or '') for b in d.get('resolvedBugs',[]))\"  # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/report.md",
+          "function": "grep -cE '^## BUG-024-005 Harden-Sweep Resolution' specs/024-design-doc-reconciliation/report.md  # == 1",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/report.md",
+          "function": "grep -cE '/home/<user>/' specs/024-design-doc-reconciliation/report.md  # == 0 (PII redaction)",
+          "type": "pii-redaction-check"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/state.json",
+        "specs/024-design-doc-reconciliation/report.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: state.json gets >= 7 BUG-024-005 executionHistory entries + resolvedBugs entry; report.md carries 1 '## BUG-024-005 Harden-Sweep Resolution' section with Code Diff Evidence + Git-Backed Proof; zero /home/<user>/ paths; nothing committed — Scenario 'BUG-024-005-SCN-005 Parent governance backfill recorded; nothing committed'."
+    }
+  ]
+}

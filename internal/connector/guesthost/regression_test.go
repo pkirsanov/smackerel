@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -672,16 +673,19 @@ func TestNormalizeTaskCompletedHasStatus(t *testing.T) {
 func TestFetchActivityContextCancelledBetweenPages(t *testing.T) {
 	// When a context is cancelled between pagination pages, FetchActivity
 	// should return a cancellation error instead of making the next request.
-	page := 0
+	// page is read by the spin-wait goroutine below while it is written by
+	// the httptest handler goroutine, so it MUST be accessed atomically to
+	// avoid a data race (regression: -race flagged an unsynchronized int).
+	var page atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		page++
+		p := int(page.Add(1))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ActivityFeedResponse{
 			Events: []ActivityEvent{
-				{ID: "e" + strings.Repeat("x", page), Type: "guest.created", Timestamp: "2026-04-01T10:00:00Z", EntityID: "g1", Data: json.RawMessage(`{"email":"a@b.com","name":"A"}`)},
+				{ID: "e" + strings.Repeat("x", p), Type: "guest.created", Timestamp: "2026-04-01T10:00:00Z", EntityID: "g1", Data: json.RawMessage(`{"email":"a@b.com","name":"A"}`)},
 			},
 			HasMore: true,
-			Cursor:  "cursor-page-" + strings.Repeat("x", page),
+			Cursor:  "cursor-page-" + strings.Repeat("x", p),
 		})
 	}))
 	defer srv.Close()
@@ -692,7 +696,7 @@ func TestFetchActivityContextCancelledBetweenPages(t *testing.T) {
 	// Cancel context after one page has been fetched. The first request
 	// will succeed, then the context check before page 2 should catch it.
 	go func() {
-		for page < 1 {
+		for page.Load() < 1 {
 			// spin-wait for first page to complete
 		}
 		cancel()
