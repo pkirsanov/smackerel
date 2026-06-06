@@ -1,0 +1,148 @@
+{
+  "bugId": "BUG-024-004-state-missing-certifiedat-g088",
+  "version": 1,
+  "generatedAt": "2026-06-06T00:00:00Z",
+  "parentSpec": "specs/024-design-doc-reconciliation",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-024-004-SCN-001",
+      "scope": "scope-1",
+      "title": "Top-level certifiedAt is present and matches OPS-001 sweep moment",
+      "requiredTestType": "state-shape",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert d.get('certifiedAt') == '2026-05-28T05:07:51Z'\"  # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert d.get('certifiedBy') == 'bubbles.workflow'\"  # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert d.get('lastUpdatedAt', '') >= '2026-06-06'\"  # exits 0",
+          "type": "json-shape-check"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/state.json:6 (after FR-01)",
+        "specs/024-design-doc-reconciliation/bugs/BUG-024-004-state-missing-certifiedat-g088/report.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: top-level certifiedAt is present in spec 024 state.json with value 2026-05-28T05:07:51Z (1s after OPS-001 sweep); certifiedBy is bubbles.workflow; lastUpdatedAt is 2026-06-06T00:00:00Z — Scenario 'BUG-024-004-SCN-001 Top-level certifiedAt is present and matches OPS-001 sweep moment'."
+    },
+    {
+      "scenarioId": "BUG-024-004-SCN-002",
+      "scope": "scope-1",
+      "title": "Gate G088 PASSES after the backfill",
+      "requiredTestType": "governance-gate",
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/post-cert-spec-edit-guard.sh",
+          "function": "bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/024-design-doc-reconciliation  # exits 0",
+          "type": "framework-guard"
+        },
+        {
+          "file": ".github/bubbles/scripts/post-cert-spec-edit-guard.sh",
+          "function": "bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/024-design-doc-reconciliation 2>&1 | grep -c 'PASS Gate G088'  # >= 1",
+          "type": "framework-guard-output"
+        }
+      ],
+      "evidenceRefs": [
+        ".github/bubbles/scripts/post-cert-spec-edit-guard.sh:179-220",
+        "specs/024-design-doc-reconciliation/bugs/BUG-024-004-state-missing-certifiedat-g088/report.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: post-cert-spec-edit-guard.sh exits 0 with 'PASS Gate G088 (post_certification_spec_edit_gate)' output for spec 024 — Scenario 'BUG-024-004-SCN-002 Gate G088 PASSES after the backfill'."
+    },
+    {
+      "scenarioId": "BUG-024-004-SCN-003",
+      "scope": "scope-1",
+      "title": "state-transition-guard exits 0 after the backfill",
+      "requiredTestType": "governance-gate",
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation  # exits 0",
+          "type": "framework-guard"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | grep -c '🟢 TRANSITION ALLOWED'  # == 1",
+          "type": "framework-guard-output"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | grep -cE 'failure'  # 0 (or matches pre-existing failure baseline)",
+          "type": "framework-guard-output"
+        }
+      ],
+      "evidenceRefs": [
+        ".github/bubbles/scripts/state-transition-guard.sh",
+        "specs/024-design-doc-reconciliation/bugs/BUG-024-004-state-missing-certifiedat-g088/report.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: state-transition-guard.sh exits 0 with '🟢 TRANSITION ALLOWED' for spec 024; failure count drops from 1 (pre-fix) to 0 (post-fix); 2 pre-existing non-blocking WARNs survive unchanged — Scenario 'BUG-024-004-SCN-003 state-transition-guard exits 0 after the backfill'."
+    },
+    {
+      "scenarioId": "BUG-024-004-SCN-004",
+      "scope": "scope-1",
+      "title": "Parent governance backfill records BUG-024-004 closure",
+      "requiredTestType": "doc-and-state-shape",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert any(b.get('bugId') == 'BUG-024-004' for b in d.get('resolvedBugs', []))\"  # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c \"import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); h=d['executionHistory']; assert sum(1 for e in h if 'BUG-024-004' in (e.get('summary') or '')) >= 7\"  # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/report.md",
+          "function": "grep -cE '^## BUG-024-004 Gaps-Sweep Resolution' specs/024-design-doc-reconciliation/report.md  # == 1",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/report.md",
+          "function": "grep -cE '/home/<user>/' specs/024-design-doc-reconciliation/report.md  # == 0 (PII redaction)",
+          "type": "pii-redaction-check"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/state.json",
+        "specs/024-design-doc-reconciliation/report.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: parent state.json gets ≥ 7 BUG-024-004 executionHistory entries + resolvedBugs entry + lastUpdatedAt bump; report.md carries '## BUG-024-004 Gaps-Sweep Resolution (2026-06-06)' section with Code Diff Evidence + Git-Backed Proof block; zero absolute /home/<user>/ paths — Scenario 'BUG-024-004-SCN-004 Parent governance backfill records BUG-024-004 closure'."
+    },
+    {
+      "scenarioId": "BUG-024-004-SCN-005",
+      "scope": "scope-1",
+      "title": "Single atomic commit with bubbles(024/bug-024-004) prefix satisfies Check 17 + path discipline + runtime preserved",
+      "requiredTestType": "commit-discipline",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/bugs/BUG-024-004-state-missing-certifiedat-g088/report.md",
+          "function": "git log --oneline -1 --format='%s' begins with 'bubbles(024/bug-024-004):'",
+          "type": "commit-prefix"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/bugs/BUG-024-004-state-missing-certifiedat-g088/report.md",
+          "function": "git diff --cached --name-status | grep -vE '^[AM]\\s+specs/024-design-doc-reconciliation/' | wc -l == 0",
+          "type": "commit-discipline"
+        },
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "go test -run TestConnectorCountContract ./internal/deploy/... 2>&1 | grep -c -- '--- PASS:'  # == 4",
+          "type": "regression-go-unit"
+        }
+      ],
+      "evidenceRefs": [
+        "git log --oneline -1",
+        "internal/deploy/docs_connector_count_contract_test.go (BUG-024-003 contract preserved)"
+      ],
+      "linkedDoD": "Scope 1 DoD: single atomic commit with subject prefix 'bubbles(024/bug-024-004):' lands all changes; commit --name-status confirms zero stray files from specs/055-*, specs/044-*, cmd/, internal/, ml/, scripts/, smackerel.sh, config/, docker-compose*, .github/bubbles/; BUG-024-003 forward-detection contract (TestConnectorCountContract) preserved 4/4 PASS — Scenario 'BUG-024-004-SCN-005 Single atomic commit with bubbles(024/bug-024-004) prefix satisfies Check 17 + path discipline + runtime preserved'."
+    }
+  ]
+}
