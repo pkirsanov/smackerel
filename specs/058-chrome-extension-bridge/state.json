@@ -260,7 +260,20 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-058-DEDUP-KEY-OWNER-ISOLATION",
+      "title": "dedup_key omitted owner_user_id, enabling cross-tenant dedup collapse",
+      "severity": "medium",
+      "status": "done",
+      "workflowMode": "bugfix-fastlane",
+      "resolvedAt": "2026-06-06T22:30:00Z",
+      "discoveredBy": "chaos-sweep-round-18",
+      "bugDir": "specs/058-chrome-extension-bridge/bugs/BUG-058-DEDUP-KEY-OWNER-ISOLATION/",
+      "summary": "owner_user_id folded FIRST into the ComputeDedupKey preimage (no schema migration); single caller passes the server-authenticated owner with a fail-loud empty-owner guard. Unit (VariesByOwner) + store (CrossOwnerIsolation) + handler (RejectsItemWithoutOwner) + live-Postgres (TestPostgresDedupStore_CrossOwnerIsolation, CI-run) regression cover added; TestComputeDedupKey_VariesByDevice (Chrome Sync) preserved. Scope 2 dedup contract is now owner-isolated.",
+      "closureNote": "Parent touched report.md + state.json only (bookkeeping); no parent planning-truth edit, so no parent recertification. Bug packet state-transition-guard reports a single G088 block that is the uncommitted-working-tree planning-edit gate (resolves at commit); artifact-lint PASSED."
+    }
+  ],
   "failures": [],
   "scopeLayout": "single-file",
   "artifacts": {
