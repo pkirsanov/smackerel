@@ -147,7 +147,7 @@ These run the complete pipeline. Use for new features.
 **Use when:** All feature work, bug fixes (use `bugfix-fastlane` for focused bugs), release-candidate work, and legacy hardening. This is the default mode.
 
 ```
-/bubbles.workflow  full-delivery for 042-catalog-assistant
+/bubbles.workflow implement action:full-delivery target:spec for 042-catalog-assistant
 ```
 
 ### <img src="../../icons/bubbles-glasses.svg" width="20"> value-first-e2e-batch

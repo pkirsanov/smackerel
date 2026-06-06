@@ -23,10 +23,10 @@ Just tell `bubbles.super` what you want:
 ## If you prefer to invoke a workflow directly
 
 ```
-/bubbles.workflow propagate-forward
-/bubbles.workflow propagate-forward from experimental
-/bubbles.workflow propagate-backport from prod to experimental
-/bubbles.workflow propagate-audit
+/bubbles.workflow propagate action:forward-merge
+/bubbles.workflow propagate action:forward-merge from experimental
+/bubbles.workflow propagate action:backport from prod to experimental
+/bubbles.workflow propagate action:audit-drift
 ```
 
 ---
@@ -101,7 +101,7 @@ J-Roc will:
 You review the commits. If they're safe to backport, re-invoke:
 
 ```
-/bubbles.workflow propagate-backport from prod to experimental --approval-token=<the-prod-commit-sha>
+/bubbles.workflow propagate action:backport from prod to experimental --approval-token=<the-prod-commit-sha>
 ```
 
 J-Roc cherry-picks, validates, records the approval token in the ledger.

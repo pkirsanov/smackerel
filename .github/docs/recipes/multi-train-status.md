@@ -21,7 +21,7 @@
 ## Direct invocation
 
 ```
-/bubbles.workflow release-train-status-all
+/bubbles.workflow ship action:status scope:all-trains
 /bubbles.train status --all-trains
 ```
 

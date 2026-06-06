@@ -1,0 +1,7 @@
+{
+  "uri": "bubbles://registry/gates.yaml",
+  "name": "Bubbles gate registry",
+  "description": "Canonical gate metadata (bubbles/registry/gates.yaml) — single source of truth for every Gxxx gate. Workflows.yaml's gates block is generated from this file by bubbles/scripts/generate-gates-block.sh.",
+  "mimeType": "application/yaml",
+  "path": "bubbles/registry/gates.yaml"
+}

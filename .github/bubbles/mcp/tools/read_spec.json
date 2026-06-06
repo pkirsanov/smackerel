@@ -1,0 +1,22 @@
+{
+  "name": "read_spec",
+  "description": "Run artifact-lint against a spec directory to surface the canonical inventory of required artifacts (spec.md/design.md/scopes.md/report.md/uservalidation.md/state.json), their existence + structure status, and any blocking lint failures. Wraps artifact-lint.sh. Use as a first-pass 'what shape is this spec in?' query before deeper validation.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "spec_dir": {
+        "type": "string",
+        "description": "Spec directory relative to repo root."
+      },
+      "scenario_regex": {
+        "type": "string",
+        "description": "Optional regex to scope scenario-id matching (e.g. 'SCN-037-[A-Z][0-9]{2}').",
+        "default": ""
+      }
+    },
+    "required": ["spec_dir"]
+  },
+  "script": "artifact-lint.sh",
+  "argsTemplate": ["${spec_dir}"],
+  "successExitCodes": [0]
+}

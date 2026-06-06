@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **40 Agents · 101 Gates · 55 Workflow Modes · 26 Phases**
+> **40 Agents · 102 Gates · 55 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -100,12 +100,13 @@ Some TPB characters carry different agent roles when their narrative context leg
 
 | Alias | Maps To | Quote |
 |-------|---------|-------|
+<!-- GENERATED:CHEATSHEET_ALIASES_START - run `bash bubbles/scripts/generate-cheatsheet.sh` -->
 | `sunnyvale pull-the-strings` | `bubbles.workflow` | *"Bubbles is pulling the strings, boys."* |
 | `sunnyvale under-the-light` | `bubbles.grill` | *"Let's get it under the light and see if it survives."* |
 | `sunnyvale private-dancer` | `bubbles.grill` | *"You want answers? Put it under the light."* |
 | `sunnyvale worst-case-ontario` | `bubbles.chaos` | *"Worst case Ontario, something breaks"* |
 | `sunnyvale by-the-book` | `bubbles.audit --strict` | *"This is by the book now."* |
-| `sunnyvale get-two-birds-stoned` | `bubbles.implement` + `bubbles.test` | *"Get two birds stoned at once"* |
+| `sunnyvale get-two-birds-stoned` | `bubbles.implement + bubbles.test` | *"Get two birds stoned at once"* |
 | `sunnyvale i-got-work-to-do` | `bubbles.implement` | *"I got work to do."* |
 | `sunnyvale smokes-lets-go` | `bubbles.setup` | *"Smokes, let's go."* |
 | `sunnyvale know-what-im-sayin` | `bubbles.docs` | *"Know what I'm sayin'? Publish the truth."* |
@@ -115,7 +116,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `sunnyvale peanut-butter-and-jam` | `bubbles.gaps` | *"BAAAAM! Peanut butter and JAAAAM!"* |
 | `sunnyvale safety-always-off` | `bubbles.security` | *"Safety... always off"* |
 | `sunnyvale somethings-prowlin` | `bubbles.regression` | *"Something's prowlin' around in the code, boys."* |
-| `sunnyvale roll-camera` | `bubbles.status` | *(camera keeps rolling)* |
+| `sunnyvale roll-camera` | `bubbles.status` | *"(camera keeps rolling)"* |
 | `sunnyvale greasy` | `bubbles.harden` | *"That's greasy, boys."* |
 | `sunnyvale pave-your-cave` | `bubbles.harden` | *"Why don't you go pave your cave?"* |
 | `sunnyvale supply-and-command` | `bubbles.plan` | *"It's supply and command, Julian"* |
@@ -138,7 +139,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `sunnyvale tyrone-got-this` | `bubbles.goal` | *"Peace. Tyrone got this."* |
 | `sunnyvale on-the-clock` | `bubbles.sprint` | *"Inside and outside, both at once. Don't fall behind."* |
 | `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done — keep both flows moving."* |
-| `sunnyvale just-fixes` | `bubbles.stabilize` | *"..." (Bill spots the problem and points at it)* |
+| `sunnyvale just-fixes` | `bubbles.stabilize` | *"... (Bill spots the problem and points at it)"* |
 | `sunnyvale used-to-be-a-vet` | `bubbles.create-skill` | *"I used to be a vet, you know."* |
 | `sunnyvale true` | `bubbles.commands` | *"True."* |
 | `sunnyvale ill-do-whatever` | `bubbles.iterate` | *"I'll do whatever you need, Julian."* |
@@ -153,16 +154,21 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `sunnyvale liquor-then-sweep` | `retro-quality-sweep` | *"The liquor finds the mess. Then the whole crew sweeps it clean."* |
 | `sunnyvale liquor-then-look` | `retro-to-review` | *"The liquor shows me where to look. Green Bastard tells me what's broken."* |
 | `sunnyvale cant-just-slap` | `bubbles.ux` | *"You can't just slap things together."* |
-| `sunnyvale same-lot-new-trailer` | `product-to-delivery` (with existing impl) | *"Same lot, boys. New trailer."* |
+| `sunnyvale same-lot-new-trailer` | `product-to-delivery (with existing impl)` | *"Same lot, boys. New trailer."* |
+<!-- GENERATED:CHEATSHEET_ALIASES_END -->
 
 ---
 
 ## <img src="../icons/julian-glass.svg" width="32"> Workflow Modes
 
+> **v7 input note:** The **Mode** column lists registry keys (the v5 names). Invoke a mode with the `mode: <key>` form (`/bubbles.workflow <feature> mode: full-delivery`) or the v6 primitive+tag form (`/bubbles.workflow implement action:full-delivery target:spec`). Typing a bare `/bubbles.workflow <key>` leading token is rejected in v7.0 — `mode-resolver.sh` prints the exact v6 form to use. Existing `state.json` artifacts that already store a v5 key keep working unchanged.
+
 | Mode | Alias | What It Does |
 |------|-------|-------------|
+<!-- GENERATED:CHEATSHEET_MODES_START - run `bash bubbles/scripts/generate-cheatsheet.sh` -->
 | `value-first-e2e-batch` | boys-plan | Auto-discover highest-value work, full delivery pipeline |
 | `full-delivery` | full-send | Default maximum-assurance delivery — loops through implementation, tests, quality sweep, validation, and bug closure until truly green or blocked |
+| `full-delivery` | no-loose-ends | Maximum-assurance delivery — keep looping until validate certifies done or records a real blocker. Default continuation target for active recap/status/handoff follow-up. |
 | `devops-to-doc` | keep-the-park-online | Focused DevOps execution + operational verification + docs sync |
 | `simplify-to-doc` | strip-it-down | Simplify an existing implementation, prove it still works, then sync docs |
 | `spec-review-to-doc` | laser-eyes-sweep | Audit specs for freshness, classify trust levels, produce maintenance report |
@@ -175,19 +181,19 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `docs-only` | gnome-sayin | Documentation maintenance only |
 | `iterate` | keep-going | Continue scope-by-scope implementation |
 | `resume-only` | resume-the-tape | Resume from last session state |
-| `spec-scope-hardening` (with analyze) | whats-the-big-idea | Business analysis + UX exploration only |
+| `spec-scope-hardening (with analyze)` | whats-the-big-idea | Business analysis + UX exploration only |
 | `test-to-doc` | quick-dirty | Run tests, fix failures, update docs |
 | `audit-only` | open-and-shut | Run audit phase only |
 | `stabilize-to-doc` | bill-fixes-it | Stability fixes → test → docs |
 | `improve-existing` | survival-of-the-fitness | Analyze, harden, improve → test → docs |
-| `product-to-delivery` (with existing impl) | same-lot-new-trailer | Reconcile stale artifacts, redesign an existing feature, then deliver |
+| `product-to-delivery (with existing impl)` | same-lot-new-trailer | Reconcile stale artifacts, redesign an existing feature, then deliver |
 | `spec-scope-hardening` | harden-up | Tighten specs and scope definitions |
 | `harden-to-doc` | shit-winds-coming | Harden → test → docs |
 | `gaps-to-doc` | gut-feeling | Gap analysis → test → docs |
 | `chaos-to-doc` | we-broke-it | Chaos → test → docs |
 | `reconcile-to-doc` | i-toad-a-so | Reconcile conflicts → test → docs |
 | `validate-to-doc` | just-watching | Validate + audit + docs |
-| `spec-scope-hardening` (with analyze + socratic) | smokes-and-think | Explore ideas before building — produces design artifacts, no code |
+| `spec-scope-hardening (with analyze + socratic)` | smokes-and-think | Explore ideas before building — produces design artifacts, no code |
 | `retro-to-simplify` | liquor-then-tape | Data-driven simplification — retro finds hotspots, then simplify fixes them |
 | `retro-to-harden` | liquor-then-harden | Data-driven hardening — retro finds bug magnets, then harden targets them |
 | `retro-quality-sweep` | liquor-then-sweep | Retro finds hotspots, then the deterministic quality crew cleans them up |
@@ -214,6 +220,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `adapter-readiness-to-packet` | adapter-ready-to-go | Deliver an adapter to readiness state; packet certifies the adapter is ready for downstream consumption. Terminal status: `delivered_pending_activation`. |
 | `dark-launch-shipped` | dark-and-quiet | Code shipped behind a default-off flag; terminal status `delivered_pending_activation` until flag flip. |
 | `migration-shipped-pending-cutover` | migration-shipped-not-cutover | Migration code shipped but cutover not executed; terminal status `delivered_pending_activation` until operator cutover. |
+<!-- GENERATED:CHEATSHEET_MODES_END -->
 
 **Optional execution tags:** `grillMode`, `tdd` (inner-loop red→green only), `backlogExport` (off|tasks|issues), `specReview` (off|once-before-implement), `socratic`, `socraticQuestions`, `gitIsolation`, `autoCommit` (off|scope|dod), `maxScopeMinutes`, `maxDodMinutes`, `microFixes`, `crossModelReview` (off|codex|terminal)
 
@@ -238,6 +245,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 
 | Term | Meaning |
 |------|---------|
+<!-- GENERATED:CHEATSHEET_VOCABULARY_START - run `bash bubbles/scripts/generate-cheatsheet.sh` -->
 | `workflow-only continuation` | Recap, status, and handoff point you back to `/bubbles.workflow ...` by default instead of raw `/bubbles.implement` or `/bubbles.test` commands. |
 | `continuation envelope` | Machine-readable packet from a read-only agent carrying the target, intent, preferred workflow mode, and reason for the next workflow step. |
 | `scenario replay` | Validate reruns the linked live-system `SCN-*` user journeys from `scenario-manifest.json` before certification. |
@@ -314,11 +322,12 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `observability adapter` | `bubbles/adapters/observability/<name>.sh` — pluggable live-telemetry contract. Reference adapters: `none.sh` (default), `prometheus.sh` (requires `PROMETHEUS_BASE_URL` + per-query env vars). Adapters expose `health`, `query-instant`, `query-range`, `series-cardinality` verbs. |
 | `framework self-observation` | `bubbles.retro target: framework` (alias `framework-health`). Proposal-first: reads gate-failure logs and stalled-mode counts, writes only into `improvements/`, never auto-mutates framework files. The framework eats its own dog food. |
 | `release train portfolio` | The set of all declared trains under `config/release-trains.yaml`. Surfaced by `release-train-status-all` (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness. |
+<!-- GENERATED:CHEATSHEET_VOCABULARY_END -->
 
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 101 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 102 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**

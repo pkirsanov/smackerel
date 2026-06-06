@@ -4,11 +4,13 @@
 #
 # Reads workflows.yaml `modeDefaults.modelFloor` (and per-mode override) and
 # compares against the runtime model identifier reported by the host client.
-# Emits a warning when the active model is below the floor for the requested
-# phase. Advisory in v5.1; v6 (S9) makes it blocking.
+# For phases listed in `modeDefaults.modelFloorEnforcedPhases` (audit, security,
+# validate by default) the floor is BLOCKING (v6.1 / S9): `check` exits non-zero
+# when the active model is known and below floor. For all other phases it stays
+# advisory (warning, exit 0). Unknown model or undeclared floor never blocks.
 #
 # Usage:
-#   model-tier-advisory.sh check --mode <mode> --phase <phase>
+#   model-tier-advisory.sh check [--enforce] --mode <mode> --phase <phase>
 #   model-tier-advisory.sh resolve --mode <mode> --phase <phase>   # prints floor
 #
 # Environment:
@@ -25,16 +27,21 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-WORKFLOWS="$REPO_ROOT/bubbles/workflows.yaml"
+# BUBBLES_WORKFLOWS_FILE override exists for hermetic selftests and downstream
+# repos that relocate workflows.yaml; defaults to the in-tree path.
+WORKFLOWS="${BUBBLES_WORKFLOWS_FILE:-$REPO_ROOT/bubbles/workflows.yaml}"
 
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  model-tier-advisory.sh check --mode <mode> --phase <phase>
+  model-tier-advisory.sh check [--enforce] --mode <mode> --phase <phase>
   model-tier-advisory.sh resolve --mode <mode> --phase <phase>
 
-Reads workflows.yaml model-tier policy and advises whether the active model
-(BUBBLES_ACTIVE_MODEL) meets the floor for <mode>/<phase>. Advisory only.
+Reads workflows.yaml model-tier policy and checks whether the active model
+(BUBBLES_ACTIVE_MODEL) meets the floor for <mode>/<phase>. BLOCKING (exit 1)
+for enforced phases (modeDefaults.modelFloorEnforcedPhases or --enforce) when the
+active model is known and below floor; advisory (exit 0) otherwise. Never blocks
+when the model is unknown or no floor is declared.
 USAGE
 }
 
@@ -42,10 +49,12 @@ USAGE
 OP="$1"; shift
 MODE=""
 PHASE=""
+ENFORCE="0"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) MODE="$2"; shift 2;;
     --phase) PHASE="$2"; shift 2;;
+    --enforce) ENFORCE="1"; shift;;
     -h|--help) usage; exit 0;;
     *) usage; exit 2;;
   esac
@@ -61,7 +70,7 @@ fi
 
 ACTIVE="${BUBBLES_ACTIVE_MODEL:-}"
 
-WORKFLOWS="$WORKFLOWS" OP="$OP" MODE="$MODE" PHASE="$PHASE" ACTIVE="$ACTIVE" python3 - <<'PY'
+WORKFLOWS="$WORKFLOWS" OP="$OP" MODE="$MODE" PHASE="$PHASE" ACTIVE="$ACTIVE" FORCE_ENFORCE="$ENFORCE" python3 - <<'PY'
 import os, sys
 
 try:
@@ -78,6 +87,11 @@ active = os.environ.get('ACTIVE', '').strip()
 
 with open(workflows) as f:
     data = yaml.safe_load(f)
+
+# v6.1 (S9 / R4): which phases enforce the floor as BLOCKING vs advisory.
+enforced_phases = set((data.get('modeDefaults') or {}).get('modelFloorEnforcedPhases') or [])
+force_enforce = os.environ.get('FORCE_ENFORCE', '0') == '1'
+enforce = force_enforce or (phase in enforced_phases)
 
 # Resolve floor: per-mode-per-phase > per-mode > modeDefaults.
 default_floor = (data.get('modeDefaults') or {}).get('modelFloor', {}) or {}
@@ -138,14 +152,20 @@ if active_rank >= floor_rank:
     print(f"model-tier: OK (mode={mode} phase={phase} floor={floor} active={active})")
     sys.exit(0)
 
-# Below floor — advisory warning.
-# v5.2 / F7: also write a durable, auditable entry to the tool-call log
-# so warnings survive past the operator's scrollback and are queryable
-# alongside command evidence. Schema v2 entry with tag 'model-tier-warning'.
+# Below floor.
+# For enforced phases (modeDefaults.modelFloorEnforcedPhases or --enforce) this
+# is BLOCKING (exit 1); otherwise advisory (exit 0). v5.2 / F7: write a durable,
+# auditable entry to the tool-call log either way so the signal survives past
+# the operator's scrollback and is queryable alongside command evidence.
 import json, os, subprocess, datetime, hashlib, getpass
-warn_msg = f"model-tier: WARN — active model '{active}' is below floor '{floor}' for mode={mode} phase={phase}"
+severity = "blocked" if enforce else "warn"
+level = "BLOCKED" if enforce else "WARN"
+warn_msg = f"model-tier: {level} — active model '{active}' is below floor '{floor}' for mode={mode} phase={phase}"
 print(warn_msg)
-print("  Advisory only in v5.1+; v6 S9 will make this blocking.")
+if enforce:
+    print("  BLOCKING (v6.1 / S9 / G126): this phase requires a model at or above the declared floor.")
+else:
+    print(f"  Advisory: phase '{phase}' is not in modeDefaults.modelFloorEnforcedPhases.")
 print("  Recommended: re-run this phase with a model at or above the declared floor.")
 
 # Best-effort durable write to tool-call log.
@@ -178,7 +198,7 @@ try:
         "scope": os.environ.get('BUBBLES_SCOPE', ''),
         "cmd": cmd_label,
         "cwd": os.getcwd(),
-        "exitCode": 0,
+        "exitCode": (1 if enforce else 0),
         "durationMs": 0,
         # Hash payload deterministically so identical warnings collapse for analysis.
         "stdoutHash": hashlib.sha256(warn_msg.encode()).hexdigest(),
@@ -192,7 +212,8 @@ try:
             "phase": phase,
             "floor": floor,
             "active": active,
-            "severity": "warn",
+            "severity": severity,
+            "enforced": enforce,
         },
     }
     with open(log_path, 'a') as f:
@@ -201,5 +222,5 @@ except Exception as e:
     # Non-fatal — advisory should never break a workflow because of log I/O.
     print(f"  (model-tier: tool-log entry skipped: {e})")
 
-sys.exit(0)
+sys.exit(1 if enforce else 0)
 PY

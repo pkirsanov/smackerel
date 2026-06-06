@@ -45,7 +45,7 @@ Every project using Bubbles MUST have these files:
 | `.specify/memory/agents.md` | **Command registry** — CLI entrypoint, build/test/lint/format commands, file organization, naming conventions, tech stack declaration | **YES** |
 | `.specify/memory/constitution.md` | **Governance principles** — project-specific principles layered on top of universal governance | **YES** |
 | `.github/copilot-instructions.md` | **Project policies** — project-specific rules, testing requirements, Docker config, port allocation, command tables | **YES** |
-| `.github/bubbles-project.yaml` | **Project-owned framework extensions** — scan-pattern overrides, managed-doc registry overrides, impact-aware validation maps, trace contracts, and custom gates (G100+) | **OPTIONAL** |
+| `.github/bubbles-project.yaml` | **Project-owned framework extensions** — scan-pattern overrides, managed-doc registry overrides, impact-aware validation maps, trace contracts, and custom gates (G900+; framework reserves G001-G199) | **OPTIONAL** |
 | `.vscode/mcp.json` | **MCP server configuration** — team-shared AI tool access (cross-repo search, issue trackers, etc.) | **OPTIONAL** |
 | `.vscode/extensions.json` | **Recommended extensions** — team-consistent AI tooling (Copilot, etc.) | **OPTIONAL** |
 
@@ -214,7 +214,7 @@ This file allows projects to extend or override selected framework behavior with
 ```yaml
 # .github/bubbles-project.yaml — Project-specific Bubbles extensions
 
-# Custom quality gates (G100+ range, auto-assigned IDs)
+# Custom quality gates (G900+ range; framework reserves G001-G199)
 gates:
   license-compliance:
     script: scripts/license-check.sh

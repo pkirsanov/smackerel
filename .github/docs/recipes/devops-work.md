@@ -11,7 +11,7 @@ If the work needs a dedicated operational execution lane, use `bubbles.devops` o
 ## Focused DevOps Execution
 
 ```
-/bubbles.workflow  devops-to-doc for 042-catalog-assistant
+/bubbles.workflow implement target:devops finalize:docs for 042-catalog-assistant
 
 /bubbles.workflow  specs/_ops/OPS-001-ci-hardening mode: devops-to-doc
 ```
@@ -97,7 +97,7 @@ For cross-cutting ops work, keep the packet under `specs/_ops/OPS-*` with:
 If you know there are operational symptoms but not the root cause, start with the stability diagnostic lane:
 
 ```
-/bubbles.workflow  stabilize-to-doc for 042-catalog-assistant
+/bubbles.workflow validate action:stability-diagnostic-then-devops finalize:docs for 042-catalog-assistant
 ```
 
 That path now diagnoses with `bubbles.stabilize`, then routes operational execution through `bubbles.devops` before the rest of the quality chain runs.

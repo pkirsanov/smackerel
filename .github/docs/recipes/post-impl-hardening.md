@@ -33,17 +33,17 @@ If you want to run just the hardening sequence on existing code:
 
 ```
 # Full hardening pipeline
-/bubbles.workflow  stabilize-to-doc for 042-catalog
+/bubbles.workflow validate action:stability-diagnostic-then-devops finalize:docs for 042-catalog
 
 # Just regression + stabilize
 /bubbles.regression  check for regressions in catalog feature
 /bubbles.stabilize  stabilize the catalog feature
 
 # Retro-guided deterministic quality sweep
-/bubbles.workflow  retro-quality-sweep for 042-catalog
+/bubbles.workflow validate prelude:retro action:quality-sweep for 042-catalog
 
 # Quality sweep with all hardening agents
-/bubbles.workflow  stochastic-quality-sweep triggerAgents: regression,simplify,stabilize,security maxRounds: 8
+/bubbles.workflow validate action:stochastic scope:portfolio triggerAgents: regression,simplify,stabilize,security maxRounds: 8
 ```
 
 > **💡 Tip:** Run `/bubbles.retro hotspots` before hardening to identify bug magnets and worsening hotspots. This tells you which files deserve the most attention during the hardening pass.
@@ -55,7 +55,7 @@ If you want to run just the hardening sequence on existing code:
 If the requirement is not just "run the hardening agents" but "keep going until the whole feature is actually green," use:
 
 ```
-/bubbles.workflow  full-delivery for <feature>
+/bubbles.workflow implement action:full-delivery target:spec for <feature>
 ```
 
 That parent workflow runs reusable child workflow modes for test verification, deterministic quality sweep, and final certification. In runtimes without nested agent delegation, the active workflow parent-expands those modes while still invoking the same owner agents. New supported scenarios must update planning artifacts plus tests; true defects must be recorded as tracked bugs with regression tests and fixed inline before the run can finish.
@@ -65,7 +65,7 @@ That parent workflow runs reusable child workflow modes for test verification, d
 Before shipping a major feature, run all hardening agents in sequence:
 
 ```
-/bubbles.workflow  harden-gaps-to-doc for <feature>
+/bubbles.workflow validate action:harden-and-gaps finalize:docs for <feature>
 ```
 
 This runs the deterministic quality sweep child workflow mode: `harden → gaps → implement → test → regression → simplify → stabilize → security → chaos → validate → audit → docs`

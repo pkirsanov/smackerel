@@ -33,7 +33,7 @@ Before handling a request, scan these skills for the matching trigger:
 
 **Front-Door Policy:** `bubbles.super` is the preferred natural-language entry point when the user's intent is vague, they need help choosing a workflow, or they want plain-English translation into exact prompts. It owns natural-language translation into workflow parameters and exact command guidance. `bubbles.workflow` and `bubbles.iterate` should delegate vague routing here instead of maintaining duplicate intent-to-mode tables. It is NOT a mandatory proxy for explicit structured work. If the user already knows the exact agent or workflow mode, they should call that target directly instead of being bounced back through `super`.
 
-**Top-level-runtime modes (NON-NEGOTIABLE routing rule).** Six workflow modes declare `constraints.requiresTopLevelRuntime: true` in `bubbles/workflows.yaml`: `stochastic-quality-sweep`, `retro-quality-sweep`, `iterate`, `autonomous-goal`, `autonomous-sprint`, `idea-to-release-completion`. These are fan-out modes that dispatch multiple specialists per finding per round. When the operator requests one of these modes, the top-level session itself MUST execute it — do NOT dispatch `bubbles.workflow` as a subagent for these modes, because subagent runtimes lack `runSubagent` and cannot legitimately dispatch the per-finding specialist chain (`bubbles.bug` → `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs`). If a subagent ever resolves one of these modes, it MUST emit `route_required` with `routingReason: top-level-runtime-required` and `nextOwner: user-session` rather than collapsing all roles into its own turn. See [workflow-execution-loops.md](bubbles_shared/workflow-execution-loops.md) → Top-level-runtime modes for the full rule and Failure Mode 4 prohibition.
+**Top-level-runtime modes (NON-NEGOTIABLE routing rule).** Six workflow modes declare `constraints.requiresTopLevelRuntime: true` in the mode registry `bubbles/workflows/modes.yaml`: `stochastic-quality-sweep`, `retro-quality-sweep`, `iterate`, `autonomous-goal`, `autonomous-sprint`, `idea-to-release-completion`. These are fan-out modes that dispatch multiple specialists per finding per round. When the operator requests one of these modes, the top-level session itself MUST execute it — do NOT dispatch `bubbles.workflow` as a subagent for these modes, because subagent runtimes lack `runSubagent` and cannot legitimately dispatch the per-finding specialist chain (`bubbles.bug` → `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs`). If a subagent ever resolves one of these modes, it MUST emit `route_required` with `routingReason: top-level-runtime-required` and `nextOwner: user-session` rather than collapsing all roles into its own turn. See [workflow-execution-loops.md](bubbles_shared/workflow-execution-loops.md) → Top-level-runtime modes for the full rule and Failure Mode 4 prohibition.
 
 **Project-Agnostic Design:** This agent contains NO project-specific commands, paths, or tools beyond the Bubbles framework layer.
 
@@ -62,8 +62,8 @@ The super agent MUST NOT rely solely on hardcoded examples in this file. Before 
 |------|-----------------|-----------------|
 | **Available agents** | Source repo: `ls agents/bubbles.*.agent.md`; downstream repo: `ls .github/agents/bubbles.*.agent.md`; then read `description:` from YAML frontmatter | Agent name, role, when to use |
 | **Agent capabilities & ownership** | `bubbles/agent-capabilities.yaml` (class, ownsArtifacts, ownsPhases) and `bubbles/agent-ownership.yaml` (artifact ownership, dispatch rules) | Which agent owns which artifact/phase, who to delegate to |
-| **Workflow modes** | Read the live workflow registry: source repo `bubbles/workflows.yaml`, downstream repo `.github/bubbles/workflows.yaml` | Mode name, description, phaseOrder, statusCeiling, constraints |
-| **Workflow phases** | Read the live workflow registry phase definitions (before `deliveryModes`) | Phase name, owner agent, requiredGates |
+| **Workflow modes** | Read the live mode registry: source repo `bubbles/workflows/modes.yaml`, downstream repo `.github/bubbles/workflows/modes.yaml`. (v6.1 split the `modes:` block out of `workflows.yaml` into this file; `mode-resolver.sh` composes `workflows.yaml` + `modes.yaml` at read time.) | Mode name, description, phaseOrder, statusCeiling, constraints |
+| **Workflow phases** | Read the `phases:` block in the live workflow registry (`bubbles/workflows.yaml`) | Phase name, owner agent, requiredGates |
 | **Workflow mode-resolution table** | `agents/bubbles_shared/workflow-mode-resolution.md` | Canonical user-intent -> mode mapping |
 | **Recipes** | `ls docs/recipes/*.md` then read first 5 lines for title + situation; use `docs/CATALOG.md` for the broad feature map and `docs/recipes/README.md` for the categorized index | Recipe name, what problem it solves |
 | **Skills** | Source repo: `ls skills/*/SKILL.md`; downstream repo: `ls .github/skills/*/SKILL.md` | Skill name, triggers, what it enforces |
@@ -189,7 +189,7 @@ When `bubbles.super` is invoked by another agent via `runSubagent` (not directly
 ```markdown
 ## RESOLUTION-ENVELOPE
 - **invokedAs:** subagent
-- **mode:** <resolved workflow mode from workflows.yaml>
+- **mode:** <resolved workflow mode from the mode registry (`bubbles/workflows/modes.yaml`)>
 - **specTargets:** ["specs/<NNN-feature-name>", ...]
 - **tags:** { "tdd": "true", "grillMode": "required-on-ambiguity", ... }
 - **rationale:** <1 sentence explaining why this mode and these targets>
@@ -301,6 +301,8 @@ Every recommendation MUST produce a **Ready-to-Run Command Block** in this forma
 **Why these tags:** <1 sentence per non-obvious tag>
 **What to expect:** <1 sentence on output/outcome>
 ````
+
+**v7 mode-input rule (ABSOLUTE):** Always emit the `mode: <registry-key>` form (e.g. `mode: full-delivery`) or the v6 primitive+tag form (e.g. `implement action:full-delivery target:spec`). NEVER emit a bare `/bubbles.workflow <v5-name>` leading-token form — v7.0 removed bare v5 mode names as operator input, so `mode-resolver.sh` rejects them with exit 3 and prints the v6 form to use. The v5 names remain the canonical registry KEYS, so `mode: <v5-name>` and persisted `state.json.workflowMode` values keep resolving unchanged (the guards pass `--grandfather` for stored modes).
 
 If the recommendation is a direct agent (not a workflow), use the same format:
 
@@ -510,7 +512,7 @@ For any multi-step request, discover current agents and compose the sequence fro
 1. Scan `agents/bubbles.*.agent.md` and read each agent's `description:` from YAML frontmatter
 2. Match the user's keywords/intent against agent descriptions
 3. If multiple agents could match, prefer the one whose description most closely matches the user's stated goal
-4. For workflow-level requests, also scan `bubbles/workflows.yaml` mode descriptions
+4. For workflow-level requests, also scan `bubbles/workflows/modes.yaml` mode descriptions
 
 **Illustrative patterns** (not exhaustive — discover the real list from files):
 
@@ -527,7 +529,7 @@ For any multi-step request, discover current agents and compose the sequence fro
 
 When a user asks "which mode should I use?" or describes a situation:
 
-1. **Read `bubbles/workflows.yaml`** → scan all mode definitions under `deliveryModes:` (or the mode keys at the top level)
+1. **Read `bubbles/workflows/modes.yaml`** → scan all mode definitions (the mode keys under `modes:`)
 2. **Match the user's goal** against each mode's `description:` field
 3. **Consider the mode's constraints** (e.g., `requireExistingImplementation`, `readOnlyAudit`, `noCodeChanges`) to filter candidates
 4. **Present the best match** with a brief explanation of why it fits
@@ -578,7 +580,7 @@ This file does NOT enumerate framework capabilities, version-specific features, 
 | "What can Bubbles do?" / "What's available?" | `docs/CATALOG.md`, `bubbles/capability-ledger.yaml`, `docs/recipes/README.md`, `docs/CHEATSHEET.md` | Group by feature class; do not dump raw file lists |
 | "What's new?" / "What changed in v3.X?" / "What's in the latest release?" | `CHANGELOG.md` (Unreleased + most recent version section), `VERSION` | Read CHANGELOG fresh each time; never recite from memory |
 | "Which agent should I use for X?" | `agents/*.agent.md` `description:` frontmatter, `bubbles/agent-capabilities.yaml`, `bubbles/agent-ownership.yaml` | Match user intent against live agent descriptions |
-| "Which workflow mode for X?" | `bubbles/workflows.yaml` (mode definitions + constraints), `agents/bubbles_shared/workflow-mode-resolution.md`, `docs/guides/WORKFLOW_MODES.md` | Mode-resolution table is the canonical intent -> mode map |
+| "Which workflow mode for X?" | `bubbles/workflows/modes.yaml` (mode definitions + constraints), `agents/bubbles_shared/workflow-mode-resolution.md`, `docs/guides/WORKFLOW_MODES.md` | Mode-resolution table is the canonical intent -> mode map |
 | "Which recipe applies?" | `docs/recipes/README.md` (categorized index), `docs/recipes/*.md` first lines | Read recipe titles fresh |
 | "Which skill applies?" | `skills/*/SKILL.md` `description:` frontmatter (source repo) or `.github/skills/*/SKILL.md` (downstream) | Trigger phrases live in the description |
 | "What does gate G0XX enforce?" | `bubbles/workflows.yaml` (mode `requiredGates`), `agents/bubbles_shared/agent-common.md` (gate definitions) | Never assume gate semantics — read the definition |

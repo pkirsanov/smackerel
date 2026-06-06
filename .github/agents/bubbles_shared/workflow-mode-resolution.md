@@ -118,7 +118,7 @@ When resolving mode in Phase 0, `bubbles.workflow` MUST check whether the user's
 
 ## Mode Template Inheritance
 
-As of v3.9.0, modes in `bubbles/workflows.yaml` may share common scalars, maps, and arrays via reusable templates defined under a top-level `modeTemplates:` block. A mode (or another template) opts in via `inherits: [<template-name>...]`.
+As of v3.9.0, modes in `bubbles/workflows/modes.yaml` may share common scalars, maps, and arrays via reusable templates defined under a top-level `modeTemplates:` block in `bubbles/workflows.yaml` (the `mode-resolver.sh` composes both files at read time). A mode (or another template) opts in via `inherits: [<template-name>...]`.
 
 **Resolver:** `bubbles/scripts/mode-resolver.sh`
 
