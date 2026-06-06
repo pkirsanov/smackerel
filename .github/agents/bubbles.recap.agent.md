@@ -41,7 +41,7 @@ When recap can identify a concrete continuation target, end the response with:
 - target: specs/<NNN-feature> | specs/<NNN-feature>/bugs/BUG-... | none
 - targetType: feature | bug | ops | framework | none
 - intent: continue delivery | close bug | validate release readiness | publish docs | framework follow-up
-- preferredWorkflowMode: <any valid workflow mode from bubbles/workflows.yaml> | none
+- preferredWorkflowMode: <any valid workflow mode from bubbles/workflows/modes.yaml> | none
 - tags: <comma-separated tags or none>
 - reason: <short rationale>
 - directAgentOnly: false

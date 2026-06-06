@@ -10,7 +10,7 @@
 
 1. Anti-fabrication monotonically stronger or equal — never weaker.
 2. No gate removed; gates may be consolidated/generated/moved.
-3. v5 mode names accepted as aliases through the entire v6 cycle; removed in v7.
+3. v5 mode names accepted as aliases through the entire v6 cycle; **removed as operator input in v7.0** (they remain registry keys; existing artifacts grandfathered).
 4. No new operator command required to keep working — every v5.x command keeps working until v7.
 5. MCP server is **optional** for repos that don't use MCP-aware clients; bash scripts remain the supported fallback.
 6. Pure mechanical upgrade via `install.sh --local-source` + one-time `bubbles/scripts/migrate-modes-v5-to-v6.sh`.
@@ -37,7 +37,7 @@
 | B1 | Flip M2 (evidence bridge) to MCP-primary | `bubbles/scripts/evidence-tool-log-bridge.sh`, `bubbles/scripts/guards/evidence-depth.sh` | When MCP server is registered, gate queries the bridge via MCP `query_tool_log`; bash path is fallback. Markdown path remains accepted (v6 still has it). |
 | B2 | Flip M5 (diff-evidence-guard) to default-on for ALL specs | `bubbles/scripts/diff-evidence-guard.sh`, `bubbles/scripts/state-transition-guard.sh` | Guard always blocks; per-spec opt-out via `state.json.modernization.diffEvidence = "advisory"` documented for emergency. |
 | B3 | Result-envelope JSON: validator blocking | `bubbles/scripts/result-envelope-validate.sh`, `bubbles/scripts/framework-validate.sh` | Agent file without a valid `result_envelope:` block fails framework-validate. |
-| B4 | Mode collapse (S1 from MODERNIZATION_PLAN) | new `bubbles/workflows/{analyze,plan,implement,test,validate,fix,ship,propagate,upkeep,review,improve,docs,iterate,resume,framework-health}.yaml`; legacy alias table in `bubbles/workflows/aliases.yaml`; `mode-resolver.sh` resolves both | 54 v5 modes resolve via primitive + tag. Old mode strings still resolve (alias) with deprecation warning. Selftest covers every v5 mode → primitive+tag mapping. |
+| B4 | Mode collapse (55 v5 modes → 15 v6 primitives + tag grammar) | legacy alias table in `bubbles/workflows/aliases.yaml`; `mode-resolver.sh` resolves v5 mode names ↔ v6 primitive+tag form; v6.1 split the `modes:` registry out of `workflows.yaml` into `bubbles/workflows/modes.yaml` | 55 v5 modes resolve via primitive + tag. Through v6, old mode strings still resolved with a deprecation warning; **v7.0 rejects bare v5 names as input** (registry keys retained; existing artifacts grandfathered). Selftest covers every v5 mode → primitive+tag mapping. |
 | B5 | Skill pruning | delete listed thin-pointer skills (<80 LOC each); keep substantive policy skills | Inventory file `bubbles/skills/INVENTORY.md` lists kept + removed (with reason). No unique policy content lost. |
 | B6 | Doc consolidation | merge near-duplicate recipes/guides; tag each remaining doc with audience (`operator`/`agent`/`maintainer`) | Doc count drops ~15%; `docs/governance-index.md` regenerated. |
 | B7 | Cheatsheet generator (replaces drift check) | `bubbles/scripts/generate-cheatsheet.sh` | Single source of truth → emits both `docs/CHEATSHEET.md` and `docs/its-not-rocket-appliances.html`. H7 drift check retired. |

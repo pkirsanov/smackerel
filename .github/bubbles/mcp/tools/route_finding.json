@@ -1,0 +1,22 @@
+{
+  "name": "route_finding",
+  "description": "Route a discovered finding (test failure, lint error, gate violation) to the correct downstream disposition (in-scope fix, defer-with-ticket, sibling-spec handoff) per the discovered-issue-disposition-guard. Wraps discovered-issue-disposition-guard.sh. The optional envelope parameter points to a result envelope JSON that the guard inspects for finding ledger consistency.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "spec_dir": {
+        "type": "string",
+        "description": "Spec directory whose finding ledger should be classified."
+      },
+      "envelope": {
+        "type": "string",
+        "description": "Optional path to a result envelope JSON (relative to repo root or absolute).",
+        "default": ""
+      }
+    },
+    "required": ["spec_dir"]
+  },
+  "script": "discovered-issue-disposition-guard.sh",
+  "argsTemplate": ["${spec_dir}"],
+  "successExitCodes": [0]
+}

@@ -1,0 +1,288 @@
+# Bubbles Installer Manifest (v6.0 / B9)
+#
+# Typed enumeration of every action `install.sh` performs against a
+# downstream repo. Consumed by `bubbles/scripts/generate-installer.sh
+# --check` to verify that `install.sh` actually implements every declared
+# step. Future increments may flip this from a verification source to a
+# generation source (i.e. emit `install.sh` from this YAML).
+#
+# Step types:
+#   directory_copy   recursive copy of a source directory into the target tree
+#   glob_install     copy a set of files matching a glob into a target directory
+#   gitignore_add    ensure a line is present in a named .gitignore (creates file if missing)
+#   migration_rename rename or remove a legacy filename/dirname under the target
+#   version_stamp    copy VERSION into ${TARGET}/bubbles/.version
+#   provenance_write write ${TARGET}/bubbles/.install-source.json
+#
+# Each step must declare:
+#   name              human-readable step name (must appear in install.sh as info() or section comment)
+#   type              one of the step types above
+#   target_dir        path RELATIVE to ${TARGET} (or repo root for repo-rooted steps)
+#   source_dir        path RELATIVE to the unpacked source payload (for directory_copy)
+#   glob              glob expression in source (for glob_install)
+#   chmod             optional file mode to apply after copy (e.g. "+x")
+#   required          true = step must be present; false = step may be absent in older payloads
+#   gitignore_root    "repo-root" or "target" (for gitignore_add)
+#   gitignore_line    canonical line to ensure (for gitignore_add)
+#   marker            grep-friendly substring that MUST appear in install.sh for this step
+#   bug_class         family of historical bug this step closes (e.g. "missing-chmod", "wrong-gitignore-root")
+#
+# Adversarial fixtures in `generate-installer-selftest.sh` mutate
+# install.sh to remove or corrupt each step and verify the checker
+# rejects the mutation. This makes the bug class structurally impossible.
+
+version: 1
+
+steps:
+  # ── Phase 1: framework surface install ────────────────────────────
+  - name: install_agents
+    type: directory_copy
+    target_dir: agents
+    source_dir: agents
+    marker: 'Installing agents'
+    bug_class: missing-agent-tree
+    required: true
+
+  - name: install_agents_bubbles_shared
+    type: directory_copy
+    target_dir: agents/bubbles_shared
+    source_dir: agents/bubbles_shared
+    marker: 'agents/bubbles_shared'
+    bug_class: missing-shared-agents
+    required: true
+
+  - name: install_prompts
+    type: glob_install
+    target_dir: prompts
+    glob: prompts/bubbles.*.prompt.md
+    marker: 'Installing prompts'
+    bug_class: missing-prompts
+    required: true
+
+  - name: install_workflows
+    type: glob_install
+    target_dir: bubbles
+    glob: bubbles/*.yaml
+    marker: 'Installing workflow config and registries'
+    bug_class: missing-workflow-config
+    required: true
+
+  - name: install_release_manifest
+    type: file_copy
+    target_dir: bubbles
+    source_file: bubbles/release-manifest.json
+    marker: 'release-manifest.json'
+    bug_class: missing-release-manifest
+    required: true
+
+  - name: install_scripts
+    type: glob_install
+    target_dir: bubbles/scripts
+    glob: bubbles/scripts/*.sh
+    chmod: '+x'
+    marker: 'Installing governance scripts'
+    bug_class: missing-chmod
+    required: true
+
+  - name: install_adapters
+    type: directory_copy
+    target_dir: bubbles/adapters
+    source_dir: bubbles/adapters
+    chmod: '+x'
+    marker: 'Installing framework adapters'
+    bug_class: missing-adapter-tree
+    required: true
+
+  - name: install_schemas
+    type: directory_copy
+    target_dir: bubbles/schemas
+    source_dir: bubbles/schemas
+    marker: 'Installing framework schemas'
+    bug_class: missing-schemas
+    required: true
+
+  - name: install_registry
+    type: directory_copy
+    target_dir: bubbles/registry
+    source_dir: bubbles/registry
+    marker: 'Installing framework registry'
+    bug_class: missing-registry
+    required: true
+
+  - name: install_mcp
+    type: directory_copy
+    target_dir: bubbles/mcp
+    source_dir: bubbles/mcp
+    marker: 'Installing MCP server'
+    bug_class: missing-mcp-surface
+    required: true
+
+  - name: install_workflow_alias_map
+    type: directory_copy
+    target_dir: bubbles/workflows
+    source_dir: bubbles/workflows
+    marker: 'Installing workflow alias map'
+    bug_class: missing-workflow-alias-map
+    required: true
+
+  - name: install_installer_manifest
+    type: directory_copy
+    target_dir: bubbles/installer
+    source_dir: bubbles/installer
+    marker: 'Installing installer manifest'
+    bug_class: missing-installer-manifest
+    required: true
+
+  - name: install_cheatsheet_registry
+    type: directory_copy
+    target_dir: bubbles/cheatsheet
+    source_dir: bubbles/cheatsheet
+    marker: 'cheatsheet'
+    bug_class: missing-cheatsheet-registry
+    required: false
+
+  # ── Phase 2: repo-root gitignore writes (HIGH bug-risk surface) ──
+  - name: gitignore_improvements_root
+    type: gitignore_add
+    gitignore_root: repo-root
+    gitignore_line: 'improvements/'
+    marker: 'improvements/ to .gitignore'
+    bug_class: wrong-gitignore-root
+    required: true
+    # Historical bug ce01576: improvements/ was being written into
+    # .github/.gitignore instead of repo-root .gitignore, so git still
+    # tracked the scratch directory. The check verifies the gitignore
+    # path is RELATIVE TO REPO ROOT, not RELATIVE TO ${TARGET}.
+
+  # ── Phase 3: optional shared content (--agents-only flips these off) ──
+  - name: install_instructions
+    type: glob_install
+    target_dir: instructions
+    glob: instructions/*.md
+    marker: 'Installing shared instructions'
+    bug_class: missing-instructions
+    required: false
+    flag_gate: not_agents_only
+
+  - name: install_skills
+    type: directory_copy
+    target_dir: skills
+    source_dir: skills
+    marker: 'Installing shared skills'
+    bug_class: missing-skills
+    required: false
+    flag_gate: not_agents_only
+
+  # ── Phase 4: bootstrap scaffolding (no --bootstrap = skip) ───────
+  - name: install_bootstrap_templates
+    type: directory_copy
+    target_dir: templates
+    source_dir: templates
+    marker: 'Installing bootstrap templates'
+    bug_class: missing-templates
+    required: false
+
+  - name: install_bootstrap_defaults
+    type: directory_copy
+    target_dir: .specify
+    source_dir: .specify
+    marker: 'Installing bootstrap defaults'
+    bug_class: missing-bootstrap-defaults
+    required: false
+
+  - name: install_framework_docs
+    type: directory_copy
+    target_dir: docs
+    source_dir: docs
+    marker: 'Installing framework docs'
+    bug_class: missing-framework-docs
+    required: false
+
+  # ── Phase 5: migrations ─────────────────────────────────────────
+  - name: migration_legacy_instructions
+    type: migration_rename
+    legacy_renames:
+      - "agents.instructions.md:bubbles-agents.instructions.md"
+      - "skills.instructions.md:bubbles-skills.instructions.md"
+      - "docker-lifecycle-governance.instructions.md:bubbles-docker-lifecycle-governance.instructions.md"
+    target_dir: instructions
+    marker: 'Migrated: instructions'
+    bug_class: stale-legacy-instruction
+    required: true
+
+  - name: migration_legacy_skills
+    type: migration_rename
+    legacy_renames:
+      - "skill-authoring:bubbles-skill-authoring"
+      - "docker-port-standards:bubbles-docker-port-standards"
+      - "spec-template-bdd:bubbles-spec-template-bdd"
+      - "docker-lifecycle-governance:bubbles-docker-lifecycle-governance"
+    target_dir: skills
+    marker: 'Migrated: skills'
+    bug_class: stale-legacy-skill
+    required: true
+
+  # ── Phase 6: provenance ─────────────────────────────────────────
+  - name: version_stamp
+    type: version_stamp
+    target_file: bubbles/.version
+    source_file: VERSION
+    marker: 'Bubbles v'
+    bug_class: missing-version-stamp
+    required: true
+
+  - name: install_provenance
+    type: provenance_write
+    target_file: bubbles/.install-source.json
+    required_fields:
+      - installedVersion
+      - installMode
+      - sourceRef
+      - sourceGitSha
+      - sourceDirty
+      - installedAt
+    marker: 'Install provenance written'
+    bug_class: missing-install-provenance
+    required: true
+
+# ── Invariants enforced by the checker ──────────────────────────
+invariants:
+  - id: gitignore_root_is_repo_root
+    description: |
+      gitignore_add steps with gitignore_root=repo-root MUST NOT be
+      implemented by writing into ${TARGET}/.gitignore. The check
+      greps install.sh for the gitignore_line and verifies the
+      surrounding context references ".gitignore" (no ${TARGET}/
+      prefix) and that the write is preceded by [[ ! -f ".gitignore" ]]
+      style root-relative existence checks.
+    closes_bug: ce01576
+
+  - id: scripts_are_chmod_x
+    description: |
+      install_scripts step MUST chmod +x the destination tree. The
+      check verifies install.sh contains `chmod +x "${TARGET}"/bubbles/scripts/*.sh`
+      OR an equivalent find ... -exec chmod +x {} ; statement.
+    closes_bug: missing-chmod
+
+  - id: adapter_files_are_chmod_x
+    description: |
+      install_adapters step MUST chmod +x adapter shell scripts. The
+      check verifies install.sh contains `find "${TARGET}/bubbles/adapters" -type f -name '*.sh' -exec chmod +x`
+      OR equivalent.
+    closes_bug: adapter-not-executable
+
+  - id: every_step_has_a_marker
+    description: |
+      Each step's marker MUST appear as a literal substring in
+      install.sh. This is the structural guarantee that the step is
+      present. Missing marker => generator-check FAIL.
+    closes_bug: silent-step-deletion
+
+  - id: provenance_records_six_fields
+    description: |
+      .install-source.json MUST carry exactly the six declared fields
+      (installedVersion, installMode, sourceRef, sourceGitSha,
+      sourceDirty, installedAt). The check greps install.sh for the
+      cat > heredoc emitting .install-source.json and verifies every
+      field name appears.
+    closes_bug: missing-provenance-field

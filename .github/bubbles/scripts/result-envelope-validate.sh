@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
 #
-# bubbles result-envelope-validate.sh (v5.2 / F5).
+# bubbles result-envelope-validate.sh
 #
 # Scans every `agents/*.agent.md` for ```json fenced blocks tagged as
 # `result_envelope:` (or `result-envelope:`) and validates each against
 # bubbles/schemas/result-envelope.schema.json.
 #
-# v5.2: ADVISORY. Missing block in an agent file → warn, do not fail.
-#       Malformed block → warn, do not fail. v6 F5 promotion makes both
-#       blocking.
+# Modes (history):
+#   v5.2 / F5: full ADVISORY. Missing or malformed envelopes warn only.
+#   v6.0 / B3: malformed envelopes BLOCK. Missing envelopes still WARN
+#              (full coverage tracked as v6.1 follow-up — flipping all 40
+#              agents at once would block every push without rolling
+#              authoring work first).
 #
 # Usage:
-#   result-envelope-validate.sh           # scan whole repo, exit 0 always
-#                                         # (advisory)
-#   result-envelope-validate.sh --strict  # exit 1 on any failure
+#   result-envelope-validate.sh                  # v6.0 default: malformed
+#                                                # blocks, missing warns
+#   result-envelope-validate.sh --advisory       # v5.2 behavior: never block
+#   result-envelope-validate.sh --strict         # block on missing OR malformed
+#                                                # (v6.1+; opt-in until all
+#                                                # agents are populated)
 #
 # Exit codes:
-#   0  advisory mode (default), or strict mode with no findings
-#   1  strict mode + at least one envelope is malformed/missing
+#   0  no blocking findings
+#   1  at least one blocking finding for the active mode
 #   2  usage error or missing schema
 
 set -euo pipefail
@@ -27,8 +33,18 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SCHEMA="$REPO_ROOT/bubbles/schemas/result-envelope.schema.json"
 AGENTS_DIR="$REPO_ROOT/agents"
 
-STRICT=0
-if [[ "${1:-}" == "--strict" ]]; then STRICT=1; fi
+MODE="v6-default"  # v6.0 / B3 default: malformed blocks, missing warns.
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --strict) MODE="strict"; shift;;
+    --advisory) MODE="advisory"; shift;;
+    -h|--help)
+      sed -n '1,30p' "$0" >&2
+      exit 0
+      ;;
+    *) echo "result-envelope-validate: unknown arg: $1" >&2; exit 2;;
+  esac
+done
 
 [[ -f "$SCHEMA" ]] || { echo "result-envelope-validate: schema missing at $SCHEMA" >&2; exit 2; }
 [[ -d "$AGENTS_DIR" ]] || { echo "result-envelope-validate: agents/ missing at $AGENTS_DIR" >&2; exit 2; }
@@ -38,13 +54,13 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 0
 fi
 
-AGENTS_DIR="$AGENTS_DIR" SCHEMA="$SCHEMA" STRICT="$STRICT" python3 - <<'PY'
+AGENTS_DIR="$AGENTS_DIR" SCHEMA="$SCHEMA" MODE="$MODE" python3 - <<'PY'
 import json, os, re, sys
 from pathlib import Path
 
 agents_dir = Path(os.environ['AGENTS_DIR'])
 schema_path = Path(os.environ['SCHEMA'])
-strict = int(os.environ['STRICT']) == 1
+mode = os.environ.get('MODE', 'v6-default')  # advisory | v6-default | strict
 
 try:
     import jsonschema
@@ -103,20 +119,28 @@ print(f"result-envelope-validate: scanned {total_agents} agent file(s)")
 print(f"  with valid envelope: {agents_with_envelope}")
 print(f"  missing envelope: {len(agents_missing_envelope)}")
 print(f"  malformed envelope(s): {len(malformed_envelopes)}")
+print(f"  mode: {mode}")
 
-if agents_missing_envelope and not strict:
-    print("  Advisory (v5.2): the following agents do not yet emit a result_envelope JSON block:")
+if agents_missing_envelope and mode != "strict":
+    print("  Advisory: the following agents do not yet emit a result_envelope JSON block:")
     for name in agents_missing_envelope[:10]:
         print(f"    - {name}")
     if len(agents_missing_envelope) > 10:
         print(f"    ... and {len(agents_missing_envelope) - 10} more")
-    print("  v6 will make this blocking. No action required yet.")
+    if mode == "v6-default":
+        print("  v6.1 will make MISSING blocking. Authoring envelopes for all 40 agents is tracked separately.")
 
 for name, err in malformed_envelopes[:10]:
     print(f"  MALFORMED: {name}: {err}")
 
-# v5.2 advisory mode: always exit 0 unless --strict.
-if strict and (agents_missing_envelope or malformed_envelopes):
-    sys.exit(1)
-sys.exit(0)
+# Exit policy:
+#   advisory     -> always 0
+#   v6-default   -> 1 iff any malformed; missing warns only
+#   strict       -> 1 iff any malformed OR missing
+if mode == "advisory":
+    sys.exit(0)
+if mode == "v6-default":
+    sys.exit(1 if malformed_envelopes else 0)
+# strict
+sys.exit(1 if (agents_missing_envelope or malformed_envelopes) else 0)
 PY

@@ -1,0 +1,376 @@
+# v5 → v6 Workflow Mode Alias Table
+#
+# v6.0 collapses the operator-visible workflow surface from 55 modes to
+# 15 primitives + tag grammar. This file is the canonical alias map.
+#
+# Resolution semantics (enforced by mode-resolver.sh):
+#   1. If the user invokes a v6 primitive+tag form (e.g. `ship train:mvp action:promote`),
+#      the resolver matches the (primitive, tag) tuple in the `v6Primitives` block
+#      below and resolves to the underlying v5 mode by REVERSE lookup of this
+#      table, then resolves that mode definition from workflows.yaml. Tag grammar
+#      enforces unknown tags are rejected.
+#   2. If the user invokes a bare v5 mode name (e.g. `release-train-promote`)
+#      as NEW operator input, the resolver REJECTS it (exit 3, v7.0) and prints
+#      the v6 form to use instead. The v5 names remain the canonical registry
+#      KEYS, so this table still maps v6 forms to those keys and existing
+#      artifacts (state.json.workflowMode) keep resolving unchanged. Tools that
+#      resolve a PERSISTED mode pass --grandfather / set
+#      BUBBLES_MODE_GRANDFATHER=1, which downgrades the rejection to a
+#      deprecation notice and resolves the stored key. The
+#      migrate-modes-v5-to-v6.sh script (C1) rewrites operator-side invocations
+#      from v5 names to v6 forms automatically.
+#
+# Invariants
+#   - Every v5 mode in workflows.yaml MUST appear under `v5Aliases`.
+#   - Every primitive listed under `v6Primitives` MUST have at least one entry.
+#   - The (primitive, tag) tuple MUST be unique across this file.
+#   - The v5 mode name MUST be unique across this file.
+#
+# Selftest: bubbles/scripts/mode-alias-selftest.sh enforces all four invariants
+# AND verifies that every v5 alias resolves to a primitive+tag pair that
+# produces a byte-identical resolved mode definition from workflows.yaml.
+# Adversarial fixtures cover: missing v5 mode, duplicate (primitive, tag),
+# v6 primitive not in the canonical 15, unknown tag.
+
+version: 1
+
+# The 15 canonical v6 primitives. Order is documentation-only.
+v6Primitives:
+- analyze
+- plan
+- implement
+- test
+- validate
+- fix
+- ship
+- propagate
+- upkeep
+- review
+- improve
+- docs
+- iterate
+- resume
+- framework-health
+
+# NOTE: `analyze` is a canonical v6 primitive but no v5 mode maps to it
+# standalone. v5 always rolled `analyze` into `plan` (e.g. product-to-planning).
+# In v6, an operator can invoke `analyze target:product` directly without going
+# through `plan` — this is a new v6 capability covered by the selftest's
+# "primitive-without-v5-alias" allowance.
+
+# Tag grammar (descriptive — enforced by mode-resolver.sh):
+#   action:<verb>      — what the primitive is doing
+#                        e.g. action:promote, action:cut, action:rollback
+#   task:<task-name>   — for upkeep, names the recurring task
+#                        e.g. task:restore-drill, task:backup-verify
+#   target:<thing>     — what the primitive targets
+#                        e.g. target:doc, target:full-stack, target:framework
+#   train:<name>       — release-train identifier for ship/propagate work
+#   edge:<direction>   — propagation direction (forward, backport, audit)
+#   audience:<who>     — operator|agent|maintainer (currently unused)
+# Reserved compound tag: "lifecycle:adapter-readiness", "lifecycle:dark-launch",
+# "lifecycle:migration-pending" — encode delivery-with-pending-activation modes.
+
+# v5 mode name → v6 primitive + tag set
+v5Aliases:
+  # -------------------- Delivery family --------------------
+  value-first-e2e-batch:
+    primitive: implement
+    tags: { action: full-delivery, target: highest-value-batch }
+    description: Discover highest-value work, bootstrap missing artifacts, deliver end to end.
+
+  full-delivery:
+    primitive: implement
+    tags: { action: full-delivery, target: spec }
+    description: Maximum-assurance delivery of a known spec.
+
+  product-to-delivery:
+    primitive: implement
+    tags: { action: full-delivery, target: product, prelude: analyze-design-plan }
+    description: Analyst -> UX -> design -> plan -> implement -> ship for a brand-new product feature.
+
+  improve-existing:
+    primitive: improve
+    tags: { target: existing-feature, action: analyze-and-harden }
+    description: Analyze + harden + close gaps on existing code, then test + docs.
+
+  idea-to-release-completion:
+    primitive: improve
+    tags: { target: release-cycle, action: full-loop }
+    description: Idea -> release-packet bootstrap -> spec/design/scopes -> deliver -> packet refresh.
+
+  # -------------------- Bug/incident family --------------------
+  bugfix-fastlane:
+    primitive: fix
+    tags: { target: bug, action: fastlane }
+    description: Reproduce-fix-verify with regression + hardening + validation + audit.
+
+  incident-fastlane:
+    primitive: fix
+    tags: { target: production-incident, action: triage-fix-validate-propagate-audit }
+    description: Production-incident chain across triage, fix, validate, propagate, audit.
+
+  # -------------------- Plan/spec/design family --------------------
+  spec-scope-hardening:
+    primitive: plan
+    tags: { target: scope, action: harden }
+    description: Tighten specs and scope definitions; no implementation.
+
+  product-to-planning:
+    primitive: plan
+    tags: { target: product, action: analyze-design-plan }
+    description: Analyst + UX + design + plan; no implementation.
+
+  release-planning-to-doc:
+    primitive: plan
+    tags: { target: release-packet, action: produce-or-refresh, finalize: docs }
+    description: Produce/refresh a phase release packet; enforce Product Direction Surfaces trio.
+
+  # -------------------- Test family --------------------
+  test-to-doc:
+    primitive: test
+    tags: { target: spec, action: run-and-fix, finalize: docs }
+    description: Run tests, fix failures, publish docs.
+
+  # -------------------- Validation/audit/diagnostic family --------------------
+  validate-only:
+    primitive: validate
+    tags: { action: gates-only }
+    description: Run validation gates only.
+
+  audit-only:
+    primitive: validate
+    tags: { action: audit-only }
+    description: Run audit phase only.
+
+  validate-to-doc:
+    primitive: validate
+    tags: { action: gates-plus-audit, finalize: docs }
+    description: Validate + audit + docs.
+
+  spec-review-to-doc:
+    primitive: review
+    tags: { target: specs, action: freshness-audit, finalize: docs }
+    description: Audit specs for freshness, classify trust levels, produce maintenance report.
+
+  # -------------------- Hardening/gaps/security/regression/stabilize family --------------------
+  harden-to-doc:
+    primitive: validate
+    tags: { action: harden, finalize: docs }
+    description: Harden existing code, fix issues, test + doc.
+
+  gaps-to-doc:
+    primitive: validate
+    tags: { action: gaps-analysis, finalize: docs }
+    description: Gap analysis -> implement fixes -> test -> docs.
+
+  harden-gaps-to-doc:
+    primitive: validate
+    tags: { action: harden-and-gaps, finalize: docs }
+    description: "Pre-release sweep: harden + gaps + test + docs."
+
+  security-to-doc:
+    primitive: validate
+    tags: { action: security-scan, finalize: docs }
+    description: Security scan + implement fixes + test + docs.
+
+  regression-to-doc:
+    primitive: validate
+    tags: { action: regression-check, finalize: docs }
+    description: Regression guardian check + fix cross-spec collisions + test + docs.
+
+  reconcile-to-doc:
+    primitive: improve
+    tags: { action: reconcile-stale-state, finalize: docs }
+    description: Reconcile stale state, fix conflicts, test, docs.
+
+  stabilize-to-doc:
+    primitive: validate
+    tags: { action: stability-diagnostic-then-devops, finalize: docs }
+    description: Stability diagnosis -> DevOps execution -> test -> docs.
+
+  devops-to-doc:
+    primitive: implement
+    tags: { target: devops, finalize: docs }
+    description: Focused DevOps execution for CI/CD, build, deployment, monitoring, observability, release automation.
+
+  simplify-to-doc:
+    primitive: improve
+    tags: { action: simplify, finalize: docs }
+    description: Simplify an existing implementation, prove it still works, sync docs.
+
+  # -------------------- Chaos family --------------------
+  chaos-hardening:
+    primitive: validate
+    tags: { action: chaos-iterative }
+    description: Iterative chaos + bugfix cycles until clean or limit reached.
+
+  chaos-to-doc:
+    primitive: validate
+    tags: { action: chaos-probe, finalize: docs }
+    description: Chaos probing -> fix -> docs.
+
+  stochastic-quality-sweep:
+    primitive: validate
+    tags: { action: stochastic, scope: portfolio }
+    description: Randomized adversarial probing across the portfolio.
+
+  # -------------------- Retro family --------------------
+  retro-to-simplify:
+    primitive: improve
+    tags: { prelude: retro, action: simplify }
+    description: Retro finds hotspots -> simplify fixes them.
+
+  retro-to-harden:
+    primitive: validate
+    tags: { prelude: retro, action: harden }
+    description: Retro finds bug magnets -> harden pipeline targets them.
+
+  retro-quality-sweep:
+    primitive: validate
+    tags: { prelude: retro, action: quality-sweep }
+    description: Retro picks hotspot mess -> simplify+harden+rest of crew sweeps it clean.
+
+  retro-to-review:
+    primitive: review
+    tags: { prelude: retro, target: code, action: identify-risk }
+    description: Retro identifies highest-risk files -> code-review reviews them.
+
+  framework-health:
+    primitive: framework-health
+    tags: { action: proposal-first }
+    description: Proposal-first self-observation of the framework itself. Writes only to improvements/.
+
+  # -------------------- Docs family --------------------
+  docs-only:
+    primitive: docs
+    tags: { target: managed-docs, action: maintain }
+    description: Managed-doc maintenance only.
+
+  # -------------------- Iteration family --------------------
+  iterate:
+    primitive: iterate
+    tags: { action: pick-next }
+    description: Priority-driven scope-by-scope execution.
+
+  resume-only:
+    primitive: resume
+    tags: { action: from-session-state }
+    description: Resume from saved session state.
+
+  autonomous-goal:
+    primitive: iterate
+    tags: { action: autonomous-goal-loop }
+    description: Single-goal convergence loop (Tyrone).
+
+  autonomous-sprint:
+    primitive: iterate
+    tags: { action: autonomous-sprint-loop }
+    description: Multi-goal time-bounded sprint controller (Erica).
+
+  # -------------------- Ship family (release-train mechanics) --------------------
+  release-train-cut:
+    primitive: ship
+    tags: { action: cut }
+    description: DVS cuts a candidate at a trunk SHA for a named train.
+
+  release-train-promote:
+    primitive: ship
+    tags: { action: promote }
+    description: Pointer-swap a candidate between slots on a train.
+
+  release-train-rollback:
+    primitive: ship
+    tags: { action: rollback }
+    description: Revert the train pointer to the previous candidate.
+
+  release-train-retire:
+    primitive: ship
+    tags: { action: retire }
+    description: End-of-life a train; requires flag-retirement completion.
+
+  release-train-status-all:
+    primitive: ship
+    tags: { action: status, scope: all-trains }
+    description: Portfolio rollup across every declared train.
+
+  adapter-readiness-to-packet:
+    primitive: ship
+    tags: { action: deliver, lifecycle: adapter-readiness }
+    description: Deliver an adapter to readiness state; packet certifies readiness for downstream consumption.
+
+  dark-launch-shipped:
+    primitive: ship
+    tags: { action: deliver, lifecycle: dark-launch }
+    description: Code shipped behind a default-off flag; pending flag flip.
+
+  migration-shipped-pending-cutover:
+    primitive: ship
+    tags: { action: deliver, lifecycle: migration-pending }
+    description: Migration code shipped but cutover not executed; pending operator cutover.
+
+  # -------------------- Propagate family (cross-train) --------------------
+  propagate-forward:
+    primitive: propagate
+    tags: { action: forward-merge }
+    description: J-Roc forward-merges a fix/feature across defaultFlow edges.
+
+  propagate-backport:
+    primitive: propagate
+    tags: { action: backport }
+    description: J-Roc backports under explicit train-owner approval token.
+
+  propagate-audit:
+    primitive: propagate
+    tags: { action: audit-drift }
+    description: Read-only drift detection between declared trains.
+
+  # -------------------- Upkeep family (calendar-driven) --------------------
+  upkeep-backup-verify:
+    primitive: upkeep
+    tags: { task: backup-verify }
+    description: Scheduled backup verification.
+
+  upkeep-restore-drill:
+    primitive: upkeep
+    tags: { task: restore-drill }
+    description: Weekly restore drill.
+
+  upkeep-bcdr-drill:
+    primitive: upkeep
+    tags: { task: bcdr-drill }
+    description: Quarterly BCDR drill.
+
+  upkeep-patch-cycle:
+    primitive: upkeep
+    tags: { task: patch-cycle }
+    description: Scheduled patch/dependency-rotation cycle.
+
+  upkeep-secret-rotation:
+    primitive: upkeep
+    tags: { task: secret-rotation }
+    description: Scheduled secret/credential rotation.
+
+  upkeep-flag-cleanup:
+    primitive: upkeep
+    tags: { task: flag-cleanup }
+    description: Remove feature flags before release-train-retire.
+
+  upkeep-compliance-sweep:
+    primitive: upkeep
+    tags: { task: compliance-sweep }
+    description: Quarterly compliance evidence collection.
+
+# Test entries used only by selftest. The selftest verifies these resolve
+# to the same backing v5 mode. Not consumed by mode-resolver.sh at runtime.
+selftestExpectations:
+- input: "ship action:promote"
+  expectV5Mode: release-train-promote
+- input: "upkeep task:restore-drill"
+  expectV5Mode: upkeep-restore-drill
+- input: "fix target:bug action:fastlane"
+  expectV5Mode: bugfix-fastlane
+- input: "validate action:gates-only"
+  expectV5Mode: validate-only
+- input: "framework-health action:proposal-first"
+  expectV5Mode: framework-health

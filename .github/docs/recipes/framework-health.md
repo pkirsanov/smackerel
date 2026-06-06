@@ -21,7 +21,7 @@
 ## Direct invocation
 
 ```
-/bubbles.workflow framework-health
+/bubbles.workflow framework-health action:proposal-first
 /bubbles.retro target: framework
 bash bubbles/scripts/retro-framework-health.sh
 ```
@@ -62,7 +62,7 @@ Framework evolution is high-trust. Even when the data shows "G123 has failed 47 
 If you read the proposal and agree:
 
 ```
-/bubbles.workflow full-delivery
+/bubbles.workflow implement action:full-delivery target:spec
 > implement IMP-NNN: <slug>
 ```
 

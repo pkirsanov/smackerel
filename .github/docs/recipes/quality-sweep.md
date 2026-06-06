@@ -11,7 +11,7 @@ Implementation is done but you want a thorough quality check — find gaps, hard
 ## The Command
 
 ```
-/bubbles.workflow  full-delivery for 042-catalog-assistant
+/bubbles.workflow implement action:full-delivery target:spec for 042-catalog-assistant
 ```
 
 Or just use natural language:
@@ -52,7 +52,7 @@ Updates documentation to match the hardened state.
 If you want the standalone quality bundle without the full no-loose-ends certification loop:
 
 ```
-/bubbles.workflow  harden-gaps-to-doc for 042-catalog-assistant
+/bubbles.workflow validate action:harden-and-gaps finalize:docs for 042-catalog-assistant
 ```
 
 ## Alternative: Stochastic Sweep
@@ -60,7 +60,7 @@ If you want the standalone quality bundle without the full no-loose-ends certifi
 Don't know what to check? Let the system randomly pick:
 
 ```
-/bubbles.workflow  stochastic-quality-sweep
+/bubbles.workflow validate action:stochastic scope:portfolio
 ```
 
 The stochastic parent now does exactly two things per round before execution: pick a spec and pick a trigger. After that it executes the mapped trigger-owned end-to-end workflow mode and **waits for it to complete** before starting the next round.
@@ -103,7 +103,7 @@ The same rule applies outside stochastic sweeps: if `chaos`, `test`, `simplify`,
 For repeated passes from one specialist angle, constrain the trigger pool instead of using a deterministic batch mode:
 
 ```
-/bubbles.workflow  stochastic-quality-sweep triggerAgents: stabilize maxRounds: 10
+/bubbles.workflow validate action:stochastic scope:portfolio triggerAgents: stabilize maxRounds: 10
 ```
 
 Use that pattern for requests like "do 10 rounds of stabilize" or similar single-specialist sweeps. Those are round-based stochastic passes, not `stabilize-to-doc` or other deterministic spec-batch workflows.

@@ -1,0 +1,11 @@
+{
+  "//": "Sample Cursor config. Cursor reads MCP servers from ~/.cursor/mcp.json (global) or .cursor/mcp.json (workspace). Substitute the absolute path to server.py.",
+  "mcpServers": {
+    "bubbles": {
+      "command": "python3",
+      "args": [
+        "/absolute/path/to/your/repo/.github/bubbles/mcp/server.py"
+      ]
+    }
+  }
+}

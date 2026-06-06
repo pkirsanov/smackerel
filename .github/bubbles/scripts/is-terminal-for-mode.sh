@@ -36,6 +36,11 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WORKFLOWS_FILE="${BUBBLES_WORKFLOWS_FILE:-$ROOT_DIR/bubbles/workflows.yaml}"
+# v6.1 (S2 true split): mode definitions live in their own registry. The raw
+# fallback reads below use it; fall back to workflows.yaml for pre-split repos
+# that still embed an inline modes: block.
+MODES_FILE="${BUBBLES_MODES_FILE:-$(dirname "$WORKFLOWS_FILE")/workflows/modes.yaml}"
+[[ -f "$MODES_FILE" ]] || MODES_FILE="$WORKFLOWS_FILE"
 
 usage() {
   cat <<'EOF'
@@ -79,17 +84,19 @@ fi
 # Resolve the mode (honoring `inherits:` template chains) so that ceilings
 # inherited from base-delivery / delivery-* templates are visible. Falls back
 # to the raw mode entry if mode-resolver.sh is missing.
+# v7: this resolves a PERSISTED mode argument, so grandfather the (possibly
+# v5-name) registry key — bare v5 names are rejected only for new operator input.
 resolved=""
 if [[ -x "$SCRIPT_DIR/mode-resolver.sh" ]]; then
-  resolved="$(bash "$SCRIPT_DIR/mode-resolver.sh" "$MODE" 2>/dev/null || true)"
+  resolved="$(BUBBLES_MODE_GRANDFATHER=1 bash "$SCRIPT_DIR/mode-resolver.sh" "$MODE" 2>/dev/null || true)"
 fi
 
 if [[ -n "$resolved" ]]; then
   ceiling="$(printf '%s\n' "$resolved" | yq -r '.statusCeiling // ""' 2>/dev/null || true)"
   aliases="$(printf '%s\n' "$resolved" | yq -r '.terminalAliases[]? // empty' 2>/dev/null || true)"
 else
-  ceiling="$(yq -r ".modes[\"$MODE\"].statusCeiling // \"\"" "$WORKFLOWS_FILE" 2>/dev/null || true)"
-  aliases="$(yq -r ".modes[\"$MODE\"].terminalAliases[]? // empty" "$WORKFLOWS_FILE" 2>/dev/null || true)"
+  ceiling="$(yq -r ".modes[\"$MODE\"].statusCeiling // \"\"" "$MODES_FILE" 2>/dev/null || true)"
+  aliases="$(yq -r ".modes[\"$MODE\"].terminalAliases[]? // empty" "$MODES_FILE" 2>/dev/null || true)"
 fi
 
 if [[ -z "$ceiling" || "$ceiling" == "null" ]]; then

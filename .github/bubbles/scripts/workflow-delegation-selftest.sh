@@ -22,6 +22,11 @@ if [[ -f "$ROOT_DIR/bubbles/workflows.yaml" ]]; then
 else
   BUBBLES_DIR="$ROOT_DIR/.github/bubbles"
 fi
+# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml,
+# not inline in workflows.yaml. Mode-internal policy patterns are checked there;
+# fall back to workflows.yaml for pre-split repos with an inline modes: block.
+MODES_FILE="$BUBBLES_DIR/workflows/modes.yaml"
+[[ -f "$MODES_FILE" ]] || MODES_FILE="$BUBBLES_DIR/workflows.yaml"
 
 failures=0
 
@@ -73,7 +78,7 @@ check_pattern "$BUBBLES_DIR/agent-capabilities.yaml" '^  bubbles\.goal:' "Agent 
 check_pattern "$BUBBLES_DIR/agent-capabilities.yaml" '^  bubbles\.sprint:' "Agent capabilities manifest declares sprint orchestrator"
 check_pattern "$BUBBLES_DIR/workflows.yaml" 'modeOrAgentFit:' "Workflow policy defines better-fit mode/agent escalation"
 check_pattern "$BUBBLES_DIR/workflows.yaml" 'missingAgentTool:' "Workflow policy defines missing agent-tool blocking outcome"
-check_pattern "$BUBBLES_DIR/workflows.yaml" 'allowParentExpandedChildWorkflow: true' "Workflow policy enables parent-expanded child workflow fallback"
+check_pattern "$MODES_FILE" 'allowParentExpandedChildWorkflow: true' "Workflow policy enables parent-expanded child workflow fallback"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'parent-expanded-child-mode' "Workflow agent documents parent-expanded child workflow execution"
 check_pattern "$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md" 'Do not assume a subagent can invoke another subagent' "Delegation core documents one-level runtime compatibility"
 check_pattern "$AGENTS_DIR/bubbles.goal.agent.md" 'parent-expand bugfix-fastlane' "Goal agent avoids nested workflow deadlock for remediations"

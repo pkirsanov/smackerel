@@ -50,8 +50,8 @@ The state transition guard automatically discovers and runs these gates. Blockin
 
 ## Gate IDs
 
-- Built-in gates: G001–G099 range, with active IDs listed in `bubbles/workflows.yaml`
-- Custom gates: G100+ (auto-assigned)
+- Framework (built-in) gates: **G001–G199 reserved**. Active IDs are listed in `bubbles/registry/gates.yaml` (the framework currently uses G001–G095 plus G110–G125).
+- Project-local custom gates: **G900+** (auto-assigned). The custom band is kept clear of the framework-reserved range so Bubbles upgrades can never collide with your gate IDs. The G200–G899 span is an intentional reserved gap.
 - Custom gates survive Bubbles upgrades — `bubbles-project.yaml` is never overwritten
 
 ## List Your Gates

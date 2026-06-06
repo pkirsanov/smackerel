@@ -112,7 +112,7 @@ Prompt files should reference the matching profile instead of embedding duplicat
 
 ## Mode Ceiling Pre-Flight (NON-NEGOTIABLE — ALL Agents, Gate G073)
 
-**Before editing ANY non-spec file** (source code, config, Docker, test files — anything outside `specs/`), every agent MUST check the active workflow mode's `statusCeiling` from the target's `state.json` → `workflowMode` field, resolved against `bubbles/workflows.yaml` (or `.github/bubbles/workflows.yaml` in downstream repos).
+**Before editing ANY non-spec file** (source code, config, Docker, test files — anything outside `specs/`), every agent MUST check the active workflow mode's `statusCeiling` from the target's `state.json` → `workflowMode` field, resolved against `bubbles/workflows/modes.yaml` (or `.github/bubbles/workflows/modes.yaml` in downstream repos).
 
 | `statusCeiling` | Allowed File Edits |
 |-----------------|--------------------| 

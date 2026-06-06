@@ -31,7 +31,7 @@ You have a feature idea (or a requirement from a stakeholder) and need to take i
 If you want Bubbles to stay autonomous, stop there. If you want a bounded clarification loop first, opt in explicitly:
 
 ```
-/bubbles.workflow  product-to-delivery for notification-system socratic: true socraticQuestions: 4
+/bubbles.workflow implement action:full-delivery target:product prelude:analyze-design-plan for notification-system socratic: true socraticQuestions: 4
 ```
 
 **What happens:** The analyst agent researches requirements, identifies actors, creates use cases, and writes `spec.md`.
@@ -83,15 +83,15 @@ Use the direct specialist form only when you intentionally want a surgical singl
 If you want the orchestrator to handle the entire flow:
 
 ```
-/bubbles.workflow  full-delivery for notification-system
+/bubbles.workflow implement action:full-delivery target:spec for notification-system
 ```
 
 Optional execution tags:
 
 ```
-/bubbles.workflow  full-delivery for notification-system gitIsolation: true autoCommit: true maxScopeMinutes: 20 maxDodMinutes: 8
+/bubbles.workflow implement action:full-delivery target:spec for notification-system gitIsolation: true autoCommit: true maxScopeMinutes: 20 maxDodMinutes: 8
 
-/bubbles.workflow  full-delivery for notification-system grillMode: required-on-ambiguity tdd: true
+/bubbles.workflow implement action:full-delivery target:spec for notification-system grillMode: required-on-ambiguity tdd: true
 ```
 
 This runs all phases automatically, routing artifact changes to the correct owner when needed and consuming concrete result envelopes between phases: analyze → bootstrap → implement → test → security → docs → validate → audit → chaos → finalize.

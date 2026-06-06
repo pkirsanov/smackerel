@@ -1,0 +1,12 @@
+{
+  "name": "list_open_findings",
+  "description": "Run the finding-closure selftest, which surfaces the canonical contract for finding-set closure (no cherry-picking, no easy-subset remediation) and validates that the workflow agents enforce one-to-one finding accounting. Wraps finding-closure-selftest.sh. Use to inspect the active finding-closure policy + verify enforcement.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  },
+  "script": "finding-closure-selftest.sh",
+  "argsTemplate": [],
+  "successExitCodes": [0]
+}

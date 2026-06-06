@@ -5,7 +5,7 @@
   "description": "Structured form of the markdown RESULT-ENVELOPE every Bubbles agent emits. Workflow agent parses the JSON instead of grepping prose. Markdown envelope MUST still be emitted alongside for human readability — JSON envelope is additive, not a replacement.",
   "type": "object",
   "required": ["agent", "outcome"],
-  "additionalProperties": false,
+  "additionalProperties": true,
   "properties": {
     "agent": {
       "type": "string",
@@ -71,8 +71,12 @@
       "description": "IDs from a prior packet's findings[] that this invocation could not close. MUST be empty when outcome=completed_owned."
     },
     "nextOwner": {
-      "type": "string",
-      "description": "Required when outcome=route_required. Agent name expected to act next."
+      "type": ["string", "null"],
+      "description": "Required when outcome=route_required (preferred field name). Agent name expected to act next. May be aliased as nextRequiredOwner for backwards compatibility. null is permitted for non-routing outcomes."
+    },
+    "nextRequiredOwner": {
+      "type": ["string", "null"],
+      "description": "Legacy alias for nextOwner. Either field satisfies the outcome=route_required requirement; new agents SHOULD prefer nextOwner."
     },
     "blocker": {
       "type": "object",
@@ -106,11 +110,21 @@
   "allOf": [
     {
       "if": { "properties": { "outcome": { "const": "route_required" } } },
-      "then": { "required": ["nextOwner"] }
+      "then": {
+        "anyOf": [
+          { "required": ["nextOwner"] },
+          { "required": ["nextRequiredOwner"] }
+        ]
+      }
     },
     {
       "if": { "properties": { "outcome": { "const": "blocked" } } },
-      "then": { "required": ["blocker"] }
+      "then": {
+        "anyOf": [
+          { "required": ["blocker"] },
+          { "required": ["blockedReason"] }
+        ]
+      }
     }
   ]
 }

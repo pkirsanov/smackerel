@@ -22,6 +22,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WORKFLOWS="$ROOT_DIR/bubbles/workflows.yaml"
+# v6.1 (S2 true split): mode definitions (incl constraints.requiresTopLevelRuntime)
+# live in bubbles/workflows/modes.yaml. This selftest only inspects mode blocks,
+# so read them from the registry; fall back to workflows.yaml for pre-split repos
+# that still embed an inline modes: block.
+if [[ -f "$ROOT_DIR/bubbles/workflows/modes.yaml" ]] && ! grep -qE '^modes:' "$WORKFLOWS"; then
+  WORKFLOWS="$ROOT_DIR/bubbles/workflows/modes.yaml"
+fi
 EXEC_LOOPS="$ROOT_DIR/agents/bubbles_shared/workflow-execution-loops.md"
 
 failures=0

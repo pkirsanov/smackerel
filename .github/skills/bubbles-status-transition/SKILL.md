@@ -15,7 +15,7 @@ Move a spec or scope through its lifecycle without violating the framework's tra
 - Investigating why `state-transition-guard.sh` rejected a transition
 
 ## Status ceiling per workflow mode
-Each workflow mode in `bubbles/workflows.yaml` declares a `statusCeiling`. The spec cannot transition to a status above this ceiling. Common ceilings:
+Each workflow mode in `bubbles/workflows/modes.yaml` declares a `statusCeiling`. The spec cannot transition to a status above this ceiling. Common ceilings:
 
 **v4.1.0:** the new `delivered_pending_activation` ceiling sits between `validated` and `done` for work that ships implementation + tests + audit + docs but defers live-runtime evidence to an external actor (operator commit, third-party approval, cutover window, regulator review). Modes targeting it: `adapter-readiness-to-packet`, `dark-launch-shipped`, `migration-shipped-pending-cutover`. See [`docs/v4.1.0-delivered-pending-activation.md`](../../docs/v4.1.0-delivered-pending-activation.md) for the full opt-in surface (`deliverableFiles[]` manifest, `phaseStubs{}`, lockdown tags, evidence-by-reference).
 
@@ -82,6 +82,6 @@ If any guard exits non-zero:
 - `agents/bubbles_shared/state-gates.md` — state-claim integrity
 - `agents/bubbles_shared/completion-governance.md` — sequential completion, deferral blocking
 - `agents/bubbles_shared/scope-workflow.md` — status ceiling enforcement
-- `bubbles/workflows.yaml` — per-mode `statusCeiling` definitions
+- `bubbles/workflows/modes.yaml` — per-mode `statusCeiling` definitions
 - `bubbles/scripts/state-transition-guard.sh` — mechanical guard
 - `bubbles/scripts/done-spec-audit.sh` — historical grandfather + recertification

@@ -12,6 +12,13 @@ fi
 
 agents_dir="$repo_root/agents"
 workflows_file="$repo_root/bubbles/workflows.yaml"
+# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml.
+# Parse the mode count from there unless workflows.yaml still embeds an inline
+# modes: block (pre-split / fixtures).
+modes_file="$repo_root/bubbles/workflows/modes.yaml"
+if grep -qE '^modes:' "$workflows_file" 2>/dev/null || [[ ! -f "$modes_file" ]]; then
+  modes_file="$workflows_file"
+fi
 generated_dir="$repo_root/docs/generated"
 
 count_agents() {
@@ -37,7 +44,25 @@ count_workflow_modes() {
     END {
       print count + 0
     }
-  ' "$workflows_file"
+  ' "$modes_file"
+}
+
+# v6 operator-visible surface: the canonical primitives listed under
+# v6Primitives: in bubbles/workflows/aliases.yaml (15). Operators interact with
+# these primitives + tag grammar; the 55 underlying definitions in
+# workflows.yaml remain reachable via v5 aliases.
+count_v6_primitives() {
+  aliases_file="$repo_root/bubbles/workflows/aliases.yaml"
+  if [ ! -f "$aliases_file" ]; then
+    echo 0
+    return
+  fi
+  awk '
+    /^v6Primitives:/ { in_p = 1; next }
+    in_p && /^[A-Za-z]/ { in_p = 0 }
+    in_p && /^- / { count++ }
+    END { print count + 0 }
+  ' "$aliases_file"
 }
 
 count_section_entries() {
@@ -111,6 +136,13 @@ version=$(cat "$repo_root/VERSION" | tr -d '[:space:]')
 agent_count=$(count_agents)
 gate_count=$(count_section_entries gates '^  G[0-9][0-9][0-9]:')
 workflow_mode_count=$(count_workflow_modes)
+primitive_count=$(count_v6_primitives)
+if [ "$primitive_count" -gt 0 ] 2>/dev/null && [ "$workflow_mode_count" -ge "$primitive_count" ] 2>/dev/null; then
+  alias_extra=$((workflow_mode_count - primitive_count))
+else
+  primitive_count=$workflow_mode_count
+  alias_extra=0
+fi
 phase_count=$(count_section_entries phases '^  [a-z][a-z0-9-]*:')
 
 summary_line="$agent_count Agents · $gate_count Gates · $workflow_mode_count Workflow Modes · $phase_count Phases"
@@ -192,7 +224,7 @@ block_temp=$(mktemp)
 cat <<EOF > "$block_temp"
   <img src="https://img.shields.io/badge/agents-$agent_count-58a6ff?style=flat-square" alt="$agent_count agents">
   <img src="https://img.shields.io/badge/gates-$gate_count-3fb950?style=flat-square" alt="$gate_count gates">
-  <img src="https://img.shields.io/badge/workflow_modes-$workflow_mode_count-bc8cff?style=flat-square" alt="$workflow_mode_count modes">
+  <img src="https://img.shields.io/badge/workflow_modes-${primitive_count}_primitives_%2B_${alias_extra}_aliases-bc8cff?style=flat-square" alt="$primitive_count primitive modes (+$alias_extra v5 aliases)">
 EOF
 replace_block "$repo_root/README.md" "GENERATED:FRAMEWORK_STATS_BADGES_START" "GENERATED:FRAMEWORK_STATS_BADGES_END" "$block_temp"
 
@@ -200,7 +232,7 @@ block_temp=$(mktemp)
 cat <<EOF > "$block_temp"
 <tr><td width="64"><img src="icons/bubbles-glasses.svg" width="48"></td><td><strong>$agent_count specialized agents</strong> — each with a defined role, from implementation to framework ops</td></tr>
 <tr><td width="64"><img src="icons/lahey-badge.svg" width="48"></td><td><strong>$gate_count quality gates</strong> — nothing ships without evidence. Nothing.</td></tr>
-<tr><td width="64"><img src="icons/julian-glass.svg" width="48"></td><td><strong>$workflow_mode_count workflow modes</strong> — from full delivery to quick bugfixes to chaos sweeps</td></tr>
+<tr><td width="64"><img src="icons/julian-glass.svg" width="48"></td><td><strong>$primitive_count primitive workflow modes</strong> — plus $alias_extra v5 aliases retained as registry keys — from full delivery to quick bugfixes to chaos sweeps</td></tr>
 EOF
 replace_block "$repo_root/README.md" "GENERATED:FRAMEWORK_STATS_CALLOUTS_START" "GENERATED:FRAMEWORK_STATS_CALLOUTS_END" "$block_temp"
 

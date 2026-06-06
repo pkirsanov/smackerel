@@ -416,7 +416,7 @@ Step 5: IF lint fails → STOP. Status stays "in_progress". Fix failures.
 
 #### Status Ceiling Enforcement (NON-NEGOTIABLE)
 
-**The `state.json` `status` field MUST NOT exceed the `statusCeiling` defined for the active workflow mode in `bubbles/workflows.yaml`.**
+**The `state.json` `status` field MUST NOT exceed the `statusCeiling` defined for the active workflow mode in `bubbles/workflows/modes.yaml`.**
 
 | Workflow Mode | `statusCeiling` | Meaning |
 |---------------|-----------------|---------|

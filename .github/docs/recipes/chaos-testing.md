@@ -17,7 +17,7 @@ You need to find out what happens when things go wrong — load spikes, malforme
 Or with hardening follow-up:
 
 ```
-/bubbles.workflow  chaos-hardening for 042-catalog-assistant
+/bubbles.workflow validate action:chaos-iterative for 042-catalog-assistant
 ```
 
 **Phases:** chaos → harden → test → validate

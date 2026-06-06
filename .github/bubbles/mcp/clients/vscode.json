@@ -1,0 +1,14 @@
+{
+  "//": "Sample client config for VS Code (GitHub Copilot Chat agent surface). Copy the `bubbles` block into your VS Code settings.json under `mcpServers`. The repo-relative server path is auto-resolved by server.py from BUBBLES_MCP_REPO_ROOT or by walking up from the script location.",
+  "mcpServers": {
+    "bubbles": {
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/.github/bubbles/mcp/server.py"
+      ],
+      "env": {
+        "BUBBLES_MCP_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}

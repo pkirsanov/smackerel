@@ -21,7 +21,7 @@
 ## Direct invocation
 
 ```
-/bubbles.workflow incident-fastlane
+/bubbles.workflow fix target:production-incident action:triage-fix-validate-propagate-audit
 ```
 
 ---

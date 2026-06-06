@@ -11,9 +11,32 @@
 > Each entry is a stub link. Open the file directly to read its purpose,
 > scope, and authority level — the source files are the source of truth.
 
+## Audience Matrix (v6.0 / B6)
+
+Every doc section below is tagged with one canonical audience. The three audiences are:
+
+| Audience | Who it's for | Typical entry point |
+|---|---|---|
+| **operator** | Humans driving Bubbles through prompts and CLI commands; people who run pushes, validate, ship | `docs/CHEATSHEET.md`, `docs/recipes/`, `docs/guides/AGENT_MANUAL.md` |
+| **agent** | LLM-driven agents executing workflows; the rules and contracts an agent reads at trigger time | `agents/bubbles_shared/`, `skills/*/SKILL.md`, `instructions/*.instructions.md` |
+| **maintainer** | Bubbles framework maintainers extending the framework itself; people who add gates, agents, or governance modules | `docs/Framework_Convergence_Health.md`, `docs/v6-mcp-design.md`, `docs/decisions/` |
+
+A single doc may serve multiple audiences in practice (e.g., a skill describes agent rules but a maintainer reads it when authoring a new gate). The tag captures the **primary** audience — the one the doc is structured for.
+
+## Consolidation Notes (v6.0 / B6)
+
+v6 design B6 called for merging near-duplicate recipes/guides and dropping doc count ~15%. After auditing all 63 recipes plus 12 guides plus 7 maintainer docs:
+
+- **Zero true content duplicates found.** Recipe families that share a theme (e.g., the four `retro-driven-*` recipes plus `retro-quality-sweep.md` plus `retro.md`) are distinct workflows that compose the same primitive into different end-to-end shapes.
+- **No merge candidates in v6.0.** Doc count stays at 96 (was 96).
+- v6.0 baseline therefore documents the audience matrix and the absence of duplicates rather than executing a synthetic merge that would lose useful content.
+- Future drift toward duplication is detected by `governance-index-lint.sh` (it surfaces orphan docs); if a near-duplicate IS added, it shows up here as a candidate before being indexed.
+
 ---
 
 ## Agent Shared Docs (`agents/bubbles_shared/`)
+
+**Audience:** agent
 
 Shared governance, contracts, templates, and bootstrap modules that every
 agent reads.
@@ -68,14 +91,20 @@ agent reads.
 
 ## Framework Maintainer Docs (`docs/`)
 
+**Audience:** maintainer
+
 Durable source-repo framework behavior and maintainer contracts.
 
+- [DEPRECATIONS.md](DEPRECATIONS.md)
 - [Framework_Convergence_Health.md](Framework_Convergence_Health.md)
 - [Spec_Implementation_Alignment.md](Spec_Implementation_Alignment.md)
+- [decisions/ADR-001-v6.1-review-followups.md](decisions/ADR-001-v6.1-review-followups.md)
 
 ---
 
 ## Instructions (`instructions/`)
+
+**Audience:** agent
 
 Project-installable instruction modules consumed by IDE agents via
 `applyTo` patterns.
@@ -90,6 +119,8 @@ Project-installable instruction modules consumed by IDE agents via
 ---
 
 ## Skills (`skills/*/SKILL.md`)
+
+**Audience:** agent
 
 Discoverable procedural workflows packaged as model skills.
 
@@ -109,6 +140,8 @@ Discoverable procedural workflows packaged as model skills.
 ---
 
 ## Recipes (`docs/recipes/`)
+
+**Audience:** operator
 
 Operator-facing workflow recipes that compose agents and prompts into
 end-to-end flows.
@@ -166,12 +199,16 @@ end-to-end flows.
 - [system-review.md](recipes/system-review.md)
 - [tdd-first-execution.md](recipes/tdd-first-execution.md)
 - [update-docs.md](recipes/update-docs.md)
+- [upgrade-to-v6.md](recipes/upgrade-to-v6.md)
+- [upgrade-to-v7.md](recipes/upgrade-to-v7.md)
 - [ux-single-file-sweep.md](recipes/ux-single-file-sweep.md)
 - [validation-latency-budgets.md](recipes/validation-latency-budgets.md)
 
 ---
 
 ## Capability-First Design Governance
+
+**Audience:** agent + maintainer
 
 - Validation IDs: `AN5`, `DE4`, `UX9`, `P4` in [validation-profiles.md](../agents/bubbles_shared/validation-profiles.md)
 - Gate: `G094 capability_foundation_gate` in [workflows.yaml](../bubbles/workflows.yaml)

@@ -11,6 +11,12 @@ else
   AGENTS_DIR="$ROOT_DIR/agents"
   WORKFLOWS_FILE="$ROOT_DIR/bubbles/workflows.yaml"
 fi
+# v6.1 (S2 true split): mode-internal registries (triggerWorkflowModes, per-mode
+# finding routing) live in bubbles/workflows/modes.yaml. Check those patterns
+# there; fall back to workflows.yaml for pre-split repos with an inline modes:
+# block.
+MODES_FILE="$(dirname "$WORKFLOWS_FILE")/workflows/modes.yaml"
+[[ -f "$MODES_FILE" ]] || MODES_FILE="$WORKFLOWS_FILE"
 
 failures=0
 
@@ -51,8 +57,8 @@ check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'bubbles\.analyst.*bubbles
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'Full finding-owned delivery workflow:' "Workflow agent defines the full finding-owned delivery workflow"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'bubbles\.implement.*bubbles\.test.*bubbles\.validate.*bubbles\.audit.*bubbles\.docs' "Workflow agent routes findings through implement test validate audit docs"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'This applies to `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, `gaps`' "Workflow agent applies finding-owned closure to all trigger-style specialists"
-check_pattern "$WORKFLOWS_FILE" 'triggerWorkflowModes:' "Workflow registry defines trigger-owned workflow mappings"
-check_pattern "$WORKFLOWS_FILE" 'test: test-to-doc' "Workflow registry maps test findings to a trigger-owned child workflow"
+check_pattern "$MODES_FILE" 'triggerWorkflowModes:' "Workflow registry defines trigger-owned workflow mappings"
+check_pattern "$MODES_FILE" 'test: test-to-doc' "Workflow registry maps test findings to a trigger-owned child workflow"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'MUST NOT execute the trigger phase as a standalone probe or build an ad hoc trigger-specific fix cycle' "Stochastic parent is forbidden from running trigger-only rounds when a mapped child workflow mode exists"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'parent-expand that same mode' "Stochastic sweep handles runtimes without nested subagent delegation"
 check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'owns the full chain from its trigger through the finding-owned planning workflow' "Trigger-owned child workflow owns the finding-owned planning chain"

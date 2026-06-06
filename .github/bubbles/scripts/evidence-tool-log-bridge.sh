@@ -1,45 +1,83 @@
 #!/usr/bin/env bash
 #
 # bubbles evidence-tool-log-bridge.sh — bridge between DoD evidence and
-# tool-call log (v5.1 / M2 — advisory phase).
+# tool-call log.
 #
-# For each `[x]` DoD item in scopes.md (or per-scope scope.md), check whether
-# the spec's tool-calls.jsonl contains an entry with matching:
-#   - sessionId or spec field present
-#   - exitCode == 0 (or matches expected pattern)
-#   - cmd substring overlapping with what the DoD claims
-#
-# In v5.1 this is ADVISORY ONLY: it reports coverage as a confidence signal,
-# not a blocker. v5.2 promotes the matcher to a primary evidence path —
-# at which point a DoD item with a passing tool-log entry no longer requires
-# inline ≥10-line raw output (the tool-log is structurally stronger).
+# History:
+#   v5.1 (M2): introduced as advisory matcher. Reports coverage as a
+#              confidence signal; never blocks.
+#   v5.2 (F1): primary evidence path for `[x]` DoD items. A passing
+#              tool-log entry can satisfy the gate alongside the
+#              traditional ≥10-line raw markdown evidence path. Both
+#              paths preserved.
+#   v6.0 (B1): MCP-primary. When the Bubbles MCP server is registered,
+#              `query_tool_log` (declared in bubbles/mcp/tools/) wraps
+#              this script and surfaces the JSON envelope produced by
+#              `--format=json`. The bash twin remains the supported
+#              fallback when MCP isn't registered.
+#   v6.1 (R2): auto-capture. `bubbles/scripts/tool-capture-shim.sh` (sourceable)
+#              routes gate-relevant commands through tool-log.sh so the entries
+#              this bridge reads are populated as a ground-truth side effect of
+#              running commands, not a manual step. Markdown evidence stays a
+#              valid fallback when no tool-log entry exists.
 #
 # Anti-fabrication is monotonically stronger: existing prose-evidence path
 # is preserved; tool-log path is additive proof.
 #
 # Usage:
-#   evidence-tool-log-bridge.sh <spec-dir> [--log <path>]
+#   evidence-tool-log-bridge.sh <spec-dir> [--log <path>] [--format=text|json]
+#
+# Output:
+#   text (default)  Human-readable summary written to stdout.
+#   json            Machine-readable envelope with shape:
+#                     {
+#                       "spec":           "<spec-slug>",
+#                       "logPath":        "<absolute path>",
+#                       "scopeFiles":     N,
+#                       "dodItems":       N,
+#                       "toolLogEntries": N,
+#                       "matchedDodItems": N,
+#                       "coveragePct":    0-100,
+#                       "matches":        [{"scopeFile":..., "line":N, "dodBody":..., "cmd":..., "ts":...}, ...]
+#                     }
+#
+# Exit codes:
+#   0   success (advisory; coverage reported regardless of value)
+#   2   bad argument or missing spec dir
+#
+# The script is intentionally non-blocking. Promotion to a blocking gate
+# is the responsibility of state-transition-guard.sh + diff-evidence-guard.sh,
+# which read the JSON envelope and decide whether to fail the transition.
 
 set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: evidence-tool-log-bridge.sh <spec-dir> [--log <path>]
+Usage: evidence-tool-log-bridge.sh <spec-dir> [--log <path>] [--format=text|json]
 
-Reports DoD ↔ tool-call log coverage. Advisory only in v5.1.
+Reports DoD ↔ tool-call log coverage. Text by default; JSON for MCP / programmatic
+consumption (`--format=json`).
 USAGE
 }
 
 [[ $# -lt 1 ]] && { usage; exit 2; }
 SPEC_DIR="$1"; shift
 LOG_OVERRIDE=""
+FORMAT="text"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --log) LOG_OVERRIDE="$2"; shift 2;;
+    --format) FORMAT="$2"; shift 2;;
+    --format=*) FORMAT="${1#--format=}"; shift;;
     -h|--help) usage; exit 0;;
     *) usage; exit 2;;
   esac
 done
+
+case "$FORMAT" in
+  text|json) ;;
+  *) echo "evidence-tool-log-bridge: --format must be 'text' or 'json' (got: $FORMAT)" >&2; exit 2;;
+esac
 
 [[ -d "$SPEC_DIR" ]] || { echo "evidence-tool-log-bridge: spec dir missing" >&2; exit 2; }
 
@@ -55,22 +93,29 @@ if [[ -z "$LOG" ]]; then
   LOG="$REPO_ROOT/.specify/runtime/tool-calls.jsonl"
 fi
 
+SPEC_SLUG="$(basename "$SPEC_DIR")"
+
 if [[ ! -f "$LOG" ]]; then
+  if [[ "$FORMAT" == "json" ]]; then
+    printf '{"spec":%s,"logPath":%s,"logPresent":false,"scopeFiles":0,"dodItems":0,"toolLogEntries":0,"matchedDodItems":0,"coveragePct":0,"matches":[],"note":"no tool-call log found"}\n' \
+      "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$SPEC_SLUG")" \
+      "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$LOG")"
+    exit 0
+  fi
   echo "evidence-tool-log-bridge: no tool-call log at $LOG"
   echo "  Advisory: agents can opt into tool-call logging via tool-log.sh wrapper."
-  echo "  v5.2 evidence gate will read this log as primary structured evidence."
+  echo "  v6.0 evidence path reads this log via MCP query_tool_log when registered."
   exit 0
 fi
 
-SPEC_SLUG="$(basename "$SPEC_DIR")"
-
-SPEC_DIR="$SPEC_DIR" SPEC_SLUG="$SPEC_SLUG" LOG="$LOG" python3 - <<'PY'
-import json, os, re
+SPEC_DIR="$SPEC_DIR" SPEC_SLUG="$SPEC_SLUG" LOG="$LOG" FORMAT="$FORMAT" python3 - <<'PY'
+import json, os, re, sys
 from pathlib import Path
 
 spec_dir = Path(os.environ['SPEC_DIR'])
 spec_slug = os.environ['SPEC_SLUG']
 log_path = Path(os.environ['LOG'])
+fmt = os.environ.get('FORMAT', 'text')
 
 # Load tool-call entries for this spec.
 entries = []
@@ -100,39 +145,67 @@ for sf in scope_files:
         for i, line in enumerate(sf.read_text(errors='replace').splitlines(), start=1):
             m = CHECKED_RE.match(line)
             if m:
-                dod_items.append((sf.relative_to(spec_dir.parent), i, m.group(1)))
+                dod_items.append((str(sf.relative_to(spec_dir.parent)), i, m.group(1)))
     except Exception:
         continue
 
-print(f"evidence-tool-log-bridge: {spec_slug}")
-print(f"  Tool-call entries (spec={spec_slug}): {len(entries)}")
-print(f"  DoD [x] items found in {len(scope_files)} scope file(s): {len(dod_items)}")
-
-if not dod_items:
-    print("  (no checked DoD items to bridge)")
-    raise SystemExit(0)
-
-if not entries:
-    print("  Coverage: 0% — no tool-log entries for this spec.")
-    print("  Advisory only in v5.1; existing prose-evidence path remains valid.")
-    raise SystemExit(0)
-
 # Heuristic matching: DoD body contains tokens from cmd field.
+STOPWORDS = {'a', 'the', 'and', 'or', 'for', 'is', 'in', 'of', 'to', 'with'}
+
 def tokens(s):
     return set(re.findall(r'[a-zA-Z][a-zA-Z0-9._/-]+', s.lower()))
 
-matched_dod = 0
+matches = []
 for sf, ln, body in dod_items:
     body_toks = tokens(body)
-    # Require ≥2 token overlap (excluding common words) to count as match.
     for e in entries:
-        cmd_toks = tokens(e.get('cmd', ''))
-        overlap = body_toks & cmd_toks - {'a', 'the', 'and', 'or', 'for', 'is', 'in', 'of', 'to', 'with'}
+        cmd = e.get('cmd', '')
+        cmd_toks = tokens(cmd)
+        overlap = (body_toks & cmd_toks) - STOPWORDS
         if len(overlap) >= 2 and e.get('exitCode') == 0:
-            matched_dod += 1
+            matches.append({
+                "scopeFile": sf,
+                "line": ln,
+                "dodBody": body,
+                "cmd": cmd,
+                "ts": e.get('ts', ''),
+                "overlapTokens": sorted(overlap),
+            })
             break
 
-pct = (matched_dod * 100) // max(len(dod_items), 1)
-print(f"  Coverage: {pct}% ({matched_dod}/{len(dod_items)} DoD items have a matching tool-log entry)")
-print("  Advisory in v5.1; v5.2 evidence gate makes this primary.")
+matched_count = len(matches)
+total = len(dod_items)
+pct = (matched_count * 100) // max(total, 1)
+
+if fmt == "json":
+    out = {
+        "spec": spec_slug,
+        "logPath": str(log_path),
+        "logPresent": True,
+        "scopeFiles": len(scope_files),
+        "dodItems": total,
+        "toolLogEntries": len(entries),
+        "matchedDodItems": matched_count,
+        "coveragePct": pct,
+        "matches": matches,
+    }
+    print(json.dumps(out, indent=2))
+    sys.exit(0)
+
+# text output
+print(f"evidence-tool-log-bridge: {spec_slug}")
+print(f"  Tool-call entries (spec={spec_slug}): {len(entries)}")
+print(f"  DoD [x] items found in {len(scope_files)} scope file(s): {total}")
+
+if not dod_items:
+    print("  (no checked DoD items to bridge)")
+    sys.exit(0)
+
+if not entries:
+    print("  Coverage: 0% — no tool-log entries for this spec.")
+    print("  Advisory only; existing prose-evidence path remains valid.")
+    sys.exit(0)
+
+print(f"  Coverage: {pct}% ({matched_count}/{total} DoD items have a matching tool-log entry)")
+print("  v6.0: structured-evidence path is MCP-primary via query_tool_log; markdown ≥10-line raw evidence remains accepted.")
 PY

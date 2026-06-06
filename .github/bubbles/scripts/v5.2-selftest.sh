@@ -129,9 +129,13 @@ else
 fi
 
 # --- F7: model-tier-advisory writes warning entry to tool-call log ---
+# Uses a NON-enforced phase (implement) so this exercises the advisory WARN
+# path (severity "warn", exit 0). The blocking path for enforced phases
+# (audit/security/validate, v6.1 / G126) is covered by
+# model-tier-advisory-selftest.sh.
 WARN_LOG="$tmp_root/warn.jsonl"
 BUBBLES_TOOL_LOG_FILE="$WARN_LOG" BUBBLES_ACTIVE_MODEL="claude-haiku-3" \
-  bash "$SCRIPT_DIR/model-tier-advisory.sh" check --mode product-to-delivery --phase audit >/dev/null 2>&1
+  bash "$SCRIPT_DIR/model-tier-advisory.sh" check --mode product-to-delivery --phase implement >/dev/null 2>&1
 if [[ -f "$WARN_LOG" ]] && python3 - "$WARN_LOG" <<'PY' >/dev/null 2>&1
 import json, sys
 recs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
@@ -153,7 +157,7 @@ fi
 # F7 OK path: no warning when active >= floor.
 WARN_LOG_OK="$tmp_root/warn-ok.jsonl"
 BUBBLES_TOOL_LOG_FILE="$WARN_LOG_OK" BUBBLES_ACTIVE_MODEL="claude-sonnet-4" \
-  bash "$SCRIPT_DIR/model-tier-advisory.sh" check --mode product-to-delivery --phase audit >/dev/null 2>&1
+  bash "$SCRIPT_DIR/model-tier-advisory.sh" check --mode product-to-delivery --phase implement >/dev/null 2>&1
 if [[ ! -f "$WARN_LOG_OK" ]] || ! python3 - "$WARN_LOG_OK" <<'PY' >/dev/null 2>&1
 import json, sys
 try:

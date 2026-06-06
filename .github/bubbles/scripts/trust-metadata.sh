@@ -279,6 +279,18 @@ bubbles_framework_manifest_entries() {
     bubbles_print_manifest_entry "$source_root" "bubbles/scripts/$(basename "$file_path")"
   done
 
+  # v6.1 (M4 guard split): state-transition-guard.sh sources self-contained
+  # check-fragments from bubbles/scripts/guards/. The bubbles/scripts/*.sh glob
+  # above is NON-recursive, so the guard fragments MUST be enumerated explicitly
+  # or they would be copied by install.sh yet absent from the framework
+  # manifest/checksums — leaving them unprotected by drift detection and
+  # framework-write-guard.
+  while IFS= read -r file_path; do
+    [[ -f "$file_path" ]] || continue
+    relative_path="${file_path#$source_root/}"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
+  done < <(find "$source_root/bubbles/scripts/guards" -type f -name '*.sh' 2>/dev/null | LC_ALL=C sort)
+
   while IFS= read -r file_path; do
     [[ -f "$file_path" ]] || continue
     relative_path="${file_path#$source_root/}"
@@ -302,6 +314,45 @@ bubbles_framework_manifest_entries() {
     relative_path="${file_path#$source_root/}"
     bubbles_print_manifest_entry "$source_root" "$relative_path"
   done < <(find "$source_root/bubbles/registry" -type f 2>/dev/null | LC_ALL=C sort)
+
+  # v6.0 (A1-A6): MCP server + tool catalog + resource catalog + client
+  # configs. Optional surface — repos that don't register the server still
+  # work via bash scripts. Installed downstream so mcp-server-selftest.sh
+  # and the operator's MCP client can resolve everything.
+  while IFS= read -r file_path; do
+    [[ -f "$file_path" ]] || continue
+    relative_path="${file_path#$source_root/}"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
+  done < <(find "$source_root/bubbles/mcp" -type f 2>/dev/null | LC_ALL=C sort)
+
+  # v6.0 (B7): cheatsheet registry. Source of truth for the operator
+  # cheatsheet (docs/CHEATSHEET.md + docs/its-not-rocket-appliances.html);
+  # generate-cheatsheet.sh renders both files from these JSON inputs and
+  # retires the v5.0.1 H7 drift check.
+  while IFS= read -r file_path; do
+    [[ -f "$file_path" ]] || continue
+    relative_path="${file_path#$source_root/}"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
+  done < <(find "$source_root/bubbles/cheatsheet" -type f 2>/dev/null | LC_ALL=C sort)
+
+  # v6.0 (B4): v5 -> v6 workflow mode alias map. Resolves legacy v5 mode
+  # names to v6 primitive+tag tuples. Installed downstream so the
+  # mode-resolver can accept both forms during the v6 cycle.
+  while IFS= read -r file_path; do
+    [[ -f "$file_path" ]] || continue
+    relative_path="${file_path#$source_root/}"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
+  done < <(find "$source_root/bubbles/workflows" -type f 2>/dev/null | LC_ALL=C sort)
+
+  # v6.0 (B9): typed installer manifest. Consumed by
+  # bubbles/scripts/generate-installer.sh --check to verify that
+  # install.sh structurally implements every declared step. Installed
+  # downstream so re-validators can run the same check.
+  while IFS= read -r file_path; do
+    [[ -f "$file_path" ]] || continue
+    relative_path="${file_path#$source_root/}"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
+  done < <(find "$source_root/bubbles/installer" -type f 2>/dev/null | LC_ALL=C sort)
 
   # v5.0.1 (H8): pre-push hook source for maintainer installs.
   while IFS= read -r file_path; do

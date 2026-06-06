@@ -3,7 +3,7 @@
   "$id": "https://github.com/pkirsanov/bubbles/schemas/workflows.schema.json",
   "title": "Bubbles workflow registry",
   "type": "object",
-  "required": ["defaultMode", "gates", "modes"],
+  "required": ["defaultMode", "gates"],
   "additionalProperties": true,
   "properties": {
     "defaultMode": { "type": "string" },

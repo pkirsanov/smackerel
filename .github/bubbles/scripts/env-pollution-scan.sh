@@ -43,6 +43,14 @@ for p_glob in $TEST_PATHS; do
   # shellcheck disable=SC2086
   files="$(find $REPO_ROOT -path "*/node_modules/*" -prune -o -path "*/target/*" -prune -o -path "*/.venv/*" -prune -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' -o -name '*.rs' -o -name '*.go' -o -name '*.sh' \) -print 2>/dev/null | grep -E "($(echo "$p_glob" | sed 's/\*\*\///g; s/\*//g'))" 2>/dev/null || true)"
   for f in $files; do
+    # Allowlist: this scanner's own selftest fixture intentionally embeds the
+    # forbidden patterns inside heredocs to assert the scanner catches them.
+    # It is NOT production test code and MUST NOT be scanned. (Restored after a
+    # 7.0.1 regression dropped this guard; the default `**/*.test.*` glob
+    # otherwise matches `...selftest.sh` via the `.test.` fragment.)
+    if [[ "$(basename "$f")" == "env-pollution-scan-selftest.sh" ]]; then
+      continue
+    fi
     for pat in "${PATTERNS[@]}"; do
       if grep -nE "($WRITE_VERBS).*$pat|$pat.*($WRITE_VERBS)" "$f" 2>/dev/null; then
         err "$f: write to forbidden prod surface matching '$pat'"

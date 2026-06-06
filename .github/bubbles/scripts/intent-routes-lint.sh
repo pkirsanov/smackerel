@@ -19,6 +19,10 @@ REPO_ROOT="${1:-.}"
 ROUTES_FILE="$REPO_ROOT/bubbles/intent-routes.yaml"
 CAPS_FILE="$REPO_ROOT/bubbles/agent-capabilities.yaml"
 WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
+# v6.1 (S2 true split): mode definitions live in their own registry; fall back
+# to workflows.yaml for pre-split repos that still embed an inline modes: block.
+MODES_FILE="$REPO_ROOT/bubbles/workflows/modes.yaml"
+[[ -f "$MODES_FILE" ]] || MODES_FILE="$WORKFLOWS_FILE"
 
 FAILED=0
 err() { echo "[intent-routes-lint][ERROR] $*" >&2; FAILED=1; }
@@ -109,7 +113,7 @@ if [[ -n "$KNOWN_AGENTS" ]]; then
 fi
 
 KNOWN_MODES=""
-[[ -f "$WORKFLOWS_FILE" ]] && KNOWN_MODES="$(yq -r '.modes | keys | .[]' "$WORKFLOWS_FILE" 2>/dev/null || true)"
+[[ -f "$MODES_FILE" ]] && KNOWN_MODES="$(yq -r '.modes | keys | .[]' "$MODES_FILE" 2>/dev/null || true)"
 if [[ -n "$KNOWN_MODES" ]]; then
   for ((i = 0; i < route_count; i++)); do
     mode="${ROUTE_MODE[$i]:-}"

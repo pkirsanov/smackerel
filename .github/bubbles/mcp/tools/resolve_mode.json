@@ -1,0 +1,17 @@
+{
+  "name": "resolve_mode",
+  "description": "Resolve a Bubbles workflow mode (v5 name OR v6 primitive+tag form once B4 lands) to its fully-expanded YAML definition with template inheritance applied. Wraps mode-resolver.sh against bubbles/workflows.yaml. Use to discover a mode's phases, gates, status ceiling, and termination criteria before dispatch.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "description": "Mode name (e.g. 'bugfix-fastlane', 'spec-scope-hardening'). Use '--list-modes' as the mode value to enumerate every defined mode."
+      }
+    },
+    "required": ["mode"]
+  },
+  "script": "mode-resolver.sh",
+  "argsTemplate": ["${mode}"],
+  "successExitCodes": [0]
+}

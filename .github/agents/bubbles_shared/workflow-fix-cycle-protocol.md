@@ -4,7 +4,7 @@ Use this module when `bubbles.workflow` runs a stochastic or other trigger-owned
 
 ## Core Contract
 
-- Parent workflows select the target spec and trigger, then resolve `triggerWorkflowModes[trigger]` from `bubbles/workflows.yaml`.
+- Parent workflows select the target spec and trigger, then resolve `triggerWorkflowModes[trigger]` from `bubbles/workflows/modes.yaml`.
 - Parent workflows MUST execute the mapped child workflow mode instead of pre-running the trigger or hand-building a bespoke fix cycle when a mapping exists.
 - The mapped child workflow mode owns trigger execution and the full finding-owned closure chain for that spec.
 - Runtime compatibility: if a nested `bubbles.workflow` child lacks the `agent`/`runSubagent` tool, the parent orchestrator MUST execute the resolved child mode in parent-expanded form from the current runtime. This is not a direct-trigger shortcut; it is the same mapped mode executed without recursive tool dependency.

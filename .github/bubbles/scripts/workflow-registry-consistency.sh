@@ -5,6 +5,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
+# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml.
+# mode_inventory() parses them from there unless workflows.yaml still embeds an
+# inline modes: block (pre-split / fixtures).
+MODES_FILE="$REPO_ROOT/bubbles/workflows/modes.yaml"
+if grep -qE '^modes:' "$WORKFLOWS_FILE" 2>/dev/null || [[ ! -f "$MODES_FILE" ]]; then
+  MODES_FILE="$WORKFLOWS_FILE"
+fi
 WORKFLOW_AGENT_FILE="$REPO_ROOT/agents/bubbles.workflow.agent.md"
 CHEATSHEET_FILE="$REPO_ROOT/docs/CHEATSHEET.md"
 STATS_FILE="$REPO_ROOT/docs/generated/framework-stats.json"
@@ -51,7 +58,7 @@ mode_inventory() {
         }
       }
     }
-  ' "$WORKFLOWS_FILE"
+  ' "$MODES_FILE"
 }
 
 supported_options_inventory() {

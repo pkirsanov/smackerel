@@ -1,0 +1,17 @@
+{
+  "name": "verify_status_transition",
+  "description": "Alias surface for validate_dod with the v6 ABSOLUTE COMPLETION HIERARCHY framing. Equivalent invocation; semantics are 'before flipping state.json status to done, run the transition guard and surface the verbatim verdict'.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "spec_dir": {
+        "type": "string",
+        "description": "Spec directory relative to repo root."
+      }
+    },
+    "required": ["spec_dir"]
+  },
+  "script": "state-transition-guard.sh",
+  "argsTemplate": ["${spec_dir}"],
+  "successExitCodes": [0]
+}

@@ -1,0 +1,7 @@
+{
+  "uri": "bubbles://workflows.yaml",
+  "name": "Bubbles workflows registry",
+  "description": "The canonical workflow-mode + gate-block source of truth (bubbles/workflows.yaml). 55 modes, 26 phases, 101 gates as of v5.3. Read this to see every mode's phase list, gate requirements, status ceiling, and template inheritance.",
+  "mimeType": "application/yaml",
+  "path": "bubbles/workflows.yaml"
+}

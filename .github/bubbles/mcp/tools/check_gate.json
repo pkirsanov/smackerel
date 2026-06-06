@@ -1,0 +1,23 @@
+{
+  "name": "check_gate",
+  "description": "Look up the metadata for a specific Bubbles gate (e.g. G024, G028, G035) — returns the full JSON record (gate id, name, description, etc.) from bubbles/registry/gates.yaml via gate-meta.sh. Use when an agent or operator needs to know what a gate enforces. Set action='list' to enumerate every gate id, or action='exists' for a presence check.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "gate_id": {
+        "type": "string",
+        "pattern": "^G[0-9]{3}$",
+        "description": "Three-digit gate identifier, e.g. 'G024'. Omit when action='list' or action='count'."
+      },
+      "action": {
+        "type": "string",
+        "enum": ["json", "name", "description", "exists", "list", "count"],
+        "description": "Lookup mode. 'json' (default) returns the full record. 'name'/'description'/'exists' return single fields. 'list'/'count' ignore gate_id.",
+        "default": "json"
+      }
+    }
+  },
+  "script": "gate-meta.sh",
+  "argsTemplate": ["${action}", "${gate_id?}"],
+  "successExitCodes": [0]
+}

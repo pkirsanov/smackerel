@@ -373,7 +373,7 @@ YAML_CONTENT="# ================================================================
 # See: agents/bubbles_shared/project-config-contract.md for full schema.
 # =============================================================================
 
-# Custom quality gates (G100+ range, auto-assigned IDs)
+# Custom quality gates (G900+ range; framework reserves G001-G199)
 # gates:
 #   example-gate:
 #     script: scripts/my-check.sh

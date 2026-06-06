@@ -1,0 +1,33 @@
+{
+  "name": "search_code",
+  "description": "Search the workspace for a pattern with the v5.2-auto-selected backend (ripgrep when available, else grep). Wraps code-search.sh which caches the chosen backend at .specify/runtime/code-search.tool. Output is capped to 200 lines by default; pass no_cap=true to disable. Use over raw ripgrep/grep because the wrapper enforces consistent backend selection across agent and human callers.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "pattern": {
+        "type": "string",
+        "description": "Regex pattern to search for."
+      },
+      "paths": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Optional path scope (relative to repo root). Defaults to repo root if empty.",
+        "default": []
+      },
+      "kind": {
+        "type": "string",
+        "description": "Optional language/file-kind filter (e.g. 'rust', 'md', 'yaml').",
+        "default": ""
+      },
+      "no_cap": {
+        "type": "boolean",
+        "description": "If true, do not cap output at 200 lines.",
+        "default": false
+      }
+    },
+    "required": ["pattern"]
+  },
+  "script": "code-search.sh",
+  "argsTemplate": ["${pattern}"],
+  "successExitCodes": [0, 1]
+}

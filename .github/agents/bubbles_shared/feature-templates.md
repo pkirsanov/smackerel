@@ -361,7 +361,7 @@ Rules:
 **`specDependsOn`:** Explicit array of repo-relative spec paths; empty array when no dependency exists.
 **`certifiedAt`:** Top-level certification timestamp; `null` until certification or backfill from scope-level certification timestamps.
 **`requiresRevalidation`:** Explicit boolean used by inter-spec dependency/revalidation flows; defaults to `false`.
-Only modes with `statusCeiling: done` (in `bubbles/workflows.yaml`) may set `status: "done"`.
+Only modes with `statusCeiling: done` (in `bubbles/workflows/modes.yaml`) may set `status: "done"`.
 Artifact-only modes set their ceiling status (e.g., `specs_hardened` for `spec-scope-hardening`).
 **`execution` vs `certification`:** execution records runtime claims; certification is the validate-owned authoritative state that must match top-level `status` before promotion.
 **`policySnapshot`:** records the effective grill/TDD/auto-commit/lockdown/regression/validation settings together with provenance.

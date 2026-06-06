@@ -47,9 +47,9 @@ Use `bubbles.workflow` only after you already know you want follow-through work 
 Examples:
 
 ```
-/bubbles.workflow  improve-existing for booking
-/bubbles.workflow  product-to-delivery for notification-system
-/bubbles.workflow  harden-gaps-to-doc for 042-catalog-assistant
+/bubbles.workflow improve target:existing-feature action:analyze-and-harden for booking
+/bubbles.workflow implement action:full-delivery target:product prelude:analyze-design-plan for notification-system
+/bubbles.workflow validate action:harden-and-gaps finalize:docs for 042-catalog-assistant
 ```
 
 ## The Practical Split

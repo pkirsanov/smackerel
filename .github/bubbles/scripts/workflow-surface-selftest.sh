@@ -3,6 +3,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml.
+# Mode-name checks read it; executionOptions (specReview, …) stay in
+# workflows.yaml. Fall back to workflows.yaml for pre-split repos with an inline
+# modes: block.
+MODES_FILE="$ROOT_DIR/workflows/modes.yaml"
+[[ -f "$MODES_FILE" ]] || MODES_FILE="$ROOT_DIR/workflows.yaml"
 
 failures=0
 
@@ -42,7 +48,7 @@ check_optional_pattern() {
 
 echo "Running workflow command-surface smoke test..."
 
-check_pattern "$ROOT_DIR/workflows.yaml" '^  full-delivery:$' "Workflow registry exposes full-delivery"
+check_pattern "$MODES_FILE" '^  full-delivery:$' "Workflow registry exposes full-delivery"
 check_pattern "$ROOT_DIR/workflows.yaml" '^    specReview:$' "Workflow registry exposes the specReview execution option"
 check_pattern "$SCRIPT_DIR/aliases.sh" '\[no-loose-ends\]="full-delivery"' "Sunnyvale alias resolves to full-delivery"
 check_pattern "$ROOT_DIR/../agents/bubbles.workflow.agent.md" 'mode: .*full-delivery' "Workflow agent advertises full-delivery mode"

@@ -17,8 +17,11 @@
 #       canonical set is built from every line in that file that contains
 #       either "requiredGates" or "delivery-gate-baseline" — those are the
 #       authoritative sources of which gates exist as workflow contracts.
-#       Any ID >= G100 is treated as a custom/local gate and is always
-#       allowed (never reported as unknown).
+#       Gate-ID bands: the framework RESERVES G001–G199 (these MUST resolve
+#       to a canonical workflow contract). Project-local custom gates use
+#       G900+ — any ID >= G900 is treated as a custom/local gate and is
+#       always allowed (never reported as unknown). The G200–G899 span is
+#       an intentional reserved gap so the two bands can never overlap.
 #
 # Modes:
 #   default   - only fail on duplicate-adjacent findings
@@ -54,7 +57,8 @@ Scans agents/, instructions/, docs/, bubbles/scripts/ under <repo-root>
 for gate ID patterns (G[0-9]{3}). Detects:
   - duplicate-adjacent IDs (e.g., "G028, G028")
   - unknown gate IDs not present in workflows.yaml requiredGates lists
-    (only reported under --strict; G100+ is always allowed)
+    (only reported under --strict; project-local custom gates G900+ are
+    always allowed; framework gates G001-G199 must resolve canonically)
 
 Options:
   --repo-root <path>   Repo root to scan (default: script repo root)
@@ -99,18 +103,26 @@ if [[ ! -f "$workflows_yaml" ]]; then
   exit 2
 fi
 
+# v6.1 (S2 true split): mode definitions (including each mode's requiredGates)
+# live in bubbles/workflows/modes.yaml. Include it in the canonical-gate
+# extraction so a gate referenced only by a mode is not flagged unknown.
+gate_source_files=("$workflows_yaml")
+modes_yaml="$repo_root/bubbles/workflows/modes.yaml"
+[[ -f "$modes_yaml" ]] && gate_source_files+=("$modes_yaml")
+
 # --- Build canonical gate ID set from workflows.yaml -----------------------
 #
 # Canonical sources are lines mentioning either "requiredGates" or
 # "delivery-gate-baseline". We extract every G[0-9]{3} occurrence on those
-# lines. Anything >= G100 is also implicitly allowed at lookup time.
+# lines. Project-local custom gates (>= G900) are also implicitly allowed at
+# lookup time; framework gates (G001-G199) must resolve canonically.
 
 declare -A canonical_set=()
 while IFS= read -r gate_id; do
   [[ -z "$gate_id" ]] && continue
   canonical_set["$gate_id"]=1
 done < <(
-  grep -E 'requiredGates|delivery-gate-baseline' "$workflows_yaml" \
+  grep -E 'requiredGates|delivery-gate-baseline' "${gate_source_files[@]}" \
     | grep -oE '\bG[0-9]{3}\b' \
     | sort -u
 )
@@ -158,7 +170,7 @@ dup_count="$(wc -l < "$dup_findings_file" | tr -d ' ')"
 # --- Detect unknown gate ID findings (used under --strict) -----------------
 #
 # Collect every <file>:<line>:<G\d{3}> reference, then for each ID check
-# canonical membership. IDs >= G100 are always allowed.
+# canonical membership. Project-local custom gates (>= G900) are always allowed.
 
 grep -rPno --binary-files=without-match \
   '\bG[0-9]{3}\b' \
@@ -167,14 +179,15 @@ grep -rPno --binary-files=without-match \
 
 while IFS=: read -r file line id; do
   [[ -z "$id" ]] && continue
-  # IDs >= G100 are always allowed
+  # Project-local custom gates (>= G900) are always allowed; the framework
+  # band G001-G199 must resolve canonically (G200-G899 is the reserved gap).
   numeric="${id#G}"
   numeric="${numeric#0}"
   numeric="${numeric#0}"
   if [[ -z "$numeric" ]]; then
     numeric=0
   fi
-  if (( 10#$numeric >= 100 )); then
+  if (( 10#$numeric >= 900 )); then
     continue
   fi
   if [[ -z "${canonical_set[$id]:-}" ]]; then

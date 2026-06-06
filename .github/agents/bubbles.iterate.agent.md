@@ -250,7 +250,7 @@ If registry and this file conflict, registry phase/gate policy wins and the conf
 
 ## Top-Level Runtime Requirement (NON-NEGOTIABLE)
 
-`bubbles.iterate` is a fan-out orchestrator: each iteration auto-selects and dispatches a delivery child workflow (`bugfix-fastlane`, `full-delivery`, `chaos-hardening`, `harden-to-doc`, etc.) that itself spans multiple specialist agents per finding. `bubbles/workflows.yaml` declares `constraints.requiresTopLevelRuntime: true` for this mode.
+`bubbles.iterate` is a fan-out orchestrator: each iteration auto-selects and dispatches a delivery child workflow (`bugfix-fastlane`, `full-delivery`, `chaos-hardening`, `harden-to-doc`, etc.) that itself spans multiple specialist agents per finding. `bubbles/workflows/modes.yaml` declares `constraints.requiresTopLevelRuntime: true` for this mode.
 
 **Routing rule.** If this agent is invoked in a subagent runtime that lacks `runSubagent`, it MUST NOT attempt parent-expanded execution (one agent playing every specialist role for every iteration would forge cross-role transitions and break the anti-fabrication invariant). Instead it MUST emit a `route_required` result envelope with:
 
