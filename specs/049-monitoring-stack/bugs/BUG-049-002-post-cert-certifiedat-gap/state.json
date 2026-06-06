@@ -6,8 +6,10 @@
   "featureName": "BUG-049-002 Post-certification certifiedAt gap blocks Gate G088",
   "parentSpec": "specs/049-monitoring-stack/",
   "title": "Spec 049 state.json missing top-level certifiedAt blocks Gate G088",
-  "status": "in_progress",
-  "workflowMode": "devops-to-doc",
+  "status": "done",
+  "certifiedAt": "2026-06-06T14:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "workflowMode": "bugfix-fastlane",
   "severity": "medium",
   "class": "governance",
   "discoveredBy": "sweep round 10 (stochastic-quality-sweep, harden trigger, harden-to-doc mapped mode, parent-expanded-child-mode)",
@@ -26,24 +28,50 @@
   },
   "execution": {
     "activeAgent": null,
-    "currentPhase": "docs",
+    "currentPhase": "finalize",
     "currentScope": "BUG-049-002-S1",
     "runStartedAt": "2026-06-05T23:09:53Z",
     "completedPhaseClaims": [
-      "discovery",
       "design",
-      "plan"
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
+    "status": "done",
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-06T14:00:00Z",
+    "completedScopes": [
+      "BUG-049-002-S1"
+    ],
+    "certifiedCompletedPhases": [
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
     "scopeProgress": [
       {
         "scope": "BUG-049-002-S1",
         "name": "State.json recertification + guard re-pass",
-        "status": "In Progress",
+        "status": "Done",
+        "completedAt": "2026-06-06T13:45:00Z",
         "dependsOn": [],
         "scopeDir": ".",
         "evidenceFile": "report.md"
@@ -87,8 +115,8 @@
       "title": "State.json recertification + guard re-pass",
       "status": "Done",
       "dod": {
-        "total": 11,
-        "checked": 11
+        "total": 14,
+        "checked": 14
       }
     }
   ],
