@@ -1,0 +1,165 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-005-relationship-cooling-llm-driven",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-005-relationship-cooling-llm-driven",
+  "featureName": "BUG-021-005: relationship-cooling decision must be LLM-driven, not hardcoded magic-number thresholds",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "supersedes": "BUG-021-004-relationship-cooling-heuristic-untested",
+  "reportedAt": "2026-06-07T01:40:00Z",
+  "reporter": "owner directive (no const limits; LLM decides per situation)",
+  "certifiedAt": "2026-06-07T05:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T05:00:00Z",
+  "lastUpdatedAt": "2026-06-07T02:10:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T01:40:00Z",
+        "completedAt": "2026-06-07T01:48:00Z",
+        "outcome": "completed_owned",
+        "summary": "Owner directive: 'there should be NO const limits; all should be decided by LLM depending on situation'. Grounded against docs/smackerel.md §3.6 (domain reasoning is LLM-driven, not rule-driven) and the constitution C8/NO-DEFAULTS SST boundary. The relationship-cooling producer encoded the cooling judgment as hardcoded SQL magic numbers, and BUG-021-004 cemented them as Go constants + a lock test. Mapped the existing LLM machinery: agent.Bridge + scenario prompt contracts + the annotation_classify precedent (which replaced a hardcoded interactionMap literal with an LLM scenario)."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T01:48:00Z",
+        "completedAt": "2026-06-07T01:52:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope superseding BUG-021-004: new relationship_cooling_evaluate scenario + BridgeCoolingEvaluator (mockable) routing the cooling judgment to the LLM; producer retrieves candidate signals only; operational bounds (cap, confidence floor, dedup window) moved to fail-loud SST; remove BUG-021-004 constants + builder + lock test. SCN-021-COOLING-LLM-01..03 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T01:52:00Z",
+        "completedAt": "2026-06-07T02:02:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created config/prompt_contracts/relationship-cooling-evaluate-v1.yaml (per-situation judgment, input/output schema, noop tool). internal/intelligence/cooling.go: CoolingCandidate/Decision, CoolingEvaluator + BridgeCoolingEvaluator, CoolingConfig, pure helpers, noop tool init(). Engine gained a cooling field + SetCoolingConfig. Reworked ProduceRelationshipCoolingAlerts to retrieve candidate signals (no business threshold) and let the LLM judge each, gating only on the operational confidence floor; graceful skip when evaluator nil. SST: intelligence.relationship_cooling.* keys (smackerel.yaml + config.sh + internal/config/relationship_cooling.go). Wiring: cmd/core/wiring_cooling.go + main.go call. Removed BUG-021-004 constants + relationshipCoolingAlertQuery() + the lock test."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:02:00Z",
+        "completedAt": "2026-06-07T02:08:00Z",
+        "outcome": "completed_owned",
+        "summary": "cooling_test.go: scripted coolingBridgeRunner proves the LLM-driven path (parse, scenario routing, signal forwarding, PersonID non-leak, all error paths) + pure helpers. relationship_cooling_test.go: SST loader populate + fail-loud + range rejection. scenario-lint registers the new scenario (0 new rejects); agent loader + TestSpec061_LivePromptContractsLoadCleanly green. go build ./... + vet green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:08:00Z",
+        "completedAt": "2026-06-07T02:11:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full intelligence + config + scheduler + cmd/core + scenario-lint + agent packages green. ./smackerel.sh config generate resolves the new operational keys into dev.env (config-validate OK). The removed lock test no longer cements magic numbers."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:11:00Z",
+        "completedAt": "2026-06-07T02:12:00Z",
+        "outcome": "completed_owned",
+        "summary": "Reused the annotation_classify bridge pattern; extracted two small pure helpers (typical-gap math, surface gate) for testability; no new abstractions beyond the evaluator."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:12:00Z",
+        "completedAt": "2026-06-07T02:13:00Z",
+        "outcome": "completed_owned",
+        "summary": "Candidates are collected before any LLM call (no DB cursor held during Invoke); context cancellation honored mid-loop; the scenario carries operational LLM-call bounds (timeout_ms, token_budget). Nil-evaluator path degrades gracefully."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:13:00Z",
+        "completedAt": "2026-06-07T02:14:00Z",
+        "outcome": "completed_owned",
+        "summary": "The internal PersonID is json:\"-\" and proven (by test) not to enter the LLM envelope; only name + numeric signals are sent. The candidate query is parameterized (no SQL injection). No secret/auth surface. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:14:00Z",
+        "completedAt": "2026-06-07T02:16:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; config generate + build + vet + affected packages green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:16:00Z",
+        "completedAt": "2026-06-07T02:17:00Z",
+        "outcome": "completed_owned",
+        "summary": "No hardcoded cooling threshold remains (grep of coolingMinPriorInteractions / relationshipCoolingAlertQuery = 0). No migration; generated env gitignored; no .github/bubbles changes; parent spec 021 planning artifacts untouched. BUG-021-004 superseded (its lock test removed)."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:17:00Z",
+        "completedAt": "2026-06-07T02:18:00Z",
+        "outcome": "completed_owned",
+        "summary": "Scenario YAML, cooling.go, smackerel.yaml, and wiring_cooling.go document the LLM-driven judgment and the operational/business boundary. The bug packet records the supersession of BUG-021-004 and flags the sibling digest/recommendation threshold debt as follow-up."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T05:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "LLM-driven relationship-cooling judgment", "status": "Done", "completedDoD": 11, "totalDoD": 11, "completedAt": "2026-06-07T02:18:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane LLM-driven rework; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T02:18:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-021-COOLING-HARDCODED",
+      "summary": "The relationship-cooling judgment was hardcoded SQL magic numbers (>30 days, >=4 in a fixed 90-180 day window, LIMIT 10); BUG-021-004 cemented them as Go constants + a lock test, contradicting docs/smackerel.md §3.6 (domain reasoning must be LLM-driven).",
+      "resolution": "Moved the cooling judgment to the relationship_cooling_evaluate LLM scenario via BridgeCoolingEvaluator; the producer retrieves candidate signals only; operational bounds moved to fail-loud SST; removed BUG-021-004's constants, query builder, and lock test.",
+      "evidence": "report.md Test/Validation Evidence; internal/intelligence/cooling.go; config/prompt_contracts/relationship-cooling-evaluate-v1.yaml; grep coolingMinPriorInteractions = 0.",
+      "status": "resolved"
+    }
+  ],
+  "discoveredIssues": [
+    {
+      "id": "DI-021-005",
+      "summary": "Sibling hardcoded business thresholds remain in the digest/recommendation/intelligence layers (resurface dormancy 30d + relevance 0.3; hospitality sentiment 0.3 / rating 3.5; expense windows 7d/97d; price-drop 10%). Same class of debt — domain reasoning that should be LLM-driven per docs/smackerel.md §3.6.",
+      "disposition": "routed-to-followup",
+      "owner": "specs/021,035,036,039 owners (per-surface LLM-driven rework)",
+      "blocking": false
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-no-const-limits",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}

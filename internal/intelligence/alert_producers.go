@@ -247,94 +247,109 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 	return nil
 }
 
-// Relationship-cooling heuristic parameters (BUG-021-004).
-//
-// Spec 021 R-021-005 / UC-005 require alerting on a contact the user was
-// "previously in regular contact" with who has since gone silent. The
-// shipped operationalization of "previously regular contact" is: at least
-// coolingMinPriorInteractions DISTINCT interactions during the prior window
-// [coolingPriorWindowEndDays, coolingPriorWindowStartDays] days ago (i.e.
-// 3-6 months back), AND no interaction for more than coolingSilenceMinDays.
-// These constants are the single source of truth for the heuristic; the
-// spec-contract test TestRelationshipCoolingHeuristic_* locks them so a
-// threshold change cannot drift silently from the documented contract.
-//
-// NOTE (surfaced for owner): this threshold is LOOSER than the spec's
-// shorthand "≥ 1/week previous frequency" (≥4 in 90 days ≈ 1 per 22 days).
-// The shipped value favors surfacing more cooling relationships on a
-// single-user system. Tightening to a literal weekly cadence is a one-line
-// change to coolingMinPriorInteractions, pending owner direction; see
-// specs/021-intelligence-delivery/bugs/BUG-021-004.
-const (
-	coolingSilenceMinDays       = 30
-	coolingPriorWindowStartDays = 180
-	coolingPriorWindowEndDays   = 90
-	coolingMinPriorInteractions = 4
-	coolingDedupWindowDays      = 30
-	coolingMaxAlertsPerRun      = 10
-)
+// candidateCoolingQuery retrieves cooling CANDIDATES and their interaction
+// signals. This is pure data retrieval — it applies NO business threshold for
+// "cooling" (that judgment is the LLM evaluator's). The only numeric inputs are
+// OPERATIONAL bounds: $1 = dedup window days (don't re-alert a person whose
+// cooling nudge is still pending/delivered within the window) and $2 = the
+// per-run candidate cap (throughput). People are ordered most-dormant-first so
+// the cap keeps the highest-signal candidates. typical_gap_days is the person's
+// average cadence (span / (interactions-1)) — pure arithmetic, no threshold —
+// so the LLM can compare the current silence against THIS person's own rhythm.
+const candidateCoolingQuery = `
+	SELECT p.id, p.name,
+	       EXTRACT(DAY FROM NOW() - MAX(a.created_at))::int AS days_since_last,
+	       COUNT(DISTINCT a.id)::int AS total_interactions,
+	       EXTRACT(DAY FROM MAX(a.created_at) - MIN(a.created_at))::int AS span_days
+	FROM people p
+	JOIN edges e ON e.dst_id = p.id AND e.dst_type = 'person'
+	JOIN artifacts a ON a.id = e.src_id
+	WHERE NOT EXISTS (
+	  SELECT 1 FROM alerts
+	  WHERE alert_type = 'relationship_cooling'
+	    AND artifact_id = p.id
+	    AND status IN ('pending', 'delivered')
+	    AND created_at > NOW() - make_interval(days => $1)
+	)
+	GROUP BY p.id, p.name
+	HAVING COUNT(DISTINCT a.id) >= 1
+	ORDER BY MAX(a.created_at) ASC
+	LIMIT $2
+`
 
-// relationshipCoolingAlertQuery builds the cooling-detection query from the
-// documented heuristic constants. Extracted from an inline literal so the
-// thresholds are first-class and unit-testable without a live database
-// (BUG-021-004). Values are integer constants only — never user input — so
-// the fmt interpolation carries no injection risk.
-func relationshipCoolingAlertQuery() string {
-	return fmt.Sprintf(`
-		SELECT p.id, p.name,
-		       EXTRACT(DAY FROM NOW() - MAX(a.created_at))::int AS days_since
-		FROM people p
-		JOIN edges e ON e.dst_id = p.id AND e.dst_type = 'person'
-		JOIN artifacts a ON a.id = e.src_id
-		GROUP BY p.id, p.name
-		HAVING EXTRACT(DAY FROM NOW() - MAX(a.created_at)) > %d
-		   AND COUNT(DISTINCT a.id) FILTER (WHERE a.created_at BETWEEN NOW() - INTERVAL '%d days' AND NOW() - INTERVAL '%d days') >= %d
-		   AND NOT EXISTS (
-		     SELECT 1 FROM alerts
-		     WHERE alert_type = 'relationship_cooling'
-		       AND artifact_id = p.id
-		       AND status IN ('pending', 'delivered')
-		       AND created_at > NOW() - INTERVAL '%d days'
-		   )
-		LIMIT %d
-	`, coolingSilenceMinDays, coolingPriorWindowStartDays, coolingPriorWindowEndDays,
-		coolingMinPriorInteractions, coolingDedupWindowDays, coolingMaxAlertsPerRun)
-}
-
-// ProduceRelationshipCoolingAlerts creates alerts for contacts with fading communication.
+// ProduceRelationshipCoolingAlerts surfaces contacts whose relationship the
+// LLM judges to be cooling (BUG-021-005). The Go core retrieves candidates and
+// their interaction signals; the `relationship_cooling_evaluate` scenario
+// decides, per candidate, whether the relationship is genuinely cooling given
+// that person's own historical cadence. There is NO hardcoded threshold for
+// "cooling" — when the evaluator is not wired, cooling production is skipped
+// (the framework does not fall back to magic numbers).
 func (e *Engine) ProduceRelationshipCoolingAlerts(ctx context.Context) error {
 	if e.Pool == nil {
 		return fmt.Errorf("relationship cooling alert production requires a database connection")
 	}
-
-	rows, err := e.Pool.Query(ctx, relationshipCoolingAlertQuery())
-	if err != nil {
-		return fmt.Errorf("query cooling relationships: %w", err)
+	if e.cooling == nil || e.cooling.Evaluator == nil {
+		slog.Warn("relationship cooling alert production skipped: LLM evaluator not wired (no hardcoded fallback)")
+		return nil
 	}
-	defer rows.Close()
+
+	rows, err := e.Pool.Query(ctx, candidateCoolingQuery, e.cooling.DedupWindowDays, e.cooling.MaxCandidates)
+	if err != nil {
+		return fmt.Errorf("query cooling candidates: %w", err)
+	}
+
+	// Collect candidates first so the evaluator's LLM calls do not run while a
+	// DB row cursor is held open.
+	var candidates []CoolingCandidate
+	for rows.Next() {
+		var c CoolingCandidate
+		var spanDays int
+		if err := rows.Scan(&c.PersonID, &c.Name, &c.DaysSinceLastInteraction, &c.TotalInteractions, &spanDays); err != nil {
+			slog.Warn("relationship cooling candidate scan failed", "error", err)
+			continue
+		}
+		c.RelationshipSpanDays = spanDays
+		c.TypicalGapDays = coolingTypicalGapDays(spanDays, c.TotalInteractions)
+		candidates = append(candidates, c)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("relationship cooling candidate iteration: %w", err)
+	}
+	rows.Close()
 
 	var created int
-	for rows.Next() {
+	for _, c := range candidates {
 		if ctx.Err() != nil {
-			slog.Warn("relationship cooling alert production context cancelled, remaining rows skipped", "created_so_far", created)
+			slog.Warn("relationship cooling alert production context cancelled, remaining candidates skipped", "created_so_far", created)
 			break
 		}
 
-		var id, name string
-		var daysSince int
-		if err := rows.Scan(&id, &name, &daysSince); err != nil {
-			slog.Warn("relationship cooling scan failed", "error", err)
+		decision, err := e.cooling.Evaluator.EvaluateCooling(ctx, c)
+		if err != nil {
+			slog.Warn("relationship cooling evaluation failed", "person", c.Name, "error", err)
+			metrics.AlertProducerFailures.WithLabelValues(string(AlertRelationship)).Inc()
+			continue
+		}
+		// The LLM judges cooling; the confidence floor is an OPERATIONAL safety
+		// gate (withhold the nudge when the model is not confident — Product
+		// Principle 6, invisible by default).
+		if !coolingShouldSurface(decision, e.cooling.ConfidenceFloor) {
 			continue
 		}
 
+		body := decision.Rationale
+		if body == "" {
+			body = fmt.Sprintf("It's been %d days since your last interaction with %s.", c.DaysSinceLastInteraction, c.Name)
+		}
 		if err := e.CreateAlert(ctx, &Alert{
 			AlertType:  AlertRelationship,
-			Title:      fmt.Sprintf("Reconnect with %s? Last contact %d days ago", name, daysSince),
-			Body:       fmt.Sprintf("You used to communicate regularly with %s, but it's been %d days since your last interaction.", name, daysSince),
+			Title:      fmt.Sprintf("Reconnect with %s? Last contact %d days ago", c.Name, c.DaysSinceLastInteraction),
+			Body:       body,
 			Priority:   3,
-			ArtifactID: id,
+			ArtifactID: c.PersonID,
 		}); err != nil {
-			slog.Warn("failed to create relationship cooling alert", "person", name, "error", err)
+			slog.Warn("failed to create relationship cooling alert", "person", c.Name, "error", err)
 			metrics.AlertProducerFailures.WithLabelValues(string(AlertRelationship)).Inc()
 		} else {
 			metrics.AlertsProduced.WithLabelValues(string(AlertRelationship)).Inc()
@@ -342,11 +357,7 @@ func (e *Engine) ProduceRelationshipCoolingAlerts(ctx context.Context) error {
 		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("relationship cooling row iteration: %w", err)
-	}
-
-	slog.Info("relationship cooling alert production complete", "created", created)
+	slog.Info("relationship cooling alert production complete", "candidates", len(candidates), "created", created)
 	return nil
 }
 
