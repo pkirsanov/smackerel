@@ -263,7 +263,29 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 			caps := googleProvider.Capabilities()
 			caps.MaxFileSizeBytes = cfg.Drive.Limits.MaxFileSizeBytes
 			googleProvider.Configure(caps)
-			googleProvider.ConfigureRuntime(svc.pg.Pool, http.DefaultClient, cfg.Drive.Providers.Google)
+			// BUG-038-001 — give the Google provider a client that bounds
+			// connect/header hangs. http.DefaultClient (previously passed
+			// here) has NO timeout, so a provider endpoint that accepts a
+			// connection but never responds blocked the scan/monitor
+			// goroutine indefinitely. ResponseHeaderTimeout (plus the dial
+			// and TLS-handshake timeouts) caps the time-to-response-headers
+			// WITHOUT capping whole-request duration, so legitimate large
+			// downloads (up to drive.limits.max_file_size_bytes) are not
+			// aborted mid-body; per-call context deadlines bound those.
+			driveHeaderTimeout := time.Duration(cfg.Drive.Providers.Google.HTTPResponseHeaderTimeoutSeconds) * time.Second
+			driveHTTPClient := &http.Client{
+				Transport: &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: driveHeaderTimeout,
+					}).DialContext,
+					TLSHandshakeTimeout:   driveHeaderTimeout,
+					ResponseHeaderTimeout: driveHeaderTimeout,
+					IdleConnTimeout:       90 * time.Second,
+					MaxIdleConns:          100,
+					MaxIdleConnsPerHost:   10,
+				},
+			}
+			googleProvider.ConfigureRuntime(svc.pg.Pool, driveHTTPClient, cfg.Drive.Providers.Google)
 		} else {
 			slog.Warn("registered google drive provider has unexpected type", "type", "not *google.Provider")
 		}
