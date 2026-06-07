@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-004-relationship-cooling-heuristic-untested",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-004-relationship-cooling-heuristic-untested",
+  "featureName": "BUG-021-004: relationship-cooling heuristic was untested inline SQL and deviates from the spec's ≥1/week shorthand",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "reportedAt": "2026-06-07T00:30:00Z",
+  "reporter": "stochastic-quality-sweep round 9 (regression, parent-expanded)",
+  "certifiedAt": "2026-06-07T02:30:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T02:30:00Z",
+  "lastUpdatedAt": "2026-06-07T01:30:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:30:00Z",
+        "completedAt": "2026-06-07T00:34:00Z",
+        "outcome": "completed_owned",
+        "summary": "Sweep round 9 (regression lens) of spec 021 found ProduceRelationshipCoolingAlerts encodes its heuristic as inline SQL magic numbers with NO test, and the threshold (>=4 distinct interactions in the prior 90-day window) is looser than the spec R-021-005/UC-005 shorthand 'previously >= 1/week'. Two problems: untested heuristic (silent drift risk) + spec/code disagreement (a product decision)."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:34:00Z",
+        "completedAt": "2026-06-07T00:36:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope (engineering concern): extract the heuristic into documented constants + a testable builder (identical SQL, no behavior change) and add a lock test. Surface the threshold-direction disagreement as DI-021-004 (owner decision) rather than silently changing behavior or the parent spec. SCN-021-COOLING-01 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:36:00Z",
+        "completedAt": "2026-06-07T00:42:00Z",
+        "outcome": "completed_owned",
+        "summary": "internal/intelligence/alert_producers.go: added named constants (coolingSilenceMinDays=30, coolingPriorWindowStartDays=180, coolingPriorWindowEndDays=90, coolingMinPriorInteractions=4, coolingDedupWindowDays=30, coolingMaxAlertsPerRun=10) + relationshipCoolingAlertQuery() builder (fmt.Sprintf over integer constants only). ProduceRelationshipCoolingAlerts calls the builder; the produced SQL is byte-for-byte the prior inline literal. The comment surfaces the >=1/week deviation."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:42:00Z",
+        "completedAt": "2026-06-07T00:48:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added TestRelationshipCoolingHeuristic_MatchesDocumentedContract: asserts the produced query embeds the documented threshold fragments (independently hardcoded as the contract) and that the constants back them. PASS on the shipped heuristic; adversarial drift (set coolingMinPriorInteractions=13) makes it FAIL (fragment + constant assertions). go build green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:48:00Z",
+        "completedAt": "2026-06-07T00:50:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full internal/intelligence package green (ok 0.047s) with the lock test; existing producer/helper tests unchanged (no behavior change since the SQL is identical)."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:50:00Z",
+        "completedAt": "2026-06-07T00:51:00Z",
+        "outcome": "completed_owned",
+        "summary": "Constants + one builder function; no new abstractions; the builder makes the heuristic testable without a live DB."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:51:00Z",
+        "completedAt": "2026-06-07T00:52:00Z",
+        "outcome": "completed_owned",
+        "summary": "fmt.Sprintf over integer constants only (no user input, no injection); deterministic query; no perf change (identical SQL)."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:52:00Z",
+        "completedAt": "2026-06-07T00:53:00Z",
+        "outcome": "completed_owned",
+        "summary": "The SQL is built from integer constants only; no user input reaches the format string. No secret/auth surface. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:53:00Z",
+        "completedAt": "2026-06-07T00:55:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; go build + full intelligence package green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:55:00Z",
+        "completedAt": "2026-06-07T00:56:00Z",
+        "outcome": "completed_owned",
+        "summary": "Diff confined to alert_producers.go + alert_producers_test.go; no migration (SQL identical); no .github/bubbles changes; parent spec 021 requirement text deliberately untouched (DI-021-004 surfaced, not applied)."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:56:00Z",
+        "completedAt": "2026-06-07T00:57:00Z",
+        "outcome": "completed_owned",
+        "summary": "alert_producers.go comment documents the heuristic contract + the surfaced >=1/week deviation + the owner-decision pointer (DI-021-004)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T02:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Make the cooling heuristic explicit and test-guarded", "status": "Done", "completedDoD": 9, "totalDoD": 9, "completedAt": "2026-06-07T00:57:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane refactor + lock test; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T00:57:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-021-COOLING-UNTESTED",
+      "summary": "The relationship-cooling heuristic was inline SQL magic numbers with no test, so a threshold change would drift silently.",
+      "resolution": "Extracted the heuristic into named, documented constants + a testable relationshipCoolingAlertQuery() builder (identical SQL, no behavior change); added TestRelationshipCoolingHeuristic_MatchesDocumentedContract which fails on a threshold drift.",
+      "evidence": "report.md Test Evidence (PASS + adversarial drift FAIL); internal/intelligence/alert_producers.go constants + builder; full intelligence package ok.",
+      "status": "resolved"
+    }
+  ],
+  "discoveredIssues": [
+    {
+      "id": "DI-021-004",
+      "summary": "The shipped cooling threshold (>=4 distinct interactions in the prior 90-day window, ~1 per 22 days) is looser than spec 021 R-021-005/UC-005 shorthand 'previously >= 1/week'. Reconciling the two changes the user's live cooling-alert frequency (a product decision). Option A: keep the shipped value, refresh the spec wording to match. Option B: tighten coolingMinPriorInteractions toward a weekly cadence. Both are a one-line change to the constant + the test fragment. This fix locked the SHIPPED behavior and did NOT decide the direction or edit the parent spec requirement text.",
+      "disposition": "routed-to-owner",
+      "owner": "operator (product decision); then specs/021-intelligence-delivery spec-owner for the wording refresh",
+      "blocking": false
+    }
+  ],
+  "sweep": {
+    "sweepId": "sweep-2026-06-07-r9",
+    "round": 9,
+    "trigger": "regression",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}

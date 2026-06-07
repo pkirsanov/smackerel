@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-021-004-relationship-cooling-heuristic-untested",
+  "parentSpec": "021-intelligence-delivery",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real refactor + lock test; the scenario drives the heuristic-contract proof + adversarial drift."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': TestRelationshipCoolingHeuristic_MatchesDocumentedContract passes against the shipped heuristic; changing a threshold constant makes it FAIL (fragment + constant drift), proving the heuristic is now guarded."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-COOLING-01",
+      "scope": "Scope 1",
+      "title": "Relationship-cooling query enforces the documented threshold contract",
+      "requiredTestType": "regression",
+      "testFiles": ["internal/intelligence/alert_producers_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/alert_producers_test.go", "function": "TestRelationshipCoolingHeuristic_MatchesDocumentedContract"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-make-the-cooling-heuristic-explicit-and-test-guarded"
+      ],
+      "liveTestExpectation": "relationshipCoolingAlertQuery() contains '> 30', INTERVAL '180 days', INTERVAL '90 days', ') >= 4', dedup '30 days', and 'LIMIT 10'; the backing constants equal the documented contract. A threshold change fails the test.",
+      "changeType": "added"
+    }
+  ]
+}

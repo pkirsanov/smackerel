@@ -2,6 +2,7 @@ package intelligence
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -274,5 +275,51 @@ func TestAnnualBillingDateNextYear(t *testing.T) {
 
 	if nextBilling.Year() != 2027 || nextBilling.Month() != time.March || nextBilling.Day() != 5 {
 		t.Errorf("expected 2027-03-05, got %s", nextBilling.Format("2006-01-02"))
+	}
+}
+
+// TestRelationshipCoolingHeuristic_MatchesDocumentedContract — BUG-021-004.
+//
+// The relationship-cooling heuristic (spec 021 R-021-005 / UC-005) was
+// previously inline SQL magic numbers with NO test, so a threshold change
+// would drift silently from the documented contract. This locks the shipped
+// operationalization of "previously regular contact, now silent": the
+// produced query MUST enforce >coolingSilenceMinDays since last contact,
+// >=coolingMinPriorInteractions distinct interactions in the
+// [coolingPriorWindowEndDays, coolingPriorWindowStartDays]-day prior window,
+// a dedup window, and a per-run cap. The expected fragments are hardcoded
+// here as the independent spec contract, so any code-side threshold change
+// fails this test (forcing a conscious, spec-reconciled decision).
+func TestRelationshipCoolingHeuristic_MatchesDocumentedContract(t *testing.T) {
+	q := relationshipCoolingAlertQuery()
+
+	// Each fragment is the documented contract value, hardcoded independently
+	// of the constants so a constant change is caught (not tautological).
+	wantFragments := []struct {
+		desc string
+		frag string
+	}{
+		{"silence threshold > 30 days since last contact", "EXTRACT(DAY FROM NOW() - MAX(a.created_at)) > 30"},
+		{"prior-window start = 180 days ago", "NOW() - INTERVAL '180 days'"},
+		{"prior-window end = 90 days ago", "NOW() - INTERVAL '90 days'"},
+		{"at least 4 distinct prior interactions", ") >= 4"},
+		{"dedup within 30 days", "created_at > NOW() - INTERVAL '30 days'"},
+		{"per-run cap of 10 alerts", "LIMIT 10"},
+	}
+	for _, w := range wantFragments {
+		if !strings.Contains(q, w.frag) {
+			t.Errorf("cooling query missing the %s contract — expected fragment %q not found.\nIf this threshold changed intentionally, update specs/021-intelligence-delivery/bugs/BUG-021-004 and this test together.", w.desc, w.frag)
+		}
+	}
+
+	// The constants must back the produced query (catches a hand-edit that
+	// bypasses the constants).
+	if coolingSilenceMinDays != 30 || coolingPriorWindowStartDays != 180 ||
+		coolingPriorWindowEndDays != 90 || coolingMinPriorInteractions != 4 ||
+		coolingDedupWindowDays != 30 || coolingMaxAlertsPerRun != 10 {
+		t.Errorf("cooling heuristic constants drifted from the documented BUG-021-004 contract: "+
+			"silence=%d priorStart=%d priorEnd=%d minInteractions=%d dedup=%d cap=%d",
+			coolingSilenceMinDays, coolingPriorWindowStartDays, coolingPriorWindowEndDays,
+			coolingMinPriorInteractions, coolingDedupWindowDays, coolingMaxAlertsPerRun)
 	}
 }
