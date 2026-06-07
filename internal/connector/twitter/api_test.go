@@ -397,6 +397,73 @@ func TestTwitterAPI_ReplayPagination(t *testing.T) {
 	}
 }
 
+// TestTwitterAPI_EmptyNonTerminalPageDoesNotAdvanceCursor — regression for the
+// sparse-results cursor bug (sweep round 18).
+//
+// Twitter v2 can return an empty `data` array that STILL carries a next_token
+// (sparse results), distinct from the empty TERMINAL page (no next_token) that
+// TestTwitterAPI_ReplayPagination covers. The resume cursor MUST stay anchored
+// to the last page that actually produced tweets — an empty non-terminal page
+// must NOT advance lastNonEmptyToken past the real data. Fixture sequence:
+//
+//	page1 (3 tweets, next=PAGE2_TOKEN) → page2 (EMPTY, next=PAGE3_TOKEN)
+//	  → page3 (EMPTY, no next_token, terminal)
+//
+// Pre-fix the loop advanced lastNonEmptyToken to PAGE3_TOKEN on the empty
+// page2; the contract is to persist PAGE2_TOKEN (the last non-empty page's
+// next_token).
+func TestTwitterAPI_EmptyNonTerminalPageDoesNotAdvanceCursor(t *testing.T) {
+	t.Parallel()
+
+	page1, err := os.ReadFile(filepath.Join("testdata", "api", "bookmarks_page1.json"))
+	if err != nil {
+		t.Fatalf("read page1: %v", err)
+	}
+	emptyWithNext := []byte(`{"data":[],"meta":{"result_count":0,"next_token":"PAGE3_TOKEN"}}`)
+	emptyTerminal := []byte(`{"data":[],"meta":{"result_count":0}}`)
+
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		switch r.URL.Query().Get("pagination_token") {
+		case "PAGE2_TOKEN":
+			_, _ = w.Write(emptyWithNext)
+		case "PAGE3_TOKEN":
+			_, _ = w.Write(emptyTerminal)
+		default:
+			_, _ = w.Write(page1)
+		}
+	}))
+	defer srv.Close()
+
+	client, err := newAPIClient(TwitterConfig{
+		SyncMode:    SyncModeAPI,
+		BearerToken: "test-bearer-token-not-real",
+	}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = srv.URL
+
+	tweets, finalCursor, err := client.fetchBookmarks(context.Background(), "2244994945", "")
+	if err != nil {
+		t.Fatalf("fetchBookmarks: %v", err)
+	}
+	if len(tweets) != 3 {
+		t.Fatalf("expected 3 tweets (page1 only; both later pages empty), got %d", len(tweets))
+	}
+	// The empty non-terminal page2 must NOT advance the cursor to PAGE3_TOKEN.
+	if finalCursor != "PAGE2_TOKEN" {
+		t.Fatalf("final cursor must stay anchored to PAGE2_TOKEN (last non-empty page); "+
+			"an empty non-terminal page advanced it to %q", finalCursor)
+	}
+	if requests != 3 {
+		t.Fatalf("expected 3 requests (page1, empty+next, terminal empty), got %d", requests)
+	}
+}
+
 // TestTwitterAPI_CursorSurvivesProcessRestart — regression for SCN-056-002.
 //
 // Simulates a process restart by:

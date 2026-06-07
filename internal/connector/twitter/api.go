@@ -320,7 +320,16 @@ func (c *apiClient) fetchEndpointPaginated(ctx context.Context, endpoint apiEndp
 		if body.Meta.NextToken == "" {
 			return tweets, lastNonEmptyToken, nil
 		}
-		lastNonEmptyToken = body.Meta.NextToken
+		// Only advance the persisted resume cursor when THIS page actually
+		// carried data. Twitter v2 results can be sparse — an empty page may
+		// still carry a next_token. Moving lastNonEmptyToken on such an empty
+		// page would push the next sync tick's resume point PAST the last page
+		// that produced tweets. Honoring the variable's name (and the
+		// TestTwitterAPI_ReplayPagination contract) keeps the cursor anchored
+		// to the last non-empty page's next_token.
+		if len(body.Data) > 0 {
+			lastNonEmptyToken = body.Meta.NextToken
+		}
 		cursor = body.Meta.NextToken
 	}
 	c.logger.Warn("pagination cap hit",
