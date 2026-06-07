@@ -247,30 +247,67 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 	return nil
 }
 
-// ProduceRelationshipCoolingAlerts creates alerts for contacts with fading communication.
-func (e *Engine) ProduceRelationshipCoolingAlerts(ctx context.Context) error {
-	if e.Pool == nil {
-		return fmt.Errorf("relationship cooling alert production requires a database connection")
-	}
+// Relationship-cooling heuristic parameters (BUG-021-004).
+//
+// Spec 021 R-021-005 / UC-005 require alerting on a contact the user was
+// "previously in regular contact" with who has since gone silent. The
+// shipped operationalization of "previously regular contact" is: at least
+// coolingMinPriorInteractions DISTINCT interactions during the prior window
+// [coolingPriorWindowEndDays, coolingPriorWindowStartDays] days ago (i.e.
+// 3-6 months back), AND no interaction for more than coolingSilenceMinDays.
+// These constants are the single source of truth for the heuristic; the
+// spec-contract test TestRelationshipCoolingHeuristic_* locks them so a
+// threshold change cannot drift silently from the documented contract.
+//
+// NOTE (surfaced for owner): this threshold is LOOSER than the spec's
+// shorthand "≥ 1/week previous frequency" (≥4 in 90 days ≈ 1 per 22 days).
+// The shipped value favors surfacing more cooling relationships on a
+// single-user system. Tightening to a literal weekly cadence is a one-line
+// change to coolingMinPriorInteractions, pending owner direction; see
+// specs/021-intelligence-delivery/bugs/BUG-021-004.
+const (
+	coolingSilenceMinDays       = 30
+	coolingPriorWindowStartDays = 180
+	coolingPriorWindowEndDays   = 90
+	coolingMinPriorInteractions = 4
+	coolingDedupWindowDays      = 30
+	coolingMaxAlertsPerRun      = 10
+)
 
-	rows, err := e.Pool.Query(ctx, `
+// relationshipCoolingAlertQuery builds the cooling-detection query from the
+// documented heuristic constants. Extracted from an inline literal so the
+// thresholds are first-class and unit-testable without a live database
+// (BUG-021-004). Values are integer constants only — never user input — so
+// the fmt interpolation carries no injection risk.
+func relationshipCoolingAlertQuery() string {
+	return fmt.Sprintf(`
 		SELECT p.id, p.name,
 		       EXTRACT(DAY FROM NOW() - MAX(a.created_at))::int AS days_since
 		FROM people p
 		JOIN edges e ON e.dst_id = p.id AND e.dst_type = 'person'
 		JOIN artifacts a ON a.id = e.src_id
 		GROUP BY p.id, p.name
-		HAVING EXTRACT(DAY FROM NOW() - MAX(a.created_at)) > 30
-		   AND COUNT(DISTINCT a.id) FILTER (WHERE a.created_at BETWEEN NOW() - INTERVAL '180 days' AND NOW() - INTERVAL '90 days') >= 4
+		HAVING EXTRACT(DAY FROM NOW() - MAX(a.created_at)) > %d
+		   AND COUNT(DISTINCT a.id) FILTER (WHERE a.created_at BETWEEN NOW() - INTERVAL '%d days' AND NOW() - INTERVAL '%d days') >= %d
 		   AND NOT EXISTS (
 		     SELECT 1 FROM alerts
 		     WHERE alert_type = 'relationship_cooling'
 		       AND artifact_id = p.id
 		       AND status IN ('pending', 'delivered')
-		       AND created_at > NOW() - INTERVAL '30 days'
+		       AND created_at > NOW() - INTERVAL '%d days'
 		   )
-		LIMIT 10
-	`)
+		LIMIT %d
+	`, coolingSilenceMinDays, coolingPriorWindowStartDays, coolingPriorWindowEndDays,
+		coolingMinPriorInteractions, coolingDedupWindowDays, coolingMaxAlertsPerRun)
+}
+
+// ProduceRelationshipCoolingAlerts creates alerts for contacts with fading communication.
+func (e *Engine) ProduceRelationshipCoolingAlerts(ctx context.Context) error {
+	if e.Pool == nil {
+		return fmt.Errorf("relationship cooling alert production requires a database connection")
+	}
+
+	rows, err := e.Pool.Query(ctx, relationshipCoolingAlertQuery())
 	if err != nil {
 		return fmt.Errorf("query cooling relationships: %w", err)
 	}
