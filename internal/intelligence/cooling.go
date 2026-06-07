@@ -13,7 +13,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/smackerel/smackerel/internal/agent"
 )
@@ -77,55 +76,22 @@ func coolingShouldSurface(decision CoolingDecision, floor float64) bool {
 	return decision.IsCooling && decision.Confidence >= floor
 }
 
-// coolingBridgeRunner is the minimal subset of *agent.Bridge that the
-// BridgeCoolingEvaluator consumes. Production wiring passes the live
-// *agent.Bridge; tests inject a scripted runner.
-type coolingBridgeRunner interface {
-	Invoke(ctx context.Context, env agent.IntentEnvelope) (*agent.InvocationResult, *agent.RoutingDecision)
-}
-
 // BridgeCoolingEvaluator is the production CoolingEvaluator, backed by the
-// `relationship_cooling_evaluate` scenario via the agent bridge.
+// `relationship_cooling_evaluate` scenario via the agent bridge. The
+// marshal/invoke/validate/decode transport is the shared agent.InvokeJudgment
+// primitive (BUG-021-010); this evaluator carries only its scenario id and
+// signal/decision shapes.
 type BridgeCoolingEvaluator struct {
-	Runner coolingBridgeRunner
+	Runner agent.JudgmentRunner
 }
-
-// ErrCoolingEvaluatorUnavailable is returned when no bridge runner is wired.
-var ErrCoolingEvaluatorUnavailable = errors.New("intelligence: relationship cooling evaluator unavailable (agent bridge not wired)")
 
 // EvaluateCooling invokes the `relationship_cooling_evaluate` scenario for one
 // candidate and returns the LLM's structured judgment.
 func (b *BridgeCoolingEvaluator) EvaluateCooling(ctx context.Context, candidate CoolingCandidate) (CoolingDecision, error) {
-	if b == nil || b.Runner == nil {
-		return CoolingDecision{}, ErrCoolingEvaluatorUnavailable
+	if b == nil {
+		return CoolingDecision{}, agent.ErrJudgmentUnavailable
 	}
-
-	structured, err := json.Marshal(candidate)
-	if err != nil {
-		return CoolingDecision{}, fmt.Errorf("intelligence cooling evaluator: marshal candidate: %w", err)
-	}
-
-	env := agent.IntentEnvelope{
-		Source:            "scheduler",
-		StructuredContext: structured,
-		ScenarioID:        "relationship_cooling_evaluate",
-	}
-	res, _ := b.Runner.Invoke(ctx, env)
-	if res == nil {
-		return CoolingDecision{}, ErrCoolingEvaluatorUnavailable
-	}
-	if res.Outcome != agent.OutcomeOK {
-		return CoolingDecision{}, fmt.Errorf("intelligence cooling evaluator: scenario outcome %q (detail=%v)", res.Outcome, res.OutcomeDetail)
-	}
-	if len(res.Final) == 0 {
-		return CoolingDecision{}, fmt.Errorf("intelligence cooling evaluator: scenario returned empty final payload")
-	}
-
-	var decision CoolingDecision
-	if err := json.Unmarshal(res.Final, &decision); err != nil {
-		return CoolingDecision{}, fmt.Errorf("intelligence cooling evaluator: decode final: %w", err)
-	}
-	return decision, nil
+	return agent.InvokeJudgment[CoolingDecision](ctx, b.Runner, "scheduler", "relationship_cooling_evaluate", candidate)
 }
 
 func init() {

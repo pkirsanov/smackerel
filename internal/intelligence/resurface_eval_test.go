@@ -114,12 +114,12 @@ func TestBridgeResurfaceEvaluator_ErrorPaths(t *testing.T) {
 
 func TestBridgeResurfaceEvaluator_NilReceiverAndRunner(t *testing.T) {
 	var nilEv *BridgeResurfaceEvaluator
-	if _, err := nilEv.EvaluateResurface(context.Background(), sampleResurfaceSignals()); !errors.Is(err, ErrResurfaceEvaluatorUnavailable) {
-		t.Errorf("nil receiver should return ErrResurfaceEvaluatorUnavailable, got %v", err)
+	if _, err := nilEv.EvaluateResurface(context.Background(), sampleResurfaceSignals()); !errors.Is(err, agent.ErrJudgmentUnavailable) {
+		t.Errorf("nil receiver should return agent.ErrJudgmentUnavailable, got %v", err)
 	}
 	ev := &BridgeResurfaceEvaluator{Runner: nil}
-	if _, err := ev.EvaluateResurface(context.Background(), sampleResurfaceSignals()); !errors.Is(err, ErrResurfaceEvaluatorUnavailable) {
-		t.Errorf("nil runner should return ErrResurfaceEvaluatorUnavailable, got %v", err)
+	if _, err := ev.EvaluateResurface(context.Background(), sampleResurfaceSignals()); !errors.Is(err, agent.ErrJudgmentUnavailable) {
+		t.Errorf("nil runner should return agent.ErrJudgmentUnavailable, got %v", err)
 	}
 }
 

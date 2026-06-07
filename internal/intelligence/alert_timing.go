@@ -13,7 +13,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 
 	"github.com/smackerel/smackerel/internal/agent"
@@ -115,55 +114,21 @@ func (e *Engine) evaluateAndCreateTimedAlert(ctx context.Context, c AlertTimingC
 	return true
 }
 
-// alertTimingBridgeRunner is the minimal subset of *agent.Bridge that the
-// BridgeAlertTimingEvaluator consumes. Production wiring passes the live
-// *agent.Bridge; tests inject a scripted runner.
-type alertTimingBridgeRunner interface {
-	Invoke(ctx context.Context, env agent.IntentEnvelope) (*agent.InvocationResult, *agent.RoutingDecision)
-}
-
 // BridgeAlertTimingEvaluator is the production AlertTimingEvaluator, backed by
-// the `alert_timing_evaluate` scenario via the agent bridge.
+// the `alert_timing_evaluate` scenario via the agent bridge. The
+// marshal/invoke/validate/decode transport is the shared agent.InvokeJudgment
+// primitive (BUG-021-010).
 type BridgeAlertTimingEvaluator struct {
-	Runner alertTimingBridgeRunner
+	Runner agent.JudgmentRunner
 }
-
-// ErrAlertTimingEvaluatorUnavailable is returned when no bridge runner is wired.
-var ErrAlertTimingEvaluatorUnavailable = errors.New("intelligence: alert timing evaluator unavailable (agent bridge not wired)")
 
 // EvaluateAlertTiming invokes the `alert_timing_evaluate` scenario for one
 // candidate and returns the LLM's structured judgment.
 func (b *BridgeAlertTimingEvaluator) EvaluateAlertTiming(ctx context.Context, candidate AlertTimingCandidate) (AlertTimingDecision, error) {
-	if b == nil || b.Runner == nil {
-		return AlertTimingDecision{}, ErrAlertTimingEvaluatorUnavailable
+	if b == nil {
+		return AlertTimingDecision{}, agent.ErrJudgmentUnavailable
 	}
-
-	structured, err := json.Marshal(candidate)
-	if err != nil {
-		return AlertTimingDecision{}, fmt.Errorf("intelligence alert timing evaluator: marshal candidate: %w", err)
-	}
-
-	env := agent.IntentEnvelope{
-		Source:            "scheduler",
-		StructuredContext: structured,
-		ScenarioID:        "alert_timing_evaluate",
-	}
-	res, _ := b.Runner.Invoke(ctx, env)
-	if res == nil {
-		return AlertTimingDecision{}, ErrAlertTimingEvaluatorUnavailable
-	}
-	if res.Outcome != agent.OutcomeOK {
-		return AlertTimingDecision{}, fmt.Errorf("intelligence alert timing evaluator: scenario outcome %q (detail=%v)", res.Outcome, res.OutcomeDetail)
-	}
-	if len(res.Final) == 0 {
-		return AlertTimingDecision{}, fmt.Errorf("intelligence alert timing evaluator: scenario returned empty final payload")
-	}
-
-	var decision AlertTimingDecision
-	if err := json.Unmarshal(res.Final, &decision); err != nil {
-		return AlertTimingDecision{}, fmt.Errorf("intelligence alert timing evaluator: decode final: %w", err)
-	}
-	return decision, nil
+	return agent.InvokeJudgment[AlertTimingDecision](ctx, b.Runner, "scheduler", "alert_timing_evaluate", candidate)
 }
 
 func init() {

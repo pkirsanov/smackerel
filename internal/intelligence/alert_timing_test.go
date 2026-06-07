@@ -102,12 +102,12 @@ func TestBridgeAlertTimingEvaluator_ErrorPaths(t *testing.T) {
 
 func TestBridgeAlertTimingEvaluator_NilReceiverAndRunner(t *testing.T) {
 	var nilEv *BridgeAlertTimingEvaluator
-	if _, err := nilEv.EvaluateAlertTiming(context.Background(), sampleTimingCandidate()); !errors.Is(err, ErrAlertTimingEvaluatorUnavailable) {
-		t.Errorf("nil receiver should return ErrAlertTimingEvaluatorUnavailable, got %v", err)
+	if _, err := nilEv.EvaluateAlertTiming(context.Background(), sampleTimingCandidate()); !errors.Is(err, agent.ErrJudgmentUnavailable) {
+		t.Errorf("nil receiver should return agent.ErrJudgmentUnavailable, got %v", err)
 	}
 	ev := &BridgeAlertTimingEvaluator{Runner: nil}
-	if _, err := ev.EvaluateAlertTiming(context.Background(), sampleTimingCandidate()); !errors.Is(err, ErrAlertTimingEvaluatorUnavailable) {
-		t.Errorf("nil runner should return ErrAlertTimingEvaluatorUnavailable, got %v", err)
+	if _, err := ev.EvaluateAlertTiming(context.Background(), sampleTimingCandidate()); !errors.Is(err, agent.ErrJudgmentUnavailable) {
+		t.Errorf("nil runner should return agent.ErrJudgmentUnavailable, got %v", err)
 	}
 }
 

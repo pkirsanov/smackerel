@@ -124,11 +124,11 @@ func TestBridgeExpertiseEvaluator_ErrorPaths(t *testing.T) {
 
 func TestBridgeExpertiseEvaluator_NilReceiverAndRunner(t *testing.T) {
 	var nilEv *BridgeExpertiseEvaluator
-	if _, err := nilEv.ClassifyExpertise(context.Background(), 1, sampleExpertiseSignals()); !errors.Is(err, ErrExpertiseEvaluatorUnavailable) {
-		t.Errorf("nil receiver should return ErrExpertiseEvaluatorUnavailable, got %v", err)
+	if _, err := nilEv.ClassifyExpertise(context.Background(), 1, sampleExpertiseSignals()); !errors.Is(err, agent.ErrJudgmentUnavailable) {
+		t.Errorf("nil receiver should return agent.ErrJudgmentUnavailable, got %v", err)
 	}
 	ev := &BridgeExpertiseEvaluator{Runner: nil}
-	if _, err := ev.ClassifyExpertise(context.Background(), 1, sampleExpertiseSignals()); !errors.Is(err, ErrExpertiseEvaluatorUnavailable) {
-		t.Errorf("nil runner should return ErrExpertiseEvaluatorUnavailable, got %v", err)
+	if _, err := ev.ClassifyExpertise(context.Background(), 1, sampleExpertiseSignals()); !errors.Is(err, agent.ErrJudgmentUnavailable) {
+		t.Errorf("nil runner should return agent.ErrJudgmentUnavailable, got %v", err)
 	}
 }

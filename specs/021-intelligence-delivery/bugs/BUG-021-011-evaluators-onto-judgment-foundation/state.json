@@ -1,0 +1,156 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-011-evaluators-onto-judgment-foundation",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-011-evaluators-onto-judgment-foundation",
+  "featureName": "BUG-021-011: migrate the four prior LLM-judgment evaluators onto the agent.InvokeJudgment foundation",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "low",
+  "continues": "BUG-021-010-judgment-foundation-hospitality",
+  "reportedAt": "2026-06-07T05:10:00Z",
+  "reporter": "owner directive (best solution long term — complete the foundation)",
+  "certifiedAt": "2026-06-07T10:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T10:00:00Z",
+  "lastUpdatedAt": "2026-06-07T05:35:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:10:00Z",
+        "completedAt": "2026-06-07T05:14:00Z",
+        "outcome": "completed_owned",
+        "summary": "BUG-021-010 introduced agent.InvokeJudgment[T] and proved it on the new hospitality evaluator, but the four pre-existing evaluators (cooling, alert_timing, resurface_eval, expertise_eval) still each carried a private xBridgeRunner interface, an ErrXEvaluatorUnavailable sentinel, and a ~30-line hand-rolled marshal→invoke→validate→decode body — four copies of the transport the foundation centralizes. The owner's 'best solution long term' directive calls to converge them. Confirmed (grep) the four sentinels + four interfaces are referenced only inside each evaluator file and its test (no producers, no wiring), so removal is contained."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:14:00Z",
+        "completedAt": "2026-06-07T05:17:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single behaviour-preserving bugfix-fastlane scope: retype each BridgeXEvaluator.Runner to agent.JudgmentRunner; delete the four xBridgeRunner interfaces and the four ErrXEvaluatorUnavailable sentinels; replace each method body with one agent.InvokeJudgment[T] call (expertise unwraps resp.Classifications and keeps its empty-topics short-circuit); keep the nil-receiver guard (returns agent.ErrJudgmentUnavailable); drop the now-unused fmt import; update the four test nil assertions to agent.ErrJudgmentUnavailable. No new tests — the existing evaluator tests are the regression guard. Rejected the sentinel-alias alternative (keeps four redundant names; diverges from hospitality). SCN-021-MIGRATE-01..02."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:17:00Z",
+        "completedAt": "2026-06-07T05:26:00Z",
+        "outcome": "completed_owned",
+        "summary": "cooling.go / alert_timing.go / resurface_eval.go: Runner -> agent.JudgmentRunner; sentinel + interface removed; body -> if b == nil { return zero, agent.ErrJudgmentUnavailable }; return agent.InvokeJudgment[Decision](ctx, b.Runner, \"scheduler\", scenarioID, in). expertise_eval.go: same, source \"api\", InvokeJudgment[expertiseResponse] then return resp.Classifications; kept expertiseRequest/expertiseResponse + len(topics)==0 short-circuit. Dropped fmt import from all four (json/errors remain for init() no-op tool). Updated the four test nil-receiver/nil-runner assertions to agent.ErrJudgmentUnavailable and corrected the stale 'coolingBridgeRunner' comment in cooling_test.go."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:26:00Z",
+        "completedAt": "2026-06-07T05:29:00Z",
+        "outcome": "completed_owned",
+        "summary": "go build ./... + vet green (unused fmt would have failed the build). All four evaluators' existing tests pass: TestBridge{Cooling,AlertTiming,Resurface,Expertise}Evaluator_* (parse, routing, signal forwarding, internal-field non-leak, nil-receiver/nil-runner now on agent.ErrJudgmentUnavailable, all error paths). TestInvokeJudgment_* (the shared primitive) green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:29:00Z",
+        "completedAt": "2026-06-07T05:31:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full intelligence + agent + digest + cmd/core + scenario-lint packages green. The production wiring (BridgeXEvaluator{Runner: bridge}) compiles against the retyped agent.JudgmentRunner field because *agent.Bridge satisfies it. The test scripted runners satisfy agent.JudgmentRunner (same Invoke signature). No producer/scheduler test affected (no behaviour change)."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:31:00Z",
+        "completedAt": "2026-06-07T05:32:00Z",
+        "outcome": "completed_owned",
+        "summary": "This phase IS the simplification: net ~135 fewer lines (179 deletions, 44 insertions) across the eight files — four interfaces, four sentinels, and four ~30-line transport bodies collapse to four one-line InvokeJudgment calls. The codebase now has exactly one judgment transport."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:32:00Z",
+        "completedAt": "2026-06-07T05:33:00Z",
+        "outcome": "completed_owned",
+        "summary": "The nil-receiver guard is retained in each method (a method on a nil *BridgeXEvaluator must not dereference b.Runner); the nil-runner path is handled inside InvokeJudgment. Both yield agent.ErrJudgmentUnavailable, so the producers' graceful-degradation paths (gate on the error / nil evaluator) are unchanged. expertise keeps its empty-topics short-circuit."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:33:00Z",
+        "completedAt": "2026-06-07T05:33:30Z",
+        "outcome": "completed_owned",
+        "summary": "No change to what is sent to the LLM: each evaluator still marshals the same signals struct (internal fields remain json:\"-\"; the non-leak tests still pass). InvokeJudgment performs no payload logging. No new external surface. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:33:30Z",
+        "completedAt": "2026-06-07T05:34:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; build + vet + affected packages green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:34:00Z",
+        "completedAt": "2026-06-07T05:34:30Z",
+        "outcome": "completed_owned",
+        "summary": "grep of the four removed interface names + four removed sentinel names across internal/ and cmd/ = 0 (fully removed). No migration; no scenario YAML / SST / wiring / producer / schema change; diff confined to the four evaluator files + four tests; no .github/bubbles changes; parent spec 021 planning artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:34:30Z",
+        "completedAt": "2026-06-07T05:35:00Z",
+        "outcome": "completed_owned",
+        "summary": "Each migrated evaluator's struct doc-comment now notes the shared agent.InvokeJudgment transport (BUG-021-010). The packet records continuation of BUG-021-010 and the convergence to one judgment primitive across the six BUG-021-005..010 LLM-driven judgments."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T10:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Migrate the four evaluators onto agent.InvokeJudgment", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T05:35:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "behaviour-preserving refactor; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T05:35:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-021-JUDGMENT-DUPLICATION-RETROFIT",
+      "summary": "The four pre-existing LLM-judgment evaluators (cooling, alert timing, resurface, expertise) still each carried a private xBridgeRunner interface, an ErrXEvaluatorUnavailable sentinel, and a hand-rolled copy of the marshal/invoke/validate/decode transport that BUG-021-010 centralized into agent.InvokeJudgment[T].",
+      "resolution": "Migrated all four onto agent.InvokeJudgment: Runner retyped to agent.JudgmentRunner, the four interfaces + four sentinels removed, each body replaced by one InvokeJudgment call (expertise unwraps resp.Classifications), the unused fmt import dropped. Behaviour preserved — all existing evaluator unit tests pass; ~135 fewer lines.",
+      "evidence": "report.md Test/Code-Diff/Audit Evidence; internal/intelligence/{cooling,alert_timing,resurface_eval,expertise_eval}.go; grep of the removed identifiers = 0.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-no-const-limits",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}

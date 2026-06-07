@@ -14,7 +14,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/smackerel/smackerel/internal/agent"
 )
@@ -67,55 +66,21 @@ func resurfaceShouldSurface(decision ResurfaceDecision, floor float64) bool {
 	return decision.WorthResurfacing && decision.Confidence >= floor
 }
 
-// resurfaceBridgeRunner is the minimal subset of *agent.Bridge that the
-// BridgeResurfaceEvaluator consumes. Production wiring passes the live
-// *agent.Bridge; tests inject a scripted runner.
-type resurfaceBridgeRunner interface {
-	Invoke(ctx context.Context, env agent.IntentEnvelope) (*agent.InvocationResult, *agent.RoutingDecision)
-}
-
 // BridgeResurfaceEvaluator is the production ResurfaceEvaluator, backed by the
-// `resurface_evaluate` scenario via the agent bridge.
+// `resurface_evaluate` scenario via the agent bridge. The
+// marshal/invoke/validate/decode transport is the shared agent.InvokeJudgment
+// primitive (BUG-021-010).
 type BridgeResurfaceEvaluator struct {
-	Runner resurfaceBridgeRunner
+	Runner agent.JudgmentRunner
 }
-
-// ErrResurfaceEvaluatorUnavailable is returned when no bridge runner is wired.
-var ErrResurfaceEvaluatorUnavailable = errors.New("intelligence: resurface evaluator unavailable (agent bridge not wired)")
 
 // EvaluateResurface invokes the `resurface_evaluate` scenario for one dormant
 // artifact and returns the LLM's structured judgment.
 func (b *BridgeResurfaceEvaluator) EvaluateResurface(ctx context.Context, signals ResurfaceSignals) (ResurfaceDecision, error) {
-	if b == nil || b.Runner == nil {
-		return ResurfaceDecision{}, ErrResurfaceEvaluatorUnavailable
+	if b == nil {
+		return ResurfaceDecision{}, agent.ErrJudgmentUnavailable
 	}
-
-	structured, err := json.Marshal(signals)
-	if err != nil {
-		return ResurfaceDecision{}, fmt.Errorf("intelligence resurface evaluator: marshal signals: %w", err)
-	}
-
-	env := agent.IntentEnvelope{
-		Source:            "scheduler",
-		StructuredContext: structured,
-		ScenarioID:        "resurface_evaluate",
-	}
-	res, _ := b.Runner.Invoke(ctx, env)
-	if res == nil {
-		return ResurfaceDecision{}, ErrResurfaceEvaluatorUnavailable
-	}
-	if res.Outcome != agent.OutcomeOK {
-		return ResurfaceDecision{}, fmt.Errorf("intelligence resurface evaluator: scenario outcome %q (detail=%v)", res.Outcome, res.OutcomeDetail)
-	}
-	if len(res.Final) == 0 {
-		return ResurfaceDecision{}, fmt.Errorf("intelligence resurface evaluator: scenario returned empty final payload")
-	}
-
-	var decision ResurfaceDecision
-	if err := json.Unmarshal(res.Final, &decision); err != nil {
-		return ResurfaceDecision{}, fmt.Errorf("intelligence resurface evaluator: decode final: %w", err)
-	}
-	return decision, nil
+	return agent.InvokeJudgment[ResurfaceDecision](ctx, b.Runner, "scheduler", "resurface_evaluate", signals)
 }
 
 func init() {
