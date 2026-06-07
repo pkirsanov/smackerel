@@ -36,6 +36,7 @@ var driveSSTKeys = []string{
 	"DRIVE_PROVIDER_GOOGLE_OAUTH_REDIRECT_URL",
 	"DRIVE_PROVIDER_GOOGLE_OAUTH_BASE_URL",
 	"DRIVE_PROVIDER_GOOGLE_API_BASE_URL",
+	"DRIVE_PROVIDER_GOOGLE_HTTP_RESPONSE_HEADER_TIMEOUT_SECONDS",
 	"DRIVE_PROVIDER_GOOGLE_SCOPE_DEFAULTS",
 }
 
@@ -161,6 +162,9 @@ func TestDriveConfigPopulatesEveryField(t *testing.T) {
 	}
 	if d.Providers.Google.APIBaseURL == "" {
 		t.Error("APIBaseURL is empty")
+	}
+	if d.Providers.Google.HTTPResponseHeaderTimeoutSeconds != 30 {
+		t.Errorf("HTTPResponseHeaderTimeoutSeconds = %d, want 30", d.Providers.Google.HTTPResponseHeaderTimeoutSeconds)
 	}
 	if len(d.Providers.Google.ScopeDefaults) == 0 {
 		t.Error("ScopeDefaults must contain at least one scope")

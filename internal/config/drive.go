@@ -106,6 +106,16 @@ type DriveGoogleProviderConfig struct {
 	OAuthBaseURL      string
 	APIBaseURL        string
 	ScopeDefaults     []string
+	// HTTPResponseHeaderTimeoutSeconds bounds the time the Google provider's
+	// HTTP client waits for response headers (Transport.ResponseHeaderTimeout)
+	// plus connection establishment (Dialer + TLS handshake). It catches a
+	// provider endpoint that accepts a connection but never responds — the
+	// indefinite hang that http.DefaultClient (no timeout) previously left
+	// unbounded (BUG-038-001). It deliberately does NOT cap whole-request
+	// duration, so legitimate large-file downloads (up to
+	// drive.limits.max_file_size_bytes) are not aborted mid-body; per-call
+	// context deadlines bound those.
+	HTTPResponseHeaderTimeoutSeconds int
 	// IOLimits carries the SST-resolved drive.io_limits.* caps so the
 	// Google provider can wrap io.ReadAll(resp.Body) sites with
 	// io.LimitReader without depending on the top-level config package
@@ -243,6 +253,11 @@ func loadDriveConfig() (DriveConfig, error) {
 	} else if !strings.HasPrefix(cfg.Providers.Google.APIBaseURL, "http://") && !strings.HasPrefix(cfg.Providers.Google.APIBaseURL, "https://") {
 		errs = append(errs, "DRIVE_PROVIDER_GOOGLE_API_BASE_URL (must be an absolute http(s) URL)")
 	}
+
+	// BUG-038-001 — fail-loud HTTP response-header timeout for the Google
+	// provider client (bounds connect-but-never-respond hangs that
+	// http.DefaultClient left unbounded).
+	cfg.Providers.Google.HTTPResponseHeaderTimeoutSeconds, errs = parsePositiveInt("DRIVE_PROVIDER_GOOGLE_HTTP_RESPONSE_HEADER_TIMEOUT_SECONDS", errs)
 
 	scopeRaw := os.Getenv("DRIVE_PROVIDER_GOOGLE_SCOPE_DEFAULTS")
 	if scopeRaw == "" || scopeRaw == "[]" {

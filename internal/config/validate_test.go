@@ -718,6 +718,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("DRIVE_PROVIDER_GOOGLE_OAUTH_REDIRECT_URL", "http://127.0.0.1:40001/v1/connectors/drive/oauth/callback")
 	t.Setenv("DRIVE_PROVIDER_GOOGLE_OAUTH_BASE_URL", "https://accounts.google.com")
 	t.Setenv("DRIVE_PROVIDER_GOOGLE_API_BASE_URL", "https://www.googleapis.com")
+	t.Setenv("DRIVE_PROVIDER_GOOGLE_HTTP_RESPONSE_HEADER_TIMEOUT_SECONDS", "30")
 	t.Setenv("DRIVE_PROVIDER_GOOGLE_SCOPE_DEFAULTS", `["https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive.readonly"]`)
 	t.Setenv("PHOTOS_ENABLED", "true")
 	t.Setenv("PHOTOS_SCAN_PARALLELISM", "2")
