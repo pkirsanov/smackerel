@@ -1,0 +1,157 @@
+{
+  "version": 3,
+  "specId": "058-chrome-extension-bridge",
+  "bugId": "BUG-058-001-admin-devices-html-surface",
+  "featureDir": "specs/058-chrome-extension-bridge/bugs/BUG-058-001-admin-devices-html-surface",
+  "featureName": "BUG-058-001: extension-devices admin HTML surface on a shared admin scaffold (BLOCKER-3)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "trackingBug": "BUG-058-EXTERNAL-INFRA-MISSING",
+  "discharges": "BUG-058-EXTERNAL-INFRA-MISSING/BLOCKER-3-HTMX-ADMIN-SCAFFOLDING",
+  "reportedAt": "2026-06-07T05:30:00Z",
+  "reporter": "owner directive (proper long-term solution, no shortcuts) — spec 058 blocker resolution",
+  "certifiedAt": "2026-06-07T12:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T12:00:00Z",
+  "lastUpdatedAt": "2026-06-07T06:00:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:30:00Z",
+        "completedAt": "2026-06-07T05:38:00Z",
+        "outcome": "completed_owned",
+        "summary": "A repo-wide open-work scan found spec 058 blocked. A thorough investigation (Explore subagent) mapped its 4 blockers with evidence: BLOCKER-2 (live-Postgres integration) is genuinely RESOLVED 2026-06-05 (3 passing tests) but the parent spec's blockingDependencies[] is stale; BLOCKER-3 (HTMX admin scaffolding) is fully buildable + testable here; BLOCKER-1 (MV3 Playwright e2e) and BLOCKER-4 (CI MV3 sideload smoke) require Chromium/live-stack and CI runners respectively (cannot be validated in this environment). Confirmed the repo's established admin-UI pattern is Go html/template (internal/web/agent_admin.go), the devices JSON handler exposes a testable extensiondevices.Store + AdminPredicate, and internal/web/admin/ does not exist."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:38:00Z",
+        "completedAt": "2026-06-07T05:42:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: build a reusable internal/web/admin scaffold (shared base layout + nav fragment + AuthGate=extensiondevices.AdminPredicate + renderContent/renderPage) in Go html/template (no new engine, no static-embed shortcut), and the extension-devices HTML page on it reusing the certified extensiondevices.Store + the same admin predicate (no duplicated query, no second auth primitive). Mount behind webAuthMiddleware. Deliberate no-shortcut decisions: do NOT rewrite the certified XSS-audited tokens page (link it from nav instead — rewriting risks a security regression); reuse the store so JSON/HTML views cannot diverge. SCN-058-001-01..02 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:42:00Z",
+        "completedAt": "2026-06-07T05:50:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created internal/web/admin/scaffold.go (baseLayout + newBaseTemplate + navLinks + AuthGate alias + renderContent/renderPage) and internal/web/admin/devices.go (DevicesHandler reusing extensiondevices.Store; GET-only; 401 unauth; non-admin own-owner scoping with 403 when absent; deterministic order; html-table render with empty state; 500 on store error; fail-loud nil-arg constructor). Wired: internal/api/health.go ExtensionDevicesUIHandler field; internal/api/router.go GET /admin/extension/devices behind webAuthMiddleware; cmd/core/wiring.go constructs webadmin.NewDevicesHandler(extStore, adminPredicate) reusing the existing store + predicate + webadmin import. No cycle (internal/api -> internal/web/admin -> internal/api/admin/extensiondevices leaf)."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:50:00Z",
+        "completedAt": "2026-06-07T05:53:00Z",
+        "outcome": "completed_owned",
+        "summary": "internal/web/admin/devices_test.go (no DB — fake extensiondevices.Store + scripted AuthGate): 10 tests PASS — RendersTableForAdmin (scaffold chrome + nav active + rows + no owner filter), EmptyState, NonAdminScopedToOwnOwner (filter==owner), NonAdminMissingOwnerForbidden (403, store not queried), UnauthenticatedRejected (401, store not queried), StoreErrorIs500, MethodNotAllowed (405), EscapesUserInfluencedValues (XSS: <script> id escaped), NewDevicesHandler_NilArgsPanic, NavLinks_MarksActive. go build ./... + vet green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:53:00Z",
+        "completedAt": "2026-06-07T05:55:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full internal/web/... + internal/api + internal/api/admin/extensiondevices + cmd/core packages green (internal/api router suite 15.2s ok) — the new /admin/extension/devices mount did not regress the existing router or web suites. No schema migration; no change to the JSON endpoint or the certified tokens page."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:55:00Z",
+        "completedAt": "2026-06-07T05:55:30Z",
+        "outcome": "completed_owned",
+        "summary": "The scaffold is the simplification target: it factors shared admin chrome (layout + nav + auth gate) into one reusable place so future admin pages stop hand-rolling HTML. The devices page reuses the existing store + predicate (no parallel query, no second auth primitive). Net new surface is one small package + 23 lines of wiring."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:55:30Z",
+        "completedAt": "2026-06-07T05:56:00Z",
+        "outcome": "completed_owned",
+        "summary": "ServeHTTP gates before any store call (unauth/missing-owner paths never query); store error degrades to 500; empty result renders an explicit empty state. Templates are parsed once in the constructor (no per-request parse). No new perf hot path."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:56:00Z",
+        "completedAt": "2026-06-07T05:57:00Z",
+        "outcome": "completed_owned",
+        "summary": "XSS: the inner page is an html/template, so user-influenced source_device_id/owner_user_id are auto-escaped — proven by TestDevicesHandler_EscapesUserInfluencedValues (a <script> id is rendered as &lt;script&gt;). Auth: reuses the same callerIsAdmin predicate as the JSON handler (non-admin scoped to own owner; unauth → 401) — no new auth primitive. The certified XSS-audited tokens page is left untouched (no regression). No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:57:00Z",
+        "completedAt": "2026-06-07T05:57:30Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; build + vet + affected packages green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:57:30Z",
+        "completedAt": "2026-06-07T05:58:00Z",
+        "outcome": "completed_owned",
+        "summary": "No migration; diff confined to the new internal/web/admin package + 3 wiring/mount touch-points (health.go, router.go, wiring.go); no SST change; no change to the JSON endpoint or the certified tokens page; no .github/bubbles changes. Parent spec 058 stays blocked (BLOCKER-1 + BLOCKER-4 remain); the stale BLOCKER-2 + now-resolved BLOCKER-3 are reconciled in the parent state + tracking bug as part of this change."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:58:00Z",
+        "completedAt": "2026-06-07T06:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "scaffold.go + devices.go carry doc-comments explaining the reusable foundation, the no-static-embed/no-new-engine rationale, the store reuse, and the html/template XSS-safety. The packet records the deliberate no-shortcut decisions (tokens page untouched; store reused) and the scope boundary (BLOCKER-1/4 are browser/CI-gated)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T12:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Shared admin scaffold + extension-devices HTML page", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T06:00:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane admin-UI delivery; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T06:00:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-058-BLOCKER3-HTMX-ADMIN-SCAFFOLDING",
+      "summary": "Spec 058's extension-devices view shipped JSON-only and the repo had no shared admin-UI scaffolding (internal/web/admin/ did not exist) to render an operator HTML surface on — BLOCKER-3 of BUG-058-EXTERNAL-INFRA-MISSING.",
+      "resolution": "Built a reusable internal/web/admin scaffold (shared base layout + nav fragment + AuthGate) in Go html/template matching the repo convention, and the extension-devices HTML page (GET /admin/extension/devices) on it, reusing the certified extensiondevices.Store + the same admin predicate as the JSON handler. Mounted behind webAuthMiddleware. 10 unit tests PASS (render, auth/scoping, XSS); affected packages green.",
+      "evidence": "report.md Test/Validation/Audit Evidence; internal/web/admin/{scaffold,devices}.go; internal/web/admin/devices_test.go.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-spec058-proper-solution",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
