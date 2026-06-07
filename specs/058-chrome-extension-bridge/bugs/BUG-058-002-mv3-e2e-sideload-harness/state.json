@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "058-chrome-extension-bridge",
+  "bugId": "BUG-058-002-mv3-e2e-sideload-harness",
+  "featureDir": "specs/058-chrome-extension-bridge/bugs/BUG-058-002-mv3-e2e-sideload-harness",
+  "featureName": "BUG-058-002: local MV3 Playwright e2e harness + automated sideload smoke (BLOCKER-1 + BLOCKER-4)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "blocker",
+  "trackingBug": "BUG-058-EXTERNAL-INFRA-MISSING",
+  "discharges": "BUG-058-EXTERNAL-INFRA-MISSING/BLOCKER-1-PLAYWRIGHT-HARNESS + BUG-058-EXTERNAL-INFRA-MISSING/BLOCKER-4-SIDELOAD-AUTOMATION",
+  "reportedAt": "2026-06-07T06:30:00Z",
+  "reporter": "owner directive (proper long-term solution, no shortcuts; build/deploy is local) — spec 058 final blocker resolution",
+  "certifiedAt": "2026-06-07T13:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T13:00:00Z",
+  "lastUpdatedAt": "2026-06-07T07:35:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T06:30:00Z",
+        "completedAt": "2026-06-07T06:40:00Z",
+        "outcome": "completed_owned",
+        "summary": "After BUG-058-001 (BLOCKER-3) the parent spec 058 stayed blocked on BLOCKER-1 (MV3-extension Playwright e2e harness absent under extensions/chrome-bridge/test/e2e/) and BLOCKER-4 (SCN-058-019 sideload manual-only). The owner confirmed build/deploy is LOCAL (the knb sibling owns the deploy target), so these are locally completable, not CI-deferred. Probed feasibility in a real headless Chromium: under OLD headless the MV3 service worker never starts (extension id null); under NEW headless (--headless=new + --load-extension on a persistent context) the SW starts and chrome.bookmarks/history work. A throwaway probe proved a full bookmark.create -> SW capture -> drain -> real POST /v1/connectors/extension/ingest with Authorization: Bearer roundtrip. Confirmed @playwright/test 1.49.1 + chromium-1148 already cached by spec 077."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T06:40:00Z",
+        "completedAt": "2026-06-07T06:45:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: author a local Playwright harness (fixtures + config + four spec files) that loads the real built extension into real headless Chromium and uses a real per-test in-process HTTP recording server (NOT request interception) so the extension's real transport executes; wire a self-contained lane (scripts/runtime/extension-e2e.sh + ./smackerel.sh test e2e-ext) with no live stack. Deliberate no-shortcut decisions: real HTTP server over interception (earns the e2e classification); reloadServiceWorker to reproduce the real worker-eviction lifecycle for the removed-tombstone + deny-filter cases rather than faking a clock or weakening the fixed-bucket-0 client dedup. SCN-058-002-01..05 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T06:45:00Z",
+        "completedAt": "2026-06-07T07:10:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created extensions/chrome-bridge/test/e2e/{fixtures.ts, playwright.config.ts, bookmark_roundtrip.spec.ts, auth_failure.spec.ts, options_setup.spec.ts, sideload_smoke.spec.ts}. fixtures.ts: launchPersistentContext(headless:false, args:[--headless=new, --load-extension]); recording HTTP server (baseURL/hits/setResponder/waitForHits); ext.configure/openOptions/triggerDrain/reloadServiceWorker. Wired package.json (@playwright/test@1.49.1 devDep + test:e2e script), tsconfig.json (exclude test/e2e/**), .gitignore (test-results/, playwright-report/, .playwright/). Lane: scripts/runtime/extension-e2e.sh (fail-loud node/npm; install-if-missing with browser download skipped; npm run build; playwright test; exit-code propagated) + smackerel.sh `test e2e-ext` dispatcher + usage line. Verified field names against src: transport INGEST_PATH=/v1/connectors/extension/ingest + 401->auth_terminal; bookmarks metadata.{bookmark_event,bookmark_id,client_event_id}; config.saveOptions flat storage keys; manifest MV3 perms+CSP."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T07:10:00Z",
+        "completedAt": "2026-06-07T07:25:00Z",
+        "outcome": "completed_owned",
+        "summary": "./smackerel.sh test e2e-ext runs 11 tests in real headless Chromium: all 11 PASS (auth-badge; created roundtrip artifact shape+bearer; deny-drop no-POST; removed tombstone; options configure/persist/repopulate; mask/reveal; invalid->error; sideload+SW register; manifest MV3/perms/CSP; options render; SETUP badge). First run surfaced two real failures fixed before green: (1) removed test reused the options page after chrome.runtime.reload() closed it -> re-open a fresh extension page for the removal; (2) the auth/SETUP badge reads raced the async setBadge -> bounded polling. Focused bookmark_roundtrip.spec.ts re-run 3/3 PASS. Evidence in report.md ### Test Evidence + ### Validation Evidence."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T07:25:00Z",
+        "completedAt": "2026-06-07T07:28:00Z",
+        "outcome": "completed_owned",
+        "summary": "The extension vitest unit suite remains 39/39 PASS (6 files) and tsc --noEmit exits 0 after the tsconfig test/e2e exclude — the new e2e lane does not disturb the unit lane (vitest globs only test/unit/**; tsc excludes test/e2e/**). No production source under src/ was modified; the harness is test-only + lane wiring + the e2e devDependency."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T07:28:00Z",
+        "completedAt": "2026-06-07T07:28:30Z",
+        "outcome": "completed_owned",
+        "summary": "The harness is additive test infrastructure. The reloadServiceWorker helper is the single reusable primitive that serves BOTH the deny-filter-active case and the removed-tombstone dedup-clear case, avoiding two bespoke workarounds. The lane wrapper mirrors the established scripts/runtime/*.sh + smackerel.sh dispatcher convention (no new pattern)."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T07:28:30Z",
+        "completedAt": "2026-06-07T07:29:00Z",
+        "outcome": "completed_owned",
+        "summary": "Determinism: workers:1 + fullyParallel:false (each persistent context holds a profile lock; the MV3 worker lifecycle is process-global). Badge reads poll with a bounded timeout (the worker sets the badge asynchronously after the drain/response path). The deny-drop + deny-filter activation and the removed-tombstone dedup-clear are made deterministic via reloadServiceWorker (spin-up refreshPrivacy + cleared in-memory dedup) rather than timing sleeps. Full-suite re-run after the fixes: 11/11 PASS, stable across repeated runs."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T07:29:00Z",
+        "completedAt": "2026-06-07T07:29:30Z",
+        "outcome": "completed_owned",
+        "summary": "No interception primitives (route()/intercept()/msw/nock) exist in test/e2e/ — the only grep match is the doc-comment asserting their absence — so the suite drives the real extension transport (legitimate extension-client e2e). The sideload smoke positively asserts the security posture of the shipped artifact: manifest_version 3, minimum permissions [alarms, bookmarks, history, storage] (no tabs/cookies/all_urls perm beyond the host_permissions fetch scope), restrictive CSP (script-src 'self'; object-src 'self'; no 'unsafe-eval'). The bearer token is written to chrome.storage.local and masked by default in the options page (proven by the reveal-toggle test). No secret values in any committed file."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T07:29:30Z",
+        "completedAt": "2026-06-07T07:30:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASS for the packet; the canonical e2e run is invoked through the repo CLI surface ./smackerel.sh test e2e-ext (11/11 PASS); the unit lane stays 39/39 PASS and tsc exits 0. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T07:30:00Z",
+        "completedAt": "2026-06-07T07:33:00Z",
+        "outcome": "completed_owned",
+        "summary": "Diff confined to extensions/chrome-bridge/test/e2e/ (new) + package.json/package-lock.json/tsconfig.json/.gitignore + scripts/runtime/extension-e2e.sh (new) + smackerel.sh dispatcher + the BUG-058-002 packet + the two reconciled parent/tracking state files. dist/, node_modules/, and Playwright transient outputs are git-ignored; no config/generated and no .github/bubbles framework files staged. Reconciled BUG-058-EXTERNAL-INFRA-MISSING BLOCKER-1 + BLOCKER-4 to resolved and the parent spec 058 blockingDependencies; whether spec 058 leaves `blocked` is left to a deliberate verified state-transition pass."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T07:33:00Z",
+        "completedAt": "2026-06-07T07:35:00Z",
+        "outcome": "completed_owned",
+        "summary": "fixtures.ts + each spec file + the lane wrapper carry doc-comments explaining the new-headless-mode requirement, the real-HTTP-not-interception classification, the reloadServiceWorker production-lifecycle rationale, and the self-contained (no live stack) lane. smackerel.sh usage gains a `test e2e-ext` line. The packet records the deliberate no-shortcut decisions and the BLOCKER-1/4 scope boundary."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T13:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Local MV3 Playwright e2e harness + automated sideload smoke", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T07:35:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane local MV3 e2e harness; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T07:35:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-058-BLOCKER1-PLAYWRIGHT-HARNESS",
+      "summary": "Spec 058's MV3-extension-specific Playwright e2e harness did not exist (extensions/chrome-bridge/test/e2e/ absent), leaving SCN-058-010..015 e2e rows, the bookmark roundtrip, and auth_failure with no real-browser proof — BLOCKER-1 of BUG-058-EXTERNAL-INFRA-MISSING.",
+      "resolution": "Authored a local Playwright harness that loads the real built extension into real headless Chromium (--headless=new) and proves the capture->queue->drain->POST pipeline, the deny-drop privacy gate, the removed tombstone (via the real worker-eviction lifecycle), the auth-failure AUTH-badge classification, and the options-page flow against a real in-process HTTP recording server (no interception). Wired ./smackerel.sh test e2e-ext. 11/11 PASS.",
+      "evidence": "report.md ### Test/Validation/Audit Evidence; extensions/chrome-bridge/test/e2e/{fixtures.ts,bookmark_roundtrip.spec.ts,auth_failure.spec.ts,options_setup.spec.ts}.",
+      "status": "resolved"
+    },
+    {
+      "id": "FINDING-058-BLOCKER4-SIDELOAD-AUTOMATION",
+      "summary": "SCN-058-019 sideload verification was a manual-only 8-step runbook with no automated path — BLOCKER-4 of BUG-058-EXTERNAL-INFRA-MISSING.",
+      "resolution": "Authored sideload_smoke.spec.ts: the automated counterpart to the manual walkthrough — it sideloads the built extension into real headless Chromium and asserts the MV3 service worker registers, the manifest is MV3 with the minimum permissions + restrictive CSP, the options page renders, and an unconfigured install shows the SETUP badge. Runs in the same ./smackerel.sh test e2e-ext lane. 4/4 sideload tests PASS.",
+      "evidence": "report.md ### Test Evidence (tests 8-11); extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-spec058-proper-solution",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}

@@ -45,6 +45,8 @@ Commands:
   test stress [--go-run <regex>] Run live-stack stress smoke test; optionally run only matching Go stress tests
   test e2e-ui [--help|--print-compose-project] Run PWA browser end-to-end UI tests via Playwright against the disposable
                               Compose project `smackerel-test-e2e-ui` (spec 077)
+  test e2e-ext [--help] [-- <playwright args>] Run the MV3 Chrome extension bridge end-to-end harness in real headless
+                              Chromium; self-contained (per-test recording server, no live stack) (spec 058)
   up                          Start the stack for the current environment
   down [--volumes]            Stop the stack; optionally remove named volumes
   status                      Show docker status and health endpoint output
@@ -1715,6 +1717,14 @@ E2EUI_HELP
           exit 0
         fi
         exec bash "$SCRIPT_DIR/scripts/runtime/web-e2e-ui.sh" "$@"
+        ;;
+      e2e-ext)
+        # Spec 058 BUG-058-002 (BLOCKER-1 / BLOCKER-4) — dispatch the MV3 Chrome
+        # extension bridge end-to-end harness. Self-contained: each test runs an
+        # in-process recording HTTP server and loads the real built extension
+        # into real headless Chromium, so this lane needs no live stack and no
+        # Compose project (unlike the spec-077 e2e-ui PWA lane above).
+        exec bash "$SCRIPT_DIR/scripts/runtime/extension-e2e.sh" "$@"
         ;;
       *)
         usage
