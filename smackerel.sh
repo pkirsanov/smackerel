@@ -47,6 +47,8 @@ Commands:
                               Compose project `smackerel-test-e2e-ui` (spec 077)
   test e2e-ext [--help] [-- <playwright args>] Run the MV3 Chrome extension bridge end-to-end harness in real headless
                               Chromium; self-contained (per-test recording server, no live stack) (spec 058)
+  test extension-supplychain [--help] Run the LOCAL cosign sign + verify-blob proof for the chrome-bridge sideload
+                              zip (sha256 binding + offline sign/verify + tamper detection) (spec 058 Scope 4)
   up                          Start the stack for the current environment
   down [--volumes]            Stop the stack; optionally remove named volumes
   status                      Show docker status and health endpoint output
@@ -1725,6 +1727,14 @@ E2EUI_HELP
         # into real headless Chromium, so this lane needs no live stack and no
         # Compose project (unlike the spec-077 e2e-ui PWA lane above).
         exec bash "$SCRIPT_DIR/scripts/runtime/extension-e2e.sh" "$@"
+        ;;
+      extension-supplychain)
+        # Spec 058 Scope 4 — LOCAL cosign sign + verify-blob proof for the
+        # chrome-bridge sideload zip (sha256 binding + offline ephemeral-key
+        # sign/verify + adversarial tamper detection). Self-contained and
+        # OFFLINE (no public-Rekor upload). The keyless-OIDC identity binding
+        # against a real Rekor entry remains a CI-only concern.
+        exec bash "$SCRIPT_DIR/scripts/runtime/extension-verify-blob.sh" "$@"
         ;;
       *)
         usage
