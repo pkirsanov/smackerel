@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-038-001-google-drive-http-timeout",
+  "parentSpec": "038-cloud-drives-integration",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real config+wiring fix; scenarios drive the fail-loud + populate config-key proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the new required key DRIVE_PROVIDER_GOOGLE_HTTP_RESPONSE_HEADER_TIMEOUT_SECONDS is enforced fail-loud by TestDriveConfigValidationRequiresEverySSTField and round-trips via TestDriveConfigPopulatesEveryField; ./smackerel.sh config generate resolves it end-to-end."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-038-TIMEOUT-01",
+      "scope": "Scope 1",
+      "title": "Missing/empty drive google response-header timeout fails loud naming the env var",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/config/drive_config_test.go"],
+      "linkedTests": [
+        {"file": "internal/config/drive_config_test.go", "function": "TestDriveConfigValidationRequiresEverySSTField"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-bound-the-google-drive-provider-client-fail-loud-sst-timeout"
+      ],
+      "liveTestExpectation": "With DRIVE_PROVIDER_GOOGLE_HTTP_RESPONSE_HEADER_TIMEOUT_SECONDS empty, Load() returns an error naming that env var (fail-loud, no default).",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-038-TIMEOUT-02",
+      "scope": "Scope 1",
+      "title": "Response-header timeout round-trips into the typed Google provider config",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/config/drive_config_test.go"],
+      "linkedTests": [
+        {"file": "internal/config/drive_config_test.go", "function": "TestDriveConfigPopulatesEveryField"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "cfg.Drive.Providers.Google.HTTPResponseHeaderTimeoutSeconds == 30 after Load() with the dev fixture env.",
+      "changeType": "added"
+    }
+  ]
+}

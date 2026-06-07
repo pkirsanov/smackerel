@@ -207,7 +207,7 @@ annotations:
   # (internal/api/annotation_source.go: allowedAnnotationSources)
   # must stay in lockstep with this list.
   source_header_name: "X-Smackerel-Source"
-  source_allowlist: ["web", "extension", "telegram", "api"]
+  source_allowlist: [ "web", "extension", "telegram", "api" ]
   # Spec 027 scope 9 PLAN-9-05 — upper bound on the
   # GET /api/annotations?actor=me limit query param.
   list_my_max_limit: 200
@@ -1271,6 +1271,13 @@ drive:
       oauth_base_url: "https://accounts.google.com"
       api_base_url: "https://www.googleapis.com"
       scope_defaults: [ "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.readonly" ]
+      # REQUIRED (BUG-038-001): bounds the time the Google provider HTTP client
+      # waits for response headers + connection establishment. Catches a
+      # provider endpoint that accepts a connection but never responds (the
+      # hang http.DefaultClient left unbounded). Does NOT cap whole-request
+      # duration, so large-file downloads (up to limits.max_file_size_bytes)
+      # are not aborted mid-body.
+      http_response_header_timeout_seconds: 30
 
 photos:
   enabled: true
