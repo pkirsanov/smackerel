@@ -34,6 +34,12 @@
   },
   "script": "tool-log.sh",
   "argsTemplate": ["--", "${command}"],
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
   "successExitCodes": [0],
   "timeoutSeconds": 600
 }

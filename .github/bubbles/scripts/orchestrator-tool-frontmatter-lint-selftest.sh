@@ -76,11 +76,54 @@ else
   sed -n '1,60p' "$pass_log"
 fi
 
-if grep -Fq "PASS — every orchestrator declares 'agent' in tools" "$pass_log"; then
+if grep -Fq "PASS — every orchestrator can delegate" "$pass_log"; then
   pass "PASS fixture reports zero missing"
 else
   fail "PASS fixture missing PASS marker"
   sed -n '1,60p' "$pass_log"
+fi
+
+# --- Adversarial: orchestrator with NO tools: allowlist -------------------
+#
+# An orchestrator that declares no `tools:` allowlist inherits ALL tools
+# (including `agent`), so delegation works. It MUST NOT be flagged. Before the
+# v7.0.3 false-positive fix this exited 1 (absent allowlist was treated as
+# "missing agent"); it must now exit 0.
+
+inherit_root="$TMPDIR/repo-inherit"
+mkdir -p "$inherit_root/agents"
+
+cat > "$inherit_root/agents/fake.inherit-orchestrator.agent.md" <<'EOF'
+---
+description: Orchestrator with no tools allowlist (inherits all tools)
+---
+
+## Agent Identity
+
+**Name:** fake.inherit-orchestrator
+**Role:** Orchestrator that delegates and declares no tools: allowlist
+
+This agent invokes runSubagent(target=fake.executor) to delegate work.
+EOF
+
+set +e
+inherit_log="$TMPDIR/inherit.log"
+bash "$LINT" --repo-root "$inherit_root" --verbose >"$inherit_log" 2>&1
+inherit_rc=$?
+set -e
+
+if [[ "$inherit_rc" -eq 0 ]]; then
+  pass "absent tools: orchestrator is NOT flagged (inherits agent, exit 0)"
+else
+  fail "absent tools: orchestrator expected exit 0, got $inherit_rc"
+  sed -n '1,60p' "$inherit_log"
+fi
+
+if grep -Fq "OK (no tools: allowlist; inherits agent)" "$inherit_log"; then
+  pass "absent tools: orchestrator reported as inheriting agent"
+else
+  fail "absent tools: orchestrator missing inherit-OK verbose line"
+  sed -n '1,60p' "$inherit_log"
 fi
 
 # --- FAIL fixture ---------------------------------------------------------

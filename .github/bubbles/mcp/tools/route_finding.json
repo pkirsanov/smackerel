@@ -18,5 +18,11 @@
   },
   "script": "discovered-issue-disposition-guard.sh",
   "argsTemplate": ["${spec_dir}"],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
   "successExitCodes": [0]
 }

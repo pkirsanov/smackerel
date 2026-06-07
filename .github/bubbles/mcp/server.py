@@ -5,6 +5,8 @@ Bubbles MCP server — Model Context Protocol bridge for the Bubbles framework.
 Transport: stdio (newline-delimited JSON-RPC 2.0 messages framed with
 `Content-Length:` headers per MCP spec) OR HTTP (v6.1 / R9 — JSON-RPC over
 POST, reachable from CI runners and shared/cloud environments).
+Protocol: negotiates MCP 2024-11-05 / 2025-03-26 / 2025-06-18 (echoes the
+client's requested version when supported, else returns the latest).
 Runtime: Python 3.10+, stdlib only. No pip install. No daemon.
 
 Surface (per docs/v6-mcp-design.md):
@@ -12,6 +14,8 @@ Surface (per docs/v6-mcp-design.md):
     bubbles/mcp/tools/*.json for the declarative catalog.
   Resources (A3): read-only handles to canonical repo files — see
     bubbles/mcp/resources/*.json.
+    Prompts: read-only exposure of the existing VS Code prompt shims under
+        prompts/*.prompt.md (or .github/prompts/*.prompt.md downstream).
 
 Design rules (NON-NEGOTIABLE):
   - The server NEVER duplicates business logic. Every tool dispatches to an
@@ -51,6 +55,7 @@ Exit codes:
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -62,7 +67,14 @@ from typing import Any, Optional
 # ---------------------------------------------------------------------------
 # Constants
 
-PROTOCOL_VERSION = "2024-11-05"  # MCP spec version we implement
+# MCP protocol versions this server can speak, newest first. We negotiate per
+# the MCP spec: echo back the client's requested version when we support it,
+# otherwise return our latest supported version and let the client decide
+# whether to proceed. The wire surface we expose (tools + annotations,
+# resources + templates, prompts) is compatible across this range; newer-only
+# features are optional capabilities we simply do not advertise.
+SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]  # latest MCP version we implement
 SERVER_NAME = "bubbles"
 # Server version reads from VERSION file when running from source repo;
 # falls back to .github/bubbles/.version when running from a downstream
@@ -80,6 +92,7 @@ ERR_TOOL_NOT_FOUND = -32001
 ERR_TOOL_FAILED = -32002
 ERR_RESOURCE_NOT_FOUND = -32003
 ERR_RESOURCE_FAILED = -32004
+ERR_PROMPT_NOT_FOUND = -32005
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +149,16 @@ def _resolve_mcp_dir(repo_root: Path) -> Path:
         return downstream
     # Allow startup with no catalog — server exposes zero tools/resources
     # but still responds to initialize, ping, and method-not-found queries.
+    return src
+
+def _resolve_prompts_dir(repo_root: Path) -> Path:
+    """Return the path to Bubbles prompt shims in source/downstream layouts."""
+    src = repo_root / "prompts"
+    if src.is_dir():
+        return src
+    downstream = repo_root / ".github" / "prompts"
+    if downstream.is_dir():
+        return downstream
     return src
 
 
@@ -273,13 +296,14 @@ class ToolCatalog:
     def list_tools(self) -> list[dict[str, Any]]:
         out = []
         for name, spec in self._tools.items():
-            out.append(
-                {
-                    "name": name,
-                    "description": spec.get("description", ""),
-                    "inputSchema": spec.get("inputSchema", {"type": "object"}),
-                }
-            )
+            entry = {
+                "name": name,
+                "description": spec.get("description", ""),
+                "inputSchema": spec.get("inputSchema", {"type": "object"}),
+            }
+            if "annotations" in spec:
+                entry["annotations"] = spec["annotations"]
+            out.append(entry)
         return out
 
     def get(self, name: str) -> Optional[dict[str, Any]]:
@@ -289,28 +313,69 @@ class ToolCatalog:
 class ResourceCatalog:
     """Loads resource definitions from bubbles/mcp/resources/*.json.
 
-    Each resource JSON has the shape:
-      {
-        "uri": "bubbles://workflows.yaml",
-        "name": "Bubbles workflows registry",
-        "description": "...",
-        "mimeType": "application/yaml",
-        "path": "bubbles/workflows.yaml"     # relative to repo_root
-      }
+    Two kinds of resource are supported:
 
-    A resource may also use "pathTemplate" with `${var}` interpolation against
-    a `uriTemplate` to expose families of resources (e.g. per-spec state.json).
-    For v6.0 we support only static URIs; templated resources are deferred to
-    v6.1 (the catalog file may still declare them but the server returns
-    method-not-supported on read).
+    1. STATIC — a fixed `uri` mapped to a repo-relative `path`:
+         {
+           "uri": "bubbles://workflows.yaml",
+           "name": "...", "description": "...",
+           "mimeType": "application/yaml",
+           "path": "bubbles/workflows.yaml"
+         }
+
+    2. TEMPLATED — a `uriTemplate` (RFC 6570 level-1 `{var}` expansion) that
+       expands to a FAMILY of resources. A templated resource resolves its
+       content one of two ways:
+
+       a. `pathTemplate` — a repo-relative path/glob with `{var}` placeholders.
+            { "uriTemplate": "bubbles://spec/{nnn}/state.json",
+              "pathTemplate": "specs/{nnn}*/state.json", ... }
+
+       b. `commandTemplate` — a bash twin under scripts_dir, run with
+          `{var}`-substituted args; stdout becomes the resource body. This keeps
+          the server a THIN wrapper — it never duplicates the bash twin's logic.
+            { "uriTemplate": "bubbles://gates/{id}",
+              "commandTemplate": {"script": "gate-meta.sh", "args": ["json", "{id}"]}, ... }
+
+    Static URIs match first; if none match, the URI is tested against each
+    template's `uriTemplate`. Extracted variables may not contain `..` and
+    (being single URI path segments) never contain `/`.
     """
 
-    def __init__(self, mcp_dir: Path, repo_root: Path, logger: logging.Logger):
+    def __init__(
+        self,
+        mcp_dir: Path,
+        repo_root: Path,
+        scripts_dir: Path,
+        logger: logging.Logger,
+    ):
         self._mcp_dir = mcp_dir
         self._repo_root = repo_root
+        self._scripts_dir = scripts_dir
         self._logger = logger
         self._resources: dict[str, dict[str, Any]] = {}
+        self._templates: list[dict[str, Any]] = []
         self._reload()
+
+    @staticmethod
+    def _compile_uri_template(uri_template: str) -> "re.Pattern[str]":
+        # RFC 6570 level-1 simple expansion: {var} -> exactly one path segment.
+        parts: list[str] = []
+        idx = 0
+        while idx < len(uri_template):
+            start = uri_template.find("{", idx)
+            if start == -1:
+                parts.append(re.escape(uri_template[idx:]))
+                break
+            parts.append(re.escape(uri_template[idx:start]))
+            end = uri_template.find("}", start + 1)
+            if end == -1:
+                parts.append(re.escape(uri_template[start:]))
+                break
+            var = uri_template[start + 1 : end]
+            parts.append(f"(?P<{var}>[^/]+)")
+            idx = end + 1
+        return re.compile("^" + "".join(parts) + "$")
 
     def _reload(self) -> None:
         res_dir = self._mcp_dir / "resources"
@@ -326,16 +391,29 @@ class ResourceCatalog:
                 )
                 sys.exit(1)
             uri = spec.get("uri")
-            if not uri:
+            uri_template = spec.get("uriTemplate")
+            if not uri and not uri_template:
                 sys.stderr.write(
-                    f"bubbles-mcp: resource file {path} missing uri\n"
+                    f"bubbles-mcp: resource file {path} missing uri/uriTemplate\n"
                 )
                 sys.exit(1)
-            spec.setdefault("name", uri)
             spec.setdefault("description", "")
             spec.setdefault("mimeType", "text/plain")
-            self._resources[uri] = spec
-            self._logger.debug("loaded resource: %s", uri)
+            if uri_template:
+                spec.setdefault("name", uri_template)
+                if "pathTemplate" not in spec and "commandTemplate" not in spec:
+                    sys.stderr.write(
+                        f"bubbles-mcp: templated resource {uri_template} needs "
+                        "pathTemplate or commandTemplate\n"
+                    )
+                    sys.exit(1)
+                spec["_uriRegex"] = self._compile_uri_template(uri_template)
+                self._templates.append(spec)
+                self._logger.debug("loaded resource template: %s", uri_template)
+            else:
+                spec.setdefault("name", uri)
+                self._resources[uri] = spec
+                self._logger.debug("loaded resource: %s", uri)
 
     def list_resources(self) -> list[dict[str, Any]]:
         out = []
@@ -349,16 +427,58 @@ class ResourceCatalog:
             out.append(entry)
         return out
 
+    def list_resource_templates(self) -> list[dict[str, Any]]:
+        out = []
+        for spec in self._templates:
+            out.append(
+                {
+                    "uriTemplate": spec["uriTemplate"],
+                    "name": spec.get("name", spec["uriTemplate"]),
+                    "description": spec.get("description", ""),
+                    "mimeType": spec.get("mimeType", "text/plain"),
+                }
+            )
+        return out
+
     def read(self, uri: str) -> Optional[dict[str, Any]]:
         spec = self._resources.get(uri)
-        if spec is None:
-            return None
-        if "pathTemplate" in spec and "path" not in spec:
-            # Templated resource not yet supported in v6.0.
-            return {"error": "templated resources deferred to v6.1"}
+        if spec is not None:
+            return self._read_static(uri, spec)
+        for tspec in self._templates:
+            match = tspec["_uriRegex"].match(uri)
+            if not match:
+                continue
+            variables = match.groupdict()
+            for var, val in variables.items():
+                if ".." in val:
+                    return {"error": f"resource {uri} variable '{var}' contains '..'"}
+            if "commandTemplate" in tspec:
+                return self._read_command(uri, tspec, variables)
+            return self._read_path_template(uri, tspec, variables)
+        return None
+
+    def _read_static(self, uri: str, spec: dict[str, Any]) -> dict[str, Any]:
         rel = spec.get("path")
         if not rel:
             return {"error": f"resource {uri} has no path"}
+        return self._read_file(uri, rel, spec.get("mimeType", "text/plain"))
+
+    def _read_path_template(
+        self, uri: str, spec: dict[str, Any], variables: dict[str, str]
+    ) -> dict[str, Any]:
+        pattern = spec["pathTemplate"]
+        for var, val in variables.items():
+            pattern = pattern.replace("{" + var + "}", val)
+        matches = [p for p in sorted(self._repo_root.glob(pattern)) if p.is_file()]
+        if not matches:
+            return {"error": f"resource {uri} matched no file (pattern: {pattern})"}
+        if len(matches) > 1:
+            rels = ", ".join(str(p.relative_to(self._repo_root)) for p in matches)
+            return {"error": f"resource {uri} is ambiguous (matched: {rels})"}
+        rel = str(matches[0].relative_to(self._repo_root))
+        return self._read_file(uri, rel, spec.get("mimeType", "text/plain"))
+
+    def _read_file(self, uri: str, rel: str, mime: str) -> dict[str, Any]:
         abs_path = (self._repo_root / rel).resolve()
         # Containment check: don't allow `..` traversal out of repo_root.
         try:
@@ -371,10 +491,123 @@ class ResourceCatalog:
             text = abs_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             return {"error": f"resource {uri} is not UTF-8 text"}
+        return {"text": text, "mimeType": mime}
+
+    def _read_command(
+        self, uri: str, spec: dict[str, Any], variables: dict[str, str]
+    ) -> dict[str, Any]:
+        cmd_spec = spec["commandTemplate"]
+        script = cmd_spec.get("script")
+        if not script:
+            return {"error": f"resource {uri} commandTemplate missing script"}
+        script_path = (self._scripts_dir / script).resolve()
+        # Containment: the script must live under scripts_dir.
+        try:
+            script_path.relative_to(self._scripts_dir.resolve())
+        except ValueError:
+            return {"error": f"resource {uri} script escapes scripts_dir"}
+        if not script_path.is_file():
+            return {"error": f"resource {uri} script not found: {script}"}
+        args: list[str] = []
+        for tok in cmd_spec.get("args", []):
+            rendered = tok
+            for var, val in variables.items():
+                rendered = rendered.replace("{" + var + "}", val)
+            args.append(rendered)
+        cmd = ["bash", str(script_path), *args]
+        timeout = int(
+            os.environ.get("BUBBLES_MCP_TOOL_TIMEOUT", DEFAULT_TOOL_TIMEOUT_SECONDS)
+        )
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=self._repo_root,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return {"error": f"resource {uri} command timed out after {timeout}s"}
+        if completed.returncode != 0:
+            return {
+                "error": (
+                    f"resource {uri} command exit={completed.returncode}: "
+                    f"{completed.stderr.strip()}"
+                )
+            }
         return {
-            "text": text,
+            "text": completed.stdout,
             "mimeType": spec.get("mimeType", "text/plain"),
         }
+
+
+class PromptCatalog:
+    """Loads Bubbles prompt shims from prompts/*.prompt.md.
+
+    Prompt files are VS Code prompt shims with YAML frontmatter and a markdown
+    body. The MCP server does not synthesize prompt logic; it exposes those
+    existing files so MCP clients with prompt catalogs can discover and request
+    the same Bubbles entrypoints operators already use.
+    """
+
+    def __init__(self, prompts_dir: Path, logger: logging.Logger):
+        self._prompts_dir = prompts_dir
+        self._logger = logger
+        self._prompts: dict[str, dict[str, Any]] = {}
+        self._reload()
+
+    @staticmethod
+    def _split_prompt(text: str) -> tuple[dict[str, str], str]:
+        if not text.startswith("---\n"):
+            return {}, text.strip()
+        end = text.find("\n---\n", 4)
+        if end == -1:
+            return {}, text.strip()
+        frontmatter_text = text[4:end]
+        body = text[end + len("\n---\n") :].strip()
+        frontmatter: dict[str, str] = {}
+        for raw_line in frontmatter_text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            frontmatter[key.strip()] = value.strip().strip('"\'')
+        return frontmatter, body
+
+    def _reload(self) -> None:
+        if not self._prompts_dir.is_dir():
+            self._logger.info("prompt catalog empty: %s not found", self._prompts_dir)
+            return
+        for path in sorted(self._prompts_dir.glob("*.prompt.md")):
+            text = path.read_text(encoding="utf-8")
+            frontmatter, body = self._split_prompt(text)
+            name = path.name.removesuffix(".prompt.md")
+            description = frontmatter.get("description", "")
+            agent = frontmatter.get("agent", name)
+            self._prompts[name] = {
+                "name": name,
+                "description": description,
+                "agent": agent,
+                "body": body,
+                "path": str(path),
+            }
+            self._logger.debug("loaded prompt: %s -> %s", name, path)
+
+    def list_prompts(self) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for name, spec in self._prompts.items():
+            out.append(
+                {
+                    "name": name,
+                    "description": spec.get("description", ""),
+                    "arguments": [],
+                }
+            )
+        return out
+
+    def get(self, name: str) -> Optional[dict[str, Any]]:
+        return self._prompts.get(name)
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +759,7 @@ class Server:
         transport: StdioTransport,
         tools: ToolCatalog,
         resources: ResourceCatalog,
+        prompts: PromptCatalog,
         repo_root: Path,
         scripts_dir: Path,
         version: str,
@@ -534,6 +768,7 @@ class Server:
         self._transport = transport
         self._tools = tools
         self._resources = resources
+        self._prompts = prompts
         self._repo_root = repo_root
         self._scripts_dir = scripts_dir
         self._version = version
@@ -612,16 +847,27 @@ class Server:
             return self._tools_call(params)
         if method == "resources/list":
             return {"resources": self._resources.list_resources()}
+        if method == "resources/templates/list":
+            return {"resourceTemplates": self._resources.list_resource_templates()}
         if method == "resources/read":
             return self._resources_read(params)
         if method == "prompts/list":
-            return {"prompts": []}
+            return {"prompts": self._prompts.list_prompts()}
+        if method == "prompts/get":
+            return self._prompts_get(params)
         raise _JsonRpcError(ERR_METHOD_NOT_FOUND, f"unknown method: {method}")
 
     def _initialize(self, params: dict[str, Any]) -> dict[str, Any]:
-        # We accept any client protocol version; we report ours.
+        # Protocol version negotiation (per MCP spec): echo the client's
+        # requested version when we support it; otherwise return our latest
+        # supported version and let the client decide whether to proceed.
+        requested = params.get("protocolVersion")
+        if isinstance(requested, str) and requested in SUPPORTED_PROTOCOL_VERSIONS:
+            negotiated = requested
+        else:
+            negotiated = PROTOCOL_VERSION
         return {
-            "protocolVersion": PROTOCOL_VERSION,
+            "protocolVersion": negotiated,
             "serverInfo": {
                 "name": SERVER_NAME,
                 "version": self._version,
@@ -635,10 +881,13 @@ class Server:
                 "prompts": {"listChanged": False},
             },
             "instructions": (
-                "Bubbles MCP server (v6.0). Tools are thin wrappers around "
+                "Bubbles MCP server. Tools are thin wrappers around "
                 "bubbles/scripts/*.sh — every call records the actual command "
                 "line and full stdout/stderr in the response. Resources are "
-                "read-only handles to canonical Bubbles files. No summarization."
+                "read-only handles to canonical Bubbles files; templated "
+                "resources (bubbles://gates/{id}, bubbles://spec/{nnn}/state.json) "
+                "expand per-id/per-spec. Prompts expose the repo's existing "
+                "Bubbles prompt shims. No summarization."
             ),
         }
 
@@ -669,6 +918,32 @@ class Server:
                     "text": result["text"],
                 }
             ]
+        }
+
+    def _prompts_get(self, params: dict[str, Any]) -> dict[str, Any]:
+        name = params.get("name")
+        if not name:
+            raise _JsonRpcError(ERR_INVALID_PARAMS, "missing 'name'")
+        spec = self._prompts.get(name)
+        if spec is None:
+            raise _JsonRpcError(ERR_PROMPT_NOT_FOUND, f"unknown prompt: {name}")
+        body = spec.get("body", "")
+        description = spec.get("description", "")
+        agent = spec.get("agent", name)
+        text = body
+        if agent:
+            text = f"Use agent: {agent}\n\n{text}".strip()
+        return {
+            "description": description,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": {
+                        "type": "text",
+                        "text": text,
+                    },
+                }
+            ],
         }
 
     def _reply_result(self, msg_id: Any, result: Any) -> None:
@@ -863,20 +1138,23 @@ def main() -> int:
     repo_root = _detect_repo_root()
     scripts_dir = _resolve_scripts_dir(repo_root)
     mcp_dir = _resolve_mcp_dir(repo_root)
+    prompts_dir = _resolve_prompts_dir(repo_root)
     version = _resolve_server_version(repo_root)
     logger.info(
-        "starting bubbles-mcp v%s transport=%s repo_root=%s scripts=%s mcp=%s",
+        "starting bubbles-mcp v%s transport=%s repo_root=%s scripts=%s mcp=%s prompts=%s",
         version,
         transport_kind,
         repo_root,
         scripts_dir,
         mcp_dir,
+        prompts_dir,
     )
     tools = ToolCatalog(mcp_dir, scripts_dir, logger)
-    resources = ResourceCatalog(mcp_dir, repo_root, logger)
+    resources = ResourceCatalog(mcp_dir, repo_root, scripts_dir, logger)
+    prompts = PromptCatalog(prompts_dir, logger)
     transport = StdioTransport(sys.stdin.buffer, sys.stdout.buffer)
     server = Server(
-        transport, tools, resources, repo_root, scripts_dir, version, logger
+        transport, tools, resources, prompts, repo_root, scripts_dir, version, logger
     )
     if transport_kind == "http":
         return serve_http(server, http_host, http_port, logger)

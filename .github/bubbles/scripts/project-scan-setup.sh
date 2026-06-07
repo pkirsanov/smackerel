@@ -31,6 +31,7 @@ set -euo pipefail
 # Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
 _BTMPS=()
 trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
+# shellcheck disable=SC2120  # _btmp forwards optional flags to mktemp (e.g. -d); also called bare.
 _btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -84,14 +85,12 @@ log ""
 
 # Detect serialization
 HAS_PROTOBUF="false"
-HAS_JSON="false"
 
 find . -maxdepth 5 -name '*.proto' -not -path '*/target/*' -not -path '*/node_modules/*' 2>/dev/null | grep -q . && HAS_PROTOBUF="true"
 # JSON is assumed if not protobuf-only
 if [[ "$HAS_PROTOBUF" == "true" ]]; then
   log "  Serialization: Protobuf detected"
 else
-  HAS_JSON="true"
   log "  Serialization: JSON (default)"
 fi
 

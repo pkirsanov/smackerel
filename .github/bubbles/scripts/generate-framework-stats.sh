@@ -2,8 +2,8 @@
 
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-repo_root=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+script_dir=$(unset CDPATH; cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(unset CDPATH; cd -- "$script_dir/../.." && pwd)
 
 check_only=false
 if [ "${1:-}" = "--check" ]; then
@@ -16,7 +16,7 @@ workflows_file="$repo_root/bubbles/workflows.yaml"
 # Parse the mode count from there unless workflows.yaml still embeds an inline
 # modes: block (pre-split / fixtures).
 modes_file="$repo_root/bubbles/workflows/modes.yaml"
-if grep -qE '^modes:' "$workflows_file" 2>/dev/null || [[ ! -f "$modes_file" ]]; then
+if grep -qE '^modes:' "$workflows_file" 2>/dev/null || [ ! -f "$modes_file" ]; then
   modes_file="$workflows_file"
 fi
 generated_dir="$repo_root/docs/generated"

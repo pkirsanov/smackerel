@@ -8,5 +8,11 @@
   },
   "script": "finding-closure-selftest.sh",
   "argsTemplate": [],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
   "successExitCodes": [0]
 }

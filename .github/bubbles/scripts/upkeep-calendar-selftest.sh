@@ -32,7 +32,7 @@ tasks:
   - id: bcdr-drill
     cadence: quarterly
 EOF
-UPKEEP_LEDGER="$TMP/no-ledger.jsonl" output="$("$CAL" "$TMP" </dev/null 2>&1)"
+output="$(UPKEEP_LEDGER="$TMP/no-ledger.jsonl" "$CAL" "$TMP" </dev/null 2>&1)"
 if echo "$output" | grep -q "backup.*DUE" && echo "$output" | grep -q "bcdr-drill.*DUE"; then
   echo "PASS: tasks marked DUE when no ledger"
 else
@@ -44,7 +44,7 @@ fi
 # 3. Calendar present + recent successful ledger → task marked ok
 NOW_ISO="$(date -u +%FT%TZ)"
 printf '{"task":"backup","outcome":"success","finished_at":"%s"}\n' "$NOW_ISO" > "$TMP/ledger.jsonl"
-UPKEEP_LEDGER="$TMP/ledger.jsonl" output="$("$CAL" "$TMP" </dev/null 2>&1)"
+output="$(UPKEEP_LEDGER="$TMP/ledger.jsonl" "$CAL" "$TMP" </dev/null 2>&1)"
 if echo "$output" | grep -q "backup.*ok"; then
   echo "PASS: recent backup marked ok"
 else

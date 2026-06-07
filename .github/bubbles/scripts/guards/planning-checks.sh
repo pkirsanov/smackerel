@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2154  # sourced fragment: all referenced vars are set in state-transition-guard.sh's scope before sourcing
 # =============================================================================
 # guards/planning-checks.sh  (M4 guard split)
 # =============================================================================
