@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-056-001-twitter-empty-page-cursor-advance",
+  "parentSpec": "056-twitter-api-connector",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real code fix; the scenario drives the empty-non-terminal-page cursor red\u2192green proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "go test re-runs captured in report.md '## Test Evidence': RED = TestTwitterAPI_EmptyNonTerminalPageDoesNotAdvanceCursor FAILs (cursor advanced to PAGE3_TOKEN) against the unguarded loop; GREEN = PASS after guarding the advance on len(body.Data) > 0; revert re-fails."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-056-CURSOR-01",
+      "scope": "Scope 1",
+      "title": "Empty non-terminal page does not advance the persisted resume cursor",
+      "requiredTestType": "regression",
+      "testFiles": ["internal/connector/twitter/api_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/twitter/api_test.go", "function": "TestTwitterAPI_EmptyNonTerminalPageDoesNotAdvanceCursor"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-anchor-the-resume-cursor-to-the-last-non-empty-page"
+      ],
+      "liveTestExpectation": "page1(3 tweets, next=PAGE2) -> page2(EMPTY, next=PAGE3) -> page3(EMPTY, terminal) yields finalCursor=PAGE2_TOKEN (last non-empty page), 3 tweets, 3 requests.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-056-CURSOR-02",
+      "scope": "Scope 1",
+      "title": "Regression: empty TERMINAL page still persists the last non-empty token",
+      "requiredTestType": "regression",
+      "testFiles": ["internal/connector/twitter/api_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/twitter/api_test.go", "function": "TestTwitterAPI_ReplayPagination"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "page1(data, next=PAGE2) -> page2(EMPTY, terminal) yields finalCursor=PAGE2_TOKEN \u2014 preserved, no regression.",
+      "changeType": "preserved"
+    }
+  ]
+}
