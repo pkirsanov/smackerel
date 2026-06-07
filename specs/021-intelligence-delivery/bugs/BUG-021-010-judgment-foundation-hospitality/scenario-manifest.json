@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-021-010-judgment-foundation-hospitality",
+  "parentSpec": "021-intelligence-delivery",
+  "continues": "BUG-021-009-seasonal-llm-driven",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real LLM-driven rework introducing the reusable agent.InvokeJudgment foundation; foundation + evaluator + SST-loader tests drive the proofs."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the hospitality concern decision now flows through the hospitality_concern_evaluate scenario on the reusable agent.InvokeJudgment foundation; TestInvokeJudgment_* prove the primitive (routing, forwarding, json:\"-\" non-leak, nil-runner sentinel, error paths) and TestBridgeHospitalityEvaluator_* prove the hospitality batch path; the SST loader tests prove fail-loud operational caps."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-HOSP-01",
+      "scope": "Scope 1",
+      "title": "Reusable agent.InvokeJudgment primitive routes, forwards signals, hides internal fields, and reports errors",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/agent/judgment_test.go"],
+      "linkedTests": [
+        {"file": "internal/agent/judgment_test.go", "function": "TestInvokeJudgment_ParsesRoutesAndForwardsSignals"},
+        {"file": "internal/agent/judgment_test.go", "function": "TestInvokeJudgment_ErrorPaths"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-reusable-judgment-foundation--llm-driven-hospitality-alerts"
+      ],
+      "liveTestExpectation": "InvokeJudgment[T] marshals signals into IntentEnvelope{Source,ScenarioID}, forwards public fields, omits json:\"-\" fields, returns ErrJudgmentUnavailable on nil runner / nil result, and errors on non-OK / empty final / bad JSON.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-HOSP-02",
+      "scope": "Scope 1",
+      "title": "Hospitality concern judgment routes to the batched scenario and never leaks the internal guest email",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/digest/hospitality_eval_test.go"],
+      "linkedTests": [
+        {"file": "internal/digest/hospitality_eval_test.go", "function": "TestBridgeHospitalityEvaluator_ParsesBatch"},
+        {"file": "internal/digest/hospitality_eval_test.go", "function": "TestBridgeHospitalityEvaluator_ErrorPaths"}
+      ],
+      "evidenceRefs": [
+        "report.md#hospitality-evaluator-scripted-bridge--no-live-llm"
+      ],
+      "liveTestExpectation": "EvaluateConcerns routes IntentEnvelope{ScenarioID: hospitality_concern_evaluate}, forwards guests {ref,name,total_stays,sentiment_score,total_spend} + properties {ref,name,issue_count,avg_rating}, omits guest Email (json:\"-\"), parses {guest_alerts,property_alerts}, short-circuits empty input, and errors on nil runner / nil result / non-OK / empty final / bad JSON.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-HOSP-03",
+      "scope": "Scope 1",
+      "title": "Operational hospitality candidate caps are fail-loud SST config",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/config/hospitality_test.go"],
+      "linkedTests": [
+        {"file": "internal/config/hospitality_test.go", "function": "TestLoadHospitalityConfig_FailLoudOnMissing"},
+        {"file": "internal/config/hospitality_test.go", "function": "TestLoadHospitalityConfig_RejectsOutOfRange"}
+      ],
+      "evidenceRefs": [
+        "report.md#validation-evidence"
+      ],
+      "liveTestExpectation": "Missing/empty DIGEST_HOSPITALITY_* keys fail loud naming the var; out-of-range values (guest/property candidate limit <= 0) are rejected.",
+      "changeType": "added"
+    }
+  ]
+}
