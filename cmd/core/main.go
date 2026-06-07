@@ -202,6 +202,12 @@ func run() error {
 	// dormancy resurfacing disabled (serendipity unaffected).
 	wireResurfaceEvaluator(agentBridge, svc.intEngine)
 
+	// Spec 021 BUG-021-008 — wire the LLM-driven expertise classifier into the
+	// intelligence engine for the expertise map (replaces the hardcoded
+	// depth-score weights + tier/velocity thresholds). Nil bridge ⇒ the
+	// expertise endpoint fails loud (no hardcoded tier fallback).
+	wireExpertiseEvaluator(agentBridge, svc.intEngine)
+
 	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
 	// run in webhook mode, register the POST handler on the existing
 	// chi router OUTSIDE bearer-auth (Telegram does not send our
