@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-058-001-admin-devices-html-surface",
+  "parentSpec": "058-chrome-extension-bridge",
+  "trackingBug": "BUG-058-EXTERNAL-INFRA-MISSING",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane admin-UI delivery; the scaffold + devices-page unit tests (render, auth/scoping, XSS) drive the proofs."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the devices view now renders as HTML on the shared internal/web/admin scaffold; TestDevicesHandler_* prove render + empty-state + non-admin scoping + 401/403/500/405 + XSS escaping, and TestNavLinks_MarksActive + TestNewDevicesHandler_NilArgsPanic prove the scaffold helpers."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-058-001-01",
+      "scope": "Scope 1",
+      "title": "Extension-devices admin page renders on the shared scaffold and escapes user-influenced values",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/web/admin/devices_test.go"],
+      "linkedTests": [
+        {"file": "internal/web/admin/devices_test.go", "function": "TestDevicesHandler_RendersTableForAdmin"},
+        {"file": "internal/web/admin/devices_test.go", "function": "TestDevicesHandler_EscapesUserInfluencedValues"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-shared-admin-scaffold--extension-devices-html-page"
+      ],
+      "liveTestExpectation": "GET /admin/extension/devices renders the shared scaffold chrome (DOCTYPE, nav links, active highlight) + an HTML device table reusing extensiondevices.Store; user-influenced source_device_id/owner_user_id are HTML-escaped (a <script> id is not rendered raw).",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-001-02",
+      "scope": "Scope 1",
+      "title": "Auth + scoping + scaffold helpers: 401/403/500/405, non-admin own-owner scoping, nav active, nil-arg guard",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/web/admin/devices_test.go"],
+      "linkedTests": [
+        {"file": "internal/web/admin/devices_test.go", "function": "TestDevicesHandler_UnauthenticatedRejected"},
+        {"file": "internal/web/admin/devices_test.go", "function": "TestDevicesHandler_NonAdminScopedToOwnOwner"},
+        {"file": "internal/web/admin/devices_test.go", "function": "TestNavLinks_MarksActive"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "Unauthenticated callers get 401 (store NOT queried); non-admin callers are scoped to their own owner_user_id (403 when absent); store error → 500; non-GET → 405; navLinks marks exactly one active link; NewDevicesHandler panics on nil store/gate.",
+      "changeType": "added"
+    }
+  ]
+}

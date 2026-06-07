@@ -256,6 +256,13 @@ type Dependencies struct {
 	// bearerAuthMiddleware; the handler itself enforces admin scoping.
 	ExtensionDevicesHandler http.Handler
 
+	// Spec 058 BUG-058 BLOCKER-3 — extension devices admin HTML page
+	// (GET /admin/extension/devices) on the shared internal/web/admin
+	// scaffold. Mounted behind webAuthMiddleware (same as the agent admin
+	// UI); the handler enforces the same admin scoping as the JSON view.
+	// Nil when extension wiring is absent.
+	ExtensionDevicesUIHandler http.Handler
+
 	// Spec 069 SCOPE-1a — Assistant HTTP transport handler. Routes
 	// POST /v1/assistant/turn through the late-bound HTTPAdapter
 	// (wireAssistantFacade installs the backing adapter post-boot).

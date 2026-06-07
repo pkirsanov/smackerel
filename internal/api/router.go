@@ -413,6 +413,17 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Get("/admin/auth/tokens", deps.HandleAdminTokensUI)
 	})
 
+	// Spec 058 BUG-058 BLOCKER-3 — extension devices admin HTML page on the
+	// shared internal/web/admin scaffold. Behind webAuthMiddleware (same auth
+	// as the agent operator UI); the handler enforces the same admin scoping as
+	// the JSON view at /v1/admin/extension/devices.
+	if deps.ExtensionDevicesUIHandler != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(deps.webAuthMiddleware)
+			r.Get("/admin/extension/devices", deps.ExtensionDevicesUIHandler.ServeHTTP)
+		})
+	}
+
 	// Spec 058 — Chrome Extension Bridge.
 	//
 	// POST /v1/connectors/extension/ingest is mounted behind

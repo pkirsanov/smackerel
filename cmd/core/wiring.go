@@ -45,6 +45,7 @@ import (
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/web"
+	webadmin "github.com/smackerel/smackerel/internal/web/admin"
 )
 
 // configureLogging sets up the global slog handler based on cfg.LogLevel.
@@ -532,6 +533,10 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		}
 		extStore := extensiondevices.NewPostgresStore(svc.pg.Pool)
 		deps.ExtensionDevicesHandler = extensiondevices.NewHandler(extStore, adminPredicate)
+		// BUG-058 BLOCKER-3 — the HTML admin page reuses the SAME store +
+		// admin predicate as the JSON handler (no duplicated query, no second
+		// auth primitive), rendered on the shared internal/web/admin scaffold.
+		deps.ExtensionDevicesUIHandler = webadmin.NewDevicesHandler(extStore, adminPredicate)
 		slog.Info("spec 058 extension bridge wired",
 			"max_batch_items", cfg.Extension.Ingest.MaxBatchItems,
 			"max_body_bytes", cfg.Extension.Ingest.MaxBodyBytes,
