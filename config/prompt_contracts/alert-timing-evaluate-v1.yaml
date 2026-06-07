@@ -1,0 +1,117 @@
+id: alert_timing_evaluate
+version: "alert-timing-evaluate-v1"
+principleAlignment:
+- "Principle 1"
+- "Principle 6"
+type: "scenario"
+description: |
+  Spec 021 R-021-002/003/004 / BUG-021-006 — LLM-driven alert-timing judgment.
+
+  Replaces the hardcoded alert-timing windows in the bill, trip-prep, and
+  return-window alert producers (`> 3 days`, `INTERVAL '5 days'`) with a
+  per-situation LLM decision. The Go core retrieves upcoming events within a
+  generous OPERATIONAL lookahead horizon and their signals; this scenario
+  decides, per event, whether NOW is the right time to surface the reminder.
+
+  This honors the product architecture (docs/smackerel.md §3.6): "when should I
+  alert the user?" is domain reasoning — it depends on the event. A large annual
+  charge warrants earlier notice than a small monthly one; an international trip
+  needs more lead time than a local overnight; a high-value return window is
+  more urgent than a trivial one. A fixed N-day window cannot capture that.
+
+intent_examples:
+- "should I alert the user about this upcoming event now"
+- "is now a good time to surface this reminder"
+- "evaluate alert timing for an upcoming bill, trip, or return deadline"
+
+system_prompt: |
+  You are Smackerel's alert-timing judge.
+
+  The user maintains a personal knowledge graph. For ONE upcoming event, you
+  decide whether NOW is a good time to surface a gentle reminder, so the
+  reminder lands when it is actually useful — not so early it is noise, not so
+  late it is useless.
+
+  You are given:
+    - alert_kind: "bill" | "trip_prep" | "return_window"
+    - subject: the event's short label (service name, destination, item title)
+    - days_until_event: whole days from today until the event (0 = today)
+    - detail: a short free-text description with the situational specifics
+      (e.g. "annual $120 subscription", "monthly $9.99 subscription",
+      "5-day international trip", "return deadline for a $300 jacket")
+
+  JUDGE PER SITUATION — there is NO fixed N-day window:
+    - bill: a large or annual charge deserves earlier notice (more time to
+      cancel/budget) than a small recurring one. A trivial charge close to its
+      date may still be worth a same-day heads-up; a big annual renewal may
+      warrant a week.
+    - trip_prep: more lead time for bigger/farther/more-involved trips
+      (international, multi-day) so there is time to prepare; a local overnight
+      needs little.
+    - return_window: higher urgency as the deadline nears, and for higher-value
+      items; surface in time to actually act.
+    - In all cases, if days_until_event is so far out that a reminder now would
+      just be noise, withhold (should_alert=false). If the event has effectively
+      passed or is not actionable, withhold.
+
+  RULES (mandatory):
+    1. Output MUST validate against the declared output_schema.
+    2. `confidence` is your calibrated probability in [0,1] that should_alert is
+       correct. When the signals are ambiguous, return a LOW confidence so the
+       Go caller withholds the reminder rather than pestering the user
+       (Product Principle 6 — invisible by default).
+    3. Do NOT call any tool — finalise on the first turn. The
+       `noop_alert_timing` tool is registered only to satisfy the loader's
+       allowed_tools schema; you MUST NOT invoke it.
+    4. `rationale` is a one-sentence audit string (under 200 chars) explaining
+       the timing judgment; recorded for transparency (Product Principle 8) and
+       may be used as the reminder body.
+
+allowed_tools:
+- name: noop_alert_timing
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ alert_kind, subject, days_until_event, detail ]
+  additionalProperties: false
+  properties:
+    alert_kind:
+      type: string
+      enum: [ "bill", "trip_prep", "return_window" ]
+    subject:
+      type: string
+      minLength: 1
+      maxLength: 200
+    days_until_event:
+      type: integer
+      minimum: 0
+    detail:
+      type: string
+      maxLength: 400
+
+output_schema:
+  type: object
+  required: [ should_alert, confidence ]
+  additionalProperties: false
+  properties:
+    should_alert:
+      type: boolean
+    confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+    rationale:
+      type: string
+      maxLength: 200
+
+limits:
+  max_loop_iterations: 1
+  timeout_ms: 15000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 7500
+
+token_budget: 400
+temperature: 0.0
+model_preference: "fast"
+side_effect_class: read
