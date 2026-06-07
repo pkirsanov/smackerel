@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-021-011-evaluators-onto-judgment-foundation",
+  "parentSpec": "021-intelligence-delivery",
+  "continues": "BUG-021-010-judgment-foundation-hospitality",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Behaviour-preserving transport refactor; the existing evaluator unit tests are the regression guard."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the four migrated evaluators are exercised by their existing unit tests (parse, routing, signal forwarding, internal-field non-leak, nil-receiver/nil-runner now on agent.ErrJudgmentUnavailable, all error paths), all green against the InvokeJudgment-backed bodies; TestInvokeJudgment_* prove the shared primitive they route through."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-MIGRATE-01",
+      "scope": "Scope 1",
+      "title": "The four migrated evaluators preserve behaviour on the shared InvokeJudgment transport",
+      "requiredTestType": "unit",
+      "testFiles": [
+        "internal/intelligence/cooling_test.go",
+        "internal/intelligence/alert_timing_test.go",
+        "internal/intelligence/resurface_eval_test.go",
+        "internal/intelligence/expertise_eval_test.go"
+      ],
+      "linkedTests": [
+        {"file": "internal/intelligence/cooling_test.go", "function": "TestBridgeCoolingEvaluator_NilReceiver"},
+        {"file": "internal/intelligence/alert_timing_test.go", "function": "TestBridgeAlertTimingEvaluator_NilReceiverAndRunner"},
+        {"file": "internal/intelligence/resurface_eval_test.go", "function": "TestBridgeResurfaceEvaluator_NilReceiverAndRunner"},
+        {"file": "internal/intelligence/expertise_eval_test.go", "function": "TestBridgeExpertiseEvaluator_NilReceiverAndRunner"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-migrate-the-four-evaluators-onto-agentinvokejudgment"
+      ],
+      "liveTestExpectation": "Each BridgeXEvaluator routes through agent.InvokeJudgment to its scenario, forwards public signals, omits json:\"-\" internal fields, returns agent.ErrJudgmentUnavailable on nil receiver / nil runner / nil result, and errors on non-OK / empty final / bad JSON — identical to the pre-refactor behaviour.",
+      "changeType": "modified"
+    },
+    {
+      "scenarioId": "SCN-021-MIGRATE-02",
+      "scope": "Scope 1",
+      "title": "The shared agent.InvokeJudgment primitive backs all four migrated evaluators",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/agent/judgment_test.go"],
+      "linkedTests": [
+        {"file": "internal/agent/judgment_test.go", "function": "TestInvokeJudgment_ParsesRoutesAndForwardsSignals"},
+        {"file": "internal/agent/judgment_test.go", "function": "TestInvokeJudgment_ErrorPaths"}
+      ],
+      "evidenceRefs": [
+        "report.md#the-shared-primitive-the-four-now-route-through"
+      ],
+      "liveTestExpectation": "InvokeJudgment[T] performs the marshal/invoke/validate/decode contract once; the four evaluators delegate to it.",
+      "changeType": "modified"
+    }
+  ]
+}
