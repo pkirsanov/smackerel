@@ -270,6 +270,20 @@ intelligence:
     lookahead_days: 30 # REQUIRED: positive int; candidate-retrieval horizon
     max_candidates: 25 # REQUIRED: positive int; per-run evaluation cap
     confidence_floor: 0.7 # REQUIRED: float in [0,1]; below this the reminder is withheld
+  # Spec 021 R-505 / BUG-021-007 — resurfacing-worthiness intelligence.
+  # The "is this dormant artifact worth resurfacing?" JUDGMENT is LLM-driven
+  # (the resurface_evaluate scenario), NOT a hardcoded dormancy/relevance
+  # threshold. These are OPERATIONAL bounds only — fail-loud, operator-tunable:
+  #   - min_dormancy_days: candidate-retrieval floor; exclude artifacts accessed
+  #     more recently than this (so the LLM judges genuinely dormant items).
+  #   - max_candidates: per-run evaluation cap (throughput).
+  #   - confidence_floor: decision-confidence safety gate; below this the
+  #     resurfacing is withheld (Product Principle 6 — invisible by default).
+  # Serendipity (random rediscovery) is a separate strategy, unaffected.
+  resurface:
+    min_dormancy_days: 7 # REQUIRED: positive int; candidate-retrieval dormancy floor
+    max_candidates: 25 # REQUIRED: positive int; per-run evaluation cap
+    confidence_floor: 0.7 # REQUIRED: float in [0,1]; below this the resurfacing is withheld
 
 # Spec 058 Scope 1 — Chrome Extension Bridge ingest endpoint SST.
 # Every value flows through scripts/commands/config.sh into the

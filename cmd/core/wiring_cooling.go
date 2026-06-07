@@ -86,3 +86,38 @@ func wireAlertTimingEvaluator(bridge *agent.Bridge, engine *intelligence.Engine)
 		"max_candidates", timingCfg.MaxCandidates,
 		"confidence_floor", timingCfg.ConfidenceFloor)
 }
+
+// wireResurfaceEvaluator injects the LLM-driven resurfacing-worthiness
+// evaluator into the intelligence engine for the dormancy strategy
+// (BUG-021-007). Nil bridge ⇒ no-op (the dormancy strategy stays disabled;
+// there is no hardcoded dormancy/relevance threshold fallback; serendipity is
+// unaffected).
+func wireResurfaceEvaluator(bridge *agent.Bridge, engine *intelligence.Engine) {
+	if engine == nil {
+		return
+	}
+	if bridge == nil {
+		slog.Warn("resurface evaluator skipped: agent bridge is nil; dormancy resurfacing disabled",
+			"spec", "021", "bug", "BUG-021-007")
+		return
+	}
+
+	resurfaceCfg, err := config.LoadResurfaceConfig()
+	if err != nil {
+		slog.Error("resurface evaluator disabled: SST load failed",
+			"spec", "021", "bug", "BUG-021-007", "error", err.Error())
+		return
+	}
+
+	engine.SetResurfaceConfig(&intelligence.ResurfaceConfig{
+		Evaluator:       &intelligence.BridgeResurfaceEvaluator{Runner: bridge},
+		MinDormancyDays: resurfaceCfg.MinDormancyDays,
+		MaxCandidates:   resurfaceCfg.MaxCandidates,
+		ConfidenceFloor: resurfaceCfg.ConfidenceFloor,
+	})
+	slog.Info("resurface evaluator wired (LLM-driven)",
+		"spec", "021", "bug", "BUG-021-007",
+		"min_dormancy_days", resurfaceCfg.MinDormancyDays,
+		"max_candidates", resurfaceCfg.MaxCandidates,
+		"confidence_floor", resurfaceCfg.ConfidenceFloor)
+}
