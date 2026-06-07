@@ -191,6 +191,11 @@ func run() error {
 	// magic-number heuristic). Nil bridge ⇒ cooling alerts disabled.
 	wireRelationshipCoolingEvaluator(agentBridge, svc.intEngine)
 
+	// Spec 021 BUG-021-006 — wire the LLM-driven alert-timing evaluator
+	// into the intelligence engine for the bill / trip-prep / return-window
+	// producers (replaces hardcoded N-day windows). Nil bridge ⇒ disabled.
+	wireAlertTimingEvaluator(agentBridge, svc.intEngine)
+
 	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
 	// run in webhook mode, register the POST handler on the existing
 	// chi router OUTSIDE bearer-auth (Telegram does not send our
