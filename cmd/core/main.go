@@ -186,6 +186,11 @@ func run() error {
 	// shadow comparator into the HTTP handler + Telegram bot.
 	wireAnnotationShadowComparator(agentBridge, deps, tgBot)
 
+	// Spec 021 BUG-021-005 — wire the LLM-driven relationship-cooling
+	// evaluator into the intelligence engine (replaces the hardcoded
+	// magic-number heuristic). Nil bridge ⇒ cooling alerts disabled.
+	wireRelationshipCoolingEvaluator(agentBridge, svc.intEngine)
+
 	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
 	// run in webhook mode, register the POST handler on the existing
 	// chi router OUTSIDE bearer-auth (Telegram does not send our

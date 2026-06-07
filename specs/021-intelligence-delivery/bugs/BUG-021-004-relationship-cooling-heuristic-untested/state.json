@@ -6,6 +6,8 @@
   "featureName": "BUG-021-004: relationship-cooling heuristic was untested inline SQL and deviates from the spec's ≥1/week shorthand",
   "workflowMode": "bugfix-fastlane",
   "status": "done",
+  "supersededBy": "BUG-021-005-relationship-cooling-llm-driven",
+  "supersededNote": "Owner directive (no const limits; LLM decides per situation). BUG-021-005 replaces the extracted constants + the TestRelationshipCoolingHeuristic_MatchesDocumentedContract lock test with an LLM-driven relationship_cooling_evaluate scenario. The constants/builder/lock test were removed by BUG-021-005; this packet remains as the historical record of the interim constant-extraction step.",
   "severity": "medium",
   "reportedAt": "2026-06-07T00:30:00Z",
   "reporter": "stochastic-quality-sweep round 9 (regression, parent-expanded)",
