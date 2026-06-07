@@ -416,12 +416,17 @@ func NewRouter(deps *Dependencies) http.Handler {
 	// Spec 058 — Chrome Extension Bridge.
 	//
 	// POST /v1/connectors/extension/ingest is mounted behind
-	// bearerAuthMiddleware AND auth.RequireScope("extension:bookmarks",
-	// "extension:history") (AND-semantics per spec 060 Scope 2). The
-	// extension client mints a per-user PASETO whose `scope` claim
-	// MUST contain both scopes for the request to reach the handler;
-	// bootstrap and (dev/test) shared-token sessions bypass the
-	// scope gate via SessionSourceBootstrap/SharedToken short-circuit.
+	// bearerAuthMiddleware AND auth.RequireScope("extension:bookmarks,history").
+	// Per spec 060 spec.md (L15/L70/L138) and spec 058 design.md
+	// (L295/L330/L498/L684) the canonical extension scope is the SINGLE
+	// comma-joined capability string "extension:bookmarks,history" (one
+	// surface, two capabilities). getScopeClaim does NOT split on ","
+	// so the per-user PASETO `scope` claim carries it as ONE element;
+	// auth.RequireScope matches with exact slices.Contains. Splitting
+	// the gate into two separate scopes 403s every real per-user token
+	// (regression guarded by router_extension_scope_test.go). Bootstrap
+	// and (dev/test) shared-token sessions bypass the scope gate via
+	// SessionSourceBootstrap/SharedToken short-circuit.
 	//
 	// GET /v1/admin/extension/devices is mounted behind
 	// bearerAuthMiddleware only; the extensiondevices.Handler enforces
@@ -429,7 +434,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 	if deps.ExtensionIngestHandler != nil {
 		r.Group(func(r chi.Router) {
 			r.Use(deps.bearerAuthMiddleware)
-			r.With(auth.RequireScope("extension:bookmarks", "extension:history")).
+			r.With(auth.RequireScope("extension:bookmarks,history")).
 				Post("/v1/connectors/extension/ingest", deps.ExtensionIngestHandler.ServeHTTP)
 		})
 	}
