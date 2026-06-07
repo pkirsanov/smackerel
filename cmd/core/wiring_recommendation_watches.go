@@ -37,9 +37,10 @@ func wireRecommendationWatchPoller(
 		return
 	}
 	evaluator := watch.NewEvaluator(watch.Options{
-		Store:    svc.recommendationStore,
-		Registry: svc.recommendationRegistry,
-		Clock:    func() time.Time { return time.Now().UTC() },
+		Store:                        svc.recommendationStore,
+		Registry:                     svc.recommendationRegistry,
+		Clock:                        func() time.Time { return time.Now().UTC() },
+		DefaultPriceDropThresholdPct: cfg.Recommendations.Watches.DefaultPriceDropThresholdPct,
 	})
 	source := &recommendationWatchSource{
 		store:     svc.recommendationStore,
