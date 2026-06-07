@@ -208,6 +208,12 @@ func run() error {
 	// expertise endpoint fails loud (no hardcoded tier fallback).
 	wireExpertiseEvaluator(agentBridge, svc.intEngine)
 
+	// Spec 021 BUG-021-009 — wire the operational bounds for LLM-driven seasonal
+	// pattern detection (replaces the hardcoded 0.7/1.5 volume-ratio threshold;
+	// significance is judged by the seasonal.analyze ML path). SST load failure
+	// ⇒ seasonal detection disabled.
+	wireSeasonalConfig(svc.intEngine)
+
 	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
 	// run in webhook mode, register the POST handler on the existing
 	// chi router OUTSIDE bearer-auth (Telegram does not send our

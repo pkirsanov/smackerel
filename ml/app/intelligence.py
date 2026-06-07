@@ -357,44 +357,81 @@ async def handle_seasonal_analyze(
     api_key: str | None,
     ollama_url: str | None = None,
 ) -> dict:
-    """Detect seasonal patterns with LLM commentary.
+    """Judge which capture-behavior signals represent meaningful seasonal patterns.
 
-    Input: { month, patterns: [{ pattern, month, observation, actionable }] }
-    Output: { patterns: [{ pattern, month, observation, actionable }], success }
+    BUG-021-009: the significance JUDGMENT is LLM-driven — there is no hardcoded
+    year-over-year ratio threshold. The Go core (DetectSeasonalPatterns) gathers
+    raw signals only (this-month vs last-year volume, candidate topics) and this
+    handler decides which, if any, are genuinely seasonal. When no LLM is
+    configured, no judgment can be made, so no observations are returned — there
+    is NO magic-number fallback.
+
+    Input:  { current_month, data_days, this_month_count,
+              last_year_same_month_count, topic_candidates: [{ name, count }] }
+    Output: { observations: [{ pattern, month, observation, actionable }], success }
     """
     start = time.time()
-    patterns = data.get("patterns", [])
-    month = data.get("month", "")
+    current_month = data.get("current_month", "")
+    this_month = data.get("this_month_count", 0)
+    last_year = data.get("last_year_same_month_count", 0)
+    topic_candidates = data.get("topic_candidates", []) or []
 
-    if provider and api_key and patterns:
-        pattern_text = "\n".join(f"- {p.get('observation', '')}" for p in patterns[:10])
-        prompt = (
-            f"You are a personal analyst reviewing seasonal capture patterns for {month}.\n\n"
-            f"Detected patterns:\n{pattern_text}\n\n"
-            "For each pattern, write a brief, actionable insight. "
-            "Return ONLY valid JSON array with objects containing:\n"
-            '- "pattern": pattern type\n'
-            '- "month": month name\n'
-            '- "observation": human-readable insight\n'
-            '- "actionable": true/false\n\n'
-            "JSON:"
+    def _empty() -> dict:
+        return {
+            "observations": [],
+            "success": True,
+            "processing_time_ms": _elapsed_ms(start),
+        }
+
+    # No LLM configured ⇒ no judgment ⇒ no seasonal observations. There is NO
+    # hardcoded ratio fallback (the whole point of BUG-021-009).
+    if not (provider and api_key):
+        return _empty()
+
+    topic_lines = (
+        "\n".join(
+            f"- {t.get('name', '')}: {t.get('count', 0)} captures this month"
+            for t in topic_candidates[:10]
         )
-        result = await _call_llm(prompt, provider, model or "", api_key, ollama_url or "")
-        if result:
-            try:
-                parsed = json.loads(result.strip().strip("`").strip())
-                if isinstance(parsed, list):
-                    return {
-                        "patterns": parsed,
-                        "success": True,
-                        "processing_time_ms": _elapsed_ms(start),
-                    }
-            except (json.JSONDecodeError, KeyError):
-                logger.warning("Failed to parse LLM seasonal analysis")
+        or "- (none)"
+    )
+    prompt = (
+        "You are a personal analyst judging whether capture-behavior signals for "
+        f"{current_month} represent meaningful SEASONAL patterns worth surfacing.\n\n"
+        f"Year-over-year volume for {current_month}:\n"
+        f"- This year: {this_month} captures\n"
+        f"- Last year: {last_year} captures\n\n"
+        f"Candidate topics active this {current_month}:\n{topic_lines}\n\n"
+        "Judge PER SITUATION — there is NO fixed percentage threshold:\n"
+        "- Is the year-over-year volume change a meaningful seasonal drop or "
+        "spike, or just noise? Only surface it if it is substantial and "
+        "plausibly seasonal.\n"
+        "- Which candidate topics (if any) genuinely look seasonal for this "
+        "month, rather than incidental?\n\n"
+        "Return ONLY a JSON object of the form "
+        '{"observations": [{"pattern": "volume_drop|volume_spike|topic_seasonal", '
+        '"month": "<month>", "observation": "<one human sentence>", '
+        '"actionable": true|false}]}. '
+        "Return an empty observations array if nothing is meaningfully seasonal.\n\n"
+        "JSON:"
+    )
+    result = await _call_llm(prompt, provider, model or "", api_key, ollama_url or "")
+    if result:
+        try:
+            parsed = json.loads(result.strip().strip("`").strip())
+            if isinstance(parsed, list):
+                observations = parsed
+            elif isinstance(parsed, dict):
+                observations = parsed.get("observations", [])
+            else:
+                observations = []
+            if isinstance(observations, list):
+                return {
+                    "observations": observations,
+                    "success": True,
+                    "processing_time_ms": _elapsed_ms(start),
+                }
+        except (json.JSONDecodeError, AttributeError, KeyError):
+            logger.warning("Failed to parse LLM seasonal analysis")
 
-    # Fallback: return input patterns as-is
-    return {
-        "patterns": patterns,
-        "success": True,
-        "processing_time_ms": _elapsed_ms(start),
-    }
+    return _empty()

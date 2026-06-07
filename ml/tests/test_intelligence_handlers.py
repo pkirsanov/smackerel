@@ -187,32 +187,55 @@ class TestQuickrefGenerate:
 
 
 class TestSeasonalAnalyze:
-    """Tests for seasonal.analyze handler."""
+    """Tests for seasonal.analyze handler (BUG-021-009: LLM-judged significance)."""
 
-    def test_fallback_returns_input_patterns(self):
-        patterns = [
-            {"pattern": "volume_spike", "month": "January", "observation": "Capture volume up 50%", "actionable": False}
-        ]
+    def test_no_llm_returns_empty_observations(self):
+        # With raw signals but no LLM configured, there is NO hardcoded ratio
+        # fallback — the handler returns zero observations.
         result = asyncio.run(
             handle_seasonal_analyze(
-                {"month": "January", "patterns": patterns},
+                {
+                    "current_month": "January",
+                    "data_days": 400,
+                    "this_month_count": 120,
+                    "last_year_same_month_count": 40,
+                    "topic_candidates": [{"name": "taxes", "count": 9}],
+                },
                 None,
                 None,
                 None,
             )
         )
         assert result["success"] is True
-        assert len(result["patterns"]) == 1
-        assert result["patterns"][0]["pattern"] == "volume_spike"
+        assert result["observations"] == []
 
-    def test_empty_patterns(self):
+    def test_no_signals_returns_empty(self):
         result = asyncio.run(
             handle_seasonal_analyze(
-                {"month": "March", "patterns": []},
+                {
+                    "current_month": "March",
+                    "data_days": 365,
+                    "this_month_count": 0,
+                    "last_year_same_month_count": 0,
+                    "topic_candidates": [],
+                },
                 None,
                 None,
                 None,
             )
         )
         assert result["success"] is True
-        assert result["patterns"] == []
+        assert result["observations"] == []
+
+    def test_response_shape_has_observations_key(self):
+        result = asyncio.run(
+            handle_seasonal_analyze(
+                {"current_month": "April"},
+                None,
+                None,
+                None,
+            )
+        )
+        assert "observations" in result
+        assert isinstance(result["observations"], list)
+        assert result["success"] is True

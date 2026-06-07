@@ -102,6 +102,12 @@ type Engine struct {
 	// tier/velocity threshold fallback — the tier/growth judgment is the
 	// LLM's).
 	expertise *ExpertiseConfig
+
+	// seasonal carries the OPERATIONAL bounds for seasonal pattern detection
+	// (BUG-021-009). Nil until wired; a nil config disables seasonal detection
+	// (no hardcoded volume-ratio threshold fallback — the "is this YoY change a
+	// meaningful seasonal pattern?" judgment is the LLM's via seasonal.analyze).
+	seasonal *SeasonalConfig
 }
 
 // NewEngine creates a new intelligence engine.
@@ -131,6 +137,13 @@ func (e *Engine) SetResurfaceConfig(c *ResurfaceConfig) {
 // fallback — the tier/growth judgment is the LLM's).
 func (e *Engine) SetExpertiseConfig(c *ExpertiseConfig) {
 	e.expertise = c
+}
+
+// SetSeasonalConfig injects the operational bounds for LLM-driven seasonal
+// pattern detection. Passing nil leaves seasonal detection disabled (no
+// hardcoded volume-ratio fallback — the significance judgment is the LLM's).
+func (e *Engine) SetSeasonalConfig(c *SeasonalConfig) {
+	e.seasonal = c
 }
 
 // SetAlertTimingConfig injects the LLM-driven alert-timing evaluator and its

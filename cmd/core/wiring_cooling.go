@@ -159,3 +159,33 @@ func wireExpertiseEvaluator(bridge *agent.Bridge, engine *intelligence.Engine) {
 		"blind_spot_max_captures", expertiseCfg.BlindSpotMaxCaptures,
 		"blind_spot_limit", expertiseCfg.BlindSpotLimit)
 }
+
+// wireSeasonalConfig injects the OPERATIONAL bounds for LLM-driven seasonal
+// pattern detection (BUG-021-009). Unlike the bridge-based evaluators, seasonal
+// significance is judged via the existing seasonal.analyze ML/NATS path; this
+// only supplies the operational bounds. SST load failure ⇒ seasonal detection
+// stays disabled (no hardcoded volume-ratio fallback).
+func wireSeasonalConfig(engine *intelligence.Engine) {
+	if engine == nil {
+		return
+	}
+	seasonalCfg, err := config.LoadSeasonalConfig()
+	if err != nil {
+		slog.Error("seasonal detection disabled: SST load failed",
+			"spec", "021", "bug", "BUG-021-009", "error", err.Error())
+		return
+	}
+
+	engine.SetSeasonalConfig(&intelligence.SeasonalConfig{
+		MinDataDays:         seasonalCfg.MinDataDays,
+		TopicMinCaptures:    seasonalCfg.TopicMinCaptures,
+		TopicCandidateLimit: seasonalCfg.TopicCandidateLimit,
+		MaxObservations:     seasonalCfg.MaxObservations,
+	})
+	slog.Info("seasonal detection config wired (LLM-driven significance)",
+		"spec", "021", "bug", "BUG-021-009",
+		"min_data_days", seasonalCfg.MinDataDays,
+		"topic_min_captures", seasonalCfg.TopicMinCaptures,
+		"topic_candidate_limit", seasonalCfg.TopicCandidateLimit,
+		"max_observations", seasonalCfg.MaxObservations)
+}

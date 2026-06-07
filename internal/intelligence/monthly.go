@@ -293,10 +293,8 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 	if err != nil {
 		slog.Warn("seasonal pattern detection failed", "error", err)
 	} else if len(seasonalPatterns) > 0 {
-		// Cap at 2 seasonal observations per monthly report per design
-		if len(seasonalPatterns) > 2 {
-			seasonalPatterns = seasonalPatterns[:2]
-		}
+		// DetectSeasonalPatterns already caps at the operational
+		// MaxObservations bound (BUG-021-009).
 		report.SeasonalPatterns = seasonalPatterns
 	}
 
@@ -516,29 +514,53 @@ type SeasonalPattern struct {
 	Actionable  bool   `json:"actionable"`
 }
 
-// DetectSeasonalPatterns analyzes year-over-year capture behavior per R-508.
+// SeasonalConfig carries the OPERATIONAL bounds for seasonal pattern detection
+// (BUG-021-009). The "is this year-over-year volume change a meaningful seasonal
+// pattern?" JUDGMENT is LLM-driven (the seasonal.analyze ML scenario), NOT a
+// hardcoded ratio threshold. These are operator-tunable operational bounds only:
+//   - MinDataDays: data-sufficiency floor (R-508 needs 6+ months).
+//   - TopicMinCaptures: minimum same-month captures for a topic to be a candidate.
+//   - TopicCandidateLimit: cap on topic candidates sent to the LLM.
+//   - MaxObservations: cap on returned seasonal observations.
+type SeasonalConfig struct {
+	MinDataDays         int
+	TopicMinCaptures    int
+	TopicCandidateLimit int
+	MaxObservations     int
+}
+
+// DetectSeasonalPatterns gathers year-over-year volume + topic-candidate signals
+// and asks the ML sidecar (seasonal.analyze) to JUDGE which represent meaningful
+// seasonal patterns (R-508 / BUG-021-009). There is NO hardcoded volume-ratio
+// threshold: the Go core only retrieves signals within operational bounds, and
+// the LLM decides significance. When the operational config is not wired or the
+// ML sidecar is unavailable, seasonal detection is skipped (the monthly report
+// omits the section) rather than falling back to a magic-number heuristic.
 func (e *Engine) DetectSeasonalPatterns(ctx context.Context) ([]SeasonalPattern, error) {
 	if e.Pool == nil {
 		return nil, fmt.Errorf("seasonal patterns require a database connection")
 	}
+	if e.seasonal == nil {
+		slog.Warn("seasonal detection skipped: operational config not wired")
+		return nil, nil
+	}
+	cfg := e.seasonal
 
-	// Check data maturity (need 6+ months)
+	// Data-sufficiency floor (operational; R-508 needs 6+ months).
 	var dataDays int
 	if err := e.Pool.QueryRow(ctx, `
 		SELECT COALESCE(EXTRACT(DAY FROM NOW() - MIN(created_at))::int, 0) FROM artifacts
 	`).Scan(&dataDays); err != nil {
 		return nil, fmt.Errorf("check data maturity: %w", err)
 	}
-
-	if dataDays < 180 {
+	if dataDays < cfg.MinDataDays {
 		return nil, nil // Not enough data
 	}
 
-	var patterns []SeasonalPattern
-
-	// Volume pattern: compare current month to same month last year — single query
-	var thisMonthCount, lastYearSameMonthCount int
 	currentMonth := time.Now().Month()
+
+	// Volume signal: this year vs last year, same month. NO decision in Go.
+	var thisMonthCount, lastYearSameMonthCount int
 	if err := e.Pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*) FILTER (WHERE EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())),
@@ -549,26 +571,13 @@ func (e *Engine) DetectSeasonalPatterns(ctx context.Context) ([]SeasonalPattern,
 		slog.Warn("failed to query seasonal volume", "error", err)
 	}
 
-	if lastYearSameMonthCount > 0 {
-		ratio := float64(thisMonthCount) / float64(lastYearSameMonthCount)
-		if ratio < 0.7 {
-			patterns = append(patterns, SeasonalPattern{
-				Pattern:     "volume_drop",
-				Month:       time.Now().Format("January"),
-				Observation: fmt.Sprintf("Your capture volume is down %.0f%% compared to %s last year (%d vs %d)", (1-ratio)*100, time.Now().Format("January"), thisMonthCount, lastYearSameMonthCount),
-				Actionable:  true,
-			})
-		} else if ratio > 1.5 {
-			patterns = append(patterns, SeasonalPattern{
-				Pattern:     "volume_spike",
-				Month:       time.Now().Format("January"),
-				Observation: fmt.Sprintf("Your capture volume is up %.0f%% compared to %s last year (%d vs %d)", (ratio-1)*100, time.Now().Format("January"), thisMonthCount, lastYearSameMonthCount),
-				Actionable:  false,
-			})
-		}
+	// Topic candidates: same-month topics above the operational floor. These are
+	// CANDIDATES for the LLM to judge, not pre-decided seasonal patterns.
+	type topicCandidate struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
 	}
-
-	// Topic seasonal pattern: topics that spike in the same month
+	var topicCandidates []topicCandidate
 	topicRows, err := e.Pool.Query(ctx, `
 		SELECT t.name, COUNT(*) AS cnt
 		FROM topics t
@@ -576,22 +585,16 @@ func (e *Engine) DetectSeasonalPatterns(ctx context.Context) ([]SeasonalPattern,
 		JOIN artifacts a ON a.id = e.src_id
 		WHERE EXTRACT(MONTH FROM a.created_at) = $1
 		GROUP BY t.name
-		HAVING COUNT(*) >= 5
+		HAVING COUNT(*) >= $2
 		ORDER BY cnt DESC
-		LIMIT 5
-	`, int(currentMonth))
+		LIMIT $3
+	`, int(currentMonth), cfg.TopicMinCaptures, cfg.TopicCandidateLimit)
 	if err == nil {
 		defer topicRows.Close()
 		for topicRows.Next() {
-			var name string
-			var cnt int
-			if topicRows.Scan(&name, &cnt) == nil {
-				patterns = append(patterns, SeasonalPattern{
-					Pattern:     "topic_seasonal",
-					Month:       time.Now().Format("January"),
-					Observation: fmt.Sprintf("%s tends to spike in %s (%d captures this month)", name, time.Now().Format("January"), cnt),
-					Actionable:  false,
-				})
+			var tc topicCandidate
+			if topicRows.Scan(&tc.Name, &tc.Count) == nil {
+				topicCandidates = append(topicCandidates, tc)
 			}
 		}
 		if err := topicRows.Err(); err != nil {
@@ -599,42 +602,54 @@ func (e *Engine) DetectSeasonalPatterns(ctx context.Context) ([]SeasonalPattern,
 		}
 	}
 
-	// BUG-003: ask the ML sidecar for higher-level seasonal commentary on top
-	// of the local volume/topic patterns. 15-second timeout per Scope 01 DoD.
-	// On any failure we keep the locally-derived patterns only — never block
-	// the monthly report on LLM availability.
-	if e.NATS != nil {
-		payload := map[string]any{
-			"current_month":  time.Now().Format("January"),
-			"data_days":      dataDays,
-			"local_patterns": patterns,
-		}
-		if data, err := json.Marshal(payload); err == nil {
-			reply, reqErr := e.NATS.Request(ctx, smacknats.SubjectSeasonalAnalyze, data, seasonalAnalyzeLLMTimeout)
-			if reqErr != nil {
-				slog.Warn("NATS seasonal analyze request failed, using local patterns only", "error", reqErr)
-			} else {
-				var resp seasonalAnalyzeReply
-				if err := json.Unmarshal(reply, &resp); err != nil {
-					slog.Warn("NATS seasonal analyze reply unmarshal failed, using local patterns only", "error", err)
-				} else {
-					for _, obs := range resp.Observations {
-						if strings.TrimSpace(obs.Observation) == "" {
-							continue
-						}
-						patterns = append(patterns, SeasonalPattern{
-							Pattern:     obs.Pattern,
-							Month:       obs.Month,
-							Observation: obs.Observation,
-							Actionable:  obs.Actionable,
-						})
-					}
-				}
-			}
-		} else {
-			slog.Warn("seasonal analyze payload marshal failed, using local patterns only", "error", err)
-		}
+	// No signals at all → nothing for the LLM to judge.
+	if thisMonthCount == 0 && lastYearSameMonthCount == 0 && len(topicCandidates) == 0 {
+		return nil, nil
 	}
 
+	// The ML sidecar (seasonal.analyze) JUDGES which signals are meaningful
+	// seasonal patterns. No NATS client ⇒ skip (no hardcoded ratio fallback).
+	if e.NATS == nil {
+		slog.Warn("seasonal detection skipped: ML sidecar unavailable (no NATS client); no hardcoded ratio fallback")
+		return nil, nil
+	}
+
+	payload := map[string]any{
+		"current_month":              time.Now().Format("January"),
+		"data_days":                  dataDays,
+		"this_month_count":           thisMonthCount,
+		"last_year_same_month_count": lastYearSameMonthCount,
+		"topic_candidates":           topicCandidates,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal seasonal signals: %w", err)
+	}
+	reply, reqErr := e.NATS.Request(ctx, smacknats.SubjectSeasonalAnalyze, data, seasonalAnalyzeLLMTimeout)
+	if reqErr != nil {
+		slog.Warn("NATS seasonal analyze request failed; seasonal section skipped", "error", reqErr)
+		return nil, nil
+	}
+	var resp seasonalAnalyzeReply
+	if err := json.Unmarshal(reply, &resp); err != nil {
+		slog.Warn("NATS seasonal analyze reply unmarshal failed; seasonal section skipped", "error", err)
+		return nil, nil
+	}
+
+	var patterns []SeasonalPattern
+	for _, obs := range resp.Observations {
+		if strings.TrimSpace(obs.Observation) == "" {
+			continue
+		}
+		patterns = append(patterns, SeasonalPattern{
+			Pattern:     obs.Pattern,
+			Month:       obs.Month,
+			Observation: obs.Observation,
+			Actionable:  obs.Actionable,
+		})
+		if len(patterns) >= cfg.MaxObservations {
+			break
+		}
+	}
 	return patterns, nil
 }

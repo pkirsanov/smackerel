@@ -1,0 +1,163 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-009-seasonal-llm-driven",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-009-seasonal-llm-driven",
+  "featureName": "BUG-021-009: seasonal volume significance must be LLM-driven, not a hardcoded YoY ratio threshold",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "continues": "BUG-021-008-expertise-llm-driven",
+  "reportedAt": "2026-06-07T03:50:00Z",
+  "reporter": "owner directive (no const limits; LLM decides per situation)",
+  "certifiedAt": "2026-06-07T08:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T08:00:00Z",
+  "lastUpdatedAt": "2026-06-07T04:25:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:50:00Z",
+        "completedAt": "2026-06-07T03:56:00Z",
+        "outcome": "completed_owned",
+        "summary": "After BUG-021-008 made expertise LLM-driven, an audit of sibling hardcoded business thresholds found DetectSeasonalPatterns (R-508, monthly report) deciding seasonal significance with hardcoded ratios: ratio < 0.7 (volume_drop), ratio > 1.5 (volume_spike), and a topic_seasonal claim for any topic with >= 5 same-month captures. A second finding: the seasonal.analyze ML enrichment was DEAD due to a request/response key mismatch (Go sent current_month/data_days/local_patterns; Python read patterns/month; Python returned patterns; Go read observations) — inert since BUG-003. Both answer/serve the same domain question docs/smackerel.md §3.6 requires to be LLM-driven."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:56:00Z",
+        "completedAt": "2026-06-07T04:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope using Option A (owner-agreed): extend the EXISTING seasonal.analyze ML/NATS path to judge significance rather than add a new agent.Bridge scenario (seasonal already has an ML touchpoint; the prior four conversions used agent.Bridge only because those producers had none). The Go core gathers raw signals; the ML sidecar judges; operational bounds to fail-loud SST. SCN-021-SEASONAL-01..02 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:00:00Z",
+        "completedAt": "2026-06-07T04:12:00Z",
+        "outcome": "completed_owned",
+        "summary": "internal/intelligence/monthly.go: added SeasonalConfig (operational bounds); reworked DetectSeasonalPatterns to gather raw signals (this-month vs last-year volume; topic candidates above the operational floor, capped) and delegate significance to seasonal.analyze; removed the 0.7/1.5 ratio decision and the topic_seasonal '>=5' claim; capped results at MaxObservations; removed the caller-side '>2' cap in GenerateMonthlyReport. ml/app/intelligence.py: reworked handle_seasonal_analyze to a coherent contract (input raw signals; output {observations:[...]}) and to JUDGE significance, with no-LLM => empty observations. Engine gained a seasonal field + SetSeasonalConfig. SST: intelligence.seasonal.* (smackerel.yaml + config.sh + internal/config/seasonal.go). Wiring: wireSeasonalConfig + main.go call."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:12:00Z",
+        "completedAt": "2026-06-07T04:16:00Z",
+        "outcome": "completed_owned",
+        "summary": "config/seasonal_test.go: SST populate + fail-loud + range. ml/tests/test_intelligence_handlers.py::TestSeasonalAnalyze reworked: no-LLM => empty observations (no ratio fallback), no-signals => empty, response shape has observations key. go build ./... + vet green; Go intelligence/config/cmd-core green; full Python suite 487 passed, 2 skipped."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:16:00Z",
+        "completedAt": "2026-06-07T04:18:00Z",
+        "outcome": "completed_owned",
+        "summary": "./smackerel.sh config generate resolves the new keys into dev.env (lines 188-191). Existing TestDetectSeasonalPatterns_NilPool still passes (nil pool errors first). bug003_test.go seasonalAnalyzeReply binding test unaffected (response struct unchanged). Full Python ML suite green."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:18:00Z",
+        "completedAt": "2026-06-07T04:19:00Z",
+        "outcome": "completed_owned",
+        "summary": "One reworked detector + one reworked ML handler; the dead second enrichment attempt (which previously appended ML observations on TOP of the hardcoded Go patterns) collapses into a single coherent path. The caller-side cap is removed in favor of the detector's MaxObservations."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:19:00Z",
+        "completedAt": "2026-06-07T04:20:00Z",
+        "outcome": "completed_owned",
+        "summary": "DetectSeasonalPatterns collects all signals before the NATS request; nil config / nil NATS / request error / unmarshal error / no-signals all degrade gracefully to an omitted seasonal section. The ML handler's no-LLM path returns empty observations rather than fabricating significance."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:20:00Z",
+        "completedAt": "2026-06-07T04:21:00Z",
+        "outcome": "completed_owned",
+        "summary": "The seasonal signal queries are parameterized (EXTRACT(MONTH)=$1, HAVING COUNT(*) >= $2, LIMIT $3). The NATS payload carries only aggregate counts + topic names (no artifact bodies / ids). The ML prompt is built from those aggregates only. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:21:00Z",
+        "completedAt": "2026-06-07T04:22:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; config generate + build + vet + affected Go packages + full Python suite green; ./smackerel.sh lint (Go lint + Python ruff + web-validate) passed (LINT_RC=0). Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:22:00Z",
+        "completedAt": "2026-06-07T04:23:00Z",
+        "outcome": "completed_owned",
+        "summary": "No hardcoded seasonal-significance ratio remains (grep of 'ratio < 0.7' / 'ratio > 1.5' in monthly.go = 0). No migration; generated env gitignored; no .github/bubbles changes; the seasonal.analyze NATS subject/response names are unchanged (only payload shapes made coherent); parent spec 021 + spec 006 planning artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:23:00Z",
+        "completedAt": "2026-06-07T04:25:00Z",
+        "outcome": "completed_owned",
+        "summary": "monthly.go, intelligence.py, smackerel.yaml, and the wiring document the LLM-driven significance judgment via the ML path and the operational/business boundary. The packet records continuation of BUG-021-008, the Option-A rationale (reuse the existing ML path), and the fixed dead request/response contract."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T08:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "LLM-driven seasonal significance via the ML path", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T04:25:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane LLM-driven rework; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T04:25:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-021-SEASONAL-HARDCODED",
+      "summary": "DetectSeasonalPatterns decided seasonal significance with hardcoded volume-ratio thresholds (ratio < 0.7, ratio > 1.5) and a 'topic with >= 5 same-month captures = seasonal' claim, contradicting docs/smackerel.md §3.6 and the owner directive.",
+      "resolution": "Moved the significance judgment to the existing seasonal.analyze ML path (Option A); DetectSeasonalPatterns now gathers raw signals only; operational bounds moved to fail-loud SST. No hardcoded ratio remains; no-LLM/no-config/no-NATS skip.",
+      "evidence": "report.md ML Handler / SST loader / Audit Evidence; internal/intelligence/monthly.go; ml/app/intelligence.py; grep of 'ratio < 0.7' / 'ratio > 1.5' in monthly.go = 0.",
+      "status": "resolved"
+    },
+    {
+      "id": "FINDING-021-SEASONAL-DEAD-CONTRACT",
+      "summary": "The seasonal.analyze ML enrichment was inert since BUG-003 due to a request/response key mismatch (Go sent current_month/data_days/local_patterns and read observations; Python read patterns/month and returned patterns).",
+      "resolution": "Reworked both ends to a single coherent contract: request {current_month,data_days,this_month_count,last_year_same_month_count,topic_candidates}; response {observations:[{pattern,month,observation,actionable}]}.",
+      "evidence": "report.md ML Handler Evidence; ml/app/intelligence.py handle_seasonal_analyze; internal/intelligence/monthly.go DetectSeasonalPatterns.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-no-const-limits",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
