@@ -47,6 +47,11 @@ type RecommendationWatchesConfig struct {
 	CooldownSecondsByKind map[string]int
 	QuietHoursPolicy      map[string]any
 	PollCron              string
+	// DefaultPriceDropThresholdPct is the OPERATIONAL fallback price-drop
+	// threshold (fraction in (0,1]) used ONLY when neither the trigger context
+	// nor the user's watch filter supplies `threshold_pct`. Fail-loud SST — no
+	// hardcoded in-source default (smackerel-no-defaults / owner NO-const-limits).
+	DefaultPriceDropThresholdPct float64
 }
 
 type RecommendationRetentionConfig struct {
@@ -106,6 +111,10 @@ func loadRecommendationsConfig() (RecommendationsConfig, error) {
 	cfg.Watches.CooldownSecondsByKind, errs = requiredIntMap("RECOMMENDATIONS_WATCHES_COOLDOWN_SECONDS_BY_KIND", errs)
 	cfg.Watches.QuietHoursPolicy, errs = requiredObject("RECOMMENDATIONS_WATCHES_QUIET_HOURS_POLICY", errs)
 	cfg.Watches.PollCron, errs = requiredNonEmptyString("RECOMMENDATIONS_WATCHES_POLL_CRON", errs)
+	cfg.Watches.DefaultPriceDropThresholdPct, errs = parseUnitFloat("RECOMMENDATIONS_WATCHES_DEFAULT_PRICE_DROP_THRESHOLD_PCT", errs)
+	if cfg.Watches.DefaultPriceDropThresholdPct <= 0 {
+		errs = append(errs, "RECOMMENDATIONS_WATCHES_DEFAULT_PRICE_DROP_THRESHOLD_PCT (must be > 0 and <= 1)")
+	}
 
 	cfg.Retention.RawProviderPayloadSeconds, errs = parsePositiveInt("RECOMMENDATIONS_RETENTION_RAW_PROVIDER_PAYLOAD_SECONDS", errs)
 	cfg.Retention.TraceRetentionSeconds, errs = parsePositiveInt("RECOMMENDATIONS_RETENTION_TRACE_RETENTION_SECONDS", errs)
