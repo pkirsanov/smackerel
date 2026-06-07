@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-021-007-resurface-llm-driven",
+  "parentSpec": "021-intelligence-delivery",
+  "continues": "BUG-021-006-alert-timing-llm-driven",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real LLM-driven rework; scenarios drive the evaluator + SST-loader proofs."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the dormancy worthiness decision now flows through the resurface_evaluate scenario; TestBridgeResurfaceEvaluator_* prove the LLM-driven path (parse, routing, public-signal forwarding, internal-field non-leak, error paths) with a scripted bridge; the SST loader tests prove fail-loud operational bounds."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-RESURFACE-01",
+      "scope": "Scope 1",
+      "title": "Resurfacing-worthiness judgment routes to the LLM scenario, parses the decision, and never leaks internal fields",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/intelligence/resurface_eval_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_eval_test.go", "function": "TestBridgeResurfaceEvaluator_ParsesDecision"},
+        {"file": "internal/intelligence/resurface_eval_test.go", "function": "TestBridgeResurfaceEvaluator_ErrorPaths"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-llm-driven-resurfacing-worthiness-for-the-dormancy-strategy"
+      ],
+      "liveTestExpectation": "EvaluateResurface routes IntentEnvelope{ScenarioID: resurface_evaluate}, forwards {title,days_dormant,relevance_score,access_count}, omits ArtifactID (json:\"-\"), parses {worth_resurfacing,confidence,reason}, and errors on nil runner / nil result / non-OK / empty final / bad JSON.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-RESURFACE-02",
+      "scope": "Scope 1",
+      "title": "Pure helper: the operational confidence-floor gate",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/intelligence/resurface_eval_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_eval_test.go", "function": "TestResurfaceShouldSurface"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "resurfaceShouldSurface is true only when worth_resurfacing AND confidence >= floor.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-RESURFACE-03",
+      "scope": "Scope 1",
+      "title": "Operational resurfacing bounds are fail-loud SST config",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/config/resurface_test.go"],
+      "linkedTests": [
+        {"file": "internal/config/resurface_test.go", "function": "TestLoadResurfaceConfig_FailLoudOnMissing"},
+        {"file": "internal/config/resurface_test.go", "function": "TestLoadResurfaceConfig_RejectsOutOfRange"}
+      ],
+      "evidenceRefs": [
+        "report.md#validation-evidence"
+      ],
+      "liveTestExpectation": "Missing/empty INTELLIGENCE_RESURFACE_* keys fail loud naming the var; out-of-range values (min_dormancy_days<=0, cap<=0, floor not in [0,1]) are rejected.",
+      "changeType": "added"
+    }
+  ]
+}

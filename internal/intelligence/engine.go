@@ -88,6 +88,13 @@ type Engine struct {
 	// Nil until wired; a nil config disables those producers (no hardcoded
 	// alert-timing window fallback — the "alert now?" judgment is the LLM's).
 	alertTiming *AlertTimingConfig
+
+	// resurface carries the LLM evaluator + operational bounds for the
+	// dormancy-based resurfacing strategy (BUG-021-007). Nil until wired; a
+	// nil config disables the dormancy strategy (no hardcoded dormancy /
+	// relevance threshold fallback — the "worth resurfacing?" judgment is the
+	// LLM's). Serendipity (random discovery) is unaffected.
+	resurface *ResurfaceConfig
 }
 
 // NewEngine creates a new intelligence engine.
@@ -101,6 +108,14 @@ func NewEngine(pool *pgxpool.Pool, nats *smacknats.Client) *Engine {
 // alert production disabled.
 func (e *Engine) SetCoolingConfig(c *CoolingConfig) {
 	e.cooling = c
+}
+
+// SetResurfaceConfig injects the LLM-driven resurfacing evaluator and its
+// operational bounds for the dormancy strategy. Passing nil (or a config with
+// a nil Evaluator) leaves the dormancy strategy disabled (no hardcoded
+// dormancy/relevance threshold fallback); serendipity is unaffected.
+func (e *Engine) SetResurfaceConfig(c *ResurfaceConfig) {
+	e.resurface = c
 }
 
 // SetAlertTimingConfig injects the LLM-driven alert-timing evaluator and its
