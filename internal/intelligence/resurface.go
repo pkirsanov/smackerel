@@ -34,38 +34,53 @@ func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate
 		limit = 5
 	}
 
-	// Strategy 1: High-value dormant artifacts (not accessed in 30+ days, high relevance)
-	rows, err := e.Pool.Query(ctx, `
-		SELECT id, title, relevance_score,
-		       COALESCE(last_accessed, created_at) as last_access,
-		       EXTRACT(DAY FROM NOW() - COALESCE(last_accessed, created_at))::int as days_dormant
-		FROM artifacts
-		WHERE COALESCE(last_accessed, created_at) < NOW() - INTERVAL '30 days'
-		AND relevance_score > 0.3
-		ORDER BY relevance_score DESC, last_accessed ASC
-		LIMIT $1
-	`, limit)
-	if err != nil {
-		return nil, fmt.Errorf("query dormant artifacts: %w", err)
-	}
-	defer rows.Close()
-
+	// Strategy 1: LLM-judged dormant artifacts (BUG-021-007). The Go core
+	// retrieves dormant CANDIDATES and their signals — within an OPERATIONAL
+	// dormancy-retrieval floor (exclude freshly-accessed items) and a cap — and
+	// the `resurface_evaluate` scenario decides, per candidate, whether the
+	// artifact is genuinely worth resurfacing. There is NO hardcoded dormancy /
+	// relevance threshold; when the evaluator is not wired, the dormancy
+	// strategy is skipped (serendipity still fills the digest).
 	var candidates []ResurfaceCandidate
-	for rows.Next() {
-		var c ResurfaceCandidate
-		var daysDormant int
-		if err := rows.Scan(&c.ArtifactID, &c.Title, &c.Score, &c.LastAccessed, &daysDormant); err != nil {
-			slog.Warn("resurface scan failed", "error", err)
-			continue
+	if e.resurface != nil && e.resurface.Evaluator != nil {
+		dormant, err := e.gatherResurfaceCandidates(ctx)
+		if err != nil {
+			slog.Warn("resurface candidate retrieval failed", "error", err)
+		} else {
+			for _, sig := range dormant {
+				if len(candidates) >= limit {
+					break
+				}
+				if ctx.Err() != nil {
+					break
+				}
+				decision, derr := e.resurface.Evaluator.EvaluateResurface(ctx, sig)
+				if derr != nil {
+					slog.Warn("resurface evaluation failed", "artifact", sig.ArtifactID, "error", derr)
+					continue
+				}
+				if !resurfaceShouldSurface(decision, e.resurface.ConfidenceFloor) {
+					continue
+				}
+				reason := decision.Reason
+				if reason == "" {
+					reason = fmt.Sprintf("A valuable item you haven't seen in %d days.", sig.DaysDormant)
+				}
+				candidates = append(candidates, ResurfaceCandidate{
+					ArtifactID: sig.ArtifactID,
+					Title:      sig.Title,
+					Score:      sig.Relevance,
+					Reason:     reason,
+				})
+			}
 		}
-		c.Reason = fmt.Sprintf("High-value artifact dormant for %d days", daysDormant)
-		candidates = append(candidates, c)
-	}
-	if err := rows.Err(); err != nil {
-		return candidates, fmt.Errorf("resurface row iteration: %w", err)
+	} else {
+		slog.Warn("resurface dormancy strategy skipped: LLM evaluator not wired (no hardcoded fallback); serendipity only")
 	}
 
-	// Strategy 2: Serendipity — random artifact from underexplored topics
+	// Strategy 2: Serendipity — random artifact from underexplored topics.
+	// This is intentionally non-deterministic rediscovery (not a worthiness
+	// threshold), so it is NOT LLM-judged and is unaffected by BUG-021-007.
 	if len(candidates) < limit {
 		serendipity, err := e.serendipityPick(ctx, limit-len(candidates))
 		if err != nil {
@@ -113,6 +128,45 @@ func (e *Engine) MarkResurfaced(ctx context.Context, artifactIDs []string) error
 		return fmt.Errorf("batch update resurfaced artifacts: %w", err)
 	}
 	return nil
+}
+
+// gatherResurfaceCandidates retrieves dormant artifacts and their signals for
+// LLM resurfacing-worthiness judgment (BUG-021-007). The only numbers it
+// applies are OPERATIONAL: $1 = the dormancy-retrieval floor in days (exclude
+// freshly-accessed items so the LLM judges genuinely dormant ones) and $2 = the
+// per-run candidate cap (throughput). It applies NO business threshold for
+// "worth resurfacing" — that judgment is the LLM's. Items are ordered
+// most-dormant-first so the cap keeps the highest-signal candidates; unscored
+// relevance is treated as 0.
+func (e *Engine) gatherResurfaceCandidates(ctx context.Context) ([]ResurfaceSignals, error) {
+	rows, err := e.Pool.Query(ctx, `
+		SELECT id, title,
+		       COALESCE(relevance_score, 0) AS relevance_score,
+		       EXTRACT(DAY FROM NOW() - COALESCE(last_accessed, created_at))::int AS days_dormant,
+		       COALESCE(access_count, 0) AS access_count
+		FROM artifacts
+		WHERE COALESCE(last_accessed, created_at) < NOW() - make_interval(days => $1)
+		ORDER BY COALESCE(last_accessed, created_at) ASC, relevance_score DESC
+		LIMIT $2
+	`, e.resurface.MinDormancyDays, e.resurface.MaxCandidates)
+	if err != nil {
+		return nil, fmt.Errorf("query dormant artifacts: %w", err)
+	}
+	defer rows.Close()
+
+	var out []ResurfaceSignals
+	for rows.Next() {
+		var s ResurfaceSignals
+		if err := rows.Scan(&s.ArtifactID, &s.Title, &s.Relevance, &s.DaysDormant, &s.AccessCount); err != nil {
+			slog.Warn("resurface candidate scan failed", "error", err)
+			continue
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return out, fmt.Errorf("resurface candidate iteration: %w", err)
+	}
+	return out, nil
 }
 
 // serendipityPick selects random artifacts from underexplored topics.

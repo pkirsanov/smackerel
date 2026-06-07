@@ -196,6 +196,12 @@ func run() error {
 	// producers (replaces hardcoded N-day windows). Nil bridge ⇒ disabled.
 	wireAlertTimingEvaluator(agentBridge, svc.intEngine)
 
+	// Spec 021 BUG-021-007 — wire the LLM-driven resurfacing-worthiness
+	// evaluator into the intelligence engine for the dormancy strategy
+	// (replaces hardcoded 30-day/0.3-relevance thresholds). Nil bridge ⇒
+	// dormancy resurfacing disabled (serendipity unaffected).
+	wireResurfaceEvaluator(agentBridge, svc.intEngine)
+
 	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
 	// run in webhook mode, register the POST handler on the existing
 	// chi router OUTSIDE bearer-auth (Telegram does not send our
