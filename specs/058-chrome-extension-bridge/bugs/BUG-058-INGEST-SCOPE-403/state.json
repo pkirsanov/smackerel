@@ -1,0 +1,155 @@
+{
+  "version": 3,
+  "specId": "058-chrome-extension-bridge",
+  "bugId": "BUG-058-INGEST-SCOPE-403",
+  "featureDir": "specs/058-chrome-extension-bridge/bugs/BUG-058-INGEST-SCOPE-403",
+  "featureName": "BUG-058-INGEST-SCOPE-403: extension ingest scope gate split into two scopes 403s every real per-user token",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "high",
+  "reportedAt": "2026-06-07T00:15:00Z",
+  "reporter": "stochastic-quality-sweep round 16 (harden, parent-expanded)",
+  "certifiedAt": "2026-06-07T01:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T01:00:00Z",
+  "lastUpdatedAt": "2026-06-07T00:45:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:15:00Z",
+        "completedAt": "2026-06-07T00:18:00Z",
+        "outcome": "completed_owned",
+        "summary": "Sweep round 16 (harden lens) of spec 060/058 auth wiring found that internal/api/router.go wires POST /v1/connectors/extension/ingest with auth.RequireScope(\"extension:bookmarks\", \"extension:history\") \u2014 two separate scopes under AND-semantics with exact slices.Contains matching. getScopeClaim (internal/auth/verify.go) reads the PASETO scope claim as []string WITHOUT splitting on ',', so a real per-user token carries Scopes=[\"extension:bookmarks,history\"] (one element). Neither bare substring matches, so every legitimate per-user token is 403'd. Verified by reading the canonical contract (spec 060 spec.md L15/L70/L138; spec 058 design.md L295/L330/L498/L684) and by a red regression test through the real NewRouter."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:18:00Z",
+        "completedAt": "2026-06-07T00:20:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: restore the gate to the canonical single scope auth.RequireScope(\"extension:bookmarks,history\"). SCN-058-027..029 authored in scenario-manifest.json. No contract change (the contract already mandates the single scope); pure wiring correction."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:20:00Z",
+        "completedAt": "2026-06-07T00:24:00Z",
+        "outcome": "completed_owned",
+        "summary": "internal/api/router.go: changed RequireScope(\"extension:bookmarks\", \"extension:history\") to RequireScope(\"extension:bookmarks,history\"); corrected the adjacent comment to the single-scope contract + regression-test reference. No token-format change, no schema migration, no change to internal/auth/* or the extension handler."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:24:00Z",
+        "completedAt": "2026-06-07T00:32:00Z",
+        "outcome": "completed_owned",
+        "summary": "Scenario-first red->green in new internal/api/router_extension_scope_test.go: TestExtensionIngest_CanonicalScopeReachesHandler mints a real per-user PASETO (auth.IssueToken, Scopes=[\"extension:bookmarks,history\"]) and drives the real NewRouter \u2014 RED 403 before the fix, GREEN after. TestExtensionIngest_MissingScopeRejected (no-scope token -> 403) is the adversarial twin. Adversarial re-RED: reverting router.go to two scopes fails the canonical test (REVERT_RC=1)."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:32:00Z",
+        "completedAt": "2026-06-07T00:36:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full internal/api package green (ok 9.435s) with the two new tests; go build ./internal/api/... and go vet ./internal/api/ clean. No collateral regression."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:36:00Z",
+        "completedAt": "2026-06-07T00:37:00Z",
+        "outcome": "completed_owned",
+        "summary": "One-line wiring change + one focused regression file; no new abstractions, no dead code."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:37:00Z",
+        "completedAt": "2026-06-07T00:38:00Z",
+        "outcome": "completed_owned",
+        "summary": "Deterministic HTTP-layer test; no new perf hot path; no flakiness surface."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:38:00Z",
+        "completedAt": "2026-06-07T00:40:00Z",
+        "outcome": "completed_owned",
+        "summary": "The bug fails CLOSED (over-restrictive 403), not open \u2014 no unauthorized access was ever granted. The fix restores the intended single-scope gate; tokens lacking extension:bookmarks,history still 403 (adversarial twin proves enforcement). Shared-token/bootstrap bypass unchanged. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:40:00Z",
+        "completedAt": "2026-06-07T00:43:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; build/vet/test green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:43:00Z",
+        "completedAt": "2026-06-07T00:44:00Z",
+        "outcome": "completed_owned",
+        "summary": "Diff confined to internal/api/router.go (one wiring line + comment) and the new internal/api/router_extension_scope_test.go; no migration; no .github/bubbles changes; parent spec 058 (blocked) artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:44:00Z",
+        "completedAt": "2026-06-07T00:45:00Z",
+        "outcome": "completed_owned",
+        "summary": "router.go comment documents the single-scope contract + regression test. The parent spec 058 report.md L19 (documents the old two-scope form) is noted as a non-goal to refresh when spec 058 unblocks, to keep the blocked parent's evidence stable."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T01:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Restore single-scope extension ingest gate", "status": "Done", "completedDoD": 9, "totalDoD": 9, "completedAt": "2026-06-07T00:45:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane single-line wiring fix; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T00:45:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-INGEST-SCOPE-403",
+      "summary": "POST /v1/connectors/extension/ingest was gated with auth.RequireScope(\"extension:bookmarks\", \"extension:history\") \u2014 two separate scopes \u2014 while the canonical per-user token carries the single comma-joined scope \"extension:bookmarks,history\"; AND-semantics exact-match rejected every legitimate token 403. Shipped undetected because dev/test shared-token + bootstrap sessions bypass the scope gate.",
+      "resolution": "Restored the gate to the single canonical scope auth.RequireScope(\"extension:bookmarks,history\") in internal/api/router.go (matches spec 060 spec.md L15/L138 + spec 058 design.md L295/L684). Added internal/api/router_extension_scope_test.go: TestExtensionIngest_CanonicalScopeReachesHandler (red->green through the real NewRouter) + TestExtensionIngest_MissingScopeRejected (adversarial twin). Adversarial re-RED proves a revert re-fails.",
+      "evidence": "report.md Test Evidence (RED 403 body required:[\"extension:bookmarks\"] -> GREEN ok; re-RED REVERT_RC=1); internal/api/router.go RequireScope(\"extension:bookmarks,history\"); full internal/api ok 9.435s.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "sweep-2026-06-07-r16",
+    "round": 16,
+    "trigger": "harden",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}

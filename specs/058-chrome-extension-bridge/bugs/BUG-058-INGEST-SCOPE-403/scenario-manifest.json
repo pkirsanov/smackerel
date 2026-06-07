@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-058-INGEST-SCOPE-403",
+  "parentSpec": "058-chrome-extension-bridge",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real wiring fix; scenarios drive the single-scope-gate red\u2192green proof through the real router."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "go test re-runs captured in report.md '## Test Evidence': RED = TestExtensionIngest_CanonicalScopeReachesHandler FAILs (403, body required:[\"extension:bookmarks\"]) against the two-scope wiring; GREEN = PASS after the gate is restored to the single canonical scope; adversarial re-RED confirms a revert re-fails."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-058-027",
+      "scope": "Scope 1",
+      "title": "Canonical single-scope per-user token reaches the extension ingest handler",
+      "requiredTestType": "regression",
+      "testFiles": ["internal/api/router_extension_scope_test.go"],
+      "linkedTests": [
+        {"file": "internal/api/router_extension_scope_test.go", "function": "TestExtensionIngest_CanonicalScopeReachesHandler"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-restore-single-scope-extension-ingest-gate"
+      ],
+      "liveTestExpectation": "A per-user PASETO with Scopes=[\"extension:bookmarks,history\"] POSTing to /v1/connectors/extension/ingest through the real NewRouter reaches the ingest handler (not 403). Red before the fix, green after.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-028",
+      "scope": "Scope 1",
+      "title": "A per-user token without the canonical scope is still rejected 403",
+      "requiredTestType": "regression",
+      "testFiles": ["internal/api/router_extension_scope_test.go"],
+      "linkedTests": [
+        {"file": "internal/api/router_extension_scope_test.go", "function": "TestExtensionIngest_MissingScopeRejected"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-restore-single-scope-extension-ingest-gate"
+      ],
+      "liveTestExpectation": "A per-user PASETO with no scope claim (legacy spec-044 token) POSTing to /v1/connectors/extension/ingest is rejected 403 \u2014 the gate keeps enforcing after the fix.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-029",
+      "scope": "Scope 1",
+      "title": "Broader internal/api regression suite stays green with the fix and new tests",
+      "requiredTestType": "regression",
+      "testFiles": ["internal/api/router_extension_scope_test.go"],
+      "linkedTests": [
+        {"file": "internal/api/router_extension_scope_test.go", "function": "TestExtensionIngest_CanonicalScopeReachesHandler"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "The full internal/api package (router, auth middleware, handlers) runs green (ok 9.435s) with the two new regression tests included \u2014 no collateral regression from the wiring change.",
+      "changeType": "added"
+    }
+  ]
+}
