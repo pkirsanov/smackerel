@@ -1,0 +1,155 @@
+{
+  "version": 3,
+  "specId": "056-twitter-api-connector",
+  "bugId": "BUG-056-001-twitter-empty-page-cursor-advance",
+  "featureDir": "specs/056-twitter-api-connector/bugs/BUG-056-001-twitter-empty-page-cursor-advance",
+  "featureName": "BUG-056-001: empty non-terminal page advances the persisted pagination cursor past the last real data",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "low",
+  "reportedAt": "2026-06-07T00:30:00Z",
+  "reporter": "stochastic-quality-sweep round 18 (regression, parent-expanded)",
+  "certifiedAt": "2026-06-07T02:30:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T02:30:00Z",
+  "lastUpdatedAt": "2026-06-07T01:15:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:30:00Z",
+        "completedAt": "2026-06-07T00:33:00Z",
+        "outcome": "completed_owned",
+        "summary": "Sweep round 18 (regression lens) of spec 056 found fetchEndpointPaginated advances lastNonEmptyToken (the persisted resume cursor) on every page with a next_token, including empty pages. A sparse Twitter v2 result (empty data + next_token) pushes the cursor past the last page with data. Confirmed by a red regression test through the real fetchEndpointPaginated; existing tests only covered the empty TERMINAL page."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:33:00Z",
+        "completedAt": "2026-06-07T00:35:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: guard the cursor advance on len(body.Data) > 0. SCN-056-CURSOR-01/02 authored. No contract change (the variable name + ReplayPagination contract already require last-non-empty semantics)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:35:00Z",
+        "completedAt": "2026-06-07T00:38:00Z",
+        "outcome": "completed_owned",
+        "summary": "internal/connector/twitter/api.go: advance lastNonEmptyToken only when len(body.Data) > 0; the in-loop cursor still advances every page so pagination proceeds. Comment documents the contract + the regression test."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:38:00Z",
+        "completedAt": "2026-06-07T00:44:00Z",
+        "outcome": "completed_owned",
+        "summary": "Scenario-first red->green in api_test.go: TestTwitterAPI_EmptyNonTerminalPageDoesNotAdvanceCursor asserts finalCursor=PAGE2_TOKEN for page1(data)->page2(empty+next)->page3(empty terminal). RED (advanced to PAGE3_TOKEN) before the guard, GREEN after. Adversarial re-RED: reverting the guard re-fails (REVERT_RC=1)."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:44:00Z",
+        "completedAt": "2026-06-07T00:46:00Z",
+        "outcome": "completed_owned",
+        "summary": "TestTwitterAPI_ReplayPagination + TestTwitterAPI_BookmarksPaginatesAndPersistsCursor + restart/bounds tests preserved; full internal/connector/twitter package green (ok 4.052s)."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:46:00Z",
+        "completedAt": "2026-06-07T00:47:00Z",
+        "outcome": "completed_owned",
+        "summary": "One guarded assignment + one regression test; no new abstractions."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:47:00Z",
+        "completedAt": "2026-06-07T00:48:00Z",
+        "outcome": "completed_owned",
+        "summary": "Deterministic httptest fixture; no new perf hot path; loop remains bounded."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:48:00Z",
+        "completedAt": "2026-06-07T00:49:00Z",
+        "outcome": "completed_owned",
+        "summary": "No auth/secret surface; cursor tokens are opaque Twitter pagination tokens. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:49:00Z",
+        "completedAt": "2026-06-07T00:51:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; go build + vet + full package test green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:51:00Z",
+        "completedAt": "2026-06-07T00:52:00Z",
+        "outcome": "completed_owned",
+        "summary": "Diff confined to internal/connector/twitter/api.go + api_test.go; no migration; no .github/bubbles changes; parent spec 056 artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:52:00Z",
+        "completedAt": "2026-06-07T00:53:00Z",
+        "outcome": "completed_owned",
+        "summary": "api.go comment documents the last-non-empty cursor contract + the regression test."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T02:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Anchor the resume cursor to the last non-empty page", "status": "Done", "completedDoD": 8, "totalDoD": 8, "completedAt": "2026-06-07T00:53:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane single-line guard; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T00:53:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-056-CURSOR-ADVANCE",
+      "summary": "fetchEndpointPaginated advanced the persisted resume cursor (lastNonEmptyToken) on empty non-terminal pages, pushing the next sync tick's resume point past the last page with data.",
+      "resolution": "Advance lastNonEmptyToken only when len(body.Data) > 0; the in-loop cursor still advances every page. Added TestTwitterAPI_EmptyNonTerminalPageDoesNotAdvanceCursor (red->green) and preserved ReplayPagination/Bookmarks contracts.",
+      "evidence": "report.md Test Evidence (RED PAGE3_TOKEN -> GREEN; re-RED REVERT_RC=1); internal/connector/twitter/api.go guarded advance; full package ok 4.052s.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "sweep-2026-06-07-r18",
+    "round": 18,
+    "trigger": "regression",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
