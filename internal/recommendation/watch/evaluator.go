@@ -43,6 +43,12 @@ type Options struct {
 	Store    *recstore.Store
 	Registry ProviderRegistry
 	Clock    func() time.Time
+	// DefaultPriceDropThresholdPct is the OPERATIONAL fallback price-drop
+	// threshold (fraction in (0,1]) used ONLY when neither the trigger context
+	// nor the user's watch filter supplies `threshold_pct`. Sourced from
+	// fail-loud SST (RECOMMENDATIONS_WATCHES_DEFAULT_PRICE_DROP_THRESHOLD_PCT);
+	// there is NO hardcoded in-source default.
+	DefaultPriceDropThresholdPct float64
 }
 
 // Outcome is the structured per-evaluation result returned to the scheduler
@@ -77,9 +83,10 @@ type NotifyEnvelope struct {
 
 // Evaluator runs the watch decision pipeline.
 type Evaluator struct {
-	store    *recstore.Store
-	registry ProviderRegistry
-	clock    func() time.Time
+	store                        *recstore.Store
+	registry                     ProviderRegistry
+	clock                        func() time.Time
+	defaultPriceDropThresholdPct float64
 }
 
 // NewEvaluator returns a configured watch evaluator.
@@ -88,7 +95,12 @@ func NewEvaluator(opts Options) *Evaluator {
 	if clock == nil {
 		clock = func() time.Time { return time.Now().UTC() }
 	}
-	return &Evaluator{store: opts.Store, registry: opts.Registry, clock: clock}
+	return &Evaluator{
+		store:                        opts.Store,
+		registry:                     opts.Registry,
+		clock:                        clock,
+		defaultPriceDropThresholdPct: opts.DefaultPriceDropThresholdPct,
+	}
 }
 
 // EvaluateWatch runs the full watch evaluation for a single watch_id and
@@ -568,6 +580,21 @@ func (e *Evaluator) gatherProviderCandidates(ctx context.Context, watch recstore
 	return candidates, facts, statuses, nil, nil
 }
 
+// resolvePriceDropThreshold resolves the price-drop threshold fraction with a
+// strict precedence: the trigger context's `threshold_pct`, then the user's
+// watch filter `threshold_pct`, then the OPERATIONAL SST fallback
+// (defaultPct). There is NO hardcoded in-source default — defaultPct comes from
+// RECOMMENDATIONS_WATCHES_DEFAULT_PRICE_DROP_THRESHOLD_PCT (fail-loud SST).
+func resolvePriceDropThreshold(trigger TriggerContext, watch recstore.WatchRecord, defaultPct float64) float64 {
+	if pct := numericFromAny(trigger.Context["threshold_pct"]); pct != 0 {
+		return pct
+	}
+	if pct := numericFromAny(watch.Filters["threshold_pct"]); pct != 0 {
+		return pct
+	}
+	return defaultPct
+}
+
 func (e *Evaluator) gatherPriceDropCandidates(watch recstore.WatchRecord, trigger TriggerContext) (
 	[]recstore.CandidateInput,
 	[]recstore.ProviderFactInput,
@@ -580,13 +607,7 @@ func (e *Evaluator) gatherPriceDropCandidates(watch recstore.WatchRecord, trigge
 	//                "baseline_price", "current_price", "currency"}, ...],
 	//  "threshold_pct": 0.15}
 	products, _ := trigger.Context["products"].([]any)
-	thresholdPct := numericFromAny(trigger.Context["threshold_pct"])
-	if thresholdPct == 0 {
-		thresholdPct = numericFromAny(watch.Filters["threshold_pct"])
-	}
-	if thresholdPct == 0 {
-		thresholdPct = 0.10
-	}
+	thresholdPct := resolvePriceDropThreshold(trigger, watch, e.defaultPriceDropThresholdPct)
 	now := e.clock().UTC()
 	deliverable := map[string]bool{}
 	facts := []recstore.ProviderFactInput{}

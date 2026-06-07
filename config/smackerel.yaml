@@ -668,6 +668,11 @@ recommendations:
       start: "22:00"
       end: "07:00"
     poll_cron: "*/5 * * * *"
+    # OPERATIONAL fallback price-drop threshold (fraction in (0,1]) used ONLY
+    # when neither the trigger context nor the user's watch filter supplies
+    # threshold_pct. Fail-loud SST — no hardcoded in-source default. The user's
+    # per-watch threshold_pct and the trigger payload still take precedence.
+    default_price_drop_threshold_pct: 0.10
   retention:
     raw_provider_payload_seconds: 604800
     trace_retention_seconds: 2592000
