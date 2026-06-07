@@ -32,6 +32,11 @@ import (
 	// registers itself at package-init time so config/prompt_contracts/
 	// open_knowledge.yaml passes loader allow_tools validation here.
 	_ "github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
+	// Spec 021 BUG-021-010 — the digest package registers
+	// noop_hospitality_concern at init() so
+	// config/prompt_contracts/hospitality-concern-evaluate-v1.yaml passes
+	// loader allowed_tools (BS-010) validation here.
+	_ "github.com/smackerel/smackerel/internal/digest"
 	_ "github.com/smackerel/smackerel/internal/recommendation/tools"
 )
 

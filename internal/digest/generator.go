@@ -25,11 +25,27 @@ type Generator struct {
 	Registry         *connector.Registry
 	KnowledgeEnabled bool
 	ExpenseSection   *ExpenseDigestSection
+
+	// hospitalityEval + hospitalityBounds drive the LLM-judged guest/property
+	// concern alerts (BUG-021-010). Nil eval ⇒ no concern alerts (no hardcoded
+	// sentiment/rating/issue-count threshold fallback). Wired by cmd/core after
+	// the agent bridge is available.
+	hospitalityEval   HospitalityEvaluator
+	hospitalityBounds HospitalityBounds
 }
 
 // NewGenerator creates a new digest generator.
 func NewGenerator(pool *pgxpool.Pool, nats *smacknats.Client, registry *connector.Registry) *Generator {
 	return &Generator{Pool: pool, NATS: nats, Registry: registry}
+}
+
+// SetHospitalityEvaluator injects the LLM-driven hospitality concern evaluator
+// and its operational candidate-retrieval bounds. Passing a nil evaluator
+// leaves guest/property concern alerts disabled (no hardcoded threshold
+// fallback); the rest of the digest is unaffected.
+func (g *Generator) SetHospitalityEvaluator(eval HospitalityEvaluator, bounds HospitalityBounds) {
+	g.hospitalityEval = eval
+	g.hospitalityBounds = bounds
 }
 
 // DigestContext is the context payload sent to the ML sidecar for digest generation.
@@ -123,7 +139,7 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 
 	// Assemble hospitality context if GuestHost connector is active
 	if g.isGuestHostActive() {
-		hCtx, hErr := AssembleHospitalityContext(ctx, g.Pool)
+		hCtx, hErr := AssembleHospitalityContext(ctx, g.Pool, g.hospitalityEval, g.hospitalityBounds)
 		if hErr != nil {
 			slog.Warn("failed to assemble hospitality digest context", "error", hErr)
 		} else if !hCtx.IsEmpty() {

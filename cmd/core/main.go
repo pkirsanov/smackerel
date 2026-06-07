@@ -208,6 +208,12 @@ func run() error {
 	// expertise endpoint fails loud (no hardcoded tier fallback).
 	wireExpertiseEvaluator(agentBridge, svc.intEngine)
 
+	// Spec 021 BUG-021-010 — wire the LLM-driven hospitality concern evaluator
+	// into the digest generator (replaces hardcoded sentiment/rating/issue-count
+	// alert thresholds) on the reusable agent.InvokeJudgment foundation. Nil
+	// bridge ⇒ guest/property concern alerts disabled (no threshold fallback).
+	wireHospitalityEvaluator(agentBridge, svc.digestGen)
+
 	// Spec 021 BUG-021-009 — wire the operational bounds for LLM-driven seasonal
 	// pattern detection (replaces the hardcoded 0.7/1.5 volume-ratio threshold;
 	// significance is judged by the seasonal.analyze ML path). SST load failure

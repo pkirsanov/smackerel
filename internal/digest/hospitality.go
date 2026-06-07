@@ -78,7 +78,13 @@ func (h *HospitalityDigestContext) IsEmpty() bool {
 // AssembleHospitalityContext queries the database for hospitality-specific
 // digest data. The pool must be connected to the Smackerel database that
 // contains artifacts, guests, and properties tables.
-func AssembleHospitalityContext(ctx context.Context, pool *pgxpool.Pool) (*HospitalityDigestContext, error) {
+//
+// Guest/property concern alerts are LLM-judged (BUG-021-010): the eval gathers
+// candidate signals within the operational bounds and the
+// hospitality_concern_evaluate scenario decides which warrant a host alert.
+// A nil eval ⇒ no concern alerts (there is NO hardcoded sentiment/rating/
+// issue-count threshold fallback); the rest of the digest is unaffected.
+func AssembleHospitalityContext(ctx context.Context, pool *pgxpool.Pool, eval HospitalityEvaluator, bounds HospitalityBounds) (*HospitalityDigestContext, error) {
 	now := time.Now()
 	today := now.Format("2006-01-02")
 
@@ -112,25 +118,76 @@ func AssembleHospitalityContext(ctx context.Context, pool *pgxpool.Pool) (*Hospi
 		hCtx.Revenue = revenue
 	}
 
-	gAlerts, err := queryGuestAlerts(ctx, pool)
-	if err != nil {
-		slog.Warn("hospitality digest: failed to query guest alerts", "error", err)
-	} else {
-		hCtx.GuestAlerts = gAlerts
-	}
-
-	pAlerts, err := queryPropertyAlerts(ctx, pool)
-	if err != nil {
-		slog.Warn("hospitality digest: failed to query property alerts", "error", err)
-	} else {
-		hCtx.PropertyAlerts = pAlerts
-	}
+	// LLM-judged guest/property concern alerts (BUG-021-010). No hardcoded
+	// sentiment/rating/issue thresholds; a nil evaluator ⇒ no concern alerts.
+	gAlerts, pAlerts := assembleConcernAlerts(ctx, pool, eval, bounds)
+	hCtx.GuestAlerts = gAlerts
+	hCtx.PropertyAlerts = pAlerts
 
 	// Fill revenue check-in/out counts from arrivals/departures
 	hCtx.Revenue.TodayCheckIns = len(hCtx.TodayArrivals)
 	hCtx.Revenue.TodayCheckOuts = len(hCtx.TodayDepartures)
 
 	return hCtx, nil
+}
+
+// assembleConcernAlerts gathers guest/property candidate signals and asks the
+// LLM which warrant a host alert. Returns empty slices (no alerts) when the
+// evaluator is not wired or the judgment is unavailable — never a hardcoded
+// threshold fallback.
+func assembleConcernAlerts(ctx context.Context, pool *pgxpool.Pool, eval HospitalityEvaluator, bounds HospitalityBounds) ([]GuestAlert, []PropertyAlert) {
+	if eval == nil {
+		slog.Warn("hospitality digest: concern alerts skipped — LLM evaluator not wired (no hardcoded threshold fallback)")
+		return nil, nil
+	}
+
+	guests, err := gatherGuestSignals(ctx, pool, bounds.GuestCandidateLimit)
+	if err != nil {
+		slog.Warn("hospitality digest: failed to gather guest signals", "error", err)
+	}
+	properties, err := gatherPropertySignals(ctx, pool, bounds.PropertyCandidateLimit)
+	if err != nil {
+		slog.Warn("hospitality digest: failed to gather property signals", "error", err)
+	}
+	if len(guests) == 0 && len(properties) == 0 {
+		return nil, nil
+	}
+
+	decision, err := eval.EvaluateConcerns(ctx, guests, properties)
+	if err != nil {
+		slog.Warn("hospitality digest: concern evaluation failed", "error", err)
+		return nil, nil
+	}
+
+	var gAlerts []GuestAlert
+	for _, j := range decision.GuestAlerts {
+		if j.Ref < 0 || j.Ref >= len(guests) {
+			slog.Warn("hospitality digest: guest alert ref out of range", "ref", j.Ref, "guests", len(guests))
+			continue
+		}
+		g := guests[j.Ref]
+		gAlerts = append(gAlerts, GuestAlert{
+			GuestName:   g.Name,
+			GuestEmail:  g.Email,
+			AlertType:   j.AlertType,
+			Description: j.Description,
+		})
+	}
+
+	var pAlerts []PropertyAlert
+	for _, j := range decision.PropertyAlerts {
+		if j.Ref < 0 || j.Ref >= len(properties) {
+			slog.Warn("hospitality digest: property alert ref out of range", "ref", j.Ref, "properties", len(properties))
+			continue
+		}
+		p := properties[j.Ref]
+		pAlerts = append(pAlerts, PropertyAlert{
+			PropertyName: p.Name,
+			AlertType:    j.AlertType,
+			Description:  j.Description,
+		})
+	}
+	return gAlerts, pAlerts
 }
 
 // queryGuestStaysByDate returns bookings matching a given date field (checkin_date or checkout_date).
@@ -282,81 +339,68 @@ func queryRevenueSnapshot(ctx context.Context, pool *pgxpool.Pool, now time.Time
 	return snap, nil
 }
 
-// queryGuestAlerts returns alerts for repeat guests and low-sentiment guests.
-func queryGuestAlerts(ctx context.Context, pool *pgxpool.Pool) ([]GuestAlert, error) {
+// gatherGuestSignals retrieves candidate guests and their deterministic signals
+// for LLM concern judgment (BUG-021-010). Candidate selection is OPERATIONAL
+// (guests we have a sentiment score for, or with stay history) — NOT the
+// concern decision, which the LLM makes. No sentiment threshold is applied here.
+func gatherGuestSignals(ctx context.Context, pool *pgxpool.Pool, limit int) ([]GuestSignal, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT name, email,
-			CASE
-				WHEN total_stays > 1 THEN 'repeat_guest'
-				WHEN sentiment_score IS NOT NULL AND sentiment_score < 0.3 THEN 'low_sentiment'
-				ELSE 'unknown'
-			END AS alert_type,
-			CASE
-				WHEN total_stays > 1 THEN FORMAT('Repeat guest with %s stays, total spend $%s', total_stays, ROUND(total_spend::numeric, 2))
-				WHEN sentiment_score IS NOT NULL AND sentiment_score < 0.3 THEN FORMAT('Low sentiment score: %s', ROUND(sentiment_score::numeric, 2))
-				ELSE ''
-			END AS description
+		SELECT name, email, total_stays, sentiment_score, total_spend
 		FROM guests
-		WHERE (total_stays > 1) OR (sentiment_score IS NOT NULL AND sentiment_score < 0.3)
-		ORDER BY total_stays DESC, sentiment_score ASC
-		LIMIT 20
-	`)
+		WHERE sentiment_score IS NOT NULL OR total_stays > 1
+		ORDER BY total_stays DESC, sentiment_score ASC NULLS LAST
+		LIMIT $1
+	`, limit)
 	if err != nil {
-		return nil, fmt.Errorf("query guest alerts: %w", err)
+		return nil, fmt.Errorf("gather guest signals: %w", err)
 	}
 	defer rows.Close()
 
-	var alerts []GuestAlert
+	var signals []GuestSignal
 	for rows.Next() {
-		var a GuestAlert
-		if err := rows.Scan(&a.GuestName, &a.GuestEmail, &a.AlertType, &a.Description); err != nil {
-			slog.Warn("guest alerts scan failed", "error", err)
+		var s GuestSignal
+		if err := rows.Scan(&s.Name, &s.Email, &s.TotalStays, &s.Sentiment, &s.TotalSpend); err != nil {
+			slog.Warn("guest signal scan failed", "error", err)
 			continue
 		}
-		alerts = append(alerts, a)
+		s.Ref = len(signals)
+		signals = append(signals, s)
 	}
 	if err := rows.Err(); err != nil {
-		return alerts, err
+		return signals, err
 	}
-	return alerts, nil
+	return signals, nil
 }
 
-// queryPropertyAlerts returns alerts for properties with high issue counts or
-// low average ratings.
-func queryPropertyAlerts(ctx context.Context, pool *pgxpool.Pool) ([]PropertyAlert, error) {
+// gatherPropertySignals retrieves candidate properties and their deterministic
+// signals for LLM concern judgment (BUG-021-010). Candidate selection is
+// OPERATIONAL (properties with a rating or any open issues) — NOT the concern
+// decision. No rating/issue threshold is applied here.
+func gatherPropertySignals(ctx context.Context, pool *pgxpool.Pool, limit int) ([]PropertySignal, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT name,
-			CASE
-				WHEN issue_count >= 5 THEN 'high_issue_count'
-				WHEN avg_rating IS NOT NULL AND avg_rating < 3.5 THEN 'low_rating'
-				ELSE 'unknown'
-			END AS alert_type,
-			CASE
-				WHEN issue_count >= 5 THEN FORMAT('Property has %s open issues', issue_count)
-				WHEN avg_rating IS NOT NULL AND avg_rating < 3.5 THEN FORMAT('Average rating: %s', ROUND(avg_rating::numeric, 1))
-				ELSE ''
-			END AS description
+		SELECT name, issue_count, avg_rating
 		FROM properties
-		WHERE (issue_count >= 5) OR (avg_rating IS NOT NULL AND avg_rating < 3.5)
-		ORDER BY issue_count DESC, avg_rating ASC
-		LIMIT 20
-	`)
+		WHERE avg_rating IS NOT NULL OR issue_count > 0
+		ORDER BY issue_count DESC, avg_rating ASC NULLS LAST
+		LIMIT $1
+	`, limit)
 	if err != nil {
-		return nil, fmt.Errorf("query property alerts: %w", err)
+		return nil, fmt.Errorf("gather property signals: %w", err)
 	}
 	defer rows.Close()
 
-	var alerts []PropertyAlert
+	var signals []PropertySignal
 	for rows.Next() {
-		var a PropertyAlert
-		if err := rows.Scan(&a.PropertyName, &a.AlertType, &a.Description); err != nil {
-			slog.Warn("property alerts scan failed", "error", err)
+		var s PropertySignal
+		if err := rows.Scan(&s.Name, &s.IssueCount, &s.AvgRating); err != nil {
+			slog.Warn("property signal scan failed", "error", err)
 			continue
 		}
-		alerts = append(alerts, a)
+		s.Ref = len(signals)
+		signals = append(signals, s)
 	}
 	if err := rows.Err(); err != nil {
-		return alerts, err
+		return signals, err
 	}
-	return alerts, nil
+	return signals, nil
 }
