@@ -26,6 +26,19 @@ const TRANSPORT_HINT_WEB = "web";
 // the same request body until the user edits the composer.
 let pendingTurn = null;
 
+// Guards against overlapping turns: only ONE turn may be in flight at a
+// time so a rapid double-submit (Send button or Enter key) cannot fire
+// two turns with different transport_message_ids — the SCN-073
+// idempotency contract is "one logical turn per user action". Also
+// drives the composer busy state (disabled Send + aria-busy).
+let inFlight = false;
+
+// Client-side request timeout (ms). A hung or unreachable assistant
+// endpoint must not leave the composer frozen with no feedback; the
+// fetch is aborted after this budget and surfaced as a retryable error.
+// This is a client UX constant, not environment-specific runtime config.
+const TURN_TIMEOUT_MS = 30000;
+
 function el(id) {
   const node = document.getElementById(id);
   if (!node) {
@@ -198,31 +211,67 @@ function showLocalError(message) {
 async function postTurn(requestBody) {
   // credentials: 'same-origin' carries the spec 070 HttpOnly session
   // cookie. The bearer token is never read or sent by this client.
-  const resp = await fetch(ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  });
-  const text = await resp.text();
-  if (!resp.ok) {
-    throw new Error("HTTP " + resp.status + ": " + text.slice(0, 256));
-  }
-  let parsed;
+  // An AbortController bounds the request (TURN_TIMEOUT_MS) so a hung or
+  // unreachable endpoint cannot leave the turn pending forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TURN_TIMEOUT_MS);
   try {
-    parsed = JSON.parse(text);
+    const resp = await fetch(ENDPOINT, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+    const text = await resp.text();
+    if (!resp.ok) {
+      throw new Error("HTTP " + resp.status + ": " + text.slice(0, 256));
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      throw new Error("response is not valid JSON: " + err.message);
+    }
+    validateTurnResponse(parsed);
+    return parsed;
   } catch (err) {
-    throw new Error("response is not valid JSON: " + err.message);
+    if (err && err.name === "AbortError") {
+      throw new Error("request timed out after " + Math.round(TURN_TIMEOUT_MS / 1000) + "s");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  validateTurnResponse(parsed);
-  return parsed;
+}
+
+// setComposerBusy toggles the in-flight UI affordance: the Send button is
+// disabled and aria-busy is announced while a turn is in flight, then
+// restored when it settles. This is the visible half of the inFlight
+// guard (the correctness half is the early-return in dispatchTurn).
+function setComposerBusy(busy) {
+  const sendBtn = el("assistant-send-btn");
+  sendBtn.disabled = busy;
+  if (busy) {
+    sendBtn.setAttribute("aria-busy", "true");
+  } else {
+    sendBtn.removeAttribute("aria-busy");
+  }
 }
 
 async function dispatchTurn(requestBody) {
   validateTurnRequest(requestBody);
+  // Single-flight: ignore a new dispatch while one is already running so
+  // overlapping turns with distinct transport_message_ids cannot be
+  // created (SCN-073 idempotency: one logical turn per user action).
+  if (inFlight) {
+    return;
+  }
+  inFlight = true;
+  setComposerBusy(true);
   pendingTurn = requestBody;
   try {
     const response = await postTurn(requestBody);
@@ -236,6 +285,9 @@ async function dispatchTurn(requestBody) {
     showLocalError("Network or server error. You can retry the same turn.");
     // pendingTurn intentionally retained for the retry button.
     throw err;
+  } finally {
+    inFlight = false;
+    setComposerBusy(false);
   }
 }
 
@@ -329,6 +381,10 @@ function wireEvents() {
 
   form.addEventListener("submit", (ev) => {
     ev.preventDefault();
+    // A turn is already in flight — ignore the submit without clearing the
+    // composer, so the user does not silently lose their typed text and no
+    // overlapping turn is dispatched.
+    if (inFlight) return;
     const text = String(input.value || "").trim();
     if (text.length === 0) return;
     input.value = "";
