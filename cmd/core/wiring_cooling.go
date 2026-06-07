@@ -121,3 +121,41 @@ func wireResurfaceEvaluator(bridge *agent.Bridge, engine *intelligence.Engine) {
 		"max_candidates", resurfaceCfg.MaxCandidates,
 		"confidence_floor", resurfaceCfg.ConfidenceFloor)
 }
+
+// wireExpertiseEvaluator injects the LLM-driven expertise classifier into the
+// intelligence engine for the expertise map (BUG-021-008). Nil bridge ⇒ no-op
+// (the expertise endpoint fails loud when invoked; there is no hardcoded
+// weighted-score or tier/velocity threshold fallback).
+func wireExpertiseEvaluator(bridge *agent.Bridge, engine *intelligence.Engine) {
+	if engine == nil {
+		return
+	}
+	if bridge == nil {
+		slog.Warn("expertise evaluator skipped: agent bridge is nil; expertise map disabled",
+			"spec", "021", "bug", "BUG-021-008")
+		return
+	}
+
+	expertiseCfg, err := config.LoadExpertiseConfig()
+	if err != nil {
+		slog.Error("expertise evaluator disabled: SST load failed",
+			"spec", "021", "bug", "BUG-021-008", "error", err.Error())
+		return
+	}
+
+	engine.SetExpertiseConfig(&intelligence.ExpertiseConfig{
+		Evaluator:            &intelligence.BridgeExpertiseEvaluator{Runner: bridge},
+		MaxTopics:            expertiseCfg.MaxTopics,
+		MaturityDays:         expertiseCfg.MaturityDays,
+		BlindSpotMinMentions: expertiseCfg.BlindSpotMinMentions,
+		BlindSpotMaxCaptures: expertiseCfg.BlindSpotMaxCaptures,
+		BlindSpotLimit:       expertiseCfg.BlindSpotLimit,
+	})
+	slog.Info("expertise evaluator wired (LLM-driven)",
+		"spec", "021", "bug", "BUG-021-008",
+		"max_topics", expertiseCfg.MaxTopics,
+		"maturity_days", expertiseCfg.MaturityDays,
+		"blind_spot_min_mentions", expertiseCfg.BlindSpotMinMentions,
+		"blind_spot_max_captures", expertiseCfg.BlindSpotMaxCaptures,
+		"blind_spot_limit", expertiseCfg.BlindSpotLimit)
+}

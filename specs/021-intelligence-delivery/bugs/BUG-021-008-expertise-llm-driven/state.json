@@ -1,0 +1,156 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-008-expertise-llm-driven",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-008-expertise-llm-driven",
+  "featureName": "BUG-021-008: expertise tier & growth must be LLM-driven, not hardcoded score/threshold heuristics",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "continues": "BUG-021-007-resurface-llm-driven",
+  "reportedAt": "2026-06-07T03:15:00Z",
+  "reporter": "owner directive (no const limits; LLM decides per situation)",
+  "certifiedAt": "2026-06-07T07:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T07:00:00Z",
+  "lastUpdatedAt": "2026-06-07T03:45:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:15:00Z",
+        "completedAt": "2026-06-07T03:20:00Z",
+        "outcome": "completed_owned",
+        "summary": "After BUG-021-007 made resurfacing LLM-driven, an audit of sibling hardcoded business thresholds found the expertise map (GET /api/expertise, R-501) still decided tier + growth with hardcoded heuristics: computeDepthScore (a fixed weighted sum 0.3/15/20/0.1/10), assignTier (numeric boundaries >100/>50/>20/>5 captures & >90/>60/>30/>10 score), computeTrajectory (velocity cutoffs 1.5/0.7/0.3). Lock tests cemented every magic number. These answer the same domain question docs/smackerel.md §3.6 requires to be LLM-driven (genuine expertise weighs volume, diversity, depth, revisitation and interconnection situationally — 30 rich captures can outrank 200 shallow ones)."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:20:00Z",
+        "completedAt": "2026-06-07T03:24:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope reusing the BUG-021-007 pattern in a BATCH variant: one expertise_classify scenario (array input/output) + BridgeExpertiseEvaluator (mockable); GenerateExpertiseMap gathers per-topic signals and makes ONE batched call (the endpoint is on-demand over up to 100 topics, so a per-topic loop would mean up to 100 sequential LLM calls). Operational bounds (max_topics, maturity_days, blind_spot_*) to fail-loud SST. SCN-021-EXPERTISE-01..03 authored. The superseded spec-006 lock tests are removed and recorded in bug.md (spec 006 not edited)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:24:00Z",
+        "completedAt": "2026-06-07T03:34:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created config/prompt_contracts/expertise-classify-v1.yaml. internal/intelligence/expertise_eval.go: ExpertiseSignals (TopicID json:\"-\", Ref correlation), ExpertiseClassification, ExpertiseEvaluator + BridgeExpertiseEvaluator, ExpertiseConfig, expertiseRequest/expertiseResponse envelopes, noop_expertise_classify init(). Engine gained an expertise field + SetExpertiseConfig. Reworked GenerateExpertiseMap: fail loud without evaluator, gather signals capped by max_topics (LIMIT $1), maturity vs maturity_days, ONE ClassifyExpertise call, map back by ref. Removed computeDepthScore, assignTier, computeTrajectory and the DepthScore field. detectBlindSpots parameterized by SST bounds. SST: intelligence.expertise.* (smackerel.yaml + config.sh + internal/config/expertise.go). Wiring: wireExpertiseEvaluator + main.go call."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:34:00Z",
+        "completedAt": "2026-06-07T03:38:00Z",
+        "outcome": "completed_owned",
+        "summary": "expertise_eval_test.go: scripted runner proves batch parse, scenario routing, public-signal forwarding, internal-TopicID non-leak, ref correlation, empty-input short-circuit, all error paths. config/expertise_test.go: SST populate + fail-loud + range. Removed the computeDepthScore/assignTier/computeTrajectory lock tests. scenario-lint registers expertise_classify (13 registered, up from 12); go build ./... + vet green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:38:00Z",
+        "completedAt": "2026-06-07T03:40:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full intelligence + config + cmd/core + scenario-lint + api + agent packages green. ./smackerel.sh config generate resolves the new keys into dev.env. internal/api (which exercises the expertise HTTP handler) green. Remaining expertise_test.go tests (constants, struct, nil-pool, immature, shift-direction) unaffected."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:40:00Z",
+        "completedAt": "2026-06-07T03:41:00Z",
+        "outcome": "completed_owned",
+        "summary": "One batched scenario + one evaluator; the removal of computeDepthScore/assignTier/computeTrajectory net-deletes 246 lines (functions + lock tests). The DepthScore intermediate field is gone (no consumer; confirmed repo-wide)."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:41:00Z",
+        "completedAt": "2026-06-07T03:42:00Z",
+        "outcome": "completed_owned",
+        "summary": "GenerateExpertiseMap collects all signals (closing the row cursor) before the single LLM call; out-of-range refs from the model are guarded and skipped with a warning; the empty-topic path short-circuits without an LLM call. Nil-evaluator path fails loud rather than emitting bogus tiers."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:42:00Z",
+        "completedAt": "2026-06-07T03:43:00Z",
+        "outcome": "completed_owned",
+        "summary": "ExpertiseSignals.TopicID is json:\"-\" and proven (by test) not to enter the LLM envelope; only ref + topic_name + the numeric signals are sent. The topic-dimension and blind-spot queries are parameterized (no SQL injection; LIMIT $1/$3 + bounds $1/$2). No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:43:00Z",
+        "completedAt": "2026-06-07T03:43:30Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; config generate + build + vet + affected packages green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:43:30Z",
+        "completedAt": "2026-06-07T03:44:00Z",
+        "outcome": "completed_owned",
+        "summary": "No hardcoded depth-score formula or tier/velocity threshold remains (grep of computeDepthScore|assignTier|computeTrajectory|LIMIT 100|>= 90 in expertise.go = 0). No migration; generated env gitignored; no .github/bubbles changes; parent spec 021 + spec 006 planning artifacts untouched (spec-006 lock-test supersession recorded in bug.md)."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:44:00Z",
+        "completedAt": "2026-06-07T03:45:00Z",
+        "outcome": "completed_owned",
+        "summary": "Scenario YAML, expertise_eval.go, expertise.go, smackerel.yaml, and wiring document the LLM-driven batch judgment and the operational/business boundary. The packet records continuation of BUG-021-007, the batch-vs-per-candidate rationale, and the spec-006 supersession."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T07:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "LLM-driven expertise tier & growth classification", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T03:45:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane LLM-driven rework; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T03:45:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-021-EXPERTISE-HARDCODED",
+      "summary": "GenerateExpertiseMap decided tier + growth with a hardcoded weighted score (computeDepthScore) and numeric tier/velocity boundaries (assignTier, computeTrajectory), with lock tests cementing the magic numbers — contradicting docs/smackerel.md §3.6 (domain reasoning must be LLM-driven) and the owner directive.",
+      "resolution": "Moved the tier + growth judgment to the expertise_classify batch LLM scenario via BridgeExpertiseEvaluator; GenerateExpertiseMap gathers signals within an operational topic cap only and fails loud without an evaluator; operational bounds moved to fail-loud SST. The magic-number functions, the DepthScore field, and their lock tests are removed.",
+      "evidence": "report.md Test/Validation/Audit Evidence; internal/intelligence/expertise_eval.go; config/prompt_contracts/expertise-classify-v1.yaml; grep of computeDepthScore|assignTier|computeTrajectory in expertise.go = 0.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-no-const-limits",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}

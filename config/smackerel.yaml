@@ -285,6 +285,22 @@ intelligence:
     max_candidates: 25 # REQUIRED: positive int; per-run evaluation cap
     confidence_floor: 0.7 # REQUIRED: float in [0,1]; below this the resurfacing is withheld
 
+  # Spec 021 BUG-021-008 — expertise-map OPERATIONAL bounds.
+  # The "how expert is the user in this topic, and is it growing?" JUDGMENT is
+  # LLM-driven (the expertise_classify scenario), NOT a hardcoded weighted score
+  # or tier/velocity threshold. These are OPERATIONAL bounds only — fail-loud,
+  # operator-tunable:
+  #   - max_topics: per-request cap on topics retrieved and classified.
+  #   - maturity_days: data-sufficiency floor; the map is "mature" only past it.
+  #   - blind_spot_min_mentions / blind_spot_max_captures / blind_spot_limit:
+  #     gap-detection bounds for the "mentioned but under-captured" blind spots.
+  expertise:
+    max_topics: 100 # REQUIRED: positive int; per-request topic cap
+    maturity_days: 90 # REQUIRED: positive int; data-sufficiency floor
+    blind_spot_min_mentions: 5 # REQUIRED: positive int; min mentions to flag a blind spot
+    blind_spot_max_captures: 5 # REQUIRED: positive int; capture ceiling for under-captured
+    blind_spot_limit: 10 # REQUIRED: positive int; max blind spots returned
+
 # Spec 058 Scope 1 — Chrome Extension Bridge ingest endpoint SST.
 # Every value flows through scripts/commands/config.sh into the
 # generated env file as EXTENSION_INGEST_*; no in-source defaults.

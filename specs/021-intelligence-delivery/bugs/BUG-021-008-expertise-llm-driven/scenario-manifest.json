@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-021-008-expertise-llm-driven",
+  "parentSpec": "021-intelligence-delivery",
+  "continues": "BUG-021-007-resurface-llm-driven",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real LLM-driven rework; scenarios drive the evaluator + SST-loader proofs."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the tier/growth decision now flows through the expertise_classify batch scenario; TestBridgeExpertiseEvaluator_* prove the LLM-driven path (batch parse, routing, public-signal forwarding, internal-TopicID non-leak, ref correlation, empty-input short-circuit, error paths) with a scripted bridge; the SST loader tests prove fail-loud operational bounds; the former magic-number lock tests are removed."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-EXPERTISE-01",
+      "scope": "Scope 1",
+      "title": "Expertise tier/growth judgment routes to the batched LLM scenario, parses the classifications, and never leaks internal ids",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/intelligence/expertise_eval_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/expertise_eval_test.go", "function": "TestBridgeExpertiseEvaluator_ParsesBatch"},
+        {"file": "internal/intelligence/expertise_eval_test.go", "function": "TestBridgeExpertiseEvaluator_ErrorPaths"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-llm-driven-expertise-tier--growth-classification"
+      ],
+      "liveTestExpectation": "ClassifyExpertise routes IntentEnvelope{ScenarioID: expertise_classify}, forwards {data_days, topics:[{ref,topic_name,capture_count,source_diversity,depth_ratio,engagement,connection_density,recent_captures_30d,avg_monthly_captures}]}, omits TopicID (json:\"-\"), parses {classifications:[{ref,tier,growth,confidence}]}, and errors on nil runner / nil result / non-OK / empty final / bad JSON.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-EXPERTISE-02",
+      "scope": "Scope 1",
+      "title": "Batch correlation contract: ref maps classifications to topics; empty input short-circuits",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/intelligence/expertise_eval_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/expertise_eval_test.go", "function": "TestBridgeExpertiseEvaluator_EmptyTopics"},
+        {"file": "internal/intelligence/expertise_eval_test.go", "function": "TestBridgeExpertiseEvaluator_ParsesBatch"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "Empty topic input returns (nil,nil) without invoking the runner; a populated batch echoes each input ref so the caller maps classifications to the right topic.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-EXPERTISE-03",
+      "scope": "Scope 1",
+      "title": "Operational expertise bounds are fail-loud SST config",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/config/expertise_test.go"],
+      "linkedTests": [
+        {"file": "internal/config/expertise_test.go", "function": "TestLoadExpertiseConfig_FailLoudOnMissing"},
+        {"file": "internal/config/expertise_test.go", "function": "TestLoadExpertiseConfig_RejectsOutOfRange"}
+      ],
+      "evidenceRefs": [
+        "report.md#validation-evidence"
+      ],
+      "liveTestExpectation": "Missing/empty INTELLIGENCE_EXPERTISE_* keys fail loud naming the var; out-of-range values (max_topics<=0, maturity_days<=0, blind_spot_* <=0) are rejected.",
+      "changeType": "added"
+    }
+  ]
+}

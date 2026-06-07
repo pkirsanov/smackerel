@@ -1,0 +1,169 @@
+id: expertise_classify
+version: "expertise-classify-v1"
+principleAlignment:
+- "Principle 1"
+- "Principle 8"
+type: "scenario"
+description: |
+  Spec 021 R-501 / BUG-021-008 — LLM-driven expertise-tier and growth-trajectory
+  classification.
+
+  Replaces the hardcoded expertise heuristics in
+  `internal/intelligence/expertise.go` (the `computeDepthScore` weighted formula,
+  the `assignTier` capture/score boundaries `>100/>50/>20/>5` & `>90/>60/>30/>10`,
+  and the `computeTrajectory` velocity cutoffs `1.5/0.7/0.3`) with a
+  per-situation LLM judgment over the whole topic set in ONE call.
+
+  This honors the product architecture (docs/smackerel.md §3.6): "how expert is
+  the user in this topic, and is the topic growing?" is domain reasoning that
+  depends on the situation and the relative shape of the user's whole graph. A
+  fixed weighted-sum and fixed numeric tier boundaries cannot capture that —
+  e.g. 30 deeply-connected, frequently-revisited captures from many sources can
+  represent more genuine expertise than 200 shallow ones.
+
+intent_examples:
+- "classify the user's expertise tier for each topic"
+- "assess how expert the user is across their topics and whether each is growing"
+- "map topic expertise and growth trajectory from capture signals"
+
+system_prompt: |
+  You are Smackerel's expertise-mapping judge.
+
+  The user maintains a personal knowledge graph. You are given a BATCH of the
+  user's topics with per-topic signals, plus how many days of data exist. For
+  EACH topic you assign:
+    - tier: one of "novice" | "foundation" | "intermediate" | "deep" | "expert"
+    - growth: one of "accelerating" | "steady" | "decelerating" | "stopped"
+
+  Each topic carries:
+    - ref: an integer correlation key — echo it back UNCHANGED so the caller can
+      map your classification to the right topic.
+    - topic_name: the topic's label.
+    - capture_count: total artifacts captured in this topic.
+    - source_diversity: number of distinct sources the captures came from.
+    - depth_ratio: fraction of captures that received full (deep) processing,
+      in [0,1].
+    - engagement: total times the user revisited/accessed this topic's captures.
+    - connection_density: knowledge-graph edges per capture (how interlinked).
+    - recent_captures_30d: captures in the last 30 days.
+    - avg_monthly_captures: average captures per active month.
+
+  JUDGE PER SITUATION — there are NO fixed thresholds or weighted formulas:
+    - tier: weigh volume, source diversity, processing depth, revisitation, and
+      interconnection TOGETHER and RELATIVE to the rest of this user's topics.
+      Genuine expertise is deep, diverse, revisited and interconnected — not
+      merely high-count. A small but rich topic can outrank a large shallow one.
+    - growth: compare recent_captures_30d against avg_monthly_captures and the
+      overall data window. Accelerating = clearly building momentum; steady =
+      holding; decelerating = clearly slowing; stopped = effectively inactive.
+      When avg_monthly_captures is ~0 but there are recent captures, that is
+      accelerating; when there is no recent activity, that is stopped.
+
+  RULES (mandatory):
+    1. Output MUST validate against the declared output_schema and MUST contain
+       exactly one classification per input topic, each echoing the input `ref`.
+    2. `tier` and `growth` MUST be drawn from the declared enums.
+    3. `confidence` is your calibrated probability in [0,1] for each topic's
+       classification; lower it when signals are sparse or ambiguous. It is
+       recorded for transparency (Product Principle 8), not used to fabricate a
+       tier.
+    4. Do NOT call any tool — finalise on the first turn. The
+       `noop_expertise_classify` tool is registered only to satisfy the loader's
+       allowed_tools schema; you MUST NOT invoke it.
+
+allowed_tools:
+- name: noop_expertise_classify
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ data_days, topics ]
+  additionalProperties: false
+  properties:
+    data_days:
+      type: integer
+      minimum: 0
+    topics:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required:
+        - ref
+        - topic_name
+        - capture_count
+        - source_diversity
+        - depth_ratio
+        - engagement
+        - connection_density
+        - recent_captures_30d
+        - avg_monthly_captures
+        additionalProperties: false
+        properties:
+          ref:
+            type: integer
+            minimum: 0
+          topic_name:
+            type: string
+            minLength: 1
+            maxLength: 200
+          capture_count:
+            type: integer
+            minimum: 0
+          source_diversity:
+            type: integer
+            minimum: 0
+          depth_ratio:
+            type: number
+            minimum: 0
+            maximum: 1
+          engagement:
+            type: integer
+            minimum: 0
+          connection_density:
+            type: number
+            minimum: 0
+          recent_captures_30d:
+            type: integer
+            minimum: 0
+          avg_monthly_captures:
+            type: number
+            minimum: 0
+
+output_schema:
+  type: object
+  required: [ classifications ]
+  additionalProperties: false
+  properties:
+    classifications:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        required: [ ref, tier, growth ]
+        additionalProperties: false
+        properties:
+          ref:
+            type: integer
+            minimum: 0
+          tier:
+            type: string
+            enum: [ "novice", "foundation", "intermediate", "deep", "expert" ]
+          growth:
+            type: string
+            enum: [ "accelerating", "steady", "decelerating", "stopped" ]
+          confidence:
+            type: number
+            minimum: 0
+            maximum: 1
+
+limits:
+  max_loop_iterations: 1
+  timeout_ms: 30000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 7500
+
+token_budget: 4000
+temperature: 0.0
+model_preference: "fast"
+side_effect_class: read

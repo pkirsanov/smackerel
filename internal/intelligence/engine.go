@@ -95,6 +95,13 @@ type Engine struct {
 	// relevance threshold fallback — the "worth resurfacing?" judgment is the
 	// LLM's). Serendipity (random discovery) is unaffected.
 	resurface *ResurfaceConfig
+
+	// expertise carries the LLM evaluator + operational bounds for the
+	// expertise map (BUG-021-008). Nil until wired; a nil config makes the
+	// expertise endpoint fail loud (no hardcoded weighted score or numeric
+	// tier/velocity threshold fallback — the tier/growth judgment is the
+	// LLM's).
+	expertise *ExpertiseConfig
 }
 
 // NewEngine creates a new intelligence engine.
@@ -116,6 +123,14 @@ func (e *Engine) SetCoolingConfig(c *CoolingConfig) {
 // dormancy/relevance threshold fallback); serendipity is unaffected.
 func (e *Engine) SetResurfaceConfig(c *ResurfaceConfig) {
 	e.resurface = c
+}
+
+// SetExpertiseConfig injects the LLM-driven expertise evaluator and its
+// operational bounds for the expertise map. Passing nil (or a config with a
+// nil Evaluator) leaves the expertise endpoint failing loud (no hardcoded tier
+// fallback — the tier/growth judgment is the LLM's).
+func (e *Engine) SetExpertiseConfig(c *ExpertiseConfig) {
+	e.expertise = c
 }
 
 // SetAlertTimingConfig injects the LLM-driven alert-timing evaluator and its

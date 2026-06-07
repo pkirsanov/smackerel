@@ -38,7 +38,6 @@ type TopicExpertise struct {
 	DepthRatio        float64          `json:"depth_ratio"`
 	Engagement        int              `json:"engagement"`
 	ConnectionDensity float64          `json:"connection_density"`
-	DepthScore        float64          `json:"depth_score"`
 	Tier              ExpertiseTier    `json:"tier"`
 	Growth            GrowthTrajectory `json:"growth"`
 	RecentCaptures    int              `json:"recent_captures_30d"`
@@ -68,8 +67,15 @@ func (e *Engine) GenerateExpertiseMap(ctx context.Context) (*ExpertiseMap, error
 	if e.Pool == nil {
 		return nil, fmt.Errorf("expertise mapping requires a database connection")
 	}
+	if e.expertise == nil || e.expertise.Evaluator == nil {
+		// BUG-021-008: tier/growth are LLM-judged; there is NO hardcoded
+		// fallback. With no evaluator wired the map cannot be classified, so
+		// fail loud rather than emit bogus tiers.
+		return nil, fmt.Errorf("expertise mapping requires the LLM evaluator (agent bridge not wired)")
+	}
+	cfg := e.expertise
 
-	// Check data maturity (need 90+ days)
+	// Check data maturity against the operational data-sufficiency floor.
 	var dataDays int
 	err := e.Pool.QueryRow(ctx, `
 		SELECT COALESCE(EXTRACT(DAY FROM NOW() - MIN(created_at))::int, 0) FROM artifacts
@@ -80,7 +86,7 @@ func (e *Engine) GenerateExpertiseMap(ctx context.Context) (*ExpertiseMap, error
 
 	result := &ExpertiseMap{
 		DataDays:    dataDays,
-		Mature:      dataDays >= 90,
+		Mature:      dataDays >= cfg.MaturityDays,
 		GeneratedAt: time.Now(),
 	}
 
@@ -120,13 +126,17 @@ func (e *Engine) GenerateExpertiseMap(ctx context.Context) (*ExpertiseMap, error
 		FROM topic_artifacts ta
 		LEFT JOIN topic_connections tc ON tc.topic_id = ta.topic_id
 		ORDER BY ta.capture_count DESC
-		LIMIT 100
-	`)
+		LIMIT $1
+	`, cfg.MaxTopics)
 	if err != nil {
 		return nil, fmt.Errorf("query expertise dimensions: %w", err)
 	}
 	defer rows.Close()
 
+	// Gather each topic's deterministic signals; the tier + growth JUDGMENT is
+	// made by the LLM, not by any Go threshold. Ref is the positional key the
+	// model echoes back so classifications map to the right topic.
+	var signals []ExpertiseSignals
 	for rows.Next() {
 		var te TopicExpertise
 		var monthsActive float64
@@ -140,10 +150,20 @@ func (e *Engine) GenerateExpertiseMap(ctx context.Context) (*ExpertiseMap, error
 		}
 
 		te.AvgMonthly = float64(te.CaptureCount) / math.Max(monthsActive, 1)
-		te.DepthScore = computeDepthScore(te)
-		te.Tier = assignTier(te.CaptureCount, te.DepthScore)
-		te.Growth = computeTrajectory(te.RecentCaptures, te.AvgMonthly)
 
+		ref := len(result.Topics)
+		signals = append(signals, ExpertiseSignals{
+			TopicID:           te.TopicID,
+			Ref:               ref,
+			TopicName:         te.TopicName,
+			CaptureCount:      te.CaptureCount,
+			SourceDiversity:   te.SourceDiversity,
+			DepthRatio:        te.DepthRatio,
+			Engagement:        te.Engagement,
+			ConnectionDensity: te.ConnectionDensity,
+			RecentCaptures:    te.RecentCaptures,
+			AvgMonthly:        te.AvgMonthly,
+		})
 		result.Topics = append(result.Topics, te)
 	}
 	if err := rows.Err(); err != nil {
@@ -151,8 +171,27 @@ func (e *Engine) GenerateExpertiseMap(ctx context.Context) (*ExpertiseMap, error
 	}
 	result.TotalTopics = len(result.Topics)
 
-	// Blind spot detection
-	blindSpots, err := e.detectBlindSpots(ctx)
+	// LLM-driven classification: ONE batched call assigns a tier + growth per
+	// topic (docs/smackerel.md §3.6) — no hardcoded weighted score or numeric
+	// tier/velocity threshold. The model reasons comparatively across the whole
+	// graph in a single request (this is an on-demand endpoint).
+	if len(signals) > 0 {
+		classifications, err := cfg.Evaluator.ClassifyExpertise(ctx, dataDays, signals)
+		if err != nil {
+			return nil, fmt.Errorf("expertise classification: %w", err)
+		}
+		for _, c := range classifications {
+			if c.Ref < 0 || c.Ref >= len(result.Topics) {
+				slog.Warn("expertise classification ref out of range", "ref", c.Ref, "topics", len(result.Topics))
+				continue
+			}
+			result.Topics[c.Ref].Tier = ExpertiseTier(c.Tier)
+			result.Topics[c.Ref].Growth = GrowthTrajectory(c.Growth)
+		}
+	}
+
+	// Blind spot detection (operational gap-detection bounds, SST).
+	blindSpots, err := e.detectBlindSpots(ctx, cfg)
 	if err != nil {
 		slog.Warn("blind spot detection failed", "error", err)
 	} else {
@@ -162,54 +201,10 @@ func (e *Engine) GenerateExpertiseMap(ctx context.Context) (*ExpertiseMap, error
 	return result, nil
 }
 
-// computeDepthScore calculates the composite depth score per design spec.
-func computeDepthScore(te TopicExpertise) float64 {
-	return float64(te.CaptureCount)*0.3 +
-		float64(te.SourceDiversity)*15.0 +
-		te.DepthRatio*20.0 +
-		float64(te.Engagement)*0.1 +
-		te.ConnectionDensity*10.0
-}
-
-// assignTier maps capture count and depth score to an expertise tier.
-func assignTier(captureCount int, depthScore float64) ExpertiseTier {
-	switch {
-	case captureCount > 100 && depthScore > 90:
-		return TierExpert
-	case captureCount > 50 && depthScore > 60:
-		return TierDeep
-	case captureCount > 20 && depthScore > 30:
-		return TierIntermediate
-	case captureCount > 5 && depthScore > 10:
-		return TierFoundation
-	default:
-		return TierNovice
-	}
-}
-
-// computeTrajectory determines the growth direction of a topic.
-func computeTrajectory(recent30d int, avgMonthly float64) GrowthTrajectory {
-	if avgMonthly <= 0 {
-		if recent30d > 0 {
-			return TrajectoryAccelerating
-		}
-		return TrajectoryStopped
-	}
-	velocity := float64(recent30d) / avgMonthly
-	switch {
-	case velocity > 1.5:
-		return TrajectoryAccelerating
-	case velocity >= 0.7:
-		return TrajectorySteady
-	case velocity >= 0.3:
-		return TrajectoryDecelerating
-	default:
-		return TrajectoryStopped
-	}
-}
-
-// detectBlindSpots finds topics that are mentioned but under-captured.
-func (e *Engine) detectBlindSpots(ctx context.Context) ([]BlindSpot, error) {
+// detectBlindSpots finds topics that are mentioned but under-captured. The
+// gap-detection bounds (min mentions, max captures, result limit) are
+// OPERATIONAL SST values, not business thresholds.
+func (e *Engine) detectBlindSpots(ctx context.Context, cfg *ExpertiseConfig) ([]BlindSpot, error) {
 	rows, err := e.Pool.Query(ctx, `
 		WITH mentioned_topics AS (
 			SELECT t.name, COUNT(DISTINCT e.src_id) AS mention_count
@@ -226,11 +221,11 @@ func (e *Engine) detectBlindSpots(ctx context.Context) ([]BlindSpot, error) {
 		SELECT mt.name, mt.mention_count, COALESCE(ct.capture_count, 0) AS capture_count
 		FROM mentioned_topics mt
 		LEFT JOIN captured_topics ct ON ct.name = mt.name
-		WHERE COALESCE(ct.capture_count, 0) < 5
-		  AND mt.mention_count > 5
+		WHERE COALESCE(ct.capture_count, 0) < $1
+		  AND mt.mention_count > $2
 		ORDER BY (mt.mention_count - COALESCE(ct.capture_count, 0)) DESC
-		LIMIT 10
-	`)
+		LIMIT $3
+	`, cfg.BlindSpotMaxCaptures, cfg.BlindSpotMinMentions, cfg.BlindSpotLimit)
 	if err != nil {
 		return nil, fmt.Errorf("query blind spots: %w", err)
 	}
