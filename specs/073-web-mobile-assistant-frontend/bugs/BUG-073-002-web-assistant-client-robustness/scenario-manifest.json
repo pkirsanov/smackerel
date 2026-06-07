@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-073-002-web-assistant-client-robustness",
+  "parentSpec": "073-web-mobile-assistant-frontend",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real client fix; scenarios drive the source-contract guard green plus the adversarial re-RED."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': TestWebAssistantRobustnessGuard_BUG_073_002 passes against the fixed assistant.js; stripping the inFlight guard + AbortController + signal makes it FAIL naming the missing mechanisms (re-RED); the adversarial twin proves the guard is non-tautological."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-073-ROBUST-01",
+      "scope": "Scope 1",
+      "title": "Web assistant client wires single-flight guard + AbortController timeout + busy affordance",
+      "requiredTestType": "regression",
+      "testFiles": ["web/pwa/tests/assistant_robustness_guard_test.go"],
+      "linkedTests": [
+        {"file": "web/pwa/tests/assistant_robustness_guard_test.go", "function": "TestWebAssistantRobustnessGuard_BUG_073_002"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-single-flight-time-bounded-busy-aware-web-assistant-client"
+      ],
+      "liveTestExpectation": "The committed web/pwa/assistant.js source contains new AbortController(, signal: controller.signal, if (inFlight) (>=2 sites), .disabled = busy, and TURN_TIMEOUT_MS (>=2); the guard passes.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-073-ROBUST-02",
+      "scope": "Scope 1",
+      "title": "Robustness guard detects a regression (adversarial)",
+      "requiredTestType": "regression",
+      "testFiles": ["web/pwa/tests/assistant_robustness_guard_test.go"],
+      "linkedTests": [
+        {"file": "web/pwa/tests/assistant_robustness_guard_test.go", "function": "TestWebAssistantRobustnessGuard_Adversarial_BUG_073_002"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "A synthetic regressed client (no AbortController, no signal, no inFlight, no busy toggle, no TURN_TIMEOUT_MS) fails every required pattern's minimum-hit contract.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-073-ROBUST-03",
+      "scope": "Scope 1",
+      "title": "Regression: storage guard still forbids bearer/session persistence",
+      "requiredTestType": "regression",
+      "testFiles": ["web/pwa/tests/assistant_storage_guard_test.go"],
+      "linkedTests": [
+        {"file": "web/pwa/tests/assistant_storage_guard_test.go", "function": "TestWebAssistantStorageGuard_TP_073_06"}
+      ],
+      "evidenceRefs": [
+        "report.md#validation-evidence"
+      ],
+      "liveTestExpectation": "The robustness changes introduce no forbidden browser-storage API; the storage guard stays green.",
+      "changeType": "preserved"
+    }
+  ]
+}

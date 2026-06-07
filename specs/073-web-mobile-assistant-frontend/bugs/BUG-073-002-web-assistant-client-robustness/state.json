@@ -1,0 +1,155 @@
+{
+  "version": 3,
+  "specId": "073-web-mobile-assistant-frontend",
+  "bugId": "BUG-073-002-web-assistant-client-robustness",
+  "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-002-web-assistant-client-robustness",
+  "featureName": "BUG-073-002: web assistant client had no single-flight guard, no request timeout, and no busy affordance",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "reportedAt": "2026-06-07T00:30:00Z",
+  "reporter": "stochastic-quality-sweep round 15 (chaos, parent-expanded)",
+  "certifiedAt": "2026-06-07T02:30:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T02:30:00Z",
+  "lastUpdatedAt": "2026-06-07T01:25:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:30:00Z",
+        "completedAt": "2026-06-07T00:34:00Z",
+        "outcome": "completed_owned",
+        "summary": "Sweep round 15 (chaos lens) of spec 073 found web/pwa/assistant.js dispatches turns with no single-flight guard (rapid double-submit -> overlapping turns with distinct transport_message_ids), fetches with no AbortController (hung endpoint freezes the composer), and never disables the Send button. Mobile Dart client audited clean."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:34:00Z",
+        "completedAt": "2026-06-07T00:36:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: inFlight single-flight guard + AbortController timeout + setComposerBusy affordance, locked by a Go source-contract guard (the page is auth-gated; browser interaction tests cannot reach the composer). SCN-073-ROBUST-01..03 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:36:00Z",
+        "completedAt": "2026-06-07T00:42:00Z",
+        "outcome": "completed_owned",
+        "summary": "web/pwa/assistant.js: added inFlight flag + TURN_TIMEOUT_MS; dispatchTurn early-returns when inFlight and toggles setComposerBusy; postTurn builds an AbortController, passes signal to fetch, aborts after TURN_TIMEOUT_MS, surfaces a timeout error; the submit handler early-returns when inFlight without clearing the composer."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:42:00Z",
+        "completedAt": "2026-06-07T00:48:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added web/pwa/tests/assistant_robustness_guard_test.go: a source-contract guard asserting AbortController + signal + inFlight (>=2) + .disabled=busy + TURN_TIMEOUT_MS (>=2), with an adversarial twin proving a regressed source fails every contract. Both PASS; re-RED proven by stripping the wiring (FAIL naming the missing mechanisms). node --check clean."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:48:00Z",
+        "completedAt": "2026-06-07T00:50:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full web/pwa/tests Go package green (ok 1.377s): storage guard + codegen-drift guard + new robustness guard. No forbidden storage API introduced."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:50:00Z",
+        "completedAt": "2026-06-07T00:51:00Z",
+        "outcome": "completed_owned",
+        "summary": "One flag + one helper + one AbortController; the inFlight guard covers all dispatch entry points (submit/confirm/disambiguation/retry) with no duplication."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:51:00Z",
+        "completedAt": "2026-06-07T00:52:00Z",
+        "outcome": "completed_owned",
+        "summary": "AbortController bounds the request; finally clears the timer and the busy state on every path. No flakiness surface."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:52:00Z",
+        "completedAt": "2026-06-07T00:53:00Z",
+        "outcome": "completed_owned",
+        "summary": "Same-origin HttpOnly cookie auth unchanged; no storage/XSS regression (storage guard green). Single-flight also reduces accidental duplicate-turn submission. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:53:00Z",
+        "completedAt": "2026-06-07T00:55:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; node --check clean; full web/pwa/tests package green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:55:00Z",
+        "completedAt": "2026-06-07T00:56:00Z",
+        "outcome": "completed_owned",
+        "summary": "Diff confined to web/pwa/assistant.js + the new guard test; no migration; no .github/bubbles changes; parent spec 073 artifacts and the mobile client untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:56:00Z",
+        "completedAt": "2026-06-07T00:57:00Z",
+        "outcome": "completed_owned",
+        "summary": "assistant.js comments document the single-flight contract, the timeout budget, and the busy affordance; the guard test documents the auth-gating rationale."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T02:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Single-flight, time-bounded, busy-aware web assistant client", "status": "Done", "completedDoD": 8, "totalDoD": 8, "completedAt": "2026-06-07T00:57:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane client robustness fix; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T00:57:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-073-CLIENT-ROBUSTNESS",
+      "summary": "web/pwa/assistant.js had a submit race (overlapping turns with distinct transport_message_ids), no fetch timeout (hung endpoint froze the composer), and no busy affordance.",
+      "resolution": "Added an inFlight single-flight guard (dispatchTurn + submit handler), an AbortController request timeout (TURN_TIMEOUT_MS) in postTurn, and a setComposerBusy disabled-Send affordance. Locked by a Go source-contract guard with an adversarial twin (the auth-gated page blocks a browser interaction test).",
+      "evidence": "report.md Test/Validation Evidence; web/pwa/assistant.js diff; web/pwa/tests/assistant_robustness_guard_test.go; full web/pwa/tests package ok 1.377s.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "sweep-2026-06-07-r15",
+    "round": 15,
+    "trigger": "chaos",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
