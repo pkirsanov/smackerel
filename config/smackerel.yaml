@@ -315,6 +315,18 @@ intelligence:
     topic_candidate_limit: 5 # REQUIRED: positive int; cap on topic candidates sent to LLM
     max_observations: 2 # REQUIRED: positive int; cap on returned seasonal observations
 
+# Spec 013 / 021 BUG-021-010 — digest OPERATIONAL bounds.
+# The "is this guest/property a concern worth flagging?" JUDGMENT is LLM-driven
+# (the hospitality_concern_evaluate scenario), NOT a hardcoded sentiment/rating/
+# issue-count threshold. These are OPERATIONAL candidate-retrieval caps only —
+# fail-loud, operator-tunable:
+#   - guest_candidate_limit: max guests gathered + sent to the LLM per digest.
+#   - property_candidate_limit: max properties gathered + sent per digest.
+digest:
+  hospitality:
+    guest_candidate_limit: 50 # REQUIRED: positive int; per-digest guest candidate cap
+    property_candidate_limit: 50 # REQUIRED: positive int; per-digest property candidate cap
+
 # Spec 058 Scope 1 — Chrome Extension Bridge ingest endpoint SST.
 # Every value flows through scripts/commands/config.sh into the
 # generated env file as EXTENSION_INGEST_*; no in-source defaults.

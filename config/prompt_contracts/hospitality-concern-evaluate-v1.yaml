@@ -1,0 +1,182 @@
+id: hospitality_concern_evaluate
+version: "hospitality-concern-evaluate-v1"
+principleAlignment:
+- "Principle 6"
+- "Principle 8"
+type: "scenario"
+description: |
+  Spec 013 / 021 BUG-021-010 — LLM-driven hospitality concern judgment.
+
+  Replaces the hardcoded guest/property alert thresholds in
+  `internal/digest/hospitality.go` (`sentiment_score < 0.3`, `avg_rating < 3.5`,
+  `issue_count >= 5`, `total_stays > 1`) with a per-situation LLM judgment over a
+  batch of the host's guests and properties in ONE call.
+
+  This honors the product architecture (docs/smackerel.md §3.6): "is this guest
+  or property a concern worth flagging to the host this morning?" is domain
+  reasoning that depends on the situation. A sentiment of 0.31 is not
+  categorically fine while 0.29 is alarming; a 3.4-star property with one stray
+  review differs from a chronically 3.4-star one; a high-value repeat guest who
+  dipped in sentiment matters more than a one-off. Fixed cutoffs cannot weigh
+  that. This is the first hospitality use of the reusable agent.InvokeJudgment
+  foundation.
+
+intent_examples:
+- "judge which guests and properties are concerns worth flagging to the host"
+- "evaluate hospitality guest sentiment and property ratings for the daily digest"
+- "decide which guests or properties need the host's attention today"
+
+system_prompt: |
+  You are Smackerel's hospitality concern judge for a short-term-rental host's
+  morning digest.
+
+  You are given a BATCH of the host's guests and properties with per-row
+  signals. For the guests and properties that genuinely warrant the host's
+  attention today, return a concise alert. OMIT everything that is not worth
+  surfacing — silence is the default (Product Principle 6: invisible by default,
+  felt not heard).
+
+  Each guest carries:
+    - ref: an integer correlation key — echo it back UNCHANGED.
+    - name: the guest's display name.
+    - total_stays: how many stays this guest has had.
+    - sentiment_score: a 0..1 sentiment signal (may be absent/null).
+    - total_spend: lifetime spend in the host's currency.
+
+  Each property carries:
+    - ref: an integer correlation key — echo it back UNCHANGED.
+    - name: the property's display name.
+    - issue_count: number of currently open issues.
+    - avg_rating: average guest rating, typically 1..5 (may be absent/null).
+
+  JUDGE PER SITUATION — there are NO fixed thresholds:
+    - guest: flag a guest whose signals suggest a real concern OR a real
+      opportunity worth the host knowing — e.g. a genuinely low-sentiment guest,
+      or a high-value repeat guest. Weigh sentiment, stay history, and spend
+      TOGETHER. A marginal sentiment with no other signal is usually not worth a
+      flag.
+    - property: flag a property whose rating or open-issue load genuinely needs
+      attention. A single soft review on an otherwise strong property is usually
+      not worth a flag; a sustained low rating or a real backlog of open issues
+      is.
+
+  RULES (mandatory):
+    1. Output MUST validate against the declared output_schema. Include only the
+       guests/properties worth flagging; an empty array for either is correct
+       when nothing warrants attention.
+    2. Every returned alert MUST echo the input `ref` so the caller can map it
+       back to the right guest/property.
+    3. `alert_type` is a short snake_case label you choose (e.g. "low_sentiment",
+       "repeat_guest_opportunity", "low_rating", "open_issue_backlog").
+    4. `description` is a single human sentence (under 200 chars) the host will
+       read; it is recorded for transparency (Product Principle 8).
+    5. Do NOT call any tool — finalise on the first turn. The
+       `noop_hospitality_concern` tool exists only to satisfy the loader's
+       allowed_tools schema; you MUST NOT invoke it.
+
+allowed_tools:
+- name: noop_hospitality_concern
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ guests, properties ]
+  additionalProperties: false
+  properties:
+    guests:
+      type: array
+      items:
+        type: object
+        required: [ ref, name, total_stays, total_spend ]
+        additionalProperties: false
+        properties:
+          ref:
+            type: integer
+            minimum: 0
+          name:
+            type: string
+            minLength: 1
+            maxLength: 200
+          total_stays:
+            type: integer
+            minimum: 0
+          sentiment_score:
+            type: [ number, "null" ]
+            minimum: 0
+            maximum: 1
+          total_spend:
+            type: number
+            minimum: 0
+    properties:
+      type: array
+      items:
+        type: object
+        required: [ ref, name, issue_count ]
+        additionalProperties: false
+        properties:
+          ref:
+            type: integer
+            minimum: 0
+          name:
+            type: string
+            minLength: 1
+            maxLength: 200
+          issue_count:
+            type: integer
+            minimum: 0
+          avg_rating:
+            type: [ number, "null" ]
+            minimum: 0
+
+output_schema:
+  type: object
+  required: [ guest_alerts, property_alerts ]
+  additionalProperties: false
+  properties:
+    guest_alerts:
+      type: array
+      items:
+        type: object
+        required: [ ref, alert_type, description ]
+        additionalProperties: false
+        properties:
+          ref:
+            type: integer
+            minimum: 0
+          alert_type:
+            type: string
+            minLength: 1
+            maxLength: 60
+          description:
+            type: string
+            minLength: 1
+            maxLength: 200
+    property_alerts:
+      type: array
+      items:
+        type: object
+        required: [ ref, alert_type, description ]
+        additionalProperties: false
+        properties:
+          ref:
+            type: integer
+            minimum: 0
+          alert_type:
+            type: string
+            minLength: 1
+            maxLength: 60
+          description:
+            type: string
+            minLength: 1
+            maxLength: 200
+
+limits:
+  max_loop_iterations: 1
+  timeout_ms: 30000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 7500
+
+token_budget: 4000
+temperature: 0.0
+model_preference: "fast"
+side_effect_class: read

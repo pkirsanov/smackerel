@@ -1,0 +1,163 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-010-judgment-foundation-hospitality",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-010-judgment-foundation-hospitality",
+  "featureName": "BUG-021-010: hospitality guest/property alerts LLM-driven on a reusable judgment foundation",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "continues": "BUG-021-009-seasonal-llm-driven",
+  "reportedAt": "2026-06-07T04:30:00Z",
+  "reporter": "owner directive (no const limits; LLM decides) + best-solution-long-term-but-short-term-value",
+  "certifiedAt": "2026-06-07T09:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T09:00:00Z",
+  "lastUpdatedAt": "2026-06-07T05:05:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:30:00Z",
+        "completedAt": "2026-06-07T04:38:00Z",
+        "outcome": "completed_owned",
+        "summary": "Two findings. (1) The GuestHost digest's guest/property concern alerts were decided by hardcoded SQL thresholds (queryGuestAlerts: sentiment_score < 0.3, total_stays > 1; queryPropertyAlerts: avg_rating < 3.5, issue_count >= 5) — the same docs/smackerel.md §3.6 domain reasoning the prior four conversions moved to the LLM, but the digest package had NO bridge access. (2) The four prior agent.Bridge evaluators (cooling/alert-timing/resurface/expertise) each re-implemented the identical marshal→invoke→validate→decode plumbing — duplication the owner's 'best solution long term' directive calls to converge. Decision: extract agent.InvokeJudgment[T] (long-term foundation) and ship hospitality on it (short-term value), the first digest-package LLM judgment."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:38:00Z",
+        "completedAt": "2026-06-07T04:42:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: (a) agent.InvokeJudgment[T] + JudgmentRunner + ErrJudgmentUnavailable in the agent package (natural home; depends only on IntentEnvelope/InvocationResult/OutcomeOK; no cycle); (b) one batched hospitality_concern_evaluate scenario (guests + properties in one call — the digest runs daily, capped); (c) BridgeHospitalityEvaluator on the foundation; (d) gather-signals + LLM-judge rework; (e) Bridge wiring into the digest generator + scenario-lint blank import for BS-010; (f) operational candidate caps to fail-loud SST. Migrating the existing four evaluators is a deferred behaviour-preserving follow-up (out of scope to keep blast radius on the new behaviour). SCN-021-HOSP-01..03 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:42:00Z",
+        "completedAt": "2026-06-07T04:55:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created internal/agent/judgment.go (InvokeJudgment[T], JudgmentRunner, ErrJudgmentUnavailable). config/prompt_contracts/hospitality-concern-evaluate-v1.yaml. internal/digest/hospitality_eval.go: GuestSignal/PropertySignal (Email json:\"-\", Ref correlation), ConcernJudgment, HospitalityDecision, HospitalityEvaluator + BridgeHospitalityEvaluator (on InvokeJudgment), HospitalityBounds, noop_hospitality_concern init(). Reworked hospitality.go: gatherGuestSignals/gatherPropertySignals replace the threshold queries; assembleConcernAlerts runs the LLM and maps by ref; AssembleHospitalityContext takes eval + bounds. generator.go gained hospitalityEval/hospitalityBounds + SetHospitalityEvaluator + the call-site pass-through. SST: digest.hospitality.* (smackerel.yaml + config.sh + internal/config/hospitality.go). Wiring: cmd/core/wiring_hospitality.go + main.go call; cmd/scenario-lint blank-imports internal/digest."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:55:00Z",
+        "completedAt": "2026-06-07T04:59:00Z",
+        "outcome": "completed_owned",
+        "summary": "agent/judgment_test.go: routing, source, signal forwarding, json:\"-\" non-leak, nil-runner sentinel, all error paths. digest/hospitality_eval_test.go: batch parse, routing, guest/property forwarding, internal-Email non-leak, empty-input short-circuit, all error paths. config/hospitality_test.go: SST populate + fail-loud + range. scenario-lint registers hospitality_concern_evaluate (14, up from 13); go build ./... + vet green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:59:00Z",
+        "completedAt": "2026-06-07T05:01:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full agent + digest + config + cmd/core + scenario-lint packages green. The pre-existing 16 hospitality unit tests (IsEmpty_*, FormatHospitalityFallback_*, DigestContext_With/WithoutHospitality, IsGuestHostActive_NilRegistry) stay green — they assert struct/format/empty semantics, not the removed threshold queries. ./smackerel.sh config generate resolves the new keys into dev.env (192-193)."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:01:00Z",
+        "completedAt": "2026-06-07T05:02:00Z",
+        "outcome": "completed_owned",
+        "summary": "The new foundation NET-REMOVES future duplication: hospitality's evaluator is ~6 lines on InvokeJudgment instead of the ~30-line marshal/invoke/validate/decode block the prior four carry. One batched scenario + one evaluator + one assembleConcernAlerts mapping. The two threshold query functions collapse into two signal-gather functions + one LLM mapping."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:02:00Z",
+        "completedAt": "2026-06-07T05:03:00Z",
+        "outcome": "completed_owned",
+        "summary": "assembleConcernAlerts gathers all candidate signals before the single LLM call; out-of-range refs from the model are guarded and skipped with a warning; empty candidate sets short-circuit without an LLM call; nil evaluator / unavailable judgment / parse error all degrade to no concern alerts (the rest of the digest is unaffected). No DB cursor held during Invoke."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:03:00Z",
+        "completedAt": "2026-06-07T05:04:00Z",
+        "outcome": "completed_owned",
+        "summary": "GuestSignal.Email is json:\"-\" and proven (by test) not to enter the LLM envelope; only name + counts + sentiment/rating are sent (names already appear in the LLM-generated digest). The signal queries are parameterized (LIMIT $1). The foundation's InvokeJudgment performs no logging of payloads. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:04:00Z",
+        "completedAt": "2026-06-07T05:04:30Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; config generate + build + vet + affected packages green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:04:30Z",
+        "completedAt": "2026-06-07T05:04:45Z",
+        "outcome": "completed_owned",
+        "summary": "No hardcoded hospitality alert threshold remains (grep of sentiment_score < 0.3 | avg_rating < 3.5 | issue_count >= 5 in hospitality.go = 0). No migration; generated env gitignored; no .github/bubbles changes; the AssembleHospitalityContext signature change is contained (only generator.go calls it, confirmed repo-wide); parent spec 021 + spec 013 planning artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:04:45Z",
+        "completedAt": "2026-06-07T05:05:00Z",
+        "outcome": "completed_owned",
+        "summary": "judgment.go, hospitality_eval.go, hospitality.go, smackerel.yaml, and the wiring document the reusable foundation, the LLM-driven judgment, and the operational/business boundary. The packet records continuation of BUG-021-009, the owner's best-long-term-plus-short-term-value framing, and the deferred migration of the existing four evaluators onto the foundation."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T09:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Reusable judgment foundation + LLM-driven hospitality alerts", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T05:05:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane LLM-driven rework; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T05:05:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-021-HOSPITALITY-HARDCODED",
+      "summary": "The GuestHost digest decided guest/property concern alerts with hardcoded SQL thresholds (sentiment_score < 0.3, avg_rating < 3.5, issue_count >= 5, total_stays > 1), contradicting docs/smackerel.md §3.6 and the owner directive; the digest package had no LLM access.",
+      "resolution": "Introduced agent.InvokeJudgment[T] and routed the hospitality concern decision through the hospitality_concern_evaluate scenario via BridgeHospitalityEvaluator; the digest gathers candidate signals within operational caps only; caps moved to fail-loud SST. No hardcoded threshold remains; nil evaluator ⇒ no concern alerts.",
+      "evidence": "report.md Test/Validation/Audit Evidence; internal/agent/judgment.go; internal/digest/hospitality_eval.go; grep of the three thresholds in hospitality.go = 0.",
+      "status": "resolved"
+    },
+    {
+      "id": "FINDING-021-JUDGMENT-DUPLICATION",
+      "summary": "The four prior agent.Bridge judgment evaluators each re-implemented the identical marshal→invoke→validate→decode plumbing — duplication the owner's best-solution-long-term directive calls to converge.",
+      "resolution": "Extracted agent.InvokeJudgment[T] (+ JudgmentRunner + ErrJudgmentUnavailable) as the single reusable primitive, unit-tested, and made hospitality its first native consumer. Migrating the existing four onto it is a deferred behaviour-preserving follow-up guarded by their unit tests.",
+      "evidence": "report.md Test Evidence (TestInvokeJudgment_*); internal/agent/judgment.go; design.md Alternatives Considered.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-no-const-limits",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
