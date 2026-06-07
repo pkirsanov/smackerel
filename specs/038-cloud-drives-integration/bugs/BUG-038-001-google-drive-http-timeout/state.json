@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "038-cloud-drives-integration",
+  "bugId": "BUG-038-001-google-drive-http-timeout",
+  "featureDir": "specs/038-cloud-drives-integration/bugs/BUG-038-001-google-drive-http-timeout",
+  "featureName": "BUG-038-001: Google Drive provider used http.DefaultClient (no timeout); a hung endpoint blocks the scan/monitor goroutine indefinitely",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "reportedAt": "2026-06-07T00:30:00Z",
+  "reporter": "stochastic-quality-sweep round 17 (devops, parent-expanded)",
+  "certifiedAt": "2026-06-07T02:30:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T02:30:00Z",
+  "lastUpdatedAt": "2026-06-07T01:20:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:30:00Z",
+        "completedAt": "2026-06-07T00:34:00Z",
+        "outcome": "completed_owned",
+        "summary": "Sweep round 17 (devops lens) of spec 038 found cmd/core/wiring.go injects http.DefaultClient (no timeout) into the Google Drive provider, so a connect-but-never-respond endpoint blocks the scan/monitor goroutine indefinitely. Every other connector sets an explicit client timeout. Verified by reading the wiring + all p.client.Do call sites."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:34:00Z",
+        "completedAt": "2026-06-07T00:37:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: add a fail-loud SST response-header-timeout key and build a bounded Transport (NOT a whole-request timeout, which would abort large downloads). SCN-038-TIMEOUT-01/02 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:37:00Z",
+        "completedAt": "2026-06-07T00:44:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added drive.providers.google.http_response_header_timeout_seconds to config/smackerel.yaml + scripts/commands/config.sh (assignment + heredoc emit); parsed fail-loud in internal/config/drive.go into HTTPResponseHeaderTimeoutSeconds; built the Google provider client in cmd/core/wiring.go with Transport.ResponseHeaderTimeout + dial + TLS-handshake timeouts from the SST value, no whole-request Timeout."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:44:00Z",
+        "completedAt": "2026-06-07T00:50:00Z",
+        "outcome": "completed_owned",
+        "summary": "Wired the new required key into driveSSTKeys + setRequiredEnv + a populate assertion. TestDriveConfigValidationRequiresEverySSTField/...HTTP_RESPONSE_HEADER_TIMEOUT_SECONDS proves fail-loud; TestDriveConfigPopulatesEveryField asserts == 30. go build ./... + vet green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:50:00Z",
+        "completedAt": "2026-06-07T00:53:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full internal/config package green (ok 31.375s) with the new required key. ./smackerel.sh config generate resolves the key into dev.env (config-validate OK)."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:53:00Z",
+        "completedAt": "2026-06-07T00:54:00Z",
+        "outcome": "completed_owned",
+        "summary": "One SST key + one bounded Transport; reuses already-imported net/http/time; no new abstractions."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:54:00Z",
+        "completedAt": "2026-06-07T00:55:00Z",
+        "outcome": "completed_owned",
+        "summary": "ResponseHeaderTimeout bounds the hang without capping large downloads; pool tuning matches the discord precedent. No new perf hot path."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:55:00Z",
+        "completedAt": "2026-06-07T00:56:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bounding an unbounded client reduces a hang/DoS surface. No secret handling change; the bearer token is still never logged. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:56:00Z",
+        "completedAt": "2026-06-07T00:58:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; config generate + build + vet + full config package green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:58:00Z",
+        "completedAt": "2026-06-07T00:59:00Z",
+        "outcome": "completed_owned",
+        "summary": "Diff confined to the SST source + config loader/tests + wiring client construction; no migration; generated env gitignored; no .github/bubbles changes; parent spec 038 artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T00:59:00Z",
+        "completedAt": "2026-06-07T01:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "smackerel.yaml + drive.go + wiring.go comments document the response-header-timeout contract and the why-not-whole-request rationale. Unused rate-limit enforcement flagged for the owner."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T02:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Bound the Google Drive provider client (fail-loud SST timeout)", "status": "Done", "completedDoD": 9, "totalDoD": 9, "completedAt": "2026-06-07T01:00:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane config+wiring fix; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T01:00:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-038-DRIVE-NO-TIMEOUT",
+      "summary": "cmd/core/wiring.go injected http.DefaultClient (no timeout) into the Google Drive provider, so a hung endpoint blocked the scan/monitor goroutine indefinitely.",
+      "resolution": "Added fail-loud SST key drive.providers.google.http_response_header_timeout_seconds; built the provider client with Transport.ResponseHeaderTimeout + dial + TLS timeouts from it (no whole-request Timeout, so large downloads are not aborted). Config tests lock the required key; config generate resolves it end-to-end.",
+      "evidence": "report.md Test/Validation Evidence; internal/config/drive.go parse; cmd/core/wiring.go Transport; dev.env DRIVE_PROVIDER_GOOGLE_HTTP_RESPONSE_HEADER_TIMEOUT_SECONDS=30.",
+      "status": "resolved"
+    }
+  ],
+  "discoveredIssues": [
+    {
+      "id": "DI-038-001",
+      "summary": "drive.rate_limits.requests_per_minute is SST-declared and parsed but not enforced by a runtime limiter. Enforcing it is a feature (token-bucket), out of scope for this reliability fix.",
+      "disposition": "routed-to-owner",
+      "owner": "specs/038-cloud-drives-integration (bubbles.plan/bubbles.implement)",
+      "blocking": false
+    }
+  ],
+  "sweep": {
+    "sweepId": "sweep-2026-06-07-r17",
+    "round": 17,
+    "trigger": "devops",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
