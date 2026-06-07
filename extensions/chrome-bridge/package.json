@@ -8,9 +8,11 @@
     "build": "node esbuild.config.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test --config test/e2e/playwright.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@playwright/test": "1.49.1",
     "@types/chrome": "^0.0.268",
     "@types/node": "^20.12.7",
     "esbuild": "^0.21.5",

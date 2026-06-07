@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-058-002-mv3-e2e-sideload-harness",
+  "parentSpec": "058-chrome-extension-bridge",
+  "trackingBug": "BUG-058-EXTERNAL-INFRA-MISSING",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane MV3 e2e harness; the real-browser Playwright suite (bookmark roundtrip, deny-drop, removed tombstone, auth failure, options setup, sideload smoke) drives the proofs and is locked once green."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '### Test Evidence': before this packet `extensions/chrome-bridge/test/e2e/` did not exist (no real-browser proof of the MV3 pipeline); after, `./smackerel.sh test e2e-ext` runs 11 real-headless-Chromium tests across the four spec files, all PASS. The deny-drop and removed-tombstone cases are proven via the real worker-eviction lifecycle (reloadServiceWorker) rather than a faked clock."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-058-002-01",
+      "scope": "Scope 1",
+      "title": "Created bookmark is captured by the real MV3 worker and POSTed to the ingest endpoint with the bearer token and the correct RawArtifact shape",
+      "requiredTestType": "e2e-ui",
+      "testFiles": ["extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts"],
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts", "function": "created bookmark is captured and POSTed to /v1/connectors/extension/ingest with the bearer token and correct artifact shape"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-local-mv3-playwright-e2e-harness--automated-sideload-smoke"
+      ],
+      "liveTestExpectation": "A real chrome.bookmarks.create in real headless Chromium (--headless=new) flows through the genuine background service worker (privacy filter, local dedup, IndexedDB queue, drain) and is POSTed over real HTTP to a per-test in-process recording server (NOT request interception) at /v1/connectors/extension/ingest with Authorization: Bearer <token> and body = RawArtifact[] (source_id=browser-extension, source_ref=bookmark:<id>, content_type=bookmark, title, url, metadata.{source_device_id, bookmark_event=created, bookmark_id, client_event_id}).",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-002-02",
+      "scope": "Scope 1",
+      "title": "Privacy deny-pattern drops a URL before it leaves the browser; a removal emits a bookmark_event=removed tombstone across the worker-eviction lifecycle",
+      "requiredTestType": "e2e-ui",
+      "testFiles": ["extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts"],
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts", "function": "a deny-pattern URL is dropped before it leaves the browser (no ingest POST)"},
+        {"file": "extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts", "function": "removed bookmark emits a tombstone artifact with bookmark_event=removed"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "report.md#validation-evidence"
+      ],
+      "liveTestExpectation": "A bookmark whose URL matches a deny pattern produces NO ingest POST (the worker's compiled privacy filter drops it before enqueue; made deterministic by reloadServiceWorker so the filter is active on spin-up). A removal of a previously-drained bookmark, after the worker is evicted (chrome.runtime.reload clears the in-memory dedup cache — the real production lifecycle), emits a tombstone artifact with metadata.bookmark_event=removed.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-002-03",
+      "scope": "Scope 1",
+      "title": "A 401 from the ingest endpoint sets the AUTH badge (auth_terminal) and retains the queued item",
+      "requiredTestType": "e2e-ui",
+      "testFiles": ["extensions/chrome-bridge/test/e2e/auth_failure.spec.ts"],
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/e2e/auth_failure.spec.ts", "function": "a 401 from the ingest endpoint sets the AUTH badge and retains the queued item"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "The recording server replies 401 to the real fetch (with Authorization: Bearer <revoked-token> attached); the worker classifies the batch as auth_terminal, sets the AUTH badge via chrome.action.setBadgeText, and does NOT drop the queued item (the operator must re-enroll).",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-002-04",
+      "scope": "Scope 1",
+      "title": "Operator options-page setup: configure/persist/repopulate, bearer-token mask + reveal toggle, invalid input rejected without persistence",
+      "requiredTestType": "e2e-ui",
+      "testFiles": ["extensions/chrome-bridge/test/e2e/options_setup.spec.ts"],
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/e2e/options_setup.spec.ts", "function": "operator can configure the extension through the options page and the values persist"},
+        {"file": "extensions/chrome-bridge/test/e2e/options_setup.spec.ts", "function": "the bearer-token field is masked by default and the Reveal button toggles visibility"},
+        {"file": "extensions/chrome-bridge/test/e2e/options_setup.spec.ts", "function": "invalid configuration is rejected with a visible error and is not persisted"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "The real options page (chrome-extension://<id>/options/index.html) saves the operator config to chrome.storage.local and repopulates it on reopen; the bearer-token input is type=password by default and the Reveal button toggles it to text and back; invalid input (bad base_url, bad source_device_id) shows a visible #errors message and writes nothing to storage.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-058-002-05",
+      "scope": "Scope 1",
+      "title": "Automated local sideload smoke (BLOCKER-4): the built extension sideloads, the MV3 SW registers, the manifest + permissions + CSP are correct, options render, and an unconfigured install shows the SETUP badge",
+      "requiredTestType": "e2e-ui",
+      "testFiles": ["extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts"],
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts", "function": "the built extension sideloads and its MV3 service worker registers"},
+        {"file": "extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts", "function": "the sideloaded manifest is MV3 with the minimum permissions and a restrictive CSP"},
+        {"file": "extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts", "function": "the options page renders for a sideloaded install"},
+        {"file": "extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts", "function": "badge matrix: an unconfigured install shows SETUP after a drain attempt"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "The automated counterpart to the manual SCN-058-019 walkthrough: loading the built extension into real headless Chromium yields a registered MV3 service worker (background.js), a manifest with manifest_version=3, permissions exactly [alarms, bookmarks, history, storage], and a restrictive CSP (script-src 'self'; object-src 'self'; no 'unsafe-eval'); the options page renders; and an unconfigured install shows the SETUP badge (gateConfig failure path / badge-state-matrix entry).",
+      "changeType": "added"
+    }
+  ]
+}
