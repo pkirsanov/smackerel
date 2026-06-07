@@ -1,0 +1,156 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-007-resurface-llm-driven",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-007-resurface-llm-driven",
+  "featureName": "BUG-021-007: resurfacing worthiness must be LLM-driven, not a hardcoded dormancy/relevance window",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "continues": "BUG-021-006-alert-timing-llm-driven",
+  "reportedAt": "2026-06-07T02:42:00Z",
+  "reporter": "owner directive (no const limits; LLM decides per situation)",
+  "certifiedAt": "2026-06-07T06:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T06:00:00Z",
+  "lastUpdatedAt": "2026-06-07T03:10:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:42:00Z",
+        "completedAt": "2026-06-07T02:48:00Z",
+        "outcome": "completed_owned",
+        "summary": "After BUG-021-006 made alert timing LLM-driven, an audit of sibling hardcoded business thresholds found the resurfacing pipeline's dormancy strategy (Engine.Resurface Strategy 1) still decided 'worth resurfacing?' with a hardcoded window: last_accessed < NOW() - INTERVAL '30 days' AND relevance_score > 0.3. This answers the same domain question docs/smackerel.md §3.6 requires to be LLM-driven (worthiness depends on the item: a reference returned to often before going quiet vs something opened once; relevance 0.31 vs 0.29 is not categorically worth/not-worth). Serendipity (random rediscovery) carries no worthiness threshold and was scoped out."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:48:00Z",
+        "completedAt": "2026-06-07T02:52:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope reusing the BUG-021-006 pattern: one resurface_evaluate scenario + BridgeResurfaceEvaluator (mockable) + a gatherResurfaceCandidates retrieval helper; Strategy 1 retrieves dormant candidates within an operational dormancy-retrieval floor and lets the LLM judge each; operational bounds (min_dormancy_days, max_candidates, confidence_floor) to fail-loud SST. SCN-021-RESURFACE-01..03 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:52:00Z",
+        "completedAt": "2026-06-07T03:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created config/prompt_contracts/resurface-evaluate-v1.yaml. internal/intelligence/resurface_eval.go: ResurfaceSignals (ArtifactID json:\"-\"), ResurfaceDecision, ResurfaceEvaluator + BridgeResurfaceEvaluator, ResurfaceConfig, resurfaceShouldSurface, noop_resurface_evaluate init(). Engine gained a resurface field + SetResurfaceConfig. Reworked Engine.Resurface Strategy 1 to retrieve dormant candidates via the new gatherResurfaceCandidates helper (COALESCE(last_accessed,created_at) < NOW() - make_interval(days => $min_dormancy_days), capped by $max_candidates) and route each through the LLM, gating on the confidence floor; graceful skip when nil. Removed the INTERVAL '30 days' + relevance_score > 0.3 dormancy window. Serendipity unchanged. SST: intelligence.resurface.* (smackerel.yaml + config.sh + internal/config/resurface.go). Wiring: wireResurfaceEvaluator + main.go call."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:00:00Z",
+        "completedAt": "2026-06-07T03:04:00Z",
+        "outcome": "completed_owned",
+        "summary": "resurface_eval_test.go: scripted runner proves parse, scenario routing, public-signal forwarding, internal-field (ArtifactID) non-leak, all error paths + the pure gate. config/resurface_test.go: SST populate + fail-loud + range. scenario-lint registers resurface_evaluate (12 registered, up from 11); go build ./... + vet green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:04:00Z",
+        "completedAt": "2026-06-07T03:06:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full intelligence + config + scheduler + cmd/core + scenario-lint + agent packages green. ./smackerel.sh config generate resolves the new keys into dev.env. Existing resurface tests (serendipity, MarkResurfaced, ResurfaceCandidate fields) unaffected — Strategy 1's struct construction no longer sets LastAccessed in the dormancy path but those tests assert serendipity/MarkResurfaced/field semantics, not the dormancy query."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:06:00Z",
+        "completedAt": "2026-06-07T03:07:00Z",
+        "outcome": "completed_owned",
+        "summary": "One scenario + one evaluator + one gatherResurfaceCandidates helper; the worthiness decision and the human-facing reason share a single path. No duplication with the cooling/alert-timing evaluators (each is its own bounded contract)."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:07:00Z",
+        "completedAt": "2026-06-07T03:08:00Z",
+        "outcome": "completed_owned",
+        "summary": "gatherResurfaceCandidates collects all candidates before any LLM call (no DB cursor held during Invoke); the Resurface loop honors limit and context cancellation mid-iteration; the scenario carries operational LLM-call bounds. Nil-evaluator path degrades gracefully to serendipity-only."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:08:00Z",
+        "completedAt": "2026-06-07T03:09:00Z",
+        "outcome": "completed_owned",
+        "summary": "ResurfaceSignals.ArtifactID is json:\"-\" and proven (by test) not to enter the LLM envelope; only title + day-count + relevance + access-count are sent. The candidate query is parameterized (no SQL injection; make_interval(days => $1) + LIMIT $2). No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:09:00Z",
+        "completedAt": "2026-06-07T03:09:30Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; config generate + build + vet + affected packages green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:09:30Z",
+        "completedAt": "2026-06-07T03:10:00Z",
+        "outcome": "completed_owned",
+        "summary": "No hardcoded dormancy worthiness window remains (relevance_score > 0.3 removed; the single remaining INTERVAL '30 days' at line 305 is the serendipity calendar-context query, operational, intentionally left). No migration; generated env gitignored; no .github/bubbles changes; parent spec 021 planning artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T03:10:00Z",
+        "completedAt": "2026-06-07T03:10:00Z",
+        "outcome": "completed_owned",
+        "summary": "Scenario YAML, resurface_eval.go, resurface.go, smackerel.yaml, and wiring document the LLM-driven judgment and the operational/business boundary. The packet records continuation of BUG-021-006 and notes serendipity as intentionally non-deterministic (not threshold-judged)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T06:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "LLM-driven resurfacing worthiness for the dormancy strategy", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T03:10:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane LLM-driven rework; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T03:10:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-021-RESURFACE-HARDCODED",
+      "summary": "Engine.Resurface Strategy 1 decided 'worth resurfacing?' with a hardcoded dormancy + relevance window (INTERVAL '30 days', relevance_score > 0.3), contradicting docs/smackerel.md §3.6 (domain reasoning must be LLM-driven) and the owner directive.",
+      "resolution": "Moved the worthiness judgment to the resurface_evaluate LLM scenario via BridgeResurfaceEvaluator; the strategy retrieves dormant candidates within an operational dormancy-retrieval floor only; operational bounds moved to fail-loud SST. No hardcoded worthiness window remains; serendipity unchanged.",
+      "evidence": "report.md Test/Validation Evidence; internal/intelligence/resurface_eval.go; config/prompt_contracts/resurface-evaluate-v1.yaml; relevance_score > 0.3 removed from Strategy 1.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-no-const-limits",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
