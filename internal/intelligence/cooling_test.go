@@ -13,7 +13,7 @@ import (
 	"github.com/smackerel/smackerel/internal/agent"
 )
 
-// scriptedCoolingRunner is a coolingBridgeRunner that returns a canned
+// scriptedCoolingRunner is an agent.JudgmentRunner that returns a canned
 // InvocationResult and records the envelope it received.
 type scriptedCoolingRunner struct {
 	result   *agent.InvocationResult
@@ -128,8 +128,8 @@ func TestBridgeCoolingEvaluator_ErrorPaths(t *testing.T) {
 func TestBridgeCoolingEvaluator_NilReceiver(t *testing.T) {
 	var ev *BridgeCoolingEvaluator
 	_, err := ev.EvaluateCooling(context.Background(), sampleCandidate())
-	if !errors.Is(err, ErrCoolingEvaluatorUnavailable) {
-		t.Errorf("nil receiver should return ErrCoolingEvaluatorUnavailable, got %v", err)
+	if !errors.Is(err, agent.ErrJudgmentUnavailable) {
+		t.Errorf("nil receiver should return agent.ErrJudgmentUnavailable, got %v", err)
 	}
 }
 

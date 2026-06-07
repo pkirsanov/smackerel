@@ -15,7 +15,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/smackerel/smackerel/internal/agent"
 )
@@ -71,21 +70,13 @@ type ExpertiseConfig struct {
 	BlindSpotLimit       int
 }
 
-// expertiseBridgeRunner is the minimal subset of *agent.Bridge that the
-// BridgeExpertiseEvaluator consumes. Production wiring passes the live
-// *agent.Bridge; tests inject a scripted runner.
-type expertiseBridgeRunner interface {
-	Invoke(ctx context.Context, env agent.IntentEnvelope) (*agent.InvocationResult, *agent.RoutingDecision)
-}
-
 // BridgeExpertiseEvaluator is the production ExpertiseEvaluator, backed by the
-// `expertise_classify` scenario via the agent bridge.
+// `expertise_classify` scenario via the agent bridge. The
+// marshal/invoke/validate/decode transport is the shared agent.InvokeJudgment
+// primitive (BUG-021-010).
 type BridgeExpertiseEvaluator struct {
-	Runner expertiseBridgeRunner
+	Runner agent.JudgmentRunner
 }
-
-// ErrExpertiseEvaluatorUnavailable is returned when no bridge runner is wired.
-var ErrExpertiseEvaluatorUnavailable = errors.New("intelligence: expertise evaluator unavailable (agent bridge not wired)")
 
 // expertiseRequest is the structured payload sent to the scenario.
 type expertiseRequest struct {
@@ -101,37 +92,15 @@ type expertiseResponse struct {
 // ClassifyExpertise invokes the `expertise_classify` scenario once for the
 // whole topic batch and returns the LLM's structured per-topic judgments.
 func (b *BridgeExpertiseEvaluator) ClassifyExpertise(ctx context.Context, dataDays int, topics []ExpertiseSignals) ([]ExpertiseClassification, error) {
-	if b == nil || b.Runner == nil {
-		return nil, ErrExpertiseEvaluatorUnavailable
+	if b == nil {
+		return nil, agent.ErrJudgmentUnavailable
 	}
 	if len(topics) == 0 {
 		return nil, nil
 	}
-
-	structured, err := json.Marshal(expertiseRequest{DataDays: dataDays, Topics: topics})
+	resp, err := agent.InvokeJudgment[expertiseResponse](ctx, b.Runner, "api", "expertise_classify", expertiseRequest{DataDays: dataDays, Topics: topics})
 	if err != nil {
-		return nil, fmt.Errorf("intelligence expertise evaluator: marshal signals: %w", err)
-	}
-
-	env := agent.IntentEnvelope{
-		Source:            "api",
-		StructuredContext: structured,
-		ScenarioID:        "expertise_classify",
-	}
-	res, _ := b.Runner.Invoke(ctx, env)
-	if res == nil {
-		return nil, ErrExpertiseEvaluatorUnavailable
-	}
-	if res.Outcome != agent.OutcomeOK {
-		return nil, fmt.Errorf("intelligence expertise evaluator: scenario outcome %q (detail=%v)", res.Outcome, res.OutcomeDetail)
-	}
-	if len(res.Final) == 0 {
-		return nil, fmt.Errorf("intelligence expertise evaluator: scenario returned empty final payload")
-	}
-
-	var resp expertiseResponse
-	if err := json.Unmarshal(res.Final, &resp); err != nil {
-		return nil, fmt.Errorf("intelligence expertise evaluator: decode final: %w", err)
+		return nil, err
 	}
 	return resp.Classifications, nil
 }
