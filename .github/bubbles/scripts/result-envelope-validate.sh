@@ -128,7 +128,7 @@ if agents_missing_envelope and mode != "strict":
     if len(agents_missing_envelope) > 10:
         print(f"    ... and {len(agents_missing_envelope) - 10} more")
     if mode == "v6-default":
-        print("  v6.1 will make MISSING blocking. Authoring envelopes for all 40 agents is tracked separately.")
+        print("  Missing envelopes are advisory by default in the current contract; use --strict to make missing envelopes blocking.")
 
 for name, err in malformed_envelopes[:10]:
     print(f"  MALFORMED: {name}: {err}")

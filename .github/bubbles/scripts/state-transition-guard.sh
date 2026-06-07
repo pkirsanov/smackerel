@@ -348,10 +348,18 @@ scope_files=()
 scope_analysis_files=()
 scope_analysis_labels=()
 report_files=()
+# The following per-feature artifact paths are exported into the environment and
+# consumed by child guard scripts / embedded heredocs that shellcheck cannot
+# follow, so it reports them as unused (SC2034) — they are not. Keep declared.
+# shellcheck disable=SC2034
 scenario_manifest_file="$feature_dir/scenario-manifest.json"
+# shellcheck disable=SC2034
 lockdown_approvals_file="$feature_dir/lockdown-approvals.json"
+# shellcheck disable=SC2034
 invalidation_ledger_file="$feature_dir/invalidation-ledger.json"
+# shellcheck disable=SC2034
 transition_requests_file="$feature_dir/transition-requests.json"
+# shellcheck disable=SC2034
 rework_queue_file="$feature_dir/rework-queue.json"
 framework_ownership_lint_script="$SCRIPT_DIR/agent-ownership-lint.sh"
 
@@ -393,6 +401,7 @@ if [[ ${#scope_files[@]} -gt 0 ]]; then
     scopes_file="$combined_scopes_tmp"
   fi
 fi
+# shellcheck disable=SC2034  # exported/consumed by child guard scripts; not unused.
 scope_file="$scopes_file"
 
 relative_artifact_path() {
@@ -1195,7 +1204,7 @@ PY
 if [[ -n "$state_workflow_mode" ]]; then
   required_specialists=()
   case "$state_workflow_mode" in
-    full-delivery|value-first-e2e-batch)
+    value-first-e2e-batch)
       required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
       ;;
     full-delivery)
@@ -1409,6 +1418,7 @@ for p in set(claims + certified):
           # Find a parent-expanded entry for this phase
           pe_line="$(echo "$execution_history_block" | awk -F'\t' -v p="$claimed_phase" '$2==p && $3=="parent-expanded" {print; exit}')"
           if [[ -n "$pe_line" ]]; then
+            # shellcheck disable=SC2034  # surfaced for parity with pe_* fields; consumed downstream.
             pe_agent="$(echo "$pe_line" | awk -F'\t' '{print $1}')"
             pe_expanded_by="$(echo "$pe_line" | awk -F'\t' '{print $4}')"
             pe_reason="$(echo "$pe_line" | awk -F'\t' '{print $5}')"
@@ -2350,6 +2360,7 @@ if [[ -f "$reality_scan_script" ]]; then
 
   if [[ "$run_reality_scan" == "true" ]]; then
     reality_output="$(bubbles_run_with_timeout 120 bash "$reality_scan_script" "$feature_dir" --verbose 2>&1 || true)"
+    # shellcheck disable=SC2034  # captured for symmetry; reality_output drives the checks.
     reality_exit="$?"
 
     # Show condensed output

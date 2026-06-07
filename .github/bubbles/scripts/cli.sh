@@ -76,9 +76,6 @@ CONTROL_PLANE_RUNTIME_DIR="$REPO_ROOT/.specify/runtime"
 CONTROL_PLANE_RUNTIME_FILE="$CONTROL_PLANE_RUNTIME_DIR/resource-leases.json"
 CONTROL_PLANE_EVENT_FILE="$CONTROL_PLANE_RUNTIME_DIR/framework-events.jsonl"
 CONTROL_PLANE_RUN_STATE_FILE="$CONTROL_PLANE_RUNTIME_DIR/workflow-runs.json"
-LESSONS_FILE="$REPO_ROOT/.specify/memory/lessons.md"
-SKILL_PROPOSALS_FILE="$REPO_ROOT/.specify/memory/skill-proposals.md"
-DEVELOPER_PROFILE_FILE="$REPO_ROOT/.specify/memory/developer-profile.md"
 ACTION_RISK_REGISTRY_FILE="$FRAMEWORK_DIR/action-risk-registry.yaml"
 ADOPTION_PROFILES_FILE="$FRAMEWORK_DIR/adoption-profiles.yaml"
 
@@ -1837,9 +1834,8 @@ cmd_dag() {
   fi
 
   for sf in "${scope_files[@]}"; do
-    local scope_id scope_name scope_status depends_on status_icon
+    local scope_id scope_status depends_on status_icon
     scope_id=$(grep -oE '^## (Scope [0-9]+|[0-9]+-[a-z][-a-z0-9]*)' "$sf" | head -1 | sed 's/## //')
-    scope_name=$(grep -E '^## ' "$sf" | head -1 | sed 's/^## //' | sed 's/ *(.*//')
     scope_status=$(grep -oE 'Status: (Done|In Progress|Not Started|Blocked)' "$sf" | head -1 | sed 's/Status: //')
     depends_on=$(grep -oE 'Depends On:.*' "$sf" | head -1 | sed 's/Depends On: *//')
 
@@ -2848,6 +2844,7 @@ cmd_upgrade() {
     local target_ref="$target_version"
     local target_sha=''
     local target_dirty='false'
+    # shellcheck disable=SC2034  # populated by name via bubbles_read_release_manifest_summary (positional nameref output param)
     local target_version_from_manifest=''
     local target_sha_from_manifest=''
     local target_profiles=''
@@ -3005,7 +3002,8 @@ cmd_upgrade() {
   if [[ -n "$local_source" ]]; then
     bash "$local_source/install.sh" --local-source "$local_source"
   elif [[ -n "${BUBBLES_SOURCE_OVERRIDE_DIR:-}" ]]; then
-    BUBBLES_SOURCE_OVERRIDE_DIR="$BUBBLES_SOURCE_OVERRIDE_DIR" bash "$BUBBLES_SOURCE_OVERRIDE_DIR/install.sh" "$target_version"
+    export BUBBLES_SOURCE_OVERRIDE_DIR
+    bash "$BUBBLES_SOURCE_OVERRIDE_DIR/install.sh" "$target_version"
   else
     curl -fsSL "https://raw.githubusercontent.com/${repo}/${target_version}/install.sh" | bash -s -- "$target_version"
   fi

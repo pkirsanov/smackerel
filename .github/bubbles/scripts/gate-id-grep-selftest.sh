@@ -218,6 +218,48 @@ else
   sed -n '1,40p' "$unk_strict_log"
 fi
 
+# --- PCRE grep guard (adversarial) ----------------------------------------
+#
+# A grep without -P (BSD/macOS default) would make the scans return zero
+# matches and the gate would SILENTLY PASS. The guard must fail-fast (exit 2)
+# instead. Stage a stub grep that rejects -P and confirm exit 2. This would
+# regress to a false-negative exit 0 if the guard were removed.
+
+pcre_root="$TMPDIR/repo-pcre"
+seed_repo "$pcre_root"
+
+stub_dir="$TMPDIR/stub-grep"
+mkdir -p "$stub_dir"
+real_grep="$(command -v grep)"
+cat > "$stub_dir/grep" <<EOF
+#!/usr/bin/env bash
+for a in "\$@"; do
+  [ "\$a" = "-P" ] && { echo "grep: invalid option -- P" >&2; exit 2; }
+done
+exec "$real_grep" "\$@"
+EOF
+chmod +x "$stub_dir/grep"
+
+set +e
+pcre_log="$TMPDIR/pcre.log"
+BUBBLES_GREP="$stub_dir/grep" bash "$TARGET" --repo-root "$pcre_root" >"$pcre_log" 2>&1
+pcre_rc=$?
+set -e
+
+if [[ "$pcre_rc" -eq 2 ]]; then
+  pass "missing grep -P fail-fasts with exit 2 (no silent pass)"
+else
+  fail "missing grep -P expected exit 2, got $pcre_rc"
+  sed -n '1,40p' "$pcre_log"
+fi
+
+if grep -Fq "requires GNU grep with PCRE (-P) support" "$pcre_log"; then
+  pass "missing grep -P prints the PCRE guard message"
+else
+  fail "missing grep -P did not print the PCRE guard message"
+  sed -n '1,40p' "$pcre_log"
+fi
+
 # --- Summary --------------------------------------------------------------
 
 echo

@@ -71,9 +71,9 @@ fi
 
 # T5: a persisted v5-key mode still resolves its ceiling through the guards.
 if [[ -x "$IS_TERMINAL" ]]; then
-  bash "$IS_TERMINAL" done "$V5_MODE" >/dev/null 2>&1
+  bash "$IS_TERMINAL" "done" "$V5_MODE" >/dev/null 2>&1
   t5_done=$?
-  bash "$IS_TERMINAL" in_progress "$V5_MODE" >/dev/null 2>&1
+  bash "$IS_TERMINAL" "in_progress" "$V5_MODE" >/dev/null 2>&1
   t5_prog=$?
   if [[ $t5_done -eq 0 && $t5_prog -ne 0 ]]; then
     pass "T5: persisted v5-key mode '$V5_MODE' resolves ceiling (done terminal, in_progress not)"

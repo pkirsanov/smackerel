@@ -76,6 +76,18 @@ Orchestrator rule:
 - only orchestrators may invoke child workflow modes; if nested delegation is unavailable, the active orchestrator parent-expands the mapped mode and still delegates owner work to specialists
 - orchestration-heavy agents may use structural YAML body sections such as `TOOL ALLOWLIST` and `PHASE ROUTER`, but frontmatter still controls actual VS Code tool availability
 
+### `tools:` frontmatter convention
+
+An agent's frontmatter `tools:` field is an explicit allowlist of the VS Code tools the agent may call. The convention:
+
+- **Omit `tools:`** to inherit ALL available tools. This is the default for most specialists — they declare no allowlist and rely on the full tool surface.
+- **Declare `tools:`** only when you want to constrain the surface. The autonomous orchestrators (`bubbles.workflow`, `bubbles.goal`, `bubbles.iterate`, `bubbles.sprint`, `bubbles.bug`) declare the canonical allowlist `tools: [read, search, edit, agent, todo, web, execute]`.
+- **Any orchestrator that declares a `tools:` allowlist MUST include `agent`** — that is the sub-agent dispatch tool that backs `runSubagent(...)`. An orchestrator that restricts its tools but forgets `agent` silently degrades into a single-agent transcript: the IDE blocks the call and the whole delegation pipeline collapses with no visible error.
+- Omitting `tools:` entirely is **not** a violation for an orchestrator — inheriting all tools includes `agent`, so delegation still works.
+- A genuinely terminal agent that never delegates may opt out of the check with frontmatter `delegationModel: none`.
+
+Enforced by `bubbles/scripts/orchestrator-tool-frontmatter-lint.sh` (both a live scan and a hermetic selftest run in `framework-validate`). The guard flags only an orchestrator whose **present** `tools:` allowlist omits `agent`.
+
 ## Owners And Executors
 
 | Agent | Use When | Primary References |

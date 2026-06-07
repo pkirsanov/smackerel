@@ -1,8 +1,8 @@
 {
-  "installedVersion": "7.0.1",
+  "installedVersion": "7.0.8",
   "installMode": "local-source",
   "sourceRef": "main",
-  "sourceGitSha": "1dcd2daa5f3a7c6cf96f28daa87ff00d75e99c12",
+  "sourceGitSha": "e36975699f0e82dd874dc9616a585b2216f8b442",
   "sourceDirty": false,
-  "installedAt": "2026-06-06T13:39:22Z"
+  "installedAt": "2026-06-07T04:14:26Z"
 }
