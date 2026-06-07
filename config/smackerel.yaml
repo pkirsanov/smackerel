@@ -301,6 +301,20 @@ intelligence:
     blind_spot_max_captures: 5 # REQUIRED: positive int; capture ceiling for under-captured
     blind_spot_limit: 10 # REQUIRED: positive int; max blind spots returned
 
+  # Spec 021 BUG-021-009 — seasonal-detection OPERATIONAL bounds.
+  # The "is this YoY volume change a meaningful seasonal pattern?" JUDGMENT is
+  # LLM-driven (the seasonal.analyze ML scenario), NOT a hardcoded volume-ratio
+  # threshold. These are OPERATIONAL bounds only — fail-loud, operator-tunable:
+  #   - min_data_days: data-sufficiency floor (R-508 needs 6+ months).
+  #   - topic_min_captures: min same-month captures for a topic to be a candidate.
+  #   - topic_candidate_limit: cap on topic candidates sent to the LLM.
+  #   - max_observations: cap on returned seasonal observations.
+  seasonal:
+    min_data_days: 180 # REQUIRED: positive int; data-sufficiency floor (6+ months)
+    topic_min_captures: 5 # REQUIRED: positive int; min same-month captures for a candidate
+    topic_candidate_limit: 5 # REQUIRED: positive int; cap on topic candidates sent to LLM
+    max_observations: 2 # REQUIRED: positive int; cap on returned seasonal observations
+
 # Spec 058 Scope 1 — Chrome Extension Bridge ingest endpoint SST.
 # Every value flows through scripts/commands/config.sh into the
 # generated env file as EXTENSION_INGEST_*; no in-source defaults.

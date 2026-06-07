@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-021-009-seasonal-llm-driven",
+  "parentSpec": "021-intelligence-delivery",
+  "continues": "BUG-021-008-expertise-llm-driven",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real LLM-driven rework via the existing seasonal.analyze ML path; SST loader + ML handler tests drive the proofs."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## ML Handler Evidence' + 'SST loader Evidence': the seasonal significance decision now flows through the seasonal.analyze ML path; TestSeasonalAnalyze proves the no-LLM/no-signal skip contract (no hardcoded ratio fallback) and the coherent observations response; the SST loader tests prove fail-loud operational bounds."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-SEASONAL-01",
+      "scope": "Scope 1",
+      "title": "Operational seasonal-detection bounds are fail-loud SST config",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/config/seasonal_test.go"],
+      "linkedTests": [
+        {"file": "internal/config/seasonal_test.go", "function": "TestLoadSeasonalConfig_FailLoudOnMissing"},
+        {"file": "internal/config/seasonal_test.go", "function": "TestLoadSeasonalConfig_RejectsOutOfRange"}
+      ],
+      "evidenceRefs": [
+        "report.md#sst-loader-evidence-fail-loud--populate--range",
+        "scopes.md#scope-1-llm-driven-seasonal-significance-via-the-ml-path"
+      ],
+      "liveTestExpectation": "Missing/empty INTELLIGENCE_SEASONAL_* keys fail loud naming the var; out-of-range values (min_data_days<=0, topic_min_captures<=0, topic_candidate_limit<=0, max_observations<=0) are rejected.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-SEASONAL-02",
+      "scope": "Scope 1",
+      "title": "ML seasonal handler judges significance and never falls back to a hardcoded ratio",
+      "requiredTestType": "unit",
+      "testFiles": ["ml/tests/test_intelligence_handlers.py"],
+      "linkedTests": [
+        {"file": "ml/tests/test_intelligence_handlers.py", "function": "TestSeasonalAnalyze::test_no_llm_returns_empty_observations"},
+        {"file": "ml/tests/test_intelligence_handlers.py", "function": "TestSeasonalAnalyze::test_response_shape_has_observations_key"}
+      ],
+      "evidenceRefs": [
+        "report.md#ml-handler-evidence"
+      ],
+      "liveTestExpectation": "handle_seasonal_analyze consumes raw signals {current_month,data_days,this_month_count,last_year_same_month_count,topic_candidates} and returns {observations:[...]}; with no LLM configured it returns zero observations (no hardcoded ratio fallback).",
+      "changeType": "added"
+    }
+  ]
+}
