@@ -257,6 +257,19 @@ intelligence:
     max_candidates: 25 # REQUIRED: positive int; per-run evaluation cap
     confidence_floor: 0.7 # REQUIRED: float in [0,1]; below this the nudge is withheld
     dedup_window_days: 30 # REQUIRED: positive int; re-alert suppression window
+  # Spec 021 R-021-002/003/004 / BUG-021-006 — alert-timing intelligence.
+  # The "should I alert about this upcoming event NOW?" JUDGMENT is LLM-driven
+  # (the alert_timing_evaluate scenario), NOT a hardcoded N-day window. These
+  # are OPERATIONAL bounds only — fail-loud, operator-tunable:
+  #   - lookahead_days: how far ahead to retrieve candidate events (bill / trip
+  #     / return deadline) for the LLM to judge (candidate-retrieval horizon).
+  #   - max_candidates: per-run evaluation cap per producer (throughput).
+  #   - confidence_floor: decision-confidence safety gate; below this the
+  #     reminder is withheld (Product Principle 6 — invisible by default).
+  alert_timing:
+    lookahead_days: 30 # REQUIRED: positive int; candidate-retrieval horizon
+    max_candidates: 25 # REQUIRED: positive int; per-run evaluation cap
+    confidence_floor: 0.7 # REQUIRED: float in [0,1]; below this the reminder is withheld
 
 # Spec 058 Scope 1 — Chrome Extension Bridge ingest endpoint SST.
 # Every value flows through scripts/commands/config.sh into the
