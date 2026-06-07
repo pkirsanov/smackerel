@@ -9,10 +9,19 @@ import (
 	"github.com/smackerel/smackerel/internal/metrics"
 )
 
-// ProduceBillAlerts creates alerts for subscriptions with upcoming billing dates.
+// ProduceBillAlerts surfaces subscriptions whose upcoming charge the LLM judges
+// worth a reminder NOW (BUG-021-006). The Go core estimates the next billing
+// date and retrieves candidates; the alert_timing_evaluate scenario decides
+// whether now is a good time given the charge's size/cadence. There is NO
+// hardcoded alert-timing window — when the evaluator is not wired, production
+// is skipped.
 func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 	if e.Pool == nil {
 		return fmt.Errorf("bill alert production requires a database connection")
+	}
+	if e.alertTiming == nil || e.alertTiming.Evaluator == nil {
+		slog.Warn("bill alert production skipped: LLM alert-timing evaluator not wired (no hardcoded fallback)")
+		return nil
 	}
 
 	rows, err := e.Pool.Query(ctx, `
@@ -25,22 +34,20 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 		    WHERE alert_type = 'bill'
 		      AND artifact_id = subscriptions.id
 		      AND status IN ('pending', 'delivered')
-		      AND created_at > NOW() - INTERVAL '30 days'
+		      AND created_at > NOW() - make_interval(days => $1)
 		  )
-		LIMIT 20
-	`)
+		LIMIT $2
+	`, e.alertTiming.LookaheadDays, e.alertTiming.MaxCandidates)
 	if err != nil {
 		return fmt.Errorf("query subscriptions for billing: %w", err)
 	}
-	defer rows.Close()
 
-	var created int
+	type billCand struct {
+		cand   AlertTimingCandidate
+		amount float64
+	}
+	var bills []billCand
 	for rows.Next() {
-		if ctx.Err() != nil {
-			slog.Warn("bill alert production context cancelled, remaining rows skipped", "created_so_far", created)
-			break
-		}
-
 		var id, serviceName, currency, billingFreq string
 		var amount float64
 		var firstSeen time.Time
@@ -50,23 +57,17 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 		}
 
 		// Estimate next billing date using proper date arithmetic.
-		// For monthly: same day-of-month in the current month (clamped to month length).
-		// For annual: same month and day as first_seen.
 		now := time.Now()
 		billingDay := firstSeen.Day()
-		// Use local midnight (not now.Truncate which aligns to UTC boundaries)
-		// to ensure consistent comparison with clampDay's time.Local dates.
 		localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 
 		var nextBilling time.Time
 		if billingFreq == "annual" {
-			// Try this year first, then next year
 			nextBilling = clampDay(now.Year(), firstSeen.Month(), billingDay)
 			if nextBilling.Before(localToday) {
 				nextBilling = clampDay(now.Year()+1, firstSeen.Month(), billingDay)
 			}
 		} else {
-			// Monthly: try current month, then next month
 			nextBilling = clampDay(now.Year(), now.Month(), billingDay)
 			if nextBilling.Before(localToday) {
 				nextMonth := now.Month() + 1
@@ -80,170 +81,218 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 		}
 
 		daysUntilBilling := calendarDaysBetween(localToday, nextBilling)
-		if daysUntilBilling < 0 || daysUntilBilling > 3 {
+		if daysUntilBilling < 0 || daysUntilBilling > e.alertTiming.LookaheadDays {
 			continue
 		}
 
-		title := fmt.Sprintf("Upcoming charge: %s", serviceName)
+		detail := fmt.Sprintf("%s subscription", billingFreq)
 		if amount > 0 {
-			title = fmt.Sprintf("Upcoming charge: %s (%.2f %s)", serviceName, amount, currency)
+			detail = fmt.Sprintf("%s %s %.2f subscription", billingFreq, currency, amount)
 		}
+		bills = append(bills, billCand{
+			cand: AlertTimingCandidate{
+				ArtifactID:     id,
+				AlertType:      AlertBill,
+				Priority:       2,
+				AlertKind:      AlertKindBill,
+				Subject:        serviceName,
+				DaysUntilEvent: daysUntilBilling,
+				Detail:         detail,
+			},
+			amount: amount,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("bill alert row iteration: %w", err)
+	}
+	rows.Close()
 
-		if err := e.CreateAlert(ctx, &Alert{
-			AlertType:  AlertBill,
-			Title:      title,
-			Body:       fmt.Sprintf("%s billing expected in ~%d days", serviceName, daysUntilBilling),
-			Priority:   2,
-			ArtifactID: id,
-		}); err != nil {
-			slog.Warn("failed to create bill alert", "subscription", serviceName, "error", err)
-			metrics.AlertProducerFailures.WithLabelValues(string(AlertBill)).Inc()
-		} else {
-			metrics.AlertsProduced.WithLabelValues(string(AlertBill)).Inc()
+	var created int
+	for _, b := range bills {
+		if ctx.Err() != nil {
+			slog.Warn("bill alert production context cancelled, remaining candidates skipped", "created_so_far", created)
+			break
+		}
+		title := fmt.Sprintf("Upcoming charge: %s", b.cand.Subject)
+		if b.amount > 0 {
+			title = fmt.Sprintf("Upcoming charge: %s (%.2f)", b.cand.Subject, b.amount)
+		}
+		fallback := fmt.Sprintf("%s charges in %d days.", b.cand.Subject, b.cand.DaysUntilEvent)
+		if e.evaluateAndCreateTimedAlert(ctx, b.cand, title, fallback) {
 			created++
 		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("bill alert row iteration: %w", err)
-	}
-
-	slog.Info("bill alert production complete", "created", created)
+	slog.Info("bill alert production complete", "candidates", len(bills), "created", created)
 	return nil
 }
 
-// ProduceTripPrepAlerts creates alerts for upcoming trips with departure within 5 days.
+// ProduceTripPrepAlerts surfaces upcoming trips the LLM judges worth a prep
+// reminder NOW (BUG-021-006). The Go core retrieves trips within the
+// operational lookahead horizon; the alert_timing_evaluate scenario decides
+// whether now is a good time given the trip's nature.
 func (e *Engine) ProduceTripPrepAlerts(ctx context.Context) error {
 	if e.Pool == nil {
 		return fmt.Errorf("trip prep alert production requires a database connection")
+	}
+	if e.alertTiming == nil || e.alertTiming.Evaluator == nil {
+		slog.Warn("trip prep alert production skipped: LLM alert-timing evaluator not wired (no hardcoded fallback)")
+		return nil
 	}
 
 	rows, err := e.Pool.Query(ctx, `
 		SELECT id, destination, start_date
 		FROM trips
 		WHERE status = 'upcoming'
-		  AND start_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '5 days'
+		  AND start_date BETWEEN CURRENT_DATE AND CURRENT_DATE + make_interval(days => $1)
 		  AND NOT EXISTS (
 		    SELECT 1 FROM alerts
 		    WHERE alert_type = 'trip_prep'
 		      AND artifact_id = trips.id
 		      AND status IN ('pending', 'delivered')
 		  )
-		LIMIT 10
-	`)
+		LIMIT $2
+	`, e.alertTiming.LookaheadDays, e.alertTiming.MaxCandidates)
 	if err != nil {
 		return fmt.Errorf("query upcoming trips: %w", err)
 	}
-	defer rows.Close()
 
-	var created int
+	var trips []AlertTimingCandidate
 	for rows.Next() {
-		if ctx.Err() != nil {
-			slog.Warn("trip prep alert production context cancelled, remaining rows skipped", "created_so_far", created)
-			break
-		}
-
 		var id, destination string
 		var startDate time.Time
 		if err := rows.Scan(&id, &destination, &startDate); err != nil {
 			slog.Warn("trip alert scan failed", "error", err)
 			continue
 		}
-
-		// Use calendarDaysBetween for DST-safe, time-of-day-independent day counting
-		// consistent with ProduceBillAlerts and CheckOverdueCommitments.
 		now := time.Now()
 		localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 		daysUntil := calendarDaysBetween(localToday, startDate)
 		if daysUntil < 0 {
 			daysUntil = 0
 		}
+		trips = append(trips, AlertTimingCandidate{
+			ArtifactID:     id,
+			AlertType:      AlertTripPrep,
+			Priority:       2,
+			AlertKind:      AlertKindTripPrep,
+			Subject:        destination,
+			DaysUntilEvent: daysUntil,
+			Detail:         fmt.Sprintf("trip to %s", destination),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("trip alert row iteration: %w", err)
+	}
+	rows.Close()
 
-		if err := e.CreateAlert(ctx, &Alert{
-			AlertType:  AlertTripPrep,
-			Title:      fmt.Sprintf("Trip prep: %s in %d days", destination, daysUntil),
-			Body:       fmt.Sprintf("Your trip to %s departs in %d days. Check bookings and packing.", destination, daysUntil),
-			Priority:   2,
-			ArtifactID: id,
-		}); err != nil {
-			slog.Warn("failed to create trip prep alert", "trip", destination, "error", err)
-			metrics.AlertProducerFailures.WithLabelValues(string(AlertTripPrep)).Inc()
-		} else {
-			metrics.AlertsProduced.WithLabelValues(string(AlertTripPrep)).Inc()
+	var created int
+	for _, c := range trips {
+		if ctx.Err() != nil {
+			slog.Warn("trip prep alert production context cancelled, remaining candidates skipped", "created_so_far", created)
+			break
+		}
+		title := fmt.Sprintf("Trip prep: %s in %d days", c.Subject, c.DaysUntilEvent)
+		fallback := fmt.Sprintf("Your trip to %s departs in %d days. Check bookings and packing.", c.Subject, c.DaysUntilEvent)
+		if e.evaluateAndCreateTimedAlert(ctx, c, title, fallback) {
 			created++
 		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("trip alert row iteration: %w", err)
-	}
-
-	slog.Info("trip prep alert production complete", "created", created)
+	slog.Info("trip prep alert production complete", "candidates", len(trips), "created", created)
 	return nil
 }
 
-// ProduceReturnWindowAlerts creates alerts for artifacts with return deadlines expiring within 5 days.
+// ProduceReturnWindowAlerts surfaces artifacts with an approaching return
+// deadline that the LLM judges worth a reminder NOW (BUG-021-006). The Go core
+// retrieves deadlines within the operational lookahead horizon; the
+// alert_timing_evaluate scenario decides whether now is a good time.
 func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 	if e.Pool == nil {
 		return fmt.Errorf("return window alert production requires a database connection")
 	}
+	if e.alertTiming == nil || e.alertTiming.Evaluator == nil {
+		slog.Warn("return window alert production skipped: LLM alert-timing evaluator not wired (no hardcoded fallback)")
+		return nil
+	}
 
 	// Use a safe date cast so a single artifact with a malformed return_deadline
-	// doesn't cause the entire query to fail (killing all return window detection).
-	// The regex validates month (01-12) and day (01-31) ranges to prevent
-	// dates like "2026-13-45" from reaching the ::date cast and crashing the query.
+	// doesn't cause the entire query to fail. The regex validates month (01-12)
+	// and day (01-31) ranges before the ::date cast.
 	rows, err := e.Pool.Query(ctx, `
 		SELECT id, title, metadata->>'return_deadline' AS return_deadline
 		FROM artifacts
 		WHERE metadata->>'return_deadline' IS NOT NULL
 		  AND metadata->>'return_deadline' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
-		  AND (metadata->>'return_deadline')::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '5 days'
+		  AND (metadata->>'return_deadline')::date BETWEEN CURRENT_DATE AND CURRENT_DATE + make_interval(days => $1)
 		  AND NOT EXISTS (
 		    SELECT 1 FROM alerts
 		    WHERE alert_type = 'return_window'
 		      AND artifact_id = artifacts.id
 		      AND status IN ('pending', 'delivered')
 		  )
-		LIMIT 10
-	`)
+		LIMIT $2
+	`, e.alertTiming.LookaheadDays, e.alertTiming.MaxCandidates)
 	if err != nil {
 		return fmt.Errorf("query return windows: %w", err)
 	}
-	defer rows.Close()
 
-	var created int
+	type returnCand struct {
+		cand        AlertTimingCandidate
+		deadlineStr string
+	}
+	var returns []returnCand
 	for rows.Next() {
-		if ctx.Err() != nil {
-			slog.Warn("return window alert production context cancelled, remaining rows skipped", "created_so_far", created)
-			break
-		}
-
 		var id, title, deadlineStr string
 		if err := rows.Scan(&id, &title, &deadlineStr); err != nil {
 			slog.Warn("return window scan failed", "error", err)
 			continue
 		}
+		daysUntil := 0
+		if d, perr := time.Parse("2006-01-02", deadlineStr); perr == nil {
+			now := time.Now()
+			localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+			deadlineLocal := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.Local)
+			daysUntil = calendarDaysBetween(localToday, deadlineLocal)
+			if daysUntil < 0 {
+				daysUntil = 0
+			}
+		}
+		returns = append(returns, returnCand{
+			cand: AlertTimingCandidate{
+				ArtifactID:     id,
+				AlertType:      AlertReturnWindow,
+				Priority:       1,
+				AlertKind:      AlertKindReturnWindow,
+				Subject:        title,
+				DaysUntilEvent: daysUntil,
+				Detail:         fmt.Sprintf("return deadline for %q", title),
+			},
+			deadlineStr: deadlineStr,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("return window row iteration: %w", err)
+	}
+	rows.Close()
 
-		if err := e.CreateAlert(ctx, &Alert{
-			AlertType:  AlertReturnWindow,
-			Title:      fmt.Sprintf("Return window closing: %s", title),
-			Body:       fmt.Sprintf("Return deadline for \"%s\" is %s. Act soon.", title, deadlineStr),
-			Priority:   1,
-			ArtifactID: id,
-		}); err != nil {
-			slog.Warn("failed to create return window alert", "artifact", id, "error", err)
-			metrics.AlertProducerFailures.WithLabelValues(string(AlertReturnWindow)).Inc()
-		} else {
-			metrics.AlertsProduced.WithLabelValues(string(AlertReturnWindow)).Inc()
+	var created int
+	for _, r := range returns {
+		if ctx.Err() != nil {
+			slog.Warn("return window alert production context cancelled, remaining candidates skipped", "created_so_far", created)
+			break
+		}
+		title := fmt.Sprintf("Return window closing: %s", r.cand.Subject)
+		fallback := fmt.Sprintf("Return deadline for %q is %s. Act soon.", r.cand.Subject, r.deadlineStr)
+		if e.evaluateAndCreateTimedAlert(ctx, r.cand, title, fallback) {
 			created++
 		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("return window row iteration: %w", err)
-	}
-
-	slog.Info("return window alert production complete", "created", created)
+	slog.Info("return window alert production complete", "candidates", len(returns), "created", created)
 	return nil
 }
 

@@ -1,0 +1,156 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-006-alert-timing-llm-driven",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-006-alert-timing-llm-driven",
+  "featureName": "BUG-021-006: bill/trip/return alert timing must be LLM-driven, not hardcoded N-day windows",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "continues": "BUG-021-005-relationship-cooling-llm-driven",
+  "reportedAt": "2026-06-07T02:20:00Z",
+  "reporter": "owner directive (no const limits; LLM decides per situation)",
+  "certifiedAt": "2026-06-07T05:30:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T05:30:00Z",
+  "lastUpdatedAt": "2026-06-07T02:55:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:20:00Z",
+        "completedAt": "2026-06-07T02:26:00Z",
+        "outcome": "completed_owned",
+        "summary": "After BUG-021-005 made cooling LLM-driven, an audit of sibling hardcoded business thresholds found the bill/trip/return alert producers in the same alert_producers.go still decided 'alert now?' with hardcoded N-day windows: bill daysUntilBilling > 3; trip/return INTERVAL '5 days'. These answer the same domain question docs/smackerel.md §3.6 requires to be LLM-driven (alert timing depends on the event: large annual charge vs small monthly; international vs local trip; high-value vs trivial return)."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:26:00Z",
+        "completedAt": "2026-06-07T02:30:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope reusing the BUG-021-005 pattern: one alert_timing_evaluate scenario (alert_kind in input lets the LLM reason per-kind) + BridgeAlertTimingEvaluator (mockable) + a shared evaluateAndCreateTimedAlert helper; all three producers retrieve candidates within an operational lookahead horizon and let the LLM judge each; operational bounds (lookahead, cap, floor) to fail-loud SST. SCN-021-TIMING-01..03 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:30:00Z",
+        "completedAt": "2026-06-07T02:42:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created config/prompt_contracts/alert-timing-evaluate-v1.yaml. internal/intelligence/alert_timing.go: AlertKind, AlertTimingCandidate (internal fields json:\"-\"), AlertTimingDecision, AlertTimingEvaluator + BridgeAlertTimingEvaluator, AlertTimingConfig, alertTimingShouldSurface, evaluateAndCreateTimedAlert helper, noop_alert_timing init(). Engine gained an alertTiming field + SetAlertTimingConfig. Reworked ProduceBillAlerts / ProduceTripPrepAlerts / ProduceReturnWindowAlerts to retrieve candidates within $lookahead_days (parameterized + capped) and route each through the LLM, gating on the confidence floor; graceful skip when nil. Removed the > 3 and INTERVAL '5 days' windows. SST: intelligence.alert_timing.* (smackerel.yaml + config.sh + internal/config/alert_timing.go). Wiring: wireAlertTimingEvaluator + main.go call. Removed a dead billCand.freq field."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:42:00Z",
+        "completedAt": "2026-06-07T02:48:00Z",
+        "outcome": "completed_owned",
+        "summary": "alert_timing_test.go: scripted runner proves parse, scenario routing, public-signal forwarding, internal-field (ArtifactID/AlertType/Priority) non-leak, all error paths + the pure gate. config/alert_timing_test.go: SST populate + fail-loud + range. scenario-lint registers alert_timing_evaluate (11 registered); go build ./... + vet green."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:48:00Z",
+        "completedAt": "2026-06-07T02:51:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full intelligence + config + scheduler + cmd/core + scenario-lint packages green. ./smackerel.sh config generate resolves the new keys into dev.env (config-validate OK). Existing alert_producers_test.go helper tests unaffected (date math unchanged)."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:51:00Z",
+        "completedAt": "2026-06-07T02:52:00Z",
+        "outcome": "completed_owned",
+        "summary": "One scenario + one evaluator + one shared evaluateAndCreateTimedAlert helper for all three producers; removed a dead struct field. No duplication across the three kinds."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:52:00Z",
+        "completedAt": "2026-06-07T02:53:00Z",
+        "outcome": "completed_owned",
+        "summary": "Each producer collects candidates before any LLM call (no DB cursor held during Invoke); context cancellation honored mid-loop; the scenario carries operational LLM-call bounds. Nil-evaluator path degrades gracefully."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:53:00Z",
+        "completedAt": "2026-06-07T02:54:00Z",
+        "outcome": "completed_owned",
+        "summary": "AlertTimingCandidate internal fields (ArtifactID/AlertType/Priority) are json:\"-\" and proven (by test) not to enter the LLM envelope; only kind + subject + day-count + a composed detail string are sent. Candidate queries are parameterized (no SQL injection; the return-window regex guard is preserved). No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:54:00Z",
+        "completedAt": "2026-06-07T02:55:00Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; config generate + build + vet + affected packages green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:55:00Z",
+        "completedAt": "2026-06-07T02:55:30Z",
+        "outcome": "completed_owned",
+        "summary": "No hardcoded alert-timing window remains (grep of 'daysUntilBilling > 3' and INTERVAL '5 days' in alert_producers.go = 0). No migration; generated env gitignored; no .github/bubbles changes; parent spec 021 planning artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T02:55:30Z",
+        "completedAt": "2026-06-07T02:56:00Z",
+        "outcome": "completed_owned",
+        "summary": "Scenario YAML, alert_timing.go, smackerel.yaml, and wiring document the LLM-driven judgment and the operational/business boundary. The packet records continuation of BUG-021-005 and notes commitment_overdue/meeting_brief as event-driven (not threshold-judged)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T05:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "LLM-driven alert timing for bill/trip/return producers", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T02:56:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane LLM-driven rework; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T02:56:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-021-ALERT-TIMING-HARDCODED",
+      "summary": "The bill/trip/return alert producers decided 'alert now?' with hardcoded N-day windows (> 3, INTERVAL '5 days'), contradicting docs/smackerel.md §3.6 (domain reasoning must be LLM-driven) and the owner directive.",
+      "resolution": "Moved the alert-timing judgment to the alert_timing_evaluate LLM scenario via BridgeAlertTimingEvaluator; the producers retrieve candidates within an operational lookahead horizon only; operational bounds moved to fail-loud SST. No hardcoded window remains.",
+      "evidence": "report.md Test/Validation Evidence; internal/intelligence/alert_timing.go; config/prompt_contracts/alert-timing-evaluate-v1.yaml; grep of hardcoded windows = 0.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-no-const-limits",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}

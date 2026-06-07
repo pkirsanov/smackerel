@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-021-006-alert-timing-llm-driven",
+  "parentSpec": "021-intelligence-delivery",
+  "continues": "BUG-021-005-relationship-cooling-llm-driven",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real LLM-driven rework; scenarios drive the evaluator + SST-loader proofs."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the alert-timing decision now flows through the alert_timing_evaluate scenario; TestBridgeAlertTimingEvaluator_* prove the LLM-driven path (parse, routing, public-signal forwarding, internal-field non-leak, error paths) with a scripted bridge; the SST loader tests prove fail-loud operational bounds."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-TIMING-01",
+      "scope": "Scope 1",
+      "title": "Alert-timing judgment routes to the LLM scenario, parses the decision, and never leaks internal fields",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/intelligence/alert_timing_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/alert_timing_test.go", "function": "TestBridgeAlertTimingEvaluator_ParsesDecision"},
+        {"file": "internal/intelligence/alert_timing_test.go", "function": "TestBridgeAlertTimingEvaluator_ErrorPaths"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-llm-driven-alert-timing-for-billtripreturn-producers"
+      ],
+      "liveTestExpectation": "EvaluateAlertTiming routes IntentEnvelope{ScenarioID: alert_timing_evaluate}, forwards {alert_kind,subject,days_until_event,detail}, omits ArtifactID/AlertType/Priority (json:\"-\"), parses {should_alert,confidence,rationale}, and errors on nil runner / nil result / non-OK / empty final / bad JSON.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-TIMING-02",
+      "scope": "Scope 1",
+      "title": "Pure helper: the operational confidence-floor gate",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/intelligence/alert_timing_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/alert_timing_test.go", "function": "TestAlertTimingShouldSurface"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "alertTimingShouldSurface is true only when should_alert AND confidence >= floor.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-TIMING-03",
+      "scope": "Scope 1",
+      "title": "Operational alert-timing bounds are fail-loud SST config",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/config/alert_timing_test.go"],
+      "linkedTests": [
+        {"file": "internal/config/alert_timing_test.go", "function": "TestLoadAlertTimingConfig_FailLoudOnMissing"},
+        {"file": "internal/config/alert_timing_test.go", "function": "TestLoadAlertTimingConfig_RejectsOutOfRange"}
+      ],
+      "evidenceRefs": [
+        "report.md#validation-evidence"
+      ],
+      "liveTestExpectation": "Missing/empty INTELLIGENCE_ALERT_TIMING_* keys fail loud naming the var; out-of-range values (lookahead<=0, cap<=0, floor not in [0,1]) are rejected.",
+      "changeType": "added"
+    }
+  ]
+}

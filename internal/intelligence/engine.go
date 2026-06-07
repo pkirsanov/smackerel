@@ -82,6 +82,12 @@ type Engine struct {
 	// disables cooling-alert production (there is NO hardcoded fallback
 	// heuristic — the judgment is the LLM's, not magic numbers in Go).
 	cooling *CoolingConfig
+
+	// alertTiming carries the LLM evaluator + operational bounds for the
+	// timing-judged producers (bill / trip-prep / return-window, BUG-021-006).
+	// Nil until wired; a nil config disables those producers (no hardcoded
+	// alert-timing window fallback — the "alert now?" judgment is the LLM's).
+	alertTiming *AlertTimingConfig
 }
 
 // NewEngine creates a new intelligence engine.
@@ -95,4 +101,12 @@ func NewEngine(pool *pgxpool.Pool, nats *smacknats.Client) *Engine {
 // alert production disabled.
 func (e *Engine) SetCoolingConfig(c *CoolingConfig) {
 	e.cooling = c
+}
+
+// SetAlertTimingConfig injects the LLM-driven alert-timing evaluator and its
+// operational bounds for the bill / trip-prep / return-window producers.
+// Passing nil (or a config with a nil Evaluator) leaves those producers
+// disabled (no hardcoded alert-timing window fallback).
+func (e *Engine) SetAlertTimingConfig(c *AlertTimingConfig) {
+	e.alertTiming = c
 }

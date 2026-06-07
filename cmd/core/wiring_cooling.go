@@ -52,3 +52,37 @@ func wireRelationshipCoolingEvaluator(bridge *agent.Bridge, engine *intelligence
 		"confidence_floor", coolingCfg.ConfidenceFloor,
 		"dedup_window_days", coolingCfg.DedupWindowDays)
 }
+
+// wireAlertTimingEvaluator injects the LLM-driven alert-timing evaluator into
+// the intelligence engine for the bill / trip-prep / return-window producers
+// (BUG-021-006). Nil bridge ⇒ no-op (those producers stay disabled; there is
+// no hardcoded alert-timing window fallback).
+func wireAlertTimingEvaluator(bridge *agent.Bridge, engine *intelligence.Engine) {
+	if engine == nil {
+		return
+	}
+	if bridge == nil {
+		slog.Warn("alert timing evaluator skipped: agent bridge is nil; bill/trip/return alerts disabled",
+			"spec", "021", "bug", "BUG-021-006")
+		return
+	}
+
+	timingCfg, err := config.LoadAlertTimingConfig()
+	if err != nil {
+		slog.Error("alert timing evaluator disabled: SST load failed",
+			"spec", "021", "bug", "BUG-021-006", "error", err.Error())
+		return
+	}
+
+	engine.SetAlertTimingConfig(&intelligence.AlertTimingConfig{
+		Evaluator:       &intelligence.BridgeAlertTimingEvaluator{Runner: bridge},
+		LookaheadDays:   timingCfg.LookaheadDays,
+		MaxCandidates:   timingCfg.MaxCandidates,
+		ConfidenceFloor: timingCfg.ConfidenceFloor,
+	})
+	slog.Info("alert timing evaluator wired (LLM-driven)",
+		"spec", "021", "bug", "BUG-021-006",
+		"lookahead_days", timingCfg.LookaheadDays,
+		"max_candidates", timingCfg.MaxCandidates,
+		"confidence_floor", timingCfg.ConfidenceFloor)
+}
