@@ -75,9 +75,24 @@ type Alert struct {
 type Engine struct {
 	Pool *pgxpool.Pool
 	NATS *smacknats.Client
+
+	// cooling carries the LLM evaluator + operational bounds for the
+	// relationship-cooling producer (BUG-021-005). Nil until wired by
+	// cmd/core after the agent bridge is constructed; a nil cooling config
+	// disables cooling-alert production (there is NO hardcoded fallback
+	// heuristic — the judgment is the LLM's, not magic numbers in Go).
+	cooling *CoolingConfig
 }
 
 // NewEngine creates a new intelligence engine.
 func NewEngine(pool *pgxpool.Pool, nats *smacknats.Client) *Engine {
 	return &Engine{Pool: pool, NATS: nats}
+}
+
+// SetCoolingConfig injects the LLM-driven relationship-cooling evaluator and
+// its operational bounds. Called by cmd/core wiring after the agent bridge is
+// available. Passing nil (or a config with a nil Evaluator) leaves cooling
+// alert production disabled.
+func (e *Engine) SetCoolingConfig(c *CoolingConfig) {
+	e.cooling = c
 }

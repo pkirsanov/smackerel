@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-021-005-relationship-cooling-llm-driven",
+  "parentSpec": "021-intelligence-delivery",
+  "supersedes": "BUG-021-004-relationship-cooling-heuristic-untested",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane real LLM-driven rework; scenarios drive the evaluator + SST-loader proofs."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the cooling decision now flows through the relationship_cooling_evaluate scenario; TestBridgeCoolingEvaluator_* prove the LLM-driven path (parse, routing, signal forwarding, PersonID non-leak, error paths) with a scripted bridge; the SST loader tests prove fail-loud operational bounds; BUG-021-004's magic-number lock test is removed."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-COOLING-LLM-01",
+      "scope": "Scope 1",
+      "title": "Cooling judgment routes to the LLM scenario, parses the decision, and never leaks PersonID",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/intelligence/cooling_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/cooling_test.go", "function": "TestBridgeCoolingEvaluator_ParsesCoolingDecision"},
+        {"file": "internal/intelligence/cooling_test.go", "function": "TestBridgeCoolingEvaluator_ErrorPaths"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-llm-driven-relationship-cooling-judgment"
+      ],
+      "liveTestExpectation": "EvaluateCooling routes IntentEnvelope{ScenarioID: relationship_cooling_evaluate}, forwards candidate signals, omits PersonID (json:\"-\"), parses {is_cooling,confidence,rationale}, and errors on nil runner / nil result / non-OK outcome / empty final / bad JSON.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-COOLING-LLM-02",
+      "scope": "Scope 1",
+      "title": "Pure helpers: typical-gap arithmetic and the operational confidence-floor gate",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/intelligence/cooling_test.go"],
+      "linkedTests": [
+        {"file": "internal/intelligence/cooling_test.go", "function": "TestCoolingTypicalGapDays"},
+        {"file": "internal/intelligence/cooling_test.go", "function": "TestCoolingShouldSurface"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "liveTestExpectation": "coolingTypicalGapDays = span/(n-1) (0 for <=1 interaction); coolingShouldSurface is true only when is_cooling AND confidence >= floor.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-021-COOLING-LLM-03",
+      "scope": "Scope 1",
+      "title": "Operational cooling bounds are fail-loud SST config",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/config/relationship_cooling_test.go"],
+      "linkedTests": [
+        {"file": "internal/config/relationship_cooling_test.go", "function": "TestLoadRelationshipCoolingConfig_FailLoudOnMissing"},
+        {"file": "internal/config/relationship_cooling_test.go", "function": "TestLoadRelationshipCoolingConfig_RejectsOutOfRange"}
+      ],
+      "evidenceRefs": [
+        "report.md#validation-evidence"
+      ],
+      "liveTestExpectation": "Missing/empty INTELLIGENCE_RELATIONSHIP_COOLING_* keys fail loud naming the var; out-of-range values (cap<=0, floor not in [0,1], window<=0) are rejected.",
+      "changeType": "added"
+    }
+  ]
+}

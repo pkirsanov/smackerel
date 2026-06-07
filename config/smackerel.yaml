@@ -242,6 +242,22 @@ surfacing:
   dedupe_window_hours: 6 # same content_key collapses within this window
   urgent_escalation_enabled: true # priority-1 + time_critical may bypass exhausted budget
 
+# Spec 021 R-021-005 / BUG-021-005 — relationship-cooling intelligence.
+# The "is this relationship cooling?" JUDGMENT is LLM-driven (the
+# relationship_cooling_evaluate scenario), NOT a hardcoded threshold. These
+# are OPERATIONAL bounds only — fail-loud, operator-tunable:
+#   - max_candidates: how many of the most-dormant contacts to evaluate per
+#     weekly run (throughput cap; the LLM judges each).
+#   - confidence_floor: decision-confidence safety gate; below this the nudge
+#     is withheld (Product Principle 6 — invisible by default).
+#   - dedup_window_days: do not re-alert a contact whose cooling nudge is still
+#     pending/delivered within this many days (anti-spam).
+intelligence:
+  relationship_cooling:
+    max_candidates: 25 # REQUIRED: positive int; per-run evaluation cap
+    confidence_floor: 0.7 # REQUIRED: float in [0,1]; below this the nudge is withheld
+    dedup_window_days: 30 # REQUIRED: positive int; re-alert suppression window
+
 # Spec 058 Scope 1 — Chrome Extension Bridge ingest endpoint SST.
 # Every value flows through scripts/commands/config.sh into the
 # generated env file as EXTENSION_INGEST_*; no in-source defaults.
