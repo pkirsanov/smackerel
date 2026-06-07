@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-039-004-price-drop-threshold-sst",
+  "parentSpec": "039-recommendations-engine",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane NO-DEFAULTS remediation; the threshold-resolution helper test + config-loader fail-loud coverage drive the proofs."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '## Test Evidence': the price-drop threshold fallback now comes from fail-loud SST; TestResolvePriceDropThreshold_Precedence proves the trigger->filter->SST-default order and TestResolvePriceDropThreshold_UsesConfiguredDefault proves the fallback is the configured value (not a baked-in 0.10)."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-039-004-01",
+      "scope": "Scope 1",
+      "title": "Price-drop threshold resolves trigger -> user filter -> SST default with no hardcoded literal",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/recommendation/watch/threshold_test.go"],
+      "linkedTests": [
+        {"file": "internal/recommendation/watch/threshold_test.go", "function": "TestResolvePriceDropThreshold_Precedence"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "scopes.md#scope-1-price-drop-threshold-fallback--fail-loud-sst"
+      ],
+      "liveTestExpectation": "resolvePriceDropThreshold returns trigger.Context[threshold_pct] when non-zero, else watch.Filters[threshold_pct] when non-zero, else the SST default; zero and absent are both treated as unset.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-039-004-02",
+      "scope": "Scope 1",
+      "title": "The fallback is the configured SST default, not a baked-in 0.10",
+      "requiredTestType": "unit",
+      "testFiles": ["internal/recommendation/watch/threshold_test.go"],
+      "linkedTests": [
+        {"file": "internal/recommendation/watch/threshold_test.go", "function": "TestResolvePriceDropThreshold_UsesConfiguredDefault"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "report.md#validation-evidence"
+      ],
+      "liveTestExpectation": "A configured default of 0.30 flows straight through when no trigger/filter override is present; the SST key RECOMMENDATIONS_WATCHES_DEFAULT_PRICE_DROP_THRESHOLD_PCT is required and fails loud (range (0,1]).",
+      "changeType": "added"
+    }
+  ]
+}

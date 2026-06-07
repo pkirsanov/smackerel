@@ -1,0 +1,155 @@
+{
+  "version": 3,
+  "specId": "039-recommendations-engine",
+  "bugId": "BUG-039-004-price-drop-threshold-sst",
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-004-price-drop-threshold-sst",
+  "featureName": "BUG-039-004: price-drop watch threshold has a hardcoded 0.10 fallback (NO-DEFAULTS violation)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "medium",
+  "reportedAt": "2026-06-07T04:45:00Z",
+  "reporter": "owner directive (no const limits) — autonomous open-items sweep",
+  "certifiedAt": "2026-06-07T11:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-07T11:00:00Z",
+  "lastUpdatedAt": "2026-06-07T05:05:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:45:00Z",
+        "completedAt": "2026-06-07T04:48:00Z",
+        "outcome": "completed_owned",
+        "summary": "Autonomous open-items sweep found a genuine hardcoded fallback the earlier triage under-classified as 'user-configured, low value': internal/recommendation/watch/evaluator.go gatherPriceDropCandidates used thresholdPct = 0.10 as the final fallback when neither trigger.Context[threshold_pct] nor watch.Filters[threshold_pct] was set. That is a binding smackerel-no-defaults / NO-const-limits violation. Classified as an OPERATIONAL default (the threshold is a user-config value with a trigger override; 0.10 is only the missing-input fallback), so the correct fix is fail-loud SST, NOT an LLM call (consistent with every operational floor/cap/window in the BUG-021-005..011 sweep). Verified the only price-drop integration test always supplies threshold_pct: 0.15 (both filter + trigger), so no test is coupled to the 0.10 literal."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:48:00Z",
+        "completedAt": "2026-06-07T04:50:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: add recommendations.watches.default_price_drop_threshold_pct as fail-loud SST (parseUnitFloat + >0 guard); thread through watch.Options -> Evaluator; extract resolvePriceDropThreshold(trigger, watch, defaultPct) for the trigger->filter->default precedence (unit-testable without a DB); wire cfg value in cmd/core; add setRequiredEnv key. Rejected the LLM alternative (would re-architect a certified user-config-first scalar-threshold model — over-engineering a fallback). SCN-039-004-01..02 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:50:00Z",
+        "completedAt": "2026-06-07T04:58:00Z",
+        "outcome": "completed_owned",
+        "summary": "internal/config/recommendations.go: RecommendationWatchesConfig.DefaultPriceDropThresholdPct + parseUnitFloat load + >0 guard. config/smackerel.yaml: recommendations.watches.default_price_drop_threshold_pct: 0.10. scripts/commands/config.sh: RECOMMENDATIONS_WATCHES_DEFAULT_PRICE_DROP_THRESHOLD_PCT (assignment + emit). internal/recommendation/watch/evaluator.go: Options + Evaluator field + NewEvaluator threading; new resolvePriceDropThreshold helper; gatherPriceDropCandidates calls it; 0.10 literal removed. cmd/core/wiring_recommendation_watches.go: pass cfg.Recommendations.Watches.DefaultPriceDropThresholdPct. internal/config/validate_test.go: setRequiredEnv key. New internal/recommendation/watch/threshold_test.go."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T04:58:00Z",
+        "completedAt": "2026-06-07T05:01:00Z",
+        "outcome": "completed_owned",
+        "summary": "threshold_test.go: TestResolvePriceDropThreshold_Precedence (5 sub-cases: trigger wins; filter wins when trigger absent/zero; SST default when neither/both-zero) + TestResolvePriceDropThreshold_UsesConfiguredDefault (0.30 passthrough proves no baked-in 0.10). go build ./... + vet green. Fixed two authoring slips during test: a duplicate package clause and a WatchRecord literal needing the embedded WatchInput (Filters is a promoted field)."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:01:00Z",
+        "completedAt": "2026-06-07T05:03:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full recommendation/watch + config + cmd/core packages green. ./smackerel.sh config generate resolves the key into dev.env (line 217); config-validate OK. validate_test.go setRequiredEnv updated so all existing config-load tests stay green. The price-drop integration test (explicit 0.15 threshold) and non-price watch tests are unaffected (verified no coupling to the literal)."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:03:00Z",
+        "completedAt": "2026-06-07T05:03:30Z",
+        "outcome": "completed_owned",
+        "summary": "Extracting resolvePriceDropThreshold both removes the inline literal AND makes the precedence unit-testable without a DB — a net clarity gain. The three-branch inline if-cascade collapses to one early-return helper."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:03:30Z",
+        "completedAt": "2026-06-07T05:04:00Z",
+        "outcome": "completed_owned",
+        "summary": "The helper treats both zero and absent threshold_pct as unset (numericFromAny returns 0 for both), matching the prior inline behaviour exactly. The loader's >0 guard prevents a degenerate 0 default (every price would count as a drop). Existing Options callers that omit the field get Go's zero value, which is only read on the price-drop path that production always wires from SST."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:04:00Z",
+        "completedAt": "2026-06-07T05:04:15Z",
+        "outcome": "completed_owned",
+        "summary": "No new external surface; no secret; the SST value is a numeric operator knob. No change to what is sent to providers or persisted. No framework files touched."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:04:15Z",
+        "completedAt": "2026-06-07T05:04:30Z",
+        "outcome": "completed_owned",
+        "summary": "artifact-lint PASSED for the packet; config generate + build + vet + affected packages green. Evidence in report.md."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:04:30Z",
+        "completedAt": "2026-06-07T05:04:45Z",
+        "outcome": "completed_owned",
+        "summary": "grep of '= 0.10' in evaluator.go = 0 (literal removed). No migration; config/generated gitignored + regenerated per run (config generate --env test carries the key into the test stack); no .github/bubbles changes; parent spec 039 planning artifacts untouched."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-07T05:04:45Z",
+        "completedAt": "2026-06-07T05:05:00Z",
+        "outcome": "completed_owned",
+        "summary": "evaluator.go, recommendations.go, smackerel.yaml document the operational/business boundary and the fail-loud SST default. The packet records this as the completion of the owner's NO-const-limits sweep and the operational-vs-business classification rationale."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-07T11:00:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Price-drop threshold fallback → fail-loud SST", "status": "Done", "completedDoD": 10, "totalDoD": 10, "completedAt": "2026-06-07T05:05:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane NO-DEFAULTS remediation; no convergence loop required",
+      "lastUpdatedAt": "2026-06-07T05:05:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-039-PRICE-DROP-HARDCODED-DEFAULT",
+      "summary": "internal/recommendation/watch/evaluator.go used a hardcoded thresholdPct = 0.10 fallback for the price-drop threshold when neither the trigger nor the user's watch filter supplied threshold_pct — a binding smackerel-no-defaults / NO-const-limits violation.",
+      "resolution": "Moved the fallback to fail-loud SST (recommendations.watches.default_price_drop_threshold_pct, range (0,1]); extracted resolvePriceDropThreshold for the trigger->filter->SST-default precedence; threaded the value through Options/Evaluator and wired it in cmd/core. The literal is removed; user/trigger thresholds still take precedence.",
+      "evidence": "report.md Test/Validation/Audit Evidence; internal/recommendation/watch/evaluator.go; internal/config/recommendations.go; grep of '= 0.10' in evaluator.go = 0.",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "owner-directive-2026-06-07-no-const-limits",
+    "round": 0,
+    "trigger": "owner-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
