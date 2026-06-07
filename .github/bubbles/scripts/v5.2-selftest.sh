@@ -32,7 +32,7 @@ fail() { echo "FAIL: $1" >&2; failures=$((failures + 1)); }
 tmp_root="$(mktemp -d -t bubbles-v5.2-selftest.XXXXXX)"
 trap 'rm -rf "$tmp_root"' EXIT INT TERM
 
-cd "$tmp_root"
+cd "$tmp_root" || exit 1
 git init -q
 git -c user.email=test@bubbles -c user.name=test commit --allow-empty -q -m "init"
 
@@ -118,7 +118,7 @@ else
   fail "F6: code-search did not create .specify/runtime/code-search.tool"
 fi
 # Manual override honored.
-if BUBBLES_CODE_SEARCH_BACKEND=grep bash "$SCRIPT_DIR/code-search.sh" "nonexistent-token-xyz" "$tmp_root" >/dev/null 2>&1; then
+if BUBBLES_CODE_SEARCH_BACKEND="grep" bash "$SCRIPT_DIR/code-search.sh" "nonexistent-token-xyz" "$tmp_root" >/dev/null 2>&1; then
   : # exit code 1 on no-match is acceptable
 fi
 # Override should not have mutated the cache.

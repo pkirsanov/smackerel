@@ -22,7 +22,6 @@ INSTALL_PROVENANCE_FILE="$FRAMEWORK_ROOT/.install-source.json"
 quiet="false"
 violations=0
 warnings=0
-manifest_managed_count=''
 
 usage() {
   cat <<'EOF'
@@ -107,6 +106,14 @@ if [[ ! -f "$INSTALL_PROVENANCE_FILE" ]]; then
 fi
 
 bubbles_validate_release_manifest_schema "$RELEASE_MANIFEST_FILE" 'bubbles framework-write-guard' || exit 1
+
+# Pre-declare the by-name (nameref) out-params populated by the bubbles_read_*
+# helpers below. Without this, shellcheck cannot see the assignment and reports
+# SC2154 at every reference; the placeholder values are intentional (SC2034).
+# shellcheck disable=SC2034
+manifest_version='' manifest_git_sha='' manifest_profiles='' manifest_interop='' manifest_managed_count=''
+# shellcheck disable=SC2034
+install_version='' install_mode='' source_ref='' source_git_sha='' source_dirty=''
 
 bubbles_read_release_manifest_summary "$RELEASE_MANIFEST_FILE" \
   manifest_version \

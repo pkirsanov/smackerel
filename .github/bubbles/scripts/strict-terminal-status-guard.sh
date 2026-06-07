@@ -356,7 +356,7 @@ check_workflow_outcome_states() {
 line_is_legacy_or_forbidden() {
   local line_lc="$1"
   case "$line_lc" in
-    *legacy*|*read-only*|*read\ only*|*migrat*|*forbidden*|*deprecated*|*not\ valid*|*not\ permitted*|*must\ not*|*cannot*|*no\ new*|*new\ writes\ are\ forbidden*|*old\ specs*|*until\ touched*|*compatib*|*reject*|*block*|*g092*) return 0 ;;
+    *legacy*|*read-only*|*read\ only*|*migrat*|*forbidden*|*deprecated*|*not\ valid*|*not\ permitted*|*must\ not*|*cannot*|*no\ new*|*old\ specs*|*until\ touched*|*compatib*|*reject*|*block*|*g092*) return 0 ;;
     *) return 1 ;;
   esac
 }

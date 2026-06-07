@@ -150,6 +150,7 @@ path_matches_pattern() {
   local pattern_value="$2"
 
   [[ -n "$pattern_value" ]] || return 1
+  # shellcheck disable=SC2053  # intentional glob match: pattern_value is a glob pattern
   [[ "$path_value" == $pattern_value ]]
 }
 
@@ -337,10 +338,13 @@ while IFS= read -r raw_line; do
 done < "$CONFIG_FILE"
 
 declare -a MATCHED_COMPONENTS=()
+# shellcheck disable=SC2034  # populated by name via append_unique (local -n seen_map)
 declare -A MATCHED_COMPONENT_SEEN=()
 declare -a IMPACTED_CATEGORIES=()
+# shellcheck disable=SC2034  # populated by name via append_unique (local -n seen_map)
 declare -A IMPACTED_CATEGORY_SEEN=()
 declare -a ALWAYS_RUN=()
+# shellcheck disable=SC2034  # populated by name via append_unique (local -n seen_map)
 declare -A ALWAYS_RUN_SEEN=()
 declare -a FULL_SUITE_FILES=()
 

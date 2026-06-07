@@ -22,7 +22,6 @@ ROOT_FLAG=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 REQUIRED_CHAIN_TEXT="bubbles.analyst -> bubbles.ux -> bubbles.design -> bubbles.plan"
-REQUIRED_AGENTS=("bubbles.analyst" "bubbles.ux" "bubbles.design" "bubbles.plan")
 
 REQUIRED_PROMPT_FILES=(
   "agents/bubbles.goal.agent.md"

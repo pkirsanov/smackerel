@@ -73,9 +73,9 @@ json_first_string() {
     return 0
   fi
 
-  grep -Eo '"'"'"$key"'"'"[[:space:]]*:[[:space:]]*"[^"]+"' "$file" \
+  grep -Eo '"'"$key"'"[[:space:]]*:[[:space:]]*"[^"]+"' "$file" \
     | head -n 1 \
-    | sed -E 's/.*"'"'"$key"'"'"[[:space:]]*:[[:space:]]*"([^"]+)"/\1/'
+    | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*"([^"]+)"/\1/'
 }
 
 detect_scope_layout() {

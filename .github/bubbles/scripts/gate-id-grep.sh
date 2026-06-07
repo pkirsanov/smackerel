@@ -97,6 +97,23 @@ if [[ ! -d "$repo_root" ]]; then
   exit 2
 fi
 
+# --- PCRE grep guard (GNU grep -P required) --------------------------------
+#
+# The duplicate-adjacent and reference scans below use `grep -P` for the
+# back-reference (\1) and precise word-boundary matching. On a grep without
+# PCRE support (BSD/macOS default grep, or a GNU grep built --without-pcre),
+# `grep -P` errors out. Because those scans suppress stderr and `|| true` the
+# exit, a missing -P would make the scans return ZERO matches and the gate
+# would SILENTLY PASS — a false negative. Fail loud instead.
+# Override with BUBBLES_GREP (e.g. BUBBLES_GREP=ggrep on macOS).
+GREP_BIN="${BUBBLES_GREP:-grep}"
+if ! printf 'x\n' | "$GREP_BIN" -P 'x' >/dev/null 2>&1; then
+  echo "gate-id-grep: requires GNU grep with PCRE (-P) support; '$GREP_BIN' lacks -P." >&2
+  echo "  This gate cannot scan reliably without -P and refuses to pass silently." >&2
+  echo "  On macOS: 'brew install grep' then re-run with BUBBLES_GREP=ggrep (or put GNU grep first on PATH)." >&2
+  exit 2
+fi
+
 workflows_yaml="$repo_root/bubbles/workflows.yaml"
 if [[ ! -f "$workflows_yaml" ]]; then
   echo "gate-id-grep: bubbles/workflows.yaml not found at $workflows_yaml" >&2
@@ -160,7 +177,7 @@ unknown_findings_file="$(mktemp)"
 # via --binary-files=without-match and skip vendored .git dirs (find roots
 # already exclude .git by virtue of not descending into them).
 # NOTE: -P and -E are mutually exclusive in GNU grep; use -P only.
-grep -rPn --binary-files=without-match \
+"$GREP_BIN" -rPn --binary-files=without-match \
   '\b(G[0-9]{3})\b[ ,]+\1\b' \
   "${scan_roots[@]}" \
   > "$dup_findings_file" 2>/dev/null || true
@@ -172,7 +189,7 @@ dup_count="$(wc -l < "$dup_findings_file" | tr -d ' ')"
 # Collect every <file>:<line>:<G\d{3}> reference, then for each ID check
 # canonical membership. Project-local custom gates (>= G900) are always allowed.
 
-grep -rPno --binary-files=without-match \
+"$GREP_BIN" -rPno --binary-files=without-match \
   '\bG[0-9]{3}\b' \
   "${scan_roots[@]}" \
   > "$ref_findings_file" 2>/dev/null || true

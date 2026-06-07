@@ -45,7 +45,7 @@ if [[ -z "$repo_root" ]]; then
   echo "❌ pii-scan: not inside a git repo." >&2
   exit 1
 fi
-cd "$repo_root"
+cd "$repo_root" || exit 1
 
 # 1. Sanity: gitleaks must be installed.
 if ! command -v gitleaks >/dev/null 2>&1; then

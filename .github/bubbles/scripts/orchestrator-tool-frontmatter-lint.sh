@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # orchestrator-tool-frontmatter-lint.sh
 #
-# Detects orchestrator agents whose YAML frontmatter does NOT declare
-# the `agent` tool. An orchestrator without `agent` in `tools:` cannot
-# call `runSubagent(...)` at runtime — the IDE blocks the tool, the
-# orchestrator silently degrades into a single-agent transcript, and
-# the entire delegation pipeline collapses without any visible error.
+# Detects orchestrator agents whose YAML frontmatter declares a `tools:`
+# allowlist that OMITS the `agent` tool. An orchestrator that restricts its
+# tools but forgets `agent` cannot call `runSubagent(...)` at runtime — the
+# IDE blocks the tool, the orchestrator silently degrades into a single-agent
+# transcript, and the entire delegation pipeline collapses without any visible
+# error.
+#
+# IMPORTANT — absent `tools:` is NOT a violation. When an agent declares no
+# `tools:` allowlist, it inherits ALL available tools (including `agent`), so
+# delegation works. Only a PRESENT allowlist missing `agent` is a real defect.
 #
 # An agent is considered an orchestrator when ANY of these signals are
 # present in its body:
@@ -195,6 +200,14 @@ frontmatter_has_agent_tool() {
   return 1
 }
 
+# True when frontmatter declares a `tools:` allowlist at all (inline
+# `tools: [..]` or a block `tools:` followed by `- item` lines). Absent
+# allowlist => inherits all tools => never a violation.
+frontmatter_declares_tools() {
+  local frontmatter="$1"
+  printf '%s\n' "$frontmatter" | grep -qE '^tools:[[:space:]]*(\[|$)'
+}
+
 frontmatter_opt_out() {
   local frontmatter="$1"
   printf '%s' "$frontmatter" | grep -qE '^delegationModel:[[:space:]]*none[[:space:]]*$'
@@ -258,7 +271,11 @@ while IFS= read -r -d '' agent_file; do
   fi
 
   orchestrators=$((orchestrators + 1))
-  if frontmatter_has_agent_tool "$fm"; then
+  if ! frontmatter_declares_tools "$fm"; then
+    # No tools: allowlist declared -> inherits ALL tools (including agent) ->
+    # delegation works at runtime. Not a violation.
+    [[ "$verbose" == "true" ]] && echo "OK (no tools: allowlist; inherits agent): $rel ($name) [$reason]"
+  elif frontmatter_has_agent_tool "$fm"; then
     [[ "$verbose" == "true" ]] && echo "OK: $rel ($name) [$reason]"
   else
     missing+=("$rel|$name|$reason")
@@ -273,7 +290,7 @@ echo "orchestrator-tool-frontmatter-lint: opt-outs (delegationModel: none): $opt
 echo "orchestrator-tool-frontmatter-lint: --allow exclusions: $allowed"
 
 if [[ "${#missing[@]}" -eq 0 ]]; then
-  echo "orchestrator-tool-frontmatter-lint: PASS — every orchestrator declares 'agent' in tools"
+  echo "orchestrator-tool-frontmatter-lint: PASS — every orchestrator can delegate (declares 'agent' or inherits all tools)"
   exit 0
 fi
 

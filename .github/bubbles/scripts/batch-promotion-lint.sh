@@ -136,11 +136,9 @@ case "$mode" in
     fi
     if git rev-parse --verify "${git_ref}^" >/dev/null 2>&1; then
       parent_ref="${git_ref}^"
-      diff_range="${parent_ref}..${git_ref}"
       root_commit=0
     else
       parent_ref=""
-      diff_range="$git_ref"
       root_commit=1
     fi
     if [[ "$root_commit" -eq 1 ]]; then

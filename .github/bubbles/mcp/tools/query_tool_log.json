@@ -18,6 +18,12 @@
   },
   "script": "evidence-tool-log-bridge.sh",
   "argsTemplate": ["${spec_dir}", "--format=json"],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
   "successExitCodes": [0]
 }
 

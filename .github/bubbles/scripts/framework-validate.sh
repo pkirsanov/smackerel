@@ -86,6 +86,8 @@ echo
 
 run_check "Repository drift report (informational)" bash "$SCRIPT_DIR/repo-drift-report.sh" --repo-root "$REPO_ROOT"
 run_check_self_only "Portable surface agnosticity" bash "$SCRIPT_DIR/agnosticity-lint.sh" --quiet "${agnosticity_targets[@]}"
+run_check_self_only "Shellcheck lint (v7.0.2, -S warning, zero findings)" bash "$SCRIPT_DIR/shellcheck-lint.sh" --quiet
+run_check_self_only "Shellcheck lint selftest (v7.0.2)" bash "$SCRIPT_DIR/shellcheck-lint-selftest.sh"
 run_check "Registry consistency selftest" bash "$SCRIPT_DIR/registry-consistency-selftest.sh"
 run_check "YAML schema validate" bash "$SCRIPT_DIR/yaml-schema-validate.sh"
 run_check_self_only "Cheatsheet generator selftest (v6.0 / B7)" bash "$SCRIPT_DIR/generate-cheatsheet-selftest.sh"
@@ -150,6 +152,7 @@ else
 fi
 run_check "Instruction budget lint" bash "$SCRIPT_DIR/instruction-budget-lint.sh" "$agents_dir"
 run_check "Agent ownership lint" bash "$SCRIPT_DIR/agent-ownership-lint.sh"
+run_check "Orchestrator tool frontmatter lint (v7.0.3)" bash "$SCRIPT_DIR/orchestrator-tool-frontmatter-lint.sh"
 run_check "Action risk registry lint" bash "$SCRIPT_DIR/action-risk-registry-lint.sh"
 run_check_self_only "Capability ledger selftest" bash "$SCRIPT_DIR/capability-ledger-selftest.sh"
 run_check_self_only "Capability freshness selftest" bash "$SCRIPT_DIR/capability-freshness-selftest.sh"
@@ -171,6 +174,7 @@ run_check "Transition guard selftest" bash "$SCRIPT_DIR/state-transition-guard-s
 run_check "Convergence cap guard selftest" bash "$SCRIPT_DIR/convergence-cap-guard-selftest.sh"
 run_check "Compaction discipline guard selftest" bash "$SCRIPT_DIR/compaction-discipline-guard-selftest.sh"
 run_check "Pre-existing deferral guard selftest" bash "$SCRIPT_DIR/pre-existing-deferral-guard-selftest.sh"
+run_check "Discovered-issue disposition guard selftest (G095)" bash "$SCRIPT_DIR/discovered-issue-disposition-guard-selftest.sh"
 run_check "Framework dogfood guard selftest" bash "$SCRIPT_DIR/framework-dogfood-guard-selftest.sh"
 run_check "Orchestrator persistence lint selftest" bash "$SCRIPT_DIR/orchestrator-persistence-lint-selftest.sh"
 run_check "Validation latency report selftest" bash "$SCRIPT_DIR/validation-latency-report-selftest.sh"
@@ -210,6 +214,10 @@ fi
 
 if [[ -x "$SCRIPT_DIR/gate-id-grep-selftest.sh" ]]; then
   run_check "Gate ID grep selftest" bash "$SCRIPT_DIR/gate-id-grep-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/release-packet-location-guard-selftest.sh" ]]; then
+  run_check "Release packet location guard selftest" bash "$SCRIPT_DIR/release-packet-location-guard-selftest.sh"
 fi
 
 if [[ -x "$SCRIPT_DIR/workflow-surface-selftest.sh" ]]; then
@@ -286,6 +294,17 @@ fi
 
 if [[ -x "$SCRIPT_DIR/intent-routes-lint.sh" && -f "$REPO_ROOT/bubbles/intent-routes.yaml" ]]; then
   run_check "Intent routes lint (live)" bash "$SCRIPT_DIR/intent-routes-lint.sh" "$REPO_ROOT"
+fi
+
+if [[ -x "$SCRIPT_DIR/stale-deferral-lint-selftest.sh" ]]; then
+  run_check "Stale-deferral lint selftest" bash "$SCRIPT_DIR/stale-deferral-lint-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/stale-deferral-lint.sh" ]]; then
+  # Live scan is source-only: it reads the framework VERSION and scans the
+  # framework's own managed docs. Downstream repos have their own VERSION +
+  # product docs, so the lapsed-promise comparison is meaningful only here.
+  run_check_self_only "Stale-deferral lint (live)" bash "$SCRIPT_DIR/stale-deferral-lint.sh" "$REPO_ROOT"
 fi
 
 if [[ "$failures" -gt 0 ]]; then

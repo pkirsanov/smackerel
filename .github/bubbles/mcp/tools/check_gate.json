@@ -19,5 +19,11 @@
   },
   "script": "gate-meta.sh",
   "argsTemplate": ["${action}", "${gate_id?}"],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
   "successExitCodes": [0]
 }

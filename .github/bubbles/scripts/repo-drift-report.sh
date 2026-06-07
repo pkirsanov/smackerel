@@ -127,7 +127,8 @@ relative_path() {
 display_path() {
   local path="$1"
   if [[ -n "${HOME:-}" && "$path" == "$HOME"/* ]]; then
-    printf '~/%s' "${path#$HOME/}"
+    # shellcheck disable=SC2088  # literal ~/ is intentional display text, not a path to expand
+    printf '~/%s' "${path#"$HOME"/}"
   else
     printf '%s' "$path"
   fi

@@ -1,0 +1,7 @@
+{
+  "uriTemplate": "bubbles://gates/{id}",
+  "name": "Bubbles gate (by id)",
+  "description": "Full metadata for a single gate, e.g. bubbles://gates/G024. Backed by gate-meta.sh json <id> against bubbles/registry/gates.yaml — the same bash twin the check_gate tool uses, never a duplicated parser. Returns ERR_RESOURCE_FAILED for an unknown gate id.",
+  "mimeType": "application/json",
+  "commandTemplate": { "script": "gate-meta.sh", "args": ["json", "{id}"] }
+}

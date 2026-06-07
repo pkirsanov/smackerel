@@ -150,8 +150,6 @@ run_rule_on_file() {
   local file="$1"
   local is_markdown="false"
   local grep_project_name
-  local grep_abs_path
-  local grep_concrete_tool
 
   [[ "$file" == *.md ]] && is_markdown="true"
 

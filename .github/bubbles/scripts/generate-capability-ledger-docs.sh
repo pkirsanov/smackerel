@@ -4,6 +4,7 @@ set -euo pipefail
 # Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
 _BTMPS=()
 trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
+# shellcheck disable=SC2120  # _btmp forwards optional flags to mktemp (e.g. -d); also called bare.
 _btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -184,7 +185,6 @@ format_issue_list() {
 state_count() {
   local target_state="$1"
   local count=0
-  local line
   while IFS=$'\t' read -r kind _ _ state _; do
     [[ "$kind" == "CAP" ]] || continue
     if [[ "$state" == "$target_state" ]]; then
@@ -301,7 +301,7 @@ competitive_doc_temp="$(_btmp)"
   echo '| Capability | State | Summary | Competitor Pressure | Docs | Evidence | Issues |'
   echo '| --- | --- | --- | --- | --- | --- | --- |'
 
-  while IFS=$'\t' read -r kind cap_id label state summary owner_surface release_introduced competitor_tags docs_refs evidence_refs issue_refs; do
+  while IFS=$'\t' read -r kind _ label state summary owner_surface _ competitor_tags docs_refs evidence_refs issue_refs; do
     [[ "$kind" == "CAP" ]] || continue
     printf '| %s | %s | %s | %s | %s | `%s`' \
       "$label" \
@@ -326,7 +326,7 @@ issue_doc_temp="$(_btmp)"
   echo '| Issue | Ledger Status | Related Capability | Summary |'
   echo '| --- | --- | --- | --- |'
 
-  while IFS=$'\t' read -r kind cap_id label state summary _ _ _ _ _ issue_refs; do
+  while IFS=$'\t' read -r kind _ label state summary _ _ _ _ _ issue_refs; do
     [[ "$kind" == "CAP" ]] || continue
     [[ -n "$issue_refs" ]] || continue
     IFS=$'\034' read -r -a issue_paths <<< "$issue_refs"
@@ -414,7 +414,7 @@ interop_doc_temp="$(_btmp)"
   echo '| Source | Parser | Review-Only Intake | Supported Apply Targets | Proposal-Only / Unsupported |'
   echo '| --- | --- | --- | --- | --- |'
 
-  while IFS=$'\t' read -r kind source_id display_name parser_kind detectors apply_instruction apply_guardrail apply_command_surface apply_tool_request apply_docs_reference unsupported_targets; do
+  while IFS=$'\t' read -r kind _ display_name parser_kind detectors apply_instruction apply_guardrail apply_command_surface apply_tool_request apply_docs_reference unsupported_targets; do
     [[ "$kind" == 'SRC' ]] || continue
     apply_targets=''
     for apply_target in "$apply_instruction" "$apply_guardrail" "$apply_command_surface" "$apply_tool_request" "$apply_docs_reference"; do

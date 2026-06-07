@@ -234,8 +234,9 @@ load_runtime_defaults() {
     CFG_RUNTIME_REUSE_POLICY="$(config_string_value runtime reusePolicy fingerprint-match-only "$CONTROL_PLANE_CONFIG")"
   else
     CFG_RUNTIME_TTL_MINUTES=20
+    # shellcheck disable=SC2034  # default surfaced for env consumption by lease ops.
     CFG_RUNTIME_STALE_AFTER_MINUTES=60
-    CFG_RUNTIME_REUSE_POLICY=fingerprint-match-only
+    CFG_RUNTIME_REUSE_POLICY="fingerprint-match-only"
   fi
 }
 

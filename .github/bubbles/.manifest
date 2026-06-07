@@ -31,6 +31,7 @@ bubbles/scripts/delivery-implementation-delta-guard.sh
 bubbles/scripts/developer-profile.sh
 bubbles/scripts/diff-evidence-guard-selftest.sh
 bubbles/scripts/diff-evidence-guard.sh
+bubbles/scripts/discovered-issue-disposition-guard-selftest.sh
 bubbles/scripts/discovered-issue-disposition-guard.sh
 bubbles/scripts/docs-registry-effective.sh
 bubbles/scripts/docs-registry-resolve.sh
@@ -126,6 +127,7 @@ bubbles/scripts/regression-quality-guard.sh
 bubbles/scripts/release-check.sh
 bubbles/scripts/release-manifest-purity-selftest.sh
 bubbles/scripts/release-manifest-selftest.sh
+bubbles/scripts/release-packet-location-guard-selftest.sh
 bubbles/scripts/release-packet-location-guard.sh
 bubbles/scripts/release-train-backfill-planner.sh
 bubbles/scripts/release-train-flag-audit-selftest.sh
@@ -146,9 +148,13 @@ bubbles/scripts/retro-framework-health-selftest.sh
 bubbles/scripts/retro-framework-health.sh
 bubbles/scripts/runtime-lease-selftest.sh
 bubbles/scripts/runtime-leases.sh
+bubbles/scripts/shellcheck-lint-selftest.sh
+bubbles/scripts/shellcheck-lint.sh
 bubbles/scripts/skill-evolution.sh
 bubbles/scripts/spec-dashboard.sh
 bubbles/scripts/spec-review-handoff-selftest.sh
+bubbles/scripts/stale-deferral-lint-selftest.sh
+bubbles/scripts/stale-deferral-lint.sh
 bubbles/scripts/state-linkage-backfill-selftest.sh
 bubbles/scripts/state-linkage-backfill.sh
 bubbles/scripts/state-snapshot-selftest.sh
@@ -208,8 +214,10 @@ bubbles/mcp/clients/cline.json
 bubbles/mcp/clients/cursor.json
 bubbles/mcp/clients/vscode.json
 bubbles/mcp/resources/agent-capabilities.json
+bubbles/mcp/resources/gate-by-id.json
 bubbles/mcp/resources/gates.json
 bubbles/mcp/resources/intent-routes.json
+bubbles/mcp/resources/spec-state.json
 bubbles/mcp/resources/tool-call-schema.json
 bubbles/mcp/resources/workflows.json
 bubbles/mcp/server.py

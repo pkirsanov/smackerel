@@ -524,7 +524,6 @@ state_completed_phases_block=""
 state_execution_phase_claims_block=""
 state_certified_completed_phases_block=""
 state_completed_scopes_block=""
-wi_parity_present="false"
 wi_canonical_count=""
 wi_provisional_count=""
 wi_post_migration_target=""
@@ -701,7 +700,6 @@ if [[ -f "$state_file" ]]; then
 
       # Cross-check completedScopes array in state.json
       state_completed_scopes="$state_completed_scopes_block"
-      state_completed_scopes_empty="$({ echo "$state_completed_scopes" | grep -cE '^\s*\[\s*\]\s*$|"completedScopes"[[:space:]]*:[[:space:]]*\[\s*\]'; } || true)"
 
       if [[ "$done_scopes" -gt 0 ]] && echo "$state_completed_scopes" | grep -qE '\[\s*\]'; then
         fail "scopes.md shows $done_scopes Done scope(s) but state.json completedScopes is empty — INCONSISTENCY"
@@ -714,7 +712,7 @@ if [[ -f "$state_file" ]]; then
     if [[ "$state_status" == "done" ]]; then
       mode_required_specialists=()
       case "$state_workflow_mode" in
-        full-delivery|value-first-e2e-batch)
+        value-first-e2e-batch)
           mode_required_specialists=("implement" "test" "docs" "validate" "audit" "chaos")
           ;;
         full-delivery)
@@ -918,7 +916,6 @@ if [[ -f "$state_file" ]]; then
   } || true)"
 
   if [[ -n "$wi_canonical_count$wi_provisional_count$wi_post_migration_target$wi_migration_status" ]]; then
-    wi_parity_present="true"
     pass "Detected wiParity metadata in state.json"
 
     if [[ -z "$wi_canonical_count" ]] || [[ -z "$wi_provisional_count" ]] || [[ -z "$wi_post_migration_target" ]] || [[ -z "$wi_migration_status" ]]; then
@@ -1584,7 +1581,7 @@ done
 if [[ -f "$state_file" ]] && [[ "$state_status" == "done" ]] && [[ -n "$state_workflow_mode" ]]; then
   required_specialists=()
   case "$state_workflow_mode" in
-    full-delivery|value-first-e2e-batch)
+    value-first-e2e-batch)
       required_specialists=("implement" "test" "docs" "validate" "audit" "chaos")
       ;;
     full-delivery)

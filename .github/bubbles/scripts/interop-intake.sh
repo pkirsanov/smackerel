@@ -445,7 +445,6 @@ write_translation_report() {
   local source_files=("$@")
   local source_file=''
   local supported_target=''
-  local proposal_ref=''
   local primary_class=''
 
   {
@@ -627,7 +626,7 @@ print_status() {
   local review_status=''
   local apply_status=''
   local normalized_output=''
-  local proposal_refs=''
+  local proposal_refs_joined=''
   local applied_targets=''
   local collision_targets=''
 
@@ -644,10 +643,10 @@ print_status() {
     review_status="$(bubbles_json_string_field "$entry_file" reviewStatus)"
     apply_status="$(bubbles_json_string_field "$entry_file" applyStatus)"
     normalized_output="$(bubbles_json_string_field "$entry_file" normalizedOutput)"
-    proposal_refs="$(bubbles_json_array_joined "$entry_file" proposalRefs ', ' 'none')"
+    proposal_refs_joined="$(bubbles_json_array_joined "$entry_file" proposalRefs ', ' 'none')"
     applied_targets="$(bubbles_json_array_joined "$entry_file" appliedTargets ', ' 'none')"
     collision_targets="$(bubbles_json_array_joined "$entry_file" collisionTargets ', ' 'none')"
-    echo "- ${source_id}: reviewStatus=${review_status} applyStatus=${apply_status} normalizedOutput=${normalized_output} applied=${applied_targets} collisions=${collision_targets} proposals=${proposal_refs}"
+    echo "- ${source_id}: reviewStatus=${review_status} applyStatus=${apply_status} normalizedOutput=${normalized_output} applied=${applied_targets} collisions=${collision_targets} proposals=${proposal_refs_joined}"
   done < <(find "$IMPORTS_ROOT" -mindepth 3 -maxdepth 3 -name manifest-entry.json | sort)
 }
 
