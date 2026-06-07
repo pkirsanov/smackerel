@@ -1,0 +1,7 @@
+{
+  "uriTemplate": "bubbles://spec/{nnn}/state.json",
+  "name": "Spec control-plane state (by number)",
+  "description": "The state.json control-plane record for a spec, e.g. bubbles://spec/042/state.json resolves specs/042*/state.json. Read-only. The Bubbles source repo keeps no specs (G085 dogfood guard), so this resolves only in downstream consumer repos; an unmatched or ambiguous number returns ERR_RESOURCE_FAILED.",
+  "mimeType": "application/json",
+  "pathTemplate": "specs/{nnn}*/state.json"
+}

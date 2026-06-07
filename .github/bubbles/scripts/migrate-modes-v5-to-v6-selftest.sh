@@ -16,7 +16,6 @@ set -euo pipefail
 
 REPO_ROOT="${BUBBLES_REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 SCRIPT="${REPO_ROOT}/bubbles/scripts/migrate-modes-v5-to-v6.sh"
-REAL_ALIASES="${REPO_ROOT}/bubbles/workflows/aliases.yaml"
 
 FIXTURE_ROOT="${HOME}/.cache/bubbles-migrate-modes-selftest"
 rm -rf "$FIXTURE_ROOT"

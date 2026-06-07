@@ -1,7 +1,7 @@
-# Bubbles MCP Server (v6.0)
+# Bubbles MCP Server
 
-> Status: SHIPPED in v6.0. Optional — bash scripts remain the supported fallback.
-> Transport: stdio (default) or HTTP (v6.1 / R9). Protocol: Model Context Protocol (MCP) 2024-11-05.
+> Status: SHIPPED (since v6.0). Optional — bash scripts remain the supported fallback.
+> Transport: stdio (default) or HTTP. Protocol: Model Context Protocol (MCP) — negotiates 2024-11-05 / 2025-03-26 / 2025-06-18 (echoes the client's requested version when supported, else returns the latest).
 > Runtime: Python 3.10+, stdlib only. No `pip install`. No daemon.
 
 The Bubbles MCP server exposes the framework's gate registry, validation scripts, and canonical resources as MCP tools and resources so MCP-aware clients (VS Code Copilot Chat agent, Claude Desktop, Cursor, Cline) can call them directly — without spawning shell processes or parsing markdown.
@@ -18,7 +18,7 @@ If you do not register the MCP server, every Bubbles workflow continues to work 
 
 ```bash
 bash .github/bubbles/scripts/mcp-server-selftest.sh
-# Expected: 11 PASS lines and "mcp-server-selftest passed."
+# Expected: T1–T19 PASS lines and "mcp-server-selftest passed."
 ```
 
 ### 2. Register with your MCP client
@@ -32,7 +32,7 @@ Sample configs ship under `.github/bubbles/mcp/clients/`. Pick the one for your 
 | Cursor | `.cursor/mcp.json` (workspace) or `~/.cursor/mcp.json` (global) | `.github/bubbles/mcp/clients/cursor.json` |
 | Cline | `cline_mcp_settings.json` | `.github/bubbles/mcp/clients/cline.json` |
 
-Restart your client. The `bubbles` server should appear with 10 tools and 5 resources.
+Restart your client. The `bubbles` server should appear with 10 annotated tools, 5 static resources, 2 resource templates, and 37 prompts.
 
 ---
 
@@ -53,6 +53,11 @@ Restart your client. The `bubbles` server should appear with 10 tools and 5 reso
 
 Tool definitions live in `.github/bubbles/mcp/tools/*.json`. Each declares an `inputSchema` (JSON Schema) and an `argsTemplate` with `${var}` (required) and `${var?}` (optional, drop-on-empty) placeholders.
 
+Tools also expose MCP annotations so newer clients can plan safely:
+
+- read-only query tools (`check_gate`, `resolve_mode`, `read_spec`, `search_code`, validation/readback tools) advertise `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, and `openWorldHint: false`.
+- `record_evidence` advertises `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: false`, and `openWorldHint: true` because it wraps an arbitrary command and appends to the tool-call log.
+
 ---
 
 ## Resource Catalog
@@ -65,7 +70,36 @@ Tool definitions live in `.github/bubbles/mcp/tools/*.json`. Each declares an `i
 | `bubbles://schemas/tool-call` | `bubbles/schemas/tool-call.schema.json` | `application/json` |
 | `bubbles://workflows/intent-routes.yaml` | `bubbles/intent-routes.yaml` | `application/yaml` |
 
-Resources are read-only. Templated URIs (`bubbles://gates/{id}`, `bubbles://spec/{nnn}/state.json`) are deferred to v6.1.
+Resources are read-only.
+
+### Resource Templates
+
+The server also exposes **templated resources** (RFC 6570 level-1 `{var}`
+expansion), discoverable via the `resources/templates/list` method:
+
+| URI template | Resolves to | MIME |
+|--------------|-------------|------|
+| `bubbles://gates/{id}` | One gate's full metadata, e.g. `bubbles://gates/G024`. Backed by the `gate-meta.sh json <id>` bash twin — the same source the `check_gate` tool uses, never a duplicated parser. | `application/json` |
+| `bubbles://spec/{nnn}/state.json` | A spec's control-plane `state.json`, e.g. `bubbles://spec/042/state.json` → `specs/042*/state.json`. Resolves only in downstream consumer repos (the Bubbles source repo keeps no `specs/` per the G085 dogfood guard). | `application/json` |
+
+Templated reads surface the same anti-fabrication guarantee as tools: a
+`commandTemplate`-backed resource (like `bubbles://gates/{id}`) runs its bash
+twin and returns the verbatim stdout; an unknown id or an unmatched/ambiguous
+spec number returns a real `-32004` (`ERR_RESOURCE_FAILED`) error, never a fake
+empty success. Extracted `{var}` values may not contain `..`.
+
+---
+
+## Prompt Catalog
+
+The MCP server exposes the same prompt shims Bubbles installs for VS Code and other agent clients:
+
+| MCP method | Backing files | Result |
+|------------|---------------|--------|
+| `prompts/list` | `prompts/*.prompt.md` in the source repo, `.github/prompts/*.prompt.md` downstream | Lists every Bubbles prompt shim by name and description. |
+| `prompts/get` | One selected `.prompt.md` file | Returns a single user message containing the prompt body plus the target `agent:` from frontmatter. |
+
+Prompt exposure is read-only and does not synthesize new prompt logic. The server parses the existing frontmatter (`agent`, `description`) and body, so MCP clients that surface prompt catalogs can invoke the same Bubbles entrypoints as slash-prompt users. Unknown prompt names return a real `-32005` (`ERR_PROMPT_NOT_FOUND`) error.
 
 ---
 
@@ -107,9 +141,9 @@ The server enforces the same anti-fabrication discipline as the bash scripts:
 
 ## Selftest
 
-`bash .github/bubbles/scripts/mcp-server-selftest.sh` asserts 11 invariants (T1–T11): server boots, every declared tool has a bash twin, `initialize`/`ping`/`tools/list`/`tools/call`/`resources/list`/`resources/read` round-trip correctly, malformed/unknown requests return proper JSON-RPC error codes, optional `${var?}` substitution works.
+`bash .github/bubbles/scripts/mcp-server-selftest.sh` asserts 19 invariants (T1–T19): server boots, every declared tool has a bash twin, `initialize`/`ping`/`tools/list`/`tools/call`/`resources/list`/`resources/read` round-trip correctly, `resources/templates/list` returns the templated catalog, templated reads (`bubbles://gates/{id}`) resolve via the bash twin and surface real `-32004` errors for unknown ids, `prompts/list` returns the prompt catalog, `prompts/get` returns a real prompt body, unknown prompts return `-32005`, `tools/list` exposes planning/safety annotations, `initialize` negotiates the protocol version (echo-when-supported, latest-otherwise), malformed/unknown requests return proper JSON-RPC error codes, and optional `${var?}` substitution works.
 
-The selftest is wired into `bubbles/scripts/framework-validate.sh` so the v6 MCP invariant is enforced on every source-side framework-validate run.
+The selftest is wired into `bubbles/scripts/framework-validate.sh` so the MCP invariant is enforced on every source-side framework-validate run.
 
 ## HTTP Transport (v6.1 / R9)
 
@@ -128,10 +162,10 @@ python3 .github/bubbles/mcp/server.py --transport http --host 127.0.0.1 --port 8
 
 ---
 
-## What v6.0 Does Not Do
+## What The Server Does Not Do
 
-- HTTP/SSE transport (HTTP POST shipped in v6.1 / R9; Server-Sent Events streaming still deferred).
-- Templated resource URIs like `bubbles://gates/{id}` (deferred to v6.1).
+- Server-Sent Events (SSE) streaming over the HTTP transport (HTTP POST + health only).
 - Server-initiated notifications (`resources/listChanged`, `tools/listChanged` events).
-- Auth / per-tool authorization (the server inherits the OS user's permissions).
+- Prompt argument templating — current Bubbles prompt shims are static and accept no MCP prompt arguments.
+- Auth / per-tool authorization beyond the optional HTTP bearer token (the server otherwise inherits the OS user's permissions).
 - Server installation via `pip install` or `npm install` — the design is intentionally dependency-free.

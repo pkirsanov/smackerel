@@ -156,7 +156,7 @@ looks_like_test_path() {
   esac
 
   case "$base" in
-    *test*.*|*spec*.*|test_*|spec_*|*_test.*|*_spec.*)
+    *test*.*|*spec*.*|test_*|spec_*)
       return 0
       ;;
   esac

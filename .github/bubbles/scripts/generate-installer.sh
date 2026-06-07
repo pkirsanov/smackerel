@@ -24,10 +24,9 @@ REPO_ROOT="${BUBBLES_REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || p
 INSTALLER_YAML="${REPO_ROOT}/bubbles/installer/installer.yaml"
 INSTALL_SH="${REPO_ROOT}/install.sh"
 
-MODE="--check"
 if [[ $# -gt 0 ]]; then
   case "$1" in
-    --check) MODE="--check"; shift ;;
+    --check) shift ;;
     -h|--help)
       cat <<EOF
 Usage: bash bubbles/scripts/generate-installer.sh [--check]
@@ -47,7 +46,6 @@ fi
 
 declare -i fail_count=0
 declare -i step_count=0
-declare -i invariant_count=0
 
 emit_fail() {
   echo "FAIL: $*"
@@ -108,7 +106,6 @@ for ln in "${parsed_lines[@]}"; do
 done
 
 step_count=${#steps[@]}
-invariant_count=${#invariants[@]}
 
 if [[ $step_count -eq 0 ]]; then
   echo "generate-installer.sh: no steps parsed from manifest" >&2
@@ -117,7 +114,7 @@ fi
 
 # ── Step check: every required step's marker appears in install.sh ─
 for stuple in "${steps[@]}"; do
-  IFS=$'\t' read -r sname smarker srequired stype <<<"$stuple"
+  IFS=$'\t' read -r sname smarker srequired _ <<<"$stuple"
   if [[ "$srequired" != "true" ]]; then
     continue
   fi
