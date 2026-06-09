@@ -17,6 +17,12 @@
       "plan",
       "implement",
       "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "stabilize",
+      "harden",
+      "security",
       "validate",
       "audit",
       "chaos",
@@ -73,6 +79,12 @@
     "certifiedCompletedPhases": [
       "implement",
       "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "stabilize",
+      "harden",
+      "security",
       "validate",
       "audit",
       "chaos",
@@ -151,7 +163,31 @@
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
-    }
+    },
+    "observations": [
+      {
+        "id": "HARD-035-OBS-001",
+        "severity": "low",
+        "class": "defense-in-depth",
+        "phase": "harden",
+        "summary": "recipe.ScaleIngredients rejects only originalServings<=0 || targetServings<=0 and applies no upper-bound clamp on targetServings, relying on callers to cap. Both spec-035 entry points DO cap at 1000 before calling it (internal/api/domain.go:61 returns HTTP 400 on >1000; internal/telegram/recipe_commands.go:52,69 enforce n<=maxServings), so a large ratio is unreachable through spec-035. Even a hypothetical future uncapped caller stays panic-free: a +Inf scaled quantity flows into FormatQuantity, which returns the literal string +Inf (no crash, no unbounded allocation). Not exploitable via any current spec-035 surface.",
+        "evidenceRef": "report.md § 'Harden Pass — reconcile-to-doc (2026-06-07)'",
+        "disposition": "recorded-not-routed",
+        "followUpOwner": "bubbles.design",
+        "followUpAction": "defer"
+      },
+      {
+        "id": "SEC-035-OBS-001",
+        "severity": "low",
+        "class": "multi-tenancy-design-note",
+        "phase": "security",
+        "summary": "GetArtifactWithDomain scopes the recipe read by WHERE id = $1 with no user_id/owner_id predicate. Correct and complete for spec 035 Hard Constraint single-user-system: the schema has no ownership column, so cross-tenant access is unrepresentable (not an IDOR per OWASP A01). Forward-looking note only: if a future spec converts Smackerel to multi-tenant, this query and the bearer->user binding would need an owner-scope predicate. Describes no defect in current certified-done single-user behavior.",
+        "evidenceRef": "report.md § 'Security Scan — reconcile-to-doc (2026-06-07)'",
+        "disposition": "recorded-not-routed",
+        "followUpOwner": "bubbles.design",
+        "followUpAction": "defer"
+      }
+    ]
   },
   "policySnapshot": {
     "grill": {
@@ -310,6 +346,28 @@
       "runStartedAt": "2026-05-13T00:00:00Z",
       "runCompletedAt": "2026-05-13T00:00:00Z",
       "summary": "Stochastic-quality-sweep R17/20 (seed 20260513) devops-to-doc child mode parent-expanded by bubbles.workflow (nested runSubagent unavailable in current runtime). Probed CI/CD coverage (ci.yml lint-and-test + integration jobs cover internal/recipe and internal/telegram), Build-Once Deploy-Many compliance for recipe code (build.yml digest-pins smackerel-core with cosign keyless + SBOM + SLSA + bundle determinism — compliant), third-party dep delta (none — recipe uses only stdlib), deployment health (existing /healthz adequate for single-user Telegram scope), observability (gap: no smackerel_recipe_* or smackerel_cook_* metrics in internal/metrics/metrics.go), runbook coverage (thin — added authoritative-spec pointer + Phase B status + observability current-state note to docs/Operations.md). Mechanical fixes performed: (1) docs/Operations.md § Recipe Features cross-reference + observability current-state note (operator-pointer addition; no behavior change), (2) report.md R17 appendix with probe matrix + concerns + compliance affirmations, (3) this state.json executionHistory entry. Concerns surfaced: DEVOPS-OBS-035-001 (low; missing recipe-specific Prometheus metrics — owner chain bubbles.bug → bubbles.design → bubbles.plan → bubbles.implement) and DEVOPS-OBS-035-002 (low; Operations.md observability subsection update after metrics land — owner bubbles.docs). No certification.* mutations; status, completedScopes, completedPhaseClaims, certifiedCompletedPhases, scopeProgress preserved verbatim. IDE-tool-only mutations (no shell redirection / heredoc / python3 -c open). No framework-file edits. No deploy/CI changes. No git push."
+    },
+    {
+      "agent": "bubbles.harden",
+      "phasesExecuted": [
+        "harden"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-07T00:00:00Z",
+      "runCompletedAt": "2026-06-07T00:00:00Z",
+      "summary": "Parent-expanded harden-to-doc child mode under bubbles.workflow reconcile-to-doc; phase routed REAL-WORK-NEEDED by the Phase-Record Reconciliation pass. GENUINE robustness / abuse-resistance probe of the spec-035 surfaces (internal/recipe quantity parse + kitchen-fraction format, ?servings= API path in internal/api/domain.go, Telegram scale/cook triggers in internal/telegram/recipe_commands.go, recipe->shopping-list aggregation, cook-mode command/nav). Verdict HARDENED across input-bounds / panic-safety / resource-bounds / fail-loud-SST / injection, every dimension backed by an executed regression test: TestParseQuantity_ZeroDenominator + _ZeroNumerator, 4x TestParseQuantity_Overflow*, TestScaleIngredients_ZeroServingsReturnsNil + _LargeScaleFactor, 3x TestFormatCookStep bounds, TestParseScaleTrigger + TestParseCookTrigger _MaxServingsCap, TestDomainDataHandler_InvalidServings -- ok internal/api + internal/recipe + internal/telegram, EXIT=0. On-disk guards confirmed: den>0 and IsInf/IsNaN in quantity.go; maxServings=1000 caps in domain.go:60-62 + recipe_commands.go:52,69; no ParseMode on the bot.go reply path; internal/recipe reads zero runtime config (grep RC=1). 0 actionable findings, nothing routed; 1 LOW non-routed defense-in-depth observation HARD-035-OBS-001 (ScaleIngredients lacks a self-defending upper clamp; unreachable via spec-035, panic-free +Inf). Diagnostic-only: the harden pass mutated no protected artifact and no certification field (Gate G088 grandfather preserved); this phase record is written by bubbles.validate after the evidence landed. Evidence: report.md section 'Harden Pass — reconcile-to-doc (2026-06-07)'."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": [
+        "security"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-07T00:00:00Z",
+      "runCompletedAt": "2026-06-07T00:00:00Z",
+      "summary": "Parent-expanded security-to-doc child mode under bubbles.workflow reconcile-to-doc; phase routed REAL-WORK-NEEDED by the Phase-Record Reconciliation pass. GENUINE OWASP-2021 security review of the spec-035 surfaces (scaler core internal/recipe, ?servings= path internal/api/domain.go -> internal/db/postgres.go artifact read, Telegram cook/scale surface, recipe aggregation). Verdict SECURE / CLEAN across injection (SQL + markup) / input-validation / authorization-scoping / data-exposure / secret-handling / resource-DoS. Executed evidence: spec-035 security-surface suite WRAPPER_EXIT_CODE=0 (ok internal/api,recipe,telegram,list,mealplan); parameterized SELECT ... FROM artifacts WHERE id = $1 in postgres.go so no SQL injection; zero ParseMode on the reply surface (ParseMode_RC=1) so no markup injection; /artifacts/{id}/domain registered inside the bearerAuthMiddleware group under Throttle(100); Telegram allowlist (!b.allowedChats[chatID]) + resolveActorUserID before dispatch; input bounds 0<n<=1000 + maxArtifactIDLen=128 + io.LimitReader 1MB + anchored non-backtracking trigger regexes; per-chat bearer attached header-only, token never logged (TOKEN_LOG_RC=1). 0 actionable findings, nothing routed; 1 LOW non-routed forward-looking note SEC-035-OBS-001 (WHERE id=$1 is correct for the single-user Hard Constraint; a future multi-tenant spec would need an owner-scope predicate). Diagnostic-only: the security pass mutated no protected artifact and no certification field (Gate G088 grandfather preserved); this phase record is written by bubbles.validate after the evidence landed. Evidence: report.md section 'Security Scan — reconcile-to-doc (2026-06-07)'."
     }
   ],
   "activeBugs": [],

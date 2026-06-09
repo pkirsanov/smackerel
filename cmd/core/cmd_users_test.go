@@ -202,11 +202,58 @@ func TestRunUsersList_PrintsHeaderAndRows(t *testing.T) {
 	}
 }
 
-func TestRunUsersCommand_UnknownSubcommand(t *testing.T) {
-	// runUsersCommand needs DATABASE_URL; we don't exercise it directly
-	// here. Instead verify the dispatcher's usage path through args=[].
-	// (Full dispatch with DB is exercised by SCOPE-4 deploy verification.)
-	if webcreds.MinPasswordLength != 12 {
-		t.Fatalf("expected webcreds.MinPasswordLength=12, got %d", webcreds.MinPasswordLength)
+func TestRunUsersCommand_MissingArgs_Exit2(t *testing.T) {
+	// runUsersCommand returns exit 2 (invocation error) for a missing
+	// subcommand BEFORE any config load or DB connection, so this branch
+	// is exercisable without Postgres.
+	if rc := runUsersCommand(context.Background(), nil); rc != 2 {
+		t.Fatalf("nil args: expected exit 2 (usage), got %d", rc)
+	}
+	if rc := runUsersCommand(context.Background(), []string{}); rc != 2 {
+		t.Fatalf("empty args: expected exit 2 (usage), got %d", rc)
+	}
+}
+
+func TestDispatchUsersSubcommand_UnknownSubcommand_Exit2(t *testing.T) {
+	// The dispatcher's default branch maps any unrecognised subcommand to
+	// exit 2. Exercised through the same switch the live CLI uses, against
+	// an in-memory repo (no DB).
+	repo := newMemRepo()
+	rc := dispatchUsersSubcommand(context.Background(), repo, []string{"bogus"},
+		fixedPrompt("correct-horse-battery-staple", nil), io.Discard)
+	if rc != 2 {
+		t.Fatalf("unknown subcommand: expected exit 2, got %d", rc)
+	}
+}
+
+func TestDispatchUsersSubcommand_RoutesToKnownSubcommands(t *testing.T) {
+	// Prove the dispatcher actually routes (not a no-op proxy): add
+	// creates a user, set-password rotates it, list prints it — all
+	// through the real switch against an in-memory repo.
+	repo := newMemRepo()
+	if rc := dispatchUsersSubcommand(context.Background(), repo, []string{"add", "operator"},
+		fixedPrompt("correct-horse-battery-staple", nil), io.Discard); rc != 0 {
+		t.Fatalf("add: expected exit 0, got %d", rc)
+	}
+	if ok, _ := repo.Exists(context.Background(), "operator"); !ok {
+		t.Fatalf("add: dispatcher did not create the user")
+	}
+	if rc := dispatchUsersSubcommand(context.Background(), repo, []string{"set-password", "operator"},
+		fixedPrompt("brand-new-strong-passphrase", nil), io.Discard); rc != 0 {
+		t.Fatalf("set-password: expected exit 0, got %d", rc)
+	}
+	repo.mu.Lock()
+	pw := repo.users["operator"].password
+	repo.mu.Unlock()
+	if pw != "brand-new-strong-passphrase" {
+		t.Fatalf("set-password: dispatcher did not rotate password, got %q", pw)
+	}
+	var buf bytes.Buffer
+	if rc := dispatchUsersSubcommand(context.Background(), repo, []string{"list"},
+		fixedPrompt("", nil), &buf); rc != 0 {
+		t.Fatalf("list: expected exit 0, got %d", rc)
+	}
+	if !strings.Contains(buf.String(), "operator") {
+		t.Fatalf("list: dispatcher did not print the user row:\n%s", buf.String())
 	}
 }

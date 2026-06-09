@@ -201,3 +201,43 @@ func TestErrorPaths_RuntimeAuthStartup_NeverEchoesSecrets(t *testing.T) {
 		})
 	}
 }
+
+// TestErrorPaths_NeverEchoPlaceholderAuthToken — closes the canary blind
+// spot for the SMACKEREL_AUTH_TOKEN placeholder-rejection branch in
+// Validate() (FR-051-007).
+//
+// setEnv001 seeds SMACKEREL_AUTH_TOKEN with a ≥16-char NON-placeholder
+// canary, so the placeholder-rejection branch was NEVER exercised by the
+// redaction proof — false confidence. This adversarial test drives that
+// EXACT branch by setting SMACKEREL_AUTH_TOKEN to a public placeholder
+// constant ("changeme", drawn from the Validate() rejection list — a safe
+// public value, not a real secret) and asserts the error:
+//
+//  1. is non-nil,
+//  2. names the offending KEY (SMACKEREL_AUTH_TOKEN), and
+//  3. does NOT echo the offending placeholder VALUE.
+//
+// This is a RED→GREEN guard: against the pre-fix `%q` echo it FAILS
+// (the value is reflected into the error); after the value echo is
+// removed it PASSES. Any future regression that reintroduces a value
+// echo on this branch re-fails this test.
+func TestErrorPaths_NeverEchoPlaceholderAuthToken(t *testing.T) {
+	setEnv001(t)
+	// Force the failure: a known placeholder shared auth token in
+	// production. "changeme" is a public placeholder constant from the
+	// Validate() rejection list — safe to reference, not a real secret.
+	const placeholder = "changeme"
+	t.Setenv("SMACKEREL_AUTH_TOKEN", placeholder)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error from config.Load when SMACKEREL_AUTH_TOKEN is a known placeholder in production")
+	}
+	if !strings.Contains(err.Error(), "SMACKEREL_AUTH_TOKEN") {
+		t.Errorf("error must name SMACKEREL_AUTH_TOKEN, got: %v", err)
+	}
+	if strings.Contains(err.Error(), placeholder) {
+		t.Errorf("error must NOT echo placeholder value %q (FR-051-007 redaction contract), got: %v", placeholder, err)
+	}
+	assertNoCanaryLeak(t, err.Error(), "Validate placeholder-auth-token path")
+}

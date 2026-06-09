@@ -302,7 +302,7 @@ for entry in "${missing[@]}"; do
 done
 echo
 echo "Action: add 'agent' to the frontmatter 'tools:' list, e.g.:"
-echo "  tools: [read, search, edit, agent, todo, web, execute]"
+echo "  tools: [read, search, edit, agent, todo, web, execute, bubbles, playwright]"
 echo "Or, if the agent is genuinely terminal, add 'delegationModel: none'"
 echo "to its frontmatter to opt out of this lint."
 exit 1

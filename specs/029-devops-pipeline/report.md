@@ -31,7 +31,7 @@ Spec 029 establishes CI/CD pipeline infrastructure: GitHub Actions workflows, Do
 - Replaced 100+ individual env declarations with `env_file: config/generated/dev.env` for both core and ML services. env_file drift guard added to `./smackerel.sh check`.
 
 ### Scope 7 — GHCR Image Push on Tagged Releases
-- `push-images` CI job pushes to `ghcr.io` on tagged releases. `docker-compose.yml` supports image override via `SMACKEREL_CORE_IMAGE` / `SMACKEREL_ML_IMAGE`. `docs/Operations.md` documents pull-based deployment.
+- **Superseded by spec 047 (Build-Once Deploy-Many); summary corrected 2026-06-07 (doc-freshness sweep H-029-002).** The original Scope-7 `push-images` job in `.github/workflows/ci.yml` (a `${VERSION}`-tagged `ghcr.io` push on `refs/tags/v*`) was removed by BUG-029-004 and replaced by the spec 047 publish path in `.github/workflows/build.yml`. `build.yml` now publishes both images **by content-addressed digest** (`ghcr.io/<owner>/smackerel-core@sha256:<digest>`, plus a source-SHA tag — never a mutable `:latest`/`:v1.0.0` deploy identity), cosign keyless-signs them, attaches SBOM + SLSA provenance, Trivy-gates before signing, and STOPS at registry push. Any `docker push` / GHCR tag-mint / GHCR `docker/login-action` in `ci.yml` is now FORBIDDEN by the contract test `TestCIWorkflow_NoParallelPublishPath_PostBUG029004` (`internal/deploy/ci_workflow_no_parallel_publish_test.go`). Compose image override via `SMACKEREL_CORE_IMAGE` / `SMACKEREL_ML_IMAGE` remains supported (`docker-compose.yml` dev fallback, `deploy/compose.deploy.yml` digest-pinned deploy); `docs/Operations.md` documents pull-based deployment. See the `.github/workflows/build.yml` supersession row in the Code Diff Evidence table below.
 
 ---
 
@@ -69,6 +69,17 @@ Security probe of spec 029 devops-pipeline implementation: CI workflow, Dockerfi
 | SEC-029-003 | INFO | Docker images | `Dockerfile`, `ml/Dockerfile`, `docker-compose.yml` | Base images pinned by version tag (`golang:1.24.3-alpine`, `python:3.12-slim`, `alpine:3.20`) but not by `@sha256:` digest. Third-party service images (`pgvector/pgvector:pg16`, `nats:2.10-alpine`, `ollama/ollama:0.6`) use minor-version mutable tags. | **ACCEPTED** — Adequate for self-hosted local deployment. Version tags provide reasonable pinning. |
 | SEC-029-004 | INFO | CI credentials | `.github/workflows/ci.yml:149` | Integration test uses hardcoded `SMACKEREL_AUTH_TOKEN: ci-test-token-integration` and `POSTGRES_PASSWORD: smackerel`. | **ACCEPTED** — Ephemeral CI service containers with no persistence. Test-only credentials appropriate for this context. |
 | SEC-029-005 | INFO | Network | `docker-compose.yml`, `config/generated/dev.env` | PostgreSQL connections use `sslmode=disable`. | **ACCEPTED** — Docker internal network for local dev. Production deployment guide (`docs/Deployment.md`) should recommend TLS for non-local deployments. |
+
+#### SEC-029-002 deferral re-affirmation (2026-06-07, doc-freshness sweep H-029-003)
+
+The SEC-029-002 deferral (`ml/requirements.txt` lacks `--require-hashes` integrity verification, vs. design.md §Dependency Verification lines 102–103) is **re-affirmed as an accepted deferral** for spec 029. Decision: **keep the accepted deferral — do NOT implement `--require-hashes` at this time.** Rationale:
+
+- **Go side is already covered.** CI runs `go mod verify` (checksum-DB integrity) before build, so the Go dependency tree has supply-chain integrity verification today.
+- **Python `--require-hashes` is all-or-nothing and high-maintenance.** Enabling it requires a fully-resolved, hash-pinned lockfile covering the **entire transitive** Python tree (every wheel, every platform), regenerated on every dependency bump. The current `==` version pins do not satisfy `--require-hashes`; pip rejects partial adoption.
+- **Risk/benefit does not favor implementation now.** Generating and maintaining hashed pins for the full transitive tree is non-trivial and regression-bearing (platform-wheel hash mismatches break CI installs). For a self-hosted, single-operator deployment the marginal supply-chain risk reduction does not justify the maintenance burden and CI-breakage risk.
+- **Boundary respected.** Implementing `--require-hashes` would also require amending protected `spec.md`/`design.md` acceptance criteria, which is out of scope for this NON-protected doc-freshness remediation. A future hardening spec, if adopted, should own the `ci.yml` `pip install --require-hashes` step and a generated hashed `ml/requirements.txt` together.
+
+Disposition unchanged: **DOCUMENTED / accepted deferral**, tracked as a future hardening item.
 
 ### Positive Security Controls Verified
 
@@ -135,7 +146,7 @@ Reconciliation of all 7 scopes' claimed-vs-implemented state. Verified every DoD
 | 6 | env_file directive | Both core and ml use `env_file:` | YES — `${SMACKEREL_ENV_FILE:-config/generated/dev.env}` |
 | 6 | SST var removal | No individual SST-managed vars in environment blocks | YES — only container-path overrides remain |
 | 6 | Drift guard | `./smackerel.sh check` includes env_file guard | YES — "env_file drift guard: OK" |
-| 7 | push-images job | GHCR push on `refs/tags/v*` | YES — job with `docker/login-action`, tag+push steps |
+| 7 | push-images job | GHCR push on `refs/tags/v*` | SUPERSEDED by spec 047 (corrected 2026-06-07, H-029-002) — publish moved to `.github/workflows/build.yml` (digest-pinned + cosign-signed); the `ci.yml` push-images path was removed and is now forbidden by `TestCIWorkflow_NoParallelPublishPath_PostBUG029004` |
 | 7 | Image override | `image: ${SMACKEREL_CORE_IMAGE:-}` | YES — both services, empty default falls back to build |
 | 7 | Operations docs | Pull-based deployment documented | YES — `docs/Operations.md` has Pre-built Image Deployment section |
 

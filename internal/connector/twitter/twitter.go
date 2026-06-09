@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/smackerel/smackerel/internal/connector"
 )
 
@@ -55,10 +56,13 @@ var safeURLSchemes = map[string]bool{"http": true, "https": true}
 
 // TwitterConfig holds parsed Twitter-specific configuration.
 type TwitterConfig struct {
-	SyncMode    SyncMode
-	ArchiveDir  string
-	BearerToken string
-	APIEnabled  bool
+	SyncMode          SyncMode
+	ArchiveDir        string
+	BearerToken       string
+	OAuthClientID     string
+	OAuthClientSecret string
+	OAuthRedirectURL  string
+	APIEnabled        bool
 }
 
 // ArchiveTweet represents a tweet from the Twitter data archive.
@@ -139,6 +143,23 @@ type Connector struct {
 	apiClient          *apiClient
 	apiUserID          string
 	apiBaseURLOverride string
+
+	// apiUserContextTokenOverride lets connector-level API/hybrid-sync tests
+	// inject a user-context access-token source without a database-backed
+	// oauthStore. nil in production, where Connect builds a store-backed reader
+	// from the ConfigureRuntime-injected pool + at-rest key instead.
+	apiUserContextTokenOverride userContextTokenFunc
+
+	// Spec 056 / BUG-056-002 Scope B — User-Context OAuth runtime deps
+	// injected by ConfigureRuntime: the DB pool backing the twitter_oauth_*
+	// tables, the at-rest encryption key (SMACKEREL_AUTH_TOKEN), and the
+	// operator OAuth client config. These are the injection point for the
+	// user-context endpoint routing + refresh path delivered in Scope C; the
+	// authorize CLI (cmd/core/cmd_connector.go) builds its own store directly
+	// from config and is what populates the token the routing path reads.
+	oauthPool      *pgxpool.Pool
+	oauthAtRestKey string
+	oauthConfig    TwitterOAuthConfig
 }
 
 // New creates a new Twitter connector.
@@ -147,6 +168,70 @@ func New(id string) *Connector {
 }
 
 func (c *Connector) ID() string { return c.id }
+
+// ConfigureRuntime injects the runtime dependencies the Twitter connector
+// needs to perform User-Context OAuth 2.0 PKCE calls (the DB pool backing the
+// twitter_oauth_states / twitter_oauth_tokens tables, the at-rest encryption
+// key, and the operator OAuth client config). Mirrors
+// internal/drive/google.Provider.ConfigureRuntime: provider-neutral wiring
+// stays in the connector registry; connector-specific runtime deps live on the
+// concrete type. The injected deps are consumed by the user-context routing +
+// refresh path (Scope C). Returns the receiver so it composes with New.
+func (c *Connector) ConfigureRuntime(pool *pgxpool.Pool, atRestKey string, oauthCfg TwitterOAuthConfig) *Connector {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.oauthPool = pool
+	c.oauthAtRestKey = atRestKey
+	c.oauthConfig = oauthCfg
+	return c
+}
+
+// userContextAuth returns the user-context access-token resolver AND the
+// force-refresh hook wired into the API client for user-owned endpoints
+// (users_me, bookmarks, liked_tweets). A connector-level test override
+// (httptest API sync without a database) takes precedence and has NO refresh
+// hook. Otherwise it builds a userContextManager over the encrypted oauthStore
+// (ConfigureRuntime-injected pool + at-rest key) + the confidential-client
+// OAuth provider: the manager's AccessToken resolves the persisted token and
+// refreshes it proactively within the pre-expiry skew, and its Refresh is the
+// reactive 401 backstop that rotates + re-persists the token. Missing runtime
+// deps or a store-construction error yield a fail-loud token source
+// (ErrUserContextTokenRequired) and a nil refresh hook — NEVER an App-Only
+// fallback (BUG-056-002). Refresh-token rotation persistence is owned by the
+// manager.
+//
+// Caller MUST hold c.mu (invoked from Connect under the lock); it reads the
+// ConfigureRuntime-injected fields without re-locking.
+func (c *Connector) userContextAuth() (userContextTokenFunc, func(context.Context) error) {
+	if c.apiUserContextTokenOverride != nil {
+		return c.apiUserContextTokenOverride, nil
+	}
+	pool := c.oauthPool
+	atRestKey := c.oauthAtRestKey
+	if pool == nil || atRestKey == "" {
+		return failLoudUserContextSource(nil), nil
+	}
+	store, err := newOAuthStore(pool, atRestKey)
+	if err != nil {
+		return failLoudUserContextSource(err), nil
+	}
+	mgr := newUserContextManager(store, newTwitterOAuthProvider(c.oauthConfig), DefaultOwnerUserID, slog.Default())
+	return mgr.AccessToken, mgr.Refresh
+}
+
+// failLoudUserContextSource returns a token resolver that always fails loud with
+// ErrUserContextTokenRequired (wrapping cause when non-nil). Used when the
+// user-context runtime deps are absent or the store cannot be constructed, so a
+// user-owned endpoint fails loud rather than silently falling back to the
+// App-Only bearer (BUG-056-002).
+func failLoudUserContextSource(cause error) userContextTokenFunc {
+	return func(context.Context) (string, error) {
+		if cause != nil {
+			return "", fmt.Errorf("%w: %v", ErrUserContextTokenRequired, cause)
+		}
+		return "", ErrUserContextTokenRequired
+	}
+}
 
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
 	cfg, err := parseTwitterConfig(config)
@@ -209,6 +294,15 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		// Apply test-only base URL override if set BEFORE Connect.
 		if c.apiBaseURLOverride != "" && client != nil {
 			client.baseURL = c.apiBaseURLOverride
+		}
+		// Wire the user-context access-token source consumed by user-owned
+		// endpoints (users_me, bookmarks, liked_tweets) plus the refresh-on-401
+		// backstop. App-Only endpoints (tweets, mentions) ignore both and keep
+		// using the bearer token.
+		if client != nil {
+			tokenSource, refresh := c.userContextAuth()
+			client.userContextToken = tokenSource
+			client.refreshUserContext = refresh
 		}
 		c.apiClient = client
 	}
@@ -964,6 +1058,21 @@ func parseTwitterConfig(config connector.ConnectorConfig) (TwitterConfig, error)
 	if token, ok := config.Credentials["bearer_token"]; ok {
 		cfg.BearerToken = token
 		cfg.APIEnabled = true
+	}
+
+	// User-context OAuth 2.0 PKCE credentials (BUG-056-002 Scope A). These are
+	// the confidential-client credentials for the bookmarks/likes/users-me
+	// user-owned endpoints. They are parsed here but not yet required at this
+	// layer — Scope C wires the fail-loud-when-absent routing. No hidden
+	// default: an unset key leaves the field empty (smackerel-no-defaults).
+	if v, ok := config.Credentials["oauth_client_id"]; ok {
+		cfg.OAuthClientID = v
+	}
+	if v, ok := config.Credentials["oauth_client_secret"]; ok {
+		cfg.OAuthClientSecret = v
+	}
+	if v, ok := config.Credentials["oauth_redirect_url"]; ok {
+		cfg.OAuthRedirectURL = v
 	}
 
 	// Fail-loud when API mode requires a bearer token but none was provided (CWE-287).

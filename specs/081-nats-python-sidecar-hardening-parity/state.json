@@ -44,7 +44,7 @@
     "completedAt": "2026-06-04T20:36:05Z",
     "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#audit-final-promotion-completed-2026-06-04-attempt-2",
     "completedScopes": ["SCOPE-081-01"],
-    "certifiedCompletedPhases": ["implement", "test", "validate", "audit", "spec-review", "chaos", "docs"],
+    "certifiedCompletedPhases": ["implement", "test", "regression", "harden", "gaps", "simplify", "stabilize", "security", "validate", "audit", "spec-review", "chaos", "docs"],
     "scopeProgress": [
       {
         "scopeId": "SCOPE-081-01",
@@ -65,7 +65,78 @@
       "totalScopes": 1,
       "doneScopes": 0,
       "openFindings": 0
-    }
+    },
+    "concerns": [
+      {
+        "id": "SEC-081-R1",
+        "severity": "low",
+        "blocking": false,
+        "owaspCategory": "A03-Injection",
+        "category": "defense-in-depth",
+        "raisedBy": "bubbles.security",
+        "recordedBy": "bubbles.validate",
+        "recordedAt": "2026-06-08T02:00:00Z",
+        "reconcileMode": "reconcile-to-doc",
+        "trackedBy": "specs/081-nats-python-sidecar-hardening-parity/bugs/BUG-081-001-deadletter-last-error-crlf-sanitization",
+        "routedTo": ["bubbles.plan", "bubbles.implement"],
+        "followUpOwner": "bubbles.plan",
+        "followUpAction": "cross-cutting-fix",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#security-scan--reconcile-to-doc-2026-06-07",
+        "summary": "Dead-letter Smackerel-Last-Error header is built from str(exc) with only UTF-8 truncation and NO CR/LF sanitization on both runtimes (Python ml/app/nats_client.py:683-685 and Go internal/pipeline/{subscriber,synthesis_subscriber,domain_subscriber}.go). nats-py value.strip() removes only leading/trailing whitespace, so an internal CR/LF would inject an extra HPUB header line the server parses as legitimate. Sink + non-validating library confirmed by reading; a reachable attacker-controlled source was NOT demonstrated within 081's scope. Pre-existing and byte-for-byte symmetric with the already-shipped Go side (NOT an 081 regression). Defense-in-depth, LOW, non-blocking: 081 stays done. Fix deferred to a deliberate cross-cutting pass (Go primary + Python parity mirror together) tracked by BUG-081-001 (status blocked).",
+        "resolved": true,
+        "resolvedBy": "BUG-081-001-deadletter-last-error-crlf-sanitization",
+        "resolvedAt": "2026-06-08T07:00:00Z",
+        "reconciledBy": "bubbles.validate",
+        "resolution": "RESOLVED by BUG-081-001, now terminal (bug state.json status=done, certification.status=done, certifiedAt 2026-06-08T06:12:00Z; bug.md '[x] Fixed (audit-certified SHIP_IT 2026-06-08)'; bug artifact-lint PASSED). The CR/LF/C0/DEL header-injection gap (CWE-113) on the dead-letter Smackerel-Last-Error header was closed on BOTH runtimes: Go (3 subscribers — subscriber.go, synthesis_subscriber.go, domain_subscriber.go — via stringutil.SanitizeHeaderValue) and the Python sidecar (ml/app/nats_client.py _sanitize_header_value) at all 4 dead-letter Smackerel-Last-Error sinks, with sanitize-then-truncate ordering, a byte-for-byte Go/Python parity pin, and adversarial RED->GREEN regression coverage. Independently re-verified GREEN (Go ok internal/pipeline + internal/stringutil; Python 496 passed, 2 skipped) and audit-certified SHIP_IT. Original raise/route audit trail above is preserved; only resolution fields appended. Parent spec 081 stays terminal-for-mode done (top-level status unchanged)."
+      }
+    ],
+    "observations": [
+      {
+        "id": "OBS-081-1",
+        "severity": "low",
+        "source": "bubbles.gaps",
+        "followUpOwner": "none",
+        "followUpAction": "accept-as-designed",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#gaps-probe-results--reconcile-to-doc-2026-06-07",
+        "summary": "Finalize-verb asymmetry is intentional: Go calls msg.Ack() after a successful dead-letter publish, Python calls msg.term(); both positively finalize so redelivery stops and the forensic copy lands in DEADLETTER. spec section 2 success-signal and design section 4 both specify term(). Observable parity holds; no action."
+      },
+      {
+        "id": "OBS-081-2",
+        "severity": "low",
+        "source": "bubbles.gaps",
+        "followUpOwner": "bubbles.design",
+        "followUpAction": "doc-correction-optional",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#gaps-probe-results--reconcile-to-doc-2026-06-07",
+        "summary": "design.md section 6 'Regression spec 046' row cites ml/tests/test_nats_reconnect_contract.py which does not exist; the actual reconnect-contract regression lives in ml/tests/test_nats_client.py::TestConnectReconnectContract. The protection exists; only the filename pointer is stale. design.md is a PROTECTED artifact on a certified-done spec, so reported for the owner, NOT edited here."
+      },
+      {
+        "id": "OBS-081-3",
+        "severity": "low",
+        "source": "bubbles.gaps",
+        "followUpOwner": "none",
+        "followUpAction": "accept-as-designed",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#gaps-probe-results--reconcile-to-doc-2026-06-07",
+        "summary": "Python adds an additive metric nats_deadletter_publish_failures_total (the nak-not-term path) which design section 8 lists as out-of-scope. Benign additive observability of an error path Go only logs; no requirement violated. No action."
+      },
+      {
+        "id": "OBS-STAB-01",
+        "severity": "low",
+        "source": "bubbles.stabilize",
+        "followUpOwner": "none",
+        "followUpAction": "accept-as-designed",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#stabilize-pass--reconcile-to-doc-2026-06-07",
+        "summary": "close() does not await the cancelled consumer tasks nor reset self._nc=None; cosmetic only because drain() already flushes in-flight acks/publishes and the process is terminating. No leak or data loss; declined per anti-gold-plating. STABLE."
+      },
+      {
+        "id": "SEC-081-N1",
+        "severity": "info",
+        "source": "bubbles.security",
+        "followUpOwner": "bubbles.devops",
+        "followUpAction": "dependency-hygiene-optional",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#security-scan--reconcile-to-doc-2026-06-07",
+        "summary": "nats-py version skew: production ml/requirements.txt pins nats-py==2.9.0; the dev/test env (ml/pyproject.toml nats-py>=2.9.0) resolved to nats-py 2.15.0 in this run. The header-encoder behavior relevant to SEC-081-R1 is identical across both, so the security verdict is unchanged; tracking note for repo dependency hygiene only. Not introduced by 081."
+      }
+    ]
   },
   "execution": {
     "activeAgent": "bubbles.audit",
@@ -168,6 +239,72 @@
         "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#audit-final-promotion-completed-2026-06-04-attempt-2",
         "verdict": "PASS",
         "summary": "Final-promotion audit attempt 2 — VERDICT: SHIP_IT. All 14 findings from the 20:30Z REWORK_REQUIRED cycle closed by bubbles.plan (operator-side rework): Cat A (G022) added chaos+docs to certification.certifiedCompletedPhases[] alongside preserved execution.phaseStubs.{chaos,docs} (dual-record convention); Cat B inserted ### Validation Evidence + ### Chaos Evidence sections in report.md with all required markers (**Executed:** YES, **Command:**, **Phase Agent:**); Cat C added 3 structured markers to ### Audit Evidence section (line 466); Cat D commit-verification fenced block extended to 17 lines (>= 10-line anti-fabrication threshold). Both 17:30Z operator blockers also remain closed (commit 6912eb5e + bubbles.spec-review phase). PRE-PROMOTION gates exit 0: artifact-lint (status=not_started); traceability-guard (0 warnings); state-transition-guard (TRANSITION PERMITTED with 2 informational warnings — completedAt-not-yet-set and Test-Plan-path-heuristic, both non-blocking and contradicted by traceability-guard's 4 concrete mappings). Promoted: top-level status=done, certification.status=done, certification.completedAt=2026-06-04T20:36:05Z, evidenceRef pointed at the COMPLETED section. POST-PROMOTION gates exit 0 (final state): artifact-lint at status=done with 0 errors (all 14 prior findings cleared); state-transition-guard at status=done TRANSITION PERMITTED with 1 informational warning. ONE NEW FINDING surfaced + addressed during this audit run: Gate G088 (post_certification_spec_edit_gate) requires a top-level certifiedAt field at status=done which the user task list omitted from the field enumeration; the missing field was added as a mirror of certification.completedAt (same RFC3339 value, matching the repo schema convention seen across specs 075-078 which all set top-level certifiedAt). G088 then passed cleanly. References commit 6912eb5e576138c12d7a0922e7cbfc739856a1b4. Spec 081 is now terminal-for-mode done under workflowMode=full-delivery with statusCeiling=done."
+      },
+      {
+        "phase": "regression",
+        "scopeId": "SCOPE-081-01",
+        "agent": "bubbles.test",
+        "reconciledBy": "bubbles.validate",
+        "reconciledAt": "2026-06-08T00:12:07Z",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T00:12:07Z",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#bubblestest-execution-2026-06-04",
+        "summary": "RECONCILE-TO-DOC migration (no new code; bubbles.workflow reconcile-to-doc dispatch). The regression-phase work product genuinely shipped folded under the test phase and is real + citable: scopes.md D01-14 / Test Plan row T-081-E1 designate ml/tests/integration/test_deadletter_parity.py::test_poison_message_publishes_to_deadletter_subject as the PERSISTENT live-stack regression-E2E (explicit Gate G028 Check 8A protection point) guarding poison->deadletter.<subject> routing + bytes-for-bytes payload + the 6-header Go-parity envelope; SCN-081-04 (test_failure_counts_attribute_removed) is the explicit regression pinning the leaky _failure_counts excision. Both executed against the live test stack (no mocks; real NATS JetStream + spec-022 DEADLETTER stream); the D01-10 aggregate run is 12/12 green (11 unit + 1 live integration, exit 0) at HEAD 914253ee. A pre-existing execution.phaseStubs.regression already documented this in-scope coverage (dual-record convention, mirroring the prior chaos/docs migration). executionHistory + git log confirm no distinct regression specialist ran; the substance is genuine so the phase record is reconciled here rather than fabricated."
+      },
+      {
+        "phase": "harden",
+        "scopeId": "SCOPE-081-01",
+        "agent": "bubbles.implement",
+        "reconciledBy": "bubbles.validate",
+        "reconciledAt": "2026-06-08T00:12:07Z",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T00:12:07Z",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#summary",
+        "summary": "RECONCILE-TO-DOC migration (no new code; bubbles.workflow reconcile-to-doc dispatch). The harden-phase work product IS this spec's entire deliverable (title: 'NATS Python Sidecar Hardening Parity') and is real + citable in the executed D01-* implement/test evidence: bounded JetStream redelivery via SST NATS_CONSUMER_MAX_DELIVER/ACK_WAIT threaded through ConsumerConfig (D01-1/D01-2/D01-4), fail-loud no-default os.environ reads of both consumer keys + generator fail-loud adversarial probe (D01-3/D01-5/D01-11), publish-before-term dead-letter invariant (D01-8), canonical 6-header Go-parity envelope matching internal/pipeline/synthesis_subscriber.publishSynthesisToDeadLetter (D01-9), and excision of the leaky process-local _failure_counts dict in favour of msg.metadata.num_delivered as single source of truth (D01-6/D01-7). All evidenced Claim Source: executed; the D01-10 live-stack aggregate is 12/12 green at HEAD 914253ee. executionHistory + git log confirm no distinct harden specialist ran as a separate phase; per the reconcile-to-doc dispatch the genuine hardening substance is reconciled into the phase records rather than fabricated."
+      },
+      {
+        "phase": "gaps",
+        "scopeId": "SCOPE-081-01",
+        "agent": "bubbles.gaps",
+        "reconciledBy": "bubbles.validate",
+        "reconciledAt": "2026-06-08T02:00:00Z",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T01:30:00Z",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#gaps-probe-results--reconcile-to-doc-2026-06-07",
+        "summary": "GENUINE gaps-specialist execution under reconcile-to-doc dispatch (distinct work product, NOT a fold-under migration). Verdict MINOR_GAPS_REMAIN: a rigorous claimed-vs-actual probe verified the Go<->Python dead-letter parity is REAL on both sides (no spec-056-style false parity claim) and SCN-081-01..04 each trace to real tests. Closed one asymmetric UNTESTED boundary (malformed consumer-env values) with a genuine adversarial test test_subscribe_all_fails_loud_on_malformed_consumer_env (+5 parametrized cases: non-integer, <1, negative for both keys) in non-protected ml/tests/test_nats_consumer_config.py. Python unit suite 487 -> 492 passed, 2 skipped, exit 0. Three low observations recorded (OBS-081-1/2/3); none blocking. Zero protected artifacts touched."
+      },
+      {
+        "phase": "simplify",
+        "scopeId": "SCOPE-081-01",
+        "agent": "bubbles.simplify",
+        "reconciledBy": "bubbles.validate",
+        "reconciledAt": "2026-06-08T02:00:00Z",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T01:35:00Z",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#simplify-pass--reconcile-to-doc-2026-06-07",
+        "summary": "GENUINE simplify-specialist execution under reconcile-to-doc dispatch (distinct work product, NOT a fold-under migration). Verdict APPROPRIATELY SIMPLE -- NO SAFE SIMPLIFICATION APPLIED; 0 source edits. Dead-code/unused-import/marker scan CLEAN (no TODO/FIXME/stub; PUBLISH_SUBJECTS is contract-test-consumed, not dead). Three redundancy candidates probed, all declined/routed with cited reasons: SIMP-01 always-true 'if consumer:' guard is mandated Go-parity envelope structure (declined); SIMP-02 reply_subject 3x duplication is pre-existing dispatch glue outside 081's changed-file set with real loop-control behavioral risk (routed to bubbles.plan if pursued); SIMP-03 three subject enumerations are three DISTINCT contract-validated mappings, not duplication (declined). Python unit suite 492 passed, 2 skipped, exit 0. Zero protected artifacts touched."
+      },
+      {
+        "phase": "stabilize",
+        "scopeId": "SCOPE-081-01",
+        "agent": "bubbles.stabilize",
+        "reconciledBy": "bubbles.validate",
+        "reconciledAt": "2026-06-08T02:00:00Z",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T01:40:00Z",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#stabilize-pass--reconcile-to-doc-2026-06-07",
+        "summary": "GENUINE stabilize-specialist execution under reconcile-to-doc dispatch (distinct work product, NOT a fold-under migration). Verdict STABLE -- NO DESTABILIZER FOUND, NO CODE CHANGE. All five operational-robustness dimensions of ml/app/nats_client.py re-probed against the live source and confirmed bounded/correct: reconnect-resilience (fail-loud SST reads + disconnected/reconnected callbacks + drain), backpressure (bounded fetch(batch=5) + ack_wait threaded), resource-bounds (tracked asyncio tasks + _failure_counts removed, grep count 0), shutdown-ordering (cancel -> clear -> drain), redelivery-safety (MaxDeliver=5, num_delivered single source of truth, publish-before-term, pub-fail -> nak-not-term). One non-blocking observation OBS-STAB-01 (close() does not await cancelled tasks nor reset _nc -- cosmetic; drain() already flushes). Python unit suite 492 passed, 2 skipped, exit 0. Zero protected artifacts touched."
+      },
+      {
+        "phase": "security",
+        "scopeId": "SCOPE-081-01",
+        "agent": "bubbles.security",
+        "reconciledBy": "bubbles.validate",
+        "reconciledAt": "2026-06-08T02:00:00Z",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T01:45:00Z",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#security-scan--reconcile-to-doc-2026-06-07",
+        "summary": "GENUINE security-specialist execution under reconcile-to-doc dispatch (first dedicated security-specialist review of 081; the earlier 'no new attack surface' line was an audit gate stub, now superseded). 5 OWASP-oriented checks: S1 secret-handling CLEAN (NATS auth token never logged; read fail-loud from SST; NATS_URL carries no embedded credential), S3 input-validation CLEAN (both new SST integer keys int()-parsed fail-loud + guarded >=1, regression-locked), S4 data-exposure CLEAN (forensic payload preservation mirrors Go; no payload logged), S5 dependency-surface CLEAN (no new dependency; NOTE SEC-081-N1 nats-py 2.9.0 prod vs 2.15.0 dev skew, header-encoder identical across both). S2 injection: 1 LOW finding SEC-081-R1 (OWASP A03 CRLF header injection in dead-letter Smackerel-Last-Error; sink + non-validating nats-py confirmed by reading, reachable source NOT demonstrated; pre-existing and symmetric with Go, NOT an 081 regression) -- routed and now tracked by BUG-081-001 as a NON-BLOCKING certification.concern. 0 critical, 0 high. Python unit suite 492 passed, exit 0. Zero protected artifacts touched."
       }
     ],
     "executionHistory": [
@@ -252,10 +389,91 @@
         "runStartedAt": "2026-06-06T17:00:00Z",
         "runEndedAt": "2026-06-06T17:00:00Z",
         "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 28711074 (mid-tier drift cleanup — reconciled stale internal/nats/subscriber.go + synthesis_subscriber.go path references to internal/pipeline/ in scopes.md T-081-U3 Test Plan row + canonical-envelope note after pipeline-package consolidation; 6-header dead-letter set + scenario IDs unchanged). Sole documentation-reconciliation campaign edit since certification; no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phase": "validate",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T00:18:00Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "outcome": "route_required",
+        "summary": "RECONCILE-TO-DOC phase-record drift (bubbles.workflow dispatch; no code changed; spec.md/design.md/scopes.md NOT touched). A stricter artifact-lint now requires 12 specialist phases at status=done; spec 081 was certified done 2026-06-04 under a looser gate and certification.certifiedCompletedPhases was missing 6 (Gate G022). Classified each against anti-fabrication: record ONLY with genuine citable distinct work product. MIGRATED 2 (this session) — harden (spec is definitionally a hardening spec; D01-1..D01-9 ARE the hardening deliverable) and regression (T-081-E1 distinct designated persistent live-stack regression-E2E per G028 Check 8A + SCN-081-04 _failure_counts excision regression). REAL-WORK-NEEDED 4 — gaps (zero work product, no phaseStub/section/commit), simplify (sole candidate _failure_counts excision is already the harden deliverable; no distinct sweep), stabilize (sole candidate live integration test is already test/regression evidence; no distinct sweep), security (D01-3/D01-5/D01-11 fail-loud SST reads are implement-phase no-defaults compliance; 'no new attack surface' is an audit-authored gate stub, not a security-specialist review). Honest routing rather than extending the chaos+docs dual-record convention to phases that did not genuinely run. artifact-lint delta 13 -> 9 (4 missing phases x 2 checks + 1 summary). Residual 9 is the CORRECT outcome; routed to gaps/simplify/stabilize/security specialists. Evidence: report.md '## Reconcile-to-Doc — Phase-Record Drift (2026-06-08)'.",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#reconcile-to-doc--phase-record-drift-2026-06-08"
+      },
+      {
+        "agent": "bubbles.gaps",
+        "phase": "gaps",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T01:30:00Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "outcome": "completed_diagnostic",
+        "summary": "Gaps probe (reconcile-to-doc dispatch; the gaps phase genuinely never ran on 081 before this). Claimed-vs-actual parity probe: Go<->Python dead-letter parity verified GENUINE on both sides (no false claim); SCN-081-01..04 all trace to real tests. Closed one asymmetric UNTESTED boundary (malformed consumer-env values) with test_subscribe_all_fails_loud_on_malformed_consumer_env (+5 adversarial cases) in non-protected ml/tests/test_nats_consumer_config.py; Python suite 487 -> 492 passed, exit 0. OBS-081-1/2/3 recorded (low). Zero protected artifacts touched.",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#gaps-probe-results--reconcile-to-doc-2026-06-07"
+      },
+      {
+        "agent": "bubbles.simplify",
+        "phase": "simplify",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T01:35:00Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "outcome": "completed_diagnostic",
+        "summary": "Simplify pass (reconcile-to-doc dispatch; genuinely never ran before). Verdict APPROPRIATELY SIMPLE; 0 source edits. Dead-code/marker scan CLEAN. SIMP-01 declined (mandated Go-parity envelope), SIMP-02 routed (pre-existing dispatch glue outside 081 changed-file set), SIMP-03 declined (three distinct contract-validated mappings). Python suite 492 passed, exit 0. Zero protected artifacts touched.",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#simplify-pass--reconcile-to-doc-2026-06-07"
+      },
+      {
+        "agent": "bubbles.stabilize",
+        "phase": "stabilize",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T01:40:00Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "outcome": "completed_diagnostic",
+        "summary": "Stabilize pass (reconcile-to-doc dispatch; genuinely never ran as a distinct phase before). Verdict STABLE across all five dimensions (reconnect, backpressure, resource-bounds, shutdown-ordering, redelivery-safety); no destabilizer; 0 source edits. OBS-STAB-01 recorded (low, cosmetic). Python suite 492 passed, exit 0. Zero protected artifacts touched.",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#stabilize-pass--reconcile-to-doc-2026-06-07"
+      },
+      {
+        "agent": "bubbles.security",
+        "phase": "security",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T01:45:00Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "outcome": "completed_diagnostic",
+        "summary": "Security scan (reconcile-to-doc dispatch; first dedicated security-specialist review of 081). 4/5 OWASP checks CLEAN (S1 secret-handling, S3 input-validation, S4 data-exposure, S5 dependency). S2 injection: 1 LOW SEC-081-R1 (A03 CRLF in dead-letter Last-Error; sink confirmed, reachable source not demonstrated; pre-existing + symmetric with Go, NOT an 081 regression) routed and tracked by BUG-081-001 as a non-blocking concern. SEC-081-N1 version-skew note. 0 critical/high. Python suite 492 passed, exit 0. Zero protected artifacts touched.",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#security-scan--reconcile-to-doc-2026-06-07"
+      },
+      {
+        "agent": "bubbles.validate",
+        "phase": "validate",
+        "reconcileMode": "reconcile-to-doc",
+        "timestamp": "2026-06-08T02:00:00Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "outcome": "completed_owned",
+        "summary": "RECONCILE-TO-DOC recording (bubbles.workflow dispatch; no code changed; spec.md/design.md/scopes.md NOT touched). Recorded the four genuinely-executed specialist phases that ran after the 2026-06-08T00:18Z route_required (gaps/simplify/stabilize/security), each backed by a distinct real evidence section in report.md with terminal-output signals: gaps (MINOR_GAPS_REMAIN; +5 malformed-consumer-env adversarial tests; Python 487->492), simplify (APPROPRIATELY SIMPLE; 0 edits; 492), stabilize (STABLE on 5 dimensions; 492), security (4/5 OWASP CLEAN; 1 LOW SEC-081-R1). Added all four to certification.certifiedCompletedPhases + execution.completedPhaseClaims with evidence anchors plus specialist executionHistory entries. Logged SEC-081-R1 (LOW, OWASP A03, defense-in-depth) as a NON-BLOCKING certification.concern trackedBy BUG-081-001 (status blocked), routedTo bubbles.plan/bubbles.implement; added top-level activeBugs index. Recorded clean-pass observations OBS-081-1/2/3 + OBS-STAB-01 + SEC-081-N1. artifact-lint 9 -> 0 (PASSED): all four missing-phase G022 issues cleared. Spec 081 stays terminal-for-mode done; SEC-081-R1 is a tracked non-blocking concern, not an 081 regression.",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#reconcile-to-doc--four-phases-recorded-and-sec-081-r1-concern-logged-2026-06-08"
       }
     ]
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "discoveredIssues": []
+  "discoveredIssues": [],
+  "activeBugs": [
+    {
+      "bugId": "BUG-081-001-deadletter-last-error-crlf-sanitization",
+      "bugDir": "specs/081-nats-python-sidecar-hardening-parity/bugs/BUG-081-001-deadletter-last-error-crlf-sanitization",
+      "findingId": "SEC-081-R1",
+      "severity": "low",
+      "status": "done",
+      "resolvedAt": "2026-06-08T07:00:00Z",
+      "resolvedBy": "bubbles.audit",
+      "blocking": false,
+      "owaspCategory": "A03-Injection",
+      "raisedBy": "bubbles.security",
+      "summary": "CR/LF sanitization of dead-letter Smackerel-Last-Error header (Go primary 3 subscribers + Python parity mirror). LOW / defense-in-depth. DELIVERED + audit-certified SHIP_IT 2026-06-08 (bug state.json status=done, certification.status=done, certifiedAt 2026-06-08T06:12:00Z): sanitize-then-truncate at all 4 sinks, byte-for-byte Go/Python parity pin, adversarial RED->GREEN regression; independently re-verified GREEN (Go ok internal/pipeline + internal/stringutil; Python 496 passed). Resolves concern SEC-081-R1. Parent spec 081 stays done."
+    }
+  ]
 }

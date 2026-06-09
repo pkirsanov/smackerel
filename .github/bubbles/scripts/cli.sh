@@ -1168,6 +1168,7 @@ Commands:
   regression-quality [args...]  Run bailout/adversarial regression quality scan on test files or dirs
   docs-registry [mode]          Show framework-default or effective managed-doc registry
   framework-write-guard         Check downstream framework-managed files against install provenance
+  mcp <subcommand>              Apply operator-declared MCP tool grants (sync)
   interop <subcommand>          Detect, import, apply, and inspect project-owned interop packets
   framework-validate            Run framework self-validation across core guard and selftest surfaces
   release-check                 Run source-repo release hygiene checks
@@ -1693,6 +1694,29 @@ cmd_repo_readiness() {
 
 cmd_framework_write_guard() {
   bash "$SCRIPT_DIR/downstream-framework-write-guard.sh" "$@"
+}
+
+cmd_mcp() {
+  local sub="${1:-}"
+  case "$sub" in
+    sync)
+      shift
+      bash "$SCRIPT_DIR/mcp-grant-sync.sh" "$@"
+      ;;
+    ''|-h|--help)
+      cat <<'EOF'
+Usage: bubbles mcp <subcommand>
+
+  sync [--check] [--quiet]   Apply operator-declared MCP tool grants
+                             (.github/bubbles-project.yaml mcp.grants) to the
+                             restricted orchestrator agents. Idempotent; run
+                             after editing grants or after a framework refresh.
+EOF
+      ;;
+    *)
+      die "Unknown mcp subcommand: $sub\nRun 'bubbles mcp --help' for usage."
+      ;;
+  esac
 }
 
 cmd_interop() {
@@ -3083,6 +3107,7 @@ main() {
     regression-quality) cmd_regression_quality "$@" ;;
     docs-registry)      cmd_docs_registry "$@" ;;
     framework-write-guard) cmd_framework_write_guard "$@" ;;
+    mcp)                cmd_mcp "$@" ;;
     interop)            cmd_interop "$@" ;;
     framework-validate) cmd_framework_validate "$@" ;;
     release-check)      cmd_release_check "$@" ;;

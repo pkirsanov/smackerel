@@ -796,3 +796,207 @@ Coverage: `internal/config/validate_test.go` exercises Scope 2 SCN-023-04 (Conne
 Coverage: `internal/api/intelligence_test.go` exercises Scope 2 SCN-023-05 (Intelligence handlers use `writeJSON` for consistent responses) by asserting handler routes return correct Content-Type/status via `writeJSON`. Test Plan rows in scope 2 reference this path.
 
 Coverage: `internal/connector/sync_interval_test.go` exercises Scope 3 SCN-023-09 (Connector sync interval from config) via `TestGetSyncInterval_FromConfig`, `TestGetSyncInterval_FromSourceConfig`, `TestGetSyncInterval_Default`, `TestGetSyncInterval_EmptySchedule`, `TestGetSyncInterval_OAuthConnectorSchedules`. Test Plan rows in scope 3 reference this path.
+
+---
+
+## Phase-Record Reconciliation (2026-06-08, reconcile-to-doc)
+
+**Trigger:** bubbles.workflow reconcile-to-doc (Gate G022 phase-record drift)
+**Agent:** bubbles.validate (state-reconciliation owner)
+**Scope:** `state.json` execution/certification phase records only — spec.md/design.md/scopes.md untouched; no requirement, scenario, or DoD semantics changed.
+
+`artifact-lint` flagged 4 required specialist phases absent from `certification.certifiedCompletedPhases` / `execution.completedPhaseClaims`: `regression`, `simplify`, `stabilize`, `security`. Each was classified against report.md substance and git history before any record was written. Phases with a genuine citable anchor were migrated into both phase-record arrays; the phase with evidence-of-absence was left unrecorded and routed.
+
+| Phase | Disposition | Anchor / Evidence |
+|-------|-------------|-------------------|
+| `regression` | MIGRATED | report.md §"Regression Sweep (2026-04-12, regression trigger)" — 8-row invariant verification table, cross-spec conflict analysis across 7 files, `./smackerel.sh check` + `./smackerel.sh test unit` pass, zero findings |
+| `simplify` | MIGRATED | commit `96ad78f3` (trigger=simplify, mappedMode=simplify-to-doc) — extracted `probeHTTPGet` helper (present at `internal/api/health.go:644`), produced `bugs/BUG-023-002-health-probe-dedup` (status done) |
+| `security` | MIGRATED | report.md §"Security Scan (2026-04-21)" + §"Security Scan — Repeat (2026-04-30)" — `bubbles.security`, 14 OWASP checks each, clean verdict |
+| `stabilize` | REAL-WORK-NEEDED (not recorded) | Zero `stabiliz` occurrences in report.md; commits `d4dd693a` / `8b928995` attribute stabilize work to ingestion/ops/weather and name engquality only for other phases. Routed to `bubbles.stabilize`. |
+
+### Reconciliation Evidence
+
+```
+internal/api/health.go:644:func probeHTTPGet(ctx context.Context, url string, client *http.Client) bool {
+✅ Required specialist phase 'regression' recorded in execution/certification phase records
+✅ Required specialist phase 'simplify' recorded in execution/certification phase records
+✅ Required specialist phase 'security' recorded in execution/certification phase records
+❌ Required specialist phase 'stabilize' NOT in execution/certification phase records (Gate G022 violation)
+Artifact lint FAILED with 3 issue(s).
+```
+
+The residual 3 `artifact-lint` issues are `stabilize`-only and are the intended outcome of this pass: no genuine stabilize sweep has run against spec 023 surfaces, so the phase is routed to `bubbles.stabilize` rather than recorded. Writing a `stabilize` record without a citable anchor would be a Gate G022 fabrication.
+
+---
+
+## Stabilize Pass — reconcile-to-doc (2026-06-08)
+
+**Trigger:** bubbles.workflow `reconcile-to-doc` (the 2026-06-08 Phase-Record Reconciliation routed the `stabilize` phase here because no prior stabilize sweep had run against spec 023 surfaces)
+**Agent:** bubbles.stabilize
+**Surfaces probed:** `internal/api/health.go` (typed `Dependencies` god-object refactor, parallel health-probe path, knowledge/intelligence health caches), `internal/api/router.go` (health-log exclusion), `internal/connector/supervisor.go` (goroutine lifecycle, panic-recovery circuit breakers, sync-interval bounds), `internal/connector/imap/imap.go` (the connector prior chaos race-fixed).
+**Result:** 0 destabilizers found. Spec 023's reliability / resource / shutdown / timing surfaces are stable under the sanctioned CLI. 1 low-severity test-tooling observation recorded (not a runtime destabilizer; not routed).
+
+### Method & Honest Scope (Uncertainty Declaration)
+
+This pass uses the sanctioned repo CLI only — `./smackerel.sh test unit --go --go-run <regex> --verbose` and `./smackerel.sh check` — plus read-only `grep`. The CLI's Go unit path (`scripts/runtime/go-unit.sh`) runs `go test ./...` and does **not** expose the `-race` detector flag; the only flags it forwards are `-v`, `-run`, and `-count=1`. Re-running the detector would require an ad-hoc `go test -race`, which `.github/instructions/terminal-discipline.instructions.md` and this pass's constraints forbid.
+
+Consequently the **races** dimension is evidenced by (a) structural proof that the three prior race-fix guards are present in the current tree (real `grep` output below) plus (b) the concurrency regression tests those fixes shipped with passing green via the sanctioned CLI — **not** by a fresh `-race` run this session. The prior `-race` runs remain recorded in the two Chaos Hardening Probe sections above. This is a deliberately bounded claim, not a "race-detector-clean" assertion for this session.
+
+### Per-Dimension Stability Verdict
+
+| Dimension | Verdict | Basis (evidence below) |
+|-----------|---------|------------------------|
+| Races | STABLE (bounded — see Uncertainty Declaration) | 3 prior guards structurally intact (`grep`); mlClient `sync.Once`, IMAP `mu` RWMutex, supervisor post-delay `stopped` RLock; concurrency regression tests green |
+| Leaks (goroutine / resource) | STABLE | Supervisor `wg.Add`/`defer wg.Done` + bounded 10s drain proven by `TestSupervisor_StopAll_BoundedTimeout`; health `probeWg.Add(2)`/`Wait`; `knowledgeHealthCh` buffered(1) + drained only when authenticated |
+| Resource bounds | STABLE | `parseSyncInterval` capped at `maxSyncDuration`/`maxSyncMinutes`/`maxSyncHours` with `d <= 0` overflow guard; `healthAuxiliaryProbeTimeout = 1500ms`; overflow tests green |
+| Shutdown ordering | STABLE | `StopAll` sets `stopped`, cancels children, bounded-waits; panic recovery re-checks `stopped` + `parentCtx` before restart — observed "skipping restart — supervisor stopped during delay" |
+| Timing / flakiness | STABLE | Jittered restart (3–7s) observed across runs (6.00s / 4.20s / 4.71s / 3.93s); backoff-exhaustion + jitter tests deterministic-green, not wall-clock flaky |
+
+### Evidence 1 — Structural guard presence (3 prior race fixes intact)
+
+**Executed:** YES (in current session)
+**Command:** `grep -n` over the three guard sites
+**Phase Agent:** bubbles.stabilize
+
+```
+=== guard 1: mlClient sync.Once (health.go) ===
+130:    mlClientOnce       sync.Once
+408:    client := d.mlClient() // safe: sync.Once guarantees single init
+631:    d.mlClientOnce.Do(func() {
+=== guard 2: IMAP health mutex (imap.go) ===
+23:     mu         sync.RWMutex // Protects concurrent access to config/health/qualifiers
+49:     c.mu.Lock()
+439:    c.mu.RLock()
+446:    c.mu.Lock()
+=== guard 3: supervisor stopped post-delay RLock (supervisor.go) ===
+229:                    s.mu.RLock()
+230:                    stoppedAfterDelay := s.stopped
+232:                    if stoppedAfterDelay || parentCtx.Err() != nil {
+=== resource bounds: sync-interval caps + health probe timeout ===
+internal/connector/supervisor.go:441:const maxSyncDuration = 720 * time.Hour // 30 days
+internal/connector/supervisor.go:444:const maxSyncMinutes = 43200 // 30 days in minutes
+internal/connector/supervisor.go:447:const maxSyncHours = 720 // 30 days in hours
+internal/api/health.go:359:const healthAuxiliaryProbeTimeout = 1500 * time.Millisecond
+```
+
+**Result:** PASS — all three prior race-fix guards are present (the IMAP `healthMu` was consolidated into a single `mu` RWMutex that now also snapshots config under lock — a strictly stronger guard than the original C-023-CHAOS-002 fix).
+
+### Evidence 2 — Supervisor shutdown / panic-recovery / resource-bound tests
+
+**Executed:** YES (in current session)
+**Command:** `./smackerel.sh test unit --go --go-run 'TestSupervisor|TestStopAll|TestPanicRecovery|TestStartConnector_RejectsAfterStopAll|TestSyncError_BackoffExhausted|TestParseSyncInterval|TestGetSyncInterval|TestBackoff' --verbose`
+**Phase Agent:** bubbles.stabilize
+
+```
+2026/06/08 01:07:13 WARN restarting connector after panic connector=panic-test panic_count=1 max_before_disable=5 restart_delay=4.20345639s
+2026/06/08 01:07:17 WARN skipping restart — supervisor stopped during delay connector=panic-test
+--- PASS: TestSupervisor_PanicRecovery (4.21s)
+=== RUN   TestSupervisor_StopAll_BoundedTimeout
+2026/06/08 01:07:27 WARN connector supervisor stop timed out waiting for goroutines — proceeding with shutdown
+--- PASS: TestSupervisor_StopAll_BoundedTimeout (10.05s)
+=== RUN   TestSupervisor_PanicRecovery_RestartDelayJittered
+2026/06/08 01:07:27 WARN restarting connector after panic connector=jitter-test panic_count=1 max_before_disable=5 restart_delay=6.004580638s
+--- PASS: TestSupervisor_PanicRecovery_RestartDelayJittered (0.10s)
+=== RUN   TestParseSyncInterval_CronMinutesOverflow
+--- PASS: TestParseSyncInterval_CronMinutesOverflow (0.00s)
+=== RUN   TestParseSyncInterval_CronHoursOverflow
+--- PASS: TestParseSyncInterval_CronHoursOverflow (0.00s)
+=== RUN   TestParseSyncInterval_GoDurationExceedsCap
+--- PASS: TestParseSyncInterval_GoDurationExceedsCap (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector       20.871s
+[go-unit] go test ./... finished OK
+```
+
+**Result:** PASS — bounded 10s shutdown drain fires the timeout path cleanly; the post-delay `stopped` re-check (C-023-CHAOS-003 guard) executes ("skipping restart — supervisor stopped during delay"); sync-interval overflow caps hold. Exit 0.
+
+### Evidence 3 — Health-handler concurrency / cache tests
+
+**Executed:** YES (in current session)
+**Command:** `./smackerel.sh test unit --go --go-run 'TestMLClient|TestHealthHandler_ConcurrentAccess|TestHealthHandler_ParallelProbes|TestHealthHandler_IntelligenceCacheConcurrentReaders|TestChaos_ConcurrentHealthWithSlowKnowledgeStore' --verbose`
+**Phase Agent:** bubbles.stabilize
+
+```
+=== RUN   TestMLClient_ConcurrentAccess
+--- PASS: TestMLClient_ConcurrentAccess (0.00s)
+=== RUN   TestHealthHandler_ConcurrentAccess
+--- PASS: TestHealthHandler_ConcurrentAccess (0.09s)
+=== RUN   TestHealthHandler_ParallelProbes
+--- PASS: TestHealthHandler_ParallelProbes (1.03s)
+=== RUN   TestHealthHandler_ParallelProbes_MixedStatus
+--- PASS: TestHealthHandler_ParallelProbes_MixedStatus (0.02s)
+=== RUN   TestHealthHandler_IntelligenceCacheConcurrentReaders
+--- PASS: TestHealthHandler_IntelligenceCacheConcurrentReaders (0.00s)
+=== RUN   TestChaos_ConcurrentHealthWithSlowKnowledgeStore
+--- PASS: TestChaos_ConcurrentHealthWithSlowKnowledgeStore (0.20s)
+PASS
+ok      github.com/smackerel/smackerel/internal/api     1.654s
+[go-unit] go test ./... finished OK
+```
+
+**Result:** PASS — mlClient single-init under concurrency, parallel probe goroutines, and the RWMutex-protected knowledge + intelligence health caches (C-023-C001 lock-not-held-across-DB-I/O pattern) all hold. Exit 0.
+
+### Evidence 4 — IMAP concurrent-sync race guard (C-023-CHAOS-002)
+
+**Executed:** YES (in current session)
+**Command:** `./smackerel.sh test unit --go --go-run 'TestChaos_ConcurrentIMAPSync|TestChaos_Sync_DuplicateUIDs' --verbose`
+**Phase Agent:** bubbles.stabilize
+
+```
+=== RUN   TestChaos_ConcurrentIMAPSync
+2026/06/08 01:11:43 INFO IMAP connector connected id=chaos-concurrent auth=oauth2
+2026/06/08 01:11:43 INFO IMAP sync complete id=chaos-concurrent fetched=1 artifacts=1 cursor=100
+2026/06/08 01:11:43 INFO IMAP sync complete id=chaos-concurrent fetched=1 artifacts=1 cursor=100
+--- PASS: TestChaos_ConcurrentIMAPSync (0.00s)
+=== RUN   TestChaos_Sync_DuplicateUIDs
+2026/06/08 01:11:43 INFO IMAP sync complete id=chaos-dup-uid fetched=3 artifacts=3 cursor=101
+--- PASS: TestChaos_Sync_DuplicateUIDs (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/imap  0.026s
+```
+
+**Result:** PASS — concurrent `Sync()` against the `mu`-guarded `health` field runs clean through the regression test the prior race fix shipped.
+
+### Evidence 5 — SST config-sync (the spec 023 SST-compliance refactor)
+
+**Executed:** YES (in current session)
+**Command:** `./smackerel.sh check`
+**Phase Agent:** bubbles.stabilize
+
+```
+config-validate: ~/smackerel/config/generated/dev.env.tmp.2126522 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+Exit Code: 0
+```
+
+**Result:** PASS — config remains in sync with SST and the env-file drift guard holds, so the spec 023 connector-env-var SST refactor has not regressed.
+
+### Observation (advisory — NOT a destabilizer, NOT routed)
+
+| ID | Severity | Class | Observation | Disposition |
+|----|----------|-------|-------------|-------------|
+| OBS-023-STAB-01 | Low | test-tooling | The sanctioned Go unit path (`scripts/runtime/go-unit.sh`) runs `go test ./...` without `-race`, so the data-race-detector evidence the two prior chaos probes relied on cannot be reproduced through the repo CLI. | Recorded only. Not a runtime destabilizer of spec 023 surfaces; a `--race` opt-in on `go-unit.sh` would be a CLI/devops enhancement outside spec 023's scope, so it is **not** routed from this pass (anti-gold-plating). |
+
+### Verdict
+
+🟢 STABLE — 0 destabilizers across races / leaks / resource-bounds / shutdown / timing for spec 023's probed surfaces. The three prior race fixes are structurally intact and regression-guarded; shutdown drain, panic-recovery circuit breakers, and sync-interval overflow caps are bounded and green; SST config-sync holds. The single observation (OBS-023-STAB-01) is a test-tooling reproducibility note, not a runtime risk. No code change required; no protected artifact touched. The `stabilize` phase record is left for `bubbles.validate` to write against this section.
+
+### Stabilize Phase Record Reconciliation (bubbles.validate, 2026-06-08)
+
+**Executed:** YES (in current session)
+**Command:** `grep -nE '"stabilize",|"phase": "stabilize"|"evidenceRef": "report.md|"agent": "bubbles.stabilize"' specs/023-engineering-quality/state.json`
+**Phase Agent:** bubbles.validate
+
+The genuinely-run `stabilize` phase above is now written into `state.json`: `stabilize` added to `execution.completedPhaseClaims` and `certification.certifiedCompletedPhases`; a `bubbles.stabilize` `executionHistory` entry appended with its anchor pointing at this "Stabilize Pass — reconcile-to-doc (2026-06-08)" section; and OBS-023-STAB-01 captured as a low-severity `certification.observations` note (disposition `recorded-not-routed`, owner `bubbles.devops`, action `defer`). This was the sole remaining Gate G022 residual for spec 023, so `artifact-lint` moved 3 → 0 (PASSED). No protected artifact (`spec.md` / `design.md` / `scopes.md`) was touched; 023 stays `done`.
+
+```
+21:      "stabilize",
+48:      "stabilize",
+67:        "phase": "stabilize",
+69:        "evidenceRef": "report.md § 'Stabilize Pass — reconcile-to-doc (2026-06-08)'",
+174:      "agent": "bubbles.stabilize",
+```

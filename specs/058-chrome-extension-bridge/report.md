@@ -843,4 +843,81 @@ device `TestComputeDedupKey_VariesByDevice` (Chrome Sync) is preserved.
 `internal/connector/ingest` 12/12 and `internal/api/connectors/extension` 40/40.
 Full evidence in `bugs/BUG-058-DEDUP-KEY-OWNER-ISOLATION/report.md`.
 
+## DevOps Diagnostic Probe — Residual Supply-Chain Rows (2026-06-07)
+
+`bubbles.devops` diagnostic probe (stochastic-quality-sweep Round 14/20,
+`devops-to-doc`). Scope: establish the GROUND TRUTH of the two residual
+not-run DoD rows on Scope 4 with real command output. **No protected artifact
+(`spec.md`/`design.md`/`scopes.md`) edited; `state.json` status left `blocked`.**
+This probe does NOT promote the spec — promotion remains a deliberate separate
+pass owned by `bubbles.validate`.
+
+**Residual item 2 — `Regression_BuildManifestRecordsZipSHA256` build-manifest
+contract test — VERIFIED BY RUNNING IT: test-exists-and-passes.** The contract
+is LANDED at `internal/deploy/build_workflow_chrome_bridge_contract_test.go`
+(1 live-file assertion + 3 adversarial sub-tests). The canonical label
+`Regression_BuildManifestRecordsZipSHA256` lives in the `t.Logf`/comment text;
+the Go functions are named `TestChromeBridgeManifestContract_*`, so a `-run` on
+the literal canonical label alone matches nothing — the run below uses an
+alternation that also matches the real function names:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'Regression_BuildManifestRecordsZipSHA256|BuildManifest.*ZipSHA256|ChromeBridgeManifestContract' --verbose
+--- PASS: TestChromeBridgeManifestContract_LiveFile (0.00s)
+    build_workflow_chrome_bridge_contract_test.go:156: contract OK: build.yml builds+signs the chrome-bridge zip and the build manifest records its zipSha256 + cosign-keyless/Rekor provenance (Regression_BuildManifestRecordsZipSHA256)
+--- PASS: TestChromeBridgeManifestContract_AdversarialMissingZipSha256 (0.00s)
+--- PASS: TestChromeBridgeManifestContract_AdversarialMissingSignatureScheme (0.00s)
+--- PASS: TestChromeBridgeManifestContract_AdversarialMissingShaArtifactDownload (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.026s
+```
+
+The three adversarial sub-tests prove the contract is non-tautological: it
+rejects a `chromeBridge:` block missing `zipSha256`, missing
+`signatureScheme: cosign-keyless`, and a publish job missing the
+`chrome-bridge-sha` artifact download. **This residual row is dischargeable**,
+but the discharge requires flipping the `[ ]` row in `scopes.md` (a protected
+artifact) — routed below, not done here.
+
+**Residual item 1 — post-merge cosign verify-blob against a real Rekor entry —
+VERIFIED BY RUNNING THE LOCAL PROOF: split status.** The verify-blob mechanics
++ sha256 binding + tamper detection are locally-satisfiable and now PROVEN
+against the real built zip; the KEYLESS-OIDC identity binding recorded in a
+real public Rekor entry is genuinely-external-blocked (irreducibly CI-only):
+
+```text
+$ ./smackerel.sh test extension-supplychain
+    sha256 OK: 2bdf51e7e814103480f1a5434040160dc4a799ea4e7dace6fb0bdadf0ce498b1
+    verify-blob OK: signature verifies against the artifact
+    tamper detection OK: verify-blob rejected the truncated copy
+PASS: chrome-bridge supply-chain proof — sha256 binding + offline cosign sign/verify-blob + tamper detection all hold.
+NOTE: the keyless-OIDC identity binding against a real Rekor entry is a CI-only concern (not run here; no public-Rekor pollution).
+```
+
+The keyless-OIDC-real-Rekor remainder CANNOT be honestly produced on a
+developer box — it needs a tagged release signed by CI's OIDC identity, and
+uploading test signatures to the public Rekor log is forbidden shared-system
+pollution. This is an HONEST, correctly-documented remaining blocker; it is
+NOT landable this round and MUST NOT be fabricated.
+
+**DevOps health — INFERRED FROM READING `.github/workflows/build.yml` +
+`scripts/commands/build-chrome-bridge.sh` (Build-Once Deploy-Many / G081):**
+build manifest pins core/ml images by `@<digest>` (`coreDigest`/`mlDigest`,
+not `:latest`/`:main`); GitHub Actions are pinned by full commit SHA; the zip
+is named by `<version>-<sha-short>` (immutable, no mutable tag); the
+`build-chrome-bridge` job cosign-keyless signs (Rekor) and the workflow STOPS
+at artifact upload + tag-only Release attach (the only `ssh`/`apply.sh`/`:latest`
+hits in `build.yml` are G074 prohibition COMMENTS, not executable steps). The
+zip is byte-reproducible (`SOURCE_DATE_EPOCH` + `zip -X`); the local
+supply-chain proof above rebuilt the artifact and its `.sha256` sidecar matched.
+No supply-chain regression observed.
+
+**Drift finding (DEVOPS-058-D1, routed — protected artifact):** `scopes.md`
+line 551 still records the `Regression_BuildManifestRecordsZipSHA256` DoD row as
+`[ ]` / `Claim Source: not-run` / "routed to `bubbles.plan` to schedule the
+additional contract assertion." That is now STALE — `state.json`
+`RESIDUAL-NOT-RUN-DOD-ROWS` already states the assertion is LANDED, and the run
+above confirms it PASSES. The row should be flipped to `[x]` with the real
+evidence anchor. `scopes.md` is owned by `bubbles.plan`; this probe does not
+edit it.
+
 

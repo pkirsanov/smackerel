@@ -187,6 +187,29 @@ def _utf8_truncate(s: str, max_bytes: int) -> str:
     return encoded[:max_bytes].decode("utf-8", errors="ignore")
 
 
+def _sanitize_header_value(s: str) -> str:
+    """Replace every C0 control char (U+0000–U+001F, incl CR/LF/TAB) and DEL
+    (U+007F) with a single ASCII space (U+0020).
+
+    Byte-for-byte PARITY MIRROR of the Go core
+    internal/stringutil/stringutil.go::SanitizeHeaderValue (SEC-081-R1). It
+    neutralizes header-injection (CRLF) attacks (CWE-113) when an untrusted
+    error string is written into a single-line wire header value such as the
+    dead-letter Smackerel-Last-Error header.
+
+    Parity argument: only codepoints < 0x20 or == 0x7F are replaced, and every
+    such codepoint is a single byte in UTF-8 (multi-byte sequences contain no
+    byte < 0x80). So this codepoint-oriented Python rule and the byte-oriented
+    Go rule sanitize the SAME positions and produce byte-for-byte equal output
+    for the same input. Byte length is preserved (single-byte control ->
+    single-byte space), so a subsequent fixed-byte UTF-8 truncation lands on an
+    identical boundary on both runtimes.
+    """
+    if not any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in s):
+        return s  # fast path: no control/DEL chars
+    return "".join(" " if (ord(ch) < 0x20 or ord(ch) == 0x7F) else ch for ch in s)
+
+
 class NATSClient:
     """Manages NATS JetStream connection and subscriptions for the ML sidecar."""
 
@@ -680,7 +703,11 @@ class NATSClient:
             "Smackerel-Failed-At": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "Smackerel-Delivery-Count": str(num_delivered),
         }
-        last_err = _utf8_truncate(str(exc), 256)
+        # SEC-081-R1: sanitize CR/LF/C0/DEL (header injection, CWE-113) THEN
+        # truncate — byte-for-byte parity with the Go core sinks
+        # (stringutil.SanitizeHeaderValue then TruncateUTF8). Sanitization
+        # preserves byte length, so the 256-byte boundary is unchanged.
+        last_err = _utf8_truncate(_sanitize_header_value(str(exc)), 256)
         if last_err:  # parity with Go `if lastError != ""`
             headers["Smackerel-Last-Error"] = last_err
         consumer = ""
