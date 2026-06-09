@@ -5,7 +5,7 @@
   "featureDir": "specs/059-google-keep-live-mode/bugs/BUG-059-001-gkeepapi-missing-from-sidecar-build",
   "parentFeatureDir": "specs/059-google-keep-live-mode",
   "featureName": "BUG-059-001: gkeepapi live-mode dependency missing from ML sidecar build surfaces",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "bugfix-fastlane",
   "severity": "medium",
   "linkedImplementationSpec": null,
@@ -13,7 +13,7 @@
   "planningOnly": false,
   "planningOnlyJustification": null,
   "specDependsOn": [],
-  "certifiedAt": null,
+  "certifiedAt": "2026-06-09T15:59:14Z",
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.validate",
@@ -24,7 +24,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": ["scope-1-gkeepapi-pin-build-surface"],
     "certifiedCompletedPhases": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
     "scopeProgress": [
@@ -35,7 +35,7 @@
         "dependsOn": [],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null,
+        "certifiedAt": "2026-06-09T15:59:14Z",
         "notes": "CERTIFIED (Path A; the terminal done stamp is applied post-commit via the two-phase G088-safe commit ordering): gkeepapi==0.17.1 pinned on ml/pyproject.toml ([project.optional-dependencies] runtime) + ml/requirements.txt; smackerel-ml image rebuilt (BUILD_EXIT=0); in-image import gkeepapi exit 0 at v0.17.1; structural guard test_build_surface_pins.py GREEN with pin (500 passed) / RED without (2 failed, exit 1, non-tautological); format --check clean. Scope is contract-only (zero-runtime-delta build-manifest pin); its applicable regression contract (structural-unit guard + build-image import) is GREEN, so the broad-E2E DoD row was reconciled to that contract (not a fabricated E2E pass). bugfix-fastlane specialist chain complete: regression (500 passed re-run), simplify (minimal, no change), stabilize (deterministic text-read guard; 3 identical runs), security (OSV vet: 0 CVEs across the full gkeepapi closure, urllib3 1.26.4 positive control = 13 vulns), validate (certification-chain validation), audit (prior independent bubbles.audit pass, clean on merits). 13/13 DoD green. The state-transition guard passes 36/36 for the in_progress packet (exit 0, TRANSITION PERMITTED; re-verified this session); G088 (post-cert spec edit) passes while certifiedAt is null and stays green under the two-phase commit ordering (planning truth committed first, then certifiedAt post-dates it). Planning truth is frozen with final certified language (phase 1); the commit owner applies the certifiedAt stamp post-commit (phase 2)."
       }
     ],
@@ -50,7 +50,9 @@
         "severity": "low",
         "summary": "Planning truth is FROZEN with final certified language (phase 1 of the two-phase G088-safe terminal certification). The substantive certification is complete: scope Done, DoD 13/13, the full bugfix-fastlane chain (implement/test/regression/simplify/stabilize/security/validate/audit) recorded, and the state-transition guard passes 36/36 for the in_progress packet (exit 0, TRANSITION PERMITTED; re-verified this session: ./smackerel.sh test unit --python = 500 passed exit 0, artifact-lint = exit 0, state-transition-guard = exit 0). G088 (post_certification_spec_edit_gate) currently PASSES because certifiedAt is null; it would only flag a planning-truth edit if certifiedAt were set in the same uncommitted batch as that edit. The two-phase pattern keeps G088 green: the commit owner commits the frozen planning-truth + evidence artifacts FIRST (commit 1), then phase 2 sets certifiedAt so it post-dates that commit and flips status=done (cf. BUG-002-005). No requiresRevalidation fudge, no fabricated timestamp, no guard bypass. Concern stays open until phase 2 lands certifiedAt and flips status=done, per the operator's two-phase instruction.",
         "owner": "bubbles.validate",
-        "raisedAt": "2026-06-09T15:05:00Z"
+        "raisedAt": "2026-06-09T15:05:00Z",
+        "resolvedAt": "2026-06-09T15:59:14Z",
+        "resolution": "RESOLVED in phase 2: planning truth was committed first in b67cbbe4 (phase 1), then certifiedAt (2026-06-09T15:59:14Z) was set in the follow-up commit so it post-dates the planning-truth commit. Gate G088 (post_certification_spec_edit_gate / state-transition-guard Check 30) is satisfied via the two-phase commit ordering, not bypassed: no requiresRevalidation fudge, no fabricated timestamp, no guard bypass. Terminal status=done now applied."
       }
     ]
   },
@@ -134,11 +136,18 @@
       "at": "2026-06-09T15:45:15Z",
       "outcome": "route_required",
       "summary": "Phase 1 of the two-phase G088-safe terminal certification: FROZE planning truth (scopes.md) with final, status-neutral certified language — removed the transient 'rests at in_progress / terminal done pending G088' hedges that would become false once status flips to done; reconciled the same framing in bug.md + report.md. Did NOT set certifiedAt and did NOT flip status (both remain null / in_progress) to preserve G088 commit-ordering; did NOT set requiresRevalidation. Re-verified the substantive certification still holds before freezing: ./smackerel.sh test unit --python = 500 passed, 2 skipped, exit 0 (structural guard GREEN); artifact-lint = exit 0; state-transition-guard = exit 0 (36/36, TRANSITION PERMITTED, G088 green while certifiedAt is null). Routed to the commit owner to land commit 1 (frozen planning truth + evidence); phase 2 then sets certifiedAt > that commit and flips status=done. Delivered fix unchanged (HEAD 30d6836b); parent spec 059 untouched."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phase": "validate",
+      "at": "2026-06-09T15:59:14Z",
+      "outcome": "completed_owned",
+      "summary": "Phase 2 (final) of the two-phase G088-safe terminal certification: applied the terminal certification STAMP. Set top-level status=done and certification.status=done; set top-level certifiedAt and scope-1 (scope-1-gkeepapi-pin-build-surface) certifiedAt = 2026-06-09T15:59:14Z (real current UTC, post-dating the phase-1 planning-truth commit b67cbbe4 - this is what makes Gate G088 / Check 30 PASS without any bypass). Resolved concern UD-059-001-g088-commit-ordering (resolvedAt + resolution). requiresRevalidation left false (no G088 fudge). Edited state.json ONLY - no planning-truth file (spec.md/design.md/scopes.md) touched, so the committed-clean scopes.md keeps G088 green. Re-ran state-transition-guard.sh post-stamp: exit 0, TRANSITION PERMITTED at status=done, Check 30 (G088) PASS. Delivered fix unchanged (HEAD 30d6836b); parent spec 059 untouched. Terminal done now applied."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-09T15:45:15Z",
+  "lastUpdatedAt": "2026-06-09T15:59:14Z",
   "notes": "Path A delivered + verified + CERTIFIED (the terminal done stamp is applied post-commit via the two-phase G088-safe commit ordering). gkeepapi==0.17.1 pinned on both build surfaces; image rebuilt; in-image import exit 0 (v0.17.1); structural guard GREEN-with-pin / RED-without; no unit regression. 13/13 DoD green. Scope is contract-only (zero-runtime-delta build-manifest pin); the broad-E2E DoD row was reconciled to the applicable regression contract (structural-unit guard + build-image import, both GREEN), not a fabricated E2E pass. CERTIFICATION 2026-06-09 (bubbles.workflow parent-expanded; runSubagent unavailable): ran the remaining bugfix-fastlane chain — regression (./smackerel.sh test unit --python = 500 passed exit 0), simplify (minimal, no change), stabilize (deterministic text-read guard; 3 identical runs), security (OSV vet: 0 CVEs across the gkeepapi closure; urllib3 1.26.4 positive control = 13 vulns) — then bubbles.validate validated the chain (audit = prior independent bubbles.audit pass, clean on merits). Audit findings AUD-059-001-F1..F6 resolved (report.md -> Certification Resolution). The state-transition guard passes 36/36 for the in_progress packet (exit 0, TRANSITION PERMITTED; re-verified this session). G088 (commit-ordering) passes while certifiedAt is null and stays green under the two-phase ordering. PHASE 1 (2026-06-09) froze planning truth (scopes.md) with final certified language and re-verified the substantive certification (./smackerel.sh test unit --python = 500 passed exit 0, artifact-lint = exit 0, state-transition-guard = exit 0); the commit owner lands commit 1 (frozen planning truth + evidence), then phase 2 sets certifiedAt > that commit and flips status=done. Delivered fix unchanged (HEAD 30d6836b). Parent spec 059 remains done with protected artifacts unchanged."
 }
