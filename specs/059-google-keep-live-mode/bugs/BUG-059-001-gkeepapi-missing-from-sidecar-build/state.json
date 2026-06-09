@@ -5,7 +5,7 @@
   "featureDir": "specs/059-google-keep-live-mode/bugs/BUG-059-001-gkeepapi-missing-from-sidecar-build",
   "parentFeatureDir": "specs/059-google-keep-live-mode",
   "featureName": "BUG-059-001: gkeepapi live-mode dependency missing from ML sidecar build surfaces",
-  "status": "blocked",
+  "status": "in_progress",
   "workflowMode": "bugfix-fastlane",
   "severity": "medium",
   "linkedImplementationSpec": null,
@@ -16,42 +16,43 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "documentation",
-    "currentScope": null,
+    "activeAgent": "bubbles.audit",
+    "currentPhase": "audit",
+    "currentScope": 1,
     "runStartedAt": "2026-06-07T00:00:00Z",
-    "completedPhaseClaims": ["discovery", "documentation"],
+    "completedPhaseClaims": ["discovery", "documentation", "design", "planning", "implement", "test", "validate"],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "blocked",
+    "status": "in_progress",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {
         "scope": 1,
         "name": "Pin gkeepapi on the build surface + structural guard test",
-        "status": "blocked",
+        "status": "In Progress",
         "dependsOn": [],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": null,
+        "notes": "DELIVERED + VERIFIED (Path A): gkeepapi==0.17.1 pinned on ml/pyproject.toml ([project.optional-dependencies] runtime) + ml/requirements.txt; smackerel-ml image rebuilt (BUILD_EXIT=0); in-image import gkeepapi exit 0 at v0.17.1; structural guard test_build_surface_pins.py GREEN with pin (500 passed) / RED without (2 failed, exit 1, non-tautological); format --check clean (63 files); full Go+Python unit no-regression (only pre-existing unrelated docfreshness staleness + node/dart-not-on-PATH failures). 11/12 DoD green. ONE honest not-run UD: the broader LIVE E2E suite (zero-runtime-delta build-manifest change; design designated structural-unit regression; proportionate broader regression is GREEN). Stays In Progress (not Done): the bugfix-fastlane specialist-certification chain (regression/simplify/stabilize/security/audit) is owned downstream by separation of duties; this single delivery agent did not (and must not) self-certify those phases."
       }
     ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
     },
-    "blockers": [
+    "blockers": [],
+    "concerns": [
       {
-        "id": "BLK-059-001-supply-chain",
-        "severity": "medium",
-        "summary": "Maintainer supply-chain decision required before any fix code lands: which gkeepapi version to pin and acceptance of the reverse-engineered-library risk (design.md Open Question Q1). Fix intentionally deferred to a deliberate delivery pass; not a sweep-round drive-by.",
-        "owner": "maintainer",
-        "raisedAt": "2026-06-07T00:00:00Z"
+        "id": "UD-059-001-broader-e2e",
+        "severity": "low",
+        "summary": "Honest not-run Uncertainty Declaration (Gate G021): the broader LIVE ./smackerel.sh test e2e suite was NOT spun up. Deliberate: BUG-059-001 is a zero-runtime-delta build-manifest change (ml/app/keep_bridge.py untouched), and design.md designated a structural-unit guard + build-image-import as this bug's regression contract (an import test would couple execution to the dependency under question). Proportionate broader-regression evidence IS green: full Python unit (500 passed) + full Go unit (only pre-existing unrelated failures) + image build + in-image import. NON-BLOCKING for the structural deliverable; it keeps the packet at in_progress rather than a forced done. Evidence: report.md -> Regression Disposition + Evidence A/D/E.",
+        "owner": "bubbles.workflow",
+        "raisedAt": "2026-06-09T00:00:00Z"
       }
-    ],
-    "concerns": []
+    ]
   },
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
@@ -77,11 +78,25 @@
       "at": "2026-06-07T00:00:00Z",
       "outcome": "tracked_bug_packet_created",
       "summary": "Created full bug packet (bug.md/spec.md/design.md/scopes.md/report.md/uservalidation.md/scenario-manifest.json/state.json) with verified diagnostic evidence. Fix DEFERRED: pinning a reverse-engineered Google library is a deliberate maintainer supply-chain decision (design.md Q1). Status set to blocked (triaged backlog awaiting maintainer decision + deliberate delivery pass). No fix code touched; parent spec 059 untouched (stays done)."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phase": "delivery",
+      "at": "2026-06-09T00:00:00Z",
+      "outcome": "delivered_verified_pending_certification",
+      "summary": "Maintainer resolved design.md Q1 by choosing Path A (DELIVER) + accepting the reverse-engineered-library supply-chain risk, clearing BLK-059-001-supply-chain. Delivered the fix inline (single delivery agent; runSubagent unavailable in this runtime, so no specialist sub-dispatch): added gkeepapi==0.17.1 to ml/pyproject.toml [project.optional-dependencies] runtime + ml/requirements.txt (the Dockerfile lock); added the structural guard ml/tests/test_build_surface_pins.py (reads manifest text, never imports gkeepapi). keep_bridge.py / Dockerfile / config untouched (change boundary honored). Verified via sanctioned CLI with real evidence (report.md Fix Verification Evidence A-E): ./smackerel.sh test unit --python = 500 passed (guard GREEN); pin-removed RED run = 2 failed exit 1 (non-tautological); restored byte-identical + re-GREEN; ./smackerel.sh format --check = 63 files clean; ./smackerel.sh build = BUILD_EXIT=0; docker run smackerel-smackerel-ml import gkeepapi = exit 0 v0.17.1; ./smackerel.sh test unit --go = only pre-existing unrelated failures (docfreshness staleness + node/dart-not-on-PATH). 11/12 DoD green. ONE honest not-run UD: broader LIVE E2E suite (zero-runtime-delta + design's structural-regression choice). Set status blocked->in_progress (delivered, pending the bugfix-fastlane specialist-certification chain regression/simplify/stabilize/security/audit, owned downstream by separation of duties; NOT self-certified, anti-fabrication Gate G021). Parent spec 059 stays done, protected artifacts unchanged; parent-spec governance follow-up flagged in report.md (no false live-mode claim found; this fix is the prerequisite for the parent's routed live-stack round)."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phase": "audit",
+      "at": "2026-06-09T07:30:00Z",
+      "outcome": "route_required",
+      "summary": "Separation-of-duties terminal-status audit (delivery agent declined self-certify and routed here). INDEPENDENTLY re-ran key evidence (did not trust summary): state-transition-guard.sh (GUARD_EXIT=1); ./smackerel.sh test unit --python = 500 passed/2 skipped exit 0 (reproduces Evidence A, guard GREEN); in-image import on fresh image 8cfe72c97bf2 = IMPORT_OK gkeepapi 0.17.1 exit 0 (reproduces Evidence D); skip-marker scan of test_build_surface_pins.py CLEAN; grep -rnE 'keep_bridge|gkeepapi|keep.sync|sync_mode' tests/e2e/ = no matches (zero Keep-live e2e coverage). VERDICT: deliverable is audit-clean on the merits; terminal `done` is NOT honestly reachable this pass. Binding blockers (NOT the E2E row): (1) bugfix-fastlane specialist chain incomplete — Gate G022 Check 6 shows regression/simplify/stabilize/security NOT recorded (security claimed clean by operator but unrecorded); (2) only bubbles.validate may certify done (certifiedCompletedPhases empty); (3) G027/G053/G040/G060 also block done. E2E DoD-row disposition: non-applicable broad-regression gate for this zero-runtime-delta/zero-Go-delta change class — no backing e2e scenario (scenario-manifest has 3 non-e2e scenarios, all verified; design designated structural-unit+build-image-import contract); materially different from BUG-056-002's genuinely-applicable migration row; row stays [ ] (audit will NOT fabricate a green [x] for an unrun suite) as an audit-reviewed UD that bubbles.validate MAY resolve at final certification. Did NOT record `audit` in completedPhaseClaims (audit-mode records phase only on SHIP_IT). Did NOT write certification.* (validate-owned). status stays in_progress. Parent spec 059 untouched (grandfather preserved). Findings AUD-059-001-F1..F6 + Spot-Check Recommendations in report.md -> Audit Findings."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-07T00:00:00Z",
-  "notes": "Tracked-work creation only. Fix deferred pending maintainer supply-chain decision (design.md Open Question Q1). DoD items intentionally unchecked (anti-fabrication, Gate G021). Parent spec 059 remains done and its protected artifacts are unchanged."
+  "lastUpdatedAt": "2026-06-09T07:30:00Z",
+  "notes": "Path A delivered + verified. gkeepapi==0.17.1 pinned on both build surfaces; image rebuilt; in-image import exit 0 (v0.17.1); structural guard GREEN-with-pin / RED-without; no unit regression. 11/12 DoD green; 1 honest not-run UD (broader live E2E suite). status in_progress = delivered, pending downstream bugfix-fastlane specialist-certification chain (separation of duties). Parent spec 059 remains done with protected artifacts unchanged; governance follow-up flagged in report.md, not acted on. AUDIT 2026-06-09 (bubbles.audit): terminal status in_progress CONFIRMED (NOT done). Independently re-ran guard (exit 1), ./smackerel.sh test unit --python (500 passed exit 0), in-image import (gkeepapi 0.17.1 exit 0), skip-scan (clean), tests/e2e Keep grep (no matches). Deliverable audit-clean on the merits; done blocked by incomplete specialist chain (G022: regression/simplify/stabilize/security unrecorded) + validate-owned certification (certifiedCompletedPhases empty) + G027/G053/G040/G060 — NOT primarily the E2E row. E2E DoD-row adjudicated as a non-applicable broad-regression gate for this zero-runtime-delta change class (no backing e2e scenario; design-designated structural-unit contract); stays [ ] as an audit-reviewed UD that bubbles.validate may resolve at final certification. Verdict REWORK_REQUIRED on the pipeline (not the fix); routed to bubbles.workflow. Findings AUD-059-001-F1..F6 + Spot-Checks in report.md."
 }
