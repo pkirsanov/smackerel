@@ -23,6 +23,12 @@ runtime = [
     "pypdf>=4.1.0",
     "numpy>=1.26.0",
     "jsonschema>=4.23.0",
+    # BUG-059-001: gkeepapi is the Google Keep live-mode dependency. It is an
+    # UNOFFICIAL, reverse-engineered client that Google periodically breaks, so
+    # it is EXACT-pinned (unlike the >= siblings above) and bumped deliberately
+    # per the spec 059 drift-circuit-breaker runbook — never floated. It is
+    # installed into the image via ml/requirements.txt (the Dockerfile lock).
+    "gkeepapi==0.17.1",
 ]
 dev = [
     "pytest>=8.0",
