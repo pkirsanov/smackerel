@@ -4,9 +4,11 @@
   "featureNumber": "070",
   "featureName": "Web Username/Password Login",
   "status": "done",
-  "certifiedAt": "2026-06-06T17:00:00Z",
-  "certifiedBy": "bubbles.workflow",
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "certifiedAt": "2026-06-07T19:30:00Z",
+  "certifiedBy": "bubbles.spec-review",
+  "lastUpdatedAt": "2026-06-07T19:30:00Z",
+  "requiresRevalidation": false,
+  "revalidationReason": "RESOLVED 2026-06-07T19:30Z by bubbles.spec-review G088 freshness/known-drift recert (stochastic-quality-sweep Round 2; named owner per bubbles.validate blocked verdict). The Round-2 harden remediation edited PROTECTED artifacts (F6 spec.md ## Status draft->done; F7 documented login rate-limit 10->20/min to match internal/api/router.go LimitByIP(20,1m)) plus a scopes.md citation. Independent git diff HEAD plus guard review confirmed these are drift-REMOVING reconciliations and that F1-F7 introduced ZERO new structural drift (state-transition-guard failure count 42 at HEAD -> 39 in working tree). Re-affirmed under the SAME passed-with-known-drift basis with advanced certifiedAt; flag cleared. See certification.recertifications[0]. NOTE: clean terminal Gate G088 (green post-cert-spec-edit-guard) seals at commit time once the F1-F7 planning-truth edits are committed and certifiedAt is re-stamped to post-date that commit per the established OPS-002 pattern (commit eea5e568); this recert does not fabricate a clean current-policy pass.",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -14,7 +16,7 @@
   "planningOnly": false,
   "specDependsOn": [
     "specs/044-per-user-bearer-auth",
-    "specs/057-form-encoded-web-login",
+    "specs/057-browser-login-redirect",
     "specs/060-bearer-auth-scope-claim"
   ],
   "amends": [],
@@ -41,7 +43,9 @@
     "lockdownState": "n/a-full-delivery-certified",
     "completedScopes": ["SCOPE-1", "SCOPE-2", "SCOPE-3"],
     "certifierAgent": "bubbles.validate",
-    "certifiedAt": "2026-06-06T17:00:00Z",
+    "certifiedAt": "2026-06-07T19:30:00Z",
+    "recertifiedAt": "2026-06-07T19:30:00Z",
+    "recertifiedBy": "bubbles.spec-review",
     "auditVerdict": "passed-with-known-drift",
     "auditNote": "SCOPE-1/2/3 implemented and verified with executed unit + integration evidence (see report.md). SCOPE-4 is operator-action (CI green + promote.sh apply/verify + users add CLI in live container + browser login smoke + cookie persistence) that no in-process agent can perform. Per BUG-045-002 precedent, SCOPE-4 DoD items are recorded as certification.unresolvedFindings with explicit operator acceptance criteria. The implementation code SCOPE-4 exercises is complete and gated by the unit + integration test matrix.",
     "unresolvedFindings": [
@@ -81,7 +85,20 @@
         "acceptanceCriterion": "Navigating to at least two distinct admin routes after login does not re-prompt for credentials."
       }
     ],
-    "notes": "Spec 070 (originally scaffolded as 063, renumbered 2026-05-31 to resolve duplicate 063 collision with knowledge-ai-enrichment) scaffolded 2026-05-30. SCOPE-1/2/3 implemented and verified with executed unit + integration evidence on 2026-06-01 (see report.md). SCOPE-4 (live home-lab deploy + browser smoke) is operator-action and certified under passed-with-known-drift per BUG-045-002 precedent: its 5 DoD items are routed as certification.unresolvedFindings with explicit operator acceptance criteria. Spec status flipped to done 2026-06-01T23:30Z."
+    "notes": "Spec 070 (originally scaffolded as 063, renumbered 2026-05-31 to resolve duplicate 063 collision with knowledge-ai-enrichment) scaffolded 2026-05-30. SCOPE-1/2/3 implemented and verified with executed unit + integration evidence on 2026-06-01 (see report.md). SCOPE-4 (live home-lab deploy + browser smoke) is operator-action and certified under passed-with-known-drift per BUG-045-002 precedent: its 5 DoD items are routed as certification.unresolvedFindings with explicit operator acceptance criteria. Spec status flipped to done 2026-06-01T23:30Z.",
+    "recertifications": [
+      {
+        "recertifiedAt": "2026-06-07T19:30:00Z",
+        "recertifiedBy": "bubbles.spec-review",
+        "recertGate": "G088",
+        "basis": "passed-with-known-drift (reaffirmed; SAME basis as original closure)",
+        "trigger": "Round-2 stochastic-quality-sweep harden remediation edited PROTECTED artifacts (F6 spec.md ## Status draft->done; F7 documented rate-limit 10->20/min to match internal/api/router.go LimitByIP(20,1m)) plus a scopes.md citation reconciliation; bubbles.implement set requiresRevalidation:true and routed the G088 re-cert decision to bubbles.spec-review.",
+        "regressionCheck": "No new drift. Independent git diff HEAD shows F1-F7 are drift-REMOVING (spec.md status reconciled to the already-certified done state; rate-limit doc reconciled to real code; scopes.md citation reconciled to the F1/F2 dispatch-seam tests) plus additive GREEN test strengthening (cmd_users dispatcher exit-code tests, login.html field tests, timing-test rename). state-transition-guard failure count DECREASED 42 (HEAD, pre-F1-F7) -> 39 (working tree, post-F1-F7); zero new structural failures. post-cert-spec-edit-guard (Gate G088 Check 30) PASS at both HEAD and working tree.",
+        "knownDriftReaffirmed": "The 39 current-policy (--profile changed) failures are the SAME pre-existing structural known-drift carried at the closure epoch: 070 was certified via the streamlined implement/test/validate/audit path with SCOPE-4 (live home-lab deploy + browser smoke) deferred as operator-action (certification.unresolvedFindings OP-070-SCOPE4-*). The full-delivery-policy items it never satisfied (missing regression/simplify/gaps/harden/stabilize/security/docs/chaos specialist phases; SCOPE-4 deferral language G040/G041; missing Validation/Audit/Chaos report sections; Code Diff Evidence G053; regression-E2E planning) are accepted known-drift, not regressions.",
+        "alsoCorrected": "Fixed pre-existing dangling specDependsOn reference specs/057-form-encoded-web-login -> specs/057-browser-login-redirect (the form-login dependency spec was renamed; target status is done). The dangling reference existed identically at HEAD (git show HEAD confirmed) and was not an F1-F7 regression; this is a referential correction, not a dependency-intent change.",
+        "finalizationNote": "Clean terminal Gate G088 (requiresRevalidation:false + green post-cert-spec-edit-guard) seals at commit time: the F1-F7 planning-truth edits must be committed, then certifiedAt re-stamped to post-date that commit per the established OPS-002 certifiedAt re-stamp pattern (commit eea5e568). This recert does NOT fabricate a clean current-policy pass; the ~37 remaining structural items stay documented known-drift and done-spec-audit --profile changed remains exit 1 by design."
+      }
+    ]
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -107,6 +124,17 @@
         "runStartedAt": "2026-06-06T17:00:00Z",
         "runEndedAt": "2026-06-06T17:00:00Z",
         "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits to THIS spec: 75f2e2be (2026-06-01T23:34Z round-2 convergence close-out, ~4min after faithful cert ts 23:30Z; flipped scopes 1-3 from Not Started to Done with [x] DoD evidence and deferred SCOPE-4 to operator-action, consistent with certification.unresolvedFindings OP-070-SCOPE4-* and auditVerdict passed-with-known-drift; category a plus b deferral) and b1c46991 (2026-06-05 tier-4 drift cleanup; reconciled planned-to-shipped file paths repo_postgres.go to repo.go, timing_test.go to hasher_test.go, cli_users.go to cmd_users.go; DoD checkboxes unchanged; category b). SCOPE-4 deferral and its 6 operator-action unchecked DoD predate done and are documented known-drift, not a post-promotion reset. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-07T19:10:00Z",
+        "runEndedAt": "2026-06-07T19:30:00Z",
+        "runCompletedAt": "2026-06-07T19:30:00Z",
+        "summary": "Round-2 stochastic-quality-sweep G088 freshness/known-drift recert (named owner per bubbles.validate blocked verdict). Independently confirmed via git diff HEAD plus guards that the Round-2 harden F1-F7 remediation introduced ZERO new drift: F6/F7/scopes.md edits are drift-REMOVING reconciliations (spec.md draft->done to match the already-certified state; rate-limit doc 10->20/min to match router.go LimitByIP(20,1m); citation reconciled to the real dispatch-seam tests) plus additive GREEN test strengthening. state-transition-guard failures DECREASED 42 (HEAD) -> 39 (working tree). The 39 --profile changed failures are the SAME pre-existing known-drift from the streamlined passed-with-known-drift closure (SCOPE-4 operator-deferred; 8 specialist phases never run; full-delivery report sections never authored). Re-affirmed known-drift under the SAME basis, advanced certifiedAt 2026-06-06T17:00:00Z -> 2026-06-07T19:30:00Z, cleared requiresRevalidation. Also corrected a pre-existing dangling specDependsOn reference specs/057-form-encoded-web-login -> specs/057-browser-login-redirect (target status done; dangling identically at HEAD). Final clean Gate G088 seals via the OPS-002 certifiedAt re-stamp after the planning-truth commit; no current-policy pass fabricated. See certification.recertifications[0]."
       }
     ]
   }

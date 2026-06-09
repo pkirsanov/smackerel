@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "featureDir": "specs/081-nats-python-sidecar-hardening-parity/bugs/BUG-081-001-deadletter-last-error-crlf-sanitization",
+  "generatedAt": "2026-06-08T00:00:00Z",
+  "deferred": false,
+  "deferredReason": "Delivered 2026-06-08 in one cross-cutting pass (Go primary surface + Python parity mirror together), preserving spec 081's byte-for-byte parity invariant. gherkinHash, linkedTests, and evidenceRefs are populated below; RED->GREEN + parity evidence is in report.md (DELIVERY PASS / VALIDATE RE-VERIFICATION / CLOSE-OUT AUTHORING PASS).",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-081-001-001",
+      "scope": "scope-1-go-core-crlf-sanitize",
+      "title": "Go dead-letter Smackerel-Last-Error: CRLF-laden error yields exactly six canonical headers, zero injected",
+      "gherkin": {
+        "given": "a Go subscriber exhausts a message with lastError \"boom\\r\\nNats-Msg-Id: forged\"",
+        "when": "publishToDeadLetter builds the dead-letter headers",
+        "then": "the message has exactly the six canonical Smackerel-* header lines and no injected header line"
+      },
+      "gherkinHash": "sha256:42a91c773362eba61484c063bc7015443636085314a15779b74ec0f9d55147bf",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/pipeline/subscriber_test.go", "testId": "TestDeadLetterLastErrorCRLFSanitized" }
+      ],
+      "evidenceRefs": ["report.md#test-evidence", "report.md#delivery-pass"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-081-001-002",
+      "scope": "scope-1-go-core-crlf-sanitize",
+      "title": "Removing the Go sanitizer reproduces the header injection (adversarial regression)",
+      "gherkin": {
+        "given": "the CR/LF sanitizer is absent from the Go subscribers",
+        "when": "a \"boom\\r\\nNats-Msg-Id: forged\" lastError is built into headers",
+        "then": "a seventh injected header line appears and the regression test fails RED"
+      },
+      "gherkinHash": "sha256:b9bb1c4f1ef53a5bc17945a6af3353c1193a13113f2bd568c582e06b5af22c9f",
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/pipeline/subscriber_test.go", "testId": "TestDeadLetterLastErrorCRLFSanitized" }
+      ],
+      "evidenceRefs": ["report.md#delivery-pass"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-081-001-003",
+      "scope": "scope-2-python-sidecar-crlf-sanitize",
+      "title": "Python dead-letter Smackerel-Last-Error: CRLF-laden str(exc) yields exactly six canonical headers, zero injected",
+      "gherkin": {
+        "given": "the ML poison handler exhausts a message with str(exc) \"boom\\r\\nNats-Msg-Id: forged\"",
+        "when": "_handle_poison builds the dead-letter headers",
+        "then": "the message has exactly the six canonical Smackerel-* header lines and no injected header line"
+      },
+      "gherkinHash": "sha256:7d71cf8f6fd30ea189af083012241c77206f4f301d825fc03ad623983d7a547e",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "ml/tests/test_nats_deadletter.py", "testId": "test_last_error_crlf_sanitized" }
+      ],
+      "evidenceRefs": ["report.md#test-evidence", "report.md#delivery-pass"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-081-001-004",
+      "scope": "scope-2-python-sidecar-crlf-sanitize",
+      "title": "Go and Python sanitized Smackerel-Last-Error values are byte-for-byte equal (parity, adversarial)",
+      "gherkin": {
+        "given": "the same CR/LF-and-control-laden error string on both runtimes",
+        "when": "each builds its Smackerel-Last-Error header value",
+        "then": "the two sanitized values are byte-for-byte equal and a one-sided fix fails this assertion"
+      },
+      "gherkinHash": "sha256:4294282a8422d9d98cc15a117bb15c9b0c22845b837af8eb26c1eaf4ac151329",
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "ml/tests/test_nats_deadletter.py", "testId": "test_sanitize_header_value_parity_pin" },
+        { "file": "ml/tests/integration/test_deadletter_parity.py", "testId": "test_last_error_sanitize_parity" }
+      ],
+      "evidenceRefs": ["report.md#delivery-pass", "report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

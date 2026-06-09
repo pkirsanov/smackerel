@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "featureDir": "specs/059-google-keep-live-mode/bugs/BUG-059-001-gkeepapi-missing-from-sidecar-build",
+  "generatedAt": "2026-06-07T00:00:00Z",
+  "deferred": true,
+  "deferredReason": "Tracked-work creation only; fix deferred pending maintainer supply-chain decision (design.md Open Question Q1). linkedTests and evidenceRefs will be populated by the delivery pass.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-059-001-001",
+      "scope": "scope-1-gkeepapi-pin-build-surface",
+      "title": "Built smackerel-ml image contains the gkeepapi live-mode dependency",
+      "gherkin": {
+        "given": "the smackerel-ml image is built from ml/Dockerfile",
+        "when": "ml/requirements.txt is installed during the build",
+        "then": "python -c \"import gkeepapi\" exits 0 inside the image"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-059-001-002",
+      "scope": "scope-1-gkeepapi-pin-build-surface",
+      "title": "Structural guard test catches removal of the gkeepapi pin (adversarial regression)",
+      "gherkin": {
+        "given": "a guard test asserts an exact gkeepapi== pin on the build surface",
+        "when": "the gkeepapi pin is removed from ml/requirements.txt",
+        "then": "the guard test fails RED, catching the exact reintroduction of this bug"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-059-001-003",
+      "scope": "scope-1-gkeepapi-pin-build-surface",
+      "title": "Live-mode authentication no longer raises gkeepapi-not-installed",
+      "gherkin": {
+        "given": "sync_mode=gkeepapi with gkeep_enabled and warning_acknowledged",
+        "when": "keep_bridge.authenticate() runs in a built image",
+        "then": "RuntimeError(\"gkeepapi is not installed\") is not raised"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

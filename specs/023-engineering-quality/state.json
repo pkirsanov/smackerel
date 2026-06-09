@@ -14,9 +14,13 @@
       "bootstrap",
       "implement",
       "test",
+      "regression",
+      "simplify",
       "validate",
       "harden",
+      "stabilize",
       "gaps",
+      "security",
       "audit",
       "chaos",
       "spec-review",
@@ -37,9 +41,13 @@
       "bootstrap",
       "implement",
       "test",
+      "regression",
+      "simplify",
       "validate",
       "harden",
+      "stabilize",
       "gaps",
+      "security",
       "audit",
       "chaos",
       "spec-review",
@@ -50,7 +58,20 @@
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
-    }
+    },
+    "observations": [
+      {
+        "id": "OBS-023-STAB-01",
+        "severity": "low",
+        "class": "test-tooling",
+        "phase": "stabilize",
+        "summary": "Sanctioned Go unit path (scripts/runtime/go-unit.sh) runs 'go test ./...' without -race, so the data-race-detector evidence the two prior chaos probes relied on is not reproducible through the repo CLI. Not a runtime destabilizer of spec 023 surfaces; the races dimension is evidenced structurally (3 prior race guards intact via grep) plus green concurrency regression tests.",
+        "evidenceRef": "report.md § 'Stabilize Pass — reconcile-to-doc (2026-06-08)'",
+        "disposition": "recorded-not-routed",
+        "followUpOwner": "bubbles.devops",
+        "followUpAction": "defer"
+      }
+    ]
   },
   "policySnapshot": {
     "grill": {
@@ -134,6 +155,32 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 6860f5b8 (scopes.md — trace-guard DoD-prefix 'Scenario SCN-023-NN:' on existing bullets + Test Plan file-path corrections citing existing health_test.go/router_test.go/etc.; category b), fb2a4266 (design.md — 'Design Successor Note' that spec 067 augments the quality-guard catalog; note states 023 'stays done' and 'remain authoritative'; category b), 8cd272dc (scopes.md — single broken path 'internal/api/interfaces.go' rewritten to actual landing site internal/api/health.go; that commit's spec-060 doc-presence tests landed in spec 060, not 023; category b). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "regression",
+        "simplify",
+        "security"
+      ],
+      "reviewStatus": "reconcile-to-doc",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-08T00:00:00Z",
+      "runEndedAt": "2026-06-08T00:00:00Z",
+      "summary": "reconcile-to-doc phase-record reconciliation (Gate G022 phase-record drift). Migrated 3 genuinely-completed phases into execution/certification phase records with citable anchors: regression — report.md section 'Regression Sweep (2026-04-12, regression trigger)' (8-check invariant verification table, cross-spec conflict analysis of 7 files, ./smackerel.sh check + ./smackerel.sh test unit pass, zero findings); simplify — commit 96ad78f3 (trigger=simplify, mappedMode=simplify-to-doc) which extracted probeHTTPGet at internal/api/health.go:644 and produced bugs/BUG-023-002-health-probe-dedup (status done); security — report.md sections 'Security Scan (2026-04-21)' and 'Security Scan — Repeat (2026-04-30)' (bubbles.security, 14 OWASP checks each, clean). stabilize NOT recorded — zero report.md occurrences and no spec-023-attributed commit; the only stabilize commits (d4dd693a, 8b928995) attribute stabilize work to ingestion/ops/weather while naming engquality only for other phases (evidence of absence). Routed to bubbles.stabilize. artifact-lint 9 to 3 issues (residual = stabilize real-work-needed). No protected artifacts (spec.md/design.md/scopes.md) touched; no requirement/scenario/DoD semantics changed."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "reviewStatus": "reconcile-to-doc",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-08T00:00:00Z",
+      "runEndedAt": "2026-06-08T00:00:00Z",
+      "summary": "Genuine stabilize sweep recorded from report.md section 'Stabilize Pass — reconcile-to-doc (2026-06-08)' (authored by bubbles.stabilize; routed here by the 2026-06-08 reconcile because no prior stabilize sweep had run against spec 023 surfaces). Verdict STABLE — 0 destabilizers across races/leaks/resource-bounds/shutdown/timing for spec 023 surfaces (internal/api/health.go, internal/api/router.go, internal/connector/supervisor.go, internal/connector/imap/imap.go). Evidence: 5 sanctioned-CLI blocks — structural grep of 3 intact race guards (mlClient sync.Once, IMAP mu RWMutex, supervisor post-delay stopped RLock); supervisor shutdown/panic-recovery/sync-overflow tests (internal/connector ok 20.871s; bounded 10s drain + 'skipping restart — supervisor stopped during delay'); health concurrency/cache tests (internal/api ok 1.654s); IMAP concurrent-sync regression (internal/connector/imap ok 0.026s); ./smackerel.sh check exit 0 (Config in sync with SST; scenario-lint 16 registered/0 rejected). 1 low-severity advisory recorded not routed (OBS-023-STAB-01: CLI go-unit path lacks -race). No code change; no protected artifact (spec.md/design.md/scopes.md) touched; 023 stays done. Phase record written by bubbles.validate."
     }
   ],
   "activeBugs": [],
@@ -141,7 +188,7 @@
   "failures": [],
   "certifiedAt": "2026-06-06T17:00:00Z",
   "certifiedBy": "bubbles.workflow",
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-08T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,7 +30,212 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/smackerel/smackerel/internal/auth"
+	"github.com/smackerel/smackerel/internal/metrics"
 )
+
+// ============================================================================
+// BUG-056-002 Scope C — endpoint auth-tier routing helpers + tests
+// ============================================================================
+
+// testUserContextToken is the canned user-context OAuth 2.0 access token
+// injected into apiClient by tests that exercise user-owned endpoints
+// (users_me, bookmarks, liked_tweets). It is deliberately DISTINCT from the
+// App-Only bearer so assertions can prove which credential a request carried.
+const testUserContextToken = "user-context-access-token-FOR-TEST-only-7e2f"
+
+// staticUserContextToken returns a userContextTokenFunc that always yields tok.
+// Test-only helper for exercising the user-context auth tier without a
+// database-backed oauthStore.
+func staticUserContextToken(tok string) userContextTokenFunc {
+	return func(context.Context) (string, error) { return tok, nil }
+}
+
+// TestEndpointAuthTier pins the spec 056 NC-1 auth-tier matrix (BUG-056-002):
+// user-owned endpoints (users_me, bookmarks, liked_tweets) require the
+// user-context token; tweets/mentions use the App-Only bearer. Non-tautological:
+// it asserts the EXACT tier per label, so flipping any mapping (e.g. routing
+// bookmarks back through App-Only — the original defect) turns this test RED.
+func TestEndpointAuthTier(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		label string
+		want  authTier
+	}{
+		{usersMeLabel, authTierUserContext},
+		{string(endpointBookmarks), authTierUserContext},
+		{string(endpointLikes), authTierUserContext},
+		{string(endpointOwnTweets), authTierAppOnly},
+		{string(endpointMentions), authTierAppOnly},
+		// Unknown labels bias to the MORE-restrictive user-context tier so a
+		// future endpoint added without a matrix entry fails loud rather than
+		// silently leaking an App-Only bearer onto a user resource.
+		{"some_unmapped_future_endpoint", authTierUserContext},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.label, func(t *testing.T) {
+			t.Parallel()
+			if got := endpointAuthTier(tc.label); got != tc.want {
+				t.Fatalf("endpointAuthTier(%q)=%s, want %s", tc.label, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildRequest_UserContextEndpointUsesUserToken — SCN-BUG-056-002-009.
+//
+// With a populated user-context source, every user-owned endpoint request must
+// carry the USER-CONTEXT access token, never the App-Only bearer. The App-Only
+// bearer is set on the client too, so this proves the TIER selects the token —
+// not mere availability — and would catch a regression that re-routed a
+// user-owned endpoint through App-Only.
+func TestBuildRequest_UserContextEndpointUsesUserToken(t *testing.T) {
+	t.Parallel()
+	const appOnlyBearer = "APP-ONLY-bearer-must-not-be-used-on-user-endpoints"
+
+	userOwned := []struct {
+		label string
+		path  string
+	}{
+		{usersMeLabel, "/users/me"},
+		{string(endpointBookmarks), "/users/2244994945/bookmarks"},
+		{string(endpointLikes), "/users/2244994945/liked_tweets"},
+	}
+	for _, ep := range userOwned {
+		ep := ep
+		t.Run(ep.label, func(t *testing.T) {
+			t.Parallel()
+			client, err := newAPIClient(TwitterConfig{
+				SyncMode:    SyncModeAPI,
+				BearerToken: appOnlyBearer,
+			}, slog.Default())
+			if err != nil {
+				t.Fatalf("setup: %v", err)
+			}
+			client.userContextToken = staticUserContextToken(testUserContextToken)
+
+			req, err := client.buildRequest(context.Background(), http.MethodGet, ep.path, nil, endpointAuthTier(ep.label))
+			if err != nil {
+				t.Fatalf("buildRequest %s: %v", ep.label, err)
+			}
+			got := req.Header.Get("Authorization")
+			if got != "Bearer "+testUserContextToken {
+				t.Fatalf("%s must carry the user-context token; got Authorization=%q want %q",
+					ep.label, got, "Bearer "+testUserContextToken)
+			}
+			// CRITICAL: it must NOT be the App-Only bearer (the original BUG-056-002).
+			if strings.Contains(got, appOnlyBearer) {
+				t.Fatalf("%s leaked the App-Only bearer onto a user-owned endpoint: %q", ep.label, got)
+			}
+		})
+	}
+}
+
+// TestBuildRequest_AppOnlyEndpointUsesBearer — SCN-BUG-056-002-013.
+//
+// App-Only endpoints (tweets, mentions) keep using c.bearerToken even when a
+// user-context source IS present — proving the tier (not availability) selects
+// the credential, and that the App-Only path is behaviorally unchanged.
+func TestBuildRequest_AppOnlyEndpointUsesBearer(t *testing.T) {
+	t.Parallel()
+	const appOnlyBearer = "app-only-bearer-token-not-real"
+
+	appOnly := []struct {
+		label string
+		path  string
+	}{
+		{string(endpointOwnTweets), "/users/2244994945/tweets"},
+		{string(endpointMentions), "/users/2244994945/mentions"},
+	}
+	for _, ep := range appOnly {
+		ep := ep
+		t.Run(ep.label, func(t *testing.T) {
+			t.Parallel()
+			client, err := newAPIClient(TwitterConfig{
+				SyncMode:    SyncModeAPI,
+				BearerToken: appOnlyBearer,
+			}, slog.Default())
+			if err != nil {
+				t.Fatalf("setup: %v", err)
+			}
+			// A user-context source is present but MUST be ignored for App-Only.
+			client.userContextToken = staticUserContextToken(testUserContextToken)
+
+			req, err := client.buildRequest(context.Background(), http.MethodGet, ep.path, nil, endpointAuthTier(ep.label))
+			if err != nil {
+				t.Fatalf("buildRequest %s: %v", ep.label, err)
+			}
+			got := req.Header.Get("Authorization")
+			if got != "Bearer "+appOnlyBearer {
+				t.Fatalf("%s must carry the App-Only bearer; got Authorization=%q want %q",
+					ep.label, got, "Bearer "+appOnlyBearer)
+			}
+			if strings.Contains(got, testUserContextToken) {
+				t.Fatalf("%s leaked the user-context token onto an App-Only endpoint: %q", ep.label, got)
+			}
+		})
+	}
+}
+
+// TestBuildRequest_UserContextEndpoint_NoToken_FailsLoud — SCN-BUG-056-002-012.
+//
+// With NO usable user-context token (no source wired, an empty store, an empty
+// token, or a store error), a user-owned endpoint request MUST fail loud with
+// the ErrUserContextTokenRequired sentinel — NOT a silent App-Only fallback
+// (the original bug), NOT a panic. Precursor to the full adversarial fixture
+// test. The App-Only bearer is set on the client so the assertions can prove it
+// never leaks into the failure path.
+func TestBuildRequest_UserContextEndpoint_NoToken_FailsLoud(t *testing.T) {
+	t.Parallel()
+	const appOnlyBearer = "app-only-bearer-MUST-NOT-be-used-as-fallback"
+
+	cases := []struct {
+		name   string
+		source userContextTokenFunc
+	}{
+		{"nil source (no runtime wired)", nil},
+		{"empty store (no token row)", func(context.Context) (string, error) { return "", ErrUserContextTokenRequired }},
+		{"empty token string", func(context.Context) (string, error) { return "", nil }},
+		{"store error", func(context.Context) (string, error) { return "", errors.New("db down") }},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client, err := newAPIClient(TwitterConfig{
+				SyncMode:    SyncModeAPI,
+				BearerToken: appOnlyBearer,
+			}, slog.Default())
+			if err != nil {
+				t.Fatalf("setup: %v", err)
+			}
+			client.userContextToken = tc.source
+
+			req, err := client.buildRequest(context.Background(), http.MethodGet,
+				"/users/2244994945/bookmarks", nil, endpointAuthTier(string(endpointBookmarks)))
+			if err == nil {
+				t.Fatalf("expected ErrUserContextTokenRequired, got nil (req=%v) — silent App-Only fallback is the original bug", req)
+			}
+			if req != nil {
+				t.Fatalf("fail-loud must return a nil request, got %v", req)
+			}
+			if !errors.Is(err, ErrUserContextTokenRequired) {
+				t.Fatalf("error must wrap the ErrUserContextTokenRequired sentinel, got %T: %v", err, err)
+			}
+			// Remediation must name the authorize command.
+			if !strings.Contains(err.Error(), "authorize-begin") {
+				t.Fatalf("error must name the authorize remedy, got: %v", err)
+			}
+			// CRITICAL: the App-Only bearer must NOT have leaked into the failure.
+			if strings.Contains(err.Error(), appOnlyBearer) {
+				t.Fatalf("App-Only bearer leaked into the error (silent-fallback smell): %v", err)
+			}
+		})
+	}
+}
 
 // TestTwitterAPI_EmptyBearerTokenFailsLoud — SCN-056-001.
 //
@@ -104,7 +310,7 @@ func TestTwitterAPI_RequestBuilderRejectsNonGET(t *testing.T) {
 		method := method
 		t.Run(method, func(t *testing.T) {
 			t.Parallel()
-			req, err := client.buildRequest(context.Background(), method, "/users/me", nil)
+			req, err := client.buildRequest(context.Background(), method, "/users/me", nil, authTierAppOnly)
 			if err == nil {
 				t.Fatalf("method %s must be rejected, got req=%v", method, req)
 			}
@@ -131,7 +337,7 @@ func TestTwitterAPI_BuildRequestAttachesAuthAndUserAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	req, err := client.buildRequest(context.Background(), http.MethodGet, "/users/me", nil)
+	req, err := client.buildRequest(context.Background(), http.MethodGet, "/users/me", nil, authTierAppOnly)
 	if err != nil {
 		t.Fatalf("buildRequest GET: %v", err)
 	}
@@ -185,6 +391,8 @@ func TestTwitterAPI_FetchUsersMeReplay(t *testing.T) {
 	// by overriding the baseURL via the unexported field — this is the same
 	// technique scope 02's pagination tests will use for httptest.
 	client.baseURL = srv.URL
+	// /users/me is a user-owned endpoint (user-context tier); inject the token.
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 
 	user, err := client.fetchUsersMe(context.Background())
 	if err != nil {
@@ -201,8 +409,8 @@ func TestTwitterAPI_FetchUsersMeReplay(t *testing.T) {
 	}
 
 	// Header observations.
-	if observedAuth != "Bearer "+token {
-		t.Errorf("server saw Authorization=%q, want %q", observedAuth, "Bearer "+token)
+	if observedAuth != "Bearer "+testUserContextToken {
+		t.Errorf("server saw Authorization=%q, want %q (user-context tier)", observedAuth, "Bearer "+testUserContextToken)
 	}
 	if !strings.Contains(observedUA, "smackerel-twitter-connector") {
 		t.Errorf("server saw User-Agent=%q, want substring 'smackerel-twitter-connector'", observedUA)
@@ -243,6 +451,8 @@ func TestTwitterAPI_BearerTokenNeverInLogs(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	// /users/me is user-context tier; inject the token so the call proceeds.
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 
 	// Exercise the client's logger by performing a real call. Any future
 	// addition of structured log lines on this path must continue to obey
@@ -259,6 +469,9 @@ func TestTwitterAPI_BearerTokenNeverInLogs(t *testing.T) {
 	}
 	if strings.Contains(logText, "Bearer "+token) {
 		t.Fatalf("Authorization header literal leaked in logs:\n%s", logText)
+	}
+	if strings.Contains(logText, testUserContextToken) {
+		t.Fatalf("user-context token leaked in logs (length=%d):\n%s", len(logText), logText)
 	}
 }
 
@@ -314,6 +527,7 @@ func TestTwitterAPI_BookmarksPaginatesAndPersistsCursor(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 
 	tweets, finalCursor, err := client.fetchBookmarks(context.Background(), "2244994945", "")
 	if err != nil {
@@ -378,6 +592,7 @@ func TestTwitterAPI_ReplayPagination(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 
 	tweets, finalCursor, err := client.fetchBookmarks(context.Background(), "2244994945", "")
 	if err != nil {
@@ -446,6 +661,7 @@ func TestTwitterAPI_EmptyNonTerminalPageDoesNotAdvanceCursor(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 
 	tweets, finalCursor, err := client.fetchBookmarks(context.Background(), "2244994945", "")
 	if err != nil {
@@ -547,6 +763,7 @@ func TestTwitterAPI_CursorSurvivesProcessRestart(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 
 	startToken := restored.PerEndpoint[endpointBookmarks]
 	if _, _, err := client.fetchBookmarks(context.Background(), "2244994945", startToken); err != nil {
@@ -581,6 +798,7 @@ func TestTwitterAPI_PaginationBoundsTerminateOnRunawayServer(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 
 	tweets, finalCursor, err := client.fetchBookmarks(context.Background(), "2244994945", "")
 	if err != nil {
@@ -673,6 +891,7 @@ func TestTwitterAPI_RateLimit429HonorsResetWindow(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 	client.sleeper = sleeper.sleep
 	client.now = func() time.Time { return frozen }
 
@@ -743,6 +962,7 @@ func TestTwitterAPI_Unauthorized401FailsWithoutRetry(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 	client.sleeper = sleeper.sleep
 	client.now = time.Now
 
@@ -755,6 +975,9 @@ func TestTwitterAPI_Unauthorized401FailsWithoutRetry(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), token) {
 		t.Fatalf("bearer token leaked in error message: %s", err.Error())
+	}
+	if strings.Contains(err.Error(), testUserContextToken) {
+		t.Fatalf("user-context token leaked in error message: %s", err.Error())
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Fatalf("401 must NOT retry; expected 1 call, got %d", got)
@@ -795,6 +1018,7 @@ func TestTwitterAPI_ServerError5xxBoundedBackoff(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 	client.sleeper = sleeper.sleep
 	client.now = time.Now
 
@@ -898,6 +1122,7 @@ func TestTwitterAPI_BearerTokenNeverAppearsInLogs(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 	client.sleeper = (&recordingSleeper{}).sleep
 	client.now = func() time.Time { return frozen }
 
@@ -924,6 +1149,9 @@ func TestTwitterAPI_BearerTokenNeverAppearsInLogs(t *testing.T) {
 	}
 	if strings.Contains(logText, token[len(token)-20:]) {
 		t.Fatalf("bearer token suffix leaked in logs:\n%s", logText)
+	}
+	if strings.Contains(logText, testUserContextToken) {
+		t.Fatalf("user-context token leaked in logs:\n%s", logText)
 	}
 }
 
@@ -955,6 +1183,7 @@ func TestTwitterAPI_RateLimitResetCapAborts(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 	client.baseURL = srv.URL
+	client.userContextToken = staticUserContextToken(testUserContextToken)
 	client.sleeper = sleeper.sleep
 	client.now = func() time.Time { return frozen }
 
@@ -997,4 +1226,678 @@ func TestTwitterAPI_BackoffDurationProgression(t *testing.T) {
 		})
 	}
 
+}
+
+// ============================================================================
+// BUG-056-002 Scope C — Pass 2: refresh-on-401 + the KEY adversarial regression
+// ============================================================================
+
+// newRefreshTokenServer returns an httptest.Server emulating Twitter's
+// confidential-client token endpoint for grant_type=refresh_token. It asserts
+// the grant type + HTTP Basic client auth (the confidential-client contract),
+// records each presented refresh_token, and responds with the ROTATED pair
+// {newAccess,newRefresh} valid for expiresIn seconds. The returned *int32 counts
+// exchanges and the snapshot func returns the presented refresh tokens. Real
+// httptest server (not a mock-and-mislabel), NOT the live Twitter endpoint.
+func newRefreshTokenServer(t *testing.T, newAccess, newRefresh string, expiresIn int) (*httptest.Server, *int32, func() []string) {
+	t.Helper()
+	var calls int32
+	var mu sync.Mutex
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+		form, _ := url.ParseQuery(string(body))
+		mu.Lock()
+		seen = append(seen, form.Get("refresh_token"))
+		mu.Unlock()
+		if form.Get("grant_type") != "refresh_token" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"error":"unsupported_grant_type"}`)
+			return
+		}
+		// Confidential client: credentials travel via HTTP Basic auth (NOT the
+		// body) — the same contract Scope A's TokenEndpointAuthStyle="basic"
+		// delivers and the Scope B finalize test pins.
+		if user, _, ok := r.BasicAuth(); !ok || user != testOAuthClientID {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"error":"invalid_client"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, fmt.Sprintf(
+			`{"token_type":"bearer","expires_in":%d,"access_token":%q,"refresh_token":%q,`+
+				`"scope":"offline.access tweet.read users.read bookmark.read like.read"}`,
+			expiresIn, newAccess, newRefresh))
+	}))
+	snapshot := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string{}, seen...)
+	}
+	return srv, &calls, snapshot
+}
+
+// TestTwitterAPI_AppOnlyOnUserOwnedEndpointRejected — SCN-BUG-056-002-010, the
+// KEY adversarial regression (the test that would have caught the original
+// BUG-056-002 defect, and goes RED if a user-owned endpoint is ever re-routed
+// through App-Only).
+//
+// The fixture server ENFORCES user-context the way the real Twitter API does
+// (and the old permissive fake did NOT): a user-owned endpoint presented with
+// the App-Only sentinel bearer is rejected 403 "Unsupported Authentication".
+//
+//   - Sub-case (a) — no user-context token configured: a user-owned fetch with
+//     ONLY an App-Only credential MUST fail loud with ErrUserContextTokenRequired
+//     at authorizationHeader BEFORE the wire (the enforcing server is never
+//     contacted), never silently sending the App-Only bearer.
+//   - Sub-case (b) — a user-context token IS configured: the request MUST carry
+//     the user-context token (which the enforcing server accepts 200), never the
+//     app bearer.
+//
+// Genuinely adversarial: if a user-owned endpoint is (re)routed through App-Only
+// (the original defect), sub-case (a) reaches the wire and gets 403
+// (errAuthRejected, server hits ≥ 1 — both assertions fail) and sub-case (b)
+// sends the app bearer so the enforcing server 403s and the call fails — i.e.
+// the test goes RED. The matrix-reverted RED is captured in report.md.
+func TestTwitterAPI_AppOnlyOnUserOwnedEndpointRejected(t *testing.T) {
+	t.Parallel()
+	const appOnlyBearer = "APP-ONLY-sentinel-bearer-forbidden-on-user-owned-endpoints"
+
+	var hits int32
+	var mu sync.Mutex
+	var observedAuth []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		got := r.Header.Get("Authorization")
+		mu.Lock()
+		observedAuth = append(observedAuth, got)
+		mu.Unlock()
+		if got == "Bearer "+appOnlyBearer {
+			// Twitter's real auth-tier enforcement (the old fixture lacked it).
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(w, `{"title":"Unsupported Authentication",`+
+				`"detail":"Authenticating with OAuth 2.0 Application-Only is forbidden for this endpoint. `+
+				`Supported authentication types are [OAuth 1.0a User Context, OAuth 2.0 User Context].",`+
+				`"type":"https://api.twitter.com/2/problems/unsupported-authentication","status":403}`)
+			return
+		}
+		// A user-context token is accepted.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"data":[{"id":"1001","text":"ok","author_id":"a"}],"meta":{"result_count":1}}`)
+	}))
+	defer srv.Close()
+
+	// Sub-case (a): App-Only-only credential on a user-owned endpoint → fail
+	// loud BEFORE the wire.
+	t.Run("app_only_only_fails_loud_before_wire", func(t *testing.T) {
+		clientA, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: appOnlyBearer}, slog.Default())
+		if err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		clientA.baseURL = srv.URL
+		// No user-context source wired (the operator never authorized).
+		clientA.userContextToken = nil
+
+		_, _, err = clientA.fetchBookmarks(context.Background(), "2244994945", "")
+		if err == nil {
+			t.Fatal("expected fail-loud ErrUserContextTokenRequired on a user-owned endpoint with no user-context token, got nil")
+		}
+		if !errors.Is(err, ErrUserContextTokenRequired) {
+			t.Fatalf("user-owned endpoint with no user-context token must fail with ErrUserContextTokenRequired "+
+				"(NOT a 403/errAuthRejected from a silently-sent App-Only bearer); got %T: %v", err, err)
+		}
+		if errors.Is(err, errAuthRejected) {
+			t.Fatalf("error must NOT be errAuthRejected — that would mean the App-Only bearer was silently sent and "+
+				"the enforcing server rejected it (the original bug); got: %v", err)
+		}
+		if got := atomic.LoadInt32(&hits); got != 0 {
+			mu.Lock()
+			seen := append([]string{}, observedAuth...)
+			mu.Unlock()
+			t.Fatalf("fail-loud must happen BEFORE the wire — the enforcing server must NOT be contacted; "+
+				"got %d hit(s), observed auth=%v", got, seen)
+		}
+		if strings.Contains(err.Error(), appOnlyBearer) {
+			t.Fatalf("App-Only bearer leaked into the error (silent-fallback smell): %v", err)
+		}
+	})
+
+	// Sub-case (b): user-context token configured → request carries it (the
+	// enforcing server accepts user-context), never the app bearer.
+	t.Run("user_context_token_used_not_app_bearer", func(t *testing.T) {
+		atomic.StoreInt32(&hits, 0)
+		mu.Lock()
+		observedAuth = nil
+		mu.Unlock()
+
+		clientB, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: appOnlyBearer}, slog.Default())
+		if err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		clientB.baseURL = srv.URL
+		clientB.userContextToken = staticUserContextToken(testUserContextToken)
+
+		tweets, _, err := clientB.fetchBookmarks(context.Background(), "2244994945", "")
+		if err != nil {
+			t.Fatalf("user-context fetch against an enforcing server must succeed; got: %v", err)
+		}
+		if len(tweets) != 1 {
+			t.Fatalf("expected 1 tweet from the enforcing server, got %d", len(tweets))
+		}
+		mu.Lock()
+		seen := append([]string{}, observedAuth...)
+		mu.Unlock()
+		if len(seen) == 0 {
+			t.Fatal("enforcing server was never contacted")
+		}
+		for i, a := range seen {
+			if a != "Bearer "+testUserContextToken {
+				t.Fatalf("request[%d] must carry the user-context token, got Authorization=%q want %q",
+					i, a, "Bearer "+testUserContextToken)
+			}
+			if strings.Contains(a, appOnlyBearer) {
+				t.Fatalf("request[%d] leaked the App-Only bearer onto a user-owned endpoint: %q", i, a)
+			}
+		}
+	})
+}
+
+// TestTwitterAPI_Refresh_On401_RetriesOnce — SCN-BUG-056-002-011 / -014.
+//
+// A user-context bookmarks call returns 401 on the first attempt, then 200 after
+// a single refresh. Drives a REAL userContextManager (fake store + real
+// confidential-client provider against an httptest token endpoint). Asserts:
+//   - exactly ONE refresh exchange occurred,
+//   - the first request used the OLD access token and the retry used the ROTATED
+//     NEW access token (proving the retry picked up the freshly-persisted token),
+//   - the refresh presented the stored OLD refresh token,
+//   - the ROTATED pair was persisted (Twitter rotates the refresh token),
+//   - the call succeeded, and
+//   - the refresh-after-401 log line was emitted with NO token value leaked
+//     (SCN-014: access + refresh tokens never appear in logs).
+//
+// Non-tautological: without refresh-on-401 the first 401 is terminal (no retry,
+// no rotated token persisted) and every assertion below fails.
+func TestTwitterAPI_Refresh_On401_RetriesOnce(t *testing.T) {
+	t.Parallel()
+	const (
+		oldAccess  = "OLD-ACCESS-token-pre-refresh-401test"
+		oldRefresh = "OLD-REFRESH-token-rotating-401test"
+		newAccess  = "NEW-ACCESS-token-post-refresh-401test"
+		newRefresh = "NEW-REFRESH-token-rotated-401test"
+	)
+
+	var mu sync.Mutex
+	var apiAuth []string
+	var apiCalls int32
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&apiCalls, 1)
+		mu.Lock()
+		apiAuth = append(apiAuth, r.Header.Get("Authorization"))
+		mu.Unlock()
+		if n == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"title":"Unauthorized","status":401}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"data":[{"id":"1001","text":"ok","author_id":"a"}],"meta":{"result_count":1}}`)
+	}))
+	defer apiSrv.Close()
+
+	tokenSrv, tokenCalls, tokenRefreshSeen := newRefreshTokenServer(t, newAccess, newRefresh, 7200)
+	defer tokenSrv.Close()
+
+	store := newFakeFlowStore()
+	// Seed a non-expired token (far-future expiry → no PROACTIVE refresh; this
+	// test exercises the REACTIVE 401 path specifically).
+	if err := store.SaveTokens(context.Background(), DefaultOwnerUserID, &auth.Token{
+		AccessToken:  oldAccess,
+		RefreshToken: oldRefresh,
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		TokenType:    "bearer",
+	}); err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	provider := newTwitterOAuthProvider(testOAuthCfg())
+	provider.Config.TokenEndpoint = tokenSrv.URL
+	mgr := newUserContextManager(store, provider, DefaultOwnerUserID, logger)
+
+	client, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: "app-only-bearer-unused-on-user-owned"}, logger)
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = apiSrv.URL
+	client.userContextToken = mgr.AccessToken
+	client.refreshUserContext = mgr.Refresh
+	client.sleeper = (&recordingSleeper{}).sleep
+
+	tweets, _, err := client.fetchBookmarks(context.Background(), "2244994945", "")
+	if err != nil {
+		t.Fatalf("fetchBookmarks should succeed after a single refresh-and-retry, got: %v", err)
+	}
+	if len(tweets) != 1 {
+		t.Fatalf("expected 1 tweet after retry, got %d", len(tweets))
+	}
+	if got := atomic.LoadInt32(tokenCalls); got != 1 {
+		t.Fatalf("expected exactly 1 refresh exchange, got %d", got)
+	}
+	if got := atomic.LoadInt32(&apiCalls); got != 2 {
+		t.Fatalf("expected 2 API calls (401, then 200 retry), got %d", got)
+	}
+	mu.Lock()
+	gotAPIAuth := append([]string{}, apiAuth...)
+	mu.Unlock()
+	if len(gotAPIAuth) != 2 || gotAPIAuth[0] != "Bearer "+oldAccess || gotAPIAuth[1] != "Bearer "+newAccess {
+		t.Fatalf("API requests must use OLD access first then the ROTATED NEW access on retry; got %v", gotAPIAuth)
+	}
+	if gotRefresh := tokenRefreshSeen(); len(gotRefresh) != 1 || gotRefresh[0] != oldRefresh {
+		t.Fatalf("the refresh exchange must present the stored OLD refresh token; got %v", gotRefresh)
+	}
+	persisted, perr := store.GetTokens(context.Background(), DefaultOwnerUserID)
+	if perr != nil {
+		t.Fatalf("GetTokens after refresh: %v", perr)
+	}
+	if persisted.AccessToken != newAccess || persisted.RefreshToken != newRefresh {
+		t.Fatalf("the ROTATED pair must be persisted; got access=%q refresh=%q want %q/%q",
+			persisted.AccessToken, persisted.RefreshToken, newAccess, newRefresh)
+	}
+	logText := logBuf.String()
+	if !strings.Contains(logText, "user-context token refreshed after 401") {
+		t.Fatalf("expected the refresh-after-401 log line; logs:\n%s", logText)
+	}
+	for _, secret := range []string{oldAccess, newAccess, oldRefresh, newRefresh} {
+		if strings.Contains(logText, secret) {
+			t.Fatalf("token value %q leaked in logs:\n%s", secret, logText)
+		}
+	}
+}
+
+// TestTwitterAPI_PreExpiryRefresh — SCN-BUG-056-002-011 (proactive arm).
+//
+// A stored token within refreshSkew of expiry triggers a PROACTIVE refresh
+// BEFORE the request goes out: the single API request carries the freshly
+// rotated access token and no 401 is ever needed. Non-tautological: without the
+// pre-expiry refresh the request would carry the near-expiry OLD access token
+// and the token endpoint would not be contacted (both assertions fail).
+func TestTwitterAPI_PreExpiryRefresh(t *testing.T) {
+	t.Parallel()
+	const (
+		oldAccess  = "OLD-ACCESS-near-expiry-proactive"
+		oldRefresh = "OLD-REFRESH-near-expiry-proactive"
+		newAccess  = "NEW-ACCESS-proactively-rotated"
+		newRefresh = "NEW-REFRESH-proactively-rotated"
+	)
+
+	var mu sync.Mutex
+	var apiAuth []string
+	var apiCalls int32
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&apiCalls, 1)
+		mu.Lock()
+		apiAuth = append(apiAuth, r.Header.Get("Authorization"))
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"data":[{"id":"1001","text":"ok","author_id":"a"}],"meta":{"result_count":1}}`)
+	}))
+	defer apiSrv.Close()
+
+	tokenSrv, tokenCalls, tokenRefreshSeen := newRefreshTokenServer(t, newAccess, newRefresh, 7200)
+	defer tokenSrv.Close()
+
+	store := newFakeFlowStore()
+	// Seed a token that expires WITHIN the refreshSkew window → must be
+	// proactively refreshed BEFORE the request goes out.
+	if err := store.SaveTokens(context.Background(), DefaultOwnerUserID, &auth.Token{
+		AccessToken:  oldAccess,
+		RefreshToken: oldRefresh,
+		ExpiresAt:    time.Now().Add(refreshSkew / 2),
+		TokenType:    "bearer",
+	}); err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+
+	provider := newTwitterOAuthProvider(testOAuthCfg())
+	provider.Config.TokenEndpoint = tokenSrv.URL
+	mgr := newUserContextManager(store, provider, DefaultOwnerUserID, slog.Default())
+
+	client, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: "app-only-bearer-unused-on-user-owned"}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = apiSrv.URL
+	client.userContextToken = mgr.AccessToken
+	client.refreshUserContext = mgr.Refresh
+	client.sleeper = (&recordingSleeper{}).sleep
+
+	tweets, _, err := client.fetchBookmarks(context.Background(), "2244994945", "")
+	if err != nil {
+		t.Fatalf("fetchBookmarks: %v", err)
+	}
+	if len(tweets) != 1 {
+		t.Fatalf("expected 1 tweet, got %d", len(tweets))
+	}
+	if got := atomic.LoadInt32(tokenCalls); got != 1 {
+		t.Fatalf("expected exactly 1 PROACTIVE refresh exchange before the request, got %d", got)
+	}
+	if got := atomic.LoadInt32(&apiCalls); got != 1 {
+		t.Fatalf("expected exactly 1 API call (no 401 needed — proactive refresh), got %d", got)
+	}
+	mu.Lock()
+	gotAPIAuth := append([]string{}, apiAuth...)
+	mu.Unlock()
+	if len(gotAPIAuth) != 1 || gotAPIAuth[0] != "Bearer "+newAccess {
+		t.Fatalf("the request must carry the proactively-refreshed NEW access token (proving refresh happened "+
+			"BEFORE the request, not reactively after a 401); got %v", gotAPIAuth)
+	}
+	if gotRefresh := tokenRefreshSeen(); len(gotRefresh) != 1 || gotRefresh[0] != oldRefresh {
+		t.Fatalf("the proactive refresh must present the stored OLD refresh token; got %v", gotRefresh)
+	}
+	persisted, perr := store.GetTokens(context.Background(), DefaultOwnerUserID)
+	if perr != nil {
+		t.Fatalf("GetTokens after proactive refresh: %v", perr)
+	}
+	if persisted.AccessToken != newAccess || persisted.RefreshToken != newRefresh {
+		t.Fatalf("the proactively-rotated pair must be persisted; got access=%q refresh=%q",
+			persisted.AccessToken, persisted.RefreshToken)
+	}
+}
+
+// TestTwitterAPI_AppOnly401_NoRefresh_Terminal — SCN-BUG-056-002-013 (refresh
+// boundary).
+//
+// An App-Only-tier endpoint (tweets) that returns 401 MUST stay terminal and
+// MUST NOT trigger a refresh — an application bearer cannot be rotated. The
+// refresh hook IS wired and the store holds a valid refreshable token, so the
+// ONLY reason the token endpoint is never contacted is the endpoint→tier gate
+// (proving the gate is by TIER, not by the mere presence of a refresh hook).
+// Non-tautological: if the 401 backstop refreshed on ANY tier, the token
+// endpoint would be hit and the App-Only call would retry — both assertions
+// below would fail.
+func TestTwitterAPI_AppOnly401_NoRefresh_Terminal(t *testing.T) {
+	t.Parallel()
+
+	var apiCalls int32
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&apiCalls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"title":"Unauthorized","status":401}`)
+	}))
+	defer apiSrv.Close()
+
+	tokenSrv, tokenCalls, _ := newRefreshTokenServer(t, "SHOULD-NOT-BE-ISSUED", "SHOULD-NOT-ROTATE", 7200)
+	defer tokenSrv.Close()
+
+	store := newFakeFlowStore()
+	// Seed a VALID refreshable token so the ONLY reason the token endpoint is
+	// not contacted is the App-Only tier gate — not an empty store.
+	if err := store.SaveTokens(context.Background(), DefaultOwnerUserID, &auth.Token{
+		AccessToken:  "user-context-access-present",
+		RefreshToken: "user-context-refresh-present",
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		TokenType:    "bearer",
+	}); err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+
+	provider := newTwitterOAuthProvider(testOAuthCfg())
+	provider.Config.TokenEndpoint = tokenSrv.URL
+	mgr := newUserContextManager(store, provider, DefaultOwnerUserID, slog.Default())
+
+	client, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: "app-only-bearer-for-tweets"}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = apiSrv.URL
+	// Refresh IS available — proving the gate is by ENDPOINT TIER, not by the
+	// mere presence of a refresh hook.
+	client.userContextToken = mgr.AccessToken
+	client.refreshUserContext = mgr.Refresh
+	client.sleeper = (&recordingSleeper{}).sleep
+
+	// tweets is an App-Only-tier endpoint.
+	_, _, err = client.fetchOwnTweets(context.Background(), "2244994945", "")
+	if err == nil {
+		t.Fatal("expected terminal errAuthRejected on an App-Only 401, got nil")
+	}
+	if !errors.Is(err, errAuthRejected) {
+		t.Fatalf("App-Only 401 must surface errAuthRejected, got %T: %v", err, err)
+	}
+	if got := atomic.LoadInt32(&apiCalls); got != 1 {
+		t.Fatalf("App-Only 401 must NOT retry; expected exactly 1 API call, got %d", got)
+	}
+	if got := atomic.LoadInt32(tokenCalls); got != 0 {
+		t.Fatalf("App-Only 401 must NOT trigger a refresh; expected 0 token-endpoint exchanges, got %d", got)
+	}
+}
+
+// TestTwitterAPI_Refresh_On401_PersistentIsTerminalAfterOneRefresh —
+// SCN-BUG-056-002-011 (refresh-once boundary / no-infinite-loop guard).
+//
+// A user-context endpoint that returns 401 on EVERY attempt (even after the
+// refresh) MUST refresh AT MOST ONCE and then surface terminal errAuthRejected —
+// no infinite refresh→retry loop. Asserts exactly one refresh exchange, exactly
+// two API calls (initial 401 + one post-refresh retry that also 401s), and a
+// terminal errAuthRejected. Non-tautological: without the refreshedOnce gate the
+// loop would refresh on every 401 and issue maxRetries+1 calls / refreshes.
+func TestTwitterAPI_Refresh_On401_PersistentIsTerminalAfterOneRefresh(t *testing.T) {
+	t.Parallel()
+	const (
+		oldAccess  = "OLD-ACCESS-persistent-401"
+		oldRefresh = "OLD-REFRESH-persistent-401"
+		newAccess  = "NEW-ACCESS-persistent-401"
+		newRefresh = "NEW-REFRESH-persistent-401"
+	)
+
+	var apiCalls int32
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&apiCalls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"title":"Unauthorized","status":401}`)
+	}))
+	defer apiSrv.Close()
+
+	tokenSrv, tokenCalls, _ := newRefreshTokenServer(t, newAccess, newRefresh, 7200)
+	defer tokenSrv.Close()
+
+	store := newFakeFlowStore()
+	if err := store.SaveTokens(context.Background(), DefaultOwnerUserID, &auth.Token{
+		AccessToken:  oldAccess,
+		RefreshToken: oldRefresh,
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		TokenType:    "bearer",
+	}); err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+
+	provider := newTwitterOAuthProvider(testOAuthCfg())
+	provider.Config.TokenEndpoint = tokenSrv.URL
+	mgr := newUserContextManager(store, provider, DefaultOwnerUserID, slog.Default())
+
+	client, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: "app-only-bearer-unused-on-user-owned"}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = apiSrv.URL
+	client.userContextToken = mgr.AccessToken
+	client.refreshUserContext = mgr.Refresh
+	client.sleeper = (&recordingSleeper{}).sleep
+
+	_, _, err = client.fetchBookmarks(context.Background(), "2244994945", "")
+	if err == nil {
+		t.Fatal("expected terminal errAuthRejected when the 401 persists after a refresh, got nil")
+	}
+	if !errors.Is(err, errAuthRejected) {
+		t.Fatalf("persisting 401 must surface errAuthRejected, got %T: %v", err, err)
+	}
+	if got := atomic.LoadInt32(tokenCalls); got != 1 {
+		t.Fatalf("refresh must happen AT MOST ONCE per request; expected 1 refresh exchange, got %d", got)
+	}
+	if got := atomic.LoadInt32(&apiCalls); got != 2 {
+		t.Fatalf("expected exactly 2 API calls (initial 401 + one post-refresh retry); "+
+			"a third would mean an infinite refresh loop; got %d", got)
+	}
+}
+
+// ============================================================================
+// BUG-056-002 Scope D (GAP-056-G2 / R-016) — x-rate-limit-remaining gauge
+// ============================================================================
+//
+// These integration tests drive doWithRetry against an httptest.Server (a real
+// in-process HTTP server, NOT a route/intercept mock) and read the published
+// gauge with prometheus testutil.ToFloat64. Each test uses a UNIQUE endpoint
+// label so the package-global GaugeVec cannot bleed values across tests — no
+// .Reset() is needed and the tests stay parallel-safe.
+
+// remainingReqBuilder returns a doWithRetry reqBuilder that issues a plain GET
+// at the given URL — enough to exercise the response-header observation path
+// without the buildRequest auth-tier machinery (irrelevant to header parsing).
+func remainingReqBuilder(ctx context.Context, rawURL string) func() (*http.Request, error) {
+	return func() (*http.Request, error) {
+		return http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	}
+}
+
+// TestTwitterAPI_RateLimitRemaining_SetFromHeader — SCN-BUG-056-002-015.
+//
+// A 200 response carrying x-rate-limit-remaining: 42 sets the gauge to 42. This
+// is the GREEN side of the RED→GREEN proof: with the doWithRetry hook removed
+// the gauge stays at 0 and this assertion fails.
+func TestTwitterAPI_RateLimitRemaining_SetFromHeader(t *testing.T) {
+	t.Parallel()
+	const endpoint = "scope_d_remaining_set_from_header"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-rate-limit-remaining", "42")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	client, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: "test-bearer-token-not-real"}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	resp, err := client.doWithRetry(context.Background(), endpoint, remainingReqBuilder(context.Background(), srv.URL))
+	if err != nil {
+		t.Fatalf("doWithRetry: %v", err)
+	}
+	drainAndClose(resp)
+
+	if got := testutil.ToFloat64(metrics.ConnectorTwitterAPIRateLimitRemaining.WithLabelValues("twitter", endpoint)); got != 42 {
+		t.Fatalf("gauge = %v, want 42 (x-rate-limit-remaining header must drive the gauge)", got)
+	}
+}
+
+// TestTwitterAPI_RateLimitRemaining_AbsentHeaderLeavesPriorValue — no-clobber.
+//
+// Seed the gauge to a known value, then a response that OMITS the header MUST
+// leave it unchanged: an absent header is "unknown", not "exhausted", so it
+// must never overwrite the last real headroom with a bogus 0.
+func TestTwitterAPI_RateLimitRemaining_AbsentHeaderLeavesPriorValue(t *testing.T) {
+	t.Parallel()
+	const endpoint = "scope_d_remaining_absent_header"
+
+	// Seed a known prior value via the same gauge the connector publishes to.
+	metrics.ConnectorTwitterAPIRateLimitRemaining.WithLabelValues("twitter", endpoint).Set(99)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Deliberately NO x-rate-limit-remaining header.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	client, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: "test-bearer-token-not-real"}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	resp, err := client.doWithRetry(context.Background(), endpoint, remainingReqBuilder(context.Background(), srv.URL))
+	if err != nil {
+		t.Fatalf("doWithRetry: %v", err)
+	}
+	drainAndClose(resp)
+
+	if got := testutil.ToFloat64(metrics.ConnectorTwitterAPIRateLimitRemaining.WithLabelValues("twitter", endpoint)); got != 99 {
+		t.Fatalf("gauge = %v, want 99 unchanged (absent header MUST NOT clobber the prior value)", got)
+	}
+}
+
+// TestTwitterAPI_RateLimitRemaining_SetOnEveryStatus — SCN-BUG-056-002-016.
+//
+// ADVERSARIAL: proves the gauge is updated from the header on BOTH a 2xx and a
+// 429 — i.e. "after each API call", not only on the 429 branch (the original
+// reset-gauge mistake, inverted). Two independent endpoint labels so neither
+// status overwrites the other's observation.
+func TestTwitterAPI_RateLimitRemaining_SetOnEveryStatus(t *testing.T) {
+	t.Parallel()
+
+	// --- 200 path ---
+	const ep200 = "scope_d_remaining_every_status_200"
+	srv200 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-rate-limit-remaining", "200")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv200.Close()
+
+	client200, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: "test-bearer-token-not-real"}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup 200: %v", err)
+	}
+	resp, err := client200.doWithRetry(context.Background(), ep200, remainingReqBuilder(context.Background(), srv200.URL))
+	if err != nil {
+		t.Fatalf("doWithRetry 200: %v", err)
+	}
+	drainAndClose(resp)
+	if got := testutil.ToFloat64(metrics.ConnectorTwitterAPIRateLimitRemaining.WithLabelValues("twitter", ep200)); got != 200 {
+		t.Fatalf("200-path gauge = %v, want 200", got)
+	}
+
+	// --- 429 path ---
+	// A persistent 429 with NO x-rate-limit-reset header (waitDur 0, under the
+	// cap) loops to errMaxRetriesExceeded under a no-op sleeper. The
+	// remaining-header hook runs BEFORE the status switch, so the gauge is set
+	// from the 429 response even though the call ultimately errors — the
+	// adversarial proof that the gauge moves on a non-2xx status.
+	const ep429 = "scope_d_remaining_every_status_429"
+	srv429 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-rate-limit-remaining", "7")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"title":"Too Many Requests"}`))
+	}))
+	defer srv429.Close()
+
+	client429, err := newAPIClient(TwitterConfig{SyncMode: SyncModeAPI, BearerToken: "test-bearer-token-not-real"}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup 429: %v", err)
+	}
+	client429.sleeper = func(context.Context, time.Duration) error { return nil } // no real sleep
+	_, err = client429.doWithRetry(context.Background(), ep429, remainingReqBuilder(context.Background(), srv429.URL))
+	if err == nil {
+		t.Fatalf("doWithRetry 429: expected an error after a persistent 429, got nil")
+	}
+	if !errors.Is(err, errMaxRetriesExceeded) {
+		t.Fatalf("doWithRetry 429: error must wrap errMaxRetriesExceeded, got %T: %v", err, err)
+	}
+	if got := testutil.ToFloat64(metrics.ConnectorTwitterAPIRateLimitRemaining.WithLabelValues("twitter", ep429)); got != 7 {
+		t.Fatalf("429-path gauge = %v, want 7 (gauge MUST update on a 429, not only on 2xx)", got)
+	}
 }

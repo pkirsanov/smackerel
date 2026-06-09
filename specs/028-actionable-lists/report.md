@@ -613,3 +613,239 @@ $ git diff --stat HEAD -- specs/028-actionable-lists/scopes.md specs/028-actiona
 ```
 
 Interpretation: spec 028 runtime/source files (`internal/list/types.go`, `internal/list/store.go`, `internal/list/generator.go`, `internal/list/recipe_aggregator.go`, `internal/list/reading_aggregator.go`, `internal/list/harden_test.go`, `internal/api/lists.go`, `internal/telegram/list.go`, `internal/intelligence/lists.go`) are already at HEAD; BUG-028-003's working-tree delta is artifact-only (`specs/028-actionable-lists/{scopes.md,report.md,state.json}`) and adds **zero** lines of runtime code.
+
+---
+
+## Test-to-Doc Sweep (Round 20 — 2026-06-07)
+
+Stochastic-quality-sweep parent, round 20 of 20 (final), trigger `test` → child mode `test-to-doc`. Spec 028 stays certified `done`; this round probes the item-mutation validation boundary and closes one adversarial coverage gap with a new test. No runtime/source code changed (test file only); protected artifacts (spec.md, design.md, scopes.md) untouched.
+
+### Adversarial Gap Closed — Item-Mutation Bounding (SCN-AL-024)
+
+`internal/api/lists.go::CheckItemHandler` maps the request `status` through a `switch` whose `default:` branch silently coerces ANY unrecognized status to `ItemDone`. Pre-existing tests covered the `done` / `skipped` / `substituted` cases and the empty-body default, but none drove a WELL-FORMED request carrying an unsupported status string, so the mutation-validation boundary was untested.
+
+`TestCheckItemHandler_UnknownStatusCoercedToDone` in [internal/api/lists_test.go](internal/api/lists_test.go) drives `{"status":"pending"}` — a real `list.ItemStatus` constant the endpoint has no case for, and the exact value a caller would send to UN-check an item. It pins two behavior-meaningful facts: (1) an unsupported status is NOT rejected (HTTP 200, permissive), and (2) it is coerced to `done`, so an un-check attempt silently marks the item done. The test was authored RED-first (asserting the naive "item stays pending" expectation) to prove it exercises the real handler path and is non-tautological, then flipped GREEN to characterize the actual contract.
+
+```text
+# RED — naive "stays pending" assertion; proves real path exercised + coercion is real
+$ ./smackerel.sh test unit --go --go-run 'TestCheckItemHandler_UnknownStatusCoercedToDone' --verbose
+=== RUN   TestCheckItemHandler_UnknownStatusCoercedToDone
+    lists_test.go:550: expected item to remain pending, got done
+--- FAIL: TestCheckItemHandler_UnknownStatusCoercedToDone (0.00s)
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/api     0.414s
+
+# GREEN — assertion flipped to characterize actual coercion contract; full list-handler suite
+$ ./smackerel.sh test unit --go --go-run 'TestCheckItemHandler|TestAddItemHandler|TestCompleteListHandler|TestArchiveListHandler|TestGetListHandler|TestListListsHandler|TestCreateListHandler|TestUpdateListHandler|TestRemoveItemHandler' --verbose
+=== RUN   TestCheckItemHandler_UnknownStatusCoercedToDone
+--- PASS: TestCheckItemHandler_UnknownStatusCoercedToDone (0.00s)
+=== RUN   TestCheckItemHandler_SkipItem
+--- PASS: TestCheckItemHandler_SkipItem (0.00s)
+=== RUN   TestCheckItemHandler_SubstituteItem
+--- PASS: TestCheckItemHandler_SubstituteItem (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/api     0.827s
+# (24 list-handler tests total, all PASS; lines elided above for brevity)
+
+# Artifact-lint delta — baseline 5 → 5 (unchanged; only gaps/harden phase-record drift)
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/028-actionable-lists 2>&1 | tail -1
+Artifact lint FAILED with 5 issue(s).
+```
+
+### Advisory Finding (NOT closed this round — needs owner decision)
+
+`F-AL-T1` — The permissive coercion above means the check endpoint has no un-check path and silently turns an unsupported/`pending` request into a `done` mutation. Whether the contract SHOULD reject unknown statuses (HTTP 400) or expose an explicit reset-to-pending path is a spec/design decision owned by `bubbles.analyst` / `bubbles.implement`, not a test change. This round PINS the current behavior so any future change is deliberate; it does not alter `internal/api/lists.go`.
+
+### Outcome
+
+- Round work: probe ran; one adversarial unit gap closed with RED→GREEN proof; one advisory finding surfaced for owner routing.
+- Spec 028 certification status: unchanged (`done`). This round adds test proof to an already-certified spec; it does not re-promote or re-validate.
+- Changed files: `internal/api/lists_test.go` (new test function), `specs/028-actionable-lists/report.md` (this section). No source, scope, spec, design, config, or state.json changes. No git push.
+
+---
+
+## Reconcile-to-Doc Phase-Record Reconciliation (2026-06-07)
+
+`reconcile-to-doc` (bubbles.validate, state-reconciliation owner). Gate G022 flagged two required specialist phases — `harden` and `gaps` — missing from `execution.completedPhaseClaims` + `certification.certifiedCompletedPhases`. Each phase was classified against report.md content + git history; no protected artifact (spec.md/design.md/scopes.md) or source/test code was touched.
+
+### `harden` → MIGRATE (genuine evidence)
+
+The harden phase genuinely ran. Anchors:
+
+- report.md → `## Harden-to-Doc Sweep (2026-04-22)` — findings H1/H3/H4/H5; added `TestParseQuantity_UncountableQuantities`, `TestRecipeAggregator_UncountableQuantityPreserved`, `TestArchiveListHandler[_NotFound]`, `TestUpdateListHandler_ArchiveViaUpdate/_InvalidJSON`, `TestRemoveItemHandler[_NotFound]`.
+- `internal/list/harden_test.go` present at HEAD (`git ls-tree HEAD` blob `f8d92ee0`).
+- report.md → `## BUG-028-003 Reconcile-Sweep Evidence (Sweep 2026-05-23, Round 22, harden-to-doc)` + `resolvedBugs[BUG-028-003]` (`parentTrigger=harden`, `parentMappedMode=harden-to-doc`).
+
+BUG-028-003 extended the phase arrays with `regression/simplify/stabilize/security` but omitted `harden` itself. This reconcile records the genuine `harden` phase in both arrays and adds a `bubbles.harden` `executionHistory` entry citing the anchors above.
+
+### `gaps` → REAL-WORK-NEEDED (no evidence; routed, not recorded)
+
+The gaps phase never ran for spec 028. Evidence of absence (verified read-only):
+
+- report.md has no `gaps-to-doc` / gap-sweep section. The only `Gap` headers (`Coverage Gap Analysis`, `Mechanical Gap Closure`, `Adversarial Gap Closed`) are subsections inside `test-to-doc` rounds.
+- `git log --all --grep=028 | grep -i gap` returns one `gaps-to-doc` commit `3b4fe6a4`, which belongs to spec **015**, not 028; `5bfcc49d` is generic "test coverage gaps".
+- `executionHistory` has no `bubbles.gaps` entry; no gaps-triggered bug exists.
+
+`gaps` is therefore NOT recorded (anti-fabrication, G022). It is routed to `bubbles.gaps` for a genuine probe and tracked in `certification.concerns[PHASE-028-GAPS-UNRUN]`. `artifact-lint.sh` honestly remains exit 1 on missing `gaps` by design until that probe runs and records its own evidence anchor.
+
+### Artifact-lint delta (5 → 3, honest residual)
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/028-actionable-lists 2>&1   # BEFORE — both phases missing
+❌ Required specialist phase 'gaps' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ Required specialist phase 'harden' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ 2 of 12 required specialist phases are MISSING
+Artifact lint FAILED with 5 issue(s).
+
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/028-actionable-lists 2>&1   # AFTER — harden MIGRATE recorded; gaps honestly residual
+✅ Required specialist phase 'harden' found in execution/certification phase records
+❌ Required specialist phase 'gaps' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ 1 of 12 required specialist phases are MISSING
+Artifact lint FAILED with 3 issue(s).
+```
+
+The residual 3 issues are all `gaps`-only and are the correct honest outcome: a genuinely-unrun phase must not be recorded. Spec 028 stays `done` (all 8 scopes already shipped; 11 of 12 required phases genuinely recorded); the `gaps` probe is the routed follow-up to `bubbles.gaps`.
+
+---
+
+## Gaps Probe Results — reconcile-to-doc (2026-06-07)
+
+`reconcile-to-doc` → `bubbles.gaps` (gaps-diagnostic). This is the genuine gaps-phase
+probe that the 2026-06-07 reconcile section above routed. It ran a coverage-hole +
+claimed-vs-actual analysis against the spec 028 delivered surface (`internal/list/`,
+`internal/api/lists.go`, `internal/intelligence/lists.go`, `internal/telegram/list.go`,
+`internal/recipe/quantity.go`). Read-only + `./smackerel.sh test unit` only. **No
+protected artifact (spec.md/design.md/scopes.md) and no state.json was edited; no source
+or test code was changed.**
+
+### 1. Claimed-vs-Actual Reality Check (PRIMARY) — NO false delivered-claim
+
+The reconcile pass caught a false delivered-claim on spec 056 (PKCE). Spec 028 was probed
+for the same pattern (a surface claimed-delivered in report.md/scopes.md but not actually
+wired). **Result: NONE found.** Every claimed surface is genuinely wired into the running
+binary, verified read-only:
+
+| Claimed surface | Wiring anchor (verified) | Status |
+|---|---|---|
+| REST `/api/lists` CRUD + item ops | `internal/api/router.go:193` `r.Route("/lists", …)` registers all 9 routes under `if deps.ListHandlers != nil` | WIRED |
+| `ListHandlers` instantiated | `cmd/core/main.go` constructs `listResolver`/`listStore`/`listGenerator` and assigns `deps.ListHandlers` unconditionally | WIRED |
+| `lists.created` / `lists.completed` publish | `internal/list/store.go` `CreateList` + `CompleteList` publish via `s.NATS.Publish(...)` | WIRED |
+| Intelligence subscriber | `cmd/core/main.go:351` `svc.intEngine.SubscribeListsCompleted(ctx)` at startup; consumer in `internal/intelligence/lists.go:142` | WIRED |
+| Telegram `/list` + inline keyboard | `internal/telegram/bot.go:564` `case "list": b.handleList(...)`; callback at `bot.go:425` `b.handleListCallback(ctx, cb)` | WIRED |
+
+The one historically-dead surface — `deps.ListHandlers` never assigned, making the entire
+list REST API + Telegram `/list` silently 404 at runtime — was already caught and fixed in
+the **DevOps-to-Doc Sweep (D1, 2026-04-22)** above. This probe re-verified the fix holds at
+HEAD. So the spec-056-style "defined-but-not-wired" pattern is ABSENT from spec 028 today.
+
+Source scan for stubs/placeholders in the delivered surface also came back clean — no
+`TODO`/`FIXME`/`not implemented`/`panic(` markers in `internal/list/*.go`; `HandleListCompleted`
+and the aggregators contain real PostgreSQL/NATS/merge logic, not scaffolds.
+
+### 2. Scenario → Test Coverage Map (scope-committed contract)
+
+All 34 `SCN-AL-*` scenarios in `scenario-manifest.json` map to test functions that genuinely
+exist in-tree (verified by `grep '^func Test'` per file). Condensed by scope:
+
+| Scope | SCN-AL | Backing test file | Exists? |
+|---|---|---|---|
+| 1 — DB & Types | 001–002 | `internal/list/types_test.go` (+ `tests/integration/db_migration_test.go`) | YES |
+| 2 — Store CRUD | 003–008 | `internal/api/lists_test.go` (+ integration `artifact_crud_test.go`) | YES |
+| 3 — Recipe Aggregator | 009–014 | `internal/list/recipe_aggregator_test.go` | YES |
+| 4 — Reading/Compare | 015–017 | `internal/list/reading_aggregator_test.go` | YES |
+| 5 — Generator | 018–021 | `internal/list/generator_test.go` | YES |
+| 6 — REST API | 022–027 | `internal/api/lists_test.go` | YES |
+| 7 — Telegram | 028–032 | `internal/telegram/list_test.go` | YES |
+| 8 — Intelligence | 033–034 | `internal/intelligence/lists_test.go` | YES |
+
+The prior R20 adversarial closure (`TestCheckItemHandler_UnknownStatusCoercedToDone`,
+status-coercion characterization) is present at `internal/api/lists_test.go:525` and PASSes.
+No claimed-but-missing test function was found.
+
+### 3. Real Test-Run Evidence (G021)
+
+```text
+$ ~/smackerel/smackerel.sh test unit --go --go-run 'List|Item|Recipe|Reading|Generator'
+[go-unit] applying -run selector: List|Item|Recipe|Reading|Generator
+ok      github.com/smackerel/smackerel/internal/api     0.468s
+ok      github.com/smackerel/smackerel/internal/intelligence    0.117s
+ok      github.com/smackerel/smackerel/internal/list    0.017s
+ok      github.com/smackerel/smackerel/internal/recipe  0.006s
+ok      github.com/smackerel/smackerel/internal/telegram        0.368s
+[go-unit] go test ./... finished OK
+EXIT_CODE=0
+```
+
+All spec-028-owned packages GREEN; selector-wide `go test ./...` finished OK; exit 0. No
+flakes, no failures.
+
+### 4. Genuine Gaps Found — spec-vision Business Scenarios NOT decomposed into scopes
+
+The 34-scenario scope contract is GAP_FREE. However, three spec.md **Business Scenarios**
+describe behavior the planning phase did NOT carry into any Scope Gherkin/DoD, and which is
+genuinely absent from the code. These are real (quoted from spec.md), not manufactured, and
+critically are **NOT claimed delivered** anywhere in report.md/uservalidation.md (so they are
+under-decomposition findings, NOT false-claims):
+
+| ID | Severity | Spec source | Finding (evidenced) | Disposition |
+|---|---|---|---|---|
+| GAP-028-G1 | 🟡 medium | BS-013 + Success Signal + UI wireframe (spec.md L345) + design.md mermaid L426 (`Complete --> AnnotateRecipes: Auto-create "made_it"`) | List completion does NOT auto-create `made_it` interaction annotations on source recipes. `internal/intelligence/lists.go::HandleListCompleted` only boosts relevance (+0.1) and tracks purchase frequency. Cross-package grep confirms `InteractionMadeIt`/`made_it` appears ONLY in `internal/annotation/*` — no list/intelligence/store/telegram call constructs one. Scope 8 DoD committed only relevance-boost + frequency. | ROUTED — needs `bubbles.plan` decision (decompose into follow-on scope/spec **or** formally record as deferred in scopes.md). Diagnostic agent cannot edit protected artifacts. |
+| GAP-028-G2 | 🔵 low | BS-011 (spec.md L223–227, `"~1 cup"`) | Quantity-overflow display normalization absent. `internal/recipe/quantity.go::FormatIngredient` renders summed quantity verbatim (`"50 tsp salt"`), with no downscale to a readable unit. NB the "pantry staples flagged as likely-already-have" half of BS-011 overlaps explicitly-deferred work (Non-Goals L65 + IP-001 Smart Pantry Awareness), so only the unit-overflow-display half is an un-deferred gap. | ROUTED / observation — low impact display nicety. |
+| GAP-028-G3 | 🔵 low | BS-010 (spec.md L211–214) | Failed-extraction per-artifact flag absent. `internal/list/generator.go` skips artifacts lacking `domain_data` with `slog.Warn` and still generates the list (graceful degradation works), but does NOT inject the BS-010 placeholder item `"ingredients could not be extracted — add manually"`. | ROUTED / observation — degradation works; only the explicit per-artifact flag is missing. |
+
+Not gaps (verified covered or legitimately out-of-scope): BS-001…BS-009 and BS-012 map to
+implemented+tested scope scenarios; BS-014 (mobile/PWA) is cross-spec (spec 033) and out of
+028's scope.
+
+### Verdict
+
+⚠️ **MINOR_GAPS_REMAIN** — The delivered, scope-committed contract (34/34 SCN-AL) is
+GAP_FREE, fully wired, and GREEN (exit 0), with **no false delivered-claim** (spec-056
+pattern absent; the one historical dead-wiring was already fixed). Three genuine
+spec-vision Business Scenarios (BS-013 medium, BS-011/BS-010 low) were under-decomposed from
+the scope plan and are unimplemented; they are routed to `bubbles.plan` for a deliberate
+decompose-or-defer decision. No protected artifact, state.json, source, or test was changed
+by this probe; `bubbles.validate` records the `gaps` phase from this evidence section.
+
+---
+
+## Reconcile-to-Doc Phase Recording — `gaps` recorded (2026-06-07)
+
+`reconcile-to-doc` (bubbles.validate, state-reconciliation owner). The genuine `gaps` probe
+in the section above ran with real evidence (34/34 SCN-AL mapped to in-tree tests;
+`./smackerel.sh test unit` GREEN, exit 0; no false delivered-claim — the spec-056/PKCE
+defined-but-not-wired pattern is absent). This pass records that genuinely-executed phase
+into `state.json`; it does **not** re-run or manufacture anything beyond what the probe
+produced. Only `state.json` + this `report.md` were touched — `spec.md` / `design.md` /
+`scopes.md` were left untouched.
+
+State-reconciliation actions:
+
+- **Recorded `gaps`** in `execution.completedPhaseClaims` **and**
+  `certification.certifiedCompletedPhases`, plus a `bubbles.gaps` `executionHistory` entry
+  (2026-06-07) anchored to `## Gaps Probe Results — reconcile-to-doc (2026-06-07)`.
+- **Resolved** the now-stale `certification.concerns[PHASE-028-GAPS-UNRUN]` — the gaps phase
+  is no longer unrun; the concern carries `disposition: resolved` plus a resolution pointing
+  at the probe evidence anchor.
+- **Logged 3 non-blocking findings** as `certification.concerns`, each `routedTo
+  bubbles.plan` for a decompose-or-defer decision: `GAP-028-G1` (medium — BS-013
+  made_it-annotation-on-completion), `GAP-028-G2` (low — BS-011 quantity-overflow display),
+  `GAP-028-G3` (low — BS-010 failed-extraction placeholder flag). These are spec-vision
+  under-decomposition items, never claimed delivered, so spec 028 legitimately **stays
+  `done`**.
+
+Artifact-lint delta — 3 (`gaps`-only) → 0:
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/028-actionable-lists 2>&1; echo "EXIT_CODE=$?"
+✅ Required specialist phase 'gaps' found in execution/certification phase records
+✅ Required specialist phase 'gaps' recorded in execution/certification phase records
+✅ All 17 evidence blocks in report.md contain legitimate terminal output
+✅ No narrative summary phrases detected in report.md
+Artifact lint PASSED.
+EXIT_CODE=0
+```
+
+Spec 028 remains `done`: all 8 scopes shipped, the delivered 34/34 SCN-AL contract is
+gap-free + wired + GREEN, and all 12 required specialist phases are now genuinely recorded.
+The 3 GAP concerns are routed follow-ups owned by `bubbles.plan`, not blocking defects.

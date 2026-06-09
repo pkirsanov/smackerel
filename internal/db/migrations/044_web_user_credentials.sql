@@ -1,4 +1,4 @@
--- Spec 063 — web operator credentials (username + argon2id password hash).
+-- Spec 070 — web operator credentials (username + argon2id password hash).
 --
 -- This table backs the human-facing login form at /v1/web/login. It is
 -- additive on top of the existing spec 044/057/060 auth stack:
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS web_user_credentials (
 );
 
 COMMENT ON TABLE web_user_credentials IS
-    'Spec 063 — operator username/password credential layer for the smackerel web UI. Verification reuses the existing shared AuthToken on success; this table is a UX layer, not a privilege layer.';
+    'Spec 070 — operator username/password credential layer for the smackerel web UI. Verification reuses the existing shared AuthToken on success; this table is a UX layer, not a privilege layer.';
 
 COMMENT ON COLUMN web_user_credentials.password_hash IS
     'argon2id PHC string; opaque to application code outside internal/auth/webcreds.';

@@ -175,6 +175,9 @@ type Config struct {
 	DiscordMonitoredChannels      []interface{}
 	TwitterEnabled                bool
 	TwitterBearerToken            string
+	TwitterOAuthClientID          string
+	TwitterOAuthClientSecret      string
+	TwitterOAuthRedirectURL       string
 	TwitterSyncSchedule           string
 	TwitterSyncMode               string
 	TwitterArchiveDir             string
@@ -579,6 +582,9 @@ func Load() (*Config, error) {
 		DiscordMonitoredChannels:      parseEnvJSONArray("DISCORD_MONITORED_CHANNELS"),
 		TwitterEnabled:                os.Getenv("TWITTER_ENABLED") == "true",
 		TwitterBearerToken:            os.Getenv("TWITTER_BEARER_TOKEN"),
+		TwitterOAuthClientID:          os.Getenv("TWITTER_OAUTH_CLIENT_ID"),
+		TwitterOAuthClientSecret:      os.Getenv("TWITTER_OAUTH_CLIENT_SECRET"),
+		TwitterOAuthRedirectURL:       os.Getenv("TWITTER_OAUTH_REDIRECT_URL"),
 		TwitterSyncSchedule:           os.Getenv("TWITTER_SYNC_SCHEDULE"),
 		TwitterSyncMode:               os.Getenv("TWITTER_SYNC_MODE"),
 		TwitterArchiveDir:             os.Getenv("TWITTER_ARCHIVE_DIR"),
@@ -1813,7 +1819,9 @@ func (c *Config) Validate() error {
 		}
 		for _, p := range placeholders {
 			if strings.EqualFold(c.AuthToken, p) {
-				return fmt.Errorf("SMACKEREL_AUTH_TOKEN is set to a known placeholder value %q — generate a secure random token: openssl rand -hex 24", c.AuthToken)
+				// FR-051-007 redaction contract: name the offending KEY but
+				// never echo the offending VALUE (no %q on c.AuthToken).
+				return fmt.Errorf("SMACKEREL_AUTH_TOKEN is set to a known placeholder value — generate a secure random token: openssl rand -hex 24")
 			}
 		}
 		// Reject any token starting with "dev-token-" — these are development-only patterns

@@ -56,6 +56,41 @@ func TestLoginPage_RendersForm(t *testing.T) {
 	}
 }
 
+// Spec 070 AC-6 — the rendered login form MUST expose username + password
+// fields as the primary credential intake, with the legacy token field
+// demoted into a collapsible <details> "machine client login" block.
+// TestLoginPage_RendersForm only asserts name="token" + the form action,
+// which the spec-057 token-only form already satisfied; it does NOT prove
+// the spec-070 credential fields render. This test closes that gap.
+func TestLoginPage_RendersCredentialFields(t *testing.T) {
+	deps := newLoginPageDeps_DevShared() // AuthEnabled => credential branch
+	rec := getLogin(t, deps, "/login?next=/dashboard")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="username"`) {
+		t.Errorf("AC-6: missing username field in rendered form: %s", body)
+	}
+	if !strings.Contains(body, `name="password"`) {
+		t.Errorf("AC-6: missing password field in rendered form: %s", body)
+	}
+	// The token field MUST survive as a machine-client fallback, demoted
+	// inside the collapsible <details> block (not the primary inputs).
+	if !strings.Contains(body, "<details") {
+		t.Errorf("AC-6: missing collapsible <details> machine-login block: %s", body)
+	}
+	if !strings.Contains(body, `name="token"`) {
+		t.Errorf("AC-6: token fallback field disappeared: %s", body)
+	}
+	// Ordering guard: username/password must appear above the token
+	// fallback so the human credential path is primary (AC-6 "above the
+	// existing token field").
+	if idxUser, idxToken := strings.Index(body, `name="username"`), strings.Index(body, `name="token"`); idxUser == -1 || idxToken == -1 || idxUser > idxToken {
+		t.Errorf("AC-6: username field (idx=%d) must render above token field (idx=%d)", idxUser, idxToken)
+	}
+}
+
 // Test 1.2 — `?token=` query parameter ignored (must not leak into HTML).
 func TestLoginPage_IgnoresTokenQueryParam(t *testing.T) {
 	deps := newLoginPageDeps_DevShared()

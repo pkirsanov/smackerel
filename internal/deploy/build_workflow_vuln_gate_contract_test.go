@@ -36,19 +36,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// workflowStep is the minimal YAML shape of a single workflow step this
+// test needs. It intentionally does NOT model every field of a step so
+// unrelated workflow edits stay a non-event. ContinueOnError and If are
+// modeled so the contract can reject the two most common gate-neutering
+// mechanisms: a step that cannot fail the build (`continue-on-error: true`)
+// and a step the runner skips because of a statically-false `if:`.
+// ContinueOnError is a *bool so an unset field (nil) is distinguishable from
+// an explicit `continue-on-error: false`.
+type workflowStep struct {
+	Name            string                 `yaml:"name"`
+	ID              string                 `yaml:"id"`
+	Uses            string                 `yaml:"uses"`
+	With            map[string]interface{} `yaml:"with"`
+	Run             string                 `yaml:"run"`
+	ContinueOnError *bool                  `yaml:"continue-on-error"`
+	If              string                 `yaml:"if"`
+}
+
+// workflowJob is the minimal YAML shape of a job: just its ordered steps.
+type workflowJob struct {
+	Steps []workflowStep `yaml:"steps"`
+}
+
 // workflowDoc is the minimal YAML shape this test needs to assert the
 // vulnerability-gate contract. It intentionally does NOT model every field
 // of build.yml so unrelated workflow edits stay a non-event.
 type workflowDoc struct {
-	Jobs map[string]struct {
-		Steps []struct {
-			Name string                 `yaml:"name"`
-			ID   string                 `yaml:"id"`
-			Uses string                 `yaml:"uses"`
-			With map[string]interface{} `yaml:"with"`
-			Run  string                 `yaml:"run"`
-		} `yaml:"steps"`
-	} `yaml:"jobs"`
+	Jobs map[string]workflowJob `yaml:"jobs"`
 }
 
 // imageMatrix declares every image the workflow builds. This list is the
@@ -103,6 +118,26 @@ func assertVulnGateContract(doc *workflowDoc, raw []byte) error {
 		}
 		// Detect Trivy scan steps by `uses:` prefix and image-ref in `with:`.
 		if strings.HasPrefix(step.Uses, "aquasecurity/trivy-action@") {
+			// Fail-open guard 1 (spec 047 FR-047-002): a trivy gate step with
+			// `continue-on-error: true` REPORTS findings but does NOT fail the
+			// workflow, so a non-zero (CRITICAL/HIGH) scan would let the
+			// vulnerable image proceed to cosign-sign + manifest — the exact
+			// deployability bypass spec 047 closes. This is the single most
+			// common CI-gate-neutering mechanism, so the drift contract MUST
+			// reject it. ContinueOnError is *bool: nil/unset and explicit
+			// `false` are both fine; only an explicit `true` neuters the gate.
+			if step.ContinueOnError != nil && *step.ContinueOnError {
+				return fmt.Errorf("contract violation: trivy gate step %q has continue-on-error:true — a non-zero scan would not fail the build (fail-open)",
+					step.Name)
+			}
+			// Fail-open guard 2 (spec 047 FR-047-002): a trivy gate step guarded
+			// by a statically-false `if:` is silently skipped by the runner, so
+			// the gate never runs even though the step still APPEARS present in
+			// the workflow. Reject the unambiguous literal-false forms.
+			if ifNeutersGate(step.If) {
+				return fmt.Errorf("contract violation: trivy gate step %q is guarded by a gate-neutering if: %q",
+					step.Name, step.If)
+			}
 			imageRef, _ := step.With["image-ref"].(string)
 			severity, _ := step.With["severity"].(string)
 			exitCode, _ := step.With["exit-code"].(string)
@@ -208,6 +243,27 @@ func assertVulnGateContract(doc *workflowDoc, raw []byte) error {
 	return nil
 }
 
+// ifNeutersGate reports whether a step-level `if:` expression statically
+// disables the step, so a present-but-skipped trivy gate would never run.
+// It rejects only the unambiguous literal-false forms — `false` and
+// `${{ false }}` (with surrounding-whitespace tolerance and case-insensitive
+// matching). It deliberately does NOT try to evaluate arbitrary expressions:
+// legitimate conditional guards (event/matrix filters such as
+// `if: github.event_name == 'push'`) stay allowed, so this guard cannot turn
+// into a false-positive that blocks unrelated workflow edits.
+func ifNeutersGate(ifExpr string) bool {
+	core := strings.TrimSpace(ifExpr)
+	if core == "" {
+		return false
+	}
+	// Unwrap a single `${{ ... }}` expression wrapper, then re-trim, so
+	// `${{ false }}` collapses to `false` for the literal comparison.
+	if strings.HasPrefix(core, "${{") && strings.HasSuffix(core, "}}") {
+		core = strings.TrimSpace(core[len("${{") : len(core)-len("}}")])
+	}
+	return strings.EqualFold(core, "false")
+}
+
 // TestVulnGateContract_LiveFile verifies the live `.github/workflows/build.yml`
 // satisfies the spec 047 vulnerability gate contract.
 func TestVulnGateContract_LiveFile(t *testing.T) {
@@ -226,23 +282,9 @@ func TestVulnGateContract_AdversarialMissingScan(t *testing.T) {
 	// while smackerel-core does. The contract MUST fail because matrix
 	// coverage is incomplete.
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					{
@@ -278,23 +320,9 @@ func TestVulnGateContract_AdversarialMissingScan(t *testing.T) {
 // catches a regression where the Trivy scan runs AFTER cosign sign.
 func TestVulnGateContract_AdversarialScanAfterSign(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					// Sign FIRST — adversarial.
@@ -343,23 +371,9 @@ func TestVulnGateContract_AdversarialScanAfterSign(t *testing.T) {
 // CRITICAL findings through.
 func TestVulnGateContract_AdversarialWeakSeverity(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{
 						Name: "Trivy vulnerability scan — smackerel-core",
@@ -391,23 +405,9 @@ func TestVulnGateContract_AdversarialWeakSeverity(t *testing.T) {
 // workflow on findings (exit-code: '0' or unset).
 func TestVulnGateContract_AdversarialNonBlockingExitCode(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{
 						Name: "Trivy vulnerability scan — smackerel-core",
@@ -439,23 +439,9 @@ func TestVulnGateContract_AdversarialNonBlockingExitCode(t *testing.T) {
 // longer carries vulnerabilityScan attestation evidence.
 func TestVulnGateContract_AdversarialMissingManifestEvidence(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					{
@@ -503,23 +489,9 @@ func TestVulnGateContract_AdversarialMissingManifestEvidence(t *testing.T) {
 // (i.e., reverts spec 047 design.md §Threshold Tuning) on either trivy step.
 func TestVulnGateContract_AdversarialIgnoreUnfixedFlipped(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					{
@@ -564,23 +536,9 @@ func TestVulnGateContract_AdversarialIgnoreUnfixedFlipped(t *testing.T) {
 // the action's default behavior instead of explicit policy declaration).
 func TestVulnGateContract_AdversarialMissingIgnoreUnfixedField(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					{
@@ -626,23 +584,9 @@ func TestVulnGateContract_AdversarialMissingIgnoreUnfixedField(t *testing.T) {
 // inconsistent with the actual gate behavior.
 func TestVulnGateContract_AdversarialMissingIgnoreUnfixedManifestKey(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					{
@@ -710,23 +654,9 @@ func TestVulnGateContract_AdversarialMissingIgnoreUnfixedManifestKey(t *testing.
 // fix and reintroduce the false-positive failure mode.
 func TestVulnGateContract_AdversarialMissingLimitSeveritiesForSarif(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					{
@@ -773,23 +703,9 @@ func TestVulnGateContract_AdversarialMissingLimitSeveritiesForSarif(t *testing.T
 // (trivy-action v0.36.0 still unsets TRIVY_SEVERITY) — both must be rejected.
 func TestVulnGateContract_AdversarialLimitSeveritiesForSarifFalse(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					{
@@ -846,23 +762,9 @@ func TestVulnGateContract_AdversarialLimitSeveritiesForSarifFalse(t *testing.T) 
 // policy field to the same drift contract as the other two.
 func TestVulnGateContract_AdversarialMissingIgnoreUnfixedRationaleManifestKey(t *testing.T) {
 	doc := &workflowDoc{
-		Jobs: map[string]struct {
-			Steps []struct {
-				Name string                 `yaml:"name"`
-				ID   string                 `yaml:"id"`
-				Uses string                 `yaml:"uses"`
-				With map[string]interface{} `yaml:"with"`
-				Run  string                 `yaml:"run"`
-			} `yaml:"steps"`
-		}{
+		Jobs: map[string]workflowJob{
 			"build-images": {
-				Steps: []struct {
-					Name string                 `yaml:"name"`
-					ID   string                 `yaml:"id"`
-					Uses string                 `yaml:"uses"`
-					With map[string]interface{} `yaml:"with"`
-					Run  string                 `yaml:"run"`
-				}{
+				Steps: []workflowStep{
 					{Name: "Build and push smackerel-core"},
 					{Name: "Build and push smackerel-ml"},
 					{
@@ -904,4 +806,117 @@ func TestVulnGateContract_AdversarialMissingIgnoreUnfixedRationaleManifestKey(t 
 		t.Fatalf("expected missing-ignoreUnfixedRationale-manifest-key violation, got: %v", err)
 	}
 	t.Logf("adversarial OK: build-manifest heredoc missing ignoreUnfixedRationale is rejected with: %v", err)
+}
+
+// TestVulnGateContract_AdversarialContinueOnError proves the contract test
+// catches the single most common CI-gate-neutering mechanism: an operator
+// adding `continue-on-error: true` to a trivy gate step. With that flag a
+// non-zero scan (CRITICAL/HIGH findings) reports the failure but does NOT
+// fail the workflow, so the vulnerable image proceeds to cosign-sign +
+// manifest — exactly the deployability bypass spec 047 exists to close. A
+// chaos probe proved this was fail-open: injecting the flag into the live
+// build.yml left TestVulnGateContract_LiveFile GREEN. This regression anchors
+// the flag to the gate. Every other field on the doc is valid, so the ONLY
+// reason this doc may be rejected is the continue-on-error flag — making the
+// test non-tautological (it passes ONLY if assertVulnGateContract grew the
+// continue-on-error guard).
+func TestVulnGateContract_AdversarialContinueOnError(t *testing.T) {
+	neuter := true
+	doc := &workflowDoc{
+		Jobs: map[string]workflowJob{
+			"build-images": {
+				Steps: []workflowStep{
+					{Name: "Build and push smackerel-core"},
+					{Name: "Build and push smackerel-ml"},
+					{
+						Name:            "Trivy vulnerability scan — smackerel-core",
+						Uses:            "aquasecurity/trivy-action@v0.29.0",
+						ContinueOnError: &neuter, // adversarial: fail-open
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
+						},
+					},
+					{
+						Name: "Trivy vulnerability scan — smackerel-ml",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
+						},
+					},
+					{Name: "Cosign keyless sign — core"},
+				},
+			},
+		},
+	}
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  ignoreUnfixedRationale: advisory CVEs with no upstream fix are non-actionable\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	err := assertVulnGateContract(doc, raw)
+	if err == nil {
+		t.Fatal("expected adversarial doc (continue-on-error: true on trivy gate step) to fail contract, but it passed")
+	}
+	if !strings.Contains(err.Error(), "continue-on-error:true") {
+		t.Fatalf("expected fail-open continue-on-error violation, got: %v", err)
+	}
+	t.Logf("adversarial OK: trivy gate step with continue-on-error:true is rejected with: %v", err)
+}
+
+// TestVulnGateContract_AdversarialNeuteringIf proves the contract test
+// catches the other common gate-neutering mechanism: guarding the trivy gate
+// step with a statically-false `if:` so the runner skips it. A skipped gate
+// never fails the build, so a CRITICAL/HIGH image proceeds to sign + manifest
+// even though the workflow still APPEARS to contain a scan step. Every other
+// field on the doc is valid, so the ONLY reason this doc may be rejected is
+// the gate-neutering `if:` — making the test non-tautological (it passes ONLY
+// if assertVulnGateContract grew the if-guard).
+func TestVulnGateContract_AdversarialNeuteringIf(t *testing.T) {
+	doc := &workflowDoc{
+		Jobs: map[string]workflowJob{
+			"build-images": {
+				Steps: []workflowStep{
+					{Name: "Build and push smackerel-core"},
+					{Name: "Build and push smackerel-ml"},
+					{
+						Name: "Trivy vulnerability scan — smackerel-core",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						If:   "false", // adversarial: gate is statically skipped
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
+						},
+					},
+					{
+						Name: "Trivy vulnerability scan — smackerel-ml",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
+						},
+					},
+					{Name: "Cosign keyless sign — core"},
+				},
+			},
+		},
+	}
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  ignoreUnfixedRationale: advisory CVEs with no upstream fix are non-actionable\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	err := assertVulnGateContract(doc, raw)
+	if err == nil {
+		t.Fatal("expected adversarial doc (if: false on trivy gate step) to fail contract, but it passed")
+	}
+	if !strings.Contains(err.Error(), "gate-neutering if") {
+		t.Fatalf("expected gate-neutering if violation, got: %v", err)
+	}
+	t.Logf("adversarial OK: trivy gate step guarded by if: false is rejected with: %v", err)
 }

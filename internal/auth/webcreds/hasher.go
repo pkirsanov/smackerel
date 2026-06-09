@@ -1,4 +1,4 @@
-// Package webcreds implements the spec 063 web operator credential
+// Package webcreds implements the spec 070 web operator credential
 // layer: argon2id password hashing + a Postgres-backed repo for the
 // web_user_credentials table.
 //

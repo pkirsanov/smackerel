@@ -138,7 +138,7 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 		credentialVerified bool
 	)
 
-	// Spec 063 — credential-path short-circuit. When the form posts
+	// Spec 070 — credential-path short-circuit. When the form posts
 	// username + password (regardless of whether `token` is also
 	// present), verify credentials against web_user_credentials and
 	// on success set the cookie to the existing shared AuthToken.
