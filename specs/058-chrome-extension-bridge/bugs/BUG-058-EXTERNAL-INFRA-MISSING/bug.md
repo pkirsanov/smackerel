@@ -1,7 +1,7 @@
 # BUG-058-EXTERNAL-INFRA-MISSING: Spec 058 blocked by 4 external-infrastructure gaps
 
-**Status:** Open (partial resolution — see `## Reconcile 2026-06-05`)
-**Severity:** Blocker (spec 058 cannot reach `done` until ALL blockers are resolved)
+**Status:** Open — all 4 blockers RESOLVED + re-verified 2026-06-09; terminal closeout pending operator decision (see `## Closeout 2026-06-09`)
+**Severity:** Blocker (all four now resolved; retained as the triage record)
 **Reported:** 2026-06-03
 **Reporter:** bubbles.plan (via operator directive — `done_with_concerns` invalid in governance regime)
 **Owner:** Needs operator triage to assign per-blocker
@@ -173,4 +173,40 @@ partially satisfied (cross-cutting harness done, MV3-specific pending);
 AC-3 and AC-4 still open. Spec 058 status remains `blocked` until BLOCKER-3
 and the BLOCKER-1-residual / BLOCKER-4 pair are dispositioned by the
 operator.
+
+## Closeout 2026-06-09 (bubbles.validate — operator-authorized Option A)
+
+All four enumerated blockers are RESOLVED and were independently re-verified
+against repo HEAD on 2026-06-09:
+
+- **BLOCKER-3** (HTMX admin scaffold + `GET /admin/extension/devices`) — admin
+  unit suite GREEN: `./smackerel.sh test unit --go --go-run 'TestExtension|AdminDevices|AdminSeesAll'`
+  → `ok .../internal/api/admin/extensiondevices`, `internal/api`,
+  `internal/web`, `internal/config`; `go test ./... finished OK`.
+- **BLOCKER-1 + BLOCKER-4** (MV3 Playwright e2e harness + sideload automation) —
+  `extensions/chrome-bridge/test/e2e/` carries 4 spec files incl.
+  `sideload_smoke.spec.ts`; the harness was de-flaked + re-certified by
+  `BUG-058-003` (status `done`, certifiedAt 2026-06-09T17:28:39Z).
+- **BLOCKER-2** (live-Postgres dedup race + admin aggregation integration tests)
+  — `tests/integration/extension_dedup_race_test.go` +
+  `extension_admin_devices_test.go` present on disk; discharge recorded in the
+  `blockers[]` evidence (the heavy live `test integration` stack is
+  sandbox-throughput-gated and not re-run for closeout).
+
+All three discharging child bugs are `status: done`: `BUG-058-001`
+(certifiedAt 2026-06-07T12:00:00Z), `BUG-058-002` (2026-06-07T13:00:00Z),
+`BUG-058-003` (2026-06-09T17:28:39Z).
+
+**Closing this umbrella does not promote spec 058.** The parent spec 058 stays
+`blocked`; its remaining blocker is the keyless-OIDC `cosign verify-blob`
+against a real public-Rekor entry (a CI-release-gated row tracked on the
+parent's `blockingDependencies`), which is NOT one of this umbrella's four
+blockers.
+
+**Terminal-status note:** this packet is a deliberately-minimal triage tracker
+(`bug.md` + `spec.md` + `report.md` + `state.json`; no `scopes.md` /
+`design.md` / `uservalidation.md`). The canonical close-out guards structurally
+require those scaffolding artifacts, so flipping this tracker to terminal `done`
+is an explicit operator decision rather than an automatic flip — see
+`report.md` → `## Closeout 2026-06-09`.
 
