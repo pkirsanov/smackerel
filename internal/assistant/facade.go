@@ -37,9 +37,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/assistant/capturefallback"
@@ -414,6 +416,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		turnScenarioID      string
 		turnTopScore        float64
 		turnAssistantTurnID string
+		invocation          *agent.InvocationResult
 	)
 
 	// Spec 061 SCOPE-09b — `assistant.facade.handle` span (design
@@ -471,7 +474,16 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		// with the canonical shell-e2e assertion field set: correlation_id,
 		// scenario_id, status, error_cause, user_id, transport,
 		// body_redacted (Principle 8 affirmation; bodies never logged).
-		slog.Info("assistant_turn",
+		//
+		// BUG-061-004 — when the executor outcome is not OK, also emit
+		// the raw outcome enum + a redacted summary of OutcomeDetail +
+		// provider/model identity. Without these, error_cause alone
+		// collapses several distinct failure modes (LLM driver error,
+		// LLM returned no tool calls + no final, schema retry exhaustion,
+		// deadline-after-response, tool provider 5xx) into the single
+		// `provider_unavailable` cause, forcing operators to docker-exec
+		// into the container for triage.
+		logAttrs := []any{
 			"user_id", msg.UserID,
 			"transport", transportLabel,
 			"correlation_id", effectiveCorrelationID,
@@ -481,10 +493,24 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			"band", string(turnBand),
 			"status", string(resp.Status),
 			"error_cause", string(resp.ErrorCause),
-			"latency_ms", latency*1000,
+			"latency_ms", latency * 1000,
 			"agent_trace_id", agentTraceID(turnAssistantTurnID),
 			"body_redacted", true,
-		)
+		}
+		if invocation != nil && invocation.Outcome != agent.OutcomeOK {
+			logAttrs = append(logAttrs,
+				"outcome", string(invocation.Outcome),
+				"outcome_iterations", invocation.Iterations,
+				"outcome_detail", summarizeOutcomeDetail(invocation.OutcomeDetail),
+			)
+			if invocation.Provider != "" {
+				logAttrs = append(logAttrs, "provider", invocation.Provider)
+			}
+			if invocation.Model != "" {
+				logAttrs = append(logAttrs, "model", invocation.Model)
+			}
+		}
+		slog.Info("assistant_turn", logAttrs...)
 	}()
 
 	conv, _, loadErr := f.loadContextWithSpan(ctx, msg.UserID, msg.Transport, transportLabel, hashedUserID, correlationID)
@@ -855,7 +881,6 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	assistantmetrics.RouterBandTotal.WithLabelValues(string(band), transportLabel).Inc()
 
 	// --- Step 6: band-driven dispatch ---
-	var invocation *agent.InvocationResult
 
 	// Spec 064 SCOPE-17 — when the substrate router returned a resolved
 	// fallback scenario (decision.Reason == ReasonFallbackClarify with
@@ -1784,4 +1809,61 @@ func (f *Facade) resolvePendingDisambig(
 	conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 	f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
 	return resp, true
+}
+
+// summarizeOutcomeDetail renders the executor's `OutcomeDetail` map
+// into a compact, deterministically-ordered key=value string suitable
+// for the structured `assistant_turn` log line.
+//
+// BUG-061-004 — error_cause alone collapses several distinct executor
+// failures (LLM driver error vs LLM-returned-nothing vs schema retry
+// exhaustion vs deadline-after-response vs tool 5xx) into a single
+// `provider_unavailable` value. Surfacing OutcomeDetail in the log
+// lets operators read the actual failure from the line without
+// docker-exec triage.
+//
+// Safety:
+//   - Keys are sorted lexically (deterministic across runs / hosts).
+//   - Per-value rendering is capped at 200 runes; the whole summary
+//     is capped at 512 runes.
+//   - Body content never enters OutcomeDetail (verified by reading
+//     every `OutcomeDetail = map[string]any{...}` site in
+//     internal/agent/executor.go: only static error strings, tool
+//     names, deadlines, retry counts, provider-side error text).
+//     Principle 8 (Trust Through Transparency) is preserved because
+//     the log line still carries `body_redacted: true`.
+func summarizeOutcomeDetail(detail map[string]any) string {
+	if len(detail) == 0 {
+		return ""
+	}
+	const perValueCap = 200
+	const totalCap = 512
+	keys := make([]string, 0, len(detail))
+	for k := range detail {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		v := fmt.Sprintf("%v", detail[k])
+		if utf8.RuneCountInString(v) > perValueCap {
+			runes := []rune(v)
+			v = string(runes[:perValueCap]) + "…"
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(v)
+		if b.Len() >= totalCap {
+			break
+		}
+	}
+	out := b.String()
+	if utf8.RuneCountInString(out) > totalCap {
+		runes := []rune(out)
+		out = string(runes[:totalCap]) + "…"
+	}
+	return out
 }
