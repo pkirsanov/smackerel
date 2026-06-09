@@ -145,7 +145,15 @@ func init() {
 		OutputSchema:     outputSchema,
 		SideEffectClass:  agent.SideEffectExternal,
 		OwningPackage:    "internal/agent/tools/weather",
-		PerCallTimeoutMs: 2000,
+		// A single lookup is geocode + forecast, two sequential HTTPS
+		// round trips to open-meteo. Measured worst case from the
+		// home-lab container is ~2s per call (so ~4s end-to-end on a
+		// cold cache). The previous 2000 ms cap was tighter than a
+		// single HTTP call and made /weather fail with
+		// `provider_unavailable` on most cold-cache invocations. 8s
+		// gives ~2x headroom over the observed worst case while still
+		// failing fast if open-meteo or DNS is degraded.
+		PerCallTimeoutMs: 8000,
 		Handler:          handleWeatherLookup,
 	})
 }

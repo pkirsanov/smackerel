@@ -599,7 +599,13 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 		}
 		return nil
 	}
-	tgBot, err := telegram.NewBot(telegram.Config{
+	// Bot init can transiently fail when the container's DNS resolver
+	// isn't ready yet (race against Docker's embedded DNS at startup)
+	// or when api.telegram.org is briefly unreachable. Retry with
+	// exponential backoff before giving up — historically a single
+	// DNS hiccup silently disabled telegram for the entire process
+	// lifetime because the failure path just returned nil.
+	tgBotCfg := telegram.Config{
 		BotToken:                     cfg.TelegramBotToken,
 		ChatIDs:                      cfg.TelegramChatIDs,
 		CoreAPIURL:                   cfg.CoreAPIURL,
@@ -619,10 +625,47 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 		// is acceptable.
 		Environment: cfg.Environment,
 		UserMapping: cfg.TelegramUserMapping,
-	})
+	}
+	var (
+		tgBot     *telegram.Bot
+		err       error
+		backoffs  = []time.Duration{0, 1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second}
+		lastSlept time.Duration
+	)
+	for attempt, backoff := range backoffs {
+		if backoff > 0 {
+			select {
+			case <-ctx.Done():
+				slog.Warn("telegram bot initialization aborted by context cancellation",
+					"attempt", attempt+1, "last_error", err)
+				return nil
+			case <-time.After(backoff):
+				lastSlept = backoff
+			}
+		}
+		tgBot, err = telegram.NewBot(tgBotCfg)
+		if err == nil {
+			if attempt > 0 {
+				slog.Info("telegram bot initialization succeeded after retry",
+					"attempt", attempt+1, "last_sleep", lastSlept)
+			}
+			break
+		}
+		slog.Warn("telegram bot initialization failed; will retry",
+			"attempt", attempt+1, "next_backoff", backoff, "error", err)
+	}
 	if err != nil {
-		slog.Warn("telegram bot initialization failed", "error", err)
-		return nil
+		// All retries exhausted. A token IS configured (we wouldn't
+		// be in this branch otherwise — the empty-token early return
+		// is above), so the operator intends telegram to be on. Fail
+		// loud so Docker's auto-restart can try again with fresh DNS,
+		// instead of silently running for the rest of the process
+		// lifetime with no Telegram transport bound (which is how
+		// the production bot disappeared for ~6h on 2026-06-09 after
+		// a transient DNS blip during container restart).
+		slog.Error("telegram bot initialization failed after retries; exiting so the container can be restarted with fresh DNS",
+			"retries", len(backoffs), "error", err)
+		os.Exit(1)
 	}
 
 	// Spec 044 Scope 04 — F02 closure. In production with auth.enabled
