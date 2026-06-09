@@ -1,0 +1,32 @@
+{
+  "bugId": "BUG-061-004",
+  "title": "assistant_turn structured log collapses distinct executor failures into a single error_cause",
+  "spec": "specs/061-conversational-assistant",
+  "severity": "S3",
+  "status": "done",
+  "resolution": "internal/assistant/facade.go: when invocation.Outcome != OutcomeOK, the deferred assistant_turn log block now emits outcome (raw enum), outcome_iterations, outcome_detail (redacted summary of OutcomeDetail map, 200-rune per-value + 512-rune total cap), provider, and model fields. Added summarizeOutcomeDetail helper with deterministic key ordering. Moved var invocation declaration up to the turn-scoped var block. body_redacted: true Principle 8 affirmation preserved. Build + facade unit tests pass.",
+  "owner": "bubbles.devops",
+  "discoveredBy": "bubbles.devops session 2026-06-09 during /weather provider_unavailable triage",
+  "discoveredAt": "2026-06-09T15:40:00Z",
+  "resolvedAt": "2026-06-09T16:05:00Z",
+  "affectedSurface": [
+    "internal/assistant/facade.go assistant_turn log line",
+    "Operator triage workflow for every smackerel scenario hitting an external provider or the LLM driver"
+  ],
+  "deferredScopes": [
+    "Scope 02: focused unit test asserting new fields appear on outcome != OK (parameterized across the 9 OutcomeDetail-producing sites in executor.go)"
+  ],
+  "relatedBugs": [
+    "BUG-015-001 (ollama volume) — provider_unavailable masking turned this 30-second issue into a 30-minute triage",
+    "BUG-061-005 (telegram bot DNS-race silent disable) — sibling observability theme"
+  ],
+  "completedPhases": [
+    "discovery",
+    "design",
+    "implement",
+    "verify"
+  ],
+  "completedScopes": [
+    "scope-01"
+  ]
+}
