@@ -18,3 +18,8 @@ pypdf==4.1.0
 numpy==1.26.0
 jsonschema==4.23.0
 PyYAML==6.0.2
+# BUG-059-001: gkeepapi live-mode dependency (Google Keep). UNOFFICIAL,
+# reverse-engineered client that Google periodically breaks — exact-pinned and
+# bumped deliberately per the spec 059 drift-circuit-breaker runbook. pip
+# resolves the transitive deps gpsoauth>=1.1.0 and future>=0.16.0 automatically.
+gkeepapi==0.17.1

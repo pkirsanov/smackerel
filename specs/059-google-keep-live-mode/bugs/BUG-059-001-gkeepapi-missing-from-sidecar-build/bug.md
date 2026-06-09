@@ -15,11 +15,11 @@ The `gkeepapi` runtime dependency required by Google Keep live mode is absent fr
 - [ ] Reported
 - [x] Confirmed (reproduced via diagnostic evidence)
 - [ ] In Progress
-- [ ] Fixed
+- [x] Fixed
 - [ ] Verified
 - [ ] Closed
 
-**Triage state:** Documented + triaged + DEFERRED (state.json `status: blocked`). The fix is intentionally NOT applied in this sweep round because adding a reverse-engineered Google library as a pinned production dependency is a deliberate supply-chain decision the maintainer must consciously own (see design.md → Open Questions Q1). Tracked for a deliberate delivery pass.
+**Triage state:** RESOLVED via Path A (DELIVER). The maintainer accepted the reverse-engineered-library supply-chain risk and selected `gkeepapi==0.17.1` (design.md Q1 resolved), clearing the prior `blocked` state. Fix DELIVERED + VERIFIED: pinned on `ml/pyproject.toml` + `ml/requirements.txt`, image rebuilt, in-image `import gkeepapi` exit 0 (v0.17.1), structural guard GREEN-with-pin / RED-without, no unit regression (report.md → Fix Verification Evidence). `Verified`/`Closed` remain unchecked pending the downstream bugfix-fastlane specialist-certification chain (separation of duties); state.json `status: in_progress`.
 
 ## Reproduction Steps
 1. Confirm the dependency is absent from all build surfaces:
@@ -59,5 +59,5 @@ The consumer code (`ml/app/keep_bridge.py`) performs a LAZY `import gkeepapi` in
 - Parent scopes echo: `specs/059-google-keep-live-mode/scopes.md:526`
 - Diagnostic origin: DEVOPS-059-A (stochastic-quality-sweep round 17/20)
 
-## Deferred Reason
-`gkeepapi` is an UNOFFICIAL, REVERSE-ENGINEERED Google Keep client that Google actively breaks. Pinning it as a production dependency and rebuilding the image is a deliberate supply-chain / security decision that MUST be consciously owned by the maintainer — it is not a proportionate sweep-round drive-by. This packet tracks the fix for a deliberate delivery pass. Priority: medium; deploy-blocking ONLY for operators who intend to run live mode. Fix when a maintainer selects the pin version and accepts the supply-chain risk (design.md → Open Questions Q1).
+## Resolution (Path A — DELIVER)
+`gkeepapi` is an UNOFFICIAL, REVERSE-ENGINEERED Google Keep client that Google actively breaks. Pinning it as a production dependency was a deliberate supply-chain decision the maintainer consciously owned. The maintainer chose **Path A**: accept the supply-chain risk and pin `gkeepapi==0.17.1` (latest stable; `requires-python >=3.10`, satisfied by the `python:3.12-slim` builder). The exact pin is bumped deliberately (never floated) per the spec 059 drift-circuit-breaker runbook (design.md Q2). The existing consumer call `keep.login(email, password)` (`keep_bridge.py:74`) is API-compatible with 0.17.1 (`Keep.login(self, email, password, state=None, sync=True, device_id=None)`) — ZERO consumer-code change. Delivered surfaces: `ml/pyproject.toml` (`[project.optional-dependencies] runtime`) + `ml/requirements.txt` (the Dockerfile-installed lock) + `ml/tests/test_build_surface_pins.py` (structural guard). Priority was medium; deploy-blocking ONLY for operators running live mode. See report.md → Fix Verification Evidence and scopes.md DoD.
