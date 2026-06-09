@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "058-chrome-extension-bridge",
+  "bugId": "BUG-058-003-flaky-badge-matrix-mv3-sw-alarms-race",
+  "featureDir": "specs/058-chrome-extension-bridge/bugs/BUG-058-003-flaky-badge-matrix-mv3-sw-alarms-race",
+  "featureName": "BUG-058-003: flaky badge-matrix e2e test — MV3 service-worker chrome.alarms spin-up race in the triggerDrain test helper",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "severity": "major",
+  "trackingBug": null,
+  "reportedAt": "2026-06-09T16:40:00Z",
+  "reporter": "Orchestrator directive — a genuine flake discovered while re-verifying spec 058's ./smackerel.sh test e2e-ext discharge claim (10 passed / 1 failed; failing test sideload_smoke.spec.ts:49 'badge matrix'; ~1/3 cold-run fail rate; retries:0 fails the whole suite).",
+  "certifiedAt": "2026-06-09T17:28:39Z",
+  "certifiedBy": "bubbles.workflow",
+  "completedAt": "2026-06-09T16:58:00Z",
+  "lastUpdatedAt": "2026-06-09T16:59:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["discovery", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:40:00Z",
+        "completedAt": "2026-06-09T16:45:00Z",
+        "outcome": "completed_owned",
+        "summary": "Independently re-confirmed the reported flake. `--repeat-each=15` in ONE warm process passed 15/15 (no repro); 12 SEPARATE cold `./smackerel.sh test e2e-ext -- sideload_smoke.spec.ts --grep \"badge matrix\"` invocations failed 2/12 (runs 4, 7) with `TypeError: Cannot read properties of undefined (reading 'create')` at fixtures.ts:192 — proving a COLD-process-start race, not a warm-fixture one. Read fixtures.ts triggerDrain (unguarded chrome.alarms.create in sw.evaluate), manifest.json (declares the `alarms` permission), and src/background/index.ts:273-274 (top-level chrome.alarms.create + onAlarm listener) and CONFIRMED the product code is correct — the bug is a test-harness MV3-SW spin-up binding race where permission-gated chrome.alarms is transiently undefined while base chrome exists."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:45:00Z",
+        "completedAt": "2026-06-09T16:47:00Z",
+        "outcome": "completed_owned",
+        "summary": "Single bugfix-fastlane scope: harden triggerDrain() to wait INSIDE the sw.evaluate worker context for `typeof chrome?.alarms?.create === 'function'` before calling it (no cross-process TOCTOU gap), bounded to 5s/50ms and rejecting loudly on timeout. Deliberate no-shortcut decisions: NOT adding Playwright retries (forbidden flake-masking); NOT weakening expect(badge).toBe('SETUP'); NOT touching product code; in-evaluate poll over the heavier reloadServiceWorker() since we only need to wake+drain a fresh worker. SCN-058-003-01 authored."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:47:00Z",
+        "completedAt": "2026-06-09T16:50:00Z",
+        "outcome": "completed_owned",
+        "summary": "Edited extensions/chrome-bridge/test/e2e/fixtures.ts triggerDrain() only: replaced the unguarded `chrome.alarms.create(...)` with an in-evaluate bounded readiness poll (5s deadline, 50ms interval) that waits for `typeof chrome?.alarms?.create === 'function'`, then creates the drain alarm and settles 50ms; rejects with a clear 'MV3 service-worker lifecycle race' error on timeout. Added a doc-comment explaining the MV3 SW lifecycle race. No other file changed; get_errors on fixtures.ts → no errors."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:50:00Z",
+        "completedAt": "2026-06-09T16:56:00Z",
+        "outcome": "completed_owned",
+        "summary": "AFTER fix: 20 SEPARATE cold `./smackerel.sh test e2e-ext -- sideload_smoke.spec.ts --grep \"badge matrix\"` invocations → 20/20 PASS (AFTER_FIX_TALLY: pass=20 fail=0 of 20), exceeding the >=10 bar. Full `./smackerel.sh test e2e-ext` suite → 11/11 PASS (test 11 = the previously-flaky badge matrix). All runs through the sanctioned CLI surface. Evidence in report.md '### After Fix (GREEN)' + '### Test Evidence'."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:56:00Z",
+        "completedAt": "2026-06-09T16:57:00Z",
+        "outcome": "completed_owned",
+        "summary": "Adversarial RED→GREEN documented: the 'test' is the e2e test; the adversarial methodology is the separate-cold-invocation battery (the only methodology that surfaces the flake — warm --repeat-each does not). RED = 2/12 fail before the guard; GREEN = 20/20 + 11/11 after. Reverting the in-evaluate readiness poll restores the BEFORE red. Recorded in report.md '### Regression Evidence'."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:57:00Z",
+        "completedAt": "2026-06-09T16:57:20Z",
+        "outcome": "completed_owned",
+        "summary": "The fix is the minimal surgical change: a single in-evaluate poll in the one failing helper. Rejected heavier alternatives (full reloadServiceWorker() before drain; Playwright-side two-step readiness check that reopens the TOCTOU window). No new abstraction or helper introduced."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:57:20Z",
+        "completedAt": "2026-06-09T16:57:40Z",
+        "outcome": "completed_owned",
+        "summary": "Determinism: the readiness check and the chrome.alarms.create call run in the SAME worker evaluate, so the binding cannot disappear between check and use; the wait is bounded (5s) and rejects loudly so a genuinely-broken worker fails clearly rather than hanging or silently passing. playwright.config.ts stays workers:1/fullyParallel:false/retries:0. 20/20 cold + 11/11 full-suite confirm stability."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:57:40Z",
+        "completedAt": "2026-06-09T16:58:00Z",
+        "outcome": "completed_owned",
+        "summary": "No secrets touched; no request interception introduced; the assertion expect(badge).toBe('SETUP') is NOT weakened; no product/security surface (manifest permissions, CSP, alarms wiring) changed. The change is confined to a test helper's robustness. git status shows only test/e2e/fixtures.ts modified."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:58:00Z",
+        "completedAt": "2026-06-09T16:58:00Z",
+        "outcome": "completed_owned",
+        "summary": "The canonical proof runs through the repo CLI surface (./smackerel.sh test e2e-ext): 20/20 isolated cold + 11/11 full suite. artifact-lint + state-transition-guard run at close-out against this packet (output appended to report.md '### Validation Evidence'). Parent spec 058 planning truth NOT touched."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:58:00Z",
+        "completedAt": "2026-06-09T16:58:00Z",
+        "outcome": "completed_owned",
+        "summary": "Change-boundary containment: `git status --porcelain` shows only extensions/chrome-bridge/test/e2e/fixtures.ts modified (the untracked .vscode/ is pre-existing unrelated IDE state, not staged, not part of this fix). Product code (src/background/index.ts, manifest.json) confirmed unchanged. No config/generated and no .github/bubbles framework files touched. Parent spec 058 stays blocked; its blockingDependencies are NOT modified by this packet."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "startedAt": "2026-06-09T16:58:00Z",
+        "completedAt": "2026-06-09T16:58:00Z",
+        "outcome": "completed_owned",
+        "summary": "The fix carries an inline doc-comment explaining the MV3 SW lifecycle race and the no-retry-masking decision. The packet (bug.md/spec.md/design.md/scopes.md/report.md/uservalidation.md/scenario-manifest.json) records the root cause, the cold-vs-warm proof, the RED→GREEN evidence, the product-code-is-correct confirmation, the honest parent-058-stays-blocked caveat, and the Gate G088 commit-ordering note for the committing orchestrator."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "startedAt": "2026-06-09T17:28:39Z",
+        "completedAt": "2026-06-09T17:28:39Z",
+        "outcome": "completed_owned",
+        "summary": "G088 two-phase re-stamp: certifiedAt set after planning-truth commit bed146f9"
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-09T16:58:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Make triggerDrain() robust to the MV3 SW spin-up chrome.alarms race", "status": "Done", "completedDoD": 14, "totalDoD": 14, "completedAt": "2026-06-09T16:58:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane MV3 test-harness flake fix; single helper change; no convergence loop required",
+      "lastUpdatedAt": "2026-06-09T16:58:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "resolvedFindings": [
+    {
+      "id": "FINDING-058-003-MV3-ALARMS-SPINUP-RACE",
+      "summary": "The MV3 e2e harness helper triggerDrain() (fixtures.ts:191) called chrome.alarms.create(...) with no readiness guard; on a cold MV3 service-worker spin-up the permission-gated chrome.alarms binding is transiently undefined while the base chrome namespace exists, so the call threw 'Cannot read properties of undefined (reading 'create')' and — with playwright.config.ts retries:0 — flaked the whole ./smackerel.sh test e2e-ext suite ~1-in-6 to ~1-in-3 cold runs (reproduced 2/12).",
+      "resolution": "Hardened triggerDrain() with an in-evaluate bounded readiness poll: inside the sw.evaluate worker context, wait up to 5s (50ms interval) for `typeof chrome?.alarms?.create === 'function'` before calling chrome.alarms.create(DRAIN_ALARM); reject loudly on timeout. No Playwright retries added; the assertion expect(badge).toBe('SETUP') and all product code are unchanged.",
+      "evidence": "report.md '### Before Fix (RED)' (2/12 cold fail), '### After Fix (GREEN)' (20/20 cold + 11/11 full suite), '### Code Diff Evidence', '### Regression Evidence', '### Audit Evidence'; extensions/chrome-bridge/test/e2e/fixtures.ts triggerDrain().",
+      "status": "resolved"
+    }
+  ],
+  "sweep": {
+    "sweepId": "orchestrator-directive-2026-06-09-spec058-e2e-ext-flake",
+    "round": 0,
+    "trigger": "orchestrator-directive",
+    "mappedWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}
