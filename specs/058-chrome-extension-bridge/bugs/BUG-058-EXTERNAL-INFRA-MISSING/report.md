@@ -104,3 +104,45 @@ locally per the owner's confirmation that build/deploy is local. This umbrella's
 blockers resolved) and it is ready for operator closeout; the parent spec 058
 `blockingDependencies` are reconciled to `resolved`, and any promotion of spec
 058 out of `blocked` is a separate, deliberate state-transition pass.
+
+## Closeout 2026-06-09 (bubbles.validate — operator-authorized Option A)
+
+Re-verification (this session, repo HEAD 2026-06-09):
+
+- **BLOCKER-3 admin unit GREEN** — `./smackerel.sh test unit --go --go-run 'TestExtension|AdminDevices|AdminSeesAll'`:
+
+  ```
+  [go-unit] applying -run selector: TestExtension|AdminDevices|AdminSeesAll
+  [go-unit] starting go test ./...
+  ok      github.com/smackerel/smackerel/internal/api     0.253s
+  ok      github.com/smackerel/smackerel/internal/api/admin/extensiondevices     0.010s
+  ok      github.com/smackerel/smackerel/internal/config  0.060s
+  ok      github.com/smackerel/smackerel/internal/web     0.240s
+  [go-unit] go test ./... finished OK
+  ```
+
+- **Child packets all `done`** — `BUG-058-001` (certifiedAt 2026-06-07T12:00:00Z),
+  `BUG-058-002` (2026-06-07T13:00:00Z), `BUG-058-003` (de-flake + re-cert,
+  2026-06-09T17:28:39Z).
+- **Blocker artifacts present** — 4 e2e specs under
+  `extensions/chrome-bridge/test/e2e/` incl. `sideload_smoke.spec.ts`;
+  `tests/integration/extension_dedup_race_test.go` +
+  `extension_admin_devices_test.go`; the admin devices HTML page.
+
+All four `blockers[]` entries remain `resolved`; this re-verification adds fresh
+2026-06-09 evidence on top of the original discharge.
+
+**Closing this umbrella does not promote spec 058; the parent remains blocked on
+the keyless-OIDC Rekor row, tracked separately** on the parent's
+`blockingDependencies` (RESIDUAL-NOT-RUN-DOD-ROWS) and NOT among this umbrella's
+four blockers.
+
+**Terminal-status disposition (PHASE 1).** Planning truth (`bug.md`, `spec.md`,
+`report.md`) is finalized to the closeout framing; `state.json` status is kept
+NON-terminal (`open`, no `certifiedAt`) so the planning-truth commit lands first
+(G088-safe two-phase). Terminal `done` for this zero-implementation tracker is
+gated by the canonical guards, which structurally require `scopes.md` +
+`design.md` + `uservalidation.md` (absent by design here): artifact-lint exits 1
+on the three missing artifacts and `state-transition-guard.sh` hard-errors
+without `scopes.md`. The terminal-status decision is therefore reserved for the
+operator.
