@@ -16,10 +16,10 @@ The `gkeepapi` runtime dependency required by Google Keep live mode is absent fr
 - [x] Confirmed (reproduced via diagnostic evidence)
 - [ ] In Progress
 - [x] Fixed
-- [ ] Verified
+- [x] Verified
 - [ ] Closed
 
-**Triage state:** RESOLVED via Path A (DELIVER). The maintainer accepted the reverse-engineered-library supply-chain risk and selected `gkeepapi==0.17.1` (design.md Q1 resolved), clearing the prior `blocked` state. Fix DELIVERED + VERIFIED: pinned on `ml/pyproject.toml` + `ml/requirements.txt`, image rebuilt, in-image `import gkeepapi` exit 0 (v0.17.1), structural guard GREEN-with-pin / RED-without, no unit regression (report.md → Fix Verification Evidence). `Verified`/`Closed` remain unchecked pending the downstream bugfix-fastlane specialist-certification chain (separation of duties); state.json `status: in_progress`.
+**Triage state:** CERTIFIED via Path A (DELIVER). The maintainer accepted the reverse-engineered-library supply-chain posture and selected `gkeepapi==0.17.1` (design.md Q1 resolved), clearing the prior `blocked` state. Fix DELIVERED, VERIFIED, and CERTIFIED: pinned on `ml/pyproject.toml` + `ml/requirements.txt`, image rebuilt, in-image `import gkeepapi` exit 0 (v0.17.1), structural guard GREEN-with-pin / RED-without, no unit regression (report.md → Fix Verification Evidence). The bugfix-fastlane specialist-certification chain (regression/simplify/stabilize/security/validate + the prior independent audit) is complete and recorded and all 36 state-transition-guard checks pass (exit 0, transition permitted), so `Verified` is checked. The `Closed` box (terminal `done`) is applied post-commit by the commit owner under the two-phase G088-safe commit ordering — planning truth is committed first, then `certifiedAt` post-dates it; state.json currently records `status: in_progress` with `certifiedAt: null`.
 
 ## Reproduction Steps
 1. Confirm the dependency is absent from all build surfaces:
