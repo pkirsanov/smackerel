@@ -515,6 +515,7 @@ jobs:
       run: |
         cat > build-manifest.yaml <<EOF
         manifestVersion: 1
+        trustModel: ci-keyless
         sourceSha: ${{ needs.build-images.outputs.sourceSha }}
         builtAt: $(date -u +%Y-%m-%dT%H:%M:%SZ)
         ciRunUrl: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

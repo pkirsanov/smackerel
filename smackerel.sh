@@ -62,8 +62,16 @@ Commands:
   clean measure               Show docker disk usage
   clean smart                 Stop the current stack without deleting persistent volumes
   clean full                  Stop the current stack and remove project-scoped volumes
+  deploy <target>             Zero-manual deploy orchestrator (knb spec 019).
+                              Sources scripts/deploy/orchestrator.sh from the
+                              knb checkout resolved via $KNB_REPO_ROOT or
+                              $DEPLOY_TARGETS_ROOT (default: $HOME/knb).
+                              Flags forwarded to orchestrator: --source-sha,
+                              --knb-rev, --auto-cleanup-stale-images,
+                              --dry-run, --rollback (see orchestrator --help).
   deploy-target <target> <action> [args]
-                              Run a deployment-target adapter action.
+                              Run a deployment-target adapter action (legacy
+                              spec-017/018 form; preserved for backward compat).
                               Targets: home-lab (see deploy/<target>/README.md)
                               Actions: preconditions | bootstrap | apply | rollback |
                                        verify | teardown | status | manifest | params
@@ -1840,6 +1848,25 @@ E2EUI_HELP
     ;;
   deploy-target)
     bash "$SCRIPT_DIR/scripts/commands/deploy_target.sh" "$@"
+    ;;
+  deploy)
+    # knb spec 019 scope 05 — zero-manual deploy orchestrator shim per
+    # design.md D2 (=<15 non-blank/non-comment lines; sources shared
+    # scripts/deploy/orchestrator.sh; sets KNB_PRODUCT; forwards "$@").
+    # Legacy `deploy-target` arm above remains the spec-017/018 baseline
+    # (C4 backward compat); orchestrator phases are NOT injected into it.
+    shift # consume "deploy"
+    target="${1:?missing required: deploy <target> (e.g. home-lab); see ./smackerel.sh --help}"
+    shift
+    KNB_REPO_ROOT="${KNB_REPO_ROOT:-${DEPLOY_TARGETS_ROOT:-$HOME/knb}}"
+    if [[ ! -f "$KNB_REPO_ROOT/scripts/deploy/orchestrator.sh" ]]; then
+      echo "missing: knb orchestrator at $KNB_REPO_ROOT/scripts/deploy/orchestrator.sh" >&2
+      echo "  remediation: set \$KNB_REPO_ROOT or \$DEPLOY_TARGETS_ROOT to your knb checkout (default: \$HOME/knb)" >&2
+      exit 1
+    fi
+    export KNB_PRODUCT="smackerel"
+    export KNB_REPO_ROOT
+    exec bash "$KNB_REPO_ROOT/scripts/deploy/orchestrator.sh" "$target" "$@"
     ;;
   release)
     # Thin wrapper over bubbles framework + knb adapter.
