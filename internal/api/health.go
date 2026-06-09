@@ -165,7 +165,7 @@ type Dependencies struct {
 	RevocationCache   *revocation.Cache
 	AuthAdminHandlers *AuthAdminHandlers
 
-	// Spec 063 — web operator credential layer (username/password login).
+	// Spec 070 — web operator credential layer (username/password login).
 	// nil when the deployment has no Postgres pool (config-validate mode,
 	// some tests). HandleWebLogin falls back to the existing token-form
 	// path when this is nil OR when the form does not include username +

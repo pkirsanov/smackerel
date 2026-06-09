@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -282,6 +283,112 @@ func TestPublishToDeadLetter_PublishFailure(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when publish fails")
 	}
+}
+
+// SEC-081-R1 / BUG-081-001: the dead-letter Smackerel-Last-Error value MUST be
+// CR/LF/C0/DEL-sanitized before it is written into a single-line wire header, so
+// an untrusted error string cannot inject an extra header line (CWE-113 header
+// injection). This is an adversarial RED->GREEN regression: without the
+// stringutil.SanitizeHeaderValue call at each subscriber sink, the raw
+// "boom\r\nNats-Msg-Id: forged" survives and this test fails.
+//
+// CROSS-RUNTIME PARITY PIN: the shared input "boom\r\nNats-Msg-Id: forged" and the
+// expected sanitized value "boom  Nats-Msg-Id: forged" are pinned identically by
+// the Python sidecar tests
+// (ml/tests/test_nats_deadletter.py::test_last_error_crlf_sanitized and
+// ::test_sanitize_header_value_parity_pin). Both runtimes assert the SAME
+// byte-for-byte contract so the Go core and Python sidecar dead-letter values stay
+// byte-for-byte equal (spec 081 parity invariant).
+func TestDeadLetterLastErrorCRLFSanitized(t *testing.T) {
+	const (
+		crlfInput     = "boom\r\nNats-Msg-Id: forged"
+		wantLastError = "boom  Nats-Msg-Id: forged" // PARITY PIN: CR->space, LF->space
+	)
+
+	// The exact six-name canonical envelope (all present when last-error and the
+	// metadata-derived delivery-count + consumer are populated).
+	canonical := []string{
+		"Smackerel-Original-Subject",
+		"Smackerel-Original-Stream",
+		"Smackerel-Failed-At",
+		"Smackerel-Delivery-Count",
+		"Smackerel-Last-Error",
+		"Smackerel-Original-Consumer",
+	}
+
+	assertSanitized := func(t *testing.T, dlMsg *nats.Msg) {
+		t.Helper()
+		// Exactly the canonical six headers — never a seventh, injected line.
+		if len(dlMsg.Header) != len(canonical) {
+			t.Errorf("expected exactly %d canonical headers, got %d: %v", len(canonical), len(dlMsg.Header), dlMsg.Header)
+		}
+		for _, k := range canonical {
+			if dlMsg.Header.Get(k) == "" {
+				t.Errorf("missing canonical header %q", k)
+			}
+		}
+		// The forged header name must NOT appear as its own key.
+		if v := dlMsg.Header.Get("Nats-Msg-Id"); v != "" {
+			t.Errorf("injected Nats-Msg-Id header leaked: %q", v)
+		}
+		lastErr := dlMsg.Header.Get("Smackerel-Last-Error")
+		// RED->GREEN discriminator: the value must carry NO CR/LF and equal the
+		// cross-runtime parity pin.
+		if strings.ContainsAny(lastErr, "\r\n") {
+			t.Errorf("Smackerel-Last-Error leaked CR/LF (header injection): %q", lastErr)
+		}
+		if lastErr != wantLastError {
+			t.Errorf("Smackerel-Last-Error = %q, want parity-pinned %q", lastErr, wantLastError)
+		}
+	}
+
+	t.Run("ResultSubscriber", func(t *testing.T) {
+		js := &mockJetStream{}
+		rs := &ResultSubscriber{NATS: &smacknats.Client{JetStream: js}}
+		msg := &mockJetStreamMsg{
+			data:     []byte(`{"artifact_id":"x"}`),
+			metadata: &jetstream.MsgMetadata{NumDelivered: 5, Consumer: "smackerel-core-processed"},
+		}
+		if err := rs.publishToDeadLetter(context.Background(), msg, "artifacts.processed", "ARTIFACTS", crlfInput); err != nil {
+			t.Fatalf("publishToDeadLetter: %v", err)
+		}
+		if len(js.published) != 1 {
+			t.Fatalf("expected 1 dead-letter message, got %d", len(js.published))
+		}
+		assertSanitized(t, js.published[0])
+	})
+
+	t.Run("SynthesisResultSubscriber", func(t *testing.T) {
+		js := &mockJetStream{}
+		sub := &SynthesisResultSubscriber{NATS: &smacknats.Client{JetStream: js}}
+		msg := &mockJetStreamMsg{
+			data:     []byte(`{"artifact_id":"x"}`),
+			metadata: &jetstream.MsgMetadata{NumDelivered: uint64(synthesisMaxDeliver), Consumer: "smackerel-core-synthesized"},
+		}
+		if err := sub.publishSynthesisToDeadLetter(context.Background(), msg, "synthesis.extracted", "SYNTHESIS", crlfInput); err != nil {
+			t.Fatalf("publishSynthesisToDeadLetter: %v", err)
+		}
+		if len(js.published) != 1 {
+			t.Fatalf("expected 1 dead-letter message, got %d", len(js.published))
+		}
+		assertSanitized(t, js.published[0])
+	})
+
+	t.Run("DomainResultSubscriber", func(t *testing.T) {
+		js := &mockJetStream{}
+		d := &DomainResultSubscriber{NATS: &smacknats.Client{JetStream: js}}
+		msg := &mockJetStreamMsg{
+			data:     []byte(`{"artifact_id":"x"}`),
+			metadata: &jetstream.MsgMetadata{NumDelivered: uint64(domainMaxDeliver), Consumer: "smackerel-core-domain"},
+		}
+		// handleDomainDeliveryFailure stringifies the error internally; feed the
+		// CR/LF-laden text via errors.New so the sink's own errStr build is exercised.
+		d.handleDomainDeliveryFailure(context.Background(), msg, errors.New(crlfInput))
+		if len(js.published) != 1 {
+			t.Fatalf("expected 1 dead-letter message, got %d", len(js.published))
+		}
+		assertSanitized(t, js.published[0])
+	})
 }
 
 // --- handleMessage validation tests ---

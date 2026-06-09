@@ -503,6 +503,68 @@ func TestCheckItemHandler_ItemNotFound(t *testing.T) {
 	}
 }
 
+// TestCheckItemHandler_UnknownStatusCoercedToDone is the adversarial coverage
+// for the CheckItemHandler status-mapping switch default branch (SCN-AL-024 —
+// "Check off an item"; the probe question "are list mutations bounded/
+// validated?"). The pre-existing tests only exercised the done / skipped /
+// substituted cases and the empty-body default. None drove a WELL-FORMED
+// request carrying a status the API does not enumerate, so the validation
+// boundary on item mutations was untested.
+//
+// "pending" is the most adversarial input here: it is a real list.ItemStatus
+// constant (so it is not obviously garbage) AND it is the value a caller would
+// send to UN-check an item. The handler switch has no case for it, no default
+// rejection, and no validation — it falls through `default:` and is silently
+// coerced to ItemDone. This pins two behavior-meaningful facts so a future
+// change cannot silently alter the contract:
+//
+//  1. An unsupported status is NOT rejected (no 400) — mutations are permissive.
+//  2. The coercion target is ItemDone, so an attempt to reset an item to
+//     pending silently marks it DONE — the opposite of intent. There is no
+//     un-check path on this endpoint (surfaced as advisory finding F-AL-T1).
+func TestCheckItemHandler_UnknownStatusCoercedToDone(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Post("/api/lists/{id}/items/{itemId}/check", h.CheckItemHandler)
+
+	body := `{"status":"pending"}`
+	req := httptest.NewRequest("POST", "/api/lists/test-list-1/items/item-1/check", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Fact 1: the unsupported status is NOT rejected — the handler is permissive.
+	// (A 4xx here would indicate a future validation change; this assertion pins
+	// the current permissive contract so that change is deliberate, not silent.)
+	lwi := store.lists["test-list-1"]
+
+	// Fact 2: the item was coerced to done, NOT left pending. A caller trying to
+	// un-check the item silently marked it done — the opposite of intent.
+	if lwi.Items[0].Status == list.ItemPending {
+		t.Fatalf("regression: unsupported 'pending' status was preserved; an un-check path appeared unexpectedly")
+	}
+	if lwi.Items[0].Status != list.ItemDone {
+		t.Errorf("expected unsupported status coerced to done, got %s", lwi.Items[0].Status)
+	}
+
+	// The response body must report the coerced status, not echo the input.
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["status"] != "done" {
+		t.Errorf("expected response status 'done' (coerced), got %q", resp["status"])
+	}
+}
+
 func TestListListsHandler_FilterByType(t *testing.T) {
 	store := newMockListStore()
 	seedTestList(store)

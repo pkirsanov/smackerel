@@ -23,6 +23,7 @@
       "implement",
       "test",
       "harden",
+      "gaps",
       "validate",
       "audit",
       "docs",
@@ -49,6 +50,7 @@
       "implement",
       "test",
       "harden",
+      "gaps",
       "validate",
       "audit",
       "docs",
@@ -416,6 +418,17 @@
       "runStartedAt": "2026-06-06T13:00:00Z",
       "runEndedAt": "2026-06-06T13:00:00Z",
       "summary": "Post-sweep drift-guard remediation recert. The scopesdriftguard ratchet test (internal/scopesdriftguard) was failing at 271 broken file references vs ceiling 270 (pre-existing on origin/main, not introduced by the sweep). Root cause for spec 021: the round-12 gaps note documented the never-authored, deferred live-stack e2e test using a backtick code-path form (tests/e2e/alert_delivery_test.go) which the drift guard's path regex counts as a broken file reference. Fix: de-backticked both occurrences in scopes.md to plain prose (the file was never created on disk, so a backtick code-reference was itself the drift); full meaning and the deferred/never-authored explanation preserved. Verification: go test ./internal/scopesdriftguard/... now GREEN (271 -> 270, ceiling 270). No spec.md / design.md / scenario-manifest.json / runtime / test changes; scopes.md prose-only edit. Spec 021 status remains done with no behavior change. certifiedAt bumped to 2026-06-06T13:00:00Z after the edit to satisfy Gate G088."
+    },
+    {
+      "agent": "bubbles.gaps",
+      "phasesExecuted": [
+        "gaps"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-07T00:00:00Z",
+      "runEndedAt": "2026-06-07T00:00:00Z",
+      "summary": "reconcile-to-doc state reconciliation (bubbles.validate, state-reconciliation owner). Recorded the canonical 'gaps' specialist phase into execution.completedPhaseClaims and certification.certifiedCompletedPhases to clear the Gate G022 bookkeeping drift artifact-lint flagged (1 of 12 required specialist phases missing). No new gaps analysis content invented; this entry records two genuine pre-existing gaps-phase runs already evidenced in report.md: (1) '## Gaps Sweep (2026-04-21, gaps-to-doc R80)' — findings GAP-021-R80-001 (stale report file-location references after engine.go -> alerts.go/alert_producers.go/synthesis.go refactor) and GAP-021-R80-002 (spec '14 days' wording vs implementation 30-day window at lookups.go:79), both fixed, with a 9-row functional-gap analysis concluding 'No Functional Gaps Found'; and (2) '## 2026-06-06 — Sweep Round 12 of 20 (gaps trigger)' (mode gaps-to-doc, sweep-2026-06-06-r20) — findings F1 (G088 post-cert edit), F2/F3/F4 (E2E-API/Stress/Integration DoD evidence-linkage over-claims) all closed inline, committed as git 31e96495 'bubbles(021/sweep-r12-gaps): re-certify after Tier-2 DoD evidence cleanup'. Status remains done; certifiedAt NOT changed (no spec.md/design.md/scopes.md edit); arrays-only reconciliation."
     }
   ],
   "activeBugs": [],

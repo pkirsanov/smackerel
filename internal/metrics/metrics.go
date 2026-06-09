@@ -110,6 +110,20 @@ var ConnectorTwitterAPIRateLimitReset = prometheus.NewGaugeVec(
 	[]string{"connector", "endpoint"},
 )
 
+// ConnectorTwitterAPIRateLimitRemaining records the requests-remaining count
+// reported by the x-rate-limit-remaining header on the MOST RECENT response per
+// endpoint, refreshed after EVERY API call (2xx/4xx/429/5xx) rather than only
+// on 429 — satisfying spec 056 R-016 "updated after each API call". An absent
+// header leaves the prior value untouched (no-clobber), so the gauge never
+// false-reports "exhausted" when a response simply omits the header.
+var ConnectorTwitterAPIRateLimitRemaining = prometheus.NewGaugeVec(
+	prometheus.GaugeOpts{
+		Name: "smackerel_connector_twitter_api_rate_limit_remaining",
+		Help: "Remaining requests in the current rate-limit window per endpoint (from x-rate-limit-remaining header)",
+	},
+	[]string{"connector", "endpoint"},
+)
+
 // --- NATS ---
 
 // NATSDeadLetter counts messages routed to dead letter by stream.
@@ -593,6 +607,7 @@ func init() {
 		ConnectorTwitterAPIRequests,
 		ConnectorTwitterAPIRetries,
 		ConnectorTwitterAPIRateLimitReset,
+		ConnectorTwitterAPIRateLimitRemaining,
 		NATSDeadLetter,
 		DBConnectionsActive,
 		DigestGeneration,

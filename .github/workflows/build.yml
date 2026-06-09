@@ -89,7 +89,7 @@ jobs:
     #   - MEDIUM/LOW/UNKNOWN = report only (visible in workflow log,
     #     does NOT block). A future spec can tighten if needed.
     #
-    # Drift prevention: tests/workflows/build_workflow_contract_test.go
+    # Drift prevention: internal/deploy/build_workflow_vuln_gate_contract_test.go
     # statically asserts that EVERY image built in this job has a matching
     # Trivy scan step that runs BEFORE the first cosign sign step. If a
     # new image is added to the matrix without a scan, the contract test

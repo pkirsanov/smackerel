@@ -1,6 +1,7 @@
 package stringutil
 
 import (
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -31,6 +32,76 @@ func TestTruncateUTF8(t *testing.T) {
 				t.Errorf("TruncateUTF8(%q, %d) produced invalid UTF-8: %q", tt.input, tt.maxBytes, got)
 			}
 		})
+	}
+}
+
+// SEC-081-R1: SanitizeHeaderValue collapses CR/LF/all C0 controls and DEL to a
+// single space so an untrusted error string cannot inject an extra wire header
+// line (CWE-113). Unlike SanitizeControlChars it does NOT preserve \n or \t,
+// because a header value must be a single line.
+func TestSanitizeHeaderValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"clean ascii", "Hello World", "Hello World"},
+		{"empty", "", ""},
+		{"strips carriage return", "hello\rworld", "hello world"},
+		{"strips line feed", "hello\nworld", "hello world"},
+		{"strips crlf to two spaces", "hello\r\nworld", "hello  world"},
+		{"strips tab (NOT preserved)", "col1\tcol2", "col1 col2"},
+		{"strips null byte", "before\x00after", "before after"},
+		{"strips DEL 0x7f", "before\x7fafter", "before after"},
+		{"strips escape sequence", "text\x1b[31mred", "text [31mred"},
+		{"strips multiple controls", "\x01\x02\x03abc", "   abc"},
+		{"only controls", "\x00\x01\x02", "   "},
+		{"preserves multi-byte rune", "café\x00naïve", "café naïve"},
+		{"preserves emoji", "🔔 alert\x00text", "🔔 alert text"},
+		{"fast path no control", "no control chars here", "no control chars here"},
+		// Cross-runtime PARITY PIN (SEC-081-R1): this exact input/output pair is
+		// asserted identically by the Go pipeline test
+		// (TestDeadLetterLastErrorCRLFSanitized) and the Python sidecar test
+		// (ml/tests/test_nats_deadletter.py::test_sanitize_header_value_parity_pin)
+		// so the two runtimes pin the SAME byte-for-byte contract.
+		{"crlf header-injection adversarial (parity pin)", "boom\r\nNats-Msg-Id: forged", "boom  Nats-Msg-Id: forged"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SanitizeHeaderValue(tt.input)
+			if got != tt.want {
+				t.Errorf("SanitizeHeaderValue(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+			if strings.ContainsAny(got, "\r\n") {
+				t.Errorf("SanitizeHeaderValue(%q) leaked CR/LF: %q", tt.input, got)
+			}
+			if !utf8.ValidString(got) {
+				t.Errorf("SanitizeHeaderValue(%q) produced invalid UTF-8: %q", tt.input, got)
+			}
+			// Byte length is preserved (single-byte control -> single-byte space).
+			if len(got) != len(tt.input) {
+				t.Errorf("SanitizeHeaderValue(%q) changed byte length: got %d, want %d", tt.input, len(got), len(tt.input))
+			}
+		})
+	}
+}
+
+// SEC-081-R1: sanitize-then-truncate preserves the 256-byte UTF-8 truncation
+// invariant — sanitization does not change byte length, so the truncation
+// boundary is identical to the pre-sanitization path.
+func TestSanitizeHeaderValue_TruncationInvariant(t *testing.T) {
+	// 300 bytes: 150 CRLF pairs. After sanitize -> 300 spaces; truncate -> 256.
+	raw := strings.Repeat("\r\n", 150)
+	got := TruncateUTF8(SanitizeHeaderValue(raw), 256)
+	if len(got) != 256 {
+		t.Errorf("sanitize+truncate length = %d, want 256", len(got))
+	}
+	if strings.ContainsAny(got, "\r\n") {
+		t.Errorf("sanitize+truncate leaked CR/LF: %q", got)
+	}
+	if got != strings.Repeat(" ", 256) {
+		t.Errorf("sanitize+truncate = %q, want 256 spaces", got)
 	}
 }
 
