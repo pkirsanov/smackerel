@@ -387,3 +387,31 @@ every `./smackerel.sh test unit --go` invocation.
 `done` — all three scopes complete with inline raw evidence; all gates green;
 all required phases recorded in state.json; certification.status promoted to
 `done`.
+
+---
+
+## Phase-Record Reconciliation (reconcile-to-doc, 2026-06-07)
+
+`reconcile-to-doc` migrated two genuinely-executed phases into `state.json`
+`certification.certifiedCompletedPhases` and `execution.completedPhaseClaims`.
+Both are MIGRATE (honest bookkeeping of work that already happened), not new
+work — no protected artifact (`spec.md` / `design.md` / `scopes.md`) was
+touched, and no phase was fabricated.
+
+- **`gaps` — MIGRATE.** The `gaps-to-doc` probe ran Round 11 (2026-05-13)
+  under the stochastic-quality-sweep parent. Evidence anchor: the
+  `Gaps Probe Results — Round 11` section above (Implementation-gap table
+  `G-051-IMPL-01..06`, Test-gap table `G-051-TST-01..06`, Cross-cutting gaps,
+  outcome `done_with_concerns`) plus `executionHistory` `phase=gaps round=11`.
+- **`harden` — MIGRATE.** Defense-in-depth secret/auth hardening shipped in
+  Round 13: the `AUTH_BOOTSTRAP_TOKEN` production-load gate, dev-default
+  Postgres-password rejection (SST loader + runtime `DATABASE_URL`), and
+  startup log-redaction (the `LEAKCANARY-*` sentinel suite). Evidence anchor:
+  the `security` phase claim and the `### Chaos Evidence` adversarial suite
+  above. Additional P0 hardening `BUG-051-001` (`SEC-HL-001`, commit
+  `8fe34750`, status `done`) closed the home-lab runtime auth-bypass with a
+  Red→Green regression. This hardening was originally filed under the
+  `security` / `chaos` phases and the `BUG-051-001` packet rather than a
+  distinct `harden` phase claim.
+
+Gate G022 artifact-lint delta after reconciliation: 5 → 0.

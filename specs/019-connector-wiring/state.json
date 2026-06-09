@@ -100,6 +100,18 @@
         "runStartedAt": "2026-06-06T17:00:00Z",
         "runEndedAt": "2026-06-06T17:00:00Z",
         "summary": "OPS-002 G088 recert (no-source reconstruction). Reconstructed original certification moment from git: commit e2dcb391 (2026-04-10T18:33:53Z) in_progress->done ('delivery-lockdown: certify specs 019, 021, 023 done'); status held done thereafter. Reviewed 12 post-cert planning edits to THIS spec, all category (b) incidental reconciliation: 7f6f1834 (2026-04-10 design.md+scopes.md sweep); 52d9a4ce (2026-04-11 design.md 1-line); 80bda251 (2026-04-12 scopes.md scope-status labels 'Planning complete'/'[x] In Progress'->Done); ee6b7ca0 (2026-04-14 spec.md health-endpoint connector count 14->15 + balanced design/scopes rewording, DoD stays [x]); 9e879807 (2026-04-15 design.md); 4626c2a5 (2026-04-17 spec.md/scopes.md balanced); 344338e9 (2026-04-22 design.md+scopes.md); 466d2f1c (2026-04-22 scopes.md 4-line); c363141c (2026-04-24 scopes.md evidence reconcile, balanced); 6860f5b8 (2026-05-08 DoD-trace-prefix + scenario-manifest + Test Plan paths); d203d0b9 (2026-05-24 +2-line SCN-019-004/005 G068 fidelity bullets); 19b31c0a (2026-05-28 spec.md Status banner->Done). No post-promotion requirement/scenario/DoD semantic change; current scopes.md all-Done with 0 unchecked DoD; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": [
+          "certify"
+        ],
+        "reviewStatus": "CURRENT",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-07T00:00:00Z",
+        "runEndedAt": "2026-06-07T00:00:00Z",
+        "summary": "DV-019-003 certification-taxonomy reconciliation (stochastic-quality-sweep Round 4). Migrated the legacy combined 'improve' entry in certification.certifiedCompletedPhases to its post-split components 'simplify' + 'gaps' (Gate G022 specialist-phase split). Truthful basis: the legacy 'improve' work for THIS spec genuinely covered BOTH dimensions. Gap-closure is evidenced by report.md Improvement Sweep R27 (IMP-019-R27-001 Gov Alerts source_earthquake + IMP-019-R27-002 Weather enable_alerts/forecast_days/precision 'entirely missing from SST pipeline', both Fixed) and Improvement Sweep R28 (IMP-019-R28-001 Financial Markets fred_enabled + IMP-019-R28-002 fred_series 'entirely missing from SST pipeline', both Fixed), plus Test Sweep 2026-04-12 missing-test additions (TestAllConnectorsRegistered, test_connector_wiring.sh, TestDuplicateRegistrationRejected). Simplification/structure review is evidenced by the 2026-04-21 Improvement Sweep full-implementation review (registration-pattern consistency, BUG-004 connectors.go/services.go/helpers.go/shutdown.go split, dead-helper identification). Original certification basis preserved: commit e2dcb391 (2026-04-10) 'delivery-lockdown: certify specs 019, 021, 023 done' is unchanged; this is metadata reconciliation, not re-validation, so the Gate G088 grandfather basis holds. No protected artifact (spec.md/design.md/scopes.md) edited. Repo-wide legacy-taxonomy drift also affects siblings 021 (records 'simplify' only) and 023 (records 'gaps' only) from the same cert commit e2dcb391 — flagged for a dedicated migration pass, not fixed here (scope discipline)."
       }
     ]
   },
@@ -117,7 +129,8 @@
       "regression",
       "harden",
       "security",
-      "improve",
+      "simplify",
+      "gaps",
       "devops",
       "stabilize",
       "validate",

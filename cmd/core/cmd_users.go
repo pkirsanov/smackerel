@@ -62,13 +62,26 @@ func runUsersCommand(ctx context.Context, args []string) int {
 		return 1
 	}
 
+	return dispatchUsersSubcommand(ctx, repo, args, passwordPromptStdin, os.Stdout)
+}
+
+// dispatchUsersSubcommand routes a parsed `users` invocation to the
+// matching subcommand handler. It is split out from runUsersCommand so
+// the subcommand-routing and unknown-subcommand exit-code contract can be
+// unit-tested against an in-memory webcreds.Repo WITHOUT a live Postgres
+// connection (runUsersCommand opens a real pool before this point).
+//
+// Precondition: len(args) >= 1 (the caller rejects the empty case with
+// exit 2 before any DB setup). Exit codes follow the file header — a
+// 2 here means an unknown subcommand (invocation error).
+func dispatchUsersSubcommand(ctx context.Context, repo webcreds.Repo, args []string, prompt passwordPrompter, listOut io.Writer) int {
 	switch args[0] {
 	case "add":
-		return runUsersAdd(ctx, repo, args[1:], passwordPromptStdin)
+		return runUsersAdd(ctx, repo, args[1:], prompt)
 	case "set-password":
-		return runUsersSetPassword(ctx, repo, args[1:], passwordPromptStdin)
+		return runUsersSetPassword(ctx, repo, args[1:], prompt)
 	case "list":
-		return runUsersList(ctx, repo, os.Stdout)
+		return runUsersList(ctx, repo, listOut)
 	default:
 		fmt.Fprintf(os.Stderr, "smackerel-core users: unknown subcommand %q (want add|set-password|list)\n", args[0])
 		return 2

@@ -1149,4 +1149,987 @@ NONE. Spec 081 is **done**. The release-train flag is set in
 promotion's `state.json` + `report.md` edits with a structured
 commit (e.g., `spec(081): bubbles.audit final promotion to done`).
 
+## Reconcile-to-Doc — Phase-Record Drift (2026-06-08)
+
+**Owner:** bubbles.validate · **Role:** state-reconciliation-owner ·
+**Mode:** reconcile-to-doc (bubbles.workflow dispatch) · **Outcome:**
+`route_required`. No code changed; this is artifact-state
+reconciliation only. `spec.md` / `design.md` / `scopes.md` (protected)
+were **not** touched.
+
+A stricter `artifact-lint` now requires 12 specialist phases at
+`status=done`. Spec 081 was certified done on 2026-06-04 under a looser
+gate, so `certification.certifiedCompletedPhases` was missing 6 of them
+(Gate G022). Each missing phase was classified against the
+anti-fabrication rule: **record a phase ONLY with genuine citable
+evidence the work occurred** (folding under another label is allowed),
+otherwise route as REAL-WORK-NEEDED. `executionHistory` + `git log`
+confirm only analyst → implement → test → validate → audit×3 →
+spec-review ran; no distinct gaps/simplify/stabilize/security specialist
+executed.
+
+**Two phases MIGRATED** — distinct, designated, executed work product:
+
+- `harden` → the spec is *definitionally* a hardening spec ("NATS
+  Python Sidecar Hardening Parity"); `D01-1..D01-9` ARE the hardening
+  deliverable (bounded redelivery via `ConsumerConfig`, fail-loud SST
+  reads, `msg.metadata.num_delivered` as single source of truth, the
+  6-header `deadletter.<subject>` envelope published before `term`).
+  Anchor: report.md#summary + the executed `D01-*` blocks above.
+- `regression` → `T-081-E1` is a DISTINCT designated persistent
+  live-stack regression-E2E (Gate G028 Check 8A protection point),
+  a separate Test-Plan row from the `T-081-I1` integration row;
+  `SCN-081-04` (`test_failure_counts_attribute_removed`) is the explicit
+  regression pinning the `_failure_counts` excision. Both ran green
+  against the live test stack. Anchor:
+  report.md#d01-10--all-4-scn-green-executed-by-bubblestest + scopes.md
+  Test Plan row `T-081-E1`.
+
+**Four phases are REAL-WORK-NEEDED** — no distinct phase work product;
+the only candidate evidence is the core implementation relabeled or a
+gate-passing N/A stub authored by `bubbles.audit` (not the phase
+specialist). Honest routing, **not** fabricated records:
+
+- `gaps` — no `phaseStub`, no report section, no commit, zero work
+  product. → gaps specialist.
+- `simplify` — sole candidate (`_failure_counts` excision) is already
+  the `harden` deliverable; no distinct simplify sweep ran. → simplify
+  specialist.
+- `stabilize` — sole candidate (the live integration test) is already
+  the `test`/`regression` evidence; no distinct stabilize sweep ran.
+  → stabilize specialist.
+- `security` — fail-loud SST reads (`D01-3`/`D01-5`/`D01-11`) are
+  implement-phase no-defaults compliance; the "no new attack surface"
+  text is an audit-authored gate stub, not a security-specialist
+  review. → security specialist.
+
+Residual `artifact-lint` failure for the 4 REAL-WORK-NEEDED phases is
+the **correct** honest outcome — those phases are NOT recorded because
+they did not genuinely run.
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/081-nats-python-sidecar-hardening-parity 2>&1 \
+    | grep -E "phase '(regression|harden|simplify|gaps|stabilize|security)' (found|missing)|required specialist phases are MISSING|Artifact lint (PASSED|FAILED)"
+✅ Required specialist phase 'regression' found in execution/certification phase records
+❌ Required specialist phase 'simplify' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ Required specialist phase 'gaps' missing from execution/certification phase records (Gate G022 — FABRICATION)
+✅ Required specialist phase 'harden' found in execution/certification phase records
+❌ Required specialist phase 'stabilize' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ Required specialist phase 'security' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ 4 of 12 required specialist phases are MISSING
+Artifact lint FAILED with 9 issue(s).
+```
+
+Delta: **13 → 9** issues (`regression` + `harden` migrated this
+session). The residual 9 (4 phases × 2 checks + 1 summary line) remain
+open pending genuine specialist execution of gaps / simplify /
+stabilize / security. The spec stays terminal-for-mode `done`; the
+residual is a gate-tightening reconciliation backlog, not a
+correctness regression in the shipped Python sidecar.
+
+---
+
+## Gaps Probe Results — reconcile-to-doc (2026-06-07)
+
+**Agent:** bubbles.gaps · **Claim Source:** executed · **Mode:**
+`reconcile-to-doc` (the `gaps` phase genuinely never ran on this spec —
+confirmed by the residual artifact-lint G022 `gaps missing` above and by
+`certification.certifiedCompletedPhases` omitting `gaps`).
+
+**Verdict: ⚠️ MINOR_GAPS_REMAIN → one small non-protected test gap CLOSED
+this session; parity verified GENUINE; no false-claim found.**
+
+The R15-stabilize read ("well-built, verified parity") holds up under a
+rigorous claimed-vs-actual probe. SCN-081-01..04 are each backed by real
+tests; the Go↔Python dead-letter parity is real on both sides; the only
+actionable hole was an asymmetric `⬛ UNTESTED` boundary (malformed
+consumer-env values), now closed with a genuine adversarial test in the
+non-protected `ml/tests/test_nats_consumer_config.py`.
+
+### 1. Scenario → test coverage map
+
+| Scenario | Backing test(s) | Tier | Disposition |
+|----------|-----------------|------|-------------|
+| SCN-081-01 (ConsumerConfig from SST) | `test_subscribe_all_threads_consumer_config` (asserts `ConsumerConfig(max_deliver=5, ack_wait=120.0)` on every `pull_subscribe`) | unit | ✅ covered |
+| SCN-081-02 (missing key fails loud) | `test_subscribe_all_fails_loud_when_consumer_env_missing[both params]` + `test_no_getenv_fallback_defaults_for_consumer_env` | unit | ✅ covered |
+| §2 Hard Constraint (malformed value fails loud) | **`test_subscribe_all_fails_loud_on_malformed_consumer_env[5 params]` — ADDED this session** | unit | ✅ gap closed |
+| SCN-081-03 (deadletter before term, 6-header envelope) | `test_deadletter_headers_match_go_envelope`, `test_deadletter_last_error_omitted_when_empty`, `test_deadletter_original_consumer_falls_back_when_metadata_empty`, `test_deadletter_publish_failure_results_in_nak_not_term`, `test_below_max_deliver_naks_without_publishing`, live `test_poison_message_publishes_to_deadletter_subject` | unit + integration (live NATS) | ✅ covered |
+| SCN-081-04 (`_failure_counts` removed, `num_delivered` source-of-truth) | `test_failure_counts_attribute_removed`, `test_subject_to_stream_covers_every_subscribe_subject` | unit | ✅ covered |
+
+### 2. Claimed-vs-actual PARITY check (headline) — **GENUINE, no false claim**
+
+The spec claims parity with the Go core's NATS hardening (specs 022/046).
+Probed each claimed element against BOTH sides — all match:
+
+| Parity element | Go side (evidence) | Python side (evidence) | Match |
+|----------------|--------------------|------------------------|-------|
+| `MaxDeliver = 5` | `subscriber.go:27 DefaultMaxDeliver = 5`, `synthesis_subscriber.go:25 synthesisMaxDeliver = 5`, `domain_subscriber.go:24 domainMaxDeliver = 5` | SST `config/smackerel.yaml` `consumer.max_deliver: 5` → `NATS_CONSUMER_MAX_DELIVER` | ✅ |
+| ack_wait threaded into EVERY consumer | per-subscriber `ConsumerConfig{ AckWait }` at construction | single `pull_subscribe` site (`nats_client.py:344`) receives shared `config=consumer_config` (`:347`) → trivially every subscription | ✅ |
+| 6-header dead-letter envelope | `subscriber.go:325-342` / `synthesis_subscriber.go:507-521` set the exact 6 names | `_handle_poison` builds the exact same 6 names (set-equality asserted by `test_deadletter_headers_match_go_envelope`) | ✅ |
+| `Failed-At` format | `time.Now().UTC().Format(time.RFC3339)` → renders zone as `Z` for UTC | `strftime("%Y-%m-%dT%H:%M:%SZ")` | ✅ |
+| `Last-Error` UTF-8-safe trunc 256B, omit-if-empty | `stringutil.TruncateUTF8(...,256)` inside `if lastError != ""` | `_utf8_truncate(str(exc),256)` then `if last_err:` | ✅ |
+| `Delivery-Count` decimal of `num_delivered` | `strconv.FormatUint(md.NumDelivered,10)` | `str(num_delivered)` from `msg.metadata.num_delivered` | ✅ |
+| publish-before-finalize; nak (not finalize) on publish failure | publish → on success `Ack()`; on failure `Nak()` | publish → on success `term()`; on failure `nak()` + return | ✅ (see Obs-1) |
+| no process-local poison counter | counts off `msg.Metadata().NumDelivered` only | `_failure_counts` removed (grep count `0`) | ✅ |
+
+```text
+$ grep -nE 'pull_subscribe\(|config=consumer_config' ml/app/nats_client.py
+344:                    sub = await self._js.pull_subscribe(
+347:                        config=consumer_config,
+$ grep -rnE 'DefaultMaxDeliver = 5|synthesisMaxDeliver = 5|domainMaxDeliver = 5' internal/pipeline/*.go
+internal/pipeline/domain_subscriber.go:24:const domainMaxDeliver = 5
+internal/pipeline/subscriber.go:27:const DefaultMaxDeliver = 5
+internal/pipeline/synthesis_subscriber.go:25:const synthesisMaxDeliver = 5
+$ grep -c '_failure_counts' ml/app/nats_client.py
+0
+```
+
+No spec-056-style false parity claim exists here: every behavior the
+spec asserts as "parity" is implemented on the Python side and matches
+the Go reference. No TODO/FIXME/stub markers in `nats_client.py`
+(`grep -nE 'TODO|FIXME|XXX|NotImplemented|stub'` → no matches, exit 1).
+
+### 3. Gap CLOSED this session — `⬛ UNTESTED` malformed consumer-env values
+
+Spec §2 Hard Constraint states *"Non-integer values fail loud with the
+offending value in the message"* and FR-081-001 requires each key be
+*int ≥ 1*. The implementation enforces both (the `int()`-`ValueError`
+guard and the `< 1` guard in `subscribe_all`), but the pre-existing
+suite tested only the **missing**-key path — the malformed-value
+branches had zero regression coverage. This is an asymmetric gap: the
+design says these reads "mirror the spec 046 fail-loud pattern", and
+spec 046 *did* test its non-integer reconnect path
+(`test_nats_client.py::test_connect_fails_loud_on_non_integer_max_reconnect_attempts`),
+but the spec 081 mirror omitted the parallel test.
+
+Closed with `test_subscribe_all_fails_loud_on_malformed_consumer_env`
+(5 parametrized cases: non-integer + `< 1` + negative, for both keys).
+Adversarial — deleting the `int()` or `< 1` guard makes it fail (no/other
+error, or the reason/offending-value absent). Full-suite delta confirms
+exactly +5 cases, all green, no regressions:
+
+```text
+# BASELINE (before adding the test) — ./smackerel.sh test unit --python
+487 passed, 2 skipped, 2 warnings in 17.23s
++ echo '[py-unit] pytest ml/tests finished OK'
+[py-unit] pytest ml/tests finished OK
+
+# AFTER adding test_subscribe_all_fails_loud_on_malformed_consumer_env
+492 passed, 2 skipped, 2 warnings in 14.56s
++ echo '[py-unit] pytest ml/tests finished OK'
+[py-unit] pytest ml/tests finished OK
+```
+
+### 4. Low-severity observations (informational — NOT defects, NOT routed as blockers)
+
+- **Obs-1 (finalize verb, intentional):** Go calls `msg.Ack()` after a
+  successful dead-letter publish; Python calls `msg.term()`. This is a
+  **deliberate, documented** design choice (spec §2 success-signal and
+  design §4 both specify `term()`; design §3 explains the `Failed-At`
+  naming around it). Both verbs positively finalize the message so it
+  stops redelivering; the forensic copy lands in `DEADLETTER` either way.
+  Observable parity (envelope + payload preservation + stop-redelivery)
+  holds. No action.
+- **Obs-2 (`design.md` §6 stale test-file reference) — `🔵` doc-only,
+  protected:** design.md §6 "Regression spec 046" row cites an
+  *existing* file `ml/tests/test_nats_reconnect_contract.py` that does
+  **not** exist; the actual reconnect-contract regression lives in
+  `ml/tests/test_nats_client.py::TestConnectReconnectContract`
+  (`test_connect_passes_indefinite_reconnect_from_env`, etc.). The
+  protection exists — only the filename pointer is wrong. design.md is a
+  PROTECTED artifact on a certified-`done` spec, so this is reported for
+  the owner, **not** edited here. Severity: low. Follow-up owner:
+  `bubbles.design` (one-line filename correction) or leave as historical.
+- **Obs-3 (additive metric):** Python adds
+  `nats_deadletter_publish_failures_total` (the nak-not-term path), which
+  design §8 lists as out-of-scope ("new metrics beyond mirroring
+  `metrics.NATSDeadLetter`"). Benign additive observability of an error
+  path Go only logs; no requirement violated. No action.
+
+### 5. Artifact-lint delta + protected-artifact honesty
+
+Artifact-lint stays at **9** by design: the `gaps` phase remains flagged
+by G022 until `bubbles.validate` records it from this evidence section.
+This probe touched zero protected artifacts.
+
+Honest disclosure: `state.json` DOES show a working-tree change, but it
+is **pre-existing and NOT from this gaps probe** — it is the in-flight
+`bubbles.validate` reconcile-to-doc sweep migrating the `regression` and
+`harden` phase records (the same "13 → 9" delta noted above;
+`reconciledBy: bubbles.validate`, `reconcileMode: reconcile-to-doc`,
+timestamp `2026-06-08T00:12:07Z`). No `"phase": "gaps"` record exists yet
+— this probe did not add one (that is `bubbles.validate`'s job). The
+three requirement-bearing artifacts (`spec.md`, `design.md`, `scopes.md`)
+are genuinely untouched:
+
+```text
+$ git --no-pager diff --name-only .../081.../spec.md .../081.../design.md .../081.../scopes.md
+exit=0
+# (empty — spec.md, design.md, scopes.md all untouched)
+
+$ git --no-pager diff --name-only .../081.../state.json
+specs/081-nats-python-sidecar-hardening-parity/state.json   # pre-existing validate sweep
+
+$ git --no-pager diff .../081.../state.json | grep -E 'reconciledBy|"phase": "(regression|harden|gaps)"'
++        "phase": "regression",
++        "reconciledBy": "bubbles.validate",
++        "phase": "harden",
++        "reconciledBy": "bubbles.validate",
+```
+
+`protectedArtifactsTouched (by this gaps probe): false`.
+
+**Files changed by this gaps probe:**
+`ml/tests/test_nats_consumer_config.py` (new
+`test_subscribe_all_fails_loud_on_malformed_consumer_env`, +5 cases) and
+`specs/081-nats-python-sidecar-hardening-parity/report.md` (this
+section). `state.json` was NOT modified by this probe.
+
+---
+
+## Simplify Pass — reconcile-to-doc (2026-06-07)
+
+**Agent:** bubbles.simplify · **Role:** simplify-diagnostic · **Mode:**
+`reconcile-to-doc` (bubbles.workflow dispatch). The `simplify` phase
+genuinely never ran on this spec — confirmed by the residual
+artifact-lint G022 `simplify missing` above and by
+`certification.certifiedCompletedPhases` omitting `simplify`. The sole
+prior "simplify candidate" (`_failure_counts` excision) was already the
+`harden` deliverable; no distinct simplify sweep had executed. This is
+that genuine sweep.
+
+**Verdict: ✅ APPROPRIATELY SIMPLE — NO SAFE SIMPLIFICATION APPLIED.**
+The spec-081 hardening surface (consumer-config threading, the 6-header
+dead-letter envelope, reconnect contract, `SUBJECT_TO_STREAM` mapping)
+is lean. Three redundancy candidates were probed; all three are
+declined/routed for honest, cited reasons — none is dead code worth
+excising, and the two real redundancies are either **mandated Go-parity
+structure** (which the dispatch brief explicitly forbids stripping) or
+**pre-existing dispatch code outside this spec's changed-file set**.
+Zero source files were edited; this matches the spec 080 / spec 056
+"appropriately simple" precedent. **Claim Source: executed** (every
+finding below carries grep/sed/pytest terminal output; each fence is
+tagged *verified by running* vs *verified by reading*).
+
+### 1. GREEN baseline (no edits — confirms the tree this probe reasoned against)
+
+**Claim Source: executed — verified by running** `./smackerel.sh test unit --python`:
+
+```text
+$ ./smackerel.sh test unit --python
+[py-unit] pip install OK; starting pytest ml/tests
+492 passed, 2 skipped, 2 warnings in 15.15s
+[py-unit] pytest ml/tests finished OK
+```
+
+Unchanged from the gaps-probe baseline (492 passed / 2 skipped) — this
+simplify pass made **no source edits**, so the count is identical by
+construction. The single `RuntimeWarning: coroutine '_consume_loop' was
+never awaited` is a pre-existing test-teardown artifact, not introduced
+here.
+
+### 2. Dead-code / unused-import / marker scan — CLEAN
+
+**Claim Source: executed — verified by running** grep. No
+`TODO/FIXME/XXX/NotImplemented/stub` markers (`markers_exit=1` = no
+match), and the one module-level constant not referenced by production
+code (`PUBLISH_SUBJECTS`) is **not dead** — it is consumed by the
+contract-parity test, so removing it would break `test_nats_contract.py`:
+
+```text
+$ grep -nE 'TODO|FIXME|XXX|NotImplemented|\bstub\b' ml/app/nats_client.py ; echo "markers_exit=$?"
+markers_exit=1
+$ grep -rn 'PUBLISH_SUBJECTS' ml/app/nats_client.py ml/tests/test_nats_contract.py
+ml/app/nats_client.py:71:PUBLISH_SUBJECTS = [
+ml/tests/test_nats_contract.py:38:    from app.nats_client import PUBLISH_SUBJECTS
+ml/tests/test_nats_contract.py:44:    for subject in PUBLISH_SUBJECTS:
+ml/tests/test_nats_contract.py:50:        assert subject in PUBLISH_SUBJECTS, (
+```
+
+All 20+ symbols imported by `nats_client.py` (the `metrics.*`,
+`validation.*`, `url_validator.validate_fetch_url`, `auth._AUTH_TOKEN`,
+`ConsumerConfig`, `JetStreamContext`, stdlib) are referenced in the body
+— **verified by reading** the import block (lines 1–36) against their use
+sites (`nats_consume_fetch_errors_total`:399, `processing_latency`:599,
+`sanitize_model`/`llm_tokens_used`:604–605, `nats_deadletter_*`:702/706,
+`_utf8_truncate`:683, `validate_*`:411/630). No unused imports. The
+single-use module helper `_utf8_truncate` (line 176) is a justified
+named function mirroring Go `stringutil.TruncateUTF8` (UTF-8-safe 256B
+trunc), unit-tested via the dead-letter envelope tests — not
+over-engineering.
+
+### 3. Findings (3 — all declined/routed; none is removable dead code)
+
+| ID | Severity | What | Disposition |
+|----|----------|------|-------------|
+| SIMP-01 | low | Always-true `if consumer:` guard in `_handle_poison` (line 691): the fallback at 689–690 (`subject` is always a non-empty `SUBSCRIBE_SUBJECTS` entry) makes its false-branch unreachable | **declined-not-actually-complex** — mandated Go-parity envelope structure |
+| SIMP-02 | low | `reply_subject` inline reply-to-inbox block duplicated 3× (`search.embed` 436–442, `search.rerank` 451–457, `agent.invoke.request` 570–576) | **routed** (out-of-scope + behavioral-risk; → bubbles.plan if pursued) |
+| SIMP-03 | info | Three parallel subject enumerations (`SUBSCRIBE_SUBJECTS`, `SUBJECT_RESPONSE_MAP` keys, `SUBJECT_TO_STREAM` keys) each list the same 25 subjects | **declined-not-actually-complex** — three DISTINCT contract-validated mappings, not duplication |
+
+#### SIMP-01 — always-true `if consumer:` guard — DECLINED
+
+**Claim Source: executed — verified by reading** the source region:
+
+```text
+$ sed -n '686,692p' ml/app/nats_client.py
+        consumer = ""
+        if md is not None:
+            consumer = getattr(md, "consumer", "") or ""
+        if not consumer:
+            consumer = f"smackerel-ml-{subject.replace('.', '-')}"
+        if consumer:  # parity with Go `if md.Consumer != ""`
+            headers["Smackerel-Original-Consumer"] = consumer
+```
+
+The `if not consumer:` fallback (689–690) guarantees `consumer` is
+non-empty (`subject` is always a non-empty `SUBSCRIBE_SUBJECTS` literal),
+so the subsequent `if consumer:` (691) is always-true and its false
+branch is unreachable. **Declined, not removed**, because: (a) it is part
+of the 6-header dead-letter parity envelope, which the dispatch brief
+explicitly flags as *mandated, not complexity to strip*; the
+`# parity with Go if md.Consumer != ""` comment is load-bearing
+documentation reconciling the Python fallback against the Go conditional;
+(b) removing it yields **zero** observable-behavior change AND zero
+meaningful complexity reduction (it is already a no-op branch on a
+certified-`done` forensic path); (c) both guarded paths are already
+covered (`test_deadletter_headers_match_go_envelope`,
+`test_deadletter_original_consumer_falls_back_when_metadata_empty`).
+Touching certified parity code for a cosmetic no-op is anti-gold-plating
+territory — declined.
+
+#### SIMP-02 — `reply_subject` block duplicated 3× — ROUTED
+
+**Claim Source: executed — verified by reading** the three sites:
+
+```text
+$ grep -nE "reply_subject = data\.get|if reply_subject and self\._nc:|await self\._nc\.publish\(reply_subject" ml/app/nats_client.py
+436:                        reply_subject = data.get("reply_subject")
+437:                        if reply_subject and self._nc:
+440:                            await self._nc.publish(reply_subject, payload)
+451:                        reply_subject = data.get("reply_subject")
+452:                        if reply_subject and self._nc:
+455:                            await self._nc.publish(reply_subject, payload)
+570:                        reply_subject = data.get("reply_subject")
+571:                        if reply_subject and self._nc:
+574:                            await self._nc.publish(reply_subject, payload)
+```
+
+This is a **genuine** 6-line duplication, but it is **not** part of spec
+081's hardening surface — it is pre-existing dispatch glue (spec 037
+agent invoke + the search reply path) inside `_consume_loop`'s subject
+`elif` ladder. The simplify mandate forbids refactoring outside the
+changed-file set, and extraction carries real behavioral risk: each block
+ends in an inline `continue` that short-circuits the dispatch loop and
+each branch shapes `result` differently before publishing, so a
+helper-returning-sentinel would restructure loop control on a
+certified-`done` path. **Routed** to `bubbles.plan` for a scoped
+dispatch-refactor if ever pursued — not applied inline here.
+
+#### SIMP-03 — three subject enumerations — DECLINED
+
+Surface-level "the 25 subjects are listed three times" is **not**
+collapsible duplication: `SUBSCRIBE_SUBJECTS`, `SUBJECT_RESPONSE_MAP`
+(keys), and `SUBJECT_TO_STREAM` (keys) are three DISTINCT mappings with
+DISTINCT values, each independently validated against a different
+dimension of the shared NATS contract — `SUBSCRIBE_SUBJECTS` ↔
+`core_to_ml`, `SUBJECT_RESPONSE_MAP` ↔ `request_response_pairs` (both in
+`test_nats_contract.py`), and `SUBJECT_TO_STREAM` ↔ `AllStreams` bindings
+(module-level fail-loud at import + `test_subject_to_stream_covers_every_subscribe_subject`).
+**Verified by reading** `ml/tests/test_nats_contract.py` (lines 16–70)
+and the module-level `_missing_stream_subjects` guard
+(`nats_client.py` 165–172). Collapsing them into one structure would
+fight that contract-parity test architecture and increase coupling — a
+redesign, not a simplification. Declined.
+
+### 4. Artifact-lint delta + protected-artifact honesty
+
+Artifact-lint stays at **9** by design: the `simplify` phase remains
+flagged by G022 until `bubbles.validate` records it from this evidence
+section (this probe does NOT edit `state.json`). This pass touched zero
+protected artifacts — `spec.md`, `design.md`, `scopes.md` and the
+`nats_client.py` source show an empty diff (exit 0); `report.md` (this
+section) is the only changed 081 artifact:
+
+```text
+$ git --no-pager diff --name-only -- specs/081-nats-python-sidecar-hardening-parity/spec.md specs/081-nats-python-sidecar-hardening-parity/design.md specs/081-nats-python-sidecar-hardening-parity/scopes.md ml/app/nats_client.py ; echo "protected_diff_exit=$?"
+protected_diff_exit=0
+$ git --no-pager diff --name-only -- specs/081-nats-python-sidecar-hardening-parity/report.md
+specs/081-nats-python-sidecar-hardening-parity/report.md
+```
+
+`protectedArtifactsTouched (by this simplify probe): false`.
+
+**Files changed by this simplify probe:**
+`specs/081-nats-python-sidecar-hardening-parity/report.md` (this section
+only). No `ml/app/*.py`, no `ml/tests/*.py`, no `state.json` change.
+
+## Stabilize Pass — reconcile-to-doc (2026-06-07)
+
+**Agent:** bubbles.stabilize · **Role:** stabilize-diagnostic · **Mode:**
+`reconcile-to-doc` (bubbles.workflow dispatch). The `stabilize` phase
+genuinely never ran as a *distinct* phase on this spec — confirmed by
+`bubbles.validate` (the live-integration deadletter test was attributed
+to the test/regression phase, not a separate stabilize sweep) and by the
+residual artifact-lint G022 `stabilize missing` flag. The prior R15
+stochastic sweep already probed this sidecar and found it STABLE
+(reconnect wired, `_failure_counts` removed, bounded redelivery,
+`num_delivered` source-of-truth); this pass **cites and extends R15**
+rather than duplicating it — it is the distinct stabilize-phase
+re-confirmation against the live tree. Probe executed 2026-06-08; cycle
+dated 2026-06-07 to match the sibling gaps / simplify reconcile-to-doc
+sweep sections.
+
+**Verdict: 🟢 STABLE — NO DESTABILIZER FOUND, NO CODE CHANGE.** All five
+operational-robustness dimensions of `ml/app/nats_client.py`
+(reconnect-resilience, backpressure, resource-bounds, shutdown-ordering,
+redelivery-safety) were re-probed against the live source and confirmed
+bounded and correct. Zero source files edited — no manufactured issues
+(anti-gold-plating). **Claim Source: executed** — every dimension below
+carries grep or pytest terminal output, each fence tagged *verified by
+running* vs *verified by reading*.
+
+### 1. GREEN baseline — full Python suite (verified by running)
+
+**Claim Source: executed — verified by running** `./smackerel.sh test unit --python`:
+
+```text
+$ ./smackerel.sh test unit --python
+[py-unit] pip install OK; starting pytest ml/tests
+492 passed, 2 skipped, 2 warnings in 15.51s
+[py-unit] pytest ml/tests finished OK
+```
+
+Matches the baseline (492 passed / 2 skipped) exactly — this stabilize
+pass made **no source edits**, so the count is identical by construction.
+The two warnings are pre-existing and were NOT introduced here: a
+Starlette `httpx`-testclient deprecation, and a `RuntimeWarning:
+coroutine 'NATSClient._consume_loop' was never awaited` test-teardown
+artifact in `test_subscribe_all_threads_consumer_config` (the unit test
+stubs the loop so the spawned task is GC'd un-awaited — a mock-scaffold
+warning, not a production leak; the production path tracks and cancels
+the task, see dimension 4).
+
+### 2. Reconnect resilience — STABLE (bounded retry + callbacks + drain)
+
+**Claim Source: executed — verified by running** grep against the live
+source:
+
+```text
+$ grep -nE "NATS_MAX_RECONNECT_ATTEMPTS|max_reconnect_attempts=max_reconnect_attempts|disconnected_cb=self\._on_disconnect|reconnected_cb=self\._on_reconnect|await self\._nc\.drain\(\)" ml/app/nats_client.py
+224:            raw_max = os.environ["NATS_MAX_RECONNECT_ATTEMPTS"]
+227:                "NATS_MAX_RECONNECT_ATTEMPTS is required (spec 046 FR-046-001) — "
+235:            raise RuntimeError(f"NATS_MAX_RECONNECT_ATTEMPTS must be an integer; got {raw_max!r}") from exc
+254:            max_reconnect_attempts=max_reconnect_attempts,
+255:            disconnected_cb=self._on_disconnect,
+256:            reconnected_cb=self._on_reconnect,
+1102:            await self._nc.drain()
+```
+
+Reconnect parameters flow fail-loud from SST (`NATS_MAX_RECONNECT_ATTEMPTS`,
+`NATS_RECONNECT_TIME_WAIT_SECONDS`) with no hidden default — a missing or
+non-integer value raises `RuntimeError` at `connect()` time (224/227/235).
+`max_reconnect_attempts=-1` (config `smackerel.yaml`
+`infrastructure.nats.client.max_reconnect_attempts`) is intentional
+indefinite retry for the always-on sidecar; each attempt is **rate-bounded**
+by `reconnect_time_wait` (=2s) so even `-1` cannot busy-loop. Both lifecycle
+callbacks are wired (`disconnected_cb`/`reconnected_cb`, 255–256) and
+`close()` drains the connection (1102). **Verified by reading:** the
+`_on_disconnect`/`_on_reconnect` handlers (1105–1109) log the transition.
+**STABLE.**
+
+### 3. Backpressure — STABLE (bounded pull fetch + ack_wait honored)
+
+**Claim Source: executed — verified by running** grep:
+
+```text
+$ grep -nE "await sub\.fetch\(batch=5, timeout=5\)|ack_wait=float\(ack_wait_seconds\)|max_deliver=max_deliver," ml/app/nats_client.py
+332:            max_deliver=max_deliver,
+333:            ack_wait=float(ack_wait_seconds),
+392:                msgs = await sub.fetch(batch=5, timeout=5)
+```
+
+The consumer is **pull-based with a bounded batch** — `sub.fetch(batch=5,
+timeout=5)` (392) caps in-flight messages at 5 per subject per iteration;
+the `for msg in msgs:` body processes and acks each message serially
+(`await` per handler) before the next `fetch`, so a slow consumer applies
+natural backpressure to JetStream and there is **no unbounded in-memory
+queue growth**. `ack_wait` is threaded from SST (=120s) into the single
+shared `ConsumerConfig` (333) so JetStream honors the redelivery window.
+**Verified by reading:** the fetch sits inside the `while True` loop at
+389 with `nats.errors.TimeoutError` treated as the normal idle-poll
+`continue` (no tight spin). **STABLE.**
+
+### 4. Resource bounds — STABLE (tracked tasks, no in-memory counter, bounded loop)
+
+**Claim Source: executed — verified by running** grep:
+
+```text
+$ grep -nE "self\._tasks: list\[asyncio\.Task\]|task = asyncio\.create_task|self\._tasks\.append\(task\)" ml/app/nats_client.py
+198:        self._tasks: list[asyncio.Task] = []
+380:            task = asyncio.create_task(self._consume_loop(subject, sub))
+381:            self._tasks.append(task)
+$ grep -c "_failure_counts" ml/app/nats_client.py ; echo "failurecounts_exit=$?"
+0
+failurecounts_exit=1
+```
+
+Every spawned consumer task is tracked on `self._tasks` (198 declared, 381
+appended) and cancelled on shutdown (dimension 5), so there is **no
+asyncio task leak**. The R15 finding holds: there is **zero** in-memory
+`_failure_counts` accumulator (`grep -c` → 0, exit 1) — the unbounded
+per-message dict that the harden phase excised is gone, removing the only
+unbounded-growth vector; the poison decision now reads JetStream's own
+`num_delivered` counter (dimension 6). The only unbounded construct is the
+`while True` consume loop, which is bounded by `task.cancel()` at close.
+**Verified by reading:** `test_failure_counts_attribute_removed` and
+`test_init_no_failure_counts_attribute` lock this invariant in CI.
+**STABLE.**
+
+### 5. Shutdown ordering — STABLE (cancel → clear → drain)
+
+**Claim Source: executed — verified by running** grep:
+
+```text
+$ grep -nE "task\.cancel\(\)|self\._tasks\.clear\(\)|await self\._nc\.drain\(\)" ml/app/nats_client.py
+1098:            task.cancel()
+1099:        self._tasks.clear()
+1102:            await self._nc.drain()
+```
+
+`close()` orders teardown correctly for a pull consumer: **(1)** cancel
+every consumer task (1098) so no loop fetches new work, **(2)** clear the
+task registry (1099), **(3)** `drain()` the connection (1102) which flushes
+in-flight acks/publishes and unsubscribes before closing the socket.
+Stopping intake *before* draining is the right order — it prevents new
+fetches racing the drain. **Verified by reading:** `test_close_cancels_tasks`
+asserts `cancel()` is called and `_tasks` is emptied;
+`test_close_drains_connection` asserts `drain()` is invoked. One honest,
+non-blocking observation (NOT a destabilizer, declined per
+anti-gold-plating): `close()` does not `await` the cancelled tasks nor
+reset `self._nc=None`; this is cosmetic — `drain()` already flushes
+in-flight work and the process is terminating, so it introduces no leak or
+data loss. **STABLE.**
+
+### 6. Redelivery safety — STABLE (MaxDeliver=5, num_delivered SoT, publish-before-term)
+
+**Claim Source: executed — verified by running** grep:
+
+```text
+$ grep -nE "num_delivered = md\.num_delivered|if num_delivered < max_deliver:|await self\._js\.publish\(dl_subject|await msg\.nak\(\)|return  # MUST NOT term|await msg\.term\(\)" ml/app/nats_client.py
+664:            await msg.nak()
+668:        num_delivered = md.num_delivered if md is not None else 0
+670:        if num_delivered < max_deliver:
+671:            await msg.nak()
+695:            await self._js.publish(dl_subject, msg.data, headers=headers)
+703:            await msg.nak()
+704:            return  # MUST NOT term() — preserve forensic evidence
+713:        await msg.term()
+```
+
+`MaxDeliver` is bounded from SST (=5, validated `>= 1` at subscribe time).
+`_handle_poison` drives the poison decision off JetStream's
+`msg.metadata.num_delivered` (668) — the single source of truth, no local
+counter. Below the bound → `nak()` for ordinary redelivery (670–671);
+at exhaustion the **publish-before-term invariant** holds: the original
+payload + 6-header envelope is published to `deadletter.<subject>` (695)
+and `term()` (713) fires **only after** a successful publish. A
+dead-letter publish failure → `nak()` + early `return` (703–704), so the
+message is **never lost** — JetStream redelivers and the publish is
+retried; `term()` is unreachable on that path. Terminal `term()` after a
+durable dead-letter publish means **no infinite redelivery loop**.
+**Verified by reading:** `test_deadletter_publish_failure_results_in_nak_not_term`
+(publish raises → `nak` asserted, `term` asserted-not-called) and
+`test_below_max_deliver_naks_without_publishing` lock both invariants.
+**STABLE.**
+
+### 7. Per-dimension verdict + artifact-lint delta + protected-artifact honesty
+
+| Dimension | Verdict | Primary evidence |
+|---|---|---|
+| Reconnect resilience | 🟢 STABLE | fail-loud SST reads 224/227/235; callbacks 255–256; drain 1102 |
+| Backpressure | 🟢 STABLE | bounded `fetch(batch=5)` 392; `ack_wait` threaded 333 |
+| Resource bounds | 🟢 STABLE | tasks tracked 198/381; `_failure_counts` count 0 (exit 1) |
+| Shutdown ordering | 🟢 STABLE | cancel 1098 → clear 1099 → drain 1102 |
+| Redelivery safety | 🟢 STABLE | `num_delivered` SoT 668; publish 695 before term 713; pub-fail → nak 703–704 |
+
+Artifact-lint stays at **9** by design: the `stabilize` phase remains
+flagged by G022 until `bubbles.validate` records it from this evidence
+section (this probe does NOT edit `state.json`). This pass touched zero
+protected artifacts — `spec.md`, `design.md`, `scopes.md` and the
+`nats_client.py` source show an empty diff (exit 0); `report.md` (this
+section) is the only changed 081 artifact:
+
+```text
+$ git --no-pager diff --name-only -- specs/081-nats-python-sidecar-hardening-parity/spec.md specs/081-nats-python-sidecar-hardening-parity/design.md specs/081-nats-python-sidecar-hardening-parity/scopes.md ml/app/nats_client.py ; echo "protected_diff_exit=$?"
+protected_diff_exit=0
+$ git --no-pager diff --name-only -- specs/081-nats-python-sidecar-hardening-parity/report.md
+specs/081-nats-python-sidecar-hardening-parity/report.md
+```
+
+`protectedArtifactsTouched (by this stabilize probe): false`.
+
+**Files changed by this stabilize probe:**
+`specs/081-nats-python-sidecar-hardening-parity/report.md` (this section
+only). No `ml/app/*.py`, no `ml/tests/*.py`, no `state.json` change.
+
+## Security Scan — reconcile-to-doc (2026-06-07)
+
+**Agent:** bubbles.security · **Role:** security-diagnostic · **Mode:** reconcile-to-doc.
+**Scope:** the spec-081 NATS surface in `ml/app/nats_client.py` — the 2 new
+SST consumer keys (`NATS_CONSUMER_MAX_DELIVER`, `NATS_CONSUMER_ACK_WAIT_SECONDS`),
+the 6-header dead-letter envelope (`_handle_poison`), and the NATS connection
+(URL + auth token). OWASP-oriented, 5 checks. This is the **first dedicated
+security-specialist review of 081**; the earlier "no new attack surface" line
+was an audit gate stub, not a security scan.
+
+**Verdict: ⚠️ FINDINGS** — 1 LOW defense-in-depth finding (routed); the other
+4 checks CLEAN with per-check evidence. No critical/high. Secret handling — the
+highest-risk vector here — is CLEAN.
+
+### S1 — Secret handling (NATS auth token): 🟢 CLEAN
+
+**Claim Source: executed.** Every `logger`/`print`/`raise` line in the module
+was grepped for the token; none reference it. The connect log emits only
+`self.url`; reconnect/disconnect callbacks emit fixed strings; the token flows
+solely through the `connect_opts["token"]` kwarg.
+
+```text
+$ grep -nEi "logger\.(info|debug|warning|error)|print\(|raise " ml/app/nats_client.py | grep -iE "token|_auth|connect_opts|secret|password|credential"
+grep_exit=1 (1 = no matches = clean)
+
+$ grep -nE "logger\.(info|warning|error)\(" ml/app/nats_client.py | grep -E "Connected to NATS|NATS disconnected|NATS reconnected|NATS fetch failed"
+400:                logger.error("NATS fetch failed on subject=%s err=%s", subject, fetch_err)
+1106:        logger.warning("NATS disconnected")
+1109:        logger.info("NATS reconnected")
+
+$ grep -nE "_AUTH_TOKEN|connect_opts\[|self\.url" ml/app/nats_client.py   # token-wiring lines
+194:        self.url = url
+251:            servers=[self.url],
+265:        if _AUTH_TOKEN:
+266:            connect_opts["token"] = _AUTH_TOKEN
+272:            self.url,
+```
+
+The token is read **fail-loud from SST** (no default), and `NATS_URL` carries
+**no embedded credential** (so the `logger.info("Connected to NATS at %s", self.url)`
+line at 270–272 cannot leak it):
+
+```text
+$ grep -nE "_AUTH_TOKEN = os.environ\[" ml/app/auth.py
+22:    _AUTH_TOKEN = os.environ["SMACKEREL_AUTH_TOKEN"]
+
+$ grep -nE "^NATS_URL=" config/generated/dev.env
+69:NATS_URL=nats://nats:4222
+url_has_token_exit=0 (0 = no user:token@ credential in URL)
+```
+
+`auth.py` reads `os.environ["SMACKEREL_AUTH_TOKEN"]` (the bracket form, which
+raises at import if unset — empty string is the legitimate dev-bypass signal);
+`nats_client.py` re-uses that constant and never re-reads or logs it. The only
+"token"-named log anywhere (`main.py`) reports the *fact of emptiness*
+(`"SMACKEREL_AUTH_TOKEN is empty — auth bypassed"`), never the value.
+
+### S2 — Injection / data integrity (dead-letter headers): 🟡 FINDING (LOW, defense-in-depth) — SEC-081-R1
+
+Five of the six envelope headers come from fixed/internal allowlists and are
+**not attacker-reachable**: `Smackerel-Original-Subject` (from the static
+`SUBSCRIBE_SUBJECTS` list), `Smackerel-Original-Stream` (from the static
+`SUBJECT_TO_STREAM` table), `Smackerel-Delivery-Count` (`str(int)`),
+`Smackerel-Failed-At` (server clock), `Smackerel-Original-Consumer` (fixed
+durable-name format). The sixth — `Smackerel-Last-Error` — is the **only**
+header derived from a potentially attacker-influenced string (`str(exc)`), and
+it is written **unsanitized for CR/LF**:
+
+```text
+$ grep -nE "Smackerel-Last-Error|_utf8_truncate\(str\(exc\)" ml/app/nats_client.py
+683:        last_err = _utf8_truncate(str(exc), 256)
+685:            headers["Smackerel-Last-Error"] = last_err
+py_replace_present_exit=0 (0 = no .replace("\r"/"\n") CR/LF sanitizer present)
+```
+
+**Library behavior (Claim Source: interpreted — read from nats-py source, not
+executed locally).** `js.publish(..., headers=...)` reaches the legacy
+`nats.aio.client.Client._send_publish`, identical in prod `2.9.0` and the dev
+`2.15.0` resolved below. It encodes each header value with `value.strip()`
+(this fenced block is an upstream-source citation, not local terminal output,
+so it is wrapped in evidence-legitimacy-skip markers):
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```python
+# nats-py  nats/aio/client.py :: Client._send_publish  (header block encode)
+for k, v in headers.items():
+    key = k.strip()
+    if not key:
+        continue
+    hdr.extend(key.encode())
+    hdr.extend(b": ")
+    value = v.strip()          # strips LEADING/TRAILING whitespace ONLY
+    hdr.extend(value.encode()) # an INTERNAL \r\n survives -> new header line
+    hdr.extend(_CRLF_)
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+`str.strip()` removes only leading/trailing whitespace; an **internal** `\r\n`
+is preserved and written into the `HPUB` header block, injecting an additional
+header line that the server parses as legitimate. nats-py performs **no**
+header-value CRLF validation in the 2.x line (the `crlf_injection` guard that
+exists upstream is for *subjects* in the newer `nats-core` rewrite, not header
+values, and not in the pinned releases).
+
+The **Go parity reference is symmetric** — it also writes the error unsanitized
+(only `TruncateUTF8`), so 081 faithfully mirrored Go rather than introducing a
+new divergence:
+
+```text
+$ grep -nE "Smackerel-Last-Error|TruncateUTF8\(lastError|ReplaceAll\(lastError" internal/pipeline/subscriber.go internal/pipeline/synthesis_subscriber.go
+internal/pipeline/subscriber.go:333:            lastError = stringutil.TruncateUTF8(lastError, 256)
+internal/pipeline/subscriber.go:335:        headers.Set("Smackerel-Last-Error", lastError)
+internal/pipeline/synthesis_subscriber.go:512:            lastError = stringutil.TruncateUTF8(lastError, 256)
+internal/pipeline/synthesis_subscriber.go:514:        headers.Set("Smackerel-Last-Error", lastError)
+```
+
+The UTF-8 truncation itself is **SAFE** (no panic, no unbounded header):
+`_utf8_truncate` byte-slices then `decode(errors="ignore")`, dropping any
+partial trailing codepoint — that sub-concern is clean.
+
+**Honest exploitability caveat (Claim Source: interpreted).** The SINK
+(unsanitized header write) and the non-validating library are confirmed by
+reading. A concrete reachable SOURCE was **not demonstrated** within 081's
+scope: `_handle_poison` only fires on *uncaught* handler exceptions, and the ML
+handlers reviewed use `!r`/`repr` (which escapes CR/LF) or fixed strings in
+their messages — no handler was positively identified that raw-interpolates
+(`%s`/`!s`/`+`) attacker-controlled content containing CR/LF into an uncaught
+exception. So this is a **defense-in-depth gap** (confirmed sink, source
+not-confirmed), not a demonstrated end-to-end exploit, and it is **pre-existing
+and symmetric** with the already-shipped Go side. I am explicitly NOT claiming a
+working exploit I did not reproduce.
+
+> **Finding SEC-081-R1** — OWASP **A03 (Injection / CRLF header injection)**,
+> with **A08/A09** integrity-and-observability impact if a reachable source is
+> ever introduced (e.g. a forged `Nats-Msg-Id` collapsing distinct poison
+> entries on the DEADLETTER stream, destroying forensic evidence). **Severity:
+> LOW.** **Disposition: route_required** → cross-cutting hardening bug packet:
+> strip/replace CR and LF (and other C0 controls) from `Smackerel-Last-Error`
+> on **both** `internal/pipeline/{subscriber,synthesis_subscriber,domain_subscriber}.go`
+> **and** `ml/app/nats_client.py` to preserve byte-for-byte parity, plus an
+> adversarial regression on each side (CRLF-laden error ⇒ exactly the 6
+> canonical header lines, zero injected line). **Owner:** `bubbles.plan` (file
+> the bug + DoD/scenario) → `bubbles.implement`. **Not fixed inline:** the fix
+> must touch the Go parity contract and add tests on both runtimes, so it
+> exceeds a tiny safe non-protected change; a Python-only `.replace` would
+> silently break the byte-for-byte Go parity that is the entire point of 081.
+
+### S3 — Input validation (2 new SST integer keys): 🟢 CLEAN
+
+**Claim Source: executed.** Both keys are parsed with `int()` (fail-loud on
+non-integer, echoing the offending value) and guarded `>= 1`:
+
+```text
+$ grep -nE "NATS_CONSUMER_(MAX_DELIVER|ACK_WAIT_SECONDS) must be" ml/app/nats_client.py
+304:            raise RuntimeError(f"NATS_CONSUMER_MAX_DELIVER must be an integer; got {raw_max_deliver!r}") from exc
+306:            raise RuntimeError(f"NATS_CONSUMER_MAX_DELIVER must be >= 1; got {max_deliver}")
+319:            raise RuntimeError(f"NATS_CONSUMER_ACK_WAIT_SECONDS must be an integer; got {raw_ack_wait!r}") from exc
+321:            raise RuntimeError(f"NATS_CONSUMER_ACK_WAIT_SECONDS must be >= 1; got {ack_wait_seconds}")
+```
+
+These branches are regression-locked by
+`test_nats_consumer_config.py::test_subscribe_all_fails_loud_on_malformed_consumer_env`
+(the `abc` / `xyz` / `0` / `-3` parameter cases), which passed in the GREEN run
+below. A malformed value cannot reach JetStream — startup fails loud first.
+
+### S4 — Data exposure / PII: 🟢 CLEAN
+
+**Claim Source: executed + interpreted.** The dead-letter path republishes the
+ORIGINAL payload to `deadletter.<subject>` **by design** (forensic preservation;
+DEADLETTER is a `LimitsPolicy`, inspectable internal stream — `internal/nats/client.go:131`),
+mirroring Go. No message **payload** is logged anywhere in the module — the
+poison log emits only `subject`/`dl_subject`/`num_delivered`, and the generic
+handler-error log emits the *exception*, never `msg.data`:
+
+```text
+$ grep -nE "logger\.(warning|error)\(.*(routed to dead-letter|Error processing)" ml/app/nats_client.py
+643:                    logger.error("Error processing %s message: %s", subject, e, exc_info=True)
+707:        logger.warning("ml message routed to dead-letter subject=%s dl_subject=%s num_delivered=%d", ...)
+payload_logged_exit=0 (0 = no logger.*(... msg.data ...) call exists)
+```
+
+No incremental PII exposure beyond the intentional, internal-only payload
+preservation that is contractually mirrored from the Go side.
+
+### S5 — Dependency surface: 🟢 CLEAN (for 081) + version-skew NOTE
+
+**Claim Source: executed.** 081 introduces **no new Python dependency** —
+`_handle_poison` and the consumer-config path use only pre-existing nats-py
+APIs (`ConsumerConfig`, `js.publish(headers=...)`); `nats-py` and `httpx`
+predate this spec. No new known-vuln surface is attributable to 081.
+
+```text
+$ grep -nE "nats-py" ml/requirements.txt ml/pyproject.toml
+ml/requirements.txt:8:nats-py==2.9.0
+ml/pyproject.toml:9:    "nats-py>=2.9.0",
+# during `./smackerel.sh test unit --python` the [dev] resolve produced:
+#   Successfully installed ... nats-py-2.15.0 ...
+```
+
+> **NOTE SEC-081-N1** (hygiene observation — *not* a finding, *not* introduced
+> by 081): a version skew exists. Production (`ml/requirements.txt`) pins
+> `nats-py==2.9.0`; the `[dev]`/test environment (`ml/pyproject.toml`,
+> `nats-py>=2.9.0`) resolved to `nats-py-2.15.0` in this run, so the unit suite
+> validates against a different nats-py minor than production ships. The
+> header-encoder behavior in S2 is identical across both, so it does not change
+> the S2 verdict — but the skew is worth a tracking note for repo dependency
+> hygiene.
+
+### Test run evidence (GREEN baseline — this probe changed no code)
+
+**Claim Source: executed** via `./smackerel.sh test unit --python` (sanctioned
+CLI; full `pytest ml/tests -q`):
+
+```text
+$ ./smackerel.sh test unit --python
+[py-unit] pip install OK; starting pytest ml/tests
+s....................................................................... [ 14%]
+........................................................................ [ 87%]
+..............................................................          [100%]
+492 passed, 2 skipped, 2 warnings in 16.96s
+[py-unit] pytest ml/tests finished OK
+```
+
+The whole sidecar suite — including the spec-081 NATS hardening tests
+(`test_nats_consumer_config.py`, `test_nats_client.py`) — is GREEN; the script
+ran under `set -e` and finished OK (exit 0).
+
+### Per-check verdict + finding accounting
+
+| Check | OWASP | Verdict | Disposition |
+|---|---|---|---|
+| S1 Secret handling | A02/A07 | 🟢 CLEAN | — |
+| S2 Injection / data integrity | A03 (A08/A09 impact) | 🟡 FINDING (LOW) | route_required → SEC-081-R1 |
+| S3 Input validation | A03/A04 | 🟢 CLEAN | — |
+| S4 Data exposure / PII | A01/A09 | 🟢 CLEAN | — |
+| S5 Dependency surface | A06 | 🟢 CLEAN (NOTE N1) | tracking note only |
+
+**findingsCount:** 1 routed (SEC-081-R1, LOW, A03) + 1 observational note
+(SEC-081-N1, version skew). 0 critical, 0 high.
+
+### Artifact-lint delta + protected-artifact honesty
+
+This security pass touched **zero protected artifacts** — `spec.md`,
+`design.md`, `scopes.md`, and `ml/app/nats_client.py` show an empty diff;
+`report.md` (this section) is the only changed 081 artifact, and `state.json`
+is left for `bubbles.validate` to record the security phase.
+
+`protectedArtifactsTouched (by this security probe): false`. Artifact-lint
+remains flagged on the `security` phase until `bubbles.validate` records it from
+this evidence section (this probe does NOT edit `state.json`).
+
+---
+
+## Reconcile-to-Doc — Four Phases Recorded and SEC-081-R1 Concern Logged (2026-06-08)
+
+**Owner:** bubbles.validate · **Role:** state-reconciliation-owner ·
+**Mode:** reconcile-to-doc (bubbles.workflow dispatch) · **Outcome:**
+`completed_owned`. No code changed; this is artifact-state reconciliation
+only. `spec.md` / `design.md` / `scopes.md` (protected) were **not** touched.
+
+After the `2026-06-08T00:18Z` `route_required`, the four routed specialists
+genuinely executed, each leaving a distinct, terminal-output-backed evidence
+section in this `report.md` (the **Gaps Probe**, **Simplify Pass**,
+**Stabilize Pass**, and **Security Scan** sections above). This entry records
+those four genuinely-run phases into `state.json`. They are honest records of
+work that occurred — not the chaos/docs dual-record convention extended to
+phases that never ran (the `2026-06-08T00:12Z` `harden`/`regression` migration
+is separate and unchanged).
+
+**Phases recorded** — each added to `certification.certifiedCompletedPhases`
++ `execution.completedPhaseClaims` with an evidence anchor, plus a specialist
+`executionHistory` entry:
+
+| Phase | Verdict | Distinct work product | Evidence anchor |
+|-------|---------|-----------------------|-----------------|
+| `gaps` | MINOR_GAPS_REMAIN | +5 malformed-consumer-env adversarial tests; Go↔Python parity verified genuine; Python `487 → 492` | `#gaps-probe-results--reconcile-to-doc-2026-06-07` |
+| `simplify` | APPROPRIATELY SIMPLE | 0 source edits; 3 candidates declined/routed with cited reasons; `492` | `#simplify-pass--reconcile-to-doc-2026-06-07` |
+| `stabilize` | STABLE | all 5 robustness dimensions confirmed bounded; 0 edits; `492` | `#stabilize-pass--reconcile-to-doc-2026-06-07` |
+| `security` | 1 LOW finding | 4/5 OWASP checks CLEAN; SEC-081-R1 routed; `492` | `#security-scan--reconcile-to-doc-2026-06-07` |
+
+**Concern logged (non-blocking).** `SEC-081-R1` (OWASP A03 / CRLF in the
+dead-letter `Smackerel-Last-Error` header) is recorded as a
+`certification.concerns` entry — severity LOW, `blocking: false`,
+defense-in-depth — `trackedBy`
+`BUG-081-001-deadletter-last-error-crlf-sanitization` (status `blocked`),
+`routedTo` `bubbles.plan` → `bubbles.implement`, with a mirrored top-level
+`activeBugs` index. The sink is confirmed by reading but a reachable
+attacker-controlled source was not demonstrated; the gap is pre-existing and
+byte-for-byte symmetric with the already-shipped Go side, so it is **not** an
+081 regression. 081 stays terminal-for-mode `done`. Clean-pass observations
+`OBS-081-1/2/3`, `OBS-STAB-01`, and the `SEC-081-N1` nats-py version-skew note
+are recorded as low/info `certification.observations`.
+
+**Artifact-lint delta: `9 → 0`.** Recording the four phases cleared all four
+G022 `missing` + `NOT in records` pairs and the `4 of 12 ... MISSING` summary
+line. Verbatim command + output from the recorded-state lint run:
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/081-nats-python-sidecar-hardening-parity 2>&1 \
+    | grep -E "phase '(gaps|simplify|stabilize|security)' (found|recorded)|Artifact lint (PASSED|FAILED)"; echo "lint-exit=${PIPESTATUS[0]}"
+✅ Required specialist phase 'simplify' found in execution/certification phase records
+✅ Required specialist phase 'gaps' found in execution/certification phase records
+✅ Required specialist phase 'stabilize' found in execution/certification phase records
+✅ Required specialist phase 'security' found in execution/certification phase records
+✅ Required specialist phase 'simplify' recorded in execution/certification phase records
+✅ Required specialist phase 'gaps' recorded in execution/certification phase records
+✅ Required specialist phase 'stabilize' recorded in execution/certification phase records
+✅ Required specialist phase 'security' recorded in execution/certification phase records
+Artifact lint PASSED.
+lint-exit=0
+```
+
+`protectedArtifactsTouched (by this reconcile recording): false`. Files
+changed by this recording: `state.json` (4 phase records + SEC-081-R1 concern
++ 5 observations + `activeBugs` index) and `report.md` (this section).
+
+## Reconcile — SEC-081-R1 Resolved by BUG-081-001 (2026-06-08)
+
+**Agent:** bubbles.validate · **Role:** state-reconciliation-owner · **Mode:**
+reconcile-to-doc. The previously non-blocking `SEC-081-R1` concern (logged
+2026-06-08T02:00:00Z, tracked by `BUG-081-001`) is now reconciled to
+**resolved** because its tracking bug reached terminal state.
+
+**What changed.** `BUG-081-001-deadletter-last-error-crlf-sanitization`
+delivered the CR/LF/C0/DEL (CWE-113) header-injection fix at all 4 dead-letter
+`Smackerel-Last-Error` sinks on BOTH runtimes — Go core (3 subscribers:
+`subscriber.go`, `synthesis_subscriber.go`, `domain_subscriber.go` via
+`stringutil.SanitizeHeaderValue`) and the Python sidecar
+(`ml/app/nats_client.py` `_sanitize_header_value`) — with sanitize-then-truncate
+ordering, a byte-for-byte Go/Python parity pin, and adversarial RED→GREEN
+regression coverage. The bug was independently re-verified GREEN and
+audit-certified `SHIP_IT`.
+
+**State updates (this reconcile).** In `state.json`:
+`certification.concerns[SEC-081-R1]` gained `resolved: true`,
+`resolvedBy: BUG-081-001-deadletter-last-error-crlf-sanitization`,
+`resolvedAt: 2026-06-08T07:00:00Z`, and a `resolution` note (original
+raise/route audit trail preserved, fields appended only); the top-level
+`activeBugs[]` index for BUG-081-001 advanced `status: blocked → done` with
+`resolvedAt`/`resolvedBy`. Parent spec 081 **top-level `status` is unchanged
+(`done`)**; no other concern, observation, or phase record was altered; no
+protected artifact (`spec.md`/`design.md`/`scopes.md`) was touched.
+
+**Bug terminal-state evidence (verified by reading the bug packet).**
+
+```text
+$ python3 -c "import json; d=json.load(open('.../BUG-081-001-.../state.json')); \
+    print('status:', d['status'], '| cert.status:', d['certification']['status'])"
+status: done | cert.status: done
+certifiedAt: 2026-06-08T06:12:00Z   (bug state.json)
+bug.md: [x] Fixed (audit-certified SHIP_IT 2026-06-08; sanitizer + all 4 sinks
+        + byte-for-byte parity independently re-verified GREEN)
+re-verify (from bug close-out): Go ok internal/pipeline + internal/stringutil;
+        Python 496 passed, 2 skipped, PY_EXIT=0
+```
+
+`protectedArtifactsTouched: false`. Files changed by this reconcile:
+`state.json` (SEC-081-R1 resolution fields + activeBugs index) and `report.md`
+(this section) only.
+
 

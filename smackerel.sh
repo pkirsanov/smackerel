@@ -35,6 +35,11 @@ Commands:
                               smackerel-core container (enroll|rotate|revoke|
                               list-users|bootstrap|keygen|inspect). Embedded `,`
                               in `--scope extension:bookmarks,history` is NOT split.
+  connector <args>            BUG-056-002 — passthrough wrapper that forwards args
+                              verbatim to `smackerel-core connector ...` inside the
+                              running smackerel-core container (twitter
+                              authorize-begin|authorize-finalize|authorize-status:
+                              the User-Context OAuth 2.0 PKCE authorize flow).
   check                       Validate generated config and docker-compose wiring
   lint                        Run Go vet, Python ruff, and web asset validation
   format [--check]            Format Go and Python files, or check formatting
@@ -678,6 +683,22 @@ case "$COMMAND" in
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     smackerel_compose "$TARGET_ENV" exec smackerel-core smackerel-core auth "$@"
+    ;;
+  connector)
+    # BUG-056-002 Scope B — passthrough wrapper to `smackerel-core connector ...`
+    # inside the running smackerel-core container, mirroring the `auth)` case.
+    # Args are forwarded verbatim via "$@" — no flag rewriting. Operator MUST
+    # have `./smackerel.sh up` already; if the container is not running, docker
+    # compose exec fails loud (the wrapper does NOT silently start the stack or
+    # fall back to a host-installed binary — Gate G028 / NO-DEFAULTS SST).
+    #
+    # The in-container binary is `smackerel-core` (per Dockerfile ENTRYPOINT).
+    # The first `smackerel-core` arg below is the docker compose service name;
+    # the second is the binary name (identical only because the service and
+    # binary share a name).
+    require_docker
+    smackerel_generate_config "$TARGET_ENV" >/dev/null
+    smackerel_compose "$TARGET_ENV" exec smackerel-core smackerel-core connector "$@"
     ;;
   backup-restore-test)
     require_docker

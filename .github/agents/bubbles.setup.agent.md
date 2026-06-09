@@ -287,6 +287,16 @@ bash .github/bubbles/scripts/project-scan-setup.sh --quiet
 
 This auto-detects the project's languages, auth patterns, serialization formats, and test env dependencies, then generates project-specific patterns for gates G047 (IDOR), G048 (silent decode), and G051 (env deps). The generated file is project-owned and never overwritten by Bubbles upgrades. To force regeneration (e.g., after major project changes), run `bubbles project setup --force`.
 
+7) MCP Tool Grant Sync (AUTOMATIC after first install or refresh):
+
+`install.sh` re-applies operator-declared MCP tool grants after writing the agents, so grants survive a framework refresh. If `.github/bubbles-project.yaml` declares an `mcp.grants` section (extra MCP/IDE tools for the restricted orchestrators `bubbles.goal/sprint/iterate/bug/workflow`), confirm they are applied:
+
+```bash
+bash .github/bubbles/scripts/cli.sh mcp sync
+```
+
+This injects the declared grants onto each restricted orchestrator's canonical `tools:` line (deterministic, idempotent, append-only). The framework write guard is grant-aware, so a declared grant does **not** report as drift while any undeclared edit still does. Grants carry tool **names** only — never secrets or per-machine values. See `agents/bubbles_shared/project-config-contract.md` → `mcp.grants` Contract.
+
 If ANY post-apply validation fails:
 - Report the failure with specific file and issue
 - Recommend manual fix or re-run `/bubbles.setup` with corrected input

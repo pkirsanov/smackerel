@@ -1857,6 +1857,7 @@ func TestSync_APIModeSkipsArchive(t *testing.T) {
 	// Inject the httptest base URL via the package-private override field
 	// BEFORE Connect; Connect copies it into the apiClient.
 	c.apiBaseURLOverride = srv.URL
+	c.apiUserContextTokenOverride = staticUserContextToken(testUserContextToken)
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		SourceConfig: map[string]interface{}{"sync_mode": "api"},
 		Credentials:  map[string]string{"bearer_token": "test-token-not-real"},
@@ -2938,6 +2939,7 @@ func TestTwitterAPI_HybridDedupAcrossArchiveAndAPI(t *testing.T) {
 
 	c := New("twitter")
 	c.apiBaseURLOverride = srv.URL
+	c.apiUserContextTokenOverride = staticUserContextToken(testUserContextToken)
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		SourceConfig: map[string]interface{}{
 			"sync_mode":   "hybrid",
@@ -3013,6 +3015,7 @@ func TestTwitterAPI_HybridIdempotentArchiveImport(t *testing.T) {
 
 	c := New("twitter")
 	c.apiBaseURLOverride = srv.URL
+	c.apiUserContextTokenOverride = staticUserContextToken(testUserContextToken)
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		SourceConfig: map[string]interface{}{
 			"sync_mode":   "hybrid",

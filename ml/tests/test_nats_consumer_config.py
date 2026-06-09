@@ -140,6 +140,57 @@ def test_no_getenv_fallback_defaults_for_consumer_env():
     assert not bad, f"NATS_CONSUMER_* env reads must not have getenv defaults: {bad}"
 
 
+@pytest.mark.parametrize(
+    "max_deliver_val,ack_wait_val,offending_key,offending_val,reason_fragment",
+    [
+        # Non-integer values — spec 081 §2 Hard Constraint:
+        # "Non-integer values fail loud with the offending value in the message".
+        ("abc", "120", "NATS_CONSUMER_MAX_DELIVER", "abc", "must be an integer"),
+        ("5", "xyz", "NATS_CONSUMER_ACK_WAIT_SECONDS", "xyz", "must be an integer"),
+        # Below-minimum values — spec 081 FR-081-001: each key is int >= 1.
+        ("0", "120", "NATS_CONSUMER_MAX_DELIVER", "0", "must be >= 1"),
+        ("-3", "120", "NATS_CONSUMER_MAX_DELIVER", "-3", "must be >= 1"),
+        ("5", "0", "NATS_CONSUMER_ACK_WAIT_SECONDS", "0", "must be >= 1"),
+    ],
+)
+def test_subscribe_all_fails_loud_on_malformed_consumer_env(
+    monkeypatch,
+    max_deliver_val,
+    ack_wait_val,
+    offending_key,
+    offending_val,
+    reason_fragment,
+):
+    """Spec 081 §2 Hard Constraint + FR-081-001 — a present-but-malformed
+    NATS_CONSUMER_* value (non-integer, or integer < 1) MUST raise
+    RuntimeError that names the offending key, the reason, and the
+    offending value.
+
+    Gaps-probe (reconcile-to-doc 2026-06-07): the pre-existing suite only
+    covered the *missing*-key path (test_subscribe_all_fails_loud_when_
+    consumer_env_missing). The int()/`>= 1` validation branches in
+    subscribe_all had no regression coverage, even though the design says
+    this mirrors the spec 046 reconnect-contract pattern — and spec 046
+    DID test its non-integer path
+    (test_nats_client.py::test_connect_fails_loud_on_non_integer_max_reconnect_attempts).
+    This closes that asymmetric ⬛ UNTESTED gap. Adversarial: deleting the
+    int() guard or the `< 1` check makes this fail (no/other error, or the
+    offending value/reason absent from the message)."""
+    monkeypatch.setenv("NATS_CONSUMER_MAX_DELIVER", max_deliver_val)
+    monkeypatch.setenv("NATS_CONSUMER_ACK_WAIT_SECONDS", ack_wait_val)
+
+    client = NATSClient("nats://localhost:4222")
+    client._js = MagicMock()
+
+    with pytest.raises(RuntimeError) as excinfo:
+        asyncio.run(client.subscribe_all())
+
+    msg = str(excinfo.value)
+    assert offending_key in msg, f"error must name the offending key: {msg!r}"
+    assert reason_fragment in msg, f"error must state the reason: {msg!r}"
+    assert offending_val in msg, f"error must include the offending value: {msg!r}"
+
+
 # ---------------------------------------------------------------------------
 # T-081-U3 — canonical 6-header dead-letter envelope (Go parity)
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 ---
 name: bubbles-quality-gates-catalog
-description: Look up Bubbles quality gates (G024–G095+) by ID, by symptom, or by enforcement script. Use when a guard rejects work and you need to understand the failing gate, when designing a scope's DoD, or when wiring tests to cover gate-relevant scenarios. Covers the canonical test taxonomy, gate IDs, and which script enforces each one.
+description: Look up Bubbles quality gates (G024–G097+) by ID, by symptom, or by enforcement script. Use when a guard rejects work and you need to understand the failing gate, when designing a scope's DoD, or when wiring tests to cover gate-relevant scenarios. Covers the canonical test taxonomy, gate IDs, and which script enforces each one.
 ---
 
 # Bubbles Quality Gates Catalog
@@ -36,6 +36,8 @@ Gates G073, G090, G022, G041, G040, G008A, G009, G056 received non-breaking refi
 | G080 | Trace contracts (traceContracts config) | `trace-contract-guard.sh` |
 | G082–G093 | Convergence cap, compaction discipline, pre-existing deferral, dogfood, orchestrator persistence, planning packet linkage, post-cert edits, inter-spec deps, retro convergence, planning chain, strict terminal status, delivery delta | targeted guards (each named after the gate) |
 | G094 | Capability foundation gate | `capability-foundation-guard.sh` |
+| G095 | Discovered-issue disposition (every observed issue is filed, not deferred) | `discovered-issue-disposition-guard.sh` |
+| G097 | Requirement-mechanism correspondence (named mechanism ↔ code, warn-and-justify) | `requirement-mechanism-guard.sh` |
 
 ## Canonical Test Taxonomy (binding)
 | Category | Means | Real-stack? | Mocks permitted? |

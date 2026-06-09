@@ -3,8 +3,8 @@
 # =============================================================================
 # guards/tail-delegated-gates.sh  (M4 guard split)
 # =============================================================================
-# Checks 26-35: the delegated tail gates G085-G095. This fragment is the body
-# of the `else` branch of the BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST
+# Checks 26-36: the delegated tail gates G085-G095 and G097. This fragment is
+# the body of the `else` branch of the BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST
 # fast-path conditional in state-transition-guard.sh; it is sourced in the same
 # shell scope so pass/fail/warn/info, the failures/warnings counters, and
 # computed vars ($SCRIPT_DIR, $feature_dir, $script_repo_root, $guard_repo_root,
@@ -294,5 +294,34 @@ if [[ -x "$discovered_issue_guard" ]]; then
   fi
 else
   info "discovered-issue-disposition-guard.sh not present at $discovered_issue_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 36: Requirement-Mechanism Correspondence (Gate G097)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/requirement-mechanism-guard.sh.
+# When requirements name a concrete mechanism (PKCE, OAuth2, CSRF, HMAC, mTLS,
+# ...), the scope's declared implementation files MUST show that mechanism or a
+# known synonym, OR a Requirement-Mechanism justification MUST disclose the
+# naming/scope difference. G021 checks a command ran, G028 checks a real call
+# is made, traceability checks a test exists — none check requirement-to-code
+# correspondence. This gate is warn-and-require-justification: a legitimate
+# differently-named mechanism is cleared by one disclosure line; only a
+# mechanism named with NEITHER code evidence NOR a justification blocks. Specs
+# created before 2026-06-08 (or without createdAt) are grandfathered to WARN.
+echo "--- Check 36: Requirement-Mechanism Correspondence (Gate G097) ---"
+requirement_mechanism_guard="$SCRIPT_DIR/requirement-mechanism-guard.sh"
+if [[ -x "$requirement_mechanism_guard" ]]; then
+  if run_guard_in_feature_repo bash "$requirement_mechanism_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "Requirement-mechanism correspondence satisfied, disclosed, not applicable, or grandfathered (Gate G097)"
+  else
+    fail "Requirement-mechanism correspondence guard failed — Gate G097. Run 'bash $requirement_mechanism_guard $feature_dir' for the named-mechanism gap list"
+    info "A finding is a mechanism named in requirements (PKCE, OAuth2, CSRF, HMAC, mTLS, ...) with NEITHER code evidence in the scope's implementation files NOR a disclosed justification"
+    info "Remediate by ONE of: (a) implement the named mechanism, OR (b) add a '## Requirement-Mechanism Justifications' section (spec.md or report.md) — or a 'Mechanism-Justification: <mechanism> — <reason>' line — disclosing the differently-named mechanism or out-of-scope decision"
+    info "Advisory nudges (non-blocking): name a security mechanism with a negative/rejection test assertion; do not back a live-tier test with only an in-process fake server"
+  fi
+else
+  info "requirement-mechanism-guard.sh not present at $requirement_mechanism_guard; skipping (advisory)"
 fi
 echo ""

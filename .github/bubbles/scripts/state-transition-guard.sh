@@ -2836,13 +2836,14 @@ source "$SCRIPT_DIR/guards/tail-convergence-gates.sh"
 # `done` demonstrates the installed framework can drive work to
 # certification.
 if [[ "${BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST:-0}" == "1" ]]; then
-  echo "--- Check 26-35: Delegated Tail Gates (selftest fast path) ---"
-  info "State-transition selftest fast path enabled; delegated gates G085-G095 are covered by their dedicated selftests in framework-validate"
+  echo "--- Check 26-36: Delegated Tail Gates (selftest fast path) ---"
+  info "State-transition selftest fast path enabled; delegated gates G085-G095 and G097 are covered by their dedicated selftests in framework-validate"
   echo ""
 else
 # =============================================================================
-# CHECKS 26-35: delegated tail gates G085-G095. Extracted to a guards/ fragment
-# (M4 split) and sourced inside this else branch so behavior is byte-identical.
+# CHECKS 26-36: delegated tail gates G085-G095 and G097. Extracted to a guards/
+# fragment (M4 split) and sourced inside this else branch so behavior is
+# byte-identical.
 # =============================================================================
 source "$SCRIPT_DIR/guards/tail-delegated-gates.sh"
 fi

@@ -1,7 +1,7 @@
 # Spec 070 — Web Username/Password Login
 
 ## Status
-draft
+done
 
 ## Problem
 Today, logging in to the smackerel web admin UI requires pasting the shared
@@ -112,7 +112,7 @@ no change to `auth.RequireScope` semantics.
   trust model; CLI may print a length-suggestion warning).
 - No account lockout (Caddy / future spec can layer rate limiting).
 - Form posts are rate-limited by the existing
-  `r.Use(httprate.LimitByIP(10, 1*time.Minute))` group in
+  `r.Use(httprate.LimitByIP(20, 1*time.Minute))` group in
   `internal/api/router.go`.
 - On successful user+pass verify, the cookie value is the existing
   shared `AuthToken`. This means a web user gets the same access as

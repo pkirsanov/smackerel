@@ -1,0 +1,87 @@
+{
+  "version": 3,
+  "specId": "059-google-keep-live-mode",
+  "bugId": "BUG-059-001-gkeepapi-missing-from-sidecar-build",
+  "featureDir": "specs/059-google-keep-live-mode/bugs/BUG-059-001-gkeepapi-missing-from-sidecar-build",
+  "parentFeatureDir": "specs/059-google-keep-live-mode",
+  "featureName": "BUG-059-001: gkeepapi live-mode dependency missing from ML sidecar build surfaces",
+  "status": "blocked",
+  "workflowMode": "bugfix-fastlane",
+  "severity": "medium",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "documentation",
+    "currentScope": null,
+    "runStartedAt": "2026-06-07T00:00:00Z",
+    "completedPhaseClaims": ["discovery", "documentation"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "blocked",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Pin gkeepapi on the build surface + structural guard test",
+        "status": "blocked",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [
+      {
+        "id": "BLK-059-001-supply-chain",
+        "severity": "medium",
+        "summary": "Maintainer supply-chain decision required before any fix code lands: which gkeepapi version to pin and acceptance of the reverse-engineered-library risk (design.md Open Question Q1). Fix intentionally deferred to a deliberate delivery pass; not a sweep-round drive-by.",
+        "owner": "maintainer",
+        "raisedAt": "2026-06-07T00:00:00Z"
+      }
+    ],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "workflow-mode-bugfix-fastlane"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.devops",
+      "phase": "discovery",
+      "at": "2026-06-07T00:00:00Z",
+      "outcome": "finding_verified",
+      "summary": "DEVOPS-059-A (stochastic-quality-sweep round 17/20): grep -rn gkeepapi ml/requirements.txt ml/pyproject.toml ml/Dockerfile exit 1 — live-mode dependency absent from all three build surfaces while ml/app/keep_bridge.py:72 imports it lazily. Orchestrator independently verified."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phase": "documentation",
+      "at": "2026-06-07T00:00:00Z",
+      "outcome": "tracked_bug_packet_created",
+      "summary": "Created full bug packet (bug.md/spec.md/design.md/scopes.md/report.md/uservalidation.md/scenario-manifest.json/state.json) with verified diagnostic evidence. Fix DEFERRED: pinning a reverse-engineered Google library is a deliberate maintainer supply-chain decision (design.md Q1). Status set to blocked (triaged backlog awaiting maintainer decision + deliberate delivery pass). No fix code touched; parent spec 059 untouched (stays done)."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-06-07T00:00:00Z",
+  "notes": "Tracked-work creation only. Fix deferred pending maintainer supply-chain decision (design.md Open Question Q1). DoD items intentionally unchecked (anti-fabrication, Gate G021). Parent spec 059 remains done and its protected artifacts are unchanged."
+}

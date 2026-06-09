@@ -63,6 +63,14 @@ func main() {
 		defer cancel()
 		os.Exit(runAssistantCommand(ctx, os.Args[2:]))
 	}
+	// BUG-056-002 Scope B — `smackerel-core connector <connector> <subcommand>`
+	// operator surface (twitter authorize-begin|authorize-finalize|
+	// authorize-status: the User-Context OAuth 2.0 PKCE authorize flow).
+	if len(os.Args) > 1 && os.Args[1] == "connector" {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		os.Exit(runConnectorCommand(ctx, os.Args[2:]))
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal startup error", "error", err)
 		os.Exit(1)

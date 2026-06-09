@@ -1,4 +1,4 @@
-// Spec 063 — credential-path coverage for /v1/web/login. Verifies:
+// Spec 070 — credential-path coverage for /v1/web/login. Verifies:
 //   - username + password (matching) → 303 + cookie set to shared AuthToken
 //   - username + wrong password → 200 re-render with error, no cookie
 //   - unknown username → same generic error, no cookie

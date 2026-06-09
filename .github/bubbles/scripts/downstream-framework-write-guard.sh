@@ -3,6 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/trust-metadata.sh"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/mcp-grant-reconcile.sh"
 
 if [[ "$SCRIPT_DIR" == *"/.github/bubbles/scripts" ]]; then
   PROJECT_ROOT="${SCRIPT_DIR%/.github/bubbles/scripts}"
@@ -130,6 +132,12 @@ bubbles_read_install_provenance_summary "$INSTALL_PROVENANCE_FILE" \
 
 info "Checking downstream framework-managed files against .github/bubbles/.checksums"
 
+# Resolve the project-owned MCP grant config once. Restricted orchestrators may
+# carry operator-declared grants (mcp.grants) injected as an append-only suffix
+# on their canonical tools: line; the per-file check below strips ONLY those
+# declared tokens before comparing to the canonical hash.
+MCP_GRANT_CONFIG="$(bubbles_mcp_config_path "$PROJECT_ROOT")"
+
 info "Installed release manifest: version=${manifest_version} gitSha=${manifest_git_sha}"
 info "Install provenance: mode=${install_mode} sourceRef=${source_ref} sourceGitSha=${source_git_sha} dirty=${source_dirty}"
 info "Supported profiles: ${manifest_profiles}"
@@ -156,6 +164,19 @@ while IFS=$'\t' read -r expected_hash relative_path; do
 
   actual_hash="$(bubbles_sha256_file "$target_file")"
   if [[ "$actual_hash" != "$expected_hash" ]]; then
+    # Grant-aware reconcile: a restricted orchestrator may carry operator-declared
+    # MCP tool grants injected on its canonical tools: line. Strip ONLY the
+    # declared grant tokens and re-check against the UNCHANGED canonical hash.
+    # Any undeclared edit (body tamper, undeclared tool, missing core token)
+    # leaves a non-canonical reconstruction and still fails as drift.
+    base_name="${relative_path##*/}"
+    agent_name="${base_name%.agent.md}"
+    if [[ "$relative_path" == agents/*.agent.md ]] && bubbles_mcp_is_restricted_agent "$agent_name"; then
+      reconciled_hash="$(bubbles_mcp_reconcile_to_stdout "$target_file" "$MCP_GRANT_CONFIG" "$agent_name" | bubbles_sha256_stdin)"
+      if [[ "$reconciled_hash" == "$expected_hash" ]]; then
+        continue
+      fi
+    fi
     fail_line "Framework-managed file drift detected: $relative_path"
     [[ "$quiet" == "true" ]] || {
       echo "   Expected: $expected_hash"

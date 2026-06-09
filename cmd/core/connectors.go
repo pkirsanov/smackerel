@@ -46,6 +46,16 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	guesthostConn := guesthostConnector.New()
 	discordConn := discordConnector.New("discord")
 	twitterConn := twitterConnector.New("twitter")
+	// BUG-056-002 Scope B — inject the User-Context OAuth runtime deps (DB pool
+	// backing twitter_oauth_*, the at-rest key, and the operator OAuth client
+	// config). Consumed by the user-context routing + refresh path (Scope C);
+	// the authorize CLI populates the token the routing path reads.
+	twitterConn.ConfigureRuntime(svc.pg.Pool, cfg.AuthToken, twitterConnector.TwitterOAuthConfig{
+		ClientID:           cfg.TwitterOAuthClientID,
+		ClientSecret:       cfg.TwitterOAuthClientSecret,
+		RedirectURL:        cfg.TwitterOAuthRedirectURL,
+		HTTPTimeoutSeconds: cfg.AuthOAuthHTTPTimeoutSeconds,
+	})
 	weatherConn := weatherConnector.New("weather")
 	alertsConn := alertsConnector.New("gov-alerts")
 	marketsConn := marketsConnector.New("financial-markets", cfg.FinancialMarketsHTTPTimeoutSeconds)
@@ -294,8 +304,13 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	// Auto-start Twitter/X connector (token or file-based)
 	if cfg.TwitterEnabled {
 		twitterCfg := connector.ConnectorConfig{
-			AuthType:     "token",
-			Credentials:  map[string]string{"bearer_token": cfg.TwitterBearerToken},
+			AuthType: "token",
+			Credentials: map[string]string{
+				"bearer_token":        cfg.TwitterBearerToken,
+				"oauth_client_id":     cfg.TwitterOAuthClientID,
+				"oauth_client_secret": cfg.TwitterOAuthClientSecret,
+				"oauth_redirect_url":  cfg.TwitterOAuthRedirectURL,
+			},
 			Enabled:      true,
 			SyncSchedule: cfg.TwitterSyncSchedule,
 			SourceConfig: map[string]interface{}{

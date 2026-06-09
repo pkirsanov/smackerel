@@ -83,12 +83,23 @@ func TestDummyHash_VerifiesAgainstNothing(t *testing.T) {
 	}
 }
 
-func TestVerify_TimingParityWithinTwentyPercent(t *testing.T) {
-	// Adversarial timing parity check: the wall-clock cost of Verify
-	// against an unknown user (collapsed to dummyHash compare) MUST
-	// be within ±20% of a known-user-wrong-password Verify. If a
-	// future refactor skips the dummy compare on unknown users, this
-	// test catches it.
+func TestVerify_TimingParityWithinConstantFactor(t *testing.T) {
+	// Adversarial timing parity check (AC-5 — no user-enumeration leak
+	// via timing). The wall-clock cost of Verify against an unknown
+	// user (collapsed to a DummyHash compare) MUST stay within the same
+	// order of magnitude as a known-user-wrong-password Verify.
+	//
+	// Guard band: 0.5..2.0 (a 2x constant factor either way), NOT a
+	// literal ±20%. A timing assertion this tight would be flaky in CI:
+	// argon2id's wall-clock cost swings well past ±20% under GC pauses,
+	// scheduler preemption, and shared-runner contention, which would
+	// produce false failures unrelated to the security property.
+	//
+	// The band's real job is to catch the one regression that matters:
+	// if a future refactor skips the dummy compare on unknown users, the
+	// unknown path returns near-instantly (ratio -> ~0), landing far
+	// below 0.5 and failing this test. The 2x band reliably catches that
+	// collapse without paying for jitter false-positives.
 	const iterations = 30
 	pw := "correct-horse-battery-staple"
 	phc, err := Hash(pw)
@@ -102,7 +113,7 @@ func TestVerify_TimingParityWithinTwentyPercent(t *testing.T) {
 	t.Logf("median timings: known-wrong=%s unknown=%s", knownWrong, unknown)
 	ratio := float64(unknown) / float64(knownWrong)
 	if ratio < 0.5 || ratio > 2.0 {
-		t.Errorf("timing parity violated: unknown/known ratio = %.2f (want 0.5..2.0)", ratio)
+		t.Errorf("timing parity violated: unknown/known ratio = %.2f (want 0.5..2.0, same order of magnitude)", ratio)
 	}
 }
 

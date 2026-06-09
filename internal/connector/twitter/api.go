@@ -47,11 +47,32 @@ var ErrAPIBearerTokenRequired = errors.New(
 	"twitter connector: bearer_token is required for sync_mode=api or sync_mode=hybrid; " +
 		"set connectors.twitter.bearer_token in config/smackerel.yaml")
 
+// ErrUserContextTokenRequired is returned by the request builder when a
+// user-owned endpoint (/2/users/me, /2/users/:id/bookmarks,
+// /2/users/:id/liked_tweets) needs a User-Context OAuth 2.0 access token but
+// none has been persisted (the operator has not authorized). Per spec 056 NC-1
+// and the smackerel-no-defaults policy the connector FAILS LOUD here rather
+// than silently falling back to the App-Only bearer — that silent fallback was
+// the original BUG-056-002 defect. Mirrors ErrAPIBearerTokenRequired's sentinel
+// shape so callers can errors.Is on it.
+var ErrUserContextTokenRequired = errors.New(
+	"twitter connector: a user-context OAuth 2.0 access token is required for user-owned " +
+		"endpoints (/2/users/me, bookmarks, liked_tweets) but none is persisted; " +
+		"run `./smackerel.sh connector twitter authorize-begin` to authorize")
+
 // ErrAPIMethodNotAllowed is returned by the request builder for any HTTP method
 // other than GET. The Twitter v2 read endpoints we consume are GET-only; any
 // non-GET attempt is a programming error worth surfacing immediately.
 var ErrAPIMethodNotAllowed = errors.New(
 	"twitter api client: only GET requests are allowed by this client")
+
+// userContextTokenFunc resolves the current decrypted User-Context OAuth 2.0
+// access token for the connector owner. Implementations return
+// ErrUserContextTokenRequired (or an error wrapping it) when no token has been
+// persisted. It is injected so unit tests can supply a token without a database
+// and so the production path can read (and, in a later scope, refresh) the
+// token from the encrypted oauthStore.
+type userContextTokenFunc func(ctx context.Context) (string, error)
 
 // apiClient is the package-private HTTP client for Twitter API v2 calls.
 // The bearer token field is unexported and never read by anything outside this
@@ -66,6 +87,28 @@ type apiClient struct {
 	// defaults (defaultSleeper, time.Now).
 	sleeper sleeperFunc
 	now     nowFunc
+
+	// userContextToken resolves the current decrypted User-Context OAuth 2.0
+	// access token for the connector owner. It is consulted ONLY for
+	// user-context-tier endpoints (endpointAuthTier == authTierUserContext);
+	// App-Only endpoints use bearerToken unchanged. A nil source, an empty
+	// token, or a resolver error makes a user-context request fail loud with
+	// ErrUserContextTokenRequired — never an App-Only fallback (BUG-056-002).
+	// Injected by Connector.Connect (production: a store-backed reader; tests:
+	// a static stub). nil on App-Only-only call paths.
+	userContextToken userContextTokenFunc
+
+	// refreshUserContext force-refreshes the persisted user-context token after
+	// a 401 on a user-context-tier endpoint (an expired access token).
+	// doWithRetry calls it AT MOST ONCE per request and only when the endpoint
+	// resolves to authTierUserContext AND the status is 401; App-Only bearers
+	// cannot be rotated (so an App-Only 401 stays terminal) and a 403 is a
+	// tier/permission failure rather than an expired-token signal (so it stays
+	// terminal too). A nil hook means "no refresh capability" — the 401 stays
+	// terminal. Wired to userContextManager.Refresh in production; nil on
+	// App-Only-only paths and in tests that do not exercise refresh
+	// (BUG-056-002 Scope C Pass 2).
+	refreshUserContext func(ctx context.Context) error
 }
 
 // newAPIClient constructs the API client for a given Twitter connector config.
@@ -106,20 +149,31 @@ func newAPIClient(cfg TwitterConfig, logger *slog.Logger) (*apiClient, error) {
 // it is used directly so tests can point at httptest.Server. Returns
 // ErrAPIMethodNotAllowed for any method other than GET.
 //
-// Always sets:
-//   - Authorization: Bearer <token>
-//   - User-Agent: smackerel-twitter-connector/...
-//   - Accept: application/json
+// The Authorization header is selected by the requested auth tier (see
+// endpointAuthTier):
+//   - authTierAppOnly:     Authorization: Bearer <application bearer token>
+//   - authTierUserContext: Authorization: Bearer <user-context access token>,
+//     or ErrUserContextTokenRequired when no user-context token is present
+//     (fail loud — NEVER an App-Only fallback; BUG-056-002).
 //
-// The token is read from the unexported field; callers MUST NOT pass the token
+// Always also sets User-Agent and Accept: application/json. The token is read
+// from the unexported field / injected source; callers MUST NOT pass the token
 // in path or query, and MUST NOT log the returned request without first
 // scrubbing the Authorization header.
-func (c *apiClient) buildRequest(ctx context.Context, method, path string, query url.Values) (*http.Request, error) {
+func (c *apiClient) buildRequest(ctx context.Context, method, path string, query url.Values, tier authTier) (*http.Request, error) {
 	if method != http.MethodGet {
 		return nil, fmt.Errorf("%w: method=%q path=%q", ErrAPIMethodNotAllowed, method, path)
 	}
 	if c == nil {
 		return nil, errors.New("twitter api client: buildRequest called on nil client")
+	}
+
+	// Resolve the credential for this tier BEFORE building the request so a
+	// missing user-context token fails loud without constructing a doomed
+	// request (and never reaches the wire with the wrong credential).
+	authValue, err := c.authorizationHeader(ctx, tier)
+	if err != nil {
+		return nil, err
 	}
 
 	fullURL := path
@@ -138,10 +192,39 @@ func (c *apiClient) buildRequest(ctx context.Context, method, path string, query
 	if err != nil {
 		return nil, fmt.Errorf("twitter api client: build request for %s: %w", path, err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.bearerToken)
+	req.Header.Set("Authorization", authValue)
 	req.Header.Set("User-Agent", c.userAgent)
 	req.Header.Set("Accept", "application/json")
 	return req, nil
+}
+
+// authorizationHeader resolves the Authorization header value for the given
+// auth tier. It NEVER logs a token and NEVER embeds a token in a returned
+// error:
+//
+//   - authTierAppOnly:     "Bearer " + bearerToken (the application token).
+//   - authTierUserContext: "Bearer " + the resolved user-context access token.
+//     A nil source, an empty token, or a resolver error returns
+//     ErrUserContextTokenRequired (resolver errors are wrapped so errors.Is
+//     still matches). It NEVER falls back to the App-Only bearer (BUG-056-002).
+func (c *apiClient) authorizationHeader(ctx context.Context, tier authTier) (string, error) {
+	if tier == authTierUserContext {
+		if c.userContextToken == nil {
+			return "", ErrUserContextTokenRequired
+		}
+		tok, err := c.userContextToken(ctx)
+		if err != nil {
+			if errors.Is(err, ErrUserContextTokenRequired) {
+				return "", err
+			}
+			return "", fmt.Errorf("%w: %v", ErrUserContextTokenRequired, err)
+		}
+		if tok == "" {
+			return "", ErrUserContextTokenRequired
+		}
+		return "Bearer " + tok, nil
+	}
+	return "Bearer " + c.bearerToken, nil
 }
 
 // usersMeResponse is the minimal shape of GET /2/users/me. Wider response
@@ -166,8 +249,8 @@ func (c *apiClient) fetchUsersMe(ctx context.Context) (*usersMeResponse, error) 
 	if c == nil {
 		return nil, errors.New("twitter api client: fetchUsersMe called on nil client")
 	}
-	resp, err := c.doWithRetry(ctx, "users_me", func() (*http.Request, error) {
-		return c.buildRequest(ctx, http.MethodGet, "/users/me", nil)
+	resp, err := c.doWithRetry(ctx, usersMeLabel, func() (*http.Request, error) {
+		return c.buildRequest(ctx, http.MethodGet, "/users/me", nil, endpointAuthTier(usersMeLabel))
 	})
 	if err != nil {
 		return nil, err
@@ -193,6 +276,62 @@ const (
 	endpointOwnTweets apiEndpoint = "tweets"
 	endpointMentions  apiEndpoint = "mentions"
 )
+
+// usersMeLabel is the endpoint label for GET /2/users/me. It is NOT an
+// apiEndpoint (it is never paginated and never a cursor-map key) but it shares
+// the metrics/label namespace and participates in the auth-tier matrix below.
+const usersMeLabel = "users_me"
+
+// authTier classifies which Twitter credential a request must carry.
+//
+//   - authTierAppOnly: the application-only Bearer token (apiClient.bearerToken).
+//   - authTierUserContext: the per-user OAuth 2.0 access token resolved via
+//     apiClient.userContextToken.
+//
+// The distinction is the crux of BUG-056-002: Twitter rejects the App-Only
+// bearer on user-owned resources (bookmarks, likes, /users/me) with 403, so
+// those endpoints MUST carry the user-context token and MUST fail loud — never
+// silently fall back to App-Only — when no user-context token is present.
+type authTier int
+
+const (
+	authTierAppOnly authTier = iota
+	authTierUserContext
+)
+
+// String renders the tier for diagnostics. It never exposes a token value.
+func (t authTier) String() string {
+	switch t {
+	case authTierUserContext:
+		return "user-context"
+	default:
+		return "app-only"
+	}
+}
+
+// endpointAuthTier is the single, authoritative, auditable source of truth for
+// the spec 056 NC-1 auth-tier matrix (BUG-056-002 design A.5). It maps a
+// Twitter API endpoint label — the same label used for metrics and pagination
+// cursors — to the credential tier the endpoint requires:
+//
+//	user-context → users_me, bookmarks, liked_tweets   (user-owned resources)
+//	App-Only     → tweets, mentions                     (app-readable resources)
+//
+// The mapping is centralized here (rather than inlined at each call site) so the
+// matrix is auditable in one place and pinned by TestEndpointAuthTier. An
+// unrecognized label resolves to the MORE-restrictive user-context tier so a
+// future endpoint added without a matrix entry fails loud (missing token)
+// rather than silently leaking an App-Only bearer onto a user resource.
+func endpointAuthTier(label string) authTier {
+	switch label {
+	case usersMeLabel, string(endpointBookmarks), string(endpointLikes):
+		return authTierUserContext
+	case string(endpointOwnTweets), string(endpointMentions):
+		return authTierAppOnly
+	default:
+		return authTierUserContext
+	}
+}
 
 // apiTweet is the minimal v2 tweet shape we persist. Additional fields
 // (entities, attachments, public_metrics) land in later scopes as needed.
@@ -306,7 +445,7 @@ func (c *apiClient) fetchEndpointPaginated(ctx context.Context, endpoint apiEndp
 			query.Set("pagination_token", cursor)
 		}
 		resp, err := c.doWithRetry(ctx, string(endpoint), func() (*http.Request, error) {
-			return c.buildRequest(ctx, http.MethodGet, path, query)
+			return c.buildRequest(ctx, http.MethodGet, path, query, endpointAuthTier(string(endpoint)))
 		})
 		if err != nil {
 			return tweets, lastNonEmptyToken, fmt.Errorf("twitter api client: %s page %d: %w", endpoint, page, err)
@@ -454,7 +593,13 @@ type nowFunc func() time.Time
 //
 // Behavior matrix:
 //   - 2xx: return resp, no retry
-//   - 4xx (401, 403): return errAuthRejected wrapped with status, no retry
+//   - 401 on a user-context-tier endpoint with a refresh hook wired: refresh
+//     the user-context token ONCE and retry; a persisting 401 after the refresh
+//     (or a refresh failure) is terminal errAuthRejected. The refresh is gated
+//     by endpointAuthTier, so App-Only endpoints never refresh.
+//   - 401 otherwise (App-Only tier, or no refresh hook) / any 403: return
+//     errAuthRejected wrapped with status, no retry (a 403 is a
+//     tier/permission failure, not an expired-token signal — not refreshable)
 //   - 4xx (other than 401/403/429): return error with status, no retry
 //   - 429: parse x-rate-limit-reset, sleep until that time (capped at
 //     rateLimitMaxWait), retry. Increments TwitterAPIRetries{reason=rate_limit}.
@@ -490,6 +635,10 @@ func (c *apiClient) doWithRetry(ctx context.Context, endpoint string, reqBuilder
 	}
 
 	var lastErr error
+	// refreshedOnce gates the user-context refresh-on-401 backstop to AT MOST
+	// ONCE per doWithRetry call: a 401/403 that persists after a refresh is
+	// terminal (avoids an infinite refresh→retry loop). BUG-056-002 Scope C.
+	refreshedOnce := false
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		req, err := reqBuilder()
 		if err != nil {
@@ -516,12 +665,57 @@ func (c *apiClient) doWithRetry(ctx context.Context, endpoint string, reqBuilder
 
 		statusLabel := strconv.Itoa(resp.StatusCode)
 		c.observeRequest(endpoint, statusLabel)
+		// GAP-056-G2 (R-016): publish per-call rate-limit headroom from the
+		// x-rate-limit-remaining header on EVERY response (2xx/4xx/429/5xx), not
+		// only on 429 — that is what "after each API call" means. Reading a
+		// header is safe regardless of how the body is later drained/closed. An
+		// absent or unparseable header ⇒ no Set (no-clobber: the prior value is
+		// left intact; we never write a bogus 0 that would read as "exhausted").
+		if rem, ok := parseRateLimitRemaining(resp.Header.Get("x-rate-limit-remaining")); ok {
+			c.observeRateLimitRemaining(endpoint, rem)
+		}
 
 		switch {
 		case resp.StatusCode >= 200 && resp.StatusCode < 300:
 			return resp, nil
 		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 			drainAndClose(resp)
+			// Refresh-on-401 backstop (BUG-056-002 design A.6). A
+			// user-context-tier endpoint that returns 401 may be carrying an
+			// EXPIRED access token. Refresh the user-context token ONCE and
+			// retry: the next reqBuilder() rebuilds the request and
+			// authorizationHeader picks up the freshly-persisted token. The
+			// refresh is gated by the SAME endpoint→tier matrix used to select
+			// the credential (no duplication) so App-Only endpoints — whose app
+			// bearer cannot be rotated — stay terminal and never refresh. Only a
+			// 401 (Unauthorized) triggers the refresh: a 403 (Forbidden /
+			// "Unsupported Authentication") is a tier/permission failure, NOT an
+			// expired-token signal, so it stays terminal (a new access token of
+			// the same scopes would not change the outcome). At most one refresh
+			// per call (refreshedOnce) prevents an infinite loop when the 401
+			// persists.
+			if resp.StatusCode == http.StatusUnauthorized && !refreshedOnce &&
+				c.refreshUserContext != nil && endpointAuthTier(endpoint) == authTierUserContext {
+				if rErr := c.refreshUserContext(ctx); rErr != nil {
+					// Refresh failed — surface terminal errAuthRejected wrapping
+					// the refresh-failure context. NEVER a token value (the
+					// refresh error is the token endpoint's rejection, not a
+					// token echo) and NEVER a silent App-Only fallback.
+					c.logger.Warn("user-context token refresh after 401 failed",
+						slog.String("endpoint", endpoint),
+						slog.Int("status", resp.StatusCode),
+						slog.String("err", rErr.Error()),
+					)
+					return nil, fmt.Errorf("%w: status=%d; user-context refresh failed: %v",
+						errAuthRejected, resp.StatusCode, rErr)
+				}
+				refreshedOnce = true
+				c.logger.Info("user-context token refreshed after 401",
+					slog.String("endpoint", endpoint),
+					slog.Int("status", resp.StatusCode),
+				)
+				continue
+			}
 			c.logger.Warn("authentication rejected",
 				slog.String("endpoint", endpoint),
 				slog.Int("status", resp.StatusCode),
@@ -607,6 +801,25 @@ func parseRateLimitReset(headerVal string, now time.Time) time.Duration {
 	return reset.Sub(now)
 }
 
+// parseRateLimitRemaining converts an x-rate-limit-remaining header value (the
+// integer count of requests left in the current rate-limit window, per Twitter
+// API v2 docs) into a float64 gauge sample. The bool reports whether the header
+// was present AND numeric: an empty or unparseable value yields (0, false) so
+// the caller SKIPS the Set and leaves the prior gauge value intact (an absent
+// header MUST NOT clobber a previously-observed headroom with a bogus 0 that a
+// dashboard would read as "exhausted"). Never panics.
+func parseRateLimitRemaining(headerVal string) (float64, bool) {
+	trimmed := strings.TrimSpace(headerVal)
+	if trimmed == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return float64(n), true
+}
+
 // backoffDuration returns the exponential backoff interval for the given
 // retry attempt number (0-indexed). 1s, 2s, 4s, ... capped at 30s.
 func backoffDuration(attempt int) time.Duration {
@@ -620,11 +833,12 @@ func backoffDuration(attempt int) time.Duration {
 	return d
 }
 
-// observeRequest, observeRetry, observeRateLimitReset increment the spec 056
-// Prometheus metrics. They use the connector ID label "twitter" (matching the
-// existing connector.Connector ID convention). All three are no-ops when
-// metrics registration is bypassed (e.g. unit tests run without the init()
-// pulling in prometheus side effects — which is the default Go behavior).
+// observeRequest, observeRetry, observeRateLimitReset, and
+// observeRateLimitRemaining increment the spec 056 Prometheus metrics. They use
+// the connector ID label "twitter" (matching the existing connector.Connector
+// ID convention). All are no-ops when metrics registration is bypassed (e.g.
+// unit tests run without the init() pulling in prometheus side effects — which
+// is the default Go behavior).
 func (c *apiClient) observeRequest(endpoint, status string) {
 	metrics.ConnectorTwitterAPIRequests.WithLabelValues("twitter", endpoint, status).Inc()
 }
@@ -635,4 +849,8 @@ func (c *apiClient) observeRetry(endpoint, reason string) {
 
 func (c *apiClient) observeRateLimitReset(endpoint string, wait time.Duration) {
 	metrics.ConnectorTwitterAPIRateLimitReset.WithLabelValues("twitter", endpoint).Set(wait.Seconds())
+}
+
+func (c *apiClient) observeRateLimitRemaining(endpoint string, remaining float64) {
+	metrics.ConnectorTwitterAPIRateLimitRemaining.WithLabelValues("twitter", endpoint).Set(remaining)
 }

@@ -1155,6 +1155,9 @@ TWITTER_SYNC_MODE="$(yaml_get connectors.twitter.sync_mode 2>/dev/null)" || TWIT
 TWITTER_ARCHIVE_DIR="$(yaml_get connectors.twitter.archive_dir 2>/dev/null)" || TWITTER_ARCHIVE_DIR=""
 if [[ -z "$TWITTER_ARCHIVE_DIR" ]]; then TWITTER_ARCHIVE_DIR="./data/twitter-archive"; fi
 TWITTER_BEARER_TOKEN="$(yaml_get connectors.twitter.bearer_token 2>/dev/null)" || TWITTER_BEARER_TOKEN=""
+TWITTER_OAUTH_CLIENT_ID="$(yaml_get connectors.twitter.oauth_client_id 2>/dev/null)" || TWITTER_OAUTH_CLIENT_ID=""
+TWITTER_OAUTH_CLIENT_SECRET="$(yaml_get connectors.twitter.oauth_client_secret 2>/dev/null)" || TWITTER_OAUTH_CLIENT_SECRET=""
+TWITTER_OAUTH_REDIRECT_URL="$(yaml_get connectors.twitter.oauth_redirect_url 2>/dev/null)" || TWITTER_OAUTH_REDIRECT_URL=""
 TWITTER_SYNC_SCHEDULE="$(yaml_get connectors.twitter.sync_schedule 2>/dev/null)" || TWITTER_SYNC_SCHEDULE=""
 
 # Weather connector
@@ -1909,6 +1912,9 @@ TWITTER_ENABLED=${TWITTER_ENABLED}
 TWITTER_SYNC_MODE=${TWITTER_SYNC_MODE}
 TWITTER_ARCHIVE_DIR=${TWITTER_ARCHIVE_DIR}
 TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
+TWITTER_OAUTH_CLIENT_ID=${TWITTER_OAUTH_CLIENT_ID}
+TWITTER_OAUTH_CLIENT_SECRET=${TWITTER_OAUTH_CLIENT_SECRET}
+TWITTER_OAUTH_REDIRECT_URL=${TWITTER_OAUTH_REDIRECT_URL}
 TWITTER_SYNC_SCHEDULE=${TWITTER_SYNC_SCHEDULE}
 WEATHER_ENABLED=${WEATHER_ENABLED}
 WEATHER_SYNC_SCHEDULE=${WEATHER_SYNC_SCHEDULE}

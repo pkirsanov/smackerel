@@ -543,3 +543,121 @@ Implementation remains **fully aligned** with spec claims. One residual document
 | Unit | `./smackerel.sh test unit` | PASS — all Go packages + 263 Python tests | 2026-04-22 |
 | Build | `./smackerel.sh build` | PASS — both images built | 2026-04-22 |
 | Config generate | `./smackerel.sh config generate` | PASS — dev.env + nats.conf, 42 connector env vars | 2026-04-22 |
+
+---
+
+## DevOps Probe (stochastic-quality-sweep Round 4, 2026-06-07)
+
+**Agent:** bubbles.devops (Tommy Bean) — `devops-to-doc` head diagnostic phase, parent-expanded.
+**Scope:** DevOps/CI/build/deploy/observability + SST fail-loud surface for the 5 wired connectors (Discord, Twitter, Weather, Gov Alerts, Financial Markets). Read-only probe; no protected artifact (`spec.md`/`design.md`/`scopes.md`/`state.json`) edited.
+**Verdict:** DevOps-lane surface CLEAN (all connector/CI/build/deploy/SST/observability checks MATCH). Separately, the spec FAILS `artifact-lint.sh` at HEAD on a **pre-existing** `state.json` phase-record gap (Gate G022) — recorded below as a routed finding for the certification owner, outside the devops lane and a forbidden artifact for this role. Two further non-blocking observations recorded (G092).
+
+### Probed Surfaces & Verdicts
+
+| Surface | Check | Verdict |
+|---------|-------|---------|
+| Registration wiring | 5 connectors imported, instantiated, and present in the `[]connector.Connector{...}` registration slice in `cmd/core/connectors.go` (16-entry slice) | MATCH |
+| Auto-start blocks | All 5 have config-gated `if cfg.<Connector>Enabled` start blocks (`DiscordEnabled`/`TwitterEnabled`/`WeatherEnabled`/`GovAlertsEnabled`/`FinancialMarketsEnabled`) | MATCH |
+| Config struct + load | Fields present in `internal/config/config.go` and loaded via `os.Getenv(...)` / `parseEnvFloat` / `parseEnvJSONArray` / `parseEnvJSONObject` | MATCH |
+| YAML SST entries | `connectors.{discord,twitter,weather,gov-alerts,financial-markets}` present in `config/smackerel.yaml` (L503/L517/L524/L543/L583) | MATCH |
+| Generated env mapping | `scripts/commands/config.sh` extracts every connector key; `env_file drift guard: OK` and `Config is in sync with SST` | MATCH |
+| Health/readiness exposure | `internal/api/health.go` enumerates connectors dynamically via `ConnectorRegistry.ListConnectorHealth(ctx)` → `connector:<id>` — no hardcoded count | MATCH |
+| Docker Compose | `TWITTER_ARCHIVE_DIR` archive mount uses fail-loud `${TWITTER_ARCHIVE_DIR:?Gate G028 ...}` SST form (matches bookmarks/maps/browser pattern); other 4 are API-based, no mount needed; all vars flow via fail-loud `env_file: ${SMACKEREL_ENV_FILE:?...}` | MATCH |
+| Docs/runtime contract | `TestConnectorCountContract_LiveFile` green: `connectors.go=16 == smackerel.md §22.7=16 == Development.md=16`; 3 adversarial sub-tests prove non-tautological detection | MATCH |
+| SST fail-loud | Connector keys use the sanctioned emission-time-placeholder precedence (shell-env > yaml > repo-default, G028-compliant); required values use `required_value` (e.g. `FINANCIAL_MARKETS_HTTP_TIMEOUT_SECONDS`); no `${VAR:-default}` / `os.Getenv(k, fallback)` / `unwrap_or` introduced | MATCH |
+
+### Executed Evidence
+
+**Claim Source:** executed
+
+```
+$ ./smackerel.sh check
+config-validate: .../config/generated/dev.env.tmp.117870 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+```
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose
+=== RUN   TestConnectorCountContract_LiveFile
+    docs_connector_count_contract_test.go:236: contract OK: cmd/core/connectors.go + docs/smackerel.md §22.7 + docs/Development.md all agree on 16 connectors (spec 024 R-006 + BS-004 + AC-5 in sync)
+--- PASS: TestConnectorCountContract_LiveFile (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialConnectorsGoLow (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialSmackerelMdHigh (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialDevelopmentMdLow (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.045s
+```
+
+> **Note (orchestrator correction, 2026-06-07):** A prior draft of this section
+> pasted a narrated (`…`-elided) `artifact-lint.sh` block as "executed evidence".
+> That block was removed because elided narration is not faithful terminal output.
+> The artifact-lint result is documented as a routed finding below; the live
+> failing output was captured by `bubbles.workflow` in the Round 4 orchestration
+> log and handed to `bubbles.validate` for certification-owned reconciliation.
+
+### Routed Finding (needs certification owner — NOT devops lane)
+
+| ID | Severity | Location | Protected? | Note | Disposition |
+|----|----------|----------|------------|------|-------------|
+| DV-019-003 | High | `state.json` `certification.certifiedCompletedPhases` (L120 `"improve"`) | YES | Spec 019 fails `artifact-lint.sh` at HEAD: `certifiedCompletedPhases` carries the legacy `improve` phase but omits `simplify` and `gaps`, tripping Gate G022. **Correction (bubbles.workflow, 2026-06-07):** the original "unique outlier" claim was DISPROVEN on verification — siblings `021` (records `simplify`, not `gaps`) and `023` (records `gaps`, not `simplify`), certified in the SAME lockdown commit `e2dcb391`, ALSO fail `artifact-lint.sh`. This is therefore a **repo-wide legacy certification-taxonomy drift** (pre-split `improve`/partial records), not a 019-specific defect. Pre-existing: `state.json` unchanged from HEAD. | **Routed** to `bubbles.validate` (certification authority) for an HONEST taxonomy reconciliation of THIS spec (legacy `improve` was the pre-split union of `simplify`+`gaps`), and to flag the repo-wide pattern (≥019/021/023) for a dedicated reconciliation pass. Any phase-record edit MUST be truthful migration, NOT G041 structural manipulation. Editing `state.json` is forbidden for `bubbles.devops`. |
+
+### Observations (non-blocking, G092)
+
+| ID | Severity | Location | Protected? | Note | Disposition |
+|----|----------|----------|------------|------|-------------|
+| DV-019-001 | Low | `design.md` Architecture Overview / Per-Connector mapping prose | YES | Prose still names `parseJSONObject`/`parseFloatEnv`/`parseJSONArrayEnv` as `cmd/core/helpers.go`/`main.go` helpers, but the certified implementation moved them to `internal/config` (`parseEnvFloat`/`parseEnvJSONArray`/`parseEnvJSONObject`); `cmd/core/helpers.go` now holds only `parseJSONArray`/`parseJSONArrayVal`. Cosmetic doc-location drift; design already carries a 2026-04-22 reconciliation note for the struct-field refactor. Functionality correct and tested. | Observation only — protected artifact; route to `bubbles.design` if prose tightening is desired. Not fixed (would lift G088 grandfather). |
+| DV-019-002 | Info | `internal/config` test suite | NO | No dedicated config-loader unit test asserts `<CONNECTOR>_ENABLED=true → cfg.<Connector>Enabled=true` for the 5 connectors; coverage is indirect (build + `config in sync` + per-connector package tests + count contract). | Observation only — not adding net-new tests to a CLEAN-certified spec during a doc-freshness sweep (scope discipline). |
+
+---
+
+## Certification-Taxonomy Reconciliation — DV-019-003 (stochastic-quality-sweep Round 4, 2026-06-07)
+
+**Agent:** bubbles.validate (certification authority).
+
+**Finding:** DV-019-003 (routed by the Round 4 devops probe). `state.json` `certification.certifiedCompletedPhases` carried the legacy combined `improve` phase but neither post-split component `simplify` nor `gaps`, so `artifact-lint.sh` failed Gate G022 (exit 1, 5 issues).
+
+**Action:** Truthful taxonomy migration — the single legacy `improve` entry was represented as its two post-split components `simplify` + `gaps`. This is metadata reconciliation only: no protected artifact (`spec.md`/`design.md`/`scopes.md`) and no spec content changed, and the spec `status` stays `done`.
+
+### Truthful basis — the legacy `improve` work covered BOTH dimensions
+
+- **gaps (gap-closure):** Improvement Sweep R27 closed `IMP-019-R27-001` (Gov Alerts `source_earthquake` "entirely missing from SST pipeline") and `IMP-019-R27-002` (Weather `enable_alerts`/`forecast_days`/`precision` missing); Improvement Sweep R28 closed `IMP-019-R28-001` (Financial Markets `fred_enabled` missing) and `IMP-019-R28-002` (`fred_series` missing); the 2026-04-12 Test Sweep added the previously-missing `TestAllConnectorsRegistered`, `test_connector_wiring.sh`, and `TestDuplicateRegistrationRejected`.
+- **simplify (structure/simplification review):** the 2026-04-21 Improvement Sweep ran a full-implementation review of registration-pattern consistency, the BUG-004 `connectors.go`/`services.go`/`helpers.go`/`shutdown.go` split, and dead-helper identification.
+
+### Certification basis preserved (Gate G088)
+
+The original certification commit `e2dcb391` (2026-04-10, "delivery-lockdown: certify specs 019, 021, 023 done") is unchanged, so the Gate G088 grandfather basis holds. This reconciliation only migrates phase-record taxonomy in `state.json` and appends an executionHistory note; it does not re-open or re-validate spec content.
+
+### Verification — `artifact-lint.sh` green after reconciliation
+
+The command and the tail of its real output (every required specialist phase recorded, including the migrated `simplify` and `gaps`; Gate G022 satisfied):
+
+**Claim Source:** executed
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/019-connector-wiring
+✅ Required specialist phase 'implement' recorded in execution/certification phase records
+✅ Required specialist phase 'test' recorded in execution/certification phase records
+✅ Required specialist phase 'regression' recorded in execution/certification phase records
+✅ Required specialist phase 'simplify' recorded in execution/certification phase records
+✅ Required specialist phase 'gaps' recorded in execution/certification phase records
+✅ Required specialist phase 'harden' recorded in execution/certification phase records
+✅ Required specialist phase 'stabilize' recorded in execution/certification phase records
+✅ Required specialist phase 'security' recorded in execution/certification phase records
+✅ Required specialist phase 'docs' recorded in execution/certification phase records
+✅ Required specialist phase 'validate' recorded in execution/certification phase records
+✅ Required specialist phase 'audit' recorded in execution/certification phase records
+✅ Required specialist phase 'chaos' recorded in execution/certification phase records
+✅ Spec-review phase recorded for 'full-delivery' (specReview enforcement)
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+===EXIT:0===
+```
+
+### Repo-wide pattern (flagged, not fixed here)
+
+Siblings `021-intelligence-delivery` (records `simplify`, not `gaps`) and `023-engineering-quality` (records `gaps`, not `simplify`) were certified in the same lockdown commit `e2dcb391` and also fail `artifact-lint.sh` on the same Gate G022 legacy-taxonomy drift. They are left for a dedicated repo-wide migration pass — this round reconciles 019 only (scope discipline).

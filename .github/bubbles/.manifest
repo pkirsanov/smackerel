@@ -85,6 +85,9 @@ bubbles/scripts/interop-import-selftest.sh
 bubbles/scripts/interop-intake.sh
 bubbles/scripts/interop-registry.sh
 bubbles/scripts/is-terminal-for-mode.sh
+bubbles/scripts/mcp-grant-reconcile.sh
+bubbles/scripts/mcp-grant-selftest.sh
+bubbles/scripts/mcp-grant-sync.sh
 bubbles/scripts/mcp-http-transport-selftest.sh
 bubbles/scripts/mcp-server-selftest.sh
 bubbles/scripts/migrate-modes-v5-to-v6-selftest.sh
@@ -140,6 +143,8 @@ bubbles/scripts/repo-drift-report-selftest.sh
 bubbles/scripts/repo-drift-report.sh
 bubbles/scripts/repo-readiness.sh
 bubbles/scripts/report-section-autofix.sh
+bubbles/scripts/requirement-mechanism-guard-selftest.sh
+bubbles/scripts/requirement-mechanism-guard.sh
 bubbles/scripts/result-envelope-validate-selftest.sh
 bubbles/scripts/result-envelope-validate.sh
 bubbles/scripts/retro-convergence-health-selftest.sh

@@ -124,6 +124,25 @@ local_manifest="$LOCAL_FIXTURE/.github/bubbles/release-manifest.json"
   || fail "Local-source provenance records dirty working tree risk"
 assert_no_path_leak "$local_provenance" "$DIRTY_SOURCE" "Local-source provenance never persists the absolute checkout path"
 
+# Stale-script prune: a framework script removed upstream must NOT linger in a
+# downstream after re-install. Plant an orphan in the installed scripts dir,
+# re-install from source, and assert the orphan is gone while a real script
+# survives. (Regression for the v7.3.x orphan guard scripts that broke
+# registry-consistency in downstreams when a removed script kept a stale gate
+# reference.)
+local_scripts_dir="$LOCAL_FIXTURE/.github/bubbles/scripts"
+printf '#!/usr/bin/env bash\n# orphan prune probe (intentionally stale)\n' > "$local_scripts_dir/__orphan_prune_probe.sh"
+(
+  cd "$LOCAL_FIXTURE"
+  bash "$ROOT_DIR/install.sh" --local-source "$DIRTY_SOURCE" >/dev/null
+)
+[[ ! -e "$local_scripts_dir/__orphan_prune_probe.sh" ]] \
+  && pass "Re-install prunes a stale framework script not present in source" \
+  || fail "Re-install prunes a stale framework script not present in source"
+[[ -f "$local_scripts_dir/framework-validate.sh" ]] \
+  && pass "Re-install keeps real framework scripts after prune" \
+  || fail "Re-install keeps real framework scripts after prune"
+
 (
   cd "$QUOTED_FIXTURE"
   bash "$ROOT_DIR/install.sh" --local-source "$QUOTED_SOURCE" >/dev/null

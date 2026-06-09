@@ -326,6 +326,13 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 	headers.Set("Smackerel-Original-Stream", originalStream)
 	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
 	if lastError != "" {
+		// SEC-081-R1: strip CR/LF/C0/DEL to a single space BEFORE writing the
+		// value into a single-line wire header, so an untrusted error string
+		// cannot inject an extra header line (CWE-113). Sanitize THEN truncate so
+		// the 256-byte boundary is byte-for-byte identical to the Python sidecar
+		// (ml/app/nats_client.py::_sanitize_header_value) — sanitization preserves
+		// byte length, so this does not change the truncation boundary.
+		lastError = stringutil.SanitizeHeaderValue(lastError)
 		// Truncate to 256 bytes per design contract to prevent oversized headers.
 		// Use UTF-8-safe truncation to avoid splitting multi-byte characters
 		// which would produce invalid UTF-8 in NATS headers (IMP-022-R29-003).

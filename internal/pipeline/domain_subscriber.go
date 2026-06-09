@@ -238,7 +238,11 @@ func (d *DomainResultSubscriber) handleDomainDeliveryFailure(ctx context.Context
 	headers.Set("Smackerel-Original-Stream", "DOMAIN")
 	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
 	if lastErr != nil {
-		errStr := lastErr.Error()
+		// SEC-081-R1: sanitize CR/LF/C0/DEL (header injection, CWE-113) THEN
+		// truncate, byte-for-byte identical to the other Go sinks and the Python
+		// sidecar (_sanitize_header_value). Sanitization preserves byte length so
+		// the 256-byte boundary is unchanged.
+		errStr := stringutil.SanitizeHeaderValue(lastErr.Error())
 		if len(errStr) > 256 {
 			errStr = stringutil.TruncateUTF8(errStr, 256)
 		}

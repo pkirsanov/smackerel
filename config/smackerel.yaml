@@ -519,6 +519,9 @@ connectors:
     sync_mode: archive # archive, api, or hybrid
     archive_dir: "" # REQUIRED for archive/hybrid mode: path to Twitter data export
     bearer_token: "" # REQUIRED for api/hybrid mode: Twitter API v2 bearer token
+    oauth_client_id: "" # REQUIRED for user-context (bookmarks/likes/users-me): Twitter OAuth 2.0 client id
+    oauth_client_secret: "" # REQUIRED for user-context: confidential-client secret (never logged)
+    oauth_redirect_url: "" # REQUIRED for user-context: registered redirect URI (e.g. http://127.0.0.1/callback)
     sync_schedule: "0 */6 * * *"
 
   weather:

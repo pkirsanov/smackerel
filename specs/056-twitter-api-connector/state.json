@@ -13,7 +13,7 @@
   ],
   "certifiedAt": "2026-06-06T17:00:00Z",
   "certifiedBy": "bubbles.workflow",
-  "requiresRevalidation": false,
+  "requiresRevalidation": true,
   "execution": {
     "activeAgent": null,
     "currentPhase": "done",
@@ -25,6 +25,8 @@
       "test",
       "regression",
       "simplify",
+      "gaps",
+      "harden",
       "stabilize",
       "security",
       "docs",
@@ -52,6 +54,8 @@
       "test",
       "regression",
       "simplify",
+      "gaps",
+      "harden",
       "stabilize",
       "security",
       "docs",
@@ -70,7 +74,7 @@
         "evidenceFile": "report.md",
         "certifiedAt": "2026-05-27T20:11:56Z",
         "implementationCommit": "649b5993",
-        "notes": "App-Only bearer + PKCE auth scaffolding; empty-token fail-loud + non-GET request-builder reject."
+        "notes": "App-Only bearer client; empty-token fail-loud + non-GET request-builder reject. NOTE (reconcile 2026-06-07): the 2026-05-27 'PKCE auth scaffolding' claim here was false — no PKCE/oauth2 code exists in internal/connector/twitter; User-Context PKCE is unimplemented and tracked by BUG-056-002 (GAP-056-G1)."
       },
       {
         "scope": 2,
@@ -120,7 +124,63 @@
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
-    }
+    },
+    "concerns": [
+      {
+        "id": "CONCERN-056-002-pkce-false-claim",
+        "severity": "high",
+        "raisedAt": "2026-06-07T00:00:00Z",
+        "raisedBy": "bubbles.validate",
+        "workflowMode": "reconcile-to-doc",
+        "summary": "Spec 056 was promoted to done 2026-05-27 partly on a false report.md claim that the User-Context OAuth 2.0 PKCE flow was delivered. The genuine gaps phase (2026-06-07) confirmed PKCE is unimplemented: a single static App-Only 'Authorization: Bearer' header is applied to every endpoint, including /2/users/me, /2/users/:id/bookmarks, /2/users/:id/liked_tweets, which spec.md NC-1 + design.md require user-context for. report.md line 7 was corrected to the honest App-Only-only statement. R-016 x-rate-limit-remaining gauge is also missing (MEDIUM). Both gaps are tracked by open BUG-056-002 (blocked, awaiting maintainer product decision BLK-056-002-pkce-product-decision).",
+        "evidenceAnchor": "report.md → ## Gaps Probe Results — reconcile-to-doc (2026-06-07)",
+        "trackingBug": "specs/056-twitter-api-connector/bugs/BUG-056-002-pkce-user-context-auth-missing",
+        "followUpOwner": "bubbles.bug",
+        "followUpAction": "deliver-BUG-056-002-then-run-deferred-harden-and-re-reconcile",
+        "resolved": true,
+        "resolvedAt": "2026-06-08",
+        "resolvedBy": "BUG-056-002-pkce-user-context-auth-missing",
+        "resolution": "PKCE User-Context OAuth 2.0 (S256) genuinely delivered via BUG-056-002 (internal/auth/oauth.go + internal/connector/twitter/oauth_*.go + migration 056_twitter_oauth_pkce.sql + per-endpoint auth-tier routing in api.go with fail-loud ErrUserContextTokenRequired). The 2026-05-27 report.md PKCE-delivered claim — false at the time — was corrected to truth on 2026-06-08 and is now accurate because the capability shipped; Gate G097 (delivered-claim conformance) now genuinely passes. The deferred harden phase ran 2026-06-09 (report.md -> ## Harden Pass — BUG-056-002 auth surface) with verdict ROBUST and is recorded in the phase records. Audit trail preserved: this entry is annotated resolved, not deleted."
+      },
+      {
+        "id": "CONCERN-056-002-harden-deferred",
+        "severity": "medium",
+        "raisedAt": "2026-06-07T00:00:00Z",
+        "raisedBy": "bubbles.validate",
+        "workflowMode": "reconcile-to-doc",
+        "summary": "The harden specialist phase was never run for spec 056 and is intentionally NOT recorded (anti-fabrication G022/G041). Running harden on a connector missing a core spec-required auth flow (PKCE) would be premature. harden is deferred to BUG-056-002 delivery. As a direct consequence, artifact-lint legitimately still fails (exit 1) reporting harden missing; this residual is the honest, expected state and MUST NOT be cleared by fabricating a harden record.",
+        "followUpOwner": "bubbles.bug",
+        "followUpAction": "run-harden-after-BUG-056-002-delivery",
+        "resolved": true,
+        "resolvedAt": "2026-06-09",
+        "resolvedBy": "bubbles.harden",
+        "resolution": "Precondition satisfied: BUG-056-002 shipped the PKCE auth machinery, so the deferred harden phase was no longer premature. harden genuinely ran 2026-06-09 on the delivered auth surface (report.md -> ## Harden Pass — BUG-056-002 auth surface) with real executed grep + test evidence, verdict ROBUST across all six dimensions. The phase is now honestly recorded in execution.completedPhaseClaims + certification.certifiedCompletedPhases (backed by the evidence anchor, NOT a fabricated record). artifact-lint Gate G022 now legitimately passes."
+      },
+      {
+        "id": "HARDEN-056-OBS-1",
+        "severity": "low",
+        "raisedAt": "2026-06-09T00:00:00Z",
+        "raisedBy": "bubbles.harden",
+        "workflowMode": "full-delivery",
+        "blocking": false,
+        "summary": "token-lifecycle: the user-context refresh read-modify-write (GetTokens -> exchange -> SaveTokens) is not serialized with a DB row lock (SELECT ... FOR UPDATE). For the single-operator 'default' owner this is acceptable — a concurrent double-refresh has both readers present the same prior refresh token, Twitter invalidates it on first use, and the second exchange then fails loud (ErrUserContextTokenRequired / refresh-failed) with no token corruption, no leak, no silent App-Only fallback. A row lock is worth adding only if multi-account concurrency lands.",
+        "evidenceAnchor": "report.md -> ## Harden Pass — BUG-056-002 auth surface -> ### Low-severity observations -> OBS-1",
+        "followUpOwner": "bubbles.bug",
+        "followUpAction": "add-row-lock-only-if-multi-account-concurrency-lands"
+      },
+      {
+        "id": "HARDEN-056-OBS-2",
+        "severity": "low",
+        "raisedAt": "2026-06-09T00:00:00Z",
+        "raisedBy": "bubbles.harden",
+        "workflowMode": "full-delivery",
+        "blocking": false,
+        "summary": "secret-handling / no-defaults: an empty oauth_client_secret is validated at token-exchange time (the confidential-client POST /2/oauth2/token is rejected by Twitter -> fail-loud) rather than at authorize-begin, where only client_id and redirect_url are pre-checked. Still fail-loud with no default/fallback secret (source is bare os.Getenv), just surfaced one stage later.",
+        "evidenceAnchor": "report.md -> ## Harden Pass — BUG-056-002 auth surface -> ### Low-severity observations -> OBS-2",
+        "followUpOwner": "bubbles.bug",
+        "followUpAction": "optionally-pre-check-client_secret-at-authorize-begin"
+      }
+    ]
   },
   "policySnapshot": {
     "grill": {
@@ -291,9 +351,62 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit 2667745b (2026-05-27 'spec(056): promote to done under full-delivery'): only change to this spec is scopes.md scope-status flips to Done plus a <!-- bubbles:g040-skip-begin --> marker wrapping the already-documented NC-2 search-endpoint out-of-scope note. This is the promote-to-done close-out, committed 8 min after the faithful cert moment 2026-05-27T21:30:00Z (executionHistory statusAfter==done, bubbles.goal); category a. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "agent": "bubbles.gaps",
+      "phasesExecuted": ["gaps"],
+      "runStartedAt": "2026-06-07T00:00:00Z",
+      "runEndedAt": "2026-06-07T00:00:00Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "provenanceMode": "specialist",
+      "expansionEvidenceRef": "report.md → ## Gaps Probe Results — reconcile-to-doc (2026-06-07)",
+      "summary": "Genuine gaps phase (never previously run for spec 056) executed under reconcile-to-doc. Re-ran the twitter suite via the sanctioned CLI (exit 0; live arms SKIP) and cross-checked every coverage claim by read-only grep. Surfaced GAP-056-G1 (User-Context OAuth 2.0 PKCE designed + claimed-delivered but unimplemented; HIGH) and GAP-056-G2 (R-016 x-rate-limit-remaining gauge missing; MEDIUM). Both ROUTED, now tracked by BUG-056-002. No protected artifact or source changed by the probe."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["reconcile"],
+      "runStartedAt": "2026-06-07T00:00:00Z",
+      "runEndedAt": "2026-06-07T00:00:00Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "provenanceMode": "specialist",
+      "expansionEvidenceRef": "report.md → ## Reconcile Close — bubbles.validate (reconcile-to-doc, 2026-06-07)",
+      "summary": "State-reconciliation owner pass under reconcile-to-doc. Corrected report.md line 7 false PKCE-delivered claim to honest App-Only-only. Recorded the genuine gaps phase in execution.completedPhaseClaims + certification.certifiedCompletedPhases with the Gaps Probe evidence anchor. Did NOT record harden (genuinely not run; deferred to BUG-056-002 delivery) — artifact-lint honestly remains exit 1 on missing harden by design. Added certification.concerns (HIGH false-claim + MEDIUM harden-deferred), activeBugs[BUG-056-002], set requiresRevalidation=true. No protected artifact (spec.md/design.md/scopes.md) touched."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["delivery-validation"],
+      "runStartedAt": "2026-06-08T00:00:00Z",
+      "runEndedAt": "2026-06-08T00:00:00Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "provenanceMode": "specialist",
+      "expansionEvidenceRef": "BUG-056-002 packet report.md (Scope A/B/C/D delivery evidence) + bubbles.validate re-verification 2026-06-08 (./smackerel.sh test unit --go --go-run 'TestTwitterAPI|TestTwitterAuthorize|TestTwitterOAuth|PKCE|TestConfig_TwitterOAuth' GREEN; ./smackerel.sh check + lint clean)",
+      "summary": "Delivery-validation + state-reconciliation pass for BUG-056-002 (User-Context OAuth 2.0 PKCE). Independently re-verified all 4 bug scopes GREEN (PKCE S256, AES-256-GCM encrypted store, authorize-begin/finalize/status CLI, per-endpoint auth-tier routing, fail-loud ErrUserContextTokenRequired with NO App-Only fallback, refresh-on-401 retry-once + 60s pre-expiry refresh, and the R-016 x-rate-limit-remaining gauge incl. the adversarial App-Only-on-user-owned->403 and non-429 gauge tests). Corrected this report.md Summary from the 2026-06-07 honest 'App-Only only / PKCE NOT implemented' statement to the now-truthful 'both App-Only + User-Context OAuth 2.0 PKCE delivered via BUG-056-002', and marked GAP-056-G1/G2 RESOLVED — the originally-premature claim is now TRUE because the capability genuinely shipped. No overclaim: the live real-Twitter 403->200 arm stays operator-gated/manual and is NOT claimed executed (fixture+unit+parity suite is what runs). Parent top-level status stays done; certification structure unchanged; spec.md/design.md/scopes.md untouched. Bug packet left at delivered-pending-audit (non-terminal); terminal certification deferred to bubbles.audit (separation of duties)."
+    },
+    {
+      "agent": "bubbles.harden",
+      "phasesExecuted": ["harden"],
+      "runStartedAt": "2026-06-09T00:00:00Z",
+      "runEndedAt": "2026-06-09T00:00:00Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "provenanceMode": "specialist",
+      "expansionEvidenceRef": "report.md -> ## Harden Pass — BUG-056-002 auth surface (2026-06-08)",
+      "summary": "Genuine harden phase — deferred 2026-06-07 because the connector lacked the PKCE auth machinery; now runnable since BUG-056-002 shipped it — executed on the User-Context OAuth 2.0 Authorization-Code-with-PKCE (S256) auth surface. Probed six security-sensitive dimensions with executed read-only grep + the sanctioned CLI test runner: secret-handling (no token/verifier/client_secret reaches any log/format sink; AES-256-GCM encrypted-store round-trip + empty-key fail-loud), pkce-integrity (32-byte CSPRNG verifier, S256-only, RFC 7636 Appendix B vector pinned by a passing test), csrf-state (32-byte CSPRNG state, 15-min TTL, DELETE...RETURNING single-use, unknown/expired fail-loud with zero token-endpoint hits), token-lifecycle (rotation persisted, refresh-once-on-401, App-Only-no-refresh tier gate, ErrUserContextTokenRequired with no App-Only fallback), input-redirect (config-only redirect_uri, 1 MB bounded token read), and sql (5 parameterized queries, zero concatenation). Verdict ROBUST on every dimension; all targeted auth/PKCE/tier/refresh/log-scan tests reported --- PASS (go test ./... finished OK). Three low non-blocking observations recorded: HARDEN-056-OBS-1 (refresh not row-locked), HARDEN-056-OBS-2 (client_secret validated at exchange not config-load), OBS-3 (the pre-existing report.md narrative-phrase artifact-hygiene note, owned by bubbles.validate, now cleared by the item-B narrative fix). No protected artifact modified by the probe; this phase-record write is bubbles.validate's state-reconciliation, anchored on report.md -> ## Harden Pass."
     }
   ],
-  "activeBugs": [],
+  "activeBugs": [
+    {
+      "bugId": "BUG-056-002",
+      "specPath": "specs/056-twitter-api-connector/bugs/BUG-056-002-pkce-user-context-auth-missing",
+      "status": "delivered-pending-audit",
+      "severity": "high",
+      "openedAt": "2026-06-07T00:00:00Z",
+      "notes": "DELIVERED via design Path A + validated 2026-06-08. User-Context OAuth 2.0 PKCE (spec.md NC-1 / design.md) now implemented for /2/users/me, /2/users/:id/bookmarks, /2/users/:id/liked_tweets (GAP-056-G1 RESOLVED), and the R-016 x-rate-limit-remaining gauge added (GAP-056-G2 RESOLVED). All 4 bug scopes A-D green; bubbles.validate independently re-verified (tests GREEN, check+lint clean). report.md Summary corrected 2026-06-08 from the interim honest 'App-Only only' statement to the now-truthful 'both tiers delivered'. The BLK-056-002-pkce-product-decision blocker is resolved (Path A chosen + shipped). Packet is NON-terminal (delivered-pending-audit); terminal closure + the deferred harden phase are owned by bubbles.audit (separation of duties). One documented honest gap remains: the migration 056 live DB-apply under `./smackerel.sh test integration` was not run in the unit-scoped validate pass."
+    }
+  ],
   "resolvedBugs": [
     {
       "bugId": "BUG-015-002",
@@ -303,7 +416,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-08T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -341,6 +454,6 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Spec 056 promoted to done under full-delivery mode 2026-05-27. All 5 scopes shipped via commits 649b5993 (scope 01), 63d86de4 (scope 02), caa1a01f (scope 03), b695123d (scope 04), 68c90d84 (scope 05). 27+ tests pass under -race. BUG-015-002 closed in f17b31f7 citing this spec as the truthful remediation path. Scenario-first TDD discipline followed; red→green ratchet preserved per scenario."
+  "notes": "Spec 056 promoted to done under full-delivery mode 2026-05-27. All 5 scopes shipped via commits 649b5993 (scope 01), 63d86de4 (scope 02), caa1a01f (scope 03), b695123d (scope 04), 68c90d84 (scope 05). 27+ tests pass under -race. BUG-015-002 closed in f17b31f7 citing this spec as the truthful remediation path. Scenario-first TDD discipline followed; red→green ratchet preserved per scenario. RECONCILE 2026-06-07 (reconcile-to-doc, bubbles.validate): genuine gaps phase recorded (surfaced GAP-056-G1 User-Context PKCE HIGH + GAP-056-G2 x-rate-limit-remaining gauge MEDIUM, now tracked by open BUG-056-002 blocked); report.md line 7 false 'User-Context PKCE delivered' claim corrected to App-Only-only; harden phase NOT run, deferred to BUG-056-002 delivery (premature on a connector missing core auth); done status retained but qualified by certification.concerns + activeBugs[BUG-056-002] + requiresRevalidation=true; artifact-lint honestly remains exit 1 on missing harden."
 }
 

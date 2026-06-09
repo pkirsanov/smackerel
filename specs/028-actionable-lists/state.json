@@ -78,8 +78,10 @@
       "spec-review",
       "regression",
       "simplify",
+      "harden",
       "stabilize",
-      "security"
+      "security",
+      "gaps"
     ],
     "pendingTransitionRequests": []
   },
@@ -105,8 +107,58 @@
       "spec-review",
       "regression",
       "simplify",
+      "harden",
       "stabilize",
-      "security"
+      "security",
+      "gaps"
+    ],
+    "concerns": [
+      {
+        "id": "PHASE-028-GAPS-UNRUN",
+        "severity": "medium",
+        "phase": "gaps",
+        "disposition": "resolved",
+        "routedTo": "bubbles.gaps",
+        "summary": "The 'gaps' specialist phase genuinely never ran for spec 028 and is NOT recorded as complete (anti-fabrication). Evidence of absence: report.md has no gaps-to-doc / gap-sweep section (the only 'Gap' headers — Coverage Gap Analysis, Mechanical Gap Closure, Adversarial Gap Closed — are subsections inside test-to-doc rounds); git log --all --grep=028 has no gaps-to-doc commit for this spec (the one gaps-to-doc commit 3b4fe6a4 belongs to spec 015; 5bfcc49d is generic 'test coverage gaps'); executionHistory has no bubbles.gaps entry; no gaps-triggered bug exists. Routed to bubbles.gaps for a genuine gaps probe. artifact-lint.sh honestly remains exit 1 on missing 'gaps' by design until that probe runs and records its evidence anchor.",
+        "recordedAt": "2026-06-07T00:00:00Z",
+        "recordedBy": "bubbles.validate",
+        "resolvedAt": "2026-06-07T00:00:00Z",
+        "resolvedBy": "bubbles.validate",
+        "resolution": "RESOLVED — the genuine gaps phase ran on 2026-06-07 (bubbles.gaps, reconcile-to-doc). Evidence: report.md -> '## Gaps Probe Results — reconcile-to-doc (2026-06-07)' (34/34 SCN-AL scenarios mapped to in-tree tests; ./smackerel.sh test unit GREEN, exit 0; NO false delivered-claim — the spec-056/PKCE defined-but-not-wired pattern is explicitly ABSENT). The 'gaps' phase is now recorded in execution.completedPhaseClaims + certification.certifiedCompletedPhases with that evidence anchor. The probe's three non-blocking spec-vision under-decomposition findings are tracked as GAP-028-G1/G2/G3 below."
+      },
+      {
+        "id": "GAP-028-G1",
+        "severity": "medium",
+        "phase": "gaps",
+        "disposition": "real-work-needed-routed",
+        "routedTo": "bubbles.plan",
+        "summary": "BS-013 made_it-annotation-on-completion under-decomposed (spec-vision, NOT a false delivered-claim). spec.md BS-013 + Success Signal + UI wireframe (L345) and design.md mermaid (L426 'Complete --> AnnotateRecipes: Auto-create made_it') describe list completion auto-creating made_it interaction annotations on source recipes. Implemented behavior in internal/intelligence/lists.go::HandleListCompleted only boosts relevance (+0.1) and tracks purchase frequency; cross-package grep confirms InteractionMadeIt/made_it appears ONLY in internal/annotation/* — no list/intelligence/store/telegram caller constructs one. Scope 8 DoD committed only relevance-boost + frequency. Not claimed delivered anywhere in report.md/uservalidation.md, so this is under-decomposition, not fabrication. Non-blocking: spec 028 stays done. Routed to bubbles.plan for a decompose-into-follow-on-scope/spec OR formally-record-as-deferred-in-scopes.md decision (diagnostic/validation agent cannot edit protected scopes.md).",
+        "evidenceAnchor": "report.md -> ## Gaps Probe Results — reconcile-to-doc (2026-06-07) -> section 4 (GAP-028-G1)",
+        "recordedAt": "2026-06-07T00:00:00Z",
+        "recordedBy": "bubbles.validate"
+      },
+      {
+        "id": "GAP-028-G2",
+        "severity": "low",
+        "phase": "gaps",
+        "disposition": "real-work-needed-routed",
+        "routedTo": "bubbles.plan",
+        "summary": "BS-011 quantity-overflow display normalization absent (spec-vision, NOT a false delivered-claim). spec.md BS-011 (L223-227, '~1 cup') expects aggregated quantities to render in a readable unit. internal/recipe/quantity.go::FormatIngredient renders the summed quantity verbatim (e.g. '50 tsp salt') with no downscale to a larger unit. The 'pantry staples flagged as likely-already-have' half of BS-011 overlaps explicitly-deferred work (Non-Goals L65 + IP-001 Smart Pantry Awareness), so ONLY the unit-overflow-display half is an un-deferred gap. Low impact (display nicety); spec 028 stays done. Routed to bubbles.plan for a decompose-or-defer decision.",
+        "evidenceAnchor": "report.md -> ## Gaps Probe Results — reconcile-to-doc (2026-06-07) -> section 4 (GAP-028-G2)",
+        "recordedAt": "2026-06-07T00:00:00Z",
+        "recordedBy": "bubbles.validate"
+      },
+      {
+        "id": "GAP-028-G3",
+        "severity": "low",
+        "phase": "gaps",
+        "disposition": "real-work-needed-routed",
+        "routedTo": "bubbles.plan",
+        "summary": "BS-010 failed-extraction per-artifact placeholder flag absent (spec-vision, NOT a false delivered-claim). spec.md BS-010 (L211-214) expects a per-artifact placeholder item ('ingredients could not be extracted — add manually') when extraction fails. internal/list/generator.go skips artifacts lacking domain_data with a slog.Warn and still generates the list (graceful degradation works), but does NOT inject the BS-010 placeholder item. Low impact (degradation already works; only the explicit per-artifact flag is missing); spec 028 stays done. Routed to bubbles.plan for a decompose-or-defer decision.",
+        "evidenceAnchor": "report.md -> ## Gaps Probe Results — reconcile-to-doc (2026-06-07) -> section 4 (GAP-028-G3)",
+        "recordedAt": "2026-06-07T00:00:00Z",
+        "recordedBy": "bubbles.validate"
+      }
     ],
     "scopeProgress": [
       {
@@ -349,6 +401,25 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 495f1753 (scopes.md — BUG-028-003 harden-to-doc artifact-only reconciliation: added Regression E2E Test Plan rows + scenario-specific/broader E2E DoD bullets across 8 scopes citing existing tests TestList_CreateAndUpdateStatus / TestList_Chaos_CascadeDeleteDuringConcurrentUpdates; commit states 'done -> done, zero runtime change'; category b), fb2a4266 (spec.md + design.md — Successor/UX notes that slash-command list entry is superseded by spec 066/068; 'list projection/store semantics remain unchanged'; category b), 3f7c0649 (scopes.md — migration 017_actionable_lists.sql -> 001_initial_schema.sql path reconciliation; category b), 18f8512b (scopes.md — aggregator.go -> types.go path + compare_aggregator.go deferral; category b). No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "agent": "bubbles.harden",
+      "phasesExecuted": ["harden"],
+      "runStartedAt": "2026-04-22T00:00:00Z",
+      "runEndedAt": "2026-04-22T00:10:00Z",
+      "reconciledAt": "2026-06-07T00:00:00Z",
+      "summary": "Reconcile-to-doc MIGRATE of a genuine-but-unrecorded phase. The harden phase ran on 2026-04-22 (report.md -> '## Harden-to-Doc Sweep (2026-04-22)'): the harden probe surfaced findings H1/H3/H4/H5 and added tests TestParseQuantity_UncountableQuantities, TestRecipeAggregator_UncountableQuantityPreserved, TestArchiveListHandler[_NotFound], TestUpdateListHandler_ArchiveViaUpdate/_InvalidJSON, and TestRemoveItemHandler[_NotFound], plus internal/list/harden_test.go (present at HEAD; git ls-tree HEAD blob f8d92ee0). A second harden-triggered pass is recorded in report.md -> '## BUG-028-003 Reconcile-Sweep Evidence (Sweep 2026-05-23, Round 22, harden-to-doc)' and resolvedBugs[BUG-028-003] (parentTrigger=harden, parentMappedMode=harden-to-doc). BUG-028-003 extended the phase arrays with regression/simplify/stabilize/security but omitted 'harden' itself; this reconcile records the genuine harden phase in execution.completedPhaseClaims + certification.certifiedCompletedPhases. No protected artifact (spec.md/design.md/scopes.md) or source changed by this reconcile.",
+      "evidenceAnchor": "report.md -> ## Harden-to-Doc Sweep (2026-04-22); report.md -> ## BUG-028-003 Reconcile-Sweep Evidence (Sweep 2026-05-23, Round 22, harden-to-doc)"
+    },
+    {
+      "agent": "bubbles.gaps",
+      "phasesExecuted": [
+        "gaps"
+      ],
+      "runStartedAt": "2026-06-07T00:00:00Z",
+      "runEndedAt": "2026-06-07T00:00:00Z",
+      "summary": "Reconcile-to-doc genuine gaps probe (routed by the 2026-06-07 reconcile-to-doc phase-record section). Coverage-hole + claimed-vs-actual analysis over the delivered spec-028 surface (internal/list/, internal/api/lists.go, internal/intelligence/lists.go, internal/telegram/list.go, internal/recipe/quantity.go); read-only + ./smackerel.sh test unit only; NO protected artifact (spec.md/design.md/scopes.md), state.json, source, or test was edited by the probe itself. Findings: (1) Claimed-vs-actual reality check — NO false delivered-claim; the spec-056/PKCE defined-but-not-wired pattern is ABSENT (REST /api/lists CRUD, lists.created/lists.completed publish, intelligence subscriber, Telegram /list + inline keyboard are all genuinely wired; the one historical dead-wiring of deps.ListHandlers was already fixed in the DevOps-to-Doc Sweep D1 and re-verified at HEAD). (2) 34/34 SCN-AL scenarios map to in-tree test functions. (3) ./smackerel.sh test unit GREEN, exit 0, no flakes. (4) Three genuine spec-vision Business Scenarios under-decomposed from the scope plan and unimplemented (NOT claimed delivered): GAP-028-G1 (medium, BS-013 made_it-on-completion), GAP-028-G2 (low, BS-011 quantity-overflow display), GAP-028-G3 (low, BS-010 failed-extraction placeholder flag) — each routed to bubbles.plan for a decompose-or-defer decision. Verdict MINOR_GAPS_REMAIN; spec 028 stays done because the delivered 34/34 scope contract is gap-free, fully wired, and GREEN.",
+      "evidenceAnchor": "report.md -> ## Gaps Probe Results — reconcile-to-doc (2026-06-07)"
     }
   ],
   "activeBugs": [],

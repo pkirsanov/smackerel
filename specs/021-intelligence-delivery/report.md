@@ -1214,3 +1214,61 @@ exercised at the unit + scheduler-pipeline boundary.
   recursive `runSubagent`; resolved mode's `phaseOrder` invoked inline
   per the parent-expansion fallback).
 
+## 2026-06-07 — State Reconciliation: `gaps` specialist phase recorded (reconcile-to-doc)
+
+**Mode:** `reconcile-to-doc` (owner `bubbles.validate`, state-reconciliation).
+Artifact-state bookkeeping only — zero code, zero `spec.md` / `design.md` /
+`scopes.md` edits, zero behavior change, zero DoD checkbox toggled. `status`
+stays `done`; `certifiedAt` unchanged (no protected-artifact edit, so Gate
+G088 is not engaged).
+
+**Drift:** `artifact-lint` failed Gate G022 with 3 issues, all of which
+collapse to one missing specialist phase: `gaps` was absent from
+`execution.completedPhaseClaims` and `certification.certifiedCompletedPhases`
+even though the `full-delivery` required-phase set lists it. There was no
+separate non-phase third issue — the three failing lines were the strict-mode
+flag, the "1 of 12 missing" count, and the anti-fabrication restatement, all
+naming `gaps`.
+
+**Ground truth (genuine evidence → MIGRATE, not fabrication):** the `gaps`
+phase genuinely ran twice and is already evidenced earlier in this report:
+
+- `## Gaps Sweep (2026-04-21, gaps-to-doc R80)` — findings GAP-021-R80-001
+  (stale report file-location references after the `engine.go` →
+  `alerts.go` / `alert_producers.go` / `synthesis.go` refactor) and
+  GAP-021-R80-002 (spec wording vs the 30-day window in `lookups.go:79`),
+  both fixed, with a 9-row functional-gap analysis concluding "No Functional
+  Gaps Found".
+- `## 2026-06-06 — Sweep Round 12 of 20 (gaps trigger)` — findings F1 (G088
+  post-cert edit) and F2/F3/F4 (E2E-API / Stress / Integration DoD
+  evidence-linkage over-claims), closed inline and committed as git
+  31e96495 (bubbles(021/sweep-r12-gaps): re-certify after Tier-2 DoD
+  evidence cleanup).
+
+**Reconciliation applied (state.json is the only artifact changed besides
+this note):** added `gaps` to both `execution.completedPhaseClaims` and
+`certification.certifiedCompletedPhases`, and appended a `bubbles.gaps`
+provenance entry to `executionHistory` citing the two anchors above.
+
+**Evidence — artifact-lint before reconciliation:**
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/021-intelligence-delivery
+❌ Required specialist phase 'gaps' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ 1 of 12 required specialist phases are MISSING
+❌ Required specialist phase 'gaps' NOT in execution/certification phase records (Gate G022 violation)
+Artifact lint FAILED with 3 issue(s).
+```
+
+**Evidence — artifact-lint after reconciliation:**
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/021-intelligence-delivery
+✅ Required specialist phase 'gaps' found in execution/certification phase records
+✅ Required specialist phase 'gaps' recorded in execution/certification phase records
+✅ All 12 evidence blocks in report.md contain legitimate terminal output
+Artifact lint PASSED.
+```
+
+Delta: 3 issues → 0. No protected artifact touched.
+

@@ -1,0 +1,364 @@
+{
+  "version": 1,
+  "featureDir": "specs/056-twitter-api-connector/bugs/BUG-056-002-pkce-user-context-auth-missing",
+  "generatedAt": "2026-06-08T00:00:00Z",
+  "deferred": false,
+  "deferredReason": "DELIVERED (Path A, 2026-06-08): all 16 scenarios are implemented; linkedTests + evidenceRefs below are populated to the REAL delivered unit/integration tests (each verified to exist in the working tree). gherkinHash values are retained from authoring (not recomputed in the RW-056-002-001 structural pass). No scenario claims a live Twitter pass; the real-API 403->200 arm is operator-gated (api_live_test.go) and is intentionally NOT a manifest scenario because it is not CI-runnable. This connector's contract is unit + integration only (no e2e-api row).",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-056-002-001",
+      "scope": "scope-a-foundation",
+      "title": "PKCE code_verifier derives the correct S256 code_challenge",
+      "gherkin": {
+        "given": "a code_verifier generated from 32 cryptographically-random bytes",
+        "when": "the S256 code_challenge is derived",
+        "then": "the verifier is 43 base64url-nopad chars from [A-Za-z0-9-._~] and the challenge equals base64url-nopad(SHA-256(ASCII(verifier))) with method S256"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/auth/oauth_pkce_test.go", "name": "TestAuth_GeneratePKCEPairS256" }
+      ],
+      "evidenceRefs": ["report.md A-E4", "report.md A-E5"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-002",
+      "scope": "scope-a-foundation",
+      "title": "OAuth2 helper speaks PKCE + confidential-client Basic auth (additive; interface unchanged)",
+      "gherkin": {
+        "given": "a GenericOAuth2 configured with TokenEndpointAuthStyle 'basic'",
+        "when": "AuthURLWithPKCE builds the authorize URL and ExchangeCodeWithVerifier posts to the token endpoint",
+        "then": "the URL carries code_challenge_method=S256 and the POST sends Authorization: Basic base64(id:secret) + code_verifier in the body (secret omitted from body); the shared OAuth2Provider interface is unchanged"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/auth/oauth_pkce_test.go", "name": "TestAuth_OAuth2PKCEBasicAuthStyle" }
+      ],
+      "evidenceRefs": ["report.md A-E4"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-003",
+      "scope": "scope-a-foundation",
+      "title": "User-context tokens round-trip through the encrypted store",
+      "gherkin": {
+        "given": "a Twitter oauthStore built with a non-empty at-rest key",
+        "when": "an access+refresh token pair is saved and read back",
+        "then": "the persisted columns are AES-256-GCM ciphertext (not equal to the plaintext) and GetTokens decrypts back to the exact original pair"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/oauth_store_test.go", "name": "TestTwitterOAuth_EncryptedStoreRoundTrip" }
+      ],
+      "evidenceRefs": ["report.md A-E4"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-004",
+      "scope": "scope-a-foundation",
+      "title": "Encrypted store fails loud on an empty at-rest key (no plaintext fallback)",
+      "gherkin": {
+        "given": "the at-rest key (SHA-256 of SMACKEREL_AUTH_TOKEN) is empty",
+        "when": "newOAuthStore is constructed",
+        "then": "it returns an error, no store is created, and no refresh token is ever written in plaintext"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/oauth_store_test.go", "name": "TestTwitterOAuth_EmptyKeyFailsLoud" }
+      ],
+      "evidenceRefs": ["report.md A-E4"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-005",
+      "scope": "scope-a-foundation",
+      "title": "OAuth credential config has no hidden default (SST fail-loud)",
+      "gherkin": {
+        "given": "TWITTER_OAUTH_CLIENT_ID/SECRET/REDIRECT_URL are unset",
+        "when": "config is loaded",
+        "then": "the three fields resolve to empty string (no fallback value substituted) and carry their exact env values when set"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "config",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/config/twitter_oauth_config_test.go", "name": "TestConfig_TwitterOAuthCredentialsHaveNoHiddenDefault" }
+      ],
+      "evidenceRefs": ["report.md A-E4"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-006",
+      "scope": "scope-b-authorize",
+      "title": "authorize-begin starts a PKCE flow and prints the authorize URL",
+      "gherkin": {
+        "given": "valid oauth_client_id and oauth_redirect_url are configured",
+        "when": "the operator runs `connector twitter authorize-begin`",
+        "then": "a verifier+S256 challenge+state are generated, a twitter_oauth_states row is persisted (15-min TTL), the printed URL carries code_challenge_method=S256 and the locked scopes, and empty client config fails loud (no verifier/secret printed)"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/oauth_authorize_test.go", "name": "TestTwitterAuthorize_BeginPersistsStateAndBuildsS256URL" }
+      ],
+      "evidenceRefs": ["report.md B-E1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-007",
+      "scope": "scope-b-authorize",
+      "title": "authorize-finalize exchanges the code and persists encrypted tokens",
+      "gherkin": {
+        "given": "a valid un-expired state token and the operator-pasted authorization code",
+        "when": "the operator runs `connector twitter authorize-finalize --state <s> --code <c>`",
+        "then": "the state row is consumed (TTL-checked and DELETED), the code+verifier are exchanged with Basic client auth, the access+refresh pair is persisted AES-256-GCM-encrypted, and only a success line is printed (never a token value)"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/oauth_authorize_test.go", "name": "TestTwitterAuthorize_FinalizeExchangesAndPersistsEncrypted" }
+      ],
+      "evidenceRefs": ["report.md B-E1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-008",
+      "scope": "scope-b-authorize",
+      "title": "authorize-status reports whether a user-context token is persisted",
+      "gherkin": {
+        "given": "the authorize-finalize step has completed",
+        "when": "the operator runs `connector twitter authorize-status`",
+        "then": "it reports a valid/refreshable user-context token is present, and before any authorize it reports none is persisted"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/oauth_authorize_test.go", "name": "TestTwitterAuthorize_StatusReflectsPersistedToken" }
+      ],
+      "evidenceRefs": ["report.md B-E1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-009",
+      "scope": "scope-c-routing-refresh-failloud",
+      "title": "User-owned endpoints carry the user-context token, not App-Only",
+      "gherkin": {
+        "given": "a persisted, valid user-context access token",
+        "when": "the connector fetches /2/users/me, /2/users/:id/bookmarks, or /2/users/:id/liked_tweets",
+        "then": "each request carries the user-context access token and NOT the App-Only bearer"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestBuildRequest_UserContextEndpointUsesUserToken" }
+      ],
+      "evidenceRefs": ["report.md C-E1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-010",
+      "scope": "scope-c-routing-refresh-failloud",
+      "title": "App-Only bearer on a user-owned endpoint is rejected, never silently used (KEY adversarial regression)",
+      "gherkin": {
+        "given": "a fixture server that ENFORCES user-context on /2/users/:id/bookmarks and the request is presented with the App-Only sentinel bearer",
+        "when": "the connector calls the endpoint",
+        "then": "the fixture returns 403 'Unsupported Authentication', the connector SURFACES the 403 (errAuthRejected) and never silently succeeds; RED precisely when a user-owned endpoint is routed through App-Only"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestTwitterAPI_AppOnlyOnUserOwnedEndpointRejected" }
+      ],
+      "evidenceRefs": ["report.md C-Pass2-E1", "report.md C-Pass2-E2"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-011",
+      "scope": "scope-c-routing-refresh-failloud",
+      "title": "Expired/401 user-context token is refreshed once, retried, and the rotated token persisted",
+      "gherkin": {
+        "given": "a user-context request that returns 401",
+        "when": "the connector handles the response",
+        "then": "it exchanges the refresh token (Basic auth), re-encrypts and persists the ROTATED pair, retries exactly once, and a second 401 surfaces errAuthRejected (no infinite retry)"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestTwitterAPI_Refresh_On401_RetriesOnce" },
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestTwitterAPI_Refresh_On401_PersistentIsTerminalAfterOneRefresh" }
+      ],
+      "evidenceRefs": ["report.md C-Pass2-E3"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-012",
+      "scope": "scope-c-routing-refresh-failloud",
+      "title": "Fail loud when a user-context token is required but absent (ErrUserContextTokenRequired)",
+      "gherkin": {
+        "given": "sync_mode api or hybrid is configured to fetch bookmarks/likes/users-me and no user-context token has been persisted",
+        "when": "the connector starts the user-owned fetch",
+        "then": "it fails loud with ErrUserContextTokenRequired naming the authorize remedy and NEVER attaches the App-Only bearer to a user-owned endpoint"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestBuildRequest_UserContextEndpoint_NoToken_FailsLoud" }
+      ],
+      "evidenceRefs": ["report.md C-E1", "report.md C-E2"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-013",
+      "scope": "scope-c-routing-refresh-failloud",
+      "title": "Public endpoints keep App-Only (no regression)",
+      "gherkin": {
+        "given": "a sync of /2/users/:id/tweets or /2/users/:id/mentions",
+        "when": "the connector fetches the page",
+        "then": "it uses the App-Only bearer token unchanged"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestBuildRequest_AppOnlyEndpointUsesBearer" },
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestTwitterAPI_AppOnly401_NoRefresh_Terminal" }
+      ],
+      "evidenceRefs": ["report.md C-Pass2-E1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-014",
+      "scope": "scope-c-routing-refresh-failloud",
+      "title": "User-context tokens never appear in logs",
+      "gherkin": {
+        "given": "a user-context fetch and refresh cycle",
+        "when": "logs are captured",
+        "then": "neither the access token nor the refresh token appears in any log line"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestTwitterAPI_Refresh_On401_RetriesOnce" },
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestTwitterAPI_BearerTokenNeverAppearsInLogs" }
+      ],
+      "evidenceRefs": ["report.md C-Pass2-E6"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-015",
+      "scope": "scope-d-observability-integrity",
+      "title": "x-rate-limit-remaining gauge is set after each API call (R-016)",
+      "gherkin": {
+        "given": "any Twitter API response carrying x-rate-limit-remaining",
+        "when": "the call completes (the success path of doWithRetry)",
+        "then": "ConnectorTwitterAPIRateLimitRemaining{connector,endpoint} reflects the header value"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestTwitterAPI_RateLimitRemaining_SetFromHeader" }
+      ],
+      "evidenceRefs": ["report.md D-E2"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-056-002-016",
+      "scope": "scope-d-observability-integrity",
+      "title": "Remaining gauge updates on a non-429 200 (adversarial)",
+      "gherkin": {
+        "given": "a 200 response carrying x-rate-limit-remaining and NO 429 ever occurs",
+        "when": "the call completes",
+        "then": "the remaining gauge is still updated; RED if the parse is wired only into the 429 branch"
+      },
+      "gherkinHash": "sha256:pending-delivery-pass",
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        { "file": "internal/connector/twitter/api_test.go", "name": "TestTwitterAPI_RateLimitRemaining_SetOnEveryStatus" }
+      ],
+      "evidenceRefs": ["report.md D-E2", "report.md D-E3"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

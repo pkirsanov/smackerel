@@ -508,6 +508,11 @@ func (s *SynthesisResultSubscriber) publishSynthesisToDeadLetter(ctx context.Con
 	headers.Set("Smackerel-Original-Stream", originalStream)
 	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
 	if lastError != "" {
+		// SEC-081-R1: sanitize CR/LF/C0/DEL (header injection, CWE-113) THEN
+		// truncate, byte-for-byte identical to the Go ResultSubscriber sink and the
+		// Python sidecar (_sanitize_header_value). Sanitization preserves byte
+		// length so the 256-byte boundary is unchanged.
+		lastError = stringutil.SanitizeHeaderValue(lastError)
 		if len(lastError) > 256 {
 			lastError = stringutil.TruncateUTF8(lastError, 256)
 		}

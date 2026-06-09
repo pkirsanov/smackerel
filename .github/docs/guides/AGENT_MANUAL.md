@@ -81,12 +81,21 @@ Orchestrator rule:
 An agent's frontmatter `tools:` field is an explicit allowlist of the VS Code tools the agent may call. The convention:
 
 - **Omit `tools:`** to inherit ALL available tools. This is the default for most specialists — they declare no allowlist and rely on the full tool surface.
-- **Declare `tools:`** only when you want to constrain the surface. The autonomous orchestrators (`bubbles.workflow`, `bubbles.goal`, `bubbles.iterate`, `bubbles.sprint`, `bubbles.bug`) declare the canonical allowlist `tools: [read, search, edit, agent, todo, web, execute]`.
+- **Declare `tools:`** only when you want to constrain the surface. The autonomous orchestrators (`bubbles.workflow`, `bubbles.goal`, `bubbles.iterate`, `bubbles.sprint`, `bubbles.bug`) declare the canonical allowlist `tools: [read, search, edit, agent, todo, web, execute, bubbles, playwright]` — the `bubbles` (framework MCP server) and `playwright` defaults let the orchestrators drive framework + browser MCP tools out of the box. Additional per-project MCP tools layer on via `.github/bubbles-project.yaml` `mcp.grants` (see `project-config-contract.md`).
 - **Any orchestrator that declares a `tools:` allowlist MUST include `agent`** — that is the sub-agent dispatch tool that backs `runSubagent(...)`. An orchestrator that restricts its tools but forgets `agent` silently degrades into a single-agent transcript: the IDE blocks the call and the whole delegation pipeline collapses with no visible error.
+- **Orchestrators MUST keep `edit` in their allowlist** even though they delegate authoring to specialists. In VS Code, *a subagent inherits the parent session's tools by default* — so when an orchestrator dispatches a worker (`bubbles.implement`, `bubbles.test`, …), the worker can only use tools the orchestrator's surface includes. Strip `edit` from an orchestrator and **every worker it dispatches is starved of edit too**, and each dispatch returns `blocked`. The "orchestrators delegate rather than author" rule is enforced as **prose discipline in the agent body** (and Gate G042 ownership), NOT by removing the `edit` tool — removing the capability breaks delegation itself.
 - Omitting `tools:` entirely is **not** a violation for an orchestrator — inheriting all tools includes `agent`, so delegation still works.
 - A genuinely terminal agent that never delegates may opt out of the check with frontmatter `delegationModel: none`.
 
 Enforced by `bubbles/scripts/orchestrator-tool-frontmatter-lint.sh` (both a live scan and a hermetic selftest run in `framework-validate`). The guard flags only an orchestrator whose **present** `tools:` allowlist omits `agent`.
+
+### Troubleshooting: "the agent can't edit files / a tool isn't enabled / dispatches return blocked"
+
+An agent's `tools:` allowlist **declares** which tools an agent (and the workers it dispatches) may use, but it cannot **force-enable** a tool that is turned off in your chat session. Per VS Code: *"If a given tool is not available when using the custom agent, it is ignored,"* and *"a subagent inherits the agent from the main chat session and uses the same model and tools."* Two consequences:
+
+1. **The session must have the tools enabled.** If file edits fail, make sure the chat is in **Agent** mode (Ask/Plan are read-only) and the **Edit Files** tool group (`create_file`, `replace_string_in_file`, `multi_replace_string_in_file`) is enabled in the tools picker (🛠️ Configure Tools).
+2. **Subagents inherit the parent's tools.** When `bubbles.goal`/`bubbles.workflow`/etc. dispatch `bubbles.implement` and the dispatch returns `blocked`, the cause is that edit tools are not available in the session — so the inherited worker has none either. Enable Edit Files in the session, then re-run. (Running `/bubbles.implement` directly in Agent mode also works, because the worker then runs as the main agent in your tool-enabled session.)
+3. **After a framework upgrade, reload the VS Code window** so the editor re-reads the updated `.agent.md` frontmatter — a running session keeps the allowlist it loaded at startup.
 
 ## Owners And Executors
 
