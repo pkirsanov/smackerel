@@ -52,3 +52,25 @@ the missing infrastructure.
 - Blocked DoD evidence catalog: `../../report.md` → `## Deferred DoD Items`
 - Status transition record: `../../report.md` → `## Status Transition — 2026-06-03`
 - Per-blocker details: `bug.md`
+
+## Closeout Status (2026-06-09)
+
+All four acceptance-criteria blockers are RESOLVED and re-verified 2026-06-09:
+
+- **AC-1** (MV3 Playwright harness) — landed via `BUG-058-002`
+  (`extensions/chrome-bridge/test/e2e/`), de-flaked + re-certified via
+  `BUG-058-003`.
+- **AC-2** (live-Postgres integration harness) —
+  `tests/integration/extension_dedup_race_test.go` +
+  `extension_admin_devices_test.go` authored 2026-06-05.
+- **AC-3** (HTMX admin scaffold) — landed via `BUG-058-001`
+  (`internal/web/admin` + `GET /admin/extension/devices`); BLOCKER-3 admin unit
+  suite re-verified GREEN 2026-06-09.
+- **AC-4** (SCN-058-019 sideload disposition) — resolved as option (b): a local
+  MV3 sideload smoke (`sideload_smoke.spec.ts`) was delivered via `BUG-058-002`.
+
+**AC-5 is governed separately and is NOT discharged by closing this umbrella.**
+Spec 058's transition out of `blocked` is a distinct, deliberate pass; the
+parent remains `blocked` on the keyless-OIDC `cosign verify-blob` / public-Rekor
+row, which is tracked on the parent's `blockingDependencies` and is NOT one of
+this umbrella's four blockers.
