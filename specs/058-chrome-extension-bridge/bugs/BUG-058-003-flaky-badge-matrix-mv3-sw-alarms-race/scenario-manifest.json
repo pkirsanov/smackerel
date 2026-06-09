@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-058-003-flaky-badge-matrix-mv3-sw-alarms-race",
+  "parentSpec": "058-chrome-extension-bridge",
+  "trackingBug": null,
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane MV3 test-harness flake fix; the deterministic badge-matrix e2e proof (20/20 separate cold invocations + full-suite 11/11) drives certification and is locked once green."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "report.md '### Before Fix (RED)' and '### After Fix (GREEN)': BEFORE the triggerDrain() readiness guard, the badge-matrix test failed ~17% of separate cold ./smackerel.sh test e2e-ext invocations (2 of 12, with chrome.alarms undefined at fixtures.ts:192); AFTER, it passes 20/20 separate cold invocations and the full suite passes 11/11. The 'test' is the e2e test; the regression contract is the >=10x cold-green proof of the now-robust helper (delivered 20x). Reverting the in-evaluate chrome.alarms.create readiness poll restores the BEFORE red."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-058-003-01",
+      "scope": "Scope 1",
+      "title": "The badge-matrix sideload smoke is deterministic across cold MV3 service-worker spin-ups (triggerDrain waits for the chrome.alarms binding before firing the drain alarm)",
+      "requiredTestType": "e2e-ui",
+      "testFiles": ["extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts"],
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts", "function": "badge matrix: an unconfigured install shows SETUP after a drain attempt"}
+      ],
+      "evidenceRefs": [
+        "report.md#before-fix-red",
+        "report.md#after-fix-green",
+        "report.md#regression-evidence-adversarial-redgreen",
+        "scopes.md#scope-1--make-triggerdrain-robust-to-the-mv3-sw-spin-up-chromealarms-race"
+      ],
+      "liveTestExpectation": "Run in real headless Chromium (--headless=new) against the REAL built extension, the badge-matrix test calls the now-robust triggerDrain() helper, which (inside the sw.evaluate worker context) waits up to 5s/50ms for `typeof chrome.alarms.create === 'function'` before calling chrome.alarms.create(DRAIN_ALARM). The unconfigured worker's gateConfig() fails and sets the SETUP badge; expect(badge).toBe('SETUP') holds. Proven non-flaky across 20 separate cold ./smackerel.sh test e2e-ext invocations (>=10 required) and a full-suite 11/11 run. NOT request interception; no Playwright retries; assertion unchanged.",
+      "changeType": "modified"
+    }
+  ]
+}

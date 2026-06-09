@@ -189,11 +189,42 @@ export const test = base.extend<Fixtures>({
         await page.close();
       },
       triggerDrain: async () => {
+        // MV3 service-worker lifecycle race (BUG-058-003): Chrome terminates an
+        // idle MV3 service worker and re-spins it on the next `sw.evaluate`.
+        // During the brief window right after a (cold) spin-up the worker's
+        // global scope and the base `chrome` namespace already exist — so the
+        // evaluate itself runs — but the permission-gated `chrome.alarms`
+        // binding may not yet be installed, so a naive
+        // `chrome.alarms.create(...)` throws "Cannot read properties of
+        // undefined (reading 'create')". We wait INSIDE the worker context (so
+        // there is no cross-process TOCTOU gap between the readiness check and
+        // the call) for the binding to appear, then fire the drain alarm. The
+        // wait is bounded and rejects LOUDLY on timeout — a genuinely-broken
+        // worker surfaces as a clear error rather than a flake, and we
+        // deliberately do NOT mask the race with Playwright-side retries.
         await sw.evaluate(
           (alarm) =>
-            new Promise<void>((resolve) => {
-              chrome.alarms.create(alarm, { when: Date.now() + 100 });
-              setTimeout(resolve, 50);
+            new Promise<void>((resolve, reject) => {
+              const deadlineMs = Date.now() + 5000;
+              const fireWhenReady = () => {
+                if (typeof chrome?.alarms?.create === "function") {
+                  chrome.alarms.create(alarm, { when: Date.now() + 100 });
+                  // Let the onAlarm registration settle before returning.
+                  setTimeout(resolve, 50);
+                  return;
+                }
+                if (Date.now() >= deadlineMs) {
+                  reject(
+                    new Error(
+                      "triggerDrain: chrome.alarms binding never became available within " +
+                        "5000ms of SW spin-up (MV3 service-worker lifecycle race)",
+                    ),
+                  );
+                  return;
+                }
+                setTimeout(fireWhenReady, 50);
+              };
+              fireWhenReady();
             }),
           DRAIN_ALARM,
         );
