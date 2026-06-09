@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Pre-push hook — smackerel
+# Wires the knb spec 019 uniformity lint into smackerel's pre-push validation.
+#
+# Spec: <knb>/specs/019-zero-manual-deploy-orchestrator/scopes/10-per-product-pre-push-wiring
+# Canonical template: <knb>/tests/deploy/fixtures/pre-push-wiring/smackerel-pre-push.sh
+#
+# Install (local, once per clone):
+#   cp scripts/git-hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+#
+# No bypass: C3 of spec 019 mandates that no --skip / --no-uniformity /
+# --force / INSECURE_SKIP_UNIFORMITY flag exists in this hook. The only
+# way past a lint failure is to fix the upstream drift.
+
+set -uo pipefail
+
+# spec 019 scope 10: resolve knb checkout (smackerel)
+# Identical helper across all four products. We do NOT use KNB_<PRODUCT>_REPO
+# here because spec 019 scope 03's product-cli path helper already overloads
+# that name to point to the product repo dir (not the knb checkout). Using
+# KNB_REPO_ROOT only avoids the collision; operators set it once per shell.
+resolve_knb_checkout() {
+  if [ -n "${KNB_REPO_ROOT:-}" ] && [ -d "${KNB_REPO_ROOT}" ]; then
+    printf '%s' "$KNB_REPO_ROOT"
+    return 0
+  fi
+  if [ -d "$HOME/knb" ]; then
+    printf '%s' "$HOME/knb"
+    return 0
+  fi
+  return 1
+}
+
+# === knb spec 019 scope 10 — per-product pre-push uniformity lint ===
+# IDENTICAL bytes across smackerel/wanderaide/guesthost/quantitativefinance.
+# Only the resolve_knb_checkout helper above differs per repo in its
+# product-specific env-var name. The lint catches drift in the product's
+# `deploy <target>` shim shape per spec 019.
+# Spec: <knb>/specs/019-zero-manual-deploy-orchestrator/scopes/10-per-product-pre-push-wiring
+if _knb_root="$(resolve_knb_checkout)"; then
+  _lint_script="$_knb_root/scripts/lint/deploy-cli-uniformity.sh"
+  if [ ! -x "$_lint_script" ]; then
+    printf '%s\n' \
+      "[F019-PRE-PUSH-MISSING-LINT] Uniformity lint not executable at $_lint_script" \
+      "       knb checkout at $_knb_root appears incomplete - push rejected." \
+      "       Fix: ensure scripts/lint/deploy-cli-uniformity.sh exists in knb and is executable." >&2
+    exit 1
+  fi
+  bash "$_lint_script" || exit $?
+else
+  printf '%s\n' \
+    "[WARN] knb spec 019 uniformity lint SKIPPED: no knb checkout found." \
+    "       Set KNB_<PRODUCT>_REPO, KNB_REPO_ROOT, or check out knb at \$HOME/knb to enable local enforcement." \
+    "       knb CI safety net (scope 11) catches drift on push to main." >&2
+fi
+# === end knb spec 019 scope 10 ===
