@@ -389,10 +389,7 @@ async def handle_seasonal_analyze(
         return _empty()
 
     topic_lines = (
-        "\n".join(
-            f"- {t.get('name', '')}: {t.get('count', 0)} captures this month"
-            for t in topic_candidates[:10]
-        )
+        "\n".join(f"- {t.get('name', '')}: {t.get('count', 0)} captures this month" for t in topic_candidates[:10])
         or "- (none)"
     )
     prompt = (
