@@ -98,4 +98,16 @@ def test_clean():
 EOF
 assert_pass "comment-only mention allowed"
 
+# 7. Regression: the scanner must NOT self-match framework '*selftest.sh' files.
+#    Before the glob dot-escaping fix, the '**/*.test.*' glob compiled to the
+#    regex '.test.', whose unescaped dots matched '...selftest.sh' and flagged
+#    this scanner's own fixtures during a full-repo pre-push scan (G115 false
+#    positive). A '*selftest.sh' file outside a test dir must pass clean.
+reset_tmp
+cat > "$TMP/pipeline-selftest.sh" <<'EOF'
+def deploy():
+    write_to("/srv/backups/should-not-be-scanned")
+EOF
+assert_pass "framework *selftest.sh not self-matched (glob dot-escaping)"
+
 echo "All env-pollution-scan selftests passed."

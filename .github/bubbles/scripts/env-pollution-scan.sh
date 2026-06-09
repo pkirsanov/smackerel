@@ -39,8 +39,18 @@ PATTERNS=(
 WRITE_VERBS='write|push|publish|emit|send|record|append|update|patch|put|post'
 
 for p_glob in $TEST_PATHS; do
+  # Translate the shell-style glob into a path-substring regex:
+  #   1. Escape '.' FIRST so a glob like '**/*.test.*' yields the LITERAL
+  #      '\.test\.'. Without this, the stripped form is '.test.', whose
+  #      unescaped dots match any char and self-match this scanner's own
+  #      '...selftest.sh' fixtures (a G115 false positive at pre-push).
+  #   2. Strip the '**/' prefix and any remaining '*' wildcards.
+  glob_re="$(echo "$p_glob" | sed 's/\./\\./g; s/\*\*\///g; s/\*//g')"
+  # Prune '*/bubbles/scripts/*' (this scanner + its selftest): those framework
+  # files intentionally embed prod-surface strings as fixtures and are NOT
+  # product test code, so they must never be scanned as such.
   # shellcheck disable=SC2086
-  files="$(find $REPO_ROOT -path "*/node_modules/*" -prune -o -path "*/target/*" -prune -o -path "*/.venv/*" -prune -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' -o -name '*.rs' -o -name '*.go' -o -name '*.sh' \) -print 2>/dev/null | grep -E "($(echo "$p_glob" | sed 's/\*\*\///g; s/\*//g'))" 2>/dev/null || true)"
+  files="$(find $REPO_ROOT -path "*/node_modules/*" -prune -o -path "*/target/*" -prune -o -path "*/.venv/*" -prune -o -path "*/bubbles/scripts/*" -prune -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' -o -name '*.rs' -o -name '*.go' -o -name '*.sh' \) -print 2>/dev/null | grep -E "($glob_re)" 2>/dev/null || true)"
   for f in $files; do
     for pat in "${PATTERNS[@]}"; do
       if grep -nE "($WRITE_VERBS).*$pat|$pat.*($WRITE_VERBS)" "$f" 2>/dev/null; then
