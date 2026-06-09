@@ -1,0 +1,36 @@
+{
+  "bugId": "BUG-061-005",
+  "title": "Telegram bot init silently disabled on DNS hiccup at container start",
+  "spec": "specs/061-conversational-assistant",
+  "severity": "S1",
+  "status": "done",
+  "resolution": "cmd/core/wiring.go::startTelegramBotIfConfigured() now retries telegram.NewBot() 6× with exponential backoff (0,1,2,4,8,16s; ~30s total) and os.Exit(1) on retry exhaustion so Docker auto-restart can recover with fresh DNS resolver state. Shipped in commit 96acf294 (2026-06-09T05:53 UTC), CI green, deployed to <deploy-host> via ci-keyless promote (2026-06-09T15:33:39Z), bot live at 15:04:57Z.",
+  "owner": "bubbles.devops",
+  "discoveredBy": "bubbles.devops session 2026-06-09 during /weather triage",
+  "discoveredAt": "2026-06-09T08:00:00Z",
+  "resolvedAt": "2026-06-09T15:33:39Z",
+  "filedRetroactivelyAt": "2026-06-09T16:10:00Z",
+  "affectedSurface": [
+    "cmd/core/wiring.go::startTelegramBotIfConfigured",
+    "production telegram bot availability on <deploy-host> (and any other smackerel deployment with TELEGRAM_BOT_TOKEN configured)"
+  ],
+  "deferredScopes": [
+    "Chaos drill: force DNS failure at container start and verify the retry-then-exit path is exercised"
+  ],
+  "relatedBugs": [
+    "BUG-015-001 (ollama volume) — same 2026-06-09 boot incident",
+    "BUG-002-001 (caddy boot-race) — same 2026-06-09 boot incident",
+    "BUG-016-001 (weather tool timeout too tight) — shipped together in commit 96acf294",
+    "BUG-061-004 (provider_unavailable observability) — sibling theme: smackerel-core failures lacked operator-visible diagnostic detail"
+  ],
+  "completedPhases": [
+    "discovery",
+    "design",
+    "implement",
+    "verify",
+    "deploy"
+  ],
+  "completedScopes": [
+    "scope-01"
+  ]
+}
