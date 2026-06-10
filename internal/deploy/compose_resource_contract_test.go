@@ -87,6 +87,13 @@ var servicesUnderResourceContract = []struct {
 	// and PROMETHEUS_MEMORY_LIMIT in app.env or compose aborts at
 	// substitution time per Gate G028.
 	{"prometheus", "PROMETHEUS_CPU_LIMIT", "PROMETHEUS_MEMORY_LIMIT"},
+	// Spec 082 SCOPE-082-05 — SearxNG inherits the spec 045 FR-045-001
+	// resource envelope contract. The `searxng` Compose profile is opt-in;
+	// when enabled, the deploy adapter MUST emit SEARXNG_CPU_LIMIT and
+	// SEARXNG_MEMORY_LIMIT in app.env or compose aborts at substitution
+	// time per Gate G028. Was previously a hardcoded `memory: 256M` with no
+	// cpus cap (off-contract); SCOPE-082-05 brings it under the SST.
+	{"searxng", "SEARXNG_CPU_LIMIT", "SEARXNG_MEMORY_LIMIT"},
 }
 
 // assertResourceContract returns nil iff every service in the contract
@@ -159,7 +166,7 @@ func TestComposeResourceContract_LiveFile(t *testing.T) {
 	if err := assertResourceContractRequiresAll(yamlBytes); err != nil {
 		t.Fatalf("live deploy/compose.deploy.yml violates spec 045 FR-045-001 resource envelope contract: %v", err)
 	}
-	t.Logf("contract OK: deploy/compose.deploy.yml satisfies spec 045 FR-045-001 (every service in {postgres, nats, smackerel-core, smackerel-ml, ollama, prometheus} declares both cpus and memory under deploy.resources.limits using the fail-loud ${VAR:?...} SST form)")
+	t.Logf("contract OK: deploy/compose.deploy.yml satisfies spec 045 FR-045-001 (every service in {postgres, nats, smackerel-core, smackerel-ml, ollama, prometheus, searxng} declares both cpus and memory under deploy.resources.limits using the fail-loud ${VAR:?...} SST form)")
 }
 
 // assertResourceContractRequiresAll first asserts every contract-set
@@ -374,4 +381,28 @@ func TestComposeResourceContract_AdversarialDefaultFallback(t *testing.T) {
 		t.Fatalf("adversarial contract test failed: error did not mention 'postgres': %v", err)
 	}
 	t.Logf("adversarial OK: ${VAR:-default} fallback on postgres cpus is rejected with: %v", err)
+}
+
+// TestComposeResourceContract_AdversarialSearxNGLiteral proves the Spec 082
+// SCOPE-082-05 extension catches a regression back to the pre-082 form where
+// searxng hardcoded `memory: 256M` with NO cpus cap, off the SST contract.
+func TestComposeResourceContract_AdversarialSearxNGLiteral(t *testing.T) {
+	const fixture = `services:
+  searxng:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+`
+	err := assertResourceContract([]byte(fixture))
+	if err == nil {
+		t.Fatal("adversarial contract test failed: searxng hardcoded `memory: 256M` with no cpus was accepted (SCOPE-082-05 regression to the pre-082 off-contract form would NOT be caught)")
+	}
+	if !strings.Contains(err.Error(), "searxng") {
+		t.Fatalf("adversarial contract test failed: error did not mention 'searxng': %v", err)
+	}
+	if !strings.Contains(err.Error(), "cpus is missing") && !strings.Contains(err.Error(), "SEARXNG_CPU_LIMIT") {
+		t.Fatalf("adversarial contract test failed: error did not flag the missing searxng cpus limit: %v", err)
+	}
+	t.Logf("adversarial OK: searxng literal memory:256M with no cpus is rejected with: %v", err)
 }
