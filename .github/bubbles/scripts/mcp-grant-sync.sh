@@ -135,7 +135,11 @@ if [[ "$check_only" == "true" ]]; then
 fi
 
 if [[ -z "$CONFIG_FILE" ]]; then
-  say "mcp-grant-sync: no .github/bubbles-project.yaml — restricted agents kept canonical"
+  if [[ "$changed" -gt 0 ]]; then
+    say "mcp-grant-sync: ${changed} restricted agent(s) synced to the per-repo MCP server token (no operator grants declared)"
+  else
+    say "mcp-grant-sync: restricted agents already in sync (no operator grants declared)"
+  fi
 else
   say "mcp-grant-sync: ${changed} agent(s) updated from ${CONFIG_FILE#"$PROJECT_ROOT"/}"
 fi

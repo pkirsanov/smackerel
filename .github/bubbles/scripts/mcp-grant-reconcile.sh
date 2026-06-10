@@ -41,9 +41,22 @@
 #   tools: [read, search, edit, agent, todo, web, execute, bubbles, playwright]
 # `bubbles` (the framework's own MCP server) and `playwright` ship as framework
 # defaults so the autonomous orchestrators can drive framework + browser MCP
-# tools out of the box. Unknown tokens (server not configured) are ignored by
-# the IDE. Per-downstream additions layer on via mcp.grants.
+# tools out of the box. Per-downstream additions layer on via mcp.grants.
+#
+# `bubbles` is the CANONICAL placeholder for the framework MCP server token. On
+# a downstream install the server registers in .vscode/mcp.json under a UNIQUE
+# per-repo id (bubbles-<repo-slug>) so VS Code 1.118+ does not dedup-disable it
+# in a multi-root workspace. The placeholder is therefore MATERIALIZED to that
+# per-repo id in the installed agents (see bubbles_mcp_server_token) so the
+# orchestrators actually bind to the running server. The canonical source — and
+# therefore .checksums — always stores `bubbles`; reconcile normalizes the
+# materialized token back to `bubbles` before hashing, exactly like a stripped
+# grant. In the Bubbles SOURCE repo the token stays canonical `bubbles`.
 BUBBLES_MCP_CORE_TOOLS=(read search edit agent todo web execute bubbles playwright)
+
+# The canonical placeholder token that names the framework MCP server in the
+# core allowlist. Materialized per-repo on downstream installs.
+BUBBLES_MCP_SERVER_PLACEHOLDER="bubbles"
 
 # The five framework-managed orchestrators that ship the restrictive allowlist.
 # Only these are eligible for grants; every other agent inherits all tools.
@@ -57,6 +70,42 @@ BUBBLES_MCP_RESTRICTED_AGENTS=(
 
 # Reserved group-alias key in mcp.grants that fans out to all restricted agents.
 BUBBLES_MCP_GROUP_ALIAS="restricted-orchestrators"
+
+# --- MCP server token materialization (per-repo unique id) ----------------
+
+# Resolve the framework MCP server token to materialize in the restricted
+# orchestrators' `tools:` allowlist.
+#
+# - Downstream install layout (this lib at <repo>/.github/bubbles/scripts):
+#   returns `bubbles-<repo-slug>`, matching the id install.sh registers in
+#   .vscode/mcp.json. The slug algorithm MUST stay byte-identical to install.sh
+#   ("Register the Bubbles MCP server" step) so the agent token matches the
+#   registered server and the IDE binds it.
+# - Bubbles SOURCE layout (this lib at <repo>/bubbles/scripts): returns the
+#   canonical placeholder `bubbles` — NO per-repo materialization, so the source
+#   agents and their .checksums stay canonical.
+# - BUBBLES_MCP_FORCE_SERVER_TOKEN overrides the derivation (hermetic selftests).
+#
+# Layout is detected from THIS lib's own path (BASH_SOURCE), so every caller
+# (mcp-grant-sync.sh, downstream-framework-write-guard.sh, selftest) derives the
+# identical token regardless of which script sourced the lib.
+bubbles_mcp_server_token() {
+  if [[ -n "${BUBBLES_MCP_FORCE_SERVER_TOKEN:-}" ]]; then
+    printf '%s' "$BUBBLES_MCP_FORCE_SERVER_TOKEN"
+    return 0
+  fi
+  local lib_dir project_root base slug
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ "$lib_dir" != *"/.github/bubbles/scripts" ]]; then
+    printf '%s' "$BUBBLES_MCP_SERVER_PLACEHOLDER"
+    return 0
+  fi
+  project_root="${lib_dir%/.github/bubbles/scripts}"
+  base="$(basename "$project_root")"
+  slug="$(printf '%s' "$base" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed -e 's/[^a-z0-9]/-/g' -e 's/--*/-/g' -e 's/^-//' -e 's/-$//')"
+  [[ -n "$slug" ]] || slug="repo"
+  printf '%s' "bubbles-${slug}"
+}
 
 # --- Predicates -----------------------------------------------------------
 
@@ -75,6 +124,9 @@ bubbles_mcp_is_core_tool() {
   for candidate in "${BUBBLES_MCP_CORE_TOOLS[@]}"; do
     [[ "$candidate" == "$name" ]] && return 0
   done
+  # The materialized per-repo server token stands in for the canonical `bubbles`
+  # core token, so treat it as core too (prevents a redundant grant suffix).
+  [[ "$name" == "$(bubbles_mcp_server_token)" ]] && return 0
   return 1
 }
 
@@ -124,12 +176,15 @@ bubbles_mcp_effective_grants() {
   done | LC_ALL=C sort -u
 }
 
-# Join the canonical core tools with ", " (the exact canonical separator).
+# Join the canonical core tools with ", " (the exact canonical separator),
+# materializing the `bubbles` placeholder to the per-repo MCP server token.
 bubbles_mcp_join_core() {
-  local out=''
-  local token
+  local out='' token emit server_token
+  server_token="$(bubbles_mcp_server_token)"
   for token in "${BUBBLES_MCP_CORE_TOOLS[@]}"; do
-    out="${out:+$out, }$token"
+    emit="$token"
+    [[ "$token" == "$BUBBLES_MCP_SERVER_PLACEHOLDER" ]] && emit="$server_token"
+    out="${out:+$out, }$emit"
   done
   printf '%s' "$out"
 }
@@ -147,15 +202,18 @@ bubbles_mcp_reconcile_to_stdout() {
   local config="$2"
   local agent="$3"
 
-  local strip
+  local strip server_token
   strip="$(bubbles_mcp_effective_grants "$config" "$agent")"
+  server_token="$(bubbles_mcp_server_token)"
 
-  if [[ -z "$strip" ]]; then
+  # Fast path: no grant suffix to strip AND no per-repo token to normalize
+  # (source layout) — the file is already canonical, emit byte-identical.
+  if [[ -z "$strip" && "$server_token" == "$BUBBLES_MCP_SERVER_PLACEHOLDER" ]]; then
     cat "$file"
     return 0
   fi
 
-  awk -v strip="$strip" '
+  awk -v strip="$strip" -v server_token="$server_token" -v placeholder="$BUBBLES_MCP_SERVER_PLACEHOLDER" '
     BEGIN {
       n = split(strip, arr, "\n")
       for (i = 1; i <= n; i++) if (arr[i] != "") drop[arr[i]] = 1
@@ -167,8 +225,10 @@ bubbles_mcp_reconcile_to_stdout() {
       m = split(inner, toks, ", ")
       out = ""
       for (i = 1; i <= m; i++) {
-        if (toks[i] in drop) continue
-        out = (out == "") ? toks[i] : out ", " toks[i]
+        t = toks[i]
+        if (t in drop) continue
+        if (t == server_token) t = placeholder   # normalize materialized token -> canonical
+        out = (out == "") ? t : out ", " t
       }
       print "tools: [" out "]"
       next
