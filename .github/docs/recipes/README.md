@@ -60,6 +60,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 |--------|-------------------|
 | [Autonomous Goal](autonomous-goal.md) | "Give it a single goal — feature, bug, ops, or hardening — and let it handle everything until done" |
 | [Autonomous Sprint](autonomous-sprint.md) | "Give it multiple goals + a time budget, let it prioritize and execute autonomously" |
+| [Cross-Repo Goal Scenario](cross-repo-scenario.md) | "Take a whole outcome — review → plan → deliver → deploy → operate, possibly across repos — and let goal/sprint compile and run it as one approval-gated scenario" |
 
 > **💡 Tip:** Use **goal** when you have one well-defined objective and want full autonomy. Use **sprint** when you have a backlog and a deadline. Both run convergence loops that don't stop until findings are zero or time runs out.
 

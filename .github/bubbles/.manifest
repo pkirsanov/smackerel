@@ -153,6 +153,8 @@ bubbles/scripts/retro-framework-health-selftest.sh
 bubbles/scripts/retro-framework-health.sh
 bubbles/scripts/runtime-lease-selftest.sh
 bubbles/scripts/runtime-leases.sh
+bubbles/scripts/scenario-compile-lint-selftest.sh
+bubbles/scripts/scenario-compile-lint.sh
 bubbles/scripts/shellcheck-lint-selftest.sh
 bubbles/scripts/shellcheck-lint.sh
 bubbles/scripts/skill-evolution.sh
@@ -302,6 +304,7 @@ docs/recipes/check-status.md
 docs/recipes/choose-review-path.md
 docs/recipes/code-health-analysis.md
 docs/recipes/cross-model-review.md
+docs/recipes/cross-repo-scenario.md
 docs/recipes/custom-gates.md
 docs/recipes/design-a-capability.md
 docs/recipes/devops-release-coordination.md
@@ -439,6 +442,7 @@ agents/bubbles_shared/planning-core.md
 agents/bubbles_shared/project-config-contract.md
 agents/bubbles_shared/quality-gates.md
 agents/bubbles_shared/review-core.md
+agents/bubbles_shared/scenario-compile.md
 agents/bubbles_shared/scope-templates.md
 agents/bubbles_shared/scope-workflow.md
 agents/bubbles_shared/state-gates.md

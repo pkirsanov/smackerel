@@ -288,6 +288,10 @@ if [[ -x "$SCRIPT_DIR/observability-adapter-lint.sh" && -d "$REPO_ROOT/bubbles/a
   run_check "Observability adapter lint (live)" bash "$SCRIPT_DIR/observability-adapter-lint.sh" "$REPO_ROOT"
 fi
 
+if [[ -x "$SCRIPT_DIR/scenario-compile-lint-selftest.sh" ]]; then
+  run_check "Scenario compile lint selftest" bash "$SCRIPT_DIR/scenario-compile-lint-selftest.sh"
+fi
+
 if [[ -x "$SCRIPT_DIR/retro-framework-health-selftest.sh" ]]; then
   run_check "Retro framework-health selftest" bash "$SCRIPT_DIR/retro-framework-health-selftest.sh"
 fi

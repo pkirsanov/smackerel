@@ -122,6 +122,36 @@ After any non-terminal phase, this orchestrator MUST automatically continue to t
 
 Any sprint-dispatched goal that creates or repairs planning truth inherits the canonical planning chain: `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`. UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling. Enforced by `bubbles/scripts/planning-workflow-chain-guard.sh` (registered as Gate `G091` and invoked as Check 28 inside `bubbles/scripts/state-transition-guard.sh`).
 
+## Sprint Scenario Execution (Cross-Repo / Multi-Phase Missions)
+
+When the sprint's goals form ONE ordered mission rather than an independent backlog — e.g.
+"review readiness → plan work in repo A and repo B → deliver all → deploy to a target →
+stand up ongoing ops" — compile a **goal scenario** instead of an effort-sorted queue.
+Follow [scenario-compile.md](bubbles_shared/scenario-compile.md) as the authoritative
+contract. The difference from the normal sprint queue:
+
+- **Dependency order, not effort reorder.** Scenario nodes execute in `dependsOn` order; the
+  `dynamic_reorder` time heuristic does NOT apply across scenario nodes (a deploy node must
+  never run before its delivery + verification nodes, regardless of remaining time).
+- **Typed, cross-repo nodes.** Each node declares its `repo` and resolves to one existing
+  mode/agent. Per-node work runs in THAT repo's command surface and is certified by
+  `bubbles.validate` in that repo. The sprint ledger aggregates per-repo sub-results but
+  NEVER certifies across repos.
+- **Action nodes are gated.** A host-mutating `action` node (deploy/promote/rollback) is an
+  OPS packet that emits `route_required` with `action: human-approval` and waits for an
+  approval token before any mutation — PRE-mutation, per-action-node.
+- **Depth-safe.** No node may resolve to a `requiresTopLevelRuntime` fan-out mode
+  (`iterate`/`autonomous-*`/`*-quality-sweep`/`idea-to-release-completion`); each node is a
+  depth-1 dispatch parent-expanded in this top-level sprint runtime (Gate G064).
+
+Compile the plan to `.specify/runtime/scenario-plan-<scenarioId>.json`, validate it with
+`bash bubbles/scripts/scenario-compile-lint.sh <plan>` (exit 0 required), preview node order
++ aggregate riskClass + approval points to the operator, then execute nodes in dependency
+order. After the final node, verify the `rootOutcome` Outcome Contract (successSignal proven,
+hardConstraints held — Gate G070 shape), not merely that each node returned success. When the
+sprint receives a single declared outcome rather than a goal list, delegate the compilation +
+execution to a `bubbles.goal` convergence run (or parent-expand it) instead.
+
 ## Time Management
 
 ```yaml

@@ -80,7 +80,9 @@ Commit this file so new team members get consistent tooling suggestions.
 
 ## Bubbles Integration
 
-Bubbles does NOT manage `.vscode/mcp.json` or `.vscode/extensions.json` — these are project-owned files. Bubbles provides the agent definitions, skills, and governance; MCP provides external tool access that complements them.
+Bubbles manages exactly ONE entry in `.vscode/mcp.json`: its own MCP server, registered under a **unique per-repo id** (`bubbles-<repo-slug>`) on every install/upgrade. Every other server in the file, and `.vscode/extensions.json`, stay project-owned — Bubbles never reads or rewrites them. The unique id is what lets the server start cleanly in multi-root workspaces, where a shared generic `bubbles` id across folders makes VS Code's MCP gateway refuse to start any of them. See [MCP.md](../MCP.md) for details.
+
+Bubbles provides the agent definitions, skills, and governance; MCP provides external tool access that complements them.
 
 **Example workflow:**
 1. Agent loads `copilot-instructions.md` (project rules) + `AGENTS.md` (guardrails)
