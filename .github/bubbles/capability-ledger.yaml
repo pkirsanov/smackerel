@@ -141,6 +141,44 @@ capabilities:
     - README.md
     - docs/generated/competitive-capabilities.md
 
+  cross-repo-scenario-orchestration:
+    label: Cross-repo goal scenario compiler
+    state: shipped
+    summary: >
+      bubbles.goal (single outcome) and bubbles.sprint (multi outcome) compile a high-level
+      operator outcome into a typed, dependency-ordered, possibly cross-repo DAG whose nodes
+      each resolve to an EXISTING workflow mode or specialist — no new per-journey workflow
+      modes. bubbles.super resolves intent only (scenario-aware RESOLUTION-ENVELOPE fields);
+      it never compiles or executes the DAG. Node types (diagnostic/planning/delivery/
+      verification/action/ongoing-ops) are routing metadata, not a new completion model —
+      action and ongoing-ops nodes are OPS packets certified per repo by bubbles.validate.
+      Host-mutating action nodes are gated by a pre-mutation approval token (the propagate
+      pattern). scenario-compile-lint.sh forbids any node resolving to a
+      requiresTopLevelRuntime fan-out mode (Gate G064 depth safety) by deriving the forbidden
+      set from modes.yaml, and validates DAG acyclicity, action gating, and the rootOutcome
+      Outcome Contract (Gate G070 shape). Runtime plan/ledger live under .specify/runtime/.
+    ownerSurface: agents/bubbles_shared/scenario-compile.md
+    releaseIntroduced: v7.6.0
+    docsRefs:
+    - docs/recipes/cross-repo-scenario.md
+    - docs/guides/WORKFLOW_MODES.md
+    evidenceRefs:
+    - agents/bubbles_shared/scenario-compile.md
+    - bubbles/scripts/scenario-compile-lint.sh
+    - bubbles/scripts/scenario-compile-lint-selftest.sh
+    - tests/regression/test_20_scenario_compile.sh
+    - agents/bubbles.goal.agent.md
+    - agents/bubbles.sprint.agent.md
+    - agents/bubbles.super.agent.md
+    - bubbles/intent-routes.yaml
+    competitorTags:
+    - claude-code
+    - roo-code
+    - cursor
+    freshnessTargets:
+    - README.md
+    - docs/generated/competitive-capabilities.md
+
   supported-interop-apply:
     label: Supported interop apply
     state: shipped

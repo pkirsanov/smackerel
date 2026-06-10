@@ -102,6 +102,8 @@ Some TPB characters carry different agent roles when their narrative context leg
 |-------|---------|-------|
 <!-- GENERATED:CHEATSHEET_ALIASES_START - run `bash bubbles/scripts/generate-cheatsheet.sh` -->
 | `sunnyvale pull-the-strings` | `bubbles.workflow` | *"Bubbles is pulling the strings, boys."* |
+| `sunnyvale i-got-a-plan-boys` | `bubbles.goal` | *"I got a plan, boys, and it's a good one — the whole thing, start to finish."* |
+| `sunnyvale the-whole-operation` | `bubbles.sprint` | *"We're runnin' the whole operation now — review, deliver, deploy, the works."* |
 | `sunnyvale under-the-light` | `bubbles.grill` | *"Let's get it under the light and see if it survives."* |
 | `sunnyvale private-dancer` | `bubbles.grill` | *"You want answers? Put it under the light."* |
 | `sunnyvale worst-case-ontario` | `bubbles.chaos` | *"Worst case Ontario, something breaks"* |

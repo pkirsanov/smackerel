@@ -63,6 +63,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 51 | [Incident Response](recipes/incident-response.md) | `incident-fastlane` | Diagnose production incidents, route rollback authority to train, execute and validate |
 | 52 | [Observe Production](recipes/observe-production.md) | `traceContracts.liveTelemetryEndpoints` | Wire live telemetry through swappable observability adapters |
 | 53 | [Framework Health](recipes/framework-health.md) | `framework-health` | Analyze Bubbles itself and emit proposal-first improvement packets |
+| 54 | [Cross-Repo Goal Scenario](recipes/cross-repo-scenario.md) | `bubbles.goal` / `bubbles.sprint` | Compile an outcome (review → plan → deliver → deploy → operate, possibly cross-repo) into one approval-gated scenario DAG |
 
 ---
 

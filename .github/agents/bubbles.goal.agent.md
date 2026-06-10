@@ -206,6 +206,47 @@ If registry and this file conflict, registry phase/gate policy wins and the conf
 
 ---
 
+## Goal Scenario Compilation (Cross-Repo / Multi-Phase)
+
+When the goal is bigger than one spec/mode — it spans more than one repo, chains
+heterogeneous phases (review → plan → deliver → deploy → operate), or includes a
+host-mutating deploy — this agent compiles a **goal scenario**: a typed,
+dependency-ordered DAG whose nodes each resolve to ONE existing workflow mode or
+specialist. Follow [scenario-compile.md](bubbles_shared/scenario-compile.md) as the
+authoritative contract. Summary:
+
+1. **Resolve intent.** If the request is vague, `runSubagent(bubbles.super)` and consume a
+   `RESOLUTION-ENVELOPE` with the scenario-aware fields (`goalClass`, `primaryRepo`,
+   `supportingRepos`, `targetEnvironment`, `deploymentModel`, `constraints`,
+   `compositionHint`). `super` resolves only — it never compiles or executes the DAG.
+2. **Compile the DAG.** Build `rootOutcome` (an Outcome Contract: intent, successSignal,
+   hardConstraints, failureCondition), `repos[]`, and typed `nodes[]` (`diagnostic`,
+   `planning`, `delivery`, `verification`, `action`, `ongoing-ops`). Action and ongoing-ops
+   nodes are OPS packets under `specs/_ops/OPS-*` in the target repo. Write the compiled
+   plan to `.specify/runtime/scenario-plan-<scenarioId>.json` via the runtime/session tool
+   surface (never an ad-hoc file edit).
+3. **Validate the plan** with `bash bubbles/scripts/scenario-compile-lint.sh
+   .specify/runtime/scenario-plan-<scenarioId>.json` (exit 0 required). No node may resolve
+   to a `requiresTopLevelRuntime` fan-out mode (Gate G064); the lint enforces this.
+4. **Preview + approval.** Present node order, per-node repo+mode, aggregate riskClass, and
+   which nodes need approval. At an `action` node, emit `route_required` with
+   `action: human-approval` and STOP until re-invoked with an approval token — exactly like a
+   propagate backport. Approval is PRE-mutation.
+5. **Execute nodes in dependency order**, each as a depth-1 dispatch (single specialist OR
+   single-spec mode), parent-expanded in this top-level runtime. Each node's repo work runs
+   in THAT repo's own command surface and is certified by `bubbles.validate` in that repo.
+   Append one `.specify/runtime/scenario-runs.jsonl` ledger record per node attempt.
+6. **Verify the root outcome.** After all nodes are terminal, demonstrate the `successSignal`
+   with real evidence and confirm every `hardConstraint` held (Gate G070 shape) — not merely
+   that each node returned success.
+
+Hard rules (mechanically enforced): no fan-out mode as a node, exactly one of mode/agent per
+node, action nodes fully gated, per-repo certification only, no cross-repo `state.json`
+certification. If this runtime is itself a subagent without `runSubagent`, emit
+`route_required` with `routingReason: top-level-runtime-required` instead of collapsing roles.
+
+---
+
 ## Convergence Loop
 
 ```yaml

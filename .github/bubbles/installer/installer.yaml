@@ -13,6 +13,7 @@
 #   migration_rename rename or remove a legacy filename/dirname under the target
 #   version_stamp    copy VERSION into ${TARGET}/bubbles/.version
 #   provenance_write write ${TARGET}/bubbles/.install-source.json
+#   mcp_register     write/merge the Bubbles server entry (unique per-repo id) into repo-root .vscode/mcp.json
 #
 # Each step must declare:
 #   name              human-readable step name (must appear in install.sh as info() or section comment)
@@ -116,6 +117,20 @@ steps:
     marker: 'Installing MCP server'
     bug_class: missing-mcp-surface
     required: true
+
+  - name: register_mcp_vscode
+    type: mcp_register
+    target_dir: .vscode/mcp.json
+    marker: 'Registering Bubbles MCP server'
+    bug_class: mcp-server-id-collision
+    required: true
+    # Multi-root VS Code workspaces read each folder's own .vscode/mcp.json.
+    # A shared generic server id ("bubbles") across folders makes the editor's
+    # MCP gateway refuse to start any of them (perpetual "Update Tools", never
+    # connects). install.sh registers the server under a UNIQUE per-repo id
+    # (bubbles-<repo-slug>) and manages only that one entry; every other server
+    # in the file is operator-owned and left untouched. Repo-rooted write:
+    # target is repo-root .vscode/mcp.json, NOT ${TARGET}/.vscode/mcp.json.
 
   - name: install_workflow_alias_map
     type: directory_copy

@@ -139,12 +139,12 @@ var outputSchema = json.RawMessage(`{
 
 func init() {
 	agent.RegisterTool(agent.Tool{
-		Name:             ToolName,
-		Description:      "Look up current conditions or a short-horizon forecast for a single location via the configured weather provider; cache hits preserve the original retrieved_at timestamp for accurate attribution.",
-		InputSchema:      inputSchema,
-		OutputSchema:     outputSchema,
-		SideEffectClass:  agent.SideEffectExternal,
-		OwningPackage:    "internal/agent/tools/weather",
+		Name:            ToolName,
+		Description:     "Look up current conditions or a short-horizon forecast for a single location via the configured weather provider; cache hits preserve the original retrieved_at timestamp for accurate attribution.",
+		InputSchema:     inputSchema,
+		OutputSchema:    outputSchema,
+		SideEffectClass: agent.SideEffectExternal,
+		OwningPackage:   "internal/agent/tools/weather",
 		// A single lookup is geocode + forecast, two sequential HTTPS
 		// round trips to open-meteo. Measured worst case from the
 		// home-lab container is ~2s per call (so ~4s end-to-end on a

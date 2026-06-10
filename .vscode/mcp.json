@@ -1,0 +1,21 @@
+{
+    "servers": {
+        "bubbles-smackerel": {
+            "type": "stdio",
+            "command": "python3",
+            "args": [
+                "${workspaceFolder}/.github/bubbles/mcp/server.py"
+            ],
+            "env": {
+                "BUBBLES_MCP_LOG_LEVEL": "INFO"
+            }
+        },
+        "playwright": {
+            "type": "stdio",
+            "command": "npx",
+            "args": [
+                "@playwright/mcp@latest"
+            ]
+        }
+    }
+}

@@ -46,7 +46,7 @@ Every project using Bubbles MUST have these files:
 | `.specify/memory/constitution.md` | **Governance principles** — project-specific principles layered on top of universal governance | **YES** |
 | `.github/copilot-instructions.md` | **Project policies** — project-specific rules, testing requirements, Docker config, port allocation, command tables | **YES** |
 | `.github/bubbles-project.yaml` | **Project-owned framework extensions** — scan-pattern overrides, managed-doc registry overrides, impact-aware validation maps, trace contracts, and custom gates (G900+; framework reserves G001-G199) | **OPTIONAL** |
-| `.vscode/mcp.json` | **MCP server configuration** — team-shared AI tool access (cross-repo search, issue trackers, etc.) | **OPTIONAL** |
+| `.vscode/mcp.json` | **MCP server configuration** — team-shared AI tool access (cross-repo search, issue trackers, etc.). The installer auto-registers its own `bubbles-<repo-slug>` server entry here (creating the file if absent); every other server stays project-owned. | **OPTIONAL** |
 | `.vscode/extensions.json` | **Recommended extensions** — team-consistent AI tooling (Copilot, etc.) | **OPTIONAL** |
 
 ---
@@ -469,7 +469,7 @@ When adopting Bubbles for a new project, populate these files:
 - [ ] `config/<project>.yaml` — Create the SST config file with ports, services, infrastructure, environments
 - [ ] `scripts/commands/config.sh` (or equivalent) — Create the config generator that parses SST and writes derived files
 - [ ] `.github/copilot-instructions.md` → SST section — Document generated files, per-language enforcement, port allocation
-- [ ] `.vscode/mcp.json` — (Optional) Configure team-shared MCP servers for cross-repo AI tool access
+- [ ] `.vscode/mcp.json` — (Optional) Configure team-shared MCP servers for cross-repo AI tool access (the installer auto-registers its own `bubbles-<repo-slug>` entry; other servers stay project-owned)
 - [ ] `.vscode/extensions.json` — (Optional) Recommend AI extensions for the team
 - [ ] `bubbles/workflows.yaml` — Copy as-is (project-agnostic) or customize modes
 - [ ] `agents/` — Copy all `bubbles.*.agent.md` files as-is (project-agnostic)
