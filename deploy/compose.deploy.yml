@@ -31,7 +31,10 @@
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    # Spec 082 SCOPE-082-06 — pinned by sha256 digest (verified 2026-06-10)
+    # for supply-chain reproducibility. Byte-for-byte lockstep with
+    # deploy/contract.yaml::externalImages (external_images_contract_test.go).
+    image: pgvector/pgvector:pg16@sha256:00ba258a66dac104fd5171074a0084462a64a1369d8513f3d0a634e2f24d15bc
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -72,7 +75,8 @@ services:
         max-file: "5"
 
   nats:
-    image: nats:2.10-alpine
+    # Spec 082 SCOPE-082-06 — pinned by sha256 digest (verified 2026-06-10).
+    image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -102,7 +106,14 @@ services:
           memory: "${NATS_MEMORY_LIMIT:?NATS_MEMORY_LIMIT must be set by deploy adapter}"
     labels:
       com.smackerel.component: nats
-      com.smackerel.lifecycle: ephemeral
+      # Spec 082 SCOPE-082-04 — JetStream persists at-least-once in-flight
+      # capture state (events accepted but not yet processed by core) to the
+      # nats-data named volume. It MUST survive a `./smackerel.sh clean` /
+      # `down` on a running home-lab stack, so it is labelled `persistent`
+      # (was `ephemeral`, which marked it as fair game for cleanup and risked
+      # wiping queued captures). The clean tooling preserves volumes whose
+      # component is labelled persistent.
+      com.smackerel.lifecycle: persistent
     logging:
       driver: json-file
       options:
@@ -174,14 +185,19 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
     restart: unless-stopped
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
-    # The HuggingFace caches AND sentence-transformers caches AND uvicorn
-    # temp files all live under `/tmp/...` thanks to HF_HOME and
-    # SENTENCE_TRANSFORMERS_HOME overrides set in `environment:` below;
-    # one 768M tmpfs at `/tmp` absorbs them all and survives container
-    # restart with the model re-downloaded on first request.
+    # Spec 082 SCOPE-082-03 — the HuggingFace + sentence-transformers model
+    # caches now live on the PERSISTENT named volume `ml-model-cache`
+    # mounted at /home/smackerel/.cache (the image's baked cache path; the
+    # ML image runs as non-root USER smackerel and bakes the embedding
+    # model there at build time — ml/Dockerfile). Docker initializes the
+    # fresh named volume FROM the image content on first mount, so the model
+    # is present with correct ownership and is NOT re-downloaded from
+    # HuggingFace on restart (the prior /tmp tmpfs override both ignored the
+    # baked model and lost it on restart). The /tmp tmpfs now only absorbs
+    # uvicorn scratch, so it is shrunk to 128M.
     read_only: true
     tmpfs:
-      - /tmp:size=768m,mode=1777,nosuid,nodev
+      - /tmp:size=128m,mode=1777,nosuid,nodev
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -192,15 +208,22 @@ services:
       - ./app.env
     environment:
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
-      # Spec 045 FR-045-003 — redirect HuggingFace + sentence-transformers
-      # caches into the read-only-root tmpfs at /tmp. Without these
-      # overrides the libraries default to `~/.cache/huggingface/...`
-      # which would attempt to write under `/` and fail at first request.
-      HF_HOME: /tmp/hf-cache
-      SENTENCE_TRANSFORMERS_HOME: /tmp/st-cache
+      # Spec 045 FR-045-003 + Spec 082 SCOPE-082-03 — point the HuggingFace +
+      # sentence-transformers caches at the PERSISTENT ml-model-cache volume
+      # mounted at /home/smackerel/.cache (matching the image's baked ENV).
+      # Without an override the libraries default to these same paths, but
+      # the read-only root would reject writes; the persistent mount makes
+      # them writable AND durable. The prior /tmp form re-downloaded the
+      # model on every restart (external HuggingFace dependency on the
+      # reboot-recovery path) — removed.
+      HF_HOME: /home/smackerel/.cache/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /home/smackerel/.cache/sentence-transformers
     volumes:
       - ./prompt_contracts:/app/prompt_contracts:ro
       - ./nats_contract.json:/config/nats_contract.json:ro
+      # Spec 082 SCOPE-082-03 — persistent embedding-model cache (mounted at
+      # the image's baked cache path so the model survives restarts).
+      - ml-model-cache:/home/smackerel/.cache
     stop_grace_period: 15s
     depends_on:
       nats:
@@ -230,7 +253,8 @@ services:
         max-file: "5"
 
   ollama:
-    image: ollama/ollama:rocm
+    # Spec 082 SCOPE-082-06 — pinned by sha256 digest (verified 2026-06-10).
+    image: ollama/ollama:rocm@sha256:e658cf94b88ef88aa0868bc5900e6f83ccf77262ef2ca582601161f865a2b080
     restart: unless-stopped
     devices:
       # AMD ROCm — required for GPU inference on home-lab (Radeon 8060S iGPU,
@@ -240,9 +264,19 @@ services:
       - /dev/kfd
       - /dev/dri
     group_add:
-      # render + video host GIDs needed to access /dev/dri/renderD128.
-      - "44"
-      - "993"
+      # Spec 082 SCOPE-082-09 — render + video host GIDs needed to access
+      # /dev/dri/renderD128. These are HOST-SPECIFIC (a different distro/host
+      # assigns different render/video GIDs) — exactly the "value that changes
+      # when a different operator deploys" that the no-env-specific-content +
+      # deployment-ownership-boundary policy forbids as literals in this
+      # generic compose. They are routed to adapter-supplied fail-loud env
+      # vars (Gate G028, no silent default): the deploy adapter MUST emit
+      # OLLAMA_RENDER_GID and OLLAMA_VIDEO_GID into app.env (resolved from
+      # `getent group render` / `getent group video` on the real host) or
+      # compose aborts at substitution time. The HSA/HCC gfx env literals
+      # below stay generic because they describe the GPU CLASS, not the host.
+      - "${OLLAMA_RENDER_GID:?OLLAMA_RENDER_GID must be set by deploy adapter (host render group GID, e.g. getent group render)}"
+      - "${OLLAMA_VIDEO_GID:?OLLAMA_VIDEO_GID must be set by deploy adapter (host video group GID, e.g. getent group video)}"
     environment:
       # Daemon-side model keep-alive default; SST-derived per
       # infrastructure.ollama.keep_alive (config/smackerel.yaml). Without this
@@ -410,7 +444,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # Spec 082 SCOPE-082-05 — SST-derived; fail-loud per Gate G028.
+          # Was a hardcoded `memory: 256M` with NO cpus cap, drifting from
+          # the spec-045 resource contract every other service follows.
+          cpus: "${SEARXNG_CPU_LIMIT:?SEARXNG_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${SEARXNG_MEMORY_LIMIT:?SEARXNG_MEMORY_LIMIT must be set by deploy adapter}"
     labels:
       com.smackerel.component: searxng
       com.smackerel.lifecycle: ephemeral
@@ -429,3 +467,10 @@ volumes:
     name: ${OLLAMA_VOLUME_NAME}
   prometheus-data:
     name: ${PROMETHEUS_VOLUME_NAME}
+  # Spec 082 SCOPE-082-03 — persistent embedding-model cache for smackerel-ml.
+  # Initialized from the image's baked /home/smackerel/.cache on first mount
+  # so the embedding model is never re-downloaded from HuggingFace on restart.
+  ml-model-cache:
+    name: ${ML_MODEL_CACHE_VOLUME_NAME}
+    labels:
+      com.smackerel.lifecycle: persistent

@@ -3159,7 +3159,7 @@ To restore default startup health on the 8 GiB ollama envelope, BUG-045-001 Scop
 | `recipe.enrichment.local_model` | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
 | `meal_plan.suggestion.local_model` | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
 
-The ml-sidecar envelope is unchanged: `embedder.local.model` = `nomic-embed-text` (350 MiB) and `ocr.local.model` = `deepseek-ocr:3b` (3072 MiB) both fit the 3 GiB ml-sidecar ceiling.
+The ml-sidecar envelope is unchanged: `embedder.local.model` = `nomic-embed-text` (768 MiB) and `ocr.local.model` = `deepseek-ocr:3b` (2560 MiB) both fit the 3 GiB ml-sidecar ceiling.
 
 ### Model memory profiles catalog
 
@@ -3170,7 +3170,7 @@ The `model_memory_profiles` map in `config/smackerel.yaml` declares the resident
 | `gemma3:4b` | 4096 | <https://ollama.com/library/gemma3> |
 | `deepseek-r1:7b` | 4864 | <https://ollama.com/library/deepseek-r1> |
 
-Pre-existing entries for `gemma4:26b` (30720 MiB), `deepseek-r1:32b` (24576 MiB), `gpt-oss:20b` (16384 MiB), and all other catalogued models remain in place. They are NOT removed because the operator opt-up path (see below) still needs to validate them.
+Pre-existing entries for `gemma4:26b` (18432 MiB), `deepseek-r1:32b` (22528 MiB), `gpt-oss:20b` (14336 MiB), and all other catalogued models remain in place. They are NOT removed because the operator opt-up path (see below) still needs to validate them. (Spec 082 SCOPE-082-02 reconciled these three figures + the two ml-sidecar figures below to the `config/smackerel.yaml` `model_memory_profiles` SST authority, which had drifted from this doc.)
 
 ### Operator opt-up path
 
@@ -3195,6 +3195,40 @@ The `./smackerel.sh config generate --env <env>` pipeline now runs `cmd/config-v
 This means an envelope-violating override (whether authored by an operator, an upstream merge, or a runtime experiment) cannot land in `config/generated/<env>.env`. The stack will fail to start with a clear validator error instead of crashing ollama at first inference on the deploy target. The pre-emit gate is honored by every codepath that lands on `smackerel_generate_config` — including `./smackerel.sh check` (Compose render preflight), `./smackerel.sh up` (which runs `config generate` first), and `./smackerel.sh test integration` (which runs `config generate --env test` first).
 
 The integration harness can substitute a precompiled validator binary by setting `SMACKEREL_CONFIG_VALIDATE_BIN` before invoking `smackerel_generate_config`; the default path falls back to `go run ./cmd/config-validate`. The gate also skips when `SHELL_PRODUCTION_CLASS_TARGETS` is empty (i.e., not a production-class generation run).
+
+### Concurrent interactive-set envelope guard (Spec 082 SCOPE-082-02)
+
+The per-model envelope check above proves each configured model fits the
+ollama envelope **alone**. It does NOT, by itself, prove that the models the
+runtime keeps **co-resident** fit together. Under a resident `OLLAMA_KEEP_ALIVE`
+(`-1` = never unload, or any duration ≥ 10 minutes such as the home-lab/prod
+`24h`), ollama retains every model it loads, so the distinct interactive
+hot-path models are simultaneously resident and their **sum** must also fit
+`OLLAMA_MEMORY_LIMIT`. If it does not, Docker OOM-kills the ollama container
+into a restart crash-loop the first time the second large model loads.
+
+`internal/config/config.go::validateModelEnvelopes` now sums the distinct
+interactive hot-path slots — `LLM_MODEL`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL`,
+`AGENT_PROVIDER_DEFAULT_MODEL`, `AGENT_PROVIDER_FAST_MODEL`,
+`AGENT_PROVIDER_VISION_MODEL` — and fails loud (at `./smackerel.sh config
+generate` time, via the pre-emit gate) when that sum exceeds
+`OLLAMA_MEMORY_LIMIT` AND keep-alive is resident. On-demand specialists
+(reasoning, OCR, photo-intelligence batch) are governed by the per-model
+individual check above; operators running sustained concurrent
+reasoning+OCR+chat workloads on a long keep-alive should add further headroom
+or shorten `OLLAMA_KEEP_ALIVE`.
+
+| Env | Interactive distinct set | Sum (MiB) | `OLLAMA_MEMORY_LIMIT` | Result |
+|-----|--------------------------|-----------|-----------------------|--------|
+| dev | `gemma3:4b` + `qwen2.5:0.5b-instruct` | 5120 | 8G (8192) | fits |
+| test | `qwen2.5:0.5b-instruct` | 1024 | 8G (8192) | fits |
+| home-lab | `gemma4:26b` + `llama3.1:8b` | 24576 | **28G (28672)** | fits |
+
+The home-lab `ollama_memory_limit` was raised `20G → 28G` (Spec 082) precisely
+because the old 20G floor was sized for `gemma4:26b` alone (18432 MiB) and the
+`+ llama3.1:8b` agent default/fast model pushed the resident set to 24576 MiB,
+over-subscribing the cgroup. The evo-x2 host has ~109 GiB RAM, so 28G leaves
+~4 GiB headroom for KV-cache growth.
 
 ## QF Companion Connector Operations (Spec 041 Scope 5)
 

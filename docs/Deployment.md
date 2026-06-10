@@ -805,6 +805,87 @@ Closure evidence:
 fallback flag is documented in
 [Operations.md → "Deprecation Pathway"](Operations.md#deprecation-pathway--production_shared_token_fallback_enabled).
 
+## Go-Live Readiness Checklist (evo-x2 / home-lab)
+
+> **Spec 082 SCOPE-082-08.** This is the single consolidated operator
+> checklist for a FIRST real deployment of the Smackerel MVP to a
+> production-class home-lab target (evo-x2). It ties together the secret
+> prerequisites (spec 051), the bundle secret-injection contract (spec 052),
+> the local-operator vs CI trust decision (spec 017), Compose profile
+> enablement, backup/restore-drill sequencing, and the supervised-canary
+> first apply. Work top to bottom; every gate below is fail-closed by design
+> (the system refuses to start insecurely rather than starting insecurely).
+
+### 1. Build & trust model (spec 017 — local-operator vs CI)
+
+- [ ] Decide the build path. **CI (keyless, recommended):** the `build.yml`
+      workflow produces cosign-keyless-signed images + SBOM + SLSA provenance.
+      **Local-operator (no cloud CI):** run `./smackerel.sh build --target home-lab`
+      which docker-builds, Trivy-gates, pushes to ghcr, signs with the operator
+      cosign key, attaches an SBOM, generates the deterministic `accel`-tier
+      bundle, and emits `local-build-manifest-<sha>.yaml` (`trustModel: local-operator`).
+- [ ] Do **NOT** raw `docker build` + `docker compose up` on the host — that
+      bypasses the signed-supply-chain contract (no cosign, no bundle hash).
+- [ ] Confirm the knb home-lab adapter `preconditions.sh`/`apply.sh` accepts the
+      chosen `trustModel` (the local-operator path uses an operator pubkey and
+      omits SLSA; keep adapter cosign-verify ON, pointed at the operator key).
+
+### 2. Production secrets (spec 051 — five required, fail-loud)
+
+The deploy adapter MUST populate these in its encrypted store; the runtime
+fails loud at startup if any is missing, empty, or a dev default:
+
+- [ ] `POSTGRES_PASSWORD` — non-default (the dev literal `smackerel` is rejected for home-lab).
+- [ ] `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` — PASETO v4.public signing key (`smackerel-core auth keygen`).
+- [ ] `AUTH_SIGNING_ACTIVE_KEY_ID` — operator-chosen key id (e.g. `key-2026-06`).
+- [ ] `AUTH_AT_REST_HASHING_KEY` — `openssl rand -hex 32`; MUST differ from the signing key.
+- [ ] `AUTH_BOOTSTRAP_TOKEN` — `openssl rand -hex 24`; one-shot, cleared after first user enrolls.
+
+### 3. Bundle secret injection (spec 052 — L2 is knb-side)
+
+- [ ] Confirm the knb-side **L2 secret-injection adapter** PR is landed. L1
+      (placeholder emit) + L3 (runtime fail-loud) are implemented in THIS repo;
+      L2 (substituting `__SECRET_PLACEHOLDER__<KEY>__` from the sops/age store)
+      lives in the knb adapter and is a HARD pre-go-live dependency.
+- [ ] Dry-run `apply.sh` against the published bundle and assert **0 remaining
+      placeholders** before the real apply.
+- [ ] Confirm the adapter writes `HOST_BIND_ADDRESS`, `OLLAMA_RENDER_GID`,
+      `OLLAMA_VIDEO_GID`, and all `*_CPU_LIMIT`/`*_MEMORY_LIMIT` values into
+      `app.env` (Compose fails loud at substitution time if any is missing).
+
+### 4. Compose profile enablement (the "it deployed but X is dead" footguns)
+
+- [ ] `--profile ollama` — REQUIRED on evo-x2 or the ML sidecar has no LLM
+      backend. Confirm `/dev/kfd` + `/dev/dri` ROCm device passthrough and the
+      correct render/video GIDs (`getent group render` / `getent group video`).
+- [ ] `--profile monitoring` — enable Prometheus (Grafana + Alertmanager are
+      knb-side stand-up).
+- [ ] `--profile searxng` — enable only if the open-knowledge agent is on.
+
+### 5. Backup, restore-drill & promote sequencing
+
+- [ ] Sequence the first go-live as an initial **apply** (or knb promote), NOT a
+      release-train **promote**. On a fresh host no backup or restore-drill has
+      ever run, so the promote gates **G112** (backup-freshness) and **G113**
+      (restore-drill currency) cannot pass yet.
+- [ ] After the stack is live, wire the knb backup scheduler and run ≥1 backup +
+      ≥1 restore-drill (recording ledger entries) BEFORE the first promote.
+- [ ] Decide off-host backup (USB/cloud) vs accepting the documented RAID5-only,
+      no-offsite risk (`offsite_required: false` → G116 WARN, non-blocking).
+
+### 6. Supervised canary first apply
+
+- [ ] Run the first `apply` as a **supervised canary** with `verify.sh` + health
+      checks + a rollback rehearsal — the full adapter → bundle → secret-injection
+      → runtime path has never been exercised end-to-end against a real target.
+- [ ] Validate accel inference on the host: `rocminfo` confirms the gfx target,
+      `ollama ps` shows the interactive working set resident without OOM under a
+      concurrent chat+OCR+synthesis load, and an accel-tier scenario returns
+      within budget — BEFORE enrolling real users.
+- [ ] Keep all evo-x2-specific topology/secrets in the out-of-tree knb overlay;
+      never add real hostnames, IPs, tailnet identifiers, or secret values to
+      this repo (pii-scan/gitleaks gates defend this).
+
 ## Docker Compose Production Overrides
 
 Create a `docker-compose.prod.yml` for production-specific settings:
