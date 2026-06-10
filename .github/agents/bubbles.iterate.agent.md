@@ -1,6 +1,6 @@
 ---
 description: Work picker and workflow dispatcher - identify next high-priority work (by type if specified), prepare artifacts if needed, then execute the correct workflow mode via specialist agents
-tools: [read, search, edit, agent, todo, web, execute, bubbles, playwright]
+tools: [read, search, edit, agent, todo, web, execute, bubbles-smackerel, playwright]
 handoffs:
   - label: Business Analysis
     agent: bubbles.analyst
