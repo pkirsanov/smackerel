@@ -343,3 +343,84 @@ func TestExternalImagesContract_AdversarialLiteralImageMismatch(t *testing.T) {
 	}
 	t.Logf("adversarial OK: literal image mismatch rejected with: %v", err)
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Spec 082 SCOPE-082-06 — third-party infra images pinned by sha256 digest.
+//
+// pgvector/pgvector, nats, and ollama/ollama sit OUTSIDE the cosign keyless
+// + SBOM + SLSA supply chain that covers smackerel-core / smackerel-ml.
+// Pinning them by digest makes the deploy reproducible and prevents a
+// mutable upstream tag (`:pg16`, `:2.10-alpine`, `:rocm`) from silently
+// changing the bytes a home-lab apply pulls. Digests verified 2026-06-10
+// via `docker buildx imagetools inspect <tag>`.
+// ─────────────────────────────────────────────────────────────────────────
+
+// productionTrioDigestPinned is the set of third-party infra services that
+// SCOPE-082-06 requires to carry an @sha256: digest in their compose image.
+var productionTrioDigestPinned = map[string]bool{
+	"postgres": true,
+	"nats":     true,
+	"ollama":   true,
+}
+
+// assertProductionImagesDigestPinned returns nil iff every service in
+// productionTrioDigestPinned declares a literal image containing an
+// `@sha256:` digest. SST-substituted images are exempt (their pin lives in
+// the SST). Returns a non-nil error naming the offending service.
+func assertProductionImagesDigestPinned(compose composeImageDoc) error {
+	for svc := range productionTrioDigestPinned {
+		def, ok := compose.Services[svc]
+		if !ok {
+			return fmt.Errorf("contract violation: services.%s not found — SCOPE-082-06 requires the production infra trio {postgres, nats, ollama} to exist and be digest-pinned", svc)
+		}
+		img := strings.TrimSpace(def.Image)
+		if strings.Contains(img, "${") {
+			continue // SST-substituted; digest pin lives in the SST surface.
+		}
+		if !strings.Contains(img, "@sha256:") {
+			return fmt.Errorf("contract violation: services.%s declares image %q without an @sha256: digest — SCOPE-082-06 requires the third-party infra trio to be pinned by digest (a mutable tag drifts outside the cosign/SBOM supply chain). Pin via `docker buildx imagetools inspect <tag>`", svc, img)
+		}
+	}
+	return nil
+}
+
+// TestExternalImagesContract_ProductionTrioDigestPinned parses the live
+// compose file and asserts postgres, nats, and ollama are digest-pinned.
+func TestExternalImagesContract_ProductionTrioDigestPinned(t *testing.T) {
+	root := repoRoot(t)
+	composePath := filepath.Join(root, "deploy", "compose.deploy.yml")
+	composeBytes, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", composePath, err)
+	}
+	var compose composeImageDoc
+	if err := yaml.Unmarshal(composeBytes, &compose); err != nil {
+		t.Fatalf("yaml.Unmarshal %s: %v", composePath, err)
+	}
+	if err := assertProductionImagesDigestPinned(compose); err != nil {
+		t.Fatalf("live deploy/compose.deploy.yml violates SCOPE-082-06 digest-pin contract: %v", err)
+	}
+	t.Logf("contract OK: postgres, nats, ollama are @sha256: digest-pinned in deploy/compose.deploy.yml (SCOPE-082-06)")
+}
+
+// TestExternalImagesContract_AdversarialBareTagTrio proves the digest-pin
+// check catches a regression where any trio member drops its @sha256: digest
+// back to a mutable tag.
+func TestExternalImagesContract_AdversarialBareTagTrio(t *testing.T) {
+	compose := composeImageDoc{Services: map[string]struct {
+		Image string `yaml:"image"`
+	}{
+		"postgres": {Image: "pgvector/pgvector:pg16@sha256:00ba258a66dac104fd5171074a0084462a64a1369d8513f3d0a634e2f24d15bc"},
+		// nats regressed to a bare mutable tag (digest dropped).
+		"nats":   {Image: "nats:2.10-alpine"},
+		"ollama": {Image: "ollama/ollama:rocm@sha256:e658cf94b88ef88aa0868bc5900e6f83ccf77262ef2ca582601161f865a2b080"},
+	}}
+	err := assertProductionImagesDigestPinned(compose)
+	if err == nil {
+		t.Fatal("adversarial contract test failed: bare-tag nats (no @sha256:) was ACCEPTED (a SCOPE-082-06 regression to a mutable tag would NOT be caught)")
+	}
+	if !strings.Contains(err.Error(), "nats") {
+		t.Fatalf("adversarial contract test failed: error did not mention 'nats': %v", err)
+	}
+	t.Logf("adversarial OK: bare-tag nats rejected with: %v", err)
+}

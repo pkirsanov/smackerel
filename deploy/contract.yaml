@@ -27,11 +27,11 @@ images:
 # is locked by `internal/deploy/external_images_contract_test.go` (BUG-049-001).
 externalImages:
 - name: postgres
-  image: pgvector/pgvector:pg16
+  image: pgvector/pgvector:pg16@sha256:00ba258a66dac104fd5171074a0084462a64a1369d8513f3d0a634e2f24d15bc
 - name: nats
-  image: nats:2.10-alpine
+  image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
 - name: ollama
-  image: ollama/ollama:rocm
+  image: ollama/ollama:rocm@sha256:e658cf94b88ef88aa0868bc5900e6f83ccf77262ef2ca582601161f865a2b080
 # Spec 049 — only required when operator enables `--profile monitoring`.
 # SST pin: config/smackerel.yaml::monitoring.prometheus.image
 - name: prometheus
