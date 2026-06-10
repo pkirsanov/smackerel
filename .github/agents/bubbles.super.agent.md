@@ -88,6 +88,7 @@ The super agent MUST NOT rely solely on hardcoded examples in this file. Before 
 | **Framework event stream** | Read `.specify/runtime/framework-events.jsonl` when present | Recent command starts/completions, runtime lifecycle, and failure context |
 | **Gate registry** | Search `bubbles/workflows.yaml` and `agents/bubbles_shared/agent-common.md` for `G0XX` gate definitions | What a gate enforces, where it runs, blocking vs advisory |
 | **Natural-language intent routes** | Read `bubbles/intent-routes.yaml` when present | NL phrase → (agent, mode) mapping. Match user phrases here BEFORE falling back to descriptive parsing of agent docs. |
+| **Goal scenario compiler** | Read `agents/bubbles_shared/scenario-compile.md` | Cross-repo / multi-phase missions: `bubbles.goal` (single outcome) or `bubbles.sprint` (multi outcome) compile a typed dependency DAG of EXISTING modes/agents. `super` only resolves intent + the scenario-aware RESOLUTION-ENVELOPE fields; it never compiles or runs the DAG. Action/deploy nodes are OPS packets gated by an approval token. |
 | **Repo posture** | Inspect repo layout or run `repo-readiness` | Whether this is the source framework repo, a downstream installed repo, or neither |
 
 **Discovery Protocol (MANDATORY for agent/mode/skill questions):**
@@ -196,12 +197,25 @@ When `bubbles.super` is invoked by another agent via `runSubagent` (not directly
 - **confidence:** high|medium|low
 ```
 
+**Scenario-aware fields (OPTIONAL — add ONLY when the intent implies a cross-repo or multi-phase mission a goal scenario should compile).** When the request spans more than one repo, chains heterogeneous phases (review → plan → deliver → deploy → operate), or includes a host-mutating deploy, set `mode` to `autonomous-goal` (single declared outcome) or `autonomous-sprint` (several outcomes) and ADD these fields so the orchestrator can compile the DAG. `super` resolves intent only — it MUST NOT emit a node list or execute anything.
+
+```markdown
+- **goalClass:** <e.g. release-deployment-readiness | feature-delivery | hardening>
+- **primaryRepo:** <repo id or workspace folder name>
+- **supportingRepos:** [ <repo id>, ... ]            # empty for single-repo scenarios
+- **targetEnvironment:** <target id>                  # only when a deploy is in scope
+- **deploymentModel:** <local-target | registry-pull> # only when a deploy is in scope
+- **constraints:** [ <hard constraint in plain English>, ... ]
+- **compositionHint:** single-outcome | multi-outcome
+```
+
 Resolution rules:
 1. Apply the same intent-to-mode matching, tag selection, and dynamic discovery logic used for direct user requests
 2. Scan `specs/` folders to resolve feature names to paths
 3. If multiple modes could fit, pick the most specific one (prefer `improve-existing` over `iterate` when intent is clear)
 4. Set `confidence: low` only when the intent is genuinely ambiguous — the calling agent will confirm with the user before proceeding
 5. Return tags using the same Tag Selection Matrix applied to direct user recommendations
+6. **Scenario detection:** if the outcome is bigger than one spec/mode AND (spans repos OR chains review→plan→deliver→deploy→operate OR includes a host-mutating deploy), resolve to `autonomous-goal`/`autonomous-sprint` and populate the scenario-aware fields. Compilation + execution belong to `bubbles.goal`/`bubbles.sprint` per `agents/bubbles_shared/scenario-compile.md` — never compile or run the DAG inside `super`.
 
 **FRAMEWORK-ENVELOPE format** (for framework operation requests):
 
@@ -246,6 +260,7 @@ Use this mode when the user says things like:
 - "How do I do this without reading the docs?"
 - "Why did Bubbles stop here?"
 - "Turn this problem into the right prompts"
+- "Get this repo ready for deployment to my target and ship it" (cross-repo / multi-phase → resolve to `bubbles.goal` or `bubbles.sprint`, which compile a goal scenario per `agents/bubbles_shared/scenario-compile.md`; see the [Cross-Repo Scenario](../docs/recipes/cross-repo-scenario.md) recipe)
 
 In this mode, super should:
 1. Infer whether the user needs a single command, a workflow mode, a specialist, or a multi-step sequence

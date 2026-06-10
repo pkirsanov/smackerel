@@ -91,3 +91,27 @@ routes:
   targetAgent: bubbles.retro
   targetMode: framework-health
   summary: "Analyze framework events + gate failures, emit improvement proposal"
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# Goal scenario — single-outcome cross-repo / deploy mission (bubbles.goal)
+# Compiles + executes a goal scenario DAG per agents/bubbles_shared/scenario-compile.md.
+# ────────────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "make this repo deployment ready"
+  - "get this ready to deploy and ship it"
+  - "production ready then deploy"
+  - "deliver everything and deploy to my target"
+  targetAgent: bubbles.goal
+  targetMode: autonomous-goal
+  summary: "Compile a single-outcome cross-repo goal scenario (review/plan/deliver/deploy/operate) and converge it"
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# Goal scenario — multi-outcome ordered mission (bubbles.sprint)
+# ─────────────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "review deliver deploy and operate"
+  - "plan deliver and deploy across repos"
+  - "full readiness deploy and set up ops"
+  targetAgent: bubbles.sprint
+  targetMode: autonomous-sprint
+  summary: "Compile a multi-outcome ordered cross-repo goal scenario and execute its nodes in dependency order"

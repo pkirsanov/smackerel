@@ -39,6 +39,17 @@ Current assessment: review still does not need its own separate workflow family,
 Optional execution tags apply across modes when you need more control without changing the default autonomous behavior:
 - `grillMode: on-demand|required-on-ambiguity|required-for-lockdown` inserts or requires `bubbles.grill` before analysis, selection, bootstrap, or locked-behavior invalidation so weak assumptions get challenged early.
 - `tdd: true` forces a red-green-first implementation loop for changed behavior after the normal planning and scenario gates are already satisfied.
+
+## Goal Scenarios Are Not Workflow Modes
+
+A **goal scenario** is a runtime execution plan, not a workflow mode. When an outcome is bigger than one spec and one mode — it spans repos, chains review → plan → deliver → deploy → operate, or ends in a host-mutating deploy — `bubbles.goal` (single outcome) or `bubbles.sprint` (multi outcome) compile a typed, dependency-ordered DAG whose nodes each resolve to an EXISTING mode or specialist. There is deliberately NO new `mode:` per mission; the scenario is data, not a mode.
+
+- `bubbles.super` resolves natural language to intent only (scenario-aware RESOLUTION-ENVELOPE fields); it never compiles or runs the DAG.
+- Node types (`diagnostic`, `planning`, `delivery`, `verification`, `action`, `ongoing-ops`) are routing metadata, not a new completion model — `action`/`ongoing-ops` nodes are OPS packets certified per repo by `bubbles.validate`.
+- Host-mutating `action` nodes are gated by a pre-mutation approval token (the propagate pattern).
+- No node may resolve to a `requiresTopLevelRuntime` fan-out mode (`iterate` / `autonomous-*` / `*-quality-sweep` / `idea-to-release-completion`) — that would nest orchestrators and break Gate G064. `bubbles/scripts/scenario-compile-lint.sh` enforces this by deriving the forbidden set from `modes.yaml`.
+
+See [Cross-Repo Goal Scenario](../recipes/cross-repo-scenario.md) and the contract in [`agents/bubbles_shared/scenario-compile.md`](../../agents/bubbles_shared/scenario-compile.md).
 - `backlogExport: tasks|issues` forwards backlog-ready task or issue output preferences to `bubbles.plan`.
 - `socratic: true` with `socraticQuestions: <1-5>` enables a bounded clarification loop before discovery/bootstrap work.
 - `gitIsolation: true` opts into isolated branch/worktree setup when repo policy allows it.
