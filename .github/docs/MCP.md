@@ -23,7 +23,9 @@ bash .github/bubbles/scripts/mcp-server-selftest.sh
 
 ### 2. Register with your MCP client
 
-Sample configs ship under `.github/bubbles/mcp/clients/`. Pick the one for your client and merge the `mcpServers.bubbles` block into your client's config file:
+**VS Code (Copilot Chat agent):** install/upgrade does this for you — no manual steps. `install.sh` writes/merges a `bubbles-<repo-slug>` server entry into your repo's `.vscode/mcp.json` under a **unique per-repo id**. The unique id matters in multi-root workspaces: VS Code (1.118+) **deduplicates MCP servers that share a name and disables all but one**, so several repos each registering a generic `bubbles` server would leave most of them disabled. With a per-repo id, every repo's server stays enabled. VS Code detects the `.vscode/mcp.json` change and (re)starts the server automatically; the first time, it shows a one-time **trust** prompt (a VS Code security gate that the installer cannot and should not bypass) — confirm it once and the server's tools are available. From then on the default **Agent** auto-selects bubbles tools from the enabled set with no tool-list edits. Only that one entry is Bubbles-owned; every other server in the file is left untouched.
+
+**Other clients:** sample configs ship under `.github/bubbles/mcp/clients/`. Pick the one for your client and merge the `bubbles` block into your client's config file (give it a unique id per repo if you use a multi-root setup):
 
 | Client | Config file | Sample |
 |--------|-------------|--------|
@@ -32,7 +34,7 @@ Sample configs ship under `.github/bubbles/mcp/clients/`. Pick the one for your 
 | Cursor | `.cursor/mcp.json` (workspace) or `~/.cursor/mcp.json` (global) | `.github/bubbles/mcp/clients/cursor.json` |
 | Cline | `cline_mcp_settings.json` | `.github/bubbles/mcp/clients/cline.json` |
 
-Restart your client. The `bubbles` server should appear with 10 annotated tools, 5 static resources, 2 resource templates, and 37 prompts.
+Restart your client. The `bubbles-<repo-slug>` server should appear with 10 annotated tools, 5 static resources, 2 resource templates, and 37 prompts.
 
 ---
 
@@ -132,6 +134,7 @@ The server enforces the same anti-fabrication discipline as the bash scripts:
 | Symptom | Diagnosis |
 |---------|-----------|
 | Server doesn't appear in client | Check client logs for "failed to spawn"; verify `python3` is on PATH; check the path in the client config resolves to `server.py`. |
+| Server shows a perpetual "Update Tools" / refresh state and never starts (multi-root workspace) | Two or more workspace folders registered the server under the same id (typically the generic `bubbles`), so VS Code's MCP gateway cannot disambiguate and starts none. Re-run install/upgrade in each repo so its `.vscode/mcp.json` gets a unique `bubbles-<repo-slug>` id, then **Developer: Reload Window** and **Start** the server. |
 | Selftest passes but client shows zero tools | Client may not be honoring the `initialize` capability response. Check client version. |
 | Tool call returns "missing argument" | The bash twin requires a positional argument that the caller did not supply. Check the tool's `inputSchema.required`. |
 | Tool call hangs | The bash twin is doing real work; default timeout is 300s. Raise `BUBBLES_MCP_TOOL_TIMEOUT` or the tool spec's `timeoutSeconds`. |
