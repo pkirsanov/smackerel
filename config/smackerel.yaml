@@ -90,7 +90,12 @@ llm:
 
 telegram:
   bot_token: ""
-  chat_ids: "510638591"
+  # Spec 082 SCOPE-082-01 — empty by default. A fresh operator MUST set their
+  # own chat_ids; an empty value is treated by the runtime as "no Telegram
+  # recipient configured" (internal/config/config.go guards `chatIDs != ""`,
+  # leaving Config.TelegramChatIDs nil) and does NOT break startup. Never ship
+  # a real personal chat-id as the committed default.
+  chat_ids: ""
   # Spec 044 Scope 03 — chat_id → user_id mapping for the Telegram
   # bridge. Format: "<chat_id>:<user_id>" pairs, comma-separated
   # (mirrors chat_ids).
@@ -103,7 +108,8 @@ telegram:
   # to attribute captures to the wrong user. In development/test the
   # empty mapping is acceptable and existing single-user dev flows
   # keep working.
-  user_mapping: "510638591:philip"
+  # Spec 082 SCOPE-082-01 — empty by default (was a real personal mapping).
+  user_mapping: ""
   assembly_window_seconds: 10
   assembly_max_messages: 100
   media_group_window_seconds: 3
@@ -1554,6 +1560,17 @@ deploy_resources:
   prometheus:
     cpus: "1.0"
     memory: "512M"
+  # Spec 082 SCOPE-082-05 — SearxNG resource envelope. Previously the
+  # searxng service hardcoded `memory: 256M` with NO cpus cap, drifting
+  # from the spec-045 SST resource contract every other service follows.
+  # Now SST-sourced + fail-loud (Gate G028); profile-gated (searxng).
+  # When the operator enables `--profile searxng`, the deploy adapter MUST
+  # emit SEARXNG_CPU_LIMIT and SEARXNG_MEMORY_LIMIT into app.env or compose
+  # aborts at substitution time. memory preserves the prior 256M; cpus is
+  # the new explicit cap (was unbounded).
+  searxng:
+    cpus: "1.0"
+    memory: "256M"
 
 # Spec 049 — Monitoring Stack SST (FR-049-001 / FR-049-003 / FR-049-005).
 #
@@ -1809,6 +1826,9 @@ environments:
     postgres_volume_name: smackerel-postgres-data
     nats_volume_name: smackerel-nats-data
     ollama_volume_name: smackerel-ollama-data
+    # Spec 082 SCOPE-082-03 — persistent embedding-model cache so the ML
+    # sidecar does not re-download from HuggingFace on every restart.
+    ml_model_cache_volume_name: smackerel-ml-model-cache
     prometheus_volume_name: smackerel-prometheus-data
     # Spec 043 — per-env opt-in. Spec 064 SCOPE-17 — dev defaults to true so
     # the open-knowledge agent works end-to-end without a separate profile.
@@ -1844,6 +1864,8 @@ environments:
     postgres_volume_name: smackerel-test-postgres-data
     nats_volume_name: smackerel-test-nats-data
     ollama_volume_name: smackerel-test-ollama-data
+    # Spec 082 SCOPE-082-03 — persistent embedding-model cache (test env).
+    ml_model_cache_volume_name: smackerel-test-ml-model-cache
     prometheus_volume_name: smackerel-test-prometheus-data
     # Spec 043 — test stack auto-starts Ollama (FR-OLLAMA-001). Final
     # SMACKEREL_TEST_OLLAMA=1 enforcement is wired in scope 03.
@@ -1895,6 +1917,8 @@ environments:
     postgres_volume_name: smackerel-home-lab-postgres-data
     nats_volume_name: smackerel-home-lab-nats-data
     ollama_volume_name: smackerel-home-lab-ollama-data
+    # Spec 082 SCOPE-082-03 — persistent embedding-model cache (home-lab).
+    ml_model_cache_volume_name: smackerel-home-lab-ml-model-cache
     prometheus_volume_name: smackerel-home-lab-prometheus-data
     # Spec 043 — home-lab preserves opt-in. Operator flips to true after
     # provisioning the GPU host and pulling the production model.
@@ -1922,7 +1946,18 @@ environments:
     # gemma3:4b default from the base llm.* block. Reasoning + OCR keep
     # their per-task specialists (deepseek-r1:7b, deepseek-ocr:3b) — those
     # env vars are forward-compat and not emitted by config.sh today.
-    ollama_memory_limit: "20G"
+    #
+    # Spec 082 SCOPE-082-02 — raised 20G → 28G. Under the resident
+    # keep_alive ("24h"), ollama holds the whole interactive hot-path set
+    # co-resident: gemma4:26b (18432 MiB, llm+ollama+vision) +
+    # llama3.1:8b (6144 MiB, agent default+fast) = 24576 MiB. The old 20G
+    # envelope was sized for gemma4:26b ALONE, so the concurrent set
+    # OOM-killed ollama into a restart crash-loop. 28G (28672 MiB) fits
+    # the 24576 MiB interactive sum with ~4 GiB headroom for KV-cache
+    # growth; the evo-x2 home-lab host has ~109 GiB RAM. The Go core
+    # validateModelEnvelopes concurrent-envelope guard now fails loud at
+    # config-generate time if this floor is ever under-sized again.
+    ollama_memory_limit: "28G"
     llm_model: "gemma4:26b"
     ollama_model: "gemma4:26b"
     ollama_vision_model: "gemma4:26b"

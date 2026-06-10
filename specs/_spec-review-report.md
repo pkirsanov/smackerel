@@ -147,3 +147,34 @@ No MAJOR_DRIFT in a spec with managed-docs impact was found that required immedi
 - [x] Report written to `specs/_spec-review-report.md`.
 - [x] Compact mode NOT engaged (user requested detect + classify only).
 - [x] MAJOR_DRIFT route_required packet emitted (read-only audit — no `runSubagent` invocation).
+
+---
+
+## Addendum — 2026-06-10 (Spec 082 SCOPE-082-08)
+
+> **Append-only.** The 2026-06-02 body above is preserved verbatim as the
+> historical record. This addendum records portfolio drift observed during the
+> spec 082 MVP / evo-x2 readiness review; it does NOT rewrite any prior finding.
+
+The 2026-06-02 baseline ("76 numbered + 2 ops = 78") is now stale. Deltas
+verified live on 2026-06-10:
+
+- **Portfolio grew** beyond the 2026-06-02 snapshot: specs `077`–`082` now exist
+  (`082-mvp-evo-x2-readiness-hardening` is this readiness-hardening feature).
+- **Spec 076** (`assistant-completion-rescope`) is now `done` (certified
+  2026-06-06), not in-progress. It carries two approved post-release exceptions
+  (interactionMap removal; native iOS/Android adapters) — legitimate deferrals.
+- **Spec 077** (`pwa-browser-test-harness`) shipped; the ops follow-up
+  `F-057-V-001` is resolved, not open.
+- **Spec 058** (`chrome-extension-bridge`) is `blocked` on a keyless-OIDC signing
+  row that a local box cannot satisfy (needs one real tagged CI release). Its
+  server-side ingest routes landed; only the signed-extension distributable is
+  gated. Out of MVP go-live scope.
+- The "2 in_progress" framing in the Summary no longer holds; treat the
+  per-spec `state.json` as the authority for any go/no-go decision.
+
+This addendum is the go-live decision-input refresh referenced by the
+[Go-Live Readiness Checklist](../docs/Deployment.md#go-live-readiness-checklist-evo-x2--home-lab).
+A full portfolio re-classification (re-running detect + classify across all
+`specs/0*/`) remains future work; this addendum only corrects the inputs that
+materially affect the evo-x2 MVP go-live.

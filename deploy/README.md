@@ -83,6 +83,24 @@ ports:
 
 There is no `${HOST_BIND_ADDRESS:-127.0.0.1}` fallback. A deploy adapter MUST write `HOST_BIND_ADDRESS` explicitly into the `app.env` it supplies before running Compose. Use `127.0.0.1` only as an explicit env value when loopback binding is intended; use the target's operator-owned bind address when tailnet-edge fronting requires it. Missing or empty values are expected to abort Compose at substitution time.
 
+## Adapter-Supplied Host Env (not in the SST bundle)
+
+A small set of values are HOST-SPECIFIC (they change per operator/host) and are
+therefore NOT emitted into the SST config bundle. The deploy adapter MUST write
+them explicitly into `app.env` before running Compose; each uses the fail-loud
+`${VAR:?...}` form so a missing value aborts Compose at substitution time
+(Gate G028, NO-DEFAULTS):
+
+| Env var | Meaning | How the adapter resolves it |
+|---------|---------|------------------------------|
+| `HOST_BIND_ADDRESS` | Host bind address for published ports | `127.0.0.1` (loopback) or the target's tailnet IP |
+| `OLLAMA_RENDER_GID` | Host `render` group GID for `/dev/dri` access (ROCm GPU inference) | `getent group render \| cut -d: -f3` on the real host |
+| `OLLAMA_VIDEO_GID` | Host `video` group GID for `/dev/dri` access (ROCm GPU inference) | `getent group video \| cut -d: -f3` on the real host |
+
+The `OLLAMA_RENDER_GID` / `OLLAMA_VIDEO_GID` pair is only consulted when the
+`ollama` Compose profile is active (spec 082 SCOPE-082-09 routed these out of
+the generic compose because the GIDs vary per host/distro).
+
 ## Adding a new target
 
 The skeleton at [`_example/target-skeleton/`](_example/target-skeleton/) is a fully-stubbed adapter that exits 1 on every action until filled in.

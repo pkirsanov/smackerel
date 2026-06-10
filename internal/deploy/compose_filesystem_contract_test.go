@@ -376,3 +376,163 @@ func TestFilesystemContract_AdversarialNATSReadOnly(t *testing.T) {
 	}
 	t.Logf("adversarial OK: nats with read_only:true is rejected with: %v", err)
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Spec 082 SCOPE-082-03 — embedding-model cache persistence.
+//
+// The ML image runs as non-root USER smackerel and bakes the embedding model
+// into /home/smackerel/.cache at build time (ml/Dockerfile). The pre-082
+// deploy compose OVERRODE HF_HOME=/tmp/hf-cache onto ephemeral tmpfs, which
+// both ignored the baked model AND lost it on restart — forcing a re-download
+// from HuggingFace on the reboot-recovery path. SCOPE-082-03 mounts a
+// PERSISTENT named volume at the baked cache path /home/smackerel/.cache so
+// Docker initializes the volume from the image content on first mount (model
+// present, correct ownership) and the model survives restarts with no
+// HuggingFace dependency. read_only root is preserved (writes land on the
+// volume mount).
+//
+// Covers SCN-082-C01.
+// ─────────────────────────────────────────────────────────────────────────
+
+const mlModelCacheMountPath = "/home/smackerel/.cache"
+
+// composeMLCacheDoc captures the ML service's read_only flag, environment,
+// and volume mounts, plus the top-level named-volume declarations.
+type composeMLCacheDoc struct {
+	Services map[string]struct {
+		ReadOnly    bool              `yaml:"read_only"`
+		Environment map[string]string `yaml:"environment"`
+		Volumes     []string          `yaml:"volumes"`
+	} `yaml:"services"`
+	Volumes map[string]struct {
+		Name   string            `yaml:"name"`
+		Labels map[string]string `yaml:"labels"`
+	} `yaml:"volumes"`
+}
+
+// assertMLModelCacheContract returns nil iff the smackerel-ml service mounts
+// a persistent named volume at the model-cache path, points HF_HOME and
+// SENTENCE_TRANSFORMERS_HOME into it (not /tmp), and keeps read_only:true.
+func assertMLModelCacheContract(yamlBytes []byte) error {
+	var doc composeMLCacheDoc
+	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
+		return fmt.Errorf("yaml.Unmarshal failed: %w", err)
+	}
+	ml, ok := doc.Services["smackerel-ml"]
+	if !ok {
+		return fmt.Errorf("contract violation: services.smackerel-ml not found — SCOPE-082-03 governs the ML model-cache persistence")
+	}
+	if !ml.ReadOnly {
+		return fmt.Errorf("contract violation: services.smackerel-ml.read_only must remain true (SCOPE-082-03 keeps read-only root; the cache is writable only via the named-volume mount)")
+	}
+	// 1. The persistent ml-model-cache volume is mounted at the cache path.
+	mounted := false
+	for _, v := range ml.Volumes {
+		if strings.HasPrefix(v, "ml-model-cache:"+mlModelCacheMountPath) {
+			mounted = true
+			break
+		}
+	}
+	if !mounted {
+		return fmt.Errorf("contract violation: services.smackerel-ml does not mount `ml-model-cache:%s` — SCOPE-082-03 requires the persistent embedding-model cache mounted at the image's baked cache path; got volumes %v", mlModelCacheMountPath, ml.Volumes)
+	}
+	// 2. HF_HOME + SENTENCE_TRANSFORMERS_HOME point INTO the persistent mount,
+	//    not at the ephemeral /tmp tmpfs (the pre-082 re-download cause).
+	for _, key := range []string{"HF_HOME", "SENTENCE_TRANSFORMERS_HOME"} {
+		val := strings.TrimSpace(ml.Environment[key])
+		if val == "" {
+			return fmt.Errorf("contract violation: services.smackerel-ml.environment[%s] is missing — SCOPE-082-03 requires it to point into %s", key, mlModelCacheMountPath)
+		}
+		if strings.HasPrefix(val, "/tmp") {
+			return fmt.Errorf("contract violation: services.smackerel-ml.environment[%s]=%q points at ephemeral /tmp — SCOPE-082-03 forbids this (it re-downloads the model on every restart); point it into the persistent %s mount", key, val, mlModelCacheMountPath)
+		}
+		if !strings.HasPrefix(val, mlModelCacheMountPath) {
+			return fmt.Errorf("contract violation: services.smackerel-ml.environment[%s]=%q is not under the persistent mount %s — SCOPE-082-03 requires the caches to live on the durable volume", key, val, mlModelCacheMountPath)
+		}
+	}
+	// 3. The top-level ml-model-cache volume is declared with an SST name and
+	//    the persistent lifecycle label.
+	vol, ok := doc.Volumes["ml-model-cache"]
+	if !ok {
+		return fmt.Errorf("contract violation: top-level volumes.ml-model-cache is not declared — SCOPE-082-03 requires it with name: ${ML_MODEL_CACHE_VOLUME_NAME}")
+	}
+	if !strings.Contains(vol.Name, "${ML_MODEL_CACHE_VOLUME_NAME}") {
+		return fmt.Errorf("contract violation: volumes.ml-model-cache.name=%q is not the SST form ${ML_MODEL_CACHE_VOLUME_NAME} — SCOPE-082-03 keeps per-env volume isolation", vol.Name)
+	}
+	if vol.Labels["com.smackerel.lifecycle"] != "persistent" {
+		return fmt.Errorf("contract violation: volumes.ml-model-cache must be labelled com.smackerel.lifecycle: persistent — SCOPE-082-03 protects the model cache from clean")
+	}
+	return nil
+}
+
+// TestMLModelCacheContract_LiveFile asserts the live deploy compose persists
+// the embedding-model cache on a named volume at the baked cache path.
+func TestMLModelCacheContract_LiveFile(t *testing.T) {
+	composePath := filepath.Join(repoRoot(t), "deploy", "compose.deploy.yml")
+	yamlBytes, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatalf("failed to read live compose file %q: %v", composePath, err)
+	}
+	if err := assertMLModelCacheContract(yamlBytes); err != nil {
+		t.Fatalf("live deploy/compose.deploy.yml violates SCOPE-082-03 model-cache persistence contract: %v", err)
+	}
+	t.Logf("contract OK: smackerel-ml mounts persistent ml-model-cache at %s; HF_HOME/SENTENCE_TRANSFORMERS_HOME point into it; read-only root preserved (SCOPE-082-03)", mlModelCacheMountPath)
+}
+
+// TestMLModelCacheContract_AdversarialTmpHFHome proves the contract catches a
+// regression that points HF_HOME back at the ephemeral /tmp tmpfs (the
+// pre-082 re-download form).
+func TestMLModelCacheContract_AdversarialTmpHFHome(t *testing.T) {
+	const fixture = `services:
+  smackerel-ml:
+    read_only: true
+    environment:
+      HF_HOME: /tmp/hf-cache
+      SENTENCE_TRANSFORMERS_HOME: /tmp/st-cache
+    volumes:
+      - ml-model-cache:/home/smackerel/.cache
+volumes:
+  ml-model-cache:
+    name: ${ML_MODEL_CACHE_VOLUME_NAME}
+    labels:
+      com.smackerel.lifecycle: persistent
+`
+	err := assertMLModelCacheContract([]byte(fixture))
+	if err == nil {
+		t.Fatal("adversarial contract test failed: HF_HOME=/tmp/hf-cache was ACCEPTED (a SCOPE-082-03 regression that re-downloads the model on every restart would NOT be caught)")
+	}
+	if !strings.Contains(err.Error(), "HF_HOME") {
+		t.Fatalf("adversarial contract test failed: error did not mention 'HF_HOME': %v", err)
+	}
+	if !strings.Contains(err.Error(), "/tmp") {
+		t.Fatalf("adversarial contract test failed: error did not flag the ephemeral /tmp path: %v", err)
+	}
+	t.Logf("adversarial OK: HF_HOME=/tmp/hf-cache is rejected with: %v", err)
+}
+
+// TestMLModelCacheContract_AdversarialMissingMount proves the contract fails
+// if the persistent volume mount is dropped entirely.
+func TestMLModelCacheContract_AdversarialMissingMount(t *testing.T) {
+	const fixture = `services:
+  smackerel-ml:
+    read_only: true
+    environment:
+      HF_HOME: /home/smackerel/.cache/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /home/smackerel/.cache/sentence-transformers
+    volumes:
+      - ./prompt_contracts:/app/prompt_contracts:ro
+volumes:
+  ml-model-cache:
+    name: ${ML_MODEL_CACHE_VOLUME_NAME}
+    labels:
+      com.smackerel.lifecycle: persistent
+`
+	err := assertMLModelCacheContract([]byte(fixture))
+	if err == nil {
+		t.Fatal("adversarial contract test failed: missing ml-model-cache mount was ACCEPTED (the model would live on the read-only root with nowhere durable to persist)")
+	}
+	if !strings.Contains(err.Error(), "ml-model-cache") {
+		t.Fatalf("adversarial contract test failed: error did not mention 'ml-model-cache': %v", err)
+	}
+	t.Logf("adversarial OK: missing persistent mount is rejected with: %v", err)
+}

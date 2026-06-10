@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ExpenseCategory defines an expense classification category.
@@ -339,18 +340,23 @@ type Config struct {
 	// memory/cpu literals are forbidden — the
 	// internal/deploy/compose_contract_test.go assertResourceContract()
 	// blocks regression at build time.
-	PostgresCPULimit      string
-	PostgresMemoryLimit   string
-	NATSCPULimit          string
-	NATSMemoryLimit       string
-	CoreCPULimit          string
-	CoreMemoryLimit       string
-	MLCPULimit            string
-	MLMemoryLimit         string // raw compose-style string, e.g. "3G"
-	MLMemoryLimitMiB      int    // parsed from MLMemoryLimit
-	OllamaCPULimit        string
-	OllamaMemoryLimit     string         // raw compose-style string, e.g. "8G"
-	OllamaMemoryLimitMiB  int            // parsed from OllamaMemoryLimit
+	PostgresCPULimit     string
+	PostgresMemoryLimit  string
+	NATSCPULimit         string
+	NATSMemoryLimit      string
+	CoreCPULimit         string
+	CoreMemoryLimit      string
+	MLCPULimit           string
+	MLMemoryLimit        string // raw compose-style string, e.g. "3G"
+	MLMemoryLimitMiB     int    // parsed from MLMemoryLimit
+	OllamaCPULimit       string
+	OllamaMemoryLimit    string // raw compose-style string, e.g. "8G"
+	OllamaMemoryLimitMiB int    // parsed from OllamaMemoryLimit
+	// Spec 082 SCOPE-082-02 — raw OLLAMA_KEEP_ALIVE value. The
+	// concurrent-envelope guard (validateModelEnvelopes) only enforces
+	// the interactive-set SUM against the ollama envelope when keep-alive
+	// keeps loaded models resident (see ollamaKeepAliveResident).
+	OllamaKeepAlive       string
 	MLModelMemoryProfiles map[string]int // model name → required MiB
 
 	// BUG-045-001 — Per-service envelope routing for model env vars.
@@ -670,6 +676,7 @@ func Load() (*Config, error) {
 		MLMemoryLimit:       os.Getenv("ML_MEMORY_LIMIT"),
 		OllamaCPULimit:      os.Getenv("OLLAMA_CPU_LIMIT"),
 		OllamaMemoryLimit:   os.Getenv("OLLAMA_MEMORY_LIMIT"),
+		OllamaKeepAlive:     os.Getenv("OLLAMA_KEEP_ALIVE"),
 
 		// BUG-045-001 — Per-service envelope routing model env vars.
 		// Every value below is loaded from the SST-emitted env var
@@ -2201,7 +2208,59 @@ func (c *Config) validateModelEnvelopes() error {
 		}
 	}
 
-	if len(missing) > 0 || len(oversized) > 0 {
+	// Spec 082 SCOPE-082-02 — concurrent interactive-set envelope guard.
+	// The per-model checks above ensure each model fits the ollama
+	// envelope ALONE. But under a resident keep-alive (OLLAMA_KEEP_ALIVE
+	// == "-1" or a long duration), ollama retains every model it loads,
+	// so the distinct interactive hot-path models are co-resident and
+	// their SUM must ALSO fit OLLAMA_MEMORY_LIMIT — otherwise Docker
+	// OOM-kills the ollama container into a restart crash-loop. Only the
+	// interactive hot-path slots (llm + ollama + ollama-vision + agent
+	// default/fast/vision) are summed: these serve live conversational/
+	// agent requests and are reliably co-resident. On-demand specialists
+	// (reasoning, OCR, photo-intelligence batch) are governed by the
+	// per-model individual check above plus operator keep-alive guidance,
+	// and are not guaranteed to be co-resident at full ceiling.
+	var concurrent []string
+	if c.OllamaMemoryLimitMiB > 0 && ollamaKeepAliveResident(c.OllamaKeepAlive) {
+		interactive := []modelRef{
+			{"LLM_MODEL", c.LLMModel},
+			{"OLLAMA_MODEL", c.OllamaModel},
+			{"OLLAMA_VISION_MODEL", c.OllamaVisionModel},
+			{"AGENT_PROVIDER_DEFAULT_MODEL", c.AgentProviderDefaultModel},
+			{"AGENT_PROVIDER_FAST_MODEL", c.AgentProviderFastModel},
+			{"AGENT_PROVIDER_VISION_MODEL", c.AgentProviderVisionModel},
+		}
+		residentSum := 0
+		allProfiled := true
+		seenModel := make(map[string]struct{})
+		var residentNames []string
+		for _, ref := range interactive {
+			if ref.model == "" {
+				continue
+			}
+			if _, dup := seenModel[ref.model]; dup {
+				continue
+			}
+			seenModel[ref.model] = struct{}{}
+			profileMiB, ok := c.MLModelMemoryProfiles[ref.model]
+			if !ok {
+				// Missing profile is already reported by the per-model
+				// loop above; do not sum an unknown size.
+				allProfiled = false
+				continue
+			}
+			residentSum += profileMiB
+			residentNames = append(residentNames, fmt.Sprintf("%s=%d MiB", ref.model, profileMiB))
+		}
+		if allProfiled && residentSum > c.OllamaMemoryLimitMiB {
+			concurrent = append(concurrent, fmt.Sprintf(
+				"interactive ollama working set {%s} sums to %d MiB but OLLAMA_MEMORY_LIMIT=%q resolves to %d MiB (keep-alive %q keeps these models co-resident; raise OLLAMA_MEMORY_LIMIT or shorten OLLAMA_KEEP_ALIVE)",
+				strings.Join(residentNames, ", "), residentSum, c.OllamaMemoryLimit, c.OllamaMemoryLimitMiB, c.OllamaKeepAlive))
+		}
+	}
+
+	if len(missing) > 0 || len(oversized) > 0 || len(concurrent) > 0 {
 		var parts []string
 		if len(missing) > 0 {
 			parts = append(parts, "missing model memory profile(s): "+strings.Join(missing, "; "))
@@ -2209,9 +2268,38 @@ func (c *Config) validateModelEnvelopes() error {
 		if len(oversized) > 0 {
 			parts = append(parts, "model envelope exceeded: "+strings.Join(oversized, "; "))
 		}
+		if len(concurrent) > 0 {
+			parts = append(parts, "concurrent ollama envelope exceeded: "+strings.Join(concurrent, "; "))
+		}
 		return fmt.Errorf("model envelope validation failed (spec 045 FR-045-002): %s", strings.Join(parts, " | "))
 	}
 	return nil
+}
+
+// ollamaKeepAliveResident reports whether an OLLAMA_KEEP_ALIVE value keeps
+// loaded models resident long enough that the concurrent interactive set
+// must be summed against the ollama envelope (Spec 082 SCOPE-082-02).
+//
+//   - "-1"                       → never unload → resident
+//   - a Go duration ≥ 10m        → resident (e.g. "24h", "30m")
+//   - "" / "0"                   → not resident (unset / evict immediately)
+//   - a short duration (< 10m)   → not resident (e.g. "5m"; sporadic evict)
+//
+// An unparseable value is treated as NON-resident: the per-model check
+// still applies, and we never fail-loud on a value we cannot interpret.
+func ollamaKeepAliveResident(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "0" {
+		return false
+	}
+	if raw == "-1" {
+		return true
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return false
+	}
+	return d >= 10*time.Minute
 }
 
 // parseTelegramUserMapping parses a TELEGRAM_USER_MAPPING env value

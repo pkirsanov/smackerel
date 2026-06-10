@@ -14,6 +14,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Spec 082 SCOPE-082-07 — dual-shape build-manifest extraction helpers.
+# promote.sh now parses BOTH the CI list-shape manifest and the
+# local-operator (build-home-lab.sh) map/object-shape manifest.
+# shellcheck source=scripts/deploy/promote_manifest_parse.sh
+source "$SCRIPT_DIR/promote_manifest_parse.sh"
+
 TARGET=""
 MANIFEST=""
 
@@ -64,18 +70,21 @@ fi
 TARGET_ENV="$(awk '/^environment:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); print; exit }' "$TARGET_PARAMS")"
 [[ -n "$TARGET_ENV" ]] || { echo "ERROR: environment missing in $TARGET_PARAMS" >&2; exit 1; }
 
-# Extract image refs + bundle ref from build manifest (simple yaml grep)
-SOURCE_SHA="$(awk '/^sourceSha:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
-CORE_REF="$(awk '/^[[:space:]]*- name: smackerel-core/ { found=1; next } found && /^[[:space:]]*ref:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
-ML_REF="$(awk '/^[[:space:]]*- name: smackerel-ml/ { found=1; next } found && /^[[:space:]]*ref:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
-BUNDLE_REF="$(awk -v env="$TARGET_ENV" '/^[[:space:]]*- env: / { found=($3==env); next } found && /^[[:space:]]*ref:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
+# Extract image refs + bundle ref from build manifest. Spec 082 SCOPE-082-07 —
+# these helpers parse BOTH the CI list shape AND the local-operator map/object
+# shape, so a locally-built (build-home-lab.sh) manifest promotes through the
+# same in-tree path as a CI manifest.
+SOURCE_SHA="$(manifest_source_sha "$MANIFEST")"
+CORE_REF="$(manifest_image_ref "$MANIFEST" smackerel-core)"
+ML_REF="$(manifest_image_ref "$MANIFEST" smackerel-ml)"
+BUNDLE_REF="$(manifest_bundle_ref "$MANIFEST" "$TARGET_ENV")"
 # BUG-047-001 / DEVOPS-HL-002 — pluck the per-env bundle sha256 alongside the
-# bundle ref. The build manifest emits both `ref:` and `sha256:` for each
-# configBundles entry; the adapter `apply.sh` MUST verify the pulled bundle's
-# sha256 byte-for-byte against this value before mounting. Fail-loud if the
-# value is missing — refusing to promote is safer than promoting an
-# unverifiable bundle (which is the bundle-tamper bypass DEVOPS-HL-002 closed).
-BUNDLE_SHA="$(awk -v env="$TARGET_ENV" '/^[[:space:]]*- env: / { found=($3==env); next } found && /^[[:space:]]*sha256:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
+# bundle ref. Both manifest shapes emit `sha256:` for the bundle; the adapter
+# `apply.sh` MUST verify the pulled bundle's sha256 byte-for-byte against this
+# value before mounting. Fail-loud if the value is missing — refusing to
+# promote is safer than promoting an unverifiable bundle (the bundle-tamper
+# bypass DEVOPS-HL-002 closed).
+BUNDLE_SHA="$(manifest_bundle_sha "$MANIFEST" "$TARGET_ENV")"
 
 [[ -n "$SOURCE_SHA" ]] || { echo "ERROR: sourceSha missing in $MANIFEST" >&2; exit 1; }
 [[ -n "$CORE_REF" ]]   || { echo "ERROR: smackerel-core ref missing in $MANIFEST" >&2; exit 1; }

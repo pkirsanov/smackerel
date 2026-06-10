@@ -347,3 +347,117 @@ func TestValidateModelEnvelopes_AC5b_OllamaRoutedExceedsOllamaEnvelopeRejectedWi
 		t.Errorf("AC-5(b) — offender's segment MUST NOT name ML_MEMORY_LIMIT (the wrong envelope); got segment: %q (full error: %v)", segment, err)
 	}
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Spec 082 SCOPE-082-02 — concurrent interactive-set ollama envelope guard.
+//
+// The per-model checks above ensure each model fits OLLAMA_MEMORY_LIMIT
+// ALONE. But under a resident keep-alive, ollama retains every model it
+// loads, so the distinct interactive hot-path models are co-resident and
+// their SUM must ALSO fit the envelope — otherwise Docker OOM-kills the
+// ollama container into a restart crash-loop (the live home-lab failure
+// these tests prevent). The guard sums the distinct interactive slots
+// (LLM_MODEL + OLLAMA_MODEL + OLLAMA_VISION_MODEL + AGENT_PROVIDER_DEFAULT
+// + AGENT_PROVIDER_FAST + AGENT_PROVIDER_VISION) and rejects when resident
+// AND sum > OLLAMA_MEMORY_LIMIT.
+//
+// Covers SCN-082-B01 (reject) and SCN-082-B02 (accept, no false positive).
+// ─────────────────────────────────────────────────────────────────────────
+
+// spec082InteractiveProfiles is a complete model-profile fixture covering
+// every model referenced by setRequiredEnv() after the SCOPE-082-02
+// interactive overrides below. big-a (18432) and big-b (6144) each fit a
+// 20 GiB ollama envelope ALONE but sum to 24576 MiB (> 20480), exactly the
+// home-lab gemma4:26b + llama3.1:8b over-subscription this guard catches.
+const spec082InteractiveProfiles = `[` +
+	`{"model":"spec082-big-a-18g","memory_mib":18432},` +
+	`{"model":"spec082-big-b-6g","memory_mib":6144},` +
+	`{"model":"spec082-small-x-1g","memory_mib":1024},` +
+	`{"model":"spec082-small-y-4g","memory_mib":4096},` +
+	`{"model":"all-MiniLM-L6-v2","memory_mib":256},` +
+	`{"model":"gemma4:26b","memory_mib":3072},` +
+	`{"model":"nomic-embed-text","memory_mib":256},` +
+	`{"model":"deepseek-ocr:3b","memory_mib":2560}]`
+
+// TestValidate_RejectsOversubscribedInteractiveOllamaSet — SCN-082-B01.
+// Two interactive models each fit a 20 GiB envelope alone but sum to
+// 24576 MiB under a resident keep-alive → fail loud.
+//
+// ADVERSARIAL: this test FAILS if the concurrent-sum branch in
+// validateModelEnvelopes is removed (Load() would then succeed because
+// every model fits the envelope individually).
+func TestValidate_RejectsOversubscribedInteractiveOllamaSet(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("OLLAMA_MEMORY_LIMIT", "20G") // 20480 MiB
+	t.Setenv("OLLAMA_KEEP_ALIVE", "-1")    // resident → sum guard active
+	// Distinct interactive set = {big-a 18432, big-b 6144} = 24576 MiB.
+	t.Setenv("LLM_MODEL", "spec082-big-a-18g")
+	t.Setenv("OLLAMA_MODEL", "spec082-big-a-18g")
+	t.Setenv("OLLAMA_VISION_MODEL", "spec082-big-a-18g")
+	t.Setenv("AGENT_PROVIDER_DEFAULT_MODEL", "spec082-big-b-6g")
+	t.Setenv("AGENT_PROVIDER_FAST_MODEL", "spec082-big-b-6g")
+	t.Setenv("AGENT_PROVIDER_VISION_MODEL", "spec082-big-b-6g")
+	// Remaining gemma4:26b / deepseek-ocr:3b / nomic / all-MiniLM refs in
+	// setRequiredEnv stay profiled and individually fit 20480.
+	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", spec082InteractiveProfiles)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected Load() to reject the over-subscribed interactive ollama set (24576 MiB > 20480 MiB resident) — if this passes, the SCOPE-082-02 concurrent-sum branch is missing and the contract is tautological")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"FR-045-002",
+		"concurrent ollama envelope exceeded",
+		"24576",
+		"OLLAMA_MEMORY_LIMIT",
+		"spec082-big-a-18g",
+		"spec082-big-b-6g",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error should contain %q, got: %v", want, err)
+		}
+	}
+}
+
+// TestValidate_AcceptsFittingInteractiveOllamaSum — SCN-082-B02.
+// A fitting interactive sum under a resident keep-alive MUST NOT
+// false-positive (5120 MiB ≤ 8192 MiB).
+func TestValidate_AcceptsFittingInteractiveOllamaSum(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("OLLAMA_MEMORY_LIMIT", "8G") // 8192 MiB
+	t.Setenv("OLLAMA_KEEP_ALIVE", "-1")   // resident → sum guard active
+	// Distinct interactive set = {small-x 1024, small-y 4096} = 5120 MiB.
+	t.Setenv("LLM_MODEL", "spec082-small-x-1g")
+	t.Setenv("OLLAMA_MODEL", "spec082-small-x-1g")
+	t.Setenv("OLLAMA_VISION_MODEL", "spec082-small-x-1g")
+	t.Setenv("AGENT_PROVIDER_DEFAULT_MODEL", "spec082-small-y-4g")
+	t.Setenv("AGENT_PROVIDER_FAST_MODEL", "spec082-small-y-4g")
+	t.Setenv("AGENT_PROVIDER_VISION_MODEL", "spec082-small-y-4g")
+	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", spec082InteractiveProfiles)
+
+	if _, err := Load(); err != nil {
+		t.Fatalf("expected Load() to ACCEPT a fitting interactive sum (5120 MiB ≤ 8192 MiB) — false positive: %v", err)
+	}
+}
+
+// TestValidate_SumGuardRelaxedForNonResidentKeepAlive — proves the
+// resident gate: the SAME over-subscribed set that fails under keep_alive
+// "-1" is ACCEPTED under a short keep_alive ("5m") because ollama evicts
+// between sporadic uses, so the models are not guaranteed co-resident.
+func TestValidate_SumGuardRelaxedForNonResidentKeepAlive(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("OLLAMA_MEMORY_LIMIT", "20G")
+	t.Setenv("OLLAMA_KEEP_ALIVE", "5m") // NON-resident → sum guard relaxed
+	t.Setenv("LLM_MODEL", "spec082-big-a-18g")
+	t.Setenv("OLLAMA_MODEL", "spec082-big-a-18g")
+	t.Setenv("OLLAMA_VISION_MODEL", "spec082-big-a-18g")
+	t.Setenv("AGENT_PROVIDER_DEFAULT_MODEL", "spec082-big-b-6g")
+	t.Setenv("AGENT_PROVIDER_FAST_MODEL", "spec082-big-b-6g")
+	t.Setenv("AGENT_PROVIDER_VISION_MODEL", "spec082-big-b-6g")
+	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", spec082InteractiveProfiles)
+
+	if _, err := Load(); err != nil {
+		t.Fatalf("expected Load() to ACCEPT the over-subscribed set under non-resident keep_alive 5m (per-model checks still pass, sum guard relaxed): %v", err)
+	}
+}

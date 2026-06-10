@@ -470,6 +470,12 @@ OLLAMA_MEMORY_LIMIT="$(env_override_value ollama_memory_limit deploy_resources.o
 # time when the `monitoring` profile is enabled.
 PROMETHEUS_CPU_LIMIT="$(required_value deploy_resources.prometheus.cpus)"
 PROMETHEUS_MEMORY_LIMIT="$(required_value deploy_resources.prometheus.memory)"
+# Spec 082 SCOPE-082-05 — SearxNG resource envelope. Fail-loud SST; the
+# deploy adapter MUST emit SEARXNG_CPU_LIMIT and SEARXNG_MEMORY_LIMIT in
+# app.env or compose aborts at substitution time when the `searxng`
+# profile is enabled.
+SEARXNG_CPU_LIMIT="$(required_value deploy_resources.searxng.cpus)"
+SEARXNG_MEMORY_LIMIT="$(required_value deploy_resources.searxng.memory)"
 ML_MODEL_MEMORY_PROFILES_JSON="$(required_json_value services.ml.model_memory_profiles)"
 
 # Spec 049 — Monitoring stack SST (FR-049-001 / FR-049-003).
@@ -1002,6 +1008,10 @@ PROMETHEUS_HOST_PORT="$(required_value environments.$TARGET_ENV.prometheus_host_
 POSTGRES_VOLUME_NAME="$(required_value environments.$TARGET_ENV.postgres_volume_name)"
 NATS_VOLUME_NAME="$(required_value environments.$TARGET_ENV.nats_volume_name)"
 OLLAMA_VOLUME_NAME="$(required_value environments.$TARGET_ENV.ollama_volume_name)"
+# Spec 082 SCOPE-082-03 — persistent embedding-model cache volume name so
+# the ML sidecar's HuggingFace + sentence-transformers caches survive a
+# restart without re-downloading from HuggingFace.
+ML_MODEL_CACHE_VOLUME_NAME="$(required_value environments.$TARGET_ENV.ml_model_cache_volume_name)"
 # Spec 049 — per-environment Prometheus TSDB volume name. Keeps dev,
 # test, and home-lab data fully separated even when the same image is
 # reused; also satisfies spec 045's docker-lifecycle isolation contract.
@@ -1654,6 +1664,7 @@ ML_HOST_PORT=${ML_HOST_PORT}
 OLLAMA_CONTAINER_PORT=${OLLAMA_CONTAINER_PORT}
 OLLAMA_HOST_PORT=${OLLAMA_HOST_PORT}
 OLLAMA_VOLUME_NAME=${OLLAMA_VOLUME_NAME}
+ML_MODEL_CACHE_VOLUME_NAME=${ML_MODEL_CACHE_VOLUME_NAME}
 OLLAMA_IMAGE=${OLLAMA_IMAGE}
 OLLAMA_TEST_MODEL=${OLLAMA_TEST_MODEL}
 OLLAMA_TEST_PULL_TIMEOUT_SECONDS=${OLLAMA_TEST_PULL_TIMEOUT_SECONDS}
@@ -1679,6 +1690,8 @@ SEARXNG_IMAGE=${SEARXNG_IMAGE}
 SEARXNG_CONTAINER_PORT=${SEARXNG_CONTAINER_PORT}
 SEARXNG_SECRET=${SEARXNG_SECRET}
 SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
+SEARXNG_CPU_LIMIT=${SEARXNG_CPU_LIMIT}
+SEARXNG_MEMORY_LIMIT=${SEARXNG_MEMORY_LIMIT}
 DATABASE_URL=${DATABASE_URL}
 NATS_URL=${NATS_URL}
 LLM_PROVIDER=${LLM_PROVIDER}
