@@ -16,6 +16,15 @@ import (
 	"github.com/smackerel/smackerel/internal/metrics"
 )
 
+// CardRewardsWebUI registers the spec 083 Scope 10 server-rendered card-rewards
+// web routes (wallet/offers/selections/bonuses/categories). The concrete
+// implementation lives in internal/web (CardRewardsWebHandler). Mirrors the
+// AgentAdminUI precedent — the routes are self-contained in internal/web so the
+// large WebUI interface is not bloated.
+type CardRewardsWebUI interface {
+	RegisterRoutes(r chi.Router)
+}
+
 // NewRouter creates the Chi router with all routes and middleware.
 func NewRouter(deps *Dependencies) http.Handler {
 	r := chi.NewRouter()
@@ -402,6 +411,19 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Get("/tools", deps.AgentAdminHandler.ToolsIndex)
 				r.Get("/tools/{name}", deps.AgentAdminHandler.ToolsShow)
 			})
+		})
+	}
+
+	// Spec 083 Scope 10 — card-rewards web UI (wallet/offers/selections/
+	// bonuses/categories). Behind webAuthMiddleware (same Bearer/cookie auth as
+	// the rest of the web UI); the routes + handlers are self-contained in
+	// internal/web via the CardRewardsWebUI interface. Mounted only when a
+	// Postgres pool is available (nil in config-validate mode and router unit
+	// tests, so those paths are unaffected).
+	if deps.CardRewardsWebHandler != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(deps.webAuthMiddleware)
+			deps.CardRewardsWebHandler.RegisterRoutes(r)
 		})
 	}
 

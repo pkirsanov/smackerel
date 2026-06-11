@@ -502,7 +502,7 @@ honest signal that the SPEC is not yet complete.
 | 07 Optimizer & Monthly Recommendations | **Done** | "Delivery — Scope 07" section (G01–G08: optimize unit incl. adversarial expired-rotating-ignored + shared-limit-not-double-counted, live-PG per-category + starred-override-preserved, e2e generate/report; Build Quality Gate green) |
 | 08 CalDAV Calendar Delivery | **Done** | "Delivery — Scope 08" section (H01–H06: stable-UID create + adversarial re-sync-updates-same-UID, disabled-sync-keeps-data, delete-cleanup, live-PG sync-run-audited; Build Quality Gate green) |
 | 09 Scheduler Jobs & Manual Triggers | **Done** | "Delivery — Scope 09" section (I01–I06: jobs-on-configured-crons + adversarial no-swap unit, live-PG full daily/monthly pipelines audited, manual-reuse trigger="manual", adversarial re-run idempotency; Build Quality Gate green, artifact-lint exit 0) |
-| 10 Web UI — Wallet/Offers/Selections/Bonuses/Categories | Not Started | — |
+| 10 Web UI — Wallet/Offers/Selections/Bonuses/Categories | **Done** | "Delivery — Scope 10" section (J01–J08 all via live-stack Playwright e2e-ui [7 passed], no request interception, CSP-clean; 3 live-PG store-CRUD integration tests; Docker bundle freshness verified via fresh core image rebuild; Build Quality Gate green, artifact-lint exit 0) |
 | 11 Web UI — Dashboard/Recommendations/Rotating-Verify/Report/Admin | Not Started | — |
 
 **Why not all 11 in this run (honest blocker):** delivering and
@@ -2317,4 +2317,283 @@ Progress (E08 blocked-needs-live-Ollama) and scopes 10–11 remain Not Started, 
 advances to 10. NOT committed (autoCommit off) — the orchestrator owns the
 preservation checkpoint (it will hunk-stage the single `main.go` card-rewards line
 separately from the spec-084 hunk).
+
+---
+
+## Delivery — Scope 10: Web UI — Wallet, Offers, Selections, Bonuses, Categories (2026-06-12)
+
+Scope 10 delivers the server-rendered card-rewards Web UI with full CRUD parity
+to the standalone CCManager app (FR-CR-016) — the user-facing half of the
+absorption that lets the operator retire CCManager. Pages follow the existing
+`internal/web` Go `html/template` + go-chi paradigm (NFR-CR-006), behind the
+existing `webAuthMiddleware` + global CSP, styled with the shared design-token
+palette (`var(--…)`, no hardcoded colors), and use plain Post/Redirect/Get
+forms (no client JS) so they are strictly CSP-clean.
+
+### Execution model (transparency)
+
+`runSubagent`/`agent` was **unavailable** in this runtime, so the `full-delivery`
+implement+test phases for Scope 10 ran in **parent-expanded** form by a single
+orchestrator agent — NO separate certified specialist sub-agents
+(bubbles.implement/test/validate/audit) were dispatched or claimed. Disclosed in
+`state.json.executionHistory`, consistent with Scopes 01–09. The unrelated
+concurrent **BUG-064-002 / spec-084** work in the tree (`internal/assistant/*`,
+`internal/telegram/*`, `cmd/core/main.go` [spec-084 WriteTimeout hunk only],
+`cmd/core/wiring_assistant_openknowledge.go`,
+`cmd/core/openknowledge_prompt_contract_test.go`,
+`config/prompt_contracts/open_knowledge.yaml`, `config/smackerel.yaml`,
+`docs/Operations.md`, `specs/064`/`084`) was NOT read, modified, staged, or
+committed (verified by `git diff` of `main.go` + `config/smackerel.yaml` — both
+contain ONLY spec-084 content). `main.go` was NOT touched: the web handler is
+wired in `cmd/core/wiring.go::wireCardRewardsHandler` (which already runs before
+`api.NewRouter`), reusing the same `*cardrewards.Service` as the REST handler.
+No `card_rewards` feature-flag bundle edit (`config/feature-flags.mvp.yaml`) —
+bubbles.train-owned.
+
+### Files created / changed (Scope 10)
+
+**Created:**
+- `internal/web/cardrewards.go` — `CardRewardsWebHandler` (self-contained template set with a script-free design-token `head`/`foot`), `RegisterRoutes`, and all wallet/offers/selections/bonuses/categories page + action handlers (Post/Redirect/Get).
+- `internal/web/cardrewards_templates.go` — `cardRewardsTemplates`: local `head`/`foot` (design tokens, no scripts), `cardrewards-nav`, and the 10 page templates with rich `data-*` hooks for assertion.
+- `internal/cardrewards/store_crud_test.go` — `//go:build integration` live-PG tests for the new offer/selection/bonus Get/Update/Delete/List store methods.
+- `web/pwa/tests/cardrewards_wallet.spec.ts` — e2e-ui J01–J05.
+- `web/pwa/tests/cardrewards_offers_selections.spec.ts` — e2e-ui J06, J07.
+- `web/pwa/tests/cardrewards_categories.spec.ts` — e2e-ui J08.
+
+**Modified (additive only):**
+- `internal/cardrewards/store.go` — `GetOffer`/`UpdateOffer`/`DeleteOffer`/`ListOffers`, `GetSelection`/`UpdateSelection`/`ListSelections`, `GetSignupBonus`/`UpdateSignupBonus`/`ListBonuses` (mirror existing pgx patterns).
+- `internal/cardrewards/service.go` — `ErrOfferNotFound`/`ErrSelectionNotFound`/`ErrBonusNotFound` sentinels; `GetOffer`/`UpdateOffer`/`DeleteOffer`/`ListOffers`, `GetSelection`/`UpdateSelection`/`ListSelections`, `GetBonus`/`UpdateBonus`/`ListBonuses`, `ListCatalog` (validation + delegate).
+- `internal/api/router.go` — `CardRewardsWebUI` interface + mount block behind `webAuthMiddleware` (mirrors the `AgentAdminUI` precedent; mounted only when non-nil so router unit tests are unaffected).
+- `internal/api/health.go` — `Dependencies.CardRewardsWebHandler CardRewardsWebUI` field.
+- `cmd/core/wiring.go` — `wireCardRewardsHandler` also builds `web.NewCardRewardsWebHandler(service)` and assigns `deps.CardRewardsWebHandler`.
+
+### Path reconciliation note (Test Plan vs harness)
+
+The scopes.md Test Plan names the specs `tests/e2e-ui/cardrewards_*.spec.ts`,
+but the repo's actual e2e-ui harness (`./smackerel.sh test e2e-ui` →
+`scripts/runtime/web-e2e-ui.sh`) discovers tests via `web/pwa/playwright.config.ts`
+(`testDir: "tests"`, `testMatch: "**/*.spec.ts"`), i.e. only
+`web/pwa/tests/**/*.spec.ts` are ever executed. The specs were therefore placed
+in `web/pwa/tests/` so they are actually run by the sanctioned command; placing
+them under `tests/e2e-ui/` would mean they are never discovered.
+
+### Pre-existing out-of-scope finding (shared head ↔ CSP htmx mismatch)
+
+The first e2e-ui run surfaced a **pre-existing** inconsistency: the shared
+`internal/web` `head` template loads htmx from `https://unpkg.com/htmx.org@1.9.12`
+(no trailing slash), but the global CSP `script-src` allow-lists
+`https://unpkg.com/htmx.org@1.9.12/` (WITH trailing slash) — so the browser
+refuses to load htmx on every page that uses the shared head (e.g. the
+htmx-driven recommendations page). This is owned by the web/spec-044/057 area,
+not Scope 10. Scope 10 stays scoped: the card-rewards pages use plain forms and
+a **script-free** head, so they are CSP-clean without touching the shared head
+or CSP. Recorded here as a finding for the owning area to address separately.
+
+### Evidence — DoD 1: Implementation behavior complete
+
+Server-rendered wallet/offers/selections/bonuses/categories pages with full CRUD
+parity, behind `webAuthMiddleware` + global CSP, design tokens (no hardcoded
+colors). Proven end-to-end by the 7 live-stack Playwright scenarios (DoD 2–4
+below — every page renders, every CRUD mutation persists and re-renders) plus 3
+live-PG store-CRUD integration tests. `./smackerel.sh check` (compile + SST
+sync) exit 0:
+
+```
+config-validate: /home/.../config/generated/dev.env.tmp.3188712 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+@@@CHECK_EXIT=0@@@
+```
+
+New domain CRUD (offer/selection/bonus Get/Update/Delete/List) — live-PG
+integration, `./smackerel.sh test integration --go-run CardRewardsStoreCRUD`:
+
+```
+go-integration: applying -run selector: CardRewardsStoreCRUD
+=== RUN   TestCardRewardsStoreCRUD_OfferLifecycle_J06
+--- PASS: TestCardRewardsStoreCRUD_OfferLifecycle_J06 (0.05s)
+=== RUN   TestCardRewardsStoreCRUD_SelectionLifecycle_J07
+--- PASS: TestCardRewardsStoreCRUD_SelectionLifecycle_J07 (0.04s)
+=== RUN   TestCardRewardsStoreCRUD_BonusLifecycle
+--- PASS: TestCardRewardsStoreCRUD_BonusLifecycle (0.04s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.172s
+PASS: go-integration
+@@@INTEG_EXIT=0@@@
+```
+
+The OfferLifecycle test asserts the J06 edit round-trips (title/category/rate/
+activated change persisted via Get→Update→Get), ListOffers includes the row,
+delete removes it, and a second delete of the missing row returns `(false, nil)`
+(not an error). SelectionLifecycle asserts a tier-1→tier-2 edit round-trips.
+BonusLifecycle asserts a spend-progress update meeting the requirement
+round-trips with `met=true`. Stack torn down clean (ephemeral isolation).
+
+### Evidence — DoD 2: SCN-083-J01..J05 (wallet CRUD incl. discovery/custom/note/toggle) — e2e-ui, live stack, no interception
+
+`./smackerel.sh test e2e-ui cardrewards` — 7 scenarios, real headless Chromium
+against the freshly-rebuilt disposable stack (`SMACKEREL_BASE_URL` = core), real
+`/v1/web/login` auth, real `/api/cards` seeding. J01 (wallet lists nickname,
+type, note, active) + J03 (add custom) are covered by scenario 2; J02 (discovery)
+by scenario 4; J04 (edit + note persists on reload) by scenario 6; J05 (toggle
+activation) by scenario 7:
+
+```
+Running 7 tests using 3 workers
+
+  ✓  1 …s › SCN-083-J06 — add and edit an offer with a shared limit group (2.1s)
+  ✓  2 …01 — add a custom card; wallet lists nickname, type, note, active (1.5s)
+  ✓  3 …s › SCN-083-J08 — manage category names, equivalents, and starred (1.9s)
+  ✓  4 … Rewards Wallet › SCN-083-J02 — add a catalog card via discovery (790ms)
+  ✓  5 …e 10 — Offers & Selections › SCN-083-J07 — tiered selection save (852ms)
+  ✓  6 …t › SCN-083-J04 — edit a card and add a note; persists on reload (796ms)
+  ✓  7 …— Card Rewards Wallet › SCN-083-J05 — toggle card activation off (513ms)
+
+  7 passed (5.2s)
+@@@E2EUI_EXIT=0@@@
+```
+
+No-interception scan (DoD requirement — must be empty for the card-rewards specs):
+
+```
+# grep -rn 'page\.route|context\.route|intercept(|cy\.intercept|msw|nock|wiremock' web/pwa/tests/cardrewards_*.spec.ts
+(no matches — scan clean)
+```
+
+Each scenario authenticates via the real login endpoint (adversarial guard:
+`expect(page).toHaveURL(/\/cards\/wallet…/)` ensures the authed page is NOT
+bounced to `/login`), asserts user-visible state (rendered nickname/type/note/
+`data-card-status`, not just URL), reloads to prove persistence (J04), and ends
+with `assertNoCSPViolations(page)` (CSP-clean). No silent-pass bailouts.
+
+### Evidence — DoD 3: SCN-083-J06 (offer shared-limit) + SCN-083-J07 (tiered selection) — e2e-ui, live stack
+
+From the same `7 passed` run above — scenario 1 (J06) and scenario 5 (J07):
+
+```
+  ✓  1 …s › SCN-083-J06 — add and edit an offer with a shared limit group (2.1s)
+  ✓  5 …e 10 — Offers & Selections › SCN-083-J07 — tiered selection save (852ms)
+```
+
+J06 adds an offer with a `shared_limit_group`, asserts the
+`data-shared-limit-group` tag renders, opens the edit form (asserting the title
+AND the shared-limit-group are pre-filled = round-trip), edits title+rate,
+reloads, and asserts the edited title + preserved group + new rate persist. J07
+saves tier-1 + tier-2 categories in one submit, reloads, and asserts BOTH a
+`data-selection-tier="1"` row and a `data-selection-tier="2"` row re-render with
+the correct categories and period.
+
+### Evidence — DoD 4: SCN-083-J08 (category management) — e2e-ui, live stack
+
+From the same `7 passed` run — scenario 3 (J08):
+
+```
+  ✓  3 …s › SCN-083-J08 — manage category names, equivalents, and starred (1.9s)
+```
+
+J08 adds a starred category with one equivalent (asserts the row renders with the
+equivalent + `data-starred="true"`), then re-submits the SAME canonical name with
+a second equivalent (idempotent upsert), reloads, and asserts the row is NOT
+duplicated (`toHaveCount(1)`) and reflects BOTH equivalents + starred — proving
+the change lands in `category_aliases`. (Dashboard ordering itself is Scope 11.)
+
+### Evidence — DoD 5: Build Quality Gate
+
+**`./smackerel.sh lint` — Go (golangci-lint) + web TS validation, exit 0:**
+
+```
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+@@@LINT_EXIT=0@@@
+```
+
+**`./smackerel.sh format --check` — flagged the new file, `./smackerel.sh format`
+applied gofmt, re-check clean:**
+
+```
+# first pass
+internal/web/cardrewards.go
+@@@FORMAT_EXIT=1@@@
+# after ./smackerel.sh format (gofmt -w) and a later self-contained-head edit:
+65 files already formatted
+@@@FORMAT_RECHECK_EXIT=0@@@
+```
+
+**Docker bundle freshness (UI is Docker-served; the binary embeds the Go
+templates).** The e2e-ui lane (project `smackerel-test-e2e-ui`) does not
+auto-rebuild on source change, so the stale core image from the first run was
+explicitly removed to force a fresh build:
+
+```
+Untagged: smackerel-test-e2e-ui-smackerel-core:latest
+Deleted: sha256:3b061689d5b3f31376c1dfd72d560f8cd827ca61cd628e4befce7405044fb980
+@@@RM_EXIT=0@@@
+CORE_IMAGE_ABSENT_CONFIRMED
+```
+
+The re-run then rebuilt the core image **fresh from current source** and the
+container was recreated and became Healthy before the specs ran — proving the
+served pages came from the new binary (a stale binary would 404 `/cards/*` and
+fail the no-bailout assertions):
+
+```
+#14 [smackerel-core builder 6/7] COPY . .
+#14 DONE 17.7s
+#15 [smackerel-core builder 7/7] RUN ... go build ... -o /bin/smackerel-core ./cmd/core
+#15 DONE 43.2s
+#19 naming to docker.io/library/smackerel-test-e2e-ui-smackerel-core 0.5s done
+ smackerel-core  Built
+ Container smackerel-test-e2e-ui-smackerel-core-1  Started
+ Container smackerel-test-e2e-ui-smackerel-core-1  Healthy
+```
+
+**Artifact lint — `bash .github/bubbles/scripts/artifact-lint.sh specs/083-card-rewards-companion`:**
+
+```
+✅ Required artifact exists: spec.md / design.md / uservalidation.md / state.json / scopes.md / report.md
+✅ Found DoD section in scopes.md
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: in_progress
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' (pre-existing across all scopes; non-blocking)
+ℹ️  Workflow mode 'full-delivery' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: Summary / Completion Statement / Test Evidence
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+@@@ARTIFACT_LINT_EXIT=0@@@
+```
+
+### Completion Statement — Scope 10
+
+All 5 DoD items are `[x]` with inline raw evidence above. Scope 10 is **Done**:
+the card-rewards Web UI delivers full wallet/offers/selections/bonuses/categories
+CRUD parity (J01–J08) proven on the live disposable stack with no request
+interception, CSP-clean, Docker-bundle-fresh, and behind the existing auth/CSP.
+Top-level spec status remains `in_progress` (Scope 05 In Progress —
+blocked-needs-live-Ollama; Scope 11 Not Started). `completedScopes` =
+`[1,2,3,4,6,7,8,9,10]`, `currentScope` = 11. Not committed (autoCommit off) —
+the orchestrator owns the preservation checkpoint.
+
 

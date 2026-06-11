@@ -899,6 +899,7 @@ func wireCardRewardsHandler(svc *coreServices, deps *api.Dependencies) {
 	store := cardrewards.NewStore(svc.pg.Pool)
 	service := cardrewards.NewService(store)
 	deps.CardRewardsHandler = api.NewCardRewardsHandler(service)
+	deps.CardRewardsWebHandler = web.NewCardRewardsWebHandler(service)
 	slog.Info("card-rewards handler wired (early — before NewRouter)")
 }
 
