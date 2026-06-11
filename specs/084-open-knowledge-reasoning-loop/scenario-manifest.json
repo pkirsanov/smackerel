@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "featureDir": "specs/084-open-knowledge-reasoning-loop",
+  "featureName": "Open-Knowledge Reasoning Loop",
+  "generatedBy": "bubbles.plan (full-delivery, analyze-design-plan prelude)",
+  "generatedAt": "2026-06-11T00:00:00Z",
+  "amends": ["specs/064-open-ended-knowledge-agent"],
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-084-A01" },
+    { "scenarioId": "SCN-084-A02" },
+    { "scenarioId": "SCN-084-A03" },
+    { "scenarioId": "SCN-084-A04" },
+    { "scenarioId": "SCN-084-A05" }
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "SCN-084-A01",
+      "scopeId": "SCOPE-01",
+      "title": "Reasoning prompt is question-agnostic: anti-drill bias and question-type enumeration removed; decompose/gather-all-sides/reconcile/answer contract present; CITATIONS + R1-R4 preserved verbatim",
+      "behaviorClass": "unit",
+      "changeType": "modified",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "cmd/core/openknowledge_prompt_contract_test.go::TestOpenKnowledgeAgentPrompt_IsQuestionAgnostic_Spec084",
+        "cmd/core/openknowledge_prompt_contract_test.go::TestOpenKnowledgeAgentPrompt_PreservesCitationContract_Spec084"
+      ],
+      "evidenceRefs": ["report.md#scope-02"]
+    },
+    {
+      "scenarioId": "SCN-084-A02",
+      "scopeId": "SCOPE-02",
+      "title": "Loop drills in: a multi-hop turn issues >=2 distinct tool calls before the forced final, and a reflect-before-final nudge is injected on the second-to-last iteration",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_ReflectBeforeFinal_NudgeOnSecondToLastIteration_Spec084",
+        "internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_MultiHop_AllowsDistinctToolCallsBeforeForcedFinal_Spec084"
+      ],
+      "evidenceRefs": ["report.md#scope-03"]
+    },
+    {
+      "scenarioId": "SCN-084-A03",
+      "scopeId": "SCOPE-03",
+      "title": "Comparison salvage is honest: when synthesis fails on a two-distinct-tool-call comparison, the body is framed as raw findings (couldn't directly answer) carrying both sides, NOT a confident snippet stitch",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_ComparisonSalvage_HonestlyFramed_BothSides_Spec084"
+      ],
+      "evidenceRefs": ["report.md#scope-04"]
+    },
+    {
+      "scenarioId": "SCN-084-A04",
+      "scopeId": "SCOPE-03",
+      "title": "Honest salvage on empty/ungrounded forced-final: salvaged body is framed as raw findings (not a confident answer) and still carries capped, deduped sources (no zero-source refusal)",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_HonestSalvage_EmptyForcedFinal_FramedWithSources_Spec084",
+        "internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_HonestSalvage_UngroundedExcuse_ReplacedWithFramedFindings_Spec084"
+      ],
+      "evidenceRefs": ["report.md#scope-04"]
+    },
+    {
+      "scenarioId": "SCN-084-A05",
+      "scopeId": "SCOPE-03",
+      "title": "Trust contracts preserved: a genuine cited synthesis is returned verbatim (no honest-salvage frame), and a fabricated citation is still rejected by the cite-back verifier",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_GenuineSynthesis_ReturnedVerbatim_NoSalvageFrame_Spec084",
+        "internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_FabricatedCitation_StillRejected_Spec084"
+      ],
+      "evidenceRefs": ["report.md#scope-04"]
+    }
+  ]
+}

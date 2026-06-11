@@ -314,11 +314,25 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		// rather than synthesizing from prior results.
 		requestTools := tools
 		requestMessages := messages
-		if iter == a.cfg.MaxIterations-1 && len(trace) > 0 {
+		switch {
+		case iter == a.cfg.MaxIterations-1 && len(trace) > 0:
 			requestTools = nil
 			requestMessages = append(append([]llm.ChatMessage{}, messages...), llm.ChatMessage{
 				Role:    llm.RoleUser,
 				Content: "You have used all your tool calls. Based ONLY on the tool results above, write your final answer NOW. Include the <CITATIONS>[...]</CITATIONS> block at the end. If results are insufficient, write a short refusal explaining what you searched, followed by <CITATIONS>[]</CITATIONS>.",
+			})
+		case iter == a.cfg.MaxIterations-2 && len(trace) > 0:
+			// Spec 084 (CHANGE 2) — reflect-before-final nudge. On the
+			// second-to-last iteration, prompt the model to check that its
+			// evidence actually answers the question and covers every part /
+			// side, and to spend its last tool-calling turn filling a gap if
+			// one remains. Question-agnostic (examples, not a closed list).
+			// Ephemeral (mirrors the forced-final pattern): appended to a copy
+			// of messages so it never pollutes the running history, within the
+			// existing iteration budget, no new model/dependency.
+			requestMessages = append(append([]llm.ChatMessage{}, messages...), llm.ChatMessage{
+				Role:    llm.RoleUser,
+				Content: "Before you give your final answer: re-read the question and check whether the evidence you have actually answers what was asked, and whether you have covered every part of it — for a comparison, every option; for a why/how question, the mechanism; for a recommendation, the deciding criteria. If a needed piece is still missing, issue ONE more targeted tool call now to fill that specific gap. If your evidence already answers the question, proceed to your final answer.",
 			})
 		}
 		req := llm.ChatRequest{Model: a.cfg.Model, Messages: requestMessages, Tools: requestTools}
@@ -345,7 +359,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 			if isForcedFinalTurn && strings.TrimSpace(result.FinalText) == "" {
 				autoSources := a.cappedTraceSources(trace)
 				if len(autoSources) > 0 {
-					body := synthesizeFromSnippets(trace)
+					body := honestSalvageBody(trace)
 					if body != "" {
 						return finalize(TurnResult{
 							Status:             StatusSuccess,
@@ -426,7 +440,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 					// evidence. The trace+sources prove it.
 					salvageBody := finalText
 					if isUngroundedExcuse(finalText) {
-						if syn := synthesizeFromSnippets(trace); syn != "" {
+						if syn := honestSalvageBody(trace); syn != "" {
 							salvageBody = syn
 						}
 					}
@@ -653,6 +667,24 @@ func truncatePreview(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// honestSalvagePrefix frames a snippet-salvaged body as raw findings so the
+// user is never shown a stitched snippet wall dressed up as a reasoned answer
+// (spec 084 CHANGE 4 / Principle 8 — Trust Through Transparency). It is applied
+// ONLY when genuine synthesis did not happen and the platform falls back to
+// synthesizeFromSnippets — never on the genuine cited-synthesis happy path.
+const honestSalvagePrefix = "I searched but couldn't directly answer your question. Here is the most relevant information I found:"
+
+// honestSalvageBody wraps synthesizeFromSnippets(trace) with the honest frame.
+// Returns "" when there are no snippets to salvage, so callers fall through to
+// their normal empty-body handling (e.g. a canonical refusal).
+func honestSalvageBody(trace []ToolTraceEntry) string {
+	syn := synthesizeFromSnippets(trace)
+	if syn == "" {
+		return ""
+	}
+	return honestSalvagePrefix + "\n\n" + syn
 }
 
 // synthesizeFromSnippets builds a plain-text answer from the recorded
