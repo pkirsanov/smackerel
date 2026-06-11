@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -365,6 +366,42 @@ func (s *Store) ListSelectionsByUserCard(ctx context.Context, userCardID string)
 	return out, rows.Err()
 }
 
+// ListPendingReEnrollments returns selectable-card selections whose enrollment
+// window is open at `now` (effective_start has passed and effective_end has
+// not) but which are not yet enrolled, joined to the wallet entry's catalog
+// name for display. These are the pending re-enrollment actions surfaced for
+// the dashboard (SCN-083-F06 / UC-003 A2) — the smackerel equivalent of
+// CCManager's "pending selections". Only active wallet cards are considered.
+func (s *Store) ListPendingReEnrollments(ctx context.Context, now time.Time) ([]PendingReEnrollment, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT cs.user_card_id, COALESCE(cc.name, ''), cs.category, cs.tier,
+		        cs.period_label, cs.effective_start, cs.effective_end
+		   FROM card_selections cs
+		   JOIN user_cards uc ON uc.id = cs.user_card_id
+		   LEFT JOIN card_catalog cc ON cc.id = uc.card_catalog_id
+		  WHERE cs.enrolled = false
+		    AND uc.active = true
+		    AND cs.effective_start IS NOT NULL
+		    AND cs.effective_start <= $1::date
+		    AND (cs.effective_end IS NULL OR cs.effective_end >= $1::date)
+		  ORDER BY cs.effective_start, cs.category`, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []PendingReEnrollment
+	for rows.Next() {
+		var p PendingReEnrollment
+		if err := rows.Scan(&p.UserCardID, &p.CatalogName, &p.Category, &p.Tier,
+			&p.PeriodLabel, &p.EffectiveStart, &p.EffectiveEnd); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // ---- signup_bonuses --------------------------------------------------------
 
 // CreateSignupBonus inserts a signup-bonus tracker.
@@ -636,6 +673,94 @@ func (s *Store) GetRotatingCategory(ctx context.Context, catalogID, periodLabel 
 		return nil, err
 	}
 	return &rc, nil
+}
+
+const rotatingCategoryCols = `id, card_catalog_id, period_label, period_start, period_end, categories,
+	limit_cents, activation_required, lifecycle_state, confidence,
+	needs_verification, manual_override, source_count, created_at, updated_at`
+
+func scanRotatingCategory(row pgx.Row) (*RotatingCategory, error) {
+	var rc RotatingCategory
+	if err := row.Scan(&rc.ID, &rc.CardCatalogID, &rc.PeriodLabel, &rc.PeriodStart,
+		&rc.PeriodEnd, &rc.Categories, &rc.LimitCents, &rc.ActivationRequired,
+		&rc.LifecycleState, &rc.Confidence, &rc.NeedsVerification, &rc.ManualOverride,
+		&rc.SourceCount, &rc.CreatedAt, &rc.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &rc, nil
+}
+
+// ListAllRotatingCategories returns every reconciled rotating-category record
+// ordered by (card, period). Used by the daily lifecycle pass (Scope 06) to
+// advance lifecycle_state by date (Principle 3).
+func (s *Store) ListAllRotatingCategories(ctx context.Context) ([]RotatingCategory, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT `+rotatingCategoryCols+` FROM rotating_categories ORDER BY card_catalog_id, period_label`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []RotatingCategory
+	for rows.Next() {
+		rc, err := scanRotatingCategory(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *rc)
+	}
+	return out, rows.Err()
+}
+
+// ListActiveRotatingCategories returns only the records currently in the
+// `active` lifecycle state — the set eligible for current recommendations.
+// Expired and upcoming records are excluded (SCN-083-F05).
+func (s *Store) ListActiveRotatingCategories(ctx context.Context) ([]RotatingCategory, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT `+rotatingCategoryCols+` FROM rotating_categories
+		 WHERE lifecycle_state = $1 ORDER BY card_catalog_id, period_label`, LifecycleActive)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []RotatingCategory
+	for rows.Next() {
+		rc, err := scanRotatingCategory(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *rc)
+	}
+	return out, rows.Err()
+}
+
+// UpdateRotatingLifecycle sets a record's lifecycle_state and refreshes
+// updated_at. Returns false if no row matched. It NEVER touches categories,
+// confidence, manual_override, or needs_verification — lifecycle is a pure
+// date-derived transition (Principle 3 / FR-CR-012).
+func (s *Store) UpdateRotatingLifecycle(ctx context.Context, id, state string) (bool, error) {
+	tag, err := s.Pool.Exec(ctx,
+		`UPDATE rotating_categories SET lifecycle_state = $1, updated_at = NOW() WHERE id = $2`,
+		state, id,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// CountRotatingCategoriesByCardPeriod returns the number of rotating_categories
+// rows for a (card_catalog_id, period_label). The UNIQUE constraint guarantees
+// this is 0 or 1; the reconciler's idempotency test asserts it stays exactly 1
+// across repeated runs (SCN-083-F07).
+func (s *Store) CountRotatingCategoriesByCardPeriod(ctx context.Context, catalogID, periodLabel string) (int, error) {
+	var n int
+	err := s.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM rotating_categories WHERE card_catalog_id = $1 AND period_label = $2`,
+		catalogID, periodLabel,
+	).Scan(&n)
+	return n, err
 }
 
 // ---- rotating_category_observations ----------------------------------------
