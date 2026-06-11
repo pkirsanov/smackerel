@@ -265,3 +265,11 @@ app.include_router(authed_router)
 from .routes.chat import router as openknowledge_chat_router  # noqa: E402
 
 app.include_router(openknowledge_chat_router, dependencies=[Depends(verify_auth)])
+
+# Spec 083 Scope 05 — card-rewards strict-schema rotating-category extraction.
+# Mounted under verify_auth so POST /extract-card-categories inherits the same
+# Bearer-auth contract. The model-gateway call lives here (Constitution C2); the
+# Go orchestrator only sends page text + candidate and re-validates the response.
+from .card_categories import router as card_categories_router  # noqa: E402
+
+app.include_router(card_categories_router, dependencies=[Depends(verify_auth)])
