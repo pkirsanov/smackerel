@@ -15,13 +15,13 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 |---|-------|----------|-----------|----------|--------|
 | 01 | Config SST & Migration Schema | P0 | — | Config, PostgreSQL | Done |
 | 02 | Card Domain Store, Types & CRUD API | P0 | 01 | Go Core, PostgreSQL, REST API | Done |
-| 03 | Data Migration: CCManager JSON → PostgreSQL | P0 | 02 | Go Core, one-time importer | Not Started |
-| 04 | Card-Rewards Source Connector | P1 | 01, 02 | `internal/connector/cardrewards` | Not Started |
-| 05 | LLM Category Extraction (replaces regex) | P0 | 04 | `internal/cardrewards/extract` (Go orchestrator + schema-validate) + `ml/app/card_categories.py` (sidecar model call, C2) | Not Started |
+| 03 | Data Migration: CCManager JSON → PostgreSQL | P0 | 02 | Go Core, one-time importer | Done |
+| 04 | Card-Rewards Source Connector | P1 | 01, 02 | `internal/connector/cardrewards` | Done |
+| 05 | LLM Category Extraction (replaces regex) | P0 | 04 | `internal/cardrewards/extract` (Go orchestrator + schema-validate) + `ml/app/card_categories.py` (sidecar model call, C2) | In Progress |
 | 06 | Multi-Source Reconciliation & Lifecycle | P1 | 05 | `internal/cardrewards/reconcile`, PostgreSQL | Done |
 | 07 | Optimizer & Monthly Recommendation Generation | P1 | 02, 06 | `internal/cardrewards/optimize`, REST API | Done |
-| 08 | CalDAV Calendar Delivery | P1 | 07 | `internal/cardrewards/calendar`, CalDAV | Not Started |
-| 09 | Scheduler Jobs & Manual Triggers | P1 | 04, 05, 06, 07, 08 | `internal/scheduler` | Not Started |
+| 08 | CalDAV Calendar Delivery | P1 | 07 | `internal/cardrewards/calendar`, CalDAV | Done |
+| 09 | Scheduler Jobs & Manual Triggers | P1 | 04, 05, 06, 07, 08 | `internal/scheduler` | Done |
 | 10 | Web UI — Wallet, Offers, Selections, Bonuses, Categories | P1 | 02 | `internal/web` (Go templates), e2e-ui | Not Started |
 | 11 | Web UI — Dashboard, Recommendations, Rotating Verify, Report, Admin | P1 | 06, 07, 09, 10 | `internal/web` + `internal/web/admin`, e2e-ui | Not Started |
 
@@ -619,7 +619,7 @@ Scenario: SCN-083-H06 — calendar sync run is audited
 
 ## Scope 09: Scheduler Jobs & Manual Triggers
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** 04, 05, 06, 07, 08
 **Spec Refs:** FR-CR-018, FR-CR-019, NFR-CR-005, design §8
@@ -671,11 +671,11 @@ Scenario: SCN-083-I06 — re-running a job is idempotent
 
 ### Definition of Done
 
-- [ ] Implementation behavior complete: daily refresh and monthly recommend jobs registered on configured crons; manual triggers reuse the same pipelines; idempotent
-- [ ] Scenario tests pass for SCN-083-I01 and SCN-083-I02 (jobs registered on crons) — unit
-- [ ] Scenario tests pass for SCN-083-I03 and SCN-083-I04 (full daily + monthly pipelines audited) — integration (live PG)
-- [ ] Scenario tests pass for SCN-083-I05 and SCN-083-I06 (manual trigger reuse + idempotency) — integration (live PG)
-- [ ] Build Quality Gate: build/check/lint/format clean (zero warnings); manual + scheduled paths share code (NFR-CR-005); artifact-lint clean; docs aligned
+- [x] Implementation behavior complete: daily refresh and monthly recommend jobs registered on configured crons; manual triggers reuse the same pipelines; idempotent — Evidence: [report.md](report.md) → "Evidence — DoD 1: Implementation behavior complete" (proven end-to-end by I01–I06; shared code path NFR-CR-005 structural; no implementation bug found, source unchanged except gofmt whitespace)
+- [x] Scenario tests pass for SCN-083-I01 and SCN-083-I02 (jobs registered on crons) — unit — Evidence: [report.md](report.md) → "Evidence — DoD 2: SCN-083-I01 + I02" (UNIT_EXIT=0; both jobs register on EXACTLY their configured crons + adversarial no-swap assertions; `ok internal/scheduler 0.037s`)
+- [x] Scenario tests pass for SCN-083-I03 and SCN-083-I04 (full daily + monthly pipelines audited) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — DoD 3: SCN-083-I03 + I04" (INTEG_EXIT=0; card_runs scrape+extract[partial,no-fabrication]+2×reconcile audited; reconcile merges seeded obs into 1 authoritative row; recommend+optimize+calendar_sync on live PG)
+- [x] Scenario tests pass for SCN-083-I05 and SCN-083-I06 (manual trigger reuse + idempotency) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-I05 + I06" (INTEG_EXIT=0; manual trigger="manual" reuses RunDailyRefresh, not mislabeled scheduled; ADVERSARIAL re-run keeps 1 rotating row + 1 rec row + updates the SAME CalDAV UID, no duplicates; clean teardown)
+- [x] Build Quality Gate: build/check/lint/format clean (zero warnings); manual + scheduled paths share code (NFR-CR-005); artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 5: Build Quality Gate" (CHECK_EXIT=0, LINT_EXIT=0, format re-check exit 0 after `gofmt -w` on the 2 Scope 09 files, ARTIFACT_LINT_EXIT=0; shared main.go hash byte-identical before/after)
 
 ---
 
