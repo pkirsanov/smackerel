@@ -1315,3 +1315,302 @@ promoted to `done`: Scope 05's E08 successful-live-Ollama-inference item is
 blocked-needs-live-Ollama and 6 scopes (06–11) remain, so `currentScope` stays
 5 and `completedScopes` is NOT extended with "5".
 
+---
+
+## Delivery — Scope 06: Multi-Source Reconciliation & Category Lifecycle (2026-06-11)
+
+> Scope 06 was delivered by a prior implement pass that was cut off mid-run: the
+> implementation existed on disk (`internal/cardrewards/reconcile.go` + the new
+> Store/types methods) and the unit tests were reported passing, but the live-PG
+> integration results (F06/F07) were never captured and the scope status was
+> never flipped. This run is a **VERIFY + CERTIFY** pass: every Scope 06 test was
+> re-run via the repo CLI with full raw evidence below; no implementation bug was
+> found, so `reconcile.go`/`store.go`/`types.go` were NOT modified. All evidence
+> is from real in-session execution. autoCommit OFF — nothing committed.
+
+### Files verified (Scope 06)
+
+- `internal/cardrewards/reconcile.go` (NEW, pre-existing on disk) — `Reconciler`
+  with PURE `mergeObservations` (F01 agreement; F02 disagreement →
+  `needs_verification`+conservative confidence; F03 manual-override protection;
+  plurality selection deterministic) and PURE date-driven lifecycle via the
+  shared `deriveLifecycle`; `Reconcile` (idempotent per-(card,period) upsert +
+  `card_runs` reconcile audit row) and `AdvanceLifecycle` (upcoming→active→expired
+  transitions + `ListPendingReEnrollments` for the dashboard). Owns no
+  model/network access (Store + clock only).
+- `internal/cardrewards/reconcile_test.go` (NEW) — T-06-01/02/03 unit tests for
+  the PURE decisions (F01–F05 + UC-002 A2 low-confidence + no-observation edge).
+  F02/F03 are ADVERSARIAL with explicit `REGRESSION` assertions that fail if the
+  protection is removed (not tautological).
+- `internal/cardrewards/reconcile_integration_test.go` (NEW, `//go:build
+  integration`) — T-06-04 live-PG tests: F07 idempotent upsert (asserts exactly
+  ONE `rotating_categories` row per (card,period) + stable id after running the
+  reconciler twice), F06 re-enrollment pending action (window-opens-today &
+  not-enrolled surfaced; future/already-enrolled NOT), plus live F04/F05
+  transitions+exclusion, live F02 (both observations retained), live F03
+  (override not rewritten + observation retained for audit).
+- `internal/cardrewards/store.go` (M) — added `UpsertRotatingCategory`,
+  `GetRotatingCategory`, `ListAllRotatingCategories`, `ListActiveRotatingCategories`,
+  `UpdateRotatingLifecycle`, `ListPendingReEnrollments`,
+  `CountRotatingCategoriesByCardPeriod` (idempotent upsert keyed on
+  `(card_catalog_id, period_label)`; active-set excludes `expired`).
+- `internal/cardrewards/types.go` (M) — added `PendingReEnrollment` +
+  `CardPeriodRef` (and the `RotatingCategoryObservation` consumed by the merge).
+
+### Evidence — SCN-083-F01/F02/F03/F04/F05 + UC-002 A2 (reconcile unit tests)
+
+Command: `./smackerel.sh test unit --go --go-run 'TestReconcile_' --verbose`
+(runs `go test -v -run TestReconcile_ -count=1 ./...`; only the cardrewards
+pure-decision tests match — F02/F03 are adversarial with `REGRESSION`
+assertions). Full raw output:
+
+```text
+[go-unit] applying -run selector: TestReconcile_
+[go-unit] starting go test ./...
++ go test -v -run TestReconcile_ -count=1 ./...
+=== RUN   TestReconcile_MergeAgreement_F01
+--- PASS: TestReconcile_MergeAgreement_F01 (0.00s)
+=== RUN   TestReconcile_MergeDisagreement_F02
+--- PASS: TestReconcile_MergeDisagreement_F02 (0.00s)
+=== RUN   TestReconcile_ManualOverrideNeverOverwritten_F03
+--- PASS: TestReconcile_ManualOverrideNeverOverwritten_F03 (0.00s)
+=== RUN   TestReconcile_LifecycleByDate_F04_F05
+=== RUN   TestReconcile_LifecycleByDate_F04_F05/upcoming:_start_in_future
+=== RUN   TestReconcile_LifecycleByDate_F04_F05/F04_active:_start_past,_end_future
+=== RUN   TestReconcile_LifecycleByDate_F04_F05/F05_expired:_end_in_past
+=== RUN   TestReconcile_LifecycleByDate_F04_F05/active_boundary:_end_==_today
+=== RUN   TestReconcile_LifecycleByDate_F04_F05/active_boundary:_start_==_today
+=== RUN   TestReconcile_LifecycleByDate_F04_F05/undated:_cannot_determine
+--- PASS: TestReconcile_LifecycleByDate_F04_F05 (0.00s)
+    --- PASS: TestReconcile_LifecycleByDate_F04_F05/upcoming:_start_in_future (0.00s)
+    --- PASS: TestReconcile_LifecycleByDate_F04_F05/F04_active:_start_past,_end_future (0.00s)
+    --- PASS: TestReconcile_LifecycleByDate_F04_F05/F05_expired:_end_in_past (0.00s)
+    --- PASS: TestReconcile_LifecycleByDate_F04_F05/active_boundary:_end_==_today (0.00s)
+    --- PASS: TestReconcile_LifecycleByDate_F04_F05/active_boundary:_start_==_today (0.00s)
+    --- PASS: TestReconcile_LifecycleByDate_F04_F05/undated:_cannot_determine (0.00s)
+=== RUN   TestReconcile_LowConfidenceFlags_A2
+--- PASS: TestReconcile_LowConfidenceFlags_A2 (0.00s)
+=== RUN   TestReconcile_NoObservationsKeepsExisting
+--- PASS: TestReconcile_NoObservationsKeepsExisting (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.044s
+[go-unit] go test ./... finished OK
+@@@UNIT_EXIT=0@@@
+```
+
+- **F01** (agreeing sources → agreed set, `source_count=2`, `needs_verification=false`,
+  confidence = max 0.90): PASS.
+- **F02 (adversarial)** — two distinct category sets MUST be flagged
+  `needs_verification=true` with conservative lower confidence 0.88 and
+  `source_count=1` (plurality only); `REGRESSION` guards fail if disagreement is
+  silently reconciled as agreement: PASS.
+- **F03 (adversarial)** — a high-confidence (0.99) DISAGREEING observation MUST
+  NOT overwrite a `manual_override=true` record; categories stay
+  `[Gym Memberships]`, confidence stays 1.0, `needs_verification` stays false:
+  PASS.
+- **F04/F05** — date-driven lifecycle (upcoming/active/expired incl. both
+  boundary days + undated→unknown) all 6 subtests PASS; the end-to-end merge of a
+  past-period observation reconciles to `expired`.
+
+### Evidence — SCN-083-F06/F07 (+ live F02/F03/F04/F05) on live disposable Postgres
+
+Command: `./smackerel.sh test integration --go-run 'ReconcileLivePG'` (live test
+stack built + brought up healthy: postgres/nats/ollama/ml/core all Healthy;
+go-integration container with `DATABASE_URL` → the disposable
+`smackerel-test-postgres`; `-tags integration`; each test namespaces its catalog
+ids with a per-test prefix). Only the 5 reconcile live-PG tests match the
+selector; the disagreement/override WARN/INFO log lines are the reconciler's own
+audit output. Full raw output (test block + teardown):
+
+```text
+go-integration: applying -run selector: ReconcileLivePG
+=== RUN   TestReconcileLivePG_IdempotentUpsert_F07
+--- PASS: TestReconcileLivePG_IdempotentUpsert_F07 (0.05s)
+=== RUN   TestReconcileLivePG_PendingReEnrollment_F06
+2026/06/11 18:50:26 INFO card-rewards lifecycle: pending re-enrollment actions surfaced for dashboard count=1
+--- PASS: TestReconcileLivePG_PendingReEnrollment_F06 (0.03s)
+=== RUN   TestReconcileLivePG_LifecycleTransitions_F04_F05
+2026/06/11 18:50:26 INFO card-rewards lifecycle transition card_id=cr-int-20260611185026-248219806-discover-it period=P_active from=upcoming to=active
+2026/06/11 18:50:26 INFO card-rewards lifecycle transition card_id=cr-int-20260611185026-248219806-discover-it period=P_expired from=active to=expired
+2026/06/11 18:50:26 INFO card-rewards lifecycle: pending re-enrollment actions surfaced for dashboard count=1
+--- PASS: TestReconcileLivePG_LifecycleTransitions_F04_F05 (0.04s)
+=== RUN   TestReconcileLivePG_DisagreementRetainsBothObservations_F02
+2026/06/11 18:50:26 WARN card-rewards reconcile: sources disagree — flagged needs_verification, both observations retained card_id=cr-int-20260611185026-294831726-discover-it period=Q3_2026
+--- PASS: TestReconcileLivePG_DisagreementRetainsBothObservations_F02 (0.04s)
+=== RUN   TestReconcileLivePG_ManualOverrideNotRewritten_F03
+2026/06/11 18:50:26 INFO card-rewards reconcile: manual override protected — record unchanged, observations retained for audit card_id=cr-int-20260611185026-333647277-discover-it period=Q3_2026
+--- PASS: TestReconcileLivePG_ManualOverrideNotRewritten_F03 (0.03s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.255s
+PASS: go-integration
+Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
+ Container smackerel-test-smackerel-core-1  Removed
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Network smackerel-test_default  Removed
+@@@INTEG_EXIT=0@@@
+```
+
+- **F07 (idempotent upsert)** — `TestReconcileLivePG_IdempotentUpsert_F07`
+  reconciles the same two agreeing observations TWICE, then asserts
+  `CountRotatingCategoriesByCardPeriod == 1` and the row id is unchanged across
+  runs (`REGRESSION` guard: "expected exactly 1 rotating_categories row per
+  (card,period)"); the agreed record is `source_count=2`,
+  `needs_verification=false`, categories `[PayPal Restaurants]`: PASS.
+- **F06 (re-enrollment pending action)** — `TestReconcileLivePG_PendingReEnrollment_F06`
+  seeds 3 selections (window-opens-today + not-enrolled; future window;
+  open-but-enrolled) and asserts `AdvanceLifecycle` + the dashboard read path
+  (`ListPendingReEnrollments`) BOTH surface exactly 1 pending action (the
+  Restaurants window opening today) with the resolved catalog name: PASS.
+- **F04/F05 (live)** — `TestReconcileLivePG_LifecycleTransitions_F04_F05` seeds an
+  `upcoming` record whose window is now current and an `active` record whose
+  window has ended; after `AdvanceLifecycle` they become `active`/`expired`
+  respectively, and the expired record is EXCLUDED from
+  `ListActiveRotatingCategories` (`REGRESSION` guard): PASS.
+- **F02 (live)** — disagreement persists `needs_verification=true` AND retains
+  BOTH observations for audit: PASS.
+- **F03 (live)** — a high-confidence disagreeing observation does NOT rewrite a
+  manual-override row (`overrides_protected=1`, `reconciled=0`); the observation
+  is retained for audit: PASS.
+
+Teardown removed all ephemeral containers + the postgres volume + the network —
+the disposable test stack was fully torn down (test-environment isolation
+honored; no residual state).
+
+### Evidence — Build Quality Gate (Scope 06)
+
+All four gate commands run via the repo CLI on the working tree (which includes
+the Scope 06 reconcile surface). No implementation bug was found by any test, so
+`reconcile.go` / `store.go` / `types.go` were NOT modified during this
+verify+certify pass.
+
+`./smackerel.sh check` → `CHECK_EXIT=0`:
+
+```text
+config-validate: ~/smackerel/config/generated/dev.env.tmp.3340258 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+@@@CHECK_EXIT=0@@@
+```
+
+`./smackerel.sh lint` → `LINT_EXIT=0` (golangci-lint over the whole module incl.
+the reconcile surface, then web validation):
+
+```text
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+@@@LINT_EXIT=0@@@
+```
+
+`./smackerel.sh format --check` → `FORMAT_EXIT=0`:
+
+```text
+65 files already formatted
+@@@FORMAT_EXIT=0@@@
+```
+
+`bash .github/bubbles/scripts/artifact-lint.sh specs/083-card-rewards-companion`
+→ `ARTIFACT_LINT_EXIT=0`:
+
+```text
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: full-delivery
+✅ Top-level status matches certification.status
+✅ report.md contains section matching: Summary
+✅ report.md contains section matching: Completion Statement
+✅ report.md contains section matching: Test Evidence
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+@@@ARTIFACT_LINT_EXIT=0@@@
+```
+
+(One non-blocking `⚠️ state.json uses deprecated field 'scopeProgress'` warning is
+pre-existing for this spec and unchanged by Scope 06 — artifact lint still
+PASSED with exit 0.)
+
+### Code Diff Evidence (Scope 06)
+
+Real `git status --short` + `git diff --stat` scoped to the cardrewards surface
+(read-only git; autoCommit OFF — nothing committed this turn; the unrelated
+concurrent BUG-064-002 / spec-084 working-tree changes were deliberately NOT
+listed, touched, or staged):
+
+```text
+=== git status --short (cardrewards surface) ===
+ M internal/cardrewards/store.go
+ M internal/cardrewards/types.go
+?? internal/cardrewards/reconcile.go
+?? internal/cardrewards/reconcile_integration_test.go
+?? internal/cardrewards/reconcile_test.go
+=== git diff --stat (tracked cardrewards files) ===
+ internal/cardrewards/store.go | 125 +++++++++++++++++++++++++++++++++++++++++
+ internal/cardrewards/types.go |  17 ++++++
+ 2 files changed, 142 insertions(+)
+=== reconcile files line counts ===
+  382 internal/cardrewards/reconcile.go
+  245 internal/cardrewards/reconcile_test.go
+  382 internal/cardrewards/reconcile_integration_test.go
+ 1009 total
+```
+
+The Scope 06 surface is: `reconcile.go` (382 lines, NEW), `reconcile_test.go`
+(245 lines, NEW unit), `reconcile_integration_test.go` (382 lines, NEW live-PG),
+and the `store.go` (+125) / `types.go` (+17) additions. The working tree is left
+ready for an orchestrator preservation commit of exactly this surface.
+
+### Delivery — Scope 06 execution model (transparency)
+
+The `runSubagent`/`agent` tool was **unavailable** in this runtime, so the
+`full-delivery` test/verify phase for Scope 06 was executed in **parent-expanded**
+form by a single orchestrator agent — NO separate certified specialist
+sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed.
+Disclosed in `state.json.executionHistory`, consistent with Scopes 01–05. This
+run did NOT write implementation code: the reconcile implementation already
+existed on disk from a prior cut-off pass; this run RE-RAN every Scope 06 test
+via the repo CLI, captured the previously-missing live-PG evidence (F06/F07),
+confirmed all gates green, found NO implementation bug, and flipped Scope 06 →
+Done. The unrelated concurrent BUG-064-002 / spec-084 work in the tree
+(internal/assistant/*, internal/telegram/*, cmd/core/*, config/*, docs/*,
+specs/064/084) was NOT read, modified, staged, or committed. Top-level `status`
+stays `in_progress`: Scope 05 remains In Progress (E08 blocked-needs-live-Ollama)
+and scopes 07–11 remain Not Started, so `completedScopes` becomes
+["1","2","3","4","6"] and `currentScope` advances to 7. NOT committed (autoCommit
+off) — the orchestrator owns the preservation checkpoint.
+
