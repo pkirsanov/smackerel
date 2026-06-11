@@ -1,0 +1,97 @@
+{
+  "version": 3,
+  "featureDir": "specs/083-card-rewards-companion",
+  "featureName": "Card Rewards Companion",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": ["card_rewards"],
+  "planMaturityOnly": false,
+  "lastUpdatedAt": "2026-06-11T20:00:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "implement",
+    "currentScope": 4,
+    "runStartedAt": "2026-06-11T00:00:00Z",
+    "completedPhaseClaims": ["analyze", "design", "plan", "harden"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": ["1","2","3"],
+    "certifiedCompletedPhases": ["analyze", "design", "plan", "harden"],
+    "scopeProgress": [
+      { "scope": 1, "name": "Config SST & Migration Schema", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 2, "name": "Card Domain Store, Types & CRUD API", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 3, "name": "Data Migration: CCManager JSON → PostgreSQL", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 4, "name": "Card-Rewards Source Connector", "status": "Not Started", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 5, "name": "LLM Category Extraction (replaces regex)", "status": "Not Started", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 6, "name": "Multi-Source Reconciliation & Lifecycle", "status": "Not Started", "dependsOn": [5], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 7, "name": "Optimizer & Monthly Recommendation Generation", "status": "Not Started", "dependsOn": [2, 6], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 8, "name": "CalDAV Calendar Delivery", "status": "Not Started", "dependsOn": [7], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 9, "name": "Scheduler Jobs & Manual Triggers", "status": "Not Started", "dependsOn": [4, 5, 6, 7, 8], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 10, "name": "Web UI — Wallet, Offers, Selections, Bonuses, Categories", "status": "Not Started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 11, "name": "Web UI — Dashboard, Recommendations, Rotating Verify, Report, Admin", "status": "Not Started", "dependsOn": [6, 7, 9, 10], "scopeDir": null, "evidenceFile": "report.md" }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "runSubagent/agent tool was unavailable in this runtime; the product-to-planning phases (analyze, design, plan, harden) were executed in parent-expanded form by a single orchestrator agent that authored the planning artifacts directly. No separate certified specialist sub-agents (bubbles.analyst/ux/design/plan/harden) were dispatched. Artifacts are reviewable planning documents at the specs_hardened ceiling; no implementation occurred.",
+      "phasesExecuted": ["analyze", "design", "plan", "harden"],
+      "statusBefore": "not_started",
+      "statusAfter": "specs_hardened",
+      "runStartedAt": "2026-06-11T00:00:00Z",
+      "runEndedAt": "2026-06-11T00:00:00Z",
+      "summary": "Planned absorption of standalone CCManager app into smackerel as a native 'card rewards' feature (docs/smackerel.md §16.8 Financial Awareness, light-touch, recommendation-only; confirmed NOT crossing §1.6/Principle 10 QF boundary). Authored spec.md (7 use cases, 20 FRs, 7 NFRs, Product Principle Alignment, Release Train=mvp, Offline/Host note, 6 open questions), design.md (10-table PostgreSQL schema, source connector, strict-schema LLM extraction replacing the CCManager regex scraper, multi-source reconciliation + Principle-3 lifecycle, optimizer, CalDAV delivery reusing the internal/mealplan CalendarBridge pattern, rationalized Web UI IA mapping CCManager's ~22 screens to 10 smackerel pages, config SST keys fail-loud per smackerel-no-defaults, JSON→PG one-time migration), and scopes.md (11 dependency-ordered scopes, SCN-083-A01..K08 Gherkin, Test Plan tables, tiered checkbox DoD; data migration and LLM extraction are dedicated scopes with adversarial tests vs the regex failure modes; UI has two dedicated e2e-ui scopes). All reused primitives cited by verified path. Next migration 057; flag card_rewards default-ON in mvp (bundle edit deferred to delivery, owned by bubbles.train)."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "full-delivery workflow run; the runSubagent/agent tool was UNAVAILABLE in this runtime, so the delivery phases (implement, test) were executed in parent-expanded form by a single orchestrator agent — NO separate certified specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed. Disclosed per governance, not fabricated. Only Scope 01 (Config SST & Migration Schema) was delivered and validated this run; scopes 02-11 remain Not Started. No card_rewards feature-flag bundle edit was made (config/feature-flags.mvp.yaml) — that is bubbles.train-owned and routed during delivery per release-train governance. Not committed (autoCommit off); the working tree also carried unrelated in-progress BUG-064-001 work which was left untouched.",
+      "phasesExecuted": ["implement", "test"],
+      "scopesDelivered": [1],
+      "statusBefore": "specs_hardened",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-11T12:00:00Z",
+      "runEndedAt": "2026-06-11T12:00:00Z",
+      "summary": "Scope 01 delivered + validated with real in-session evidence. Files: internal/db/migrations/057_card_rewards.sql (10 tables — card_catalog, card_runs, user_cards, card_offers, card_selections, signup_bonuses, rotating_category_observations, rotating_categories, category_aliases, card_recommendations — with CHECK/FK/UNIQUE constraints + indexes, CREATE … IF NOT EXISTS self-idempotent); internal/config/cardrewards.go (CardRewardsConfig + fail-loud LoadCardRewardsConfig, wired into Load()); internal/config/cardrewards_test.go; config/smackerel.yaml (card_rewards section enabled:false dev placeholder + connectors.card-rewards); scripts/commands/config.sh (13 CARD_REWARDS_* vars via yaml_get/yaml_get_json); tests/integration/card_rewards_migration_test.go. Evidence: SCN-083-A01/A03/A04/A07 unit PASS (ok github.com/smackerel/smackerel/internal/config 0.021s); A02 config generate emitted all 13 CARD_REWARDS_* vars into dev.env+test.env; A05/A06 migration integration PASS on a live disposable Postgres (--- PASS: TestCardRewardsMigration_AppliesCleanly; INTEGRATION_EXIT=0; full stack teardown clean). Build Quality Gate GREEN: format --check FORMAT_EXIT=0 (63 files already formatted), check CHECK_EXIT=0 (Config is in sync with SST, env_file drift guard OK, scenario-lint OK), lint LINT_EXIT=0 (All checks passed! + Web validation passed); artifact-lint exit 0; no ${VAR:-default} runtime fallback introduced (smackerel-no-defaults). Continuation: implement Scope 02 (Card Domain Store, Types & CRUD API; depends on 01) next, then 03-11 in DAG order; each remaining scope needs live-PG integration / live-Ollama (spec-043) / Playwright e2e-ui evidence before its DoD can be honestly checked."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "full-delivery RESUME; the runSubagent/agent tool was UNAVAILABLE in this runtime, so the delivery phases (implement, test) for Scope 02 were executed in parent-expanded form by a single orchestrator agent — NO separate certified specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed. Disclosed per governance, not fabricated. Only Scope 02 (Card Domain Store, Types & CRUD API) was delivered and validated this run; scopes 03-11 remain Not Started. No card_rewards feature-flag bundle edit was made (config/feature-flags.mvp.yaml) — bubbles.train-owned, routed during delivery. Not committed (autoCommit off); the working tree's unrelated in-progress BUG-064-001 work was left untouched. Top-level status intentionally NOT flipped to done (9 scopes remain).",
+      "phasesExecuted": ["implement", "test"],
+      "scopesDelivered": [2],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-11T18:00:00Z",
+      "runEndedAt": "2026-06-11T18:30:00Z",
+      "summary": "Scope 02 delivered + validated with real in-session evidence (SCN-083-B01..B08, all 8 scenarios). Files: internal/cardrewards/{types,resolve,store,service}.go (pgx CRUD for catalog/user_cards/offers/selections/signup_bonuses/category_aliases + transactional custom-card insert; deterministic dependency-free resolver replacing card_resolver.py; service with UUID gen + validation + sentinel errors); internal/cardrewards/{resolve_test,store_test}.go; internal/api/cardrewards.go (REST handler, relative-prefix routes, sentinel-error→HTTP mapping); internal/api/health.go (+Dependencies.CardRewardsHandler); internal/api/router.go (mount in bearer-auth group); cmd/core/wiring.go (+wireCardRewardsHandler) + main.go (call before NewRouter); scripts/runtime/go-integration.sh (+./internal/cardrewards/...); tests/e2e/cardrewards_api_test.go. Decisions disclosed: (1) JSON=snake_case to match the whole smackerel API surface + design.md examples (prompt 'camelCase' is the WA/GH convention; HARD CONSISTENCY 'reuse verbatim' governs); (2) CRUD handler mounts on pg-pool presence, NOT gated on card_rewards.enabled (ingestion scopes 04/05/09 stay gated), so e2e runs with dev default enabled:false unchanged and no config edit. Two real bugs were caught by the live integration tests and fixed in source (not worked around): aliases TEXT[] NOT NULL rejecting nil []string (SQLSTATE 23502 → nonNilStrings guard), and UUID-typed PK columns rejecting string ids (SQLSTATE 22P02 → uuid.NewString() in the test). Evidence: resolve unit 7/7 PASS (ok internal/cardrewards 0.014s); store integration B01/B04/B05/B06/B07 all PASS on live disposable Postgres (PASS: go-integration); e2e B08 CRUD round-trip PASS on the live stack with rebuilt core image (POST 201→GET 200→PUT 200→DELETE 204→GET 404 CARD_NOT_FOUND). Build Quality Gate GREEN: CHECK_EXIT=0, LINT_EXIT=0 (All checks passed! + web validation), FORMAT_CHECK_EXIT=0 (63 files already formatted). Continuation: implement Scope 03 (Data Migration CCManager JSON→PostgreSQL; depends on 02) next, then 04-11 in DAG order."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "full-delivery RESUME; the runSubagent/agent tool was UNAVAILABLE in this runtime, so the delivery phases (implement, test) for Scope 03 were executed in parent-expanded form by a single orchestrator agent — NO separate certified specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed. Disclosed per governance, not fabricated. Only Scope 03 (Data Migration: CCManager JSON → PostgreSQL) was delivered and validated this run; stopped before Scope 04 per the run contract; scopes 04-11 remain Not Started. No card_rewards feature-flag bundle edit was made (config/feature-flags.mvp.yaml) — bubbles.train-owned. Not committed (autoCommit off); unrelated in-progress BUG-064-001 work left untouched. Top-level status intentionally NOT flipped to done (8 scopes remain).",
+      "phasesExecuted": ["implement", "test"],
+      "scopesDelivered": [3],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-11T19:30:00Z",
+      "runEndedAt": "2026-06-11T20:00:00Z",
+      "summary": "Scope 03 delivered + validated with real in-session evidence (SCN-083-C01..C06). Files: internal/cardrewards/import.go (CCManager DTOs + pure transforms + RunImport idempotent/partial-tolerant orchestrator + ImportReport); import_transform_test.go (16 unit tests); import_test.go (4 //go:build integration tests); testdata/ccmanager/* (hermetic fixtures mirroring real CCManager shapes with intentional skip cases); types.go (+RotatingCategory/CardRecommendation/CardRun + lifecycle/run enums); store.go (+GetOrCreateUserCardByCatalog/InsertOfferIfAbsent/InsertSelectionIfAbsent/InsertSignupBonusIfAbsent/InsertRunIfAbsent/CountRunsByType/UpsertRotatingCategory/UpsertRecommendation/CreateRun/ListRotatingCategoriesByCard); cmd/cardrewards-import/main.go (thin CLI, --data-dir/CARD_REWARDS_IMPORT_DIR fail-loud); internal/config/cardrewards.go (+optional ImportDataDir); config/smackerel.yaml (+card_rewards.import_data_dir placeholder); scripts/commands/config.sh (+CARD_REWARDS_IMPORT_DIR read+emit). Decisions disclosed: card_type explicit map (tiered→user-selected, flat/store/hotel/airline→fixed, unknown→skip+log); idempotency via ON CONFLICT (catalog/aliases/rotating/recommendations) + INSERT…WHERE NOT EXISTS…IS NOT DISTINCT FROM (user_cards/offers/selections/bonuses/runs); rotating seeded manual_override=true confidence=1; migration audit run appended each invocation (Principle 8); run-history maps only the CHECK-valid subset (user_change/github_sync skipped+logged); data dir invocation-gated fail-loud (never a committed real path; SST placeholder empty). Evidence: 16 transform unit PASS (ok internal/cardrewards 0.033s, UNIT_TRANSFORM_EXIT=0); 4 integration PASS on live disposable Postgres — CatalogAndAliases_C01_C05 (catalog 7, aliases 8, amazon offers 3 shared-limit 100000c, citi sel 1, usbank tiered sel 3, citi bonuses 2, recs 2026-01=2/2025-12=1), RotatingManualOverride_C03 (discover-it Q1_2026=[Grocery Stores,Wholesale Clubs,Streaming], manual_override=true, lifecycle active, limit 150000c), PartialFileToleranceAndRunLogged_C04_C06 (missing user-offers.json skipped, status partial, run_type=migration logged), Idempotent_C02 (second run zero new data rows; migration audit +1) — ok internal/cardrewards 0.390s, PASS: go-integration, clean teardown, INTEGRATION_EXIT=0. Build Quality Gate GREEN: CONFIG_GENERATE_EXIT=0, FORMAT_CHECK_EXIT=0, CHECK_EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK), LINT_EXIT=0 (All checks passed! + Web validation). No ${VAR:-default} runtime fallback (smackerel-no-defaults). Continuation: implement Scope 04 (Card-Rewards Source Connector; depends on 01,02) next, then 05-11 in DAG order."
+    }
+  ]
+}

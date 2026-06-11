@@ -1,0 +1,34 @@
+{
+  "selections": {
+    "citi-custom-cash": {
+      "categories": ["Restaurants"],
+      "lock_until": "2026-03-31",
+      "notes": "Auto-selects top spend category"
+    }
+  },
+  "tiered_selections": {
+    "us-bank-cash-plus": {
+      "tiers": [
+        {
+          "tier_index": 0,
+          "tier_name": "5% Categories",
+          "categories": ["Utilities", "TV/Internet/Streaming"],
+          "rate": 5,
+          "rate_type": "percent"
+        },
+        {
+          "tier_index": 1,
+          "tier_name": "2% Category",
+          "categories": ["Gas Stations"],
+          "rate": 2,
+          "rate_type": "percent"
+        }
+      ],
+      "lock_until": "2026-03-31",
+      "updated_at": "2025-12-30T02:30:55.214399"
+    }
+  },
+  "metadata": {
+    "last_updated": "2025-12-27"
+  }
+}
