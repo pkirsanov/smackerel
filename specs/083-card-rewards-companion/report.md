@@ -1831,3 +1831,227 @@ blocked-needs-live-Ollama) and scopes 08–11 remain Not Started, so
 to 8. NOT committed (autoCommit off) — the orchestrator owns the preservation
 checkpoint.
 
+## Delivery — Scope 08: CalDAV Calendar Delivery (2026-06-11)
+
+> Scope 08 was **implemented and tested in this run** (parent-expanded
+> `full-delivery`, phases implement + test). It adds `internal/cardrewards/calendar.go`
+> — a `CardCalendarBridge` over the shared `mealplan`-shaped `CalDAVClient`
+> interface (design §7) — and its unit + live-PG integration tests. Google
+> Calendar is the operator's PRIMARY card-rewards consumption surface (preserved
+> from CCManager), so the bridge turns persisted monthly recommendations and open
+> re-enrollment actions into stable-UID CalDAV events that UPDATE (never
+> duplicate) on re-sync. The bridge reuses the existing `internal/connector/caldav`
+> client + credentials at wire-time (Scope 09); no new Google Calendar client was
+> invented.
+
+### Files created / changed (Scope 08)
+
+```text
+?? internal/cardrewards/calendar.go
+?? internal/cardrewards/calendar_test.go
+?? internal/cardrewards/calendar_integration_test.go
+```
+
+- `internal/cardrewards/calendar.go` (NEW) — `CalDAVClient` interface (same shape as `mealplan.CalDAVClient`), `CardCalendarBridge`, stable UID scheme (`<prefix>-cardrec-<period>-<slug>` / `<prefix>-cardreenroll-<user_card_id>-<period>`), `SyncRecommendations` / `SyncReEnrollments` (input-taking, fake-client testable), `DeleteRecommendationEvent` (cleanup), and the store-driven `SyncPeriod` (persists `calendar_event_uid`, writes a `card_runs` `run_type="calendar_sync"` audit row).
+- `internal/cardrewards/calendar_test.go` (NEW, unit, untagged) — H01–H05 + UID-scheme + non-month-period edge, against an in-memory FAKE of the EXTERNAL CalDAV server.
+- `internal/cardrewards/calendar_integration_test.go` (NEW, `//go:build integration`) — H06 live-PG audit + UID round-trip + re-sync-no-duplicate.
+
+Every other entry in `git status` (`cmd/core/*`, `internal/assistant/*`,
+`internal/telegram/*`, `config/*`, `docs/Operations.md`, `specs/064-…/BUG-064-002/`,
+`specs/084-…/`) is the pre-existing concurrent **BUG-064-002 / spec-084** change
+set — NOT read, modified, or staged by this run.
+
+### Evidence — DoD 1: Implementation behavior complete
+
+`calendar.go` is new code delivered this run; the behavior is proven by the
+H01–H06 scenario tests below: write a stable-UID event (H01), update-not-duplicate
+on re-sync (H02, adversarial), re-enrollment reminder (H03), disabled-sync skips
+writes but keeps the recommendation data (H04), delete cleans up the event (H05),
+and the store-driven sync persists `calendar_event_uid` + writes the
+`run_type="calendar_sync"` audit row recording `events_written` (H06, live PG).
+Reuse of the `mealplan` CalDAVClient shape + the `caldav` credentials is per
+design §7; scheduler/manual-trigger wiring is Scope 09's responsibility (scopes.md
+Scope 09 `Depends On: …,08`).
+
+### Evidence — DoD 2 (SCN-083-H01, H02) + DoD 3 (SCN-083-H03, H05) + DoD 4 (SCN-083-H04) — unit
+
+Command: `./smackerel.sh test unit --go --go-run 'CardCalendarBridge' --verbose`
+
+```text
+[go-unit] applying -run selector: CardCalendarBridge
+[go-unit] starting go test ./...
++ go test -v -run CardCalendarBridge -count=1 ./...
+=== RUN   TestCardCalendarBridge_UIDSchemes
+--- PASS: TestCardCalendarBridge_UIDSchemes (0.00s)
+=== RUN   TestCardCalendarBridge_RecommendationEventStableUID_H01
+--- PASS: TestCardCalendarBridge_RecommendationEventStableUID_H01 (0.00s)
+=== RUN   TestCardCalendarBridge_ReSyncUpdatesSameUID_H02
+--- PASS: TestCardCalendarBridge_ReSyncUpdatesSameUID_H02 (0.00s)
+=== RUN   TestCardCalendarBridge_ReEnrollmentEvent_H03
+--- PASS: TestCardCalendarBridge_ReEnrollmentEvent_H03 (0.00s)
+=== RUN   TestCardCalendarBridge_DisabledSyncSkipsWritesKeepsData_H04
+--- PASS: TestCardCalendarBridge_DisabledSyncSkipsWritesKeepsData_H04 (0.00s)
+=== RUN   TestCardCalendarBridge_DeleteCleansUpEvent_H05
+--- PASS: TestCardCalendarBridge_DeleteCleansUpEvent_H05 (0.00s)
+=== RUN   TestCardCalendarBridge_NonMonthPeriodCountsFailed
+2026/06/11 20:13:31 WARN card calendar: skipping recommendation with non-month period category=Restaurants period=Q3_2026 error="card calendar: recommendation period \"Q3_2026\" is not a YYYY-MM month label: parsing time \"Q3_2026\" as \"2006-01\": cannot parse \"Q3_2026\" as \"2006\""
+--- PASS: TestCardCalendarBridge_NonMonthPeriodCountsFailed (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.018s
+@@@UNIT_EXIT=0@@@
+```
+
+- **H01** (`…_RecommendationEventStableUID_H01`): a recommendation writes a CalDAV event under the STABLE UID `smackerel-cardrec-2026-06-restaurants`, summary `Restaurants: use Amex Gold (4%)`, category tag `smackerel-cardrewards`, props `X-SMACKEREL-CARDREC-ID`/`X-SMACKEREL-PERIOD`, start `2026-06-01 09:00 UTC`.
+- **H02 (ADVERSARIAL)** (`…_ReSyncUpdatesSameUID_H02`): synced once at 3%, then re-synced at 5% — the fake server (keyed by UID, exactly like real CalDAV) shows `putCalls == 2` yet **exactly 1 event**, with the UPDATED `(5%)` summary. FAILS with "H02 REGRESSION: N events after re-sync, want exactly 1 (update, not duplicate)" if the UID were not stable.
+- **H03** (`…_ReEnrollmentEvent_H03`): a pending re-enrollment writes a reminder under `smackerel-cardreenroll-uc-9-2026-Q3`.
+- **H04** (`…_DisabledSyncSkipsWritesKeepsData_H04`): with `calendar_sync` disabled, `SyncRecommendations` returns `Skipped=true`, `EventsWritten=0`, a nil UID map, **zero** PutEvent calls (recommendations + re-enrollments), AND the recommendation data slice (the Web-UI data source) is left intact (2 rows, unchanged).
+- **H05** (`…_DeleteCleansUpEvent_H05`): deleting a recommendation that carries a `calendar_event_uid` removes its event (`deleteCalls == 1`, 0 events left); a recommendation with no UID is a safe no-op.
+- The non-month edge proves fail-loud per-event handling (no silent fallback to "now"); the `WARN` line above is that path firing.
+
+### Evidence — DoD 5: SCN-083-H06 — integration (live PG)
+
+Command: `./smackerel.sh test integration --go-run 'CardCalendarBridgeLivePG'` (disposable test stack, real PostgreSQL; only the EXTERNAL CalDAV server is faked)
+
+```text
+go-integration: applying -run selector: CardCalendarBridgeLivePG
+=== RUN   TestCardCalendarBridgeLivePG_SyncRunAudited_H06
+--- PASS: TestCardCalendarBridgeLivePG_SyncRunAudited_H06 (0.08s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.107s
+PASS: go-integration
+Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
+config-validate: ~/smackerel/config/generated/test.env.tmp OK
+ Container smackerel-test-smackerel-core-1  Removed
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Network smackerel-test_default  Removed
+@@@INTEG_EXIT=0@@@
+```
+
+`SyncPeriod` reads the period's recommendations + open re-enrollments from live
+PostgreSQL, writes events through the fake CalDAV boundary, and the test asserts:
+(1) a `card_runs` row pinned by the returned `RunID` has `run_type="calendar_sync"`,
+`status="success"`, and `events_written == res.EventsWritten` (SCN-083-H06);
+(2) `res.EventsWritten >= 3` (2 carded recommendations + 1 re-enrollment);
+(3) each synced recommendation persisted its stable `calendar_event_uid` (round-trip
+via `GetRecommendation`), while the un-carded recommendation stored NO UID;
+(4) a **re-sync** appends a SECOND `calendar_sync` run yet leaves the same single
+event per UID (update-not-duplicate at the live-PG level, SCN-083-H02). Disposable
+stack fully torn down — all containers + 3 volumes (`ollama-data`, `nats-data`,
+`postgres-data`) + network removed (ephemeral isolation).
+
+**External-boundary-fake confirmation:** `fakeCalDAVClient` models the EXTERNAL
+calendar server (keyed by UID, just like a real CalDAV server). It is an
+external-dependency fake explicitly allowed by the test-integrity policy; the
+Store and PostgreSQL are REAL in H06, and NO internal component (Store, service,
+business logic) is mocked.
+
+### Evidence — DoD 6: Build Quality Gate (check / lint / format)
+
+`./smackerel.sh check` →
+
+```text
+config-validate: ~/smackerel/config/generated/dev.env.tmp OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+@@@CHECK_EXIT=0@@@
+```
+
+`./smackerel.sh lint` →
+
+```text
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/extension/background.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+@@@LINT_EXIT=0@@@
+```
+
+`./smackerel.sh format --check` (clean on the first try — the new `calendar*.go`
+files were gofmt-correct as written; no BUG-064-002/spec-084 file required
+formatting either):
+
+```text
+65 files already formatted
+@@@FORMAT_EXIT=0@@@
+```
+
+No `${VAR:-default}` runtime config fallback was introduced (smackerel-no-defaults):
+`calendar_sync` and `calendar_uid_prefix` are read from the Scope 01 fail-loud SST
+loader and passed into the bridge constructor; the bridge invents no config
+defaults. The only non-config "degradation" is the human-readable calendar summary
+falling back to the stable card id when a card name is unexpectedly blank — a
+display string, not a config value.
+
+### Gate: artifact-lint — Scope 08
+
+Command: `bash .github/bubbles/scripts/artifact-lint.sh specs/083-card-rewards-companion`
+
+```text
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: full-delivery
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+ℹ️  Workflow mode 'full-delivery' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: Summary
+✅ report.md contains section matching: Completion Statement
+✅ report.md contains section matching: Test Evidence
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+@@@ARTIFACT_LINT_EXIT=0@@@
+```
+
+The `scopeProgress` deprecation is a non-blocking WARNING carried by this spec
+since Scope 01 (every scope uses `scopeProgress`); it does not affect the PASS and
+is out of Scope 08's remit. Top-level `status` correctly stays `in_progress`
+(Scope 05 In Progress, scopes 09–11 Not Started).
+
+### Delivery — Scope 08 execution model (transparency)
+
+The `runSubagent`/`agent` tool was **unavailable** in this runtime, so the
+`full-delivery` implement + test phases for Scope 08 were executed in
+**parent-expanded** form by a single orchestrator agent — NO separate certified
+specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or
+claimed. Disclosed in `state.json.executionHistory`, consistent with Scopes 01–07.
+This run WROTE new implementation code (`internal/cardrewards/calendar.go` and its
+two test files); it RAN every Scope 08 test (unit H01–H05 + the live-PG H06
+integration) to completion via the repo CLI and captured the output above before
+certifying. The unrelated concurrent **BUG-064-002 / spec-084** work in the tree
+(`internal/assistant/*`, `internal/telegram/*`, `cmd/core/main.go`,
+`cmd/core/wiring_assistant_openknowledge.go`,
+`cmd/core/openknowledge_prompt_contract_test.go`,
+`config/prompt_contracts/open_knowledge.yaml`, `config/smackerel.yaml`,
+`docs/Operations.md`, `specs/064`/`084`) was NOT read, modified, staged, or
+committed — the only working-tree additions this run are the three new
+`internal/cardrewards/calendar*.go` files. No `card_rewards` feature-flag bundle
+edit (`config/feature-flags.mvp.yaml`) — bubbles.train-owned. Top-level `status`
+stays `in_progress`: Scope 05 remains In Progress (E08 blocked-needs-live-Ollama)
+and scopes 09–11 remain Not Started, so `completedScopes` becomes
+`["1","2","3","4","6","7","8"]` and `currentScope` advances to 9. NOT committed
+(autoCommit off) — the orchestrator owns the preservation checkpoint.
+
