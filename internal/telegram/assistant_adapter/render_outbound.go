@@ -198,6 +198,11 @@ func statusPrefix(resp contracts.AssistantResponse) string {
 	switch resp.Status {
 	case contracts.StatusThinking:
 		return "thinking…"
+	case contracts.StatusAnswered:
+		// BUG-064-002 DEFECT 3a — terminal answer: NO status prefix. A
+		// delivered open_knowledge answer must not show a "thinking…"
+		// header.
+		return ""
 	case contracts.StatusCheckingWeather:
 		return "checking weather…"
 	case contracts.StatusCheckingEmail:

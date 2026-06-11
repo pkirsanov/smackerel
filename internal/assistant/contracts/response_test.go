@@ -15,6 +15,7 @@ import (
 func TestAllStatusTokens_Exhaustive(t *testing.T) {
 	declared := []StatusToken{
 		StatusThinking,
+		StatusAnswered,
 		StatusCheckingWeather,
 		StatusCheckingEmail,
 		StatusReminderProposed,
@@ -353,6 +354,19 @@ func goldenCases() []goldenCase {
 				Body:   "2 + 2 = 4",
 				Sources: []Source{
 					{ID: "c-1", Title: "calculator", Kind: SourceToolComputation, Ref: ComputationSourceRef{Tool: "calculator", InputHash: "sha256:in", OutputHash: "sha256:out"}},
+				},
+				EmittedAt: t0,
+			},
+		},
+		{
+			// BUG-064-002 DEFECT 3a — terminal answered status for a
+			// delivered open_knowledge answer (no "thinking…" header).
+			name: "answered_open_knowledge_web_source",
+			resp: AssistantResponse{
+				Status: StatusAnswered,
+				Body:   "wa-town-A 06/11: high 7:42am 8.9 ft, low 1:55pm 0.3 ft.",
+				Sources: []Source{
+					{ID: "w-1", Title: "tidetime.org", Kind: SourceWeb, Ref: WebSourceRef{URL: "https://tidetime.org/wa-town-A", Provider: "searxng", FetchedAt: t0, ContentHash: "sha256:tide", Snippet: "wa-town-A tide times"}},
 				},
 				EmittedAt: t0,
 			},
