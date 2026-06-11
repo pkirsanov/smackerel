@@ -23,12 +23,13 @@ var (
 // Service implements card-rewards business logic over a Store. It owns
 // validation and ID generation; the Store owns persistence only.
 type Service struct {
-	store *Store
+	store       *Store
+	recommender *Recommender
 }
 
 // NewService creates a card-rewards service.
 func NewService(store *Store) *Service {
-	return &Service{store: store}
+	return &Service{store: store, recommender: NewRecommender(store)}
 }
 
 // validationErr wraps ErrValidation with a specific message.
@@ -284,6 +285,69 @@ func (s *Service) ListBonusesByUserCard(ctx context.Context, userCardID string) 
 // ListCategoryAliases returns every category alias.
 func (s *Service) ListCategoryAliases(ctx context.Context) ([]CategoryAlias, error) {
 	return s.store.ListCategoryAliases(ctx)
+}
+
+// CreateCategoryAlias validates and upserts a tracked spend category (and its
+// equivalents) keyed on the canonical name. Idempotent on canonical_category,
+// so re-posting the same category updates its equivalents/star/priority. Used
+// by web category management and to declare the categories recommendation
+// generation tracks (Scope 07).
+func (s *Service) CreateCategoryAlias(ctx context.Context, a CategoryAlias) (*CategoryAlias, error) {
+	a.CanonicalCategory = strings.TrimSpace(a.CanonicalCategory)
+	if a.CanonicalCategory == "" {
+		return nil, validationErr("canonical_category is required")
+	}
+	if a.Priority != nil && *a.Priority < 0 {
+		return nil, validationErr("priority must be >= 0 when set")
+	}
+	cleaned := make([]string, 0, len(a.Equivalents))
+	for _, e := range a.Equivalents {
+		if e = strings.TrimSpace(e); e != "" {
+			cleaned = append(cleaned, e)
+		}
+	}
+	a.Equivalents = cleaned
+	a.ID = uuid.NewString()
+	if err := s.store.UpsertCategoryAlias(ctx, &a); err != nil {
+		return nil, err
+	}
+	aliases, err := s.store.ListCategoryAliases(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range aliases {
+		if strings.EqualFold(aliases[i].CanonicalCategory, a.CanonicalCategory) {
+			return &aliases[i], nil
+		}
+	}
+	return &a, nil
+}
+
+// GenerateRecommendations runs the optimizer across the tracked categories and
+// writes one card_recommendations row per (period, category), preserving
+// starred overrides (Scope 07 / SCN-083-G06, G07). An empty period means the
+// current monthly period.
+func (s *Service) GenerateRecommendations(ctx context.Context, period, trigger string) (RecommendationReport, error) {
+	return s.recommender.GenerateRecommendations(ctx, period, trigger)
+}
+
+// ListRecommendations returns the persisted recommendations for a period. An
+// empty period means the current monthly period (SCN-083-G08).
+func (s *Service) ListRecommendations(ctx context.Context, period string) (string, []CardRecommendation, error) {
+	if period == "" {
+		period = s.recommender.CurrentPeriod()
+	}
+	recs, err := s.store.ListRecommendationsByPeriod(ctx, period)
+	if err != nil {
+		return period, nil, err
+	}
+	return period, recs, nil
+}
+
+// OptimizationReport returns the read-only optimizer breakdown for a period. An
+// empty period means the current monthly period (SCN-083-G08).
+func (s *Service) OptimizationReport(ctx context.Context, period string) (OptimizationReport, error) {
+	return s.recommender.BuildOptimizationReport(ctx, period)
 }
 
 // ensureUserCardExists returns ErrUserCardNotFound when id is non-nil and the

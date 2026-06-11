@@ -894,6 +894,57 @@ func (s *Store) UpsertRecommendation(ctx context.Context, r *CardRecommendation)
 	return err
 }
 
+const recommendationCols = `id, period_label, category, recommended_user_card_id, rate,
+	reason, starred, starred_override, calendar_event_uid, generated_at, created_at, updated_at`
+
+func scanRecommendation(row pgx.Row) (*CardRecommendation, error) {
+	var rec CardRecommendation
+	if err := row.Scan(&rec.ID, &rec.PeriodLabel, &rec.Category, &rec.RecommendedUserCardID,
+		&rec.Rate, &rec.Reason, &rec.Starred, &rec.StarredOverride, &rec.CalendarEventUID,
+		&rec.GeneratedAt, &rec.CreatedAt, &rec.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+// GetRecommendation returns the recommendation for a (period_label, category),
+// or (nil, nil) when absent. Used by the optimizer to detect a starred_override
+// row that must be preserved (SCN-083-G07) and by tests.
+func (s *Store) GetRecommendation(ctx context.Context, period, category string) (*CardRecommendation, error) {
+	rec, err := scanRecommendation(s.Pool.QueryRow(ctx,
+		`SELECT `+recommendationCols+` FROM card_recommendations
+		 WHERE period_label = $1 AND category = $2`, period, category))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rec, nil
+}
+
+// ListRecommendationsByPeriod returns every recommendation for a period ordered
+// by category (used by the recommendations endpoint, SCN-083-G08).
+func (s *Store) ListRecommendationsByPeriod(ctx context.Context, period string) ([]CardRecommendation, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT `+recommendationCols+` FROM card_recommendations
+		 WHERE period_label = $1 ORDER BY category`, period)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []CardRecommendation
+	for rows.Next() {
+		rec, err := scanRecommendation(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *rec)
+	}
+	return out, rows.Err()
+}
+
 // ---- card_runs -------------------------------------------------------------
 
 // CreateRun inserts a single audit run row (always a fresh insert — each

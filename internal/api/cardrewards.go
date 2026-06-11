@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -49,6 +50,12 @@ func (h *CardRewardsHandler) RegisterRoutes(r chi.Router) {
 	})
 	r.Get("/card-offers/shared/{group}", h.ListOffersBySharedLimitGroup)
 	r.Get("/card-category-aliases", h.ListCategoryAliases)
+	r.Post("/card-category-aliases", h.CreateCategoryAlias)
+	r.Route("/card-recommendations", func(r chi.Router) {
+		r.Get("/", h.ListRecommendations)
+		r.Post("/generate", h.GenerateRecommendations)
+	})
+	r.Get("/card-optimization-report", h.OptimizationReport)
 }
 
 // ---- request DTOs (snake_case) ---------------------------------------------
@@ -111,6 +118,18 @@ type createBonusRequest struct {
 	RewardDescription  *string `json:"reward_description"`
 	Deadline           string  `json:"deadline"`
 	Met                bool    `json:"met"`
+}
+
+type createCategoryAliasRequest struct {
+	CanonicalCategory string   `json:"canonical_category"`
+	Equivalents       []string `json:"equivalents"`
+	Starred           bool     `json:"starred"`
+	Priority          *int     `json:"priority"`
+	BuiltIn           bool     `json:"built_in"`
+}
+
+type generateRecommendationsRequest struct {
+	Period string `json:"period"`
 }
 
 // ---- handlers --------------------------------------------------------------
@@ -385,6 +404,72 @@ func (h *CardRewardsHandler) ListCategoryAliases(w http.ResponseWriter, r *http.
 		aliases = []cardrewards.CategoryAlias{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"category_aliases": aliases})
+}
+
+// CreateCategoryAlias upserts a tracked spend category (and its equivalents).
+func (h *CardRewardsHandler) CreateCategoryAlias(w http.ResponseWriter, r *http.Request) {
+	var req createCategoryAliasRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "CARD_REWARDS_VALIDATION", "invalid JSON body")
+		return
+	}
+	alias, err := h.Service.CreateCategoryAlias(r.Context(), cardrewards.CategoryAlias{
+		CanonicalCategory: req.CanonicalCategory,
+		Equivalents:       req.Equivalents,
+		Starred:           req.Starred,
+		Priority:          req.Priority,
+		BuiltIn:           req.BuiltIn,
+	})
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, alias)
+}
+
+// GenerateRecommendations runs the optimizer across the tracked categories and
+// writes one recommendation per (period, category), preserving starred
+// overrides (SCN-083-G06, G07). An empty period means the current month.
+func (h *CardRewardsHandler) GenerateRecommendations(w http.ResponseWriter, r *http.Request) {
+	var req generateRecommendationsRequest
+	// An empty body is valid (generate for the current period).
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, "CARD_REWARDS_VALIDATION", "invalid JSON body")
+			return
+		}
+	}
+	report, err := h.Service.GenerateRecommendations(r.Context(), strings.TrimSpace(req.Period), "manual")
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+// ListRecommendations returns the persisted recommendations for a period
+// (?period=YYYY-MM, default current month) (SCN-083-G08).
+func (h *CardRewardsHandler) ListRecommendations(w http.ResponseWriter, r *http.Request) {
+	period, recs, err := h.Service.ListRecommendations(r.Context(), strings.TrimSpace(r.URL.Query().Get("period")))
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+	if recs == nil {
+		recs = []cardrewards.CardRecommendation{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"period": period, "recommendations": recs})
+}
+
+// OptimizationReport returns the read-only optimizer breakdown for a period
+// (?period=YYYY-MM, default current month) (SCN-083-G08).
+func (h *CardRewardsHandler) OptimizationReport(w http.ResponseWriter, r *http.Request) {
+	report, err := h.Service.OptimizationReport(r.Context(), strings.TrimSpace(r.URL.Query().Get("period")))
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 // handleServiceError maps card-rewards service sentinel errors to HTTP status.

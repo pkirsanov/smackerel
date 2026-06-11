@@ -19,7 +19,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 04 | Card-Rewards Source Connector | P1 | 01, 02 | `internal/connector/cardrewards` | Not Started |
 | 05 | LLM Category Extraction (replaces regex) | P0 | 04 | `internal/cardrewards/extract` (Go orchestrator + schema-validate) + `ml/app/card_categories.py` (sidecar model call, C2) | Not Started |
 | 06 | Multi-Source Reconciliation & Lifecycle | P1 | 05 | `internal/cardrewards/reconcile`, PostgreSQL | Done |
-| 07 | Optimizer & Monthly Recommendation Generation | P1 | 02, 06 | `internal/cardrewards/optimize`, REST API | Not Started |
+| 07 | Optimizer & Monthly Recommendation Generation | P1 | 02, 06 | `internal/cardrewards/optimize`, REST API | Done |
 | 08 | CalDAV Calendar Delivery | P1 | 07 | `internal/cardrewards/calendar`, CalDAV | Not Started |
 | 09 | Scheduler Jobs & Manual Triggers | P1 | 04, 05, 06, 07, 08 | `internal/scheduler` | Not Started |
 | 10 | Web UI — Wallet, Offers, Selections, Bonuses, Categories | P1 | 02 | `internal/web` (Go templates), e2e-ui | Not Started |
@@ -480,7 +480,7 @@ Scenario: SCN-083-F07 — reconciliation upsert is idempotent
 
 ## Scope 07: Optimizer & Monthly Recommendation Generation
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** 02, 06
 **Spec Refs:** FR-CR-013, FR-CR-014, Principle 8 (reasons), design §6
@@ -544,12 +544,12 @@ Scenario: SCN-083-G08 — recommendation/report endpoints return current data
 
 ### Definition of Done
 
-- [ ] Implementation behavior complete: optimizer computes best card from base/rotating/offer/selection with shared-limit pools, ties, and equivalents; monthly recommendation generation honors starred overrides; reasons recorded; REST endpoints mounted
-- [ ] Scenario tests pass for SCN-083-G01, G02, G03 (base vs rotating; expired ignored) — unit
-- [ ] Scenario tests pass for SCN-083-G04 and SCN-083-G05 (shared-limit pool; equivalents) — unit
-- [ ] Scenario tests pass for SCN-083-G06 and SCN-083-G07 (per-category generation + starred override) — integration (live PG)
-- [ ] Scenario test passes for SCN-083-G08 (recommendation/report endpoints) — e2e-api (live stack)
-- [ ] Build Quality Gate: build/check/lint/format clean (zero warnings); reasons recorded for explainability (Principle 8); artifact-lint clean; docs aligned
+- [x] Implementation behavior complete: optimizer computes best card from base/rotating/offer/selection with shared-limit pools, ties, and equivalents; monthly recommendation generation honors starred overrides; reasons recorded; REST endpoints mounted — Evidence: [report.md](report.md) → "Evidence — DoD 1: Implementation behavior complete" (no source rewritten this run; behavior proven by G01–G08; reasons asserted by G01 "records a reason" + G02 "reason cites the rotating benefit")
+- [x] Scenario tests pass for SCN-083-G01, G02, G03 (base vs rotating; expired ignored) — unit — Evidence: [report.md](report.md) → "Evidence — DoD 2 (SCN-083-G01, G02, G03) + DoD 3" (`TestOptimize_BaseRateHighestWins_G01`/`…_ActiveRotatingBeatsBase_G02`/`…_ExpiredRotatingIgnored_G03` PASS; `ok internal/cardrewards`; UNIT_EXIT=0)
+- [x] Scenario tests pass for SCN-083-G04 and SCN-083-G05 (shared-limit pool; equivalents) — unit — Evidence: [report.md](report.md) → "Evidence — DoD 2 … + DoD 3 (SCN-083-G04, G05)" (`TestOptimize_SharedLimitPoolNotDoubleCounted_G04`/`…_EquivalentsNormalizeBeforeMatching_G05` PASS; UNIT_EXIT=0)
+- [x] Scenario tests pass for SCN-083-G06 and SCN-083-G07 (per-category generation + starred override) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-G06 + adversarial SCN-083-G07" (`TestRecommendLivePG_PerCategoryGeneration_G06`/`…_StarredOverridePreserved_G07` PASS on live PG; INTEG_EXIT=0; disposable stack torn down)
+- [x] Scenario test passes for SCN-083-G08 (recommendation/report endpoints) — e2e-api (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-G08" (`TestCardRewardsRecommendationsE2E_G08` PASS; first run + post-gofmt re-run E2E_RERUN_EXIT=0; generate→GET recommendations+report on the live stack)
+- [x] Build Quality Gate: build/check/lint/format clean (zero warnings); reasons recorded for explainability (Principle 8); artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 6: Build Quality Gate" + "Gate: artifact-lint — Scope 07" (CHECK_EXIT=0, LINT_EXIT=0, FORMAT_RECHECK_EXIT=0; artifact-lint recorded there)
 
 ---
 
