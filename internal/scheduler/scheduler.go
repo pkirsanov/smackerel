@@ -63,6 +63,18 @@ type Scheduler struct {
 	legacyRetirementObservationCron   string
 	legacyRetirementObservationFn     LegacyRetirementJobFunc
 
+	// Spec 083 Scope 09 — card-rewards daily-refresh + monthly-recommend
+	// job wiring. The pipeline is the shared code path for both the cron
+	// jobs and the admin manual triggers (NFR-CR-005); the two crons
+	// originate from the fail-loud SST loader (Scope 01). cardRewardsJobs
+	// records each registered (name, cron) so the wiring is assertable.
+	muCardRewardsRefresh     sync.Mutex
+	muCardRewardsRecommend   sync.Mutex
+	cardRewardsPipeline      CardRewardsRefresher
+	cardRewardsScrapeCron    string
+	cardRewardsRecommendCron string
+	cardRewardsJobs          []cardRewardsJobReg
+
 	// Spec 021 Scope 4 — unified surfacing controller. When non-nil,
 	// every producer routes its candidate through Controller.Propose
 	// before dispatching to Telegram / web push / ntfy / email-out.
@@ -123,6 +135,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	}
 	s.scheduleRecommendationWatchPoller()
 	s.scheduleLegacyRetirementJobs()
+	s.scheduleCardRewardsJobs()
 	s.cron.Start()
 	slog.Info("scheduler started", "digest_cron", cronExpr)
 	return nil

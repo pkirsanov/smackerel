@@ -376,6 +376,7 @@ func run() error {
 	wireMealPlanningSchedulerAndBot(cfg, svc, sched, tgBot)
 	wireRecommendationWatchPoller(sched, agentBridge, svc, cfg, tgBot, deps.RecommendationWatchHandlers)
 	wireLegacyRetirementScheduler(cfg, svc, sched)
+	wireCardRewardsScheduler(cfg, svc, sched)
 
 	if err := sched.Start(ctx, cfg.DigestCron); err != nil {
 		slog.Warn("digest scheduler failed to start", "error", err)

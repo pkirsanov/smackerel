@@ -805,6 +805,35 @@ func (s *Store) ListObservationsByCardPeriod(ctx context.Context, catalogID, per
 	return out, rows.Err()
 }
 
+// ListObservationRefs returns the distinct (card_catalog_id, period_label)
+// pairs that have at least one rotating_category_observation, ordered
+// deterministically. The daily-refresh pipeline (Scope 09) drives
+// reconciliation over every ref this returns, so a refresh that adds NO new
+// extraction still reconciles previously-stored observations into the
+// authoritative rotating_categories record — which is what makes a re-run
+// idempotent (SCN-083-I06): the same observations upsert the same single row
+// per (card, period), never a duplicate.
+func (s *Store) ListObservationRefs(ctx context.Context) ([]CardPeriodRef, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT DISTINCT card_catalog_id, period_label
+		 FROM rotating_category_observations
+		 ORDER BY card_catalog_id, period_label`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []CardPeriodRef
+	for rows.Next() {
+		var ref CardPeriodRef
+		if err := rows.Scan(&ref.CardCatalogID, &ref.PeriodLabel); err != nil {
+			return nil, err
+		}
+		out = append(out, ref)
+	}
+	return out, rows.Err()
+}
+
 // PersistExtractionRun atomically writes one extraction audit run and its
 // validated observations, and flags any existing reconciled records that an
 // extraction failed to validate (SCN-083-E03/E08). All three writes share one
