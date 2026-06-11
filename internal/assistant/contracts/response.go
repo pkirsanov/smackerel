@@ -92,7 +92,13 @@ type AssistantResponse struct {
 type StatusToken string
 
 const (
-	StatusThinking          StatusToken = "thinking"
+	StatusThinking StatusToken = "thinking"
+	// StatusAnswered is the TERMINAL success token for a delivered
+	// answer (e.g. the open_knowledge synthesized answer). Unlike the
+	// in-flight StatusThinking, adapters render NO status prefix for it
+	// (BUG-064-002 DEFECT 3a: a completed answer must not show a
+	// "thinking…" header).
+	StatusAnswered          StatusToken = "answered"
 	StatusCheckingWeather   StatusToken = "checking_weather"
 	StatusCheckingEmail     StatusToken = "checking_email" // v2
 	StatusReminderProposed  StatusToken = "reminder_proposed"
@@ -108,6 +114,7 @@ const (
 // exactly once.
 var AllStatusTokens = []StatusToken{
 	StatusThinking,
+	StatusAnswered,
 	StatusCheckingWeather,
 	StatusCheckingEmail,
 	StatusReminderProposed,

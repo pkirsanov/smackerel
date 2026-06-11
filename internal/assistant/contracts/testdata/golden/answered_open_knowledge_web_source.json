@@ -1,0 +1,23 @@
+{
+  "body": "wa-town-A 06/11: high 7:42am 8.9 ft, low 1:55pm 0.3 ft.",
+  "capture_route": false,
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "",
+  "sources": [
+    {
+      "id": "w-1",
+      "kind": "web",
+      "ref": {
+        "content_hash": "sha256:tide",
+        "fetched_at": "2026-05-28T10:00:00Z",
+        "kind": "web",
+        "provider": "searxng",
+        "snippet": "wa-town-A tide times",
+        "url": "https://tidetime.org/wa-town-A"
+      },
+      "title": "tidetime.org"
+    }
+  ],
+  "sources_overflow_count": 0,
+  "status": "answered"
+}

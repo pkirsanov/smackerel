@@ -1433,12 +1433,17 @@ func translateFinalToBody(result *agent.InvocationResult) string {
 func translateOutcomeToStatus(outcome agent.Outcome, scenarioID string) contracts.StatusToken {
 	switch outcome {
 	case agent.OutcomeOK:
-		// Per-scenario nuance is handled by skill adapters; default
-		// to Thinking-class success token. Specific tokens
-		// (StatusCheckingWeather, StatusReminderConfirmed, ...)
-		// are set by the skill adapters in SCOPE-06/07. SCOPE-04
-		// owns the facade default ONLY.
-		_ = scenarioID
+		// BUG-064-002 DEFECT 3a — open_knowledge delivers a terminal
+		// answer; it has no skill adapter to set a specific token, so the
+		// facade default of StatusThinking leaked a "thinking…" header onto
+		// a completed answer. Return the terminal StatusAnswered (adapters
+		// render no status prefix for it). Other scenarios keep the
+		// Thinking-class default; their specific tokens
+		// (StatusCheckingWeather, StatusReminderConfirmed, …) are set by
+		// the skill adapters in SCOPE-06/07. SCOPE-04 owns the default ONLY.
+		if scenarioID == "open_knowledge" {
+			return contracts.StatusAnswered
+		}
 		return contracts.StatusThinking
 	case agent.OutcomeUnknownIntent:
 		return contracts.StatusUnavailable
