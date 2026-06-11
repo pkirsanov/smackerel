@@ -129,18 +129,28 @@ def frame(msg):
 
 
 def read_frame(reader):
-    headers = b""
-    while True:
+    # MCP stdio responses are newline-delimited JSON (one object per line).
+    # A legacy LSP-style Content-Length header block is still tolerated on
+    # read for back-compat (mirrors StdioTransport.read_message). The server
+    # now WRITES newline-delimited JSON, so this is the primary path; frame()
+    # above still WRITES Content-Length to exercise the server's back-compat
+    # read path.
+    line = reader.readline()
+    if not line:
+        return None
+    stripped = line.strip()
+    while not stripped:  # skip blank separator lines between messages
         line = reader.readline()
         if not line:
             return None
-        headers += line
-        if line == b"\r\n":
+        stripped = line.strip()
+    if not stripped.lower().startswith(b"content-length:"):
+        return json.loads(stripped.decode("utf-8"))
+    cl = int(stripped.partition(b":")[2].strip())
+    while True:
+        h = reader.readline()
+        if not h or not h.strip():
             break
-    cl = None
-    for h in headers.split(b"\r\n"):
-        if h.lower().startswith(b"content-length:"):
-            cl = int(h.split(b":")[1].strip())
     return json.loads(reader.read(cl))
 
 

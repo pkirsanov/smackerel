@@ -2,8 +2,9 @@
 """
 Bubbles MCP server — Model Context Protocol bridge for the Bubbles framework.
 
-Transport: stdio (newline-delimited JSON-RPC 2.0 messages framed with
-`Content-Length:` headers per MCP spec) OR HTTP (v6.1 / R9 — JSON-RPC over
+Transport: stdio (newline-delimited JSON-RPC 2.0 per MCP spec — one JSON
+object per line; a legacy LSP-style `Content-Length:` header form is still
+accepted on read for back-compat) OR HTTP (v6.1 / R9 — JSON-RPC over
 POST, reachable from CI runners and shared/cloud environments).
 Protocol: negotiates MCP 2024-11-05 / 2025-03-26 / 2025-06-18 (echoes the
 client's requested version when supported, else returns the latest).
@@ -177,8 +178,10 @@ def _resolve_server_version(repo_root: Path) -> str:
 # ---------------------------------------------------------------------------
 # JSON-RPC framing (MCP stdio transport)
 #
-# Per the MCP spec, each message is a JSON-RPC 2.0 object framed with
-# HTTP-style headers:
+# Per the MCP stdio transport spec, each message is a JSON-RPC 2.0 object
+# serialized as newline-delimited JSON: one JSON object per line, terminated
+# by a single `\n`. A legacy LSP-style Content-Length header block is still
+# accepted on read for back-compat:
 #
 #   Content-Length: <bytes>\r\n
 #   \r\n
@@ -193,25 +196,30 @@ class StdioTransport:
         self._write_lock = threading.Lock()
 
     def read_message(self) -> Optional[dict[str, Any]]:
-        """Read one framed JSON-RPC message. Returns None on EOF."""
-        content_length: Optional[int] = None
-        # Header block: read lines until empty line.
-        while True:
+        """Read one JSON-RPC message. Returns None on EOF.
+
+        MCP stdio transport is newline-delimited JSON (one JSON object per
+        line). A legacy LSP-style Content-Length header block is still
+        accepted on read for back-compat.
+        """
+        line = self._reader.readline()
+        if not line:
+            return None  # EOF
+        stripped = line.strip()
+        while not stripped:  # skip blank lines between messages
             line = self._reader.readline()
             if not line:
                 return None  # EOF
-            line = line.rstrip(b"\r\n")
-            if not line:
-                # End of header block.
-                if content_length is None:
-                    raise ValueError("missing Content-Length header")
-                break
-            if b":" not in line:
-                raise ValueError(f"malformed header line: {line!r}")
-            name, _, value = line.partition(b":")
-            if name.strip().lower() == b"content-length":
-                content_length = int(value.strip())
-        # Body.
+            stripped = line.strip()
+        # Newline-delimited JSON (MCP stdio spec): a JSON object, not a header.
+        if not stripped.lower().startswith(b"content-length:"):
+            return json.loads(stripped.decode("utf-8"))
+        # Legacy Content-Length framing: parse remaining header block + body.
+        content_length = int(stripped.partition(b":")[2].strip())
+        while True:
+            header_line = self._reader.readline()
+            if not header_line or not header_line.strip():
+                break  # blank line ends the header block (or EOF)
         body = self._reader.read(content_length)
         if len(body) != content_length:
             raise ValueError(
@@ -221,10 +229,8 @@ class StdioTransport:
 
     def write_message(self, msg: dict[str, Any]) -> None:
         payload = json.dumps(msg, separators=(",", ":")).encode("utf-8")
-        header = f"Content-Length: {len(payload)}\r\n\r\n".encode("ascii")
         with self._write_lock:
-            self._writer.write(header)
-            self._writer.write(payload)
+            self._writer.write(payload + b"\n")
             self._writer.flush()
 
 
