@@ -555,7 +555,7 @@ Scenario: SCN-083-G08 — recommendation/report endpoints return current data
 
 ## Scope 08: CalDAV Calendar Delivery
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** 07
 **Spec Refs:** FR-CR-015, UC-005, design §7
@@ -604,16 +604,16 @@ Scenario: SCN-083-H06 — calendar sync run is audited
 | T-08-01 | Unit | `internal/cardrewards/calendar_test.go` | SCN-083-H01, H02 | Stable UID create + update-not-duplicate (fake CalDAVClient) |
 | T-08-02 | Unit | `internal/cardrewards/calendar_test.go` | SCN-083-H03, H05 | Re-enrollment event + cleanup on delete |
 | T-08-03 | Unit | `internal/cardrewards/calendar_test.go` | SCN-083-H04 | calendar_sync disabled skips writes |
-| T-08-04 | Integration | `internal/cardrewards/calendar_test.go` | SCN-083-H06 | Calendar sync run audited — live PG |
+| T-08-04 | Integration | `internal/cardrewards/calendar_integration_test.go` | SCN-083-H06 | Calendar sync run audited — live PG |
 
 ### Definition of Done
 
-- [ ] Implementation behavior complete: CalendarBridge writes/updates/deletes CalDAV events with stable UIDs (reusing the mealplan pattern + caldav credentials); disabled-sync path keeps Web UI data; runs audited
-- [ ] Scenario tests pass for SCN-083-H01 and SCN-083-H02 (stable UID create + update-not-duplicate) — unit
-- [ ] Scenario tests pass for SCN-083-H03 and SCN-083-H05 (re-enrollment event + cleanup) — unit
-- [ ] Scenario test passes for SCN-083-H04 (calendar_sync disabled) — unit
-- [ ] Scenario test passes for SCN-083-H06 (calendar sync run audited) — integration (live PG)
-- [ ] Build Quality Gate: build/check/lint/format clean (zero warnings); the CalDAVClient mock is an external-boundary fake (calendar server), not an internal-component mock; artifact-lint clean; docs aligned
+- [x] Implementation behavior complete: CalendarBridge writes/updates/deletes CalDAV events with stable UIDs (reusing the mealplan pattern + caldav credentials); disabled-sync path keeps Web UI data; runs audited — Evidence: [report.md](report.md) → "Evidence — DoD 1: Implementation behavior complete" (new `internal/cardrewards/calendar.go`; behavior proven by H01–H06; `mealplan` CalDAVClient shape + `caldav` credentials reused per design §7; scheduler wiring is Scope 09)
+- [x] Scenario tests pass for SCN-083-H01 and SCN-083-H02 (stable UID create + update-not-duplicate) — unit — Evidence: [report.md](report.md) → "Evidence — DoD 2 (SCN-083-H01, H02) + DoD 3 (SCN-083-H03, H05) + DoD 4 (SCN-083-H04) — unit" (`…_RecommendationEventStableUID_H01` PASS, UID `smackerel-cardrec-2026-06-restaurants`; ADVERSARIAL `…_ReSyncUpdatesSameUID_H02` PASS — putCalls=2 yet exactly 1 event, summary updated to `(5%)`; UNIT_EXIT=0)
+- [x] Scenario tests pass for SCN-083-H03 and SCN-083-H05 (re-enrollment event + cleanup) — unit — Evidence: [report.md](report.md) → same unit block (`…_ReEnrollmentEvent_H03` PASS, UID `smackerel-cardreenroll-uc-9-2026-Q3`; `…_DeleteCleansUpEvent_H05` PASS — deleteCalls=1, event removed, no-UID no-op; UNIT_EXIT=0)
+- [x] Scenario test passes for SCN-083-H04 (calendar_sync disabled) — unit — Evidence: [report.md](report.md) → same unit block (`…_DisabledSyncSkipsWritesKeepsData_H04` PASS — Skipped=true, 0 PutEvent calls for recommendations AND re-enrollments, recommendation data left intact for the Web UI; UNIT_EXIT=0)
+- [x] Scenario test passes for SCN-083-H06 (calendar sync run audited) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-H06 — integration (live PG)" (`TestCardCalendarBridgeLivePG_SyncRunAudited_H06` PASS on live PG; `card_runs` run_type=calendar_sync events_written pinned by RunID; calendar_event_uid round-trip persisted; re-sync appends a 2nd run with no duplicate event; INTEG_EXIT=0; disposable stack torn down)
+- [x] Build Quality Gate: build/check/lint/format clean (zero warnings); the CalDAVClient mock is an external-boundary fake (calendar server), not an internal-component mock; artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 6: Build Quality Gate" + "Gate: artifact-lint — Scope 08" (CHECK_EXIT=0, LINT_EXIT=0, FORMAT_EXIT=0; external-boundary-fake confirmed in the DoD 5 block; artifact-lint recorded there)
 
 ---
 
