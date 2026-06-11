@@ -327,6 +327,62 @@ func (s *Store) ListOffersBySharedLimitGroup(ctx context.Context, group string) 
 	return s.queryOffers(ctx, "shared_limit_group = $1", group)
 }
 
+// GetOffer returns one offer by id, or (nil, nil) if absent.
+func (s *Store) GetOffer(ctx context.Context, id string) (*Offer, error) {
+	o, err := scanOffer(s.Pool.QueryRow(ctx, `SELECT `+offerCols+` FROM card_offers WHERE id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return o, err
+}
+
+// UpdateOffer rewrites the mutable offer columns and refreshes updated_at.
+// Returns false if no row matched.
+func (s *Store) UpdateOffer(ctx context.Context, o *Offer) (bool, error) {
+	tag, err := s.Pool.Exec(ctx,
+		`UPDATE card_offers SET title=$1, category=$2, rate=$3, rate_type=$4,
+		   limit_cents=$5, limit_period=$6, shared_limit_group=$7, starts_on=$8,
+		   ends_on=$9, activation_required=$10, activated=$11, notes=$12, updated_at=NOW()
+		 WHERE id=$13`,
+		o.Title, o.Category, o.Rate, o.RateType, o.LimitCents, o.LimitPeriod,
+		o.SharedLimitGroup, o.StartsOn, o.EndsOn, o.ActivationRequired, o.Activated,
+		o.Notes, o.ID,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// DeleteOffer removes an offer. Returns false if no row matched.
+func (s *Store) DeleteOffer(ctx context.Context, id string) (bool, error) {
+	tag, err := s.Pool.Exec(ctx, `DELETE FROM card_offers WHERE id = $1`, id)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// ListOffers returns every offer (across all wallet entries and general
+// offers), newest first. Backs the web offers index page.
+func (s *Store) ListOffers(ctx context.Context) ([]Offer, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT `+offerCols+` FROM card_offers ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Offer
+	for rows.Next() {
+		o, err := scanOffer(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *o)
+	}
+	return out, rows.Err()
+}
+
 // ---- card_selections -------------------------------------------------------
 
 // CreateSelection inserts a selectable-category choice.
@@ -348,6 +404,66 @@ func (s *Store) ListSelectionsByUserCard(ctx context.Context, userCardID string)
 		`SELECT id, user_card_id, category, tier, period_label, enrolled, enrolled_at,
 		        effective_start, effective_end, created_at, updated_at
 		 FROM card_selections WHERE user_card_id = $1 ORDER BY period_label, category`, userCardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Selection
+	for rows.Next() {
+		var sel Selection
+		if err := rows.Scan(&sel.ID, &sel.UserCardID, &sel.Category, &sel.Tier,
+			&sel.PeriodLabel, &sel.Enrolled, &sel.EnrolledAt, &sel.EffectiveStart,
+			&sel.EffectiveEnd, &sel.CreatedAt, &sel.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, sel)
+	}
+	return out, rows.Err()
+}
+
+// GetSelection returns one selection by id, or (nil, nil) if absent.
+func (s *Store) GetSelection(ctx context.Context, id string) (*Selection, error) {
+	var sel Selection
+	err := s.Pool.QueryRow(ctx,
+		`SELECT id, user_card_id, category, tier, period_label, enrolled, enrolled_at,
+		        effective_start, effective_end, created_at, updated_at
+		 FROM card_selections WHERE id = $1`, id).Scan(
+		&sel.ID, &sel.UserCardID, &sel.Category, &sel.Tier, &sel.PeriodLabel,
+		&sel.Enrolled, &sel.EnrolledAt, &sel.EffectiveStart, &sel.EffectiveEnd,
+		&sel.CreatedAt, &sel.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &sel, nil
+}
+
+// UpdateSelection rewrites the mutable selection columns and refreshes
+// updated_at. Returns false if no row matched.
+func (s *Store) UpdateSelection(ctx context.Context, sel *Selection) (bool, error) {
+	tag, err := s.Pool.Exec(ctx,
+		`UPDATE card_selections SET category=$1, tier=$2, period_label=$3, enrolled=$4,
+		   enrolled_at=$5, effective_start=$6, effective_end=$7, updated_at=NOW()
+		 WHERE id=$8`,
+		sel.Category, sel.Tier, sel.PeriodLabel, sel.Enrolled, sel.EnrolledAt,
+		sel.EffectiveStart, sel.EffectiveEnd, sel.ID,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// ListSelections returns every selection across all wallet entries, ordered by
+// period then category. Backs the web selections index page.
+func (s *Store) ListSelections(ctx context.Context) ([]Selection, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT id, user_card_id, category, tier, period_label, enrolled, enrolled_at,
+		        effective_start, effective_end, created_at, updated_at
+		 FROM card_selections ORDER BY period_label DESC, tier NULLS FIRST, category`)
 	if err != nil {
 		return nil, err
 	}
@@ -423,6 +539,66 @@ func (s *Store) ListBonusesByUserCard(ctx context.Context, userCardID string) ([
 		`SELECT id, user_card_id, bonus_type, description, spend_required_cents,
 		        spend_progress_cents, reward_description, deadline, met, created_at, updated_at
 		 FROM signup_bonuses WHERE user_card_id = $1 ORDER BY created_at`, userCardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SignupBonus
+	for rows.Next() {
+		var b SignupBonus
+		if err := rows.Scan(&b.ID, &b.UserCardID, &b.BonusType, &b.Description,
+			&b.SpendRequiredCents, &b.SpendProgressCents, &b.RewardDescription,
+			&b.Deadline, &b.Met, &b.CreatedAt, &b.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// GetSignupBonus returns one signup bonus by id, or (nil, nil) if absent.
+func (s *Store) GetSignupBonus(ctx context.Context, id string) (*SignupBonus, error) {
+	var b SignupBonus
+	err := s.Pool.QueryRow(ctx,
+		`SELECT id, user_card_id, bonus_type, description, spend_required_cents,
+		        spend_progress_cents, reward_description, deadline, met, created_at, updated_at
+		 FROM signup_bonuses WHERE id = $1`, id).Scan(
+		&b.ID, &b.UserCardID, &b.BonusType, &b.Description, &b.SpendRequiredCents,
+		&b.SpendProgressCents, &b.RewardDescription, &b.Deadline, &b.Met,
+		&b.CreatedAt, &b.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+// UpdateSignupBonus rewrites the mutable bonus columns (spend progress, met,
+// deadline, …) and refreshes updated_at. Returns false if no row matched.
+func (s *Store) UpdateSignupBonus(ctx context.Context, b *SignupBonus) (bool, error) {
+	tag, err := s.Pool.Exec(ctx,
+		`UPDATE signup_bonuses SET bonus_type=$1, description=$2, spend_required_cents=$3,
+		   spend_progress_cents=$4, reward_description=$5, deadline=$6, met=$7, updated_at=NOW()
+		 WHERE id=$8`,
+		b.BonusType, b.Description, b.SpendRequiredCents, b.SpendProgressCents,
+		b.RewardDescription, b.Deadline, b.Met, b.ID,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// ListBonuses returns every signup bonus across all wallet entries, newest
+// first. Backs the web bonuses index page.
+func (s *Store) ListBonuses(ctx context.Context) ([]SignupBonus, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT id, user_card_id, bonus_type, description, spend_required_cents,
+		        spend_progress_cents, reward_description, deadline, met, created_at, updated_at
+		 FROM signup_bonuses ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}

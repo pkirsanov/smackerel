@@ -18,6 +18,12 @@ var (
 	ErrCatalogNotFound = errors.New("cardrewards: catalog card not found")
 	// ErrUserCardNotFound indicates a referenced wallet entry does not exist (404).
 	ErrUserCardNotFound = errors.New("cardrewards: user card not found")
+	// ErrOfferNotFound indicates a referenced offer does not exist (404).
+	ErrOfferNotFound = errors.New("cardrewards: offer not found")
+	// ErrSelectionNotFound indicates a referenced selection does not exist (404).
+	ErrSelectionNotFound = errors.New("cardrewards: selection not found")
+	// ErrBonusNotFound indicates a referenced signup bonus does not exist (404).
+	ErrBonusNotFound = errors.New("cardrewards: signup bonus not found")
 )
 
 // Service implements card-rewards business logic over a Store. It owns
@@ -183,6 +189,12 @@ func (s *Service) ResolveCard(ctx context.Context, text string) ([]Candidate, er
 	return ResolveCard(text, catalog), nil
 }
 
+// ListCatalog returns every master-catalog card. The web wallet uses it to
+// resolve each wallet entry's card type for display (J01).
+func (s *Service) ListCatalog(ctx context.Context) ([]CatalogCard, error) {
+	return s.store.ListCatalogCards(ctx)
+}
+
 // CreateOffer validates and persists an offer. When o.UserCardID is set the
 // referenced wallet entry must exist.
 func (s *Service) CreateOffer(ctx context.Context, o Offer) (*Offer, error) {
@@ -215,6 +227,66 @@ func (s *Service) ListOffersByUserCard(ctx context.Context, userCardID string) (
 // ListOffersBySharedLimitGroup returns offers sharing a combined-limit pool.
 func (s *Service) ListOffersBySharedLimitGroup(ctx context.Context, group string) ([]Offer, error) {
 	return s.store.ListOffersBySharedLimitGroup(ctx, group)
+}
+
+// GetOffer returns one offer or ErrOfferNotFound.
+func (s *Service) GetOffer(ctx context.Context, id string) (*Offer, error) {
+	o, err := s.store.GetOffer(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if o == nil {
+		return nil, fmt.Errorf("%w: %s", ErrOfferNotFound, id)
+	}
+	return o, nil
+}
+
+// UpdateOffer validates and persists changes to an existing offer (J06 edit /
+// activation toggle). The referenced wallet entry (when set) must exist.
+func (s *Service) UpdateOffer(ctx context.Context, o Offer) (*Offer, error) {
+	o.ID = strings.TrimSpace(o.ID)
+	if o.ID == "" {
+		return nil, validationErr("offer id is required")
+	}
+	o.Title = strings.TrimSpace(o.Title)
+	o.Category = strings.TrimSpace(o.Category)
+	if o.Title == "" {
+		return nil, validationErr("offer title is required")
+	}
+	if o.Category == "" {
+		return nil, validationErr("offer category is required")
+	}
+	if !ValidRateType(o.RateType) {
+		return nil, validationErr("offer rate_type must be one of percent|points|multiplier, got %q", o.RateType)
+	}
+	if err := s.ensureUserCardExists(ctx, o.UserCardID); err != nil {
+		return nil, err
+	}
+	ok, err := s.store.UpdateOffer(ctx, &o)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrOfferNotFound, o.ID)
+	}
+	return s.store.GetOffer(ctx, o.ID)
+}
+
+// DeleteOffer removes an offer. Returns ErrOfferNotFound if no row matched.
+func (s *Service) DeleteOffer(ctx context.Context, id string) error {
+	ok, err := s.store.DeleteOffer(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrOfferNotFound, id)
+	}
+	return nil
+}
+
+// ListOffers returns every offer (web offers index).
+func (s *Service) ListOffers(ctx context.Context) ([]Offer, error) {
+	return s.store.ListOffers(ctx)
 }
 
 // CreateSelection validates and persists a selectable-category choice. The
@@ -250,6 +322,58 @@ func (s *Service) ListSelectionsByUserCard(ctx context.Context, userCardID strin
 	return s.store.ListSelectionsByUserCard(ctx, userCardID)
 }
 
+// GetSelection returns one selection or ErrSelectionNotFound.
+func (s *Service) GetSelection(ctx context.Context, id string) (*Selection, error) {
+	sel, err := s.store.GetSelection(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if sel == nil {
+		return nil, fmt.Errorf("%w: %s", ErrSelectionNotFound, id)
+	}
+	return sel, nil
+}
+
+// UpdateSelection validates and persists changes to an existing selection
+// (J07 edit). The referenced wallet entry must exist.
+func (s *Service) UpdateSelection(ctx context.Context, sel Selection) (*Selection, error) {
+	sel.ID = strings.TrimSpace(sel.ID)
+	if sel.ID == "" {
+		return nil, validationErr("selection id is required")
+	}
+	sel.Category = strings.TrimSpace(sel.Category)
+	sel.PeriodLabel = strings.TrimSpace(sel.PeriodLabel)
+	if sel.UserCardID == "" {
+		return nil, validationErr("selection user_card_id is required")
+	}
+	if sel.Category == "" {
+		return nil, validationErr("selection category is required")
+	}
+	if sel.PeriodLabel == "" {
+		return nil, validationErr("selection period_label is required")
+	}
+	if sel.Tier != nil && *sel.Tier <= 0 {
+		return nil, validationErr("selection tier must be > 0 when set")
+	}
+	uc := sel.UserCardID
+	if err := s.ensureUserCardExists(ctx, &uc); err != nil {
+		return nil, err
+	}
+	ok, err := s.store.UpdateSelection(ctx, &sel)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrSelectionNotFound, sel.ID)
+	}
+	return s.store.GetSelection(ctx, sel.ID)
+}
+
+// ListSelections returns every selection (web selections index).
+func (s *Service) ListSelections(ctx context.Context) ([]Selection, error) {
+	return s.store.ListSelections(ctx)
+}
+
 // CreateSignupBonus validates and persists a signup-bonus tracker. The
 // referenced wallet entry must exist.
 func (s *Service) CreateSignupBonus(ctx context.Context, b SignupBonus) (*SignupBonus, error) {
@@ -280,6 +404,62 @@ func (s *Service) CreateSignupBonus(ctx context.Context, b SignupBonus) (*Signup
 // ListBonusesByUserCard returns signup bonuses for one wallet entry.
 func (s *Service) ListBonusesByUserCard(ctx context.Context, userCardID string) ([]SignupBonus, error) {
 	return s.store.ListBonusesByUserCard(ctx, userCardID)
+}
+
+// GetBonus returns one signup bonus or ErrBonusNotFound.
+func (s *Service) GetBonus(ctx context.Context, id string) (*SignupBonus, error) {
+	b, err := s.store.GetSignupBonus(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if b == nil {
+		return nil, fmt.Errorf("%w: %s", ErrBonusNotFound, id)
+	}
+	return b, nil
+}
+
+// UpdateBonus validates and persists changes to an existing signup bonus —
+// notably manual spend-progress entry (bonuses "progress"). For spend-type
+// bonuses with a known requirement, Met is recomputed from the new progress.
+// The referenced wallet entry must exist.
+func (s *Service) UpdateBonus(ctx context.Context, b SignupBonus) (*SignupBonus, error) {
+	b.ID = strings.TrimSpace(b.ID)
+	if b.ID == "" {
+		return nil, validationErr("signup bonus id is required")
+	}
+	b.Description = strings.TrimSpace(b.Description)
+	if b.UserCardID == "" {
+		return nil, validationErr("signup bonus user_card_id is required")
+	}
+	if !ValidBonusType(b.BonusType) {
+		return nil, validationErr("signup bonus bonus_type must be one of spend|first_year_rate, got %q", b.BonusType)
+	}
+	if b.Description == "" {
+		return nil, validationErr("signup bonus description is required")
+	}
+	if b.SpendProgressCents < 0 {
+		return nil, validationErr("signup bonus spend_progress_cents must be >= 0")
+	}
+	if b.SpendRequiredCents != nil {
+		b.Met = b.SpendProgressCents >= *b.SpendRequiredCents
+	}
+	uc := b.UserCardID
+	if err := s.ensureUserCardExists(ctx, &uc); err != nil {
+		return nil, err
+	}
+	ok, err := s.store.UpdateSignupBonus(ctx, &b)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrBonusNotFound, b.ID)
+	}
+	return s.store.GetSignupBonus(ctx, b.ID)
+}
+
+// ListBonuses returns every signup bonus (web bonuses index).
+func (s *Service) ListBonuses(ctx context.Context) ([]SignupBonus, error) {
+	return s.store.ListBonuses(ctx)
 }
 
 // ListCategoryAliases returns every category alias.
