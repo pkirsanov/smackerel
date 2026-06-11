@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feature": "083-card-rewards-companion",
+  "scenarioIdPattern": "SCN-083-[A-K][0-9]{2}",
+  "totalScenarios": 78,
+  "planningCeiling": "specs_hardened",
+  "note": "Planning-only manifest. Scenario IDs are defined in scopes.md and trace 1:1 to scope DoD items. No implementation/certification has occurred.",
+  "scopes": [
+    { "scope": "01", "letter": "A", "name": "Config SST & Migration Schema", "scenarios": ["SCN-083-A01", "SCN-083-A02", "SCN-083-A03", "SCN-083-A04", "SCN-083-A05", "SCN-083-A06", "SCN-083-A07"] },
+    { "scope": "02", "letter": "B", "name": "Card Domain Store, Types & CRUD API", "scenarios": ["SCN-083-B01", "SCN-083-B02", "SCN-083-B03", "SCN-083-B04", "SCN-083-B05", "SCN-083-B06", "SCN-083-B07", "SCN-083-B08"] },
+    { "scope": "03", "letter": "C", "name": "Data Migration: CCManager JSON -> PostgreSQL", "scenarios": ["SCN-083-C01", "SCN-083-C02", "SCN-083-C03", "SCN-083-C04", "SCN-083-C05", "SCN-083-C06"] },
+    { "scope": "04", "letter": "D", "name": "Card-Rewards Source Connector", "scenarios": ["SCN-083-D01", "SCN-083-D02", "SCN-083-D03", "SCN-083-D04", "SCN-083-D05", "SCN-083-D06"] },
+    { "scope": "05", "letter": "E", "name": "LLM Category Extraction (replaces regex)", "scenarios": ["SCN-083-E01", "SCN-083-E02", "SCN-083-E03", "SCN-083-E04", "SCN-083-E05", "SCN-083-E06", "SCN-083-E07", "SCN-083-E08"] },
+    { "scope": "06", "letter": "F", "name": "Multi-Source Reconciliation & Category Lifecycle", "scenarios": ["SCN-083-F01", "SCN-083-F02", "SCN-083-F03", "SCN-083-F04", "SCN-083-F05", "SCN-083-F06", "SCN-083-F07"] },
+    { "scope": "07", "letter": "G", "name": "Optimizer & Monthly Recommendation Generation", "scenarios": ["SCN-083-G01", "SCN-083-G02", "SCN-083-G03", "SCN-083-G04", "SCN-083-G05", "SCN-083-G06", "SCN-083-G07", "SCN-083-G08"] },
+    { "scope": "08", "letter": "H", "name": "CalDAV Calendar Delivery", "scenarios": ["SCN-083-H01", "SCN-083-H02", "SCN-083-H03", "SCN-083-H04", "SCN-083-H05", "SCN-083-H06"] },
+    { "scope": "09", "letter": "I", "name": "Scheduler Jobs & Manual Triggers", "scenarios": ["SCN-083-I01", "SCN-083-I02", "SCN-083-I03", "SCN-083-I04", "SCN-083-I05", "SCN-083-I06"] },
+    { "scope": "10", "letter": "J", "name": "Web UI - Wallet, Offers, Selections, Bonuses, Categories", "scenarios": ["SCN-083-J01", "SCN-083-J02", "SCN-083-J03", "SCN-083-J04", "SCN-083-J05", "SCN-083-J06", "SCN-083-J07", "SCN-083-J08"] },
+    { "scope": "11", "letter": "K", "name": "Web UI - Dashboard, Recommendations, Rotating Verify, Report, Admin", "scenarios": ["SCN-083-K01", "SCN-083-K02", "SCN-083-K03", "SCN-083-K04", "SCN-083-K05", "SCN-083-K06", "SCN-083-K07", "SCN-083-K08"] }
+  ]
+}

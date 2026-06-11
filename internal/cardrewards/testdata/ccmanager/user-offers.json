@@ -1,0 +1,50 @@
+{
+  "offers": [
+    {
+      "id": "amazon-prime-dec2025-combo",
+      "card": "amazon prime",
+      "categories": ["Groceries", "Restaurants", "Gas Stations"],
+      "rate": 5,
+      "rate_type": "percent",
+      "limit": 1000,
+      "limit_period": "total",
+      "limit_shared": true,
+      "start_date": "2025-12-01",
+      "end_date": "2025-12-31",
+      "activation_required": true,
+      "activated": true,
+      "notes": "December promo - $1,000 combined limit"
+    },
+    {
+      "id": "discover-travel-q1-2026",
+      "card": "discover",
+      "categories": ["Travel"],
+      "rate": 5.0,
+      "rate_type": "percent",
+      "limit": 10000,
+      "limit_period": "total",
+      "limit_shared": false,
+      "start_date": "2025-12-01",
+      "end_date": "2026-03-31",
+      "activation_required": true,
+      "activated": true,
+      "notes": "Travel promo through Q1 2026"
+    },
+    {
+      "id": "usbank-spend-threshold-2026",
+      "card": "us bank cash+",
+      "promo_type": "spend_threshold",
+      "categories": ["Gas Stations"],
+      "spend_required": 400.0,
+      "reward_amount": 50.0,
+      "reward_type": "statement_credit",
+      "monthly_reset": true,
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-31",
+      "activation_required": true,
+      "activated": false,
+      "notes": ""
+    }
+  ],
+  "notes": "Combined limits: when limit_shared=true the limit applies across all listed categories"
+}
