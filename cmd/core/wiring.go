@@ -22,6 +22,7 @@ import (
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/auth/webcreds"
+	"github.com/smackerel/smackerel/internal/cardrewards"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
 	ingest "github.com/smackerel/smackerel/internal/connector/ingest"
@@ -881,6 +882,24 @@ func wireMealPlanningHandler(
 		"default_servings", cfg.MealPlanDefaultServings,
 		"calendar_sync", cfg.MealPlanCalendarSync,
 	)
+}
+
+// wireCardRewardsHandler constructs the card-rewards CRUD handler (spec 083
+// Scope 02) and attaches it to deps. The wallet/offers/selections/bonuses CRUD
+// API + card-name resolution is mounted whenever a Postgres pool is available;
+// it does NOT require the card_rewards ingestion pipeline
+// (connector/extraction/scheduler), which is separately gated by
+// card_rewards.enabled (delivered in scopes 04/05/09). Must run before
+// api.NewRouter so the routes are registered in the single-pass route build
+// (same construction-order rule as wireMealPlanningHandler — BUG-034-004).
+func wireCardRewardsHandler(svc *coreServices, deps *api.Dependencies) {
+	if svc == nil || svc.pg == nil || svc.pg.Pool == nil {
+		return
+	}
+	store := cardrewards.NewStore(svc.pg.Pool)
+	service := cardrewards.NewService(store)
+	deps.CardRewardsHandler = api.NewCardRewardsHandler(service)
+	slog.Info("card-rewards handler wired (early — before NewRouter)")
 }
 
 // wireMealPlanningSchedulerAndBot completes meal-planning wiring after

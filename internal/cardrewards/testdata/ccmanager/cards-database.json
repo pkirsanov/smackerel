@@ -1,0 +1,111 @@
+{
+  "cards": {
+    "discover": {
+      "id": "discover-it",
+      "name": "Discover it Cash Back",
+      "issuer": "Discover",
+      "type": "rotating",
+      "annual_fee": 0,
+      "base_benefits": [
+        {"category": "Everything", "rate": 1, "rate_type": "percent", "limit": null}
+      ],
+      "rotating_benefits": {
+        "type": "quarterly",
+        "activation_required": true,
+        "limit": 1500,
+        "limit_period": "quarter"
+      },
+      "perks": ["Cashback Match first year", "No annual fee"],
+      "aliases": ["discover", "discover it", "discover cashback"]
+    },
+    "amazon-prime-visa": {
+      "id": "amazon-prime-visa",
+      "name": "Amazon Prime Rewards Visa Signature",
+      "issuer": "Chase",
+      "type": "fixed",
+      "annual_fee": 0,
+      "requires": "Amazon Prime membership",
+      "base_benefits": [
+        {"category": "Amazon", "rate": 5, "rate_type": "percent", "limit": null},
+        {"category": "Everything", "rate": 1, "rate_type": "percent", "limit": null}
+      ],
+      "perks": ["No annual fee"],
+      "aliases": ["amazon prime", "amazon visa", "prime visa"]
+    },
+    "citi-custom-cash": {
+      "id": "citi-custom-cash",
+      "name": "Citi Custom Cash",
+      "issuer": "Citi",
+      "type": "user-selected",
+      "annual_fee": 0,
+      "base_benefits": [
+        {"category": "Everything", "rate": 1, "rate_type": "percent", "limit": null}
+      ],
+      "selectable_benefits": {
+        "num_categories": 1,
+        "rate": 5,
+        "rate_type": "percent",
+        "limit": 500,
+        "limit_period": "month",
+        "options": ["Restaurants", "Gas Stations", "Groceries"]
+      },
+      "perks": ["No annual fee"],
+      "aliases": ["citi custom cash", "custom cash", "citi cash"]
+    },
+    "us-bank-cash-plus": {
+      "id": "us-bank-cash-plus",
+      "name": "U.S. Bank Cash+ Visa Signature",
+      "issuer": "US Bank",
+      "type": "tiered",
+      "annual_fee": 0,
+      "base_benefits": [
+        {"category": "Everything", "rate": 1, "rate_type": "percent", "limit": null}
+      ],
+      "tiered_benefits": {
+        "lock_period": "quarter",
+        "combined_limit": 2000,
+        "tiers": [
+          {"name": "5% Categories", "rate": 5, "rate_type": "percent", "num_categories": 2},
+          {"name": "2% Category", "rate": 2, "rate_type": "percent", "num_categories": 1}
+        ]
+      },
+      "perks": ["No annual fee"],
+      "aliases": ["us bank cash+", "usb cash+", "us bank cash plus"]
+    },
+    "capital-one-quicksilver": {
+      "id": "capital-one-quicksilver",
+      "name": "Capital One Quicksilver",
+      "issuer": "Capital One",
+      "type": "flat",
+      "annual_fee": 0,
+      "base_benefits": [
+        {"category": "Everything", "rate": 1.5, "rate_type": "percent", "limit": null}
+      ],
+      "perks": ["No annual fee"],
+      "aliases": ["capital one silver", "quicksilver", "capital one quicksilver"]
+    },
+    "home-depot-consumer": {
+      "id": "home-depot-consumer",
+      "name": "The Home Depot Consumer Credit Card",
+      "issuer": "Citibank",
+      "type": "store",
+      "annual_fee": 0,
+      "base_benefits": [
+        {"category": "Home Depot", "rate": 0, "rate_type": "percent", "limit": null}
+      ],
+      "perks": ["Special financing"],
+      "aliases": ["home depot", "hd card", "home depot card"]
+    },
+    "mystery-card": {
+      "id": "mystery-card",
+      "name": "Unknown Type Card",
+      "issuer": "TestBank",
+      "type": "mystery",
+      "annual_fee": 0,
+      "base_benefits": [],
+      "perks": [],
+      "aliases": ["mystery"]
+    }
+  },
+  "categories": ["Amazon", "Dining", "Gas Stations", "Groceries", "Travel"]
+}

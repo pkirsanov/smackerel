@@ -1,0 +1,49 @@
+{
+  "cards": [
+    "discover",
+    "amazon prime",
+    "citi custom cash",
+    "us bank cash+",
+    "capital one silver",
+    "home depot",
+    "Signify Business Card",
+    "totally unknown card xyz"
+  ],
+  "notes": {
+    "citi-custom-cash": "primary dining card",
+    "us-bank-cash-plus": "quarterly enrollment"
+  },
+  "signup_bonuses": {
+    "citi-custom-cash": {
+      "spend_bonus": {
+        "amount": 200,
+        "spend_required": 1500,
+        "start_date": "2025-12-26",
+        "deadline": "2026-03-26",
+        "completed": false,
+        "notes": "Spend $1,500 in 90 days for $200 bonus"
+      },
+      "first_year_bonus": {
+        "category": "selected",
+        "rate": 6,
+        "normal_rate": 3,
+        "start_date": "2025-12-26",
+        "end_date": "2026-12-26",
+        "notes": "6% on selected category for first year"
+      }
+    }
+  },
+  "custom_cards": {
+    "signify-business-card": {
+      "name": "Signify Business Card",
+      "issuer": "Wells Fargo",
+      "type": "fixed",
+      "base_benefits": [
+        {"category": "Everything", "rate": 2.0, "rate_type": "percent", "limit": null}
+      ]
+    }
+  },
+  "metadata": {
+    "last_updated": "2025-12-27"
+  }
+}

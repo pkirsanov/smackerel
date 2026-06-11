@@ -229,6 +229,11 @@ type Dependencies struct {
 	// Meal plan handler (optional — nil when meal planning not enabled)
 	MealPlanHandler *MealPlanHandler
 
+	// Card-rewards handler (spec 083) — wallet/offers/selections/bonuses CRUD
+	// + card-name resolution. Optional — nil when no Postgres pool is
+	// available (config-validate mode, some tests).
+	CardRewardsHandler *CardRewardsHandler
+
 	// Recommendation handlers (optional — nil when recommendations not enabled)
 	RecommendationHandlers *RecommendationHandlers
 
