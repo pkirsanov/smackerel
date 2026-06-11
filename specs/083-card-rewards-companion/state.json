@@ -7,18 +7,18 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": ["card_rewards"],
   "planMaturityOnly": false,
-  "lastUpdatedAt": "2026-06-11T23:55:00Z",
+  "lastUpdatedAt": "2026-06-12T00:30:00Z",
   "execution": {
     "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": 8,
+    "currentScope": 9,
     "runStartedAt": "2026-06-11T00:00:00Z",
     "completedPhaseClaims": ["analyze", "design", "plan", "harden"],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["1","2","3","4","6","7"],
+    "completedScopes": ["1","2","3","4","6","7","8"],
     "certifiedCompletedPhases": ["analyze", "design", "plan", "harden"],
     "scopeProgress": [
       { "scope": 1, "name": "Config SST & Migration Schema", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md" },
@@ -28,7 +28,7 @@
       { "scope": 5, "name": "LLM Category Extraction (replaces regex)", "status": "In Progress", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 6, "name": "Multi-Source Reconciliation & Lifecycle", "status": "Done", "dependsOn": [5], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 7, "name": "Optimizer & Monthly Recommendation Generation", "status": "Done", "dependsOn": [2, 6], "scopeDir": null, "evidenceFile": "report.md" },
-      { "scope": 8, "name": "CalDAV Calendar Delivery", "status": "Not Started", "dependsOn": [7], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 8, "name": "CalDAV Calendar Delivery", "status": "Done", "dependsOn": [7], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 9, "name": "Scheduler Jobs & Manual Triggers", "status": "Not Started", "dependsOn": [4, 5, 6, 7, 8], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 10, "name": "Web UI — Wallet, Offers, Selections, Bonuses, Categories", "status": "Not Started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 11, "name": "Web UI — Dashboard, Recommendations, Rotating Verify, Report, Admin", "status": "Not Started", "dependsOn": [6, 7, 9, 10], "scopeDir": null, "evidenceFile": "report.md" }
@@ -140,6 +140,18 @@
       "runStartedAt": "2026-06-11T23:45:00Z",
       "runEndedAt": "2026-06-11T23:55:00Z",
       "summary": "Scope 07 (Optimizer & Monthly Recommendation Generation) VERIFIED + CERTIFIED with real in-session evidence; all 6 DoD items [x]. No implementation bug found — optimize.go/recommend.go/internal/api/cardrewards.go/service.go/store.go NOT rewritten (only gofmt whitespace on tests/e2e/cardrewards_api_test.go). Unit (./smackerel.sh test unit --go --go-run 'Optimize' --verbose): UNIT_EXIT=0; TestOptimize_BaseRateHighestWins_G01 PASS, TestOptimize_ActiveRotatingBeatsBase_G02 PASS (reason cites rotating benefit), TestOptimize_ExpiredRotatingIgnored_G03 PASS (ADVERSARIAL expired benefit not used), TestOptimize_SharedLimitPoolNotDoubleCounted_G04 PASS (shared-limit pool counted once), TestOptimize_EquivalentsNormalizeBeforeMatching_G05 PASS (alias normalization), plus NoBenefit_ReturnsNone + InactiveCardExcluded edges (ok internal/cardrewards 0.050s). Integration (./smackerel.sh test integration --go-run 'RecommendLivePG' on the disposable test stack, live PG): INTEG_EXIT=0; TestRecommendLivePG_PerCategoryGeneration_G06 PASS (one card_recommendations row per tracked category), TestRecommendLivePG_StarredOverridePreserved_G07 PASS (ADVERSARIAL starred_override preserved over optimizer pick; manual override not cleared); disposable stack fully torn down (all containers + 3 volumes + network removed). E2E (./smackerel.sh test e2e --go-run 'TestCardRewardsRecommendationsE2E_G08' on the live stack): first run E2E_EXIT=0, post-gofmt re-run E2E_RERUN_EXIT=0; TestCardRewardsRecommendationsE2E_G08 PASS both times (POST /api/card-recommendations/generate then GET recommendations?period + report endpoint return current-period data; core image rebuilt with the new REST endpoints). Build Quality Gate GREEN: CHECK_EXIT=0, LINT_EXIT=0 (golangci-lint All checks passed! + Web validation passed), FORMAT first flagged the un-gofmt'd e2e test (FORMAT_EXIT=1) then applied+rechecked clean (FORMAT_RECHECK_EXIT=0, 65 files already formatted); artifact-lint exit recorded inline in report.md Scope 07 Build Quality Gate section. completedScopes [1,2,3,4,6,7]; currentScope 8."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "full-delivery RESUME; runSubagent/agent UNAVAILABLE in this runtime, so the Scope 08 implement+test phases were executed in parent-expanded form by a single orchestrator agent — NO separate certified specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed (disclosed, not fabricated). Scope 08 (CalDAV Calendar Delivery) was IMPLEMENTED this run (new internal/cardrewards/calendar.go + calendar_test.go + calendar_integration_test.go) and certified Done; all 6 DoD items [x] with real in-session evidence. The unrelated concurrent BUG-064-002 / spec-084 working-tree changes (internal/assistant/*, internal/telegram/*, cmd/core/main.go, cmd/core/wiring_assistant_openknowledge.go, cmd/core/openknowledge_prompt_contract_test.go, config/prompt_contracts/open_knowledge.yaml, config/smackerel.yaml, docs/Operations.md, specs/064+084) were NOT read, modified, staged, or committed — the only working-tree additions this run are the three new internal/cardrewards/calendar*.go files. No card_rewards feature-flag bundle edit (config/feature-flags.mvp.yaml) — bubbles.train-owned. Not committed (autoCommit off); working tree left ready for an orchestrator preservation commit of the Scope 08 cardrewards surface only. Top-level status stays in_progress: Scope 05 remains In Progress (E08 blocked-needs-live-Ollama) and scopes 09-11 remain Not Started, so completedScopes becomes [1,2,3,4,6,7,8] and currentScope advances to 9.",
+      "phasesExecuted": ["implement", "test"],
+      "scopesDelivered": [8],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-12T00:00:00Z",
+      "runEndedAt": "2026-06-12T00:30:00Z",
+      "summary": "Scope 08 (CalDAV Calendar Delivery) IMPLEMENTED + certified Done with real in-session evidence; all 6 DoD items [x]. New internal/cardrewards/calendar.go: CalDAVClient interface (same shape as mealplan.CalDAVClient — design §7 reuse, not a new client), CardCalendarBridge with stable UID scheme (<prefix>-cardrec-<period>-<slug>, e.g. smackerel-cardrec-2026-06-restaurants; <prefix>-cardreenroll-<user_card_id>-<period>), SyncRecommendations/SyncReEnrollments (input-taking, fake-client testable), DeleteRecommendationEvent (cleanup), and store-driven SyncPeriod (persists calendar_event_uid + writes a card_runs run_type=calendar_sync audit row with events_written, Principle 8). Unit (./smackerel.sh test unit --go --go-run 'CardCalendarBridge' --verbose): UNIT_EXIT=0; H01 stable-UID create PASS, H02 ADVERSARIAL re-sync-updates-same-UID PASS (putCalls=2 yet exactly 1 event, summary updated 3%→5% — fails if UID not stable), H03 re-enrollment event PASS, H04 disabled-sync-skips-writes-keeps-data PASS (Skipped=true, 0 PutEvent calls, recommendation data intact for Web UI), H05 delete-cleans-up-event PASS (deleteCalls=1 + no-UID no-op), plus UIDSchemes + NonMonthPeriodCountsFailed (fail-loud, no silent now-fallback). Integration (./smackerel.sh test integration --go-run 'CardCalendarBridgeLivePG' on the disposable test stack, live PG): INTEG_EXIT=0; TestCardCalendarBridgeLivePG_SyncRunAudited_H06 PASS — card_runs run_type=calendar_sync row pinned by RunID has events_written matching res.EventsWritten (>=3: 2 recs + 1 re-enrollment), each synced rec persisted its stable calendar_event_uid (round-trip), un-carded rec stored NO uid, and a re-sync appended a 2nd calendar_sync run leaving exactly one event per UID (update-not-duplicate at live-PG level); disposable stack fully torn down (all containers + 3 volumes + network removed). The CalDAV fake is an EXTERNAL-boundary fake (calendar server, keyed by UID like real CalDAV) — Store + PostgreSQL are REAL in H06, NO internal component mocked. Build Quality Gate GREEN: CHECK_EXIT=0 (config in sync + drift guard + scenario-lint), LINT_EXIT=0 (golangci-lint All checks passed! + Web validation), FORMAT_EXIT=0 (65 files already formatted — calendar*.go gofmt-clean as written), ARTIFACT_LINT_EXIT=0. No fallback default config introduced (smackerel-no-defaults); calendar_sync + calendar_uid_prefix come from the Scope 01 fail-loud SST loader. Scheduler/manual-trigger wiring is Scope 09 (Depends On 08). completedScopes [1,2,3,4,6,7,8]; currentScope 9."
     }
   ]
 }
