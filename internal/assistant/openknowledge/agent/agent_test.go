@@ -84,6 +84,8 @@ func baseCfg(maxIter, tokens int, perQueryUSD, monthlyUSD, perUserUSD, ratio flo
 		CompactionThresholdRatio:   ratio,
 		CostFn:                     cost,
 		EnforcementMode:            string(citeback.EnforcementEnforce),
+		// BUG-064-002 DEFECT 3b — salvage source cap (assistant.sources_max).
+		SourcesMax: 5,
 	}
 }
 

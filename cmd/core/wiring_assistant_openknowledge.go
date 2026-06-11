@@ -239,6 +239,10 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 		Recorder:                   okMetrics,
 		Logger:                     slog.Default(),
 		EnforcementMode:            okCfg.CitebackEnforcementMode,
+		// BUG-064-002 DEFECT 3b — cap salvaged sources to the SST
+		// assistant.sources_max (same cap the facade assembler applies
+		// to the user-visible list).
+		SourcesMax: cfg.Assistant.SourcesMax,
 	})
 	if err != nil {
 		return fmt.Errorf("wireOpenKnowledge: build agent: %w", err)

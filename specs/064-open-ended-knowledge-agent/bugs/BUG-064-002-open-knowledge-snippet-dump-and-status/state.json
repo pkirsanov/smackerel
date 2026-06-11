@@ -1,0 +1,70 @@
+{
+  "bugId": "BUG-064-002",
+  "title": "open-knowledge /ask returns a triplicated raw-snippet dump under a 'thinking…' header instead of a synthesized answer",
+  "spec": "specs/064-open-ended-knowledge-agent",
+  "severity": "S1",
+  "status": "blocked",
+  "workflowMode": "bugfix-fastlane",
+  "owner": "bubbles.workflow",
+  "discoveredBy": "operator (live home-lab Telegram bot)",
+  "discoveredAt": "2026-06-11",
+  "lastUpdatedAt": "2026-06-11",
+  "rootCause": {
+    "defect1_snippetDump": "internal/assistant/openknowledge/agent/agent.go::synthesizeFromSnippets emits raw web_search snippet text as the final body whenever the model fails to produce a cited synthesis (forced-final empty text, or an ungrounded-excuse body). The salvage masks a synthesis failure with a raw-snippet dump.",
+    "defect2_triplicate": "synthesizeFromSnippets takes the lead snippet of EACH web_search tool call and joins with \\n\\n WITHOUT de-duplication; 3 searches returning the same top result produce the identical block 3x.",
+    "defect3a_thinking": "facade.go::translateOutcomeToStatus maps every OutcomeOK (including a completed open_knowledge answer) to contracts.StatusThinking; render_outbound.go::statusPrefix renders StatusThinking as the 'thinking…' first line. The closed status vocabulary had no terminal 'answer delivered' token.",
+    "defect3b_sourceOverAttach": "salvage attaches collectTraceSources(trace) (all deduped trace sources = 32) rather than the cited set; the assembler caps the user-visible list to assistant.sources_max=5 but the agent's own source set is unbounded."
+  },
+  "resolution": "DEFECT 2: synthesizeFromSnippets now de-duplicates snippets via a normalized key (lowercase + collapsed whitespace); identical lead snippets across tool calls collapse to one block. DEFECT 1: agent_system_prompt rewritten to EXTRACT-THEN-SYNTHESIZE and forbid raw-snippet passthrough / repeated blocks (the <CITATIONS> contract preserved verbatim); the cited-synthesis path already preserves the model synthesis as the body. DEFECT 3a: added terminal contracts.StatusAnswered token; translateOutcomeToStatus maps open_knowledge OutcomeOK -> StatusAnswered (scoped; other scenarios unchanged); statusPrefix renders no prefix for it. DEFECT 3b: added REQUIRED okagent.Config.SourcesMax (fail-loud in New(), sourced from assistant.sources_max) + cappedTraceSources helper at the 3 salvage sites. 3 new adversarial regression test files (RED->GREEN); full `go test ./...` GREEN; `./smackerel.sh check` + `format --check` clean; scenario-lint OK.",
+  "codeVsDeployment": "code+config+prompt (fixed and validated in-repo at the Go unit/integration level — the agent loop + facade run end-to-end with fakes asserting the un-redacted assembled body). Live home-lab symptom additionally requires a redeploy via the knb adapter (bubbles.devops) — same build-once-deploy-many chain as BUG-064-001.",
+  "affectedSurface": [
+    "internal/assistant/openknowledge/agent/agent.go (synthesizeFromSnippets dedup + snippetDedupKey; Config.SourcesMax + New() validation; cappedTraceSources helper; 3 salvage source-attach sites)",
+    "config/prompt_contracts/open_knowledge.yaml (agent_system_prompt extract-then-synthesize redesign)",
+    "internal/assistant/contracts/response.go (terminal StatusAnswered token + AllStatusTokens)",
+    "internal/assistant/contracts/response_test.go (exhaustiveness list + golden case)",
+    "internal/assistant/contracts/testdata/golden/answered_open_knowledge_web_source.json (new golden fixture)",
+    "internal/assistant/facade.go (translateOutcomeToStatus -> StatusAnswered for open_knowledge OutcomeOK)",
+    "internal/telegram/assistant_adapter/render_outbound.go (statusPrefix no-prefix for StatusAnswered)",
+    "cmd/core/wiring_assistant_openknowledge.go (pass cfg.Assistant.SourcesMax into okagent.Config.SourcesMax)",
+    "internal/assistant/openknowledge/agent/agent_test.go (baseCfg sets SourcesMax)",
+    "internal/assistant/openknowledge/agent/snippet_dedup_bug064002_test.go (new adversarial regression: T1, T2, T4, T5)",
+    "internal/assistant/facade_open_knowledge_status_bug064002_test.go (new adversarial regression: T3)",
+    "internal/telegram/assistant_adapter/render_outbound_answered_bug064002_test.go (new adversarial regression: T3b)"
+  ],
+  "scopes": [
+    { "id": "scope-01", "title": "Synthesized answer, no duplication, terminal status, capped sources", "status": "done" }
+  ],
+  "completedScopes": [
+    "scope-01"
+  ],
+  "completedPhases": [
+    "select",
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "gaps",
+    "harden",
+    "stabilize",
+    "security",
+    "devops",
+    "validate",
+    "docs"
+  ],
+  "blockedReason": "In-repo code+config+prompt fix is COMPLETE and validated (scope-01 Done; all 9 DoD items [x] with inline raw evidence; 3 adversarial regression tests RED->GREEN; full `go test ./...` GREEN; `./smackerel.sh check` + `format --check` clean; scenario-lint OK). Two genuine external blockers prevent a clean terminal 'done' in this environment: (1) DEPLOYMENT (owner bubbles.devops): the deployed smackerel-core image still ships the snippet-dump/triplicate/thinking-status code, so the live home-lab S1 symptom is cleared ONLY after a rebuild of smackerel-core from the fixed SHA + home-lab config-bundle regen + redeploy via the knb smackerel/home-lab adapter; (2) LIVE CERTIFICATION (owners bubbles.validate / bubbles.audit): the done-grade live E2E (real Telegram + searxng + gemma4:26b GPU stack) requires the home-lab GPU stack which is unavailable in this sandbox. ACTIONABLE NEXT STEP: redeploy via bubbles.devops, then re-send the tide NL prompt on the home-lab bot and confirm ONE synthesized answer (no 'thinking…' header, no triplicate, capped/deduped sources), then run the live openknowledge E2E + audit on the real stack.",
+  "nextRequiredOwner": "bubbles.devops",
+  "nextAction": "Rebuild smackerel-core from the fixed SHA (CI build-once), regenerate the home-lab config-bundle, and redeploy via `bash scripts/deploy/promote.sh --target home-lab --build-manifest <build-manifest-<sourceSha>.yaml>` (which calls `./smackerel.sh deploy-target home-lab apply ...`). Then re-test the NL tide prompt on the live Telegram bot.",
+  "modelCapabilityNote": "Per operator directive the local model (gemma4:26b) is NOT swapped. The in-repo fixes maximize a real cited synthesis (prompt) and make the fallback non-terrible (dedup + source cap + terminal status). If gemma4:26b still cannot extract the exact tide table on the live GPU stack, the user receives a single deduplicated grounded evidence digest + capped sources (a strict improvement over the triplicated dump under a 'thinking…' header); perfecting extraction is a model/prompt-tuning follow-up, not in scope for this S1 quality bugfix.",
+  "environmentalLimitations": [
+    "internal/scopesdriftguard FAIL is PRE-EXISTING: 287 broken scopes.md evidence-pointers vs ratchet ceiling 270, dominated by done specs 034 (81), 035 (62), 036 (41), 063 (40), 061 (39), 083 (17). Spec 064 is ABSENT from the breakdown — BUG-064-002 added zero broken paths. Foreign done-spec artifacts (ownership boundary); not this bug's scope.",
+    "tests/unit/clients TestRenderDescriptorV1_* FAIL (node/dart not on PATH) — pre-existing, environmental, unrelated to this bug (same gap BUG-064-001 documented).",
+    "Live integration/e2e and `./smackerel.sh build` (Docker image build) require the home-lab GPU + service stack unavailable in this sandbox; in-repo Go unit/integration with fakes is the validation surface here."
+  ],
+  "relatedSpecs": [
+    "specs/061-conversational-assistant"
+  ],
+  "relatedBugs": [
+    "specs/064-open-ended-knowledge-agent/bugs/BUG-064-001-ask-budget-refusal-and-capture-prefix"
+  ]
+}

@@ -137,6 +137,12 @@ type Config struct {
 	// (shadow) or refuse-with-capture (enforce). Spec 076 SCOPE-2c
 	// (SCN-064-A06) — REQUIRED, no silent default (G028).
 	EnforcementMode string
+	// SourcesMax caps the number of sources the agent attaches to a
+	// salvaged answer (BUG-064-002 DEFECT 3b). Sourced from the SST
+	// key assistant.sources_max. REQUIRED — New() rejects a
+	// non-positive value (G028 / smackerel-no-defaults; no silent
+	// default).
+	SourcesMax int
 }
 
 // Agent orchestrates the LLM ↔ tools loop with bounded budgets.
@@ -205,6 +211,9 @@ func New(chat LLMChat, registry *ok.Registry, verify VerifyFn, cfg Config) (*Age
 	enforcementMode, modeErr := citeback.ParseEnforcementMode(cfg.EnforcementMode)
 	if modeErr != nil {
 		errs = append(errs, "Config.EnforcementMode: "+modeErr.Error())
+	}
+	if cfg.SourcesMax <= 0 {
+		errs = append(errs, "Config.SourcesMax must be > 0 (G028 — no silent default; load from assistant.sources_max)")
 	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("%w: %s", ErrAgentInvalid, strings.Join(errs, "; "))
@@ -334,7 +343,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 			// snippets. The user gets a real answer composed from
 			// real evidence instead of a refusal from empty output.
 			if isForcedFinalTurn && strings.TrimSpace(result.FinalText) == "" {
-				autoSources := collectTraceSources(trace)
+				autoSources := a.cappedTraceSources(trace)
 				if len(autoSources) > 0 {
 					body := synthesizeFromSnippets(trace)
 					if body != "" {
@@ -361,7 +370,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 				// "answer based ONLY on tool results above"), so
 				// refusing as fabricated_source would punish a
 				// well-formed answer for a formatting omission.
-				autoSources := collectTraceSources(trace)
+				autoSources := a.cappedTraceSources(trace)
 				trimmedText := strings.TrimSpace(result.FinalText)
 				if isForcedFinalTurn && len(trace) > 0 && len(autoSources) > 0 && trimmedText != "" {
 					return finalize(TurnResult{
@@ -407,7 +416,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 			// final one, because nothing about the empty-citations
 			// failure mode is forced-turn-specific.
 			if len(verdict.Verified) == 0 && strings.TrimSpace(finalText) != "" {
-				autoSources := collectTraceSources(trace)
+				autoSources := a.cappedTraceSources(trace)
 				if len(autoSources) > 0 {
 					// Body-quality salvage: if the model wrote a
 					// "no tool results were provided" / "I am unable
@@ -648,11 +657,19 @@ func truncatePreview(s string, n int) string {
 
 // synthesizeFromSnippets builds a plain-text answer from the recorded
 // tool snippets when the model returned empty text on the forced
-// synthesis turn. Concatenates the first non-empty snippet text from
-// each tool invocation, capped at a reasonable length. The result is
-// "grounded by construction" — every word comes from a tool_result.
+// synthesis turn. Concatenates the first non-empty, NON-DUPLICATE
+// snippet text from each tool invocation, capped at a reasonable
+// length. The result is "grounded by construction" — every word comes
+// from a tool_result.
+//
+// BUG-064-002 DEFECT 2: multiple web_search calls for the same question
+// routinely return the same top snippet; without de-duplication the
+// identical block was emitted once per tool call (the live triplicate
+// dump). The dedup key normalises whitespace + case so spacing/case
+// variants of the same snippet collapse to one block.
 func synthesizeFromSnippets(trace []ToolTraceEntry) string {
 	var parts []string
+	seen := make(map[string]struct{})
 	totalLen := 0
 	const maxBodyChars = 1500
 	for _, e := range trace {
@@ -664,6 +681,11 @@ func synthesizeFromSnippets(trace []ToolTraceEntry) string {
 			if text == "" {
 				continue
 			}
+			key := snippetDedupKey(text)
+			if _, dup := seen[key]; dup {
+				continue // already included this snippet; try the next one
+			}
+			seen[key] = struct{}{}
 			if totalLen+len(text) > maxBodyChars {
 				remaining := maxBodyChars - totalLen
 				if remaining > 50 {
@@ -673,13 +695,21 @@ func synthesizeFromSnippets(trace []ToolTraceEntry) string {
 			}
 			parts = append(parts, text)
 			totalLen += len(text) + 2
-			break // one snippet per tool call is enough
+			break // one UNIQUE snippet per tool call is enough
 		}
 		if totalLen >= maxBodyChars {
 			break
 		}
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// snippetDedupKey normalises snippet text (lowercase + collapsed
+// whitespace) so snippets that differ only in spacing or case are
+// treated as duplicates by synthesizeFromSnippets (BUG-064-002
+// DEFECT 2).
+func snippetDedupKey(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }
 
 // collectTraceSources flattens all ok.Source entries recorded by tool
@@ -717,6 +747,21 @@ func collectTraceSources(trace []ToolTraceEntry) []ok.Source {
 		}
 	}
 	return out
+}
+
+// cappedTraceSources returns collectTraceSources(trace) bounded to
+// cfg.SourcesMax (BUG-064-002 DEFECT 3b). collectTraceSources already
+// de-duplicates by (kind, locator, content_hash); this caps the
+// salvaged set to the SST assistant.sources_max so a salvaged answer
+// never carries an absurd number of arbitrary trace sources (the live
+// num_sources=32). The non-salvage path attaches the verified cited
+// set (verdict.Verified) instead and is unaffected.
+func (a *Agent) cappedTraceSources(trace []ToolTraceEntry) []ok.Source {
+	srcs := collectTraceSources(trace)
+	if a.cfg.SourcesMax > 0 && len(srcs) > a.cfg.SourcesMax {
+		srcs = srcs[:a.cfg.SourcesMax]
+	}
+	return srcs
 }
 
 // citationsBlockRE matches the trailing <CITATIONS>...</CITATIONS>
