@@ -290,3 +290,20 @@ type CardPeriodRef struct {
 	CardCatalogID string
 	PeriodLabel   string
 }
+
+// PendingReEnrollment is a selectable-card re-enrollment action surfaced for the
+// dashboard (spec 083 Scope 06, SCN-083-F06 / UC-003 A2). It is derived from a
+// card_selections row whose enrollment window has opened (effective_start has
+// passed and effective_end has not) while the user has not yet enrolled — the
+// smackerel equivalent of CCManager's "pending selections". The reconciler's
+// daily lifecycle pass reports these; the persistent record is the not-enrolled
+// selection itself, read back via Store.ListPendingReEnrollments.
+type PendingReEnrollment struct {
+	UserCardID     string     `json:"user_card_id"`
+	CatalogName    string     `json:"catalog_name"`
+	Category       string     `json:"category"`
+	Tier           *int       `json:"tier,omitempty"`
+	PeriodLabel    string     `json:"period_label"`
+	EffectiveStart *time.Time `json:"effective_start,omitempty"`
+	EffectiveEnd   *time.Time `json:"effective_end,omitempty"`
+}

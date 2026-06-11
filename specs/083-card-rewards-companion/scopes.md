@@ -18,7 +18,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 03 | Data Migration: CCManager JSON → PostgreSQL | P0 | 02 | Go Core, one-time importer | Not Started |
 | 04 | Card-Rewards Source Connector | P1 | 01, 02 | `internal/connector/cardrewards` | Not Started |
 | 05 | LLM Category Extraction (replaces regex) | P0 | 04 | `internal/cardrewards/extract` (Go orchestrator + schema-validate) + `ml/app/card_categories.py` (sidecar model call, C2) | Not Started |
-| 06 | Multi-Source Reconciliation & Lifecycle | P1 | 05 | `internal/cardrewards/reconcile`, PostgreSQL | Not Started |
+| 06 | Multi-Source Reconciliation & Lifecycle | P1 | 05 | `internal/cardrewards/reconcile`, PostgreSQL | Done |
 | 07 | Optimizer & Monthly Recommendation Generation | P1 | 02, 06 | `internal/cardrewards/optimize`, REST API | Not Started |
 | 08 | CalDAV Calendar Delivery | P1 | 07 | `internal/cardrewards/calendar`, CalDAV | Not Started |
 | 09 | Scheduler Jobs & Manual Triggers | P1 | 04, 05, 06, 07, 08 | `internal/scheduler` | Not Started |
@@ -411,7 +411,7 @@ Scenario: SCN-083-E08 — extraction run is audited
 
 ## Scope 06: Multi-Source Reconciliation & Category Lifecycle
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** 05
 **Spec Refs:** FR-CR-009, FR-CR-011, FR-CR-012, Principle 3, design §5
@@ -469,12 +469,12 @@ Scenario: SCN-083-F07 — reconciliation upsert is idempotent
 
 ### Definition of Done
 
-- [ ] Implementation behavior complete: reconciler merges multi-source observations with confidence + needs_verification, protects manual overrides, advances lifecycle by date, raises re-enrollment actions, upserts idempotently
-- [ ] Scenario tests pass for SCN-083-F01 and SCN-083-F02 (agreement; disagreement → verify) — unit (F02 adversarial)
-- [ ] Scenario test passes for SCN-083-F03 (manual override never overwritten) — unit
-- [ ] Scenario tests pass for SCN-083-F04 and SCN-083-F05 (upcoming→active→expired) — unit
-- [ ] Scenario tests pass for SCN-083-F06 and SCN-083-F07 (re-enrollment action + idempotent upsert) — integration (live PG)
-- [ ] Build Quality Gate: build/check/lint/format clean (zero warnings); Principle 3 lifecycle honored; artifact-lint clean; docs aligned
+- [x] Implementation behavior complete: reconciler merges multi-source observations with confidence + needs_verification, protects manual overrides, advances lifecycle by date, raises re-enrollment actions, upserts idempotently → Evidence: report.md "Delivery — Scope 06" (Files verified: `reconcile.go` `Reconciler` + PURE `mergeObservations`/`deriveLifecycle` + `Reconcile`/`AdvanceLifecycle`; `store.go` upsert/lifecycle/pending-reenrollment methods; all SCN-083-F01..F07 unit + live-PG blocks PASS; no implementation bug found so source was NOT modified)
+- [x] Scenario tests pass for SCN-083-F01 and SCN-083-F02 (agreement; disagreement → verify) — unit (F02 adversarial) → Evidence: report.md "SCN-083-F01/F02/F03/F04/F05 ... (reconcile unit tests)" — `TestReconcile_MergeAgreement_F01 PASS` (agreed set, source_count=2, needs_verification=false, confidence=0.90) + `TestReconcile_MergeDisagreement_F02 PASS` (ADVERSARIAL: disagreement→needs_verification=true, conservative confidence 0.88, source_count=1; `REGRESSION` guards fail if silently reconciled as agreement)
+- [x] Scenario test passes for SCN-083-F03 (manual override never overwritten) — unit → Evidence: report.md unit block `TestReconcile_ManualOverrideNeverOverwritten_F03 PASS` (ADVERSARIAL: high-confidence 0.99 disagreeing observation does NOT overwrite `manual_override=true`; categories stay `[Gym Memberships]`, confidence 1.0, needs_verification false) + live `TestReconcileLivePG_ManualOverrideNotRewritten_F03 PASS` (overrides_protected=1, reconciled=0; observation retained for audit)
+- [x] Scenario tests pass for SCN-083-F04 and SCN-083-F05 (upcoming→active→expired) — unit → Evidence: report.md unit block `TestReconcile_LifecycleByDate_F04_F05 PASS` (6 subtests: upcoming / F04 active / F05 expired + both boundary days + undated→unknown) + live `TestReconcileLivePG_LifecycleTransitions_F04_F05 PASS` (upcoming→active & active→expired transitions logged; expired EXCLUDED from `ListActiveRotatingCategories` via `REGRESSION` guard)
+- [x] Scenario tests pass for SCN-083-F06 and SCN-083-F07 (re-enrollment action + idempotent upsert) — integration (live PG) → Evidence: report.md "SCN-083-F06/F07 (+ live F02/F03/F04/F05) on live disposable Postgres" — `TestReconcileLivePG_PendingReEnrollment_F06 PASS` (only the window-opening-today & not-enrolled selection surfaced; future / already-enrolled NOT; count=1 via both `AdvanceLifecycle` and `ListPendingReEnrollments`) + `TestReconcileLivePG_IdempotentUpsert_F07 PASS` (reconcile twice → `CountRotatingCategoriesByCardPeriod`==1 + stable row id; `REGRESSION` guard); `INTEG_EXIT=0`; disposable stack fully torn down (ephemeral isolation)
+- [x] Build Quality Gate: build/check/lint/format clean (zero warnings); Principle 3 lifecycle honored; artifact-lint clean; docs aligned → Evidence: report.md "Evidence — Build Quality Gate (Scope 06)" (`CHECK_EXIT=0` config in sync + drift guard + scenario-lint OK; `LINT_EXIT=0` golangci-lint All checks passed! + Web validation passed; `FORMAT_EXIT=0` 65 files already formatted; `ARTIFACT_LINT_EXIT=0` Artifact lint PASSED)
 
 ---
 

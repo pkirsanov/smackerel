@@ -7,18 +7,18 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": ["card_rewards"],
   "planMaturityOnly": false,
-  "lastUpdatedAt": "2026-06-11T22:30:00Z",
+  "lastUpdatedAt": "2026-06-11T23:30:00Z",
   "execution": {
     "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": 5,
+    "currentScope": 7,
     "runStartedAt": "2026-06-11T00:00:00Z",
     "completedPhaseClaims": ["analyze", "design", "plan", "harden"],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["1","2","3","4"],
+    "completedScopes": ["1","2","3","4","6"],
     "certifiedCompletedPhases": ["analyze", "design", "plan", "harden"],
     "scopeProgress": [
       { "scope": 1, "name": "Config SST & Migration Schema", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md" },
@@ -26,7 +26,7 @@
       { "scope": 3, "name": "Data Migration: CCManager JSON → PostgreSQL", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 4, "name": "Card-Rewards Source Connector", "status": "Done", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 5, "name": "LLM Category Extraction (replaces regex)", "status": "In Progress", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md" },
-      { "scope": 6, "name": "Multi-Source Reconciliation & Lifecycle", "status": "Not Started", "dependsOn": [5], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 6, "name": "Multi-Source Reconciliation & Lifecycle", "status": "Done", "dependsOn": [5], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 7, "name": "Optimizer & Monthly Recommendation Generation", "status": "Not Started", "dependsOn": [2, 6], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 8, "name": "CalDAV Calendar Delivery", "status": "Not Started", "dependsOn": [7], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 9, "name": "Scheduler Jobs & Manual Triggers", "status": "Not Started", "dependsOn": [4, 5, 6, 7, 8], "scopeDir": null, "evidenceFile": "report.md" },
@@ -116,6 +116,18 @@
       "runStartedAt": "2026-06-11T22:00:00Z",
       "runEndedAt": "2026-06-11T22:30:00Z",
       "summary": "Scope 05 (LLM Category Extraction — replaces the CCManager regex scraper) implement+test delivered with real in-session evidence; 7 of 8 DoD items [x], one blocked-needs-live-Ollama. Constitution C2 honored: the model-gateway call lives ONLY in ml/app/card_categories.py (NEW POST /extract-card-categories route, mounted under verify_auth; pure build_extraction_messages with prompt-injection-defended system prompt + delimited PAGE_CONTENT data block; parse_strict_response first strict-JSON pass; litellm lazily imported so the dev test lane needs no litellm). Go orchestrator internal/cardrewards/extract.go (NEW): pure validateExtraction (santhosh-tekuri/jsonschema/v6 strict schema + card/period echo defense + date checks + unknown-card skip + low-confidence flag), Extractor.Run (SidecarExtractor seam + real Store + extract audit run), HTTPSidecarExtractor (POST /extract-card-categories, Bearer, fail-loud constructor; NO direct model client — C2 grep zero hits). store.go: GetRotatingCategory, ListObservationsByCardPeriod, transactional PersistExtractionRun (FK-safe run→observations→flag; flag only sets needs_verification, never overwrites). types.go: RotatingCategoryObservation + CardPeriodRef. Tests: extract_test.go (unit E01-E07 pure + httptest transport + fail-loud; ok internal/cardrewards 0.208s with 8 adversarial discard subtests); extract_integration_test.go (live-PG E01-E07 + audit run via a fake of the EXTERNAL model-gateway boundary — Store+DB real, no internal mocks; INTEG_EXIT=0); tests/integration/cardrewards_extract_test.go (E08 live round-trip, re-gated on sidecar reachability); ml/tests/test_card_categories.py (E01+E06 pure; python 509 passed/2 skipped). Adversarial proof: TestExtractorLivePG_MalformedDiscardedNoOverwrite_E02_E03 seeds an authoritative existing rotating_categories row, feeds garbage, and asserts categories/confidence/manual_override UNCHANGED + needs_verification flipped — the exact CCManager silent-fallback failure mode proven fixed on live PG. E08 live: orchestrator hit the REAL /extract-card-categories route → HTTP 502 model-gateway-unreachable (litellm APIConnectionError; disposable-stack Ollama serves no pulled LLM model, integration lane runs no ollama-test-pull and does not forward SMACKEREL_TEST_OLLAMA) → orchestrator FAILED LOUD (discarded+flagged+audited), test PASS; a SUCCESSFUL Ollama inference is blocked-needs-live-Ollama (satisfiable on the <home-lab-host> ops node). Build gates: C2 grep zero hits; CHECK_EXIT=0; LINT_EXIT=0; FORMAT_RECHECK_EXIT=0; artifact-lint PASSED. Reconciled pre-existing card-rewards doc-drift (connector count 16→17 in smackerel.md §22.7 + Development.md; internal/cardrewards + 057 migration doc rows; self-adjusting connector-count adversarial fixture) → internal/deploy + internal/docfreshness green. Pre-existing out-of-domain internal/scopesdriftguard ratchet (287>270) was NOT introduced by Scope 05 (work reduced 083's contribution ~292→287); ratchet NOT raised. Continuation: Scope 06 (Multi-Source Reconciliation & Category Lifecycle; depends on 05) next."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "full-delivery VERIFY+CERTIFY pass for Scope 06; runSubagent/agent UNAVAILABLE in this runtime, so the test/verify phase was executed in parent-expanded form by a single orchestrator agent — NO separate certified specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed (disclosed, not fabricated). A prior Scope 06 implement pass was cut off mid-integration-test; the implementation already existed on disk (reconcile.go + store.go/types.go additions). This run did NOT write implementation code — it re-ran the full Scope 06 test set via the repo CLI, captured the previously-missing live-PG evidence (F06/F07), confirmed all gates green, found NO implementation bug (source unchanged), and certified Scope 06 Done. The unrelated concurrent BUG-064-002 / spec-084 working-tree changes (internal/assistant/*, internal/telegram/*, cmd/core/*, config/*, docs/*, specs/064+084) were NOT read, modified, staged, or committed. No card_rewards feature-flag bundle edit (config/feature-flags.mvp.yaml) — bubbles.train-owned. Not committed (autoCommit off); working tree left ready for an orchestrator preservation commit of the Scope 06 cardrewards surface only. Top-level status stays in_progress: Scope 05 remains In Progress (E08 blocked-needs-live-Ollama) and scopes 07-11 remain Not Started, so completedScopes becomes [1,2,3,4,6] and currentScope advances to 7.",
+      "phasesExecuted": ["test"],
+      "scopesDelivered": [6],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-11T23:00:00Z",
+      "runEndedAt": "2026-06-11T23:30:00Z",
+      "summary": "Scope 06 (Multi-Source Reconciliation & Category Lifecycle) VERIFIED + CERTIFIED with real in-session evidence; all 6 DoD items [x]. No implementation bug found — reconcile.go/store.go/types.go NOT modified. Unit (./smackerel.sh test unit --go --go-run 'TestReconcile_'): UNIT_EXIT=0; TestReconcile_MergeAgreement_F01 PASS, TestReconcile_MergeDisagreement_F02 PASS (ADVERSARIAL disagreement→needs_verification=true, conservative conf 0.88, source_count=1), TestReconcile_ManualOverrideNeverOverwritten_F03 PASS (ADVERSARIAL high-conf 0.99 disagreeing obs does NOT overwrite manual_override; categories/conf/flags unchanged), TestReconcile_LifecycleByDate_F04_F05 PASS (6 subtests incl. boundary days + undated→unknown), plus LowConfidenceFlags_A2 + NoObservationsKeepsExisting. Integration (./smackerel.sh test integration --go-run 'ReconcileLivePG' on the disposable test stack, live PG): INTEG_EXIT=0; TestReconcileLivePG_IdempotentUpsert_F07 PASS (reconcile twice → exactly 1 rotating_categories row per (card,period) + stable id; REGRESSION guard), TestReconcileLivePG_PendingReEnrollment_F06 PASS (only window-opening-today & not-enrolled surfaced, count=1 via AdvanceLifecycle and ListPendingReEnrollments), TestReconcileLivePG_LifecycleTransitions_F04_F05 PASS (upcoming→active & active→expired; expired EXCLUDED from active set), TestReconcileLivePG_DisagreementRetainsBothObservations_F02 PASS (needs_verification=true + both observations retained), TestReconcileLivePG_ManualOverrideNotRewritten_F03 PASS (overrides_protected=1, reconciled=0, observation retained for audit); disposable stack fully torn down (all containers + 3 volumes + network removed — ephemeral isolation). Build Quality Gate GREEN: CHECK_EXIT=0 (config in sync + drift guard + scenario-lint OK), LINT_EXIT=0 (golangci-lint All checks passed! + Web validation passed), FORMAT_EXIT=0 (65 files already formatted), ARTIFACT_LINT_EXIT=0 (Artifact lint PASSED). Evidence recorded inline in report.md 'Delivery — Scope 06'. Continuation: Scope 07 (Optimizer & Monthly Recommendation Generation; depends on 02 and 06, both Done) is next in DAG order; Scope 05's E08 successful-live-Ollama inference remains the one blocked-needs-live-Ollama item."
     }
   ]
 }
