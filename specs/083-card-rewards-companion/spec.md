@@ -47,7 +47,7 @@ that is being retired. Worse, the regex scraper is the exact kind of brittle,
 silently-degrading heuristic smackerel was built to replace with
 schema-bound LLM extraction (`docs/smackerel.md` §17.2). Meanwhile
 smackerel already owns every primitive this feature needs: a connector
-framework, a local LLM gateway (host Ollama on evo-x2), a scheduler, a
+framework, a local LLM gateway (host Ollama on <home-lab-host>), a scheduler, a
 CalDAV delivery bridge, PostgreSQL + pgvector storage, and a server-rendered
 Web UI. Credit-card cashback awareness is explicitly welcomed by
 `docs/smackerel.md` §16.8 "Financial Awareness (Light Touch)".
@@ -67,7 +67,7 @@ primary consumption surface, preserved from CCManager). A full server-rendered
 all of it. All data lives in PostgreSQL; the standalone app and its JSON files
 are migrated once and then retired.
 
-**Success Signal:** On evo-x2 home-lab, the daily refresh job fetches the
+**Success Signal:** On home-lab, the daily refresh job fetches the
 configured sources, the LLM extractor returns a schema-valid rotating-category
 record for `discover-it` Q3 2026 with a confidence score and source citation,
 the reconciler upserts it with `lifecycle_state = upcoming`, and the user sees
@@ -168,7 +168,7 @@ store outside PostgreSQL, the one-graph constraint is violated.
 | System (Reconciler) | Multi-source merge + lifecycle engine | Merge per-source observations into one record; advance lifecycle by date | Read observations, write rotating_categories |
 | System (Optimizer) | Best-card recommendation engine | Map spend categories → best card; generate monthly recommendations | Read card data, write recommendations |
 | System (Calendar Bridge) | CalDAV event writer | Push monthly recommendations + re-enrollment reminders to Google Calendar | Read recommendations, write CalDAV |
-| Operator | Person deploying/operating smackerel on evo-x2 | Configure sources/model/CalDAV; trigger manual scrape/sync; read run history | Config + admin triggers |
+| Operator | Person deploying/operating smackerel on home-lab | Configure sources/model/CalDAV; trigger manual scrape/sync; read run history | Config + admin triggers |
 
 ---
 
@@ -348,7 +348,7 @@ store outside PostgreSQL, the one-graph constraint is violated.
 
 | ID | Requirement |
 |----|-------------|
-| NFR-CR-001 | Go-first per Constitution C2: the connector, store, optimizer, reconciler, scheduler jobs, CalDAV bridge, and Web UI are Go. The **model-gateway (Ollama) call is owned by the Python ML sidecar** (`ml/app/`), like the existing `drive_classify.py` / `intelligence.py` — C2 reserves "model gateway work" for the sidecar. `internal/cardrewards/extract.go` orchestrates the call over the existing Go↔sidecar HTTP contract (pattern: `internal/agent/embedder/sidecar`) and validates the response; it does NOT embed a direct Go→Ollama client. On home-lab the sidecar targets the evo-x2 host Ollama endpoint. |
+| NFR-CR-001 | Go-first per Constitution C2: the connector, store, optimizer, reconciler, scheduler jobs, CalDAV bridge, and Web UI are Go. The **model-gateway (Ollama) call is owned by the Python ML sidecar** (`ml/app/`), like the existing `drive_classify.py` / `intelligence.py` — C2 reserves "model gateway work" for the sidecar. `internal/cardrewards/extract.go` orchestrates the call over the existing Go↔sidecar HTTP contract (pattern: `internal/agent/embedder/sidecar`) and validates the response; it does NOT embed a direct Go→Ollama client. On home-lab the sidecar targets the <home-lab-host> Ollama endpoint. |
 | NFR-CR-002 | All persistence is PostgreSQL (PostgreSQL-only governance). No SQLite/embedded/file store at runtime. |
 | NFR-CR-003 | LLM extraction enforces a strict output schema and validates JSON before storage; malformed responses are logged and discarded (§17.2). |
 | NFR-CR-004 | Network egress is limited to: reading configured public source pages (read-only) and CalDAV writes to the user's chosen calendar. No other outbound writes. |
@@ -391,7 +391,7 @@ store outside PostgreSQL, the one-graph constraint is violated.
 
 - **Target train:** `mvp` (phase `active`, `target_slot: home-lab`) per
   [`config/release-trains.yaml`](../../config/release-trains.yaml). This feature
-  is hosted on evo-x2 home-lab, which the `mvp` train targets.
+  is hosted on home-lab, which the `mvp` train targets.
 - **Default-off behavior on other trains:** The feature is gated by a single
   flag `card_rewards`, default-ON only in the `mvp` train bundle and default-OFF
   in every other train bundle. On trains where the flag is OFF, no card-rewards
@@ -409,12 +409,12 @@ store outside PostgreSQL, the one-graph constraint is violated.
 
 ## Offline / Host Note
 
-- **Hosting:** This feature ships as part of smackerel on evo-x2 home-lab via
+- **Hosting:** This feature ships as part of smackerel on home-lab via
   smackerel's **EXISTING** deploy adapter
   ([`deploy/compose.deploy.yml`](../../deploy/compose.deploy.yml) and the
   knb-side `smackerel/home-lab/` overlay). **No new knb product adapter is
   required** — card rewards is just more smackerel.
-- **LLM locality:** Rotating-category extraction targets the evo-x2 **host
+- **LLM locality:** Rotating-category extraction targets the home-lab **host
   Ollama** endpoint (per `knb/docs/HomeLabServices.md`, models such as
   `gpt-oss:20b` / `qwen3-coder:30b` at `http://<host-tailnet-ip>:11435`). LLM
   extraction is therefore local, free, and requires no external API keys —
@@ -435,7 +435,7 @@ store outside PostgreSQL, the one-graph constraint is violated.
    sources should be configured (DoC + issuer pages?) and is fetching them
    acceptable under their terms? Design assumes a configurable list with at
    least DoC + each issuer's official rotating-categories page.
-2. **Ollama model choice on evo-x2.** Which host model for structured
+2. **Ollama model choice on home-lab.** Which host model for structured
    extraction (e.g., `gpt-oss:20b` vs `qwen3-coder:30b`)? Affects latency and
    schema-adherence quality. Design leaves it a required config key.
 3. **CalDAV target.** Reuse the existing `caldav` connector's Google Calendar

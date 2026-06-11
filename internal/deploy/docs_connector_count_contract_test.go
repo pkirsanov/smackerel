@@ -276,7 +276,10 @@ func registerConnectors() {
 
 // TestConnectorCountContract_AdversarialSmackerelMdHigh proves the
 // contract catches a regression where docs/smackerel.md §22.7 header is
-// inflated to 17 while runtime + Development.md remain at 16.
+// inflated above the real runtime count while runtime + Development.md
+// stay correct. The synthetic header is set to runtime+1 so the fixture
+// always drifts regardless of how many connectors exist (self-adjusts as
+// the registry grows — currently 17).
 func TestConnectorCountContract_AdversarialSmackerelMdHigh(t *testing.T) {
 	root := repoRoot(t)
 	connectorsGo, err := os.ReadFile(filepath.Join(root, "cmd", "core", "connectors.go"))
@@ -288,22 +291,28 @@ func TestConnectorCountContract_AdversarialSmackerelMdHigh(t *testing.T) {
 		t.Fatalf("failed to read docs/Development.md: %v", err)
 	}
 
-	// Synthetic smackerel.md with header claiming 17 — drift from real
-	// runtime (16) and real Development.md (16).
-	const fixture = `# Smackerel
+	runtime, err := parseConnectorsGoCount(connectorsGo)
+	if err != nil {
+		t.Fatalf("failed to parse runtime connector count: %v", err)
+	}
 
-### 22.7 Committed Connector Inventory (17 connectors)
+	// Synthetic smackerel.md with header inflated to runtime+1 — drift from
+	// the real runtime + real Development.md (both equal to runtime).
+	inflated := runtime + 1
+	fixture := fmt.Sprintf(`# Smackerel
+
+### 22.7 Committed Connector Inventory (%d connectors)
 
 (table body intentionally omitted — only the header line is parsed)
-`
+`, inflated)
 	err = assertConnectorCountContract(connectorsGo, []byte(fixture), developmentMd)
 	if err == nil {
-		t.Fatal("adversarial contract test failed: docs/smackerel.md header claiming 17 was accepted against runtime + Development.md (both 16) — contract is tautological; it would NOT catch a regression where the §22.7 header is hand-inflated")
+		t.Fatalf("adversarial contract test failed: docs/smackerel.md header claiming %d was accepted against runtime (%d) — contract is tautological; it would NOT catch a regression where the §22.7 header is hand-inflated", inflated, runtime)
 	}
-	if !strings.Contains(err.Error(), "docs/smackerel.md §22.7=17") {
+	if !strings.Contains(err.Error(), fmt.Sprintf("docs/smackerel.md §22.7=%d", inflated)) {
 		t.Fatalf("adversarial contract test failed: error did not name the inflated smackerel.md count: %v", err)
 	}
-	t.Logf("adversarial OK: smackerel.md=17 vs runtime+Development.md=16 is rejected with: %v", err)
+	t.Logf("adversarial OK: smackerel.md=%d vs runtime+Development.md=%d is rejected with: %v", inflated, runtime, err)
 }
 
 // TestConnectorCountContract_AdversarialDevelopmentMdLow proves the
