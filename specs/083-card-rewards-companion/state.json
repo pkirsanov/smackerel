@@ -7,18 +7,18 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": ["card_rewards"],
   "planMaturityOnly": false,
-  "lastUpdatedAt": "2026-06-11T23:30:00Z",
+  "lastUpdatedAt": "2026-06-11T23:55:00Z",
   "execution": {
     "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": 7,
+    "currentScope": 8,
     "runStartedAt": "2026-06-11T00:00:00Z",
     "completedPhaseClaims": ["analyze", "design", "plan", "harden"],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["1","2","3","4","6"],
+    "completedScopes": ["1","2","3","4","6","7"],
     "certifiedCompletedPhases": ["analyze", "design", "plan", "harden"],
     "scopeProgress": [
       { "scope": 1, "name": "Config SST & Migration Schema", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md" },
@@ -27,7 +27,7 @@
       { "scope": 4, "name": "Card-Rewards Source Connector", "status": "Done", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 5, "name": "LLM Category Extraction (replaces regex)", "status": "In Progress", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 6, "name": "Multi-Source Reconciliation & Lifecycle", "status": "Done", "dependsOn": [5], "scopeDir": null, "evidenceFile": "report.md" },
-      { "scope": 7, "name": "Optimizer & Monthly Recommendation Generation", "status": "Not Started", "dependsOn": [2, 6], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 7, "name": "Optimizer & Monthly Recommendation Generation", "status": "Done", "dependsOn": [2, 6], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 8, "name": "CalDAV Calendar Delivery", "status": "Not Started", "dependsOn": [7], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 9, "name": "Scheduler Jobs & Manual Triggers", "status": "Not Started", "dependsOn": [4, 5, 6, 7, 8], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 10, "name": "Web UI — Wallet, Offers, Selections, Bonuses, Categories", "status": "Not Started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
@@ -128,6 +128,18 @@
       "runStartedAt": "2026-06-11T23:00:00Z",
       "runEndedAt": "2026-06-11T23:30:00Z",
       "summary": "Scope 06 (Multi-Source Reconciliation & Category Lifecycle) VERIFIED + CERTIFIED with real in-session evidence; all 6 DoD items [x]. No implementation bug found — reconcile.go/store.go/types.go NOT modified. Unit (./smackerel.sh test unit --go --go-run 'TestReconcile_'): UNIT_EXIT=0; TestReconcile_MergeAgreement_F01 PASS, TestReconcile_MergeDisagreement_F02 PASS (ADVERSARIAL disagreement→needs_verification=true, conservative conf 0.88, source_count=1), TestReconcile_ManualOverrideNeverOverwritten_F03 PASS (ADVERSARIAL high-conf 0.99 disagreeing obs does NOT overwrite manual_override; categories/conf/flags unchanged), TestReconcile_LifecycleByDate_F04_F05 PASS (6 subtests incl. boundary days + undated→unknown), plus LowConfidenceFlags_A2 + NoObservationsKeepsExisting. Integration (./smackerel.sh test integration --go-run 'ReconcileLivePG' on the disposable test stack, live PG): INTEG_EXIT=0; TestReconcileLivePG_IdempotentUpsert_F07 PASS (reconcile twice → exactly 1 rotating_categories row per (card,period) + stable id; REGRESSION guard), TestReconcileLivePG_PendingReEnrollment_F06 PASS (only window-opening-today & not-enrolled surfaced, count=1 via AdvanceLifecycle and ListPendingReEnrollments), TestReconcileLivePG_LifecycleTransitions_F04_F05 PASS (upcoming→active & active→expired; expired EXCLUDED from active set), TestReconcileLivePG_DisagreementRetainsBothObservations_F02 PASS (needs_verification=true + both observations retained), TestReconcileLivePG_ManualOverrideNotRewritten_F03 PASS (overrides_protected=1, reconciled=0, observation retained for audit); disposable stack fully torn down (all containers + 3 volumes + network removed — ephemeral isolation). Build Quality Gate GREEN: CHECK_EXIT=0 (config in sync + drift guard + scenario-lint OK), LINT_EXIT=0 (golangci-lint All checks passed! + Web validation passed), FORMAT_EXIT=0 (65 files already formatted), ARTIFACT_LINT_EXIT=0 (Artifact lint PASSED). Evidence recorded inline in report.md 'Delivery — Scope 06'. Continuation: Scope 07 (Optimizer & Monthly Recommendation Generation; depends on 02 and 06, both Done) is next in DAG order; Scope 05's E08 successful-live-Ollama inference remains the one blocked-needs-live-Ollama item."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "full-delivery VERIFY+CERTIFY pass for Scope 07; runSubagent/agent UNAVAILABLE in this runtime, so the test/verify phase was executed in parent-expanded form by a single orchestrator agent — NO separate certified specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed (disclosed, not fabricated). A prior Scope 07 implement pass was cut off while the live-PG integration image build was still running; the implementation already existed on disk (optimize.go, recommend.go, REST recommendation/generate/report endpoints in internal/api/cardrewards.go, plus service.go/store.go additions). This run did NOT rewrite implementation code — it re-ran the full Scope 07 test set via the repo CLI to completion, captured the previously-missing live-PG (G06/G07) and e2e-api (G08) evidence, confirmed all gates green, and found NO implementation bug. The ONLY working-tree write to a Scope 07 file was gofmt whitespace on tests/e2e/cardrewards_api_test.go (the cut-off pass never formatted it); G08 was re-run after formatting and PASSED again. The unrelated concurrent BUG-064-002 / spec-084 working-tree changes (internal/assistant/*, internal/telegram/*, cmd/core/main.go, cmd/core/wiring_assistant_openknowledge.go, config/*, docs/Operations.md, specs/064+084) were NOT read, modified, staged, or committed. No card_rewards feature-flag bundle edit (config/feature-flags.mvp.yaml) — bubbles.train-owned. Not committed (autoCommit off); working tree left ready for an orchestrator preservation commit of the Scope 07 cardrewards surface only. Top-level status stays in_progress: Scope 05 remains In Progress (E08 blocked-needs-live-Ollama) and scopes 08-11 remain Not Started, so completedScopes becomes [1,2,3,4,6,7] and currentScope advances to 8.",
+      "phasesExecuted": ["test"],
+      "scopesDelivered": [7],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-11T23:45:00Z",
+      "runEndedAt": "2026-06-11T23:55:00Z",
+      "summary": "Scope 07 (Optimizer & Monthly Recommendation Generation) VERIFIED + CERTIFIED with real in-session evidence; all 6 DoD items [x]. No implementation bug found — optimize.go/recommend.go/internal/api/cardrewards.go/service.go/store.go NOT rewritten (only gofmt whitespace on tests/e2e/cardrewards_api_test.go). Unit (./smackerel.sh test unit --go --go-run 'Optimize' --verbose): UNIT_EXIT=0; TestOptimize_BaseRateHighestWins_G01 PASS, TestOptimize_ActiveRotatingBeatsBase_G02 PASS (reason cites rotating benefit), TestOptimize_ExpiredRotatingIgnored_G03 PASS (ADVERSARIAL expired benefit not used), TestOptimize_SharedLimitPoolNotDoubleCounted_G04 PASS (shared-limit pool counted once), TestOptimize_EquivalentsNormalizeBeforeMatching_G05 PASS (alias normalization), plus NoBenefit_ReturnsNone + InactiveCardExcluded edges (ok internal/cardrewards 0.050s). Integration (./smackerel.sh test integration --go-run 'RecommendLivePG' on the disposable test stack, live PG): INTEG_EXIT=0; TestRecommendLivePG_PerCategoryGeneration_G06 PASS (one card_recommendations row per tracked category), TestRecommendLivePG_StarredOverridePreserved_G07 PASS (ADVERSARIAL starred_override preserved over optimizer pick; manual override not cleared); disposable stack fully torn down (all containers + 3 volumes + network removed). E2E (./smackerel.sh test e2e --go-run 'TestCardRewardsRecommendationsE2E_G08' on the live stack): first run E2E_EXIT=0, post-gofmt re-run E2E_RERUN_EXIT=0; TestCardRewardsRecommendationsE2E_G08 PASS both times (POST /api/card-recommendations/generate then GET recommendations?period + report endpoint return current-period data; core image rebuilt with the new REST endpoints). Build Quality Gate GREEN: CHECK_EXIT=0, LINT_EXIT=0 (golangci-lint All checks passed! + Web validation passed), FORMAT first flagged the un-gofmt'd e2e test (FORMAT_EXIT=1) then applied+rechecked clean (FORMAT_RECHECK_EXIT=0, 65 files already formatted); artifact-lint exit recorded inline in report.md Scope 07 Build Quality Gate section. completedScopes [1,2,3,4,6,7]; currentScope 8."
     }
   ]
 }
