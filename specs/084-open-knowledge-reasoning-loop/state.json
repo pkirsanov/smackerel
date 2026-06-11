@@ -1,0 +1,127 @@
+{
+  "version": 3,
+  "featureDir": "specs/084-open-knowledge-reasoning-loop",
+  "featureNumber": "084",
+  "featureName": "Open-Knowledge Reasoning Loop",
+  "status": "blocked",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "lastUpdatedAt": "2026-06-11T19:15:00Z",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "specDependsOn": [
+    "specs/064-open-ended-knowledge-agent"
+  ],
+  "amends": [
+    "specs/064-open-ended-knowledge-agent"
+  ],
+  "unblocks": [],
+  "executionModel": "parent-expanded-child-mode",
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleAlignment": [
+      "Principle 2",
+      "Principle 4",
+      "Principle 8"
+    ],
+    "principleDeviations": [],
+    "modelMatrixUnchanged": true,
+    "v1ToolSet": [
+      "internal_retrieval",
+      "web_search",
+      "unit_convert",
+      "calculator"
+    ],
+    "workflowMode": "full-delivery",
+    "improvementPrelude": "analyze-design-plan",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "owner-directive-no-commit" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "planningOnlyJustification": "Full-delivery enhancement spec amending the closed spec 064. Planning packets from the analyst -> ux -> design -> plan prelude are materialised into spec.md / design.md / scopes.md. Implementation continues in the same spec under workflowMode=full-delivery; no separate implementation spec. The home-lab deploy is a SEPARATE downstream devops dispatch; this spec terminates at validated-in-repo (no push).",
+  "ownerDirective": {
+    "date": "2026-06-11",
+    "summary": "Make the open-knowledge /ask agent a question-AGNOSTIC reasoning agent (decompose -> gather all sides -> reconcile -> answer the actual question) and make salvage honest. KEEP gemma4:26b/gemma3:4b; NO model swap, NO deepseek-r1. Loop+prompt+honesty changes only. Do NOT touch spec-083 card-rewards WIP. Do NOT commit/push.",
+    "doNotTouch": [
+      "internal/cardrewards/",
+      "ml/app/card_categories.py",
+      "ml/app/main.py",
+      "ml/tests/test_card_categories.py",
+      "specs/083-card-rewards-companion/",
+      "tests/integration/cardrewards_extract_test.go",
+      "internal/deploy/docs_connector_count_contract_test.go",
+      "docs/Development.md",
+      "docs/smackerel.md",
+      "llm_model_id / hardware-tier model matrix"
+    ]
+  },
+  "certification": {
+    "status": "blocked",
+    "certifiedAt": null,
+    "certifiedBy": null,
+    "lockdownState": { "round": 0, "lastCleanRound": 0 },
+    "evidenceRef": "report.md",
+    "certifiedCompletedPhases": ["analyze", "ux", "design", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "docs", "validate", "audit", "chaos", "spec-review"],
+    "completedScopes": [
+      "SCOPE-01",
+      "SCOPE-02",
+      "SCOPE-03"
+    ],
+    "gatesPassed": [
+      "artifact-lint (EXIT=0)",
+      "traceability-guard (PASSED, 0 warnings)",
+      "check / build+vet+config-sync+scenario-lint (EXIT=0)",
+      "format --check (EXIT=0)",
+      "test unit --go: 9 spec-084 tests GREEN (5 adversarial RED->GREEN + 4 guards)",
+      "config generate (EXIT=0; MAX_ITERATIONS=6, PER_QUERY_TOKEN_BUDGET=128000)"
+    ],
+    "knownEnvironmentalFailures": [
+      "tests/unit/clients render_descriptor canary (spec 073) fails in the container because node/dart are not on PATH; spec 084 touched no clients/render/073 code (same known failure documented in spec 082 state.json).",
+      "internal/scopesdriftguard TestScopesPathRefDrift_NonIncreasing fails at 285>270 entirely due to the operator's uncommitted spec-083 card-rewards WIP (15 broken refs). Spec 084 contributes 0 broken refs (absent from the per-spec breakdown). The non-083 total is exactly 270 = the committed-baseline ceiling, so the isolated spec-084 changeset passes the ratchet. The spec-083 ratchet bump is owned by the spec-083 author (do-not-touch)."
+    ],
+    "certificationNote": "Parent-expanded full-delivery (analyze-design-plan prelude; no specialist sub-agent dispatch available in this runtime). 3 scopes done; 5 adversarial tests RED->GREEN; trust contracts + happy path preserved by guard tests. Terminal state: validated-in-repo. Home-lab deploy is a SEPARATE bubbles.devops dispatch — NO push performed. Model matrix unchanged (gemma4:26b home-lab / gemma3:4b dev); no deepseek-r1."
+  },
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-06-11T00:00:00Z",
+    "completedPhaseClaims": [
+      { "phase": "analyze", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:00:00Z", "evidenceRef": "design.md#current-truth-gathered-2026-06-11-solution-blind", "summary": "Solution-blind current-truth pass: mapped the /ask path, found the runOpenKnowledgeDirect fast-path bypasses the substrate timeouts (Finding C1), the token re-add quadratic growth (C2), and the prompt straitjacket + lying salvage (C3)." },
+      { "phase": "ux", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:05:00Z", "evidenceRef": "spec.md#3-outcome-contract", "summary": "Defined the user-facing behavior: question-agnostic reasoning answer (verdict/explanation/recommendation), reconcile contradictions, and the honest 'couldn't directly answer; here is what I found' salvage framing. uservalidation.md authored." },
+      { "phase": "design", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:10:00Z", "evidenceRef": "design.md", "summary": "Decisions D1-D6: reasoning prompt rewrite; max_iterations 6; token budget 128000; reflect-before-final nudge; WriteTimeout 3600s (latency invariant); honest-salvage frame. F-LAT finding surfaced." },
+      { "phase": "plan", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:15:00Z", "evidenceRef": "scopes.md", "summary": "3 scopes with Gherkin (SCN-084-A01..A05), Test Plan rows, and tiered DoD; scenario-manifest authored." },
+      { "phase": "implement", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:40:00Z", "evidenceRef": "report.md", "summary": "open_knowledge.yaml prompt rewrite; smackerel.yaml max_iterations 6 + token budget 128000; main.go WriteTimeout 3600s; agent.go reflect nudge + honest-salvage frame. config generate EXIT 0; check EXIT 0." },
+      { "phase": "test", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:50:00Z", "evidenceRef": "report.md#test-evidence", "summary": "5 adversarial tests RED->GREEN (prompt guard, reflect nudge, comparison salvage, 2x honest salvage) + 4 guards (citation contract, multi-hop, genuine synthesis, fabricated citation). All 9 GREEN post-format." },
+      { "phase": "regression", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:52:00Z", "evidenceRef": "report.md#full-unit-suite--out-of-changeset-failure-attribution", "summary": "Full go test ./... run; BUG-064-002 snippet-dedup/source-cap regressions still pass; the only 2 reds originate entirely in files outside the spec-084 changeset (operator spec-083 card-rewards WIP + spec-073 node/dart container env)." },
+      { "phase": "simplify", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:53:00Z", "evidenceRef": "internal/assistant/openknowledge/agent/agent.go", "summary": "Honest-salvage logic factored into one honestSalvageBody helper reused by both snippet-salvage call sites; reflect nudge mirrors the existing ephemeral forced-final pattern. No duplication introduced." },
+      { "phase": "security", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:54:00Z", "evidenceRef": "report.md", "summary": "Trust perimeter intact: cite-back verifier + provenance gate untouched (fabricated-citation guard PASS); no secret/PII added; SST fail-loud preserved; no new egress or dependency. Net-positive (honest salvage stops misleading snippet walls)." },
+      { "phase": "docs", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:55:00Z", "evidenceRef": "docs/Operations.md", "summary": "docs/Operations.md spec-064 open-knowledge section amended with the reasoning loop, raised budgets, the WriteTimeout/F-LAT latency clarification, and honest salvage." },
+      { "phase": "validate", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T19:05:00Z", "evidenceRef": "report.md", "summary": "Claims-vs-reality: every report.md evidence block is executed terminal output (RED then GREEN). artifact-lint EXIT 0; traceability-guard PASSED 0 warnings (5 scenarios -> rows -> concrete tests -> report refs -> DoD fidelity). Out-of-changeset failures attributed by file path (spec-083 WIP, spec-073 env), not faked." },
+      { "phase": "gaps", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:56:00Z", "evidenceRef": "scopes.md", "summary": "All DoD items across the 3 scopes are [x] with executed evidence; FR-1..FR-10 satisfied; no implementation gap. Latency findings C1 (fast-path WriteTimeout ceiling) and F-LAT (substrate-limit bypass) recorded in design.md." },
+      { "phase": "harden", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:57:00Z", "evidenceRef": "report.md#build-quality-gate--check--format", "summary": "check (build+vet+config-sync+scenario-lint) EXIT 0; format --check EXIT 0; SST fail-loud preserved (max_iterations / per_query_token_budget REQUIRED >0, no colon-dash default); cite-back/provenance gates unmodified." },
+      { "phase": "stabilize", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:58:00Z", "evidenceRef": "design.md", "summary": "No live-stack perf pass: the reasoning loop's real latency is model+GPU-dependent and is exercised by the home-lab devops live re-verify (separate dispatch). The change is stability-positive: honest salvage removes a misleading-answer failure mode; the reflect nudge stays within the existing iteration budget; WriteTimeout raised to bound the 6-iteration worst case." },
+      { "phase": "audit", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T18:59:00Z", "evidenceRef": "report.md", "summary": "Ship-readiness + policy: NO-DEFAULTS (G028) preserved; cite-back verifier + provenance gate untouched (fabricated-citation guard PASS); no model / spec-083 file touched; no secret/PII; honest salvage is a Principle-8 trust improvement. Residual whole-tree guard blocks are the operator's spec-083 card-rewards WIP (ml/app/main.py default-fallbacks; specs/083 path drift) which this delivery is directed not to touch." },
+      { "phase": "chaos", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T19:00:00Z", "evidenceRef": "internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go", "summary": "No live multi-service chaos pass (requires a live Ollama+core+ml+nats stack). The agent loop is exercised via adversarial scripted fakeLLM traces including the empty/ungrounded forced-final salvage path and the multi-tool-call comparison path; the live chaos surface is the home-lab devops re-verify." },
+      { "phase": "spec-review", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T19:01:00Z", "evidenceRef": "specs/084-open-knowledge-reasoning-loop", "summary": "Spec 084 freshly authored 2026-06-11, CURRENT and mutually consistent (spec/design/scopes/scenario-manifest/report/uservalidation/state); amends closed spec 064 without reopening BUG-064-001/002; artifact-lint + traceability-guard pass." }
+    ],
+    "scopeProgress": [
+      { "scopeId": "SCOPE-01", "name": "Question-agnostic reasoning prompt (CHANGE 1)", "status": "Done", "dodItemsChecked": 7, "dodItemsTotal": 7 },
+      { "scopeId": "SCOPE-02", "name": "Let the loop drill in (CHANGE 2)", "status": "Done", "dodItemsChecked": 7, "dodItemsTotal": 7 },
+      { "scopeId": "SCOPE-03", "name": "Honest salvage + adversarial tests + docs (CHANGE 4)", "status": "Done", "dodItemsChecked": 7, "dodItemsTotal": 7 }
+    ]
+  },
+  "nextRequiredOwner": "bubbles.devops",
+  "blockedReason": "VALIDATED-IN-REPO; blocked on the owner-directed devops handoff. All in-repo work is complete and validated: 3 scopes Done, 9/9 spec-084 unit tests GREEN (5 adversarial RED->GREEN + 4 trust/guard), and check / format --check / artifact-lint / traceability-guard all pass. The remaining full-delivery `done` gates are NOT satisfiable in this session and are owned by the separate bubbles.devops dispatch: (1) the owner directive forbids any commit/push here (devops owns the isolated push + the spec(084) commit + CI + home-lab apply + operator live re-verify of the pomegranate turn); (2) the home-lab live E2E re-verification is model+GPU-dependent and runs post-apply. Additionally, the whole-working-tree state-transition guards (implementation-reality-scan ml/app/main.py:22,257 DEFAULT_FALLBACK; scopesdriftguard 285>270; tests/unit/clients node/dart canary) fail SOLELY on the operator's uncommitted spec-083 card-rewards WIP + spec-073 container env, which this spec is directed NOT to touch. The spec-084-ISOLATED changeset is clean: 084 contributes 0 drift refs and touches no ml/ or cardrewards source. Devops MUST isolate the spec-084 manifest in report.md from the spec-083 WIP before committing."
+}
