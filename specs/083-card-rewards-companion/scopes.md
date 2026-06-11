@@ -333,7 +333,7 @@ Scenario: SCN-083-D06 — cursor advances to last successful fetch
 
 ## Scope 05: LLM Category Extraction (replaces regex)
 
-**Status:** Not Started
+**Status:** In Progress — 7 of 8 DoD items complete with real evidence. The one remaining item (SCN-083-E08 *successful* live Ollama inference round-trip) is **blocked-needs-live-Ollama**: the disposable-stack Ollama serves no pulled LLM model in this environment (litellm `APIConnectionError`), so a successful inference cannot run here. The E08 audit-run persistence + the real orchestrator→sidecar HTTP fail-loud contract ARE proven live (see report.md). Satisfiable on the <home-lab-host> ops node.
 **Priority:** P0
 **Depends On:** 04
 **Spec Refs:** FR-CR-007, FR-CR-010, NFR-CR-001, NFR-CR-003, NFR-CR-008, §17.2 (Constitution C2), design §4
@@ -398,14 +398,14 @@ Scenario: SCN-083-E08 — extraction run is audited
 
 ### Definition of Done
 
-- [ ] Constitution C2 boundary honored: the Ollama model call lives in `ml/app/card_categories.py` (Python sidecar); `internal/cardrewards/extract.go` contains NO direct Ollama client and only orchestrates + schema-validates the sidecar response (NFR-CR-001/008) — verified by a grep for ollama / `/api/generate` / `/api/chat` URLs under `internal/cardrewards/` returning zero hits
-- [ ] Implementation behavior complete: strict-schema LLM extractor replaces regex; validates before storage; confidence/unknown-card/override handling; injection-safe prompt; writes observations + extract run
-- [ ] Scenario tests pass for SCN-083-E01 and SCN-083-E07 (valid extraction + provenance) — unit
-- [ ] Adversarial scenario tests pass for SCN-083-E02 and SCN-083-E03 (malformed discarded; no silent fallback) — unit; each uses input that would PASS the old silent-fallback path but MUST fail-loud to verification
-- [ ] Adversarial scenario tests pass for SCN-083-E04 and SCN-083-E05 (low-confidence flag; unknown-card skip) — unit
-- [ ] Scenario test passes for SCN-083-E06 (prompt-injection defense) — unit
-- [ ] Scenario test passes for SCN-083-E08 (extraction run audited) — integration (live PG + Ollama per spec 043)
-- [ ] Build Quality Gate: build/check/lint/format clean (zero warnings); §17.2 strict-schema contract honored; artifact-lint clean; docs aligned
+- [x] Constitution C2 boundary honored: the model-gateway call lives in `ml/app/card_categories.py` (Python sidecar); `internal/cardrewards/extract.go` contains NO direct model-backend client and only orchestrates + schema-validates the sidecar response (NFR-CR-001/008) — verified by a grep for ollama / `/api/generate` / `/api/chat` URLs under `internal/cardrewards/` returning zero hits → Evidence: report.md "Gate: Constitution C2 boundary grep" (`C2_GREP_EXIT=1`, zero matches)
+- [x] Implementation behavior complete: strict-schema LLM extractor replaces regex; validates before storage; confidence/unknown-card/override handling; injection-safe prompt; writes observations + extract run → Evidence: report.md "Delivery — Scope 05" (Files: `extract.go` orchestrator + `card_categories.py` sidecar route; `store.go` `PersistExtractionRun`; the live-PG integration block proves observations + `extract` run are written)
+- [x] Scenario tests pass for SCN-083-E01 and SCN-083-E07 (valid extraction + provenance) — unit → Evidence: report.md "SCN-083-E01..E07 (unit)" — `TestValidateExtraction_ValidRecordWithProvenance_E01_E07 PASS` + live-PG `TestExtractorLivePG_StoresObservationWithProvenance_E01_E07 PASS` (provenance source_name/url/evidence persisted)
+- [x] Adversarial scenario tests pass for SCN-083-E02 and SCN-083-E03 (malformed discarded; no silent fallback) — unit; each uses input that would PASS the old silent-fallback path but MUST fail-loud to verification → Evidence: report.md — `TestValidateExtraction_MalformedAndInvalidDiscarded_E02_E03 PASS` (8 discard subtests) + live-PG `TestExtractorLivePG_MalformedDiscardedNoOverwrite_E02_E03 PASS` (existing record categories/confidence/manual_override UNCHANGED; only needs_verification flipped true)
+- [x] Adversarial scenario tests pass for SCN-083-E04 and SCN-083-E05 (low-confidence flag; unknown-card skip) — unit → Evidence: report.md — `TestValidateExtraction_LowConfidenceFlagged_E04 PASS` + `TestValidateExtraction_UnknownCardSkipped_E05 PASS` + live-PG `TestExtractorLivePG_LowConfidenceStored_E04` / `TestExtractorLivePG_UnknownCardSkippedNoMismap_E05` PASS (no mismap onto co-resident known card)
+- [x] Scenario test passes for SCN-083-E06 (prompt-injection defense) — unit → Evidence: report.md — Go `TestExtractRequest_PageContentIsDataNotInstructions_E06` + `TestValidateExtraction_RejectsCardOrPeriodMismatch_E06` PASS, and Python `test_card_categories.py::test_build_messages_treats_page_content_as_data_E06` (injected text only in the untrusted PAGE_CONTENT data block; system prompt declares it untrusted + forbids following it)
+- [ ] Scenario test passes for SCN-083-E08 (extraction run audited) — integration (live PG + Ollama per spec 043) → **BLOCKED-NEEDS-LIVE-OLLAMA (honest).** `TestCardRewardsExtractLiveStackAudited_E08` RUNS + PASSES against the real ml sidecar (proves the orchestrator→`/extract-card-categories` HTTP contract, fail-loud handling, and a persisted `extract` audit run), and the audit-run persistence is independently PROVEN on live PG by `TestExtractorLivePG_ExtractionRunAudited_E08 PASS`. The remaining gap is a SUCCESSFUL sidecar→Ollama inference: here litellm returns `APIConnectionError` (disposable-stack Ollama has no pulled LLM model; the `integration` lane runs no `ollama-test-pull`). Satisfiable on the <home-lab-host> ops node. See report.md "SCN-083-E08 (live PG + real ml sidecar round-trip)".
+- [x] Build Quality Gate: build/check/lint/format clean (zero warnings); §17.2 strict-schema contract honored; artifact-lint clean; docs aligned → Evidence: report.md "Build Quality Gate (Scope 05)" (`CHECK_EXIT=0`; `LINT_EXIT=0` All checks passed! + Web validation passed; `FORMAT_RECHECK_EXIT=0`) + connector-count + doc-freshness contracts green + artifact-lint (report.md "Gate: artifact-lint — Scope 05")
 
 ---
 

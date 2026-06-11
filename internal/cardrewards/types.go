@@ -254,3 +254,39 @@ func ValidRunType(t string) bool {
 		return false
 	}
 }
+
+// RotatingCategoryObservation is a single per-source, strict-schema LLM
+// extraction (table rotating_category_observations, design §2.6 / §4). Each row
+// is one source's validated claim about a card's rotating categories for a
+// period, retaining full provenance (SourceName/SourceURL/SourceEvidence —
+// Principle 4) and the audit run that produced it (ExtractionRunID). The
+// reconciler (Scope 06) later merges observations into the authoritative
+// rotating_categories record; an extraction MUST never overwrite that record
+// directly (design §4 — the CCManager silent-fallback failure mode this scope
+// replaces). LimitCents is integer cents (the sidecar reports a whole-dollar
+// spend cap which the orchestrator converts ×100).
+type RotatingCategoryObservation struct {
+	ID                 string     `json:"id"`
+	CardCatalogID      string     `json:"card_catalog_id"`
+	PeriodLabel        string     `json:"period_label"`
+	PeriodStart        *time.Time `json:"period_start,omitempty"`
+	PeriodEnd          *time.Time `json:"period_end,omitempty"`
+	Categories         []string   `json:"categories"`
+	LimitCents         *int       `json:"limit_cents,omitempty"`
+	ActivationRequired *bool      `json:"activation_required,omitempty"`
+	Confidence         float64    `json:"confidence"`
+	SourceName         string     `json:"source_name"`
+	SourceURL          string     `json:"source_url"`
+	SourceEvidence     *string    `json:"source_evidence,omitempty"`
+	ExtractionRunID    string     `json:"extraction_run_id"`
+	ObservedAt         time.Time  `json:"observed_at"`
+}
+
+// CardPeriodRef identifies one reconciled rotating-category record by its
+// natural key (card_catalog_id, period_label). The extractor uses it to flag an
+// existing record needs_verification when an extraction fails to validate —
+// without touching its categories/confidence (design §4 step 2).
+type CardPeriodRef struct {
+	CardCatalogID string
+	PeriodLabel   string
+}

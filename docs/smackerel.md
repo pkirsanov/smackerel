@@ -2780,9 +2780,9 @@ All connectors are built from **proven, well-maintained open-source libraries** 
 | RSS / Podcasts | `github.com/mmcdole/gofeed` | Go | MIT | 2.5k stars | Universal RSS/Atom/JSON Feed parser. Pair with Whisper for audio. |
 | PDF text | `github.com/ledongthuc/pdf` or `pdfcpu` | Go | MIT | Active | Extract text from PDFs natively in Go |
 
-### 22.7 Committed Connector Inventory (16 connectors)
+### 22.7 Committed Connector Inventory (17 connectors)
 
-All 16 connectors are implemented under `internal/connector/` in Go:
+All 17 connectors are implemented under `internal/connector/` in Go:
 
 | # | Connector | Directory | Category | Description |
 |---|-----------|-----------|----------|-------------|
@@ -2802,6 +2802,7 @@ All 16 connectors are implemented under `internal/connector/` in Go:
 | 14 | Weather | `weather/` | Environmental | Local weather data for location context and trail enrichment |
 | 15 | YouTube | `youtube/` | Video | Watch history, liked videos, transcript fetching |
 | 16 | QF Decisions | `qfdecisions/` | Companion | QF DecisionPacket ingestion as read-only companion (spec 041 — boundary: no financial advice generation) |
+| 17 | Card Rewards | `cardrewards/` | Finance | Rotating bonus-category source-page fetch (read-only; spec 083) feeding strict-schema LLM category extraction — recommendation-only, no financial advice |
 
 ### 22.8 Connector Framework Assessment
 
