@@ -397,12 +397,16 @@ func run() error {
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		// Spec 064 SCOPE-17 — WriteTimeout sized for the longest legitimate
-		// substrate scenario: the open_knowledge agent loop may run up to
-		// max_iterations × per_llm_timeout (e.g. 3 × 600s = 30 min) before
-		// flushing the final response on CPU-only dev with gemma3:4b.
-		// GPU / smaller models complete in seconds.
-		WriteTimeout: 1800 * time.Second,
+		// Spec 064 SCOPE-17 / Spec 084 — WriteTimeout sized for the longest
+		// legitimate open-knowledge reasoning turn. The /ask fast-path
+		// (facade.go::runOpenKnowledgeDirect) runs the agent loop directly with
+		// THIS request context, so WriteTimeout — not the substrate timeout_ms —
+		// is the real ceiling. It tracks the worst-case invariant
+		// max_iterations × per_llm_timeout: spec 084 raised max_iterations to 6
+		// (assistant.open_knowledge.max_iterations) and llm_timeout_ms is 600s,
+		// so 6 × 600s = 3600s. Realistic GPU / home-lab turns complete in
+		// ~40-60s; this is the pathological-slow-CPU-dev backstop.
+		WriteTimeout: 3600 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

@@ -4393,6 +4393,44 @@ contract. See
 [`specs/064-open-ended-knowledge-agent/spec.md`](../specs/064-open-ended-knowledge-agent/spec.md)
 for the full outcome contract and refusal taxonomy.
 
+> **Amended by spec 084 (Open-Knowledge Reasoning Loop).** The agent is now
+> question-**agnostic**: its system prompt drives a decompose → gather-all-sides
+> → reconcile → answer-the-actual-question contract (comparison / why /
+> recommendation / multi-hop), replacing the spec-064 anti-multi-hop bias and
+> the BUG-064-002 question-type enumeration. The `<CITATIONS>` cite-back
+> contract, R1-R4, and the provenance gate are unchanged. Three operational
+> deltas:
+>
+> - **`max_iterations` raised 4 → 6** (5 tool-calling turns + 1 forced-synthesis
+>   turn) so a multi-side question can gather every side before answering, plus
+>   a lightweight reflect-before-final nudge on the second-to-last iteration.
+> - **`per_query_token_budget` raised 64000 → 128000.** `web_search` snippets are
+>   re-added to context each iteration, so cumulative tokens grow ~quadratically;
+>   128000 keeps a 6-iteration turn off a premature `cap_tokens` refusal. With
+>   the zero-cost self-hosted `CostFn` this budget is a pure safety guardrail.
+> - **Honest salvage.** When genuine synthesis does not happen and the platform
+>   falls back to stitched snippets, the user-visible body is now framed as raw
+>   findings ("I searched but couldn't directly answer your question. Here is the
+>   most relevant information I found:") rather than presented as a confident
+>   verdict. The capped/deduped sources still attach (not a zero-source refusal),
+>   and the cite-back / provenance contracts still hold. The genuine
+>   cited-synthesis happy path is returned verbatim, unframed.
+>
+> **Latency ceiling (F-LAT — important for operators).** The live `/ask` path
+> uses the facade fast-path (`runOpenKnowledgeDirect`), which invokes the agent
+> loop directly with the HTTP request context. The substrate scenario limits
+> (`config/prompt_contracts/open_knowledge.yaml` → `limits.timeout_ms` 120000 and
+> `limits.per_tool_timeout_ms` 30000) do **NOT** bound the wired reasoning turn —
+> they only govern the not-wired substrate fallback, and the substrate loader
+> hard-caps `timeout_ms` at 120000. The real ceiling is the HTTP server
+> `WriteTimeout` in `cmd/core/main.go`, sized to the worst-case invariant
+> `max_iterations × llm_timeout_ms`; spec 084 raised it to `6 × 600s = 3600s`.
+> Realistic home-lab (gemma4:26b, resident) reasoning turns are ~40-60s at 6
+> iterations (vs ~25-36s at 4); the 3600s ceiling is a slow-CPU-dev backstop. If
+> an operator later raises `max_iterations` to 8+, revisit ONLY the `WriteTimeout`
+> invariant — not the substrate limits. The deployed model matrix (gemma4:26b
+> home-lab / gemma3:4b dev) is unchanged by spec 084.
+
 ### Enabling / Disabling
 
 The subsystem ships disabled. Operator opts in by flipping

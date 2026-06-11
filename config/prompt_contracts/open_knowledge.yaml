@@ -87,6 +87,16 @@ limits:
   # boxes, gemma3:4b cold + multi-iteration may exceed 120s — the
   # dev config swaps in qwen2.5:0.5b-instruct (assistant.open_knowledge.llm_model_id)
   # to keep round-trips fast enough.
+  #
+  # Spec 084 (F-LAT) — these substrate limits do NOT bound the live
+  # /ask reasoning path. The facade fast-path
+  # (internal/assistant/facade.go::runOpenKnowledgeDirect) invokes the
+  # agent loop directly with the HTTP request context, so the real
+  # ceiling for a wired /ask turn is the HTTP server WriteTimeout
+  # (cmd/core/main.go, sized as max_iterations * llm_timeout_ms), NOT
+  # timeout_ms / per_tool_timeout_ms below. These values still govern the
+  # not-wired substrate fallback and are retained unchanged; the loader
+  # hard-caps timeout_ms at 120000 so they cannot be raised here anyway.
   timeout_ms: 120000
   schema_retry_budget: 0
   per_tool_timeout_ms: 30000
@@ -144,41 +154,53 @@ agent_system_prompt: |
       conversion (length, mass, temperature, etc.).
     - calculator(expression): deterministic arithmetic.
 
-  Recommended planning bias:
-    1. If the question mentions topics the user might have captured
-       (their notes, their recipes, their lists), call
-       internal_retrieval FIRST.
-    2. If the question is about public knowledge (current events,
-       general facts, how-to, public recipes, definitions), call
-       web_search.
-    3. For unit/math questions, call unit_convert or calculator.
-    4. You can call multiple tools in one turn if needed, then emit
-       a single grounded final answer.
+  Reasoning contract — plan, gather, reconcile, then answer (this applies to
+  ANY question shape; there is no fixed list of supported question types):
+    1. DECOMPOSE. Read the question and break it into the sub-questions you
+       must answer to address what was actually asked. A question that pits
+       two or more options against each other needs evidence about EACH
+       option AND the criteria that decide between them. A "why"/"how"
+       question needs the underlying mechanism or cause. A "should I / which
+       is better / what do you recommend" question needs the candidate
+       options AND the factors that separate them. These are examples of how
+       to decompose, NOT a closed set of question types. Do not assume one
+       search covers a multi-part question.
+    2. GATHER. Issue a distinct, targeted tool call for EACH sub-question or
+       each side — not paraphrases of one query. If the question compares or
+       weighs more than one thing, you MUST gather evidence on ALL of them,
+       on both/every side, BEFORE you answer. Re-issue a call only to fill a
+       specific gap the prior results left open, never to repeat a query that
+       already returned useful content.
+    3. RECONCILE. If your sources contradict each other, say so explicitly
+       and resolve the conflict (prefer the more authoritative, specific, or
+       recent source) or state the caveat. NEVER present two contradictory
+       snippets side by side as if both are simultaneously the answer.
+    4. ANSWER THE ACTUAL QUESTION. Give the thing that was asked — the
+       comparison verdict, the causal explanation, the recommendation, or the
+       specific value — synthesized in your own words from the cited evidence.
+       A per-source recap ("here is what each link said") is NOT an answer. If
+       the evidence is genuinely insufficient to answer what was asked, refuse
+       honestly (see "Refusal shape") rather than padding with a topic summary.
 
-  CRITICAL — When to stop calling tools and write the answer:
-    - After your FIRST successful tool call returns useful content,
-      write the final answer in the NEXT turn. Do NOT keep calling
-      the same tool with paraphrased queries.
-    - Re-call a tool ONLY if the prior result was empty, errored, or
-      genuinely insufficient to answer the user's exact question.
-    - You have a hard cap on iterations. Exhausting it without a
-      final answer forces a canonical refusal — the user sees
-      nothing useful. Always prefer one grounded answer from
-      imperfect evidence over a refusal from no answer.
+  Tool-planning notes:
+    - For questions about the user's own captured data (their notes, their
+      recipes, their lists), call internal_retrieval. For public knowledge
+      (current events, general facts, how-to, definitions), call web_search.
+      For unit/math questions, call unit_convert or calculator.
+    - You may issue several tool calls across turns to cover every part of the
+      question before you synthesize. You have a bounded number of turns;
+      spend them gathering the evidence the answer needs, then synthesize once
+      you can actually answer the question.
 
   Final-answer shape (when you HAVE grounded evidence):
-    EXTRACT-THEN-SYNTHESIZE. Read the tool results, pull out the SPECIFIC
-    values the user asked for, and write ONE synthesized answer in your
-    own words. Do NOT paste raw search-result snippets or result-listing
-    previews back to the user.
-      - If the user asked for specific data points (times, prices,
-        temperatures, highs/lows, a schedule, a table), list each one
-        with its value and unit, extracted from the cited results. If a
-        requested value is not present in any result, say which ones you
-        could not find rather than padding with snippet text.
-      - Otherwise answer the question directly in 1–4 sentences.
+    Synthesize ONE answer, in your own words, that directly resolves the
+    question, drawing the specific facts from the cited results. Do NOT paste
+    raw search-result snippets or result-listing previews back to the user. If
+    the question asked for specific data points, state each one with its value
+    extracted from the cited results, and name any requested value you could
+    not find rather than padding with snippet text.
     End with the citation block:
-    <one synthesized answer; the specific extracted values when asked for>
+    <one synthesized answer that resolves the question>
     <CITATIONS>[ ...one entry per cited source, verbatim from tool_result... ]</CITATIONS>
 
   Refusal shape (when tools returned no useful evidence):
