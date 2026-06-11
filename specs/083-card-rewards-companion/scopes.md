@@ -272,7 +272,7 @@ Scenario: SCN-083-C06 — a migration run is recorded in card_runs
 
 ## Scope 04: Card-Rewards Source Connector
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** 01, 02
 **Spec Refs:** FR-CR-007 (fetch half), FR-CR-008, Principle 4, design §3
@@ -323,11 +323,11 @@ Scenario: SCN-083-D06 — cursor advances to last successful fetch
 
 ### Definition of Done
 
-- [ ] Implementation behavior complete: `card-rewards` connector fetches configured sources read-only and emits source-attributed RawArtifacts; registered; no category parsing in the connector
-- [ ] Scenario tests pass for SCN-083-D01 and SCN-083-D06 (interface compliance + cursor) — unit
-- [ ] Scenario tests pass for SCN-083-D02 and SCN-083-D03 (source-attributed emission; no regex) — unit
-- [ ] Scenario tests pass for SCN-083-D04 and SCN-083-D05 (timeout isolation + health) — unit
-- [ ] Build Quality Gate: build/check/lint/format clean (zero warnings); connector-metadata-preservation honored (Principle 4); artifact-lint clean; docs aligned
+- [x] Implementation behavior complete: `card-rewards` connector fetches configured sources read-only and emits source-attributed RawArtifacts; registered; no category parsing in the connector → Evidence: report.md "Delivery — Scope 04" (Files + Decisions; `internal/connector/cardrewards/connector.go` fetch-only, no `regexp`; registered + auto-start gated in `cmd/core/connectors.go`; SCN-083-D01..D06 unit block all PASS)
+- [x] Scenario tests pass for SCN-083-D01 and SCN-083-D06 (interface compliance + cursor) — unit → Evidence: report.md SCN-083-D01..D06 unit block — `TestConnector_ImplementsInterfaceAndID_D01 PASS` (compile-time `var _ connector.Connector = New()` + `ID()=="card-rewards"`) + `TestSync_CursorEncodesLastSuccessfulFetch_D06 PASS` (cursor RFC3339Nano within [before,after])
+- [x] Scenario tests pass for SCN-083-D02 and SCN-083-D03 (source-attributed emission; no regex) — unit → Evidence: report.md SCN-083-D01..D06 unit block — `TestSync_EmitsSourceAttributedArtifactPerSource_D02 PASS` (2 sources→2 artifacts; Metadata source_name/source_url/issuer_hint) + `TestSync_NoCategoryParsingRawContentVerbatim_D03 PASS` (RawContent verbatim; exactly 3 provenance keys; no parsed category/rate keys)
+- [x] Scenario tests pass for SCN-083-D04 and SCN-083-D05 (timeout isolation + health) — unit → Evidence: report.md SCN-083-D01..D06 unit block — `TestSync_SlowSourceDegradesOnlyThatSource_D04 PASS` (slow source recorded failed via per-source deadline; fast source still emits; LastSyncStats=1/1; degraded) + `TestHealth_ReflectsConsecutiveErrors_D05 PASS` (1-4→healthy, 5→degraded, 10→failing via HealthFromErrorCount)
+- [x] Build Quality Gate: build/check/lint/format clean (zero warnings); connector-metadata-preservation honored (Principle 4); artifact-lint clean; docs aligned → Evidence: report.md "Evidence — Build Quality Gate (Scope 04)" (check: config in sync + scenario-lint OK; `format --check`: 63 files already formatted; lint: All checks passed! + Web validation passed; `go test ./... finished OK`) + report.md "Gate: artifact-lint — Scope 04"
 
 ---
 

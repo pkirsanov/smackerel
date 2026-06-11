@@ -7,24 +7,24 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": ["card_rewards"],
   "planMaturityOnly": false,
-  "lastUpdatedAt": "2026-06-11T20:00:00Z",
+  "lastUpdatedAt": "2026-06-11T21:00:00Z",
   "execution": {
     "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": 4,
+    "currentScope": 5,
     "runStartedAt": "2026-06-11T00:00:00Z",
     "completedPhaseClaims": ["analyze", "design", "plan", "harden"],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["1","2","3"],
+    "completedScopes": ["1","2","3","4"],
     "certifiedCompletedPhases": ["analyze", "design", "plan", "harden"],
     "scopeProgress": [
       { "scope": 1, "name": "Config SST & Migration Schema", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 2, "name": "Card Domain Store, Types & CRUD API", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 3, "name": "Data Migration: CCManager JSON → PostgreSQL", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
-      { "scope": 4, "name": "Card-Rewards Source Connector", "status": "Not Started", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 4, "name": "Card-Rewards Source Connector", "status": "Done", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 5, "name": "LLM Category Extraction (replaces regex)", "status": "Not Started", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 6, "name": "Multi-Source Reconciliation & Lifecycle", "status": "Not Started", "dependsOn": [5], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 7, "name": "Optimizer & Monthly Recommendation Generation", "status": "Not Started", "dependsOn": [2, 6], "scopeDir": null, "evidenceFile": "report.md" },
@@ -92,6 +92,18 @@
       "runStartedAt": "2026-06-11T19:30:00Z",
       "runEndedAt": "2026-06-11T20:00:00Z",
       "summary": "Scope 03 delivered + validated with real in-session evidence (SCN-083-C01..C06). Files: internal/cardrewards/import.go (CCManager DTOs + pure transforms + RunImport idempotent/partial-tolerant orchestrator + ImportReport); import_transform_test.go (16 unit tests); import_test.go (4 //go:build integration tests); testdata/ccmanager/* (hermetic fixtures mirroring real CCManager shapes with intentional skip cases); types.go (+RotatingCategory/CardRecommendation/CardRun + lifecycle/run enums); store.go (+GetOrCreateUserCardByCatalog/InsertOfferIfAbsent/InsertSelectionIfAbsent/InsertSignupBonusIfAbsent/InsertRunIfAbsent/CountRunsByType/UpsertRotatingCategory/UpsertRecommendation/CreateRun/ListRotatingCategoriesByCard); cmd/cardrewards-import/main.go (thin CLI, --data-dir/CARD_REWARDS_IMPORT_DIR fail-loud); internal/config/cardrewards.go (+optional ImportDataDir); config/smackerel.yaml (+card_rewards.import_data_dir placeholder); scripts/commands/config.sh (+CARD_REWARDS_IMPORT_DIR read+emit). Decisions disclosed: card_type explicit map (tiered→user-selected, flat/store/hotel/airline→fixed, unknown→skip+log); idempotency via ON CONFLICT (catalog/aliases/rotating/recommendations) + INSERT…WHERE NOT EXISTS…IS NOT DISTINCT FROM (user_cards/offers/selections/bonuses/runs); rotating seeded manual_override=true confidence=1; migration audit run appended each invocation (Principle 8); run-history maps only the CHECK-valid subset (user_change/github_sync skipped+logged); data dir invocation-gated fail-loud (never a committed real path; SST placeholder empty). Evidence: 16 transform unit PASS (ok internal/cardrewards 0.033s, UNIT_TRANSFORM_EXIT=0); 4 integration PASS on live disposable Postgres — CatalogAndAliases_C01_C05 (catalog 7, aliases 8, amazon offers 3 shared-limit 100000c, citi sel 1, usbank tiered sel 3, citi bonuses 2, recs 2026-01=2/2025-12=1), RotatingManualOverride_C03 (discover-it Q1_2026=[Grocery Stores,Wholesale Clubs,Streaming], manual_override=true, lifecycle active, limit 150000c), PartialFileToleranceAndRunLogged_C04_C06 (missing user-offers.json skipped, status partial, run_type=migration logged), Idempotent_C02 (second run zero new data rows; migration audit +1) — ok internal/cardrewards 0.390s, PASS: go-integration, clean teardown, INTEGRATION_EXIT=0. Build Quality Gate GREEN: CONFIG_GENERATE_EXIT=0, FORMAT_CHECK_EXIT=0, CHECK_EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK), LINT_EXIT=0 (All checks passed! + Web validation). No ${VAR:-default} runtime fallback (smackerel-no-defaults). Continuation: implement Scope 04 (Card-Rewards Source Connector; depends on 01,02) next, then 05-11 in DAG order."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "full-delivery RESUME; the runSubagent/agent tool was UNAVAILABLE in this runtime, so the delivery phases (implement, test) for Scope 04 were executed in parent-expanded form by a single orchestrator agent — NO separate certified specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed. Disclosed per governance, not fabricated. Only Scope 04 (Card-Rewards Source Connector) was delivered this run; Scopes 05-11 NOT started per the run contract. No card_rewards feature-flag bundle edit was made (config/feature-flags.mvp.yaml) — bubbles.train-owned. Not committed (autoCommit off); working tree left ready for an orchestrator preservation commit (Scope 04 surface only: M cmd/core/connectors.go + new internal/connector/cardrewards/). Top-level status intentionally NOT flipped to done (7 scopes remain).",
+      "phasesExecuted": ["implement", "test"],
+      "scopesDelivered": [4],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-11T20:30:00Z",
+      "runEndedAt": "2026-06-11T21:00:00Z",
+      "summary": "Scope 04 delivered + validated with real in-session unit evidence (SCN-083-D01..D06, all 6 scenarios PASS + edges). Files: internal/connector/cardrewards/connector.go (NEW — fetch-only connector.Connector impl; ConnectorID=card-rewards hardcoded via New(); Source type; fail-loud parseSources/parseFetchTimeout with NO defaults; per-source context.WithTimeout isolation; validateSourceURL SSRF guard [scheme allowlist + private/loopback rejection] with allowPrivateHosts white-box test seam; CheckRedirect refuses redirects; RawContent verbatim + Metadata={source_name,source_url,issuer_hint} only — NO regexp import, NO category parsing; consecutiveErrors mapped via connector.HealthFromErrorCount; cursor=last successful fetch RFC3339Nano; LastSyncStats accessor); internal/connector/cardrewards/connector_test.go (NEW — 14 white-box test funcs + 8 subtests covering D01 interface+ID, D06 cursor, D02 source-attributed emission, D03 verbatim/no-parse, D04 slow-source isolation [LastSyncStats 1/1, degraded], D05 health thresholds [1-4 healthy, 5 degraded, 10 failing], plus SuccessResets/TotalFailureKeepsCursor/FailsLoud×8/BeforeConnect/Close/SSRFGuard/generic-config-parser); cmd/core/connectors.go (M +36 — import cardrewardsConnector; cardRewardsConn:=New(); added to registration slice; auto-start block gated on cfg.CardRewards.Enabled mapping cfg.CardRewards.Sources to []cardrewards.Source + fetch_timeout_seconds via SourceConfig). Decisions disclosed: (1) New() hardcodes ID (mirrors guesthost.New()) so D01 cannot break; (2) config read from ConnectorConfig.SourceConfig (canonical framework pattern), fail-loud no-default; (3) Source declared locally (no internal/config import — no cycle); (4) SSRF guard defense-in-depth with allowPrivateHosts test seam so loopback httptest works while prod stays safe; (5) 'register in registry.go' honored at the canonical site cmd/core/registerConnectors (registry.go is the generic Registry type); (6) cmd/core/main_test.go curated 15-connector list NOT modified (it does not call registerConnectors and already omits qf-decisions — out of scope, still passes). Evidence: go test ./... finished OK; ok internal/connector/cardrewards 0.333s; cmd/core compiled (ok cmd/core). Build Quality Gate GREEN: check (config in sync + env_file drift OK + scenario-lint OK), format --check (63 files already formatted), lint (All checks passed! + Web validation passed); no ${VAR:-default} runtime fallback (smackerel-no-defaults); artifact-lint recorded in report.md. Continuation: implement Scope 05 (LLM Category Extraction; depends on 04) next — requires live-Ollama (spec-043) extraction evidence."
     }
   ]
 }

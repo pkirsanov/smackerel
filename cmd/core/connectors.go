@@ -11,6 +11,7 @@ import (
 	bookmarksConnector "github.com/smackerel/smackerel/internal/connector/bookmarks"
 	browserConnector "github.com/smackerel/smackerel/internal/connector/browser"
 	caldavConnector "github.com/smackerel/smackerel/internal/connector/caldav"
+	cardrewardsConnector "github.com/smackerel/smackerel/internal/connector/cardrewards"
 	discordConnector "github.com/smackerel/smackerel/internal/connector/discord"
 	guesthostConnector "github.com/smackerel/smackerel/internal/connector/guesthost"
 	hospitableConnector "github.com/smackerel/smackerel/internal/connector/hospitable"
@@ -60,10 +61,15 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	alertsConn := alertsConnector.New("gov-alerts")
 	marketsConn := marketsConnector.New("financial-markets", cfg.FinancialMarketsHTTPTimeoutSeconds)
 	qfDecisionsConn := qfDecisionsConnector.New("qf-decisions")
+	// Spec 083 Scope 04 — card-rewards source connector (fetch-only; ID fixed
+	// to "card-rewards"). Registered unconditionally; auto-started only when
+	// card_rewards is enabled in the SST config (see below).
+	cardRewardsConn := cardrewardsConnector.New()
 	for _, c := range []connector.Connector{
 		imapConn, caldavConn, ytConn, rssConn, keepConn,
 		bmConn, browserHistConn, mapsConn, hospitableConn, guesthostConn,
 		discordConn, twitterConn, weatherConn, alertsConn, marketsConn, qfDecisionsConn,
+		cardRewardsConn,
 	} {
 		if err := svc.registry.Register(c); err != nil {
 			return fmt.Errorf("register connector %q: %w", c.ID(), err)
@@ -423,6 +429,36 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			slog.Info("financial-markets connector started")
 		} else {
 			slog.Warn("financial-markets connector failed to start", "error", err)
+		}
+	}
+
+	// Auto-start Card-Rewards connector (no auth — fetches public source pages).
+	// SST-gated on card_rewards.enabled; the config loader (Scope 01) has
+	// already validated the source list + fetch timeout fail-loud when enabled.
+	if cfg.CardRewards.Enabled {
+		crSources := make([]cardrewardsConnector.Source, 0, len(cfg.CardRewards.Sources))
+		for _, s := range cfg.CardRewards.Sources {
+			crSources = append(crSources, cardrewardsConnector.Source{
+				Name:       s.Name,
+				URL:        s.URL,
+				IssuerHint: s.IssuerHint,
+			})
+		}
+		cardRewardsCfg := connector.ConnectorConfig{
+			AuthType:     "none",
+			Enabled:      true,
+			SyncSchedule: cfg.CardRewards.ScrapeCron,
+			SourceConfig: map[string]interface{}{
+				"sources":               crSources,
+				"fetch_timeout_seconds": cfg.CardRewards.FetchTimeoutSeconds,
+			},
+		}
+		if err := cardRewardsConn.Connect(ctx, cardRewardsCfg); err == nil {
+			svc.supervisor.SetConfig("card-rewards", cardRewardsCfg)
+			svc.supervisor.StartConnector(ctx, "card-rewards")
+			slog.Info("card-rewards connector started", "sources", len(crSources))
+		} else {
+			slog.Warn("card-rewards connector failed to start", "error", err)
 		}
 	}
 

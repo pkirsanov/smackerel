@@ -767,3 +767,258 @@ claimed. Disclosed in `state.json.executionHistory`, not fabricated. Only Scope
 `done` (8 scopes remain). The `card_rewards` feature-flag bundle edit
 (`config/feature-flags.mvp.yaml`) is intentionally NOT made — `bubbles.train`-owned.
 
+---
+
+## Delivery — Scope 04: Card-Rewards Source Connector (2026-06-11)
+
+> Scope 04 delivers the fetch-only `card-rewards` source connector
+> (FR-CR-007 fetch half, FR-CR-008, Principle 4). For each operator-configured
+> source page it emits ONE source-attributed `connector.RawArtifact` carrying
+> the verbatim page text + provenance metadata; it performs NO category parsing
+> and imports NO `regexp` (extraction is Scope 05). Fetches are isolated
+> per-source, health maps consecutive failures via the shared
+> `connector.HealthFromErrorCount` thresholds, and the cursor encodes the last
+> successful fetch timestamp. All evidence below is from real in-session
+> execution. autoCommit OFF — nothing committed.
+
+### Files created / changed (Scope 04)
+
+- `internal/connector/cardrewards/connector.go` (NEW) — `Connector` implementing
+  `connector.Connector` (ID/Connect/Sync/Health/Close); `ConnectorID =
+  "card-rewards"` constant; `Source` type; fail-loud `parseSources` /
+  `parseFetchTimeout` (no defaults); per-source `context.WithTimeout` isolation;
+  `validateSourceURL` SSRF guard (scheme allowlist + private/loopback rejection)
+  with an unexported `allowPrivateHosts` white-box test seam; `LastSyncStats()`
+  observability accessor. No `regexp` import; `RawContent` is the verbatim body;
+  `Metadata` carries only `source_name`/`source_url`/`issuer_hint`.
+- `internal/connector/cardrewards/connector_test.go` (NEW) — white-box unit
+  suite: the 6 Gherkin scenarios (D01–D06) plus fail-loud config, before-connect,
+  close, SSRF, and generic-config-form parser tests (14 test funcs + 8 subtests).
+- `cmd/core/connectors.go` (M, +36) — import `cardrewardsConnector`; instantiate
+  `cardRewardsConn := cardrewardsConnector.New()`; add it to the registration
+  slice (`svc.registry.Register`); add an auto-start block gated on
+  `cfg.CardRewards.Enabled` that maps `cfg.CardRewards.Sources` →
+  `[]cardrewards.Source` and passes `sources` + `fetch_timeout_seconds` via
+  `ConnectorConfig.SourceConfig`.
+
+### Decisions disclosed (honest)
+
+- **`New()` hardcodes the ID** to `ConnectorID = "card-rewards"` (mirrors
+  `guesthost.New()`), so SCN-083-D01 (`ID() == "card-rewards"`) can never break
+  via a wiring typo.
+- **Config is read from `ConnectorConfig.SourceConfig`** (the canonical
+  framework pattern used by rss `feed_urls` / weather `locations`), not a bespoke
+  setter — this keeps the supervisor re-Connect path working. `Connect` is
+  fail-loud (Gate G028, `smackerel-no-defaults`): empty/missing sources or a
+  non-positive `fetch_timeout_seconds` is an error; there is NO in-code default.
+- **`Source` is declared locally** in the connector package (not imported from
+  `internal/config`) to keep the connector self-contained and avoid any import
+  cycle, matching rss/weather; the wiring converts `config.CardRewardsSource` →
+  `cardrewards.Source`.
+- **SSRF guard** (scheme allowlist + private/loopback/link-local/unspecified
+  rejection) is defense-in-depth even though source URLs are operator SST config;
+  an unexported `allowPrivateHosts` field (white-box test seam, default `false`)
+  lets the unit tests fetch from loopback `httptest` servers while production
+  stays SSRF-safe. Redirects are refused (`CheckRedirect`).
+- **"Register in `internal/connector/registry.go`"** (Implementation Plan
+  wording) is honored at the canonical registration site
+  `cmd/core/registerConnectors` — `registry.go` is the generic `Registry` type;
+  every connector (rss/weather/markets/qf-decisions/…) is instantiated and
+  `svc.registry.Register`-ed there. The connector registers unconditionally and
+  auto-starts only when `card_rewards.enabled` (dev default `false`, so dev boot
+  is unchanged).
+- **`cmd/core/main_test.go` curated 15-connector list NOT modified**: it builds
+  its own hardcoded list and does NOT call `registerConnectors`; it already omits
+  the 16th real connector (`qf-decisions`), so it is a curated subset sanity
+  test, not an exhaustive registry mirror. Adding card-rewards there (and the
+  pre-existing qf-decisions gap) is out of Scope 04; the run confirmed it still
+  passes (`ok …/cmd/core`).
+
+### Evidence — SCN-083-D01..D06 + edges (unit, live `go test` in Docker)
+
+Command: `./smackerel.sh test unit --go --go-run '<D01..D06 + edge regex>'
+--verbose`. `go test ./...` compiled every Go package (including the
+`cmd/core` wiring — `ok …/cmd/core`), then ran the cardrewards suite. Loopback
+(`127.0.0.1:*`) targets are httptest servers; the WARN lines are the connector
+correctly recording per-source failures (slow-source timeout for D04; 10
+consecutive HTTP 500s for D05).
+
+```text
+[go-unit] starting go test ./...
+ok      github.com/smackerel/smackerel/cmd/core 0.289s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.024s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/config  0.097s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/connector       0.065s [no tests to run]
+=== RUN   TestConnector_ImplementsInterfaceAndID_D01
+--- PASS: TestConnector_ImplementsInterfaceAndID_D01 (0.00s)
+=== RUN   TestSync_CursorEncodesLastSuccessfulFetch_D06
+2026/06/11 15:42:46 INFO card-rewards connector connected id=card-rewards sources=1 fetch_timeout=5s
+--- PASS: TestSync_CursorEncodesLastSuccessfulFetch_D06 (0.03s)
+=== RUN   TestSync_EmitsSourceAttributedArtifactPerSource_D02
+2026/06/11 15:42:46 INFO card-rewards connector connected id=card-rewards sources=2 fetch_timeout=5s
+--- PASS: TestSync_EmitsSourceAttributedArtifactPerSource_D02 (0.02s)
+=== RUN   TestSync_NoCategoryParsingRawContentVerbatim_D03
+2026/06/11 15:42:46 INFO card-rewards connector connected id=card-rewards sources=1 fetch_timeout=5s
+--- PASS: TestSync_NoCategoryParsingRawContentVerbatim_D03 (0.01s)
+=== RUN   TestSync_SlowSourceDegradesOnlyThatSource_D04
+2026/06/11 15:42:46 INFO card-rewards connector connected id=card-rewards sources=2 fetch_timeout=5s
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=slow-source url=http://127.0.0.1:35011 error="fetch: Get \"http://127.0.0.1:35011\": context deadline exceeded"
+--- PASS: TestSync_SlowSourceDegradesOnlyThatSource_D04 (0.17s)
+=== RUN   TestHealth_ReflectsConsecutiveErrors_D05
+2026/06/11 15:42:46 INFO card-rewards connector connected id=card-rewards sources=1 fetch_timeout=5s
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=always-fails url=http://127.0.0.1:46375 error="unexpected HTTP status 500"
+--- PASS: TestHealth_ReflectsConsecutiveErrors_D05 (0.02s)
+=== RUN   TestSync_SuccessResetsConsecutiveErrors
+--- PASS: TestSync_SuccessResetsConsecutiveErrors (0.01s)
+=== RUN   TestSync_TotalFailureKeepsCursor
+2026/06/11 15:42:46 WARN card-rewards source fetch failed source=down url=http://127.0.0.1:35395 error="unexpected HTTP status 502"
+--- PASS: TestSync_TotalFailureKeepsCursor (0.01s)
+=== RUN   TestConnect_FailsLoudOnInvalidConfig
+--- PASS: TestConnect_FailsLoudOnInvalidConfig (0.00s)
+    --- PASS: TestConnect_FailsLoudOnInvalidConfig/nil_source_config (0.00s)
+    --- PASS: TestConnect_FailsLoudOnInvalidConfig/missing_sources (0.00s)
+    --- PASS: TestConnect_FailsLoudOnInvalidConfig/empty_sources (0.00s)
+    --- PASS: TestConnect_FailsLoudOnInvalidConfig/source_missing_url (0.00s)
+    --- PASS: TestConnect_FailsLoudOnInvalidConfig/source_missing_name (0.00s)
+    --- PASS: TestConnect_FailsLoudOnInvalidConfig/missing_timeout (0.00s)
+    --- PASS: TestConnect_FailsLoudOnInvalidConfig/zero_timeout (0.00s)
+    --- PASS: TestConnect_FailsLoudOnInvalidConfig/negative_timeout (0.00s)
+=== RUN   TestSync_BeforeConnectErrors
+--- PASS: TestSync_BeforeConnectErrors (0.00s)
+=== RUN   TestClose_SetsDisconnectedAndBlocksSync
+--- PASS: TestClose_SetsDisconnectedAndBlocksSync (0.01s)
+=== RUN   TestValidateSourceURL_SSRFGuard
+--- PASS: TestValidateSourceURL_SSRFGuard (0.00s)
+=== RUN   TestParseSources_AcceptsGenericConfigForms
+--- PASS: TestParseSources_AcceptsGenericConfigForms (0.00s)
+=== RUN   TestParseFetchTimeout_AcceptsNumericForms
+--- PASS: TestParseFetchTimeout_AcceptsNumericForms (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/cardrewards   0.333s
+[go-unit] go test ./... finished OK
+```
+
+Scenario → assertion mapping (all PASS above):
+- **D01** `TestConnector_ImplementsInterfaceAndID_D01` — compile-time
+  `var _ connector.Connector = New()` + `ID() == "card-rewards"`.
+- **D06** `TestSync_CursorEncodesLastSuccessfulFetch_D06` — cursor parses as
+  RFC3339Nano and falls within `[before, after]` the sync.
+- **D02** `TestSync_EmitsSourceAttributedArtifactPerSource_D02` — 2 sources →
+  2 artifacts; each `Metadata` carries matching `source_name`/`source_url`/
+  `issuer_hint`; `SourceID == "card-rewards"`.
+- **D03** `TestSync_NoCategoryParsingRawContentVerbatim_D03` — `RawContent ==`
+  verbatim body; `Metadata` has exactly 3 provenance keys; no
+  `categories`/`category`/`rate`/`cashback`/`rewards` parsed keys.
+- **D04** `TestSync_SlowSourceDegradesOnlyThatSource_D04` — slow source trips its
+  per-source deadline (the WARN line) and is recorded failed; the fast source
+  still emits 1 artifact; `LastSyncStats() = (1,1)`; health `degraded`; cursor
+  advances.
+- **D05** `TestHealth_ReflectsConsecutiveErrors_D05` — 1–4 failures → `healthy`,
+  5th → `degraded`, 10th → `failing` (the 10 WARN lines), via
+  `connector.HealthFromErrorCount`.
+
+### Evidence — Build Quality Gate (Scope 04)
+
+`./smackerel.sh check` (host path redacted `~/` per No-PII), `format --check`,
+`lint` — all green:
+
+```text
+=== ./smackerel.sh check ===
+config-validate: ~/smackerel/config/generated/dev.env.tmp.391529 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+
+=== ./smackerel.sh format --check ===
+63 files already formatted
+
+=== ./smackerel.sh lint ===
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+```
+
+`go test ./...` (unit run) compiled every Go package including the new
+`internal/connector/cardrewards` package and the `cmd/core` connector wiring.
+No `${VAR:-default}` runtime fallback was introduced (`smackerel-no-defaults`);
+`Connect` fail-loud rejects missing/empty sources and non-positive timeout.
+
+### Gate: artifact-lint — Scope 04
+
+Command: `bash .github/bubbles/scripts/artifact-lint.sh
+specs/083-card-rewards-companion` → **Artifact lint PASSED**, `ARTIFACT_LINT_EXIT=0`.
+
+```text
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: full-delivery
+✅ state.json v3 has required field: status / execution / certification / policySnapshot
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' (pre-existing; non-blocking)
+ℹ️  Workflow mode 'full-delivery' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section: Summary / Completion Statement / Test Evidence
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+The single ⚠️ (`scopeProgress` deprecation) is a pre-existing schema choice in
+this spec's `state.json` (used by Scopes 01–03), not introduced by Scope 04; the
+lint PASSES. The ℹ️ note is expected — the spec is mid-delivery (4 of 11 scopes
+Done) so top-level `status` stays `in_progress`.
+
+### Code Diff Evidence (Scope 04)
+
+Read-only `git status --short` + `git diff --stat` for the Scope 04 surface
+(autoCommit OFF — nothing committed this turn):
+
+```text
+ M cmd/core/connectors.go
+?? internal/connector/cardrewards/
+---DIFFSTAT---
+ cmd/core/connectors.go | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+```
+
+The new package `internal/connector/cardrewards/` (connector.go +
+connector_test.go) is an untracked new directory; the only modified tracked file
+is the +36-line connector wiring in `cmd/core/connectors.go`.
+
+### Delivery — Scope 04 execution model (transparency)
+
+The `runSubagent`/`agent` tool was **unavailable** in this runtime, so the
+`full-delivery` implement/test phases for Scope 04 were executed in
+**parent-expanded** form by a single orchestrator agent — NO separate certified
+specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or
+claimed. Disclosed in `state.json.executionHistory`, not fabricated. Only Scope
+04 was delivered this run (Scopes 05–11 NOT started, per the run contract).
+Top-level `status` intentionally NOT promoted to `done` (7 scopes remain). The
+`card_rewards` feature-flag bundle edit (`config/feature-flags.mvp.yaml`) is
+intentionally NOT made — `bubbles.train`-owned. The working tree is left ready
+for an orchestrator preservation commit (Scope 04 surface only).
+
