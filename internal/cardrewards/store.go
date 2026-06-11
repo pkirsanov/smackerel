@@ -613,6 +613,139 @@ func (s *Store) ListRotatingCategoriesByCard(ctx context.Context, catalogID stri
 	return out, rows.Err()
 }
 
+// GetRotatingCategory returns the reconciled rotating-category record for a
+// (card_catalog_id, period_label), or (nil, nil) when absent. Used by the
+// extractor to detect an existing record that must be flagged (not overwritten)
+// when an extraction fails to validate (SCN-083-E03), and by tests.
+func (s *Store) GetRotatingCategory(ctx context.Context, catalogID, periodLabel string) (*RotatingCategory, error) {
+	var rc RotatingCategory
+	err := s.Pool.QueryRow(ctx,
+		`SELECT id, card_catalog_id, period_label, period_start, period_end, categories,
+		        limit_cents, activation_required, lifecycle_state, confidence,
+		        needs_verification, manual_override, source_count, created_at, updated_at
+		 FROM rotating_categories WHERE card_catalog_id = $1 AND period_label = $2`,
+		catalogID, periodLabel,
+	).Scan(&rc.ID, &rc.CardCatalogID, &rc.PeriodLabel, &rc.PeriodStart, &rc.PeriodEnd,
+		&rc.Categories, &rc.LimitCents, &rc.ActivationRequired, &rc.LifecycleState,
+		&rc.Confidence, &rc.NeedsVerification, &rc.ManualOverride, &rc.SourceCount,
+		&rc.CreatedAt, &rc.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &rc, nil
+}
+
+// ---- rotating_category_observations ----------------------------------------
+
+const observationCols = `id, card_catalog_id, period_label, period_start, period_end,
+	categories, limit_cents, activation_required, confidence, source_name,
+	source_url, source_evidence, extraction_run_id, observed_at`
+
+func scanObservation(row pgx.Row) (*RotatingCategoryObservation, error) {
+	var o RotatingCategoryObservation
+	if err := row.Scan(&o.ID, &o.CardCatalogID, &o.PeriodLabel, &o.PeriodStart,
+		&o.PeriodEnd, &o.Categories, &o.LimitCents, &o.ActivationRequired,
+		&o.Confidence, &o.SourceName, &o.SourceURL, &o.SourceEvidence,
+		&o.ExtractionRunID, &o.ObservedAt); err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
+// ListObservationsByCardPeriod returns the per-source observations for a
+// (card_catalog_id, period_label) ordered by observed_at. Used by the
+// reconciler (Scope 06) and tests.
+func (s *Store) ListObservationsByCardPeriod(ctx context.Context, catalogID, periodLabel string) ([]RotatingCategoryObservation, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT `+observationCols+`
+		 FROM rotating_category_observations
+		 WHERE card_catalog_id = $1 AND period_label = $2
+		 ORDER BY observed_at`, catalogID, periodLabel)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []RotatingCategoryObservation
+	for rows.Next() {
+		o, err := scanObservation(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *o)
+	}
+	return out, rows.Err()
+}
+
+// PersistExtractionRun atomically writes one extraction audit run and its
+// validated observations, and flags any existing reconciled records that an
+// extraction failed to validate (SCN-083-E03/E08). All three writes share one
+// transaction so the observations' extraction_run_id FK is always satisfied and
+// a mid-batch failure leaves no partial audit trail. Returns the number of
+// existing rotating_categories rows flagged needs_verification.
+//
+// Flagging is a pure UPDATE of needs_verification + updated_at; it NEVER
+// rewrites categories/confidence/limit — the reconciled record is preserved,
+// never overwritten with stale or placeholder data (design §4, the CCManager
+// silent-fallback failure mode this scope replaces).
+func (s *Store) PersistExtractionRun(ctx context.Context, run *CardRun, observations []RotatingCategoryObservation, flags []CardPeriodRef) (int, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO card_runs
+		   (id, run_type, trigger, status, sources_attempted, sources_succeeded,
+		    categories_extracted, events_written, error_detail, started_at, finished_at, created_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())`,
+		run.ID, run.RunType, run.Trigger, run.Status, run.SourcesAttempted,
+		run.SourcesSucceeded, run.CategoriesExtracted, run.EventsWritten,
+		run.ErrorDetail, run.StartedAt, run.FinishedAt,
+	); err != nil {
+		return 0, err
+	}
+
+	for i := range observations {
+		o := &observations[i]
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO rotating_category_observations
+			   (id, card_catalog_id, period_label, period_start, period_end, categories,
+			    limit_cents, activation_required, confidence, source_name, source_url,
+			    source_evidence, extraction_run_id, observed_at)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+			o.ID, o.CardCatalogID, o.PeriodLabel, o.PeriodStart, o.PeriodEnd,
+			nonNilStrings(o.Categories), o.LimitCents, o.ActivationRequired, o.Confidence,
+			o.SourceName, o.SourceURL, o.SourceEvidence, o.ExtractionRunID, o.ObservedAt,
+		); err != nil {
+			return 0, err
+		}
+	}
+
+	flagged := 0
+	for _, f := range flags {
+		tag, err := tx.Exec(ctx,
+			`UPDATE rotating_categories
+			    SET needs_verification = true, updated_at = NOW()
+			  WHERE card_catalog_id = $1 AND period_label = $2`,
+			f.CardCatalogID, f.PeriodLabel,
+		)
+		if err != nil {
+			return 0, err
+		}
+		flagged += int(tag.RowsAffected())
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return flagged, nil
+}
+
 // ---- card_recommendations --------------------------------------------------
 
 // UpsertRecommendation inserts or updates a recommendation keyed on

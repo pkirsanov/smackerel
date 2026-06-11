@@ -1022,3 +1022,296 @@ Top-level `status` intentionally NOT promoted to `done` (7 scopes remain). The
 intentionally NOT made — `bubbles.train`-owned. The working tree is left ready
 for an orchestrator preservation commit (Scope 04 surface only).
 
+---
+
+## Delivery — Scope 05: LLM Category Extraction (replaces regex) (2026-06-11)
+
+> Scope 05 replaces the CCManager regex scraper — and its silent fallback to
+> stale / placeholder rotating categories — with strict-schema LLM extraction.
+> Constitution C2 boundary: the model-gateway call lives ONLY in the Python ML
+> sidecar route `POST /extract-card-categories`; the Go orchestrator
+> `internal/cardrewards/extract.go` sends page text + candidate over the
+> existing Go↔sidecar HTTP contract, validates the response with
+> `santhosh-tekuri/jsonschema/v6` (defense-in-depth), applies confidence /
+> unknown-card / card-period-echo handling, and persists observations + an
+> `extract` audit run. The anti-silent-fallback contract is the whole point:
+> a response that does not parse/validate, echoes the wrong card/period, or
+> names an unknown card is DISCARDED or SKIPPED — never stored, never mismapped,
+> and never used to overwrite an existing reconciled record.
+
+### Files created / changed (Scope 05)
+
+- `internal/cardrewards/extract.go` (NEW) — orchestrator: pure `validateExtraction`
+  (schema + card/period echo + date checks + unknown-card skip + low-confidence
+  flag), `Extractor.Run` (sidecar seam + store + `extract` audit run), the
+  `SidecarExtractor` interface (deterministic test seam), and the production
+  `HTTPSidecarExtractor` (POST `/extract-card-categories`, Bearer auth, fail-loud
+  constructor). NO direct model-backend client (C2).
+- `internal/cardrewards/types.go` (M) — `RotatingCategoryObservation` + `CardPeriodRef`.
+- `internal/cardrewards/store.go` (M) — `GetRotatingCategory`,
+  `ListObservationsByCardPeriod`, `scanObservation`, and the transactional
+  `PersistExtractionRun` (FK-safe: run → observations → flag-existing, atomic;
+  flagging only sets `needs_verification`, never rewrites categories).
+- `internal/cardrewards/extract_test.go` (NEW) — unit T-05-01..04 (SCN-083-E01..E07
+  pure validation + page-content-as-data + transport against httptest + fail-loud).
+- `internal/cardrewards/extract_integration_test.go` (NEW, `//go:build integration`) —
+  live-PG persistence for E01–E07 + audit run, via a deterministic fake of the
+  EXTERNAL model-gateway boundary (no internal mocks; Store + DB are real).
+- `tests/integration/cardrewards_extract_test.go` (NEW, `//go:build integration`) —
+  T-05-05 / SCN-083-E08 live-stack round-trip (real ml sidecar), gated on sidecar
+  reachability.
+- `ml/app/card_categories.py` (NEW) — sidecar route + pure `build_extraction_messages`
+  (prompt-injection defense: page content in a delimited DATA block, system prompt
+  forbids following embedded instructions) + `parse_strict_response` (first
+  strict-JSON pass). litellm imported lazily (dev test lane needs no litellm).
+- `ml/app/main.py` (M) — mount the card-categories router under `verify_auth`.
+- `ml/tests/test_card_categories.py` (NEW) — Python unit T-05-06 (SCN-083-E01 + E06 pure).
+- Doc-drift reconciliation (card-rewards domain, pre-existing from scopes 01–04):
+  `docs/smackerel.md` §22.7 connector inventory 16→17 (+card-rewards row);
+  `docs/Development.md` passive-connector bullet 16→17, `internal/cardrewards/`
+  Go-packages row, `057_card_rewards.sql` migrations row, `cardrewards/` connector
+  sub-package; `internal/deploy/docs_connector_count_contract_test.go`
+  adversarial `SmackerelMdHigh` fixture made self-adjusting (`runtime+1`).
+
+### Decisions disclosed (honest)
+
+1. **Target card+period echo.** `ExtractInput` carries the target `CardID` +
+   `PeriodLabel`; the sidecar response MUST echo both. A mismatch (hallucination
+   or prompt-injection trying to switch cards) is DISCARDED — never stored under
+   the target. This is a Go-side mismap/injection defense complementing the
+   sidecar's system-prompt defense (SCN-083-E06).
+2. **`spend_limit` is whole dollars** on the page; the orchestrator converts ×100
+   to `limit_cents` for the column.
+3. **Pure decision vs persistence split.** `validateExtraction` is a pure function
+   of (raw, input, knownCard, threshold) → unit-testable with NO DB and NO mocks
+   (E01–E07). `Extractor.Run` wires it to a REAL `Store` (live PG) for the audited
+   path (E08). Only the EXTERNAL model-gateway boundary is faked in integration
+   tests — the Store and DB are always real (no-internal-mocks policy honored).
+4. **`extract` run status.** `success` only when every input produced a stored
+   observation; any discard/skip/sidecar-error → `partial` (matches SCN-083-E02).
+5. **No new config keys / no cron wiring.** `MLSidecarURL` + `AuthToken` +
+   `Extraction.ConfidenceThreshold` already exist (Scopes 01/02). Scheduler/cron
+   wiring of the extractor is Scope 09, not Scope 05.
+
+### Gate: Constitution C2 boundary grep (DoD item)
+
+```
+$ grep -rniE 'ollama|/api/generate|/api/chat' internal/cardrewards/ ; echo "C2_GREP_EXIT=$?"
+C2_GREP_EXIT=1 (1 = no matches = PASS)
+```
+
+Zero hits — the model-gateway call lives ONLY in the Python sidecar
+(`ml/app/card_categories.py`), never in the Go orchestrator package.
+
+### Evidence — SCN-083-E01..E07 on live disposable Postgres (integration, fake external-sidecar seam)
+
+`./smackerel.sh test integration --go-run 'ExtractorLivePG|CardRewardsExtractLiveStack'` →
+full disposable stack came up Healthy, then:
+
+```
+=== RUN   TestExtractorLivePG_StoresObservationWithProvenance_E01_E07
+--- PASS: TestExtractorLivePG_StoresObservationWithProvenance_E01_E07 (0.25s)
+=== RUN   TestExtractorLivePG_MalformedDiscardedNoOverwrite_E02_E03
+2026/06/11 ... WARN card-rewards extraction discarded (invalid) — flagging target for verification card_id=cr-int-...-discover-it period=Q3_2026 source="Doctor of Credit" reason="response is not valid JSON: invalid character 'D' looking for beginning of value"
+--- PASS: TestExtractorLivePG_MalformedDiscardedNoOverwrite_E02_E03 (0.14s)
+=== RUN   TestExtractorLivePG_LowConfidenceStored_E04
+2026/06/11 ... INFO card-rewards extraction below confidence threshold — reconciler will flag card_id=cr-int-...-discover-it period=Q3_2026 source="Doctor of Credit"
+--- PASS: TestExtractorLivePG_LowConfidenceStored_E04 (0.18s)
+=== RUN   TestExtractorLivePG_UnknownCardSkippedNoMismap_E05
+2026/06/11 ... INFO card-rewards extraction skipped unknown card — not mismapped card_id=cr-int-...-ghost-card source="Doctor of Credit" reason="card_id \"cr-int-...-ghost-card\" is not in card_catalog"
+--- PASS: TestExtractorLivePG_UnknownCardSkippedNoMismap_E05 (0.10s)
+=== RUN   TestExtractorLivePG_ExtractionRunAudited_E08
+2026/06/11 ... WARN card-rewards extraction sidecar error — flagging target for verification card_id=cr-int-...-chase-freedom period=Q3_2026 source="Doctor of Credit" error="source page unreachable"
+--- PASS: TestExtractorLivePG_ExtractionRunAudited_E08 (0.09s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.946s
+PASS: go-integration
+... (project-scoped test stack teardown: all containers + volumes + network removed) ...
+INTEG_EXIT=0
+```
+
+The adversarial proof (SCN-083-E02/E03): `MalformedDiscardedNoOverwrite` seeds an
+authoritative existing `rotating_categories` row (`manual_override=true`,
+`confidence=1.0`, categories `[Grocery Stores, Streaming]`, `needs_verification=false`),
+feeds garbage to the sidecar, and asserts against the real DB afterward that the
+existing row's categories/confidence/manual_override are UNCHANGED and only
+`needs_verification` flipped to `true` — the exact CCManager silent-fallback
+failure mode, proven fixed. SCN-083-E05 asserts the unknown observation is
+neither persisted nor mismapped onto the co-resident known card.
+
+### Evidence — SCN-083-E01..E07 (unit; `extract_test.go`)
+
+`./smackerel.sh test unit --go --go-run 'ValidateExtraction|ExtractRequest|HTTPSidecarExtractor|NewHTTPSidecarExtractor|ValidRunTrigger' --verbose`:
+
+```
+--- PASS: TestValidateExtraction_ValidRecordWithProvenance_E01_E07 (0.00s)
+--- PASS: TestValidateExtraction_MalformedAndInvalidDiscarded_E02_E03 (0.00s)
+    --- PASS: .../non-JSON garbage (0.00s)
+    --- PASS: .../truncated_partial JSON (0.00s)
+    --- PASS: .../empty categories array (old path would store stale/empty) (0.00s)
+    --- PASS: .../missing categories key (0.00s)
+    --- PASS: .../confidence out of range (0.00s)
+    --- PASS: .../unexpected extra field (additionalProperties:false) (0.00s)
+    --- PASS: .../unparseable period date (0.00s)
+    --- PASS: .../period_end before period_start (0.00s)
+--- PASS: TestValidateExtraction_LowConfidenceFlagged_E04 (0.00s)
+--- PASS: TestValidateExtraction_UnknownCardSkipped_E05 (0.00s)
+--- PASS: TestExtractRequest_PageContentIsDataNotInstructions_E06 (0.00s)
+--- PASS: TestValidateExtraction_RejectsCardOrPeriodMismatch_E06 (0.00s)
+    --- PASS: .../card_id mismatch (0.00s)
+    --- PASS: .../period mismatch (0.00s)
+--- PASS: TestNewHTTPSidecarExtractor_FailLoud (0.00s)  [empty_baseURL, empty_token, non-positive_timeout]
+--- PASS: TestHTTPSidecarExtractor_Transport (0.13s)  [2xx returns raw body + bearer + /extract-card-categories path, non-2xx error, empty-body error]
+--- PASS: TestValidRunTrigger (0.00s)
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.208s
+UNIT_VERBOSE_EXIT=0
+```
+
+These are pure-function tests (no DB, no internal mocks): `validateExtraction`
+proves the design §4 contract for every adversarial shape, and the 8 discard
+subtests each use input the regex silent-fallback path would have accepted —
+here each fails loud to verification with NO observation produced.
+
+### Evidence — SCN-083-E01 + E06 (Python sidecar unit; `ml/tests/test_card_categories.py`)
+
+`./smackerel.sh test unit --python`:
+
+```
+........................................................................ [ 98%]
+.......                                                                  [100%]
+509 passed, 2 skipped, 2 warnings in 18.90s
+[py-unit] pytest ml/tests finished OK
+PY_UNIT_EXIT=0
+```
+
+`test_card_categories.py` covers: `parse_strict_response` accepts a valid record
+(E01) and rejects non-JSON / truncated / empty-categories / missing-key /
+out-of-range-confidence / additionalProperties (the inputs the regex fallback
+would have swallowed); `build_extraction_messages` places injected
+"ignore previous instructions" text ONLY inside the untrusted PAGE_CONTENT data
+block of the user message, never in the system instructions, and the system
+prompt declares the block untrusted data + forbids following it (E06). The 2
+warnings are pre-existing third-party (`fastapi/testclient` deprecation;
+`test_nats_consumer_config` coroutine) — none from this scope.
+
+### Evidence — SCN-083-E08 (live PG + real ml sidecar round-trip)
+
+`./smackerel.sh test integration --go-run 'CardRewardsExtractLiveStack'` — the full
+disposable stack came up Healthy (postgres, nats, ollama, ml sidecar, core); the test
+gates on sidecar reachability (ML_SIDECAR_URL is injected by the integration runner) so
+it RUNS the real orchestrator → sidecar round-trip:
+
+```
+=== RUN   TestCardRewardsExtractLiveStackAudited_E08
+2026/06/11 ... WARN card-rewards extraction sidecar error — flagging target for verification card_id=discover-it period=Q3_2026 source="Live Stack Source" error="cardrewards sidecar: /extract-card-categories returned HTTP 502: {\"detail\":\"model gateway unreachable: APIConnectionError\"}"
+    cardrewards_extract_test.go:144: SCN-083-E08 live extraction: stored=0 discarded=1 skipped=0 lowConfidence=0 flagged=0
+--- PASS: TestCardRewardsExtractLiveStackAudited_E08 (0.09s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.222s
+PASS: go-integration
+... (project-scoped test stack teardown: all containers + volumes + network removed) ...
+E08LIVE_EXIT=0
+```
+
+**HONEST status (blocked-needs-live-Ollama).** The test exercised the real
+orchestrator → ml-sidecar HTTP round-trip end-to-end: the sidecar's
+`/extract-card-categories` route returned a STRUCTURED HTTP 502
+(`model gateway unreachable: APIConnectionError`) — which proves the route is
+deployed in the rebuilt image (a 404 would mean otherwise) and that the
+sidecar's strict error contract works. The orchestrator FAILED LOUD
+(discarded, flagged the target `needs_verification`, persisted the `extract`
+audit run) — never a silent fallback to a stale/placeholder category, which is
+exactly the CCManager failure mode this scope replaces. The sidecar→Ollama
+MODEL INFERENCE leg could NOT complete in THIS environment: litellm raised
+`APIConnectionError` because the disposable-stack Ollama serves no pulled LLM
+model (the `integration` lane does not run the spec-043 `ollama-test-pull`
+step, and — confirmed empirically — does not forward `SMACKEREL_TEST_OLLAMA`
+into the go-test container). A SUCCESSFUL live Ollama inference round-trip
+therefore remains **blocked-needs-live-Ollama**; it is satisfiable on the
+scenario's <home-lab-host> ops node (which has Ollama + the model). The audit-run
+PERSISTENCE half of E08 is independently PROVEN on live Postgres by
+`TestExtractorLivePG_ExtractionRunAudited_E08` (PASS, above).
+
+### Evidence — Build Quality Gate (Scope 05)
+
+```
+$ ./smackerel.sh check
+config-validate: .../test.env... OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: OK
+CHECK_EXIT=0
+
+$ ./smackerel.sh lint
+All checks passed!
+Web validation passed
+LINT_EXIT=0
+
+$ ./smackerel.sh format --check
+65 files already formatted
+FORMAT_RECHECK_EXIT=0
+```
+
+Connector-count contract + doc-freshness (card-rewards domain reconciliation):
+
+```
+--- PASS: TestConnectorCountContract_LiveFile (0.00s)   (all three surfaces agree on 17 connectors)
+--- PASS: TestConnectorCountContract_AdversarialConnectorsGoLow (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialSmackerelMdHigh (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialDevelopmentMdLow (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.026s
+--- PASS: TestDocFreshness_AllInternalPackagesDocumented (0.01s)
+--- PASS: TestDocFreshness_AllMigrationsDocumented (0.00s)
+--- PASS: TestDocFreshness_AllPromptContractsDocumented (0.00s)
+ok      github.com/smackerel/smackerel/internal/docfreshness    0.028s
+```
+
+### Pre-existing, out-of-domain (NOT introduced by Scope 05)
+
+`internal/scopesdriftguard` `TestScopesPathRefDrift_NonIncreasing` fails at 287
+broken `specs/*/scopes.md` file references vs a ratchet ceiling of 270. The
+breakdown is dominated by unrelated features: 034-expense (81), 035-recipe (62),
+036-mealplan (41), 061-assistant (39), 063-enrichment (40). Spec 083 contributes
+17 — all FORWARD references to files for unbuilt scopes 06–11 (reconcile.go,
+optimize.go, calendar.go, scheduler/cardrewards.go, web/cardrewards.go, the
+e2e-ui specs) that resolve as those scopes land. Scope 05 creating the five
+Scope-05 files actually REDUCED 083's contribution (from ~22 to 17, total ~292→287).
+The ratchet was already exceeded at the committed Scope-04 HEAD; this is a
+pre-existing repo-wide drift, not a Scope-05 regression, and is NOT being
+worked around by raising the ratchet.
+
+### Gate: artifact-lint — Scope 05
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/083-card-rewards-companion
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: in_progress
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' (pre-existing from Scopes 01–04; non-blocking)
+ℹ️  Workflow mode 'full-delivery' allows status 'done'; current status is 'in_progress'
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+### Delivery — Scope 05 execution model (transparency)
+
+The `runSubagent`/`agent` tool was **unavailable** in this runtime, so the
+`full-delivery` implement/test phases for Scope 05 were executed in
+**parent-expanded** form by a single orchestrator agent — NO separate certified
+specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or
+claimed. Disclosed in `state.json.executionHistory`, consistent with Scopes
+01–04. Only Scope 05 was delivered this run (Scopes 06–11 NOT started). The
+`card_rewards` feature-flag bundle edit (`config/feature-flags.mvp.yaml`) is
+intentionally NOT made — `bubbles.train`-owned. NOT committed (autoCommit off):
+the working tree is left ready for an orchestrator preservation commit (Scope 05
+surface + the card-rewards doc-drift reconciliation + the self-adjusting
+connector-count adversarial fixture). Top-level `status` intentionally NOT
+promoted to `done`: Scope 05's E08 successful-live-Ollama-inference item is
+blocked-needs-live-Ollama and 6 scopes (06–11) remain, so `currentScope` stays
+5 and `completedScopes` is NOT extended with "5".
+

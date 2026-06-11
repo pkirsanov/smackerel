@@ -668,7 +668,7 @@ card_rewards:
   fetch_timeout_seconds: 20 # REQUIRED when enabled — per-source fetch bound
   extraction:
     model: "" # REQUIRED when enabled — host Ollama model (e.g. gpt-oss:20b)
-    endpoint: "" # REQUIRED when enabled — host Ollama URL (e.g. evo-x2)
+    endpoint: "" # REQUIRED when enabled — host Ollama URL (e.g. <home-lab-host>)
     confidence_threshold: 0.0 # REQUIRED when enabled — below → needs_verification (0..1)
     max_sources_per_card: 0 # REQUIRED when enabled — reconciliation fan-out cap (> 0)
   sources: [] # REQUIRED non-empty when enabled — [{name,url,issuer_hint}]
@@ -836,7 +836,7 @@ auth:
 # (no `${VAR:-default}` form anywhere). Sourced from the gitignored
 # `.smackerel.local.env` overlay at repo root; operator copies
 # `.smackerel.local.env.example` and sets the tier per machine
-# (cpu = WSL Cloud PC; accel = Evo-X2 ROCm/NPU host). The 6 model env vars
+# (cpu = WSL Cloud PC; accel = <home-lab-host> ROCm/NPU host). The 6 model env vars
 # (LLM_MODEL, OLLAMA_MODEL, OLLAMA_VISION_MODEL, AGENT_PROVIDER_DEFAULT_MODEL,
 # AGENT_PROVIDER_FAST_MODEL, AGENT_PROVIDER_VISION_MODEL) resolve to the
 # `<tier>.interactive.model` value at config-generate time. The 2 timeout env
@@ -1998,7 +1998,7 @@ environments:
     # envelope was sized for gemma4:26b ALONE, so the concurrent set
     # OOM-killed ollama into a restart crash-loop. 28G (28672 MiB) fits
     # the 24576 MiB interactive sum with ~4 GiB headroom for KV-cache
-    # growth; the evo-x2 home-lab host has ~109 GiB RAM. The Go core
+    # growth; the home-lab host has ~109 GiB RAM. The Go core
     # validateModelEnvelopes concurrent-envelope guard now fails loud at
     # config-generate time if this floor is ever under-sized again.
     ollama_memory_limit: "28G"
@@ -2037,7 +2037,7 @@ environments:
     agent_provider_fast_model: "llama3.1:8b"
     agent_provider_vision_model: "gemma4:26b"
     # Spec 064 SCOPE-17 — open-knowledge agent uses gemma4:26b on
-    # home-lab (evo-x2) for best-quality tool-use + JSON-schema
+    # home-lab for best-quality tool-use + JSON-schema
     # following. The base block's small dev model would silently apply
     # without this explicit override since llm_model_id is not part of
     # the tier matrix.
