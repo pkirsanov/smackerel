@@ -1,0 +1,27 @@
+{
+  "month": "2026-01",
+  "generated_at": "2026-01-27T00:05:01.082122",
+  "quarter": "Q1_2026",
+  "categories": {
+    "Amazon": {
+      "card_name": "Amazon Prime Rewards Visa Signature",
+      "card_id": "amazon-prime-rewards-visa-signature",
+      "rate": 5,
+      "rate_type": "percent",
+      "source": "base",
+      "offer_id": "",
+      "is_starred": true,
+      "needs_activation": false
+    },
+    "Travel": {
+      "card_name": "Discover it Cash Back",
+      "card_id": "discover-it-cash-back",
+      "rate": 5,
+      "rate_type": "percent",
+      "source": "promo",
+      "offer_id": "discover-travel-q1-2026",
+      "is_starred": false,
+      "needs_activation": true
+    }
+  }
+}

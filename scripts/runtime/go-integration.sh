@@ -50,6 +50,6 @@ if [[ -n "$go_run_selector" ]]; then
 	echo "go-integration: applying -run selector: $go_run_selector"
 	go_test_args+=(-run "$go_run_selector")
 fi
-go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/...)
+go_test_args+=(./tests/integration/... ./internal/notification/... ./internal/assistant/... ./internal/cardrewards/...)
 
 go test "${go_test_args[@]}"

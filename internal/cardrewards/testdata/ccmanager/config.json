@@ -1,0 +1,18 @@
+{
+  "categories": {
+    "starred": ["Groceries", "Gas Stations", "Dining"],
+    "priority": ["Groceries", "Gas Stations", "Dining", "Amazon"],
+    "built_in": ["Dining", "Restaurants", "Gas Stations", "Groceries", "Travel", "Amazon", "Streaming"],
+    "equivalents": {
+      "dining": ["restaurants", "food"],
+      "gas": ["fuel"]
+    }
+  },
+  "notifications": {
+    "advance_days": [7, 3, 1]
+  },
+  "calendar": {
+    "calendar_id": "example@group.calendar.google.com",
+    "timezone": "America/Los_Angeles"
+  }
+}

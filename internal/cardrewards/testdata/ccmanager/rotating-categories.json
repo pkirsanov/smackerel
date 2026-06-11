@@ -1,0 +1,27 @@
+{
+  "current_quarter": "Q1 2026",
+  "discover-it": {
+    "Q4_2025": {
+      "categories": ["Amazon", "Drugstores"],
+      "period": "2025-10-01 to 2025-12-31",
+      "limit": 1500,
+      "status": "expired",
+      "activation_required": true
+    },
+    "Q1_2026": {
+      "categories": ["Grocery Stores", "Wholesale Clubs", "Streaming"],
+      "period": "2026-01-01 to 2026-03-31",
+      "limit": 1500,
+      "status": "active",
+      "activation_required": true
+    }
+  },
+  "orphan-card-not-in-catalog": {
+    "Q1_2026": {
+      "categories": ["Dining"],
+      "period": "2026-01-01 to 2026-03-31",
+      "limit": 1500,
+      "status": "active"
+    }
+  }
+}

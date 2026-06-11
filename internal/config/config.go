@@ -150,6 +150,9 @@ type Config struct {
 	MealPlanAutoComplete     bool
 	MealPlanAutoCompleteCron string
 
+	// Card rewards config (Spec 083 — SST-compliant, from smackerel.yaml via config generate)
+	CardRewards CardRewardsConfig
+
 	// Connector enable/credential/schedule fields (SST-compliant — from smackerel.yaml via config generate)
 	MapsSyncSchedule              string
 	MapsWatchInterval             string
@@ -1451,6 +1454,16 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("missing or invalid required meal planning configuration: %s", strings.Join(mealPlanErrors, ", "))
 		}
 	}
+
+	// Parse card rewards config (Spec 083 — SST-compliant, from smackerel.yaml
+	// via config generate). When CARD_REWARDS_ENABLED != "true" this returns a
+	// disabled config with no error; when enabled it fails loud naming any
+	// missing/invalid required key (SCN-083-A03, A04).
+	cardRewardsCfg, err := LoadCardRewardsConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.CardRewards = cardRewardsCfg
 
 	// Spec 044 — Per-user bearer auth foundation. Every AUTH_* key is
 	// REQUIRED at the SST generator boundary; secret-bearing fields are

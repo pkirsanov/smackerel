@@ -357,6 +357,14 @@ connectors:
   caldav:
     sync_schedule: "*/15 * * * *" # Every 15 minutes
 
+  card-rewards:
+    # Spec 083 — card-rewards source connector (Scope 04). Fetch-only (no regex,
+    # no LLM in the connector). The source list, issuer hints, and fetch timeout
+    # live under the top-level `card_rewards:` section (SST single source of
+    # truth); this schedule mirrors card_rewards.scrape_cron.
+    enabled: false
+    sync_schedule: "0 6 * * *"
+
   youtube:
     sync_schedule: "0 */4 * * *" # Every 4 hours (spec R-203)
 
@@ -639,6 +647,33 @@ meal_planning:
   calendar_sync: false
   auto_complete_past_plans: true
   auto_complete_cron: "0 1 * * *"
+
+# Spec 083 Card Rewards Companion (absorbs the standalone CCManager app).
+# Light-touch credit-card cashback companion (docs/smackerel.md §16.8).
+# SST / fail-loud (Gate G028, smackerel-no-defaults): when `enabled: true`,
+# every REQUIRED key below MUST be present and valid or the Go config loader
+# (internal/config/cardrewards.go) fails loud at startup naming the offending
+# key — there are NO in-source defaults. The empty-string / empty-list values
+# here are DEV-ONLY placeholders that the loader rejects when enabled; the
+# operator supplies real values (host Ollama model/endpoint, source URLs,
+# tracked categories) on home-lab and flips `enabled: true`. The feature is
+# additionally gated by the `card_rewards` release-train flag (default-ON only
+# in the mvp train bundle; owned by bubbles.train).
+card_rewards:
+  enabled: false
+  scrape_cron: "0 6 * * *" # REQUIRED when enabled — daily refresh
+  monthly_recommend_cron: "0 7 1 * *" # REQUIRED when enabled — 1st of month
+  calendar_sync: false # opt-in; true on home-lab
+  calendar_uid_prefix: "smackerel-cardrec" # REQUIRED when calendar_sync
+  fetch_timeout_seconds: 20 # REQUIRED when enabled — per-source fetch bound
+  extraction:
+    model: "" # REQUIRED when enabled — host Ollama model (e.g. gpt-oss:20b)
+    endpoint: "" # REQUIRED when enabled — host Ollama URL (e.g. evo-x2)
+    confidence_threshold: 0.0 # REQUIRED when enabled — below → needs_verification (0..1)
+    max_sources_per_card: 0 # REQUIRED when enabled — reconciliation fan-out cap (> 0)
+  sources: [] # REQUIRED non-empty when enabled — [{name,url,issuer_hint}]
+  tracked_categories: [] # REQUIRED non-empty when enabled — spend categories to recommend for
+  import_data_dir: "" # OPTIONAL (Scope 03) — CCManager data/ dir for the one-time JSON→PG import; operator-supplied per environment, or pass --data-dir at invocation (empty here per No Env-Specific Content)
 
 recommendations:
   enabled: true

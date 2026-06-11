@@ -182,6 +182,12 @@ func run() error {
 	// (late — needs sched + tgBot constructed after NewRouter).
 	wireMealPlanningHandler(cfg, svc, deps, listResolver, listStore)
 
+	// Spec 083 Scope 02 — card-rewards CRUD handler. Same construction-order
+	// rule as meal planning: construct + attach to deps BEFORE NewRouter so
+	// the routes register in the single-pass route build. Mounted whenever a
+	// Postgres pool exists (independent of the card_rewards ingestion flag).
+	wireCardRewardsHandler(svc, deps)
+
 	router := api.NewRouter(deps)
 
 	// Start Telegram bot if configured

@@ -218,6 +218,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 				deps.MealPlanHandler.RegisterRoutes(r)
 			}
 
+			// Card-rewards endpoints (spec 083) — wallet/offers/selections/
+			// bonuses CRUD + card-name resolution. Mounted whenever the
+			// handler is wired (Postgres pool present); the ingestion
+			// pipeline (connector/extraction/scheduler) is separately gated
+			// by card_rewards.enabled.
+			if deps.CardRewardsHandler != nil {
+				deps.CardRewardsHandler.RegisterRoutes(r)
+			}
+
 			// Recommendation endpoints (spec 039)
 			if deps.RecommendationHandlers != nil {
 				r.Route("/recommendations", func(r chi.Router) {

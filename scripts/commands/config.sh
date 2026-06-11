@@ -1220,6 +1220,30 @@ MEAL_PLANNING_MEAL_TIME_SNACK="$(yaml_get meal_planning.meal_times.snack 2>/dev/
 MEAL_PLANNING_CALENDAR_SYNC="$(yaml_get meal_planning.calendar_sync 2>/dev/null)" || MEAL_PLANNING_CALENDAR_SYNC="false"
 MEAL_PLANNING_AUTO_COMPLETE="$(yaml_get meal_planning.auto_complete_past_plans 2>/dev/null)" || MEAL_PLANNING_AUTO_COMPLETE="false"
 MEAL_PLANNING_AUTO_COMPLETE_CRON="$(yaml_get meal_planning.auto_complete_cron 2>/dev/null)" || MEAL_PLANNING_AUTO_COMPLETE_CRON=""
+
+# Card rewards (Spec 083) — SST single source of truth. These are optional at the
+# generator boundary (emitted as-is); the Go loader (internal/config/cardrewards.go)
+# fails loud at startup when CARD_REWARDS_ENABLED=true and any required value is
+# missing/invalid (Gate G028, smackerel-no-defaults). sources/tracked_categories
+# are emitted as JSON arrays (yaml_get_json), like the expenses categories vars.
+CARD_REWARDS_ENABLED="$(yaml_get card_rewards.enabled 2>/dev/null)" || CARD_REWARDS_ENABLED="false"
+CARD_REWARDS_SCRAPE_CRON="$(yaml_get card_rewards.scrape_cron 2>/dev/null)" || CARD_REWARDS_SCRAPE_CRON=""
+CARD_REWARDS_MONTHLY_RECOMMEND_CRON="$(yaml_get card_rewards.monthly_recommend_cron 2>/dev/null)" || CARD_REWARDS_MONTHLY_RECOMMEND_CRON=""
+CARD_REWARDS_CALENDAR_SYNC="$(yaml_get card_rewards.calendar_sync 2>/dev/null)" || CARD_REWARDS_CALENDAR_SYNC="false"
+CARD_REWARDS_CALENDAR_UID_PREFIX="$(yaml_get card_rewards.calendar_uid_prefix 2>/dev/null)" || CARD_REWARDS_CALENDAR_UID_PREFIX=""
+CARD_REWARDS_FETCH_TIMEOUT_SECONDS="$(yaml_get card_rewards.fetch_timeout_seconds 2>/dev/null)" || CARD_REWARDS_FETCH_TIMEOUT_SECONDS=""
+CARD_REWARDS_EXTRACTION_MODEL="$(yaml_get card_rewards.extraction.model 2>/dev/null)" || CARD_REWARDS_EXTRACTION_MODEL=""
+CARD_REWARDS_EXTRACTION_ENDPOINT="$(yaml_get card_rewards.extraction.endpoint 2>/dev/null)" || CARD_REWARDS_EXTRACTION_ENDPOINT=""
+CARD_REWARDS_EXTRACTION_CONFIDENCE_THRESHOLD="$(yaml_get card_rewards.extraction.confidence_threshold 2>/dev/null)" || CARD_REWARDS_EXTRACTION_CONFIDENCE_THRESHOLD=""
+CARD_REWARDS_EXTRACTION_MAX_SOURCES_PER_CARD="$(yaml_get card_rewards.extraction.max_sources_per_card 2>/dev/null)" || CARD_REWARDS_EXTRACTION_MAX_SOURCES_PER_CARD=""
+CARD_REWARDS_SOURCES="$(yaml_get_json card_rewards.sources 2>/dev/null)" || CARD_REWARDS_SOURCES="[]"
+CARD_REWARDS_TRACKED_CATEGORIES="$(yaml_get_json card_rewards.tracked_categories 2>/dev/null)" || CARD_REWARDS_TRACKED_CATEGORIES="[]"
+# Spec 083 Scope 03 — one-time CCManager JSON→PG importer data dir. OPTIONAL
+# (empty placeholder); the operator supplies their environment's CCManager
+# `data/` path or passes --data-dir at invocation. The Go loader reads it
+# regardless of enabled; the importer fails loud if neither is set. It is never
+# a committed real path (No Env-Specific Content policy).
+CARD_REWARDS_IMPORT_DIR="$(yaml_get card_rewards.import_data_dir 2>/dev/null)" || CARD_REWARDS_IMPORT_DIR=""
 KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS="$(required_value knowledge.synthesis_timeout_seconds)"
 KNOWLEDGE_LINT_CRON="$(required_value knowledge.lint_cron)"
 KNOWLEDGE_LINT_STALE_DAYS="$(required_value knowledge.lint_stale_days)"
@@ -2052,6 +2076,19 @@ MEAL_PLANNING_MEAL_TIME_SNACK=${MEAL_PLANNING_MEAL_TIME_SNACK}
 MEAL_PLANNING_CALENDAR_SYNC=${MEAL_PLANNING_CALENDAR_SYNC}
 MEAL_PLANNING_AUTO_COMPLETE=${MEAL_PLANNING_AUTO_COMPLETE}
 MEAL_PLANNING_AUTO_COMPLETE_CRON=${MEAL_PLANNING_AUTO_COMPLETE_CRON}
+CARD_REWARDS_ENABLED=${CARD_REWARDS_ENABLED}
+CARD_REWARDS_SCRAPE_CRON=${CARD_REWARDS_SCRAPE_CRON}
+CARD_REWARDS_MONTHLY_RECOMMEND_CRON=${CARD_REWARDS_MONTHLY_RECOMMEND_CRON}
+CARD_REWARDS_CALENDAR_SYNC=${CARD_REWARDS_CALENDAR_SYNC}
+CARD_REWARDS_CALENDAR_UID_PREFIX=${CARD_REWARDS_CALENDAR_UID_PREFIX}
+CARD_REWARDS_FETCH_TIMEOUT_SECONDS=${CARD_REWARDS_FETCH_TIMEOUT_SECONDS}
+CARD_REWARDS_EXTRACTION_MODEL=${CARD_REWARDS_EXTRACTION_MODEL}
+CARD_REWARDS_EXTRACTION_ENDPOINT=${CARD_REWARDS_EXTRACTION_ENDPOINT}
+CARD_REWARDS_EXTRACTION_CONFIDENCE_THRESHOLD=${CARD_REWARDS_EXTRACTION_CONFIDENCE_THRESHOLD}
+CARD_REWARDS_EXTRACTION_MAX_SOURCES_PER_CARD=${CARD_REWARDS_EXTRACTION_MAX_SOURCES_PER_CARD}
+CARD_REWARDS_SOURCES=${CARD_REWARDS_SOURCES}
+CARD_REWARDS_TRACKED_CATEGORIES=${CARD_REWARDS_TRACKED_CATEGORIES}
+CARD_REWARDS_IMPORT_DIR=${CARD_REWARDS_IMPORT_DIR}
 CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
 RUNTIME_TRUSTED_PROXIES=${RUNTIME_TRUSTED_PROXIES}
 AGENT_SCENARIO_DIR=${AGENT_SCENARIO_DIR}
