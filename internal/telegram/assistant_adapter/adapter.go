@@ -9,6 +9,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+	"github.com/smackerel/smackerel/internal/assistant"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	"github.com/smackerel/smackerel/internal/assistant/tracing"
 	"go.opentelemetry.io/otel/attribute"
@@ -300,8 +301,11 @@ func (a *Adapter) IsBound() bool {
 //   - (true, err) when the message was claimed by the adapter but a
 //     downstream step failed; the bot SHOULD log and NOT re-handle.
 func (a *Adapter) HandleUpdate(ctx context.Context, update *tgbotapi.Update) (bool, error) {
-	assistant := a.Assistant()
-	if assistant == nil {
+	// BUG-064-001 — this local is named `facade` (not `assistant`) so it does
+	// not shadow the imported `internal/assistant` package, which HandleUpdate
+	// uses below for StripShortcutPrefix on the capture path.
+	facade := a.Assistant()
+	if facade == nil {
 		return false, nil
 	}
 	if update == nil {
@@ -341,7 +345,7 @@ func (a *Adapter) HandleUpdate(ctx context.Context, update *tgbotapi.Update) (bo
 	}
 	rootSpan.SetAttributes(canonicalAttr("user_id_hashed", tracing.HashUserID(msg.UserID)))
 
-	resp, err := assistant.Handle(ctx, msg)
+	resp, err := facade.Handle(ctx, msg)
 	if err != nil {
 		rootStatus = "error"
 		rootCause = "handle_failed"
@@ -349,11 +353,18 @@ func (a *Adapter) HandleUpdate(ctx context.Context, update *tgbotapi.Update) (bo
 	}
 	// CaptureRoute fires BEFORE the user-facing send so the artifact
 	// is durable even if Telegram is unreachable. The bot-side hook
-	// receives the verbatim inbound *tgbotapi.Message so the existing
-	// capture path produces the same idea artifact it would have
-	// produced on the legacy BS-001 fallthrough.
+	// receives the inbound *tgbotapi.Message so the existing capture
+	// path produces the same idea artifact it would have produced on
+	// the legacy BS-001 fallthrough.
+	//
+	// BUG-064-001 — strip the v1 slash-command prefix from the captured
+	// text. translate_inbound preserves the prefix in msg.Text so the
+	// facade's LookupShortcut can pin the scenario, but a captured idea
+	// must store the natural-language tail only (never "/ask",
+	// "/weather", ...). StripShortcutPrefix is a no-op for non-shortcut
+	// text, so ordinary plain-text captures are unchanged.
 	if resp.CaptureRoute && update.Message != nil {
-		a.capture(ctx, update.Message, msg.Text)
+		a.capture(ctx, update.Message, assistant.StripShortcutPrefix(msg.Text))
 	}
 	// Spec 061 SCOPE-09b — `assistant.adapter.render` span (design
 	// §8.3.1.A item 10). Sibling of facade.handle under the same
