@@ -528,6 +528,11 @@ Prompt contracts live in `config/prompt_contracts/` and are mounted into the ML 
 | Recommendation Why | `recommendation-why-v1.yaml` | `scenario` | Explain an existing recommendation from persisted trace and refs only |
 | Retrieval QA | `retrieval-qa-v1.yaml` | `scenario` | Answer a user question over the user's knowledge graph with artifact-ID citations |
 | Weather Query | `weather-query-v1.yaml` | `scenario` | Answer a current/forecast weather question from an external provider with provider+timestamp attribution |
+| Relationship Cooling Evaluate | `relationship-cooling-evaluate-v1.yaml` | `scenario` | LLM-driven relationship-cooling judgment (spec 021 R-021-005 / BUG-021-005) — replaces the hardcoded SQL interaction/silence heuristic with a per-situation decision |
+| Alert Timing Evaluate | `alert-timing-evaluate-v1.yaml` | `scenario` | LLM-driven alert-timing judgment for bill/trip-prep/return-window alerts (spec 021 R-021-002/003/004 / BUG-021-006) — replaces hardcoded timing windows |
+| Resurface Evaluate | `resurface-evaluate-v1.yaml` | `scenario` | LLM-driven resurfacing-worthiness judgment (spec 021 R-505 / BUG-021-007) — replaces the hardcoded dormancy/relevance window in `internal/intelligence/resurface.go` |
+| Expertise Classify | `expertise-classify-v1.yaml` | `scenario` | LLM-driven expertise-tier and growth-trajectory classification (spec 021 R-501 / BUG-021-008) — replaces the hardcoded heuristics in `internal/intelligence/expertise.go` |
+| Hospitality Concern Evaluate | `hospitality-concern-evaluate-v1.yaml` | `scenario` | LLM-driven guest/property hospitality concern judgment (spec 013 / 021 BUG-021-010) — replaces hardcoded sentiment/rating/issue thresholds in `internal/digest/hospitality.go` |
 
 ### Adding a New Prompt Contract
 
