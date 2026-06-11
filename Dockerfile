@@ -39,7 +39,18 @@ LABEL org.opencontainers.image.created="${BUILD_TIME}"
 LABEL org.opencontainers.image.title="smackerel-core"
 LABEL org.opencontainers.image.source="https://github.com/smackerel/smackerel"
 
-RUN apk add --no-cache ca-certificates tzdata
+# spec-047 R15 (BUG-047-003 close-out 2026-06-11): upgrade the OpenSSL
+# packages shipped by the alpine:3.22 base image. alpine:3.22 is a fixed
+# base tag whose package layer froze libssl3/libcrypto3 at 3.5.6-r0;
+# Alpine Security has since published 3.5.7-r0. CVE addressed:
+#   CVE-2026-45447  libssl3+libcrypto3  3.5.6-r0 -> 3.5.7-r0
+#     (OpenSSL heap use-after-free in PKCS7_verify(); HIGH, CVSS 8.0)
+# `apk upgrade` (not a literal pin) pulls the newest available within
+# alpine:3.22, so the image self-heals across future OpenSSL backports;
+# the spec 047 R13 Trivy gate catches anything left behind. smackerel-ml
+# (Debian python:3.12-slim) is unaffected and carries its own R14 upgrade.
+RUN apk add --no-cache ca-certificates tzdata \
+    && apk upgrade --no-cache libssl3 libcrypto3
 
 # SEC-002: Run as non-root user
 RUN addgroup -S smackerel && adduser -S smackerel -G smackerel
