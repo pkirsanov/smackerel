@@ -996,8 +996,17 @@ assistant:
     max_iterations: 4 # REQUIRED: > 0 when enabled. Spec 064 — 3 tool-calling turns + 1 forced-synthesis turn (agent strips tools on the last iteration to force a text answer; gemma-class models otherwise re-search indefinitely).
     per_query_token_budget: 64000 # REQUIRED: > 0 when enabled. Spec 064 — bumped from 8000; web_search snippets are large and re-added to context each iteration, blowing 8k after 4-5 searches. gemma4:26b ctx=262144 so headroom is fine.
     per_query_usd_budget: 0.05 # REQUIRED: > 0 when enabled
-    monthly_budget_usd: 0 # REQUIRED: >= 0 (must be explicit)
-    per_user_monthly_budget_usd: 0 # REQUIRED: >= 0
+    # BUG-064-001 — these MUST be > 0 when enabled. The open-knowledge agent's
+    # per-user-monthly USD pre-flight gate
+    # (internal/assistant/openknowledge/agent/agent.go: PerUserMonthlyUSDRemaining
+    # <= 0) refuses EVERY query before any LLM/tool call when the per-user budget
+    # is 0. The production CostFn is zero-cost (local Ollama + local searxng;
+    # cmd/core/wiring_assistant_openknowledge.go), so these ceilings never bind
+    # for the default self-hosted deployment — they are real guardrails only if a
+    # paid provider + a real CostFn is later wired. To DISABLE the capability use
+    # `enabled: false`, NOT a 0 budget.
+    monthly_budget_usd: 100 # REQUIRED: > 0 when enabled (global monthly USD ceiling)
+    per_user_monthly_budget_usd: 25 # REQUIRED: > 0 when enabled (per-user monthly USD ceiling)
     tool_allowlist: [ "internal_retrieval", "web_search", "unit_convert", "calculator" ] # REQUIRED: non-empty when enabled (deny-by-default per SCOPE-02); v1 set per spec 064 policySnapshot
     web_snippet_cache_enabled: false # REQUIRED: strict bool
     # Spec 064 SCOPE-12 — per-LLM-roundtrip timeout (ms) for the
