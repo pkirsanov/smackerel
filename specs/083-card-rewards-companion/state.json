@@ -7,18 +7,18 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": ["card_rewards"],
   "planMaturityOnly": false,
-  "lastUpdatedAt": "2026-06-12T01:00:00Z",
+  "lastUpdatedAt": "2026-06-12T02:30:00Z",
   "execution": {
     "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": 10,
+    "currentScope": 11,
     "runStartedAt": "2026-06-11T00:00:00Z",
     "completedPhaseClaims": ["analyze", "design", "plan", "harden"],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["1","2","3","4","6","7","8","9"],
+    "completedScopes": ["1","2","3","4","6","7","8","9","10"],
     "certifiedCompletedPhases": ["analyze", "design", "plan", "harden"],
     "scopeProgress": [
       { "scope": 1, "name": "Config SST & Migration Schema", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md" },
@@ -30,7 +30,7 @@
       { "scope": 7, "name": "Optimizer & Monthly Recommendation Generation", "status": "Done", "dependsOn": [2, 6], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 8, "name": "CalDAV Calendar Delivery", "status": "Done", "dependsOn": [7], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 9, "name": "Scheduler Jobs & Manual Triggers", "status": "Done", "dependsOn": [4, 5, 6, 7, 8], "scopeDir": null, "evidenceFile": "report.md" },
-      { "scope": 10, "name": "Web UI — Wallet, Offers, Selections, Bonuses, Categories", "status": "Not Started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 10, "name": "Web UI — Wallet, Offers, Selections, Bonuses, Categories", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 11, "name": "Web UI — Dashboard, Recommendations, Rotating Verify, Report, Admin", "status": "Not Started", "dependsOn": [6, 7, 9, 10], "scopeDir": null, "evidenceFile": "report.md" }
     ],
     "lockdownState": { "active": false, "lockedScenarioIds": [] }
@@ -164,6 +164,18 @@
       "runStartedAt": "2026-06-12T00:45:00Z",
       "runEndedAt": "2026-06-12T01:00:00Z",
       "summary": "Scope 09 (Scheduler Jobs & Manual Triggers) VERIFIED + CERTIFIED with real in-session evidence; all 5 DoD items [x]. No implementation bug found — pipeline.go / scheduler/cardrewards.go / wiring_cardrewards_scheduler.go / ListObservationRefs / scheduler.go NOT rewritten (only gofmt whitespace on the 2 un-formatted files). Unit (./smackerel.sh test unit --go --go-run 'CardRewards' --verbose): UNIT_EXIT=0; TestCardRewardsJobsRegisteredOnConfiguredCrons_I01_I02 PASS (refresh on scrape cron, recommend on monthly cron, ADVERSARIAL no-swap), ScheduledJobsUseScheduledTrigger PASS, ManualTriggersReuseSameMethodsWithManualTrigger_I05 PASS (manual reuse wiring), ManualTriggerPropagatesPipelineError PASS, JobsNotRegisteredWhenPipelineNil PASS, EmptyCronSkipsThatJob PASS (ok internal/scheduler 0.037s). Integration (./smackerel.sh test integration --go-run 'CardRewardsPipelineLivePG' on the disposable test stack, live PG): INTEG_EXIT=0; DailyRefreshFullPipeline_I03 PASS (card_runs scrape[success] + extract[partial, sidecar 503, zero fabrication] + 2x reconcile audited; reconcile merged seeded observations into 1 authoritative rotating_categories row), MonthlyRecommendFullPipeline_I04 PASS (1 recommendation pointing at wallet card rate 4 + optimize run + calendar_sync run + CalDAV event under stable UID persisted back), ManualTriggerReusesRefresh_I05 PASS (manual trigger reuses RunDailyRefresh; card_runs.trigger=manual delta 1, scheduled delta 0 — not mislabeled), ReRunIdempotent_I06 PASS (ADVERSARIAL: re-run refresh keeps exactly 1 rotating row; re-run recommend keeps 1 rec row + re-PUTs the SAME CalDAV UID, no duplicate rows/events); disposable stack fully torn down (all containers + 3 volumes + network removed — ephemeral isolation). Build Quality Gate GREEN: CHECK_EXIT=0 (config in sync + drift guard + scenario-lint 16 scenarios), LINT_EXIT=0 (golangci-lint clean + Web validation passed), FORMAT first flagged the 2 un-gofmt'd Scope 09 files (FORMAT_EXIT=1) then ./smackerel.sh format applied gofmt -w and FORMAT_RECHECK_EXIT=0 (main.go hash byte-identical), ARTIFACT_LINT_EXIT=0 (Artifact lint PASSED; 1 pre-existing non-blocking scopeProgress deprecation warning). Blocked-needs-live-Ollama (NOT a Scope 09 blocker): the I03 extract leg shows extracted=0 because the disposable stack serves no live model (HTTPSidecarExtractor 503) — the orchestrator records a partial extract run and fabricates nothing; Scope 09's wiring + card_runs audit + reconcile are proven via the seeded-observation path (PersistExtractionRun) without a live LLM. The live-LLM extract leg is Scope 05's E08 item, not Scope 09's. Evidence recorded inline in report.md 'Delivery — Scope 09' section (DoD 1-5, >=10 raw lines each)."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "executionModel": "parent-expanded-child-mode",
+      "executionNote": "full-delivery RESUME; runSubagent/agent UNAVAILABLE in this runtime, so the Scope 10 implement+test phases were executed in parent-expanded form by a single orchestrator agent — NO separate certified specialist sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed (disclosed, not fabricated). Scope 10 (Web UI — Wallet/Offers/Selections/Bonuses/Categories) was IMPLEMENTED this run (new internal/web/cardrewards.go + cardrewards_templates.go; new offer/selection/bonus Get/Update/Delete/List + ListCatalog domain methods in internal/cardrewards/store.go + service.go; CardRewardsWebUI interface + mount in internal/api/router.go; Dependencies.CardRewardsWebHandler in internal/api/health.go; web handler build+assign in cmd/core/wiring.go::wireCardRewardsHandler) and certified Done; all 5 DoD items [x] with real in-session evidence. cmd/core/main.go was NOT touched (web handler wired via wiring.go which already runs before NewRouter; git diff of main.go = ONLY the concurrent spec-084 WriteTimeout 1800->3600 hunk). The unrelated concurrent BUG-064-002 / spec-084 working-tree changes (internal/assistant/*, internal/telegram/*, cmd/core/main.go [spec-084 hunk only], cmd/core/wiring_assistant_openknowledge.go, cmd/core/openknowledge_prompt_contract_test.go, config/prompt_contracts/open_knowledge.yaml, config/smackerel.yaml [spec-084 open_knowledge iterations/budget only], docs/Operations.md, specs/064+084) were NOT read, modified, staged, or committed. No card_rewards feature-flag bundle edit (config/feature-flags.mvp.yaml) — bubbles.train-owned. Not committed (autoCommit off); working tree left ready for an orchestrator preservation commit of the Scope 10 cardrewards/web surface only. Pre-existing out-of-scope finding recorded in report.md: the shared internal/web head template loads htmx from a URL the global CSP does not allow-list (trailing-slash mismatch) — owned by the web/spec-044/057 area, not Scope 10; card-rewards pages use a script-free head so they are CSP-clean without touching shared head/CSP. Top-level status stays in_progress: Scope 05 remains In Progress (E08 blocked-needs-live-Ollama) and scope 11 remains Not Started, so completedScopes becomes [1,2,3,4,6,7,8,9,10] and currentScope advances to 11.",
+      "phasesExecuted": ["implement", "test"],
+      "scopesDelivered": [10],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-12T01:30:00Z",
+      "runEndedAt": "2026-06-12T02:30:00Z",
+      "summary": "Scope 10 (Web UI — Wallet/Offers/Selections/Bonuses/Categories) IMPLEMENTED + certified Done with real in-session evidence; all 5 DoD items [x]. Server-rendered Go html/template + go-chi pages behind webAuthMiddleware + global CSP, design-token styling (var(--…), no hardcoded colors), plain Post/Redirect/Get forms (no client JS, strictly CSP-clean). Routes: /cards/wallet (list/add-discovery/add-custom/edit+note/toggle/remove), /cards/offers (list/add/edit/toggle/remove incl shared_limit_group), /cards/selections (list/add+tiered/edit), /cards/bonuses (list/add/progress), /cards/categories (list/upsert). Domain CRUD live-PG tests (./smackerel.sh test integration --go-run CardRewardsStoreCRUD): INTEG_EXIT=0; TestCardRewardsStoreCRUD_OfferLifecycle_J06 PASS (edit round-trip + ListOffers + delete + missing-row delete returns (false,nil)), SelectionLifecycle_J07 PASS (tier-1->tier-2 edit round-trip), BonusLifecycle PASS (spend-progress meets requirement -> met=true round-trip); disposable stack torn down clean. e2e-ui (./smackerel.sh test e2e-ui cardrewards): E2EUI_EXIT=0, 7 passed (5.2s) on the freshly-rebuilt disposable stack — J01+J03 (custom add; wallet lists nickname/type/note/active), J02 (catalog discovery), J04 (edit+note persists on reload), J05 (toggle activation), J06 (offer shared_limit_group + edit round-trip), J07 (tiered tier-1+tier-2 save), J08 (category equivalents+starred, idempotent upsert not duplicated). All specs: real /v1/web/login auth (adversarial no-/login-bounce assertion), real /api/cards REST seeding (NOT interception), user-visible state assertions, reload-persistence, assertNoCSPViolations; no-interception grep clean (page.route/context.route/intercept/cy.intercept/msw/nock = 0). Docker bundle freshness: stale smackerel-test-e2e-ui-smackerel-core image removed (RM_EXIT=0), re-run rebuilt core fresh (COPY . . 17.7s + go build 43.2s) and container Healthy before specs ran. Build Quality Gate GREEN: CHECK_EXIT=0, LINT_EXIT=0 (golangci-lint All checks passed! + Web validation passed), FORMAT_RECHECK_EXIT=0 (65 files already formatted), ARTIFACT_LINT_EXIT recorded inline in report.md 'Delivery — Scope 10' DoD 5."
     }
   ]
 }
