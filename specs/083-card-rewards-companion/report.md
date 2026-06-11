@@ -1614,3 +1614,220 @@ and scopes 07–11 remain Not Started, so `completedScopes` becomes
 ["1","2","3","4","6"] and `currentScope` advances to 7. NOT committed (autoCommit
 off) — the orchestrator owns the preservation checkpoint.
 
+## Delivery — Scope 07: Optimizer & Monthly Recommendation Generation (2026-06-11)
+
+> Scope 07 was delivered by a prior implement pass that was cut off **while the
+> live-PG integration image build was still running**: the implementation
+> (`internal/cardrewards/optimize.go`, `recommend.go`, the REST
+> recommendation/generate/report endpoints in `internal/api/cardrewards.go`, plus
+> the `service.go`/`store.go` additions) and the unit tests (G01–G05) already
+> existed on disk, but the live-PG integration (G06/G07) and e2e-api (G08)
+> evidence was never captured and the scope was never flipped. This run is a
+> **VERIFY + CERTIFY** pass: every Scope 07 test was re-run via the repo CLI to
+> completion, the previously-missing live-PG + live-stack evidence was captured,
+> all gates confirmed green, and **NO implementation bug was found** — no
+> implementation source was rewritten. The only working-tree write to a Scope 07
+> file was `gofmt` whitespace on `tests/e2e/cardrewards_api_test.go` (the cut-off
+> pass never formatted it); G08 was re-run after formatting and PASSED again.
+
+### Files verified (Scope 07)
+
+- `internal/cardrewards/optimize.go` (NEW) — effective-rate optimizer: base/rotating/offer/selection, shared-limit pools, ties, equivalents normalization, reasons recorded (Principle 8).
+- `internal/cardrewards/optimize_test.go` (NEW) — unit G01–G05 + `NoBenefit_ReturnsNone` / `InactiveCardExcluded` edges.
+- `internal/cardrewards/recommend.go` (NEW) — per-period recommendation generation honoring `starred_override`, audit run appended.
+- `internal/cardrewards/recommend_test.go` (NEW, `//go:build integration`) — live-PG G06 + adversarial G07.
+- `internal/api/cardrewards.go` (M) — REST `GET /api/card-recommendations`, `POST /api/card-recommendations/generate`, optimization-report endpoint.
+- `internal/cardrewards/service.go`, `internal/cardrewards/store.go` (M) — recommender/optimizer wiring + recommendation upsert/list queries.
+- `tests/e2e/cardrewards_api_test.go` (M) — e2e-api G08 (live stack); gofmt'd this run.
+
+### Evidence — DoD 1: Implementation behavior complete (optimizer + recommender + REST + reasons)
+
+No implementation source was rewritten this run; the behavior is proven by the G01–G08 scenario tests below (optimizer base/rotating/expired/shared-limit/equivalents; recommender per-category generation + starred-override preservation; REST endpoints; reasons recorded — asserted by G01 "records a reason" and G02 "reason cites the rotating benefit"). The only Scope 07 working-tree write was gofmt whitespace on the e2e test (no logic change):
+
+```text
+?? internal/cardrewards/optimize.go
+?? internal/cardrewards/optimize_test.go
+?? internal/cardrewards/recommend.go
+?? internal/cardrewards/recommend_test.go
+ M internal/api/cardrewards.go
+ M internal/cardrewards/service.go
+ M internal/cardrewards/store.go
+ M tests/e2e/cardrewards_api_test.go
+```
+
+Behaviour cross-references: optimizer reasons + selection → DoD 2/3 block; per-category generation + starred override → DoD 4 block; REST endpoints round-trip → DoD 5 block.
+
+### Evidence — DoD 2 (SCN-083-G01, G02, G03) + DoD 3 (SCN-083-G04, G05) — unit
+
+Command: `./smackerel.sh test unit --go --go-run 'Optimize' --verbose`
+
+```text
+[go-unit] applying -run selector: Optimize
++ go test -v -run Optimize -count=1 ./...
+=== RUN   TestOptimize_BaseRateHighestWins_G01
+--- PASS: TestOptimize_BaseRateHighestWins_G01 (0.00s)
+=== RUN   TestOptimize_ActiveRotatingBeatsBase_G02
+--- PASS: TestOptimize_ActiveRotatingBeatsBase_G02 (0.00s)
+=== RUN   TestOptimize_ExpiredRotatingIgnored_G03
+--- PASS: TestOptimize_ExpiredRotatingIgnored_G03 (0.00s)
+=== RUN   TestOptimize_SharedLimitPoolNotDoubleCounted_G04
+--- PASS: TestOptimize_SharedLimitPoolNotDoubleCounted_G04 (0.00s)
+=== RUN   TestOptimize_EquivalentsNormalizeBeforeMatching_G05
+--- PASS: TestOptimize_EquivalentsNormalizeBeforeMatching_G05 (0.00s)
+=== RUN   TestOptimize_NoBenefit_ReturnsNone
+--- PASS: TestOptimize_NoBenefit_ReturnsNone (0.00s)
+=== RUN   TestOptimize_InactiveCardExcluded
+--- PASS: TestOptimize_InactiveCardExcluded (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.050s
+[go-unit] go test ./... finished OK
+@@@UNIT_EXIT=0@@@
+```
+
+G03 is the **adversarial** case (expired rotating benefit must NOT be used); G04 is the **shared-limit pool** case (combined limit counted once, not double-counted); G05 is the **equivalents** case (alias normalization before matching). All PASS.
+
+### Evidence — DoD 4: SCN-083-G06 + adversarial SCN-083-G07 — integration (live PG)
+
+Command: `./smackerel.sh test integration --go-run 'RecommendLivePG'` (disposable test stack, real PostgreSQL)
+
+```text
+ Container smackerel-test-postgres-1  Healthy
+ Container smackerel-test-smackerel-core-1  Healthy
+ Container smackerel-test-smackerel-ml-1  Healthy
+go-integration: applying -run selector: RecommendLivePG
+=== RUN   TestRecommendLivePG_PerCategoryGeneration_G06
+--- PASS: TestRecommendLivePG_PerCategoryGeneration_G06 (0.05s)
+=== RUN   TestRecommendLivePG_StarredOverridePreserved_G07
+--- PASS: TestRecommendLivePG_StarredOverridePreserved_G07 (0.07s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.145s
+PASS: go-integration
+Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-smackerel-core-1  Removed
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Removed
+ Volume smackerel-test-nats-data  Removing
+ Volume smackerel-test-postgres-data  Removed
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Network smackerel-test_default  Removed
+@@@INTEG_EXIT=0@@@
+```
+
+G07 is the **adversarial** regression: a `starred_override` recommendation is PRESERVED over the optimizer's pick (the test fails with "starred_override was cleared — the manual override was overwritten (G07 regression)" if the override is overwritten). PASS. Disposable stack fully torn down (all containers + 3 volumes + network removed — ephemeral isolation).
+
+### Evidence — DoD 5: SCN-083-G08 — e2e-api (live stack)
+
+Command: `./smackerel.sh test e2e --go-run 'TestCardRewardsRecommendationsE2E_G08'` (live stack; core image rebuilt with the new REST endpoints). Run once before formatting and **re-run after the gofmt whitespace fix** so the certified file state is the one tested:
+
+```text
+ Container smackerel-test-smackerel-core-1  Healthy
+ Container smackerel-test-smackerel-ml-1  Healthy
+go-e2e: applying -run selector: TestCardRewardsRecommendationsE2E_G08
+=== RUN   TestCardRewardsRecommendationsE2E_G08
+--- PASS: TestCardRewardsRecommendationsE2E_G08 (0.06s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.515s
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+ Container smackerel-test-smackerel-core-1  Removed
+ Container smackerel-test-postgres-1  Removed
+ Container smackerel-test-smackerel-ml-1  Removed
+ Volume smackerel-test-postgres-data  Removed
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Network smackerel-test_default  Removed
+@@@E2E_RERUN_EXIT=0@@@
+```
+
+The G08 test declares a unique tracked category, adds a card with a 5% offer, `POST /api/card-recommendations/generate` for a unique period (`generated >= 1`), then `GET /api/card-recommendations?period=...` and the optimization-report endpoint, asserting they return the current period's data — real chi router, bearer auth, optimizer, recommender, and PostgreSQL (no mocks). First run `@@@E2E_EXIT=0@@@`; post-gofmt re-run `@@@E2E_RERUN_EXIT=0@@@` (shown above). Both PASS.
+
+### Evidence — DoD 6: Build Quality Gate (check / lint / format / artifact-lint)
+
+`./smackerel.sh check` →
+
+```text
+config-validate: ~/smackerel/config/generated/dev.env.tmp OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+@@@CHECK_EXIT=0@@@
+```
+
+`./smackerel.sh lint` →
+
+```text
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/extension/background.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+@@@LINT_EXIT=0@@@
+```
+
+`./smackerel.sh format --check` first flagged the un-gofmt'd Scope 07 e2e test (the only unclean file in the whole tree — no BUG-064-002 file was listed), then `./smackerel.sh format` applied gofmt to that one file and `format --check` re-ran clean:
+
+```text
+tests/e2e/cardrewards_api_test.go
+@@@FORMAT_EXIT=1@@@
+65 files already formatted
+@@@FORMAT_RECHECK_EXIT=0@@@
+```
+
+### Gate: artifact-lint — Scope 07
+
+Command: `bash .github/bubbles/scripts/artifact-lint.sh specs/083-card-rewards-companion`
+
+```text
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ Found DoD section in scopes.md
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: in_progress
+✅ Top-level status matches certification.status
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+@@@ARTIFACT_LINT_EXIT=0@@@
+```
+
+### Delivery — Scope 07 execution model (transparency)
+
+The `runSubagent`/`agent` tool was **unavailable** in this runtime, so the
+`full-delivery` test/verify phase for Scope 07 was executed in **parent-expanded**
+form by a single orchestrator agent — NO separate certified specialist sub-agents
+(bubbles.implement/test/validate/audit) were dispatched or claimed. Disclosed in
+`state.json.executionHistory`, consistent with Scopes 01–06. This run did NOT
+write implementation code: the optimizer/recommender implementation and the REST
+endpoints already existed on disk from the cut-off pass; this run RE-RAN every
+Scope 07 test via the repo CLI, captured the previously-missing live-PG (G06/G07)
+and e2e-api (G08) evidence, applied gofmt to the one unformatted e2e test file
+(whitespace only; G08 re-verified after), confirmed all gates green, found NO
+implementation bug, and flipped Scope 07 → Done. The unrelated concurrent
+BUG-064-002 / spec-084 work in the tree (`internal/assistant/*`,
+`internal/telegram/*`, `cmd/core/main.go`,
+`cmd/core/wiring_assistant_openknowledge.go`, `config/*`, `docs/Operations.md`,
+`specs/064`/`084`) was NOT read, modified, staged, or committed. Top-level
+`status` stays `in_progress`: Scope 05 remains In Progress (E08
+blocked-needs-live-Ollama) and scopes 08–11 remain Not Started, so
+`completedScopes` becomes `["1","2","3","4","6","7"]` and `currentScope` advances
+to 8. NOT committed (autoCommit off) — the orchestrator owns the preservation
+checkpoint.
+
