@@ -4432,8 +4432,8 @@ boundary; the agent terminates the loop and returns
 |---------|-------|-----------|
 | `assistant.open_knowledge.per_query_token_budget` | Per turn | Total LLM tokens (prompt + completion) across all iterations of one turn. |
 | `assistant.open_knowledge.per_query_usd_budget` | Per turn | Total estimated USD spend across all iterations of one turn. |
-| `assistant.open_knowledge.monthly_budget_usd` | Per deployment | Aggregate monthly cap across all users. `0` = unlimited (operator must set explicitly). |
-| `assistant.open_knowledge.per_user_monthly_budget_usd` | Per user | Per-user monthly cap. `0` = unlimited per user. |
+| `assistant.open_knowledge.monthly_budget_usd` | Per deployment | Aggregate monthly USD cap across all users. **NOT a sentinel: `0` means a $0 cap, not "unlimited".** MUST be `> 0` when `enabled: true`. (BUG-064-001) |
+| `assistant.open_knowledge.per_user_monthly_budget_usd` | Per user | Per-user monthly USD cap. **`0` is enforced by the SCN-064-A08 pre-flight gate as "no allowance" — the agent refuses EVERY query (`cap_usd`) before any LLM/tool call.** MUST be `> 0` when `enabled: true`. To DISABLE the capability use `enabled: false`, NOT a `0` budget. The default self-hosted deployment runs a zero-cost `CostFn` (local Ollama + searxng), so the configured ceiling never actually binds — it is a guardrail only if a paid provider + real `CostFn` is later wired. (BUG-064-001) |
 | `assistant.open_knowledge.max_iterations` | Per turn | Hard cap on planner ↔ tool ↔ observation cycles. |
 | `assistant.open_knowledge.llm_timeout_ms` | Per LLM roundtrip | Caps each `/llm/chat` call to the ML sidecar independently. |
 
