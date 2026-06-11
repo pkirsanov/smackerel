@@ -496,12 +496,12 @@ honest signal that the SPEC is not yet complete.
 | 01 Config SST & Migration Schema | **Done** | "Delivery — Scope 01" section (A01–A07 all validated with real output; Build Quality Gate green) |
 | 02 Card Domain Store, Types & CRUD API | **Done** | "Delivery — Scope 02" section (B01–B08 all validated with real output: resolve unit, store integration on live PG, e2e CRUD round-trip on live stack; Build Quality Gate green) |
 | 03 Data Migration (CCManager JSON → PG) | **Done** | "Delivery — Scope 03" section (C01–C06 all validated on real infra: 16 transform unit tests + 4 live-PG integration tests for catalog/aliases/row-counts, rotating manual_override, partial-file tolerance + migration-run logged, and second-run idempotency; Build Quality Gate green) |
-| 04 Card-Rewards Source Connector | Not Started | — |
-| 05 LLM Category Extraction (sidecar + orchestrator) | Not Started | — |
-| 06 Multi-Source Reconciliation & Lifecycle | Not Started | — |
-| 07 Optimizer & Monthly Recommendations | Not Started | — |
-| 08 CalDAV Calendar Delivery | Not Started | — |
-| 09 Scheduler Jobs & Manual Triggers | Not Started | — |
+| 04 Card-Rewards Source Connector | **Done** | "Delivery — Scope 04" section (D01–D06 unit incl. SSRF guard, slow-source isolation, health thresholds, verbatim no-parse; Build Quality Gate green) |
+| 05 LLM Category Extraction (sidecar + orchestrator) | In Progress | "Delivery — Scope 05" section (E01–E07 unit + live-PG green incl. adversarial malformed-discard-no-overwrite; **E08 successful-live-Ollama-inference blocked-needs-live-Ollama** — sidecar 503 on the disposable stack) |
+| 06 Multi-Source Reconciliation & Lifecycle | **Done** | "Delivery — Scope 06" section (F01–F07: adversarial disagreement + manual-override-never-overwritten unit, live-PG idempotent-upsert/pending-re-enrollment/lifecycle-transitions; Build Quality Gate green) |
+| 07 Optimizer & Monthly Recommendations | **Done** | "Delivery — Scope 07" section (G01–G08: optimize unit incl. adversarial expired-rotating-ignored + shared-limit-not-double-counted, live-PG per-category + starred-override-preserved, e2e generate/report; Build Quality Gate green) |
+| 08 CalDAV Calendar Delivery | **Done** | "Delivery — Scope 08" section (H01–H06: stable-UID create + adversarial re-sync-updates-same-UID, disabled-sync-keeps-data, delete-cleanup, live-PG sync-run-audited; Build Quality Gate green) |
+| 09 Scheduler Jobs & Manual Triggers | **Done** | "Delivery — Scope 09" section (I01–I06: jobs-on-configured-crons + adversarial no-swap unit, live-PG full daily/monthly pipelines audited, manual-reuse trigger="manual", adversarial re-run idempotency; Build Quality Gate green, artifact-lint exit 0) |
 | 10 Web UI — Wallet/Offers/Selections/Bonuses/Categories | Not Started | — |
 | 11 Web UI — Dashboard/Recommendations/Rotating-Verify/Report/Admin | Not Started | — |
 
@@ -2054,4 +2054,267 @@ stays `in_progress`: Scope 05 remains In Progress (E08 blocked-needs-live-Ollama
 and scopes 09–11 remain Not Started, so `completedScopes` becomes
 `["1","2","3","4","6","7","8"]` and `currentScope` advances to 9. NOT committed
 (autoCommit off) — the orchestrator owns the preservation checkpoint.
+
+## Delivery — Scope 09: Scheduler Jobs & Manual Triggers (2026-06-11)
+
+> Scope 09 was **VERIFIED + CERTIFIED in this run** (parent-expanded, see the
+> execution-model note below). A prior implement pass had completed the
+> implementation + unit tests but was **cut off while the live-PG integration
+> tests were running**, so it never captured them and never certified. This run
+> did **NOT rewrite implementation code** — it re-ran the full Scope 09 test set
+> via the repo CLI to completion, captured the previously-missing live-PG
+> evidence (I03/I04/I05/I06), confirmed every gate green, and found **NO
+> implementation bug**. The only working-tree write to a Scope 09 file was
+> `gofmt -w` whitespace on the two un-formatted files the cut-off pass left
+> behind (`cmd/core/wiring_cardrewards_scheduler.go`,
+> `internal/scheduler/cardrewards_test.go`) — directly analogous to the Scope 07
+> gofmt fix.
+
+### Files created / changed (Scope 09)
+
+| File | State | Purpose |
+|------|-------|---------|
+| `internal/cardrewards/pipeline.go` | new | Shared refresh/recommend code path: `RunDailyRefresh` (sync→extract→reconcile→lifecycle) + `RunMonthlyRecommend` (optimize→recommend→calendar sync); the SINGLE path both cron jobs AND manual triggers drive (NFR-CR-005); fail-loud `NewPipeline`; idempotent. |
+| `internal/cardrewards/pipeline_integration_test.go` | new | Live-PG T-09-02/T-09-03 (`//go:build integration`): I03/I04/I05/I06 with real Store+DB; only the source website + ML sidecar (503, no model) are external-boundary fakes. |
+| `internal/scheduler/cardrewards.go` | new | Registers `card_rewards_refresh` (scrape cron) + `card_rewards_recommend` (monthly cron) via the standard `AddFunc`+`runGuarded` pattern; `TriggerCardRewardsRefreshNow`/`TriggerCardRewardsRecommendNow` reuse the SAME pipeline methods with `trigger="manual"` under the same overlap guards. |
+| `internal/scheduler/cardrewards_test.go` | new | Unit T-09-01: I01/I02 jobs-on-configured-crons (+ adversarial no-swap), scheduled→`scheduled` trigger, I05 manual-reuse wiring, error propagation, nil-pipeline + empty-cron fail-loud-skip. |
+| `cmd/core/wiring_cardrewards_scheduler.go` | new | Constructs the pipeline from SST config + the connected connector and calls `SetCardRewardsJobs`; WARN-and-skips when disabled / pool-or-connector unavailable / cron empty (fail-loud, no default). |
+| `internal/cardrewards/store.go` | modified (+29) | `ListObservationRefs` — drives reconcile off ALL stored observation refs (not just this run's), which is what makes a re-run idempotent (I06). |
+| `internal/scheduler/scheduler.go` | modified (+13) | Scheduler struct fields (`cardRewardsPipeline`/`cardRewardsScrapeCron`/`cardRewardsRecommendCron`/`cardRewardsJobs` + two overlap mutexes) and the `scheduleCardRewardsJobs()` call in `Start()`. |
+| `cmd/core/main.go` | modified (1 line) | The single call-site line `wireCardRewardsScheduler(cfg, svc, sched)` after `wireLegacyRetirementScheduler`. The concurrent spec-084 `WriteTimeout 1800→3600` hunk in this file is NOT mine and was left byte-identical (hash unchanged before/after — see DoD 5). |
+
+### Evidence — DoD 1: Implementation behavior complete
+
+Daily refresh + monthly recommend jobs register on their configured crons; manual
+triggers reuse the SAME pipeline methods (only the trigger label differs); re-runs
+are idempotent. Behavior is proven end-to-end by the I01–I06 scenarios below (unit
+wiring + live-PG composite runs). No implementation code was rewritten this run;
+the source on disk (`pipeline.go`, `scheduler/cardrewards.go`,
+`wiring_cardrewards_scheduler.go`, the `ListObservationRefs` store method, the
+`scheduler.go` wiring) is unchanged except gofmt whitespace on the two files noted
+above. The shared-code-path guarantee (NFR-CR-005) is structural: both the cron
+callbacks (`runCardRewardsRefreshJob`/`runCardRewardsRecommendJob`) and the manual
+triggers (`TriggerCardRewardsRefreshNow`/`TriggerCardRewardsRecommendNow`) call the
+identical `Pipeline.RunDailyRefresh` / `Pipeline.RunMonthlyRecommend` methods —
+there is no second, manual-only path that could drift.
+
+### Evidence — DoD 2: SCN-083-I01 + I02 (jobs registered on crons) — unit
+
+**Command:** `./smackerel.sh test unit --go --go-run 'CardRewards' --verbose` — exit 0
+
+```text
+=== RUN   TestCardRewardsJobsRegisteredOnConfiguredCrons_I01_I02
+2026/06/11 21:16:44 INFO card_rewards_refresh scheduled cron="0 6 * * *"
+2026/06/11 21:16:44 INFO card_rewards_recommend scheduled cron="0 7 1 * *"
+2026/06/11 21:16:44 INFO scheduler stopped cleanly
+--- PASS: TestCardRewardsJobsRegisteredOnConfiguredCrons_I01_I02 (0.00s)
+=== RUN   TestCardRewardsScheduledJobsUseScheduledTrigger
+2026/06/11 21:16:44 INFO scheduler stopped cleanly
+--- PASS: TestCardRewardsScheduledJobsUseScheduledTrigger (0.00s)
+=== RUN   TestCardRewardsManualTriggersReuseSameMethodsWithManualTrigger_I05
+2026/06/11 21:16:44 INFO scheduler stopped cleanly
+--- PASS: TestCardRewardsManualTriggersReuseSameMethodsWithManualTrigger_I05 (0.00s)
+=== RUN   TestCardRewardsManualTriggerPropagatesPipelineError
+2026/06/11 21:16:44 INFO scheduler stopped cleanly
+--- PASS: TestCardRewardsManualTriggerPropagatesPipelineError (0.00s)
+=== RUN   TestCardRewardsJobsNotRegisteredWhenPipelineNil
+2026/06/11 21:16:44 INFO scheduler stopped cleanly
+--- PASS: TestCardRewardsJobsNotRegisteredWhenPipelineNil (0.00s)
+=== RUN   TestCardRewardsEmptyCronSkipsThatJob
+2026/06/11 21:16:44 INFO card_rewards_refresh scheduled cron="0 6 * * *"
+2026/06/11 21:16:44 INFO scheduler stopped cleanly
+--- PASS: TestCardRewardsEmptyCronSkipsThatJob (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/scheduler       0.037s
+[go-unit] go test ./... finished OK
+@@@UNIT_EXIT=0@@@
+```
+
+I01 (`card_rewards_refresh` on the scrape cron) and I02 (`card_rewards_recommend`
+on the monthly cron) both register on EXACTLY their configured crons, with the
+ADVERSARIAL no-swap assertions inside the test proving a regression that swapped
+the crons would fail. The config package's `TestLoadCardRewardsConfig_*` (14
+subtests, all PASS) also matched the `CardRewards` selector and is shown in the
+full transcript — those belong to Scope 01 and are green here as a side effect.
+
+### Evidence — DoD 3: SCN-083-I03 + I04 (full daily + monthly pipelines audited) — integration (live PG)
+
+**Command:** `./smackerel.sh test integration --go-run 'CardRewardsPipelineLivePG'` — exit 0 (disposable test stack, live Postgres)
+
+```text
+=== RUN   TestCardRewardsPipelineLivePG_DailyRefreshFullPipeline_I03
+2026/06/11 21:19:43 WARN card-rewards extraction sidecar error — flagging target for verification card_id=cr-int-...-discover-it period=Q3_2026 source=TestSource error="cardrewards sidecar: /extract-card-categories returned HTTP 503: {\"error\":\"no model available on disposable test stack\"}"
+2026/06/11 21:19:43 INFO card-rewards daily refresh complete trigger=scheduled artifacts=1 extracted=0 reconciled=1 lifecycle_transitioned=0
+--- PASS: TestCardRewardsPipelineLivePG_DailyRefreshFullPipeline_I03 (0.09s)
+=== RUN   TestCardRewardsPipelineLivePG_MonthlyRecommendFullPipeline_I04
+2026/06/11 21:19:43 INFO card-rewards monthly recommend complete trigger=scheduled period=2026-08 generated=1 preserved_override=0 calendar_events=1
+--- PASS: TestCardRewardsPipelineLivePG_MonthlyRecommendFullPipeline_I04 (0.06s)
+```
+
+I03 runs the full daily pipeline on live PG and asserts the `card_runs` audit
+trail: exactly 1 scheduled `scrape` run (status success), 1 `extract` run (status
+**partial** — the sidecar genuinely returned HTTP 503 with no model, so it flagged
+targets and **fabricated zero** observations: observation count unchanged), and 2
+`reconcile` runs (reconcile + advance-lifecycle), with reconcile genuinely merging
+the seeded observations into exactly 1 authoritative `rotating_categories` row.
+I04 runs optimize→recommend→calendar-sync: 1 `card_recommendations` row pointing at
+the wallet card (rate 4), 1 scheduled `optimize` run, 1 `calendar_sync` run, and a
+CalDAV event under the stable recommendation UID persisted back onto the rec row.
+(See the blocked-needs-live-Ollama note below: the live-LLM extract leg is the only
+piece deferred; the seeded-observation path proves the wiring + audit + reconcile.)
+
+### Evidence — DoD 4: SCN-083-I05 + I06 (manual trigger reuse + idempotency) — integration (live PG)
+
+**Command:** same integration run (`CardRewardsPipelineLivePG`) — exit 0
+
+```text
+=== RUN   TestCardRewardsPipelineLivePG_ManualTriggerReusesRefresh_I05
+2026/06/11 21:19:43 WARN card-rewards extraction sidecar error — flagging target for verification card_id=cr-int-...-discover-it period=Q3_2026 source=TestSource error="...HTTP 503..."
+2026/06/11 21:19:43 WARN card-rewards extraction sidecar error — flagging target for verification card_id=cr-int-...-discover-it period=Q3_2026 source=TestSource error="...HTTP 503..."
+2026/06/11 21:19:43 INFO card-rewards daily refresh complete trigger=manual artifacts=1 extracted=0 reconciled=2 lifecycle_transitioned=0
+--- PASS: TestCardRewardsPipelineLivePG_ManualTriggerReusesRefresh_I05 (0.06s)
+=== RUN   TestCardRewardsPipelineLivePG_ReRunIdempotent_I06
+2026/06/11 21:19:43 INFO card-rewards daily refresh complete trigger=scheduled artifacts=1 extracted=0 reconciled=3 lifecycle_transitioned=0
+2026/06/11 21:19:43 INFO card-rewards daily refresh complete trigger=scheduled artifacts=1 extracted=0 reconciled=3 lifecycle_transitioned=0
+2026/06/11 21:19:43 INFO card-rewards monthly recommend complete trigger=scheduled period=2026-08 generated=2 preserved_override=0 calendar_events=2
+2026/06/11 21:19:43 INFO card-rewards monthly recommend complete trigger=scheduled period=2026-08 generated=2 preserved_override=0 calendar_events=2
+--- PASS: TestCardRewardsPipelineLivePG_ReRunIdempotent_I06 (0.12s)
+PASS
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.352s
+PASS: go-integration
+@@@INTEG_EXIT=0@@@
+```
+
+I05 proves the manual "scrape now" trigger reuses the SAME `RunDailyRefresh` code
+path with `trigger="manual"`: the `card_runs.trigger` column carries `manual`
+(manual scrape-run delta = 1, scheduled scrape-run delta = 0 — it does NOT mislabel
+as scheduled) and the manual refresh genuinely reconciled on live PG (1 rotating
+row). I06 (**ADVERSARIAL idempotency**) re-runs both jobs: a second
+`RunDailyRefresh` keeps exactly 1 `rotating_categories` row (a non-idempotent
+reconcile would show 2 — the assertion FAILS if regressed), and a second
+`RunMonthlyRecommend` keeps exactly 1 `card_recommendations` row while issuing a
+fresh `PutEvent` against the SAME stable CalDAV UID (event UPDATED, not duplicated;
+the test FAILS if `putCalls` does not increase OR if the row count grows). The
+disposable stack was torn down cleanly on exit (all containers + 3 volumes
+[postgres-data, nats-data, ollama-data] + network removed — ephemeral isolation).
+
+### Evidence — DoD 5: Build Quality Gate (check / lint / format / artifact-lint)
+
+**`./smackerel.sh check` — exit 0:**
+
+```text
+config-validate: ~/smackerel/config/generated/dev.env.tmp.1950139 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+@@@CHECK_EXIT=0@@@
+```
+
+**`./smackerel.sh lint` — exit 0 (golangci-lint + web validation):**
+
+```text
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: web/extension/manifest.json
+  OK: web/extension/manifest.firefox.json
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/extension/background.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+@@@LINT_EXIT=0@@@
+```
+
+**`./smackerel.sh format --check` — first flagged the two un-gofmt'd Scope 09 files (exit 1), then `./smackerel.sh format` applied `gofmt -w`, then re-check exit 0:**
+
+```text
+# ./smackerel.sh format --check   (first pass — un-formatted files from the cut-off implement pass)
+cmd/core/wiring_cardrewards_scheduler.go
+internal/scheduler/cardrewards_test.go
+@@@FORMAT_EXIT=1@@@
+
+# ./smackerel.sh format            (gofmt -w is silent for Go; ruff reports the Python files)
+65 files left unchanged
+@@@FORMAT_APPLY_EXIT=0@@@
+
+# ./smackerel.sh format --check   (re-check — clean)
+65 files already formatted
+@@@FORMAT_RECHECK_EXIT=0@@@
+```
+
+`go-format.sh` apply mode is `gofmt -w cmd internal tests/*.go` (silent — it
+rewrote only the two non-compliant Scope 09 files); the "65 files" counts are
+`ruff` (Python) output and were always clean (my changes are Go-only). The shared
+`cmd/core/main.go` was **NOT** touched by format — proven by an identical content
+hash before and after:
+
+```text
+@@@MAINGO_SHA_BEFORE=dcee8972c1bb4f6543e3970fe127b716f0ff0b44@@@
+@@@MAINGO_SHA_AFTER=dcee8972c1bb4f6543e3970fe127b716f0ff0b44@@@
+```
+
+**`bash .github/bubbles/scripts/artifact-lint.sh specs/083-card-rewards-companion` — exit 0:**
+
+```text
+✅ Required artifact exists: spec.md / design.md / scopes.md / report.md / uservalidation.md / state.json
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ uservalidation checklist has checked-by-default entries
+✅ Detected state.json status: in_progress    workflowMode: full-delivery
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' (pre-existing, carried from earlier scopes — non-blocking)
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md / report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+@@@ARTIFACT_LINT_EXIT=0@@@
+```
+
+NFR-CR-005 (manual + scheduled paths share code) is satisfied structurally and
+proven by I05; zero warnings in build/check/lint; artifact-lint clean.
+
+### Blocked-needs-live-Ollama note (NOT a Scope 09 blocker)
+
+The I03 daily-refresh extract leg shows `extracted=0` because the disposable test
+stack has **no live model** — a real `HTTPSidecarExtractor` round-trips to a local
+httptest server returning HTTP 503, so the Scope 05 orchestrator records a
+**partial** extract run and flags targets for verification, **fabricating nothing**.
+This is the same deferred-live-Ollama state already recorded against **Scope 05's
+E08** item. It is **NOT a Scope 09 blocker**: Scope 09's scenarios are about the
+scheduler wiring, the composite-pipeline composition, the `card_runs` audit trail,
+and idempotency — all of which are fully proven here via the **seeded-observation
+path** (`PersistExtractionRun`), so reconcile→lifecycle→optimize→recommend→calendar
+are genuinely exercised on live PG without requiring a live LLM. The only piece
+that genuinely needs live Ollama is a model producing observations from page text,
+which is Scope 05's remit, not Scope 09's. No live-LLM success was fabricated.
+
+### Delivery — Scope 09 execution model (transparency)
+
+The `runSubagent`/`agent` tool was **unavailable** in this runtime, so the
+`full-delivery` test/verify phase for Scope 09 was executed in **parent-expanded**
+form by a single orchestrator agent — NO separate certified specialist sub-agents
+(bubbles.implement/test/validate/audit) were dispatched or claimed. Disclosed in
+`state.json.executionHistory`, consistent with Scopes 01–08. This run did **NOT**
+write implementation code; it re-ran the full Scope 09 test set via the repo CLI to
+completion, captured the previously-missing live-PG evidence, confirmed all gates
+green, and found **NO** implementation bug — the only working-tree write was
+`gofmt -w` whitespace on `cmd/core/wiring_cardrewards_scheduler.go` and
+`internal/scheduler/cardrewards_test.go`. The unrelated concurrent
+**BUG-064-002 / spec-084** work in the tree (`internal/assistant/*`,
+`internal/telegram/*`, `cmd/core/main.go` [spec-084 hunk only],
+`cmd/core/wiring_assistant_openknowledge.go`,
+`cmd/core/openknowledge_prompt_contract_test.go`,
+`config/prompt_contracts/open_knowledge.yaml`, `config/smackerel.yaml`,
+`docs/Operations.md`, `specs/064`/`084`) was NOT read, modified, staged, or
+committed. No `card_rewards` feature-flag bundle edit (`config/feature-flags.mvp.yaml`)
+— bubbles.train-owned. Top-level `status` stays `in_progress`: Scope 05 remains In
+Progress (E08 blocked-needs-live-Ollama) and scopes 10–11 remain Not Started, so
+`completedScopes` becomes `["1","2","3","4","6","7","8","9"]` and `currentScope`
+advances to 10. NOT committed (autoCommit off) — the orchestrator owns the
+preservation checkpoint (it will hunk-stage the single `main.go` card-rewards line
+separately from the spec-084 hunk).
 
