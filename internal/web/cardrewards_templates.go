@@ -52,11 +52,16 @@ form p { margin:0.5rem 0; }
 
 {{define "cardrewards-nav"}}
 <nav aria-label="Card rewards" style="border-top:1px solid var(--border);margin-top:-1rem">
+  <a href="/cards">Dashboard</a>
   <a href="/cards/wallet">My Cards</a>
   <a href="/cards/offers">Offers</a>
   <a href="/cards/selections">Selections</a>
   <a href="/cards/bonuses">Sign-up Bonuses</a>
   <a href="/cards/categories">Categories</a>
+  <a href="/cards/recommendations">Recommendations</a>
+  <a href="/cards/rotating">Rotating</a>
+  <a href="/cards/report">Report</a>
+  <a href="/cards/admin">Admin</a>
 </nav>
 {{end}}
 
