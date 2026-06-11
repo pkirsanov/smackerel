@@ -56,6 +56,14 @@ func (h *CardRewardsHandler) RegisterRoutes(r chi.Router) {
 		r.Post("/generate", h.GenerateRecommendations)
 	})
 	r.Get("/card-optimization-report", h.OptimizationReport)
+	// Spec 083 Scope 11 — rotating-category read + observation/reconcile seed
+	// surface (the rotating-verify web page's backing data + the e2e-ui seam
+	// that produces a needs_verification record from disagreeing observations).
+	r.Route("/card-rotating", func(r chi.Router) {
+		r.Get("/", h.ListRotatingCategories)
+		r.Post("/observations", h.CreateRotatingObservation)
+		r.Post("/reconcile", h.ReconcileRotating)
+	})
 }
 
 // ---- request DTOs (snake_case) ---------------------------------------------
@@ -472,6 +480,94 @@ func (h *CardRewardsHandler) OptimizationReport(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, report)
 }
 
+// ---- rotating categories (spec 083 Scope 11) -------------------------------
+
+type createObservationRequest struct {
+	CardCatalogID string   `json:"card_catalog_id"`
+	PeriodLabel   string   `json:"period_label"`
+	PeriodStart   string   `json:"period_start"`
+	PeriodEnd     string   `json:"period_end"`
+	Categories    []string `json:"categories"`
+	Confidence    float64  `json:"confidence"`
+	SourceName    string   `json:"source_name"`
+	SourceURL     string   `json:"source_url"`
+	LimitCents    *int     `json:"limit_cents"`
+}
+
+type reconcileRequest struct {
+	Threshold float64 `json:"threshold"`
+	Trigger   string  `json:"trigger"`
+}
+
+// ListRotatingCategories returns every reconciled rotating-category record
+// (all lifecycle states). Read surface behind the same /api auth as the rest
+// of the card-rewards API.
+func (h *CardRewardsHandler) ListRotatingCategories(w http.ResponseWriter, r *http.Request) {
+	cats, err := h.Service.ListRotatingCategories(r.Context())
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+	if cats == nil {
+		cats = []cardrewards.RotatingCategory{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"rotating_categories": cats})
+}
+
+// CreateRotatingObservation persists a single per-source rotating-category
+// observation under a fresh extract audit run. It is the seam the rotating-
+// verify e2e-ui test uses to seed the observations the reconciler merges.
+func (h *CardRewardsHandler) CreateRotatingObservation(w http.ResponseWriter, r *http.Request) {
+	var req createObservationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "CARD_REWARDS_VALIDATION", "invalid JSON body")
+		return
+	}
+	start, err := parseOptionalDate(req.PeriodStart)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "CARD_REWARDS_VALIDATION", "invalid period_start (want YYYY-MM-DD)")
+		return
+	}
+	end, err := parseOptionalDate(req.PeriodEnd)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "CARD_REWARDS_VALIDATION", "invalid period_end (want YYYY-MM-DD)")
+		return
+	}
+	obs, err := h.Service.CreateObservation(r.Context(), cardrewards.RotatingCategoryObservation{
+		CardCatalogID: req.CardCatalogID,
+		PeriodLabel:   req.PeriodLabel,
+		PeriodStart:   start,
+		PeriodEnd:     end,
+		Categories:    req.Categories,
+		Confidence:    req.Confidence,
+		SourceName:    req.SourceName,
+		SourceURL:     req.SourceURL,
+		LimitCents:    req.LimitCents,
+	})
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, obs)
+}
+
+// ReconcileRotating merges every stored observation into its authoritative
+// rotating-category record via the Scope 06 reconciler. The confidence
+// threshold is a REQUIRED request field (no hidden default).
+func (h *CardRewardsHandler) ReconcileRotating(w http.ResponseWriter, r *http.Request) {
+	var req reconcileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "CARD_REWARDS_VALIDATION", "invalid JSON body")
+		return
+	}
+	res, err := h.Service.Reconcile(r.Context(), req.Threshold, req.Trigger)
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
 // handleServiceError maps card-rewards service sentinel errors to HTTP status.
 func (h *CardRewardsHandler) handleServiceError(w http.ResponseWriter, err error) {
 	switch {
@@ -479,6 +575,10 @@ func (h *CardRewardsHandler) handleServiceError(w http.ResponseWriter, err error
 		writeError(w, http.StatusBadRequest, "CARD_REWARDS_VALIDATION", err.Error())
 	case errors.Is(err, cardrewards.ErrUserCardNotFound):
 		writeError(w, http.StatusNotFound, "CARD_NOT_FOUND", err.Error())
+	case errors.Is(err, cardrewards.ErrRotatingNotFound):
+		writeError(w, http.StatusNotFound, "ROTATING_NOT_FOUND", err.Error())
+	case errors.Is(err, cardrewards.ErrRecommendationNotFound):
+		writeError(w, http.StatusNotFound, "RECOMMENDATION_NOT_FOUND", err.Error())
 	case errors.Is(err, cardrewards.ErrCatalogNotFound):
 		writeError(w, http.StatusUnprocessableEntity, "CATALOG_NOT_FOUND", err.Error())
 	default:
