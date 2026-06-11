@@ -738,9 +738,9 @@ Scenario: SCN-083-J08 — manage category names, equivalents, and starred
 
 | ID | Type | File | Scenario | Description |
 |----|------|------|----------|-------------|
-| T-10-01 | E2E UI | `tests/e2e-ui/cardrewards_wallet.spec.ts` | SCN-083-J01..J05 | Wallet list/add-discovery/add-custom/edit-note/toggle — live stack |
-| T-10-02 | E2E UI | `tests/e2e-ui/cardrewards_offers_selections.spec.ts` | SCN-083-J06, J07 | Offer shared-limit; tiered selection — live stack |
-| T-10-03 | E2E UI | `tests/e2e-ui/cardrewards_categories.spec.ts` | SCN-083-J08 | Category equivalents + starring — live stack |
+| T-10-01 | E2E UI | `web/pwa/tests/cardrewards_wallet.spec.ts` | SCN-083-J01..J05 | Wallet list/add-discovery/add-custom/edit-note/toggle — live stack |
+| T-10-02 | E2E UI | `web/pwa/tests/cardrewards_offers_selections.spec.ts` | SCN-083-J06, J07 | Offer shared-limit; tiered selection — live stack |
+| T-10-03 | E2E UI | `web/pwa/tests/cardrewards_categories.spec.ts` | SCN-083-J08 | Category equivalents + starring — live stack |
 
 ### Definition of Done
 
@@ -754,7 +754,7 @@ Scenario: SCN-083-J08 — manage category names, equivalents, and starred
 
 ## Scope 11: Web UI — Dashboard, Recommendations, Rotating Verify, Report, Admin
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** 06, 07, 09, 10
 **Spec Refs:** FR-CR-016, FR-CR-019, UC-002/005/006/007, Principle 8, design §9
@@ -811,19 +811,19 @@ Scenario: SCN-083-K08 — admin page triggers sync-calendar-now
 
 | ID | Type | File | Scenario | Description |
 |----|------|------|----------|-------------|
-| T-11-01 | E2E UI | `tests/e2e-ui/cardrewards_dashboard.spec.ts` | SCN-083-K01, K06 | Dashboard + report render — live stack |
-| T-11-02 | E2E UI | `tests/e2e-ui/cardrewards_recommendations.spec.ts` | SCN-083-K02, K03 | Recommendations view/add/edit/star + override — live stack |
-| T-11-03 | E2E UI | `tests/e2e-ui/cardrewards_rotating_verify.spec.ts` | SCN-083-K04, K05 | Verify badge + manual override clears flag — live stack |
-| T-11-04 | E2E UI | `tests/e2e-ui/cardrewards_admin.spec.ts` | SCN-083-K07, K08 | Admin scrape-now + sync-now + run history — live stack |
+| T-11-01 | E2E UI | `web/pwa/tests/cardrewards_dashboard.spec.ts` | SCN-083-K01, K06 | Dashboard + report render — live stack |
+| T-11-02 | E2E UI | `web/pwa/tests/cardrewards_recommendations.spec.ts` | SCN-083-K02, K03 | Recommendations view/add/edit/star + override — live stack |
+| T-11-03 | E2E UI | `web/pwa/tests/cardrewards_rotating_verify.spec.ts` | SCN-083-K04, K05 | Verify badge + manual override clears flag — live stack |
+| T-11-04 | E2E UI | `web/pwa/tests/cardrewards_admin.spec.ts` | SCN-083-K07, K08 | Admin scrape-now + sync-now + run history — live stack |
 
 ### Definition of Done
 
-- [ ] Implementation behavior complete: dashboard, recommendations, rotating-verify, report, and admin pages render with confidence/needs_verification badges and source citations; admin triggers wired to scheduler manual triggers
-- [ ] Scenario tests pass for SCN-083-K01 and SCN-083-K06 (dashboard + report) — e2e-ui (live stack)
-- [ ] Scenario tests pass for SCN-083-K02 and SCN-083-K03 (recommendations CRUD + override) — e2e-ui (live stack)
-- [ ] Scenario tests pass for SCN-083-K04 and SCN-083-K05 (verify badge + manual override clears flag) — e2e-ui (live stack)
-- [ ] Scenario tests pass for SCN-083-K07 and SCN-083-K08 (admin scrape-now/sync-now + run history) — e2e-ui (live stack)
-- [ ] Build Quality Gate: build/check/lint/format clean (zero warnings); e2e-ui hits real stack (no interception); Docker bundle freshness verified; artifact-lint clean; docs aligned
+- [x] Implementation behavior complete: dashboard, recommendations, rotating-verify, report, and admin pages render with confidence/needs_verification badges and source citations; admin triggers wired to scheduler manual triggers — Evidence: [report.md](report.md) → "Delivery — Scope 11 … Evidence — DoD 1: Implementation behavior complete" (CHECK_EXIT=0; full Go unit suite green for cmd/core + internal/cardrewards + internal/web + internal/api + internal/scheduler; the 8 live e2e scenarios prove every page renders and both admin triggers log a run)
+- [x] Scenario tests pass for SCN-083-K01 and SCN-083-K06 (dashboard + report) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 2: SCN-083-K01 + SCN-083-K06" (scenarios 3 + 5; dashboard renders recommendations + active-rotating + needs_verification badge + re-enrollment alert; report renders best-card-per-category with a non-empty reason)
+- [x] Scenario tests pass for SCN-083-K02 and SCN-083-K03 (recommendations CRUD + override) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 3: SCN-083-K02 + SCN-083-K03" (scenarios 7 + 13; add/edit/star persist + re-render; ADVERSARIAL — regenerate-from-UI preserves the starred override even though the card has no matching benefit)
+- [x] Scenario tests pass for SCN-083-K04 and SCN-083-K05 (verify badge + manual override clears flag) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-K04 + SCN-083-K05" (scenarios 9 + 11; needs_verification badge + confidence + 2 source citations from the real reconciler; ADVERSARIAL — a later high-confidence disagreeing reconcile does NOT overwrite the manual override)
+- [x] Scenario tests pass for SCN-083-K07 and SCN-083-K08 (admin scrape-now/sync-now + run history) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-K07 + SCN-083-K08" (scenarios 4 + 6; scrape-now fires the Scope 09 manual refresh trigger → a manual scrape run is logged; sync-now fires the manual recommend trigger → a manual optimize run is logged with events_written; non-zero CalDAV write deferred to enabled home-lab)
+- [x] Build Quality Gate: build/check/lint/format clean (zero warnings); e2e-ui hits real stack (no interception); Docker bundle freshness verified; artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 6: Build Quality Gate" (E2EUI_EXIT=0, 15 passed incl. 7 Scope 10; no-interception + silent-pass scans clean; LINT_EXIT=0; FORMATCHK_EXIT=0; Docker bundle freshness rebuild captured; scopesdriftguard ratchet re-verified; artifact-lint recorded below)
 
 ---
 

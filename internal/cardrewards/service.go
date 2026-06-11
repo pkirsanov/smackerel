@@ -24,6 +24,10 @@ var (
 	ErrSelectionNotFound = errors.New("cardrewards: selection not found")
 	// ErrBonusNotFound indicates a referenced signup bonus does not exist (404).
 	ErrBonusNotFound = errors.New("cardrewards: signup bonus not found")
+	// ErrRotatingNotFound indicates a referenced rotating-category record does not exist (404).
+	ErrRotatingNotFound = errors.New("cardrewards: rotating category not found")
+	// ErrRecommendationNotFound indicates a referenced recommendation does not exist (404).
+	ErrRecommendationNotFound = errors.New("cardrewards: recommendation not found")
 )
 
 // Service implements card-rewards business logic over a Store. It owns

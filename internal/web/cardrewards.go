@@ -21,11 +21,13 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -35,11 +37,36 @@ import (
 	"github.com/smackerel/smackerel/internal/cardrewards"
 )
 
+// runHistoryLimit caps the admin run-history table (spec 083 Scope 11). It is a
+// fixed UI page size, not an SST-managed runtime value.
+const runHistoryLimit = 50
+
+// CardRewardsTriggers is the admin manual-trigger seam (spec 083 Scope 11 →
+// Scope 09 scheduler manual triggers, NFR-CR-005). *scheduler.Scheduler
+// satisfies it. The admin page calls these for "scrape now" / "sync calendar
+// now". Because the scheduler is constructed AFTER the router (see
+// cmd/core/main.go), it is late-wired onto the handler; it may be nil, in which
+// case the admin page degrades to read-only run history and the trigger POSTs
+// return 503.
+type CardRewardsTriggers interface {
+	TriggerCardRewardsRefreshNow(ctx context.Context) error
+	TriggerCardRewardsRecommendNow(ctx context.Context) error
+}
+
 // CardRewardsWebHandler renders the spec 083 card-rewards pages.
 type CardRewardsWebHandler struct {
 	Service   *cardrewards.Service
 	Templates *template.Template
+	// Triggers is the admin manual-trigger seam (Scope 11). Late-wired after
+	// the scheduler is constructed; nil until then.
+	Triggers CardRewardsTriggers
 }
+
+// SetTriggers late-wires the admin manual-trigger seam after the scheduler is
+// constructed (the scheduler is built after the router, so this cannot be set
+// at construction time). Safe to call with a live scheduler; a nil value keeps
+// the admin page read-only.
+func (h *CardRewardsWebHandler) SetTriggers(t CardRewardsTriggers) { h.Triggers = t }
 
 // NewCardRewardsWebHandler builds the handler with a self-contained template
 // set (cardRewardsTemplates) that defines its own script-free "head"/"foot"
@@ -93,8 +120,21 @@ func NewCardRewardsWebHandler(svc *cardrewards.Service) *CardRewardsWebHandler {
 			}
 			return p
 		},
+		// confpct renders a 0..1 confidence as an integer percentage for the
+		// rotating-verify confidence badge (SCN-083-K04).
+		"confpct": func(c float64) int {
+			p := int(c*100 + 0.5)
+			if p < 0 {
+				return 0
+			}
+			if p > 100 {
+				return 100
+			}
+			return p
+		},
 	}
 	t := template.Must(template.New("cardrewards").Funcs(fm).Parse(cardRewardsTemplates))
+	template.Must(t.Parse(cardRewardsInsightsTemplates))
 	return &CardRewardsWebHandler{Service: svc, Templates: t}
 }
 
@@ -135,6 +175,25 @@ func (h *CardRewardsWebHandler) RegisterRoutes(r chi.Router) {
 	r.Route("/cards/categories", func(r chi.Router) {
 		r.Get("/", h.CategoriesPage)
 		r.Post("/", h.CategoryUpsert)
+	})
+	// Spec 083 Scope 11 — dashboard, recommendations, rotating-verify, report,
+	// and admin pages.
+	r.Get("/cards", h.DashboardPage)
+	r.Route("/cards/recommendations", func(r chi.Router) {
+		r.Get("/", h.RecommendationsPage)
+		r.Post("/", h.RecommendationUpsert)
+		r.Post("/star", h.RecommendationStar)
+		r.Post("/regenerate", h.RecommendationsRegenerate)
+	})
+	r.Route("/cards/rotating", func(r chi.Router) {
+		r.Get("/", h.RotatingPage)
+		r.Post("/{id}/verify", h.RotatingVerify)
+	})
+	r.Get("/cards/report", h.ReportPage)
+	r.Route("/cards/admin", func(r chi.Router) {
+		r.Get("/", h.AdminPage)
+		r.Post("/scrape", h.AdminScrapeNow)
+		r.Post("/sync-calendar", h.AdminSyncCalendarNow)
 	})
 }
 
@@ -636,7 +695,314 @@ func (h *CardRewardsWebHandler) CategoryUpsert(w http.ResponseWriter, r *http.Re
 	seeOther(w, r, "/cards/categories")
 }
 
+// ---- dashboard (SCN-083-K01) ------------------------------------------------
+
+// recommendationRow joins a recommendation with the display name of its
+// recommended wallet card.
+type recommendationRow struct {
+	cardrewards.CardRecommendation
+	CardName string
+}
+
+// rotatingRow joins a reconciled rotating-category record with its catalog card
+// name and (on the verify page) its per-source citations.
+type rotatingRow struct {
+	cardrewards.RotatingCategory
+	CatalogName string
+	Citations   []cardrewards.RotatingCategoryObservation
+}
+
+// DashboardPage handles GET /cards (SCN-083-K01): the hub showing the current
+// active rotating categories, this month's recommendations, and pending actions
+// (needs_verification rotating records + selectable-card re-enrollment alerts).
+func (h *CardRewardsWebHandler) DashboardPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	period := h.Service.CurrentPeriod()
+
+	_, recs, err := h.Service.ListRecommendations(ctx, period)
+	if err != nil {
+		h.fail(w, "load recommendations", err)
+		return
+	}
+	cardNames, _, err := h.cardNameIndex(r)
+	if err != nil {
+		h.fail(w, "load cards", err)
+		return
+	}
+	recRows := make([]recommendationRow, 0, len(recs))
+	for _, rec := range recs {
+		recRows = append(recRows, recommendationRow{CardRecommendation: rec, CardName: recCardName(rec.RecommendedUserCardID, cardNames)})
+	}
+
+	catalogNames, err := h.catalogNameIndex(ctx)
+	if err != nil {
+		h.fail(w, "load catalog", err)
+		return
+	}
+	active, err := h.Service.ListActiveRotatingCategories(ctx)
+	if err != nil {
+		h.fail(w, "load active rotating", err)
+		return
+	}
+	activeRows := make([]rotatingRow, 0, len(active))
+	for _, c := range active {
+		activeRows = append(activeRows, rotatingRow{RotatingCategory: c, CatalogName: catalogNames[c.CardCatalogID]})
+	}
+
+	all, err := h.Service.ListRotatingCategories(ctx)
+	if err != nil {
+		h.fail(w, "load rotating", err)
+		return
+	}
+	needsVerification := make([]rotatingRow, 0)
+	for _, c := range all {
+		if c.NeedsVerification {
+			needsVerification = append(needsVerification, rotatingRow{RotatingCategory: c, CatalogName: catalogNames[c.CardCatalogID]})
+		}
+	}
+
+	pending, err := h.Service.ListPendingReEnrollments(ctx)
+	if err != nil {
+		h.fail(w, "load pending re-enrollments", err)
+		return
+	}
+
+	h.render(w, "cardrewards-dashboard.html", map[string]any{
+		"Title":             "Card Rewards",
+		"Period":            period,
+		"Recommendations":   recRows,
+		"ActiveRotating":    activeRows,
+		"NeedsVerification": needsVerification,
+		"PendingReEnroll":   pending,
+	})
+}
+
+// ---- recommendations (SCN-083-K02/K03) --------------------------------------
+
+// RecommendationsPage handles GET /cards/recommendations (SCN-083-K02): list
+// recommendations for a period (?period=YYYY-MM, default current month) with
+// add/edit/star controls and a regenerate-from-UI button.
+func (h *CardRewardsWebHandler) RecommendationsPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	period, recs, err := h.Service.ListRecommendations(ctx, strings.TrimSpace(r.URL.Query().Get("period")))
+	if err != nil {
+		h.fail(w, "load recommendations", err)
+		return
+	}
+	cardNames, opts, err := h.cardNameIndex(r)
+	if err != nil {
+		h.fail(w, "load cards", err)
+		return
+	}
+	rows := make([]recommendationRow, 0, len(recs))
+	for _, rec := range recs {
+		rows = append(rows, recommendationRow{CardRecommendation: rec, CardName: recCardName(rec.RecommendedUserCardID, cardNames)})
+	}
+	h.render(w, "cardrewards-recommendations.html", map[string]any{
+		"Title": "Recommendations", "Period": period, "Recommendations": rows, "Cards": opts,
+	})
+}
+
+// RecommendationUpsert handles POST /cards/recommendations (SCN-083-K02
+// add/edit): create or update a per-category recommendation for the period.
+func (h *CardRewardsWebHandler) RecommendationUpsert(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.fail(w, "parse form", err)
+		return
+	}
+	period := strings.TrimSpace(r.FormValue("period_label"))
+	rec := cardrewards.CardRecommendation{
+		PeriodLabel:           period,
+		Category:              r.FormValue("category"),
+		RecommendedUserCardID: optStr(r.FormValue("recommended_user_card_id")),
+		Rate:                  atofDefault(r.FormValue("rate"), 0),
+		Reason:                r.FormValue("reason"),
+	}
+	if _, err := h.Service.UpsertRecommendation(r.Context(), rec); err != nil {
+		h.fail(w, "save recommendation", err)
+		return
+	}
+	seeOther(w, r, recommendationsPath(period))
+}
+
+// RecommendationStar handles POST /cards/recommendations/star (SCN-083-K02
+// star): set or clear the starred manual override. Starring sets
+// starred_override=true so a regenerate preserves the operator's pick over the
+// optimizer's (SCN-083-K03).
+func (h *CardRewardsWebHandler) RecommendationStar(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.fail(w, "parse form", err)
+		return
+	}
+	period := strings.TrimSpace(r.FormValue("period_label"))
+	category := r.FormValue("category")
+	starred := r.FormValue("starred") == "on"
+	if _, err := h.Service.StarRecommendation(r.Context(), period, category, starred); err != nil {
+		h.fail(w, "star recommendation", err)
+		return
+	}
+	seeOther(w, r, recommendationsPath(period))
+}
+
+// RecommendationsRegenerate handles POST /cards/recommendations/regenerate
+// (SCN-083-K03): regenerate the period's recommendations from the optimizer,
+// preserving any starred overrides.
+func (h *CardRewardsWebHandler) RecommendationsRegenerate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.fail(w, "parse form", err)
+		return
+	}
+	period := strings.TrimSpace(r.FormValue("period_label"))
+	if _, err := h.Service.GenerateRecommendations(r.Context(), period, "manual"); err != nil {
+		h.fail(w, "regenerate recommendations", err)
+		return
+	}
+	seeOther(w, r, recommendationsPath(period))
+}
+
+// ---- rotating verify (SCN-083-K04/K05) --------------------------------------
+
+// RotatingPage handles GET /cards/rotating (SCN-083-K04): list reconciled
+// rotating-category records with their confidence, needs_verification badge,
+// and per-source citations (Principle 4), each with a manual verify/override
+// form.
+func (h *CardRewardsWebHandler) RotatingPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	cats, err := h.Service.ListRotatingCategories(ctx)
+	if err != nil {
+		h.fail(w, "load rotating categories", err)
+		return
+	}
+	catalogNames, err := h.catalogNameIndex(ctx)
+	if err != nil {
+		h.fail(w, "load catalog", err)
+		return
+	}
+	rows := make([]rotatingRow, 0, len(cats))
+	for _, c := range cats {
+		obs, err := h.Service.ListObservations(ctx, c.CardCatalogID, c.PeriodLabel)
+		if err != nil {
+			h.fail(w, "load observations", err)
+			return
+		}
+		rows = append(rows, rotatingRow{RotatingCategory: c, CatalogName: catalogNames[c.CardCatalogID], Citations: obs})
+	}
+	h.render(w, "cardrewards-rotating.html", map[string]any{"Title": "Rotating Categories", "Rows": rows})
+}
+
+// RotatingVerify handles POST /cards/rotating/{id}/verify (SCN-083-K05): apply a
+// manual verify/override — store the operator-confirmed categories, set
+// manual_override, and clear needs_verification. Future extraction will not
+// overwrite the override (FR-CR-011).
+func (h *CardRewardsWebHandler) RotatingVerify(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.fail(w, "parse form", err)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	cats := splitCSV(r.FormValue("categories"))
+	if _, err := h.Service.VerifyRotatingCategory(r.Context(), id, cats); err != nil {
+		h.fail(w, "verify rotating category", err)
+		return
+	}
+	seeOther(w, r, "/cards/rotating")
+}
+
+// ---- report (SCN-083-K06) ---------------------------------------------------
+
+// ReportPage handles GET /cards/report (SCN-083-K06): the full optimization
+// report — the best card per tracked category with the reason for each pick
+// (Principle 8). ?period=YYYY-MM overrides the current month.
+func (h *CardRewardsWebHandler) ReportPage(w http.ResponseWriter, r *http.Request) {
+	report, err := h.Service.OptimizationReport(r.Context(), strings.TrimSpace(r.URL.Query().Get("period")))
+	if err != nil {
+		h.fail(w, "build optimization report", err)
+		return
+	}
+	h.render(w, "cardrewards-report.html", map[string]any{"Title": "Optimization Report", "Report": report})
+}
+
+// ---- admin (SCN-083-K07/K08) ------------------------------------------------
+
+// AdminPage handles GET /cards/admin (SCN-083-K07/K08): the run-history log plus
+// the "scrape now" / "sync calendar now" manual triggers.
+func (h *CardRewardsWebHandler) AdminPage(w http.ResponseWriter, r *http.Request) {
+	runs, err := h.Service.ListRuns(r.Context(), runHistoryLimit)
+	if err != nil {
+		h.fail(w, "load run history", err)
+		return
+	}
+	h.render(w, "cardrewards-admin.html", map[string]any{
+		"Title": "Admin", "Runs": runs, "TriggersEnabled": h.Triggers != nil,
+	})
+}
+
+// AdminScrapeNow handles POST /cards/admin/scrape (SCN-083-K07): fire the Scope
+// 09 manual refresh trigger (connector sync → extract → reconcile → lifecycle),
+// recording a new run in the history.
+func (h *CardRewardsWebHandler) AdminScrapeNow(w http.ResponseWriter, r *http.Request) {
+	if h.Triggers == nil {
+		http.Error(w, "card-rewards manual triggers are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.Triggers.TriggerCardRewardsRefreshNow(r.Context()); err != nil {
+		h.fail(w, "scrape now", err)
+		return
+	}
+	seeOther(w, r, "/cards/admin")
+}
+
+// AdminSyncCalendarNow handles POST /cards/admin/sync-calendar (SCN-083-K08):
+// fire the Scope 09 manual recommend trigger (optimize → recommend → calendar
+// sync), recording a new run logged with its events_written.
+func (h *CardRewardsWebHandler) AdminSyncCalendarNow(w http.ResponseWriter, r *http.Request) {
+	if h.Triggers == nil {
+		http.Error(w, "card-rewards manual triggers are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.Triggers.TriggerCardRewardsRecommendNow(r.Context()); err != nil {
+		h.fail(w, "sync calendar now", err)
+		return
+	}
+	seeOther(w, r, "/cards/admin")
+}
+
 // ---- helpers ----------------------------------------------------------------
+
+// recCardName resolves a recommendation's recommended wallet-card id to a
+// display name, returning an em dash when no card is recommended.
+func recCardName(userCardID *string, names map[string]string) string {
+	if userCardID == nil || *userCardID == "" {
+		return "—"
+	}
+	if n, ok := names[*userCardID]; ok {
+		return n
+	}
+	return *userCardID
+}
+
+// catalogNameIndex returns a catalog-card id → name map for resolving the
+// catalog name of a reconciled rotating-category record.
+func (h *CardRewardsWebHandler) catalogNameIndex(ctx context.Context) (map[string]string, error) {
+	catalog, err := h.Service.ListCatalog(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]string, len(catalog))
+	for _, c := range catalog {
+		names[c.ID] = c.Name
+	}
+	return names, nil
+}
+
+// recommendationsPath builds the recommendations page path, preserving an
+// explicit period query param across a Post/Redirect/Get cycle.
+func recommendationsPath(period string) string {
+	if strings.TrimSpace(period) == "" {
+		return "/cards/recommendations"
+	}
+	return "/cards/recommendations?period=" + url.QueryEscape(period)
+}
 
 // cardNameIndex returns a userCardID→display-name map and the matching select
 // options for the add/edit forms.

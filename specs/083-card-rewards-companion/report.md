@@ -2596,4 +2596,314 @@ blocked-needs-live-Ollama; Scope 11 Not Started). `completedScopes` =
 `[1,2,3,4,6,7,8,9,10]`, `currentScope` = 11. Not committed (autoCommit off) —
 the orchestrator owns the preservation checkpoint.
 
+## Delivery — Scope 11: Web UI — Dashboard, Recommendations, Rotating Verify, Report, Admin (2026-06-12)
+
+Scope 11 delivers the operator's consumption surfaces — the card-rewards
+dashboard, recommendations page, rotating-category verify page, optimization
+report, and admin page — completing the CCManager absorption (FR-CR-016,
+FR-CR-019, UC-002/005/006/007, Principle 8, design §9). Pages extend the Scope
+10 `internal/web` paradigm (Go `html/template` + go-chi, behind the existing
+`webAuthMiddleware` + global CSP, design tokens, plain Post/Redirect/Get forms,
+reusing the Scope 10 script-free `head`/`foot` so they stay strictly CSP-clean —
+the shared-head/htmx CSP mismatch noted in Scope 10 is a pre-existing
+out-of-scope finding and these pages do NOT depend on htmx). This is the FINAL
+scope (depends on 06,07,09,10 — all Done).
+
+### Execution model (transparency)
+
+`runSubagent`/`agent` was **unavailable** in this runtime, so the
+`full-delivery` implement+test phases for Scope 11 ran in **parent-expanded**
+form by a single orchestrator agent — NO separate certified specialist
+sub-agents (bubbles.implement/test/validate/audit) were dispatched or claimed.
+Disclosed in `state.json.executionHistory`, consistent with Scopes 01–10. The
+unrelated concurrent **BUG-064-002 / spec-084** work in the tree
+(`internal/assistant/*`, `internal/telegram/*`, `cmd/core/main.go` [spec-084
+WriteTimeout hunk only], `cmd/core/wiring_assistant_openknowledge.go`,
+`cmd/core/openknowledge_prompt_contract_test.go`,
+`config/prompt_contracts/open_knowledge.yaml`, `config/smackerel.yaml`
+[spec-084 open_knowledge hunk only], `docs/Operations.md`, `specs/064`/`084`)
+was NOT read, modified, staged, or committed. `cmd/core/main.go` was NOT
+touched: the admin manual-trigger seam is late-wired inside the existing
+`wireCardRewardsScheduler(cfg, svc, sched)` call (already invoked from `main()`
+after the scheduler is built). No `card_rewards` feature-flag bundle edit
+(`config/feature-flags.mvp.yaml`) — bubbles.train-owned.
+
+### Files created / changed (Scope 11)
+
+**Created:**
+- `internal/web/cardrewards_dashboard_templates.go` — `cardRewardsInsightsTemplates`: the 5 page templates (dashboard, recommendations, rotating, report, admin) with rich `data-*` hooks; parsed onto the same self-contained template set as Scope 10.
+- `internal/cardrewards/service_insights.go` — Scope 11 Service methods (rotating list/get/observations/verify, observation seed, reconcile, runs list, pending re-enrollments, recommendation upsert/star, `CurrentPeriod`).
+- `web/pwa/tests/_support/cardrewards.ts` — shared e2e-ui helpers (login + real `/api/*` seeders; no interception).
+- `web/pwa/tests/cardrewards_dashboard.spec.ts` — e2e-ui K01, K06.
+- `web/pwa/tests/cardrewards_recommendations.spec.ts` — e2e-ui K02, K03.
+- `web/pwa/tests/cardrewards_rotating_verify.spec.ts` — e2e-ui K04, K05.
+- `web/pwa/tests/cardrewards_admin.spec.ts` — e2e-ui K07, K08.
+
+**Modified (additive only):**
+- `internal/web/cardrewards.go` — `CardRewardsTriggers` admin seam interface + `Triggers` field + `SetTriggers`; `runHistoryLimit` const + `confpct` template func; dashboard/recommendations/rotating/report/admin handlers; `recCardName`/`catalogNameIndex`/`recommendationsPath` helpers; routes in `RegisterRoutes`; parse the new template set.
+- `internal/web/cardrewards_templates.go` — extended `cardrewards-nav` with Dashboard/Recommendations/Rotating/Report/Admin links (minimal additive nav edit; Scope 10 specs unaffected — re-verified below).
+- `internal/cardrewards/store.go` — `GetRotatingCategoryByID`, `ListRuns(limit)` (mirror existing pgx patterns).
+- `internal/cardrewards/service.go` — `ErrRotatingNotFound`/`ErrRecommendationNotFound` sentinels.
+- `internal/api/cardrewards.go` — `card-rotating` routes (list / observations seed / reconcile) + DTOs + handlers; `handleServiceError` maps the 2 new sentinels to 404.
+- `cmd/core/services.go` — `coreServices.cardRewardsWebHandler` field (stash for late-wiring).
+- `cmd/core/wiring.go` — `wireCardRewardsHandler` stashes the web handler on `svc`.
+- `cmd/core/wiring_cardrewards_scheduler.go` — late-wire `web.SetTriggers(sched)`; build the pipeline on pg-pool presence with crons gated on `enabled` (manual triggers available in dev/test, NO auto-cron); degraded (nil-sidecar) pipeline when disabled + `AUTH_TOKEN` absent.
+- `specs/083-card-rewards-companion/scopes.md` — corrected all 7 e2e-ui Test Plan paths from the planned `tests/e2e-ui/` prefix to the real `web/pwa/tests/` lane (resolves the `scopesdriftguard` ratchet; see below).
+
+### Admin-trigger wiring decision (K07/K08)
+
+The admin "scrape now" / "sync calendar now" buttons wire to the **Scope 09
+scheduler manual triggers** (`TriggerCardRewardsRefreshNow` /
+`TriggerCardRewardsRecommendNow`, NFR-CR-005 — the SAME pipeline code path as
+the cron jobs) via the `CardRewardsTriggers` seam (`*scheduler.Scheduler`
+satisfies it). Because the scheduler is built AFTER the router in `main()`, the
+seam is **late-wired** onto the web handler inside the existing
+`wireCardRewardsScheduler` call (no `main.go` edit). To make the manual triggers
+usable in dev/test (where `card_rewards.enabled=false`), the pipeline is now
+built whenever the Postgres pool is present, but cron auto-registration stays
+gated on `enabled` (empty crons → `scheduleCardRewardsJobs` registers nothing —
+no auto-scrape in dev). Where `AUTH_TOKEN` is an empty placeholder (dev/test),
+the HTTP sidecar extractor cannot be built; rather than fail-loud (correct only
+when ENABLED), a **degraded pipeline with a nil sidecar** is wired so the manual
+triggers still record `scrape`/`optimize` audit runs. This is safe: when
+disabled the connector is never connected, so the refresh's extract stage
+receives ZERO inputs and never dereferences the nil sidecar (`Extractor.Run`
+calls the sidecar only per-input). Live extraction is simply unavailable until
+`card_rewards` is enabled with a real `AUTH_TOKEN` (home-lab ops node).
+
+### K08 / CalDAV constraint (honest disclosure)
+
+K08 ("sync calendar now") fires `TriggerCardRewardsRecommendNow` → the recommend
+pipeline (optimize → recommend → calendar sync). The disposable e2e-ui stack has
+**no CalDAV server** wired, so the pipeline's calendar bridge is nil and the
+recommend run records `events_written=0` (calendar delivery requires operator
+CalDAV credentials on the home-lab ops node — same class of operator-infra
+deferral as Scope 05's live-Ollama item). The admin trigger, the manual-trigger
+wiring, the run logging, and the `events_written` column are all REAL and
+asserted; only the non-zero calendar-event write is deferred to enabled
+home-lab. K08's e2e asserts the recommend pipeline ran and logged an
+`optimize` run carrying an `events_written` value (`0` here).
+
+### Path reconciliation + scopesdriftguard fix
+
+The Scope 10/11 Test Plans named the specs `tests/e2e-ui/cardrewards_*.spec.ts`,
+but the repo's sanctioned harness (`./smackerel.sh test e2e-ui` →
+`web/pwa/playwright.config.ts`, `testDir: "tests"`) only ever discovers
+`web/pwa/tests/**/*.spec.ts`. The 4 new specs were placed there; the
+`internal/scopesdriftguard` ratchet test (`TestScopesPathRefDrift_NonIncreasing`)
+flagged the planned `tests/e2e-ui/` paths (7 of them across Scope 10+11) as
+broken file references (277 > ceiling 270). Fixed by correcting all 7 Test Plan
+paths in scopes.md to the real `web/pwa/tests/` location (drops 083 to 0 broken
+refs → 270, within the ratchet). Re-verified clean below.
+
+### Docker bundle freshness (verified)
+
+The stale e2e-ui core image was removed so the lane rebuilt core from current
+source (the new dashboard/recommendations/rotating/report/admin routes). Passing
+e2e-ui scenarios that navigate `/cards`, `/cards/recommendations`,
+`/cards/rotating`, `/cards/report`, `/cards/admin` prove the freshly-served
+bundle contains the new routes (a stale bundle would 404 → tests fail).
+
+```
+# docker image rm smackerel-test-e2e-ui-smackerel-core:latest
+Untagged: smackerel-test-e2e-ui-smackerel-core:latest
+Deleted: sha256:9525f963042699a6d3fbbf0abe58401d39cf03edcb5ca0823e13038a0219c754
+@@@RM_EXIT=0@@@
+
+# ./smackerel.sh test e2e-ui cardrewards  (lane rebuilds core fresh)
+#14 [smackerel-core builder 6/7] COPY . .
+#14 DONE 17.6s
+#15 [smackerel-core builder 7/7] RUN ... go build ... -o /bin/smackerel-core ./cmd/core ...
+#15 DONE 50.2s
+#19 writing image sha256:da98da8a4ca917b8dfc8a78e0303da4b5f2ed813712e9641ac9a7289d4e04ece done
+#19 naming to docker.io/library/smackerel-test-e2e-ui-smackerel-core 0.0s done
+ smackerel-core  Built
+ Container smackerel-test-e2e-ui-smackerel-core-1  Healthy
+ Container smackerel-test-e2e-ui-smackerel-ml-1  Healthy
+```
+
+### Evidence — DoD 1: Implementation behavior complete
+
+Dashboard, recommendations, rotating-verify, report, and admin pages render with
+confidence/needs_verification badges + source citations, and the admin triggers
+are wired to the Scope 09 scheduler manual triggers. Proven end-to-end by the 8
+live-stack Scope 11 Playwright scenarios (DoD 2–5 below — every page renders,
+every mutation persists/re-renders, both admin triggers log a run). Module
+compiles + SST in sync — `./smackerel.sh check` exit 0:
+
+```
+config-validate: ~/smackerel/config/generated/dev.env.tmp.3301793 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 16, rejected: 0
+scenario-lint: OK
+@@@CHECK_EXIT=0@@@
+```
+
+Full Go unit suite (compiles cmd/core + internal/cardrewards + internal/web +
+internal/api + internal/scheduler with the Scope 11 changes; existing tests
+green) — `./smackerel.sh test unit --go`:
+
+```
+ok      github.com/smackerel/smackerel/cmd/core 2.079s
+ok      github.com/smackerel/smackerel/internal/api     6.648s
+ok      github.com/smackerel/smackerel/internal/cardrewards     0.078s
+ok      github.com/smackerel/smackerel/internal/scheduler       5.122s
+ok      github.com/smackerel/smackerel/internal/web     0.780s
+```
+
+(The full `./...` run also reports 2 pre-existing environmental failures in
+`tests/unit/clients` — `TestRenderDescriptorV1_*` require `node`/`dart` on PATH,
+absent in the go-unit Docker lane; spec-073, unrelated to card-rewards and
+outside this scope — plus the `scopesdriftguard` ratchet which Scope 11 FIXES,
+re-verified below.)
+
+### Evidence — DoD 2: SCN-083-K01 + SCN-083-K06 (dashboard + report) — e2e-ui, live stack
+
+From the full 15-scenario run (below): scenario 3 (K01) + scenario 5 (K06). K01
+seeds (via the real `/api`) an active rotating category (high-conf obs +
+reconcile), a low-confidence record (→ needs_verification), a not-enrolled
+selection in window (→ pending re-enrollment), and a generated recommendation,
+then asserts the dashboard renders the recommendations panel, the active-rotating
+panel, the needs_verification pending action (badge), AND the re-enrollment
+alert. K06 seeds a card + an elevated offer + a tracked category alias and
+asserts the report row shows the best card (catalog name, not the em-dash) WITH
+a non-empty reason (Principle 8):
+
+```
+  ✓  3 …board shows recommendations, active rotating, and pending actions (1.9s)
+  ✓  5 … SCN-083-K06 — report renders best-card-per-category with reasons (1.3s)
+```
+
+### Evidence — DoD 3: SCN-083-K02 + SCN-083-K03 (recommendations CRUD + override) — e2e-ui, live stack
+
+Scenarios 7 (K02) + 13 (K03). K02 adds a recommendation (category → cardA, rate,
+reason), edits it to re-point at cardB (asserts the row now shows cardB, NOT
+cardA), then stars it and proves `data-rec-starred="true"` + the starred badge
+persist across a reload. K03 is **adversarial**: it seeds a tracked category
+alias + a card with NO benefit for it, adds + stars a manual recommendation
+(`starred_override=true`), then regenerates from the UI — the optimizer would
+null the pick (no matching benefit), but the override must keep it; the test
+asserts the rec STILL points at the override card and stays starred after
+regenerate:
+
+```
+  ✓  7 …ommendations › SCN-083-K02 — add, edit, and star a recommendation (2.5s)
+  ✓  13 …ations › SCN-083-K03 — starred override is honored on regenerate (1.7s)
+```
+
+### Evidence — DoD 4: SCN-083-K04 + SCN-083-K05 (verify badge + manual override clears flag) — e2e-ui, live stack
+
+Scenarios 9 (K04) + 11 (K05). K04 seeds two DISAGREEING per-source observations
+and runs the REAL Scope 06 reconciler (`POST /api/card-rotating/reconcile`,
+threshold supplied — no hidden default), then asserts the `/cards/rotating` row
+shows `data-needs-verification="true"`, the confidence badge, and BOTH source
+citations (Principle 4). K05 is **adversarial** (ties to the Scope 05/06
+contract): after a manual verify/override clears the flag
+(`data-needs-verification="false"`, `data-manual-override="true"`, operator
+categories stored), it seeds a fresh high-confidence (0.99) disagreeing
+observation and reconciles AGAIN — and asserts the override is NOT overwritten
+(categories unchanged, `Travel-*` NOT present, flag still clear):
+
+```
+  ✓  9 …fy page shows confidence, needs_verification badge, and citations (1.2s)
+  ✓  11 …rify clears the flag and is not overwritten by a later reconcile (1.3s)
+```
+
+### Evidence — DoD 5: SCN-083-K07 + SCN-083-K08 (admin scrape-now/sync-now + run history) — e2e-ui, live stack
+
+Scenarios 4 (K07) + 6 (K08). K07 clicks "scrape now" (fires the Scope 09 manual
+refresh trigger → real refresh pipeline), asserts the page redirects, the newest
+run-id changed, and a `manual` `scrape` run is now in the run-history log. K08
+clicks "sync calendar now" (fires the manual recommend trigger → real recommend
+pipeline), asserts a new run appears and a `manual` `optimize` run is logged
+carrying an `events_written` value (`data-events-written` matches `\d+`; `0` here
+— no CalDAV server in the disposable stack, documented above):
+
+```
+  ✓  4 …083-K07 — scrape now runs the refresh pipeline and logs a new run (2.0s)
+  ✓  6 …ow runs the recommend pipeline and logs a run with events_written (1.5s)
+```
+
+### Evidence — DoD 6: Build Quality Gate
+
+**Full 15-scenario e2e-ui run (all 8 Scope 11 + 7 Scope 10, real headless
+Chromium against the freshly-rebuilt disposable stack, real `/v1/web/login` +
+`/api/*` seeding, NO interception) — `./smackerel.sh test e2e-ui cardrewards`:**
+
+```
+Running 15 tests using 4 workers
+
+  ✓  1 …s › SCN-083-J06 — add and edit an offer with a shared limit group (3.8s)
+  ✓  2 …s › SCN-083-J08 — manage category names, equivalents, and starred (3.7s)
+  ✓  3 …board shows recommendations, active rotating, and pending actions (1.9s)
+  ✓  4 …083-K07 — scrape now runs the refresh pipeline and logs a new run (2.0s)
+  ✓  5 … SCN-083-K06 — report renders best-card-per-category with reasons (1.3s)
+  ✓  6 …ow runs the recommend pipeline and logs a run with events_written (1.5s)
+  ✓  7 …ommendations › SCN-083-K02 — add, edit, and star a recommendation (2.5s)
+  ✓  8 …pe 10 — Offers & Selections › SCN-083-J07 — tiered selection save (1.7s)
+  ✓  9 …fy page shows confidence, needs_verification badge, and citations (1.2s)
+  ✓  10 …1 — add a custom card; wallet lists nickname, type, note, active (1.3s)
+  ✓  11 …rify clears the flag and is not overwritten by a later reconcile (1.3s)
+  ✓  12 … Rewards Wallet › SCN-083-J02 — add a catalog card via discovery (1.1s)
+  ✓  13 …ations › SCN-083-K03 — starred override is honored on regenerate (1.7s)
+  ✓  14 …t › SCN-083-J04 — edit a card and add a note; persists on reload (1.4s)
+  ✓  15 … Card Rewards Wallet › SCN-083-J05 — toggle card activation off (556ms)
+
+  15 passed (10.1s)
+@@@E2EUI_EXIT=0@@@
+```
+
+The 7 Scope 10 scenarios (J01–J08) pass alongside the 8 new ones — confirming
+the additive `cardrewards-nav` edit did NOT regress Scope 10.
+
+**No-interception scan (must be empty) + silent-pass bailout scan (must be
+empty) on the 4 new specs + the shared helper:**
+
+```
+=== no-interception scan (must be empty) ===
+scan-exit=1 (1=clean/no-match)
+=== silent-pass bailout scan (must be empty) ===
+bailout-scan-exit=1 (1=clean/no-match)
+```
+
+**`./smackerel.sh lint` — Go (golangci-lint) + web TS validation, exit 0:**
+
+```
+All checks passed!
+Web validation passed
+@@@LINT_EXIT=0@@@
+```
+
+**`./smackerel.sh format --check` — exit 0:**
+
+```
+65 files already formatted
+@@@FORMATCHK_EXIT=0@@@
+```
+
+**`scopesdriftguard` ratchet — re-verified after the Test Plan path fix
+(`./smackerel.sh test unit --go` segment):**
+
+```
+ok      github.com/smackerel/smackerel/internal/scopesdriftguard
+```
+
+### Completion Statement — Scope 11
+
+All 6 DoD items are `[x]` with inline raw evidence above. Scope 11 is **Done**:
+the dashboard, recommendations, rotating-verify, report, and admin pages are
+delivered on the live disposable stack (K01–K08), with the adversarial K03
+(starred override survives regenerate) and K05 (manual override survives a later
+reconcile) both proven, no request interception, CSP-clean, Docker-bundle-fresh,
+and the admin triggers wired to the Scope 09 scheduler manual triggers.
+Top-level spec status remains `in_progress` — Scope 05 stays In Progress
+(blocked-needs-live-Ollama) and a release-readiness audit + deploy gate remain
+(the bubbles.goal orchestrator owns final promotion). `completedScopes` becomes
+`[1,2,3,4,6,7,8,9,10,11]` (all 11 scopes delivered; Scope 05's single
+live-Ollama DoD item is the only open work). Not committed (autoCommit off) —
+the orchestrator owns the preservation checkpoint.
+
+
 

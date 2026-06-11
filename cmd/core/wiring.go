@@ -898,8 +898,13 @@ func wireCardRewardsHandler(svc *coreServices, deps *api.Dependencies) {
 	}
 	store := cardrewards.NewStore(svc.pg.Pool)
 	service := cardrewards.NewService(store)
+	webHandler := web.NewCardRewardsWebHandler(service)
 	deps.CardRewardsHandler = api.NewCardRewardsHandler(service)
-	deps.CardRewardsWebHandler = web.NewCardRewardsWebHandler(service)
+	deps.CardRewardsWebHandler = webHandler
+	// Spec 083 Scope 11 — stash the concrete handler so the admin manual-
+	// trigger seam can be late-wired after the scheduler is constructed (the
+	// scheduler is built after the router; see wireCardRewardsScheduler).
+	svc.cardRewardsWebHandler = webHandler
 	slog.Info("card-rewards handler wired (early — before NewRouter)")
 }
 

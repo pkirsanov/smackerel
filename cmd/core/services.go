@@ -94,6 +94,14 @@ type coreServices struct {
 	// after the capability-layer Facade is constructed. Until then,
 	// the handler returns 503 with "assistant_http_not_ready".
 	assistantHTTPHandler *httpadapter.LateBoundHandler
+
+	// Spec 083 Scope 11 — card-rewards web handler, stashed at early
+	// (pre-router) construction so wireCardRewardsScheduler can late-wire
+	// the admin manual-trigger seam (the scheduler is built AFTER the
+	// router, so the admin "scrape now" / "sync calendar now" triggers
+	// cannot be injected at construction time). May be nil when no
+	// Postgres pool is available.
+	cardRewardsWebHandler *web.CardRewardsWebHandler
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.

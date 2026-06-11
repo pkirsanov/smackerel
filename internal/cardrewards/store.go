@@ -888,6 +888,21 @@ func (s *Store) ListAllRotatingCategories(ctx context.Context) ([]RotatingCatego
 	return out, rows.Err()
 }
 
+// GetRotatingCategoryByID returns the reconciled rotating-category record with
+// the given id, or (nil, nil) when absent. Used by the web rotating-verify page
+// to load a record for manual verify/override (spec 083 Scope 11, SCN-083-K05).
+func (s *Store) GetRotatingCategoryByID(ctx context.Context, id string) (*RotatingCategory, error) {
+	rc, err := scanRotatingCategory(s.Pool.QueryRow(ctx,
+		`SELECT `+rotatingCategoryCols+` FROM rotating_categories WHERE id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rc, nil
+}
+
 // ListActiveRotatingCategories returns only the records currently in the
 // `active` lifecycle state — the set eligible for current recommendations.
 // Expired and upcoming records are excluded (SCN-083-F05).
@@ -1196,4 +1211,34 @@ func (s *Store) CountRunsByType(ctx context.Context, runType string) (int, error
 	var n int
 	err := s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM card_runs WHERE run_type = $1`, runType).Scan(&n)
 	return n, err
+}
+
+// ListRuns returns the most recent card_runs audit rows (newest first), capped
+// at limit. Used by the web admin run-history page (spec 083 Scope 11,
+// SCN-083-K07/K08). A non-positive limit is clamped to a defensive query bound;
+// the caller always passes an explicit constant.
+func (s *Store) ListRuns(ctx context.Context, limit int) ([]CardRun, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	rows, err := s.Pool.Query(ctx,
+		`SELECT id, run_type, trigger, status, sources_attempted, sources_succeeded,
+		        categories_extracted, events_written, error_detail, started_at, finished_at, created_at
+		 FROM card_runs ORDER BY created_at DESC, id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []CardRun
+	for rows.Next() {
+		var r CardRun
+		if err := rows.Scan(&r.ID, &r.RunType, &r.Trigger, &r.Status, &r.SourcesAttempted,
+			&r.SourcesSucceeded, &r.CategoriesExtracted, &r.EventsWritten, &r.ErrorDetail,
+			&r.StartedAt, &r.FinishedAt, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
