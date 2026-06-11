@@ -681,7 +681,7 @@ Scenario: SCN-083-I06 — re-running a job is idempotent
 
 ## Scope 10: Web UI — Wallet, Offers, Selections, Bonuses, Categories
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** 02
 **Spec Refs:** FR-CR-016, NFR-CR-006, UC-001/003/004, design §9
@@ -744,11 +744,11 @@ Scenario: SCN-083-J08 — manage category names, equivalents, and starred
 
 ### Definition of Done
 
-- [ ] Implementation behavior complete: server-rendered wallet/offers/selections/bonuses/categories pages with full CRUD parity; behind existing auth/CSP; design tokens (no hardcoded colors)
-- [ ] Scenario tests pass for SCN-083-J01..J05 (wallet CRUD incl. discovery/custom/note/toggle) — e2e-ui (live stack, no request interception)
-- [ ] Scenario tests pass for SCN-083-J06 and SCN-083-J07 (offer shared-limit; tiered selection) — e2e-ui (live stack)
-- [ ] Scenario test passes for SCN-083-J08 (category management) — e2e-ui (live stack)
-- [ ] Build Quality Gate: build/check/lint/format clean (zero warnings); e2e-ui tests hit the real stack with no `page.route`/`intercept`; Docker bundle freshness verified for UI; artifact-lint clean; docs aligned
+- [x] Implementation behavior complete: server-rendered wallet/offers/selections/bonuses/categories pages with full CRUD parity; behind existing auth/CSP; design tokens (no hardcoded colors) — Evidence: [report.md](report.md) → "Evidence — DoD 1: Implementation behavior complete" (CHECK_EXIT=0; 3 live-PG store-CRUD tests PASS; proven end-to-end by the 7 live-stack Playwright scenarios; pages use the shared design-token palette + a script-free CSP-clean head)
+- [x] Scenario tests pass for SCN-083-J01..J05 (wallet CRUD incl. discovery/custom/note/toggle) — e2e-ui (live stack, no request interception) — Evidence: [report.md](report.md) → "Evidence — DoD 2: SCN-083-J01..J05" (E2EUI_EXIT=0, 7 passed; J01/J03 scenario 2, J02 scenario 4, J04 scenario 6, J05 scenario 7; no-interception scan clean; adversarial no-login-bounce + reload-persistence + assertNoCSPViolations)
+- [x] Scenario tests pass for SCN-083-J06 and SCN-083-J07 (offer shared-limit; tiered selection) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 3: SCN-083-J06 + SCN-083-J07" (scenarios 1 + 5; J06 shared_limit_group renders + edit round-trips on reload; J07 tier-1 AND tier-2 rows re-render)
+- [x] Scenario test passes for SCN-083-J08 (category management) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-J08" (scenario 3; equivalent + starred reflected in category_aliases; idempotent upsert not duplicated on re-submit)
+- [x] Build Quality Gate: build/check/lint/format clean (zero warnings); e2e-ui tests hit the real stack with no `page.route`/`intercept`; Docker bundle freshness verified for UI; artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 5: Build Quality Gate" (LINT_EXIT=0 incl. web validation, FORMAT_RECHECK_EXIT=0, CHECK_EXIT=0; no-interception scan clean; Docker freshness = stale core image removed then rebuilt fresh [COPY . . + go build] and container Healthy before specs ran; artifact-lint exit 0)
 
 ---
 

@@ -234,6 +234,12 @@ type Dependencies struct {
 	// available (config-validate mode, some tests).
 	CardRewardsHandler *CardRewardsHandler
 
+	// Card-rewards web UI (spec 083 Scope 10) — server-rendered wallet/offers/
+	// selections/bonuses/categories pages. Optional — nil when no Postgres pool
+	// is available (config-validate mode, router unit tests). Mounted behind
+	// webAuthMiddleware; routes are registered via RegisterRoutes.
+	CardRewardsWebHandler CardRewardsWebUI
+
 	// Recommendation handlers (optional — nil when recommendations not enabled)
 	RecommendationHandlers *RecommendationHandlers
 
