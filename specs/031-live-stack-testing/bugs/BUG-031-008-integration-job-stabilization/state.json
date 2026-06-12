@@ -5,29 +5,31 @@
   "status": "in_progress",
   "workflowMode": "bugfix-fastlane",
   "createdAt": "2026-06-12T06:10:00Z",
-  "lastUpdatedAt": "2026-06-12T06:50:00Z",
+  "lastUpdatedAt": "2026-06-12T15:05:00Z",
   "nextRequiredOwner": "bubbles.workflow",
   "baselineSha": "28851e7a",
   "failures": [],
-  "findingCount": 5,
+  "findingCount": 6,
   "findingCategories": [
     "C1-CLI-AUTH-PASSTHROUGH-DOCKER-ABSENT-RUNNER-SKIP",
     "C2-TRANSPORT-HINT-CORE-EXTERNAL-URL-IN-CONTAINER-UNREACHABLE",
     "C3A-MICROTOOLS-REGISTRY-CANARY-STALE-IMPORT-ASSERTION",
     "C3B-WEATHER-ALLOWED-TOOLS-LOCATION-NORMALIZE-REGRESSION",
-    "C4-LOCATION-NORMALIZE-INTEGRATION-STUB-GEOCODER-SKIP"
+    "C4-LOCATION-NORMALIZE-INTEGRATION-STUB-GEOCODER-SKIP",
+    "C6-OPENKNOWLEDGE-INTEGRATION-DEFAULTCFG-MISSING-SOURCESMAX"
   ],
   "scopeLayout": "single-file",
   "certification": {
     "status": "in_progress",
     "owner": "bubbles.validate",
-    "totalScopes": 5,
+    "totalScopes": 6,
     "completedScopes": [
       "Scope 1: C1 CLI auth passthrough docker-absent-runner skip",
       "Scope 2: C2 transport-hint in-container CORE_EXTERNAL_URL override",
       "Scope 3: C3a micro-tools registry canary stale assertion",
       "Scope 4: C3b weather scenario allowed_tools location_normalize",
-      "Scope 5: C4 TestLocationNormalizeIntegration stub-geocoder skip"
+      "Scope 5: C4 TestLocationNormalizeIntegration stub-geocoder skip",
+      "Scope 6: C6 openknowledge integration defaultCfg SourcesMax"
     ],
     "scopeProgress": [
       {
@@ -59,13 +61,19 @@
         "status": "Done",
         "dodTotal": 3,
         "dodChecked": 3
+      },
+      {
+        "scope": "Scope 6: C6 openknowledge integration defaultCfg SourcesMax",
+        "status": "Done",
+        "dodTotal": 3,
+        "dodChecked": 3
       }
     ]
   },
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "validate",
-    "currentScope": "Scope 5",
+    "currentScope": "Scope 6",
     "executionModel": "parent-expanded-bugfix-fastlane",
     "runStartedAt": "2026-06-12T06:06:00Z",
     "completedPhases": [
@@ -79,7 +87,8 @@
       "Scope 2: C2 transport-hint in-container CORE_EXTERNAL_URL override",
       "Scope 3: C3a micro-tools registry canary stale assertion",
       "Scope 4: C3b weather scenario allowed_tools location_normalize",
-      "Scope 5: C4 TestLocationNormalizeIntegration stub-geocoder skip"
+      "Scope 5: C4 TestLocationNormalizeIntegration stub-geocoder skip",
+      "Scope 6: C6 openknowledge integration defaultCfg SourcesMax"
     ]
   },
   "outOfScopeHardConstraint": {
@@ -107,6 +116,12 @@
       "agent": "bubbles.workflow",
       "phase": "reproduce+implement+test+regression",
       "summary": "Reproduced all clusters at HEAD 28851e7a via ./smackerel.sh test integration (test core/ml host ports temporarily moved to 30001/30002 to dodge a local VS Code-Server ephemeral-port collision on 45002; repro-only, reverted before staging). Reproduction OVERTURNED two hypotheses: C1 is NOT -T — the containerized go-integration runner has no docker so the auth) arm's require_docker aborts (docker is required, exit 1); fixed by skip-when-no-docker in cli_auth_passthrough_test.go. C2 is NOT cold-start — core was healthy (degraded-200) but CORE_EXTERNAL_URL=127.0.0.1:PORT is unreachable from inside the compose-network runner; fixed by adding the in-network -e CORE_EXTERNAL_URL=http://smackerel-core:8080 override in smackerel.sh (mirrors ML_SIDECAR_URL). C3a refined: only location_normalize+entity_resolve register at import (init); unit_convert+calculator are lazy; canary subtest replaced. C3b confirmed: location_normalize restored to weather allowed_tools. C4 surfaced as SEPARATE (TestLocationNormalizeIntegration fails because the test-stack geocode stub returns Reykjavik for all inputs, F-065-LOCATION-STUB; orphaned superseded spec-065 SCOPE-2 test) -> skip-when-stub (new Scope 5). Post-fix VERIFY re-run: VERIFY_EXIT=0 — C2/C3a/C3b PASS, C1/C4 honest SKIP; tests/integration + /api + /assistant packages all ok. RED+GREEN transcripts in report.md. Files changed: smackerel.sh, tests/integration/cli_auth_passthrough_test.go, tests/integration/assistant/microtools_registry_canary_test.go, tests/integration/assistant/microtools_location_test.go, config/prompt_contracts/weather-query-v1.yaml. spec-083 untouched. Next: revert temp ports, isolate in worktree, push ff to origin/main, watch CI integration job."
+    },
+    {
+      "timestamp": "2026-06-12T15:05:00Z",
+      "agent": "bubbles.workflow",
+      "phase": "reproduce+implement+test+regression+validate",
+      "summary": "Cluster 6 (residual, revealed after the C1-C5 fix merged at 75ee520d): the four tests/integration/openknowledge tests (TestOpenKnowledge_HybridInternalAndWeb, TestAgent_PerUserMonthlyBudgetExceeded, TestAgent_ToolFailureRefusesWithCapture, TestAgent_WebSearchDisabledFallsBack) all FAIL at agent.New with 'Config.SourcesMax must be > 0 (G028 — no silent default; load from assistant.sources_max)'. RED captured verbatim from the CI integration-test-log @ 75ee520d (CI run 27400228490, integration job; the only red job — lint-and-test/cross-language-canary/build all green) and locally corroborated by /tmp/intlog/integration-test.log. Root cause: BUG-064-002 added the required agent.Config.SourcesMax field (agent.go:145) with fail-loud G028 validation (agent.go:215-216) and updated the prod wiring + unit baseCfg but missed the integration helper defaultCfg() (helpers_test.go:114). FIX: one line — add 'SourcesMax: 5' to defaultCfg() (mirrors config/smackerel.yaml:899 assistant.sources_max:5 + unit baseCfg); the G028 validation is correct and was NOT weakened. VALIDATION: full integration suite GREEN this session (PASS: go-integration, INTEGRATION_EXIT=0, all 6 clusters together, no 7th cluster); focused re-run of the 4 openknowledge tests GREEN (ok tests/integration/openknowledge, FOCUSED_EXIT=0) with each test exercising real agent behavior (hybrid retrieval num_sources=2, cap_usd budget refusal, circuit-breaker tool-failure capture, web-search-disabled fallback) — non-tautological (construct-fail RED -> real-behavior PASS). format --check + check clean. Isolation: only tests/integration/openknowledge/helpers_test.go + the BUG-031-008 artifacts changed; spec-083-free. artifact-lint EXIT=0; state-transition-guard EXIT=1 (TRANSITION BLOCKED: 58 packet-wide pre-existing governance failures that equally affect the already-merged C1-C5 scopes — incl. Check 16/G028 DEFAULT_FALLBACK in ml/app/main.py which is spec-083 HARD-untouchable, plus missing policySnapshot/scenario-manifest/lockdownState, 8 specialist phases, regression-E2E planning, DoD-Gherkin fidelity, etc.). Status STAYS in_progress: the technical objective (CI integration job GREEN) is met by the C6 push, but done-certification with guard exit 0 is a GENUINE BLOCKER needing a separate governance-hardening pass over the whole packet + spec-083-owner resolution of the ml/app/main.py finding (not achievable within this surgical residual-cluster fix without violating the spec-083 untouchable constraint or G041 anti-manipulation). Next: commit + push ff to origin/main; confirm CI integration job green on the new SHA."
     }
   ]
 }
