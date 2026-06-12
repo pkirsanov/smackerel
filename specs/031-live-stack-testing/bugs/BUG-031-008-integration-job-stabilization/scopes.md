@@ -2,9 +2,12 @@
 
 Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [uservalidation.md](uservalidation.md)
 
-Four independent clusters keep the CI `integration` job red. Each cluster is one
-scope. All four are independent (`Depends On: None`) and may be fixed in any order;
+Six independent clusters keep the CI `integration` job red. Each cluster is one
+scope. All six are independent (`Depends On: None`) and may be fixed in any order;
 they are executed sequentially with per-cluster reproduce → fix → re-run evidence.
+(C1–C5 were fixed and merged at `75ee520d`; Scope 6 / C6 — the openknowledge
+`SourcesMax` integration-helper omission — is the residual cluster revealed once that
+merge turned C1–C5 green.)
 
 ## Scope 1: C1 — CLI auth passthrough (docker-absent runner) honest skip
 
@@ -339,3 +342,83 @@ spec-083 path; the stub-providers container; framework files.
   → Evidence: [report.md#c4-repro](report.md) (RED ≥10 lines) + [report.md#c4-after](report.md) (SKIP)
 - [x] Build Quality Gate: zero warnings; spec-083 untouched; skip is honest + non-masking (real-geocoder host still runs assertions); classified as SEPARATE from C3b — **Phase:** audit
   → Evidence: [report.md#c4-audit](report.md)
+
+## Scope 6: C6 — openknowledge integration defaultCfg() missing required SourcesMax
+
+**Status:** Done
+**Priority:** P1
+**Depends On:** None
+
+> Revealed only after C1–C5 were fixed and merged at `75ee520d` (the same
+> unblock-reveals-next-layer pattern). BUG-064-002 added a required
+> `agent.Config.SourcesMax` field with fail-loud G028 validation and updated the prod
+> wiring + the unit `baseCfg`, but missed the integration package's shared `defaultCfg()`
+> helper. See design.md "C6 — openknowledge integration defaultCfg() missing the required
+> SourcesMax field" + report.md#c6-repro.
+
+### Gherkin Scenarios
+
+```gherkin
+Feature: BUG-031-008 C6 openknowledge integration agents construct with a valid SourcesMax
+
+  Scenario: BUG-031-008-SCN-011 openknowledge integration agents construct and run their assertions
+    Given the integration helper defaultCfg() supplies SourcesMax from the SST source (assistant.sources_max)
+    When agent.New is called for the four tests/integration/openknowledge tests
+    Then agent.New does NOT return the G028 "Config.SourcesMax must be > 0" error
+    And each test proceeds past construction to exercise its real agent behavior (PASS, not skip)
+
+  Scenario: BUG-031-008-SCN-012 the fail-loud SourcesMax validation remains intact
+    Given agent.New validates Config.SourcesMax > 0 (G028 — no silent default)
+    When a Config with SourcesMax <= 0 is passed
+    Then agent.New still returns the G028 error (the guard is NOT weakened by this fix)
+```
+
+### Implementation Plan
+
+> The fix is a single test-helper field addition; the production agent + its fail-loud
+> validation are correct and untouched.
+
+1. In `tests/integration/openknowledge/helpers_test.go`, add `SourcesMax: 5` to the
+   `defaultCfg() agent.Config` struct literal, mirroring the SST source
+   `config/smackerel.yaml:899` `assistant.sources_max: 5` and the unit-test `baseCfg`
+   (`internal/assistant/openknowledge/agent/agent_test.go`).
+2. Do NOT modify `agent.go` (the `SourcesMax > 0` G028 validation is correct), the prod
+   wiring, the SST config, or the four `*_test.go` files (they correctly delegate to
+   `defaultCfg()`).
+3. Run the FULL integration suite (`./smackerel.sh test integration`) and confirm the
+   `tests/integration/openknowledge` package is `ok` and the go-integration lane exits 0.
+
+### Test Plan
+
+| ID | Test Name | Type | Location | Assertion | Scenario ID |
+|---|---|---|---|---|---|
+| T-C6-01 | TestOpenKnowledge_HybridInternalAndWeb | integration | tests/integration/openknowledge/hybrid_answer_test.go | constructs (no G028 error) + hybrid internal/web answer behavior | BUG-031-008-SCN-011 |
+| T-C6-02 | TestAgent_PerUserMonthlyBudgetExceeded | integration | tests/integration/openknowledge/monthly_budget_test.go | constructs + per-user monthly budget refusal behavior | BUG-031-008-SCN-011 |
+| T-C6-03 | TestAgent_ToolFailureRefusesWithCapture | integration | tests/integration/openknowledge/tool_failure_test.go | constructs + tool-failure refusal-with-capture behavior | BUG-031-008-SCN-011 |
+| T-C6-04 | TestAgent_WebSearchDisabledFallsBack | integration | tests/integration/openknowledge/web_search_disabled_test.go | constructs + web-search-disabled fallback behavior | BUG-031-008-SCN-011 |
+| T-C6-05 | TestNew_RejectsNonPositiveSourcesMax_BUG064002 | unit | internal/assistant/openknowledge/agent | agent.New still rejects SourcesMax<=0 (G028 guard intact) | BUG-031-008-SCN-012 |
+
+### Shared Infrastructure Impact Sweep
+
+The fix is confined to one integration test helper's struct literal; no production, shared,
+or SST surface changes (`SourcesMax: 5` mirrors the existing SST value the prod wiring
+already loads). The G028 fail-loud validation in `agent.New` is unchanged, so the existing
+unit test `TestNew_RejectsNonPositiveSourcesMax_BUG064002` remains the adversarial guard
+that the value is required (it would fail if the validation were weakened). This is NOT
+skip-to-green: the four tests now CONSTRUCT and run their real assertions.
+
+### Change Boundary
+
+Allowed: `tests/integration/openknowledge/helpers_test.go` (`defaultCfg()` only). Excluded:
+`internal/assistant/openknowledge/agent/agent.go` (validation is correct); the prod wiring;
+`config/smackerel.yaml`; the four `tests/integration/openknowledge/*_test.go` files; every
+spec-083 path; framework files.
+
+### Definition of Done
+
+- [x] `SourcesMax: 5` added to `tests/integration/openknowledge/helpers_test.go` `defaultCfg()`; `agent.go` G028 validation, prod wiring, SST config, and the 4 test files untouched — **Phase:** implement
+  → Evidence: [report.md#c6-implement](report.md) (diff: + SourcesMax: 5)
+- [x] T-C6-01..04 reproduced RED at `75ee520d` (all 4 fail at agent.New SourcesMax G028, verbatim from CI integration-test-log run 27400228490) AND pass GREEN in the FULL integration suite after the fix (package `ok`, lane exit 0); T-C6-05 confirms the G028 guard is intact — **Phase:** test
+  → Evidence: [report.md#c6-repro](report.md) (RED ≥10 lines) + [report.md#c6-after](report.md) (GREEN) + [report.md#regression-full-suite](report.md) (PASS: go-integration, exit 0)
+- [x] Build Quality Gate: zero warnings; gofmt clean; spec-083 untouched; fix is non-tautological (construct-fail RED before, real-behavior PASS after) and non-masking (G028 validation guard intact, not skipped) — **Phase:** audit
+  → Evidence: [report.md#c6-audit](report.md)
