@@ -18,14 +18,14 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["1","2","3","4","6","7","8","9","10","11"],
+    "completedScopes": ["1","2","3","4","5","6","7","8","9","10","11"],
     "certifiedCompletedPhases": ["analyze", "design", "plan", "harden"],
     "scopeProgress": [
       { "scope": 1, "name": "Config SST & Migration Schema", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 2, "name": "Card Domain Store, Types & CRUD API", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 3, "name": "Data Migration: CCManager JSON → PostgreSQL", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 4, "name": "Card-Rewards Source Connector", "status": "Done", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md" },
-      { "scope": 5, "name": "LLM Category Extraction (replaces regex)", "status": "In Progress", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md" },
+      { "scope": 5, "name": "LLM Category Extraction (replaces regex)", "status": "Done", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 6, "name": "Multi-Source Reconciliation & Lifecycle", "status": "Done", "dependsOn": [5], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 7, "name": "Optimizer & Monthly Recommendation Generation", "status": "Done", "dependsOn": [2, 6], "scopeDir": null, "evidenceFile": "report.md" },
       { "scope": 8, "name": "CalDAV Calendar Delivery", "status": "Done", "dependsOn": [7], "scopeDir": null, "evidenceFile": "report.md" },
