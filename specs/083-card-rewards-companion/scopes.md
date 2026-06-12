@@ -2,12 +2,13 @@
 
 Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](uservalidation.md)
 
-> **Delivery in progress (`full-delivery`).** Scopes 01–04 and 06–11 are
+> **Delivery complete (`full-delivery`).** All 11 scopes (01–11) are
 > **Done** (implemented + validated with real evidence in [report.md](report.md)
-> → the per-scope "Delivery — Scope NN" sections). Scope 05 is **In Progress**
-> — 7 of 8 DoD items are complete; its one remaining item (SCN-083-E08
-> *successful* live Ollama inference round-trip) is blocked-needs-live-Ollama
-> and deferred to the home-lab ops node [awaiting-operator-commit]. Scenario IDs use the
+> → the per-scope "Delivery — Scope NN" sections). Scope 05's final item
+> (SCN-083-E08 *successful* live Ollama inference round-trip) was proven on the
+> home-lab deployment on 2026-06-12 (gemma4:26b, HTTP 200, strict-schema
+> valid) — see report.md "Deploy to home-lab + Scope 05 E08 live-Ollama
+> closure". Scenario IDs use the
 > `SCN-083-<LETTER><NN>` convention (letter = scope) so they match the default
 > artifact-lint pattern `SCN-[0-9]{3}-[A-Z][0-9]{2}`.
 
@@ -19,7 +20,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 02 | Card Domain Store, Types & CRUD API | P0 | 01 | Go Core, PostgreSQL, REST API | Done |
 | 03 | Data Migration: CCManager JSON → PostgreSQL | P0 | 02 | Go Core, one-time importer | Done |
 | 04 | Card-Rewards Source Connector | P1 | 01, 02 | `internal/connector/cardrewards` | Done |
-| 05 | LLM Category Extraction (replaces regex) | P0 | 04 | `internal/cardrewards/extract` (Go orchestrator + schema-validate) + `ml/app/card_categories.py` (sidecar model call, C2) | In Progress |
+| 05 | LLM Category Extraction (replaces regex) | P0 | 04 | `internal/cardrewards/extract` (Go orchestrator + schema-validate) + `ml/app/card_categories.py` (sidecar model call, C2) | Done |
 | 06 | Multi-Source Reconciliation & Lifecycle | P1 | 05 | `internal/cardrewards/reconcile`, PostgreSQL | Done |
 | 07 | Optimizer & Monthly Recommendation Generation | P1 | 02, 06 | `internal/cardrewards/optimize`, REST API | Done |
 | 08 | CalDAV Calendar Delivery | P1 | 07 | `internal/cardrewards/calendar`, CalDAV | Done |
@@ -349,18 +350,20 @@ Scenario: SCN-083-D06 — cursor advances to last successful fetch
 
 ## Scope 05: LLM Category Extraction (replaces regex)
 
-**Status:** In Progress (E08 blocked-needs-live-Ollama)
+**Status:** Done (E08 live-Ollama inference proven on the home-lab deployment 2026-06-12)
 **Priority:** P0
 **Depends On:** 04
 **Spec Refs:** FR-CR-007, FR-CR-010, NFR-CR-001, NFR-CR-003, NFR-CR-008, §17.2 (Constitution C2), design §4
 
-> **Delivery note:** 7 of 8 DoD items are complete with real in-session
-> evidence. The one remaining item — SCN-083-E08 *successful* live Ollama
-> inference round-trip — is blocked-needs-live-Ollama: the disposable-stack
-> Ollama serves no pulled LLM model in this environment (litellm
-> `APIConnectionError`), so a successful inference cannot run here. The E08
-> audit-run persistence and the real orchestrator→sidecar HTTP fail-loud
-> contract ARE proven live (see report.md). Satisfiable on the home-lab ops node.
+> **Delivery note:** All 8 DoD items are complete with real evidence. The
+> final item — SCN-083-E08 *successful* live Ollama inference round-trip — was
+> deferred during disposable-stack delivery (that Ollama serves no pulled model;
+> litellm `APIConnectionError`) and is now **proven on the home-lab
+> deployment** (2026-06-12): a real POST to the deployed
+> `/extract-card-categories` route (gemma4:26b, 100% GPU) returned HTTP 200 with
+> a strict-schema-valid extraction. The E08 audit-run persistence + the
+> orchestrator→sidecar HTTP fail-loud contract were already proven live on PG.
+> See report.md "Deploy to home-lab + Scope 05 E08 live-Ollama closure".
 
 ### Gherkin Scenarios
 
@@ -429,7 +432,7 @@ Scenario: SCN-083-E08 — extraction run is audited
 - [x] Adversarial scenario tests pass for SCN-083-E02 and SCN-083-E03 (malformed discarded; no silent fallback) — unit; each uses input that would PASS the old silent-fallback path but MUST fail-loud to verification → Evidence: report.md — `TestValidateExtraction_MalformedAndInvalidDiscarded_E02_E03 PASS` (8 discard subtests) + live-PG `TestExtractorLivePG_MalformedDiscardedNoOverwrite_E02_E03 PASS` (existing record categories/confidence/manual_override UNCHANGED; only needs_verification flipped true)
 - [x] Adversarial scenario tests pass for SCN-083-E04 and SCN-083-E05 (low-confidence flag; unknown-card skip) — unit → Evidence: report.md — `TestValidateExtraction_LowConfidenceFlagged_E04 PASS` + `TestValidateExtraction_UnknownCardSkipped_E05 PASS` + live-PG `TestExtractorLivePG_LowConfidenceStored_E04` / `TestExtractorLivePG_UnknownCardSkippedNoMismap_E05` PASS (no mismap onto co-resident known card)
 - [x] Scenario test passes for SCN-083-E06 (prompt-injection defense) — unit → Evidence: report.md — Go `TestExtractRequest_PageContentIsDataNotInstructions_E06` + `TestValidateExtraction_RejectsCardOrPeriodMismatch_E06` PASS, and Python `test_card_categories.py::test_build_messages_treats_page_content_as_data_E06` (injected text only in the untrusted PAGE_CONTENT data block; system prompt declares it untrusted + forbids following it)
-- [ ] Scenario test passes for SCN-083-E08 (extraction run audited) — integration (live PG + Ollama per spec 043) → **BLOCKED-NEEDS-LIVE-OLLAMA (honest).** `TestCardRewardsExtractLiveStackAudited_E08` RUNS + PASSES against the real ml sidecar (proves the orchestrator→`/extract-card-categories` HTTP contract, fail-loud handling, and a persisted `extract` audit run), and the audit-run persistence is independently PROVEN on live PG by `TestExtractorLivePG_ExtractionRunAudited_E08 PASS`. The remaining gap is a SUCCESSFUL sidecar→Ollama inference: here litellm returns `APIConnectionError` (disposable-stack Ollama has no pulled LLM model; the `integration` lane runs no `ollama-test-pull`). Satisfiable on the <home-lab-host> ops node. See report.md "SCN-083-E08 (live PG + real ml sidecar round-trip)".
+- [x] Scenario test passes for SCN-083-E08 (extraction run audited) — integration (live PG + Ollama per spec 043) → **PROVEN ON LIVE DEPLOYMENT (2026-06-12).** Two halves, both now green: (1) audit-run persistence + the orchestrator→`/extract-card-categories` HTTP fail-loud contract were proven on live PG by `TestCardRewardsExtractLiveStackAudited_E08` + `TestExtractorLivePG_ExtractionRunAudited_E08 PASS`; (2) the previously-deferred SUCCESSFUL sidecar→Ollama inference is now proven on the home-lab deployment — a real POST to the deployed `/extract-card-categories` route (gemma4:26b, 100% GPU, in-stack `ollama:11434`) returned `HTTP 200` with a strict-schema-valid object (categories=[Gas Stations, Select Streaming Services], period 2026-07-01..09-30, confidence 1.0, verbatim source_evidence; card/period echo-guard passed). The disposable-stack `APIConnectionError` was purely a no-pulled-model artifact, resolved on the host. See report.md "Deploy to home-lab + Scope 05 E08 live-Ollama closure (2026-06-12)".
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); §17.2 strict-schema contract honored; artifact-lint clean; docs aligned → Evidence: report.md "Build Quality Gate (Scope 05)" (`CHECK_EXIT=0`; `LINT_EXIT=0` All checks passed! + Web validation passed; `FORMAT_RECHECK_EXIT=0`) + connector-count + doc-freshness contracts green + artifact-lint (report.md "Gate: artifact-lint — Scope 05")
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent adversarial regression guards (Test Plan row T-05-RE: malformed-discard, no silent overwrite) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 05"
 - [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"

@@ -2925,4 +2925,91 @@ live-Ollama DoD item is the only open work). Not committed (autoCommit off) —
 the orchestrator owns the preservation checkpoint.
 
 
+## Deploy to home-lab + Scope 05 E08 live-Ollama closure (2026-06-12)
+
+The `cardrewards-home-lab` scenario was driven through the release-readiness
+audit, git reconciliation (rebased onto origin/main, zero loss), CI build, and
+the operator-approved home-lab deploy. The build-once-deploy-many pipeline and
+the deferred Scope 05 E08 item are both proven on the live host below.
+
+### CI build — signed images + build-manifest
+
+Push of source SHA `a8d2abb2e4aadbc4b65d752d0e37b65dcd1ec0f9` to `origin/main`
+triggered `.github/workflows/build.yml`, which completed green:
+
+- `smackerel-core` @ `sha256:1a48bb431f59edc13122616aba649b50ee65d74aa733f6b9a60b5e32e17e6dee`
+- `smackerel-ml`   @ `sha256:6457e60d62fbf790e5bbadf50023f90668bee44bfc44e26f0cce2372e741c970`
+- config bundle `home-lab-a8d2abb2…` (cosign-keyless + Rekor + SBOM + SLSA, Trivy CRITICAL/HIGH gate passed)
+- `build-manifest-a8d2abb2….yaml` published
+
+### Apply on the home-lab host (knb home-lab adapter, ci-keyless trust model)
+
+`knb/smackerel/home-lab/apply.sh` verified cosign signatures + bundle hash via
+the 8 pre-apply checks, then recreate-swapped core + ml. Canonical provenance in
+`/var/log/knb-apply.log`:
+
+```
+event=apply timestamp=2026-06-12T02:45:04Z operator=phwp@<home-lab-host> knb_sha=6e2603f
+source_sha=a8d2abb2e4aadbc4b65d752d0e37b65dcd1ec0f9
+image_core=sha256:1a48bb431f59edc13122616aba649b50ee65d74aa733f6b9a60b5e32e17e6dee
+image_ml=sha256:6457e60d62fbf790e5bbadf50023f90668bee44bfc44e26f0cce2372e741c970
+config_bundle=home-lab-a8d2abb2e4aadbc4b65d752d0e37b65dcd1ec0f9
+secrets_decrypted=true effective_env_substituted_count=6
+effective_env_placeholder_remaining_count=0 cleanup_status=ok outcome=success
+```
+
+`verify`: core `/api/health` healthy, ml `/health` healthy, running digests
+MATCH the expected core/ml digests, Caddy edge `https://<home-lab-host>/ → 401`
+(auth-gated as designed). Migration `057_card_rewards.sql` applied — all 10
+card-rewards tables present in the live home-lab Postgres; covered by the knb
+`backup.sh` `pg_dump`.
+
+### SCN-083-E08 — successful live Ollama inference (CLOSES the deferred item)
+
+The one DoD item that could not run on the disposable test stack (the sidecar
+returned `APIConnectionError` because that Ollama serves no pulled model) is now
+proven against the deployed sidecar on the home-lab host, whose configured `gemma4:26b`
+runs 100% on GPU (`ollama ps` confirmed). A real POST to the deployed
+`/extract-card-categories` route (internal `:8081`, Bearer-authed via the
+container's `SMACKEREL_AUTH_TOKEN`, in-stack `ollama:11434`):
+
+```
+=== E08 LIVE: POST /extract-card-categories on the home-lab host (real route, gemma4:26b via in-stack Ollama) ===
+HTTP 200
+{
+  "card_id": "chase-freedom-flex",
+  "period_label": "2026-Q3",
+  "period_start": "2026-07-01",
+  "period_end": "2026-09-30",
+  "categories": ["Gas Stations", "Select Streaming Services"],
+  "spend_limit": 1500,
+  "activation_required": true,
+  "confidence": 1.0,
+  "source_evidence": "Earn 5% cash back on Gas Stations and Select Streaming Services on up to $1,500 in combined purchases each quarter you activate"
+}
+HAS_ALL_SCHEMA_KEYS: True
+CARD_ECHO_OK: True
+CATEGORIES: ['Gas Stations', 'Select Streaming Services']
+CONFIDENCE: 1.0
+```
+
+The strict output schema validated, the card_id/period echo-guard passed, and
+the model extracted the correct categories, period dates, spend limit,
+activation flag, and a verbatim source-evidence snippet — the exact sidecar→
+Ollama inference leg that was blocked-needs-live-Ollama. **Scope 05 E08 is
+proven on the live deployment.**
+
+### Runtime activation boundary (operator-owned)
+
+The feature deployed with `CARD_REWARDS_ENABLED=false` and empty SST
+placeholders (`sources: []`, `extraction.model/endpoint: ""`,
+`tracked_categories: []`, `calendar_sync: false`) per the No-Env-Specific-Content
+policy — the schema, route, scheduler wiring, and inference path are all live
+and proven, but full daily/monthly operation needs operator-supplied activation
+values (real offer-source URLs, tracked categories, a chosen Ollama model, and a
+CalDAV/Google-Calendar credential + sidecar `AUTH_TOKEN`). Those belong in the
+knb home-lab overlay (`environments.home-lab.card_rewards` override + the
+encrypted secrets file), NOT the generic smackerel tree.
+
+
 
