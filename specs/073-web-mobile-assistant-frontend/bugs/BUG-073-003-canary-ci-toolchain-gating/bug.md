@@ -1,6 +1,6 @@
 # BUG-073-003 — Cross-language renderer canary fails CI because the Go unit runner has no node/dart
 
-**Status:** Resolved (pending validate certification)
+**Status:** Resolved — lint-and-test GREEN + canary running in CI on origin/main (0bdfa6a9)
 **Severity:** High — blocks the `CI` workflow (`lint-and-test`) on `main`
 **Spec:** 073-web-mobile-assistant-frontend
 **Owning test:** `tests/unit/clients/render_descriptor_canary_test.go` (TP-073-03)
