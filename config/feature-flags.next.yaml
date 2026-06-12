@@ -1,5 +1,7 @@
 # Smackerel next train flag bundle
 version: 1
 train: next
-flags: {}
+flags:
+  # Owned by train 'mvp' (specs/083-card-rewards-companion); MUST be false here for G111 parity.
+  card_rewards: false
 metadata: {}
