@@ -48,6 +48,25 @@ fixed, plus reinforcing clarifications:
 
 Re-ran `bash .github/bubbles/scripts/artifact-lint.sh specs/083-card-rewards-companion` → **exit 0** (only the pre-existing deprecated-`scopeProgress` WARN, untouched by this refinement). Ceiling unchanged (`specs_hardened`).
 
+## Discovered Issues
+
+<!-- bubbles:g040-skip-begin -->
+
+Honest, fully-disclosed discovered issues / external-actor-gated deferrals for
+this in-progress spec, each with an explicit disposition (Gate G095). They are
+intentionally NOT resolved in-session because they require an external actor
+(operator-provisioned live Ollama on the home-lab ops node) or belong to another
+owning area; the spec correctly stays `in_progress` until they clear.
+
+| Date | Discovered issue | Disposition | Reference |
+|------|------------------|-------------|-----------|
+| 2026-06-12 | SCN-083-E08 — a *successful* live-Ollama category-extraction inference round-trip cannot run on the disposable test stack (its Ollama serves no pulled LLM model; litellm returns APIConnectionError). The orchestrator→sidecar HTTP fail-loud contract and the `extract` audit-run persistence ARE proven live on PG. | ops-filed / routed — satisfiable on the operator's home-lab ops node (live Ollama + model) per the spec-043 Ollama test infrastructure; tracked as the single remaining Scope 05 DoD item. | spec.md FR-CR-007 / FR-CR-010; specs/043-ollama-test-infrastructure; report.md "SCN-083-E08 (live PG + real ml sidecar round-trip)" |
+| 2026-06-12 | A non-zero CalDAV calendar-event WRITE against a real CalDAV server is gated on the operator enabling `card_rewards.calendar_sync` on the home-lab deployment. The CalDAV bridge, stable-UID update-not-duplicate behavior, and the `calendar_sync` audit run ARE proven against an external-boundary fake on live PG (H06). | routed — operator-gated at home-lab deploy time; `bubbles.train` owns the `card_rewards` flag bundle and the deploy adapter owns the CalDAV credentials. | spec.md FR-CR-015; scopes.md Scope 08 + Scope 11 K07/K08 |
+| 2026-06-12 | A pre-existing `qf-decisions` connector gap surfaced during Scope 04 — outside this spec's card-rewards remit; no card-rewards behavior depends on it. | routed — owned by the qf-decisions / connector area; recorded, not fixed here. | report.md "Delivery — Scope 04" |
+| 2026-06-12 | A shared `internal/web` head ↔ global CSP htmx trailing-slash mismatch surfaced during Scope 10 e2e-ui. Card-rewards pages use a script-free, CSP-clean head and are unaffected. | routed — owned by the web/spec-044/057 area; recorded for that area to address separately. | report.md "Pre-existing out-of-scope finding (shared head ↔ CSP htmx mismatch)" |
+
+<!-- bubbles:g040-skip-end -->
+
 ## Completion Statement
 
 The planning deliverables for feature 083 are complete to the `specs_hardened`
