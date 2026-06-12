@@ -99,15 +99,26 @@ ML_DIGEST="${ML_REF##*@}"
 # Extract just the bundle tag (after :)
 BUNDLE_TAG="${BUNDLE_REF##*:}"
 
+# Spec 021 B1a — resolve the manifest trust model and forward it to the adapter.
+# The legacy (C4) PATH-2 promote previously dropped --trust-model entirely, so a
+# CI ci-keyless manifest misresolved to the adapter's stored params default
+# (local-operator). manifest_trust_model returns ci-keyless when the manifest
+# omits trustModel (spec-019 FR-6 inference) or the explicit value otherwise.
+# smackerel.sh deploy-target apply forwards "$@" to the adapter, which has a
+# --trust-model arm, so forwarding here threads the value end-to-end.
+TRUST_MODEL="$(manifest_trust_model "$MANIFEST")"
+
 echo "▶ promote: target=$TARGET env=$TARGET_ENV sourceSha=$SOURCE_SHA"
 echo "  coreDigest:       $CORE_DIGEST"
 echo "  mlDigest:         $ML_DIGEST"
 echo "  configBundle:     $BUNDLE_TAG"
 echo "  configBundleSha:  $BUNDLE_SHA"
+echo "  trustModel:       $TRUST_MODEL"
 
 exec "$REPO_ROOT/smackerel.sh" deploy-target "$TARGET" apply \
   --image-core="$CORE_DIGEST" \
   --image-ml="$ML_DIGEST" \
   --config-bundle="$BUNDLE_TAG" \
   --config-bundle-sha="$BUNDLE_SHA" \
-  --source-sha="$SOURCE_SHA"
+  --source-sha="$SOURCE_SHA" \
+  --trust-model="$TRUST_MODEL"

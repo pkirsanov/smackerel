@@ -103,3 +103,22 @@ manifest_bundle_ref() { manifest_bundle_field "$1" "$2" ref; }
 
 # manifest_bundle_sha <manifest> <env> — convenience wrapper.
 manifest_bundle_sha() { manifest_bundle_field "$1" "$2" sha256; }
+
+# manifest_trust_model <manifest> — prints the manifest's trust model so the
+# legacy (C4 / spec-017+018) PATH-2 promote can forward it to the adapter.
+#
+# Spec 021 B1a: a CI build manifest OMITS the trustModel field on purpose
+# (spec-019 FR-6: ci-keyless is inferred from the absence of an explicit
+# value). When the field is absent we therefore return "ci-keyless" so a CI
+# manifest never silently misresolves to the adapter's stored
+# params.signing.trustModel default (local-operator). An explicit value in the
+# manifest (either shape; top-level key) wins. Quotes and trailing comments are
+# stripped to match the other extractors in this library.
+manifest_trust_model() {
+  local manifest="$1" tm
+  tm="$(awk '/^trustModel:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); gsub(/"/, ""); print; exit }' "$manifest")"
+  if [[ -z "$tm" ]]; then
+    tm="ci-keyless"
+  fi
+  printf '%s' "$tm"
+}
