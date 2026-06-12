@@ -48,10 +48,49 @@ var (
 	dartExePath    string
 	dartCompileErr error
 	dartTempDir    string
+
+	// toolchainAvailable is set by TestMain: true only when BOTH node and dart
+	// are on PATH. The cross-language renderer canary execs both renderers, so it
+	// can only run when both are present. When false, the toolchain-dependent
+	// canary tests t.Skip with toolchainSkipReason instead of failing — toolchain
+	// ABSENCE is an environment gap, not a code defect (BUG-073-003). Drift /
+	// compile failures with the toolchain PRESENT remain fail-loud (the t.Fatalf
+	// paths below are deliberately left intact). The canary still executes in CI
+	// in the dedicated `cross-language-canary` job (.github/workflows/ci.yml),
+	// which provisions node + Flutter/dart.
+	toolchainAvailable  bool
+	toolchainSkipReason string
 )
 
+// decideRenderToolchain reports whether both renderer toolchains (node and
+// dart) are available, using the supplied lookPath probe (exec.LookPath in
+// production; a stub in adversarial unit tests). When either is missing it
+// returns available=false and a skip reason naming the missing toolchain(s).
+// A MISSING toolchain is an environment gap (skip), NOT a code defect (fail) —
+// this is the BUG-073-003 gating decision. It is a pure function so the
+// decision is covered by non-tautological unit tests (TestDecideRenderToolchain_*)
+// that run in EVERY environment, including the go-only CI unit container where
+// the heavy canary itself skips.
+func decideRenderToolchain(lookPath func(string) (string, error)) (bool, string) {
+	_, nodeErr := lookPath("node")
+	_, dartErr := lookPath("dart")
+	switch {
+	case nodeErr != nil && dartErr != nil:
+		return false, "node and dart not on PATH; the spec 073 cross-language renderer canary execs both renderers and requires both. Skipping (environment gap, not a code defect — BUG-073-003); the canary executes in CI in the dedicated `cross-language-canary` job (.github/workflows/ci.yml) and on developer machines with node + Flutter/dart installed."
+	case nodeErr != nil:
+		return false, "node not on PATH; the spec 073 cross-language renderer canary requires both node and dart. Skipping (environment gap, not a code defect — BUG-073-003); the canary executes in CI in the dedicated `cross-language-canary` job (.github/workflows/ci.yml)."
+	case dartErr != nil:
+		return false, "dart not on PATH; the spec 073 cross-language renderer canary requires both node and dart. Skipping (environment gap, not a code defect — BUG-073-003); the canary executes in CI in the dedicated `cross-language-canary` job (.github/workflows/ci.yml)."
+	default:
+		return true, ""
+	}
+}
+
 func TestMain(m *testing.M) {
-	if _, err := exec.LookPath("dart"); err == nil {
+	toolchainAvailable, toolchainSkipReason = decideRenderToolchain(exec.LookPath)
+	// Pre-compile the Dart CLI to an AOT executable once (BUG-073-001) only when
+	// the toolchain is present; if it is absent the canary tests skip anyway.
+	if toolchainAvailable {
 		if err := compileDartRendererCLI(); err != nil {
 			dartCompileErr = err
 		}
@@ -119,14 +158,17 @@ const (
 )
 
 func TestRenderDescriptorV1_CrossLanguageCanary(t *testing.T) {
+	// Toolchain ABSENT is an environment gap, not a code defect (BUG-073-003):
+	// skip gracefully. The canary still runs in CI in the dedicated
+	// `cross-language-canary` job that provisions node + Flutter/dart.
+	if !toolchainAvailable {
+		t.Skip(toolchainSkipReason)
+	}
 	repoRoot := findRepoRoot(t)
 
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Fatalf("node not on PATH; the spec 073 cross-language renderer canary requires both node and dart: %v", err)
-	}
-	if _, err := exec.LookPath("dart"); err != nil {
-		t.Fatalf("dart not on PATH; the spec 073 cross-language renderer canary requires both node and dart: %v", err)
-	}
+	// Toolchain PRESENT but broken => fail loud (NOT an environment gap). These
+	// paths stay t.Fatalf so drift/compile regressions are never silently
+	// skipped (BUG-073-003 gates ABSENCE only; BUG-073-001 guard intact).
 	if dartCompileErr != nil {
 		t.Fatalf("dart AOT pre-compile failed in TestMain (BUG-073-001 fix requires it): %v", dartCompileErr)
 	}
@@ -363,9 +405,13 @@ func validateDescriptorAgainstSentinel(t *testing.T, label string, descriptor an
 // dartExePath stays empty and this test FAILS — independent of whether the
 // underlying flake reproduces on the current machine.
 func TestRenderDescriptorV1_DartPreCompiled_NoFallbackToDartRun(t *testing.T) {
-	if _, err := exec.LookPath("dart"); err != nil {
-		t.Fatalf("dart not on PATH; the spec 073 cross-language renderer canary requires dart: %v", err)
+	// Toolchain ABSENT => environment gap, skip (BUG-073-003). The dedicated
+	// `cross-language-canary` CI job runs this with the toolchain present.
+	if !toolchainAvailable {
+		t.Skip(toolchainSkipReason)
 	}
+	// Toolchain PRESENT but the AOT pre-compile failed or produced no exe =>
+	// fail loud (BUG-073-001 guard intact; BUG-073-003 gates ABSENCE only).
 	if dartCompileErr != nil {
 		t.Fatalf("dart AOT pre-compile failed in TestMain (BUG-073-001 fix requires it): %v", dartCompileErr)
 	}
@@ -378,5 +424,63 @@ func TestRenderDescriptorV1_DartPreCompiled_NoFallbackToDartRun(t *testing.T) {
 	}
 	if info.Mode()&0o111 == 0 {
 		t.Fatalf("dartExePath %s is not executable (mode=%v); BUG-073-001 fix requires a native AOT binary", dartExePath, info.Mode())
+	}
+}
+
+// --- BUG-073-003 adversarial coverage for the toolchain-gating decision ---
+//
+// These tests inject a stub lookPath so the gating decision is verified
+// independently of the ambient PATH. They run in EVERY environment (including
+// the go-only CI unit container where the heavy canary skips), so the
+// skip-vs-run decision can never silently regress to "always run" (which would
+// re-introduce the BUG-073-003 fail-loud-in-CI defect) or "always skip" (which
+// would silently disable cross-language drift detection).
+
+func stubLookPath(present map[string]bool) func(string) (string, error) {
+	return func(name string) (string, error) {
+		if present[name] {
+			return "/usr/bin/" + name, nil
+		}
+		return "", exec.ErrNotFound
+	}
+}
+
+func TestDecideRenderToolchain_BothPresent_Available(t *testing.T) {
+	ok, reason := decideRenderToolchain(stubLookPath(map[string]bool{"node": true, "dart": true}))
+	if !ok {
+		t.Fatalf("both node+dart present: want available=true, got false (reason=%q)", reason)
+	}
+	if reason != "" {
+		t.Fatalf("both present: want empty skip reason, got %q", reason)
+	}
+}
+
+func TestDecideRenderToolchain_NodeAbsent_SkipsAndNamesNode(t *testing.T) {
+	ok, reason := decideRenderToolchain(stubLookPath(map[string]bool{"node": false, "dart": true}))
+	if ok {
+		t.Fatalf("node absent: want available=false (skip), got true — the drift canary must not fail-loud on a toolchain gap")
+	}
+	if !strings.Contains(reason, "node") {
+		t.Fatalf("node absent: skip reason must name node, got %q", reason)
+	}
+}
+
+func TestDecideRenderToolchain_DartAbsent_SkipsAndNamesDart(t *testing.T) {
+	ok, reason := decideRenderToolchain(stubLookPath(map[string]bool{"node": true, "dart": false}))
+	if ok {
+		t.Fatalf("dart absent: want available=false (skip), got true — the drift canary must not fail-loud on a toolchain gap")
+	}
+	if !strings.Contains(reason, "dart") {
+		t.Fatalf("dart absent: skip reason must name dart, got %q", reason)
+	}
+}
+
+func TestDecideRenderToolchain_BothAbsent_Skips(t *testing.T) {
+	ok, reason := decideRenderToolchain(stubLookPath(map[string]bool{"node": false, "dart": false}))
+	if ok {
+		t.Fatalf("node+dart absent: want available=false (skip), got true")
+	}
+	if !strings.Contains(reason, "node") || !strings.Contains(reason, "dart") {
+		t.Fatalf("both absent: skip reason must name node and dart, got %q", reason)
 	}
 }
