@@ -1,0 +1,110 @@
+{
+  "bugId": "BUG-031-008-integration-job-stabilization",
+  "parentFeatureDir": "specs/031-live-stack-testing",
+  "owner": "bubbles.validate",
+  "generatedBy": "bubbles.workflow",
+  "schema": "bubbles.scenario-manifest.v3",
+  "scenarioCount": 9,
+  "notes": "Faithful manifest of the 9 Gherkin scenarios across the 5 clusters. All scenarios are correctness contracts (no lockdown), each backed by a live-stack integration test that honest-skips without docker and runs fully on a docker host (C2/C3a/C3b assert against the live stack; C1/C4 honest-skip the host-docker / real-geocoder path on the containerized runner). regressionRequired=true means the linked test is the persistent regression guard for that contract.",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-031-008-SCN-001",
+      "scope": "Scope 1: C1 CLI auth passthrough (docker-absent runner) honest skip",
+      "title": "auth with no subcommand returns exit 2 + usage banner",
+      "requiredTestType": "integration",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": true,
+      "linkedTests": ["tests/integration/cli_auth_passthrough_test.go::TestCLIAuthPassthrough_NoArgsExitsTwo"],
+      "evidenceRefs": ["report.md#c1-after", "report.md#regression-full-lane"]
+    },
+    {
+      "scenarioId": "BUG-031-008-SCN-002",
+      "scope": "Scope 1: C1 CLI auth passthrough (docker-absent runner) honest skip",
+      "title": "auth unknown subcommand returns exit 2 + forwarded arg",
+      "requiredTestType": "integration",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": true,
+      "linkedTests": ["tests/integration/cli_auth_passthrough_test.go::TestCLIAuthPassthrough_UnknownSubcommandExitsTwo"],
+      "evidenceRefs": ["report.md#c1-after", "report.md#regression-full-lane"]
+    },
+    {
+      "scenarioId": "BUG-031-008-SCN-003",
+      "scope": "Scope 2: C2 transport-hint in-container URL unreachability",
+      "title": "web and mobile hints accepted as telemetry against a healthy stack",
+      "requiredTestType": "integration",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": true,
+      "linkedTests": ["tests/integration/api/assistant_transport_hint_test.go::TestAssistantTransportHint_WebAndMobileAreAcceptedAsTelemetry"],
+      "evidenceRefs": ["report.md#c2-after", "report.md#regression-full-lane"]
+    },
+    {
+      "scenarioId": "BUG-031-008-SCN-004",
+      "scope": "Scope 2: C2 transport-hint in-container URL unreachability",
+      "title": "unknown transport_hint rejected pre-facade",
+      "requiredTestType": "integration",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": true,
+      "linkedTests": ["tests/integration/api/assistant_transport_hint_test.go::TestAssistantTransportHint_UnknownHintRejectedBeforeFacade"],
+      "evidenceRefs": ["report.md#c2-after", "report.md#regression-full-lane"]
+    },
+    {
+      "scenarioId": "BUG-031-008-SCN-005",
+      "scope": "Scope 2: C2 transport-hint in-container URL unreachability",
+      "title": "readiness determination (local vs CI)",
+      "requiredTestType": "diagnostic",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": false,
+      "linkedTests": ["tests/integration/api/assistant_transport_hint_test.go::TestAssistantTransportHint_WebAndMobileAreAcceptedAsTelemetry"],
+      "evidenceRefs": ["report.md#c2-repro", "report.md#c2-fix"]
+    },
+    {
+      "scenarioId": "BUG-031-008-SCN-006",
+      "scope": "Scope 3: C3a micro-tools registry canary stale assertion",
+      "title": "import-registered micro-tools match shipped reality",
+      "requiredTestType": "integration",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": true,
+      "linkedTests": ["tests/integration/assistant/microtools_registry_canary_test.go::TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate"],
+      "evidenceRefs": ["report.md#c3a-after", "report.md#regression-full-lane"]
+    },
+    {
+      "scenarioId": "BUG-031-008-SCN-007",
+      "scope": "Scope 4: C3b weather scenario allowed_tools location_normalize",
+      "title": "weather allowed_tools includes location_normalize and weather_lookup",
+      "requiredTestType": "integration",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": true,
+      "linkedTests": ["tests/integration/assistant/microtools_prompt_contract_test.go::TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent"],
+      "evidenceRefs": ["report.md#c3b-after", "report.md#regression-full-lane"]
+    },
+    {
+      "scenarioId": "BUG-031-008-SCN-009",
+      "scope": "Scope 5: C4 TestLocationNormalizeIntegration fallback-geocoder honest skip",
+      "title": "fallback geocoder is detected and the test honestly skips",
+      "requiredTestType": "integration",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": true,
+      "linkedTests": ["tests/integration/assistant/microtools_location_test.go::TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations"],
+      "evidenceRefs": ["report.md#c4-after", "report.md#regression-full-lane"]
+    },
+    {
+      "scenarioId": "BUG-031-008-SCN-010",
+      "scope": "Scope 5: C4 TestLocationNormalizeIntegration fallback-geocoder honest skip",
+      "title": "a real open-meteo geocoder still exercises the assertions",
+      "requiredTestType": "integration",
+      "lockdown": false,
+      "changeType": "stabilized",
+      "regressionRequired": true,
+      "linkedTests": ["tests/integration/assistant/microtools_location_test.go::TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations"],
+      "evidenceRefs": ["report.md#c4-implement", "report.md#regression-full-lane"]
+    }
+  ]
+}
