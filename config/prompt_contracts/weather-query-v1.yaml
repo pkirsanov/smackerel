@@ -38,6 +38,8 @@ system_prompt: |
 allowed_tools:
 - name: weather_lookup
   side_effect_class: external
+- name: location_normalize
+  side_effect_class: external
 
 # Spec 061 SCOPE-07 — pass-through optimization: the weather_lookup
 # tool already returns a JSON object that satisfies output_schema
