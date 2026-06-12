@@ -1,5 +1,11 @@
 # Smackerel mvp train flag bundle
 version: 1
 train: mvp
-flags: {}
-metadata: {}
+flags:
+  # Default-ON in this (owning) train; default-OFF in every other train (G111).
+  card_rewards: true
+metadata:
+  card_rewards:
+    owning_spec: specs/083-card-rewards-companion/
+    introduced_in_train: mvp
+    introduced_at: "2026-06-12"

@@ -2,10 +2,12 @@
 
 Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](uservalidation.md)
 
-> **Delivery in progress (`full-delivery`).** Scopes 01–02 are **Done**
-> (implemented + validated with real evidence in [report.md](report.md) →
-> "Delivery — Scope 01" / "Delivery — Scope 02"). Scopes 03–11 remain **Not
-> Started**; their DoD items are unchecked. Scenario IDs use the
+> **Delivery in progress (`full-delivery`).** Scopes 01–04 and 06–11 are
+> **Done** (implemented + validated with real evidence in [report.md](report.md)
+> → the per-scope "Delivery — Scope NN" sections). Scope 05 is **In Progress**
+> — 7 of 8 DoD items are complete; its one remaining item (SCN-083-E08
+> *successful* live Ollama inference round-trip) is blocked-needs-live-Ollama
+> and deferred to the home-lab ops node. Scenario IDs use the
 > `SCN-083-<LETTER><NN>` convention (letter = scope) so they match the default
 > artifact-lint pattern `SCN-[0-9]{3}-[A-Z][0-9]{2}`.
 
@@ -22,8 +24,8 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 07 | Optimizer & Monthly Recommendation Generation | P1 | 02, 06 | `internal/cardrewards/optimize`, REST API | Done |
 | 08 | CalDAV Calendar Delivery | P1 | 07 | `internal/cardrewards/calendar`, CalDAV | Done |
 | 09 | Scheduler Jobs & Manual Triggers | P1 | 04, 05, 06, 07, 08 | `internal/scheduler` | Done |
-| 10 | Web UI — Wallet, Offers, Selections, Bonuses, Categories | P1 | 02 | `internal/web` (Go templates), e2e-ui | Not Started |
-| 11 | Web UI — Dashboard, Recommendations, Rotating Verify, Report, Admin | P1 | 06, 07, 09, 10 | `internal/web` + `internal/web/admin`, e2e-ui | Not Started |
+| 10 | Web UI — Wallet, Offers, Selections, Bonuses, Categories | P1 | 02 | `internal/web` (Go templates), e2e-ui | Done |
+| 11 | Web UI — Dashboard, Recommendations, Rotating Verify, Report, Admin | P1 | 06, 07, 09, 10 | `internal/web` + `internal/web/admin`, e2e-ui | Done |
 
 ## Dependency Graph
 
@@ -333,10 +335,18 @@ Scenario: SCN-083-D06 — cursor advances to last successful fetch
 
 ## Scope 05: LLM Category Extraction (replaces regex)
 
-**Status:** In Progress — 7 of 8 DoD items complete with real evidence. The one remaining item (SCN-083-E08 *successful* live Ollama inference round-trip) is **blocked-needs-live-Ollama**: the disposable-stack Ollama serves no pulled LLM model in this environment (litellm `APIConnectionError`), so a successful inference cannot run here. The E08 audit-run persistence + the real orchestrator→sidecar HTTP fail-loud contract ARE proven live (see report.md). Satisfiable on the <home-lab-host> ops node.
+**Status:** In Progress (E08 blocked-needs-live-Ollama)
 **Priority:** P0
 **Depends On:** 04
 **Spec Refs:** FR-CR-007, FR-CR-010, NFR-CR-001, NFR-CR-003, NFR-CR-008, §17.2 (Constitution C2), design §4
+
+> **Delivery note:** 7 of 8 DoD items are complete with real in-session
+> evidence. The one remaining item — SCN-083-E08 *successful* live Ollama
+> inference round-trip — is blocked-needs-live-Ollama: the disposable-stack
+> Ollama serves no pulled LLM model in this environment (litellm
+> `APIConnectionError`), so a successful inference cannot run here. The E08
+> audit-run persistence and the real orchestrator→sidecar HTTP fail-loud
+> contract ARE proven live (see report.md). Satisfiable on the home-lab ops node.
 
 ### Gherkin Scenarios
 
