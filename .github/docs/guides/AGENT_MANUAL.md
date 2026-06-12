@@ -87,6 +87,8 @@ An agent's frontmatter `tools:` field is an explicit allowlist of the VS Code to
 - Omitting `tools:` entirely is **not** a violation for an orchestrator — inheriting all tools includes `agent`, so delegation still works.
 - A genuinely terminal agent that never delegates may opt out of the check with frontmatter `delegationModel: none`.
 
+> **Adding a framework MCP tool?** See [When to graduate a script to an MCP tool](../MCP.md#when-to-graduate-a-script-to-an-mcp-tool) for the decision frame — and remember the bash twin in `bubbles/scripts/*.sh` stays canonical; the tool is only a thin wrapper.
+
 Enforced by `bubbles/scripts/orchestrator-tool-frontmatter-lint.sh` (both a live scan and a hermetic selftest run in `framework-validate`). The guard flags only an orchestrator whose **present** `tools:` allowlist omits `agent`.
 
 ### Troubleshooting: "the agent can't edit files / a tool isn't enabled / dispatches return blocked"

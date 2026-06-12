@@ -1,6 +1,6 @@
 # Upkeep Calendar Schema (per-repo `config/upkeep-calendar.yaml`)
 #
-# Owned by bubbles.upkeep. Declares cadence + retention for the 7 task types.
+# Owned by bubbles.upkeep. Declares cadence + retention for the 8 task types.
 # upkeep-calendar.sh reads this + /srv/backups/upkeep-ledger.jsonl to compute
 # which tasks are DUE.
 #
@@ -42,3 +42,10 @@ tasks:
   - id: compliance-sweep
     cadence: quarterly
     retention: "7y"             # regulatory retention if applicable
+
+  - id: slo-review
+    cadence: weekly
+    at: "mon 06:00"
+    retention: "1y"
+    requires_observability_wired: true   # only runs when traceContracts.observability.posture: wired
+    routes_breach_to: stabilize          # a burning SLO packets bubbles.stabilize (read-only operate-plane check)

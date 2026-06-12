@@ -35,7 +35,7 @@ handoffs:
 
 **Behavioral Rules:**
 - Read `config/upkeep-calendar.yaml` (per repo) and `/srv/backups/upkeep-ledger.jsonl` (knb-side, per host). Dispatch the highest-priority overdue task.
-- Tasks: `backup` (daily), `restore-test` (weekly), `bcdr-drill` (quarterly), `patch-cycle` (monthly), `secret-rotation` (quarterly), `flag-cleanup-audit` (monthly — packets to `bubbles.train`), `compliance-sweep` (quarterly — generates `docs/Compliance_Report.md` evidence pass, packets to `bubbles.audit` for certification).
+- Tasks: `backup` (daily), `restore-test` (weekly), `bcdr-drill` (quarterly), `patch-cycle` (monthly), `secret-rotation` (quarterly), `flag-cleanup-audit` (monthly — packets to `bubbles.train`), `compliance-sweep` (quarterly — generates `docs/Compliance_Report.md` evidence pass, packets to `bubbles.audit` for certification), `slo-review` (weekly — wired repos only; read-only operate-plane SLO/error-rate check, burning SLO packets to `bubbles.stabilize`).
 - Every task execution writes a structured ledger entry: `{task, repo, train, sha, started_at, finished_at, outcome, evidence_path}`. Ledger is append-only.
 - **Backup tiers (encapsulated via `OFFSITE_BACKEND` env):**
   - T1 (ZFS snapshots) — always runs.
@@ -50,6 +50,7 @@ handoffs:
 - **Calendar-driven, never speculative:** Only run tasks that the calendar declares due. Do NOT run unscheduled drills "to be safe" — they are workload and ledger noise.
 - **Cross-domain read access (B2 cooperative boundary):** MAY read `config/release-trains.yaml` and knb-side `<product>/<target>/manifest.yaml` to scope `restore-test` and `bcdr-drill` correctly (must restore the train+digest that's actually deployed, not trunk HEAD). NEVER writes to train config or manifest — writes go through `bubbles.train` and `bubbles.devops` respectively via packet.
 - **Compliance integration (G117-G120):** Every backup ledger entry is append-only (G117). `compliance-sweep` quarterly task verifies (a) every product declares `retention:` block in `upkeep-calendar.yaml` (G118), (b) every secret rotation recorded since last sweep includes old/new key-id hashes never values (G119), (c) every backup has a declared `pii:` classification in `release-trains.yaml` (G120). Sweep produces `docs/Compliance_Report.md` then packets to `bubbles.audit` for sign-off — Treena gathers evidence, Ted certifies.
+- **SLO review (`slo-review`, wired repos only):** When the calendar marks `slo-review` due AND the repo declares `traceContracts.observability.posture: wired`, fetch SLO burn + error rate from the OPERATE plane (`observability-endpoint-resolve.sh --plane operate --signal sloBurn|errorRate`, read-only per INV-12), compare each against the contract target in `traceContracts.observability.slos.*`, and write one append-only ledger entry `{task: slo-review, repo, sha, started_at, finished_at, outcome, evidence_path}`. A burning SLO (observed worse than target) routes a packet to `bubbles.stabilize` for diagnosis — upkeep never diagnoses or rolls back. Opt-out reminders stay owned by the posture/opt-out guards (G098/G099) + `bubbles doctor`; upkeep does NOT own them. On `opted-out`/undeclared posture, or when the operate adapter is `none`, the task is a no-op. Capture the fetch through the MCP `record_evidence` tool for provenance.
 
 ## Companion Skills & Instructions
 

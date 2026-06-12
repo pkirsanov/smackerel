@@ -61,6 +61,7 @@ Use these sections as the single source of truth for agent-specific Tier 2 compl
 | I3 | Docs synchronized | Required docs updated for changed behavior |
 | I4 | Scope state coherent | Scope status, evidence, and `state.json` agree |
 | I5 | No new policy violations | No defaults, stubs, fake data, or deferral introduced |
+| I6 | Observability evidence captured (MUST-when-wired) | When `traceContracts.observability.posture: wired` and the scope is instrumented (a Test Plan row declares `observabilityWorkflow`), trace evidence and the `.specify/runtime/observability/<workflow>.slo.json` SLO artifact are captured; clean no-op when opted-out / undeclared / not instrumented |
 
 ## Test
 
@@ -71,6 +72,7 @@ Use these sections as the single source of truth for agent-specific Tier 2 compl
 | T3 | Live-stack integrity preserved | No mocked live-system tests |
 | T4 | Regression coverage added | Changed behavior has persistent regression coverage |
 | T5 | Evidence recorded correctly | Raw output captured where required |
+| T6 | Trace + SLO evidence preserved (MUST-when-wired) | When posture is `wired` and the scope is instrumented (`observabilityWorkflow` declared), captured trace/log output and the SLO metric artifact are preserved (via `record_evidence`) for `bubbles.validate`; no-op when opted-out / undeclared / not instrumented |
 
 ## Validate
 
@@ -83,6 +85,7 @@ Use these sections as the single source of truth for agent-specific Tier 2 compl
 | V5 | Scope/DoD coherence verified | Required artifacts are compliant and Gherkin, Test Plan, DoD, and state align |
 | V6 | Planned-behavior traceability verified | Every spec/Gherkin scenario maps to concrete non-proxy tests and executed evidence |
 | V7 | Routing and re-validation closure enforced | Missing artifacts, tests, or implementation claims are routed to owners and validation does not pass until rerun checks succeed |
+| V8 | Observability gates pass (MUST-when-wired) | When posture is `wired`, `trace-contract-guard.sh` (G080) and `observability-slo-guard.sh` (G100) pass for instrumented workflows against captured evidence; both are clean no-ops when opted-out / undeclared / not instrumented |
 
 ## Audit
 
