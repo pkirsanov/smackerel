@@ -12,12 +12,22 @@ Design decision: **Option A** (dedicated CI job + skip-when-absent). Rationale i
 
 ## Completion Statement
 
-Fix implemented and fully validated locally: the canary SKIPS in the Go-only unit container
-(greening CI `lint-and-test`), drift detection stays fail-loud when the toolchain is present,
-the skip decision is covered by non-tautological adversarial tests, and a contract test
-mechanically keeps the canary running in the dedicated `cross-language-canary` CI job. Full
-Go unit lane, lint, and format are green. Terminal certification (`done`) is gated on the
-post-push CI run confirming `lint-and-test` GREEN.
+Scoped fix delivered and verified on origin/main (`0bdfa6a9`): the spec-073 cross-language
+renderer canary now SKIPS in the Go-only `lint-and-test` container (job GREEN) and RUNS with
+real toolchains in the dedicated `cross-language-canary` CI job (job GREEN); drift detection
+stays fail-loud when the toolchain is present; the skip decision and CI wiring are guarded by
+non-tautological adversarial + contract tests. The CI `build` job and the `build` (build.yml)
+workflow are GREEN. The scoped goal — `lint-and-test` GREEN + canary running in CI — is met.
+
+Status is kept `in_progress` (NOT promoted to a guard-certified `done`): this is a
+CI/test-infrastructure fix with no product runtime-behavior surface, so the bugfix-fastlane
+done-gate's product-grade requirements (E2E-regression coverage, stress coverage,
+scenario-manifest) do not apply; forcing them would require fabricated artifacts. The fix
+itself is complete and irreversibly delivered on origin/main.
+
+Out of scope (routed to operator, see ## Discovered Issues): unblocking the pipeline past the
+long-failing canary surfaced a pre-existing backlog of `integration` and `E2E UI` failures
+that this changeset does NOT touch and did NOT cause.
 
 ---
 
@@ -181,4 +191,64 @@ skipping — proving the CI failure is resolved.
 
 ### Evidence 8 — Post-push CI result
 
-_(filled after push)_
+Pushed SHA `0bdfa6a9` (fast-forward `784a11b1..0bdfa6a9 -> main`). Per-workflow / per-job
+result for the SHA:
+
+```
+$ gh run view 27394284069 --json jobs   # workflow: CI
+  JOB lint-and-test:          completed/success   <-- SCOPED GOAL: GREEN (canary skips here)
+  JOB cross-language-canary:  completed/success   <-- canary RUNS with node+Flutter in CI: GREEN
+  JOB build:                  completed/success   <-- GREEN after `gh run rerun --failed` (initial
+                                                      attempt hit transient HF connect flake:
+                                                      "couldn't connect to https://huggingface.co"
+                                                      while preloading all-MiniLM-L6-v2 in smackerel-ml)
+  JOB integration:            completed/failure    <-- PRE-EXISTING, out of scope (see below)
+
+$ gh run view 27394284025 --json jobs   # workflow: build (build.yml, BODM signed images)
+  build-images / build-chrome-bridge / build-bundles (dev|home-lab|test) / publish-build-manifest
+  ALL completed/success                          <-- GREEN
+
+  Gitleaks workflow: completed/success           <-- GREEN
+  E2E UI workflow (27394284129): completed/failure <-- PRE-EXISTING spec-083, out of scope (see below)
+```
+
+#### Pre-existing failures surfaced by unblocking the pipeline (NOT caused by this change)
+
+Before this fix, `lint-and-test` failed at the canary on every main commit, so `build` and
+`integration` were skipped and `integration`/`E2E UI` failures never ran. Greening
+`lint-and-test` let the pipeline progress and surfaced a long-hidden backlog — the same
+“surfacing” mechanism by which spec-021 surfaced this canary bug.
+
+- `integration` job failures (my commit touches ZERO integration / CLI-auth files):
+  ```
+  cli_auth_passthrough_test.go:104: expected exit code 2 for `auth` with no subcommand, got 1
+  --- FAIL: TestCLIAuthPassthrough_NoArgsExitsTwo
+  --- FAIL: TestCLIAuthPassthrough_UnknownSubcommandExitsTwo
+  --- FAIL: TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations/...
+  FAIL github.com/smackerel/smackerel/tests/integration            (cli_auth_passthrough)
+  FAIL github.com/smackerel/smackerel/tests/integration/api
+  FAIL github.com/smackerel/smackerel/tests/integration/assistant  (location normalize)
+  FAIL github.com/smackerel/smackerel/tests/integration/mobile
+  FAIL github.com/smackerel/smackerel/tests/integration/openknowledge
+  (spec-083 TestCardRewardsExtractLiveStackAudited_E08 / TestCardRewardsMigration_AppliesCleanly PASSED)
+  ```
+- `E2E UI` workflow: pre-existing spec-083 card-rewards Playwright failures
+  (`cardrewards_wallet.spec.ts`, `cardrewards_rotating_verify.spec.ts`: `/v1/web/login ... got 429`).
+  E2E UI conclusion=failure on the last 6 main SHAs incl. `784a11b1` (parent), `20b2dafa`
+  (the SHA in the report), and `a8d2abb2` — i.e. red on main BEFORE this push.
+
+These are pre-existing, span multiple unrelated domains, and (for E2E UI) live in the
+forbidden spec-083 WIP surface. They are routed to the operator as separate work; they are
+NOT part of this bug's scope (lint-and-test GREEN + canary in CI), which is fully met.
+
+## Discovered Issues
+
+The cross-language canary skip-on-absence behavior (the word "skipping" above) is the
+intended fix, not a deferral. The two items below are pre-existing failures surfaced (not
+caused) by greening `lint-and-test`; both are dispositioned as routed-to-operator with a
+concrete reference, per the Discovered-Issue Disposition contract.
+
+| Date | Issue | Disposition | Reference |
+|------|-------|-------------|-----------|
+| 2026-06-12 | CI `integration` job pre-existing failures surfaced when greening `lint-and-test` unblocked the pipeline: `tests/integration` (`cli_auth_passthrough_test.go` `TestCLIAuthPassthrough_NoArgsExitsTwo` / `_UnknownSubcommandExitsTwo`, expected exit 2 got 1), `tests/integration/assistant` (`TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations`), `tests/integration/{api,mobile,openknowledge}`. | ROUTED to operator. Pre-existing; not caused by this change (the changeset touches zero integration / CLI-auth files); out of scope for BUG-073-003 (scope = lint-and-test GREEN + canary running in CI). A separate bug should be filed. | specs/073-web-mobile-assistant-frontend/bugs/BUG-073-003-canary-ci-toolchain-gating/report.md (Evidence 8) |
+| 2026-06-12 | CI `E2E UI` workflow pre-existing spec-083 card-rewards Playwright failures (`web/pwa/tests/cardrewards_wallet.spec.ts`, `web/pwa/tests/cardrewards_rotating_verify.spec.ts`: `/v1/web/login` returned `429`). E2E UI conclusion was `failure` on the last 6 `main` SHAs including parent `784a11b1` and report-SHA `20b2dafa` — red BEFORE this push. | ROUTED to operator. Pre-existing spec-083 WIP, explicitly excluded from this change; not caused by this fix. | specs/083-card-rewards-companion (operator WIP); report.md (Evidence 8) |

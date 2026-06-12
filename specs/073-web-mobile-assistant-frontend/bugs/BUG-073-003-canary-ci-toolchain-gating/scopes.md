@@ -2,7 +2,7 @@
 
 ## Scope 1: Toolchain-gate the canary (skip on absence, fail-loud on drift) and keep it running in CI
 
-**Status:** [ ] In Progress
+**Status:** In Progress (implementation complete and CI-verified on origin/main; spec-level done-certification deferred — see report.md Completion Statement)
 
 ### Gherkin Scenarios (Regression Tests)
 
@@ -133,5 +133,14 @@ Feature: BUG-073-003 — Cross-language canary is environment-gated, not silentl
      Artifact lint PASSED.
      ARTIFACT_LINT_EXIT=0
      ```
-- [ ] Post-push: `CI` `lint-and-test` GREEN and `cross-language-canary` executes the canary (≥10 lines)
+- [x] Post-push: `CI` `lint-and-test` GREEN and `cross-language-canary` executes the canary (≥10 lines)
+   - Evidence (report.md#evidence-8):
+     ```
+     $ gh run view 27394284069 --json jobs   # workflow CI, SHA 0bdfa6a9
+       JOB lint-and-test:         completed/success
+       JOB cross-language-canary: completed/success
+       JOB build:                 completed/success (after rerun of transient HF connect flake)
+     # build.yml workflow 27394284025: all 6 jobs completed/success ; Gitleaks: success
+     # integration + E2E UI: PRE-EXISTING failures, not this change (see report.md#evidence-8)
+     ```
 

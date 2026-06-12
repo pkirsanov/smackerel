@@ -8,12 +8,17 @@
   "status": "in_progress",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "implement",
+    "currentPhase": "validate",
     "runStartedAt": "2026-06-12T00:00:00Z",
-    "completedPhaseClaims": ["select", "bootstrap"],
+    "completedPhaseClaims": ["select", "bootstrap", "implement", "test", "regression", "validate", "docs"],
     "executionHistory": [
       {"phase": "select", "agent": "bubbles.workflow", "startedAt": "2026-06-12T00:00:00Z", "completedAt": "2026-06-12T00:05:00Z", "outcome": "completed_owned"},
-      {"phase": "bootstrap", "agent": "bubbles.workflow", "startedAt": "2026-06-12T00:05:00Z", "completedAt": "2026-06-12T00:20:00Z", "outcome": "completed_owned"}
+      {"phase": "bootstrap", "agent": "bubbles.workflow", "startedAt": "2026-06-12T00:05:00Z", "completedAt": "2026-06-12T00:20:00Z", "outcome": "completed_owned"},
+      {"phase": "implement", "agent": "bubbles.workflow", "startedAt": "2026-06-12T00:20:00Z", "completedAt": "2026-06-12T00:35:00Z", "outcome": "completed_owned"},
+      {"phase": "test", "agent": "bubbles.workflow", "startedAt": "2026-06-12T00:35:00Z", "completedAt": "2026-06-12T00:50:00Z", "outcome": "completed_owned"},
+      {"phase": "regression", "agent": "bubbles.workflow", "startedAt": "2026-06-12T00:50:00Z", "completedAt": "2026-06-12T01:00:00Z", "outcome": "completed_owned"},
+      {"phase": "validate", "agent": "bubbles.workflow", "startedAt": "2026-06-12T01:00:00Z", "completedAt": "2026-06-12T01:10:00Z", "outcome": "completed_owned"},
+      {"phase": "docs", "agent": "bubbles.workflow", "startedAt": "2026-06-12T01:10:00Z", "completedAt": "2026-06-12T01:15:00Z", "outcome": "completed_owned"}
     ]
   },
   "certification": {
@@ -23,13 +28,13 @@
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      {"scopeId": "scope-1", "title": "Toolchain-gate the canary (skip on absence, fail-loud on drift) and keep it running in CI", "status": "In Progress", "completedDoD": 0, "totalDoD": 10, "completedAt": null}
+      {"scopeId": "scope-1", "title": "Toolchain-gate the canary (skip on absence, fail-loud on drift) and keep it running in CI", "status": "In Progress", "completedDoD": 10, "totalDoD": 10, "completedAt": null}
     ],
     "lockdownState": {
       "active": false,
       "round": 0,
-      "reason": "bugfix-fastlane single-scope CI/test-infrastructure fix",
-      "lastUpdatedAt": "2026-06-12T00:20:00Z"
+      "reason": "bugfix-fastlane single-scope CI/test-infrastructure fix; done-certification deferred (product-E2E/stress/scenario-manifest gates inapplicable)",
+      "lastUpdatedAt": "2026-06-12T01:20:00Z"
     }
   },
   "policySnapshot": {
@@ -43,5 +48,9 @@
     "validateCertificationRequired": {"value": true, "source": "repo-default"}
   },
   "transitionRequests": [],
-  "reworkQueue": []
+  "reworkQueue": [],
+  "observations": [
+    {"severity": "info", "summary": "Greening lint-and-test unblocked the CI pipeline past the long-failing canary, surfacing a PRE-EXISTING backlog of integration failures (tests/integration cli_auth_passthrough_test.go TestCLIAuthPassthrough_NoArgsExitsTwo / _UnknownSubcommandExitsTwo expected exit 2 got 1; tests/integration/assistant TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations; tests/integration/{api,mobile,openknowledge}). This changeset touches zero integration / CLI-auth files; not caused by this fix and out of scope for BUG-073-003.", "followUpOwner": "operator", "followUpAction": "File separate bug(s) for the pre-existing integration-suite failures now surfaced on main."},
+    {"severity": "info", "summary": "E2E UI workflow is RED on main with PRE-EXISTING spec-083 card-rewards Playwright failures (cardrewards_wallet.spec.ts / cardrewards_rotating_verify.spec.ts: /v1/web/login got 429). E2E UI conclusion=failure on the last 6 main SHAs including parent 784a11b1 and report-SHA 20b2dafa, i.e. red BEFORE this push. spec-083 is operator WIP explicitly excluded from this change.", "followUpOwner": "operator", "followUpAction": "Resolve the spec-083 card-rewards e2e-ui /v1/web/login 429 failures in the spec-083 WIP."}
+  ]
 }
