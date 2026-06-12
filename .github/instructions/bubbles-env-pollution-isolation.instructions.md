@@ -43,6 +43,16 @@ applyTo: "**"
 - Writes to `/tmp/`, repo-local fixtures, named ephemeral docker volumes
 - Calling `apply.sh` against an ephemeral fixture directory that mirrors manifest contract
 
+## Validate-Plane Telemetry (env=test* Only)
+
+Feature-scope tests use the VALIDATE plane only (`traceContracts.observability.endpoints.validate.*`, `profile: test`):
+
+- Test-emitted telemetry MUST carry an `env=test*` label and target the ephemeral test stack's own monitoring. The OPERATE plane (`profile: prod`) is reserved for deploy/train/upkeep/incident/release scopes and is read-only (INV-12).
+- `bubbles/scripts/observability-endpoint-resolve.sh --plane validate ...` structurally cannot resolve operate-plane adapters or `BUBBLES_OBS_OPERATE_*` env, so a feature-scope test cannot accidentally point at prod telemetry even when prod env vars are present.
+- An in-test `env=prod` / `env=home-lab` telemetry write is exactly the pollution this gate blocks; the same write tagged `env=test` passes. (Proven by the `env-pollution-scan-selftest.sh` env=prod-blocks / env=test-passes adversarial case.)
+
+See [bubbles-test-environment-isolation.instructions.md](bubbles-test-environment-isolation.instructions.md) (Observability Telemetry Isolation) and `docs/guides/CONTROL_PLANE_SCHEMAS.md`.
+
 ## Enforcement
 
 Run at pre-push:

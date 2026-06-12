@@ -28,7 +28,7 @@ Optional arguments:
 - `mode: review` (default) — analyze and propose changes only
 - `mode: apply` — still MUST ask for approval first; then apply after explicit user response
 - `mode: refresh` — for projects already set up; detect drift and propose/update to latest Bubbles requirements
-- `focus: agents|prompts|instructions|skills|all` (default: all)
+- `focus: agents|prompts|instructions|skills|observability|all` (default: all)
 - `scope: minimal|standard|aggressive` (default: standard)
 - `targets:` comma-separated list of in-repo targets to prioritize (e.g., `.github/agents`, `.github/prompts`)
 
@@ -136,6 +136,126 @@ Repo-type heuristic for "is this a product repo":
 - Is the Bubbles source repo (`bubbles/` at root) → skip trio check
 - Is a pure infrastructure/library repo with no product surface → skip trio check
 - When ambiguous, ASK the user before applying.
+
+---
+
+## Focus: Observability Posture Routine (`focus: observability`)
+
+When invoked with `focus: observability`, `/bubbles.setup` runs a dedicated
+observability-posture routine. It still obeys the global **PROPOSE → WAIT →
+APPLY** mandate: it discovers the repo's telemetry reality, PROPOSES a posture
+under `traceContracts.observability` in `.github/bubbles-project.yaml` (or
+`bubbles-project.yaml`), and WAITS for explicit operator approval before writing
+anything. It MUST NEVER auto-write `bubbles-project.yaml`.
+
+> Schema reference: `templates/observability.yaml.tmpl` (the canonical starter
+> block) and `docs/guides/CONTROL_PLANE_SCHEMAS.md` → "Observability Posture +
+> Telemetry Endpoints". Endpoint-wiring guidance: `docs/recipes/observe-production.md`.
+> The posture/endpoints/SLO config is a CHILD sub-block of the existing
+> `traceContracts:` key — never a new top-level `observability:` sibling.
+
+### 1) Resolve the current posture (read-only)
+
+Resolve the existing state first via the G098 guard's read-only query — the same
+surface `bubbles doctor` uses, so setup and doctor never disagree:
+
+```bash
+bash .github/bubbles/scripts/observability-posture-guard.sh --print-state \
+  --repo-root . 2>/dev/null || echo UNAVAILABLE
+```
+
+Interpret the emitted token:
+
+| Token | Meaning | Routine action |
+|-------|---------|----------------|
+| `EXEMPT` | Framework-source repo (no runtime) | Report EXEMPT; propose nothing. |
+| `WIRED` | Posture already wired & well-formed | Offer a review/refresh only. |
+| `OPTED-OUT-FRESH\|<date>` | Opt-out recorded, not yet due | Report; no nag. |
+| `OPTED-OUT-EXPIRED\|<date>` | `revisitAfter` is in the past | Re-open the decision (escalate). |
+| `OPTED-OUT-INCOMPLETE` / `OPTED-OUT-MALFORMED` | Missing `revisitAfter` / `optOut` block | Propose a corrected `optOut` block. |
+| `UNDECLARED` | `traceContracts` present, no `observability` posture | Propose a posture — do NOT silent-pass. |
+| `UNAVAILABLE` | `yq` parser missing | Report the parser gap; still scan + propose from compose evidence. |
+| `FAKE-WIRED` / `INVALID-POSTURE\|<v>` / `UNSUPPORTED-SCHEMA\|<v>` / `MALFORMED-YAML` | Malformed config | Propose the specific correction. |
+
+### 2) DISCOVERY sub-routine (evidence gathering, read-only)
+
+Gather telemetry evidence from the target repo — never guess:
+
+- **Compose monitoring services:** scan `docker-compose*.y?ml`, `compose*.y?ml`,
+  and `**/docker-compose*.y?ml` for service images/names matching `prometheus`,
+  `grafana`, `loki`, `jaeger`, `tempo`, `otel|opentelemetry-collector`, `sentry`.
+- **App `/metrics` endpoints:** grep source for a `/metrics` route/handler
+  registration (any language).
+- **OTLP exporters:** grep source/config for `otlp`, `OTEL_EXPORTER_OTLP`, or an
+  OpenTelemetry SDK exporter setup.
+- **Declared observability policy:** read the repo's
+  `.github/copilot-instructions.md` observability section (if any) for an
+  existing monitoring-stack statement.
+
+Record what was found (file paths + matched provider names) as the evidence
+behind the proposal. Discovered provider names map to adapter NAMES under
+`bubbles/adapters/observability/<name>.sh` (INV-11) — they are PROVIDER names,
+not environment names; the validate/operate PLANE selects the env via `profile:`.
+
+### 3) PROPOSE → WAIT → APPLY
+
+Build the proposal from the discovery evidence and the resolved token, then STOP
+for approval. Apply ONLY the approved block.
+
+- **Monitoring found → propose `posture: wired`:**
+  - Seed `endpoints.validate.*` to the discovered provider with `profile: test`
+    (resolves to the EPHEMERAL per-run test stack) and `endpoints.operate.*` to
+    the discovered provider with `profile: prod` (NAMES only — no URLs/tokens;
+    real endpoints live in the deploy-overlay env).
+  - Seed `slos:` STUBS keyed by the repo's primary workflow/service identifier
+    (e.g. `gateway.request`) with placeholder targets for the operator to set.
+  - Fill the REQUIRED `decision` block (`decidedBy: operator`,
+    `decisionSource: "bubbles.setup focus: observability"`, dates).
+  - Honor INV-14: do NOT propose `wired` with every signal `none` — at least one
+    non-`none` validate signal and one non-`none` operate signal must back it.
+- **No monitoring found → propose `posture: opted-out`:**
+  - Fill the REQUIRED `optOut` block: `reasonCode`
+    (`no-runtime|pre-monitoring|external-monitoring-only`), `reason`,
+    `declaredAt`, `revisitAfter` (a future date — required so the G099 freshness
+    reminder is not a silent no-op), `approvedBy: operator`.
+  - Fill the REQUIRED `decision` block.
+
+After approval, write ONLY the approved `traceContracts.observability` block into
+the project-owned config. If the file lacks the block, scaffold it from
+`templates/observability.yaml.tmpl` and fill in the approved values.
+
+### 4) New-monitoring escalation (opted-out → re-open)
+
+If the resolved posture is `opted-out` BUT the discovery sub-routine now finds
+monitoring services in compose, ESCALATE the nag: surface that the recorded
+opt-out reason ("no monitoring") may no longer hold, and PROPOSE re-opening the
+decision toward `wired`. Do not silently leave a stale opt-out in place.
+
+### 5) Migration / back-compat (`traceContracts` but no `observability`)
+
+A repo that has `traceContracts:` but NO `observability:` sub-block (pre-feature
+config) resolves to `UNDECLARED`. The routine reports it as `undeclared` — never
+a silent pass — and PROPOSES a posture, offering to scaffold the
+`traceContracts.observability` block from `templates/observability.yaml.tmpl`.
+
+### 6) Decommission transition (`wired → opted-out`)
+
+A `wired` repo whose monitoring was removed may move to `opted-out`, but ONLY via
+an explicit, recorded transition. The routine REQUIRES a full `optOut` block
+(`reasonCode` + `reason` + `revisitAfter` + `approvedBy`) AND a fresh `decision`
+(updated `decidedAt`/`lastReviewedAt`). It REFUSES a silent downgrade that drops
+`wired` without that record.
+
+### 7) Legacy migration (clean cutover of `liveTelemetryEndpoints`)
+
+If the repo still carries a legacy `traceContracts.liveTelemetryEndpoints` map,
+the routine PROPOSES, in a SINGLE change: (a) fold each legacy signal into an
+explicit `traceContracts.observability.endpoints.operate.<signal>` entry, and
+(b) DELETE the legacy `liveTelemetryEndpoints` key. There is NO deprecation
+cycle — the legacy key has no consumer (R2-B/INV-15). Never silently drop a
+configured signal: every signal present in the legacy map MUST appear as an
+explicit `operate.<signal>` entry in the proposal. WAIT for approval before
+writing the fold-and-delete.
 
 ---
 
@@ -276,6 +396,7 @@ If approved:
 | **Shared pattern reference** | Verify each agent contains `Follow all patterns in [agent-common.md]` | Present in every `.agent.md` |
 | **Policy file integrity** | Verify `agent-common.md` and `scope-workflow.md` exist and are non-empty | Both files exist and have content |
 | **Project scan config** | Check if `.github/bubbles-project.yaml` exists with `scans:` section | Present — if missing, auto-generate via `project-scan-setup.sh --quiet` |
+| **Observability posture** | Run `observability-posture-guard.sh --print-state --repo-root .`; if `UNDECLARED` or `OPTED-OUT-EXPIRED`, surface `/bubbles.setup focus: observability` | Posture declared & well-formed (or the opt-in reminder is surfaced) — never a silent pass |
 
 6) Project Scan Setup (AUTOMATIC after first install or refresh):
 

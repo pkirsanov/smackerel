@@ -13,6 +13,10 @@ capabilities:
     evidenceRefs:
     - bubbles/workflows.yaml
     - agents/bubbles.workflow.agent.md
+    consumers:
+    - agents/bubbles.workflow.agent.md # executes modes/phaseOrder declared in workflows.yaml
+    - bubbles/scripts/mode-resolver.sh # resolves mode inheritance from workflows.yaml
+    - bubbles/scripts/state-transition-guard.sh # enforces each mode's requiredGates
     competitorTags:
     - claude-code
     - roo-code
@@ -36,6 +40,10 @@ capabilities:
     - bubbles/scripts/propagation-policy-guard.sh
     - bubbles/scripts/propagation-policy-guard-selftest.sh
     - bubbles/workflows.yaml
+    consumers:
+    - bubbles/scripts/propagation-policy-guard.sh # enforces G121/G122/G123 on propagate runs
+    - bubbles/intent-routes.yaml # routes propagate-forward/backport/audit intents
+    - bubbles/workflows.yaml # defines the propagate-* workflow modes
     competitorTags:
     - claude-code
     - cursor
@@ -56,6 +64,10 @@ capabilities:
     - agents/bubbles.stabilize.agent.md
     - bubbles/workflows.yaml
     - bubbles/intent-routes.yaml
+    consumers:
+    - agents/bubbles.stabilize.agent.md # severity classification (G124) inside the fastlane
+    - agents/bubbles.train.agent.md # rollback authority routed from an incident finding
+    - bubbles/intent-routes.yaml # routes incident intents into incident-fastlane
     competitorTags:
     - claude-code
     - roo-code
@@ -65,7 +77,7 @@ capabilities:
   observability-adapter-contract:
     label: Observability adapter contract
     state: shipped
-    summary: traceContracts.liveTelemetryEndpoints selects swappable observability adapters with a four-verb contract; v5 ships none and prometheus reference adapters plus lint/selftest.
+    summary: traceContracts.observability.endpoints selects swappable observability adapters with a four-verb contract across validate and operate planes; ships none and prometheus reference adapters plus lint/selftest.
     ownerSurface: bubbles/adapters/observability
     releaseIntroduced: v5.0.0
     docsRefs:
@@ -76,6 +88,43 @@ capabilities:
     - bubbles/adapters/observability/prometheus.sh
     - bubbles/scripts/observability-adapter-lint.sh
     - bubbles/scripts/observability-adapter-lint-selftest.sh
+    consumers:
+    - bubbles/scripts/observability-endpoint-resolve.sh # resolves (plane,signal) -> adapter
+    - bubbles/scripts/observability-check.sh # invokes the resolver --names-only (endpoints block)
+    - agents/bubbles.stabilize.agent.md # operate-plane fetch via resolved adapter
+    - agents/bubbles.upkeep.agent.md # slo-review fetch via resolved adapter
+    - agents/bubbles.train.agent.md # promote/rollback gating via resolved adapter
+    competitorTags:
+    - claude-code
+    - roo-code
+    freshnessTargets:
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/recipes/observe-production.md
+
+  observability-posture-and-slo-gates:
+    label: Observability posture + SLO/trace evidence gates
+    state: shipped
+    summary: "First-class per-repo observability posture (traceContracts.observability.posture wired | opted-out | undeclared) with recorded, expiring opt-out; wired repos prove captured telemetry + numeric SLO evidence in integration/e2e/stress. Enforced by G098 (posture declared), G099 (opt-out freshness), G100 (SLO evidence, blocking when wired), and G080 (trace contract, MUST-when-wired). bubbles doctor surfaces the posture line; bubbles.setup focus observability declares it; ops agents bubbles.stabilize, bubbles.upkeep, and bubbles.train consume read-only operate-plane telemetry; the check_observability MCP tool reports a one-shot verdict."
+    ownerSurface: bubbles/scripts/observability-posture-guard.sh
+    releaseIntroduced: v7.10.0
+    docsRefs:
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/recipes/observe-production.md
+    - agents/bubbles_shared/project-config-contract.md
+    evidenceRefs:
+    - bubbles/scripts/observability-posture-guard.sh
+    - bubbles/scripts/observability-opt-out-guard.sh
+    - bubbles/scripts/observability-slo-guard.sh
+    - bubbles/scripts/observability-endpoint-resolve.sh
+    - bubbles/scripts/observability-check.sh
+    - bubbles/mcp/tools/check_observability.json
+    - templates/observability.yaml.tmpl
+    consumers:
+    - bubbles/scripts/state-transition-guard.sh # Checks 37/38/39 invoke G098/G099/G100 (done-gate)
+    - bubbles/scripts/guards/tail-delegated-gates.sh # fragment that wires the three checks
+    - bubbles/scripts/framework-validate.sh # selftests + live guards
+    - bubbles/scripts/cli.sh # doctor posture line (advisory)
+    - bubbles/mcp/tools/check_observability.json # one-shot verdict over the bash twin
     competitorTags:
     - claude-code
     - roo-code
@@ -97,6 +146,10 @@ capabilities:
     - bubbles/scripts/retro-framework-health.sh
     - bubbles/scripts/retro-framework-health-selftest.sh
     - bubbles/workflows.yaml
+    consumers:
+    - agents/bubbles.retro.agent.md # invokes retro-framework-health.sh, writes proposal
+    - bubbles/scripts/framework-validate.sh # runs retro-framework-health-selftest
+    - bubbles/workflows.yaml # defines the framework-health workflow mode
     competitorTags:
     - claude-code
     - cursor
@@ -115,6 +168,10 @@ capabilities:
     evidenceRefs:
     - bubbles/agent-ownership.yaml
     - bubbles/workflows.yaml
+    consumers:
+    - bubbles/scripts/agent-ownership-lint.sh # parses + enforces the ownership manifest
+    - bubbles/scripts/agent-ownership-lint-selftest.sh # hermetic coverage of the linter
+    - agents/bubbles_shared/artifact-ownership.md # the ownership contract agents follow
     competitorTags:
     - claude-code
     - roo-code
@@ -134,6 +191,10 @@ capabilities:
     evidenceRefs:
     - agents/bubbles_shared/artifact-ownership.md
     - agents/bubbles_shared/agent-common.md
+    consumers:
+    - agents/bubbles.validate.agent.md # the sole certification authority
+    - agents/bubbles_shared/agent-common.md # governance index binding certification ownership
+    - bubbles/scripts/state-transition-guard.sh # enforces the certification write contract
     competitorTags:
     - claude-code
     - cursor
@@ -145,18 +206,7 @@ capabilities:
     label: Cross-repo goal scenario compiler
     state: shipped
     summary: >
-      bubbles.goal (single outcome) and bubbles.sprint (multi outcome) compile a high-level
-      operator outcome into a typed, dependency-ordered, possibly cross-repo DAG whose nodes
-      each resolve to an EXISTING workflow mode or specialist — no new per-journey workflow
-      modes. bubbles.super resolves intent only (scenario-aware RESOLUTION-ENVELOPE fields);
-      it never compiles or executes the DAG. Node types (diagnostic/planning/delivery/
-      verification/action/ongoing-ops) are routing metadata, not a new completion model —
-      action and ongoing-ops nodes are OPS packets certified per repo by bubbles.validate.
-      Host-mutating action nodes are gated by a pre-mutation approval token (the propagate
-      pattern). scenario-compile-lint.sh forbids any node resolving to a
-      requiresTopLevelRuntime fan-out mode (Gate G064 depth safety) by deriving the forbidden
-      set from modes.yaml, and validates DAG acyclicity, action gating, and the rootOutcome
-      Outcome Contract (Gate G070 shape). Runtime plan/ledger live under .specify/runtime/.
+      bubbles.goal (single outcome) and bubbles.sprint (multi outcome) compile a high-level operator outcome into a typed, dependency-ordered, possibly cross-repo DAG whose nodes each resolve to an EXISTING workflow mode or specialist — no new per-journey workflow modes. bubbles.super resolves intent only (scenario-aware RESOLUTION-ENVELOPE fields); it never compiles or executes the DAG. Node types (diagnostic/planning/delivery/ verification/action/ongoing-ops) are routing metadata, not a new completion model — action and ongoing-ops nodes are OPS packets certified per repo by bubbles.validate. Host-mutating action nodes are gated by a pre-mutation approval token (the propagate pattern). scenario-compile-lint.sh forbids any node resolving to a requiresTopLevelRuntime fan-out mode (Gate G064 depth safety) by deriving the forbidden set from modes.yaml, and validates DAG acyclicity, action gating, and the rootOutcome Outcome Contract (Gate G070 shape). Runtime plan/ledger live under .specify/runtime/.
     ownerSurface: agents/bubbles_shared/scenario-compile.md
     releaseIntroduced: v7.6.0
     docsRefs:
@@ -171,6 +221,10 @@ capabilities:
     - agents/bubbles.sprint.agent.md
     - agents/bubbles.super.agent.md
     - bubbles/intent-routes.yaml
+    consumers:
+    - agents/bubbles.goal.agent.md # compiles a single-outcome scenario DAG
+    - agents/bubbles.sprint.agent.md # compiles a multi-outcome scenario DAG
+    - bubbles/scripts/scenario-compile-lint.sh # validates the compiled scenario plan
     competitorTags:
     - claude-code
     - roo-code
@@ -195,6 +249,10 @@ capabilities:
     - bubbles/scripts/interop-apply.sh
     - bubbles/scripts/interop-apply-selftest.sh
     - bubbles/interop-registry.yaml
+    consumers:
+    - bubbles/scripts/cli.sh # exposes the interop subcommand entrypoint
+    - bubbles/scripts/interop-apply-selftest.sh # exercises the apply flow
+    - bubbles/interop-registry.yaml # declares the supported interop surfaces
     competitorTags:
     - claude-code
     - roo-code
@@ -241,6 +299,10 @@ capabilities:
     - bubbles/scripts/cli.sh
     - bubbles/scripts/framework-validate.sh
     - docs/issues/session-aware-runtime-coordination.md
+    consumers:
+    - bubbles/scripts/cli.sh # runtime subcommand + status/doctor surface
+    - bubbles/scripts/framework-validate.sh # runs the runtime-lease selftest
+    - bubbles/scripts/runtime-lease-selftest.sh # exercises acquire/attach/release/reclaim
     competitorTags:
     - claude-code
     - roo-code
@@ -264,6 +326,10 @@ capabilities:
     - bubbles/scripts/state-transition-guard.sh
     - bubbles/scripts/traceability-guard.sh
     - docs/issues/G068-word-overlap-threshold.md
+    consumers:
+    - bubbles/scripts/traceability-guard.sh # shares the tuned G068 overlap heuristic
+    - bubbles/scripts/state-transition-guard-selftest.sh # covers the G068 threshold behavior
+    - bubbles/workflows.yaml # registers G068 in the gate set
     competitorTags:
     - cline
     - roo-code
@@ -289,6 +355,10 @@ capabilities:
     - bubbles/scripts/context-compactor.sh
     - bubbles/scripts/context-compactor-selftest.sh
     - agents/bubbles_shared/operating-baseline.md
+    consumers:
+    - agents/bubbles.workflow.agent.md # compacts subagent envelopes in-loop
+    - agents/bubbles.goal.agent.md # compacts across convergence iterations
+    - bubbles/scripts/context-compactor-selftest.sh # exercises the compactor
     competitorTags:
     - claude-code
     - roo-code
@@ -308,6 +378,10 @@ capabilities:
     - bubbles/scripts/state-snapshot.sh
     - bubbles/scripts/state-snapshot-selftest.sh
     - agents/bubbles_shared/operating-baseline.md
+    consumers:
+    - agents/bubbles.goal.agent.md # emits per-convergence-iteration snapshots
+    - agents/bubbles_shared/operating-baseline.md # documents the turnSnapshots contract agents follow
+    - bubbles/scripts/state-snapshot-selftest.sh # exercises the snapshot writer
     competitorTags:
     - claude-code
     - roo-code
@@ -327,6 +401,10 @@ capabilities:
     - bubbles/scripts/edit-lint-gate.sh
     - bubbles/scripts/edit-lint-gate-selftest.sh
     - agents/bubbles_shared/operating-baseline.md
+    consumers:
+    - bubbles/scripts/edit-lint-gate-selftest.sh # exercises the gate dispatcher
+    - bubbles/scripts/framework-validate.sh # runs the edit-lint-gate selftest
+    - agents/bubbles_shared/operating-baseline.md # documents the opt-in registration contract
     competitorTags:
     - claude-code
     - roo-code
@@ -352,6 +430,10 @@ capabilities:
     - bubbles/workflows.yaml
     - agents/bubbles_shared/completion-governance.md
     - bubbles/scripts/strict-terminal-status-guard.sh
+    consumers:
+    - bubbles/scripts/strict-terminal-status-guard.sh # enforces G092 terminal-status writes
+    - bubbles/scripts/state-transition-guard.sh # invokes the strict-terminal guard (Check 32)
+    - agents/bubbles_shared/completion-governance.md # the terminal-status contract agents follow
     competitorTags:
     - swe-agent
     freshnessTargets:
@@ -372,6 +454,10 @@ capabilities:
     - bubbles/scripts/mode-resolver.sh
     - bubbles/scripts/mode-resolver-selftest.sh
     - bubbles/workflows.yaml
+    consumers:
+    - bubbles/scripts/mode-resolver.sh # resolves inherits: against modeTemplates
+    - bubbles/scripts/mode-resolver-selftest.sh # exercises deep-merge/cycle/unknown-ref
+    - agents/bubbles_shared/workflow-mode-resolution.md # the resolution contract agents follow
     competitorTags:
     - yaml-inheritance
     - dry-config
@@ -400,6 +486,10 @@ capabilities:
     - bubbles/scripts/trace-contract-guard-selftest.sh
     - bubbles/scripts/framework-validate.sh
     - bubbles/workflows.yaml
+    consumers:
+    - bubbles/scripts/trace-contract-guard.sh # validates trace evidence (G080)
+    - bubbles/scripts/framework-validate.sh # runs test-impact + trace-contract selftests
+    - agents/bubbles_shared/validation-core.md # the impact-aware validation contract
     competitorTags:
     - test-impact-analysis
     - observability-contracts
@@ -439,6 +529,10 @@ capabilities:
     - skills/bubbles-workflow-mode-resolution/SKILL.md
     - skills/bubbles-fix-cycle-protocol/SKILL.md
     - agents/bubbles_shared/agent-common.md
+    consumers:
+    - agents/bubbles_shared/agent-common.md # governance index that routes agents to skills
+    - README.md # documents the skills-first posture
+    - docs/CHEATSHEET.md # surfaces the discovery skill set to operators
     competitorTags:
     - skills-discovery
     - lazy-context-loading
@@ -448,4 +542,29 @@ capabilities:
     - docs/CHEATSHEET.md
     - docs/its-not-rocket-appliances.html
     - docs/recipes/framework-ops.md
+    - docs/generated/competitive-capabilities.md
+
+  capability-consumer-freshness:
+    label: Capability-consumer freshness gate
+    state: shipped
+    summary: >
+      Gate G127 applies the G029 integration-completeness standard to the framework's OWN capability ledger: every `state: shipped` capability MUST declare a non-empty `consumers:` list whose every path exists on disk. Closes the IMP-001 R2-B "orphan foundation" failure mode (a capability shipped with mechanism + docs but no executable consumer). partial/proposed/deprecated capabilities are exempt; a repo without the ledger no-ops; a missing yq fails closed (blocking gate); there is no bypass flag.
+    ownerSurface: bubbles/scripts/capability-consumer-freshness.sh
+    releaseIntroduced: v7.11.0
+    docsRefs:
+    - improvements/IMP-004-capability-consumer-freshness.md
+    - bubbles/schemas/capability-ledger.schema.json
+    evidenceRefs:
+    - bubbles/scripts/capability-consumer-freshness.sh
+    - bubbles/scripts/capability-consumer-freshness-selftest.sh
+    - bubbles/registry/gates.yaml
+    consumers:
+    - bubbles/scripts/framework-validate.sh # runs the selftest + the live ledger guard
+    - bubbles/scripts/capability-consumer-freshness-selftest.sh # hermetic coverage of the gate
+    - bubbles/registry/gates.yaml # registers G127 in the gate set
+    competitorTags:
+    - swe-agent
+    - capability-ledger
+    freshnessTargets:
+    - improvements/IMP-004-capability-consumer-freshness.md
     - docs/generated/competitive-capabilities.md

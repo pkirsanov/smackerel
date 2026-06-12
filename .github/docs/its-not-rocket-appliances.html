@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v7.7.0</div>
+  <div class="subtitle">Agent Orchestration System v7.11.2</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -1635,7 +1635,11 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">observability adapter</div>
-    <div class="wf-desc"><code>bubbles/adapters/observability/<name>.sh</code> — pluggable live-telemetry contract. Reference adapters: <code>none.sh</code> (default), <code>prometheus.sh</code> (requires <code>PROMETHEUS_BASE_URL</code> + per-query env vars). Adapters expose <code>health</code>, <code>query-instant</code>, <code>query-range</code>, <code>series-cardinality</code> verbs.</div>
+    <div class="wf-desc"><code>bubbles/adapters/observability/<name>.sh</code> — pluggable live-telemetry contract selected per signal+plane via <code>traceContracts.observability.endpoints</code>. Reference adapters: <code>none.sh</code> (default; returns <code>[]</code> for <code>fetch-alerts</code>, <code>{}</code> for the other three verbs), <code>prometheus.sh</code> (requires <code>PROMETHEUS_BASE_URL</code> + per-query env vars). Four verbs: <code>fetch-alerts</code>, <code>fetch-slo-burn</code>, <code>fetch-error-rate</code>, <code>fetch-deploy-impact</code>. Two planes: validate (ephemeral test stack, <code>env=test*</code>) and operate (prod, read-only).</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">observability posture</div>
+    <div class="wf-desc">First-class per-repo declaration under <code>traceContracts.observability.posture</code>: <code>wired</code> (proves captured telemetry + numeric SLOs in integration/e2e/stress) or <code>opted-out</code> (recorded + expiring via <code>revisitAfter</code>); undeclared nags. Enforced by G098 (posture declared), G099 (opt-out freshness), G100 (SLO evidence — blocking when wired), and G080 (trace contract — MUST-when-wired). <code>bubbles doctor</code> surfaces it, <code>bubbles.setup focus: observability</code> declares it, and the <code>check_observability</code> MCP tool reports a one-shot verdict.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">framework self-observation</div>
@@ -2245,8 +2249,8 @@
 </table>
 
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_START -->
-<!-- ═══════════════════════════════ THE 103 GATES ═══════════════════════════════ -->
-<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 103 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
+<!-- ═══════════════════════════════ THE 107 GATES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 107 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_END -->
 
 <div class="phase-flow">
@@ -2271,7 +2275,7 @@
 
 <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; font-style: italic;">
   <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_START -->
-  "103 gates, boys. That's more security than the trailer park has ever had.
+  "107 gates, boys. That's more security than the trailer park has ever had.
   Something's fucky? We'll find it. That's greasy? We'll clean it.
   Red first, green after. Small scopes. Tiny fix loops.
   Can't defer things either — you can't just NOT do things, Corey!
@@ -2284,10 +2288,10 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v7.7.0 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v7.11.2 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
-  <p>103 Gates • 40 Agents • 55 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
+  <p>107 Gates • 40 Agents • 55 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
   <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
   <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>

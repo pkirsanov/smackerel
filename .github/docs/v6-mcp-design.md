@@ -67,6 +67,11 @@
 | Resource surface | read-only handles to canonical files | `bubbles://` URIs resolve to repo-local file reads. Versioned via git SHA in `provenance` field. |
 | Fallback when MCP server not registered | bash scripts work exactly as v5.x | MCP is additive UX, not a replacement runtime. |
 
+> **Contributor guidance:** for *when* a capability should become a registered
+> MCP tool versus stay a directly-invoked script — without ever moving logic
+> into the server — see
+> [When to graduate a script to an MCP tool](MCP.md#when-to-graduate-a-script-to-an-mcp-tool).
+
 ---
 
 ## Backward Compatibility Matrix

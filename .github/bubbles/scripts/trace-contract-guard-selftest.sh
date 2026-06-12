@@ -25,6 +25,8 @@ trace_good="$TMP_DIR/trace-good.txt"
 trace_missing="$TMP_DIR/trace-missing.txt"
 trace_redflag="$TMP_DIR/trace-redflag.txt"
 trace_optional="$TMP_DIR/trace-optional.txt"
+contract_slo="$TMP_DIR/bubbles-project-slo.yaml"
+trace_slo="$TMP_DIR/trace-slo.txt"
 
 cat > "$contract_file" <<'YAML'
 traceContracts:
@@ -73,6 +75,30 @@ cat > "$trace_optional" <<'EOF'
 SPAN nothing-required
 EOF
 
+# Back-compat (IMP-001 T1.7): a workflow carrying the NEW optional observability
+# `slo:` link field must still parse and pass the existing guard unchanged. The
+# field is unknown to the v7.8 parser; it must be ignored, not break parsing.
+cat > "$contract_slo" <<'YAML'
+traceContracts:
+  workflows:
+    booking.create:
+      requiredSpans:
+        - name: http.request
+          attributes:
+            - trace_id
+            - booking.id
+      requiredInvariants:
+        - booking emitted exactly one confirmation event
+      slo: gateway.request
+YAML
+
+cat > "$trace_slo" <<'EOF'
+SPAN http.request
+ATTR trace_id=abc
+ATTR booking.id=booking-123
+INVARIANT booking emitted exactly one confirmation event
+EOF
+
 if "$GUARD" --contract "$contract_file" --workflow booking.create --trace-output "$trace_good" >/dev/null; then
   pass "valid trace evidence satisfies required spans, attributes, and invariants"
 else
@@ -101,6 +127,12 @@ if "$GUARD" --require-config --contract "$TMP_DIR/no-such.yaml" --trace-output "
   fail "--require-config fails when traceContracts are absent"
 else
   pass "--require-config fails when traceContracts are absent"
+fi
+
+if "$GUARD" --contract "$contract_slo" --workflow booking.create --trace-output "$trace_slo" >/dev/null; then
+  pass "workflow with unknown observability slo: field still passes (back-compat)"
+else
+  fail "workflow with unknown observability slo: field still passes (back-compat)"
 fi
 
 if [[ "$failures" -gt 0 ]]; then
