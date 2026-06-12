@@ -83,6 +83,13 @@ What actually happens.
 ### Alternative Approaches Considered
 1. [Alternative 1] - Why rejected
 2. [Alternative 2] - Why rejected
+
+## Complexity Tracking
+List any deviation from the simplest fix that resolves the root cause. If the fix introduces no such deviation, write a single line: `None — simplest viable fix used.` Otherwise add one row per deviation. This is a lightweight documentation discipline, not a blocking gate.
+
+| Decision | Simpler fix considered | Why rejected |
+|----------|------------------------|--------------|
+| [Added complexity beyond the minimal fix] | [The minimal fix, e.g., a one-line guard] | [Concrete reason the minimal fix was insufficient] |
 ```
 
 

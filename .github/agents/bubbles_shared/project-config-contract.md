@@ -431,6 +431,110 @@ Rules:
 - The guard validates actual trace/log output only. It is not a replacement for tests, implementation evidence, or outcome-contract verification.
 - Analyst-owned Success Signals stay business-observable and tech-agnostic; design, test, and validate agents translate those signals into trace spans, attributes, and invariants where trace evidence is useful.
 
+### `traceContracts.observability` Contract (posture + endpoints + SLOs)
+
+`traceContracts.observability` is an optional **child sub-block** of the existing `traceContracts` key (NOT a new top-level key). It declares a repo's observability *posture*, the two-plane telemetry *endpoints*, and the env-agnostic *SLO* targets. The posture/SLO guards parse this block directly and are the **schema authority** — a malformed shape fails loud at the guard (there is no separate JSON-schema dependency). The existing `trace-contract-guard.sh` (G080) hard-greps `^traceContracts:` and tolerates unknown sub-keys, so adding this child block does not change G080 behavior.
+
+> **Path shorthand:** everywhere this contract writes `observability.<x>` it means `traceContracts.observability.<x>`. There is no top-level `observability:` key.
+
+Worked example (project-owned `.github/bubbles-project.yaml`; never overwritten on upgrade):
+
+```yaml
+traceContracts:             # UNCHANGED top-level key — existing G080 guard still parses it
+  observability:            # child sub-block — NOT a top-level sibling
+    schemaVersion: 1        # bump on any breaking shape change; guards assert it before semantics
+    posture: wired          # wired | opted-out — REQUIRED (absent = undeclared = nag)
+    policy:
+      undeclaredPosture: warn # warn | block — controls the posture guard's severity
+    decision:               # REQUIRED for wired + opted-out — who decided + last review
+      decidedAt: 2026-06-11
+      decidedBy: operator
+      decisionSource: "bubbles.setup focus: observability"
+      lastReviewedAt: 2026-06-11
+    optOut:                 # REQUIRED iff posture: opted-out
+      reasonCode: no-runtime  # no-runtime | pre-monitoring | external-monitoring-only
+      reason: "framework source repo; nothing to monitor"
+      declaredAt: 2026-06-11
+      revisitAfter: 2027-06-11
+      approvedBy: operator
+    endpoints:              # signal-axis (4 verbs); adapter NAMES only, never URLs/tokens
+      validate:             # resolves to the EPHEMERAL per-run test stack
+        alerts: { adapter: none }
+        sloBurn: { adapter: prometheus, profile: test }
+        errorRate: { adapter: prometheus, profile: test }
+        deployImpact: { adapter: none }
+      operate:              # resolves to PROD (real URLs live in the deploy overlay env)
+        alerts: { adapter: prometheus, profile: prod }
+        sloBurn: { adapter: prometheus, profile: prod }
+        errorRate: { adapter: prometheus, profile: prod }
+        deployImpact: { adapter: prometheus, profile: prod }
+    slos:                   # env-agnostic CONTRACT targets
+      gateway.request:
+        latencyP99Ms: 50
+        errorRatePct: 0.1
+        availabilityPct: 99.9
+  workflows:                # existing G080 workflows — unchanged shape
+    booking.create:
+      requiredSpans:
+        - name: http.request
+          attributes: [trace_id, booking.id]
+      requiredInvariants:
+        - exactly one confirmation event
+      slo: gateway.request  # NEW optional link field — ignored by the existing G080 guard, read by the SLO guard
+```
+
+| Field | Meaning |
+|-------|---------|
+| `observability.schemaVersion` | Integer. Guards support known values and fail loud on an unknown breaking version *before* applying any semantics. |
+| `observability.posture` | `wired` \| `opted-out`. **Absent = undeclared** (the only "nag" state). |
+| `observability.policy.undeclaredPosture` | `warn` (default) \| `block`. Controls whether an undeclared posture is advisory or blocking. |
+| `observability.decision.*` | `decidedAt` / `decidedBy` / `decisionSource` / `lastReviewedAt`. REQUIRED for both `wired` and `opted-out`. |
+| `observability.optOut.*` | `reasonCode` (`no-runtime` \| `pre-monitoring` \| `external-monitoring-only`), `reason`, `declaredAt`, `revisitAfter`, `approvedBy`. **REQUIRED iff `posture: opted-out`.** A missing `reasonCode`, `reason`, or `revisitAfter` is malformed (a missing `revisitAfter` would make the freshness guard a silent no-op). |
+| `observability.endpoints.validate.<signal>` / `…operate.<signal>` | The 4 signals are `alerts`, `sloBurn`, `errorRate`, `deployImpact`. Each value is `{ adapter, profile }`. `adapter` is a **provider NAME** (matches `bubbles/adapters/observability/<name>.sh`), never a URL/token. `profile` selects the env binding (see below). The `validate` plane resolves to the ephemeral test stack; the `operate` plane resolves to prod. |
+| `observability.slos.<key>` | Env-agnostic numeric contract targets: `latencyP99Ms`, `errorRatePct`, `availabilityPct`. |
+| `workflows.<name>.slo` | Optional link from a trace workflow to an `observability.slos.<key>`. Ignored by the existing G080 guard; read by the SLO guard. |
+
+Rules:
+- `posture` is mandatory; *wiring* is optional. Tri-state: `wired` / `opted-out` / *undeclared*. Undeclared is the only nag state.
+- `posture: wired` requires at least one non-`none` validate-plane signal for declared instrumented workflows (a state where every signal is `none` is rejected as **fake-wired**).
+- Adapter values carry provider **names only**. Real URLs/tokens live in the deploy overlay env, never in committed config.
+- `revisitAfter` is the single source of truth for opt-out expiry. `reasonCode` only seeds the *default* `revisitAfter` that setup proposes; once written, `revisitAfter` wins.
+- The `operate` plane is **read-only** for Bubbles ops agents (fetch alerts / SLO burn / error rate / deploy impact); they must not acknowledge, silence, or mutate prod telemetry through this layer.
+
+**Clean cutover (replaces the v5 `liveTelemetryEndpoints`):** `traceContracts.observability.endpoints` REPLACES the orphan v5 `traceContracts.liveTelemetryEndpoints` flat map. The legacy key had no agent or script consumer, so it is **deleted in the same change** — there is no deprecation cycle. Every legacy signal maps to an explicit `endpoints.operate.<signal>` entry.
+
+#### `observabilityWorkflow` Test Plan field
+
+Planning adds `observabilityWorkflow: <traceContracts.workflows key>` to each applicable Test Plan row (and to the matching `test-plan.json` entry). The trace/SLO guards use that field to decide which workflow contract applies; changed-path inference may *suggest* a candidate but is never the certification trigger.
+
+**Definition — *instrumented scope*:** a scope whose Test Plan declares at least one `observabilityWorkflow`. Only instrumented scopes receive observability DoD injection; a scope with no `observabilityWorkflow` row is never blocked by the trace/SLO gates, even when `posture: wired`. A wired observability context applied to a scope that declares no `observabilityWorkflow` is reported as a **planning gap**, not silently guessed.
+
+#### Profile-to-env binding (provider adapters)
+
+Profile names (`test`, `prod`) are NOT adapter filenames. The plane resolver invokes the provider adapter with profile-specific env materialized into the adapter's native variables. Callers/overlays own the plane-scoped input env (`BUBBLES_OBS_VALIDATE_*` for the validate plane, `BUBBLES_OBS_OPERATE_*` for the operate plane); the resolver maps the selected profile's input env into the adapter-native env (e.g. `PROMETHEUS_BASE_URL`). Resolvers fail loud when the selected profile lacks required env, and a `--plane validate` resolution must not read operate-plane env even when prod env exists. The full binding table lives in `docs/guides/CONTROL_PLANE_SCHEMAS.md`.
+
+#### SLO evidence + the two evidence stores (R2-F)
+
+SLO evidence is normalized JSON the SLO guard asserts numeric targets against:
+
+```json
+{
+  "workflow": "booking.create",
+  "slo": "gateway.request",
+  "sampleWindow": "PT5M",
+  "source": "integration|e2e|stress|load",
+  "target": { "latencyP99Ms": 50, "errorRatePct": 0.1, "availabilityPct": 99.9 },
+  "observed": { "latencyP99Ms": 42, "errorRatePct": 0.02, "availabilityPct": 100.0 }
+}
+```
+
+Guards reject malformed evidence (missing `observed`/`target`, or evidence for the wrong `workflow`) *before* comparing numbers. Two stores, non-duplicative:
+
+- `.specify/runtime/tool-calls.jsonl` — **provenance/audit** that the capture command actually ran (the existing MCP `record_evidence` anti-fabrication spine).
+- `.specify/runtime/observability/<workflow>.<signal>.json` — **the parsed metric artifact** the SLO guard reads. It is an *output* of the captured run, never a second source of truth.
+
+`.specify/runtime/` MUST be gitignored (the framework ships `.specify/runtime/.gitignore` = `*` + `!.gitignore`).
+
 ---
 
 ## How Bubbles Agents Resolve Project-Specific Values (Indirection Rules)

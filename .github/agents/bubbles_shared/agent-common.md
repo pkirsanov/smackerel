@@ -9,6 +9,10 @@ Use this file as an index and compatibility reference, not as the default full-c
 
 Load the smallest authoritative module set that matches the role and current phase. Do not recreate shared rules inside prompts or secondary docs.
 
+## Philosophy — Evidence Is the Agent's Sensory Input
+
+Observability and execution evidence are not only anti-fabrication controls for human reviewers — they are the agent's **sensory input for closing its own loops**. Captured traces, test output, and SLO metrics are how an agent perceives what its change actually did: read the signal, locate the gap, fix it, re-run, and confirm the signal moved. An agent that cannot observe the runtime is working blind and can only assert; an agent that captures and reads real evidence can diagnose and self-correct. This is why the framework treats telemetry and captured output as first-class — they are the feedback channel that turns a one-shot guess into a closed control loop.
+
 ## Governance Module Index
 
 | Need | Load |

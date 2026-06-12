@@ -32,7 +32,7 @@ bash bubbles/scripts/retro-framework-health.sh
 
 - `.specify/runtime/framework-events.jsonl` — per-line JSON events (agent starts, gate pass/fail, mode lifecycle)
 - `.specify/runtime/workflow-runs.json` — per-run records with mode + outcome + duration
-- `bubbles/capability-ledger.yaml` — entries with `lastValidated > 90 days` flagged
+- `bubbles/capability-ledger.yaml` — entries with `lastValidated > 90 days` flagged. Consumer freshness on this same ledger is *enforced* by **G127** (`capability-consumer-freshness.sh`): every `state: shipped` capability MUST declare a non-empty `consumers:` list whose every path exists on disk, so a shipped-but-orphaned capability is a blocking finding, not just a retro nudge.
 
 All read-only.
 

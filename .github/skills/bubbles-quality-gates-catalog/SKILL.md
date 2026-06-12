@@ -1,6 +1,6 @@
 ---
 name: bubbles-quality-gates-catalog
-description: Look up Bubbles quality gates (G024–G097+) by ID, by symptom, or by enforcement script. Use when a guard rejects work and you need to understand the failing gate, when designing a scope's DoD, or when wiring tests to cover gate-relevant scenarios. Covers the canonical test taxonomy, gate IDs, and which script enforces each one.
+description: Look up Bubbles quality gates (G024–G100+) by ID, by symptom, or by enforcement script. Use when a guard rejects work and you need to understand the failing gate, when designing a scope's DoD, or when wiring tests to cover gate-relevant scenarios. Covers the canonical test taxonomy, gate IDs, and which script enforces each one.
 ---
 
 # Bubbles Quality Gates Catalog
@@ -38,6 +38,11 @@ Gates G073, G090, G022, G041, G040, G008A, G009, G056 received non-breaking refi
 | G094 | Capability foundation gate | `capability-foundation-guard.sh` |
 | G095 | Discovered-issue disposition (every observed issue is filed, not deferred) | `discovered-issue-disposition-guard.sh` |
 | G097 | Requirement-mechanism correspondence (named mechanism ↔ code, warn-and-justify) | `requirement-mechanism-guard.sh` |
+| G098 | Observability posture declared (wired/opted-out; undeclared WARN, project-flippable to block; fake-wired / opted-out-malformed / unsupported-schema fail loud; framework source EXEMPT) | `observability-posture-guard.sh` |
+| G099 | Observability opt-out freshness (recorded + expiring opt-out; missing required optOut field fails loud; expired revisitAfter = non-blocking route-required reminder) | `observability-opt-out-guard.sh` |
+| G100 | Observability SLO evidence (BLOCKING when posture: wired + an instrumented scope's `observabilityWorkflow` targets a workflow with an `slo:` link; captured `.specify/runtime/observability/<workflow>.slo.json` must MEET the `traceContracts.observability.slos` target; a contract-declared metric absent from `observed` is a breach; malformed / wrong-workflow evidence fails loud before numeric compare; missing jq/yq fails CLOSED; framework source EXEMPT). Division of labor: G026 ensures the stress/load test EXISTS + cites the SLO registry; G100 ensures the captured evidence MEETS the target. | `observability-slo-guard.sh` |
+| G110–G126 | Release-train + upkeep + propagation + incident + framework gates: release-train discipline, flag-default-off-on-other-trains, backup / restore-drill / BCDR evidence, env-pollution isolation (G115), offsite-backup-required, audit-trail immutability, backup-retention / PII-classification / secret-rotation declared, propagation policy / validation / ledger, incident severity declared, framework-health evidence, model-tier floor | `release-train-guard.sh`, `env-pollution-scan.sh`, `propagation-policy-guard.sh`, `model-tier-advisory.sh` + targeted guards |
+| G127 | Capability-consumer freshness (framework-source self-validation: every `state: shipped` capability in `bubbles/capability-ledger.yaml` declares a non-empty `consumers:` list whose every path exists on disk; blank-only list = ORPHAN, stray blank entry = MALFORMED, missing path = DANGLING; partial/proposed/deprecated exempt; repos with no ledger no-op; missing yq fails CLOSED only when a ledger is present; the G029 integration-completeness standard applied to the framework's own ledger) | `capability-consumer-freshness.sh` |
 
 ## Canonical Test Taxonomy (binding)
 | Category | Means | Real-stack? | Mocks permitted? |

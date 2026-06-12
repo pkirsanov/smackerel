@@ -96,6 +96,17 @@ Every entity created during a test run MUST be identifiable as test data:
 
 Stress and load test stacks MUST be isolated from other test categories so that load-induced churn (volume thrash, OOM kills, connection floods) does not corrupt other test categories' state mid-run.
 
+## Observability Telemetry Isolation (Validate Plane)
+
+Feature-scope tests that emit telemetry (metrics, traces, logs, SLO samples) MUST target the **ephemeral validate-plane stack**, never prod:
+
+- The VALIDATE-plane observability adapter (`traceContracts.observability.endpoints.validate.*`, `profile: test`) resolves to the per-run ephemeral test stack — the same isolation boundary as the test database/message bus. Operate-plane adapters (`profile: prod`) are reserved for deploy/train/upkeep/incident/release scopes and are read-only (INV-12).
+- All test-emitted telemetry MUST be labeled `env=test*` (e.g. `env=test`, `env=test-<run-id>`). A test that emits `env=prod` / `env=home-lab` telemetry is a prod-pollution defect — `env-pollution-scan.sh` (G115) blocks it; there is no override.
+- The validate-plane telemetry endpoint (test prometheus/loki/jaeger) MUST live in the per-category ephemeral Compose project and be torn down with it. It MUST NOT be a prod pushgateway/collector/tenant.
+- Resolve the plane explicitly with `bubbles/scripts/observability-endpoint-resolve.sh --plane validate --signal <signal>`; a `--plane validate` resolution NEVER reads operate-plane config or `BUBBLES_OBS_OPERATE_*` env, even when prod env is present.
+
+See [bubbles-env-pollution-isolation.instructions.md](bubbles-env-pollution-isolation.instructions.md) and `docs/guides/CONTROL_PLANE_SCHEMAS.md` (Observability Posture + Telemetry Endpoints).
+
 ## Verification Commands
 
 ```bash

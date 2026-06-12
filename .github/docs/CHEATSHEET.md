@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **40 Agents · 103 Gates · 55 Workflow Modes · 26 Phases**
+> **40 Agents · 107 Gates · 55 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -321,7 +321,8 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `propagation policy` | `propagation-policy.yaml` at repo root. Declares trains, edges, default flow direction, receiving-train validation mode, and backport approval requirement. Owned by J-Roc; enforced by Gate G121/G122. |
 | `propagation ledger` | Append-only `propagation-ledger.yaml` recording every propagation event (forward, backport, audit). One JSONL line per event with train pair, SHA, approval token (backports), and timestamp. Gate G123 enforces append-only + per-edge integrity. |
 | `incident fastlane` | Cory + Trevor's production-incident chain: triage → fix → validate → propagate → audit. Highest-priority lane; bypasses normal planning queue. Uses `bugfix-fastlane` mechanics plus mandatory cross-train propagation step. |
-| `observability adapter` | `bubbles/adapters/observability/<name>.sh` — pluggable live-telemetry contract. Reference adapters: `none.sh` (default), `prometheus.sh` (requires `PROMETHEUS_BASE_URL` + per-query env vars). Adapters expose `health`, `query-instant`, `query-range`, `series-cardinality` verbs. |
+| `observability adapter` | `bubbles/adapters/observability/<name>.sh` — pluggable live-telemetry contract selected per signal+plane via `traceContracts.observability.endpoints`. Reference adapters: `none.sh` (default; returns `[]` for `fetch-alerts`, `{}` for the other three verbs), `prometheus.sh` (requires `PROMETHEUS_BASE_URL` + per-query env vars). Four verbs: `fetch-alerts`, `fetch-slo-burn`, `fetch-error-rate`, `fetch-deploy-impact`. Two planes: validate (ephemeral test stack, `env=test*`) and operate (prod, read-only). |
+| `observability posture` | First-class per-repo declaration under `traceContracts.observability.posture`: `wired` (proves captured telemetry + numeric SLOs in integration/e2e/stress) or `opted-out` (recorded + expiring via `revisitAfter`); undeclared nags. Enforced by G098 (posture declared), G099 (opt-out freshness), G100 (SLO evidence — blocking when wired), and G080 (trace contract — MUST-when-wired). `bubbles doctor` surfaces it, `bubbles.setup focus: observability` declares it, and the `check_observability` MCP tool reports a one-shot verdict. |
 | `framework self-observation` | `bubbles.retro target: framework` (alias `framework-health`). Proposal-first: reads gate-failure logs and stalled-mode counts, writes only into `improvements/`, never auto-mutates framework files. The framework eats its own dog food. |
 | `release train portfolio` | The set of all declared trains under `config/release-trains.yaml`. Surfaced by `release-train-status-all` (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness. |
 <!-- GENERATED:CHEATSHEET_VOCABULARY_END -->
@@ -329,7 +330,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 103 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 107 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**

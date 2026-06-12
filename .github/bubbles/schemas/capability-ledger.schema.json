@@ -34,6 +34,11 @@
               "type": "array",
               "items": { "type": "string" }
             },
+            "consumers": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Executable surfaces (scripts/agents/tools) that actually USE this capability. A shipped capability with no real consumer is an orphan (the IMP-001 R2-B failure mode); listing consumers makes the wiring auditable. Candidate for a future framework-dogfood freshness check (see improvements/IMP-004)."
+            },
             "competitorContrast": { "type": "string" },
             "successOver": {
               "type": "array",

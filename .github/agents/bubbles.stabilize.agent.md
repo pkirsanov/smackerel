@@ -139,6 +139,18 @@ From `.specify/memory/agents.md`, extract and use the repo-approved commands for
 
 If any step requires running services, follow the repo-standard workflow (per `.github/copilot-instructions.md`).
 
+### Phase 0.5: Operate-Plane Telemetry Fetch (wired repos — run FIRST during an incident)
+
+When the target repo declares `traceContracts.observability.posture: wired`, begin incident diagnosis by fetching live operate-plane telemetry BEFORE reading code or logs — the prod signal is the fastest path to the blast radius. Resolve each signal with `bubbles/scripts/observability-endpoint-resolve.sh --plane operate --signal <signal>` (profile `prod`), then invoke the resolved adapter:
+
+- `alerts` (`fetch-alerts`) — what is firing right now.
+- `errorRate` (`fetch-error-rate`) — magnitude and which service is degraded.
+- `deployImpact` (`fetch-deploy-impact`) — correlate the regression delta to the suspect deploy SHA.
+
+Wrap each fetch through the MCP `record_evidence` tool (→ `tool-log.sh` → `.specify/runtime/tool-calls.jsonl`) so the operate-plane read has provenance. The operate plane is READ-ONLY (INV-12): fetch only — do not acknowledge, silence, or otherwise mutate prod telemetry. A one-shot posture + SLO + trace verdict is available via the `check_observability` MCP tool (`bubbles/scripts/observability-check.sh`).
+
+If `fetch-deploy-impact` ties the degradation to a specific deploy SHA, classify the finding `incident` and emit the `route_required` packet to `bubbles.train` for the pointer-swap rollback (stabilize never rolls back inline). When posture is `opted-out`/undeclared, or an adapter resolves to `none` / exits 1, skip this step and proceed with log/code diagnosis — telemetry is enrichment, not a hard dependency.
+
 ### Phase 1: Baseline & Symptom Inventory
 
 Create a Stability Inventory checklist for the target feature/system:

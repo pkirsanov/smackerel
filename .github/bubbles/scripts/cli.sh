@@ -2240,6 +2240,56 @@ cmd_doctor() {
   fi
 
   echo ""
+  echo -e "${BOLD}Observability Posture${NC}"
+  echo -e "${DIM}Advisory only — surfaces the declared observability posture (G098/G099). Never changes doctor's pass/fail exit code; only policy.undeclaredPosture: block makes G098 blocking at pre-push.${NC}"
+  echo ""
+
+  # Resolve via the G098 guard's read-only --print-state mode. The optional
+  # BUBBLES_OBS_DOCTOR_REPO_ROOT override is advisory-only (lets an operator
+  # inspect another repo-root's posture line); it never affects any other
+  # doctor check or the exit code.
+  local obs_guard="$SCRIPT_DIR/observability-posture-guard.sh"
+  local obs_root="${BUBBLES_OBS_DOCTOR_REPO_ROOT:-$(project_root)}"
+  if [[ -x "$obs_guard" ]]; then
+    local obs_state
+    obs_state="$(bash "$obs_guard" --print-state --repo-root "$obs_root" 2>/dev/null || echo 'UNAVAILABLE')"
+    case "$obs_state" in
+      EXEMPT)
+        echo -e "  ${GREEN}✅${NC} Observability posture: EXEMPT (no-runtime)" ;;
+      WIRED)
+        echo -e "  ${GREEN}✅${NC} Observability posture: WIRED" ;;
+      OPTED-OUT-FRESH*)
+        echo -e "  ${GREEN}✅${NC} Observability posture: OPTED-OUT until ${obs_state#OPTED-OUT-FRESH|}" ;;
+      OPTED-OUT-EXPIRED*)
+        echo -e "  ${YELLOW}⚠️${NC}  Observability posture: OPT-OUT EXPIRED (revisitAfter ${obs_state#OPTED-OUT-EXPIRED|}) — run /bubbles.setup focus: observability"
+        advisory_count=$((advisory_count + 1)) ;;
+      OPTED-OUT-INCOMPLETE)
+        echo -e "  ${YELLOW}⚠️${NC}  Observability posture: OPTED-OUT (revisitAfter missing) — run /bubbles.setup focus: observability"
+        advisory_count=$((advisory_count + 1)) ;;
+      OPTED-OUT-MALFORMED)
+        echo -e "  ${YELLOW}⚠️${NC}  Observability posture: OPTED-OUT malformed (missing optOut block)"
+        advisory_count=$((advisory_count + 1)) ;;
+      UNDECLARED)
+        echo -e "  ${YELLOW}⚠️${NC}  Observability posture: UNDECLARED — declare wired|opted-out via /bubbles.setup focus: observability"
+        advisory_count=$((advisory_count + 1)) ;;
+      FAKE-WIRED)
+        echo -e "  ${YELLOW}⚠️${NC}  Observability posture: WIRED but no usable signal (fake-wired)"
+        advisory_count=$((advisory_count + 1)) ;;
+      UNSUPPORTED-SCHEMA*)
+        echo -e "  ${YELLOW}⚠️${NC}  Observability posture: unsupported schemaVersion ${obs_state#UNSUPPORTED-SCHEMA|}"
+        advisory_count=$((advisory_count + 1)) ;;
+      INVALID-POSTURE*)
+        echo -e "  ${YELLOW}⚠️${NC}  Observability posture: invalid value ${obs_state#INVALID-POSTURE|}"
+        advisory_count=$((advisory_count + 1)) ;;
+      MALFORMED-YAML)
+        echo -e "  ${YELLOW}⚠️${NC}  Observability posture: project config YAML is malformed"
+        advisory_count=$((advisory_count + 1)) ;;
+      *)
+        echo -e "  ${CYAN}ℹ️${NC}  Observability posture: UNAVAILABLE (yq parser not installed)" ;;
+    esac
+  fi
+
+  echo ""
   echo -e "${BOLD}Result: $passed passed, $failed failed, $advisory_count advisory"
   if [[ "$healed" -gt 0 ]]; then
     echo -e "  🔧 Auto-healed $healed issue(s)${NC}"

@@ -1,0 +1,22 @@
+{
+  "name": "check_observability",
+  "description": "Return a repo's observability health as a single JSON verdict: posture (G098 — wired/opted-out/exempt/undeclared), the most recent SLO-evidence verdict (G100), the trace-contract verdict (G080), and an `endpoints` block reporting which telemetry adapter is wired per (plane, signal) resolved read-only via observability-endpoint-resolve.sh --names-only. Wraps observability-check.sh (the canonical bash twin), which runs the three guards in report mode plus the read-only endpoint resolver. READ-ONLY: it never fetches, mutates, or captures live telemetry — the actual operate-plane telemetry capture done by ops agents flows through record_evidence instead. Use when an agent or operator needs a one-shot observability health read for a repo. Set repo_root to inspect a specific checkout; omit it to inspect the repo the server runs in.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "repo_root": {
+        "type": "string",
+        "description": "Absolute path to the repo root to inspect. Omit to inspect the repo this server runs in."
+      }
+    }
+  },
+  "script": "observability-check.sh",
+  "argsTemplate": ["${repo_root?}"],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "successExitCodes": [0, 1]
+}

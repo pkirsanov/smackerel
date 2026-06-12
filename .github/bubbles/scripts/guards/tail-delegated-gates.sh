@@ -3,8 +3,9 @@
 # =============================================================================
 # guards/tail-delegated-gates.sh  (M4 guard split)
 # =============================================================================
-# Checks 26-36: the delegated tail gates G085-G095 and G097. This fragment is
-# the body of the `else` branch of the BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST
+# Checks 26-39: the delegated tail gates G085-G095, G097, and G098-G100
+# (observability posture/opt-out/SLO). This fragment is the body of the `else`
+# branch of the BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST
 # fast-path conditional in state-transition-guard.sh; it is sourced in the same
 # shell scope so pass/fail/warn/info, the failures/warnings counters, and
 # computed vars ($SCRIPT_DIR, $feature_dir, $script_repo_root, $guard_repo_root,
@@ -323,5 +324,92 @@ if [[ -x "$requirement_mechanism_guard" ]]; then
   fi
 else
   info "requirement-mechanism-guard.sh not present at $requirement_mechanism_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 37: Observability Posture Declared (Gate G098)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/observability-posture-guard.sh.
+# Posture is a first-class decision: a repo SHOULD declare
+# traceContracts.observability.posture (wired|opted-out). UNDECLARED is a
+# WARN nag (exit 0) by default — it does NOT block a done-transition unless the
+# project sets policy.undeclaredPosture: block. The guard exits 1 ONLY on a
+# genuinely broken posture: fake-wired (wired but every signal is none),
+# opted-out-malformed (no optOut block), unsupported schemaVersion, invalid
+# posture value, or malformed YAML — those SHOULD block certification. A
+# missing yq WARN-and-skips (exit 0). The Bubbles source repo auto-EXEMPTs.
+echo "--- Check 37: Observability Posture Declared (Gate G098) ---"
+obs_posture_guard="$SCRIPT_DIR/observability-posture-guard.sh"
+if fixture_gate_skip "observability posture declared (Gate G098)"; then
+  :
+elif [[ -x "$obs_posture_guard" ]]; then
+  if run_guard_in_feature_repo bash "$obs_posture_guard" --repo-root "$guard_repo_root" --quiet > /dev/null 2>&1; then
+    pass "Observability posture is declared & well-formed, undeclared+warn, or EXEMPT (Gate G098)"
+  else
+    fail "Observability posture guard failed — Gate G098. Run 'bash $obs_posture_guard --repo-root $guard_repo_root' for full diagnostic"
+    info "A blocking finding is a BROKEN posture: fake-wired (posture: wired but every validate+operate signal is adapter: none), opted-out with NO optOut block, unsupported schemaVersion, invalid posture value, or malformed YAML"
+    info "UNDECLARED posture is NOT blocking by default (WARN nag, exit 0) unless traceContracts.observability.policy.undeclaredPosture: block is set"
+    info "Remediate: declare traceContracts.observability.posture: wired (with a real non-none signal) OR opted-out (with optOut.{reasonCode,reason,revisitAfter}); run /bubbles.setup focus: observability"
+  fi
+else
+  info "observability-posture-guard.sh not present at $obs_posture_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 38: Observability Opt-Out Freshness (Gate G099)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/observability-opt-out-guard.sh.
+# When posture: opted-out, the opt-out MUST be recorded and expiring
+# (optOut.reasonCode + reason + revisitAfter all required). A missing required
+# field is malformed = blocking (exit 1). An EXPIRED revisitAfter emits a
+# NON-blocking route-required reminder (exit 0) — it does not hard-fail a
+# done-transition. Posture other than opted-out is a clean no-op; a missing yq
+# WARN-and-skips; the Bubbles source repo auto-EXEMPTs.
+echo "--- Check 38: Observability Opt-Out Freshness (Gate G099) ---"
+obs_optout_guard="$SCRIPT_DIR/observability-opt-out-guard.sh"
+if fixture_gate_skip "observability opt-out freshness (Gate G099)"; then
+  :
+elif [[ -x "$obs_optout_guard" ]]; then
+  if run_guard_in_feature_repo bash "$obs_optout_guard" --repo-root "$guard_repo_root" --quiet > /dev/null 2>&1; then
+    pass "Observability opt-out is recorded & well-formed (or not opted-out / EXEMPT) (Gate G099)"
+  else
+    fail "Observability opt-out freshness guard failed — Gate G099. Run 'bash $obs_optout_guard --repo-root $guard_repo_root' for full diagnostic"
+    info "A blocking finding is a MALFORMED opt-out: posture: opted-out with a missing/empty optOut.reasonCode, optOut.reason, or optOut.revisitAfter, an unparseable revisitAfter, or unsupported schemaVersion"
+    info "An EXPIRED revisitAfter is NOT blocking (route-required reminder, exit 0); re-run /bubbles.setup focus: observability to refresh the decision"
+  fi
+else
+  info "observability-opt-out-guard.sh not present at $obs_optout_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 39: Observability SLO Evidence (Gate G100)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/observability-slo-guard.sh — the
+# BLOCKING teeth of the posture model. When posture: wired AND an instrumented
+# scope (a Test Plan row declaring observabilityWorkflow) targets a workflow
+# carrying an slo: link, the CAPTURED SLO evidence at
+# .specify/runtime/observability/<workflow>.slo.json MUST MEET the contract
+# target. A non-adopter (no observability config) no-ops even without jq/yq via
+# the guard's parser-free opt-in pre-check, so this NEVER blocks a repo that
+# has not adopted observability. Posture != wired, no instrumented workflow, or
+# no slo: link are all clean no-ops; the Bubbles source repo auto-EXEMPTs.
+echo "--- Check 39: Observability SLO Evidence (Gate G100) ---"
+obs_slo_guard="$SCRIPT_DIR/observability-slo-guard.sh"
+if fixture_gate_skip "observability SLO evidence (Gate G100)"; then
+  :
+elif [[ -x "$obs_slo_guard" ]]; then
+  if run_guard_in_feature_repo bash "$obs_slo_guard" --repo-root "$guard_repo_root" --quiet > /dev/null 2>&1; then
+    pass "Observability SLO evidence meets the contract, or the gate no-ops (not wired / no instrumented slo workflow / non-adopter / EXEMPT) (Gate G100)"
+  else
+    fail "Observability SLO evidence guard failed — Gate G100. Run 'bash $obs_slo_guard --repo-root $guard_repo_root' for the per-workflow breach detail"
+    info "BLOCKING when posture: wired AND an instrumented workflow (observabilityWorkflow) with an slo: link has captured evidence that breaches the traceContracts.observability.slos target, is missing, malformed, or for the wrong workflow"
+    info "A metric the contract declares but the captured observed block omits is a BREACH (instrumentation regression cannot prove the SLO met)"
+    info "Capture SLO evidence under load (integration/e2e/stress) to .specify/runtime/observability/<workflow>.slo.json; an adopter repo MUST have jq + yq (mikefarah v4) installed"
+  fi
+else
+  info "observability-slo-guard.sh not present at $obs_slo_guard; skipping (advisory)"
 fi
 echo ""

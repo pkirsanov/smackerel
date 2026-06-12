@@ -1,0 +1,86 @@
+# =============================================================================
+# Bubbles observability posture template
+# =============================================================================
+# Copy the `observability:` block below UNDER the existing `traceContracts:` key
+# in your project-owned `.github/bubbles-project.yaml` (or `bubbles-project.yaml`).
+#
+#   - `observability:` is a CHILD sub-block of `traceContracts:` — NOT a new
+#     top-level key. The existing trace-contract guard hard-greps
+#     `^traceContracts:` and tolerates this child block unchanged.
+#   - This file is a STARTER. It ships in the "undeclared" / `none` state so it
+#     enforces nothing until you make a posture decision.
+#   - Adapter values are provider NAMES only (matching
+#     bubbles/adapters/observability/<name>.sh) — NEVER URLs, hosts, or tokens.
+#     Real endpoints/tokens belong in your deploy-overlay env, never here.
+#
+# Make the posture decision with:  /bubbles.setup focus: observability
+# =============================================================================
+
+traceContracts:
+  observability:
+    # ---- Schema version --------------------------------------------------
+    # Guards assert this BEFORE applying semantics; an unknown breaking
+    # version fails loud rather than mis-parsing. Bump only on a breaking
+    # shape change.
+    schemaVersion: 1
+
+    # ---- Posture (REQUIRED decision) -------------------------------------
+    # Tri-state: `wired` | `opted-out` | undeclared.
+    #   - Leaving `posture:` ABSENT = undeclared = the only "nag" state.
+    #   - `wired`      → you prove telemetry + SLOs for instrumented scopes.
+    #   - `opted-out`  → a legitimate, recorded, expiring choice (fill `optOut`).
+    # Uncomment ONE once you decide:
+    # posture: wired
+    # posture: opted-out
+
+    policy:
+      # `warn` (advisory nag) | `block` (undeclared posture fails pre-push).
+      undeclaredPosture: warn
+
+    # ---- Decision record (REQUIRED for wired + opted-out) ----------------
+    # Who decided, the source of the decision, and when it was last reviewed.
+    # decision:
+    #   decidedAt: YYYY-MM-DD
+    #   decidedBy: operator
+    #   decisionSource: "bubbles.setup focus: observability"
+    #   lastReviewedAt: YYYY-MM-DD
+
+    # ---- Opt-out record (REQUIRED iff posture: opted-out) ----------------
+    # `reasonCode`, `reason`, and `revisitAfter` are all REQUIRED when opted
+    # out (a missing `revisitAfter` would make the freshness reminder a silent
+    # no-op). `revisitAfter` is the single source of truth for expiry.
+    # optOut:
+    #   reasonCode: no-runtime   # no-runtime | pre-monitoring | external-monitoring-only
+    #   reason: "describe why there is nothing to monitor yet"
+    #   declaredAt: YYYY-MM-DD
+    #   revisitAfter: YYYY-MM-DD
+    #   approvedBy: operator
+
+    # ---- Telemetry endpoints (two planes, one provider per signal) -------
+    # 4 signals: alerts | sloBurn | errorRate | deployImpact.
+    # Each value is `{ adapter, profile }`. `adapter` is a provider NAME.
+    #   - validate plane → resolves to your EPHEMERAL per-run test stack.
+    #   - operate  plane → resolves to PROD (read-only; deploy/incident scopes).
+    # Ships ALL `none` (no telemetry source wired). Switch a signal to a
+    # provider name (e.g. `prometheus`) and add `profile: test`/`profile: prod`
+    # when you wire a real backend; set its env in your deploy-overlay.
+    endpoints:
+      validate:
+        alerts: { adapter: none }
+        sloBurn: { adapter: none }
+        errorRate: { adapter: none }
+        deployImpact: { adapter: none }
+      operate:
+        alerts: { adapter: none }
+        sloBurn: { adapter: none }
+        errorRate: { adapter: none }
+        deployImpact: { adapter: none }
+
+    # ---- SLO targets (env-agnostic contract numbers) ---------------------
+    # Keyed by a stable workflow/service identifier. Link a trace workflow to
+    # one of these via `traceContracts.workflows.<name>.slo: <key>`.
+    # slos:
+    #   gateway.request:
+    #     latencyP99Ms: 50
+    #     errorRatePct: 0.1
+    #     availabilityPct: 99.9

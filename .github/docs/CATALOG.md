@@ -4,6 +4,10 @@
 
 Every recipe solves a specific problem. Find yours, follow the steps.
 
+> **New here?** Before picking a recipe, the [Effective Prompting](guides/EFFECTIVE_PROMPTING.md)
+> guide shows how to phrase a request Bubbles can act on, and the
+> [Agent Manual](guides/AGENT_MANUAL.md) maps situations to agents and modes.
+
 ---
 
 ## At A Glance
@@ -61,7 +65,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 49 | [Propagate Changes](recipes/propagate-changes.md) | `bubbles.propagate` / `propagate-*` | Forward-merge, backport, or audit drift across release trains |
 | 50 | [Multi-Train Status](recipes/multi-train-status.md) | `release-train-status-all` | One table for all trains: phase, slot, retention, PII, open flags |
 | 51 | [Incident Response](recipes/incident-response.md) | `incident-fastlane` | Diagnose production incidents, route rollback authority to train, execute and validate |
-| 52 | [Observe Production](recipes/observe-production.md) | `traceContracts.liveTelemetryEndpoints` | Wire live telemetry through swappable observability adapters |
+| 52 | [Observe Production](recipes/observe-production.md) | `traceContracts.observability.endpoints` | Wire live telemetry through swappable observability adapters |
 | 53 | [Framework Health](recipes/framework-health.md) | `framework-health` | Analyze Bubbles itself and emit proposal-first improvement packets |
 | 54 | [Cross-Repo Goal Scenario](recipes/cross-repo-scenario.md) | `bubbles.goal` / `bubbles.sprint` | Compile an outcome (review → plan → deliver → deploy → operate, possibly cross-repo) into one approval-gated scenario DAG |
 

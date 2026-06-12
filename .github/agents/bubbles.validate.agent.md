@@ -174,7 +174,8 @@ In `deep`/`full` mode, command green status alone is insufficient. Validation MU
 | 2.18 | Implementation Delta Evidence (G053) | Guard script Check 13B | Report artifacts include git-backed implementation proof with non-artifact file paths |
 | 2.19 | Delivery Implementation Delta (G093) | Guard script Check 29B | Done-ceiling delivery has non-planning implementation/runtime/config/contract/test/docs delta outside `specs/` and `.specify/`, or lower-ceiling mode is exempt |
 | 2.20 | Impact-Aware Validation Plan (G079) | `test-impact-plan.sh` when project config exists | Changed paths map to expected first-pass test categories/checks; full-suite triggers honored |
-| 2.21 | Trace Contract Evidence (G080) | `trace-contract-guard.sh` when project config exists and trace output is available | Required workflow spans/attributes/invariants present; error red flags absent |
+| 2.21 | Trace Contract Evidence (G080) | `trace-contract-guard.sh` when project config exists and trace output is available | Required workflow spans/attributes/invariants present; error red flags absent. **MUST-when-wired:** when `traceContracts.observability.posture: wired` and the scope is instrumented (a Test Plan row declares `observabilityWorkflow`), emitting + capturing the trace evidence is REQUIRED, not optional. Still a clean no-op when unconfigured / opted-out. |
+| 2.22 | Observability SLO Evidence (G100) | `observability-slo-guard.sh` | **MUST-when-wired:** when posture is `wired` and an instrumented scope's `observabilityWorkflow` targets a workflow carrying an `slo:` link, the captured `.specify/runtime/observability/<workflow>.slo.json` MUST MEET the `traceContracts.observability.slos` target. No-op when opted-out / undeclared / no instrumented workflow. |
 
 All commands from `agents.md`. Run each step, record output in validation report.
 
@@ -267,7 +268,7 @@ bash bubbles/scripts/test-impact-plan.sh --changed-file-list <changed-files.txt>
 - Missing config is a clean no-op unless the workflow explicitly requires `--require-config`
 - Record full output in the validation report
 
-#### 2C.5: Trace Contract Guard (Gate G080, if configured)
+#### 2C.5: Trace Contract Guard (Gate G080, MUST-when-wired)
 
 If `.github/bubbles-project.yaml` or `bubbles-project.yaml` defines `traceContracts` for a workflow touched by the scope and trace/log output exists, run the guard against actual evidence:
 
@@ -277,8 +278,22 @@ bash bubbles/scripts/trace-contract-guard.sh --workflow <workflow-name> --trace-
 
 - Required spans, attributes, and invariants must appear in the trace/log output
 - Error red flags must be absent; warnings must be surfaced for review
+- **MUST-when-wired:** when `traceContracts.observability.posture: wired` AND the scope is instrumented (a Test Plan row declares `observabilityWorkflow`), emitting and capturing this trace evidence is REQUIRED — a missing trace for an instrumented wired workflow is a validation gap, never a silent pass. When posture is `opted-out` / undeclared, or the scope declares no `observabilityWorkflow`, the guard stays a clean no-op (the script logic is unchanged).
 - If trace contracts apply but no trace/log evidence exists, record a concrete validation gap rather than substituting code inspection
 - Missing config is a clean no-op unless the workflow explicitly requires `--require-config`
+
+#### 2C.5b: Observability SLO Guard (Gate G100, MUST-when-wired)
+
+When `traceContracts.observability.posture: wired` and an instrumented scope's `observabilityWorkflow` targets a `traceContracts.workflows.<workflow>` carrying an `slo:` link, the captured SLO evidence MUST meet the contract target:
+
+```bash
+bash bubbles/scripts/observability-slo-guard.sh --repo-root {REPO_ROOT}
+```
+
+- Captured `.specify/runtime/observability/<workflow>.slo.json` MUST satisfy `observed latencyP99Ms <= target`, `observed errorRatePct <= target`, `observed availabilityPct >= target`; a contract-declared metric absent from `observed` is a breach
+- Malformed evidence and wrong-workflow evidence fail loud before any numeric comparison; missing `jq`/`yq` FAILS CLOSED (blocking gate)
+- No-op (exit 0) when posture is `opted-out` / undeclared, when no scope declares an `observabilityWorkflow`, or in the Bubbles framework source repo (EXEMPT)
+- Division of labor: G026 ensures the stress/load test EXISTS and cites the SLO registry; **this** gate ensures the captured evidence MEETS the target
 
 #### 2C.6: Changed-Spec Done Audit (Prospective Cross-Feature)
 

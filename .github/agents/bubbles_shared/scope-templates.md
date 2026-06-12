@@ -55,6 +55,7 @@ Every scenario listed here must be mirrored into `scenario-manifest.json` with a
 Note: Each `[x]` item MUST have inline evidence with a `**Claim Source:**` tag (`executed` or `interpreted`).
 Items that cannot be verified MUST remain `[ ]` with an Uncertainty Declaration (see evidence-rules.md).
 An honest gap with explanation is preferred over fabricated evidence (see Honesty Incentive in critical-requirements.md).
+When `traceContracts.observability.posture: wired` AND this scope declares an `observabilityWorkflow`, ALSO inject the observability DoD items (telemetry-captured-in-integration/e2e, SLO-met-under-load, and prod-monitoring-queryable for deploy/train/upkeep/incident/release scopes) per scope-workflow.md → "Observability DoD Injection (MUST-when-wired)".
 ```
 
 ## Single-File `scopes.md` Template

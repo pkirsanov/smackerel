@@ -23,6 +23,8 @@ Purpose: mandatory planning-time rules for `bubbles.plan` and other planning-ori
 - UI work must include a UI scenario matrix.
 - If project config defines `testImpact`, run or reference `bubbles/scripts/test-impact-plan.sh` for the planned changed paths and include the resulting first-pass categories/checks in the Test Plan. This never downgrades final validation obligations.
 - If project config defines `traceContracts`, preserve tech-agnostic analyst Success Signals in `spec.md` and let design/test/validate translate them into trace workflow names, spans, attributes, and invariants in design/scopes/report evidence.
+- If `traceContracts.observability.posture: wired`, tag each applicable Test Plan row (and its `test-plan.json` entry) with `observabilityWorkflow: <traceContracts.workflows key>`. A scope with at least one such row is an *instrumented scope* and receives observability DoD injection; an observability-relevant row that omits the field is a planning gap (the trace/SLO gates never infer workflow applicability from changed paths alone).
+- **MUST emit trace + SLO evidence rows when wired.** For an instrumented scope under `posture: wired`, the Test Plan MUST include (a) a **trace-evidence** row that captures the workflow's required spans/attributes/invariants (Gate G080) and, when the workflow carries an `slo:` link, (b) an **SLO-evidence** row that captures `.specify/runtime/observability/<workflow>.slo.json` under integration/e2e/stress/load and asserts it MEETS the `traceContracts.observability.slos` target (Gate G100). Both rows carry the same `observabilityWorkflow` tag. This is a MUST, not a SHOULD, whenever the repo is wired and the scope is instrumented; it is inert (no such rows required) when posture is `opted-out` / undeclared or the scope is not instrumented. Do not duplicate G026's obligation: the stress/load test's *existence* + SLO-registry citation is G026's concern, while the SLO-evidence row here proves the captured numbers MEET the target (G100).
 
 ## Load Discipline
 - Prefer feature artifacts first.
@@ -83,7 +85,8 @@ This file enables structured handoff to `bubbles.test` — tests are discovered 
           "scenarioId": "SCN-042-02",
           "description": "Full stack round-trip: create, read, verify",
           "command": "[E2E_TEST_COMMAND from agents.md]",
-          "liveSystem": true
+          "liveSystem": true,
+          "observabilityWorkflow": "booking.create"
         }
       ]
     }
@@ -97,6 +100,7 @@ This file enables structured handoff to `bubbles.test` — tests are discovered 
 - `bubbles.test` reads it to discover required tests — it cross-references against scopes.md
 - The JSON and Markdown Test Plan tables MUST stay in sync — divergence is a planning-core violation
 - `test-plan.json` is committed alongside `scopes.md` — never deferred
+- `observabilityWorkflow` (optional) names the `traceContracts.workflows.<key>` a row instruments. It is only meaningful when `traceContracts.observability.posture: wired`; when present, the same value MUST appear in the Markdown Test Plan row so the two stay in sync. A row that captures telemetry/SLO evidence for a wired workflow declares it here; the trace/SLO gates key off this field, never off changed-path inference.
 - If `test-plan.json` does not exist when `bubbles.test` runs, test falls back to parsing Markdown Test Plan tables (backward compatibility)
 
 ## Impact-Aware Planning Handoff (G079)

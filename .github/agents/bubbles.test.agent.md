@@ -32,7 +32,7 @@ handoffs:
 - When upstream workflow context includes `tdd: true`, preserve the red → green → broader-regression sequence explicitly: capture the failing targeted proof first, make the smallest change that turns it green, then keep or add persistent regression coverage for the same scenario.
 - Enforce `test-core.md`, `test-fidelity.md`, `consumer-trace.md`, `e2e-regression.md`, `evidence-rules.md`, and `state-gates.md`.
 - If project config defines `testImpact`, use `bubbles/scripts/test-impact-plan.sh` to order narrow-first test execution and to honor always-run/full-suite triggers before reporting the selected suite complete.
-- If project config defines `traceContracts`, preserve actual trace/log evidence needed by `bubbles.validate`; do not fabricate trace results from code inspection.
+- If project config defines `traceContracts`, preserve actual trace/log evidence needed by `bubbles.validate`; do not fabricate trace results from code inspection. **MUST-when-wired:** when `traceContracts.observability.posture: wired` and a scope is instrumented (a Test Plan row declares `observabilityWorkflow`), capturing the trace + SLO evidence is REQUIRED, not optional.
 - End every invocation with a `## RESULT-ENVELOPE`. Use `completed_owned` when test/code changes and evidence were produced under this agent's execution surface, `route_required` when planning/docs/implementation follow-up is required, or `blocked` when a concrete blocker prevents clean test completion.
 
 ## RESULT-ENVELOPE
@@ -230,7 +230,7 @@ Rules:
 - `fullSuiteTriggers` force broad validation even when only a small file list changed.
 - Missing config is a no-op unless the user or workflow explicitly requires it.
 
-### F) Trace Evidence Preservation (G080)
+### F) Trace + SLO Evidence Preservation (G080 / G100, MUST-when-wired)
 
 If project config defines `traceContracts`, collect or preserve the actual trace/log output for relevant workflow names so validation can run:
 
@@ -238,7 +238,15 @@ If project config defines `traceContracts`, collect or preserve the actual trace
 bash bubbles/scripts/trace-contract-guard.sh --workflow <workflow-name> --trace-output <trace-log-path>
 ```
 
-Trace evidence complements tests. It does not replace scenario-specific E2E, regression, red-green proof, or outcome-contract validation.
+**MUST-when-wired:** when `traceContracts.observability.posture: wired` and the scope is instrumented (a Test Plan row declares `observabilityWorkflow`), capturing the trace evidence AND the SLO metric artifact under load is REQUIRED. The captured SLO evidence is the normalized JSON the G100 guard asserts against:
+
+```text
+.specify/runtime/observability/<workflow>.slo.json   # { workflow, slo, sampleWindow, source, target, observed }
+```
+
+The capture MUST flow through `record_evidence` (MCP) so the tool-log carries the provenance row; the `.slo.json` file is the parsed metric OUTPUT, never a hand-authored substitute. When posture is `opted-out` / undeclared, or no `observabilityWorkflow` is declared, this is a clean no-op.
+
+Trace + SLO evidence complements tests. It does not replace scenario-specific E2E, regression, red-green proof, or outcome-contract validation.
 
 ---
 

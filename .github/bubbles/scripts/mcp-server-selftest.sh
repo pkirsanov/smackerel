@@ -11,7 +11,7 @@
 #   T1.  Server starts and responds to `initialize` with protocolVersion +
 #        serverInfo + capabilities.
 #   T2.  `ping` returns `{}`.
-#   T3.  `tools/list` returns the full declared tool catalog (>= 10 tools
+#   T3.  `tools/list` returns the full declared tool catalog (>= 11 tools
 #        in the source repo).
 #   T4.  Every declared tool references an existing bash twin under
 #        bubbles/scripts/.
@@ -89,6 +89,7 @@ required_tools=(
   search_code
   read_spec
   list_open_findings
+  check_observability
 )
 
 # T4 is a static pre-check that doesn't require server boot.
@@ -246,10 +247,10 @@ fi
 # T3: tools/list
 tools_reply="$(get 3)"
 n_tools="$(echo "$tools_reply" | python3 -c "import json,sys; r=json.load(sys.stdin); print(len(r['result']['tools']))")"
-if [[ "$n_tools" -ge 10 ]]; then
-  pass "T3: tools/list returned $n_tools tools (>= 10 required)"
+if [[ "$n_tools" -ge 11 ]]; then
+  pass "T3: tools/list returned $n_tools tools (>= 11 required)"
 else
-  fail "T3: tools/list returned only $n_tools tools (expected >= 10)"
+  fail "T3: tools/list returned only $n_tools tools (expected >= 11)"
 fi
 
 # T5: tools/call unknown

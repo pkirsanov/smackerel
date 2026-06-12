@@ -39,6 +39,7 @@ handoffs:
 - **Port Standards:** Allocate Docker host ports inside the project's assigned 10k block (per the `bubbles-docker-port-standards` skill) and follow the Dual-URL Standard: external URLs use `127.0.0.1` + mapped host port, internal container URLs use service DNS + internal port. No standard host ports (e.g., `5432:5432`).
 - **Config Single Source of Truth:** All ports, hosts, env keys, and service definitions MUST originate in the project's `config/<project>.yaml` (or equivalent SST). Reference the `bubbles-config-sst` skill. Never edit generated `.env` files by hand. Never hardcode ports or URLs in source.
 - **Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md) and [critical-requirements.md](bubbles_shared/critical-requirements.md). Every evidence block MUST include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). When operational verification is ambiguous, use an Uncertainty Declaration instead of claiming success. A wrong operational claim ("deploy succeeded", "health check passed") is 3x worse than an honest gap.
+- **Observability wiring execution (ownership boundary):** Own the hands-on telemetry plumbing — authoring/registering `bubbles/adapters/observability/<provider>.sh` adapters, wiring `traceContracts.observability.endpoints` for both planes, dashboards, and alert rules. This WIRING EXECUTION is distinct from the read-only CONSUMPTION of operate-plane signals by `bubbles.stabilize` (incident diagnosis), `bubbles.upkeep` (`slo-review`), and `bubbles.train` (promote/rollback gating): devops builds and maintains the telemetry path; those agents only fetch through it. Keep adapter inputs NO-DEFAULTS (refuse to run on missing env) per the `bubbles-observability-adapter` skill.
 
 ## Companion Skills & Instructions
 
@@ -49,6 +50,7 @@ Load these skills and instructions before touching the matching surfaces. They a
 - `bubbles-docker-port-standards` skill — 10k Rule + Dual-URL Standard.
 - `bubbles-config-sst` skill — config Single Source of Truth, generated artifact contract.
 - `bubbles-test-environment-isolation` skill — ephemeral test storage rules.
+- `bubbles-observability-adapter` skill — telemetry adapter contract; devops owns the wiring execution, while stabilize/upkeep/train are read-only operate-plane consumers.
 - `bubbles-deployment-target.instructions.md` — companion enforcement instructions (deployment adapters).
 - `bubbles-docker-lifecycle-governance.instructions.md` — companion enforcement instructions (Docker lifecycle).
 - `bubbles-config-sst.instructions.md` — companion enforcement instructions (config SST).

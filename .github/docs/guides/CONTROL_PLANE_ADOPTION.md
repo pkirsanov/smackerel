@@ -63,9 +63,11 @@ Checklist:
 - If it is missing, rerun install/bootstrap from the Bubbles repo instead of creating the file manually.
 - Ensure repo-default grill, TDD, lockdown, regression, auto-commit, and certification behavior live there.
 - Ensure the first control-plane-aware workflow run records `policySnapshot` provenance in `state.json`.
+- Declare the observability posture: run `bash .github/bubbles/scripts/observability-posture-guard.sh --print-state --repo-root .` and, if it reports `UNDECLARED` or `OPTED-OUT-EXPIRED`, run `/bubbles.setup focus: observability` to PROPOSE `wired` (telemetry discovered) or `opted-out` (recorded + expiring). The posture is a CHILD `traceContracts.observability` block; setup scaffolds it from `templates/observability.yaml.tmpl` and never auto-writes config.
 
 Expected outcome:
 - runtime defaults come from one repo-local registry instead of prompt prose
+- every repo has made the first-class observability posture decision (wired or opted-out), or carries a live opt-in reminder
 
 ## Adoption Profiles
 

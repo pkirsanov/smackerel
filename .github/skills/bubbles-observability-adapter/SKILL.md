@@ -4,12 +4,14 @@ description: How to author and wire telemetry adapters under bubbles/adapters/ob
 
 # bubbles-observability-adapter
 
-Bubbles ships a uniform adapter contract for fetching live production telemetry (alerts, SLO burn, error rate, deploy impact). Mirrors the knb offsite-backup adapter pattern: declarative selection in `traceContracts.liveTelemetryEndpoints`, swappable backends under `bubbles/adapters/observability/<name>.sh`, `none` as the safe default.
+Bubbles ships a uniform adapter contract for fetching live production telemetry (alerts, SLO burn, error rate, deploy impact). Mirrors the knb offsite-backup adapter pattern: declarative selection in `traceContracts.observability.endpoints`, swappable backends under `bubbles/adapters/observability/<name>.sh`, `none` as the safe default. Selection is split across two planes — `validate` (the ephemeral per-run test stack) and `operate` (prod, read-only).
+
+> **Consumer status (read this first).** This adapter layer is WIRED to live runtime consumers. Operate-plane signals are fetched **read-only** by `bubbles.stabilize` (incident diagnosis — alerts/error-rate/deploy-impact fetched first), `bubbles.upkeep` (the weekly `slo-review` task — SLO burn + error rate), and `bubbles.train` (deploy-impact / SLO burn consulted before promote and as a rollback signal). `bubbles.devops` owns the wiring EXECUTION (authoring adapters, dashboards, alert rules); the three agents above are read-only CONSUMERS. The validate plane is exercised by instrumented feature scopes. (`bubbles.retro` is NOT a telemetry consumer — earlier drafts named it in error.)
 
 ## When to author a new adapter
 
 - You run a telemetry stack (Sentry, Grafana Cloud, Datadog, New Relic, custom Prometheus federation) that the shipped `prometheus` adapter does not cover.
-- You want `bubbles.retro target: framework` and `bubbles.stabilize` (incident-fastlane) to enrich diagnosis context with live signals from that stack.
+- You want Bubbles ops agents to read live signals from that stack. The operate-plane consumers (`bubbles.stabilize`, `bubbles.upkeep`, `bubbles.train`) invoke the `fetch-*` verbs at runtime through the plane resolver, so authoring the adapter immediately lights up incident diagnosis, the `slo-review` task, and promote/rollback gating for your stack.
 
 ## Contract (every adapter MUST implement all 4 verbs)
 
@@ -53,18 +55,63 @@ This matches the framework-wide NO DEFAULTS policy. The operator (or knb adapter
 
 ## Wiring
 
-In your repo's `.github/bubbles-project.yaml` (or wherever you keep `traceContracts`):
+In your repo's `.github/bubbles-project.yaml`, under the `traceContracts.observability` block (start from `templates/observability.yaml.tmpl`):
 
 ```yaml
 traceContracts:
-  liveTelemetryEndpoints:
-    alerts: "prometheus"
-    slo-burn: "prometheus"
-    error-rate: "prometheus"
-    deploy-impact: "none"   # mix-and-match is fine
+  observability:
+    endpoints:
+      validate:                              # ephemeral per-run test stack
+        sloBurn: { adapter: prometheus, profile: test }
+        errorRate: { adapter: prometheus, profile: test }
+        alerts: { adapter: none }
+        deployImpact: { adapter: none }
+      operate:                               # prod (read-only)
+        alerts: { adapter: prometheus, profile: prod }
+        sloBurn: { adapter: prometheus, profile: prod }
+        errorRate: { adapter: prometheus, profile: prod }
+        deployImpact: { adapter: none }      # mix-and-match is fine
 ```
 
-Consumers (`bubbles.retro`, `bubbles.stabilize`) resolve each verb to the named adapter at runtime.
+A resolver (`bubbles/scripts/observability-endpoint-resolve.sh`) maps `(plane, signal) → { adapter, profile }`. Adapter values are provider **names** (never URLs/tokens); `profile` selects the env binding. The operate-plane consumers (`bubbles.stabilize`, `bubbles.upkeep`, `bubbles.train`) read this config through the resolver at runtime; the validate plane is read by instrumented feature scopes.
+
+## Posture model
+
+`traceContracts.observability.posture` is a tri-state decision every repo makes:
+
+| Posture | Meaning |
+|---------|---------|
+| `wired` | Telemetry is wired; instrumented scopes must prove telemetry + SLOs. At least one non-`none` validate-plane signal is required (all-`none` is rejected as *fake-wired*). |
+| `opted-out` | A legitimate, recorded, expiring choice. Requires a full `optOut` block. |
+| *(absent)* | Undeclared — the only "nag" state. `policy.undeclaredPosture` decides warn vs block. |
+
+## Two planes, one provider, a profile per plane
+
+- **validate** → resolves to the ephemeral per-run test stack (`profile: test`). Feature scopes use the validate plane only; test telemetry stays `env=test*` (G115 protects prod).
+- **operate** → resolves to prod (`profile: prod`), read-only, and only for deploy / train / upkeep / incident / release scopes.
+
+Adapter names are provider names, never environment names — the `profile` selects env vars/endpoints, so there is no `prometheus-test` adapter file proliferation.
+
+## Opt-out lifecycle
+
+When `posture: opted-out`, the `optOut` block is REQUIRED and carries `reasonCode` (`no-runtime` | `pre-monitoring` | `external-monitoring-only`), `reason`, `declaredAt`, `revisitAfter`, and `approvedBy`. `revisitAfter` is the single source of truth for expiry — once an opt-out passes its `revisitAfter`, an opt-in reminder escalates. `reasonCode` only seeds the *default* `revisitAfter` that setup proposes. A `wired → opted-out` transition (monitoring decommissioned) is legitimate but never silent: it must set a fresh `decision` and a full `optOut`.
+
+## Evidence-file convention
+
+Captured telemetry lands under `.specify/runtime/observability/<workflow>.<signal>.{txt,json}` (trace/log evidence may stay line-oriented text; SLO evidence is normalized JSON). Two stores, non-duplicative:
+
+- `.specify/runtime/tool-calls.jsonl` — provenance that the capture command ran (MCP `record_evidence`).
+- `.specify/runtime/observability/<workflow>.<signal>.json` — the parsed metric artifact the SLO guard reads (an *output* of the captured run, never a second source of truth).
+
+`.specify/runtime/` is gitignored.
+
+## Acceptance heuristic — "3 AM reconstructibility"
+
+For a wired, instrumented scope (a Test Plan row declaring `observabilityWorkflow`), the DoD item *"telemetry captured in integration/e2e"* (Gate G080) is satisfied only when the captured trace passes the **3 AM reconstructibility** question:
+
+> *Could an on-call engineer, paged at 3 AM with nothing but this trace, reconstruct the full story of what the workflow did and where it broke — without reading the source?*
+
+If the answer is no — spans are missing, attributes that name the actor / resource / outcome are absent, or the failure point is ambiguous — the instrumentation is insufficient and the DoD item stays `[ ]`, regardless of whether the SLO numbers happen to pass. This is the human acceptance bar behind G080; the `trace-contract-guard.sh` check is the mechanical floor beneath it, and the G100 SLO guard asserts the numeric target on top. See [`scope-workflow.md`](../../agents/bubbles_shared/scope-workflow.md) → "Observability DoD Injection (MUST-when-wired)".
 
 ## Verification
 
@@ -76,12 +123,14 @@ bash bubbles/scripts/observability-adapter-lint.sh
 
 If you add a third adapter (e.g. `sentry.sh`), the lint discovers it via the `*.sh` glob. No registry update needed.
 
-## Reference adapters shipped in v5
+## Reference adapters
 
 | Adapter | Verbs | Env vars |
 |---------|-------|----------|
-| `none` | all 4 return `{}` | — |
-| `prometheus` | all 4 query Prometheus HTTP API | `PROMETHEUS_BASE_URL`, `PROMETHEUS_CURL_MAX_TIME`, `PROMETHEUS_QUERY_SLO_BURN`, `PROMETHEUS_QUERY_ERROR_RATE`, `PROMETHEUS_QUERY_DEPLOY_IMPACT` (all required; no defaults), `PROMETHEUS_BEARER_TOKEN` (optional secret) |
+| `none` | `fetch-alerts` returns `[]`; `fetch-slo-burn` / `fetch-error-rate` / `fetch-deploy-impact` return `{}` | — |
+| `prometheus` | all 4 query Prometheus HTTP API (`fetch-alerts` normalized to a bare array) | `PROMETHEUS_BASE_URL`, `PROMETHEUS_CURL_MAX_TIME`, `PROMETHEUS_QUERY_SLO_BURN`, `PROMETHEUS_QUERY_ERROR_RATE`, `PROMETHEUS_QUERY_DEPLOY_IMPACT` (all required; no defaults), `PROMETHEUS_BEARER_TOKEN` (optional secret) |
+
+> **Canonical per-verb shapes (shipped):** `fetch-alerts` → JSON **array** (`[]` when empty); `fetch-slo-burn` / `fetch-error-rate` / `fetch-deploy-impact` → JSON **map** (`{}` when empty). These shapes are defined in [`docs/guides/CONTROL_PLANE_SCHEMAS.md`](../../docs/guides/CONTROL_PLANE_SCHEMAS.md), enforced per-verb by `observability-adapter-lint.sh`, and already implemented in `none.sh` and `prometheus.sh` (the `fetch-alerts` array-vs-map split landed in IMP-001 SCOPE-3a). The earlier "all 4 return `{}`" behavior is superseded.
 
 ## Failure semantics
 

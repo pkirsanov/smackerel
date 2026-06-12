@@ -110,4 +110,25 @@ def deploy():
 EOF
 assert_pass "framework *selftest.sh not self-matched (glob dot-escaping)"
 
+# 8. ADVERSARIAL telemetry isolation (SCOPE-3 T3.6): an in-test env=prod
+#    telemetry WRITE must BLOCK (the scan still protects prod monitoring). This
+#    proves the guard fails on a real test-to-prod-telemetry regression.
+reset_tmp
+cat > "$TMP/tests/telemetry_prod_test.py" <<'EOF'
+def test_emits_prod_telemetry():
+    # Pushing a metric tagged env="prod" from test code is forbidden.
+    push_metric("gateway.request.p99", env="prod")
+EOF
+assert_fail "env=prod telemetry write blocked" 'prod'
+
+# 9. ADVERSARIAL telemetry isolation (SCOPE-3 T3.6): the SAME write tagged
+#    env=test MUST pass — the validate plane writes only to env=test* surfaces.
+reset_tmp
+cat > "$TMP/tests/telemetry_test_env_test.py" <<'EOF'
+def test_emits_test_telemetry():
+    # The validate-plane test stack uses env="test*" labels — allowed.
+    push_metric("gateway.request.p99", env="test")
+EOF
+assert_pass "env=test telemetry write allowed"
+
 echo "All env-pollution-scan selftests passed."

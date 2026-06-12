@@ -27,6 +27,7 @@ handoffs:
 - Align design to repo conventions and governance; do not invent defaults or unsupported behavior.
 - **Design testable behaviors** — every design decision must produce behavior that can be tested from the user/consumer perspective. If a behavior can't be tested as a user scenario, redesign it.
 - **Include testing strategy** — design.md must describe how each major feature will be validated (which test types, what user scenarios)
+- **Record complexity justification** — every design.md MUST include a `## Complexity Tracking` section; if the design introduces no deviation from the simplest viable approach, record `None — simplest viable approach used.`, otherwise add one row per deviation with the simpler alternative considered and why it was rejected
 - Model reusable capabilities foundation-first when `capability-foundation.md` proportionality triggers apply; satisfy DE4 before finalizing design.md
 - **Auto-detect analysis depth** — if spec.md contains `## Actors & Personas` and `## UI Wireframes` sections (analyst + UX output), automatically use `from-analysis` depth to produce contract-grade design.md
 - Reconcile stale design sections before adding new architecture, contract, or rollout decisions; active design must expose one current truth
