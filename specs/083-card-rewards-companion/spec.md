@@ -1,12 +1,15 @@
 # Feature: 083 Card Rewards Companion
 
-**Status:** Specs Hardened (planning-only; ceiling per state.json `product-to-planning`)
+**Status:** In Progress — delivered + deployed to home-lab; certification PERMITTED and pending the bubbles.goal checkpoint commit (state-transition-guard Checks 17 + G088 close on that commit; see state.json + report.md)
 
-> **Planning-only notice.** This feature folder was produced by the
-> `product-to-planning` workflow (analyst → ux → design → plan → harden).
-> It stops at the `specs_hardened` ceiling. NO implementation code, NO
-> migration, NO config edits, and NO feature-flag bundle edits have been
-> made. Delivery is a separate, later workflow.
+> **Delivery notice.** This feature was planned by the `product-to-planning`
+> workflow (analyst → ux → design → plan → harden) and then DELIVERED by the
+> `full-delivery` workflow: all 11 scopes implemented and tested;
+> migration `057_card_rewards.sql` applied; and the feature deployed to the
+> home-lab host (E08 live-Ollama inference proven on the deployed sidecar). The
+> standalone CCManager app is retired. All content certification gates pass; the
+> final certification status flip is owned by the bubbles.goal checkpoint commit.
+> See `state.json` and `report.md` for the execution evidence.
 
 > **Absorption notice.** This feature folds the standalone **CCManager**
 > app (`~/CCManager` — single-user Python/Flask credit-card
