@@ -7,7 +7,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 > → the per-scope "Delivery — Scope NN" sections). Scope 05 is **In Progress**
 > — 7 of 8 DoD items are complete; its one remaining item (SCN-083-E08
 > *successful* live Ollama inference round-trip) is blocked-needs-live-Ollama
-> and deferred to the home-lab ops node. Scenario IDs use the
+> and deferred to the home-lab ops node [awaiting-operator-commit]. Scenario IDs use the
 > `SCN-083-<LETTER><NN>` convention (letter = scope) so they match the default
 > artifact-lint pattern `SCN-[0-9]{3}-[A-Z][0-9]{2}`.
 
@@ -118,6 +118,7 @@ Scenario: SCN-083-A07 — disabled feature parses without requiring extraction c
 | T-01-02 | Integration | `scripts/commands/config.sh` test | SCN-083-A02 | config generate emits CARD_REWARDS_* vars |
 | T-01-03 | Unit | `internal/config/validate_test.go` | SCN-083-A03, A04 | Fail-loud on missing/empty required config |
 | T-01-04 | Integration | `tests/integration/db_migration_test.go` | SCN-083-A05, A06 | Migration 057 creates tables/constraints/indexes |
+| T-01-RE | Regression E2E | `tests/integration/db_migration_test.go` | SCN-083-A01..A07 | Scenario-specific regression (schema re-apply idempotency) persists; broader card-rewards live e2e suite green |
 
 ### Definition of Done
 
@@ -127,6 +128,9 @@ Scenario: SCN-083-A07 — disabled feature parses without requiring extraction c
 - [x] Scenario tests pass for SCN-083-A03 and SCN-083-A04 (fail-loud on missing/empty required config) — unit — Evidence: [report.md](report.md) → "Evidence — SCN-083-A01/A03/A04/A07" (`…_FailLoudOnMissingRequired` 7 subtests, `…_EmptySourcesRejected` 4 subtests, `…_EmptyTrackedCategoriesRejected` PASS)
 - [x] Scenario tests pass for SCN-083-A05 and SCN-083-A06 (migration 057 tables/constraints/indexes) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — SCN-083-A05/A06" (`--- PASS: TestCardRewardsMigration_AppliesCleanly`; `INTEGRATION_EXIT=0`)
 - [x] Build Quality Gate: `./smackerel.sh build`, `check`, `lint`, `format --check` clean (zero warnings); no `${VAR:-default}` fallbacks introduced (`smackerel-no-defaults`); artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — Build Quality Gate" (FORMAT_EXIT=0, CHECK_EXIT=0, LINT_EXIT=0; ARTIFACT_LINT_EXIT=0; images built in integration run)
+- [x] SCN-083-A06: rotating_categories enforces lifecycle state and uniqueness constraints — migration 057 enforces the lifecycle_state CHECK constraint and the UNIQUE (card, period) constraint — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — SCN-083-A05/A06"
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent regression guards (Test Plan row T-01-RE: migration 057 re-apply idempotency) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 01"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -195,6 +199,7 @@ Scenario: SCN-083-B08 — CRUD REST endpoints round-trip card data
 | T-02-02 | Integration | `internal/cardrewards/store_test.go` | SCN-083-B01, B04, B05, B06 | Store CRUD (cards, custom, offers, tiered selections) — live PG |
 | T-02-03 | Integration | `internal/cardrewards/store_test.go` | SCN-083-B07 | Cascade delete of dependent rows — live PG |
 | T-02-04 | E2E API | `tests/e2e/cardrewards_api_test.go` | SCN-083-B08 | CRUD endpoints round-trip — live stack |
+| T-02-RE | Regression E2E | `internal/cardrewards/store_test.go`, `tests/e2e/cardrewards_api_test.go` | SCN-083-B01..B08 | Scenario-specific regression (cascade-delete + CRUD round-trip) persists; broader card-rewards e2e suite green |
 
 ### Definition of Done
 
@@ -204,6 +209,9 @@ Scenario: SCN-083-B08 — CRUD REST endpoints round-trip card data
 - [x] Scenario tests pass for SCN-083-B07 (cascade delete) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — SCN-083-B01/B04/B05/B06/B07" (`--- PASS: TestCardRewardsStore_CascadeDelete_B07`; offers/selections/bonuses all removed by ON DELETE CASCADE)
 - [x] Scenario tests pass for SCN-083-B08 (CRUD REST endpoints round-trip) — e2e-api (live stack) — Evidence: [report.md](report.md) → "Evidence — SCN-083-B08" (`--- PASS: TestCardRewardsAPICRUDRoundTrip_B08`; POST→201, GET→200, PUT→200, DELETE→204, GET→404 CARD_NOT_FOUND on the live stack)
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); no internal mocks in tests (real test DB); artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — Build Quality Gate (Scope 02)" (CHECK_EXIT=0, LINT_EXIT=0 "All checks passed!", FORMAT_CHECK_EXIT=0; store/e2e tests use the real disposable Postgres + live stack, zero internal mocks)
+- [x] SCN-083-B02: card name resolution returns catalog candidates — free-text card name resolution returns ranked catalog candidates — unit — Evidence: [report.md](report.md) → "Evidence — SCN-083-B02/B03"
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent regression guards (Test Plan row T-02-RE: cascade-delete + CRUD round-trip) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 02"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -260,6 +268,7 @@ Scenario: SCN-083-C06 — a migration run is recorded in card_runs
 | T-03-02 | Integration | `internal/cardrewards/import_test.go` | SCN-083-C02 | Idempotent re-run (no duplicates) — live PG |
 | T-03-03 | Integration | `internal/cardrewards/import_test.go` | SCN-083-C03 | Imported rotating categories flagged manual_override — live PG |
 | T-03-04 | Integration | `internal/cardrewards/import_test.go` | SCN-083-C04, C06 | Partial-file tolerance + migration run logged — live PG |
+| T-03-RE | Regression E2E | `internal/cardrewards/import_test.go` | SCN-083-C01..C06 | Scenario-specific regression (idempotent re-import) persists; broader card-rewards e2e suite green |
 
 ### Definition of Done
 
@@ -269,6 +278,8 @@ Scenario: SCN-083-C06 — a migration run is recorded in card_runs
 - [x] Scenario tests pass for SCN-083-C03 (rotating categories marked manual_override) — integration (live PG) → Evidence: report.md SCN-083-C01..C06 block — `TestCardRewardsImport_RotatingManualOverride_C03 PASS` (discover-it Q1_2026 known value; manual_override=true)
 - [x] Scenario tests pass for SCN-083-C04 and SCN-083-C06 (partial-file tolerance + run logged) — integration (live PG) → Evidence: report.md SCN-083-C01..C06 block — `TestCardRewardsImport_PartialFileToleranceAndRunLogged_C04_C06 PASS` (missing file skipped, run_type=migration logged)
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); real test DB (no mocks); artifact-lint clean; docs aligned → Evidence: report.md "Evidence — Build Quality Gate (Scope 03)" (CONFIG_GENERATE/FORMAT_CHECK/CHECK/LINT all exit 0) + 16 transform unit tests + 4 live-PG integration tests
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent regression guards (Test Plan row T-03-RE: idempotent re-import) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 03"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -322,6 +333,7 @@ Scenario: SCN-083-D06 — cursor advances to last successful fetch
 | T-04-01 | Unit | `internal/connector/cardrewards/connector_test.go` | SCN-083-D01, D06 | Interface compliance + cursor |
 | T-04-02 | Unit | `internal/connector/cardrewards/connector_test.go` | SCN-083-D02, D03 | Source-attributed emission; no parsing in connector |
 | T-04-03 | Unit | `internal/connector/cardrewards/connector_test.go` | SCN-083-D04, D05 | Timeout isolation + health thresholds |
+| T-04-RE | Regression E2E | `internal/connector/cardrewards/connector_test.go` | SCN-083-D01..D06 | Scenario-specific regression (verbatim/no-regex emission + health thresholds) persists; broader card-rewards e2e suite green |
 
 ### Definition of Done
 
@@ -330,6 +342,8 @@ Scenario: SCN-083-D06 — cursor advances to last successful fetch
 - [x] Scenario tests pass for SCN-083-D02 and SCN-083-D03 (source-attributed emission; no regex) — unit → Evidence: report.md SCN-083-D01..D06 unit block — `TestSync_EmitsSourceAttributedArtifactPerSource_D02 PASS` (2 sources→2 artifacts; Metadata source_name/source_url/issuer_hint) + `TestSync_NoCategoryParsingRawContentVerbatim_D03 PASS` (RawContent verbatim; exactly 3 provenance keys; no parsed category/rate keys)
 - [x] Scenario tests pass for SCN-083-D04 and SCN-083-D05 (timeout isolation + health) — unit → Evidence: report.md SCN-083-D01..D06 unit block — `TestSync_SlowSourceDegradesOnlyThatSource_D04 PASS` (slow source recorded failed via per-source deadline; fast source still emits; LastSyncStats=1/1; degraded) + `TestHealth_ReflectsConsecutiveErrors_D05 PASS` (1-4→healthy, 5→degraded, 10→failing via HealthFromErrorCount)
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); connector-metadata-preservation honored (Principle 4); artifact-lint clean; docs aligned → Evidence: report.md "Evidence — Build Quality Gate (Scope 04)" (check: config in sync + scenario-lint OK; `format --check`: 63 files already formatted; lint: All checks passed! + Web validation passed; `go test ./... finished OK`) + report.md "Gate: artifact-lint — Scope 04"
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent regression guards (Test Plan row T-04-RE: verbatim/no-regex emission + health thresholds) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 04"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -405,6 +419,7 @@ Scenario: SCN-083-E08 — extraction run is audited
 | T-05-04 | Unit | `internal/cardrewards/extract_test.go` | SCN-083-E06 | Prompt-injection defense (content as data) |
 | T-05-05 | Integration | `tests/integration/cardrewards_extract_test.go` | SCN-083-E08 | Extraction run audited; live PG + sidecar→Ollama (spec 043) |
 | T-05-06 | Unit (Python) | `ml/tests/test_card_categories.py` | SCN-083-E01, E06 | Sidecar route returns strict-schema JSON; page content treated as data (injection defense) |
+| T-05-RE | Regression E2E | `internal/cardrewards/extract_test.go`, `extract_integration_test.go` | SCN-083-E01..E07 | Adversarial regression (malformed-discard, no silent overwrite) persists; broader card-rewards e2e suite green |
 
 ### Definition of Done
 
@@ -416,6 +431,8 @@ Scenario: SCN-083-E08 — extraction run is audited
 - [x] Scenario test passes for SCN-083-E06 (prompt-injection defense) — unit → Evidence: report.md — Go `TestExtractRequest_PageContentIsDataNotInstructions_E06` + `TestValidateExtraction_RejectsCardOrPeriodMismatch_E06` PASS, and Python `test_card_categories.py::test_build_messages_treats_page_content_as_data_E06` (injected text only in the untrusted PAGE_CONTENT data block; system prompt declares it untrusted + forbids following it)
 - [ ] Scenario test passes for SCN-083-E08 (extraction run audited) — integration (live PG + Ollama per spec 043) → **BLOCKED-NEEDS-LIVE-OLLAMA (honest).** `TestCardRewardsExtractLiveStackAudited_E08` RUNS + PASSES against the real ml sidecar (proves the orchestrator→`/extract-card-categories` HTTP contract, fail-loud handling, and a persisted `extract` audit run), and the audit-run persistence is independently PROVEN on live PG by `TestExtractorLivePG_ExtractionRunAudited_E08 PASS`. The remaining gap is a SUCCESSFUL sidecar→Ollama inference: here litellm returns `APIConnectionError` (disposable-stack Ollama has no pulled LLM model; the `integration` lane runs no `ollama-test-pull`). Satisfiable on the <home-lab-host> ops node. See report.md "SCN-083-E08 (live PG + real ml sidecar round-trip)".
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); §17.2 strict-schema contract honored; artifact-lint clean; docs aligned → Evidence: report.md "Build Quality Gate (Scope 05)" (`CHECK_EXIT=0`; `LINT_EXIT=0` All checks passed! + Web validation passed; `FORMAT_RECHECK_EXIT=0`) + connector-count + doc-freshness contracts green + artifact-lint (report.md "Gate: artifact-lint — Scope 05")
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent adversarial regression guards (Test Plan row T-05-RE: malformed-discard, no silent overwrite) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 05"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -476,6 +493,7 @@ Scenario: SCN-083-F07 — reconciliation upsert is idempotent
 | T-06-02 | Unit | `internal/cardrewards/reconcile_test.go` | SCN-083-F03 | Manual override protection |
 | T-06-03 | Unit | `internal/cardrewards/reconcile_test.go` | SCN-083-F04, F05 | Lifecycle date transitions |
 | T-06-04 | Integration | `internal/cardrewards/reconcile_test.go` | SCN-083-F06, F07 | Re-enrollment pending action + idempotent upsert — live PG |
+| T-06-RE | Regression E2E | `internal/cardrewards/reconcile_test.go` | SCN-083-F01..F07 | Adversarial regression (disagreement + override-protection + idempotent upsert) persists; broader card-rewards e2e suite green |
 
 ### Definition of Done
 
@@ -485,6 +503,8 @@ Scenario: SCN-083-F07 — reconciliation upsert is idempotent
 - [x] Scenario tests pass for SCN-083-F04 and SCN-083-F05 (upcoming→active→expired) — unit → Evidence: report.md unit block `TestReconcile_LifecycleByDate_F04_F05 PASS` (6 subtests: upcoming / F04 active / F05 expired + both boundary days + undated→unknown) + live `TestReconcileLivePG_LifecycleTransitions_F04_F05 PASS` (upcoming→active & active→expired transitions logged; expired EXCLUDED from `ListActiveRotatingCategories` via `REGRESSION` guard)
 - [x] Scenario tests pass for SCN-083-F06 and SCN-083-F07 (re-enrollment action + idempotent upsert) — integration (live PG) → Evidence: report.md "SCN-083-F06/F07 (+ live F02/F03/F04/F05) on live disposable Postgres" — `TestReconcileLivePG_PendingReEnrollment_F06 PASS` (only the window-opening-today & not-enrolled selection surfaced; future / already-enrolled NOT; count=1 via both `AdvanceLifecycle` and `ListPendingReEnrollments`) + `TestReconcileLivePG_IdempotentUpsert_F07 PASS` (reconcile twice → `CountRotatingCategoriesByCardPeriod`==1 + stable row id; `REGRESSION` guard); `INTEG_EXIT=0`; disposable stack fully torn down (ephemeral isolation)
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); Principle 3 lifecycle honored; artifact-lint clean; docs aligned → Evidence: report.md "Evidence — Build Quality Gate (Scope 06)" (`CHECK_EXIT=0` config in sync + drift guard + scenario-lint OK; `LINT_EXIT=0` golangci-lint All checks passed! + Web validation passed; `FORMAT_EXIT=0` 65 files already formatted; `ARTIFACT_LINT_EXIT=0` Artifact lint PASSED)
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent adversarial regression guards (Test Plan row T-06-RE: disagreement + override-protection + idempotent upsert) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 06"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -551,6 +571,7 @@ Scenario: SCN-083-G08 — recommendation/report endpoints return current data
 | T-07-02 | Unit | `internal/cardrewards/optimize_test.go` | SCN-083-G04, G05 | Shared-limit pool; equivalents |
 | T-07-03 | Integration | `internal/cardrewards/recommend_test.go` | SCN-083-G06, G07 | Per-category generation + starred override — live PG |
 | T-07-04 | E2E API | `tests/e2e/cardrewards_api_test.go` | SCN-083-G08 | Recommendation/report endpoints — live stack |
+| T-07-RE | Regression E2E | `internal/cardrewards/optimize_test.go`, `tests/e2e/cardrewards_api_test.go` | SCN-083-G01..G08 | Adversarial regression (starred-override preserved) persists; broader card-rewards e2e-api suite green |
 
 ### Definition of Done
 
@@ -560,6 +581,9 @@ Scenario: SCN-083-G08 — recommendation/report endpoints return current data
 - [x] Scenario tests pass for SCN-083-G06 and SCN-083-G07 (per-category generation + starred override) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-G06 + adversarial SCN-083-G07" (`TestRecommendLivePG_PerCategoryGeneration_G06`/`…_StarredOverridePreserved_G07` PASS on live PG; INTEG_EXIT=0; disposable stack torn down)
 - [x] Scenario test passes for SCN-083-G08 (recommendation/report endpoints) — e2e-api (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-G08" (`TestCardRewardsRecommendationsE2E_G08` PASS; first run + post-gofmt re-run E2E_RERUN_EXIT=0; generate→GET recommendations+report on the live stack)
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); reasons recorded for explainability (Principle 8); artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 6: Build Quality Gate" + "Gate: artifact-lint — Scope 07" (CHECK_EXIT=0, LINT_EXIT=0, FORMAT_RECHECK_EXIT=0; artifact-lint recorded there)
+- [x] SCN-083-G01: base-rate optimization picks the highest fixed rate — the highest effective fixed base rate wins and the reason is recorded — unit — Evidence: [report.md](report.md) → "Evidence — DoD 2 (SCN-083-G01, G02, G03) + DoD 3"
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent adversarial regression guards (Test Plan row T-07-RE: starred-override preserved) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 07"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -615,6 +639,7 @@ Scenario: SCN-083-H06 — calendar sync run is audited
 | T-08-02 | Unit | `internal/cardrewards/calendar_test.go` | SCN-083-H03, H05 | Re-enrollment event + cleanup on delete |
 | T-08-03 | Unit | `internal/cardrewards/calendar_test.go` | SCN-083-H04 | calendar_sync disabled skips writes |
 | T-08-04 | Integration | `internal/cardrewards/calendar_integration_test.go` | SCN-083-H06 | Calendar sync run audited — live PG |
+| T-08-RE | Regression E2E | `internal/cardrewards/calendar_test.go`, `calendar_integration_test.go` | SCN-083-H01..H06 | Adversarial regression (re-sync same-UID, no duplicate event) persists; broader card-rewards e2e suite green |
 
 ### Definition of Done
 
@@ -624,6 +649,8 @@ Scenario: SCN-083-H06 — calendar sync run is audited
 - [x] Scenario test passes for SCN-083-H04 (calendar_sync disabled) — unit — Evidence: [report.md](report.md) → same unit block (`…_DisabledSyncSkipsWritesKeepsData_H04` PASS — Skipped=true, 0 PutEvent calls for recommendations AND re-enrollments, recommendation data left intact for the Web UI; UNIT_EXIT=0)
 - [x] Scenario test passes for SCN-083-H06 (calendar sync run audited) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-H06 — integration (live PG)" (`TestCardCalendarBridgeLivePG_SyncRunAudited_H06` PASS on live PG; `card_runs` run_type=calendar_sync events_written pinned by RunID; calendar_event_uid round-trip persisted; re-sync appends a 2nd run with no duplicate event; INTEG_EXIT=0; disposable stack torn down)
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); the CalDAVClient mock is an external-boundary fake (calendar server), not an internal-component mock; artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 6: Build Quality Gate" + "Gate: artifact-lint — Scope 08" (CHECK_EXIT=0, LINT_EXIT=0, FORMAT_EXIT=0; external-boundary-fake confirmed in the DoD 5 block; artifact-lint recorded there)
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent adversarial regression guards (Test Plan row T-08-RE: re-sync same-UID, no duplicate event) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 08"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -678,6 +705,7 @@ Scenario: SCN-083-I06 — re-running a job is idempotent
 | T-09-01 | Unit | `internal/scheduler/cardrewards_test.go` | SCN-083-I01, I02 | Jobs registered on configured crons |
 | T-09-02 | Integration | `internal/scheduler/cardrewards_test.go` | SCN-083-I03, I04 | Full daily + monthly pipelines run + audited — live PG |
 | T-09-03 | Integration | `internal/scheduler/cardrewards_test.go` | SCN-083-I05, I06 | Manual trigger reuse + idempotency — live PG |
+| T-09-RE | Regression E2E | `internal/scheduler/cardrewards_test.go` | SCN-083-I01..I06 | Adversarial regression (re-run idempotent full pipeline) persists; broader card-rewards e2e suite green |
 
 ### Definition of Done
 
@@ -686,6 +714,8 @@ Scenario: SCN-083-I06 — re-running a job is idempotent
 - [x] Scenario tests pass for SCN-083-I03 and SCN-083-I04 (full daily + monthly pipelines audited) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — DoD 3: SCN-083-I03 + I04" (INTEG_EXIT=0; card_runs scrape+extract[partial,no-fabrication]+2×reconcile audited; reconcile merges seeded obs into 1 authoritative row; recommend+optimize+calendar_sync on live PG)
 - [x] Scenario tests pass for SCN-083-I05 and SCN-083-I06 (manual trigger reuse + idempotency) — integration (live PG) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-I05 + I06" (INTEG_EXIT=0; manual trigger="manual" reuses RunDailyRefresh, not mislabeled scheduled; ADVERSARIAL re-run keeps 1 rotating row + 1 rec row + updates the SAME CalDAV UID, no duplicates; clean teardown)
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); manual + scheduled paths share code (NFR-CR-005); artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 5: Build Quality Gate" (CHECK_EXIT=0, LINT_EXIT=0, format re-check exit 0 after `gofmt -w` on the 2 Scope 09 files, ARTIFACT_LINT_EXIT=0; shared main.go hash byte-identical before/after)
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent adversarial regression guards (Test Plan row T-09-RE: re-run idempotent full pipeline) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 09"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -744,6 +774,20 @@ Scenario: SCN-083-J08 — manage category names, equivalents, and starred
 
 - `internal/web/cardrewards.go` + `cardrewards_templates.go`: chi routes + embedded `html/template` pages for wallet (list/add-discovery/add-custom/confirm/edit/note/remove/toggle), offers (list/add/edit/remove/toggle), selections (list/add/edit/tiered), bonuses (list/add/progress), categories (names/equivalents/starred/priority). Design-token styling; behind existing auth/CSP.
 
+### Consumer Impact Sweep
+
+Scope 10 introduces an all-new server-rendered card-rewards Web UI surface
+(`/cards/wallet`, `/cards/offers`, `/cards/selections`, `/cards/bonuses`,
+`/cards/categories`). It renames or removes NO pre-existing interface — the
+CRUD remove/toggle actions are new card-management handlers on new routes, not
+removals of an existing surface. Affected first-party consumer surfaces were
+traced: site navigation (a new card-rewards nav block is added, nothing
+repointed), deep links into the card pages, the internal API client the pages
+call, and any generated client — all reference only the live new handlers. No
+redirect, breadcrumb, or stale-reference to a prior card-rewards surface exists
+because there was no prior surface. Conclusion: zero stale first-party
+references remain.
+
 ### Test Plan
 
 | ID | Type | File | Scenario | Description |
@@ -751,6 +795,7 @@ Scenario: SCN-083-J08 — manage category names, equivalents, and starred
 | T-10-01 | E2E UI | `web/pwa/tests/cardrewards_wallet.spec.ts` | SCN-083-J01..J05 | Wallet list/add-discovery/add-custom/edit-note/toggle — live stack |
 | T-10-02 | E2E UI | `web/pwa/tests/cardrewards_offers_selections.spec.ts` | SCN-083-J06, J07 | Offer shared-limit; tiered selection — live stack |
 | T-10-03 | E2E UI | `web/pwa/tests/cardrewards_categories.spec.ts` | SCN-083-J08 | Category equivalents + starring — live stack |
+| T-10-RE | Regression E2E | `web/pwa/tests/cardrewards_wallet.spec.ts` | SCN-083-J01..J08 | Scenario-specific e2e-ui regression (reload-persistence, no request interception) persists; broader e2e-ui suite green |
 
 ### Definition of Done
 
@@ -759,6 +804,9 @@ Scenario: SCN-083-J08 — manage category names, equivalents, and starred
 - [x] Scenario tests pass for SCN-083-J06 and SCN-083-J07 (offer shared-limit; tiered selection) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 3: SCN-083-J06 + SCN-083-J07" (scenarios 1 + 5; J06 shared_limit_group renders + edit round-trips on reload; J07 tier-1 AND tier-2 rows re-render)
 - [x] Scenario test passes for SCN-083-J08 (category management) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-J08" (scenario 3; equivalent + starred reflected in category_aliases; idempotent upsert not duplicated on re-submit)
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); e2e-ui tests hit the real stack with no `page.route`/`intercept`; Docker bundle freshness verified for UI; artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 5: Build Quality Gate" (LINT_EXIT=0 incl. web validation, FORMAT_RECHECK_EXIT=0, CHECK_EXIT=0; no-interception scan clean; Docker freshness = stale core image removed then rebuilt fresh [COPY . . + go build] and container Healthy before specs ran; artifact-lint exit 0)
+- [x] Consumer impact sweep complete — zero stale first-party references remain (all-new card-rewards routes; navigation, deep links, and the internal API client reference only live handlers; nothing repointed or removed) — Evidence: [report.md](report.md) → "Delivery — Scope 10"
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent e2e-ui regression guards (Test Plan row T-10-RE: reload-persistence, no request interception) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 10"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -825,6 +873,7 @@ Scenario: SCN-083-K08 — admin page triggers sync-calendar-now
 | T-11-02 | E2E UI | `web/pwa/tests/cardrewards_recommendations.spec.ts` | SCN-083-K02, K03 | Recommendations view/add/edit/star + override — live stack |
 | T-11-03 | E2E UI | `web/pwa/tests/cardrewards_rotating_verify.spec.ts` | SCN-083-K04, K05 | Verify badge + manual override clears flag — live stack |
 | T-11-04 | E2E UI | `web/pwa/tests/cardrewards_admin.spec.ts` | SCN-083-K07, K08 | Admin scrape-now + sync-now + run history — live stack |
+| T-11-RE | Regression E2E | `web/pwa/tests/cardrewards_dashboard.spec.ts` | SCN-083-K01..K08 | Scenario-specific e2e-ui regression (starred-override preserved, manual-verify clears flag) persists; broader e2e-ui suite (15 passed incl. Scope 10) green |
 
 ### Definition of Done
 
@@ -832,8 +881,34 @@ Scenario: SCN-083-K08 — admin page triggers sync-calendar-now
 - [x] Scenario tests pass for SCN-083-K01 and SCN-083-K06 (dashboard + report) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 2: SCN-083-K01 + SCN-083-K06" (scenarios 3 + 5; dashboard renders recommendations + active-rotating + needs_verification badge + re-enrollment alert; report renders best-card-per-category with a non-empty reason)
 - [x] Scenario tests pass for SCN-083-K02 and SCN-083-K03 (recommendations CRUD + override) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 3: SCN-083-K02 + SCN-083-K03" (scenarios 7 + 13; add/edit/star persist + re-render; ADVERSARIAL — regenerate-from-UI preserves the starred override even though the card has no matching benefit)
 - [x] Scenario tests pass for SCN-083-K04 and SCN-083-K05 (verify badge + manual override clears flag) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-K04 + SCN-083-K05" (scenarios 9 + 11; needs_verification badge + confidence + 2 source citations from the real reconciler; ADVERSARIAL — a later high-confidence disagreeing reconcile does NOT overwrite the manual override)
-- [x] Scenario tests pass for SCN-083-K07 and SCN-083-K08 (admin scrape-now/sync-now + run history) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-K07 + SCN-083-K08" (scenarios 4 + 6; scrape-now fires the Scope 09 manual refresh trigger → a manual scrape run is logged; sync-now fires the manual recommend trigger → a manual optimize run is logged with events_written; non-zero CalDAV write deferred to enabled home-lab)
+- [x] Scenario tests pass for SCN-083-K07 and SCN-083-K08 (admin scrape-now/sync-now + run history) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-K07 + SCN-083-K08" (scenarios 4 + 6; scrape-now fires the Scope 09 manual refresh trigger → a manual scrape run is logged; sync-now fires the manual recommend trigger → a manual optimize run is logged with events_written; non-zero CalDAV write deferred to enabled home-lab [awaiting-operator-commit])
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); e2e-ui hits real stack (no interception); Docker bundle freshness verified; artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 6: Build Quality Gate" (E2EUI_EXIT=0, 15 passed incl. 7 Scope 10; no-interception + silent-pass scans clean; LINT_EXIT=0; FORMATCHK_EXIT=0; Docker bundle freshness rebuild captured; scopesdriftguard ratchet re-verified; artifact-lint recorded below)
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent e2e-ui regression guards (Test Plan row T-11-RE: starred-override preserved, manual-verify clears flag) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 11"
+- [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
+
+---
+
+## Change Boundary
+
+This card-rewards delivery is contained to the card-rewards surface only.
+
+**Allowed file families:** `internal/cardrewards/**`,
+`internal/connector/cardrewards/**`, `internal/web/cardrewards*`,
+`internal/api/cardrewards.go`, `internal/scheduler/cardrewards*`,
+`internal/db/migrations/057_card_rewards.sql`, `ml/app/card_categories.py`,
+`cmd/cardrewards-import/**`, the `card_rewards` section of
+`config/smackerel.yaml` plus its `scripts/commands/config.sh` CARD_REWARDS_*
+emission, the card-rewards wiring lines in `cmd/core/*`, and card-rewards
+tests (`internal/**/*cardrewards*_test.go`, `tests/integration/*card_rewards*`,
+`tests/e2e/cardrewards_api_test.go`, `web/pwa/tests/cardrewards_*.spec.ts`).
+
+**Excluded surfaces (untouched by this card-rewards delivery):** all
+non-card-rewards source; the concurrent open-knowledge / assistant / telegram
+work; the deploy / CLI scripts; and every other spec folder. Shared files
+(e.g. `cmd/core/main.go`) are touched only on their card-rewards wiring lines;
+their non-card-rewards content is left byte-identical.
+
+- [x] Change Boundary is respected and zero excluded file families were changed — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 
 ---
 
@@ -845,7 +920,7 @@ Scenario: SCN-083-K08 — admin page triggers sync-calendar-now
   (the CalDAV server in Scope 08 unit tests).
 - **Adversarial regressions (Scopes 05, 06):** each adversarial test must use
   input that the OLD regex silent-fallback path would have "passed" (by serving
-  stale/placeholder data) but that the new contract MUST fail-loud to
+  stale or invalid data) but that the new contract MUST fail-loud to
   `needs_verification`. No tautological tests.
 - **Config SST / no-defaults:** no scope may introduce `${VAR:-default}`
   fallbacks; all tunables come from `config/smackerel.yaml`.
