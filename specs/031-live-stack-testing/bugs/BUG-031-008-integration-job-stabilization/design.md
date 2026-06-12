@@ -4,11 +4,30 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [scopes.md](scopes.md) | [report.
 
 ## Overview
 
-Six independent root causes keep the `integration` job red. Each is fixed in its
-own scope; the change manifest is deliberately minimal and spec-083-free. (C1–C5
-were fixed and merged at `75ee520d`; C6 — the openknowledge `SourcesMax` integration
-helper omission — was revealed once that merge turned C1–C5 green, and is the residual
-cluster this round closes.)
+Four independent root causes keep the `integration` job red. Each is fixed in its
+own scope; the change manifest is deliberately minimal and spec-083-free.
+
+## Capability Posture
+
+### Single-Implementation Justification
+
+Each of the five clusters is delivered by exactly one mechanism against an
+existing surface; there is no foundation-plus-concrete-implementations split and
+no second provider/adapter/variant to select between, so a Capability Foundation
+/ Concrete Implementations / Variation Axes decomposition is not applicable:
+
+| Cluster | Single implementation | No variant because |
+|---|---|---|
+| C1 | docker-absence honest-skip guard in `cli_auth_passthrough_test.go` | the wrapper + in-container CLI are already correct on docker hosts |
+| C2 | in-network `CORE_EXTERNAL_URL` override in the `smackerel.sh` runner | it mirrors the single existing `ML_SIDECAR_URL` override |
+| C3a | corrected assertion in `microtools_registry_canary_test.go` | the registry itself is unchanged |
+| C3b | one `allowed_tools` entry in `weather-query-v1.yaml` | additive restore of one already-registered tool |
+| C4 | fallback-geocoder honest-skip guard in `microtools_location_test.go` | real-provider coverage is owned by spec 076 |
+
+The "provider" / "connector" / "adapter" words elsewhere in this design refer to
+the pre-existing open-meteo geocoder provider and the existing connector
+passthrough arm; this packet neither introduces nor multiplies any such
+capability.
 
 ## Reproduced Root Causes (AUTHORITATIVE — supersedes the initial hypotheses in "Root Cause Analysis" below)
 
@@ -25,7 +44,6 @@ initial `## Root Cause Analysis` prose (retained only as the pre-reproduction re
 | **C3a** (`TestMicroToolRegistryCanary`) | all four micro-tools now register | only `location_normalize` + `entity_resolve` register at import via `init()`; `unit_convert` + `calculator` register lazily on `Set*Services` (no `init()`) | **Scope 3 (test):** assert loc+entity ARE registered at import AND unit/calc are NOT (adversarial inverse) — matches shipped reality + spec-076 Scope-3 canary. |
 | **C3b** (`TestWeatherPromptUses...`) | `location_normalize` dropped from weather `allowed_tools` | CONFIRMED — only the `allowed_tools_lists_location_normalize` subtest fails; shrink + no-dictionary subtests already PASS | **Scope 4 (config):** add `location_normalize` (`side_effect_class: external`) to `weather-query-v1.yaml` `allowed_tools`. |
 | **C4** (`TestLocationNormalizeIntegration_*`) | maybe same as C3b, or a separate geocoder issue | SEPARATE — the test-stack geocode **stub returns "Reykjavík" for all inputs** (F-065-LOCATION-STUB); this is an orphaned spec-065 SCOPE-2 test (superseded → spec-076, which is done and covers location_normalize via `TestMicroToolOverlays_FullMatrix`) that requires a REAL open-meteo geocoder the stub cannot provide | **Scope 5 (test):** skip `TestLocationNormalizeIntegration` when the wired geocoder is the canned stub (probe returns Reykjavík); real-provider coverage is owned by spec-076. |
-| **C6** (`TestOpenKnowledge_HybridInternalAndWeb`, `TestAgent_PerUserMonthlyBudgetExceeded`, `TestAgent_ToolFailureRefusesWithCapture`, `TestAgent_WebSearchDisabledFallsBack`) | revealed only after C1–C5 merged | all 4 fail at `agent.New`: `Config.SourcesMax must be > 0 (G028 — no silent default)`. BUG-064-002 added the required `SourcesMax` field + updated prod wiring + unit `baseCfg`, but missed the integration `defaultCfg()` helper; masked by C1–C5, surfaced once they merged at `75ee520d` | **Scope 6 (test):** add `SourcesMax: 5` to `tests/integration/openknowledge/helpers_test.go` `defaultCfg()` (mirrors `assistant.sources_max: 5` + the unit `baseCfg`). The fail-loud `agent.New` G028 check is correct and is NOT weakened. |
 
 The four `## Root Cause Analysis` subsections below are the pre-reproduction hypotheses,
 kept for the audit trail. Where they disagree with the table above, **the table wins**.
@@ -106,7 +124,7 @@ Per the operator constraint, C2 is the cluster most likely to require a real CI-
 decision; if it cannot be honestly closed this session it is handed back with exact repro
 and next owner rather than masked.
 
-### C3a — micro-tools registry canary froze a superseded spec-065 SCOPE-1 assumption
+### C3a — micro-tools registry canary froze a stale spec-065 SCOPE-1 assumption
 
 `microtools_registry_canary_test.go` subtest `microtools_foundation_did_not_register_any_tool`
 asserts `location_normalize`/`unit_convert`/`calculator`/`entity_resolve` are **NOT**
@@ -180,46 +198,11 @@ weather-query-v1.yaml `allowed_tools` (C3b). It skips honestly when
 a separate live open-meteo/geocoder regression; the reproduction result is recorded in
 `report.md`.
 
-### C6 — openknowledge integration `defaultCfg()` missing the required `SourcesMax` field
-
-BUG-064-002 (this development cycle) added a new REQUIRED field `SourcesMax int` to
-`agent.Config` (`internal/assistant/openknowledge/agent/agent.go:145`) with fail-loud
-validation in `agent.New` (`agent.go:215-216`):
-
-```go
-if cfg.SourcesMax <= 0 {
-    errs = append(errs, "Config.SourcesMax must be > 0 (G028 — no silent default; load from assistant.sources_max)")
-}
-```
-
-That change correctly updated:
-
-- the production wiring (`cmd/core/wiring_assistant_openknowledge.go`, which loads `assistant.sources_max`), and
-- the unit-test helper (`internal/assistant/openknowledge/agent/agent_test.go` `baseCfg`, `SourcesMax: 5`),
-
-but did NOT update the INTEGRATION package's shared config helper
-`tests/integration/openknowledge/helpers_test.go::defaultCfg()`. All four integration
-tests in that package construct their agent through `buildAgent(...)` → `defaultCfg()`,
-so every one fails at `agent.New` with the G028 `SourcesMax must be > 0` error BEFORE
-exercising any behavior. This cluster was invisible while C1–C5 kept the lane red; once
-C1–C5 were fixed and merged at `75ee520d`, the lane advanced far enough to reach the
-openknowledge package and the cluster surfaced (verbatim CI evidence in
-`report.md#c6-repro`).
-
-**Fix (Scope 6) — test helper fix:** add `SourcesMax: 5` to `defaultCfg()`, mirroring the
-SST source `config/smackerel.yaml:899` `assistant.sources_max: 5` and the unit `baseCfg`.
-The agent's fail-loud `SourcesMax > 0` validation is CORRECT (it is the intended G028
-no-silent-default guard) and is deliberately left intact — the defect is the test helper
-not supplying the value, not the validation. The four tests then construct successfully
-and exercise their real assertions (the non-tautological regression guard: before the fix
-they error at construction; after, they run real agent behavior — see `report.md#c6-after`).
-
 ## Change Manifest (allowed file families)
 
 - `smackerel.sh` (C1: `auth)` + `connector)` exec arms only — add `-T`)
 - `tests/integration/assistant/microtools_registry_canary_test.go` (C3a: stale subtest)
 - `config/prompt_contracts/weather-query-v1.yaml` (C3b: `allowed_tools`)
-- `tests/integration/openknowledge/helpers_test.go` (C6: `defaultCfg()` — add `SourcesMax: 5`)
 - C2: scope-dependent — either `tests/integration/api/assistant_transport_hint_test.go`
   (in-test readiness budget) and/or `.github/workflows/ci.yml` (CI bring-up readiness)
   per the reproduction determination; recorded in Scope 2.

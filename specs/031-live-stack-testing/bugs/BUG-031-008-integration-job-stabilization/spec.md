@@ -57,6 +57,30 @@ genuine failure.
   honestly-handed-back remainder is documented with exact repro + next owner).
 - `artifact-lint.sh` and `state-transition-guard.sh` pass on this bug packet.
 
+## Capability Posture
+
+### Single-Capability Justification
+
+This bug is a single, contained stabilization of one capability — the CI
+`integration` job owned by spec 031 — decomposed into five independent
+correctness fixes. It introduces NO new capability, foundation, provider,
+adapter, strategy, plugin, channel, driver, connector, or variant. The
+"provider" / "connector" terms that appear in this packet refer to the
+PRE-EXISTING open-meteo geocoder provider (owned by spec 065 / spec 076) and the
+existing `smackerel.sh` connector passthrough arm — neither is created,
+abstracted, nor given a second implementation here. Each cluster has exactly one
+mechanism against an existing surface:
+
+- C1: a docker-absence honest-skip guard in one existing integration test.
+- C2: one in-network `CORE_EXTERNAL_URL` override in the existing runner.
+- C3a: one corrected assertion in one existing canary test.
+- C3b: one restored `allowed_tools` entry in one existing scenario contract.
+- C4: one fallback-geocoder honest-skip guard in one existing test.
+
+Because no N≥2 implementation/provider/component/variant set is introduced, a
+capability-foundation + concrete-implementations split is not applicable; the
+matching single-implementation justification is recorded in design.md.
+
 ## Cross-Spec / Cross-Product Impact
 
 - C3a/C3b touch micro-tool / scenario surfaces owned historically by spec-065

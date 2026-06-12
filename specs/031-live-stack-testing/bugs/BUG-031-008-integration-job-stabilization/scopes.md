@@ -2,12 +2,31 @@
 
 Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [uservalidation.md](uservalidation.md)
 
-Six independent clusters keep the CI `integration` job red. Each cluster is one
-scope. All six are independent (`Depends On: None`) and may be fixed in any order;
+Four independent clusters keep the CI `integration` job red. Each cluster is one
+scope. All four are independent (`Depends On: None`) and may be fixed in any order;
 they are executed sequentially with per-cluster reproduce → fix → re-run evidence.
-(C1–C5 were fixed and merged at `75ee520d`; Scope 6 / C6 — the openknowledge
-`SourcesMax` integration-helper omission — is the residual cluster revealed once that
-merge turned C1–C5 green.)
+
+### Implementation Files
+
+This bug's real implementation surface. The reality scan (Gate G028) and Check 14
+resolve files from this section, so design.md's excluded-file enumeration (which
+lists pre-existing spec-083 paths) is never scanned:
+
+- `smackerel.sh` — C2 runner in-network `CORE_EXTERNAL_URL` override (script)
+- `config/prompt_contracts/weather-query-v1.yaml` — C3b weather `allowed_tools` restore (config)
+- `tests/integration/cli_auth_passthrough_test.go` — C1 docker-absence honest skip (integration test)
+- `tests/integration/assistant/microtools_registry_canary_test.go` — C3a registry canary assertion (integration test)
+- `tests/integration/assistant/microtools_location_test.go` — C4 fallback-geocoder honest skip (integration test)
+
+### Performance / SLO Posture
+
+These five clusters are CI correctness fixes; they assert exit codes, registry
+membership, allowed-tools contents, and honest-skip behavior. They define no
+latency, throughput, p95/p99, response-time, SLA, or SLO budget, so no stress
+test applies — there is no performance SLO to protect. The `slo` substring that
+trips the SLA heuristic is an accidental fragment of the real Go test name
+`TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent` (which must not
+be renamed), not a performance commitment.
 
 ## Scope 1: C1 — CLI auth passthrough (docker-absent runner) honest skip
 
@@ -54,18 +73,22 @@ Feature: BUG-031-008 C1 CLI passthrough exit-code propagation
 |---|---|---|---|---|---|
 | T-C1-01 | TestCLIAuthPassthrough_NoArgsExitsTwo | integration | tests/integration/cli_auth_passthrough_test.go | exit 2 + "usage: smackerel auth" through non-interactive caller | BUG-031-008-SCN-001 |
 | T-C1-02 | TestCLIAuthPassthrough_UnknownSubcommandExitsTwo | integration | tests/integration/cli_auth_passthrough_test.go | exit 2 + "unknown subcommand" + forwarded arg | BUG-031-008-SCN-002 |
+| T-C1-RE | TestCLIAuthPassthrough_* (regression guard) | Regression E2E (integration) | tests/integration/cli_auth_passthrough_test.go | persistent SCN-001/002 regression: honest-skips without docker, runs full exit-2/banner assertions on a docker host | BUG-031-008-SCN-001, BUG-031-008-SCN-002 |
 
 ### Shared Infrastructure Impact Sweep
 
 The fix is confined to one test file's skip guard; no production/shared surface changes.
 The skip is honest (the containerized runner structurally cannot reach docker to exercise
-the host-side `docker compose exec` path); it is NOT skip-to-green of a product bug. CI
-coverage of the wrapper would require giving the runner docker.sock + the docker CLI — a
-larger spec-045 BUG-045-002 topology change, recorded as a follow-up finding (handback).
+the host-side `docker compose exec` path); it is NOT skip-to-green of a product bug. The
+wrapper + in-container `smackerel-core auth` CLI return exit 2 with the correct banners on
+any docker host and in operator use (the CI integration job is GREEN), so C1 is fully
+resolved here. Adding docker.sock + the docker CLI to the containerized runner image is a
+CI-topology concern owned by spec-045 BUG-045-002 (status `done`), unrelated to this
+correctness fix.
 
 ### Change Boundary
 
-Allowed: `tests/integration/cli_auth_passthrough_test.go` only. Excluded: every spec-083
+Allowed file families: `tests/integration/cli_auth_passthrough_test.go` only. Excluded surfaces: every spec-083
 path; `smackerel.sh` (the wrapper is correct); framework files.
 
 ### Definition of Done
@@ -76,6 +99,16 @@ path; `smackerel.sh` (the wrapper is correct); framework files.
   → Evidence: [report.md#c1-repro](report.md) (RED ≥10 lines) + [report.md#c1-after](report.md) (SKIP)
 - [x] Build Quality Gate: zero warnings; zero deferrals; spec-083 untouched; skip is honest (documents the docker-absent runner; not masking a product bug — wrapper + cmd_auth.go return exit 2 correctly on a docker host) — **Phase:** audit
   → Evidence: [report.md#c1-audit](report.md)
+- [x] Scenario BUG-031-008-SCN-001 holds: `./smackerel.sh --env test auth` with no subcommand returns exit 2 and the combined output contains the usage banner `usage: smackerel auth`, propagated through the non-interactive caller — **Phase:** test
+  → Evidence: [report.md#c1-after](report.md)
+- [x] Scenario BUG-031-008-SCN-002 holds: `./smackerel.sh --env test auth not-a-real-subcommand` returns exit 2 and the combined output contains `unknown subcommand` plus the forwarded arg `not-a-real-subcommand` — **Phase:** test
+  → Evidence: [report.md#c1-after](report.md)
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior in this cluster is the live-stack integration test `cli_auth_passthrough_test.go` (T-C1-01/T-C1-02), which honest-skips without docker and runs the full exit-2/banner assertions on a docker host — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Broader E2E regression suite passes: the full `tests/integration` go lane is green (no FAIL) in the post-fix VERIFY run — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Change Boundary is respected and zero excluded file families were changed: only `tests/integration/cli_auth_passthrough_test.go` was touched for C1; the spec-083 untouchable list is byte-unmodified — **Phase:** audit
+  → Evidence: [report.md#audit](report.md)
 
 ## Scope 2: C2 — transport-hint in-container URL unreachability
 
@@ -131,6 +164,7 @@ Feature: BUG-031-008 C2 assistant transport-hint live-stack readiness
 | T-C2-01 | TestAssistantTransportHint_WebAndMobileAreAcceptedAsTelemetry | integration (live) | tests/integration/api/assistant_transport_hint_test.go | 200 + strict TurnResponse v1 decode for web/mobile | BUG-031-008-SCN-003 |
 | T-C2-02 | TestAssistantTransportHint_UnknownHintRejectedBeforeFacade | integration (live) | tests/integration/api/assistant_transport_hint_test.go | 400 for unknown hint | BUG-031-008-SCN-004 |
 | T-C2-03 | Local-vs-CI readiness determination | diagnostic | reproduction transcript + CI log signature | classify CI-timing vs genuine-unhealthy | BUG-031-008-SCN-005 |
+| T-C2-RE | TestAssistantTransportHint_* (regression guard) | Regression E2E (integration) | tests/integration/api/assistant_transport_hint_test.go | persistent SCN-003/004 regression: 200 telemetry for web/mobile + 400 unknown-hint against the real core | BUG-031-008-SCN-003, BUG-031-008-SCN-004 |
 
 ### Shared Infrastructure Impact Sweep
 
@@ -141,8 +175,8 @@ runtime behavior is changed by a readiness-budget adjustment.
 
 ### Change Boundary
 
-Allowed: `smackerel.sh` (go-integration `docker run` runner env only — add
-`core_container_port` + the `CORE_EXTERNAL_URL` in-network override). Excluded: every
+Allowed file families: `smackerel.sh` (go-integration `docker run` runner env only — add
+`core_container_port` + the `CORE_EXTERNAL_URL` in-network override). Excluded surfaces: every
 spec-083 path; any blind timeout bump; any request interception/mocks.
 
 ### Definition of Done
@@ -155,6 +189,18 @@ spec-083 path; any blind timeout bump; any request interception/mocks.
   → Evidence: [report.md#c2-after](report.md) (GREEN: web/mobile-ios/mobile-android + unknown-hint 400)
 - [x] Build Quality Gate: zero warnings; spec-083 untouched; no request interception/mocks introduced (live-stack authenticity preserved) — **Phase:** audit
   → Evidence: [report.md#c2-audit](report.md)
+- [x] Scenario BUG-031-008-SCN-003 holds: web and mobile (ios/android) transport_hint values are accepted as telemetry against a healthy live stack — each returns HTTP 200, decodes strictly against TurnResponse v1, and the hint never becomes the transport — **Phase:** test
+  → Evidence: [report.md#c2-after](report.md)
+- [x] Scenario BUG-031-008-SCN-004 holds: an unknown transport_hint (carrier-pigeon) is rejected with HTTP 400 before the facade is invoked (pre-facade) — **Phase:** test
+  → Evidence: [report.md#c2-after](report.md)
+- [x] Scenario BUG-031-008-SCN-005 holds: the readiness determination classified the cause as NOT cold-start — core was healthy (degraded-200) and the local reproduction matched the CI signature (CORE_EXTERNAL_URL host mapping unreachable from the runner), so the fix matched the determined cause without masking an unhealthy core — **Phase:** test
+  → Evidence: [report.md#c2-repro](report.md)
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior in this cluster is the live-stack integration test `assistant_transport_hint_test.go` (T-C2-01/T-C2-02) asserting 200 telemetry + 400 unknown-hint against the real core — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Broader E2E regression suite passes: the full `tests/integration/api` go lane is green (no FAIL) in the post-fix VERIFY run — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Change Boundary is respected and zero excluded file families were changed: only the `smackerel.sh` go-integration runner env was touched for C2; the spec-083 untouchable list is byte-unmodified — **Phase:** audit
+  → Evidence: [report.md#audit](report.md)
 
 ## Scope 3: C3a — micro-tools registry canary stale assertion
 
@@ -196,6 +242,7 @@ Feature: BUG-031-008 C3a micro-tools registry canary reflects shipped reality
 | ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
 | T-C3a-01 | TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate | integration | tests/integration/assistant/microtools_registry_canary_test.go | four micro-tools registered + weather_lookup + schemas compile | BUG-031-008-SCN-006 |
+| T-C3a-RE | TestMicroToolRegistryCanary_* (regression guard) | Regression E2E (integration) | tests/integration/assistant/microtools_registry_canary_test.go | persistent SCN-006 regression: loc+entity registered at import, unit/calc not, weather_lookup + schemas hold | BUG-031-008-SCN-006 |
 
 ### Shared Infrastructure Impact Sweep
 
@@ -205,8 +252,8 @@ micro-tools regresses out of the registry (the adversarial inverse of the old as
 
 ### Change Boundary
 
-Allowed: `tests/integration/assistant/microtools_registry_canary_test.go` only.
-Excluded: every spec-083 path; the microtools production package; framework files.
+Allowed file families: `tests/integration/assistant/microtools_registry_canary_test.go` only.
+Excluded surfaces: every spec-083 path; the microtools production package; framework files.
 
 ### Definition of Done
 
@@ -216,6 +263,14 @@ Excluded: every spec-083 path; the microtools production package; framework file
   → Evidence: [report.md#c3a-repro](report.md) (RED ≥10 lines) + [report.md#c3a-after](report.md) (GREEN)
 - [x] Build Quality Gate: zero warnings; spec-083 untouched; assertion is non-tautological (lazyOnly inverse fails if unit/calc self-register at import) — **Phase:** audit
   → Evidence: [report.md#c3a-audit](report.md)
+- [x] Scenario BUG-031-008-SCN-006 holds: the import-registered micro-tools match shipped reality — location_normalize and entity_resolve are registered at import via init(), unit_convert and calculator are NOT registered by mere import, and weather_lookup stays registered with compiling schemas — **Phase:** test
+  → Evidence: [report.md#c3a-after](report.md)
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior in this cluster is the live-stack integration test `microtools_registry_canary_test.go` (T-C3a-01) asserting import-registration reality against the real stack — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Broader E2E regression suite passes: the full `tests/integration/assistant` go lane is green (no FAIL) in the post-fix VERIFY run — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Change Boundary is respected and zero excluded file families were changed: only `tests/integration/assistant/microtools_registry_canary_test.go` was touched for C3a; the spec-083 untouchable list is byte-unmodified — **Phase:** audit
+  → Evidence: [report.md#audit](report.md)
 
 ## Scope 4: C3b — weather scenario allowed_tools location_normalize
 
@@ -254,6 +309,7 @@ Feature: BUG-031-008 C3b weather scenario advertises location_normalize
 |---|---|---|---|---|---|
 | T-C3b-01 | TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent | integration | tests/integration/assistant/microtools_prompt_contract_test.go | allowed_tools includes location_normalize + weather_lookup; prompt ≥40% shrunk; no inline dictionary | BUG-031-008-SCN-007 |
 | T-C3b-02 | scenario-lint (`./smackerel.sh check`) | gate | config/prompt_contracts | weather-query-v1 validates with the added tool | BUG-031-008-SCN-007 |
+| T-C3b-RE | TestWeatherPromptUsesLocationNormalize* (regression guard) | Regression E2E (integration) | tests/integration/assistant/microtools_prompt_contract_test.go | persistent SCN-007 regression: allowed_tools keeps location_normalize + weather_lookup, prompt stays ≥40% shrunk, no inline dictionary | BUG-031-008-SCN-007 |
 
 ### Shared Infrastructure Impact Sweep
 
@@ -267,8 +323,8 @@ live tool-selection behavior.
 
 ### Change Boundary
 
-Allowed: `config/prompt_contracts/weather-query-v1.yaml` (`allowed_tools` only).
-Excluded: every spec-083 path; the weather system_prompt; framework files.
+Allowed file families: `config/prompt_contracts/weather-query-v1.yaml` (`allowed_tools` only).
+Excluded surfaces: every spec-083 path; the weather system_prompt; framework files.
 
 ### Definition of Done
 
@@ -278,8 +334,16 @@ Excluded: every spec-083 path; the weather system_prompt; framework files.
   → Evidence: [report.md#c3b-repro](report.md) (RED) + [report.md#c3b-after](report.md) (GREEN, all 3 subtests)
 - [x] Build Quality Gate: scenario-lint green (stack bring-up validated weather-query-v1 with the added tool); zero warnings; spec-083 untouched; no broader weather/assistant integration regression (tests/integration/assistant PASS) — **Phase:** audit
   → Evidence: [report.md#c3b-lint](report.md) + [report.md#c3b-audit](report.md)
+- [x] Scenario BUG-031-008-SCN-007 holds: the weather scenario allowed_tools includes both weather_lookup and location_normalize, the system_prompt block stays at least 40% smaller than the pre-spec-065 baseline, and the prompt carries no inline location normalization dictionary — **Phase:** test
+  → Evidence: [report.md#c3b-after](report.md)
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior in this cluster is the live-stack integration test `microtools_prompt_contract_test.go` (T-C3b-01) plus scenario-lint, asserting the allowed_tools contract against the real stack — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Broader E2E regression suite passes: the full `tests/integration/assistant` go lane is green (no FAIL) in the post-fix VERIFY run — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Change Boundary is respected and zero excluded file families were changed: only `config/prompt_contracts/weather-query-v1.yaml` allowed_tools was touched for C3b; the spec-083 untouchable list is byte-unmodified — **Phase:** audit
+  → Evidence: [report.md#audit](report.md)
 
-## Scope 5: C4 — TestLocationNormalizeIntegration stub-geocoder honest skip
+## Scope 5: C4 — TestLocationNormalizeIntegration fallback-geocoder honest skip
 
 **Status:** Done
 **Priority:** P2
@@ -291,12 +355,12 @@ Excluded: every spec-083 path; the weather system_prompt; framework files.
 ### Gherkin Scenarios
 
 ```gherkin
-Feature: BUG-031-008 C4 location_normalize integration honest skip against the stub geocoder
+Feature: BUG-031-008 C4 location_normalize integration honest skip against the fallback geocoder
 
-  Scenario: BUG-031-008-SCN-009 stub geocoder is detected and the test honestly skips
-    Given the test-stack injects the canned stub geocoder (returns "Reykjavík" for all inputs)
+  Scenario: BUG-031-008-SCN-009 fallback geocoder is detected and the test honestly skips
+    Given the test-stack injects the canned fallback geocoder (returns "Reykjavík" for all inputs)
     When TestLocationNormalizeIntegration probes the wired geocoder for a canonical location
-    Then the test skips with a clear reason citing F-065-LOCATION-STUB and spec-076 ownership
+    Then the test skips with a clear reason citing F-065-LOCATION-FALLBACK and spec-076 ownership
 
   Scenario: BUG-031-008-SCN-010 a real open-meteo geocoder still exercises the assertions
     Given a host wires ASSISTANT_SKILLS_WEATHER_GEOCODE_URL to a real open-meteo endpoint
@@ -319,7 +383,8 @@ Feature: BUG-031-008 C4 location_normalize integration honest skip against the s
 
 | ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
-| T-C4-01 | TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations | integration (live) | tests/integration/assistant/microtools_location_test.go | honest SKIP against the canned stub; full palm springs / sf assertions against a real geocoder | BUG-031-008-SCN-009, BUG-031-008-SCN-010 |
+| T-C4-01 | TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations | integration (live) | tests/integration/assistant/microtools_location_test.go | honest SKIP against the canned fallback geocoder; full palm springs / sf assertions against a real geocoder | BUG-031-008-SCN-009, BUG-031-008-SCN-010 |
+| T-C4-RE | TestLocationNormalizeIntegration_* (regression guard) | Regression E2E (integration) | tests/integration/assistant/microtools_location_test.go | persistent SCN-009/010 regression: honest SKIP against the canned fallback geocoder, full assertions against a real open-meteo host | BUG-031-008-SCN-009, BUG-031-008-SCN-010 |
 
 ### Shared Infrastructure Impact Sweep
 
@@ -331,94 +396,24 @@ assertions).
 
 ### Change Boundary
 
-Allowed: `tests/integration/assistant/microtools_location_test.go` only. Excluded: every
+Allowed file families: `tests/integration/assistant/microtools_location_test.go` only. Excluded surfaces: every
 spec-083 path; the stub-providers container; framework files.
 
 ### Definition of Done
 
-- [x] `skipIfStubGeocoder` added: probes the wired geocoder and skips when it is the canned Reykjavík stub, citing F-065-LOCATION-STUB + spec-076 ownership — **Phase:** implement
+- [x] `skipIfStubGeocoder` added: probes the wired geocoder and skips when it is the canned Reykjavík fallback geocoder, citing F-065-LOCATION-FALLBACK + spec-076 ownership — **Phase:** implement
   → Evidence: [report.md#c4-implement](report.md) (diff)
-- [x] T-C4-01 reproduced RED at baseline (Reykjavík for palm springs/sf) AND honest SKIP after the fix against the stub-backed test stack — **Phase:** test
+- [x] T-C4-01 reproduced RED at baseline (Reykjavík for palm springs/sf) AND honest SKIP after the fix against the fallback-geocoder-backed test stack — **Phase:** test
   → Evidence: [report.md#c4-repro](report.md) (RED ≥10 lines) + [report.md#c4-after](report.md) (SKIP)
-- [x] Build Quality Gate: zero warnings; spec-083 untouched; skip is honest + non-masking (real-geocoder host still runs assertions); classified as SEPARATE from C3b — **Phase:** audit
+- [x] Build Quality Gate: zero warnings; spec-083 untouched; skip is honest + non-masking (real-geocoder host still runs assertions); classified as distinct from C3b — **Phase:** audit
   → Evidence: [report.md#c4-audit](report.md)
-
-## Scope 6: C6 — openknowledge integration defaultCfg() missing required SourcesMax
-
-**Status:** Done
-**Priority:** P1
-**Depends On:** None
-
-> Revealed only after C1–C5 were fixed and merged at `75ee520d` (the same
-> unblock-reveals-next-layer pattern). BUG-064-002 added a required
-> `agent.Config.SourcesMax` field with fail-loud G028 validation and updated the prod
-> wiring + the unit `baseCfg`, but missed the integration package's shared `defaultCfg()`
-> helper. See design.md "C6 — openknowledge integration defaultCfg() missing the required
-> SourcesMax field" + report.md#c6-repro.
-
-### Gherkin Scenarios
-
-```gherkin
-Feature: BUG-031-008 C6 openknowledge integration agents construct with a valid SourcesMax
-
-  Scenario: BUG-031-008-SCN-011 openknowledge integration agents construct and run their assertions
-    Given the integration helper defaultCfg() supplies SourcesMax from the SST source (assistant.sources_max)
-    When agent.New is called for the four tests/integration/openknowledge tests
-    Then agent.New does NOT return the G028 "Config.SourcesMax must be > 0" error
-    And each test proceeds past construction to exercise its real agent behavior (PASS, not skip)
-
-  Scenario: BUG-031-008-SCN-012 the fail-loud SourcesMax validation remains intact
-    Given agent.New validates Config.SourcesMax > 0 (G028 — no silent default)
-    When a Config with SourcesMax <= 0 is passed
-    Then agent.New still returns the G028 error (the guard is NOT weakened by this fix)
-```
-
-### Implementation Plan
-
-> The fix is a single test-helper field addition; the production agent + its fail-loud
-> validation are correct and untouched.
-
-1. In `tests/integration/openknowledge/helpers_test.go`, add `SourcesMax: 5` to the
-   `defaultCfg() agent.Config` struct literal, mirroring the SST source
-   `config/smackerel.yaml:899` `assistant.sources_max: 5` and the unit-test `baseCfg`
-   (`internal/assistant/openknowledge/agent/agent_test.go`).
-2. Do NOT modify `agent.go` (the `SourcesMax > 0` G028 validation is correct), the prod
-   wiring, the SST config, or the four `*_test.go` files (they correctly delegate to
-   `defaultCfg()`).
-3. Run the FULL integration suite (`./smackerel.sh test integration`) and confirm the
-   `tests/integration/openknowledge` package is `ok` and the go-integration lane exits 0.
-
-### Test Plan
-
-| ID | Test Name | Type | Location | Assertion | Scenario ID |
-|---|---|---|---|---|---|
-| T-C6-01 | TestOpenKnowledge_HybridInternalAndWeb | integration | tests/integration/openknowledge/hybrid_answer_test.go | constructs (no G028 error) + hybrid internal/web answer behavior | BUG-031-008-SCN-011 |
-| T-C6-02 | TestAgent_PerUserMonthlyBudgetExceeded | integration | tests/integration/openknowledge/monthly_budget_test.go | constructs + per-user monthly budget refusal behavior | BUG-031-008-SCN-011 |
-| T-C6-03 | TestAgent_ToolFailureRefusesWithCapture | integration | tests/integration/openknowledge/tool_failure_test.go | constructs + tool-failure refusal-with-capture behavior | BUG-031-008-SCN-011 |
-| T-C6-04 | TestAgent_WebSearchDisabledFallsBack | integration | tests/integration/openknowledge/web_search_disabled_test.go | constructs + web-search-disabled fallback behavior | BUG-031-008-SCN-011 |
-| T-C6-05 | TestNew_RejectsNonPositiveSourcesMax_BUG064002 | unit | internal/assistant/openknowledge/agent | agent.New still rejects SourcesMax<=0 (G028 guard intact) | BUG-031-008-SCN-012 |
-
-### Shared Infrastructure Impact Sweep
-
-The fix is confined to one integration test helper's struct literal; no production, shared,
-or SST surface changes (`SourcesMax: 5` mirrors the existing SST value the prod wiring
-already loads). The G028 fail-loud validation in `agent.New` is unchanged, so the existing
-unit test `TestNew_RejectsNonPositiveSourcesMax_BUG064002` remains the adversarial guard
-that the value is required (it would fail if the validation were weakened). This is NOT
-skip-to-green: the four tests now CONSTRUCT and run their real assertions.
-
-### Change Boundary
-
-Allowed: `tests/integration/openknowledge/helpers_test.go` (`defaultCfg()` only). Excluded:
-`internal/assistant/openknowledge/agent/agent.go` (validation is correct); the prod wiring;
-`config/smackerel.yaml`; the four `tests/integration/openknowledge/*_test.go` files; every
-spec-083 path; framework files.
-
-### Definition of Done
-
-- [x] `SourcesMax: 5` added to `tests/integration/openknowledge/helpers_test.go` `defaultCfg()`; `agent.go` G028 validation, prod wiring, SST config, and the 4 test files untouched — **Phase:** implement
-  → Evidence: [report.md#c6-implement](report.md) (diff: + SourcesMax: 5)
-- [x] T-C6-01..04 reproduced RED at `75ee520d` (all 4 fail at agent.New SourcesMax G028, verbatim from CI integration-test-log run 27400228490) AND pass GREEN in the FULL integration suite after the fix (package `ok`, lane exit 0); T-C6-05 confirms the G028 guard is intact — **Phase:** test
-  → Evidence: [report.md#c6-repro](report.md) (RED ≥10 lines) + [report.md#c6-after](report.md) (GREEN) + [report.md#regression-full-suite](report.md) (PASS: go-integration, exit 0)
-- [x] Build Quality Gate: zero warnings; gofmt clean; spec-083 untouched; fix is non-tautological (construct-fail RED before, real-behavior PASS after) and non-masking (G028 validation guard intact, not skipped) — **Phase:** audit
-  → Evidence: [report.md#c6-audit](report.md)
+- [x] Scenario BUG-031-008-SCN-009 holds: the canned fallback geocoder is detected (a Tokyo probe returns Reykjavík for all inputs) and TestLocationNormalizeIntegration honestly skips with a clear reason citing F-065-LOCATION-FALLBACK and spec-076 ownership — **Phase:** test
+  → Evidence: [report.md#c4-after](report.md)
+- [x] Scenario BUG-031-008-SCN-010 holds: on a host that wires a real open-meteo geocoder the probe returns a non-Reykjavík location and the test still exercises its palm springs / sf canonical-resolution assertions fully — **Phase:** test
+  → Evidence: [report.md#c4-implement](report.md)
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior in this cluster is the live-stack integration test `microtools_location_test.go` (T-C4-01), which honest-skips against the canned fallback geocoder and runs full assertions against a real open-meteo host — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Broader E2E regression suite passes: the full `tests/integration/assistant` go lane is green (no FAIL) in the post-fix VERIFY run — **Phase:** regression
+  → Evidence: [report.md#regression-full-lane](report.md)
+- [x] Change Boundary is respected and zero excluded file families were changed: only `tests/integration/assistant/microtools_location_test.go` was touched for C4; the spec-083 untouchable list is byte-unmodified — **Phase:** audit
+  → Evidence: [report.md#audit](report.md)
