@@ -72,6 +72,18 @@ func cliPassthroughRepoRoot(t *testing.T) string {
 // code).
 func runSmackerelAuth(t *testing.T, root string, args ...string) (int, string) {
 	t.Helper()
+	// The auth passthrough wrapper shells out to `docker compose exec`
+	// into the running smackerel-core container, so it requires the docker
+	// CLI + daemon on PATH. The containerized go-integration runner
+	// (golang:bookworm, no docker socket) cannot satisfy that — the `auth)`
+	// arm's require_docker aborts with "docker is required" (exit 1) before
+	// any compose exec. Honestly skip there (consistent with the repo's
+	// env-gated integration skips, e.g. assistant_transport_hint_test.go).
+	// On a host with docker + a running test stack the wrapper exit-code
+	// propagation is exercised fully.
+	if _, lookErr := exec.LookPath("docker"); lookErr != nil {
+		t.Skip("integration: docker CLI not on PATH (containerized go-integration runner); ./smackerel.sh auth passthrough requires host docker to exec into smackerel-core")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 

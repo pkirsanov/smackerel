@@ -943,6 +943,12 @@ case "$COMMAND" in
         pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
         pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
         ml_sidecar_url="$(smackerel_env_value "$env_file" "ML_SIDECAR_URL")"
+        # C2 (BUG-031-008): this runner joins the compose network, so live
+        # tests must reach core via the in-network service name, NOT the host
+        # port mapping baked into the env-file's CORE_EXTERNAL_URL
+        # (127.0.0.1:PORT, unreachable from inside this container). Mirrors the
+        # ML_SIDECAR_URL=http://smackerel-ml:PORT in-network pattern.
+        core_container_port="$(smackerel_env_value "$env_file" "CORE_CONTAINER_PORT")"
         agent_scenario_dir="$(smackerel_env_value "$env_file" "AGENT_SCENARIO_DIR")"
         # The Go test runner sets CWD per-package, so a repo-relative scenario
         # dir (`config/prompt_contracts`) won't resolve from the test package
@@ -1009,6 +1015,7 @@ case "$COMMAND" in
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           -e "OPEN_KNOWLEDGE_SEARXNG_URL=${searxng_url}" \
           -e "ML_SIDECAR_URL=${ml_sidecar_url}" \
+          -e "CORE_EXTERNAL_URL=http://smackerel-core:${core_container_port}" \
           -e "AGENT_SCENARIO_DIR=${agent_scenario_dir}" \
           -e "AGENT_ROUTING_FALLBACK_SCENARIO_ID=${agent_routing_fallback_scenario_id}" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh "${go_integration_args[@]}"

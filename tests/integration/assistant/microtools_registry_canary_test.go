@@ -77,15 +77,33 @@ func TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate(t *testing.T
 		}
 	})
 
-	t.Run("microtools_foundation_did_not_register_any_tool", func(t *testing.T) {
-		// Scope 1 ships envelope + config only. The four concrete
-		// micro-tools (location_normalize, unit_convert, calculator,
-		// entity_resolve) land in SCOPE-2..4 and MUST go through
-		// agent.RegisterTool when they do.
-		forbidden := []string{"location_normalize", "unit_convert", "calculator", "entity_resolve"}
-		for _, name := range forbidden {
+	t.Run("import_registered_microtools_match_shipped_reality", func(t *testing.T) {
+		// Shipped reality (spec 065 SCOPE-2..4 superseded → spec 076,
+		// which is done): location_normalize and entity_resolve register
+		// at package-import time via init()→agent.RegisterTool so the spec
+		// 037 loader (scenario-lint, cmd/core) recognizes the tool names;
+		// their handlers return *_not_configured until concrete services
+		// are wired. spec 076 Scope-3's own tool_registry_canary asserts
+		// agent.Has for these names. (The original spec 065 SCOPE-1
+		// "envelope-only foundation" assumption that NO concrete tool
+		// registers is stale — it froze a pre-SCOPE-2 state.)
+		importRegistered := []string{"location_normalize", "entity_resolve"}
+		for _, name := range importRegistered {
+			if !agent.Has(name) {
+				t.Errorf("expected %q to be registered at import (init()→RegisterTool); registration regressed", name)
+			}
+		}
+		// unit_convert and calculator register lazily on
+		// SetUnitConvertServices / SetCalculatorServices (no init()), so a
+		// bare microtools import MUST NOT register them. This is the
+		// adversarial inverse of the assertion above: it fails if either
+		// tool starts self-registering at import (which would change the
+		// documented lazy-wiring contract) — proving the test is not
+		// tautological.
+		lazyOnly := []string{"unit_convert", "calculator"}
+		for _, name := range lazyOnly {
 			if agent.Has(name) {
-				t.Errorf("SCOPE-1 must not register %q; concrete tools belong to later scopes", name)
+				t.Errorf("%q must NOT register on bare import; it registers only when its Set*Services wiring runs in cmd/core", name)
 			}
 		}
 	})
