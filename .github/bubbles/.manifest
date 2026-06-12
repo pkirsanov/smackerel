@@ -12,6 +12,8 @@ bubbles/scripts/artifact-freshness-guard.sh
 bubbles/scripts/artifact-lint.sh
 bubbles/scripts/batch-promotion-lint-selftest.sh
 bubbles/scripts/batch-promotion-lint.sh
+bubbles/scripts/capability-consumer-freshness-selftest.sh
+bubbles/scripts/capability-consumer-freshness.sh
 bubbles/scripts/capability-foundation-guard-selftest.sh
 bubbles/scripts/capability-foundation-guard.sh
 bubbles/scripts/capability-freshness-selftest.sh
@@ -101,6 +103,16 @@ bubbles/scripts/model-tier-advisory-selftest.sh
 bubbles/scripts/model-tier-advisory.sh
 bubbles/scripts/observability-adapter-lint-selftest.sh
 bubbles/scripts/observability-adapter-lint.sh
+bubbles/scripts/observability-check-selftest.sh
+bubbles/scripts/observability-check.sh
+bubbles/scripts/observability-endpoint-resolve-selftest.sh
+bubbles/scripts/observability-endpoint-resolve.sh
+bubbles/scripts/observability-opt-out-guard-selftest.sh
+bubbles/scripts/observability-opt-out-guard.sh
+bubbles/scripts/observability-posture-guard-selftest.sh
+bubbles/scripts/observability-posture-guard.sh
+bubbles/scripts/observability-slo-guard-selftest.sh
+bubbles/scripts/observability-slo-guard.sh
 bubbles/scripts/orchestrator-persistence-lint-selftest.sh
 bubbles/scripts/orchestrator-persistence-lint.sh
 bubbles/scripts/orchestrator-tool-frontmatter-lint-selftest.sh
@@ -120,6 +132,7 @@ bubbles/scripts/pre-tool-risk-gate-selftest.sh
 bubbles/scripts/pre-tool-risk-gate.sh
 bubbles/scripts/profile-transition-selftest.sh
 bubbles/scripts/project-scan-setup.sh
+bubbles/scripts/prometheus-adapter-fetch-selftest.sh
 bubbles/scripts/propagation-policy-guard-selftest.sh
 bubbles/scripts/propagation-policy-guard.sh
 bubbles/scripts/registry-consistency-selftest.sh
@@ -229,6 +242,7 @@ bubbles/mcp/resources/tool-call-schema.json
 bubbles/mcp/resources/workflows.json
 bubbles/mcp/server.py
 bubbles/mcp/tools/check_gate.json
+bubbles/mcp/tools/check_observability.json
 bubbles/mcp/tools/list_open_findings.json
 bubbles/mcp/tools/query_tool_log.json
 bubbles/mcp/tools/read_spec.json
@@ -250,6 +264,7 @@ templates/AGENTS.md.tmpl
 templates/agents.md.tmpl
 templates/constitution.md.tmpl
 templates/copilot-instructions.md.tmpl
+templates/observability.yaml.tmpl
 templates/propagation-policy.yaml.tmpl
 templates/release-trains.yaml.tmpl
 templates/terminal-discipline.instructions.md.tmpl
@@ -283,6 +298,7 @@ docs/guides/CONTROL_PLANE_ADOPTION.md
 docs/guides/CONTROL_PLANE_DESIGN.md
 docs/guides/CONTROL_PLANE_ROLLOUT.md
 docs/guides/CONTROL_PLANE_SCHEMAS.md
+docs/guides/EFFECTIVE_PROMPTING.md
 docs/guides/FRAMEWORK_CONCEPTS.md
 docs/guides/INSTALLATION.md
 docs/guides/INTEROP_MIGRATION.md
@@ -504,6 +520,7 @@ instructions/bubbles-env-pollution-isolation.instructions.md
 instructions/bubbles-propagation.instructions.md
 instructions/bubbles-release-trains.instructions.md
 instructions/bubbles-skills.instructions.md
+instructions/bubbles-supply-chain-source-locking.instructions.md
 instructions/bubbles-test-environment-isolation.instructions.md
 instructions/bubbles-upkeep-operations.instructions.md
 skills/bubbles-anti-fabrication/SKILL.md
@@ -535,6 +552,7 @@ skills/bubbles-skill-authoring/SKILL.md
 skills/bubbles-skills-first-discovery/SKILL.md
 skills/bubbles-spec-template-bdd/SKILL.md
 skills/bubbles-status-transition/SKILL.md
+skills/bubbles-supply-chain-source-locking/SKILL.md
 skills/bubbles-test-environment-isolation/SKILL.md
 skills/bubbles-test-integrity/SKILL.md
 skills/bubbles-upkeep-cadence/SKILL.md

@@ -144,45 +144,93 @@ Invariants:
 - complements outcome contracts and tests; it does not replace implementation, E2E, or validation proof
 - analyst-owned Success Signals remain tech-agnostic, while design/test/validate translate them into trace spans, attributes, and invariants when trace proof is useful
 
-### Live Telemetry Endpoints (v5)
+### Observability Posture + Telemetry Endpoints
 
-Extends `traceContracts` with `liveTelemetryEndpoints` — a uniform adapter contract for fetching real production telemetry (alerts, SLO burn, error rate, deploy impact). Mirrors the knb offsite-backup adapter pattern: declarative selection, swappable backends, `none` default.
+`traceContracts` is extended with an `observability` child sub-block (NOT a new top-level key — the existing `^traceContracts:` parser is preserved). It declares the repo's observability *posture*, two-plane telemetry *endpoints*, and env-agnostic *SLO* targets. The posture/SLO guards parse this block directly and are the schema authority.
+
+> **Clean cutover (R2-B):** this `observability.endpoints` model REPLACES the v5 `traceContracts.liveTelemetryEndpoints` flat map. The legacy key had no agent or script consumer (an orphan foundation), so it is deleted outright in the same change — there is no deprecation cycle. Every legacy signal maps to an explicit `endpoints.operate.<signal>` entry.
 
 Schema:
 
 ```yaml
 traceContracts:
-  liveTelemetryEndpoints:
-    alerts: "none"          # adapter name (see bubbles/adapters/observability/)
-    slo-burn: "none"
-    error-rate: "none"
-    deploy-impact: "none"
+  observability:
+    schemaVersion: 1        # guards assert this before semantics; unknown version fails loud
+    posture: wired          # wired | opted-out — REQUIRED (absent = undeclared = nag)
+    policy:
+      undeclaredPosture: warn # warn | block
+    decision:               # REQUIRED for wired + opted-out
+      decidedAt: 2026-06-11
+      decidedBy: operator
+      decisionSource: "bubbles.setup focus: observability"
+      lastReviewedAt: 2026-06-11
+    optOut:                 # REQUIRED iff posture: opted-out
+      reasonCode: no-runtime  # no-runtime | pre-monitoring | external-monitoring-only
+      reason: "framework source repo; nothing to monitor"
+      declaredAt: 2026-06-11
+      revisitAfter: 2027-06-11
+      approvedBy: operator
+    endpoints:              # signal axis (4 verbs); adapter NAMES only, never URLs/tokens
+      validate:             # resolves to the EPHEMERAL per-run test stack (profile: test)
+        alerts: { adapter: none }
+        sloBurn: { adapter: prometheus, profile: test }
+        errorRate: { adapter: prometheus, profile: test }
+        deployImpact: { adapter: none }
+      operate:              # resolves to PROD (real URLs live in the deploy overlay env)
+        alerts: { adapter: prometheus, profile: prod }
+        sloBurn: { adapter: prometheus, profile: prod }
+        errorRate: { adapter: prometheus, profile: prod }
+        deployImpact: { adapter: prometheus, profile: prod }
+    slos:                   # env-agnostic CONTRACT targets
+      gateway.request:
+        latencyP99Ms: 50
+        errorRatePct: 0.1
+        availabilityPct: 99.9
+  workflows:
+    booking.create:
+      requiredSpans:
+        - name: http.request
+          attributes: [trace_id, booking.id]
+      slo: gateway.request  # optional link — ignored by the existing G080 guard, read by the SLO guard
 ```
 
-Available adapters ship under `bubbles/adapters/observability/<name>.sh`:
+**Two planes, one provider adapter, a profile per plane.** A signal is selected per plane:
 
-| Adapter | Verbs supported | Purpose |
-|---------|----------------|---------|
-| `none`       | all 4 return `{}` | Default. No telemetry source wired. |
-| `prometheus` | all 4 query `${PROMETHEUS_BASE_URL}` | Reference adapter. Operator sets the env var. |
+- `endpoints.validate.<signal>` resolves to the ephemeral per-run **test stack** (`profile: test`). Feature scopes use the validate plane only.
+- `endpoints.operate.<signal>` resolves to **prod** (`profile: prod`). Prod telemetry queries are read-only and limited to the wired operate-plane consumers: `bubbles.stabilize` (incident diagnosis), `bubbles.upkeep` (the weekly `slo-review` task), and `bubbles.train` (deploy-impact / SLO burn consulted before promote and as a rollback signal). `bubbles.devops` owns the wiring execution; these three agents only fetch through it.
 
-Adapter contract (every adapter MUST implement all 4 verbs):
+The 4 signals are `alerts`, `sloBurn`, `errorRate`, `deployImpact`. Each value is `{ adapter, profile }`, where `adapter` is a provider **name** matching `bubbles/adapters/observability/<name>.sh`. Adapters ship under that path:
 
-| Verb | Stdout format | Failure mode |
-|------|---------------|--------------|
-| `fetch-alerts`         | JSON array of active alerts | exit 1 on adapter failure (NOT a framework failure) |
-| `fetch-slo-burn`       | JSON map service→burn-rate  | exit 1 on adapter failure |
-| `fetch-error-rate`     | JSON map service→error-pct  | exit 1 on adapter failure |
-| `fetch-deploy-impact`  | JSON map sha→regression-delta | exit 1 on adapter failure |
+| Adapter | Purpose |
+|---------|---------|
+| `none`       | Default. No telemetry source wired (returns the neutral empty value per verb). |
+| `prometheus` | Reference adapter. Queries a Prometheus HTTP API; the operator/overlay sets the env. |
 
-Validated by `bubbles/scripts/observability-adapter-lint.sh`.
+**Normalized adapter payloads.** Adapters normalize provider-specific responses to these per-verb canonical shapes before returning data to Bubbles (the lint/contract tests validate these shapes, NOT raw provider envelopes). The `none` adapter returns the neutral empty value for each verb (`[]` for alerts, `{}` for the maps):
 
-Consumers:
+| Verb | Canonical shape | Neutral (`none`) value |
+|------|-----------------|------------------------|
+| `fetch-alerts`        | JSON **array** of alert objects `{ id, service, severity, startedAt, summary }` | `[]` |
+| `fetch-slo-burn`      | JSON **map** `service.name → burn-rate (float)` | `{}` |
+| `fetch-error-rate`    | JSON **map** `service.name → error-pct (float)` | `{}` |
+| `fetch-deploy-impact` | JSON **map** `sourceSha → { service, regressionDelta }` | `{}` |
 
-- `bubbles.retro target: framework` reads alerts + deploy-impact when adapter ≠ `none`
-- `bubbles.stabilize` (incident-fastlane mode) reads alerts to enrich diagnosis context
+**Profile-to-env binding.** Profile names (`test`, `prod`) are NOT adapter filenames. The plane resolver invokes the provider adapter with profile-specific env materialized into the adapter's native variables. The caller/overlay owns the plane-scoped input env; the resolver maps the selected profile into the adapter-native env. Example for the `prometheus` provider:
 
-When `none` is selected, consumers gracefully skip the live-telemetry enrichment without failing.
+| Plane | Profile | Input env owned by caller/overlay | Adapter subprocess env |
+|-------|---------|-----------------------------------|------------------------|
+| validate | `test` | `BUBBLES_OBS_VALIDATE_PROMETHEUS_BASE_URL`, `BUBBLES_OBS_VALIDATE_PROMETHEUS_QUERY_SLO_BURN`, … | `PROMETHEUS_BASE_URL`, `PROMETHEUS_QUERY_SLO_BURN`, … |
+| operate | `prod` | `BUBBLES_OBS_OPERATE_PROMETHEUS_BASE_URL`, `BUBBLES_OBS_OPERATE_PROMETHEUS_QUERY_SLO_BURN`, … | `PROMETHEUS_BASE_URL`, `PROMETHEUS_QUERY_SLO_BURN`, … |
+
+Resolvers fail loud when the selected profile lacks required env, and a `--plane validate` resolution must not read operate-plane env even when prod env exists.
+
+The reference resolver is `bubbles/scripts/observability-endpoint-resolve.sh`: `--plane <validate|operate> --signal <alerts|sloBurn|errorRate|deployImpact>` reads `endpoints.<plane>.<signal>` and materializes the plane-scoped `BUBBLES_OBS_<PLANE>_PROMETHEUS_*` env into adapter-native `PROMETHEUS_*` env on stdout. A `--plane validate` resolution structurally reads ONLY `endpoints.validate.*` and `BUBBLES_OBS_VALIDATE_*` env (prod-block); missing required profile env fails loud (exit 1); a missing `yq` WARN-and-skips to the neutral `adapter=none`. There is no bypass flag.
+
+**Adapter contract (every adapter implements all 4 verbs):** each verb prints its canonical shape on stdout (exit 0); a `none` exit / parse failure is exit 1 (adapter unavailable — NOT a framework failure). Validated by `bubbles/scripts/observability-adapter-lint.sh`.
+
+**Consumer status.** The adapter layer ships the mechanism, the lint, the selftest, and the docs and is **available for adapter authors today**; the runtime consumer that fetches operate-plane telemetry during ops workflows is wired in a later scope. Do not assume a live `bubbles.retro` / `bubbles.stabilize` consumer exists yet.
+
+**Captured-evidence convention.** Test runs deposit telemetry to `.specify/runtime/observability/<workflow>.<signal>.{txt,json}` (trace/log evidence may stay line-oriented text; SLO evidence is normalized JSON — see `project-config-contract.md`). The MCP `record_evidence` path writes the provenance row to `.specify/runtime/tool-calls.jsonl`; the parsed metric artifact under `.specify/runtime/observability/` is the SLO guard's numeric input. `.specify/runtime/` is gitignored.
 
 ## 1. Agent Capability Registry
 

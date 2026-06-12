@@ -269,6 +269,23 @@ Use [scope-templates.md](scope-templates.md) as the single source of truth for a
 
 ---
 
+## Observability DoD Injection (MUST-when-wired)
+
+When `traceContracts.observability.posture: wired` (see [project-config-contract.md](project-config-contract.md)) **AND** a scope is an *instrumented scope* — its Test Plan declares at least one `observabilityWorkflow: <workflow>` — the Tiered DoD MUST be augmented with the following items, in addition to the normal Core Items:
+
+- **(a) Telemetry captured in integration/e2e** — the workflow's required spans/attributes/invariants are present in captured trace/log evidence (Gate G080). The human acceptance question behind this item is the **"3 AM reconstructibility" heuristic**: *could an on-call engineer, paged at 3 AM with nothing but this trace, reconstruct the full story of what the workflow did and where it broke?* If the answer is no, the instrumentation is insufficient and the item is NOT done.
+- **(b) SLO met under load** — the captured `.specify/runtime/observability/<workflow>.slo.json` MEETS the `traceContracts.observability.slos` target under integration/e2e/stress/load (Gate G100). A contract-declared metric absent from the `observed` block is a breach, not a pass.
+- **(c) Prod-monitoring queryable** — added **ONLY** for `deploy` / `train` / `upkeep` / `incident` / `release` scopes: the operate-plane adapter can fetch alerts / SLO burn / error rate / deploy impact for the workflow against prod. Feature scopes do NOT receive this item (they use the validate plane only; INV-12 keeps the operate plane read-only and limited to ops scopes).
+
+Rules:
+
+- These items are auto-added during planning (`bubbles.plan`) when the scope is instrumented and the repo is wired; `bubbles.implement` records inline evidence; `bubbles.validate` enforces G080 (step 2C.5) and G100 (step 2C.5b).
+- When posture is `opted-out` / undeclared, or the scope declares **no** `observabilityWorkflow`, NONE of these items are injected — the scope's DoD is unchanged and G080/G100 are clean no-ops.
+- **Division of labor with G026 (no double-enforcement):** Gate G026 ensures the stress/load **test EXISTS** and **cites** the `traceContracts.observability.slos` registry entry (a Test-Plan + DoD concern); item **(b)** asserts the **captured evidence MEETS** the target (G100). Do not author the same assertion as two competing DoD items.
+- A wired **service-bearing** instrumented scope MUST plan its span topology *before* implementing — see the OPTIONAL `### Trace Topology` section in the `design.md` template ([feature-templates.md](feature-templates.md)), which is REQUIRED for exactly these scopes.
+
+---
+
 ## Artifact Cross-Linking (MANDATORY)
 
 All generated documents MUST include links to related artifacts:

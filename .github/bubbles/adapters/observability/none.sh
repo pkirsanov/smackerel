@@ -1,22 +1,33 @@
 #!/usr/bin/env bash
 # bubbles/adapters/observability/none.sh — no-op telemetry adapter.
 #
-# Default adapter when no live telemetry source is wired. All verbs return
-# empty JSON objects (`{}`) and exit 0. Consumers that depend on telemetry
-# enrichment MUST gracefully skip when the adapter returns empty.
+# Default adapter when no live telemetry source is wired. Each verb returns the
+# NEUTRAL EMPTY VALUE for its canonical normalized shape (R2-D) and exits 0.
+# Consumers that depend on telemetry enrichment MUST gracefully skip when the
+# adapter returns an empty value.
 #
-# Verbs (all 4 are mandatory per the observability adapter contract):
-#   fetch-alerts          → {}
-#   fetch-slo-burn        → {}
-#   fetch-error-rate      → {}
-#   fetch-deploy-impact   → {}
+# Canonical per-verb shapes (validated by observability-adapter-lint.sh):
+#   fetch-alerts          → JSON array  → neutral empty value: []
+#   fetch-slo-burn        → JSON map    → neutral empty value: {}
+#   fetch-error-rate      → JSON map    → neutral empty value: {}
+#   fetch-deploy-impact   → JSON map    → neutral empty value: {}
+#
+# The `fetch-alerts` array vs `{}` map split was introduced in IMP-001 SCOPE-3a
+# (R2-D) to resolve the prior doc-vs-lint-vs-impl contradiction in which every
+# verb returned `{}` while the contract documented `fetch-alerts` as an array.
 
 set -euo pipefail
 
 VERB="${1:-}"
 
 case "$VERB" in
-  fetch-alerts|fetch-slo-burn|fetch-error-rate|fetch-deploy-impact)
+  fetch-alerts)
+    # Alerts normalize to a JSON ARRAY of alert objects; neutral empty is [].
+    echo '[]'
+    exit 0
+    ;;
+  fetch-slo-burn|fetch-error-rate|fetch-deploy-impact)
+    # These three normalize to JSON MAPs (key -> value); neutral empty is {}.
     echo '{}'
     exit 0
     ;;
@@ -24,7 +35,7 @@ case "$VERB" in
     cat >&2 <<'EOF'
 none.sh — no-op telemetry adapter
 Usage: none.sh <verb>
-Verbs: fetch-alerts | fetch-slo-burn | fetch-error-rate | fetch-deploy-impact
+Verbs: fetch-alerts (-> []) | fetch-slo-burn (-> {}) | fetch-error-rate (-> {}) | fetch-deploy-impact (-> {})
 EOF
     exit 0
     ;;

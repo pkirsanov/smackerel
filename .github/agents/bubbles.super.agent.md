@@ -72,6 +72,7 @@ The super agent MUST NOT rely solely on hardcoded examples in this file. Before 
 | **Cheatsheet** | `docs/CHEATSHEET.md` | Quick reference tables, aliases, persona/TPB vocabulary |
 | **Mode guide** | `docs/guides/WORKFLOW_MODES.md` | Detailed mode descriptions with use-when guidance |
 | **Agent manual** | `docs/guides/AGENT_MANUAL.md` | Agent-to-reference mapping |
+| **Effective prompting** | `docs/guides/EFFECTIVE_PROMPTING.md` | How to phrase an effective request/intent — first-touch answer to "how do I ask Bubbles for X?" |
 | **Control plane design** | `docs/guides/CONTROL_PLANE_DESIGN.md` | Framework concepts such as validation, run-state, eventing, and risk classes |
 | **Capability ledger** | `bubbles/capability-ledger.yaml` | Shipped/proposed capabilities, owner surface, release introduced, evidence refs |
 | **Release/version history** | `CHANGELOG.md` (Unreleased + version sections) and `VERSION` file | What was added/changed/removed in each release; current framework version |
@@ -845,6 +846,10 @@ When the user provides a free-text request WITHOUT structured parameters, resolv
 "test data is leaking into dev" / "ephemeral test stack" -> /bubbles.devops focus: test-isolation  (reference bubbles-test-environment-isolation skill)
 "config drift" / "hardcoded ports" / "hand-edited .env" / "SST violations" -> /bubbles.devops focus: config-sst  (reference bubbles-config-sst skill)
 "docker port allocation" / "10k Rule" / "Dual-URL Standard" -> /bubbles.devops focus: docker-ports  (reference bubbles-docker-port-standards skill)
+"declare observability posture" / "wire metrics/traces/SLOs" / "opt out of monitoring" -> /bubbles.setup focus: observability  (posture lifecycle; gates G098/G099; reference bubbles-observability-adapter skill)
+"prove SLOs" / "trace contract" / "telemetry as acceptance criteria" -> reference gates G080 + G100 + bubbles-observability-adapter skill (wired repos)
+"what's firing in prod" / "incident telemetry" / "correlate the bad deploy" -> /bubbles.stabilize  (operate-plane fetch-first, read-only)
+"review SLOs" / "SLO burn check" -> /bubbles.upkeep  (slo-review task, wired repos only)
 ```
 
 ---
@@ -902,3 +907,5 @@ When the user's request is ambiguous, use this priority:
 46. If about persistent volume protection, smart cleanup, freshness verification, or Compose stack grouping -> `/bubbles.devops focus: docker-lifecycle` and reference the `bubbles-docker-lifecycle-governance` skill.
 47. If about test data leaking into dev databases or test environment isolation -> `/bubbles.devops focus: test-isolation` and reference the `bubbles-test-environment-isolation` skill.
 48. If about cross-product release coordination across multiple repos -> `/bubbles.workflow mode: release-planning-to-doc` with `mode: cross-product` parameter (Sonny coordinates across product repos).
+49. If about declaring observability posture, wiring telemetry adapters, opting out of monitoring, or the opt-out reminder -> `/bubbles.setup focus: observability` (posture lifecycle wired/opted-out, gates G098/G099) and reference the `bubbles-observability-adapter` skill + [`docs/recipes/observe-production.md`](../docs/recipes/observe-production.md).
+50. If about SLO evidence, trace contracts, "is this scope instrumented", or telemetry as a completion gate -> reference gates G080 (trace) + G100 (SLO) + the `bubbles-observability-adapter` skill; wired repos prove telemetry + SLOs in integration/e2e/stress. For live prod incident telemetry use `/bubbles.stabilize` (operate-plane fetch-first, read-only); for periodic SLO review use `/bubbles.upkeep` (`slo-review`).

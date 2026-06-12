@@ -131,6 +131,60 @@ The server enforces the same anti-fabrication discipline as the bash scripts:
 
 ---
 
+## When to graduate a script to an MCP tool
+
+Bubbles ships a deliberately small tool surface, and it is meant to stay that
+way. Most `bubbles/scripts/*.sh` capabilities should **stay scripts** — adding a
+tool for every script invites tool sprawl without adding value. Use this
+decision frame before registering a new tool.
+
+**Stay a directly-invoked script when the work is:**
+
+- **One-off or low-frequency** — a migration helper, a one-time backfill, a
+  rarely-run audit. The cost of wrapping and maintaining a tool outweighs the
+  convenience.
+- **Human-run** — something an operator runs by hand and reads the output
+  themselves. A tool wrapper buys nothing here.
+- **Already adequately reachable** — if agents and operators invoke it fine via
+  the shell, leave it as a script.
+
+**Graduate to a thin MCP tool when at least one of these holds:**
+
+| Trigger | Why a tool earns its place |
+|---------|----------------------------|
+| **(a) High-frequency agent / CI use** | Agents or CI call it often enough that a structured, schema-validated tool call beats re-deriving a shell command each time. |
+| **(b) Multi-agent reuse** | More than one agent needs the same capability; one declared tool with one input schema is a cleaner contract than each agent shelling out independently. |
+| **(c) Evidence / provenance capture** | The call needs to land in the structured tool-call log so the verbatim command, exit code, and output are recorded as evidence (anti-fabrication / provenance) rather than narrated. |
+
+### The bash twin stays canonical (non-negotiable)
+
+Graduating a capability does **not** move logic into the server. The bash twin
+in `bubbles/scripts/*.sh` is **always** the canonical implementation; an MCP
+tool is a **thin wrapper** over that twin. The server holds **no** business
+logic of its own — it shells out to the twin and returns the twin's stdout,
+stderr, exit code, and command line verbatim (see
+[Anti-Fabrication Guarantees](#anti-fabrication-guarantees)). "Graduate to a
+tool" therefore means *add a thin wrapper over a bash twin* — never *duplicate
+or move logic into the server*.
+
+This is structurally enforced, not just a convention: the catalog loader
+**rejects any tool spec that points to a missing script** at startup, and the
+[selftest](#selftest) (`mcp-server-selftest.sh`) asserts — as one of its 19
+invariants — that **every declared tool has a bash twin**. So this rubric only
+answers *when* to reach for a tool; the wrapper discipline is guaranteed the
+moment you add one. If a capability cannot be expressed as a bash twin plus a
+thin wrapper, it is not ready to be a tool.
+
+### Adding a tool, in short
+
+1. Implement (or reuse) the capability as a `bubbles/scripts/*.sh` bash twin.
+2. Declare a tool spec under `.github/bubbles/mcp/tools/*.json` whose
+   `argsTemplate` invokes that twin — no logic in the spec, no logic in the
+   server.
+3. Run `mcp-server-selftest.sh`; it fails fast if the twin is missing.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Diagnosis |
