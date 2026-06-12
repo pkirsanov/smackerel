@@ -19,6 +19,13 @@ on:
 permissions:
   contents: read
 
+# Spec 021 B2 — `./smackerel.sh config generate` is fail-loud per
+# smackerel-no-defaults and requires SMACKEREL_HARDWARE_TIER
+# (internal/config/hardware_tier.go -> [F061-HARDWARE-TIER-MISSING] when unset).
+# The e2e-ui runner is CPU; set the tier explicitly (no fallback).
+env:
+  SMACKEREL_HARDWARE_TIER: cpu
+
 jobs:
   e2e-ui:
     runs-on: ubuntu-latest

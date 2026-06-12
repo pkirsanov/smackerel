@@ -12,6 +12,15 @@ on:
 permissions:
   contents: read
 
+# Spec 021 B2 — `./smackerel.sh config generate` is fail-loud per
+# smackerel-no-defaults and requires SMACKEREL_HARDWARE_TIER (internal/config/
+# hardware_tier.go -> [F061-HARDWARE-TIER-MISSING] when unset). CI runners are
+# CPU; set the tier explicitly (no fallback) so config generation / build / test
+# succeed in every job. build.yml sets its own per-matrix value (accel for
+# home-lab); this CPU default applies to the dev/test config these jobs generate.
+env:
+  SMACKEREL_HARDWARE_TIER: cpu
+
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest

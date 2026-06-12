@@ -1855,7 +1855,12 @@ E2EUI_HELP
     # scripts/deploy/orchestrator.sh; sets KNB_PRODUCT; forwards "$@").
     # Legacy `deploy-target` arm above remains the spec-017/018 baseline
     # (C4 backward compat); orchestrator phases are NOT injected into it.
-    shift # consume "deploy"
+    # NOTE (spec 021 B1b): the `deploy` subcommand was ALREADY consumed by the
+    # top-level COMMAND dispatch (`shift || true` after `COMMAND="${1:-help}"`).
+    # Do NOT shift again here — a second shift silently eats the <target>
+    # positional, so the orchestrator refuses with E019-FLAG-INVALID ("got 0
+    # positional argument"). That latent double-shift kept PATH 1 from ever
+    # being exercised on home-lab.
     target="${1:?missing required: deploy <target> (e.g. home-lab); see ./smackerel.sh --help}"
     shift
     KNB_REPO_ROOT="${KNB_REPO_ROOT:-${DEPLOY_TARGETS_ROOT:-$HOME/knb}}"
