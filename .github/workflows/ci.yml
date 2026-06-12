@@ -113,6 +113,49 @@ jobs:
         echo "Python test outcome: ${{ steps.pytest_step.outcome }}"
         exit 1
 
+  # BUG-073-003 — the spec-073 cross-language renderer canary
+  # (tests/unit/clients/render_descriptor_canary_test.go, TP-073-03) execs the
+  # JS renderer (node) and the Dart renderer (Flutter-bundled dart) to detect
+  # drift between the web renderer, the shared mobile core, and the golden
+  # fixtures. The shared `lint-and-test` Go unit lane runs in a Go-only
+  # golang:1.25.10-bookworm container (run_go_tooling in smackerel.sh) with no
+  # node/dart, so the canary SKIPS there (environment gap). This dedicated lane
+  # provisions node + Flutter and runs the canary so cross-language drift is
+  # still caught on every push. Direct `go test` is used (not the containerized
+  # `./smackerel.sh test unit --go`) because that container is intentionally
+  # Go-only and cannot host node + Flutter; precedent: the `go mod verify` step
+  # in lint-and-test also invokes Go directly. The
+  # internal/deploy/cross_language_canary_ci_contract_test.go guard fails the
+  # build if this job is removed or unwired, so the canary can never silently
+  # stop running in CI.
+  cross-language-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      with:
+        go-version: '1.25'
+
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: '22'
+
+    - uses: subosito/flutter-action@9a48871cbeff8679f6337339dc79b806ad9a9a13 # v2.9.1
+      with:
+        channel: stable
+
+    - name: Resolve Dart package dependencies
+      working-directory: clients/mobile/assistant
+      run: flutter pub get
+
+    - name: Cross-language renderer canary (node + dart drift)
+      run: |
+        go test -count=1 -v \
+          -run 'TestRenderDescriptorV1_CrossLanguageCanary|TestRenderDescriptorV1_DartPreCompiled_NoFallbackToDartRun' \
+          ./tests/unit/clients/...
+
   build:
     needs: lint-and-test
     runs-on: ubuntu-latest
