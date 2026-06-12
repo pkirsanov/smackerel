@@ -28,3 +28,38 @@ scans:
   silentDecode:
     patterns:
     errorHandling: ''
+
+# =============================================================================
+# Observability posture (IMP-001 / G098-G100). Project-owned, never overwritten.
+# =============================================================================
+# Smackerel is genuinely instrumented: docker-compose.yml ships a `monitoring`
+# profile (prometheus scrapes smackerel-core:8080/metrics + smackerel-ml:8081/
+# metrics, jaeger for traces), the Go core has OTEL wiring (cmd/core/
+# wiring_otel_test.go), and the ML sidecar exposes ml/app/metrics.py — so the
+# posture is `wired`. Adapter NAMES only; real prod URLs/tokens are injected via
+# BUBBLES_OBS_* env by the knb deploy overlay at apply time, never committed here
+# (carries no runtime fallback-default values — respects the NO-DEFAULTS SST policy).
+# Per-feature SLO/trace-workflow contracts are added incrementally: until an
+# instrumented scope declares an `observabilityWorkflow`, G080/G100 no-op.
+traceContracts:
+  observability:
+    schemaVersion: 1
+    posture: wired
+    policy:
+      undeclaredPosture: warn
+    decision:
+      decidedAt: 2026-06-12
+      decidedBy: operator
+      decisionSource: "downstream observability rollout (framework 7.11.2)"
+      lastReviewedAt: 2026-06-12
+    endpoints:
+      validate:                 # resolves to the ephemeral test stack (profile: test)
+        alerts: { adapter: none }
+        sloBurn: { adapter: prometheus, profile: test }
+        errorRate: { adapter: prometheus, profile: test }
+        deployImpact: { adapter: none }
+      operate:                  # resolves to prod (URLs set in the knb deploy overlay)
+        alerts: { adapter: prometheus, profile: prod }
+        sloBurn: { adapter: prometheus, profile: prod }
+        errorRate: { adapter: prometheus, profile: prod }
+        deployImpact: { adapter: prometheus, profile: prod }
