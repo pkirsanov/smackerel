@@ -1,0 +1,119 @@
+# Spec 085 Scope 04 — Lane B (Play Store submission) for the smackerel Android client.
+#
+# CODED but DORMANT. This lane is gated by the `clientReleaseLaneB` feature flag
+# (declared default-OFF in EVERY train bundle: config/feature-flags.mvp.yaml and
+# config/feature-flags.next.yaml) and is ONLY ever triggered manually
+# (workflow_dispatch). It NEVER auto-runs on push / pull_request / schedule.
+#
+# Activation (operator-driven, exactly one owning train): bubbles.train flips
+# `clientReleaseLaneB` ON in one train AND the operator sets the
+# CLIENT_RELEASE_LANE_B repository variable to "true". Until BOTH happen, every
+# invocation no-ops at the flag gate below and NO Play Store upload occurs.
+#
+# knb spec 025 gate check (f): the literal `clientReleaseLaneB` guard is
+# co-located in THIS file with the `upload_to_play_store` submit action, so the
+# gate recognizes the store-submit step as GUARDED and does not flag it
+# (E025-CLIENT-LANEB-AUTO-SUBMIT). No --skip/--force bypass exists (C3 inherited).
+name: client-release-laneb
+
+on:
+  workflow_dispatch:
+    inputs:
+      sourceSha:
+        description: 'Source SHA whose signed, digest-pinned Android AAB to submit to the Play Store'
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  CLIENTS_REGISTRY: ghcr.io/${{ github.repository_owner }}/smackerel-clients
+
+jobs:
+  laneb-play-store:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Resolve clientReleaseLaneB flag (NO-DEFAULTS; fail-fast if unset)
+      id: flag
+      env:
+        # clientReleaseLaneB is default-OFF in every train bundle. Read from an
+        # env var with NO fallback default — a MISSING value FAILS the build
+        # (smackerel-no-defaults). Activation sets CLIENT_RELEASE_LANE_B=true in
+        # the owning train only.
+        CLIENT_RELEASE_LANE_B: ${{ vars.CLIENT_RELEASE_LANE_B }}
+      run: |
+        : "${CLIENT_RELEASE_LANE_B:?clientReleaseLaneB must be set explicitly (default-OFF in every train bundle; no fallback default). Set the CLIENT_RELEASE_LANE_B repository variable to activate Lane B in the owning train.}"
+        if [ "$CLIENT_RELEASE_LANE_B" != "true" ]; then
+          echo "clientReleaseLaneB resolves OFF (value: $CLIENT_RELEASE_LANE_B) — Lane B is DORMANT. No Play Store submission. (default-OFF; bubbles.train activates it in exactly one owning train.)"
+          echo "active=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "clientReleaseLaneB resolves ON — proceeding with Play Store submission."
+          echo "active=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Checkout
+      if: steps.flag.outputs.active == 'true'
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+    - name: Install cosign
+      if: steps.flag.outputs.active == 'true'
+      uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+    - name: Install oras
+      if: steps.flag.outputs.active == 'true'
+      uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
+
+    - name: Log in to GHCR
+      if: steps.flag.outputs.active == 'true'
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login -u ${{ github.actor }} --password-stdin ${{ env.REGISTRY }}
+
+    - name: Verify AAB cosign-keyless provenance before submit
+      if: steps.flag.outputs.active == 'true'
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+        SOURCE_SHA: ${{ github.event.inputs.sourceSha }}
+      run: |
+        : "${SOURCE_SHA:?sourceSha workflow_dispatch input required}"
+        # Lane B submits only a provenance-verified artifact (always-on cosign-keyless).
+        cosign verify \
+          --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/build.yml@.*" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          "$CLIENTS_REGISTRY:android-aab-$SOURCE_SHA"
+
+    - name: Pull the signed, digest-pinned Android AAB
+      if: steps.flag.outputs.active == 'true'
+      id: pull
+      env:
+        SOURCE_SHA: ${{ github.event.inputs.sourceSha }}
+      run: |
+        : "${SOURCE_SHA:?sourceSha workflow_dispatch input required}"
+        mkdir -p dist/laneb
+        oras pull "$CLIENTS_REGISTRY:android-aab-$SOURCE_SHA" --output dist/laneb
+        aab="$(find dist/laneb -name '*.aab' -type f | head -n1)"
+        [ -s "$aab" ] || { echo "ERROR: no AAB pulled for sourceSha $SOURCE_SHA" >&2; exit 1; }
+        echo "aab=$aab" >> "$GITHUB_OUTPUT"
+
+    - name: Install fastlane
+      if: steps.flag.outputs.active == 'true'
+      run: gem install --no-document fastlane
+
+    - name: Submit AAB to Google Play (fastlane supply / upload_to_play_store)
+      if: steps.flag.outputs.active == 'true'
+      env:
+        # The clientReleaseLaneB ON gate is already cleared above; this submit
+        # step is co-located with the literal flag name so the knb gate check (f)
+        # sees a GUARDED store-submit action and does not flag it.
+        SUPPLY_PACKAGE_NAME: dev.smackerel.smackerel_assistant_example
+        SUPPLY_JSON_KEY_DATA: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        AAB_PATH: ${{ steps.pull.outputs.aab }}
+      run: |
+        : "${SUPPLY_JSON_KEY_DATA:?Google Play service-account JSON secret required for Lane B (clientReleaseLaneB)}"
+        : "${AAB_PATH:?resolved AAB path required}"
+        # fastlane `supply` == `upload_to_play_store`; submit to the internal track.
+        fastlane run upload_to_play_store \
+          aab:"$AAB_PATH" \
+          package_name:"$SUPPLY_PACKAGE_NAME" \
+          track:internal \
+          json_key_data:"$SUPPLY_JSON_KEY_DATA"

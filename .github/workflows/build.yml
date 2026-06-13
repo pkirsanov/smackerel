@@ -27,6 +27,9 @@ env:
   IMAGE_CORE: ghcr.io/${{ github.repository_owner }}/smackerel-core
   IMAGE_ML: ghcr.io/${{ github.repository_owner }}/smackerel-ml
   BUNDLE_REGISTRY: ghcr.io/${{ github.repository_owner }}/smackerel-config-bundles
+  # Spec 085 — immutable OCI artifact repo for the native Android client (AAB + APK),
+  # pushed by digest and pinned in build-manifest-<sourceSha>.yaml under clients.artifacts[].
+  CLIENTS_REGISTRY: ghcr.io/${{ github.repository_owner }}/smackerel-clients
 
 jobs:
   build-images:
@@ -440,8 +443,165 @@ jobs:
           ${{ steps.artifact.outputs.zip_path }}.sha256
           ${{ steps.artifact.outputs.zip_path }}.sig
 
+  # ─────────────────────────────────────────────────────────────────
+  # Spec 085 — Client Binary Release. Build smackerel's Flutter Android client
+  # ONCE per sourceSha (Build-Once Deploy-Many), reproducibly (SOURCE_DATE_EPOCH
+  # = commit time; commit-derived version — never wall-clock; NFR-CBR-005),
+  # distribution-sign it with the OPERATOR-PRIVATE upload keystore (GitHub secret,
+  # env-ref only — never committed; Scope 03 / FR-CBR-007), cosign-keyless
+  # provenance-sign each artifact (Rekor; the SAME scheme as the two images), and
+  # push the AAB + APK to ${CLIENTS_REGISTRY} addressed by sha256. The per-artifact
+  # digests are uploaded so publish-build-manifest pins them in
+  # build-manifest-<sourceSha>.yaml under clients.artifacts[] (knb spec 025).
+  #
+  # The buildable Android target for the clients/mobile/assistant Flutter plugin
+  # skeleton is its example app (CLIENT_APP_DIR); when a standalone app module
+  # lands the path moves but the pipeline shape is identical.
+  #
+  # Trust boundary: this job STOPS at registry push — NO ssh/scp/rsync/apply.
+  # Deploy is downstream of CI on a different trust boundary (bubbles G074).
+  # Drift detector: internal/deploy/build_workflow_clients_contract_test.go.
+  # ─────────────────────────────────────────────────────────────────
+  build-clients:
+    needs: build-images
+    runs-on: ubuntu-latest
+    env:
+      CLIENT_APP_DIR: clients/mobile/assistant/example
+      FLUTTER_VERSION: "3.24.0"
+    steps:
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      with:
+        fetch-depth: 0 # full history for git rev-list --count (commit-derived version)
+
+    - name: Resolve reproducible build inputs
+      id: repro
+      env:
+        SOURCE_SHA: ${{ needs.build-images.outputs.sourceSha }}
+      run: |
+        # Deterministic, commit-derived inputs only — never wall-clock (NFR-CBR-005).
+        epoch="$(git show -s --format=%ct "$SOURCE_SHA")"
+        build_number="$(git rev-list --count "$SOURCE_SHA")"
+        build_name="0.1.0+${SOURCE_SHA:0:12}"
+        {
+          echo "sourceDateEpoch=$epoch"
+          echo "buildNumber=$build_number"
+          echo "buildName=$build_name"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Set up Flutter SDK (pinned, reproducible)
+      run: |
+        # Pin the SDK by tag from the canonical upstream (deterministic; avoids an
+        # un-pinnable third-party setup action). Supply-chain: flutter/flutter only.
+        git clone --depth 1 --branch "$FLUTTER_VERSION" \
+          https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+        echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+    - name: Materialize Android upload keystore (operator-private secret)
+      env:
+        ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      run: |
+        # FR-CBR-007 / NO-DEFAULTS: the distribution keystore is operator-private
+        # (GitHub secret), base64-decoded into a runner-tmp path that is NEVER
+        # committed and is removed at job end. Fail-fast if the secret is absent —
+        # there is no unsigned fallback path.
+        : "${ANDROID_KEYSTORE_BASE64:?ANDROID_KEYSTORE_BASE64 secret required — release signing has no unsigned fallback (FR-CBR-007)}"
+        keystore_path="$RUNNER_TEMP/smackerel-upload.keystore"
+        printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore_path"
+        echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
+    - name: Build Android AAB + APK (release, reproducible, distribution-signed)
+      env:
+        SOURCE_DATE_EPOCH: ${{ steps.repro.outputs.sourceDateEpoch }}
+        ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        BUILD_NUMBER: ${{ steps.repro.outputs.buildNumber }}
+        BUILD_NAME: ${{ steps.repro.outputs.buildName }}
+      run: |
+        # Fail-fast on any missing signing credential (NO-DEFAULTS; no unsigned path).
+        : "${ANDROID_KEYSTORE_PATH:?ANDROID_KEYSTORE_PATH must be set by the keystore-materialize step}"
+        : "${ANDROID_KEYSTORE_PASSWORD:?ANDROID_KEYSTORE_PASSWORD secret required}"
+        : "${ANDROID_KEY_ALIAS:?ANDROID_KEY_ALIAS secret required}"
+        : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD secret required}"
+        flutter --version
+        cd "$CLIENT_APP_DIR"
+        flutter pub get
+        flutter build appbundle --release \
+          --build-number "$BUILD_NUMBER" --build-name "$BUILD_NAME"
+        flutter build apk --release \
+          --build-number "$BUILD_NUMBER" --build-name "$BUILD_NAME"
+
+    - name: Install cosign
+      uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+    - name: Install oras
+      uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
+
+    - name: Log in to GHCR
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login -u ${{ github.actor }} --password-stdin ${{ env.REGISTRY }}
+
+    - name: Push AAB + APK to ghcr by digest
+      id: push
+      env:
+        SOURCE_SHA: ${{ needs.build-images.outputs.sourceSha }}
+      run: |
+        aab="$CLIENT_APP_DIR/build/app/outputs/bundle/release/app-release.aab"
+        apk="$CLIENT_APP_DIR/build/app/outputs/flutter-apk/app-release.apk"
+        for f in "$aab" "$apk"; do
+          [ -s "$f" ] || { echo "ERROR: expected build artifact missing/empty: $f" >&2; exit 1; }
+        done
+        aab_out="$(oras push "$CLIENTS_REGISTRY:android-aab-$SOURCE_SHA" \
+          "$aab:application/vnd.android.package-archive")"
+        apk_out="$(oras push "$CLIENTS_REGISTRY:android-apk-$SOURCE_SHA" \
+          "$apk:application/vnd.android.package-archive")"
+        aab_digest="$(printf '%s\n' "$aab_out" | sed -n 's/.*[Dd]igest: *sha256:\([0-9a-f]\{64\}\).*/\1/p' | head -n1)"
+        apk_digest="$(printf '%s\n' "$apk_out" | sed -n 's/.*[Dd]igest: *sha256:\([0-9a-f]\{64\}\).*/\1/p' | head -n1)"
+        for d in "$aab_digest" "$apk_digest"; do
+          case "$d" in
+            "" | *[!0-9a-f]*) echo "ERROR: failed to capture a 64-hex OCI digest: '$d'" >&2; exit 1 ;;
+          esac
+        done
+        {
+          echo "aabRef=$CLIENTS_REGISTRY@sha256:$aab_digest"
+          echo "apkRef=$CLIENTS_REGISTRY@sha256:$apk_digest"
+          echo "aabDigest=$aab_digest"
+          echo "apkDigest=$apk_digest"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Cosign keyless provenance sign — android AAB + APK
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+        AAB_REF: ${{ steps.push.outputs.aabRef }}
+        APK_REF: ${{ steps.push.outputs.apkRef }}
+      run: |
+        cosign sign --yes "$AAB_REF"
+        cosign sign --yes "$APK_REF"
+
+    - name: Write client-sha artifacts for build-manifest consumption
+      env:
+        AAB_DIGEST: ${{ steps.push.outputs.aabDigest }}
+        APK_DIGEST: ${{ steps.push.outputs.apkDigest }}
+      run: |
+        mkdir -p dist/client-shas
+        printf '%s' "$AAB_DIGEST" > dist/client-shas/android-aab.sha
+        printf '%s' "$APK_DIGEST" > dist/client-shas/android-apk.sha
+        echo "android AAB sha256: $AAB_DIGEST"
+        echo "android APK sha256: $APK_DIGEST"
+
+    - name: Upload client-sha artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: client-shas-${{ needs.build-images.outputs.sourceSha }}
+        path: dist/client-shas/
+        if-no-files-found: error
+
+    - name: Remove materialized keystore (defense-in-depth)
+      if: always()
+      run: rm -f "$RUNNER_TEMP/smackerel-upload.keystore"
+
   publish-build-manifest:
-    needs: [ build-images, build-bundles, build-chrome-bridge ]
+    needs: [ build-images, build-bundles, build-chrome-bridge, build-clients ]
     runs-on: ubuntu-latest
     steps:
     # BUG-047-001 / DEVOPS-HL-002 — pull the per-env bundle-sha artifacts that
@@ -462,6 +622,17 @@ jobs:
       with:
         name: chrome-bridge-sha-${{ needs.build-images.outputs.sourceSha }}
         path: chrome-bridge-shas
+
+    # Spec 085 — pull the android client digests build-clients uploaded so the
+    # build manifest can pin the AAB + APK by sha256 under clients.artifacts[].
+    # Without these, the contracted android platform would have no digest and the
+    # knb conformance gate check (c) (E025-CLIENT-MANIFEST-NO-DIGEST) would refuse
+    # the deployment fail-closed.
+    - name: Download client-sha artifact
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      with:
+        name: client-shas-${{ needs.build-images.outputs.sourceSha }}
+        path: client-shas
 
     - name: Resolve chrome-bridge artifact metadata
       id: resolve-chrome-bridge
@@ -504,6 +675,31 @@ jobs:
           echo "${var_name}=${sha_value}" >> "$GITHUB_OUTPUT"
           echo "Resolved ${var_name}=${sha_value}"
         done
+
+    # Spec 085 — validate + surface the android client digests for the clients
+    # block. Fail-closed here too (defense-in-depth alongside the emitter): a
+    # missing/malformed digest never reaches the manifest.
+    - name: Resolve android client digests
+      id: resolve-client-shas
+      run: |
+        aab_file="client-shas/android-aab.sha"
+        apk_file="client-shas/android-apk.sha"
+        if [[ ! -s "$aab_file" || ! -s "$apk_file" ]]; then
+          echo "ERROR: missing android client digest file(s) from build-clients" >&2
+          exit 1
+        fi
+        aab_sha="$(cat "$aab_file")"
+        apk_sha="$(cat "$apk_file")"
+        for d in "$aab_sha" "$apk_sha"; do
+          if ! [[ "$d" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "ERROR: android client digest is not a 64-hex sha256: '$d'" >&2
+            exit 1
+          fi
+        done
+        {
+          echo "aabSha=$aab_sha"
+          echo "apkSha=$apk_sha"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Write build-manifest-${{ needs.build-images.outputs.sourceSha }}.yaml
       env:
@@ -555,6 +751,18 @@ jobs:
             evidenceArtifact: trivy-scan-reports-${{ needs.build-images.outputs.sourceSha }}
             specReference: specs/047-ci-image-vulnerability-gate/spec.md
         EOF
+        cat build-manifest.yaml
+
+    # Spec 085 — append the clients.artifacts[] block (knb spec 025) to the SAME
+    # single build-manifest-<sourceSha>.yaml. The emitter fail-closes on an
+    # empty/malformed digest, so a contracted android platform always carries a
+    # non-empty sha256 + cosign-keyless provenance (knb gate check c).
+    - name: Append clients block to build manifest (knb spec 025)
+      env:
+        ANDROID_AAB_SHA256: ${{ steps.resolve-client-shas.outputs.aabSha }}
+        ANDROID_APK_SHA256: ${{ steps.resolve-client-shas.outputs.apkSha }}
+      run: |
+        bash scripts/deploy/client-manifest-clients-block.sh >> build-manifest.yaml
         cat build-manifest.yaml
 
     - name: Upload build manifest

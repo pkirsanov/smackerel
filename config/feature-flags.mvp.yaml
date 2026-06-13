@@ -4,8 +4,16 @@ train: mvp
 flags:
   # Default-ON in this (owning) train; default-OFF in every other train (G111).
   card_rewards: true
+  # Spec 085 — Lane B (Play Store) client release. Default-OFF (dormant) in EVERY
+  # train; bubbles.train flips it ON in exactly one owning train ONLY when the
+  # operator activates public-store submission. While false it never auto-runs.
+  clientReleaseLaneB: false
 metadata:
   card_rewards:
     owning_spec: specs/083-card-rewards-companion/
+    introduced_in_train: mvp
+    introduced_at: "2026-06-12"
+  clientReleaseLaneB:
+    owning_spec: specs/085-client-binary-release/
     introduced_in_train: mvp
     introduced_at: "2026-06-12"

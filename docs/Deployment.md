@@ -1147,4 +1147,53 @@ No data migration is required either direction; the subsystem holds
 no persistent state of its own (per-turn `ToolResultStore` is
 in-process only).
 
+## Client Binary Lane (Spec 085 — knb spec 025 conformance)
+
+smackerel's native Flutter Android client (`clients/mobile/assistant`) is a
+first-class, immutable, digest-pinned, cosign-keyless-provenance artifact —
+exactly like the two container images — under the canonical, mechanically
+enforced knb spec 025 "Client Binary Release & Delivery Pattern".
+
+### What This Repo Ships
+
+- `deploy/contract.yaml` declares a top-level `clients:` group (android only;
+  `kind: [aab, apk]`, `provenance: cosign-keyless`, `laneB: false`). iOS is
+  reserved for a future spec (no `clients/mobile/assistant/ios/` app target
+  exists). Drift is locked by `internal/deploy/clients_contract_test.go`.
+- `.github/workflows/build.yml` `build-clients` job builds the AAB + APK **once
+  per `sourceSha`** (Build-Once Deploy-Many), reproducibly (`SOURCE_DATE_EPOCH`
+  = commit time + commit-derived version, never wall-clock), distribution-signs
+  with the operator-private upload keystore (env-ref only), cosign-keyless
+  provenance-signs each artifact (Rekor), and pushes to
+  `ghcr.io/<owner>/smackerel-clients` addressed by `sha256`. It **stops at
+  registry push** (no SSH/apply). `publish-build-manifest` pins the digests in
+  `build-manifest-<sourceSha>.yaml` under `clients.artifacts[]` via the
+  fail-closed emitter `scripts/deploy/client-manifest-clients-block.sh`.
+- The distribution signing material (Android upload keystore + passwords/alias)
+  is **operator-private** (GitHub Actions secrets): `ANDROID_KEYSTORE_BASE64`,
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. No
+  raw key file or inline password literal lives in the repo.
+
+### Two Lanes
+
+- **Lane A (evo-x2 self-host)** — the EXISTING knb home-lab adapter consumes the
+  signed android artifact by digest (pull → cosign-verify → byte-check sha256 →
+  serve → audit; rollback is a pointer-swap). smackerel never builds clients in
+  an adapter and never calls the knb Lane-A lib directly.
+- **Lane B (Play Store)** — CODED but **default-OFF** behind the
+  `clientReleaseLaneB` flag (declared `false` in every train bundle). The
+  `.github/workflows/client-release-laneb.yml` lane is `workflow_dispatch`-only
+  (never auto-runs) and reads the flag from an env var with no fallback default.
+  Activation = `bubbles.train` flips the flag ON in exactly one owning train AND
+  the operator sets the `CLIENT_RELEASE_LANE_B` repository variable to `true`.
+
+### Conformance Gate
+
+smackerel's pre-push hook (`scripts/git-hooks/pre-push`) and a CI safety-net
+workflow (`.github/workflows/client-binary-conformance.yml`) invoke the knb gate
+`scripts/lint/client-binary-conformance.sh --repo <smackerel-root>`. A conformance
+regression (e.g. removing the contract `clients:` block) is refused with the
+matching `E025-CLIENT-*` code. There is no `--skip`/`--force`/`--insecure`/
+`--no-verify` bypass (C3).
+
 

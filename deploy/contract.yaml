@@ -71,6 +71,44 @@ signing:
   - sbom # syft-generated SPDX SBOM
   - provenance # SLSA provenance
 
+# Native client binaries this project builds (knb spec 025 — Client Binary
+# Release & Delivery Pattern; closes CBR-010 for smackerel). Smackerel ships a
+# Flutter mobile assistant (clients/mobile/assistant) targeting Android ONLY:
+# clients/mobile/assistant/android/ is present; there is NO
+# clients/mobile/assistant/ios/ app target (the pubspec declares only an `ios`
+# *plugin platform stub*). The Android client is built ONCE per sourceSha in CI
+# (.github/workflows/build.yml `build-clients` job), cosign-keyless
+# provenance-signed (Rekor) — the SAME scheme as the two images above — stored
+# as an immutable OCI artifact in `ref` addressed by sha256, and pinned by
+# digest in build-manifest-<sourceSha>.yaml under clients.artifacts[]. Lane A
+# (evo-x2 self-host) is delivered by the existing knb home-lab adapter consuming
+# the digest (knb client-delivery-lib.sh — smackerel never builds clients in any
+# adapter); Lane B (Play Store) is coded but default-OFF behind the
+# clientReleaseLaneB flag and never auto-runs.
+#
+# Schema (canonical taxonomy in
+# .github/instructions/bubbles-client-binary-release.instructions.md, mirrored
+# by knb/smackerel/contract.yaml): each artifact carries
+# {platform, variant, kind, ref, provenance, embeds, laneB}; the build manifest
+# additionally carries a per-artifact `sha256` that is fail-closed (empty digest
+# for a contracted platform is refused, knb gate check c). Drift between this
+# block and internal/deploy/clients_contract_test.go is locked by that Go
+# contract test (mirrors internal/deploy/external_images_contract_test.go).
+# iOS is RESERVED for a future spec: when a clients/mobile/assistant/ios/ app
+# target lands, add an `ios` entry here (embeds: [watchos]) plus its manifest
+# artifact; the downstream smackerel node reconciles the knb mirror in lockstep.
+clients:
+  none: false
+  artifacts:
+  - platform: android
+    variant: "-" # single-variant platform
+    kind: [aab, apk] # AAB → Lane B (Play Store); APK → Lane A (sideload on evo-x2)
+    ref: ghcr.io/pkirsanov/smackerel-clients # OCI artifact repo; digest pinned in the build manifest
+    provenance: cosign-keyless # always-on CI provenance (Rekor); same scheme as the images
+    embeds: [] # android embeds nothing; an ios entry would embed [watchos]
+    laneB: false # Lane B (Play Store) default-OFF; gated by clientReleaseLaneB
+    laneBTarget: play-store # where Lane B submits once clientReleaseLaneB is activated
+
 # Rollout strategies the project supports. Each adapter declares its strategy in params.yaml.
 rolloutStrategies:
 - name: recreate
