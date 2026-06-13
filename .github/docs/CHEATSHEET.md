@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **40 Agents · 107 Gates · 55 Workflow Modes · 26 Phases**
+> **40 Agents · 108 Gates · 55 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -280,6 +280,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `contextual persona variant` | A documented, visually distinct reuse of the same TPB character when the character has a genuinely different narrative mode. Only the variants listed in the persona convention table are allowed. |
 | `product direction surfaces trio` | The three canonical product-direction docs every product repo must carry: `docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md`, `.github/instructions/product-principles.instructions.md`. `bubbles.setup` enforces presence; `bubbles.releases` refuses to plan without it. |
 | `release packet` | The 8-doc bundle Sonny "Iron Lung" Smith produces per phase: `vision.md`, `features.md`, `actions.md`, `business-plan.md`, `deployment.md`, `marketing.md`, `monetization.md`, `ops-scalability.md`. |
+| `release-delivery reconciliation` | Gate G101: every `delivery=required` feature declared in a phase's `features.md` (via `bubbles:feature` machine annotations) MUST map to a terminal + validate-certified spec. Blocks a `bubbles.goal`/`bubbles.sprint` release-phase scenario from self-certifying 'delivered' while required features are unspecced, non-terminal, blocked, or implement-self-certified. WARN-grandfathered until a packet opts in with a `bubbles:reconciled-packet` header. Enforced by `release-delivery-reconciliation-guard.sh`; the compile-time twin in `scenario-compile-lint.sh` rejects an under-scoped scenario DAG. |
 | `carry-forward table` | Mandatory section in every multi-phase repo's `features.md` — captures capabilities inherited from prior phases so nothing gets quietly dropped. |
 | `vision restatement` | Every phase's `vision.md` MUST be self-contained — no cross-references like "see vision.md in v1.0". Restate inline. |
 | `cross-product coordination` | When two repos ship features together (e.g., a primary product ↔ a companion product), `bubbles.releases` produces matched plan files in BOTH repos with cross-references and a shared schema-versioning rule. |
@@ -330,7 +331,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 107 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 108 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**

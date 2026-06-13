@@ -180,7 +180,7 @@ assert_stderr_contains "S4" "G087"
 assert_stderr_contains "S4" "planningOnlyJustification"
 
 echo ""
-echo "--- S5: Smackerel-053-shaped planningOnly opt-out passes ---"
+echo "--- S5: example-app-053-shaped planningOnly opt-out passes ---"
 repo="$(stage_repo s5-planning-only-valid)"
 write_planning_state "$repo" "specs_hardened" "true" '"CI ops evidence hardening packet with no runtime implementation surface."' "null"
 write_implementation_state "$repo" "in_progress" "null"

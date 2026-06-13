@@ -9,7 +9,7 @@ set -uo pipefail
 # Stages disposable spec-tree fixtures under a `mktemp -d` workspace and
 # asserts the exit-code contract plus key output tokens for the guard's real
 # behaviors: the core "named-mechanism-absent-from-code" BLOCK (the exact
-# smackerel PKCE-fake shape), synonym-based code evidence clearing it, a
+# downstream PKCE-fake shape), synonym-based code evidence clearing it, a
 # justification clearing it, grandfathering, not-applicable, and the two
 # advisory nudges (#4 negative-assertion, #3 fake-server-as-oracle).
 #
@@ -17,7 +17,7 @@ set -uo pipefail
 #   S0   Missing feature dir argument                  → exit 2
 #   S0b  Non-existent feature dir path                  → exit 2
 #   S1   spec names PKCE, impl file present WITHOUT      → exit 1  (ADVERSARIAL:
-#        pkce/code_verifier, no justification, new spec    the smackerel fake —
+#        pkce/code_verifier, no justification, new spec    the downstream fake —
 #                                                          fails iff the gate
 #                                                          actually correlates
 #                                                          requirement to code)
@@ -109,7 +109,7 @@ if [[ "$RC" -eq 2 ]]; then pass "S0b non-existent feature dir exits 2"; else bad
 
 # -----------------------------------------------------------------------
 # S1: PKCE named, impl present WITHOUT pkce, no justification, new spec → exit 1
-# (ADVERSARIAL — the smackerel fake shape)
+# (ADVERSARIAL — the downstream fake shape)
 # -----------------------------------------------------------------------
 s1="$(new_spec_root s1-pkce-fake)"
 s1root="$WORKSPACE/s1-pkce-fake"

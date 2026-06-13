@@ -123,8 +123,8 @@ yq -i '.trains[1].retention = "7d-daily"' "$TMP/config/release-trains.yaml"
 yq -i '.trains[1].pii = "none"' "$TMP/config/release-trains.yaml"
 assert_pass "per-train retention+pii accepted"
 
-# 7. home-lab slot accepted (smackerel pattern)
-#    NOTE: this case is exercised by the live Smackerel repo's config which
+# 7. home-lab slot accepted (downstream pattern)
+#    NOTE: this case is exercised by a downstream repo's config which
 #    declares `target_slot: home-lab` for its mvp train. Repeated snap-yq
 #    invocations in a single shell process can stall on cold start, so the
 #    in-process assertion was removed; the live downstream config validates it.

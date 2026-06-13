@@ -5,9 +5,9 @@
 # Detect "batch promotion" fabrication: a single git commit (or staged change
 # set) that flips multiple specs' state.json `status` fields to "done" at
 # once. Real workflows complete one spec at a time with full evidence; mass
-# promotions are a documented fabrication pattern (QF 2026-03-15 batch
-# promoted 33 specs in commit 4dde8526; QF 2026-03-31 batch promoted 17
-# specs with fabricated executionHistory in commit ec7fba88).
+# promotions are a documented fabrication pattern (one downstream batch
+# promoted 33 specs in a single commit; another batch promoted 17
+# specs with fabricated executionHistory in one commit).
 #
 # Usage:
 #   bash bubbles/scripts/batch-promotion-lint.sh [--max=N] [--ref=<git-ref>]

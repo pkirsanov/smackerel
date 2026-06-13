@@ -22,6 +22,7 @@ handoffs:
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
 - Read existing repo direction artifacts BEFORE proposing release content (constitution, design docs, capability ledger, prior release packets, plans)
 - NEVER fabricate capabilities. Every claim in `features.md` MUST trace to a delivered scope, an open spec, or a planned scope (with status flagged)
+- For phases that opt into machine reconciliation (Gate G101), author the `features.md` binding annotations consumed by `release-delivery-reconciliation-guard.sh`: a packet header `<!-- bubbles:reconciled-packet schemaVersion=1 phase=<phase> -->` and, per feature, `<!-- bubbles:feature id=<id> spec=<spec-dir|none> delivery=required|optional|carried|deferred-to:<phase> -->`. Every `delivery=required` feature MUST bind a real spec dir; a reconciled packet that binds nothing, or a required feature bound to `spec=none`, fails the gate loud. This is the machine-enforced form of the "every claim must trace" rule above.
 - Produce the canonical 8-doc release packet shape: `vision.md`, `features.md`, `actions.md`, `business-plan.md`, `deployment.md`, `marketing.md`, `monetization.md`, `ops-scalability.md`
 - Enforce the Product Direction Surfaces trio (`docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md`, `.github/instructions/product-principles.instructions.md`) — refuse to produce a release packet for a repo missing the trio (route to `bubbles.setup`)
 - Enforce carry-forward table in every multi-phase repo's `features.md` ("Carried Forward From Prior Phases")
@@ -41,6 +42,8 @@ handoffs:
 
 **Artifact Ownership:**
 - Owns `docs/releases/<phase>/{vision,features,actions,business-plan,deployment,marketing,monetization,ops-scalability}.md`
+- Owns the `bubbles:reconciled-packet` header + per-feature `bubbles:feature` machine-binding annotations inside `features.md` (consumed by Gate G101 `release-delivery-reconciliation-guard.sh`)
+- Owns the OPTIONAL generated `docs/generated/release-reconciliation-<phase>.md` Gate G101 audit note (a generated companion artifact under the `docs/generated/` convention — NOT a packet doc, so the "exactly 8" rule and `release-packet-location-guard.sh` are unaffected)
 - Owns `docs/plans/<phase>/P0N-<plan-name>.md` when the repo uses a plans-and-features split structure
 - Owns the Phase Overview table inside `docs/INVESTOR_OVERVIEW.md` (NOT the rest of the file — that belongs to the trio convention owner)
 - MUST NOT mutate `Product-Principles.md` (route to `bubbles.analyst` + `bubbles-product-principle-discovery` skill instead)

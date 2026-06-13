@@ -81,6 +81,9 @@ rootOutcome:                       # IS an Outcome Contract (Gate G070 shape)
   hardConstraints:
     - <constraint that MUST hold, e.g. "local-target build, not cloud">
   failureCondition: <what means the mission failed>
+  targetReleasePacket: <phase>     # OPTIONAL — when set, the DAG MUST cover every
+                                   # delivery=required feature in
+                                   # docs/releases/<phase>/features.md (Gate G101)
 repos:
   - id: <product>
     role: product
@@ -96,6 +99,10 @@ nodes:
     approvalRequired: true|false   # MUST be true for action nodes
     riskClass: <action-risk-registry class>   # REQUIRED for action nodes
     dependsOn: [ <node-id>, ... ]  # forms the DAG; must reference existing node ids
+    coversFeatures: [ <feature-id>, ... ]   # delivery nodes only; the release-packet
+                                            # feature ids this node delivers. REQUIRED
+                                            # coverage when rootOutcome.targetReleasePacket
+                                            # is set (Gate G101).
 ```
 
 ### Node Types And Their Completion Proof
@@ -136,6 +143,12 @@ mode and certified by `bubbles.validate` in that repo.
 7. **Node ids are unique.**
 8. **`rootOutcome` is a complete Outcome Contract** (intent, successSignal, hardConstraints,
    failureCondition all present).
+9. **Release coverage (Gate G101).** When `rootOutcome.targetReleasePacket` names a phase
+   whose `docs/releases/<phase>/features.md` is reachable, every `delivery=required` feature
+   MUST be covered by some `delivery`-type node's `coversFeatures[]`. An under-scoped DAG (a
+   promised required feature with no delivery node) is rejected at compile time. When the
+   packet is not reachable (a supporting-repo packet, or the source-repo `framework-validate`
+   run), coverage is enforced at convergence by `release-delivery-reconciliation-guard.sh`.
 
 ## Cross-Repo Execution Boundary (NON-NEGOTIABLE)
 
@@ -219,6 +232,16 @@ Contract — demonstrate the `successSignal` with real evidence and confirm ever
 (Outcome Contract) semantics; a scenario whose nodes all passed but whose `successSignal` is
 unproven or whose `hardConstraint` was violated is NOT complete.
 
+For a **release-phase scenario** (`rootOutcome.targetReleasePacket` set), root-outcome
+verification MUST additionally run
+`release-delivery-reconciliation-guard.sh --phase <phase> --require-coverage` in the target
+repo and treat a non-zero exit as a NON-terminal convergence state — continue (create/route
+the missing specs) or end `blocked` with the guard's report, NEVER EXIT_SUCCESS. The scenario
+is NOT complete while any `delivery=required` feature is unspecced, non-terminal, blocked, or
+implement-self-certified (Gate **G101**). This is the teeth behind "MVP delivered": a
+phase's promised required-feature set must each map to a terminal, validate-certified spec —
+not merely that the nodes the orchestrator chose to create all passed.
+
 ## Forbidden Patterns
 
 | ❌ Forbidden | ✅ Required |
@@ -238,7 +261,15 @@ unproven or whose `hardConstraint` was violated is NOT complete.
   compiled scenario DAG against every Hard Rule above. Exit 0 clean, 1 violation, 2 usage.
 - `bubbles/scripts/scenario-compile-lint-selftest.sh` is the hermetic selftest (clean DAG +
   adversarial fixtures: fan-out node, ungated action node, cyclic/dangling `dependsOn`,
-  duplicate id, unknown repo, missing Outcome Contract). Wired into `framework-validate.sh`.
+  duplicate id, unknown repo, missing Outcome Contract, and an under-scoped release-phase DAG
+  whose `targetReleasePacket` leaves a required feature uncovered). Wired into
+  `framework-validate.sh`.
+- `bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root <dir> [--phase <p>] [--require-coverage]`
+  reconciles `docs/releases/<phase>/features.md` `delivery=required` features against the
+  delivered (terminal + validate-certified) spec truth (Gate **G101**). Run by
+  `bubbles.goal`/`bubbles.sprint` at convergence for release-phase scenarios; wired into
+  `framework-validate.sh` (selftest + live guard). Hermetic selftest:
+  `bubbles/scripts/release-delivery-reconciliation-guard-selftest.sh`.
 
 ## Cross-References
 

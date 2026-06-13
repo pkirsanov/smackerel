@@ -12,6 +12,7 @@ verbose="false"
 quiet="false"
 failures=0
 scanned=0
+DERIVED_PROJECT_SLUG=""
 declare -a requested_files=()
 declare -a candidate_files=()
 declare -a target_files=()
@@ -146,6 +147,56 @@ context_permits_concrete_tool_reference() {
   return 1
 }
 
+# Derive the repo's OWN project slug so the PROJECT_NAME rule cannot omit a
+# downstream product (BUG-004 drift hole — the hardcoded list silently omitted
+# products). The slug is the installer-written MCP server id in
+# .vscode/mcp.json ("bubbles-<slug>"), with a .github/bubbles-project.yaml
+# projectName/slug fallback. The framework's own token ("bubbles") and an empty
+# slug deliberately resolve to NO derived token, so the Bubbles source repo
+# never starts false-flagging its own ubiquitous "bubbles" token.
+derive_project_slug() {
+  local slug=""
+  local mcp_json="$REPO_ROOT/.vscode/mcp.json"
+  if [[ -f "$mcp_json" ]]; then
+    local server_id
+    server_id="$(grep -oE '"bubbles-[A-Za-z0-9_-]+"' "$mcp_json" 2>/dev/null | head -1 | tr -d '"')"
+    slug="${server_id#bubbles-}"
+  fi
+  if [[ -z "$slug" ]]; then
+    local proj_yaml="$REPO_ROOT/.github/bubbles-project.yaml"
+    if [[ -f "$proj_yaml" ]]; then
+      slug="$(grep -oiE '^[[:space:]]*(projectName|slug):[[:space:]]*[A-Za-z0-9_-]+' "$proj_yaml" 2>/dev/null | head -1 | sed -E 's/.*:[[:space:]]*//')"
+      slug="$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]')"
+    fi
+  fi
+  # The framework's own name is never a detection target; empty means "no
+  # downstream identity" (the Bubbles source repo).
+  if [[ "$slug" == "bubbles" || -z "$slug" ]]; then
+    printf '%s' ""
+    return 0
+  fi
+  printf '%s' "$slug"
+}
+
+# An installer-substituted MCP id (bubbles-<slug>) on an agent `tools:` line is
+# a legitimate per-repo substitution, not project drift (BUG-004). Returns 0
+# (exempt) ONLY when, after removing bubbles-<slug> tokens from a tools
+# declaration line, no bare project name remains. A bare project name in
+# prose/comments — or a non-installer token alongside it — is never exempt.
+is_installer_mcp_id_token() {
+  local line="$1"
+  local names="$2"
+  # Scope the exemption to an agent `tools:` declaration line — the only place
+  # install.sh rewrites the canonical `bubbles` id to `bubbles-<slug>`.
+  [[ "$line" == *"tools:"* ]] || return 1
+  local stripped
+  stripped="$(printf '%s' "$line" | sed -E 's/bubbles-[A-Za-z0-9_-]+//g')"
+  if printf '%s' "$stripped" | grep -qiE "(^|[^[:alnum:]_])(${names})([^[:alnum:]_]|$)"; then
+    return 1
+  fi
+  return 0
+}
+
 run_rule_on_file() {
   local file="$1"
   local is_markdown="false"
@@ -155,10 +206,24 @@ run_rule_on_file() {
 
   grep_project_name="$(printf '%s|' "wander""aide" "guest""host" "quantitative""finance")"
   grep_project_name="${grep_project_name%|}"
+  # Union the repo's OWN derived slug so the rule cannot omit a downstream
+  # product (BUG-004 drift hole). Empty in the Bubbles framework source repo,
+  # so the source repo's behavior is unchanged.
+  if [[ -n "$DERIVED_PROJECT_SLUG" ]]; then
+    grep_project_name="${grep_project_name}|${DERIVED_PROJECT_SLUG}"
+  fi
 
   # PROJECT_NAME rule — case-insensitive grep for project names
   while IFS=: read -r line_num line; do
     [[ -z "$line_num" ]] && continue
+    # The installer rewrites the canonical `bubbles` MCP id to a per-repo
+    # `bubbles-<slug>` token on agent `tools:` lines. That substitution is
+    # legitimate framework output, not project drift, so it is exempt
+    # (BUG-004). A bare project name in prose/comments is never exempt.
+    if is_installer_mcp_id_token "$line" "$grep_project_name"; then
+      [[ "$verbose" == "true" ]] && info "Exempted installer MCP-id token in $file:$line_num"
+      continue
+    fi
     if ! is_allowlisted "$file" "PROJECT_NAME" "$line"; then
       violation "$file" "$line_num" "PROJECT_NAME" "$line"
     fi
@@ -208,6 +273,7 @@ for arg in "$@"; do
 done
 
 load_allowlist
+DERIVED_PROJECT_SLUG="$(derive_project_slug)"
 
 if [[ "$mode" == "staged" ]]; then
   while IFS= read -r file; do

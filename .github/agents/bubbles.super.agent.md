@@ -838,6 +838,7 @@ When the user provides a free-text request WITHOUT structured parameters, resolv
 "extend the release packet" / "add a new section to the phase plan" -> /bubbles.workflow mode: release-planning-to-doc <phase> mode: extend
 "coordinate release across products" / "cross-product release plan" -> /bubbles.workflow mode: release-planning-to-doc <phase> mode: cross-product
 "set up product principles" / "bootstrap the product direction trio" -> /bubbles.setup then /bubbles.workflow mode: release-planning-to-doc bootstrap
+"did we actually ship the MVP?" / "reconcile promised vs delivered features" / "is the release phase really done" -> bash bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root . --phase <phase> --require-coverage  (Gate G101: every delivery=required feature in docs/releases/<phase>/features.md must map to a terminal + validate-certified spec; bubbles.goal/bubbles.sprint run this at convergence for release-phase scenarios)
 "new capability end to end" / "from idea to release" / "ship and update the release packet" / "close the release loop" -> /bubbles.workflow mode: idea-to-release-completion phase: <phase> idea: <idea>
 "deploy to a new target" / "add home-lab adapter" / "set up cloud deployment" -> /bubbles.devops focus: deployment-target  (reference bubbles-deployment-target-adapter skill)
 "verify cosign signature" / "check image digest" / "sign the build" -> /bubbles.devops focus: release-automation
@@ -848,6 +849,7 @@ When the user provides a free-text request WITHOUT structured parameters, resolv
 "docker port allocation" / "10k Rule" / "Dual-URL Standard" -> /bubbles.devops focus: docker-ports  (reference bubbles-docker-port-standards skill)
 "declare observability posture" / "wire metrics/traces/SLOs" / "opt out of monitoring" -> /bubbles.setup focus: observability  (posture lifecycle; gates G098/G099; reference bubbles-observability-adapter skill)
 "prove SLOs" / "trace contract" / "telemetry as acceptance criteria" -> reference gates G080 + G100 + bubbles-observability-adapter skill (wired repos)
+"release phase claims more than was delivered" / "scenario said MVP done but features are stubs/missing" -> reference gate G101 (release-delivery reconciliation) + bash bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root . --phase <phase> --require-coverage
 "what's firing in prod" / "incident telemetry" / "correlate the bad deploy" -> /bubbles.stabilize  (operate-plane fetch-first, read-only)
 "review SLOs" / "SLO burn check" -> /bubbles.upkeep  (slo-review task, wired repos only)
 ```
