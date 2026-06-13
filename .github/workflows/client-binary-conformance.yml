@@ -1,0 +1,50 @@
+# Spec 085 Scope 05 — CI safety net for the knb spec 025 client-binary
+# conformance gate (FR-CBR-011 / SCN-085-E03; knb spec 025 FR-015 / CBR-004).
+#
+# Mirrors the pre-push wiring in scripts/git-hooks/pre-push: it checks out the
+# knb deploy-adapter overlay (the gate authority) and runs the SAME gate (--repo)
+# against this repo, so conformance drift pushed directly to main — bypassing a
+# developer's local pre-push hook — is still caught. No --skip / --force /
+# --insecure / --no-verify bypass flag exists here or on the gate (C3 inherited).
+#
+# The knb overlay is operator-private; the cross-repo checkout uses the
+# operator-provisioned KNB_CHECKOUT_TOKEN secret (read-only access to the knb
+# repo), exactly like other operator-private CI material in this project.
+name: client-binary-conformance
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  client-binary-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Checkout smackerel
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      with:
+        path: smackerel
+
+    - name: Checkout knb overlay (client-binary gate authority)
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      with:
+        repository: ${{ github.repository_owner }}/knb
+        token: ${{ secrets.KNB_CHECKOUT_TOKEN }}
+        path: knb
+
+    - name: Run client-binary conformance gate (--repo)
+      run: |
+        gate="knb/scripts/lint/client-binary-conformance.sh"
+        if [ ! -x "$gate" ]; then
+          echo "[F025-CI-MISSING-GATE] $gate not executable — knb checkout incomplete" >&2
+          exit 1
+        fi
+        # A non-zero E025-CLIENT-* exit fails the job (no bypass; C3).
+        bash "$gate" --repo "$GITHUB_WORKSPACE/smackerel"
