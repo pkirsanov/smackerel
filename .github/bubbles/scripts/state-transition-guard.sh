@@ -659,9 +659,9 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
     # dark-launch, and migration-pending-cutover modes.
     #
     # Manifest entries may be:
-    #   - exact file path: "smackerel/home-lab/apply.sh"
-    #   - directory prefix (trailing '/'): "smackerel/home-lab/"
-    #   - recursive glob (trailing '/**'): "smackerel/home-lab/tests/**"
+    #   - exact file path: "<product>/home-lab/apply.sh"
+    #   - directory prefix (trailing '/'): "<product>/home-lab/"
+    #   - recursive glob (trailing '/**'): "<product>/home-lab/tests/**"
     deliverable_files_list=""
     if command -v python3 &>/dev/null; then
       deliverable_files_list="$(python3 -c "

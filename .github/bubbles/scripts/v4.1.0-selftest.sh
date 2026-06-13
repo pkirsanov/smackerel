@@ -113,7 +113,7 @@ fi
 # is_deliverable_file shell function shape via a focused python check.
 mf_test="$(python3 -c "
 import json
-state={'deliverableFiles':['smackerel/home-lab/apply.sh','smackerel/home-lab/tests/**','docs/']}
+state={'deliverableFiles':['example-app/home-lab/apply.sh','example-app/home-lab/tests/**','docs/']}
 # Replicate the is_deliverable_file matching rules from state-transition-guard.sh
 def is_deliverable(f, deliverables):
     for df in deliverables:
@@ -122,10 +122,10 @@ def is_deliverable(f, deliverables):
         if df.endswith('/') and f.startswith(df): return True
     return False
 checks=[
-    ('smackerel/home-lab/apply.sh', True,  'exact path'),
-    ('smackerel/home-lab/tests/foo.bash', True, 'recursive glob'),
+    ('example-app/home-lab/apply.sh', True,  'exact path'),
+    ('example-app/home-lab/tests/foo.bash', True, 'recursive glob'),
     ('docs/Operations.md', True, 'dir prefix'),
-    ('smackerel/home-lab/bootstrap.sh', False, 'undeclared path'),
+    ('example-app/home-lab/bootstrap.sh', False, 'undeclared path'),
     ('backend/main.go', False, 'unrelated path'),
 ]
 for f, want, why in checks:

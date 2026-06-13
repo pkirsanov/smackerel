@@ -148,7 +148,12 @@ Compile the plan to `.specify/runtime/scenario-plan-<scenarioId>.json`, validate
 `bash bubbles/scripts/scenario-compile-lint.sh <plan>` (exit 0 required), preview node order
 + aggregate riskClass + approval points to the operator, then execute nodes in dependency
 order. After the final node, verify the `rootOutcome` Outcome Contract (successSignal proven,
-hardConstraints held — Gate G070 shape), not merely that each node returned success. When the
+hardConstraints held — Gate G070 shape), not merely that each node returned success. **For a
+release-phase scenario** (`rootOutcome.targetReleasePacket` set), this verification MUST also
+run `bash bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root <target-repo>
+--phase <phase> --require-coverage`; a non-zero exit is a NON-terminal convergence state
+(loop back to create/route the missing required-feature specs, or end `blocked`) — NEVER a
+success claim (Gate **G101**). When the
 sprint receives a single declared outcome rather than a goal list, delegate the compilation +
 execution to a `bubbles.goal` convergence run (or parent-expand it) instead.
 

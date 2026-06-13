@@ -22,6 +22,8 @@
 #   16. missing rootOutcome.successSignal                → exit 1
 #   17. empty rootOutcome.hardConstraints                → exit 1
 #   18. --list-forbidden contains all 6 fan-out modes (derived from modes.yaml)
+#   19. targetReleasePacket coverage — all required features covered     → exit 0
+#   20. targetReleasePacket coverage — a required feature uncovered      → exit 1 (G101)
 
 set -euo pipefail
 
@@ -176,5 +178,56 @@ for m in iterate autonomous-goal autonomous-sprint stochastic-quality-sweep retr
   fi
 done
 echo "PASS: --list-forbidden derives all 6 requiresTopLevelRuntime fan-out modes"
+
+# 19-20. release-packet coverage (IMP-006 / Gate G101)
+COVROOT="$TMP/covroot"
+mkdir -p "$COVROOT/docs/releases/mvp"
+cat > "$COVROOT/docs/releases/mvp/features.md" <<'MD'
+# mvp — features
+<!-- bubbles:reconciled-packet schemaVersion=1 phase=mvp -->
+<!-- bubbles:feature id=auth-real spec=specs/074-auth delivery=required -->
+<!-- bubbles:feature id=billing spec=specs/076-billing delivery=required -->
+<!-- bubbles:feature id=sso spec=none delivery=deferred-to:v2.0 -->
+MD
+
+write_covered() {
+  cat > "$F" <<'JSON'
+{
+  "version": 1,
+  "scenarioId": "covered-mvp",
+  "rootOutcome": {
+    "intent": "MVP delivered",
+    "successSignal": "All required MVP features validate-certified",
+    "hardConstraints": ["no fabrication"],
+    "failureCondition": "any required feature undelivered",
+    "targetReleasePacket": "mvp"
+  },
+  "repos": [{"id": "product", "role": "product"}],
+  "nodes": [
+    {"id": "deliver-auth", "type": "delivery", "repo": "product", "mode": "full-delivery", "coversFeatures": ["auth-real"]},
+    {"id": "deliver-billing", "type": "delivery", "repo": "product", "mode": "full-delivery", "coversFeatures": ["billing"]}
+  ]
+}
+JSON
+}
+
+# 19. covered scenario → exit 0
+write_covered
+if "$LINT" "$F" "$COVROOT" >/dev/null 2>&1; then
+  echo "PASS: targetReleasePacket coverage — all required features covered (exit 0)"
+else
+  echo "FAIL: covered release-phase scenario should pass"; "$LINT" "$F" "$COVROOT"; exit 1
+fi
+
+# 20. under-scoped scenario (required feature 'billing' uncovered) → exit 1
+write_covered
+jq '(.nodes[] | select(.id=="deliver-billing") | .coversFeatures) = []' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+rc=0
+"$LINT" "$F" "$COVROOT" >/dev/null 2>&1 || rc=$?
+if [[ $rc -eq 1 ]]; then
+  echo "PASS: under-scoped release-phase scenario — uncovered required feature 'billing' rejected (Gate G101, exit 1)"
+else
+  echo "FAIL: under-scoped scenario should exit 1, got $rc"; "$LINT" "$F" "$COVROOT"; exit 1
+fi
 
 echo "All scenario-compile-lint selftests passed."

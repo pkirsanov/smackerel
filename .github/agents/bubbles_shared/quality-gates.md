@@ -194,4 +194,57 @@ Before any final completion claim, confirm:
 - artifact state is coherent
 - test and evidence gates are satisfied
 - no required live-stack gaps remain
+
+## Gate Family Reference (G082–G127)
+
+> **Range:** the canonical gate set runs G001–G127 (G096 is burned; G101 is the
+> release-delivery reconciliation gate; G102–G109 is a reserved gap). The
+> sections above narrate the foundational gates
+> (G001–G081) by topic. This reference covers the later gate families so the
+> module stays current with `bubbles/registry/gates.yaml` — which remains the
+> single source of truth for each gate's exact name, behavior, and enforcing
+> script. Use `bubbles/scripts/gate-meta.sh <id>` for the authoritative entry.
+
+**Convergence & context discipline (G082–G086)** — keep autonomous loops honest:
+- **G082** `convergence_cap_enforcement_gate` — caps convergence iterations (default 10) so a loop cannot spin forever (`convergence-cap-guard.sh`).
+- **G083** `context_compaction_discipline_gate` — orchestrators compact trailing transition packets within per-spec budgets before the next dispatch (`compaction-discipline-guard.sh`).
+- **G084** `pre_existing_deferral_block_gate` — "pre-existing / out of scope" without a filed artifact is forbidden (`pre-existing-deferral-guard.sh`).
+- **G085** `framework_dogfood_evidence_gate` — the Bubbles source repo MUST NOT keep persistent `specs/`; framework work lives in `improvements/` (`framework-dogfood-guard.sh`).
+- **G086** `orchestrator_persistence_lint_gate` — orchestrators auto-continue after a non-terminal phase; only convergence/cap/stop/impossibility halts (`orchestrator-persistence-lint.sh`).
+
+**Planning & spec integrity (G087–G091)** — protect the plan→implementation chain:
+- **G087** `planning_packet_implementation_linkage_gate` — planning packets link to their implementation evidence.
+- **G088** `post_certification_spec_edit_gate` — edits to a certified spec re-open revalidation rather than silently mutating done work.
+- **G089** `inter_spec_dependency_gate` — declared cross-spec dependencies are revalidated when a dependency changes.
+- **G090** `retro_convergence_health_evidence_gate` — the `framework-health` retro emits convergence-health evidence.
+- **G091** `planning_workflow_chain_gate` — delivery-capable planning preserves the ordered `analyst → ux → design → plan` chain (`planning-workflow-chain-guard.sh`).
+
+**Terminal status & delivery delta (G092–G093)** — completion honesty:
+- **G092** `strict_terminal_status_gate` — new certification writes use only `done` or `blocked`; non-blocking notes attach as observations (`strict-terminal-status-guard.sh`).
+- **G093** `delivery_implementation_delta_gate` — done-ceiling delivery modes prove real implementation delta outside planning bookkeeping (`delivery-implementation-delta-guard.sh`).
+
+**Capability & discovery (G094–G095, G097)**:
+- **G094** `capability_foundation_gate` — capability-first design when proportionality triggers fire (`capability-foundation-guard.sh`).
+- **G095** `discovered_issue_disposition_gate` — every observed issue gets an explicit disposition (fixed/bug-filed/spec-filed/ops-filed/routed) (`discovered-issue-disposition-guard.sh`).
+- **G097** `requirement_mechanism_correspondence_gate` — a requirement that names a mechanism (PKCE, mTLS, …) must show that mechanism in code or an explicit justification (`requirement-mechanism-guard.sh`). *(the former G096 slot is burned — never reused.)*
+
+**Observability posture & SLO (G098–G100)** — IMP-001; see `bubbles-observability-adapter` skill:
+- **G098** `observability_posture_declared_gate` — every repo declares `traceContracts.observability.posture` (wired/opted-out); undeclared WARNs (`observability-posture-guard.sh`).
+- **G099** `observability_opt_out_freshness_gate` — an opt-out is recorded + expiring; an expired `revisitAfter` raises a non-blocking reminder (`observability-opt-out-guard.sh`).
+- **G100** `observability_slo_evidence_gate` — BLOCKING when wired + an instrumented scope targets an `slo:`-linked workflow; captured evidence MUST meet the contract target (`observability-slo-guard.sh`).
+
+**Release-delivery reconciliation (G101)** — IMP-006; `bubbles.releases` + `bubbles.goal`/`bubbles.sprint` convergence:
+- **G101** `release_delivery_reconciliation_gate` — every `delivery=required` feature in `docs/releases/<phase>/features.md` (machine-bound via `<!-- bubbles:feature id=… spec=… delivery=required -->` plus a `<!-- bubbles:reconciled-packet … -->` header) MUST map to a TERMINAL + validate-certified spec; a promised-but-unspecced, non-terminal, blocked, or implement-self-certified required feature is a finding. WARN-grandfathered without the header; BLOCKING with the header or `--require-coverage` (the goal/sprint release-phase convergence path); a malformed reconciled packet fails loud; framework source EXEMPT. Compile-time twin: `scenario-compile-lint.sh` requires a scenario's `rootOutcome.targetReleasePacket` to cover every required feature with a delivery node (`release-delivery-reconciliation-guard.sh`).
+
+**Release-train & upkeep (G110–G120)** — `bubbles.train` + `bubbles.upkeep`; enforced mainly by `release-train-guard.sh` + `env-pollution-scan.sh`:
+- **G110** release-train discipline · **G111** flag default-off on other trains · **G112** backup evidence · **G113** restore-drill evidence · **G114** BCDR evidence · **G115** env-pollution isolation (test code never writes prod monitoring/backup/manifest) · **G116** offsite-backup-required for prod trains · **G117** audit-trail immutability · **G118** backup-retention declared · **G119** secret-rotation recorded (hashes, never values) · **G120** PII classification declared.
+
+**Cross-train propagation (G121–G123)** — `bubbles.propagate`; `propagation-policy-guard.sh`:
+- **G121** propagation policy declared · **G122** receiving-train validation required · **G123** propagation ledger recorded (append-only).
+
+**Incident, framework-health, model-tier, capability-consumer (G124–G127)**:
+- **G124** `incident_severity_declared_gate` — `incident-fastlane` classifies each finding's severity; an incident routes rollback to `bubbles.train`.
+- **G125** `framework_health_evidence_gate` — `bubbles.retro target: framework` emits a proposal under `improvements/` and never mutates framework files (`retro-framework-health.sh`).
+- **G126** `model_tier_floor_gate` — high-stakes phases enforce a model floor when declared (`model-tier-advisory.sh`).
+- **G127** `capability_consumer_freshness_gate` — every `state: shipped` capability in `capability-ledger.yaml` declares a non-empty `consumers:` list whose paths exist (`capability-consumer-freshness.sh`).
 - no fabricated, deferred, or contradictory claims remain

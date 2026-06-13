@@ -68,7 +68,7 @@ assert_fail "writes to /srv/backups/ flagged" "/srv/backups/"
 reset_tmp
 cat > "$TMP/tests/bad_manifest_test.py" <<'EOF'
 def test_bad():
-    update("knb/smackerel/home-lab/manifest.yaml", {})
+    update("knb/exampleproduct/home-lab/manifest.yaml", {})
 EOF
 assert_fail "writes to knb manifest path flagged" "knb"
 
@@ -92,7 +92,7 @@ assert_fail "writes to feature-flags bundle flagged" "feature-flags"
 rm -rf "$TMP" && mkdir -p "$TMP/tests"
 cat > "$TMP/tests/comment_test.py" <<'EOF'
 # This test references /srv/backups/ in a comment only.
-# It also references knb/smackerel/home-lab/manifest.yaml as documentation.
+# It also references knb/exampleproduct/home-lab/manifest.yaml as documentation.
 def test_clean():
     assert True
 EOF
