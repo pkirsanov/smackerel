@@ -11,8 +11,8 @@
   "flagsIntroduced": [],
   "planningOnly": false,
   "planningOnlyJustification": "",
-  "lastUpdatedAt": "2026-06-13T00:30:00Z",
-  "certifiedAt": "2026-06-13T00:30:00Z",
+  "lastUpdatedAt": "2026-06-13T18:05:00Z",
+  "certifiedAt": "2026-06-13T18:05:00Z",
   "requiresRevalidation": false,
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -51,8 +51,8 @@
   "certification": {
     "status": "done",
     "certifiedBy": "bubbles.workflow",
-    "certifiedAt": "2026-06-13T00:30:00Z",
-    "lastEvaluatedAt": "2026-06-13T00:30:00Z",
+    "certifiedAt": "2026-06-13T18:05:00Z",
+    "lastEvaluatedAt": "2026-06-13T18:05:00Z",
     "evidenceRef": "specs/086-local-client-build/report.md",
     "completedScopes": [
       "SCOPE-01",
