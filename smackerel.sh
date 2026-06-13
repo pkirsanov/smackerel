@@ -69,6 +69,16 @@ Commands:
                               Flags forwarded to orchestrator: --source-sha,
                               --knb-rev, --auto-cleanup-stale-images,
                               --dry-run, --rollback (see orchestrator --help).
+  local-client-build --target <target> [--allow-dirty] [--out-dir <dir>]
+                              Spec 086 — build the Flutter Android client
+                              (clients/mobile/assistant) LOCALLY, operator-sign
+                              it (cosign sign-blob, trustModel local-operator),
+                              and emit a local build manifest clients: block
+                              (provenance local-operator) consumable by the knb
+                              home-lab adapter. The knb adapter consumes +
+                              verifies; this command BUILDS + SIGNS. Target:
+                              home-lab. The REAL flutter build + operator-sign
+                              run on evo-x2.
   deploy-target <target> <action> [args]
                               Run a deployment-target adapter action (legacy
                               spec-017/018 form; preserved for backward compat).
@@ -1852,6 +1862,9 @@ E2EUI_HELP
     ;;
   help)
     usage
+    ;;
+  local-client-build)
+    bash "$SCRIPT_DIR/scripts/commands/local-client-build.sh" "$@"
     ;;
   deploy-target)
     bash "$SCRIPT_DIR/scripts/commands/deploy_target.sh" "$@"
