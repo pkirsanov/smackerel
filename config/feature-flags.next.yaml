@@ -4,4 +4,7 @@ train: next
 flags:
   # Owned by train 'mvp' (specs/083-card-rewards-companion); MUST be false here for G111 parity.
   card_rewards: false
+  # Spec 085 — Lane B (Play Store). Owned by train 'mvp'; dormant (false) here too
+  # (default-OFF in every train; G111 parity).
+  clientReleaseLaneB: false
 metadata: {}

@@ -54,3 +54,29 @@ else
     "       knb CI safety net (scope 11) catches drift on push to main." >&2
 fi
 # === end knb spec 019 scope 10 ===
+
+# === knb spec 025 — per-product client-binary conformance gate ===
+# Spec: specs/085-client-binary-release/ ; knb spec 025 FR-015 (CBR-004).
+# Mirrors the deploy-cli-uniformity block above (same resolve_knb_checkout
+# helper, WARN-if-missing, no bypass). Verifies smackerel's deploy/contract.yaml
+# clients: block, env-ref-only distribution signing (no committed keystore /
+# inline password), and the default-OFF Lane-B guard against the knb gate. A
+# non-zero E025-CLIENT-* exit blocks the push. No --skip / --force / --insecure /
+# --no-verify flag exists here or on the gate (C3 inherited).
+if _knb_root="$(resolve_knb_checkout)"; then
+  _cbr_gate="$_knb_root/scripts/lint/client-binary-conformance.sh"
+  if [ ! -x "$_cbr_gate" ]; then
+    printf '%s\n' \
+      "[F025-PRE-PUSH-MISSING-GATE] client-binary-conformance gate not executable at $_cbr_gate" \
+      "       knb checkout at $_knb_root appears incomplete - push rejected." \
+      "       Fix: ensure scripts/lint/client-binary-conformance.sh exists in knb and is executable." >&2
+    exit 1
+  fi
+  bash "$_cbr_gate" --repo "$(git rev-parse --show-toplevel)" || exit $?
+else
+  printf '%s\n' \
+    "[WARN] knb spec 025 client-binary conformance gate SKIPPED: no knb checkout found." \
+    "       Set KNB_REPO_ROOT or check out knb at \$HOME/knb to enable local enforcement." \
+    "       knb CI safety net catches drift on push to main." >&2
+fi
+# === end knb spec 025 client-binary conformance gate ===
