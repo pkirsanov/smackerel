@@ -29,7 +29,7 @@ Exactly 8 docs per phase, no more and no fewer:
 | File | Purpose |
 |------|---------|
 | `vision.md` | Self-contained phase vision; restated inline (no cross-references to prior phases' vision.md) |
-| `features.md` | Capability list with carry-forward table; every claim traces to spec/ledger evidence |
+| `features.md` | Capability list with carry-forward table; every claim traces to spec/ledger evidence. For phases that opt into machine reconciliation (Gate G101), carry a `<!-- bubbles:reconciled-packet schemaVersion=1 phase=<phase> -->` header plus a per-feature `<!-- bubbles:feature id=<id> spec=<spec-dir\|none> delivery=required\|optional\|carried\|deferred-to:<phase> -->` annotation; every `delivery=required` feature MUST bind a real spec dir (`release-delivery-reconciliation-guard.sh`) |
 | `actions.md` | Concrete actions for the phase, including open questions and route_required dispatches |
 | `business-plan.md` | Phase-scoped business plan |
 | `deployment.md` | Phase-scoped deployment plan |
@@ -58,6 +58,7 @@ If you find a release packet at one of these locations, route to `bubbles.releas
 |----------|-------|-------|
 | `docs/INVESTOR_OVERVIEW.md` Phase Overview row | bubbles.releases | Updated when a packet is authored or refreshed; rest of file belongs to the trio convention owner |
 | `docs/plans/<phase>/P0N-*.md` | bubbles.releases | Optional per-plan files when the repo uses the plans-and-features split |
+| `docs/generated/release-reconciliation-<phase>.md` | bubbles.releases | OPTIONAL generated Gate G101 audit note (derived from `release-delivery-reconciliation-guard.sh`). Lives under `docs/generated/`, NOT in the packet folder — so the "no 9th doc" rule and `release-packet-location-guard.sh` are unaffected. |
 
 ## Ownership (BLOCKING)
 - **Owner:** `bubbles.releases` (Sonny "Iron Lung" Smith)

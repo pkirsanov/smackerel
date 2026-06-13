@@ -238,7 +238,16 @@ authoritative contract. Summary:
    Append one `.specify/runtime/scenario-runs.jsonl` ledger record per node attempt.
 6. **Verify the root outcome.** After all nodes are terminal, demonstrate the `successSignal`
    with real evidence and confirm every `hardConstraint` held (Gate G070 shape) — not merely
-   that each node returned success.
+   that each node returned success. **For a release-phase scenario** (`rootOutcome.targetReleasePacket`
+   set), this verification step MUST additionally run
+   `bash bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root <target-repo> --phase <phase> --require-coverage`
+   and treat a non-zero exit as a NON-terminal convergence state: loop back to create/route the
+   missing required-feature specs, or end `blocked` with the guard's report — NEVER EXIT_SUCCESS.
+   A release phase is NOT delivered while any `delivery=required` feature in
+   `docs/releases/<phase>/features.md` is unspecced, non-terminal, blocked, or
+   implement-self-certified (Gate **G101**). This is the mechanical teeth behind a "phase
+   delivered" claim — promised required features must each map to a terminal, validate-certified
+   spec, not merely that the nodes the orchestrator chose to create all passed.
 
 Hard rules (mechanically enforced): no fan-out mode as a node, exactly one of mode/agent per
 node, action nodes fully gated, per-repo certification only, no cross-repo `state.json`

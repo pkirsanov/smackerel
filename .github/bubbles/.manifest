@@ -53,6 +53,7 @@ bubbles/scripts/framework-dogfood-guard-selftest.sh
 bubbles/scripts/framework-dogfood-guard.sh
 bubbles/scripts/framework-validate.sh
 bubbles/scripts/fun-mode.sh
+bubbles/scripts/gate-catalog-freshness.sh
 bubbles/scripts/gate-id-grep-selftest.sh
 bubbles/scripts/gate-id-grep.sh
 bubbles/scripts/gate-meta.sh
@@ -141,6 +142,8 @@ bubbles/scripts/regression-baseline-guard.sh
 bubbles/scripts/regression-quality-guard-selftest.sh
 bubbles/scripts/regression-quality-guard.sh
 bubbles/scripts/release-check.sh
+bubbles/scripts/release-delivery-reconciliation-guard-selftest.sh
+bubbles/scripts/release-delivery-reconciliation-guard.sh
 bubbles/scripts/release-manifest-purity-selftest.sh
 bubbles/scripts/release-manifest-selftest.sh
 bubbles/scripts/release-packet-location-guard-selftest.sh

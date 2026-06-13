@@ -21,6 +21,11 @@
 #   7. Node ids unique.
 #   8. rootOutcome is a complete Outcome Contract (intent, successSignal,
 #      hardConstraints[non-empty], failureCondition).
+#   9. release coverage (IMP-006 / Gate G101): when rootOutcome.targetReleasePacket
+#      names a phase whose docs/releases/<phase>/features.md is reachable under the
+#      repo-root, every delivery=required feature MUST be covered by some
+#      delivery-type node's coversFeatures[]. Unreachable features.md → info-only
+#      (the convergence-time reconciliation guard is the backstop).
 #
 # Exit 0 = clean. Exit 1 = violation. Exit 2 = usage error.
 
@@ -243,6 +248,34 @@ if [[ "${NODE_COUNT:-0}" -gt 0 ]]; then
   done
   if [[ "$resolved_count" -lt "$total_nodes" ]]; then
     err "dependsOn graph contains a cycle (could not topologically order all nodes)"
+  fi
+fi
+
+# ---- release-packet coverage (IMP-006 / Gate G101) -------------------------
+# When rootOutcome.targetReleasePacket names a phase AND that phase's
+# features.md is reachable under the repo-root, every delivery=required feature
+# MUST be covered by some delivery-type node's coversFeatures[]. This is the
+# compile-time twin of release-delivery-reconciliation-guard.sh: it catches an
+# under-scoped DAG (a promised required feature with no delivery node) BEFORE
+# execution. When features.md is not reachable (e.g. it lives in a supporting
+# repo the lint cannot see, or the source-repo framework-validate run), the
+# convergence-time guard remains the backstop, so this stays informational.
+TARGET_PHASE="$(jq -r '.rootOutcome.targetReleasePacket // ""' "$SCENARIO")"
+if [[ -n "$TARGET_PHASE" ]]; then
+  FEATURES_MD="$ROOT/docs/releases/$TARGET_PHASE/features.md"
+  if [[ -f "$FEATURES_MD" ]]; then
+    mapfile -t REQUIRED_FEATURES < <(grep -oE 'bubbles:feature[^>]*' "$FEATURES_MD" 2>/dev/null |
+      grep -E 'delivery=required' |
+      grep -oE 'id=[^[:space:]>]+' | sed -E 's/^id=//')
+    mapfile -t COVERED_FEATURES < <(jq -r '[ .nodes[]? | select(.type=="delivery") | (.coversFeatures // [])[] ] | .[]' "$SCENARIO" 2>/dev/null || true)
+    for feat in "${REQUIRED_FEATURES[@]}"; do
+      [[ -n "$feat" ]] || continue
+      if ! in_list "$feat" "${COVERED_FEATURES[@]}"; then
+        err "rootOutcome.targetReleasePacket '$TARGET_PHASE': required feature '$feat' is not covered by any delivery node's coversFeatures[] (Gate G101 — a release-phase scenario MUST cover every required feature with a delivery node)"
+      fi
+    done
+  else
+    info "rootOutcome.targetReleasePacket '$TARGET_PHASE': features.md not reachable at $FEATURES_MD; release coverage will be enforced at convergence by release-delivery-reconciliation-guard.sh (Gate G101)"
   fi
 fi
 

@@ -109,6 +109,34 @@ If release planning surfaces a new product principle (e.g., a cross-product boun
 /bubbles.analyst  surface a new product principle for the cross-product paired-companion boundary
 ```
 
+## Reconcile Promised vs Delivered (Gate G101)
+
+A release packet's `features.md` is a promise. Gate **G101** makes that promise mechanically checkable so a scenario can never report a phase "delivered" while required features are unspecced, non-terminal, blocked, or implement-self-certified.
+
+For a phase that opts in, `bubbles.releases` annotates `features.md` with HTML-comment machine bindings (the visible prose tables are untouched):
+
+```text
+<!-- bubbles:reconciled-packet schemaVersion=1 phase=mvp -->
+<!-- bubbles:feature id=auth-real spec=specs/074-real-authentication delivery=required -->
+<!-- bubbles:feature id=enterprise-sso spec=none delivery=deferred-to:v2.0 -->
+<!-- bubbles:feature id=market-routes spec=specs/002-signal-engine delivery=carried -->
+```
+
+- `delivery` is one of `required` | `optional` | `carried` | `deferred-to:<phase>`. Only `required` is enforced by the delivery layer.
+- Every `delivery=required` feature MUST bind a real spec dir whose `state.json` is terminal (`done` or the mode's ceiling) AND validate-certified (`validate` in completed phases).
+
+Run the reconciliation directly:
+
+```
+bash bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root . --phase mvp --require-coverage
+```
+
+- Exit 0 = every required feature delivered + validate-certified.
+- Exit 1 = a required feature is missing a spec, non-terminal, blocked, or implement-self-certified (the guard names each one).
+- Without the `bubbles:reconciled-packet` header and without `--require-coverage`, the guard is WARN-only (grandfathered) so existing packets backfill at their own pace.
+
+`bubbles.goal` and `bubbles.sprint` run this guard automatically at convergence for any scenario whose `rootOutcome.targetReleasePacket` names a phase — so an autonomous "deliver the MVP" run cannot self-certify success past an under-delivered phase. The compile-time twin in `scenario-compile-lint.sh` additionally rejects an under-scoped scenario DAG before it executes.
+
 This invokes the `bubbles-product-principle-discovery` skill.
 
 ## The Honest-Capability Rule

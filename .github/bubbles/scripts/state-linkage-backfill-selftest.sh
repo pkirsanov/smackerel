@@ -211,8 +211,8 @@ assert_stderr_contains "S3" "already backfilled"
 assert_files_same "S3 state" "$snapshot" "$state"
 
 echo ""
-echo "--- S4: Smackerel 053-shaped planning packet is classifiable ---"
-repo="$(stage_repo s4-smackerel-053)"
+echo "--- S4: example-app 053-shaped planning packet is classifiable ---"
+repo="$(stage_repo s4-example-053)"
 state="$repo/specs/053-ci-ops-evidence-hardening/state.json"
 mkdir -p "$(dirname "$state")"
 cat > "$state" <<'EOF'
