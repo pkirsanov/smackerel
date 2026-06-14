@@ -12,9 +12,9 @@
   "planningOnly": false,
   "planningOnlyJustification": null,
   "createdAt": "2026-06-14T03:55:00Z",
-  "completedAt": "2026-06-14T04:15:00Z",
-  "certifiedAt": "2026-06-14T04:15:00Z",
-  "lastUpdatedAt": "2026-06-14T04:15:00Z",
+  "completedAt": "2026-06-14T06:18:00Z",
+  "certifiedAt": "2026-06-14T06:18:00Z",
+  "lastUpdatedAt": "2026-06-14T06:18:00Z",
   "releaseTrain": "mvp",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -154,7 +154,7 @@
       "round": 0,
       "locked": true
     },
-    "hardenedAt": "2026-06-14T04:15:00Z",
+    "hardenedAt": "2026-06-14T06:18:00Z",
     "certifiedBy": "bubbles.goal (direct-implement full-delivery; real captured telemetry)"
   },
   "activeBugs": [],
