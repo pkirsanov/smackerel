@@ -13,8 +13,8 @@
   "planningOnlyJustification": null,
   "createdAt": "2026-06-14T07:10:00Z",
   "completedAt": "2026-06-14T15:05:00Z",
-  "certifiedAt": "2026-06-14T15:05:00Z",
-  "lastUpdatedAt": "2026-06-14T15:05:00Z",
+  "certifiedAt": "2026-06-14T15:55:00Z",
+  "lastUpdatedAt": "2026-06-14T15:55:00Z",
   "releaseTrain": "mvp",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -339,7 +339,7 @@
   "certification": {
     "status": "done",
     "certifiedBy": "bubbles.validate",
-    "certifiedAt": "2026-06-14T15:05:00Z",
+    "certifiedAt": "2026-06-14T15:55:00Z",
     "completedScopes": [
       "01",
       "02",
