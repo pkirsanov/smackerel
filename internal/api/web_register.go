@@ -23,6 +23,7 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
 	"errors"
 	"log/slog"
@@ -30,7 +31,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/smackerel/smackerel/internal/auth/webcreds"
+	"github.com/smackerel/smackerel/internal/auth/webinvite"
 )
 
 // Exact user-facing banner strings — bound verbatim by spec.md / design.md
@@ -81,24 +85,42 @@ func (d *Dependencies) HandleWebRegister(w http.ResponseWriter, r *http.Request)
 	invite := r.PostForm.Get("invite-token")
 	configured := d.WebRegistrationInviteToken
 
-	// Step 3 — invite-token gate FIRST (constant-time, value-safe).
+	// Step 3 — invite gate FIRST (OR-gate: static secret OR live DB invite),
+	// value-safe. The gate is evaluated before any username/password logic so a
+	// request without a valid credential can never produce a field-specific or
+	// username-existence signal (non-enumeration). Every gate failure — wrong
+	// static secret, unknown/used/revoked/expired DB invite, and the disabled
+	// case — yields the BYTE-IDENTICAL 401 + shared banner + blank-secret
+	// re-render (the preserved username is BLANK on every gate-reject path).
 	//
-	// Disabled / unavailable: a nil store OR an empty configured token means
-	// registration is OFF. This is a plain comparison of a server-side
-	// constant (no secret material), so it needs no constant-time treatment;
-	// AC-4's constant-time requirement is about comparing the configured
-	// SECRET value, done below. A naive single ConstantTimeCompare would be
-	// WRONG here: when configured == "" and invite == "" it returns a match,
-	// which would be OPEN SIGNUP. The explicit empty-configured guard prevents
-	// that trap. On this path the preserved username is BLANK (the request
-	// never advanced past the gate), keeping wrong-token and disabled
-	// responses byte-identical.
-	if d.WebCredentials == nil || configured == "" {
+	// Disabled / unavailable (fail-loud, never open signup): a nil credentials
+	// store, OR neither a configured static secret NOR a DB-invite store. This
+	// is a plain comparison of server-side constants (no secret material), so it
+	// needs no constant-time treatment.
+	if d.WebCredentials == nil || (configured == "" && d.WebInvites == nil) {
 		d.logRegisterReject(r, "gate")
 		renderRegisterError(w, r, sanitizeNext(nextRaw), "", registerGateBanner, http.StatusUnauthorized)
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(invite), []byte(configured)) != 1 {
+	// Static secret first (cheap, constant-time on the configured SECRET value).
+	// The explicit `configured != ""` conjunct prevents the OPEN-SIGNUP trap: a
+	// bare ConstantTimeCompare would match an empty submitted token against an
+	// empty configured secret. AC-4's constant-time requirement is satisfied
+	// here (the configured secret is compared byte-by-byte).
+	staticOK := configured != "" &&
+		subtle.ConstantTimeCompare([]byte(invite), []byte(configured)) == 1
+	// Live DB invite second (only when the static path did NOT match and an
+	// invite store exists). IsLive is a NON-mutating gate read (the guarded
+	// UPDATE in ConsumeAndCreate is the single-use authority). A DB error keeps
+	// dbLive=false — value-safe (the error is never surfaced), so a transient
+	// failure degrades to the same generic banner, never to open signup.
+	dbLive := false
+	if !staticOK && d.WebInvites != nil {
+		if live, err := d.WebInvites.IsLive(r.Context(), webinvite.HashToken(invite)); err == nil {
+			dbLive = live
+		}
+	}
+	if !staticOK && !dbLive {
 		d.logRegisterReject(r, "gate")
 		renderRegisterError(w, r, sanitizeNext(nextRaw), "", registerGateBanner, http.StatusUnauthorized)
 		return
@@ -137,16 +159,46 @@ func (d *Dependencies) HandleWebRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Step 7 — create (create=true ⇒ ErrUserExists guarantees NO overwrite).
-	if err := d.WebCredentials.UpsertPassword(r.Context(), username, password, true); err != nil {
-		if errors.Is(err, webcreds.ErrUserExists) {
+	// Step 7 — create, branching by which gate path succeeded.
+	if staticOK {
+		// UNCHANGED spec-091 static-secret path — reusable bootstrap, consumes
+		// NO invite (create=true ⇒ ErrUserExists guarantees NO overwrite).
+		if err := d.WebCredentials.UpsertPassword(r.Context(), username, password, true); err != nil {
+			if errors.Is(err, webcreds.ErrUserExists) {
+				d.logRegisterReject(r, "duplicate")
+				renderRegisterError(w, r, sanitizeNext(nextRaw), username, registerDuplicateUserMsg, http.StatusConflict)
+				return
+			}
+			d.logRegisterReject(r, "server")
+			renderRegisterError(w, r, sanitizeNext(nextRaw), username, registerServerErrorMsg, http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// DB-invite path — atomically claim the invite AND create the account in
+		// ONE tx (webinvite owns the boundary; the account INSERT runs via the
+		// HashAndInsertTx callback on the SAME tx). A duplicate username rolls the
+		// WHOLE tx back, so the invite is NOT consumed and can be retried.
+		outcome, err := d.WebInvites.ConsumeAndCreate(r.Context(), webinvite.HashToken(invite), username,
+			func(ctx context.Context, tx pgx.Tx) error {
+				return webcreds.HashAndInsertTx(ctx, tx, username, password)
+			})
+		switch {
+		case err != nil && errors.Is(err, webcreds.ErrUserExists):
 			d.logRegisterReject(r, "duplicate")
 			renderRegisterError(w, r, sanitizeNext(nextRaw), username, registerDuplicateUserMsg, http.StatusConflict)
 			return
+		case err != nil:
+			d.logRegisterReject(r, "server")
+			renderRegisterError(w, r, sanitizeNext(nextRaw), username, registerServerErrorMsg, http.StatusInternalServerError)
+			return
+		case outcome == webinvite.ConsumeInvalid:
+			// Lost the race after IsLive (a concurrent consume/revoke/expiry) —
+			// non-enumerating generic banner, identical to a wrong static secret.
+			d.logRegisterReject(r, "gate")
+			renderRegisterError(w, r, sanitizeNext(nextRaw), "", registerGateBanner, http.StatusUnauthorized)
+			return
 		}
-		d.logRegisterReject(r, "server")
-		renderRegisterError(w, r, sanitizeNext(nextRaw), username, registerServerErrorMsg, http.StatusInternalServerError)
-		return
+		// outcome == ConsumeCreated ⇒ fall through to the shared success 303.
 	}
 
 	// Success — 303 to /login?registered=1 (carry the sanitised next when a

@@ -1,0 +1,252 @@
+{
+  "specId": "093-admin-generated-registration-invites",
+  "generatedBy": "bubbles.plan (full-delivery, parent-expanded by bubbles.goal)",
+  "generatedAt": "2026-06-14T19:15:00Z",
+  "schema": "scenario-manifest/v1",
+  "note": "One entry per Gherkin scenario across scopes.md (19 total). changeType=new for every scenario: the feature is purely additive — a new web_registration_invites table, a new internal/auth/webinvite repo, a new /cards/admin/invites admin surface, and an ADDITIVELY-widened /register gate (now accepts a live DB invite OR the unchanged static secret). No external contract (request fields, banner strings, statuses, no-cookie 303, /cards routes) is changed, replaced, or removed, so no lockdown-approvals / invalidation ledger is required (Gate G058/G059). requiredTestType: unit for the OR-gate branch + non-enumeration + Generate + anonymous-blocked; integration (real ephemeral PostgreSQL, no internal mocks) for every atomic-consume / single-use / rollback / DB-invite register path; e2e-ui (live stack + spec-077 CSP guard, no interception) for the admin UI flow and the live deploy proof. regressionRequired=true throughout (persistent E2E + spec-091/092 byte-identical regression).",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-093-01",
+      "scope": "01",
+      "title": "Generate stores ONLY the hash and returns the plaintext exactly once",
+      "uc": "UC-1",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/auth/webinvite/repo_test.go::TestWebInvite_Generate_HashedAtRest_PlaintextOnce"],
+      "evidenceRefs": ["report.md#scope-01-generate"]
+    },
+    {
+      "scenarioId": "SCN-093-02",
+      "scope": "01",
+      "title": "ConsumeAndCreate is atomic single-use; a second consume is rejected",
+      "uc": "UC-3",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/auth/webinvite/repo_test.go::TestWebInvite_ConsumeAndCreate_SingleUse"],
+      "evidenceRefs": ["report.md#scope-01-consume-singleuse"]
+    },
+    {
+      "scenarioId": "SCN-093-03",
+      "scope": "01",
+      "title": "Two concurrent consumes of one invite yield exactly one success (TOCTOU)",
+      "uc": "AC-5",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/auth/webinvite/concurrent_consume_test.go::TestWebInvite_ConcurrentConsume_ExactlyOneWins"],
+      "evidenceRefs": ["report.md#scope-01-concurrent"]
+    },
+    {
+      "scenarioId": "SCN-093-04",
+      "scope": "01",
+      "title": "An expired invite is not live and cannot be consumed",
+      "uc": "UC-4",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/auth/webinvite/repo_test.go::TestWebInvite_Expired_NotLive_NotConsumable"],
+      "evidenceRefs": ["report.md#scope-01-expired"]
+    },
+    {
+      "scenarioId": "SCN-093-05",
+      "scope": "01",
+      "title": "A duplicate username rolls the whole tx back; the invite is NOT consumed",
+      "uc": "AC-5",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/auth/webinvite/repo_test.go::TestWebInvite_DuplicateUsername_RollsBack_InviteUnconsumed"],
+      "evidenceRefs": ["report.md#scope-01-dup-rollback"]
+    },
+    {
+      "scenarioId": "SCN-093-06",
+      "scope": "01",
+      "title": "List returns metadata only — never the hash, never the plaintext",
+      "uc": "UC-8",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/auth/webinvite/repo_test.go::TestWebInvite_List_MetadataOnly_NoSecrets"],
+      "evidenceRefs": ["report.md#scope-01-list"]
+    },
+    {
+      "scenarioId": "SCN-093-07",
+      "scope": "01",
+      "title": "Revoke transitions an outstanding invite and is a no-op otherwise",
+      "uc": "UC-9",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/auth/webinvite/repo_test.go::TestWebInvite_Revoke_DoneAndNoop"],
+      "evidenceRefs": ["report.md#scope-01-revoke"]
+    },
+    {
+      "scenarioId": "SCN-093-08",
+      "scope": "02",
+      "title": "A new person registers once with a live DB invite (account + atomic mark-used)",
+      "uc": "UC-2",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_invite_test.go::TestWebRegister_DBInvite_ConsumesAndCreates_303NoCookie"],
+      "evidenceRefs": ["report.md#scope-02-consume"]
+    },
+    {
+      "scenarioId": "SCN-093-09",
+      "scope": "02",
+      "title": "Reusing a consumed DB invite is rejected (single-use)",
+      "uc": "UC-3",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_invite_test.go::TestWebRegister_DBInvite_ReuseRejected_NoSecondAccount"],
+      "evidenceRefs": ["report.md#scope-02-reuse"]
+    },
+    {
+      "scenarioId": "SCN-093-10",
+      "scope": "02",
+      "title": "The static secret still registers and consumes NOTHING (bootstrap)",
+      "uc": "UC-5",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_invite_test.go::TestWebRegister_StaticSecret_Registers_NoConsume"],
+      "evidenceRefs": ["report.md#scope-02-static"]
+    },
+    {
+      "scenarioId": "SCN-093-11",
+      "scope": "02",
+      "title": "Every invalid gate input returns the byte-identical generic banner (non-enumerating)",
+      "uc": "UC-6",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/api/web_register_invite_test.go::TestWebRegister_OrGate_BranchSelection",
+        "internal/api/web_register_invite_test.go::TestWebRegister_NonEnumerating_ByteIdentical"
+      ],
+      "evidenceRefs": ["report.md#scope-02-gate-branch", "report.md#scope-02-nonenum"]
+    },
+    {
+      "scenarioId": "SCN-093-12",
+      "scope": "02",
+      "title": "A duplicate username on the DB-invite path rolls back; the invite is NOT consumed",
+      "uc": "AC-5",
+      "requiredTestType": "integration",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_invite_test.go::TestWebRegister_DBInvite_DuplicateUsername_409_Unconsumed"],
+      "evidenceRefs": ["report.md#scope-02-dup"]
+    },
+    {
+      "scenarioId": "SCN-093-13",
+      "scope": "03",
+      "title": "Operator generates an invite; the plaintext is shown exactly once",
+      "uc": "UC-1",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/web/invites_test.go::TestAdminInviteGenerate_RenderOnce_200",
+        "web/pwa/tests/cardrewards_invites.spec.ts::generate shows the one-time token exactly once"
+      ],
+      "evidenceRefs": ["report.md#scope-03-generate", "report.md#scope-03-e2e"]
+    },
+    {
+      "scenarioId": "SCN-093-14",
+      "scope": "03",
+      "title": "The invite list shows metadata only, no secrets",
+      "uc": "UC-8",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/web/invites_test.go::TestAdminInvitesPage_MetadataOnly_503WhenNil",
+        "web/pwa/tests/cardrewards_invites.spec.ts::list shows metadata only, no token or hash"
+      ],
+      "evidenceRefs": ["report.md#scope-03-page", "report.md#scope-03-e2e"]
+    },
+    {
+      "scenarioId": "SCN-093-15",
+      "scope": "03",
+      "title": "Operator revokes an outstanding invite via PRG",
+      "uc": "UC-9",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/web/invites_test.go::TestAdminInviteRevoke_303PRG_NoticeRace",
+        "web/pwa/tests/cardrewards_invites.spec.ts::revoke transitions the row to Revoked"
+      ],
+      "evidenceRefs": ["report.md#scope-03-revoke", "report.md#scope-03-e2e"]
+    },
+    {
+      "scenarioId": "SCN-093-16",
+      "scope": "03",
+      "title": "A not-logged-in user cannot reach the invite pages",
+      "uc": "UC-7",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/web/invites_test.go::TestAdminInvites_AnonymousBlocked_WebAuthMiddleware"],
+      "evidenceRefs": ["report.md#scope-03-anon"]
+    },
+    {
+      "scenarioId": "SCN-093-17",
+      "scope": "03",
+      "title": "The invite surface is CSP-clean (spec-077 guard) and never leaks the token to the list",
+      "uc": "AC-7",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_invites.spec.ts::CSP-clean across generate/reveal/list/revoke + token absent from GET list DOM"],
+      "evidenceRefs": ["report.md#scope-03-csp"]
+    },
+    {
+      "scenarioId": "SCN-093-18",
+      "scope": "04",
+      "title": "Spec-091 and spec-092 are unchanged after the full feature",
+      "uc": "UC-10",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/api/web_register_test.go (spec-091, unchanged)",
+        "web/pwa/tests/cardrewards_dashboard.spec.ts (spec-092, unchanged)"
+      ],
+      "evidenceRefs": ["report.md#scope-04-regression"]
+    },
+    {
+      "scenarioId": "SCN-093-19",
+      "scope": "04",
+      "title": "Live home-lab generate -> register -> used -> reuse-rejected (success signal)",
+      "uc": "Outcome Contract",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["live home-lab deployed core :: generate->register(used)->reuse-rejected (no interception)"],
+      "evidenceRefs": ["report.md#scope-04-live"]
+    }
+  ]
+}
