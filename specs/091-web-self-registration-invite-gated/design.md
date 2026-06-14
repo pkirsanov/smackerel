@@ -242,8 +242,8 @@ screens can use it.
 - **Gate axis:** `/login` gate = credential verify (`VerifyAndTouch`); `/register` gate =
   constant-time invite-token compare **then** credential create (`UpsertPassword(create=true)`).
 
-### Single-Implementation Justification (handler layer)
-The **registration intake handler itself** is intentionally a single concrete implementation: there
+### Single-Implementation Justification
+_Handler layer._ The **registration intake handler itself** is intentionally a single concrete implementation: there
 is exactly one registration path (invite-token-gated, argon2id, full-admin band). There is no second
 provider/strategy/variant of "register a web user," so no provider/adapter abstraction is introduced
 for the handler — that would be speculative generality (YAGNI). The shared-surface obligation is fully
