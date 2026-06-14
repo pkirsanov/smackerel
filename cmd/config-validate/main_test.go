@@ -119,6 +119,11 @@ func TestRun_ConstructedValidEnv_ExitsZero(t *testing.T) {
 		"PHOTOS_INTELLIGENCE_AESTHETIC_MODEL", "PHOTOS_INTELLIGENCE_OCR_MODEL",
 		"AGENT_PROVIDER_DEFAULT_MODEL", "AGENT_PROVIDER_REASONING_MODEL",
 		"AGENT_PROVIDER_FAST_MODEL", "AGENT_PROVIDER_VISION_MODEL", "AGENT_PROVIDER_OCR_MODEL",
+		// Spec 088 — the open-knowledge gather model + synthesis model must also
+		// point at the profiled fixture model so the new switchable_models
+		// co-residence envelope check (validateModelEnvelopes) sees a profiled,
+		// envelope-fitting set.
+		"ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID", "ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID",
 	}
 	lines := strings.Split(live, "\n")
 	for i, ln := range lines {
@@ -129,6 +134,12 @@ func TestRun_ConstructedValidEnv_ExitsZero(t *testing.T) {
 		}
 		if strings.HasPrefix(ln, "ML_MODEL_MEMORY_PROFILES_JSON=") {
 			lines[i] = `ML_MODEL_MEMORY_PROFILES_JSON='[{"model":"bug-045-fixture-llm-6gib","memory_mib":6144},{"model":"bug-045-fixture-embed-512mib","memory_mib":512},{"model":"nomic-embed-text","memory_mib":768}]'`
+		}
+		// Spec 088 — point the switchable_models allowlist at the profiled
+		// fixture model (JSON-list-shaped; co-resident with the gather model =
+		// single 6144 MiB load, well under the live 8G envelope).
+		if strings.HasPrefix(ln, "ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=") {
+			lines[i] = `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["bug-045-fixture-llm-6gib"]`
 		}
 		if strings.HasPrefix(ln, "PHOTOS_INTELLIGENCE_EMBED_MODEL=") {
 			lines[i] = `PHOTOS_INTELLIGENCE_EMBED_MODEL="bug-045-fixture-embed-512mib"`
@@ -142,7 +153,7 @@ func TestRun_ConstructedValidEnv_ExitsZero(t *testing.T) {
 	// Snapshot env vars loadEnvFile will overwrite so other tests in
 	// the same `go test` process do not inherit mutations.
 	snapshot := map[string]string{}
-	for _, key := range append(overrideKeys, "ML_MODEL_MEMORY_PROFILES_JSON", "PHOTOS_INTELLIGENCE_EMBED_MODEL") {
+	for _, key := range append(overrideKeys, "ML_MODEL_MEMORY_PROFILES_JSON", "PHOTOS_INTELLIGENCE_EMBED_MODEL", "ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS") {
 		snapshot[key] = os.Getenv(key)
 		keyCopy := key
 		t.Cleanup(func() {

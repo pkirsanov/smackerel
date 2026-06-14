@@ -69,6 +69,17 @@ type AssistantResponse struct {
 	// Spec 075 SCOPE-6.1 (facade Policy dispatch contract).
 	LegacyRetirementNotice *NoticePayload
 
+	// ModelAttribution is the spec 088 answer-level attribution of the
+	// model that produced this response. nil means baseline (no
+	// override) — the Telegram renderer MUST NOT emit the `— model:`
+	// footer (byte-for-byte spec-087 baseline, NFR-4 / Principle 6).
+	// When non-nil with OverrideApplied=true a runtime model override
+	// was in effect; the renderer appends the attribution footer. The
+	// HTTP envelope carries the model id unconditionally via a separate
+	// path (agenttool.outputEnvelope.Model), so this field is the
+	// Telegram-surface attribution carrier only.
+	ModelAttribution *ModelAttribution
+
 	// --- Convenience derivatives ---
 
 	// Body is the rendered text body, derived from Invocation.Final
@@ -83,6 +94,19 @@ type AssistantResponse struct {
 	// EmittedAt is the capability-layer emit time. Adapters use it
 	// for per-transport telemetry latency calculation.
 	EmittedAt time.Time
+}
+
+// ModelAttribution is the spec 088 answer-level model attribution
+// (Principle 8 / FR-7). ModelID is the model of the turn that actually
+// produced the final text (TurnResult.Model, stamped in the agent's
+// finalize chokepoint) — honest across success, salvage, refuse, and
+// early-StopEndTurn. OverrideApplied distinguishes a runtime override
+// from the SST baseline so the Telegram renderer shows the `— model:`
+// footer ONLY when an override was in effect (a baseline answer is
+// byte-for-byte spec-087, NFR-4).
+type ModelAttribution struct {
+	ModelID         string
+	OverrideApplied bool
 }
 
 // StatusToken is the closed-vocabulary user-facing status token.
@@ -149,6 +173,14 @@ const (
 	// like recipe_search (BUG-061-003) to distinguish "the owned
 	// graph is empty for this query" from provider/auth/slot errors.
 	ErrNoMatch ErrorCause = "no_match"
+	// ErrModelNotSwitchable is the spec 088 fail-loud discriminator for
+	// a rejected per-request model override (off-allowlist / un-profiled
+	// / over-envelope). It pairs with StatusUnavailable and a Body that
+	// is the verbatim modelswitch.Rejection.Message; the Telegram
+	// renderer surfaces that Body as-is (NOT a canonical refusal) so the
+	// operator sees exactly which model was refused and why. The
+	// specific reason-code lives in the message + the HTTP error_code.
+	ErrModelNotSwitchable ErrorCause = "model_not_switchable"
 )
 
 // AllErrorCauses is the exhaustive non-zero closed-vocabulary list
@@ -159,6 +191,7 @@ var AllErrorCauses = []ErrorCause{
 	ErrSlotMissing,
 	ErrInternalError,
 	ErrNoMatch,
+	ErrModelNotSwitchable,
 }
 
 // ConfirmCard is the propose-phase response that requires user

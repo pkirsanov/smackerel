@@ -188,6 +188,7 @@ func baseCfg(mode citeback.EnforcementMode) agent.Config {
 	return agent.Config{
 		SystemPrompt:               "spec-076-2c-e2e-prompt",
 		Model:                      "spec-076-2c-fake-model",
+		SynthesisModel:             "spec-076-2c-fake-model",
 		MaxIterations:              4,
 		PerQueryTokenBudget:        2000,
 		PerQueryUSDBudget:          1.0,

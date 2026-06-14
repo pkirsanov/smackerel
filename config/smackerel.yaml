@@ -1027,8 +1027,11 @@ assistant:
     provider: "searxng" # REQUIRED: "searxng" | "brave" | "tavily"
     provider_endpoint: "http://searxng:8080" # REQUIRED ("" permitted when enabled=false)
     provider_api_key: "" # REQUIRED ("" allowed for searxng; brave/tavily must be non-empty when enabled)
-    llm_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 064 SCOPE-17 — quality-first dev default. ~4GB resident, sound JSON-schema following + tool-use behavior. First call cold-loads ~30-60s; subsequent calls are fast.
+    llm_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 064 SCOPE-17 — quality-first dev default. ~4GB resident, sound JSON-schema following + tool-use behavior. First call cold-loads ~30-60s; subsequent calls are fast. Used for the GATHER (tool-calling) turns; the forced-final SYNTHESIS turn uses synthesis_model_id below.
+    synthesis_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 087 — model for the tools-stripped forced-final SYNTHESIS turn (and its retries). Dev default == llm_model_id (no effective split; dev has no Ollama daemon and gemma3:4b cannot synthesize the comparison class either, so dev is not the proof environment). Home-lab override (environments.<env>.assistant_open_knowledge_synthesis_model_id) = deepseek-r1:7b — a reasoning model already in model_memory_profiles (4864 MiB) + the ollama envelope (via OLLAMA_REASONING_MODEL), on-demand (NOT in the concurrent interactive working-set guard); co-resides with gemma4:26b (23296 MiB) inside the 28672 MiB home-lab envelope. deepseek-r1:32b is the operator opt-up (raise ollama_memory_limit first).
+    switchable_models: [ "gemma3:4b" ] # REQUIRED non-empty when enabled. Spec 088 — the allowlist of models /ask may be runtime-switched TO on the SYNTHESIS turn (per-request --model= / API model). Dev = [gemma3:4b] (== baseline synthesis; switching to it is a no-op but keeps the path testable; dev has no Ollama daemon). Each entry MUST have a model_memory_profiles entry AND co-resident-fit the env ollama envelope when loaded alongside llm_model_id (gather) — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-10). Home-lab override below adds the real A/B set. NEVER a silent default.
     max_iterations: 6 # REQUIRED: > 0 when enabled. Spec 084 — raised 4->6 = 5 tool-calling turns + 1 forced-synthesis turn for multi-hop reasoning (comparison/why/recommend questions need evidence on every side before answering; the agent strips tools on the last iteration to force a text answer). Model matrix unchanged (gemma4:26b home-lab / gemma3:4b dev).
+    synthesis_retry_budget: 1 # REQUIRED: >= 0 when enabled. Spec 087 — number of stronger-prompt SYNTHESIS retries when the forced-final synthesis turn comes back empty/ungrounded, BEFORE the honest snippet salvage fires. 1 = one escalated "you already analyzed this; WRITE the verdict now, no <think>, no preamble" retry (rescues deepseek-r1's "thinks but does not conclude" failure mode). 0 = no retry (the exact spec-084 salvage timing). NOT a hidden default: 0 is an explicit, documented operator choice. Raising this raises the WriteTimeout worst case (cmd/core/main.go: (max_iterations + synthesis_retry_budget) * llm_timeout_ms).
     per_query_token_budget: 128000 # REQUIRED: > 0 when enabled. Spec 084 — raised 64000->128000: web_search snippets are re-added to context each iteration so cumulative tokens grow ~quadratically with iteration count; 4->6 iterations is ~2.25x, so the 6th synthesis turn needs headroom to avoid a premature cap_tokens refusal. 128000 = 50% of gemma4:26b ctx (262144); the production CostFn is zero-cost (local Ollama + searxng) so this budget is a pure safety guardrail.
     per_query_usd_budget: 0.05 # REQUIRED: > 0 when enabled
     # BUG-064-001 — these MUST be > 0 when enabled. The open-knowledge agent's
@@ -2042,3 +2045,25 @@ environments:
     # without this explicit override since llm_model_id is not part of
     # the tier matrix.
     assistant_open_knowledge_llm_model_id: "gemma4:26b"
+    # Spec 087 — the forced-final SYNTHESIS turn uses a reasoning model
+    # (deepseek-r1:7b) on home-lab. gemma4:26b is a strong tool-caller but a
+    # weak synthesizer for reconcile-and-decide (spec 084 empirically proved
+    # it fails the pomegranate-comparison class even unshackled). deepseek-r1:7b
+    # (4864 MiB) is RL-trained for chain-of-thought, is already in the ollama
+    # envelope via OLLAMA_REASONING_MODEL, and is an on-demand specialist (NOT
+    # in the concurrent interactive working-set guard) so it adds no
+    # concurrent-envelope pressure. Co-resident with gemma4:26b (18432) =
+    # 23296 MiB <= 28672 MiB ollama_memory_limit. deepseek-r1:32b is the
+    # operator opt-up (raise ollama_memory_limit first).
+    assistant_open_knowledge_synthesis_model_id: "deepseek-r1:7b"
+    # Spec 088 — home-lab switchable set: the gemma4:26b-vs-deepseek-r1:7b
+    # synthesis A/B (per-request /ask --model= / API model). Both
+    # envelope-consistent against the 28672 MiB ollama_memory_limit:
+    # gemma4:26b == the gather model (llm_model_id) so switching to it is a
+    # single load (18432 <= 28672); deepseek-r1:7b (4864) co-resident with
+    # the gemma4:26b gather model = 23296 <= 28672. deepseek-r1:32b is NOT
+    # switchable here (gather 18432 + 22528 = 40960 > 28672) — the operator
+    # opt-up surfaced as the model_over_memory_envelope rejection (raise the
+    # envelope first). Validated fail-loud at config-generation in
+    # internal/config/config.go::validateModelEnvelopes (FR-10 / SCN-088-A07).
+    assistant_open_knowledge_switchable_models: [ "gemma4:26b", "deepseek-r1:7b" ]

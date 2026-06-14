@@ -71,6 +71,11 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 		"telegram_update_id": strconv.Itoa(update.UpdateID),
 	}
 
+	// Spec 088 — per-request model override carrier. Parsed ONLY off the
+	// /ask (open_knowledge) line; populated below when the shortcut
+	// resolves to open_knowledge.
+	modelOverride := ""
+
 	switch {
 	case isResetCommand(text):
 		return contracts.AssistantMessage{
@@ -93,7 +98,17 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 		// set. Any non-shortcut slash command (e.g. /find, /list)
 		// returns ErrNotAssistantMessage so the bot's existing
 		// handlers run unchanged.
-		if _, _, ok := assistant.LookupShortcut(text); ok {
+		sid, _, isShortcut := assistant.LookupShortcut(text)
+		if isShortcut {
+			// Spec 088 — only the /ask (open_knowledge) surface accepts a
+			// per-request `--model=<id>` flag. Parse + strip it here (slash
+			// prefix preserved so the facade LookupShortcut + StripShortcutPrefix
+			// still work; the model the agent sees gets a clean question — same
+			// discipline as the BUG-064-001 prefix strip). Other shortcuts keep
+			// their text verbatim.
+			if sid == openKnowledgeScenarioID {
+				text, modelOverride = parseModelFlag(text)
+			}
 			break
 		}
 		return contracts.AssistantMessage{}, ErrNotAssistantMessage
@@ -109,7 +124,35 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 		Kind:               contracts.KindText,
 		ReceivedAt:         receivedAt,
 		TransportMetadata:  metadata,
+		ModelOverride:      modelOverride,
 	}, nil
+}
+
+// openKnowledgeScenarioID is the spec 037 scenario id the /ask shortcut
+// reroutes to (assistant.LookupShortcut("/ask…") → this). Spec 088 scopes
+// the --model= flag parse to this surface only.
+const openKnowledgeScenarioID = "open_knowledge"
+
+// parseModelFlag extracts a leading `--model=<id>` token from the arguments
+// of a slash-shortcut line (spec 088). It returns the text with that token
+// removed — the slash prefix and the rest of the question preserved — and
+// the model id. Only the FIRST token after the shortcut is consumed, and
+// only when it is exactly the `--model=<non-empty>` flag; everything else
+// stays in the text. ollama model tags never contain whitespace, so a single
+// whitespace-delimited token is the whole value. A bare `/ask <q>` (no flag)
+// or a valueless `--model=` returns the text unchanged and an empty override.
+func parseModelFlag(text string) (string, string) {
+	const flag = "--model="
+	fields := strings.Fields(text)
+	if len(fields) < 2 || !strings.HasPrefix(fields[1], flag) {
+		return text, ""
+	}
+	model := strings.TrimPrefix(fields[1], flag)
+	if model == "" {
+		return text, ""
+	}
+	rest := append([]string{fields[0]}, fields[2:]...)
+	return strings.Join(rest, " "), model
 }
 
 // translateCallback decodes a *tgbotapi.CallbackQuery whose

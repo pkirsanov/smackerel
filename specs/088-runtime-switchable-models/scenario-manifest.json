@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "featureDir": "specs/088-runtime-switchable-models",
+  "featureName": "Runtime-Switchable Models",
+  "generatedBy": "bubbles.plan (parent-expanded full-delivery, analyze-design-plan prelude)",
+  "generatedAt": "2026-06-13T22:30:00Z",
+  "amends": [],
+  "extends": ["specs/087-open-knowledge-genuine-synthesis"],
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-088-A01" },
+    { "scenarioId": "SCN-088-A02" },
+    { "scenarioId": "SCN-088-A03" },
+    { "scenarioId": "SCN-088-A04" },
+    { "scenarioId": "SCN-088-A05" },
+    { "scenarioId": "SCN-088-A06" },
+    { "scenarioId": "SCN-088-A07" },
+    { "scenarioId": "SCN-088-A08" }
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "SCN-088-A01",
+      "scopeId": "SCOPE-02",
+      "title": "A valid allowlisted override re-points the spec-087 forced-final SYNTHESIS turn for one invocation (the gather turns keep the baseline tool model); the per-request clone leaves the SST singleton config byte-for-byte unmutated",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec088_test.go::TestAgent_SynthesisOverrideApplied_SynthesisTurnUsesOverriddenModel_Spec088",
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec088_test.go::TestAgent_WithModelOverride_ClonesSingletonNeverMutated_Spec088",
+        "internal/assistant/facade_modelswitch_spec088_test.go::TestFacade_AppliedOverride_ThreadsAttribution_Spec088"
+      ],
+      "evidenceRefs": ["report.md#scope-02"]
+    },
+    {
+      "scenarioId": "SCN-088-A02",
+      "scopeId": "SCOPE-01",
+      "title": "An off-allowlist override is rejected fail-loud by the shared validator with reason-code model_not_allowlisted; the rejected model is never converted into an Override and never reaches the inference backend; no silent fall-back to baseline",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_Resolve_OffListRejected_ModelNotAllowlisted_Spec088",
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_RejectionMessage_GoldenWording_Spec088"
+      ],
+      "evidenceRefs": ["report.md#scope-01"]
+    },
+    {
+      "scenarioId": "SCN-088-A03",
+      "scopeId": "SCOPE-02",
+      "title": "With no override supplied, WithModelOverride returns the receiver unchanged: the gather turns use llm_model_id and the forced-final synthesis turn uses synthesis_model_id exactly as spec 087 ships (byte-for-byte baseline; no attribution footer on Telegram)",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec088_test.go::TestAgent_NoOverride_ByteForByteBaseline_Spec088",
+        "internal/telegram/assistant_adapter/render_outbound_test.go::TestBuildTelegramRendering_ModelFooterOnOverrideOnly_Spec088"
+      ],
+      "evidenceRefs": ["report.md#scope-02"]
+    },
+    {
+      "scenarioId": "SCN-088-A04",
+      "scopeId": "SCOPE-02",
+      "title": "The answer is attributed to the model of the turn that produced the final text (TurnResult.Model stamped once in finalize across success / salvage / refuse / early-StopEndTurn) and carried to the HTTP envelope model field always and the Telegram footer only on override",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec088_test.go::TestAgent_TurnResultModelStamped_AllTerminalPaths_Spec088",
+        "internal/assistant/openknowledge/agenttool/substrate_tool_test.go::TestMapTurnResult_ModelCarried_BothArms_Spec088"
+      ],
+      "evidenceRefs": ["report.md#scope-02"]
+    },
+    {
+      "scenarioId": "SCN-088-A05",
+      "scopeId": "SCOPE-02",
+      "title": "Every trust contract holds under an allowlisted override: a fabricated citation from the switched synthesis model is still refused (post-<think>-strip cite-back enforce); a zero-source response is still refused-with-capture (provenance gate + capture-as-fallback fires); the reasoning model's <think> chain-of-thought never leaks into the body and is never cited; a pre-agent rejection short-circuits with NO agent call and NO capture",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec088_test.go::TestAgent_TrustContractsHoldUnderOverride_Spec088",
+        "internal/assistant/facade_modelswitch_spec088_test.go::TestFacade_OffAllowlistOverride_ShortCircuits_NoAgentCall_NoCapture_Spec088"
+      ],
+      "evidenceRefs": ["report.md#scope-02"]
+    },
+    {
+      "scenarioId": "SCN-088-A06",
+      "scopeId": "SCOPE-03",
+      "title": "Telegram (--model= parsed off the /ask line) and web/HTTP (model JSON field) feed the SAME shared validator singleton, apply the override identically, and render the SAME Rejection.Message for the same off-allowlist input (transport parity: one allowlist, one Resolve, one rejection sentence)",
+      "behaviorClass": "functional",
+      "changeType": "new",
+      "requiredTestType": ["unit", "functional"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/telegram/assistant_adapter/translate_inbound_test.go::TestTranslateInbound_ModelFlagParsedAndStripped_SlashPreserved_Spec088",
+        "internal/api/agent_invoke_test.go::TestAgentInvoke_ModelFieldApplied_EnvelopeCarriesModel_Spec088",
+        "internal/api/agent_invoke_test.go::TestAgentInvoke_OffAllowlistModel_Returns400RejectionEnvelope_Spec088",
+        "internal/api/agent_invoke_test.go::TestAgentInvoke_RejectionEnvelopeByteIdenticalToValidator_Spec088",
+        "internal/assistant/facade_modelswitch_spec088_test.go::TestFacade_OffAllowlistOverride_ShortCircuits_NoAgentCall_NoCapture_Spec088",
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_Resolve_SingleRejectionContract_Spec088"
+      ],
+      "evidenceRefs": ["report.md#scope-03", "report.md#test-phase-verification"]
+    },
+    {
+      "scenarioId": "SCN-088-A07",
+      "scopeId": "SCOPE-01",
+      "title": "An untrusted, un-profiled model string is rejected before any per-invocation config is constructed (model_not_allowlisted); a profiled-but-over-envelope model is rejected as model_over_memory_envelope with the helpful raise-the-envelope opt-up; the same co-residence arithmetic fails loud at config-generation in validateModelEnvelopes",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_Resolve_UnprofiledRejected_ModelNotAllowlisted_Spec088",
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_Resolve_ProfiledOverEnvelopeRejected_ModelOverMemEnvelope_Spec088",
+        "internal/config/validate_ml_envelope_test.go::TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088"
+      ],
+      "evidenceRefs": ["report.md#scope-01"]
+    },
+    {
+      "scenarioId": "SCN-088-A08",
+      "scopeId": "SCOPE-02",
+      "title": "A synthesis-only per-request switch adds NO turns: WithModelOverride changes only SynthesisModel, leaving MaxIterations and SynthesisRetryBudget (the WriteTimeout formula inputs) unchanged, so the documented worst-case /ask envelope stays (max_iterations + synthesis_retry_budget) x llm_timeout_ms = 4200s; compare-both (which would double the bound) is deferred (F-COMPARE-LATENCY) and not shipped",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec088_test.go::TestAgent_SynthesisOverride_PreservesIterationEnvelope_Spec088"
+      ],
+      "evidenceRefs": ["report.md#scope-02"]
+    }
+  ]
+}

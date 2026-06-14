@@ -97,6 +97,18 @@ func buildTelegramRendering(
 		return "", nil, errors.New("assistant_adapter: response has both ConfirmCard and DisambiguationPrompt (capability contract violation)")
 	}
 
+	// Spec 088 — fail-loud model-override rejection. Render the verbatim
+	// modelswitch.Rejection.Message (carried in resp.Body under the typed
+	// ErrModelNotSwitchable cause), NOT a canonical refusal. This intercepts
+	// BEFORE the generic StatusUnavailable path, which routes to renderError
+	// and would otherwise drop the body. A rejection carries no attribution
+	// footer (ModelAttribution is nil; no model ran).
+	if resp.ErrorCause == contracts.ErrModelNotSwitchable {
+		body := strings.TrimSpace(resp.Body)
+		rendered := budgetTruncate(escapeForMode(body, mode), maxMessageChars, mode)
+		return rendered, nil, nil
+	}
+
 	// Spec 064 SCOPE-13 — open_knowledge dispatch. Routed strictly by
 	// AssistantResponse content composition so the AssistantResponse
 	// shape (spec 061) is not extended:
@@ -113,7 +125,7 @@ func buildTelegramRendering(
 	if cause, ok := openKnowledgeRefusalCauseFromError(resp.ErrorCause); ok {
 		body := RenderRefusalWithCapture(cause)
 		rendered := budgetTruncate(escapeForMode(body, mode), maxMessageChars, mode)
-		return rendered, nil, nil
+		return appendModelFooter(rendered, resp, mode), nil, nil
 	}
 	if resp.Status != contracts.StatusUnavailable &&
 		resp.ConfirmCard == nil && resp.DisambiguationPrompt == nil &&
@@ -136,7 +148,7 @@ func buildTelegramRendering(
 		}
 		headParts = append(headParts, escapeForMode(okOut, mode))
 		rendered := joinAndBudget(headParts, "", maxMessageChars, mode)
-		return rendered, nil, nil
+		return appendModelFooter(rendered, resp, mode), nil, nil
 	}
 
 	var parts []string
@@ -186,7 +198,25 @@ func buildTelegramRendering(
 		keyboard = &k
 	}
 
-	return rendered, keyboard, nil
+	return appendModelFooter(rendered, resp, mode), keyboard, nil
+}
+
+// appendModelFooter appends the spec 088 "— model: <id>" attribution footer to
+// a rendered Telegram message iff a runtime model override was applied
+// (resp.ModelAttribution != nil && OverrideApplied). A baseline answer (nil
+// attribution or OverrideApplied=false) is byte-for-byte unchanged (NFR-4 /
+// Principle 6). The footer is a SEPARATE final line (em-dash lead) so a screen
+// reader announces it after the answer; it reads "— model:" (neutral metadata),
+// never "— answered by", so it never contradicts the honest-salvage framing.
+func appendModelFooter(rendered string, resp contracts.AssistantResponse, mode MarkdownMode) string {
+	if resp.ModelAttribution == nil || !resp.ModelAttribution.OverrideApplied {
+		return rendered
+	}
+	id := strings.TrimSpace(resp.ModelAttribution.ModelID)
+	if id == "" {
+		return rendered
+	}
+	return rendered + "\n" + escapeForMode("— model: "+id, mode)
 }
 
 // statusPrefix returns the first-line status string for in-flight

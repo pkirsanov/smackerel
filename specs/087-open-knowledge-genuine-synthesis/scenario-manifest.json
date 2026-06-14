@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "featureDir": "specs/087-open-knowledge-genuine-synthesis",
+  "featureName": "Open-Knowledge Genuine Synthesis",
+  "generatedBy": "bubbles.workflow (parent-expanded full-delivery, analyze-design-plan prelude)",
+  "generatedAt": "2026-06-13T00:00:00Z",
+  "amends": ["specs/064-open-ended-knowledge-agent", "specs/084-open-knowledge-reasoning-loop"],
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-087-A01" },
+    { "scenarioId": "SCN-087-A02" },
+    { "scenarioId": "SCN-087-A03" },
+    { "scenarioId": "SCN-087-A04" },
+    { "scenarioId": "SCN-087-A05" }
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "SCN-087-A01",
+      "scopeId": "SCOPE-01",
+      "title": "Reasoning-model <think> chain-of-thought is stripped before citation parsing; the synthesized verdict is returned verbatim (no salvage); cite-back accepted the citation on the post-strip text",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_SynthesisThinkBlockStripped_VerdictReturned_Spec087"
+      ],
+      "evidenceRefs": ["report.md#scope-01"]
+    },
+    {
+      "scenarioId": "SCN-087-A02",
+      "scopeId": "SCOPE-01",
+      "title": "The tools-stripped forced-final synthesis turn uses synthesis_model_id; every tool-calling turn uses llm_model_id",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_ForcedFinalUsesSynthesisModel_ToolTurnsUseToolModel_Spec087"
+      ],
+      "evidenceRefs": ["report.md#scope-01"]
+    },
+    {
+      "scenarioId": "SCN-087-A03",
+      "scopeId": "SCOPE-02",
+      "title": "A two-distinct-tool-call comparison whose forced-final synthesis succeeds returns the cited verdict verbatim with verified citations, NOT the honest-salvage snippet wall",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_ComparisonSynthesisVerdict_NotSalvage_Spec087"
+      ],
+      "evidenceRefs": ["report.md#scope-02"]
+    },
+    {
+      "scenarioId": "SCN-087-A04",
+      "scopeId": "SCOPE-02",
+      "title": "An empty/ungrounded forced-final is retried with an escalated write-the-verdict-now prompt up to synthesis_retry_budget times; the retry's cited verdict is returned verbatim and honest salvage does NOT fire",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_RetryBeforeSalvage_RescuesEmptyForcedFinal_Spec087"
+      ],
+      "evidenceRefs": ["report.md#scope-02"]
+    },
+    {
+      "scenarioId": "SCN-087-A05",
+      "scopeId": "SCOPE-03",
+      "title": "Trust contracts preserved: fabricated citation in the synthesis output still refused (post-strip cite-back); retry budget exhausted falls to honest salvage with capped sources; <think> content never leaks into the body and is never cited",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_FabricatedCitationInSynthesis_StillRefused_Spec087",
+        "internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_RetryBudgetExhausted_HonestSalvage_Spec087",
+        "internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_ThinkBlockNeverLeaksNeverCited_Spec087"
+      ],
+      "evidenceRefs": ["report.md#scope-03"]
+    }
+  ]
+}

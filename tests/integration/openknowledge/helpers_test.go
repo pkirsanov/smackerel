@@ -115,6 +115,7 @@ func defaultCfg() agent.Config {
 	return agent.Config{
 		SystemPrompt:               "spec-076-2b-integration-prompt",
 		Model:                      "spec-076-2b-fake-model",
+		SynthesisModel:             "spec-076-2b-fake-model",
 		MaxIterations:              4,
 		SourcesMax:                 5,
 		PerQueryTokenBudget:        2000,

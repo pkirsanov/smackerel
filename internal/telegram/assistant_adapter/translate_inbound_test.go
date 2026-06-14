@@ -2,6 +2,7 @@ package assistant_adapter
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -227,6 +228,63 @@ func TestTranslateInbound_CallbackDisambig(t *testing.T) {
 	if msg.DisambiguationChoice != 2 {
 		t.Errorf("DisambiguationChoice = %d; want 2", msg.DisambiguationChoice)
 	}
+}
+
+// TestTranslateInbound_ModelFlagParsedAndStripped_SlashPreserved_Spec088 —
+// ADVERSARIAL. `/ask --model=<id> <q>` parses the model into ModelOverride and
+// strips ONLY the --model= token from Text (slash prefix preserved); a bare
+// `/ask <q>` yields an empty ModelOverride; a non-/ask shortcut keeps its text
+// verbatim (the flag is /ask-only). Fails if the flag leaks into the question
+// or the slash is dropped.
+func TestTranslateInbound_ModelFlagParsedAndStripped_SlashPreserved_Spec088(t *testing.T) {
+	t.Parallel()
+	t.Run("flag_parsed_and_stripped", func(t *testing.T) {
+		update := updateWithText(123, 42, "/ask --model=deepseek-r1:7b what is a better place to grow pomegranate?")
+		msg, err := translateInbound(update, fixedResolver("u"))
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if msg.ModelOverride != "deepseek-r1:7b" {
+			t.Fatalf("ModelOverride = %q, want deepseek-r1:7b", msg.ModelOverride)
+		}
+		if msg.Text != "/ask what is a better place to grow pomegranate?" {
+			t.Fatalf("Text = %q, want the clean question with slash preserved and flag removed", msg.Text)
+		}
+		if strings.Contains(msg.Text, "--model=") {
+			t.Fatalf("--model= flag leaked into Text: %q", msg.Text)
+		}
+		if !strings.HasPrefix(msg.Text, "/ask ") {
+			t.Fatalf("slash prefix dropped (facade LookupShortcut depends on it): %q", msg.Text)
+		}
+	})
+	t.Run("bare_ask_no_override", func(t *testing.T) {
+		update := updateWithText(123, 42, "/ask what is the capital of france?")
+		msg, err := translateInbound(update, fixedResolver("u"))
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if msg.ModelOverride != "" {
+			t.Fatalf("bare /ask must have empty ModelOverride, got %q", msg.ModelOverride)
+		}
+		if msg.Text != "/ask what is the capital of france?" {
+			t.Fatalf("bare /ask Text changed: %q", msg.Text)
+		}
+	})
+	t.Run("model_flag_is_ask_only_not_other_shortcuts", func(t *testing.T) {
+		// /weather is a shortcut but does NOT support --model=; the flag must
+		// stay in the text verbatim (parse scoped to open_knowledge only).
+		update := updateWithText(123, 42, "/weather --model=x lisbon")
+		msg, err := translateInbound(update, fixedResolver("u"))
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if msg.ModelOverride != "" {
+			t.Fatalf("/weather must NOT parse --model=, got %q", msg.ModelOverride)
+		}
+		if msg.Text != "/weather --model=x lisbon" {
+			t.Fatalf("/weather text must be verbatim, got %q", msg.Text)
+		}
+	})
 }
 
 // TestTranslateInbound_NilUpdate asserts the adapter refuses a nil

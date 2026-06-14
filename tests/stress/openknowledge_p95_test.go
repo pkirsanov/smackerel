@@ -100,6 +100,7 @@ func TestOpenKnowledge_P95SLAUnderToolLoad(t *testing.T) {
 	cfg := okagent.Config{
 		SystemPrompt:               "stress-system-prompt",
 		Model:                      "stress-model",
+		SynthesisModel:             "stress-model",
 		MaxIterations:              4,
 		PerQueryTokenBudget:        1000,
 		PerQueryUSDBudget:          1.0,

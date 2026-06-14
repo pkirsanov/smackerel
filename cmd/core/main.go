@@ -404,16 +404,27 @@ func run() error {
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		// Spec 064 SCOPE-17 / Spec 084 — WriteTimeout sized for the longest
-		// legitimate open-knowledge reasoning turn. The /ask fast-path
-		// (facade.go::runOpenKnowledgeDirect) runs the agent loop directly with
-		// THIS request context, so WriteTimeout — not the substrate timeout_ms —
-		// is the real ceiling. It tracks the worst-case invariant
-		// max_iterations × per_llm_timeout: spec 084 raised max_iterations to 6
-		// (assistant.open_knowledge.max_iterations) and llm_timeout_ms is 600s,
-		// so 6 × 600s = 3600s. Realistic GPU / home-lab turns complete in
-		// ~40-60s; this is the pathological-slow-CPU-dev backstop.
-		WriteTimeout: 3600 * time.Second,
+		// Spec 064 SCOPE-17 / Spec 084 / Spec 087 / Spec 088 — WriteTimeout
+		// sized for the longest legitimate open-knowledge reasoning turn. The
+		// /ask fast-path (facade.go::runOpenKnowledgeDirect) runs the agent
+		// loop directly with THIS request context, so WriteTimeout — not the
+		// substrate timeout_ms — is the real ceiling. It tracks the worst-case
+		// invariant (max_iterations + synthesis_retry_budget) × per_llm_timeout:
+		// spec 084 set max_iterations=6 and llm_timeout_ms=600s; spec 087 added
+		// synthesis_retry_budget=1 stronger-prompt synthesis retry, so
+		// (6 + 1) × 600s = 4200s. The forced-final synthesis turn (+ its retry)
+		// runs the reasoning synthesis model bounded by the same llm_timeout_ms,
+		// so the envelope stays honest. Spec 088 — a per-request model override
+		// (--model= / API model) only SWAPS which model occupies the synthesis
+		// seat; it adds NO turns and changes neither max_iterations nor
+		// synthesis_retry_budget, so a switched (even slower) synthesis model is
+		// bounded by the SAME 4200s envelope — NO value change. A first-class
+		// compare-both affordance (deferred, F-COMPARE-LATENCY) WOULD run two
+		// full passes and double the bound to 8400s; if it is ever shipped this
+		// value MUST be re-derived. Realistic GPU / home-lab turns complete in
+		// ~40-90s; this is the pathological-slow-CPU-dev backstop. If an
+		// operator raises max_iterations or synthesis_retry_budget, recompute.
+		WriteTimeout: 4200 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

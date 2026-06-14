@@ -4431,6 +4431,103 @@ for the full outcome contract and refusal taxonomy.
 > invariant — not the substrate limits. The deployed model matrix (gemma4:26b
 > home-lab / gemma3:4b dev) is unchanged by spec 084.
 
+> **Spec 087 — genuine synthesis (split reasoning model + retry-before-salvage).**
+> Spec 084's hypothesis (gemma4:26b reasons well once unshackled) was empirically
+> disproven: with the straitjacket removed, gemma4:26b still failed to synthesize
+> the pomegranate-comparison class and fell to honest salvage. Spec 087 fixes the
+> synthesis turn itself:
+>
+> - **Split synthesis model (`assistant.open_knowledge.synthesis_model_id`).** The
+>   tool-calling GATHER turns keep using `llm_model_id` (gemma — a strong
+>   tool-caller). The tools-stripped forced-final SYNTHESIS turn (and its retries)
+>   uses `synthesis_model_id` — a reasoning model. Dev default `gemma3:4b`
+>   (== `llm_model_id`, no effective split, envelope-safe); home-lab override
+>   `assistant_open_knowledge_synthesis_model_id: deepseek-r1:7b`. `deepseek-r1:7b`
+>   (4864 MiB) is already in the ollama envelope via `OLLAMA_REASONING_MODEL` and
+>   is an on-demand specialist (NOT in the concurrent interactive working-set
+>   guard), so it co-resides with gemma4:26b (23296 MiB ≤ 28672 MiB) with no
+>   `ollama_memory_limit` change. `deepseek-r1:32b` is the operator opt-up (raise
+>   `ollama_memory_limit` first).
+> - **`<think>` stripping.** Reasoning models emit a `<think>…</think>`
+>   chain-of-thought before the answer. The agent strips it BEFORE citation
+>   parsing and cite-back, so it can never reach the user body or become a
+>   citation (a fabricated URL inside `<think>` is impossible to cite). No-op for
+>   non-reasoning models.
+> - **Retry-before-salvage (`assistant.open_knowledge.synthesis_retry_budget`,
+>   default `1`).** An empty or ungrounded forced-final synthesis is re-issued with
+>   an escalated "write the verdict now, no `<think>`, no preamble" prompt up to
+>   `synthesis_retry_budget` times BEFORE the honest snippet salvage fires —
+>   rescuing the reasoning model's "thought but did not conclude" failure mode.
+>   `0` = no retry = the exact spec-084 salvage timing. Honest salvage remains the
+>   genuine-failure fallback (Principle 8): genuine synthesis is what stops it
+>   being the default outcome — the honest frame is NOT removed.
+> - **`WriteTimeout` updated.** The worst-case `/ask` ceiling is now
+>   `(max_iterations + synthesis_retry_budget) × llm_timeout_ms` =
+>   `(6 + 1) × 600s = 4200s` (`cmd/core/main.go`). The synthesis turn (+ retry)
+>   runs the reasoning model bounded by the same `llm_timeout_ms`, so the envelope
+>   stays honest. Realistic home-lab turns (gemma4:26b gather + deepseek-r1:7b
+>   synthesis, GPU-resident) complete in ~40-90s. If an operator raises
+>   `max_iterations` or `synthesis_retry_budget`, recompute `WriteTimeout`.
+>
+> All spec-064 trust invariants are preserved verbatim: the cite-back verifier and
+> provenance gate run on the post-`<think>`-strip text; capture-as-fallback (the
+> Facade) is untouched and inviolable. The decisive home-lab re-verification of the
+> pomegranate turn is a separate `bubbles.devops` dispatch (build new signed images
+> carrying the synthesis split + `deepseek-r1:7b` model pull + bundle that sets the
+> per-environment `synthesis_model_id`).
+
+> **Spec 088 — runtime-switchable synthesis model (per-request, allowlist-gated).**
+> The synthesis model can be switched per `/ask` invocation, on BOTH surfaces,
+> WITHOUT redeploying — so an operator can A/B `gemma4:26b` vs `deepseek-r1:7b` on
+> the synthesis turn live. The switch is a per-request PARAMETER, never an SST
+> write (the build-once SST baseline is unchanged; C6).
+>
+> - **Surfaces (validated identically).**
+>   - Telegram: `/ask --model=<id> <question>` — the `--model=` flag is parsed off
+>     the front of the `/ask` line and stripped before the question reaches the
+>     agent. A baseline `/ask <question>` (no flag) is byte-for-byte the spec-087
+>     behaviour.
+>   - Web/HTTP: `POST /v1/agent/invoke` with a top-level `"model": "<id>"` field
+>     (optional; absent ⇒ baseline). The 200 success envelope always carries the
+>     answering `model`.
+> - **Allowlist (`assistant.open_knowledge.switchable_models`).** A REQUIRED,
+>   non-empty-when-enabled, operator-curated list of models `/ask` may switch the
+>   synthesis turn TO. Dev `[gemma3:4b]`; home-lab override
+>   `assistant_open_knowledge_switchable_models: [gemma4:26b, deepseek-r1:7b]`.
+>   Each entry MUST have a `model_memory_profiles` entry AND co-resident-fit the
+>   env `ollama_memory_limit` alongside the gather model (`llm_model_id`) — the
+>   SAME co-residence arithmetic spec 087 uses (gather `gemma4:26b` 18432 +
+>   synthesis `deepseek-r1:7b` 4864 = 23296 ≤ 28672). This is enforced **fail-loud
+>   at config-generation** (`internal/config/config.go::validateModelEnvelopes`):
+>   an envelope-busting or un-profiled list aborts `config generate`.
+>   `deepseek-r1:32b` is NOT switchable on home-lab (40960 > 28672) — the operator
+>   opt-up (raise `ollama_memory_limit` first).
+> - **Fail-loud rejection (two reason-codes).** An off-allowlist / un-profiled /
+>   over-envelope `--model=` is rejected fail-loud BEFORE any Ollama call — never a
+>   silent default, never a backend passthrough. `model_not_allowlisted` (unknown /
+>   un-profiled / not-offered) vs `model_over_memory_envelope` (profiled but busts
+>   the env envelope — the "raise the envelope first" opt-up). Telegram renders the
+>   rejection sentence; HTTP returns **400** with
+>   `{status:"rejected", error_code, rejected_model, allowed_models, default_model,
+>   message}` — the `message` is the SAME sentence on both surfaces. The rejection
+>   does NOT call the agent and does NOT capture-as-answer.
+> - **Attribution (`— model:` / envelope `model`).** The answer is attributed to
+>   the model of the turn that produced the final text (honest across success /
+>   salvage / refuse / early-stop). HTTP carries `model` in the success envelope
+>   ALWAYS; Telegram appends a `— model: <id>` footer ONLY when an override was
+>   applied (a baseline answer grows no footer — NFR-4 / Principle 6).
+> - **`WriteTimeout` UNCHANGED at `4200s`.** A per-request synthesis switch adds no
+>   turns and changes neither `max_iterations` nor `synthesis_retry_budget`, so a
+>   switched (even slower) synthesis model is bounded by the same `(6+1) × 600s`
+>   envelope. A first-class compare-both affordance (deferred, F-COMPARE-LATENCY)
+>   would run two passes and double the bound — if it is ever shipped, recompute
+>   `WriteTimeout`. The live `gemma4:26b`-vs-`deepseek-r1:7b` A/B is a downstream
+>   `bubbles.devops` dispatch.
+> - All spec-064/084/087 trust invariants hold under ANY selected model: the
+>   override changes WHICH model runs, never the trust perimeter (cite-back,
+>   provenance / no-zero-source, capture-as-fallback, `<think>`-strip +
+>   retry-before-salvage all run on the turn OUTPUT, model-agnostic).
+
 ### Enabling / Disabling
 
 The subsystem ships disabled. Operator opts in by flipping

@@ -2273,6 +2273,40 @@ func (c *Config) validateModelEnvelopes() error {
 		}
 	}
 
+	// Spec 088 SCOPE-01 — switchable_models co-residence envelope guard.
+	// The operator-curated assistant.open_knowledge.switchable_models set
+	// is the allowlist of models /ask may be runtime-switched TO on the
+	// forced-final SYNTHESIS turn. Each entry MUST have a memory profile
+	// AND co-resident-fit the env ollama envelope alongside the gather
+	// model (llm_model_id), which stays resident during synthesis — the
+	// SAME arithmetic the runtime modelswitch.Allowlist uses. Checked only
+	// when open-knowledge is enabled and the ollama envelope is known
+	// (OllamaMemoryLimitMiB != 0 — e.g. home-lab; dev has no daemon and
+	// resolves to 0, so the check is skipped there, matching the runtime
+	// validator). FR-10 / SCN-088-A07: an operator cannot ship a
+	// switchable list that busts the envelope.
+	if c.Assistant.OpenKnowledge.Enabled && c.OllamaMemoryLimitMiB != 0 {
+		gather := c.Assistant.OpenKnowledge.LLMModelID
+		baseMiB := c.MLModelMemoryProfiles[gather]
+		for _, m := range c.Assistant.OpenKnowledge.SwitchableModels {
+			if strings.TrimSpace(m) == "" {
+				continue // empty entry is reported by OpenKnowledgeConfig.Validate()
+			}
+			profileMiB, ok := c.MLModelMemoryProfiles[m]
+			if !ok {
+				missing = append(missing, fmt.Sprintf("assistant.open_knowledge.switchable_models entry %q has no entry in services.ml.model_memory_profiles", m))
+				continue
+			}
+			coresident := baseMiB
+			if m != gather {
+				coresident += profileMiB
+			}
+			if coresident > c.OllamaMemoryLimitMiB {
+				oversized = append(oversized, fmt.Sprintf("assistant.open_knowledge.switchable_models entry %q co-resident with gather model %q requires %d MiB but OLLAMA_MEMORY_LIMIT=%q resolves to %d MiB", m, gather, coresident, c.OllamaMemoryLimit, c.OllamaMemoryLimitMiB))
+			}
+		}
+	}
+
 	if len(missing) > 0 || len(oversized) > 0 || len(concurrent) > 0 {
 		var parts []string
 		if len(missing) > 0 {

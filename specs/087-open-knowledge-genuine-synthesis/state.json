@@ -1,0 +1,126 @@
+{
+  "version": 3,
+  "featureDir": "specs/087-open-knowledge-genuine-synthesis",
+  "featureNumber": "087",
+  "featureName": "Open-Knowledge Genuine Synthesis",
+  "status": "blocked",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "lastUpdatedAt": "2026-06-13T19:20:00Z",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "specDependsOn": [
+    "specs/064-open-ended-knowledge-agent",
+    "specs/084-open-knowledge-reasoning-loop"
+  ],
+  "amends": [
+    "specs/064-open-ended-knowledge-agent",
+    "specs/084-open-knowledge-reasoning-loop"
+  ],
+  "unblocks": [],
+  "executionModel": "parent-expanded",
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleAlignment": [
+      "Principle 2",
+      "Principle 4",
+      "Principle 8"
+    ],
+    "principleDeviations": [],
+    "modelMatrixChanged": "synthesis_model_id added (split synthesis turn); deepseek-r1:7b home-lab synthesis already profiled + on-demand; no ollama_memory_limit change",
+    "v1ToolSet": [
+      "internal_retrieval",
+      "web_search",
+      "unit_convert",
+      "calculator"
+    ],
+    "workflowMode": "full-delivery",
+    "improvementPrelude": "analyze-design-plan",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "owner-directive-no-commit" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "planningOnlyJustification": "Full-delivery enhancement spec amending closed specs 064 + 084. Planning packets from the analyst -> ux -> design -> plan prelude are materialised into spec.md / design.md / scopes.md / scenario-manifest.json. Implementation continues in the same spec under workflowMode=full-delivery; no separate implementation spec. The home-lab live re-verify of the pomegranate turn is a SEPARATE downstream devops dispatch; this spec terminates at validated-in-repo (no push).",
+  "ownerDirective": {
+    "date": "2026-06-13",
+    "summary": "Make the open-knowledge /ask agent run a GENUINE reasoning loop (decompose -> gather each side -> reconcile -> synthesize the verdict), falling back to honest salvage only when synthesis is genuinely impossible. This is the model-comparison + structured-reasoning spec that 084 unblocked after 084 empirically DISPROVED that gemma4:26b reasons once unshackled. Wire a reasoning model on the synthesis turn (deepseek-r1:7b dev/home-lab; deepseek-r1:32b opt-up), strip <think>, structure the forced-final prompt, retry-before-salvage. Preserve ALL spec-064 trust invariants. Do NOT touch spec-083 card-rewards WIP. Do NOT commit/push (devops owns the live re-verify).",
+    "doNotTouch": [
+      "internal/cardrewards/",
+      "ml/app/card_categories.py",
+      "ml/app/main.py",
+      "ml/tests/test_card_categories.py",
+      "specs/083-card-rewards-companion/",
+      "tests/integration/cardrewards_extract_test.go"
+    ]
+  },
+  "certification": {
+    "status": "blocked",
+    "certifiedAt": null,
+    "certifiedBy": null,
+    "lockdownState": { "round": 0, "lastCleanRound": 0 },
+    "evidenceRef": "report.md",
+    "certifiedCompletedPhases": ["analyze", "ux", "design", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "docs", "validate", "audit", "chaos"],
+    "completedScopes": [
+      "SCOPE-01",
+      "SCOPE-02",
+      "SCOPE-03"
+    ],
+    "gatesPassed": [
+      "artifact-lint (EXIT=0, PASSED)",
+      "traceability-guard (RESULT: PASSED, 0 warnings; 7 scopes-Gherkin scenarios -> Test Plan rows -> concrete tests -> report refs -> DoD fidelity)",
+      "check / build+vet+config-sync+scenario-lint (EXIT=0)",
+      "format --check (EXIT=0, 65 files already formatted)",
+      "config generate dev + test (EXIT=0; SYNTHESIS_MODEL_ID + SYNTHESIS_RETRY_BUDGET present)",
+      "test unit --go: 7 spec-087 agent tests (4 adversarial RED->GREEN + 3 trust guards) + 2 spec-087 config tests GREEN; 9 spec-084 tests preserved GREEN; full suite 124/124 packages ok"
+    ],
+    "knownEnvironmentalFailures": [
+      "internal/scopesdriftguard and tests/unit/clients both passed 'ok' in the full-suite run; the spec-083 card-rewards WIP + spec-073 node/dart canary were NOT in a failing state this run. Spec 087 contributes 0 broken refs and touches no ml/ or cardrewards source.",
+      "The single full-suite FAIL (cmd/config-validate::TestRun_ConstructedValidEnv_ExitsZero) was a STALE test.env carry-over (the first config generate only regenerated dev.env); fixed by './smackerel.sh --env test config generate' (NOT a code change) and re-verified GREEN.",
+      "state-transition-guard G028 implementation-reality-scan flags ml/app/main.py:22 and ml/app/main.py:257 (DEFAULT_FALLBACK) — the operator's spec-083 card-rewards WIP (do-not-touch); spec 087 touches no ml/ source. Out-of-changeset, attributed by file path.",
+      "state-transition-guard G089 inter-spec dependency: spec 087 depends on spec-084 whose status is 'blocked' (itself validated-in-repo awaiting its own devops handoff). spec 087 builds on spec-084's committed code; the devops dispatch finalizes the 064->084->087 chain."
+    ],
+    "certificationNote": "Parent-expanded full-delivery (analyze-design-plan prelude; no specialist sub-agent dispatch available in this runtime; full-delivery is not requiresTopLevelRuntime so parent-expansion is permitted). 3 scopes done; 4 adversarial tests RED->GREEN (think-strip, model-swap, retry-before-salvage, think-leak) + 3 trust guards; spec-064 trust perimeter (cite-back verifier + provenance gate + capture-as-fallback) preserved verbatim and proven by the fabricated-citation + think-leak guards; 9 spec-084 tests preserved unchanged. Terminal state: validated-in-repo. Home-lab live re-verify of the pomegranate /ask turn (does deepseek-r1:7b synthesize the real verdict?) is a SEPARATE bubbles.devops dispatch -- NO push performed; no live-stack result fabricated. Model matrix: synthesis_model_id added (gemma3:4b dev / deepseek-r1:7b home-lab via the per-environment override); envelope-safe (deepseek-r1:7b already in the ollama envelope via OLLAMA_REASONING_MODEL; no ollama_memory_limit change)."
+  },
+  "execution": {
+    "activeAgent": "bubbles.workflow (parent-expanded)",
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-06-13T00:00:00Z",
+    "completedPhaseClaims": [
+      { "phase": "analyze", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T00:00:00Z", "evidenceRef": "design.md#current-truth-gathered-2026-06-13-solution-blind", "summary": "Verified all 5 owner-diagnosis points against committed code: spec 084 shipped+blocked/validated-in-repo; honestSalvagePrefix == screenshot text; forced-final empty/ungrounded -> honestSalvageBody; deepseek-r1:7b/32b in model_memory_profiles. De-risked the model choice: validateModelEnvelopes does NOT count the open-knowledge model in the concurrent interactive set; deepseek-r1:7b already validated via OLLAMA_REASONING_MODEL; no ollama_memory_limit change needed." },
+      { "phase": "ux", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T00:00:00Z", "evidenceRef": "spec.md#3-outcome-contract", "summary": "User-facing behavior: an answerable comparison question yields the actual synthesized verdict; reasoning-model <think> never leaks; retry-before-salvage; honest salvage preserved as genuine-failure fallback. uservalidation.md authored." },
+      { "phase": "design", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T00:00:00Z", "evidenceRef": "design.md#decision-record", "summary": "Decision record across the 3 axes: D1 (RECOMMENDED) = Axis A split reasoning model on synthesis + Axis C structured forced-final + bounded retry; D2 Axis B deterministic orchestration considered + DEFERRED (F-AXISB); D3 Axis C-alone rejected as default (084 proved gemma fails); D4 deepseek-r1:32b opt-up (F-OPTUP). Envelope + latency + trust-preservation matrices recorded." },
+      { "phase": "plan", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T00:00:00Z", "evidenceRef": "scopes.md", "summary": "3 scopes with Gherkin (SCN-087-A01..A05), Test Plan rows mapping each scenario to a concrete non-tautological test, and tiered DoD; scenario-manifest authored." },
+      { "phase": "implement", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T18:40:00Z", "evidenceRef": "report.md", "summary": "SST keys synthesis_model_id + synthesis_retry_budget (config/smackerel.yaml + openknowledge.go + config.sh + deploy/contract.yaml); agent.go forced-final model swap + structured synthesisFinalPrompt + stripThinkBlocks + retry-before-salvage; wiring threads both; main.go WriteTimeout 3600->4200. config generate (dev+test) EXIT 0; check EXIT 0; format --check EXIT 0." },
+      { "phase": "test", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T18:50:00Z", "evidenceRef": "report.md#test-evidence--green-after-implementation-restored", "summary": "7 spec-087 agent tests + 2 spec-087 config tests GREEN. 4 adversarial RED->GREEN proven by neutralizing the 3 behaviors (stripThinkBlocks no-op, model-swap removed, retry disabled): A01/A02/A04/A05c FAIL pre-change, the 3 guards stay GREEN; restored -> all GREEN." },
+      { "phase": "regression", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:00:00Z", "evidenceRef": "report.md#regression--full-go-unit-suite", "summary": "Full go unit suite 124/124 packages ok after regenerating the stale test.env. 9 spec-084 reasoning-loop/salvage tests preserved GREEN (baseCfg SynthesisRetryBudget=0 = spec-084 timing). scopesdriftguard + tests/unit/clients both ok (spec-083/073 env not failing this run)." },
+      { "phase": "simplify", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:02:00Z", "evidenceRef": "internal/assistant/openknowledge/agent/agent.go", "summary": "stripThinkBlocks and synthesisNeedsRetry are single-purpose helpers; the retry loop reuses the existing ephemeral forced-final message pattern and the existing honestSalvageBody/parseCitations/cite-back paths unchanged. No duplication introduced; the synthesis prompt consts sit beside honestSalvagePrefix." },
+      { "phase": "gaps", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:03:00Z", "evidenceRef": "scopes.md", "summary": "All DoD items across the 3 scopes are [x] with executed evidence refs; FR-1..FR-12 satisfied. F-AXISB (deterministic decompose orchestration) + F-OPTUP (deepseek-r1:32b) recorded as documented next levers, not gaps." },
+      { "phase": "harden", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:04:00Z", "evidenceRef": "report.md#scope-01", "summary": "check (build+vet+config-sync+scenario-lint) EXIT 0; format --check EXIT 0; SST fail-loud preserved (synthesis_model_id REQUIRED non-empty, synthesis_retry_budget REQUIRED >=0, no colon-dash default); new-key fail-loud coverage GREEN." },
+      { "phase": "stabilize", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:05:00Z", "evidenceRef": "design.md#latency-invariant-f-lat", "summary": "No live-stack perf pass: the reasoning synthesis latency is model+GPU-dependent (home-lab devops re-verify). Stability-positive: the retry stays within the documented WriteTimeout = (max_iterations + synthesis_retry_budget) x llm_timeout_ms = 4200s envelope; the split synthesis model is on-demand and envelope-safe." },
+      { "phase": "security", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:06:00Z", "evidenceRef": "report.md", "summary": "Trust perimeter intact: cite-back verifier + provenance gate run on the post-<think>-strip text; fabricated-citation guard PASS; <think>-leak guard proves a fabricated URL inside <think> never reaches the body or becomes a citation. No secret/PII; no new egress/dependency; capture-as-fallback untouched." },
+      { "phase": "docs", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:07:00Z", "evidenceRef": "docs/Operations.md", "summary": "docs/Operations.md open-knowledge section amended with the split synthesis model, <think> stripping, retry-before-salvage, and the updated WriteTimeout (4200s) latency invariant." },
+      { "phase": "validate", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:12:00Z", "evidenceRef": "report.md", "summary": "Claims-vs-reality: every report.md evidence block is executed terminal output (RED then GREEN). artifact-lint PASSED; traceability-guard RESULT PASSED 0 warnings (7 scope Gherkin scenarios -> Test Plan rows -> concrete tests -> report refs -> DoD fidelity). The stale-test.env failure attributed + fixed by regeneration, not faked." },
+      { "phase": "audit", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:14:00Z", "evidenceRef": "report.md#completion-statement", "summary": "Ship-readiness + policy: NO-DEFAULTS (G028) preserved; cite-back/provenance/capture untouched; no spec-083 card-rewards or ml/ file touched; no secret/PII; the split reasoning model is a Principle-2/4/8 improvement. Terminal posture validated-in-repo; devops owns the push + live re-verify." },
+      { "phase": "chaos", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-13T19:15:00Z", "evidenceRef": "internal/assistant/openknowledge/agent/synthesis_spec087_test.go", "summary": "No live multi-service chaos pass (requires a live Ollama+core+ml+nats stack). The synthesis turn is exercised via adversarial scripted fakeLLM traces: <think>+verdict, empty-then-retry, all-empty salvage, fabricated citation, and <think>-embedded fabricated URL. The live chaos surface is the home-lab devops re-verify." }
+    ],
+    "scopeProgress": [
+      { "scopeId": "SCOPE-01", "name": "Split synthesis model + <think> stripping", "status": "Done", "dodItemsChecked": 9, "dodItemsTotal": 9 },
+      { "scopeId": "SCOPE-02", "name": "Structured forced-final synthesis + retry-before-salvage", "status": "Done", "dodItemsChecked": 10, "dodItemsTotal": 10 },
+      { "scopeId": "SCOPE-03", "name": "Adversarial suite + trust guards + docs", "status": "Done", "dodItemsChecked": 8, "dodItemsTotal": 8 }
+    ]
+  },
+  "nextRequiredOwner": "bubbles.devops",
+  "blockedReason": "VALIDATED-IN-REPO; blocked on the owner-directed devops handoff. All in-repo work is complete and validated: 3 scopes Done, 7 spec-087 agent tests GREEN (4 adversarial RED->GREEN + 3 trust guards) + 2 spec-087 config tests GREEN, 9 spec-084 tests preserved GREEN, full Go unit suite 124/124 packages ok, and check / format --check / artifact-lint / traceability-guard all pass. The remaining full-delivery `done` gates are NOT satisfiable in this session and are owned by the separate bubbles.devops dispatch: (1) the owner directive forbids any commit/push here (devops owns the isolated push + the spec(087) commit + CI + build of signed images carrying the synthesis split + the deepseek-r1:7b model pull + the home-lab bundle that sets assistant_open_knowledge_synthesis_model_id + apply); (2) the decisive home-lab live E2E re-verification of the pomegranate /ask turn is model+GPU-dependent and runs post-apply. No live-stack result is fabricated. Attribute whole-working-tree guard noise to the operator's spec-083 card-rewards WIP + spec-073 container env by file path; the spec-087 isolated changeset is clean (0 drift refs, no ml/ or cardrewards source touched)."
+}

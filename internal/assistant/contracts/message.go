@@ -56,6 +56,17 @@ type AssistantMessage struct {
 	// MAY use it to round-trip per-transport hints (e.g. message
 	// thread id) through the audit layer.
 	TransportMetadata map[string]string
+
+	// ModelOverride is the spec 088 per-request, runtime-switchable
+	// model selection for the open-knowledge /ask agent. UNTRUSTED:
+	// it is a user-supplied raw model string (e.g. parsed from a
+	// Telegram `/ask --model=<id>` flag) that MUST be validated against
+	// the switchable-model allowlist (internal/assistant/openknowledge/
+	// modelswitch) BEFORE it reaches any agent or inference backend. The
+	// zero value (empty string) is the baseline — no override — so the
+	// no-override path is byte-for-byte the spec-087 behaviour (NFR-4).
+	// A typed field (owner directive), NOT a TransportMetadata key.
+	ModelOverride string
 }
 
 // MessageKind discriminates the four supported inbound message shapes.

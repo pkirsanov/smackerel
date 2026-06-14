@@ -74,8 +74,15 @@ func newRegistry(t *testing.T, extras ...ok.Tool) *ok.Registry {
 
 func baseCfg(maxIter, tokens int, perQueryUSD, monthlyUSD, perUserUSD, ratio float64, cost CostFn) Config {
 	return Config{
-		SystemPrompt:               "test-system-prompt",
-		Model:                      "test-model",
+		SystemPrompt: "test-system-prompt",
+		Model:        "test-model",
+		// Spec 087 — SynthesisModel is REQUIRED non-empty by New(); set it
+		// equal to Model so every existing agent test constructs a valid
+		// Config. SynthesisRetryBudget=0 means NO synthesis retry, which
+		// preserves the exact spec-084 forced-final salvage timing for all
+		// tests that do not opt into the spec-087 retry path.
+		SynthesisModel:             "test-model",
+		SynthesisRetryBudget:       0,
 		MaxIterations:              maxIter,
 		PerQueryTokenBudget:        tokens,
 		PerQueryUSDBudget:          perQueryUSD,

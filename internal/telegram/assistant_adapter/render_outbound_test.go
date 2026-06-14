@@ -256,6 +256,88 @@ func TestBuildTelegramRendering_SilentCaptureNoBody(t *testing.T) {
 	}
 }
 
+// TestBuildTelegramRendering_ModelFooterOnOverrideOnly_Spec088 — ADVERSARIAL.
+// An open-knowledge sourced answer with OverrideApplied=true grows a trailing
+// `— model: <id>` footer; the SAME answer with no attribution (baseline) grows
+// NO footer (byte-for-byte spec-087 / NFR-4); an attribution with
+// OverrideApplied=false also shows no footer. Fails if a baseline answer gains a
+// footer or an override answer loses it.
+func TestBuildTelegramRendering_ModelFooterOnOverrideOnly_Spec088(t *testing.T) {
+	t.Parallel()
+	webSource := []contracts.Source{{
+		ID: "w-1", Title: "WSU Extension", Kind: contracts.SourceWeb,
+		Ref: contracts.WebSourceRef{URL: "https://wsu.test/x", Provider: "searxng", FetchedAt: time.Unix(0, 0), ContentHash: "sha256:x", Snippet: "fruit hardiness"},
+	}}
+	base := contracts.AssistantResponse{
+		Status:  contracts.StatusAnswered,
+		Body:    "wa-town-B is the better choice.",
+		Sources: webSource,
+	}
+
+	t.Run("override_applied_has_trailing_footer", func(t *testing.T) {
+		resp := base
+		resp.ModelAttribution = &contracts.ModelAttribution{ModelID: "deepseek-r1:7b", OverrideApplied: true}
+		rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if !strings.Contains(rendered, "— model: deepseek-r1:7b") {
+			t.Fatalf("override answer MUST carry the '— model:' footer, got %q", rendered)
+		}
+		if !strings.HasSuffix(strings.TrimRight(rendered, "\n"), "— model: deepseek-r1:7b") {
+			t.Fatalf("the footer MUST be the trailing line, got %q", rendered)
+		}
+	})
+
+	t.Run("baseline_no_footer", func(t *testing.T) {
+		resp := base // ModelAttribution nil
+		rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if strings.Contains(rendered, "— model:") {
+			t.Fatalf("a baseline answer MUST NOT grow a footer (NFR-4), got %q", rendered)
+		}
+	})
+
+	t.Run("override_present_but_not_applied_no_footer", func(t *testing.T) {
+		resp := base
+		resp.ModelAttribution = &contracts.ModelAttribution{ModelID: "gemma4:26b", OverrideApplied: false}
+		rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if strings.Contains(rendered, "— model:") {
+			t.Fatalf("OverrideApplied=false MUST NOT show a footer, got %q", rendered)
+		}
+	})
+}
+
+// TestBuildTelegramRendering_ModelRejectionBodyRendered_Spec088 — ADVERSARIAL.
+// The fail-loud model-override rejection (ErrModelNotSwitchable) renders the
+// verbatim rejection body, NOT the generic "<skill>: <cause>" StatusUnavailable
+// error line. Fails if the rejection message is dropped.
+func TestBuildTelegramRendering_ModelRejectionBodyRendered_Spec088(t *testing.T) {
+	t.Parallel()
+	msg := "\"gpt-4o\" is not a switchable model. I did NOT use it, and I did NOT fall back to the default — nothing was sent to the model.\nSwitchable models: gemma4:26b (default), deepseek-r1:7b.\nRetry e.g. /ask --model=deepseek-r1:7b <your question>"
+	resp := contracts.AssistantResponse{
+		Status:     contracts.StatusUnavailable,
+		ErrorCause: contracts.ErrModelNotSwitchable,
+		Body:       msg,
+		Routing:    &agent.RoutingDecision{Chosen: "open_knowledge"},
+	}
+	rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if rendered != msg {
+		t.Fatalf("rejection MUST render the verbatim body.\n got: %q\nwant: %q", rendered, msg)
+	}
+	if strings.Contains(rendered, "open_knowledge: model_not_switchable") {
+		t.Fatalf("rejection must NOT render as the generic error line, got %q", rendered)
+	}
+}
+
 // --- SCOPE-13: open_knowledge dispatch ---
 
 // TestBuildTelegramRendering_AllArtifact_BackCompat asserts an

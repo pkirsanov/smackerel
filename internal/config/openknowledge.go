@@ -25,12 +25,34 @@ const (
 
 // OpenKnowledgeConfig is the SST surface for spec 064 SCOPE-03.
 type OpenKnowledgeConfig struct {
-	Enabled                 bool
-	Provider                string
-	ProviderEndpoint        string
-	ProviderAPIKey          string
-	LLMModelID              string
-	MaxIterations           int
+	Enabled          bool
+	Provider         string
+	ProviderEndpoint string
+	ProviderAPIKey   string
+	LLMModelID       string
+	// SynthesisModelID is the model used ONLY on the tools-stripped
+	// forced-final synthesis turn (and its retries). Spec 087 — the
+	// GATHER turns use LLMModelID (a strong tool-caller); the SYNTHESIS
+	// turn uses a reasoning model (deepseek-r1:7b on home-lab). REQUIRED
+	// non-empty when Enabled=true (G028 — no silent default).
+	SynthesisModelID string
+	MaxIterations    int
+	// SynthesisRetryBudget is the number of stronger-prompt synthesis
+	// retries issued when the forced-final synthesis turn returns
+	// empty/ungrounded text, BEFORE the honest snippet salvage fires.
+	// Spec 087 — REQUIRED >= 0 when Enabled=true (0 = no retry = the
+	// exact spec-084 salvage timing; an explicit operator choice, not a
+	// hidden default).
+	SynthesisRetryBudget int
+	// SwitchableModels is the spec 088 operator-curated allowlist of
+	// models the open-knowledge /ask agent may be runtime-switched TO on
+	// the forced-final SYNTHESIS turn (per-request --model= / API model).
+	// REQUIRED non-empty when Enabled=true (G028 — no silent default).
+	// Each entry MUST have a model_memory_profiles entry AND co-resident-
+	// fit the env ollama envelope; that envelope arithmetic is enforced
+	// fail-loud at config-generation in config.go::validateModelEnvelopes
+	// (here we only struct-validate non-empty list + non-empty entries).
+	SwitchableModels        []string
 	PerQueryTokenBudget     int
 	PerQueryUSDBudget       float64
 	MonthlyBudgetUSD        float64
@@ -107,12 +129,15 @@ func LoadOpenKnowledge() (OpenKnowledgeConfig, error) {
 	cfg.ProviderEndpoint, errs = lookupString("ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT", errs)
 	cfg.ProviderAPIKey, errs = lookupString("ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY", errs)
 	cfg.LLMModelID, errs = lookupString("ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID", errs)
+	cfg.SynthesisModelID, errs = lookupString("ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID", errs)
 	cfg.MaxIterations, errs = lookupInt("ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS", errs)
+	cfg.SynthesisRetryBudget, errs = lookupInt("ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_RETRY_BUDGET", errs)
 	cfg.PerQueryTokenBudget, errs = lookupInt("ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET", errs)
 	cfg.PerQueryUSDBudget, errs = lookupFloat("ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET", errs)
 	cfg.MonthlyBudgetUSD, errs = lookupFloat("ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD", errs)
 	cfg.PerUserMonthlyBudgetUSD, errs = lookupFloat("ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD", errs)
 	cfg.ToolAllowlist, errs = lookupJSONStringList("ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST", errs)
+	cfg.SwitchableModels, errs = lookupJSONStringList("ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS", errs)
 	cfg.WebSnippetCacheEnabled, errs = strictBool("ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED", errs)
 	cfg.LLMTimeoutMs, errs = lookupInt("ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS", errs)
 	cfg.AllowedEgressHosts, errs = lookupJSONStringList("ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS", errs)
@@ -172,8 +197,14 @@ func (c *OpenKnowledgeConfig) Validate() error {
 	if strings.TrimSpace(c.LLMModelID) == "" {
 		errs = append(errs, "assistant.open_knowledge.llm_model_id (empty)")
 	}
+	if strings.TrimSpace(c.SynthesisModelID) == "" {
+		errs = append(errs, "assistant.open_knowledge.synthesis_model_id (empty)")
+	}
 	if c.MaxIterations <= 0 {
 		errs = append(errs, fmt.Sprintf("assistant.open_knowledge.max_iterations (must be > 0, got %d)", c.MaxIterations))
+	}
+	if c.SynthesisRetryBudget < 0 {
+		errs = append(errs, fmt.Sprintf("assistant.open_knowledge.synthesis_retry_budget (must be >= 0, got %d)", c.SynthesisRetryBudget))
 	}
 	if c.PerQueryTokenBudget <= 0 {
 		errs = append(errs, fmt.Sprintf("assistant.open_knowledge.per_query_token_budget (must be > 0, got %d)", c.PerQueryTokenBudget))
@@ -196,6 +227,21 @@ func (c *OpenKnowledgeConfig) Validate() error {
 		for _, t := range c.ToolAllowlist {
 			if strings.TrimSpace(t) == "" {
 				errs = append(errs, "assistant.open_knowledge.tool_allowlist (contains empty entry)")
+				break
+			}
+		}
+	}
+	// Spec 088 — switchable_models is the runtime-switchable allowlist.
+	// Struct-level checks only (non-empty list + non-empty entries); the
+	// per-entry model_memory_profiles + co-residence envelope arithmetic
+	// is enforced in config.go::validateModelEnvelopes where the profiles
+	// and the ollama envelope live (G028 fail-loud).
+	if len(c.SwitchableModels) == 0 {
+		errs = append(errs, "assistant.open_knowledge.switchable_models (must be non-empty)")
+	} else {
+		for _, m := range c.SwitchableModels {
+			if strings.TrimSpace(m) == "" {
+				errs = append(errs, "assistant.open_knowledge.switchable_models (contains empty entry)")
 				break
 			}
 		}

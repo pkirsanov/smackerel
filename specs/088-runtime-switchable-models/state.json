@@ -1,0 +1,250 @@
+{
+  "version": 3,
+  "featureDir": "specs/088-runtime-switchable-models",
+  "featureNumber": "088",
+  "featureName": "Runtime-Switchable Models",
+  "status": "blocked",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "lastUpdatedAt": "2026-06-14T03:00:00Z",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "specDependsOn": [
+    "specs/087-open-knowledge-genuine-synthesis"
+  ],
+  "amends": [],
+  "unblocks": [],
+  "executionModel": "parent-expanded",
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-13T20:00:00Z",
+      "runFinishedAt": "2026-06-13T20:30:00Z",
+      "summary": "Greenfield analyst bootstrap. Grounded every requirement against committed architecture: verified the /ask model is a process-wide singleton (okagent.Config.Model + spec-087 SynthesisModel) baked at wiring (cmd/core/wiring_assistant_openknowledge.go) from SST (assistant.open_knowledge.llm_model_id / synthesis_model_id); confirmed BOTH surfaces converge on it (Telegram bot.go case ask -> Facade.Handle -> runOpenKnowledgeDirect -> CurrentAgent().Run; web/HTTP internal/api/agent_invoke.go POST /v1/agent/invoke -> substrate Handler -> agentRef.Load().Run); confirmed NO per-request/per-user/runtime override exists and NO general per-user prefs store (only per_user_token.go PASETO mint); confirmed the attribution gap (runOpenKnowledgeDirect does not set InvocationResult.Model; okagent.TurnResult + agenttool.outputEnvelope have no model field); confirmed allowlist SoT = config/smackerel.yaml model_memory_profiles + home-lab ollama_memory_limit 28G. Authored spec.md: problem statement, 6 actors, Outcome Contract (intent/success/failure-refusal/failure-condition), 8 BDD scenarios SCN-088-A01..A08, FR-1..FR-12, NFR-1..NFR-6, C1..C7 constraints, 3 design forks as open questions, Product Principle Alignment (Principle 8 primary + 6 + inherited 2/4), UI scenario matrix. No code written; no agents dispatched."
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["ux"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-13T20:35:00Z",
+      "runFinishedAt": "2026-06-13T21:15:00Z",
+      "summary": "UX phase (parent-expanded). Read analyst spec.md + state.json, spec-087 uservalidation.md (house style), and the live assistant voice (render_outbound.go / render_openknowledge.go / contracts/refusal.go / legacy_aliases.go HelpText / bot.go command dispatch / api/agent_invoke.go envelope). Authored uservalidation.md (SCN-088-A01..A08 mapped to operator-checkable acceptance items, left unchecked [ ] per anti-fabrication since pre-implementation) and appended ## UI Wireframes + ## User Flows to spec.md. Defined 3 shared UI primitives for cross-surface parity (UX9): ModelOverrideCarrier, OverrideRejection, ModelAttribution. Proposed Telegram shapes (per-request /ask --model=<id>, sticky /model <id> + /model discovery + /model default, optional /compare) and API parity (top-level model field; success envelope adds model; off-allowlist/over-envelope => HTTP 400 with machine-readable error_code + structured rejected_model/allowed_models/default_model + a message identical to the Telegram sentence). Authored fail-loud rejection wording (names the model, double-NOT no-fallback, lists allowed set + default, actionable retry) and the '— model: <id>' attribution footer. Recommendation: attribute the human surface ONLY on override/compare (preserves spec-087 baseline byte-for-byte; Principle 6 / NFR-4); the API envelope carries model ALWAYS (structured metadata). UX input to Forks A/B/C recorded. No code; no agents dispatched; status unchanged. Next owner: bubbles.design."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-13T21:20:00Z",
+      "runFinishedAt": "2026-06-13T21:55:00Z",
+      "summary": "Design phase (parent-expanded, from-analysis depth). Read spec.md (FR/NFR/SCN/forks + UI Wireframes/User Flows), uservalidation.md, and dependency 087 design.md. Grounded every integration point in committed code: confirmed the open-knowledge model is a process-wide singleton reached by TWO structurally-different fast-paths (Telegram Facade.runOpenKnowledgeDirect -> CurrentAgent().Run; web/HTTP agent_invoke.go fast-path -> CurrentAgent().Run BYPASSING the facade), so the shared validator+allowlist+clone MUST live at the agenttool singleton seam (not the facade). Verified per-turn reqModel selection (agent.go:332/342/394), the finalize() chokepoint, the attribution gap (TurnResult/outputEnvelope/InvocationResult carry no model on the fast-path), model_memory_profiles + OllamaMemoryLimitMiB on the main Config, and validateModelEnvelopes as the envelope seam. RESOLVED the 3 forks: A=per-request only (sticky deferred F-STICKY; no per-user store today); B=--model= re-points the SYNTHESIS turn only (tool-model deferred F-TOOLMODEL; re-pointing both would degrade gather on a reasoning model); C=defer compare-both (F-COMPARE-LATENCY; doubles worst case to 8400s busting the 4200s WriteTimeout; ask-twice enables A/B). Chose a NEW explicit assistant.open_knowledge.switchable_models SST list (fail-loud, co-residence-envelope-validated in validateModelEnvelopes) over reusing model_memory_profiles. Specified: carrier = typed contracts.AssistantMessage.ModelOverride (Telegram) + AgentInvokeRequest.Model (HTTP); per-request clone via new Agent.WithModelOverride (singleton never mutated, C6); shared modelswitch.Allowlist.Resolve validator returning typed Override/Rejection with two reason-codes (model_not_allowlisted / model_over_memory_envelope); attribution via new TurnResult.Model stamped in finalize -> outputEnvelope.model (HTTP always) + footer '— model: <id>' (Telegram only-on-override). 13-change file manifest + capability-foundation split + complexity tracking + trust-invariant matrix + scenario->test mapping authored. WriteTimeout unchanged (4200s). No code written; no agents dispatched; status unchanged (in_progress). Next owner: bubbles.plan."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-13T22:00:00Z",
+      "runFinishedAt": "2026-06-13T22:30:00Z",
+      "summary": "Plan phase (parent-expanded). Read design.md (resolved Forks A/B/C + 13-change manifest), spec.md (FR/NFR/SCN-088-A01..A08), uservalidation.md, state.json, and spec 087 scopes.md + scenario-manifest.json (house style). Authored scopes.md: 3 sequential, scope-gated scopes mapping the design's 13 changes -> SCOPE-01 (SST switchable_models allowlist + shared modelswitch.Resolve validator, foundation:true, covers SCN-088-A02/A07; CHANGE 1-5), SCOPE-02 (AssistantMessage.ModelOverride carrier + Agent.WithModelOverride per-request clone [singleton never mutated, C6] + TurnResult.Model attribution + facade resolve/reject/thread, core spine, covers A01/A03/A04/A05/A08; CHANGE 6,7,8a,11), SCOPE-03 (Telegram --model= parse + footer, HTTP model field + 400 rejection envelope, wiring install, deploy contract, docs, concrete carriers, covers A06; CHANGE 8b,9,10,12). Each scope carries an Execution Outline, Gherkin (quoted from spec.md §4), a Test Plan (Gherkin->concrete test::function + category), and a tiered DoD (Tier-1 universal + Tier-2 role-specific), ALL checkboxes UNCHECKED (anti-fabrication; implementation pending). Authored scenario-manifest.json binding SCN-088-A01..A08 -> scopeId -> planned concrete test(s) with regressionRequired + evidenceRefs. Authored report.md skeleton (evidence-policy header + Change Manifest + per-scope PENDING + Test Evidence PENDING + Completion PENDING). artifact-lint PASSED (6/6 artifacts). WriteTimeout unchanged (4200s); compare-both deferred (F-COMPARE-LATENCY). Terminal posture validated-in-repo; no code; no agents dispatched; no commit (C7). Next owner: bubbles.implement."
+    }
+  ],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleAlignment": [
+      "Principle 8",
+      "Principle 6",
+      "Principle 2",
+      "Principle 4"
+    ],
+    "principleDeviations": [],
+    "modelMatrixChanged": "No NEW model added. Introduces a runtime, allowlist-gated, per-invocation model override over the EXISTING model_memory_profiles set (e.g. gemma4:26b / deepseek-r1:7b synthesis A/B; deepseek-r1:32b remains the operator opt-up). No ollama_memory_limit change; allowlist entries must stay envelope-consistent (each has a model_memory_profiles entry that fits the target env ollama envelope). A new SST key assistant.open_knowledge.switchable_models is a candidate allowlist mechanism (design fork — not yet decided).",
+    "v1ToolSet": [
+      "internal_retrieval",
+      "web_search",
+      "unit_convert",
+      "calculator"
+    ],
+    "workflowMode": "full-delivery",
+    "improvementPrelude": "analyze-design-plan",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "owner-directive-no-commit" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "planningOnlyJustification": "Full-delivery greenfield spec that EXTENDS spec 087 (adds a runtime per-invocation model-override primitive; does not amend 087's closed artifacts). Planning packets from the analyst -> ux -> design -> plan prelude are materialised into spec.md / design.md / scopes.md / scenario-manifest.json. Implementation continues in the same spec under workflowMode=full-delivery; no separate implementation spec. Terminal posture is validated-in-repo: the live gemma4:26b-vs-deepseek-r1:7b A/B on home-lab hardware (the proof spec 087 could not run on dev) is a SEPARATE downstream bubbles.devops dispatch; this spec ships and validates the switchable-model primitive in-repo only (no commit/push here).",
+  "ownerDirective": {
+    "date": "2026-06-13",
+    "summary": "Make the LLM model used by the open-knowledge /ask agent runtime-switchable across surfaces so the operator can A/B-test models (e.g. gemma4:26b vs deepseek-r1:7b on the synthesis turn) WITHOUT redeploying. Owner: 'A/B testing is a plausible option, we always do that. Also maybe we should make models switchable — e.g., a Telegram command; other surfaces (web/API) should also have an api/option to do so.' An optional, allowlist-validated override is threaded transport -> facade -> per-invocation agent config (override Model and/or spec-087 SynthesisModel); no override == exactly today's SST baseline. Off-allowlist / envelope-busting model => explicit user-facing rejection listing the allowed set; never a silent default; never an un-profiled/over-envelope model reaching Ollama. Both Telegram and web/HTTP /ask surfaces get the capability, validated identically. The answer is attributed to the model that produced it. Preserve ALL spec-064/084/087 trust invariants under ANY model (cite-back, provenance/no-zero-source, capture-as-fallback inviolable, <think>-strip + retry-before-salvage). SST/NO-DEFAULTS/fail-loud (G028). Honour the spec-084/087 latency invariant. Do NOT touch spec-083 card-rewards WIP. Do NOT commit/push (devops owns the live A/B re-verify).",
+    "doNotTouch": [
+      "internal/cardrewards/",
+      "ml/app/card_categories.py",
+      "ml/app/main.py",
+      "ml/tests/test_card_categories.py",
+      "specs/083-card-rewards-companion/",
+      "tests/integration/cardrewards_extract_test.go"
+    ],
+    "dependencyChain": "064 -> 084 -> 087 -> 088 (087 is uncommitted, status blocked/validated-in-repo awaiting its own devops handoff; 088 depends directly on 087's SynthesisModel split and transitively on the 064/084 loop + trust perimeter).",
+    "designForks": [
+      "Fork A — override scope/stickiness: per-request vs per-user-sticky vs global (global likely a non-goal; conflicts with SST/build-once).",
+      "Fork B — which turn(s) the override targets: tool-calling Model, spec-087 SynthesisModel, or both.",
+      "Fork C — first-class A/B compare affordance (one command runs both models) vs minimal switchable + ask-twice (interacts with the latency invariant)."
+    ]
+  },
+  "certification": {
+    "status": "blocked",
+    "certifiedAt": null,
+    "certifiedBy": null,
+    "lockdownState": { "round": 0, "lastCleanRound": 0 },
+    "evidenceRef": "report.md",
+    "certifiedCompletedPhases": [
+      "analyze",
+      "ux",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "completedScopes": [
+      "SCOPE-01",
+      "SCOPE-02",
+      "SCOPE-03"
+    ],
+    "gatesPassed": [
+      "artifact-lint (EXIT=0, PASSED; 2 non-blocking warnings: legacy uservalidation layout + deprecated scopeProgress field)",
+      "traceability-guard (RESULT: PASSED, 0 warnings; 8 SCN-088-A01..A08 -> Test Plan rows -> concrete test files -> report evidence -> DoD fidelity 8/8 mapped)",
+      "check / build+vet+config-sync+scenario-lint (EXIT=0)",
+      "format --check (EXIT=0, 65 files already formatted)",
+      "test unit --go --go-run Spec088 --verbose via the dockerized golang:1.25.10-bookworm repo CLI (EXIT=0): 30/30 spec-088 tests GREEN across all 9 spec-088 packages (api, assistant facade, contracts, agent, agenttool, modelswitch, config, telegram adapter); go test ./... finished OK. Dockerized runner NOT blocked here (gettext-base installs; network available) -- confirms the test-phase RUNNER CORRECTION over the implement-phase note",
+      "implementation-reality-scan scoped to spec-088 (EXIT=0, 0 violations across 19 resolved files)",
+      "do-not-touch boundary clean: git status --porcelain shows zero changes under internal/cardrewards/, ml/app/card_categories.py, ml/app/main.py, ml/tests/test_card_categories.py, specs/083-card-rewards-companion/, tests/integration/cardrewards_extract_test.go"
+    ],
+    "knownEnvironmentalFailures": [
+      "state-transition-guard G028 implementation-reality-scan (whole-tree) flags ml/app/main.py:22 and ml/app/main.py:257 (DEFAULT_FALLBACK) -- the operator spec-083 card-rewards WIP (do-not-touch, C5). Out-of-changeset, attributed by file path; spec-088 touches no ml/ source (git status confirms). Identical to the spec-087 precedent finding.",
+      "state-transition-guard G089 inter-spec dependency: spec 088 depends on spec-087 (status blocked); spec-087 depends on spec-084 (status blocked). The 064->084->087->088 chain is validated-in-repo awaiting the devops handoff that finalizes it; resolves when devops promotes the chain. Identical pattern to the spec-087 precedent (which depended on the blocked spec-084).",
+      "spec-073 node/dart container canary is a non-Go (web/client) tier not exercised by ./smackerel.sh test unit --go; out-of-changeset.",
+      "Remaining full-delivery done-ceiling gates NOT satisfiable in this validated-in-repo session: (1) owner-forbidden commit/push (C7; devops owns the isolated push + spec(088) commit + CI + signed images + home-lab bundle apply); (2) the GPU/home-lab live gemma4:26b-vs-deepseek-r1:7b synthesis A/B re-verify (post-apply, model+GPU-dependent); (3) subsequent parent-expanded diagnostic phases (audit next, then chaos/docs) -- Check 6 G022 correctly reports them not-yet-run. No live-stack result fabricated.",
+      "Minor artifact-hygiene deviations from the spec-087 precedent, non-blocking for the validated-in-repo substance, owned by bubbles.plan/bubbles.implement for the done-promotion: scopes.md scope-status uses [x] Done instead of canonical Done (Check 4B/G041); scopes.md + report.md carry compare-both deferred (F-COMPARE-LATENCY) wording (Check 18/G040) -- compare-both is a legitimately scoped-out design decision (design fork C), not hidden incomplete work; all 40/40 DoD are genuinely checked + evidenced."
+    ],
+    "certificationNote": "VALIDATE phase (parent-expanded full-delivery). Claims-vs-reality: every report.md evidence block independently re-verified as REAL executed output, not template/fabricated. Ran the gates myself (execution-only, G071): artifact-lint PASSED; traceability-guard PASSED (8/8 SCN-088 -> rows -> concrete tests -> report refs); ./smackerel.sh check + format --check EXIT 0; ./smackerel.sh test unit --go --go-run Spec088 via the dockerized repo CLI EXIT 0 with 30/30 spec-088 tests GREEN (confirmed myself); scoped implementation-reality-scan 0 violations. Spot-read the actual test files (modelswitch allowlist_test.go, agent modelswitch_agent_spec088_test.go, facade_modelswitch_spec088_test.go, api agent_invoke_test.go): adversarial tests are non-tautological (genuine off-allowlist gpt-4o/totally-made-up, over-envelope deepseek-r1:32b 40960>28672, byte-for-byte baseline sequence gather-model then synth-model, C6 singleton-not-mutated, empty-LLM-queue facade short-circuit asserting 0 agent calls + 0 capture). Trust perimeter PRESERVED under override: fabricated citation -> StatusRefused+TerminationFabricatedSource; <think> never leaks into FinalText / never cited; no-override path byte-for-byte spec-087; SST fail-loud/no fallback-default preserved (G028 NO-DEFAULTS). Terminal posture: validated-in-repo / blocked. certifiedAt stays null (blocked is NOT a certified-done state, mirroring spec-087). The done-promotion (commit/push + live A/B) is the separate downstream bubbles.devops dispatch; audit is the next parent-expanded diagnostic phase. Out-of-changeset whole-tree guard noise (G028 ml/app/main.py spec-083; spec-073 canary) attributed by file path; spec-088 isolated changeset is clean."
+  },
+  "execution": {
+    "activeAgent": "bubbles.audit",
+    "currentPhase": "audit",
+    "currentScope": null,
+    "runStartedAt": "2026-06-13T22:00:00Z",
+    "scopeProgress": [
+      {
+        "scope": "SCOPE-01",
+        "status": "done",
+        "completedAt": "2026-06-13T23:10:00Z",
+        "evidenceRef": "report.md#scope-01",
+        "dodChecked": 12,
+        "dodTotal": 12,
+        "summary": "Foundation landed: NEW SST assistant.open_knowledge.switchable_models (dev [gemma3:4b] + home-lab override [gemma4:26b, deepseek-r1:7b]); config load+struct-validate (openknowledge.go); fail-loud co-residence envelope pass (config.go validateModelEnvelopes); config.sh env-override resolve (boundary-safe via yaml_get, finding F-088-CFGSH fixed) + emit; NEW leaf pkg internal/assistant/openknowledge/modelswitch (Allowlist/Override/Rejection/NewAllowlist/Resolve, two reason-codes + golden UX wording). config generate dev/test/home-lab EXIT 0; check EXIT 0; format --check EXIT 0. modelswitch (9) + config (2) spec-088 tests GREEN; RED-before proven (7 adversarial fail when neutralised). Host go1.25.10 test surface (dockerized runner blocked by offline apt; documented constraint)."
+      },
+      {
+        "scope": "SCOPE-02",
+        "status": "done",
+        "completedAt": "2026-06-13T23:55:00Z",
+        "evidenceRef": "report.md#scope-02",
+        "dodChecked": 14,
+        "dodTotal": 14,
+        "summary": "Core spine landed: typed AssistantMessage.ModelOverride; ModelAttribution{ModelID,OverrideApplied} + AssistantResponse.ModelAttribution + ErrModelNotSwitchable cause; agent TurnResult.Model + answeringModel tracking + finalize stamp (all terminal paths) + WithModelOverride per-request clone (singleton never mutated, C6); agenttool outputEnvelope.Model (both arms) + Set/SwitchableModels atomic singleton; facade nil-safe resolve -> reject(short-circuit: no agent, no capture)/thread(runOpenKnowledgeDirect ov param)/attribute; cmd/core/main.go WriteTimeout comment only (4200s unchanged). check EXIT 0; format --check EXIT 0. agent fake-LLM (A01/A03/A04/A05/A08) + facade (rejection short-circuit / applied attribution / baseline-not-applied / nil-safe) + agenttool (MapTurnResult both arms) + contracts (field inventory + golden fixture) spec-088 tests GREEN; RED-before proven (6 adversarial fail when WithModelOverride no-op'd + facade break removed). spec-084 + spec-087 agent suites + contracts golden suite preserved GREEN."
+      },
+      {
+        "scope": "SCOPE-03",
+        "status": "done",
+        "completedAt": "2026-06-14T00:45:00Z",
+        "evidenceRef": "report.md#scope-03",
+        "dodChecked": 14,
+        "dodTotal": 14,
+        "summary": "Two-surface carriers + wiring + deploy + docs landed: telegram translate_inbound --model= parse (scoped to open_knowledge shortcut; slash preserved; parseModelFlag) + render_outbound appendModelFooter (only-on-override) + fail-loud rejection-body intercept (ErrModelNotSwitchable -> verbatim rej.Message); api agent_invoke Model field + nil-safe Resolve -> 400 rejection envelope (status/error_code/rejected_model/allowed_models/default_model/message) + envelope carries model; wiring installs allowlist singleton from SAME SST gated on open_knowledge.enabled + startup log names switchable_models; deploy/contract.yaml switchable_models path; docs/Operations.md spec-088 block. check EXIT 0; format --check EXIT 0. telegram (inbound parse / footer-on-override / rejection-body) + api (model applied / 400 / baseline) spec-088 tests GREEN; RED-before proven (4 adversarial fail when parse/rejection/footer/render neutralised). FULL internal/+cmd/ unit regression 119 ok / 0 FAIL after fixing the in-changeset cmd/config-validate fixture ripple (the new switchable envelope guard correctly flagged a fixture that under-specified the gemma3:4b profile; fixed to bug-045 fixture model). No spec-083/073 reds in scope; do-not-touch boundary clean."
+      }
+    ],
+    "completedPhaseClaims": [
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyst",
+        "timestamp": "2026-06-13T20:30:00Z",
+        "evidenceRef": "spec.md#3-outcome-contract",
+        "summary": "Analyst artifacts authored and grounded in committed architecture. Defined the Outcome Contract, 8 BDD scenarios (SCN-088-A01..A08: override applied, off-allowlist rejected fail-loud, no-override baseline unchanged, model attribution, trust contracts under override, transport parity, untrusted-input security, latency honesty), FR-1..FR-12, NFR-1..NFR-6, hard constraints C1..C7, and the 3 design forks handed to design/ux. No code; no agent dispatch."
+      },
+      {
+        "phase": "ux",
+        "agent": "bubbles.ux",
+        "timestamp": "2026-06-13T21:15:00Z",
+        "evidenceRef": "spec.md#ui-wireframes",
+        "summary": "UX/interaction contract authored: uservalidation.md (SCN-088-A01..A08 operator-checkable acceptance, unchecked pre-implementation) + spec.md ## UI Wireframes & ## User Flows. 3 shared cross-surface UI primitives (ModelOverrideCarrier / OverrideRejection / ModelAttribution; UX9). Telegram shapes (/ask --model=, sticky /model, /model discovery, optional /compare) + API parity (model field; HTTP 400 rejection envelope mirroring the Telegram sentence). Fail-loud rejection wording + '— model: <id>' attribution footer. Recommend: attribute human surface only-on-override (baseline unchanged); API model field always-on. Fork A/B/C UX input recorded. No code; no agent dispatch."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-06-13T21:55:00Z",
+        "evidenceRef": "design.md",
+        "summary": "design.md authored (contract-grade, from-analysis). Forks resolved: A=per-request only (F-STICKY deferred), B=--model= re-points the SYNTHESIS turn only (F-TOOLMODEL deferred), C=defer compare-both (F-COMPARE-LATENCY). Allowlist = new explicit assistant.open_knowledge.switchable_models SST list (fail-loud + co-residence-envelope-validated in validateModelEnvelopes). Carrier = typed AssistantMessage.ModelOverride + AgentInvokeRequest.Model; per-request clone = new Agent.WithModelOverride (singleton immutable, C6); shared validator = new internal/assistant/openknowledge/modelswitch package + agenttool.Set/SwitchableModels singleton (both fast-paths reach it; the HTTP fast-path bypasses the facade); typed Override/Rejection (two reason-codes); attribution = new TurnResult.Model -> outputEnvelope.model (HTTP always) + '— model: <id>' footer (Telegram only-on-override). 13-change file manifest, capability-foundation split, complexity tracking, trust-invariant matrix, latency analysis (WriteTimeout unchanged 4200s), scenario->test mapping. No code; status unchanged."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-06-13T22:30:00Z",
+        "evidenceRef": "scopes.md",
+        "summary": "scopes.md + scenario-manifest.json + report.md skeleton authored. 3 sequential scope-gated scopes: SCOPE-01 (foundation modelswitch validator + SST switchable_models allowlist, covers SCN-088-A02/A07), SCOPE-02 (per-request WithModelOverride clone + TurnResult.Model attribution + facade thread, covers A01/A03/A04/A05/A08), SCOPE-03 (Telegram + HTTP two-surface carriers + wiring + deploy contract + docs, covers A06). Tiered DoD (Tier-1 universal + Tier-2 role-specific) ALL UNCHECKED (anti-fabrication, pre-implementation). scenario-manifest binds every SCN-088-A0x -> scope + planned concrete test. report.md is a PENDING skeleton. artifact-lint passed (6/6). No code; no commit (C7). Next owner: bubbles.implement."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-06-14T00:45:00Z",
+        "evidenceRef": "report.md",
+        "summary": "All 3 scopes implemented to DoD in dependency order (SCOPE-01 -> 02 -> 03), real code + real RED->GREEN tests. SCOPE-01 (12/12): SST switchable_models + modelswitch validator + fail-loud envelope guard. SCOPE-02 (14/14): AssistantMessage.ModelOverride + Agent.WithModelOverride per-request clone (singleton never mutated, C6) + TurnResult.Model attribution + facade resolve/reject(short-circuit)/thread/attribute + ErrModelNotSwitchable cause; WriteTimeout comment-only (4200s unchanged). SCOPE-03 (14/14): telegram --model= parse + footer + rejection-body render; HTTP model field + 400 envelope; allowlist-singleton wiring; deploy contract; docs/Operations.md. Every spec-064/084/087 trust invariant preserved model-agnostically; no-override path byte-for-byte spec-087. ./smackerel.sh check + format --check + config generate (dev/test/home-lab) all EXIT 0; artifact-lint PASSED. RED-before proven for the adversarial subset of every scope (17 adversarial fails when neutralised, restored verbatim). FULL internal/+cmd/ unit regression 119 ok / 0 FAIL (one in-changeset cmd/config-validate fixture ripple found by the new envelope guard and fixed; no spec-083/073 reds in scope; do-not-touch boundary clean). Test surface: host go1.25.10 (dockerized ./smackerel.sh test unit --go blocked by offline apt gettext-base; documented constraint, parallel to spec-087's no-GPU). Live gemma4:26b-vs-deepseek-r1:7b synthesis A/B deferred to bubbles.devops (C7). No commit/push. Next owner: bubbles.test."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-06-14T01:30:00Z",
+        "evidenceRef": "report.md#test-phase-verification",
+        "summary": "Authoritative test-phase re-run via the dockerized repo CLI (./smackerel.sh test unit --go [--go-run ...] [--verbose]). RUNNER CORRECTION: the dockerized golang:1.25.10-bookworm runner is NOT blocked in this sandbox — apt-get install gettext-base succeeds (network available), so ALL evidence is from the canonical repo CLI, not a host fallback (corrects the implement-phase constraint note). Spec-088 30/30 GREEN (the 29 planned + 1 NEW A06 parity test); spec-084 (9) + spec-087 (7 agent) regression GREEN; full unfiltered ./smackerel.sh test unit --go (whole go test ./... tree, real execution) every package ok / 0 FAIL. Out-of-changeset attribution: spec-083 tests/integration/cardrewards_extract_test.go is //go:build integration (excluded from the --go unit tier; shows [no tests to run], never executed/failed); spec-073 node/dart canary is a non-Go (web/client) tier not exercised by --go. Do-not-touch boundary untouched. Test integrity spot-checked non-tautological (genuine off-allowlist gpt-4o / over-envelope deepseek-r1:32b 40960>28672 inputs; byte-for-byte baseline vs the real singleton; trust-under-override asserts StatusRefused+TerminationFabricatedSource + think-strip; facade short-circuit uses empty fake-LLM queue + 0 capture; A04 early-StopEndTurn attributes the gather model per F-ATTR-EARLY). A06 PARITY GAP CLOSED (test-only, RED->GREEN): NEW internal/api/agent_invoke_test.go::TestAgentInvoke_RejectionEnvelopeByteIdenticalToValidator_Spec088 pins the full HTTP 400 envelope (message/error_code/rejected_model/default_model/allowed_models) byte-identical to modelswitch.Resolve(sameAllowlist,'gpt-4o'); STRENGTHENED internal/assistant facade short-circuit test pins resp.Body byte-identical to the SAME validator. Two surface-break RED demos (handler message + facade body reformatted) proved both catch the divergence the prior substring checks missed; both production edits reverted verbatim (net diff to internal/api/agent_invoke.go + internal/assistant/facade.go is ZERO). ./smackerel.sh check + format --check clean. No new production code; no certification writes; no commit/push (C7). Next owner: bubbles.security."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-06-14T02:00:00Z",
+        "evidenceRef": "report.md#security-review-bubblessecurity-2026-06-13",
+        "summary": "Security review of the per-request model override accepted from UNTRUSTED user input on two surfaces (Telegram /ask --model=, HTTP model field). All six threat-model items PASS with file:line + executed test evidence: (1) no arbitrary model-string passthrough -- Resolve trims + EXACT-matches the SST allowlist before any agent build; HTTP rejects pre-Run; facade rejects then break (no agent, no capture); WithModelOverride mutates only a per-request clone; (2) injection -- model id reaches Ollama only as a JSON field value via json.Marshal, never concatenated; (3) SST/NO-DEFAULTS integrity -- singleton never mutated, baseline REQUIRED + fail-loud G028, envelope-consistency fails loud at config-gen AND wiring; (4) trust perimeter unchanged under override -- <think>-strip unconditional before cite-back/provenance; (5) DoS -- override adds zero turns, WriteTimeout 4200s unchanged; (6) secrets/PII/supply-chain -- no new secret/egress/dependency, modelswitch stdlib-only. One LOW/informational observation (SEC-088-01: the 400 rejection echoes the raw rejected model string, JSON-escaped + bearer-gated + bounded by the 64 KiB body cap) recorded non-blocking. Scoped ./smackerel.sh test unit --go --go-run Spec088 executed, 0 FAIL. Verdict: SECURE. No agents dispatched; no commit/push."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-06-14T02:30:00Z",
+        "evidenceRef": "report.md#validation-report-bubblesvalidate",
+        "summary": "Deep claims-vs-reality validation (certification-required). Independently RE-RAN every gate (execution-only, G071): artifact-lint PASSED; traceability-guard PASSED 0 warnings (8/8 SCN-088 -> Test Plan rows -> concrete test files -> report evidence -> DoD fidelity); ./smackerel.sh check + format --check EXIT 0; ./smackerel.sh test unit --go --go-run Spec088 --verbose via the dockerized golang:1.25.10 repo CLI EXIT 0 -- 30/30 spec-088 tests GREEN across all 9 packages, go test ./... finished OK (independently confirms the dockerized runner works here; the implement-phase offline-apt note does NOT apply). Scoped implementation-reality-scan 0 violations. Spot-read the 4 key test files: adversarial cases non-tautological (real off-allowlist/over-envelope inputs; byte-for-byte baseline sequence; C6 singleton-not-mutated; empty-LLM-queue facade short-circuit with 0 capture). Trust perimeter verified preserved under override (fabricated-citation -> refused; <think>-strip; no-override byte-for-byte spec-087; SST fail-loud). Do-not-touch boundary clean (git status). Out-of-changeset G028 (ml/app/main.py spec-083) + G089 (dep chain blocked) attributed by file path -- spec-088 isolated changeset clean. Set terminal status blocked (validated-in-repo); the done ceiling (commit/push + live GPU A/B) is owned by the bubbles.devops dispatch. Next parent-expanded phase: bubbles.audit."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-06-14T03:00:00Z",
+        "evidenceRef": "report.md#final-audit-report-bubblesaudit",
+        "summary": "Final policy + ship-readiness audit (parent-expanded full-delivery diagnostic; read-only; no commit/push, C7). Independently verified the 7-item policy checklist (15/15 sub-checks PASS, 0 substance failures): (1) NO-DEFAULTS/SST G028 -- switchable_models REQUIRED+fail-loud (openknowledge.go:176 early-return-when-disabled + :239 non-empty guard = the tool_allowlist pattern; no ${VAR:-default}; config.sh ='[]' is generation-time empty-list shape, Go fails loud when enabled), envelope-consistency enforced in validateModelEnvelopes (config.go:2288) grounded in real SST values (home-lab 28G=28672 MiB; gemma4:26b 18432 single-load; deepseek-r1:7b 4864 co-resident 23296<=28672; deepseek-r1:32b 40960>28672 structurally excluded; config generate home-lab EXIT 0 proves acceptance -- no entry can OOM the host); (2) trust perimeter -- WithModelOverride (agent.go:268) clones+rewrites ONLY cfg.SynthesisModel (singleton never mutated C6; zero override returns receiver = byte-for-byte spec-087); facade (facade.go:1063) resolves UNTRUSTED override pre-agent, off-allowlist => rejection + break (no agent, no capture); cite-back/provenance/capture/<think>-strip/retry are downstream + model-agnostic; (3) deployment-ownership -- home-lab switchable_models is a generic model-tag list via the same environments.<env>.* shape as spec-087 synthesis_model_id; no real host/IP/tailnet/secret; (4) Build-Once-Deploy-Many -- deploy/contract.yaml:187 abstract contract path; (5) Principle 8 genuinely implemented (TurnResult.Model attribution + explicit switch + fail-loud rejection), not just asserted; (6) do-not-touch boundary EMPTY (git status over all 6 paths); out-of-changeset G028 ml/app/main.py (spec-083 WIP), G089 dep chain, spec-073 canary attributable by file path, NOT spec-088 (spec-088-scoped reality scan 0 violations); (7) blocked/validated-in-repo is the correct honest status -- state-transition-guard correctly refuses done (28 BLOCKs exit 1), ALL attributable to the devops-owned done-ceiling (G022 not-yet-run phases incl audit/chaos/docs; G089 chain) or known non-substance artifact-hygiene (G041 [x]Done, 5A/8A DoD shape, G053 heading, G040 deferral wording, G068 keyword fidelity); zero are spec-088 substance failures. Anti-fabrication corroborated: state-guard Checks 4/9/10/12/13/16/20/29B all PASS + artifact-lint re-run EXIT 0. Two LOW audit-added findings (AUD-088-01 SCOPE-03 DoD count 13->14 stale miscount in scope table + completion statement; AUD-088-02 report file-inventory omits 3 benign spec-087 ripple test one-liners) -- both non-blocking, for done-promotion cleanup. Verdict: SHIP_WITH_NOTES -- validated-in-repo milestone APPROVED; NOT a clearance to flip done; route to bubbles.devops for the done ceiling (commit/push + live gemma4:26b-vs-deepseek-r1:7b A/B). No spec-088 substance rework required. nextRequiredOwner=bubbles.devops."
+      }
+    ]
+  },
+  "nextRequiredOwner": "bubbles.devops",
+  "blockedReason": "VALIDATED-IN-REPO; blocked on the owner-directed bubbles.devops handoff (state.json terminal owner). All in-repo work is complete and independently re-validated by bubbles.validate: 3 scopes Done (40/40 DoD checked + evidenced), 30/30 spec-088 tests GREEN via the dockerized repo CLI (go test ./... finished OK, EXIT 0), spec-084 (9) + spec-087 (7 agent) regression GREEN, and artifact-lint / traceability-guard / check / format --check / scoped implementation-reality-scan all pass. The trust perimeter (cite-back, provenance, capture-as-fallback, <think>-strip + retry-before-salvage) is preserved model-agnostically; the no-override path is byte-for-byte spec-087; SST NO-DEFAULTS (G028) is intact. The remaining full-delivery done gates are NOT satisfiable in this session: (1) the owner directive forbids any commit/push here (devops owns the isolated push + the spec(088) commit + CI + signed images + the home-lab bundle that sets the switchable_models allowlist + apply); (2) the decisive home-lab live gemma4:26b-vs-deepseek-r1:7b synthesis A/B re-verify is GPU/Ollama-dependent and runs post-apply; (3) the subsequent parent-expanded diagnostic phases (bubbles.audit next, then chaos/docs) have not yet run -- state-transition-guard Check 6 (G022) correctly reports them not-yet-recorded. No live-stack result is fabricated. Attribute whole-working-tree guard noise to the operator spec-083 card-rewards WIP (G028 ml/app/main.py:22+:257 DEFAULT_FALLBACK) + spec-073 container canary + the 064->084->087->088 dependency chain (G089, all validated-in-repo awaiting the same devops handoff) by file path; the spec-088 isolated changeset is clean (do-not-touch boundary EMPTY in git status, 0 reality-scan violations across the 19 spec-088 files). Minor artifact-hygiene items for bubbles.plan/bubbles.implement at done-promotion: scopes.md [x] Done -> canonical Done (Check 4B/G041); the compare-both deferred (F-COMPARE-LATENCY) wording (Check 18/G040) -- compare-both is a legitimately scoped-out design decision (design fork C), not hidden work.",
+  "notes": "Plan phase complete (parent-expanded). scopes.md decomposes the design's 13-change manifest into 3 sequential, scope-gated scopes: SCOPE-01 (SST assistant.open_knowledge.switchable_models allowlist + shared modelswitch.Resolve validator, foundation:true, covers SCN-088-A02/A07; CHANGE 1-5), SCOPE-02 (typed AssistantMessage.ModelOverride carrier + Agent.WithModelOverride per-request clone [singleton never mutated, C6] + TurnResult.Model attribution stamped in finalize + facade resolve/reject/thread [nil-safe], core spine, covers A01/A03/A04/A05/A08; CHANGE 6,7,8a,11), SCOPE-03 (Telegram --model= parse + '— model:' footer, HTTP model field + 400 rejection envelope, wiring install of the allowlist singleton, deploy contract path, docs, concrete carriers, covers A06; CHANGE 8b,9,10,12). Each scope has an Execution Outline, Gherkin quoted from spec.md section 4, a Test Plan (Gherkin -> concrete test::function + category), and a tiered DoD (Tier-1 universal + Tier-2 role-specific), ALL checkboxes UNCHECKED (anti-fabrication; implementation pending). scenario-manifest.json binds SCN-088-A01..A08 -> scopeId -> planned concrete test name(s) with regressionRequired + evidenceRefs. report.md is a PENDING skeleton (evidence-policy header + Change Manifest + per-scope PENDING + Test Evidence PENDING + Completion PENDING). artifact-lint PASSED (6/6 artifacts). WriteTimeout unchanged (4200s); compare-both deferred (F-COMPARE-LATENCY). All spec-064/084/087 trust contracts (cite-back / provenance / capture / <think>-strip + retry-before-salvage) preserved model-agnostically. Terminal posture validated-in-repo; the live gemma4:26b-vs-deepseek-r1:7b synthesis A/B is a downstream bubbles.devops dispatch. IMPLEMENT phase COMPLETE (parent-expanded): all 3 scopes built to DoD in dependency order with real RED->GREEN tests; check + format --check + config generate EXIT 0; artifact-lint PASSED; full internal/+cmd/ unit regression 119 ok / 0 FAIL (one in-changeset cmd/config-validate fixture ripple fixed; no spec-083/073 reds in scope; do-not-touch clean). VALIDATE phase COMPLETE (parent-expanded): bubbles.validate independently re-ran all gates (artifact-lint / traceability-guard / check / format / dockerized test unit --go --go-run Spec088 = 30/30 GREEN) and set terminal status blocked (validated-in-repo); certifiedAt stays null (blocked is not certified-done). nextRequiredOwner = bubbles.devops for the done-ceiling (owner-forbidden commit/push + live GPU gemma4:26b-vs-deepseek-r1:7b A/B); the next parent-expanded diagnostic phase is bubbles.audit. Out-of-changeset G028 (ml/app/main.py spec-083 WIP) + G089 (064->084->087->088 chain blocked) attributed by file path; the spec-088 isolated changeset is clean."
+}
