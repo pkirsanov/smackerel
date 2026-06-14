@@ -1,0 +1,86 @@
+{
+  "version": 3,
+  "schemaVersion": "scenario-manifest/v1",
+  "specId": "090-observability-slo-dogfood",
+  "lastUpdatedAt": "2026-06-14T00:00:00Z",
+  "lastUpdatedBy": "bubbles.goal (direct-implement)",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-090-001",
+      "id": "SCN-090-001",
+      "status": "done",
+      "title": "SLO registry resolves for the dogfood workflow",
+      "scopeId": "Scope 1: core.health SLO contract + real captured evidence + G100 enforcement",
+      "requiredTestType": "functional",
+      "regressionRequired": false,
+      "linkedTests": [
+        "yq -o=json '.traceContracts.observability.slos[\"core.health\"]' .github/bubbles-project.yaml"
+      ],
+      "evidenceRefs": [
+        "report.md#dod-1"
+      ]
+    },
+    {
+      "scenarioId": "SCN-090-002",
+      "id": "SCN-090-002",
+      "status": "done",
+      "title": "Adding the SLO link without a scope token does not block other specs (G100 no-op)",
+      "scopeId": "Scope 1: core.health SLO contract + real captured evidence + G100 enforcement",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        "bash .github/bubbles/scripts/observability-slo-guard.sh --repo-root . (no scope token => no-op, exit 0)"
+      ],
+      "evidenceRefs": [
+        "report.md#dod-4"
+      ]
+    },
+    {
+      "scenarioId": "SCN-090-003",
+      "id": "SCN-090-003",
+      "status": "done",
+      "title": "Capture tool refuses to fabricate evidence when the core is down",
+      "scopeId": "Scope 1: core.health SLO contract + real captured evidence + G100 enforcement",
+      "requiredTestType": "functional",
+      "regressionRequired": true,
+      "linkedTests": [
+        "bash scripts/observability/capture-slo.sh run --workflow core.health --url http://127.0.0.1:1/api/health (exit 1, no file)"
+      ],
+      "evidenceRefs": [
+        "report.md#dod-3"
+      ]
+    },
+    {
+      "scenarioId": "SCN-090-004",
+      "id": "SCN-090-004",
+      "status": "done",
+      "title": "Real telemetry is captured under load and meets the contract",
+      "scopeId": "Scope 1: core.health SLO contract + real captured evidence + G100 enforcement",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        "bash scripts/observability/capture-slo.sh run --workflow core.health --url http://127.0.0.1:40001/api/health --requests 600 --concurrency 20"
+      ],
+      "evidenceRefs": [
+        "report.md#dod-5",
+        "report.md#dod-regression"
+      ]
+    },
+    {
+      "scenarioId": "SCN-090-005",
+      "id": "SCN-090-005",
+      "status": "done",
+      "title": "G100 enforces the captured evidence for Smackerel",
+      "scopeId": "Scope 1: core.health SLO contract + real captured evidence + G100 enforcement",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [
+        "bash .github/bubbles/scripts/observability-slo-guard.sh --repo-root . (ENFORCED, within target, exit 0)"
+      ],
+      "evidenceRefs": [
+        "report.md#dod-4",
+        "report.md#dod-5"
+      ]
+    }
+  ]
+}
