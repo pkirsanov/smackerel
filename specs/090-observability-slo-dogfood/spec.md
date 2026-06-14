@@ -65,7 +65,7 @@ core liveness endpoint that already runs on the mvp train today.
   latency client-side (curl), so it does not depend on a `/metrics` endpoint.
 - Any change to the deploy adapter, knb overlay, or operate-plane wiring.
 
-## Single-Capability Justification
+### Single-Capability Justification
 
 This spec exercises exactly **one** observability capability — captured SLO
 evidence asserted by the Bubbles G100 gate — for exactly **one** workflow
