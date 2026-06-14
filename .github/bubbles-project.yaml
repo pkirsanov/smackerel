@@ -63,3 +63,15 @@ traceContracts:
         sloBurn: { adapter: prometheus, profile: prod }
         errorRate: { adapter: prometheus, profile: prod }
         deployImpact: { adapter: prometheus, profile: prod }
+    # IMP-001 SCOPE-9 / spec 090 — core liveness SLO dogfood (second wired repo
+    # after QuantitativeFinance spec 085). Target asserted by Bubbles G100
+    # (observability_slo_evidence_gate) against captured runtime evidence in
+    # .specify/runtime/observability/core.health.slo.json.
+    slos:
+      core.health:
+        latencyP99Ms: 200
+        errorRatePct: 0.1
+        availabilityPct: 99.9
+  workflows:
+    core.health:
+      slo: core.health
