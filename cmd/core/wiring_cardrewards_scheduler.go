@@ -83,19 +83,29 @@ func wireCardRewardsScheduler(cfg *config.Config, svc *coreServices, sched *sche
 	reconciler := cardrewards.NewReconciler(store, cfg.CardRewards.Extraction.ConfidenceThreshold, nil)
 	recommender := cardrewards.NewRecommender(store)
 
-	// Calendar delivery (Scope 08) requires a concrete CalDAV client. The
-	// production CalDAV-client construction for cards is not wired here (it
-	// follows the meal-plan precedent, which also injects its CalDAV client
-	// separately); the calendar bridge + its sync behavior are delivered and
-	// covered by Scope 08 + Scope 09 integration tests against the
-	// external-boundary CalDAV fake. The pipeline accepts a nil bridge and the
-	// recommend run records zero calendar events without error. Surface the
-	// config-vs-wiring gap loudly when calendar_sync is requested.
+	// Calendar delivery (spec 089) — construct the production Google Calendar
+	// write client + bridge when calendar_sync is enabled. Presence of the
+	// calendar id + credential is already fail-loud at config load
+	// (LoadCardRewardsConfig) when calendar_sync is true, so reaching here with
+	// CalendarSync=true means both are non-empty. A MALFORMED credential JSON is
+	// caught by ParseGCalCredential and degrades gracefully (WARN + nil bridge):
+	// recommendations are still generated and persisted (visible in the Web UI),
+	// only calendar delivery is skipped — a calendar-credential typo must not
+	// take down the rest of core. The credential value is never logged.
+	var calendarBridge *cardrewards.CardCalendarBridge
 	if cfg.CardRewards.CalendarSync {
-		slog.Warn("card-rewards scheduler: calendar_sync is enabled in SST but the production CalDAV client is not wired yet; recommendations are generated and persisted, calendar events are not delivered")
+		cred, credErr := cardrewards.ParseGCalCredential(cfg.CardRewards.GCalCredentials)
+		if credErr != nil {
+			slog.Warn("card-rewards scheduler: calendar_sync enabled but the Google credential is malformed; calendar delivery disabled (recommendations still persisted)", "error", credErr)
+		} else if gcalClient, clientErr := cardrewards.NewGoogleCalendarClient(cfg.CardRewards.CalendarID, cred, nil); clientErr != nil {
+			slog.Warn("card-rewards scheduler: calendar_sync enabled but the Google Calendar client could not be constructed; calendar delivery disabled (recommendations still persisted)", "error", clientErr)
+		} else {
+			calendarBridge = cardrewards.NewCardCalendarBridge(gcalClient, store, true, cfg.CardRewards.CalendarUIDPrefix)
+			slog.Info("card-rewards scheduler: production Google Calendar delivery wired", "calendar_id", cfg.CardRewards.CalendarID, "uid_prefix", cfg.CardRewards.CalendarUIDPrefix)
+		}
 	}
 
-	pipeline, err := cardrewards.NewPipeline(conn, extractor, reconciler, recommender, nil, store, nil)
+	pipeline, err := cardrewards.NewPipeline(conn, extractor, reconciler, recommender, calendarBridge, store, nil)
 	if err != nil {
 		slog.Warn("card-rewards scheduler: pipeline construction failed; pipeline + jobs not wired", "error", err)
 		return

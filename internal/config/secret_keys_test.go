@@ -107,6 +107,7 @@ func TestSecretKeysMirror(t *testing.T) {
 		"AUTH_BOOTSTRAP_TOKEN",
 		"TELEGRAM_BOT_TOKEN",
 		"KEEP_GOOGLE_APP_PASSWORD",
+		"CARD_REWARDS_GCAL_CREDENTIALS",
 	}
 	got := SecretKeys()
 	if !reflect.DeepEqual(got, want) {

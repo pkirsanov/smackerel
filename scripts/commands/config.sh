@@ -386,6 +386,7 @@ SHELL_SECRET_KEYS=(
   AUTH_BOOTSTRAP_TOKEN
   TELEGRAM_BOT_TOKEN
   KEEP_GOOGLE_APP_PASSWORD
+  CARD_REWARDS_GCAL_CREDENTIALS
 )
 
 # Spec 052 FR-052-002 — production-class target mirror.
@@ -1231,6 +1232,18 @@ CARD_REWARDS_SCRAPE_CRON="$(yaml_get card_rewards.scrape_cron 2>/dev/null)" || C
 CARD_REWARDS_MONTHLY_RECOMMEND_CRON="$(yaml_get card_rewards.monthly_recommend_cron 2>/dev/null)" || CARD_REWARDS_MONTHLY_RECOMMEND_CRON=""
 CARD_REWARDS_CALENDAR_SYNC="$(yaml_get card_rewards.calendar_sync 2>/dev/null)" || CARD_REWARDS_CALENDAR_SYNC="false"
 CARD_REWARDS_CALENDAR_UID_PREFIX="$(yaml_get card_rewards.calendar_uid_prefix 2>/dev/null)" || CARD_REWARDS_CALENDAR_UID_PREFIX=""
+# Spec 089 — card-rewards Google Calendar delivery. CALENDAR_ID is non-secret
+# operator config (the knb deploy adapter emits the real value from params.yaml,
+# mirroring CARD_REWARDS_SOURCES). GCAL_CREDENTIALS is a managed secret: on a
+# production-class target the SST loader emits the placeholder for the deploy
+# adapter to substitute from sops; in dev/test it falls back to the yaml literal
+# (empty is fine — calendar_sync stays off until a real value is set).
+CARD_REWARDS_CALENDAR_ID="$(yaml_get card_rewards.calendar_id 2>/dev/null)" || CARD_REWARDS_CALENDAR_ID=""
+if is_production_class_target "$TARGET_ENV" && in_secret_keys "CARD_REWARDS_GCAL_CREDENTIALS"; then
+  CARD_REWARDS_GCAL_CREDENTIALS="__SECRET_PLACEHOLDER__CARD_REWARDS_GCAL_CREDENTIALS__"
+else
+  CARD_REWARDS_GCAL_CREDENTIALS="$(yaml_get card_rewards.gcal_credentials 2>/dev/null)" || CARD_REWARDS_GCAL_CREDENTIALS=""
+fi
 CARD_REWARDS_FETCH_TIMEOUT_SECONDS="$(yaml_get card_rewards.fetch_timeout_seconds 2>/dev/null)" || CARD_REWARDS_FETCH_TIMEOUT_SECONDS=""
 CARD_REWARDS_EXTRACTION_MODEL="$(yaml_get card_rewards.extraction.model 2>/dev/null)" || CARD_REWARDS_EXTRACTION_MODEL=""
 CARD_REWARDS_EXTRACTION_ENDPOINT="$(yaml_get card_rewards.extraction.endpoint 2>/dev/null)" || CARD_REWARDS_EXTRACTION_ENDPOINT=""
@@ -2112,6 +2125,8 @@ CARD_REWARDS_SCRAPE_CRON=${CARD_REWARDS_SCRAPE_CRON}
 CARD_REWARDS_MONTHLY_RECOMMEND_CRON=${CARD_REWARDS_MONTHLY_RECOMMEND_CRON}
 CARD_REWARDS_CALENDAR_SYNC=${CARD_REWARDS_CALENDAR_SYNC}
 CARD_REWARDS_CALENDAR_UID_PREFIX=${CARD_REWARDS_CALENDAR_UID_PREFIX}
+CARD_REWARDS_CALENDAR_ID=${CARD_REWARDS_CALENDAR_ID}
+CARD_REWARDS_GCAL_CREDENTIALS=${CARD_REWARDS_GCAL_CREDENTIALS}
 CARD_REWARDS_FETCH_TIMEOUT_SECONDS=${CARD_REWARDS_FETCH_TIMEOUT_SECONDS}
 CARD_REWARDS_EXTRACTION_MODEL=${CARD_REWARDS_EXTRACTION_MODEL}
 CARD_REWARDS_EXTRACTION_ENDPOINT=${CARD_REWARDS_EXTRACTION_ENDPOINT}
