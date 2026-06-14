@@ -1,0 +1,169 @@
+{
+  "version": 3,
+  "specId": "092-card-rewards-ui-elevation",
+  "specName": "Card-Rewards Web UI Elevation (match-or-exceed CCManager)",
+  "featureDir": "specs/092-card-rewards-ui-elevation",
+  "status": "in_progress",
+  "currentPhase": "implement",
+  "currentScope": null,
+  "workflowMode": "full-delivery",
+  "executionRuntime": "direct-implement",
+  "planMaturityOnly": false,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "createdAt": "2026-06-14T13:30:00Z",
+  "completedAt": null,
+  "certifiedAt": null,
+  "lastUpdatedAt": "2026-06-14T16:30:00Z",
+  "releaseTrain": "mvp",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "requiresRevalidation": false,
+  "scopeLayout": "single-file",
+  "flagsIntroduced": [],
+  "specDependsOn": [
+    "specs/083-card-rewards-companion"
+  ],
+  "relatesTo": [
+    "specs/077-pwa-browser-test-harness",
+    "specs/070-web-username-password-login"
+  ],
+  "crossRepoProvenance": null,
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "full-delivery",
+      "statusCeiling": "done",
+      "source": "user-request"
+    },
+    "tdd": {
+      "enabled": false,
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "enabled": false,
+      "perScope": false,
+      "perDoD": false,
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "enabled": true,
+      "artifactFreezeOnDone": true,
+      "source": "repo-default"
+    },
+    "regression": {
+      "enabled": true,
+      "persistentE2E": true,
+      "source": "repo-default"
+    },
+    "validation": {
+      "enabled": true,
+      "evidenceMinLines": 10,
+      "source": "repo-default"
+    },
+    "grill": {
+      "enabled": true,
+      "adversarialRegression": true,
+      "tautologicalGuard": true,
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "completedScopes": [
+    "SCOPE-01",
+    "SCOPE-02",
+    "SCOPE-03",
+    "SCOPE-04"
+  ],
+  "completedPhases": [
+    "analyze",
+    "design",
+    "plan",
+    "implement"
+  ],
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": null,
+    "executionModel": "parent-expanded-child-mode",
+    "runStartedAt": "2026-06-14T13:30:00Z",
+    "completedPhaseClaims": [
+      "analyze",
+      "design",
+      "plan",
+      "implement"
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "spec.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the analyst phase authored the BDD spec.md and seeded state.json. Operator directive (verbatim): 'ccmanager UI was way better, you need to at least match that UI or make better'. Later phases (ux/design/plan/implement/test/specialists) own their own artifacts.",
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T13:30:00Z",
+        "note": "Created specs/092-card-rewards-ui-elevation/ with a complete BDD spec.md for a PRESENTATION-LAYER elevation of the server-rendered /cards web UI to match-or-exceed the legacy CCManager app. Problem (operator quote + the flat-monochrome-vs-polished gap, grounded against real files), Goals (match CCManager visual quality + action-oriented UX on every /cards page while staying CSP-clean and preserving the data-* contract + all functionality), Non-Goals (no route/handler/data-model change, no client-side JS framework, no non-card-rewards page edits, no per-user theming beyond prefers-color-scheme, no CSP bypass to import CCManager's inline-JS affordances), Outcome Contract (Intent/Success Signal/Hard Constraints/Failure Condition), Actors (operator + automated regression suite), a Design System Capability Model (AN5: 10 /cards screens share one component vocabulary — tokens/nav/stat-card/card/badge/button/progress/list/alert, page-neutral, with binding policies: tokens-only colors, light+dark, no JS, carry data-* through), UC-1..UC-9 (Gherkin: dashboard action-priority+stat overview; bonuses progress-bar+status; rotating confidence+verify urgency; wallet polished surfaces; offers/selections/categories/recommendations/report/admin elevated; responsive mobile/desktop; dark-mode parity; data-* regression; CSP-clean), AC-1..AC-11 (concrete+testable: token system light+dark; component vocabulary; action-oriented dashboard; bonus progress bar; rotating confidence badge; wallet surfaces; responsive nav; CSP-clean no-new-JS; data-* contract preserved with the critical hooks enumerated; functional parity; scope boundary), four Open Design Decisions handed to design/ux (a Inter-CDN-vs-system-stack under the real CSP; b bottom-tab-bar vs responsive top-nav; c CSS-only theme toggle vs prefers-color-scheme-only; d minimal additive read-only stat-count view-model fields), Referenced Surfaces, Anti-Patterns, Non-Functional Requirements, and a UI Scenario Matrix. GROUNDED against real surfaces I traced: the scope-boundary templates internal/web/cardrewards_templates.go (head/foot/cardrewards-nav + minimal monochrome :root tokens, 820px single-column, plain wrapping text-link nav + Scope-10 pages) and internal/web/cardrewards_dashboard_templates.go (Scope-11 dashboard/recommendations/rotating/report/admin); internal/web/cardrewards.go view models (walletCardRow/offerRow/selectionRow/bonusRow/recommendationRow/rotatingRow; DashboardPage renders Period/Recommendations/ActiveRotating/NeedsVerification/PendingReEnroll with NO stat counts today -> grounds Open Decision (d)); the GOVERNING CSP at internal/api/router.go ~L658 (default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://unpkg.com/htmx.org@1.9.12/ 'sha256-...'; img-src 'self' data:; connect-src 'self') -> inline <style> + style= allowed, only self+pinned-htmx+one-hashed-theme-script for scripts, and NO font-src so Google-Fonts-CDN is BLOCKED under the current CSP (grounds Open Decision (a)); and the BINDING regression contract = 7 Playwright specs web/pwa/tests/cardrewards_*.spec.ts + helper _support/cardrewards.ts addressing elements by data-* locators, every spec running the spec-077 CSP guard web/pwa/tests/_support/csp.ts (attachCSPGuard/assertNoCSPViolations) which mechanically fails on any inline-script/handler OR CSP-blocked resource. KEY grounded insight captured in the spec: CCManager's base.html relies on inline <script> (auto-dismiss flash, double-submit guard, CSRF/cookie helpers) + onclick/onsubmit handlers — exactly what smackerel's CSP forbids — so 'match-or-exceed' must be achieved WITHOUT that JS. PII kept generic (repo-relative paths only; no host/IP/tailnet/home paths). Status held at in_progress; scopeLayout single-file; flagsIntroduced [] (presentation-only, no flag). nextRequiredOwner = bubbles.ux (it owns the wireframes/user-flows and should resolve Open Decisions (a) font strategy, (b) mobile-nav pattern, (c) theme control before bubbles.design settles the CSP/view-model questions)."
+      },
+      {
+        "agent": "bubbles.ux",
+        "phasesExecuted": ["analyze"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "spec.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the ux phase authored the UX specification, ASCII wireframes, and user flows and folded them into spec.md (single-file, no sidecar). Later phases (design/plan/implement/test/specialists) own their own artifacts.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:05:00Z",
+        "note": "Appended ## UX Specification, ## UI Wireframes, and ## User Flows (level-2 sections) to spec.md for the /cards web UI elevation. UX Specification: resolved the 3 UX-owned Open Decisions as binding outcomes — (a) FONT = system-font stack (-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif) tuned with CCManager's type scale; rationale: CSP has no font-src so a Google Fonts CDN is blocked at style-src + font-src and would fail the spec-077 CSP guard; zero CSP change, zero network; the a-ii/iii self-host-Inter / CSP-font-src-amendment sub-option is left DESIGN-owned. (b) NAV = responsive top-nav only, NO fixed bottom tab-bar; desktop = full-width wrapping pill row, mobile = single-row horizontally-scrollable pill strip with right-edge scroll-shadow fade; rationale: 10 destinations exceed a ~5-tab bottom-bar thumb-reach budget and a fixed bottom bar would occlude the page-bottom add-forms on bonuses/offers/selections/categories; top-nav is CSS-only and never occludes content. (c) THEME = prefers-color-scheme only, no toggle; matches CCManager default, zero JS; an optional future toggle via the existing hashed theme script is left DESIGN-owned. Component vocabulary (design tokens light+dark, app shell, responsive nav, page header, stat-card+stats-grid 2->4col, content card, badge incl starred variant, button hierarchy primary/secondary/ghost/danger+sm, progress bar [EXCEEDS CCManager which has no literal bar], tag/chip, empty-state, design-system table, alert/priority section, form-section/row) each mapped to its CCManager equivalent + the current smackerel element it replaces. UX9 UI Primitives Inventory with per-primitive consumers + composition rules + a11y/responsive constraints. Per-element interaction states (default/hover/focus/active/disabled/empty/error), all CSS-only; error path = server PRG re-render, no JS validation. Accessibility (preserve aria-labels, :focus-visible rings, color-never-the-only-signal via text+glyph+color badges, role=progressbar + aria-valuenow + visible text, >=44px mobile touch targets, works fully without JS, WCAG-AA both themes). data-* PRESERVATION CONTRACT: explicit re-skin statement + a per-page table enumerating the critical hooks from AC-9 that MUST persist on the semantically-corresponding restructured element, plus a per-wireframe inline data-* annotation, with the implement/test mandate to diff post- vs pre-redesign data-* sets and prove zero removals/renames. UI Wireframes: ASCII (mobile + desktop where they differ) for the responsive nav and all 10 pages (dashboard flagship with stat-grid + warning-tinted Pending Actions + recommendation/rotating cards; wallet polished card surfaces with type+status badges + button row; bonuses with visual progress bar via inline style=width:NN% [CSP-ok] + met/in-progress/near-deadline color thresholds; rotating confidence meter + needs-verification urgency vs manual-override resolved + citations; offers/selections/categories/recommendations/report/admin with the polished card/table treatment + consistently-styled forms). Stat-grid noted as feedable purely from existing DashboardPage collections (len Recommendations/ActiveRotating/NeedsVerification/PendingReEnroll) with NO view-model change; the owned-card/active-offer count tiles + any additive read-only view-model fields are left to DESIGN Open Decision (d). User Flows: 5 mermaid diagrams (10-page site map, dashboard action triage, wallet add discovery+custom, bonus progress PRG, recommendation star/regenerate PRG) + a competitor-insights table vs CCManager. CONSTRAINTS HONORED: CSS-only (no inline <script>, no onclick/onsubmit), all data-* preserved, generic placeholders only (no PII), design-owned decisions (a-CSP-amendment, d-view-model) NOT settled. Mechanical pre-report gate PASS: UX1 (## UI Wireframes present in spec.md) and UX8 (no sidecar ux.md/wireframes.md/flows.md/user-flows.md/screens.md — only spec.md + state.json in the feature dir); markdown fence balance verified (19 paired fences, stray trailing fence absorbed). Did NOT create design.md/scopes.md, did NOT implement code, did NOT commit, did NOT mark done. nextRequiredOwner = bubbles.design."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "design.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the design phase authored design.md (technical design) from the analyst+ux-enriched spec.md. Later phases (plan/implement/test/specialists) own their own artifacts.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:35:00Z",
+        "note": "Authored specs/092-card-rewards-ui-elevation/design.md (contract-grade, from-analysis depth — spec.md carries Actors/UX Spec/UI Wireframes). SETTLED the two design-owned Open Decisions as BINDING: (a-font) ratified the system-font stack '-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,system-ui,sans-serif' with the CCManager type scale — zero CSP change, no font CDN, no @font-face, no font-src amendment; WHY documented against the real router.go CSP (script-src 'self'+pinned htmx+one hashed theme script; NO font-src) — a Google-Fonts <link> is blocked at style-src AND the gstatic font fetch at the defaulted font-src, failing the spec-077 CSP guard; rejected a-ii self-host-Inter and a-iii CSP-font-src-amendment as cost-without-perceivable-benefit. (d-view-model) ratified NO Go change to cardrewards.go — the 4-tile dashboard stat-grid is built purely in-template from {{len .Recommendations}}/{{len .ActiveRotating}}/{{len .NeedsVerification}}/{{len .PendingReEnroll}}, the four collections DashboardPage already passes (lines 770-777); rejected owned-card/active-offer count tiles (not on DashboardPage → handler change → scope creep). Net: the feature is a TWO-FILE template diff with ZERO Go change and ZERO CSP change. design.md content: Design Brief (current/target/patterns-to-follow/avoid/resolved/open); the full CSS design-token system replacing the minimal :root — exact hex for BOTH themes (smackerel-tuned warm-neutral surfaces + CCManager Apple accent/semantic/elevation), bg-primary/secondary/tertiary/elevated, text-primary/secondary/tertiary, accent/accent-hover + added on-accent/on-danger, success/warning/danger/info/starred + explicit *-soft badge-tint pairs (AA in both themes), border/border-strong, shadow-sm/md/lg, radius-sm/md/lg/xl (theme-independent), nav-bg/nav-border; component CSS contract for the single embedded <style> (app-shell max-width 820->1200px, responsive glass top-nav with mobile horizontal-scroll pill strip per UX decision-b, page-header, card/card-header/card-title, stats-grid 2->4col + stat-card hover-lift/urgent, badge system, button hierarchy primary/secondary/ghost/danger+sm, progress-bar with inline width:NN% as the ONLY inline style via existing pct/confpct helpers, tag/chip, empty-state alias, alert/priority-section, design-system table with mobile h-scroll wrapper, form-control alias keeping .search-box; breakpoints 480/768/1024); per-page restructure plan for all 10 pages + chrome + 5 sub-pages + 2 card-select partials with the binding 'every data-* moves to the semantically-corresponding new element' rule; CSP compliance section (zero inline script/handler, progress width the only inline style, no remote CSS/font, guard stays green); a 60+ row data-* preservation table (old element -> new element) built from the actual current templates cross-checked vs AC-9; capability-foundation DE4 note (single-implementation design-system capability, 2 variation axes: page-archetype x status-signal-primitive, single-impl justification grounded in the spec Non-Goals); test strategy handed to plan (7 existing cardrewards_*.spec.ts regression specs pass UNCHANGED proving data-*+functionality intact; new assertions for stat-grid/progress-bar/badges/responsive-nav/dark-mode; CSP guard green; Go handler_test render; live e2e at deploy; regression-quality-guard on touched specs); security/compliance, no config/migrations, observability/failure-modes, alternatives, Complexity Tracking (2 deviations recorded), no blocking open questions. Scope confirmed to internal/web/cardrewards_templates.go + cardrewards_dashboard_templates.go only; cardrewards.go untouched; templates.go untouched; CSP-clean; data-* preserved; PostgreSQL-only; PII generic. Did NOT write scopes.md, implement code, run check (all symbols confirmed by reading source), or commit. nextRequiredOwner: bubbles.plan."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "scopes.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the plan phase authored scopes.md (single-file, 4 scopes), report.md evidence template, and uservalidation.md baseline from the analyst+ux-enriched spec.md and the design.md two-file-diff contract. Later phases (implement/test/specialists) own their own artifacts.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T15:10:00Z",
+        "note": "Authored specs/092-card-rewards-ui-elevation/scopes.md (single-file, 4 scopes) + report.md (evidence template anchored to every DoD item) + uservalidation.md ([x] baseline). The feature is a CSS-only re-skin = a two-file template diff (cardrewards_templates.go + cardrewards_dashboard_templates.go) with ZERO Go change (Decision d) and ZERO CSP change (Decision a). DAG: SCOPE-01 design-system foundation (foundation:true; rewrites head/foot/cardrewards-nav with the design section-3 token system both themes + section-4 component CSS + responsive glass nav) depends on nothing; SCOPE-02 Scope-10 page bodies (wallet/offers/selections/bonuses/categories + sub-pages + card-select partials) and SCOPE-03 Scope-11 page bodies (dashboard/recommendations/rotating/report/admin) both depend on SCOPE-01; SCOPE-04 consolidated verification + live deploy proof depends on 01+02+03. Sequential order 01->02->03->04. Per-scope Test-Plan-row to DoD-test-item parity: SCOPE-01 4=4, SCOPE-02 5=5, SCOPE-03 5=5, SCOPE-04 4=4. Two grounded findings drive the test plan: (1) /cards/bonuses has ZERO existing coverage (no Playwright spec, no handler_test.go case) so SCOPE-02 adds a NEW web/pwa/tests/cardrewards_bonuses.spec.ts to guard its data-bonus-* hooks + the new progress bar; (2) cardrewards templates have NO Go parse/render coverage today (cardRewardsTemplates is parsed via template.Must in the CardRewardsWebHandler constructor at cardrewards.go:136, exercised by no test; handler_test.go scans only the KB allTemplates) so SCOPE-01 adds a NEW internal/web/cardrewards_render_test.go rendering all ten pages + asserting Go-level CSP-cleanliness. Report (/cards/report) is covered by cardrewards_dashboard.spec.ts (K06) so no new report spec. Taxonomy per scope: unit (Go render) + e2e-ui (existing 7 specs as UNCHANGED regression + targeted new elevated assertions + the new bonuses + chrome specs) + the spec-077 CSP guard inside each e2e-ui spec. The data-* preservation map (design section-7, 60+ rows) is the regression contract; SCOPE-04 additionally diffs the post-redesign data-* set vs pre-redesign to prove zero removals/renames (AC-9). No code implemented, nothing committed, no DoD box pre-checked, status left in_progress. nextRequiredOwner: bubbles.implement starting SCOPE-01."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "report.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the implement phase executed SCOPE-02 + SCOPE-03 page-body restructure and the consolidated SCOPE-04 verification (SCOPE-01 foundation implementation was already on disk from a prior implement pass; this pass recorded its DoD evidence from the consolidated run). Later phases (test/specialists) own their own artifacts.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T16:30:00Z",
+        "note": "Restructured the Scope-10 page bodies (internal/web/cardrewards_templates.go: wallet +add/+add-custom/+edit, offers +edit, selections +edit, bonuses, categories, card-select partials) and the Scope-11 page bodies (internal/web/cardrewards_dashboard_templates.go: dashboard, recommendations, rotating, report, admin) to the design-system component vocabulary (.card/.card-grid/.card-header/.badge/.btn/.cr-table/.stats-grid/.alert), adding the bonuses visual .progress bar (role=progressbar, server-computed .progress-fill width = the only inline style) and the rotating confidence meter, the dashboard 4-tile .stats-grid (template-only {{len}}, ZERO Go change) + .alert-warning pending-actions-first section. ZERO Go change (cardrewards.go + templates.go empty diff), ZERO CSP change. Extended internal/web/cardrewards_render_test.go with TestCardRewardsTemplates_ElevatedMarkersAndDataHooks asserting per-page elevated markers + every critical design-section-7 data-* hook on its new element; added web/pwa/tests/cardrewards_bonuses.spec.ts (NEW e2e-ui, closes the bonuses zero-coverage Finding #1). Evidence: ./smackerel.sh test unit --go (full + CardRewards-filtered) exit 0; the consolidated ./smackerel.sh test e2e-ui cardrewards = 19/19 passed (7 existing specs UNCHANGED + chrome + bonuses, every spec-077 CSP guard empty) against a genuinely-rebuilt core image; data-* set diff PRE vs POST = byte-identical 66 tokens, 0 removed/renamed (AC-9); format --check + lint exit 0; regression-quality-guard 0 violations across all 9 specs; artifact-lint PASSED. KEY OPS FINDING: the e2e stack consumes the project-prefixed image smackerel-test-e2e-ui-smackerel-core which `docker compose up` (no --build) does NOT rebuild on source change and ./smackerel.sh build only updates the smackerel-project image — the stale e2e image had to be `docker rmi`'d to force a genuine rebuild before the bonuses progress bar rendered. SCOPE-01..04 marked Done; spec status left in_progress for the goal controller to finalize."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": []
+  }
+}

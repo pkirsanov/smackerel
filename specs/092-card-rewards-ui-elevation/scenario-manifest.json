@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "spec": "092-card-rewards-ui-elevation",
+  "featureDir": "specs/092-card-rewards-ui-elevation",
+  "generatedAt": "2026-06-14T16:45:00Z",
+  "scenarios": [
+    {
+      "id": "SCN-092-001",
+      "scenarioId": "SCN-092-001",
+      "scopeRef": "SCOPE-01",
+      "title": "SCOPE-01-A Responsive nav (UC-6 / AC-7)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_chrome.spec.ts"],
+      "evidenceRefs": ["report.md#scope-01-nav"]
+    },
+    {
+      "id": "SCN-092-002",
+      "scenarioId": "SCN-092-002",
+      "scopeRef": "SCOPE-01",
+      "title": "SCOPE-01-B Dark-mode token parity (UC-7 / AC-1)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_chrome.spec.ts"],
+      "evidenceRefs": ["report.md#scope-01-dark"]
+    },
+    {
+      "id": "SCN-092-003",
+      "scenarioId": "SCN-092-003",
+      "scopeRef": "SCOPE-01",
+      "title": "SCOPE-01-C CSP-clean foundation (UC-9 / AC-8)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_chrome.spec.ts"],
+      "evidenceRefs": ["report.md#scope-01-regression"]
+    },
+    {
+      "id": "SCN-092-004",
+      "scenarioId": "SCN-092-004",
+      "scopeRef": "SCOPE-01",
+      "title": "SCOPE-01-D Chrome preserves data-* structure (UC-8 / AC-9 / AC-11)",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["internal/web/cardrewards_render_test.go"],
+      "evidenceRefs": ["report.md#scope-01-go-render"]
+    },
+    {
+      "id": "SCN-092-005",
+      "scenarioId": "SCN-092-005",
+      "scopeRef": "SCOPE-02",
+      "title": "SCOPE-02-A Wallet polished card surfaces (UC-4 / AC-6)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_wallet.spec.ts"],
+      "evidenceRefs": ["report.md#scope-02-wallet"]
+    },
+    {
+      "id": "SCN-092-006",
+      "scenarioId": "SCN-092-006",
+      "scopeRef": "SCOPE-02",
+      "title": "SCOPE-02-B Bonuses visual progress bar + status (UC-2 / AC-4)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_bonuses.spec.ts"],
+      "evidenceRefs": ["report.md#scope-02-bonuses"]
+    },
+    {
+      "id": "SCN-092-007",
+      "scenarioId": "SCN-092-007",
+      "scopeRef": "SCOPE-02",
+      "title": "SCOPE-02-C Offers / selections / categories elevated (UC-5 / AC-9)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": [
+        "web/pwa/tests/cardrewards_offers_selections.spec.ts",
+        "web/pwa/tests/cardrewards_categories.spec.ts"
+      ],
+      "evidenceRefs": ["report.md#scope-02-offers-selections", "report.md#scope-02-categories"]
+    },
+    {
+      "id": "SCN-092-008",
+      "scenarioId": "SCN-092-008",
+      "scopeRef": "SCOPE-02",
+      "title": "SCOPE-02-D Scope-10 regression + CSP (UC-8 / UC-9)",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["internal/web/cardrewards_render_test.go"],
+      "evidenceRefs": ["report.md#scope-02-go-render"]
+    },
+    {
+      "id": "SCN-092-009",
+      "scenarioId": "SCN-092-009",
+      "scopeRef": "SCOPE-03",
+      "title": "SCOPE-03-A Dashboard action-oriented + stat-grid (UC-1 / AC-3)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_dashboard.spec.ts"],
+      "evidenceRefs": ["report.md#scope-03-dashboard-report"]
+    },
+    {
+      "id": "SCN-092-010",
+      "scenarioId": "SCN-092-010",
+      "scopeRef": "SCOPE-03",
+      "title": "SCOPE-03-B Rotating confidence meter + verify urgency (UC-3 / AC-5)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_rotating_verify.spec.ts"],
+      "evidenceRefs": ["report.md#scope-03-rotating"]
+    },
+    {
+      "id": "SCN-092-011",
+      "scenarioId": "SCN-092-011",
+      "scopeRef": "SCOPE-03",
+      "title": "SCOPE-03-C Recommendations / report / admin elevated (UC-5 / AC-9)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": [
+        "web/pwa/tests/cardrewards_recommendations.spec.ts",
+        "web/pwa/tests/cardrewards_admin.spec.ts"
+      ],
+      "evidenceRefs": ["report.md#scope-03-recommendations", "report.md#scope-03-admin"]
+    },
+    {
+      "id": "SCN-092-012",
+      "scenarioId": "SCN-092-012",
+      "scopeRef": "SCOPE-03",
+      "title": "SCOPE-03-D Scope-11 regression + CSP (UC-8 / UC-9)",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["internal/web/cardrewards_render_test.go"],
+      "evidenceRefs": ["report.md#scope-03-go-render"]
+    },
+    {
+      "id": "SCN-092-013",
+      "scenarioId": "SCN-092-013",
+      "scopeRef": "SCOPE-04",
+      "title": "SCOPE-04-A Full card-rewards suite green (UC-1..9 integrated)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_dashboard.spec.ts"],
+      "evidenceRefs": ["report.md#scope-04-e2e-ui"]
+    },
+    {
+      "id": "SCN-092-014",
+      "scenarioId": "SCN-092-014",
+      "scopeRef": "SCOPE-04",
+      "title": "SCOPE-04-B data-* preservation proof (AC-9 / design §7)",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["internal/web/cardrewards_render_test.go"],
+      "evidenceRefs": ["report.md#scope-04-data-diff"]
+    },
+    {
+      "id": "SCN-092-015",
+      "scenarioId": "SCN-092-015",
+      "scopeRef": "SCOPE-04",
+      "title": "SCOPE-04-C Live rebuild + render proof (light + dark) (UC-7 / AC-10)",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "regressionRequired": true,
+      "linkedTests": ["web/pwa/tests/cardrewards_chrome.spec.ts"],
+      "evidenceRefs": ["report.md#scope-04-deploy"]
+    }
+  ]
+}
