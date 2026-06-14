@@ -50,6 +50,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	ok "github.com/smackerel/smackerel/internal/assistant/openknowledge"
 	okagent "github.com/smackerel/smackerel/internal/assistant/openknowledge/agent"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 )
 
 // ToolName is the substrate identifier the open_knowledge scenario
@@ -88,6 +89,7 @@ var outputSchema = json.RawMessage(`{
     "body":           {"type": "string"},
     "refusal_cause":  {"type": "string"},
     "termination":    {"type": "string"},
+    "model":          {"type": "string"},
     "sources":        {"type": "array", "items": {"type": "object"}}
   }
 }`)
@@ -112,6 +114,26 @@ func SetAgent(a *okagent.Agent) { agentRef.Store(a) }
 // for tests; production code does not need this.
 func CurrentAgent() *okagent.Agent { return agentRef.Load() }
 
+// allowlistRef is the late-bound spec 088 switchable-model allowlist
+// installed by SetSwitchableModels. Parallels agentRef: one immutable
+// *modelswitch.Allowlist reached lock-free by BOTH structurally-separate
+// fast-paths (the Telegram facade and the web/HTTP handler), so the
+// override validation + allowlist gating is the SAME on both surfaces
+// (SCN-088-A06 parity).
+var allowlistRef atomic.Pointer[modelswitch.Allowlist]
+
+// SetSwitchableModels installs the runtime switchable-model allowlist.
+// Passing nil clears the binding; SwitchableModels() then returns nil
+// and callers MUST treat that as "no override capability" (baseline
+// passthrough, never a panic). cmd/core wiring calls this once at
+// startup, gated on open_knowledge.enabled (so a non-nil allowlist
+// exists exactly when CurrentAgent() is non-nil).
+func SetSwitchableModels(a *modelswitch.Allowlist) { allowlistRef.Store(a) }
+
+// SwitchableModels returns the currently bound *modelswitch.Allowlist
+// (or nil when not wired). Both fast-paths read it nil-safely.
+func SwitchableModels() *modelswitch.Allowlist { return allowlistRef.Load() }
+
 // InputSchema returns a defensive copy of the substrate input schema
 // so callers cannot mutate the package buffer. Used by tests.
 func InputSchema() json.RawMessage {
@@ -135,11 +157,16 @@ type invokeInput struct {
 
 // outputEnvelope is the JSON shape the Handler emits.
 type outputEnvelope struct {
-	Status       string           `json:"status"`
-	Body         string           `json:"body"`
-	RefusalCause string           `json:"refusal_cause"`
-	Termination  string           `json:"termination,omitempty"`
-	Sources      []map[string]any `json:"sources"`
+	Status       string `json:"status"`
+	Body         string `json:"body"`
+	RefusalCause string `json:"refusal_cause"`
+	Termination  string `json:"termination,omitempty"`
+	// Model is the spec 088 answer attribution: the model that produced
+	// the final text (TurnResult.Model). Carried on the HTTP success and
+	// refusal envelopes always (structured metadata); omitempty so a
+	// pre-loop refusal that never ran an LLM round emits no model key.
+	Model   string           `json:"model,omitempty"`
+	Sources []map[string]any `json:"sources"`
 }
 
 // Handler is the substrate ToolHandler. Exported so cmd/core wiring
@@ -179,6 +206,7 @@ func MapTurnResult(turn okagent.TurnResult) outputEnvelope {
 			Status:      "success",
 			Body:        turn.FinalText,
 			Termination: string(turn.TerminationReason),
+			Model:       turn.Model,
 			Sources:     marshalSources(turn.Sources),
 		}
 	}
@@ -188,6 +216,7 @@ func MapTurnResult(turn okagent.TurnResult) outputEnvelope {
 		Body:         contracts.CanonicalRefusalBodyFor(cause),
 		RefusalCause: string(cause),
 		Termination:  string(turn.TerminationReason),
+		Model:        turn.Model,
 		// Refused turns surface zero sources — the cite-back verifier
 		// already rejected any unverified citations the planner emitted.
 		Sources: []map[string]any{},

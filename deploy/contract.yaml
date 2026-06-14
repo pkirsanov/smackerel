@@ -148,6 +148,14 @@ sstKeyCatalog:
   - path: assistant.open_knowledge.llm_model_id
     type: string
     secret: false
+  - path: assistant.open_knowledge.synthesis_model_id
+    type: string
+    secret: false
+    notes: "Spec 087 — model for the forced-final synthesis turn; \"\" permitted when enabled=false; per-environment override via environments.<env>.assistant_open_knowledge_synthesis_model_id"
+  - path: assistant.open_knowledge.synthesis_retry_budget
+    type: int
+    secret: false
+    notes: ">=0 when enabled (Spec 087)"
   - path: assistant.open_knowledge.llm_timeout_ms
     type: int
     secret: false
@@ -176,6 +184,10 @@ sstKeyCatalog:
     type: string[]
     secret: false
     notes: Deny-by-default; non-empty when enabled. v1 set is internal_retrieval, web_search, unit_convert, calculator.
+  - path: assistant.open_knowledge.switchable_models
+    type: string[]
+    secret: false
+    notes: "Spec 088 — runtime-switchable synthesis models for /ask (per-request --model= / API model); non-empty when enabled; each entry profiled + co-resident-fits the ollama envelope (fail-loud in validateModelEnvelopes); per-environment override via environments.<env>.assistant_open_knowledge_switchable_models"
   - path: assistant.open_knowledge.web_snippet_cache_enabled
     type: bool
     secret: false

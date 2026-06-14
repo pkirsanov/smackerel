@@ -153,6 +153,57 @@ func TestMapTurnResult_Success(t *testing.T) {
 	}
 }
 
+// TestMapTurnResult_ModelCarried_BothArms_Spec088 — the spec 088 model
+// attribution rides the substrate envelope on BOTH the success and the
+// refusal arms (structured HTTP metadata, always present when a model ran);
+// an empty Model (pre-loop refusal that ran no LLM round) is omitted from the
+// JSON envelope via omitempty.
+func TestMapTurnResult_ModelCarried_BothArms_Spec088(t *testing.T) {
+	t.Run("success_arm", func(t *testing.T) {
+		turn := okagent.TurnResult{
+			Status:            okagent.StatusSuccess,
+			FinalText:         "An answer.",
+			TerminationReason: okagent.TerminationFinal,
+			Model:             "deepseek-r1:7b",
+		}
+		env := MapTurnResult(turn)
+		if env.Status != "success" {
+			t.Fatalf("Status=%q want success", env.Status)
+		}
+		if env.Model != "deepseek-r1:7b" {
+			t.Fatalf("success envelope MUST carry the model, got %q", env.Model)
+		}
+	})
+	t.Run("refusal_arm", func(t *testing.T) {
+		turn := okagent.TurnResult{
+			Status:            okagent.StatusRefused,
+			TerminationReason: okagent.TerminationFabricatedSource,
+			Model:             "deepseek-r1:7b",
+		}
+		env := MapTurnResult(turn)
+		if env.Status != "refused" {
+			t.Fatalf("Status=%q want refused", env.Status)
+		}
+		if env.Model != "deepseek-r1:7b" {
+			t.Fatalf("refusal envelope MUST carry the model, got %q", env.Model)
+		}
+	})
+	t.Run("empty_model_omitted_in_json", func(t *testing.T) {
+		turn := okagent.TurnResult{Status: okagent.StatusRefused, TerminationReason: okagent.TerminationCapUSD}
+		env := MapTurnResult(turn)
+		if env.Model != "" {
+			t.Fatalf("empty model expected, got %q", env.Model)
+		}
+		b, err := json.Marshal(env)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if strings.Contains(string(b), `"model"`) {
+			t.Fatalf("omitempty MUST drop an empty model key, got %s", string(b))
+		}
+	})
+}
+
 // TestMapTurnResult_FabricatedSource_StripsSources is the adversarial
 // G021 case: if the planner emitted a citation list but the cite-back
 // verifier rejected it (Status=refused, TerminationFabricatedSource),

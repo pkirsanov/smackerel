@@ -1,0 +1,8 @@
+{
+  "body": "\"gpt-4o\" is not a switchable model. I did NOT use it, and I did NOT fall back to the default — nothing was sent to the model.",
+  "capture_route": false,
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "model_not_switchable",
+  "sources_overflow_count": 0,
+  "status": "unavailable"
+}

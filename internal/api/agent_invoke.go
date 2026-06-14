@@ -33,6 +33,7 @@ import (
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/userreply"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 )
 
 // AgentInvokeRunner is the dependency the handler asks for. The
@@ -79,6 +80,12 @@ type AgentInvokeRequest struct {
 	ScenarioID        string          `json:"scenario_id,omitempty"`
 	Source            string          `json:"source,omitempty"`
 	ConfidenceFloor   float64         `json:"confidence_floor,omitempty"`
+	// Model is the spec 088 OPTIONAL per-request open-knowledge model
+	// override. UNTRUSTED: validated against the switchable-model allowlist
+	// in the open_knowledge fast-path BEFORE any agent/Ollama call; an empty
+	// value is the baseline (no override). Off-allowlist / over-envelope
+	// values yield an HTTP 400 rejection envelope (never a silent default).
+	Model string `json:"model,omitempty"`
 }
 
 // AgentInvokeHandlerFunc is the http.HandlerFunc closure registered on
@@ -133,7 +140,21 @@ func (h *AgentInvokeHandler) AgentInvokeHandlerFunc(w http.ResponseWriter, r *ht
 			writeAgentResponse(w, userreply.MalformedRequestResponse("raw_input"))
 			return
 		}
-		turn, runErr := agenttool.CurrentAgent().Run(r.Context(), prompt)
+		// Spec 088 — resolve an optional per-request model override. req.Model
+		// is UNTRUSTED; an off-allowlist / un-profiled / over-envelope model is
+		// rejected fail-loud with HTTP 400 BEFORE any agent/Ollama call (no
+		// silent default, no backend passthrough). A nil allowlist (capability
+		// not wired) yields baseline passthrough, never a panic.
+		var ov modelswitch.Override
+		if allow := agenttool.SwitchableModels(); allow != nil {
+			resolved, rej := allow.Resolve(req.Model)
+			if rej != nil {
+				writeOpenKnowledgeRejection(w, rej)
+				return
+			}
+			ov = resolved
+		}
+		turn, runErr := agenttool.CurrentAgent().WithModelOverride(ov).Run(r.Context(), prompt)
 		if runErr != nil {
 			slog.Warn("agent_invoke: open_knowledge fast-path failed", "error", runErr)
 			writeAgentResponse(w, userreply.InfrastructureFailureResponse("open_knowledge_agent_failed"))
@@ -192,5 +213,38 @@ func writeOpenKnowledgeResponse(w http.ResponseWriter, env any) {
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(env); err != nil && !errors.Is(err, http.ErrBodyNotAllowed) {
 		slog.Warn("agent_invoke: encode open_knowledge response failed", "error", err)
+	}
+}
+
+// openKnowledgeRejectionEnvelope is the spec 088 HTTP 400 body for a rejected
+// per-request model override. error_code is the modelswitch reason-code
+// (model_not_allowlisted | model_over_memory_envelope); message is the SAME
+// verbatim sentence the Telegram surface renders (SCN-088-A06 parity).
+type openKnowledgeRejectionEnvelope struct {
+	Status        string   `json:"status"`
+	ErrorCode     string   `json:"error_code"`
+	RejectedModel string   `json:"rejected_model"`
+	AllowedModels []string `json:"allowed_models"`
+	DefaultModel  string   `json:"default_model"`
+	Message       string   `json:"message"`
+}
+
+// writeOpenKnowledgeRejection encodes a modelswitch.Rejection as an HTTP 400
+// envelope. The override is a malformed request value caught before the agent
+// runs (parallel to the raw_input 4xx path), so 400 is the correct status —
+// NOT a 5xx (the agent never failed) and NOT a 200 (nothing was answered).
+func writeOpenKnowledgeRejection(w http.ResponseWriter, rej *modelswitch.Rejection) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	env := openKnowledgeRejectionEnvelope{
+		Status:        "rejected",
+		ErrorCode:     rej.ReasonCode,
+		RejectedModel: rej.RejectedModel,
+		AllowedModels: rej.AllowedModels,
+		DefaultModel:  rej.DefaultModel,
+		Message:       rej.Message,
+	}
+	if err := json.NewEncoder(w).Encode(env); err != nil && !errors.Is(err, http.ErrBodyNotAllowed) {
+		slog.Warn("agent_invoke: encode open_knowledge rejection failed", "error", err)
 	}
 }

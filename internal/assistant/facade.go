@@ -51,6 +51,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	okagenttool "github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 	"github.com/smackerel/smackerel/internal/assistant/provenance"
 	"github.com/smackerel/smackerel/internal/assistant/tracing"
 	"go.opentelemetry.io/otel/attribute"
@@ -1049,6 +1050,33 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		}
 
 		env.Routing = decision
+		// Spec 088 — resolve an optional per-request model override for the
+		// open_knowledge fast-path BEFORE the agent runs. msg.ModelOverride
+		// is UNTRUSTED user input; an off-allowlist / un-profiled /
+		// over-envelope model is rejected fail-loud HERE — the agent is
+		// NEVER called and capture-as-fallback is NOT invoked for the
+		// rejected request (pre-agent request validation, not an agent run;
+		// design "Rejection ≠ capture-skip"). A nil allowlist (capability
+		// not wired, or open_knowledge disabled) yields baseline
+		// passthrough, never a panic (SCOPE-02 is independently
+		// non-breaking; the singleton is installed in SCOPE-03 wiring).
+		var okOverride modelswitch.Override
+		if scenarioID == "open_knowledge" {
+			if allow := okagenttool.SwitchableModels(); allow != nil {
+				ov, rej := allow.Resolve(msg.ModelOverride)
+				if rej != nil {
+					resp = contracts.AssistantResponse{
+						Routing:    &decision,
+						Status:     contracts.StatusUnavailable,
+						ErrorCause: contracts.ErrModelNotSwitchable,
+						Body:       truncateBody(rej.Message, f.cfg.BodyMaxChars),
+						EmittedAt:  emittedAt,
+					}
+					break
+				}
+				okOverride = ov
+			}
+		}
 		// Spec 064 SCOPE-17 fast-path — bypass the substrate executor
 		// for the open_knowledge scenario when the openknowledge agent
 		// is wired. Rationale: the substrate enforces a per-tool
@@ -1060,7 +1088,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		// agent's internal budgets are authoritative.
 		var result *agent.InvocationResult
 		if scenarioID == "open_knowledge" && okagenttool.CurrentAgent() != nil {
-			result = f.runOpenKnowledgeDirect(ctx, sc, env, emittedAt)
+			result = f.runOpenKnowledgeDirect(ctx, sc, env, emittedAt, okOverride)
 		} else {
 			result = f.executor.Run(ctx, sc, env)
 		}
@@ -1079,6 +1107,23 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			ErrorCause: translateOutcomeToErrorCause(result.Outcome),
 			Body:       truncateBody(body, f.cfg.BodyMaxChars),
 			EmittedAt:  emittedAt,
+		}
+
+		// Spec 088 — stamp the answer-level model attribution for the
+		// open_knowledge fast-path. ModelID is the model that produced the
+		// final text (turn.Model → result.Model in runOpenKnowledgeDirect);
+		// OverrideApplied drives the Telegram "— model:" footer
+		// (only-on-override, NFR-4 / Principle 6) and is true exactly when a
+		// validated override was applied. Set before the assembler /
+		// provenance / capture so it rides the success path; a wholesale
+		// resp replacement (capture-failure) intentionally drops it (no
+		// footer on an error). The HTTP envelope carries the model
+		// independently (agenttool.outputEnvelope.Model), always.
+		if scenarioID == "open_knowledge" && result != nil {
+			resp.ModelAttribution = &contracts.ModelAttribution{
+				ModelID:         result.Model,
+				OverrideApplied: !okOverride.IsZero(),
+			}
 		}
 
 		// Spec 061 SCOPE-04 facade-source-assembly-hook. When a
@@ -1187,7 +1232,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 // returned *agent.InvocationResult mirrors what the substrate would
 // have produced via direct_output_from_tool, so downstream assembler,
 // provenance gate, and body translation paths work unchanged.
-func (f *Facade) runOpenKnowledgeDirect(ctx context.Context, sc *agent.Scenario, env agent.IntentEnvelope, emittedAt time.Time) *agent.InvocationResult {
+func (f *Facade) runOpenKnowledgeDirect(ctx context.Context, sc *agent.Scenario, env agent.IntentEnvelope, emittedAt time.Time, ov modelswitch.Override) *agent.InvocationResult {
 	prompt := strings.TrimSpace(string(env.StructuredContext))
 	// Prefer the raw_query/query field if structured_context is JSON.
 	var sc_payload struct {
@@ -1201,7 +1246,11 @@ func (f *Facade) runOpenKnowledgeDirect(ctx context.Context, sc *agent.Scenario,
 			prompt = sc_payload.Query
 		}
 	}
-	turn, runErr := okagenttool.CurrentAgent().Run(ctx, prompt)
+	// Spec 088 — apply the validated per-request override via a per-
+	// invocation clone (WithModelOverride returns the receiver unchanged
+	// for a zero override, so the no-override path is byte-for-byte the
+	// spec-087 baseline; the SST singleton is never mutated, C6).
+	turn, runErr := okagenttool.CurrentAgent().WithModelOverride(ov).Run(ctx, prompt)
 	result := &agent.InvocationResult{
 		ScenarioID:      "open_knowledge",
 		ScenarioVersion: "fast-path",
@@ -1217,6 +1266,10 @@ func (f *Facade) runOpenKnowledgeDirect(ctx context.Context, sc *agent.Scenario,
 	final, _ := json.Marshal(env_out)
 	result.Outcome = agent.OutcomeOK
 	result.Final = final
+	// Spec 088 — attribute the answer to the model that produced the
+	// final text (honest across success / salvage / refuse / early-
+	// StopEndTurn; CT-3/CT-4).
+	result.Model = turn.Model
 	return result
 }
 
