@@ -1195,3 +1195,96 @@ carrying the `switchable_models` allowlist (ensure `deepseek-r1:7b` resident
 within the 28 GiB envelope), run the live `gemma4:26b`-vs-`deepseek-r1:7b`
 synthesis A/B + `tests/e2e/openknowledge` regression, then promote the chain.
 No spec-088 substance rework is required.
+
+## DevOps Execution Outcome + Operator Runbook (2026-06-14)
+
+`bubbles.devops` ran the commit/push/deploy/A-B dispatch for the
+`064→084→087→088` chain. **Claim Source: executed** for STEP 1–3 (git + `gh run`
+observed); **blocked-on-operator** for STEP 4–5 (no live result fabricated).
+
+### What completed (executed)
+
+| Step | Outcome |
+|------|---------|
+| 1 — commit | DONE — combined 087+088 commit `99c8d629` (50 files, 8690 insertions). The 088 `--model` override (`modelswitch` pkg) + 087 split-synthesis hunks co-mingle across `agent.go`/`facade.go`/config; a clean per-spec hunk-split was error-prone, so both ship intact (a clean combined commit beats a broken split). pii-scan clean; transient `clients/.../.kotlin` excluded. |
+| 2 — push | DONE — `origin/main 10ed4a48..99c8d629`; pre-push uniformity lint PASSED; no `--no-verify`. Also carried the pre-existing unpushed spec-085, spec-086, framework-7.12.0 commits. |
+| 3 — CI | CI workflow (lint-and-test + cross-language-canary + build) **GREEN** — 088 Go validated on origin/main (agent-invoke model-override path, `switchable_models` allowlist, facade two-surface parity). `build-images` ✓ (core+ML cosign keyless+Rekor signed, SBOM+SLSA attested, ghcr digest push), `build-bundles` (dev/test/home-lab) ✓. |
+
+### What is blocked-on-operator (no result fabricated)
+
+- **STEP 3 gap — no build manifest.** `build-clients` ✗ (operator-private Android upload keystore secret missing) → `publish-build-manifest` was SKIPPED (`needs: build-clients`) → **`build-manifest-99c8d629.yaml` was NOT published**. Build-Once Deploy-Many therefore has no deploy input.
+- **STEP 4 — deploy.** Reachability is fine (home-lab reachable via tailscale root ssh; deploy-adapter overlay present; cosign installed), but (a) no build manifest, and (b) `deepseek-r1:7b` is NOT resident on the home-lab ollama (`gemma4:26b` IS, 17 GB). The live stack still runs the pre-088 build, so the wire does not yet honor `--model`.
+- **STEP 5 — the decisive A/B.** Requires the 088 code deployed + `deepseek-r1:7b` resident; cannot be run meaningfully against the pre-088 live stack.
+
+### Findings (operator-private CI secrets — surfaced by the push; all in spec-085/086, NOT 087/088)
+
+1. **`build-clients` ✗** — "Materialize Android upload keystore (operator-private secret)". Configure the Android upload keystore CI secret.
+2. **`client-binary-conformance` ✗** — "Input required and not supplied: token" at the deploy-adapter-overlay checkout step. Configure the overlay checkout token CI secret.
+3. **`Gitleaks` ✗** — FALSE POSITIVE on the test constant `lcbSecretSentinel = "s3cr3t-lcb-do-not-leak-DEADBEEF"` in `internal/deploy/local_client_build_test.go:142` (spec-086 commit `a243a465`, rule `generic-api-key`). Will NOT recur on the next push (gitleaks scans only the new commit range, which excludes `a243a465`). To durably baseline it, append this fingerprint to `.gitleaksignore`: `a243a4656c991696f6aa2cd3eb7d14d9fb6623bf:internal/deploy/local_client_build_test.go:generic-api-key:142`.
+
+### Operator runbook — finish STEP 4–5
+
+Substitute `<home-lab-host>` / `<home-lab-core-fqdn>` with your real (operator-private) values.
+
+**A. Unblock the build manifest (CI secrets → re-run the build):**
+1. Add the Android upload keystore + deploy-overlay checkout token CI secrets.
+2. Re-run the `build` workflow on `99c8d629`; confirm `publish-build-manifest` writes `build-manifest-99c8d629.yaml`.
+
+**B. Ensure both synthesis models resident on the home-lab ollama (within the 28672 MiB envelope):**
+
+```bash
+tailscale ssh root@<home-lab-host> -- 'docker exec smackerel-home-lab-ollama-1 ollama pull deepseek-r1:7b'
+tailscale ssh root@<home-lab-host> -- 'docker exec smackerel-home-lab-ollama-1 ollama list'   # expect deepseek-r1:7b + gemma4:26b
+```
+
+**C. Deploy (Build-Once Deploy-Many, from the deploy-adapter overlay):**
+
+```bash
+bash scripts/deploy/promote.sh --target home-lab --build-manifest <path>/build-manifest-99c8d629.yaml
+# promote resolves digests + the home-lab-99c8d629 bundle and calls:
+#   ./smackerel.sh deploy-target home-lab apply \
+#     --image-core=sha256:<core-digest> --image-ml=sha256:<ml-digest> \
+#     --config-bundle=home-lab-99c8d629 --config-bundle-sha=<sha256-hex>
+./smackerel.sh deploy-target home-lab verify
+```
+
+**D. Run the A/B (the decisive test) — two-town pomegranate-growing comparison:**
+
+Question template: `what is a better place to grow pomegranate, <town-A> or <town-B>, <ST>?`
+
+> The operator substitutes the real two-town comparison from the session. The
+> literal towns are operator-private location data (flagged by the machine-local
+> `pii-tokens.txt`) and are intentionally NOT committed to this generic repo.
+
+Telegram surface:
+
+```
+/ask what is a better place to grow pomegranate, <town-A> or <town-B>, <ST>?
+/ask --model=deepseek-r1:7b what is a better place to grow pomegranate, <town-A> or <town-B>, <ST>?
+```
+
+HTTP surface (`POST /v1/agent/invoke`; baseline omits `model`, override sets it; add the operator runtime auth header if the endpoint is gated):
+
+```bash
+# Baseline (configured synthesis model)
+curl --max-time 300 -X POST https://<home-lab-core-fqdn>/v1/agent/invoke \
+  -H 'Content-Type: application/json' \
+  -d '{"raw_input":"what is a better place to grow pomegranate, <town-A> or <town-B>, <ST>?"}'
+
+# Override (deepseek-r1:7b)
+curl --max-time 300 -X POST https://<home-lab-core-fqdn>/v1/agent/invoke \
+  -H 'Content-Type: application/json' \
+  -d '{"raw_input":"what is a better place to grow pomegranate, <town-A> or <town-B>, <ST>?","model":"deepseek-r1:7b"}'
+```
+
+Capture BOTH full answers with their `— model:` attribution. **Verdict criterion:**
+does `deepseek-r1:7b` produce a genuine synthesized COMPARISON VERDICT (reconciling
+the two towns' climate / USDA zone vs pomegranate requirements) instead of the
+honest-salvage snippet wall? Compare against `gemma4:26b` on the same question,
+then run `tests/e2e/openknowledge` against the live stack.
+
+**Honest terminal status:** `status` held at `blocked` (NOT `done`) — the live
+A/B + `verify` did not run, so the chain is not certifiable from this session.
+Once the operator captures a genuine A/B verdict and `verify` passes, the
+`064→084→087→088` chain can be promoted to `done`. `nextRequiredOwner:
+operator/user-session`.
