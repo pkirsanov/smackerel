@@ -520,6 +520,14 @@ type AuthConfig struct {
 	// deployment. Consumed exactly once via `./smackerel.sh auth bootstrap`
 	// and then cleared by the operator (OQ-10 RESOLVED).
 	BootstrapToken string
+
+	// WebRegistrationInviteToken is the spec-091 self-registration gate
+	// secret (WEB_REGISTRATION_INVITE_TOKEN). OPTIONAL: empty ⇒ POST
+	// /v1/web/register is disabled (fail-loud at POST, never open signup).
+	// Unlike BootstrapToken it is repeatable and NOT production-required, so
+	// loadAuthConfig does NOT append it to authErrors. Compared in constant
+	// time by HandleWebRegister; never logged.
+	WebRegistrationInviteToken string
 }
 
 // Load reads configuration from environment variables.
@@ -1518,6 +1526,11 @@ func loadAuthConfig(cfg *Config) error {
 	cfg.Auth.AtRestHashingKey = os.Getenv("AUTH_AT_REST_HASHING_KEY")
 	cfg.Auth.TelemetryMetricPrefix = os.Getenv("AUTH_TELEMETRY_METRIC_PREFIX")
 	cfg.Auth.BootstrapToken = os.Getenv("AUTH_BOOTSTRAP_TOKEN")
+	// Spec 091 — OPTIONAL web self-registration invite token. Empty ⇒
+	// registration disabled at POST (never open signup). Deliberately NOT
+	// appended to authErrors below: unlike AUTH_BOOTSTRAP_TOKEN it is not
+	// production-required, so an empty value must never fail boot.
+	cfg.Auth.WebRegistrationInviteToken = os.Getenv("WEB_REGISTRATION_INVITE_TOKEN")
 
 	var authErrors []string
 

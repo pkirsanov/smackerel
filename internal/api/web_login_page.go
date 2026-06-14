@@ -16,7 +16,7 @@ import (
 	"net/http"
 )
 
-//go:embed admin_ui_static/login.html admin_ui_static/login.js admin_ui_static/login.css
+//go:embed admin_ui_static/login.html admin_ui_static/login.js admin_ui_static/login.css admin_ui_static/register.html admin_ui_static/register.js
 var loginUIFS embed.FS
 
 var loginTemplate = template.Must(template.ParseFS(loginUIFS, "admin_ui_static/login.html"))
@@ -26,6 +26,11 @@ type loginPageData struct {
 	AuthEnabled bool
 	Next        string
 	Error       string
+	// Registered renders the spec-091 post-registration success flash
+	// ("Account created — sign in.") when GET /login carries ?registered=1.
+	// Additive: false (the zero value, and the only value when the query is
+	// absent) preserves the spec-057/070 /login render byte-for-byte (AC-9).
+	Registered bool
 }
 
 // HandleLoginPage serves GET /login.
@@ -44,6 +49,8 @@ func (d *Dependencies) HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	data := loginPageData{
 		AuthEnabled: d.loginAuthEnabled(),
 		Next:        next,
+		// Spec 091 — post-registration success flash on the literal ?registered=1.
+		Registered: r.URL.Query().Get("registered") == "1",
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

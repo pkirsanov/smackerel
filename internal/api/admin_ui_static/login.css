@@ -7,4 +7,7 @@ button { margin-top: 1rem; padding: .5rem 1rem; cursor: pointer; }
 .banner { padding: .75rem; border-radius: .25rem; margin-bottom: 1rem; }
 .banner-disabled { background: #fff3cd; border: 1px solid #ffe69c; }
 .banner-error { background: #f8d7da; border: 1px solid #f1aeb5; }
+/* Spec 091 — post-registration success flash (WCAG-AA: dark body text on a
+   light-green field). */
+.banner-success { background: #d1e7dd; border: 1px solid #a3cfbb; }
 .logout { margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem; }

@@ -1,0 +1,166 @@
+{
+  "version": 3,
+  "specId": "091-web-self-registration-invite-gated",
+  "specName": "Web Self-Registration (Invite-Token Gated)",
+  "featureDir": "specs/091-web-self-registration-invite-gated",
+  "status": "in_progress",
+  "currentPhase": "plan",
+  "currentScope": null,
+  "workflowMode": "full-delivery",
+  "executionRuntime": "direct-implement",
+  "planMaturityOnly": false,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "createdAt": "2026-06-14T07:10:00Z",
+  "completedAt": null,
+  "certifiedAt": null,
+  "lastUpdatedAt": "2026-06-14T11:00:00Z",
+  "releaseTrain": "mvp",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "requiresRevalidation": false,
+  "scopeLayout": "single-file",
+  "flagsIntroduced": [],
+  "specDependsOn": [
+    "specs/070-web-username-password-login"
+  ],
+  "relatesTo": [
+    "specs/057-browser-login-redirect",
+    "specs/044-per-user-bearer-auth"
+  ],
+  "crossRepoProvenance": null,
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "full-delivery",
+      "statusCeiling": "done",
+      "source": "user-request"
+    },
+    "tdd": {
+      "enabled": false,
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "enabled": false,
+      "perScope": false,
+      "perDoD": false,
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "enabled": true,
+      "artifactFreezeOnDone": true,
+      "source": "repo-default"
+    },
+    "regression": {
+      "enabled": true,
+      "persistentE2E": true,
+      "source": "repo-default"
+    },
+    "validation": {
+      "enabled": true,
+      "evidenceMinLines": 10,
+      "source": "repo-default"
+    },
+    "grill": {
+      "enabled": true,
+      "adversarialRegression": true,
+      "tautologicalGuard": true,
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "completedScopes": ["01", "02", "03", "04"],
+  "completedPhases": [
+    "analyze",
+    "ux",
+    "design",
+    "plan"
+  ],
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "currentScope": null,
+    "executionModel": "parent-expanded-child-mode",
+    "runStartedAt": "2026-06-14T07:10:00Z",
+    "completedPhaseClaims": [
+      "analyze",
+      "ux",
+      "design",
+      "plan",
+      "implement"
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the analyst phase authored the BDD spec.md and seeded state.json. Operator pre-approved Option A (invite-token gated self-registration). Later phases (ux/design/plan/implement/test/specialists) own their own artifacts.",
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T07:10:00Z",
+        "note": "Created specs/091-web-self-registration-invite-gated/ with a complete BDD spec.md: Problem (CLI/TTY-only account creation from spec 070 is friction; full-admin trust band forbids open signup -> invite-token gate), Goals, Non-Goals, Outcome Contract (Intent/Success Signal/Hard Constraints/Failure Condition), Actors, UC-1..UC-8 (Gherkin), AC-1..AC-10, Security Model, Referenced Existing Surfaces (internal/auth/webcreds/repo.go UpsertPassword/ErrUserExists/ValidateUsername, internal/db/migrations/044_web_user_credentials.sql, internal/api/web_login.go auth_token cookie, internal/api/web_login_page.go + admin_ui_static/login.html GET-page pattern, internal/api/router.go httprate(20,1min) group outside bearerAuthMiddleware, cmd/core/wiring.go deps.WebCredentials), and 3 Open Design Decisions handed to design (dedicated WEB_REGISTRATION_INVITE_TOKEN vs reuse AUTH_BOOTSTRAP_TOKEN; auto-login vs redirect-to-/login; whether a train flag is needed). Grounded against real surfaces: confirmed no existing /register surface (greenfield), webcreds.UpsertPassword(create bool) returns ErrUserExists, /login + /v1/web/login register inside httprate.LimitByIP(20,1min) outside bearerAuthMiddleware. PII kept generic (placeholders only). Status held at in_progress; nextRequiredOwner = bubbles.ux."
+      },
+      {
+        "agent": "bubbles.ux",
+        "phasesExecuted": ["ux"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the ux phase authored the UX specification and folded it into spec.md. Later phases (design/plan/implement/test/specialists) own their own artifacts.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T07:40:00Z",
+        "note": "Folded the UX specification into spec.md (single-file rule — no sidecar ux.md/wireframes.md): appended '## UX Specification' plus the gate-required '## UI Wireframes' and '## User Flows' level-2 headings (UX1/UX8 pass; feature dir holds only spec.md + state.json). Mirrored the CSP-compliant /login GET page (internal/api/admin_ui_static/login.html via web_login_page.go): single <main>/<h1>, <label>-wrapped inputs, one 'Create account' submit, external same-origin login.css + register.js only — no inline scripts/handlers, CSP script-src 'self'. Fields: username (text, autocomplete=username), password + confirm-password (password, autocomplete=new-password), invite-token (type=password masked, autocomplete=off), hidden sanitized next; 'Already have an account? Sign in' -> /login. RESOLVED Open Decision #2 (landing) = redirect-to-/login with success flash: POST /v1/web/register success -> 303 /login?registered=1 (NO cookie; session cookie stays set only by /v1/web/login), /login renders 'Account created — sign in.' (role=status). Rationale: one canonical session-establishing path, immediate credential proof, rare single-operator registration, reuse (no duplicated cookie logic), non-enumerating value-safe flash. Specified security-critical validation order: invite-token constant-time gate FIRST -> shared non-enumerating banner for wrong/missing/disabled token BEFORE any username eval -> field presence -> password match + min-length -> ValidateUsername -> UpsertPassword(create=true) ErrUserExists. Exact error-string catalog authored (shared 'Registration is not available or the invite is invalid.' for wrong/missing/disabled — identical; 'All fields are required.'; 'Passwords do not match.'; 'Password must be at least 12 characters.' grounded on webcreds.MinPasswordLength=12; 'Username must be 64 characters or fewer and contain no control characters.'; 'That username is taken.' duplicate valid-token-only; 'Something went wrong. Please try again.'; success 'Account created — sign in.'). Accessibility: label-bound inputs, tab order username->password->confirm->token->submit->link, error banner role=alert / success role=status, visible :focus-visible ring, fully operable without JS (register.js focus-only progressive enhancement), masked secret fields. Disabled-state UX: GET /register ALWAYS renders the identical form (gate enforced only at POST) so probing GET cannot distinguish enabled vs disabled — REQUIRED for the non-enumeration property to hold end-to-end. Defined shared UI primitives (banner, form-field, submit, auth cross-link, shared string, asset/serving contract) reused across /register + /login (UX9). Two mermaid user flows (happy path; failure branches). Competitor research intentionally skipped (internal admin auth page; binding reference is in-repo login.html). Flagged ONE unresolved finding: AC-5 ('GET renders unavailable') contradicts the non-enumeration goal — recommended rewording routed to bubbles.design (UX did not edit analyst-owned AC text per artifact ownership). Did NOT settle Open Decision #1 (secret identity) or #3 (train flag) — design's call. Status held at in_progress; certification untouched; nextRequiredOwner = bubbles.design."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the design phase authored design.md (contract-grade, from-analysis depth) and reconciled the one ux-surfaced acceptance criterion. Later phases (plan/implement/test/specialists) own their own artifacts.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T08:10:00Z",
+        "note": "Authored specs/091-web-self-registration-invite-gated/design.md grounded against real surfaces (web_login_page.go HandleLoginPage + loginUIFS embed + header trio; web_login.go HandleWebLogin form branch + authCookie + renderLoginError + subtle.ConstantTimeCompare + MaxBytesReader(64KiB); router.go httprate.LimitByIP(20,1min) group outside bearerAuthMiddleware ~L325-336; webcreds.Repo.UpsertPassword(create=true)/ErrUserExists/ValidateUsername/MinPasswordLength=12/ErrInvalidCredentials; Dependencies struct health.go L173 WebCredentials; wiring.go L196-230/L422; config.go AuthConfig L461-523 + loadAuthConfig L1520 + production authErrors L1590-1620; SST 3-mirror smackerel.yaml L1702-1718 + secret_keys.go L28-46 + config.sh SHELL_SECRET_KEYS L382-390 + placeholder-emit L1319-1322 + app.env L2096; secret_keys_test.go TestSecretKeysMirror want L103-111; bundle_secret_contract_test.go dynamic). SETTLED Open Decision #1 = dedicated managed secret WEB_REGISTRATION_INVITE_TOKEN (NOT reuse AUTH_BOOTSTRAP_TOKEN — bootstrap is one-shot/clear-after-use + production-required; invite must be repeatable + optional; the new secret is OPTIONAL so it is NOT added to the production authErrors block — fail-loud-at-POST not at-boot). SETTLED Open Decision #3 = NO release-train flag (secret-presence is the rollout control; a flag adds per-train default-OFF ceremony with zero incremental control; flagsIntroduced stays []). RECONCILED AC-5 in spec.md (design authority): GET /register ALWAYS renders the identical form; the disabled gate is enforced ONLY at POST returning the shared non-enumerating banner 'Registration is not available or the invite is invalid.' (byte-identical to wrong-token) — resolves the contradiction with AC-10. Enumerated 11 exact SST/loader/wiring edit sites (yaml secret_keys + auth.web_registration_invite_token; secret_keys.go slice; config.sh SHELL_SECRET_KEYS + placeholder-emit + app.env; secret_keys_test.go want; config.go AuthConfig field + loadAuthConfig load with explicit NO authErrors entry; health.go Dependencies field; wiring.go set with IsPlaceholder leak-guard). Specified architecture (new web_register_page.go/web_register.go/register.html/register.js; extend loginUIFS embed; reuse login.css; additive /login ?registered=1 success-flash + loginPageData.Registered + .banner-success), security-critical POST control flow (constant-time invite gate FIRST with explicit empty-configured guard to avoid empty-matches-empty open-signup; no cookie on register; 303 -> /login?registered=1; UpsertPassword create=true no-overwrite; value-safe non-enumerating errors), DE4 capability-foundation (reuse spec-057 login asset/serving foundation as second consumer + single-implementation justification), data model (no migration — reuse table 044), full unit/regression/live-e2e test strategy with BDD scenario->test mapping + authorization matrix + Complexity Tracking. Named the knb deploy wiring as a separate <knb-repo> commit (sops-encrypt home-lab.enc.env + apply.sh drift-check/placeholder-substitution mirroring CARD_REWARDS_GCAL_CREDENTIALS; redeploy --trust-model=ci-keyless) — NOT executed here. PII kept generic. No scopes.md written (plan owns it); no code implemented; status held in_progress; nextRequiredOwner = bubbles.plan."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the plan phase authored scopes.md (5 sequential DAG-gated scopes) + the report.md and uservalidation.md templates. Later phases (implement/test/specialists) own their own artifacts.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T08:40:00Z",
+        "note": "Authored specs/091-web-self-registration-invite-gated/scopes.md (single-file mode, 5 scopes) from spec.md (UC-1..UC-8, AC-1..AC-10, UX error catalog) + design.md (11 SST/loader/wiring edit sites, security-critical POST control flow, settled decisions). SCOPE-01 Config+SST wiring for the dedicated OPTIONAL secret WEB_REGISTRATION_INVITE_TOKEN (3-mirror + placeholder-emit + loadAuthConfig NOT in production authErrors + Dependencies wiring + IsPlaceholder leak-guard); SCOPE-02 GET /register page+template+assets (reuses spec-057 loginUIFS foundation; renders identical form regardless of gate per Reconciled AC-5); SCOPE-03 POST /v1/web/register HandleWebRegister (constant-time invite gate FIRST with empty-configured guard, field/password/username validation, UpsertPassword create=true, 303 /login?registered=1 NO cookie, value-safe); SCOPE-04 router wiring (GET public + POST inside LimitByIP(20,1min), both outside bearerAuthMiddleware) + additive /login ?registered=1 success flash + spec-070 regression sweep; SCOPE-05 live home-lab deploy proof (operator types the sops secret value-safe; agent runs apply.sh --trust-model=ci-keyless + live register->login->/cards e2e + wrong-token reject). DAG: 01->03, 02->03, 02->04, 03->04, 01->05, 04->05 (roots 01,02). REFINEMENT: swapped the task's suggested POST=02/GET=03 ordering to GET=02/POST=03 per design.md Next Owner + true dependency (web_register.go renderRegisterError re-renders registerTemplate/registerPageData defined in web_register_page.go). RESOLVED design's one non-blocking open item: implement the IsPlaceholder->empty leak guard in SCOPE-01. Test-Plan<->DoD parity confirmed per scope (01:5/5, 02:5/5, 03:7/7, 04:4/4, 05:3/3). Created report.md (anchored evidence placeholders, none fabricated) + uservalidation.md ([x] baseline). flagsIntroduced stays [] (Decision #3). scopeLayout single-file. Did NOT write certification status/claims, did NOT implement code, did NOT commit, did NOT mark done. nextRequiredOwner = bubbles.implement starting SCOPE-01."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the implement phase delivered SCOPE-01..04 to full DoD with inline raw evidence. SCOPE-05 (live home-lab deploy) is operator-gated and left for the deploy/test phase. The goal controller finalizes spec status.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T11:00:00Z",
+        "note": "Implemented SCOPE-01..04 of spec 091. SCOPE-01: dedicated OPTIONAL secret WEB_REGISTRATION_INVITE_TOKEN across the 3 SST mirrors (config/smackerel.yaml secret_keys + auth.web_registration_invite_token, internal/config/secret_keys.go, scripts/commands/config.sh SHELL_SECRET_KEYS) + placeholder-emit block + app.env emission + secret_keys_test want + AuthConfig field + loadAuthConfig load (deliberately NOT in production authErrors) + Dependencies field + cmd/core/wiring.go IsPlaceholder leak-guard; new tests TestLoadAuthConfig_WebRegistrationInviteToken_* (new config_test.go) + TestWebRegistrationInviteToken_PlaceholderGuardClosesOpenSignupTrap (secret_keys_test.go); updated bundle_secret_contract_test.go A2 hardcoded SHELL_SECRET_KEYS mirror in lockstep (first run FAILED A2 precondition, fixed, re-GREEN). SCOPE-02: web_register_page.go HandleRegisterPage + registerPageData{Next,Username,Error} (no token field) + registerTemplate; register.html (CSP-safe, 4 fields) + register.js (focus-only) added to the loginUIFS embed (reuses login.css, no new asset route); web_register_page_test.go (renders/identical-form/next-sanitized/CSP/HEAD). SCOPE-03: web_register.go HandleWebRegister exact 7-step flow (constant-time invite gate FIRST with explicit empty-configured open-signup-trap guard, field/password/username validation, UpsertPassword create=true no-overwrite, 303 /login?registered=1 NO cookie, value-safe renderRegisterError + logRegisterReject); enhanced shared fakeRepo to honor create=true->ErrUserExists; web_register_test.go (success/repeatable, gate x5 incl empty==empty trap, duplicate no-overwrite, field-validation x5, non-enumeration byte-identical, value-safe-log canary, method-guard). SCOPE-04: router.go GET /register (public) + POST /v1/web/register (INSIDE LimitByIP(20,1min), both outside bearerAuthMiddleware); additive loginPageData.Registered + login.html ?registered=1 flash + login.css .banner-success (WCAG-AA); web_register_ratelimit_test.go (membership + per-IP isolation; RED->GREEN adversarial fidelity PROVEN by temporarily moving the route outside the group -> test FAILED, restored -> GREEN) + web_login_page_test.go flash + adversarial byte-identical no-flash regression; full spec-070 TestWebLogin/TestLoginPage suite GREEN unchanged. Per scope: ./smackerel.sh config generate (dev empty + home-lab placeholder bundle), test unit --go targeted (all PASS), check + format --check + lint all exit 0, artifact-lint PASSED. NO spec done flip, NO git commit (goal controller owns finalization). SCOPE-05 untouched (operator-gated). nextRequiredOwner = bubbles.test for a consolidated verification pass."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": ["01", "02", "03", "04"],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      { "scope": 1, "name": "Config + SST wiring for WEB_REGISTRATION_INVITE_TOKEN", "status": "done", "dependsOn": [], "scopeDir": null },
+      { "scope": 2, "name": "GET /register page + template + assets", "status": "done", "dependsOn": [], "scopeDir": null },
+      { "scope": 3, "name": "POST /v1/web/register handler (HandleWebRegister)", "status": "done", "dependsOn": [1, 2], "scopeDir": null },
+      { "scope": 4, "name": "Router wiring + /login success-flash + rate-limit", "status": "done", "dependsOn": [2, 3], "scopeDir": null },
+      { "scope": 5, "name": "Live home-lab deploy proof (register -> login -> /cards)", "status": "not_started", "dependsOn": [1, 4], "scopeDir": null }
+    ]
+  }
+}
