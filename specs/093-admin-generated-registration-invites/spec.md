@@ -768,9 +768,10 @@ The Account Invites page reuses the existing spec-092 token system verbatim
 rings + `prefers-reduced-motion` + `prefers-color-scheme: dark` already defined
 there. No new component classes are required.
 
-### UI Primitives (UX9)
+### UI Primitives
 
-The surface renders the same row/badge/callout vocabulary across two states
+This section satisfies the UX9 shared-primitives requirement. The surface
+renders the same row/badge/callout vocabulary across two states
 (post-generate render and the steady list), so the shared primitives are pinned
 here:
 
