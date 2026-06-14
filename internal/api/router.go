@@ -326,6 +326,9 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Use(httprate.LimitByIP(20, 1*time.Minute))
 		r.Post("/v1/web/login", deps.HandleWebLogin)
 		r.Post("/v1/web/logout", deps.HandleWebLogout)
+		// Spec 091 — self-registration POST shares the SAME per-IP rate-limit
+		// group as /v1/web/login (UC-8 / AC-7), OUTSIDE bearerAuthMiddleware.
+		r.Post("/v1/web/register", deps.HandleWebRegister)
 	})
 
 	// Spec 057 — browser-friendly /login page + static assets. Both
@@ -333,6 +336,10 @@ func NewRouter(deps *Dependencies) http.Handler {
 	// the entry point that unauthenticated browser navigations land
 	// on via the content-negotiated 303 in bearerAuthMiddleware.
 	r.Get("/login", deps.HandleLoginPage)
+	// Spec 091 — GET /register page (PUBLIC, mirrors /login; OUTSIDE
+	// bearerAuthMiddleware). Renders the identical form regardless of the
+	// invite-gate configuration (Reconciled AC-5).
+	r.Get("/register", deps.HandleRegisterPage)
 	r.Handle("/admin_ui_static/*", http.StripPrefix("/", http.FileServer(http.FS(loginUIFS))))
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes

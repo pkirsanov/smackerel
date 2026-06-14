@@ -142,3 +142,56 @@ func TestLoginPage_SanitisesNext(t *testing.T) {
 		t.Errorf("expected fallback next=/, got: %s", body)
 	}
 }
+
+// Spec 091 SCOPE-04 — GET /login?registered=1 renders the post-registration
+// success flash ("Account created — sign in.") in a banner-success element
+// with role="status". UC-1 landing / AC-8.
+func TestLoginPage_RegisteredFlash(t *testing.T) {
+	deps := newLoginPageDeps_DevShared() // AuthEnabled => the sign-in form branch renders
+	rec := getLogin(t, deps, "/login?registered=1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Account created — sign in.") {
+		t.Errorf("missing success flash text: %s", body)
+	}
+	if !strings.Contains(body, "banner-success") {
+		t.Errorf("success flash missing banner-success class: %s", body)
+	}
+	if !strings.Contains(body, `role="status"`) {
+		t.Errorf("success flash missing role=\"status\" (polite a11y announcement): %s", body)
+	}
+}
+
+// Spec 091 SCOPE-04 — ADVERSARIAL AC-9 regression. GET /login WITHOUT
+// ?registered=1 MUST NOT render the success flash, and the only difference
+// between the ?registered=1 render and the plain render is exactly that flash
+// line (i.e., stripping the flash from the registered render reproduces the
+// plain render byte-for-byte). This fails if the flash were ever rendered
+// unconditionally — proving the additive change preserves the spec-057/070
+// /login behavior.
+func TestLoginPage_NoFlashWithoutQuery(t *testing.T) {
+	deps := newLoginPageDeps_DevShared()
+
+	recPlain := getLogin(t, deps, "/login")
+	plain := recPlain.Body.String()
+	if strings.Contains(plain, "Account created — sign in.") {
+		t.Errorf("plain /login (no ?registered=1) MUST NOT render the success flash: %s", plain)
+	}
+	if strings.Contains(plain, "banner-success") {
+		t.Errorf("plain /login MUST NOT render the banner-success element: %s", plain)
+	}
+
+	// Byte-identical-minus-flash: removing ONLY the success-flash <p> fragment
+	// from the ?registered=1 render must reproduce the plain render exactly.
+	// (The surrounding `  ` indent + newline are produced by the {{if}} action
+	// in BOTH renders — when Registered is false the action yields just the
+	// indent — so only the inner <p> element differs.)
+	recFlash := getLogin(t, deps, "/login?registered=1")
+	flashFragment := `<p class="banner banner-success" role="status">Account created — sign in.</p>`
+	stripped := strings.Replace(recFlash.Body.String(), flashFragment, "", 1)
+	if stripped != plain {
+		t.Errorf("the ONLY difference between ?registered=1 and plain /login must be the success-flash <p> fragment\n--- stripped ---\n%s\n--- plain ---\n%s", stripped, plain)
+	}
+}

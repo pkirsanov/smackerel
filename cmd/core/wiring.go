@@ -421,6 +421,18 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 	}
 	deps.WebCredentials = webCredsRepo
 
+	// Spec 091 — wire the OPTIONAL web self-registration invite-token gate.
+	// Defense-in-depth: if the knb adapter failed to substitute the bundle
+	// placeholder, the literal __SECRET_PLACEHOLDER__…__ constant must NOT
+	// become a usable invite token (that would be open admin signup — the
+	// spec Failure Condition). Map any un-substituted placeholder to ""
+	// (= registration disabled).
+	inviteTok := cfg.Auth.WebRegistrationInviteToken
+	if config.IsPlaceholder(inviteTok) {
+		inviteTok = ""
+	}
+	deps.WebRegistrationInviteToken = inviteTok
+
 	revocationCache := revocation.NewCache()
 	if cfg.Auth.Enabled {
 		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)

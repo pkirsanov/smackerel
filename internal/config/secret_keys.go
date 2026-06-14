@@ -42,6 +42,11 @@ var secretKeys = []string{
 	// card-rewards calendar write client (internal/cardrewards.GoogleCalendarClient)
 	// only when card_rewards.calendar_sync is true; never logged.
 	"CARD_REWARDS_GCAL_CREDENTIALS",
+	// Spec 091 — web self-registration invite token. OPTIONAL (empty ⇒
+	// registration disabled at POST, never open signup). Read by core's
+	// HandleWebRegister (POST /v1/web/register) only; compared in constant
+	// time; never logged.
+	"WEB_REGISTRATION_INVITE_TOKEN",
 }
 
 // placeholderPrefix and placeholderSuffix bracket the deterministic,
