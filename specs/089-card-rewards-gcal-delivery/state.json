@@ -13,10 +13,10 @@
   "executionRuntime": "direct-implement",
   "executionModelDetail": "Direct in-session feature build (parent-expanded). SCOPE-01 implemented + unit-proven this session; SCOPE-02 is the live delivery proof gated on a new CI image build + home-lab redeploy.",
   "createdAt": "2026-06-14T04:00:00Z",
-  "updatedAt": "2026-06-14T04:30:00Z",
+  "updatedAt": "2026-06-14T06:00:00Z",
   "certifiedAt": null,
   "requiresRevalidation": false,
-  "inProgressReason": "SCOPE-01 (Google Calendar write client + SST config + secret-key 3-mirror + scheduler wiring) is complete and unit-proven: 15 new gcal-client tests PASS, config fail-loud tests PASS, secret-key contract tests PASS (home-lab bundle emits the placeholder for the new CARD_REWARDS_GCAL_CREDENTIALS secret, no literal leak), format + lint clean. SCOPE-02 is the live home-lab delivery proof (Blocked): it requires pushing to smackerel main to trigger a new CI-signed image digest, delivering the Google credential via sops into the knb adapter, redeploying home-lab with calendar_sync=true, and proving a real card-rewards event lands on the operator's Google Calendar. The operator-supplied Google OAuth credential is staged + live-verified (refresh succeeds, calendar write scope, owner access to the target calendar).",
+  "inProgressReason": "Both scopes are complete with real evidence. SCOPE-01 (Google Calendar write client + SST config + secret-key 3-mirror + scheduler wiring) is unit-proven: 15 gcal-client tests PASS, config fail-loud PASS, secret-key contract PASS (home-lab bundle emits the placeholder for CARD_REWARDS_GCAL_CREDENTIALS, no literal leak), format + lint clean. SCOPE-02 (live home-lab delivery) is proven on the real host: commit fc931c6a CI-built + cosign-signed the new images + home-lab bundle; the gcal credential was sops/age-encrypted into the knb adapter (knb 1856ca3); apply.sh --trust-model=ci-keyless redeployed core 73dd65dd with substituted_secret_count=7 + calendar_sync=true + 'production Google Calendar delivery wired' in the boot log + core/ml verify healthy; and the deployed GoogleCalendarClient code wrote a real event to the operator's 'Credit cards' calendar (insert -> idempotent no-dup re-sync -> delete) against the live Google Calendar API. Status is held at in_progress (NOT promoted to full-delivery done) pending the heavy full-delivery certification ceremony (regression/chaos/audit/security/harden/gaps/simplify/docs specialist phases + their report sections) which is not all genuinely applicable to this focused 1-feature build; the engineering + live proof are done.",
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
     "tdd": {"mode": "scenario-first", "source": "repo-default"},
@@ -36,11 +36,12 @@
     "SCOPE-02"
   ],
   "completedScopes": [
-    "SCOPE-01"
+    "SCOPE-01",
+    "SCOPE-02"
   ],
   "scopeProgress": [
     {"scopeDir": "SCOPE-01", "name": "Google Calendar write client + config + wiring", "status": "Done", "dependsOn": []},
-    {"scopeDir": "SCOPE-02", "name": "Live home-lab delivery proof", "status": "Blocked", "dependsOn": ["SCOPE-01"]}
+    {"scopeDir": "SCOPE-02", "name": "Live home-lab delivery proof", "status": "Done", "dependsOn": ["SCOPE-01"]}
   ],
   "completedPhases": ["analyze", "design", "plan", "implement", "test"],
   "execution": {
@@ -53,7 +54,7 @@
     "pendingTransitionRequests": [],
     "executionHistory": [
       {"at": "2026-06-14T04:00:00Z", "phase": "analyze+design+plan", "note": "Grounded the gap: the card-rewards CardCalendarBridge (spec 083) is fully built but its CalDAVClient is never constructed (wiring passes nil + warns 'production CalDAV client is not wired yet'). The only Google Calendar usage in the tree is the READ path (internal/connector/caldav GETs /events) — no event-WRITE client exists. Confirmed smackerel's tokenStore + OAuth handler exist but request calendar.readonly scope; the operator's recovered CCManager credential has full calendar write scope, live-verified (refresh OK, owner on the target calendar). Chose to build a focused write client in the cardrewards package + deliver the credential as the managed secret CARD_REWARDS_GCAL_CREDENTIALS."},
-      {"at": "2026-06-14T04:30:00Z", "phase": "implement+test", "note": "Built internal/cardrewards/gcal_client.go (GoogleCalendarClient impl of CalDAVClient: deterministic sha1-hex event id for idempotent get-or-insert/update; refresh-token grant with in-process caching; value-safe logging; httptest-driven). Added CalendarID + GCalCredentials to internal/config/cardrewards.go (fail-loud when calendar_sync). Added CARD_REWARDS_GCAL_CREDENTIALS to all 3 secret-key mirrors (yaml + Go + shell) and CARD_REWARDS_CALENDAR_ID as non-secret config; updated the 2 pre-existing contract tests (TestSecretKeysMirror want-list + bundle_secret_contract A2 SHELL_SECRET_KEYS shape). Wired the real client+bridge into wiring_cardrewards_scheduler.go (graceful WARN+nil on malformed cred). Tests: 15 gcal-client unit tests PASS; config fail-loud PASS; secret-key contract PASS (home-lab bundle emits placeholder, no literal leak); format 65/65 clean; lint exit 0; config generate emits the new keys. SCOPE-02 live deploy proof is next (CI build + redeploy + real calendar event)."}
+      {"at": "2026-06-14T06:00:00Z", "phase": "implement+test+deploy+validate", "note": "SCOPE-02 live delivery proven. Committed fc931c6a (Google Calendar write client + wiring + 3-mirror secret + config); CI build.yml built + cosign-signed core 73dd65dd + ml 909719f4 + home-lab bundle (build-clients Android lane failed on operator-private keystore, unrelated). sops/age-encrypted the gcal credential JSON into knb smackerel/secrets/home-lab.enc.env (ciphertext only, value never in tree); knb params calendar_sync=true + calendar_id + apply.sh CARD_REWARDS_CALENDAR_ID emit (knb 1856ca3). Redeployed via apply.sh --trust-model=ci-keyless on the host (sudo, matching the operator=root precedent so the sudo-aware age resolver finds the key + root reads the root-owned manifest): cosign verified, bundle sha matched, substituted_secret_count=7, CARD_REWARDS calendar_sync=true emitted, core+ml recreated + verify healthy, digests match, apply OK. Boot log: 'card-rewards scheduler: production Google Calendar delivery wired'. Proved the DEPLOYED GoogleCalendarClient code end-to-end against the real 'Credit cards' calendar with the operator's real credential: insert -> idempotent same-uid re-sync (1 event, no dup) -> delete (0). Throwaway proof harness cmd/cardrewards-calproof deleted (never committed). No secret value logged anywhere."}
     ]
   },
   "certification": {
