@@ -1465,7 +1465,16 @@ ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID="$(yaml_get "environments.$TARGET_ENV.assi
 if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID" ]]; then
   ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID="$(yaml_get assistant.open_knowledge.llm_model_id)"
 fi
+# Spec 087 — synthesis-turn model. Per-environment override layer mirrors
+# llm_model_id: home-lab sets assistant_open_knowledge_synthesis_model_id
+# (deepseek-r1:7b); the base key is the dev default (gemma3:4b). yaml_get
+# (not required_value) because the value is legally empty when enabled=false.
+ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID="$(yaml_get "environments.$TARGET_ENV.assistant_open_knowledge_synthesis_model_id" 2>/dev/null || true)"
+if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID" ]]; then
+  ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID="$(yaml_get assistant.open_knowledge.synthesis_model_id)"
+fi
 ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS="$(required_value assistant.open_knowledge.max_iterations)"
+ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_RETRY_BUDGET="$(required_value assistant.open_knowledge.synthesis_retry_budget)"
 ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET="$(required_value assistant.open_knowledge.per_query_token_budget)"
 ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET="$(required_value assistant.open_knowledge.per_query_usd_budget)"
 ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD="$(required_value assistant.open_knowledge.monthly_budget_usd)"
@@ -1473,6 +1482,28 @@ ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD="$(required_value assistant
 ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST="$(yaml_get_json assistant.open_knowledge.tool_allowlist)"
 if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST" ]]; then
   ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST="[]"
+fi
+# Spec 088 — switchable_models allowlist. Per-environment override layer
+# mirrors synthesis_model_id (home-lab adds the real gemma4:26b /
+# deepseek-r1:7b A/B set). The env override is resolved via yaml_get
+# (exact flattened-key match) NOT yaml_get_json: yaml_get_json walks the
+# YAML tree and would bleed across sibling environment blocks when the
+# active env omits the key (returning home-lab's list for dev/test);
+# yaml_get matches the exact flattened path and returns nothing when the
+# env omits it. The inline-list value is normalised to compact JSON
+# (spaces stripped; ollama model tags never contain spaces) so the
+# generated env file parses cleanly, matching the tool_allowlist shape.
+# Legally empty when enabled=false; the Go validator enforces non-empty
+# when enabled, and the envelope guard enforces co-residence fit.
+ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=""
+if _ok_switch_override="$(yaml_get "environments.$TARGET_ENV.assistant_open_knowledge_switchable_models" 2>/dev/null)"; then
+  ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS="$(printf '%s' "$_ok_switch_override" | tr -d ' ')"
+fi
+if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS" ]]; then
+  ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS="$(yaml_get_json assistant.open_knowledge.switchable_models)"
+fi
+if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS" ]]; then
+  ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS="[]"
 fi
 ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED="$(required_value assistant.open_knowledge.web_snippet_cache_enabled)"
 ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS="$(required_value assistant.open_knowledge.llm_timeout_ms)"
@@ -2187,12 +2218,15 @@ ASSISTANT_OPEN_KNOWLEDGE_PROVIDER=${ASSISTANT_OPEN_KNOWLEDGE_PROVIDER}
 ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT=${ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT}
 ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY=${ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY}
 ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID=${ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID}
+ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID=${ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID}
 ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS=${ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS}
+ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_RETRY_BUDGET=${ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_RETRY_BUDGET}
 ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET=${ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET}
 ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET=${ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET}
 ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD=${ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD}
 ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD=${ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD}
 ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST=${ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST}
+ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=${ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS}
 ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED=${ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED}
 ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS=${ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS}
 ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS=${ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS}

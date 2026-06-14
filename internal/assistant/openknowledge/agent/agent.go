@@ -32,6 +32,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/citeback"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/llm"
 	okmetrics "github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tracewriter"
 )
 
@@ -83,6 +84,13 @@ type TurnResult struct {
 	CompactionSignaled bool
 	RejectedCitations  []citeback.RejectedCitation
 	RefusalReason      string
+	// Model is the spec 088 attribution: the model of the turn that
+	// actually produced the final text, stamped exactly once in the
+	// finalize chokepoint. Honest across every terminal path (success,
+	// honest-salvage, refuse, early-StopEndTurn). Empty on the rare
+	// pre-loop refusal (no LLM round ran). Carried to the HTTP envelope
+	// (always) and the Telegram footer (only-on-override) downstream.
+	Model string
 }
 
 // LLMChat is the narrow contract the agent loop needs from the LLM
@@ -105,8 +113,17 @@ type Config struct {
 	// SystemPrompt is the authoritative system prompt loaded from
 	// config/prompt_contracts/open_knowledge.yaml. REQUIRED — empty is
 	// rejected by New() per G028 (no silent default).
-	SystemPrompt               string
-	Model                      string
+	SystemPrompt string
+	Model        string
+	// SynthesisModel / SynthesisRetryBudget — spec 087. The tools-
+	// stripped forced-final synthesis turn (and its retries) uses
+	// SynthesisModel (a reasoning model) instead of Model; an empty or
+	// ungrounded forced-final is retried up to SynthesisRetryBudget
+	// times with an escalated prompt before the honest snippet salvage.
+	// SynthesisModel REQUIRED non-empty; SynthesisRetryBudget REQUIRED
+	// >= 0 (0 = the exact spec-084 salvage timing).
+	SynthesisModel             string
+	SynthesisRetryBudget       int
 	MaxIterations              int
 	PerQueryTokenBudget        int
 	PerQueryUSDBudget          float64
@@ -187,8 +204,14 @@ func New(chat LLMChat, registry *ok.Registry, verify VerifyFn, cfg Config) (*Age
 	if strings.TrimSpace(cfg.Model) == "" {
 		errs = append(errs, "Config.Model is required")
 	}
+	if strings.TrimSpace(cfg.SynthesisModel) == "" {
+		errs = append(errs, "Config.SynthesisModel is required (G028 — no silent default; load from assistant.open_knowledge.synthesis_model_id)")
+	}
 	if cfg.MaxIterations <= 0 {
 		errs = append(errs, "Config.MaxIterations must be > 0")
+	}
+	if cfg.SynthesisRetryBudget < 0 {
+		errs = append(errs, "Config.SynthesisRetryBudget must be >= 0")
 	}
 	if cfg.PerQueryTokenBudget <= 0 {
 		errs = append(errs, "Config.PerQueryTokenBudget must be > 0")
@@ -233,6 +256,24 @@ func New(chat LLMChat, registry *ok.Registry, verify VerifyFn, cfg Config) (*Age
 	return &Agent{llm: chat, registry: registry, verify: verify, cfg: cfg, rec: rec, log: logger, traces: traces, enforcement: enforcementMode}, nil
 }
 
+// WithModelOverride returns a shallow, per-invocation copy of the Agent
+// whose SynthesisModel is replaced by the (already-validated) override.
+// Spec 088 — Fork B: the override re-points the spec-087 forced-final
+// SYNTHESIS turn (and its retries) ONLY; the gather/tool turns keep the
+// baseline Model. The receiver (the SST singleton installed at wiring)
+// is NEVER mutated (C6 / build-once); a zero override returns the
+// receiver unchanged so the no-override path is byte-for-byte identical
+// to spec 087 (NFR-4). All deps (llm, registry, verify, rec, log,
+// traces, enforcement) are concurrency-safe and shared by the clone.
+func (a *Agent) WithModelOverride(o modelswitch.Override) *Agent {
+	if o.IsZero() {
+		return a
+	}
+	clone := *a
+	clone.cfg.SynthesisModel = o.SynthesisModel
+	return &clone
+}
+
 // Run executes the agent loop for a single user prompt. Budget caps,
 // fabricated citations, and iteration caps are surfaced as
 // Status+TerminationReason, not errors. A non-nil error is returned
@@ -260,7 +301,22 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 	turnID := newTurnID()
 	promptHash := sha256Hex(userPrompt)
 
+	// Spec 088 — answeringModel tracks the model of the turn currently
+	// in flight so finalize can stamp TurnResult.Model with the model
+	// that actually produced the final text (CT-3/CT-4). Init to the
+	// gather/tool model; re-pointed to reqModel each iteration after the
+	// per-turn model switch, and to SynthesisModel inside the synthesis-
+	// retry loop. Captured by reference by the finalize closure below.
+	answeringModel := a.cfg.Model
+
 	finalize := func(out TurnResult) TurnResult {
+		// Spec 088 — stamp the answering model exactly once. Every
+		// terminal TurnResult routes through finalize (success, salvage,
+		// refuse, early-StopEndTurn), so this single stamp is honest
+		// across all paths. Respect an already-set Model (defensive).
+		if out.Model == "" {
+			out.Model = answeringModel
+		}
 		iters := iterations
 		if iters == 0 {
 			iters = 1
@@ -314,12 +370,20 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		// rather than synthesizing from prior results.
 		requestTools := tools
 		requestMessages := messages
+		reqModel := a.cfg.Model
 		switch {
 		case iter == a.cfg.MaxIterations-1 && len(trace) > 0:
 			requestTools = nil
+			// Spec 087 — the forced-final SYNTHESIS turn uses the reasoning
+			// synthesis model (tools are already stripped here, so the
+			// synthesis model's weaker tool-calling is irrelevant) and a
+			// structured "reason then write the verdict now" prompt. The
+			// prompt preserves the spec-084 "write your final answer NOW"
+			// trigger phrase.
+			reqModel = a.cfg.SynthesisModel
 			requestMessages = append(append([]llm.ChatMessage{}, messages...), llm.ChatMessage{
 				Role:    llm.RoleUser,
-				Content: "You have used all your tool calls. Based ONLY on the tool results above, write your final answer NOW. Include the <CITATIONS>[...]</CITATIONS> block at the end. If results are insufficient, write a short refusal explaining what you searched, followed by <CITATIONS>[]</CITATIONS>.",
+				Content: synthesisFinalPrompt,
 			})
 		case iter == a.cfg.MaxIterations-2 && len(trace) > 0:
 			// Spec 084 (CHANGE 2) — reflect-before-final nudge. On the
@@ -335,7 +399,13 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 				Content: "Before you give your final answer: re-read the question and check whether the evidence you have actually answers what was asked, and whether you have covered every part of it — for a comparison, every option; for a why/how question, the mechanism; for a recommendation, the deciding criteria. If a needed piece is still missing, issue ONE more targeted tool call now to fill that specific gap. If your evidence already answers the question, proceed to your final answer.",
 			})
 		}
-		req := llm.ChatRequest{Model: a.cfg.Model, Messages: requestMessages, Tools: requestTools}
+		// Spec 088 — record the model this turn runs on so finalize can
+		// attribute the answer to it: the forced-final SYNTHESIS turn (and
+		// its retries) reports SynthesisModel (the overridden model under a
+		// per-request override, Fork B); every gather/tool turn reports the
+		// baseline Model.
+		answeringModel = reqModel
+		req := llm.ChatRequest{Model: reqModel, Messages: requestMessages, Tools: requestTools}
 		result, err := a.llm.Chat(ctx, req)
 		if err != nil {
 			return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat: %w", err)
@@ -350,6 +420,43 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		switch result.StopReason {
 		case llm.StopEndTurn:
 			isForcedFinalTurn := iter == a.cfg.MaxIterations-1
+			// Spec 087 — strip the synthesis model's <think> chain-of-
+			// thought BEFORE any parsing / salvage / cite-back so it can
+			// never reach the user body or become a citation. No-op for
+			// non-reasoning models (no <think> present).
+			result.FinalText = stripThinkBlocks(result.FinalText)
+			// Spec 087 — retry-before-salvage. On the forced-final
+			// synthesis turn, an empty or ungrounded-excuse result is
+			// re-synthesized with an escalated prompt (same synthesis
+			// model, tools stripped) up to SynthesisRetryBudget times
+			// before the honest snippet salvage fires. Each retry is a
+			// budgeted LLM call counted as an iteration.
+			if isForcedFinalTurn {
+				for retry := 0; retry < a.cfg.SynthesisRetryBudget && synthesisNeedsRetry(result.FinalText); retry++ {
+					iterations++
+					// Spec 088 — the retry runs on SynthesisModel (the
+					// overridden model under an override); attribute the
+					// answer to it even when the forced-final turn itself
+					// did not re-point reqModel (empty-trace edge case).
+					answeringModel = a.cfg.SynthesisModel
+					retryMessages := append(append([]llm.ChatMessage{}, messages...), llm.ChatMessage{
+						Role:    llm.RoleUser,
+						Content: synthesisRetryPrompt,
+					})
+					retryResult, retryErr := a.llm.Chat(ctx, llm.ChatRequest{Model: a.cfg.SynthesisModel, Messages: retryMessages, Tools: nil})
+					if retryErr != nil {
+						return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat (synthesis retry %d): %w", retry+1, retryErr)
+					}
+					if capErr := budget.RecordLLMCall(0, retryResult.TokensUsed, a.cfg.CostFn(retryResult.TokensUsed)); capErr != nil {
+						return refuse(mapCapErr(capErr), capErr.Error()), nil
+					}
+					retryResult.FinalText = stripThinkBlocks(retryResult.FinalText)
+					result = retryResult
+					if !synthesisNeedsRetry(result.FinalText) {
+						break
+					}
+				}
+			}
 			// Forced-final-turn empty-text salvage: when the model
 			// returned no text on the forced synthesis turn (gemma
 			// sometimes goes blank when tools are stripped),
@@ -667,6 +774,59 @@ func truncatePreview(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// synthesisFinalPrompt is the spec 087 structured forced-final synthesis
+// instruction. It preserves the spec-084 "write your final answer NOW"
+// trigger phrase (asserted by the reasoning-loop tests) while adding the
+// reason-then-verdict scaffold (Axis C): the model must REASON over the
+// gathered evidence and write the ACTUAL answer (a comparison verdict, a
+// causal explanation, or a recommendation), reconciling contradictions —
+// NOT a per-source recap. Used on the tools-stripped forced-final turn,
+// which spec 087 routes to the reasoning synthesis model.
+const synthesisFinalPrompt = "You have used all your tool calls; do NOT search again. Based ONLY on the tool results above, REASON over the evidence and write your final answer NOW as a direct verdict — the actual answer to the question. For a comparison, say which option is better and WHY, drawing the specific evidence for each option and reconciling any contradiction (prefer the more specific or authoritative source) instead of restating both sides. For a why/how question, give the mechanism. For a recommendation, give the choice and the deciding factors. Write it in your own words, NOT a per-source recap. Include the <CITATIONS>[...]</CITATIONS> block at the end (one entry per cited source, copied verbatim from a tool_result). If the evidence is genuinely insufficient, write a short honest sentence explaining what you searched, followed by <CITATIONS>[]</CITATIONS>."
+
+// synthesisRetryPrompt is the spec 087 escalated retry instruction issued
+// when the first forced-final synthesis came back empty or as an ungrounded
+// excuse. It targets the reasoning model's "emitted a <think> block but
+// never concluded" failure mode: output ONLY the verdict, no <think>, no
+// preamble, no apology.
+const synthesisRetryPrompt = "Your previous attempt did not produce a usable answer, but you already have all the evidence you need in the tool results above. Output ONLY your final answer now — a direct verdict, in your own words, that resolves the question — with NO <think> block, NO preamble, and NO apology. End with the <CITATIONS>[...]</CITATIONS> block, one entry per cited source copied verbatim from a tool_result. Only if the evidence genuinely cannot answer the question, write one short honest sentence and then <CITATIONS>[]</CITATIONS>."
+
+// thinkBlockRE matches a closed <think>...</think> reasoning block (dotall,
+// non-greedy). strayOpenThinkRE matches a trailing UNCLOSED <think> (a
+// reasoning model that "thought" but never concluded — everything from the
+// stray <think> to end is dropped, leaving empty text that the forced-final
+// retry / salvage path then handles).
+var thinkBlockRE = regexp.MustCompile(`(?s)<think>.*?</think>`)
+var strayOpenThinkRE = regexp.MustCompile(`(?s)<think>.*$`)
+
+// stripThinkBlocks removes every <think>...</think> block (and a trailing
+// unclosed <think>) from s and trims surrounding whitespace. Spec 087 —
+// reasoning models (deepseek-r1 and similar) emit a <think> chain-of-thought
+// BEFORE the answer; it is stripped before parseCitations and cite-back so
+// it can never reach the user body or become a citation. A no-op for
+// non-reasoning models (no <think> present). Mirrors the
+// ml/app/processor.py reasoning-preamble strip.
+func stripThinkBlocks(s string) string {
+	if !strings.Contains(s, "<think>") {
+		return s
+	}
+	s = thinkBlockRE.ReplaceAllString(s, "")
+	s = strayOpenThinkRE.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
+}
+
+// synthesisNeedsRetry reports whether a forced-final synthesis result
+// (post-<think>-strip) is empty or an ungrounded excuse and should be
+// retried with an escalated prompt before the honest snippet salvage fires
+// (spec 087). A genuine answer — even one missing its CITATIONS block — is
+// NOT retried; the existing salvage paths attach trace sources to it.
+func synthesisNeedsRetry(finalText string) bool {
+	if strings.TrimSpace(finalText) == "" {
+		return true
+	}
+	return isUngroundedExcuse(finalText)
 }
 
 // honestSalvagePrefix frames a snippet-salvaged body as raw findings so the

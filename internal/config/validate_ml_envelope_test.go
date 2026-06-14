@@ -141,6 +141,101 @@ func TestValidate_AcceptsModelWithinEnvelope(t *testing.T) {
 	}
 }
 
+// TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088
+// (ADVERSARIAL) pins the spec-088 SCOPE-01 switchable_models co-residence
+// envelope guard. A switchable entry that busts the ollama envelope
+// co-resident with the gather model is rejected as oversized; an
+// un-profiled switchable entry is rejected as a missing profile; an
+// envelope-consistent set passes; and a dev env with an unknown ollama
+// envelope (OllamaMemoryLimitMiB == 0) skips the check (matching the
+// runtime modelswitch.Allowlist semantics). Calls validateModelEnvelopes
+// directly on a hand-built Config so the assertion is not diluted by the
+// whole-config env dance — the ollama/ml bucket model fields are left
+// empty and skipped. SCN-088-A07 / FR-10.
+func TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088(t *testing.T) {
+	profiles := map[string]int{
+		"gemma4:26b":      18432,
+		"deepseek-r1:7b":  4864,
+		"deepseek-r1:32b": 22528,
+	}
+	base := func() *Config {
+		c := &Config{
+			MLModelMemoryProfiles: profiles,
+			MLMemoryLimit:         "4G",
+			MLMemoryLimitMiB:      4096,
+			OllamaMemoryLimit:     "28G",
+			OllamaMemoryLimitMiB:  28672,
+		}
+		c.Assistant.OpenKnowledge.Enabled = true
+		c.Assistant.OpenKnowledge.LLMModelID = "gemma4:26b" // gather (co-resident during synthesis)
+		return c
+	}
+
+	t.Run("over-envelope switchable entry rejected", func(t *testing.T) {
+		c := base()
+		// deepseek-r1:32b co-resident with the gemma4:26b gather model =
+		// 18432 + 22528 = 40960 MiB > 28672 MiB envelope.
+		c.Assistant.OpenKnowledge.SwitchableModels = []string{"deepseek-r1:7b", "deepseek-r1:32b"}
+		err := c.validateModelEnvelopes()
+		if err == nil {
+			t.Fatalf("expected fail-loud envelope error for over-envelope switchable entry")
+		}
+		if !strings.Contains(err.Error(), "deepseek-r1:32b") {
+			t.Fatalf("error should name the offending switchable model, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "switchable_models") {
+			t.Fatalf("error should name switchable_models, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "envelope exceeded") {
+			t.Fatalf("error should say 'envelope exceeded', got: %v", err)
+		}
+		// The fitting entry (deepseek-r1:7b co-resident = 23296 <= 28672)
+		// MUST NOT be flagged — proving the guard is selective.
+		if strings.Contains(err.Error(), "\"deepseek-r1:7b\"") {
+			t.Fatalf("fitting switchable entry must not be flagged: %v", err)
+		}
+	})
+
+	t.Run("unprofiled switchable entry rejected as missing profile", func(t *testing.T) {
+		c := base()
+		c.Assistant.OpenKnowledge.SwitchableModels = []string{"totally-made-up"}
+		err := c.validateModelEnvelopes()
+		if err == nil {
+			t.Fatalf("expected fail-loud missing-profile error for un-profiled switchable entry")
+		}
+		if !strings.Contains(err.Error(), "totally-made-up") {
+			t.Fatalf("error should name the un-profiled model, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "missing model memory profile") {
+			t.Fatalf("error should say 'missing model memory profile', got: %v", err)
+		}
+	})
+
+	t.Run("envelope-consistent switchable set accepted", func(t *testing.T) {
+		c := base()
+		// gemma4:26b == gather (single load 18432); deepseek-r1:7b
+		// co-resident = 23296 — both <= 28672.
+		c.Assistant.OpenKnowledge.SwitchableModels = []string{"gemma4:26b", "deepseek-r1:7b"}
+		if err := c.validateModelEnvelopes(); err != nil {
+			t.Fatalf("envelope-consistent switchable set must pass, got: %v", err)
+		}
+	})
+
+	t.Run("dev envelope 0 skips switchable check", func(t *testing.T) {
+		c := base()
+		c.OllamaMemoryLimit = ""
+		c.OllamaMemoryLimitMiB = 0
+		// MLMemoryLimitMiB stays non-zero so the function proceeds past the
+		// both-envelopes-missing early return; the switchable pass itself is
+		// gated on OllamaMemoryLimitMiB != 0, so this over-envelope entry is
+		// NOT checked (matches dev: no ollama daemon, no known envelope).
+		c.Assistant.OpenKnowledge.SwitchableModels = []string{"deepseek-r1:32b"}
+		if err := c.validateModelEnvelopes(); err != nil {
+			t.Fatalf("dev (ollama envelope 0) must skip the switchable envelope check, got: %v", err)
+		}
+	})
+}
+
 // TestParseComposeMemoryToMiB asserts the unit-suffix parser handles
 // every form the docker-compose memory contract accepts. Exercises the
 // helper directly so spec 045 envelope sizing is provably correct

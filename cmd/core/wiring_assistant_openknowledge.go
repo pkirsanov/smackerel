@@ -98,6 +98,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/citeback"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/llm"
 	okmetrics "github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tools"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/web"
 
@@ -229,6 +230,8 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 	agent, err := okagent.New(llmClient, registry, citeback.Verify, okagent.Config{
 		SystemPrompt:               systemPrompt,
 		Model:                      okCfg.LLMModelID,
+		SynthesisModel:             okCfg.SynthesisModelID,
+		SynthesisRetryBudget:       okCfg.SynthesisRetryBudget,
 		MaxIterations:              okCfg.MaxIterations,
 		PerQueryTokenBudget:        okCfg.PerQueryTokenBudget,
 		PerQueryUSDBudget:          okCfg.PerQueryUSDBudget,
@@ -249,9 +252,32 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 	}
 
 	agenttool.SetAgent(agent)
+
+	// Spec 088 — build + install the runtime switchable-model allowlist from
+	// the SAME SST already loaded. Gated on open_knowledge.enabled (this whole
+	// function early-returns when disabled), so agenttool.SwitchableModels() is
+	// non-nil exactly when CurrentAgent() is. NewAllowlist fails loud on an
+	// empty/un-profiled/envelope-busting set; the OllamaMemoryLimitMiB envelope
+	// is 0 on dev (no daemon) so the co-residence check is skipped there
+	// (config-generation already fails loud on an envelope-busting list).
+	allow, err := modelswitch.NewAllowlist(
+		okCfg.SwitchableModels,
+		cfg.MLModelMemoryProfiles, // model_memory_profiles
+		cfg.OllamaMemoryLimitMiB,  // env ollama envelope (0 ⇒ check skipped)
+		okCfg.LLMModelID,          // gather model (co-resident on the synthesis turn)
+		okCfg.SynthesisModelID,    // baseline synthesis = the "default" in rejections
+	)
+	if err != nil {
+		return fmt.Errorf("wireOpenKnowledge: build switchable allowlist: %w", err)
+	}
+	agenttool.SetSwitchableModels(allow)
+
 	slog.Info("open-knowledge subsystem wired",
 		"provider", okCfg.Provider,
 		"model", okCfg.LLMModelID,
+		"synthesis_model", okCfg.SynthesisModelID,
+		"switchable_models", okCfg.SwitchableModels,
+		"synthesis_retry_budget", okCfg.SynthesisRetryBudget,
 		"max_iterations", okCfg.MaxIterations,
 		"per_query_token_budget", okCfg.PerQueryTokenBudget,
 		"per_query_usd_budget", okCfg.PerQueryUSDBudget,

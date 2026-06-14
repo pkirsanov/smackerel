@@ -47,6 +47,7 @@ func TestAllErrorCauses_Exhaustive(t *testing.T) {
 		ErrSlotMissing,
 		ErrInternalError,
 		ErrNoMatch,
+		ErrModelNotSwitchable,
 	}
 	if len(AllErrorCauses) != len(declared) {
 		t.Fatalf("AllErrorCauses length %d != declared %d", len(AllErrorCauses), len(declared))
@@ -165,6 +166,29 @@ func TestAssistantResponse_NetNewFieldCount_Exactly6(t *testing.T) {
 	}
 	if count != 6 {
 		t.Fatalf("AssistantResponse contains %d of the 6 net-new fields; spec.md §3.1.3 requires all 6 present (or none renamed)", count)
+	}
+}
+
+// TestAssistantResponse_FieldInventory_ModelAttribution_Spec088 — the spec 088
+// answer-level attribution carrier is present on AssistantResponse, is typed
+// *ModelAttribution, and is nil on the zero value (baseline ⇒ no attribution /
+// no Telegram footer, NFR-4). The type carries the model id + override flag.
+func TestAssistantResponse_FieldInventory_ModelAttribution_Spec088(t *testing.T) {
+	rt := reflect.TypeOf(AssistantResponse{})
+	f, ok := rt.FieldByName("ModelAttribution")
+	if !ok {
+		t.Fatalf("AssistantResponse MUST carry a ModelAttribution field (spec 088)")
+	}
+	if f.Type != reflect.TypeOf((*ModelAttribution)(nil)) {
+		t.Fatalf("ModelAttribution field type = %s, want *ModelAttribution", f.Type)
+	}
+	var zero AssistantResponse
+	if zero.ModelAttribution != nil {
+		t.Fatalf("zero-value AssistantResponse MUST have nil ModelAttribution (baseline)")
+	}
+	attr := ModelAttribution{ModelID: "deepseek-r1:7b", OverrideApplied: true}
+	if attr.ModelID != "deepseek-r1:7b" || !attr.OverrideApplied {
+		t.Fatalf("ModelAttribution fields not wired: %+v", attr)
 	}
 }
 
@@ -369,6 +393,19 @@ func goldenCases() []goldenCase {
 					{ID: "w-1", Title: "tidetime.org", Kind: SourceWeb, Ref: WebSourceRef{URL: "https://tidetime.org/wa-town-A", Provider: "searxng", FetchedAt: t0, ContentHash: "sha256:tide", Snippet: "wa-town-A tide times"}},
 				},
 				EmittedAt: t0,
+			},
+		},
+		{
+			// Spec 088 — per-request model-override rejection: fail-loud,
+			// no capture-as-answer. Body is the verbatim modelswitch
+			// rejection sentence; the renderer surfaces it as-is.
+			name: "unavailable_model_not_switchable",
+			resp: AssistantResponse{
+				Status:       StatusUnavailable,
+				Body:         "\"gpt-4o\" is not a switchable model. I did NOT use it, and I did NOT fall back to the default — nothing was sent to the model.",
+				ErrorCause:   ErrModelNotSwitchable,
+				CaptureRoute: false,
+				EmittedAt:    t0,
 			},
 		},
 	}

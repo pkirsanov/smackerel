@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// baseOpenKnowledgeEnv returns a map of all 12 ASSISTANT_OPEN_KNOWLEDGE_*
+// baseOpenKnowledgeEnv returns a map of all ASSISTANT_OPEN_KNOWLEDGE_*
 // env vars set to valid values that pass Validate() when Enabled=true.
 // Individual subtests mutate one entry to exercise a single failure
 // mode (G021 adversarial — every assertion must be one a regression
@@ -18,12 +18,15 @@ func baseOpenKnowledgeEnv() map[string]string {
 		"ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT":                       "https://api.search.brave.com/res/v1/web/search",
 		"ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY":                        "test-key",
 		"ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID":                            "llama3.1:8b",
+		"ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID":                      "deepseek-r1:7b",
 		"ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS":                          "8",
+		"ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_RETRY_BUDGET":                  "1",
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET":                  "8000",
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET":                    "0.05",
 		"ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD":                      "10.0",
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD":             "1.0",
 		"ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST":                          `["web_search","fetch_snippet"]`,
+		"ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS":                       `["deepseek-r1:7b"]`,
 		"ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED":               "true",
 		"ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS":                          "30000",
 		"ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS":                    `[]`,
@@ -64,12 +67,15 @@ func TestOpenKnowledgeConfig_MissingEnvVars(t *testing.T) {
 		"ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT",
 		"ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY",
 		"ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID",
+		"ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID",
 		"ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS",
+		"ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_RETRY_BUDGET",
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET",
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET",
 		"ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD",
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD",
 		"ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST",
+		"ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS",
 		"ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED",
 		"ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS",
 		"ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS",
@@ -260,6 +266,119 @@ func TestOpenKnowledgeConfig_DisabledSkipsValidation(t *testing.T) {
 	if cfg.Enabled {
 		t.Fatal("expected Enabled=false")
 	}
+}
+
+// TestOpenKnowledgeConfig_SynthesisModelRequiredWhenEnabled_Spec087 —
+// the spec-087 synthesis_model_id is REQUIRED non-empty when enabled
+// (G028 fail-loud); empty + enabled MUST be rejected, and it may be
+// empty when disabled.
+func TestOpenKnowledgeConfig_SynthesisModelRequiredWhenEnabled_Spec087(t *testing.T) {
+	t.Run("empty_when_enabled_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID"] = ""
+		applyOpenKnowledgeEnv(t, env)
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("empty synthesis_model_id with enabled=true MUST be rejected")
+		}
+		if !strings.Contains(err.Error(), "synthesis_model_id") {
+			t.Fatalf("error should name synthesis_model_id, got: %v", err)
+		}
+	})
+	t.Run("empty_when_disabled_ok", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_ENABLED"] = "false"
+		env["ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID"] = ""
+		applyOpenKnowledgeEnv(t, env)
+		if _, err := LoadOpenKnowledge(); err != nil {
+			t.Fatalf("empty synthesis_model_id with enabled=false MUST load, got: %v", err)
+		}
+	})
+}
+
+// TestOpenKnowledgeConfig_SwitchableModelsRequiredWhenEnabled_Spec088 —
+// the spec-088 switchable_models allowlist is REQUIRED non-empty when
+// enabled (G028 fail-loud). Empty list + enabled MUST be rejected; an
+// empty entry MUST be rejected; the env var missing MUST be rejected; and
+// it may be empty when disabled (operator can disable without filling it).
+func TestOpenKnowledgeConfig_SwitchableModelsRequiredWhenEnabled_Spec088(t *testing.T) {
+	t.Run("empty_when_enabled_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS"] = "[]"
+		applyOpenKnowledgeEnv(t, env)
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("empty switchable_models with enabled=true MUST be rejected (FR-3 / SCN-088-A07)")
+		}
+		if !strings.Contains(err.Error(), "switchable_models") {
+			t.Fatalf("error should name switchable_models, got: %v", err)
+		}
+	})
+	t.Run("missing_env_var_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		applyOpenKnowledgeEnv(t, env)
+		if err := os.Unsetenv("ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS"); err != nil {
+			t.Fatalf("unset failed: %v", err)
+		}
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("missing ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS MUST be rejected (fail-loud)")
+		}
+		if !strings.Contains(err.Error(), "ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS") {
+			t.Fatalf("error should name the missing env var, got: %v", err)
+		}
+	})
+	t.Run("empty_entry_when_enabled_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS"] = `["deepseek-r1:7b",""]`
+		applyOpenKnowledgeEnv(t, env)
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("switchable_models with an empty entry MUST be rejected")
+		}
+		if !strings.Contains(err.Error(), "switchable_models") {
+			t.Fatalf("error should name switchable_models, got: %v", err)
+		}
+	})
+	t.Run("empty_when_disabled_ok", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_ENABLED"] = "false"
+		env["ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS"] = "[]"
+		applyOpenKnowledgeEnv(t, env)
+		if _, err := LoadOpenKnowledge(); err != nil {
+			t.Fatalf("empty switchable_models with enabled=false MUST load, got: %v", err)
+		}
+	})
+}
+
+// TestOpenKnowledgeConfig_SynthesisRetryBudgetValidated_Spec087 — the
+// spec-087 synthesis_retry_budget is REQUIRED >= 0 when enabled; a
+// negative value is rejected and 0 is accepted (explicit no-retry).
+func TestOpenKnowledgeConfig_SynthesisRetryBudgetValidated_Spec087(t *testing.T) {
+	t.Run("negative_when_enabled_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_RETRY_BUDGET"] = "-1"
+		applyOpenKnowledgeEnv(t, env)
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("negative synthesis_retry_budget with enabled=true MUST be rejected")
+		}
+		if !strings.Contains(err.Error(), "synthesis_retry_budget") {
+			t.Fatalf("error should name synthesis_retry_budget, got: %v", err)
+		}
+	})
+	t.Run("zero_accepted", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_RETRY_BUDGET"] = "0"
+		applyOpenKnowledgeEnv(t, env)
+		cfg, err := LoadOpenKnowledge()
+		if err != nil {
+			t.Fatalf("synthesis_retry_budget=0 MUST load (explicit no-retry), got: %v", err)
+		}
+		if cfg.SynthesisRetryBudget != 0 {
+			t.Fatalf("expected SynthesisRetryBudget=0, got %d", cfg.SynthesisRetryBudget)
+		}
+	})
 }
 
 func TestOpenKnowledgeConfig_InvalidJSONToolAllowlist(t *testing.T) {
