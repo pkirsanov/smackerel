@@ -37,9 +37,19 @@ func (r *fakeRepo) VerifyAndTouch(_ context.Context, username, password string) 
 	return nil
 }
 
-func (r *fakeRepo) UpsertPassword(_ context.Context, username, password string, _ bool) error {
+func (r *fakeRepo) UpsertPassword(_ context.Context, username, password string, create bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.creds == nil {
+		r.creds = map[string]string{}
+	}
+	// Honor the real Repo contract: create=true on an existing username MUST
+	// return ErrUserExists and MUST NOT overwrite the stored hash (spec 091
+	// AC-3 / UC-4). Login tests seed `creds` directly and never call this, so
+	// honoring `create` here is faithful and side-effect-free for them.
+	if _, exists := r.creds[username]; exists && create {
+		return webcreds.ErrUserExists
+	}
 	r.creds[username] = password
 	return nil
 }

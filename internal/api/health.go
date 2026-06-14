@@ -172,6 +172,12 @@ type Dependencies struct {
 	// password fields.
 	WebCredentials webcreds.Repo
 
+	// Spec 091 — web self-registration invite-token gate
+	// (WEB_REGISTRATION_INVITE_TOKEN). OPTIONAL: empty ⇒ POST
+	// /v1/web/register is disabled (fail-loud at POST, never open signup).
+	// Compared in constant time by HandleWebRegister; never logged.
+	WebRegistrationInviteToken string
+
 	// Spec 037 Scope 8 — admin web routes for the operator UI
 	// (optional — nil when the agent runtime is not enabled).
 	AgentAdminHandler AgentAdminUI

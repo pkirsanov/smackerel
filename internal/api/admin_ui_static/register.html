@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create account — Smackerel</title>
+<link rel="stylesheet" href="/admin_ui_static/login.css">
+</head>
+<body>
+<main>
+  <h1>Create account</h1>
+  {{if .Error}}<p class="banner banner-error" role="alert">{{.Error}}</p>{{end}}
+  <form method="POST" action="/v1/web/register" enctype="application/x-www-form-urlencoded">
+    <input type="hidden" name="next" value="{{.Next}}">
+    <label>
+      Username
+      <input id="register-username" type="text" name="username" autocomplete="username" value="{{.Username}}" required>
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" autocomplete="new-password" required>
+    </label>
+    <label>
+      Confirm password
+      <input type="password" name="confirm-password" autocomplete="new-password" required>
+    </label>
+    <label>
+      Invite token
+      <input type="password" name="invite-token" autocomplete="off" required>
+    </label>
+    <button type="submit">Create account</button>
+  </form>
+  <p class="auth-crosslink">Already have an account? <a href="/login">Sign in</a></p>
+</main>
+<script src="/admin_ui_static/register.js"></script>
+</body>
+</html>

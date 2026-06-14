@@ -108,6 +108,7 @@ func TestSecretKeysMirror(t *testing.T) {
 		"TELEGRAM_BOT_TOKEN",
 		"KEEP_GOOGLE_APP_PASSWORD",
 		"CARD_REWARDS_GCAL_CREDENTIALS",
+		"WEB_REGISTRATION_INVITE_TOKEN",
 	}
 	got := SecretKeys()
 	if !reflect.DeepEqual(got, want) {
@@ -352,4 +353,68 @@ func bytesContainsString(haystack []byte, needle string) bool {
 		}
 	}
 	return false
+}
+
+// TestWebRegistrationInviteToken_PlaceholderGuardClosesOpenSignupTrap
+// (spec 091 SCOPE-01) — the un-substituted-bundle-placeholder leak guard.
+//
+// home-lab placeholder-emits WEB_REGISTRATION_INVITE_TOKEN and the knb deploy
+// adapter substitutes the real value at apply time. If the adapter ever FAILED
+// to substitute (a deploy bug), the Go process would receive the literal
+// "__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__" — a publicly-known
+// constant — as the configured invite token. Without a guard that constant
+// would act as a VALID invite token and enable open admin signup (exactly the
+// spec Failure Condition). cmd/core/wiring.go closes this by mapping any
+// IsPlaceholder-valued invite token to "" (= registration disabled). This test
+// pins both halves of that guard predicate for the new key.
+func TestWebRegistrationInviteToken_PlaceholderGuardClosesOpenSignupTrap(t *testing.T) {
+	const key = "WEB_REGISTRATION_INVITE_TOKEN"
+
+	// The new key must be a declared secret so IsPlaceholder recognizes its
+	// bundle placeholder (IsPlaceholder is strict — only declared keys match).
+	declared := false
+	for _, k := range SecretKeys() {
+		if k == key {
+			declared = true
+			break
+		}
+	}
+	if !declared {
+		t.Fatalf("%s is not in SecretKeys() — IsPlaceholder cannot recognize its placeholder, "+
+			"so the wiring leak guard would silently fail open", key)
+	}
+
+	ph := Placeholder(key)
+	if ph != "__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__" {
+		t.Fatalf("Placeholder(%q) = %q, want the canonical bundle marker", key, ph)
+	}
+	// The literal bundle placeholder MUST be recognized so the wiring guard
+	// maps it to "" (= registration disabled). If it were NOT recognized, a
+	// missed knb substitution would surface this constant as a usable invite
+	// token = open admin signup.
+	if !IsPlaceholder(ph) {
+		t.Fatalf("IsPlaceholder(%q) = false; the un-substituted bundle placeholder would leak "+
+			"as a usable invite token (open-signup trap)", ph)
+	}
+
+	// Replicate the exact cmd/core/wiring.go boundary guard and assert its
+	// end-to-end mapping (placeholder -> disabled; real value -> unchanged).
+	guard := func(tok string) string {
+		if IsPlaceholder(tok) {
+			return ""
+		}
+		return tok
+	}
+	if got := guard(ph); got != "" {
+		t.Errorf("placeholder guard mapped %q -> %q, want \"\" (registration disabled)", ph, got)
+	}
+	const real = "real-operator-invite-7f3a9c"
+	if got := guard(real); got != real {
+		t.Errorf("placeholder guard altered a real invite value %q -> %q (a configured token must pass through unchanged)", real, got)
+	}
+	// Adversarial: the empty string is NOT a placeholder — an unset secret
+	// must remain "" (= disabled), never accidentally treated as a placeholder.
+	if IsPlaceholder("") {
+		t.Errorf("IsPlaceholder(\"\") = true; an unset invite token must stay \"\" (disabled)")
+	}
 }

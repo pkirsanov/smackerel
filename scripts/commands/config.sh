@@ -387,6 +387,7 @@ SHELL_SECRET_KEYS=(
   TELEGRAM_BOT_TOKEN
   KEEP_GOOGLE_APP_PASSWORD
   CARD_REWARDS_GCAL_CREDENTIALS
+  WEB_REGISTRATION_INVITE_TOKEN
 )
 
 # Spec 052 FR-052-002 — production-class target mirror.
@@ -1322,6 +1323,16 @@ else
   AUTH_BOOTSTRAP_TOKEN="$(yaml_get auth.bootstrap_token 2>/dev/null)" || AUTH_BOOTSTRAP_TOKEN=""
 fi
 
+# Spec 091 — web self-registration invite token placeholder substitution
+# (mirror AUTH_BOOTSTRAP_TOKEN). OPTIONAL secret: production-class targets
+# emit the placeholder for the knb adapter to substitute; dev/test read the
+# empty yaml value. No ${VAR:-default} fallback (smackerel-no-defaults).
+if is_production_class_target "$TARGET_ENV" && in_secret_keys "WEB_REGISTRATION_INVITE_TOKEN"; then
+  WEB_REGISTRATION_INVITE_TOKEN="__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__"
+else
+  WEB_REGISTRATION_INVITE_TOKEN="$(yaml_get auth.web_registration_invite_token 2>/dev/null)" || WEB_REGISTRATION_INVITE_TOKEN=""
+fi
+
 # Agent (spec 037 — LLM Scenario Agent & Tool Registry). SST zero-defaults:
 # every value is REQUIRED. Missing keys → config generate exits non-zero.
 AGENT_SCENARIO_DIR="$(required_value agent.scenario_dir)"
@@ -2094,6 +2105,7 @@ AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=${AUTH_PRODUCTION_SHARED_TOKEN_FAL
 AUTH_TELEMETRY_ENABLED=${AUTH_TELEMETRY_ENABLED}
 AUTH_TELEMETRY_METRIC_PREFIX=${AUTH_TELEMETRY_METRIC_PREFIX}
 AUTH_BOOTSTRAP_TOKEN=${AUTH_BOOTSTRAP_TOKEN}
+WEB_REGISTRATION_INVITE_TOKEN=${WEB_REGISTRATION_INVITE_TOKEN}
 EXPENSES_ENABLED=${EXPENSES_ENABLED}
 EXPENSES_DEFAULT_CURRENCY=${EXPENSES_DEFAULT_CURRENCY}
 EXPENSES_EXPORT_MAX_ROWS=${EXPENSES_EXPORT_MAX_ROWS}

@@ -832,6 +832,13 @@ auth:
   # default so local workflows do not require a bootstrap token.
   bootstrap_token: ""
 
+  # Spec 091 — web self-registration invite token (OPTIONAL). Empty ⇒
+  # registration disabled at POST (fail-loud, never open signup); a
+  # non-empty value enables POST /v1/web/register. Dev/test default empty
+  # so local workflows do not enable self-registration. Read by core's
+  # HandleWebRegister; compared in constant time; never logged.
+  web_registration_invite_token: ""
+
 # Spec 061 SCOPE-06c (Round 71d) — Hardware-tier × model-role matrix.
 # Switch key: SMACKEREL_HARDWARE_TIER={cpu,accel}. REQUIRED at
 # `./smackerel.sh config generate` time, fail-loud per smackerel-no-defaults
@@ -1716,6 +1723,12 @@ infrastructure:
   # is true; never logged. Real value shipped via the knb deploy adapter at
   # knb/smackerel/secrets/<target>.enc.env.
   - CARD_REWARDS_GCAL_CREDENTIALS
+  # Spec 091 — web self-registration invite token. OPTIONAL: empty ⇒
+  # registration disabled at POST (fail-loud, never open signup). Read by
+  # core's HandleWebRegister (POST /v1/web/register) only; compared in
+  # constant time; never logged. Real value shipped via the knb deploy
+  # adapter at knb/smackerel/secrets/<target>.enc.env.
+  - WEB_REGISTRATION_INVITE_TOKEN
   # When TARGET_ENV ∈ this list, the SST loader emits placeholders for
   # every key in secret_keys above. dev/test environments are NEVER in
   # this list (they keep inline values for local-dev convenience per
