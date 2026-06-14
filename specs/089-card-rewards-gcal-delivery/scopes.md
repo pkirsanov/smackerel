@@ -55,7 +55,7 @@ client + bridge into the card-rewards scheduler when `calendar_sync` is enabled.
 
 ## Scope 2: SCOPE-02 — Live home-lab delivery proof
 
-**Status:** Blocked
+**Status:** Done
 **Depends On:** SCOPE-01
 
 Build the new signed image (CI), deliver the gcal credential via sops to knb,
@@ -82,7 +82,7 @@ lands on the operator's Google Calendar.
 | 2 | live-calendar | e2e | Google Calendar | a recommend/sync run writes the event; re-run updates (no dup) | calendar events list by UID |
 
 ### Definition of Done
-- [ ] New signed image digest built by CI → Evidence: [report.md#build]
-- [ ] gcal secret delivered via sops; calendar_id + calendar_sync=true emitted; core healthy with delivery wired → Evidence: [report.md#deploy]
-- [ ] A real card-rewards event exists on the target calendar with the stable UID; re-run produces no duplicate → Evidence: [report.md#live-calendar]
-- [ ] Build Quality Gate: apply verify green, no secret logged → Evidence: [report.md#quality]
+- [x] New signed image digest built by CI → Evidence: [report.md#build]
+- [x] gcal secret delivered via sops; calendar_id + calendar_sync=true emitted; core healthy with delivery wired → Evidence: [report.md#deploy]
+- [x] A real card-rewards event exists on the target calendar with the stable UID; re-run produces no duplicate → Evidence: [report.md#live-calendar]
+- [x] Build Quality Gate: apply verify green, no secret logged → Evidence: [report.md#quality]
