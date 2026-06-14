@@ -37,6 +37,11 @@ var secretKeys = []string{
 	// The application-layer sidecar boundary is asserted by
 	// internal/config/secret_keys_test.go::TestKeepAppPasswordReadOnlyFromSidecarNotCore.
 	"KEEP_GOOGLE_APP_PASSWORD",
+	// Spec 089 — card-rewards Google Calendar OAuth credential (JSON:
+	// client_id, client_secret, refresh_token, token_uri). Read by core's
+	// card-rewards calendar write client (internal/cardrewards.GoogleCalendarClient)
+	// only when card_rewards.calendar_sync is true; never logged.
+	"CARD_REWARDS_GCAL_CREDENTIALS",
 }
 
 // placeholderPrefix and placeholderSuffix bracket the deterministic,

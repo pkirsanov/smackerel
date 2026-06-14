@@ -61,6 +61,15 @@ type CardRewardsConfig struct {
 	CalendarSync bool
 	// CalendarUIDPrefix is the stable CalDAV UID prefix. REQUIRED when CalendarSync.
 	CalendarUIDPrefix string
+	// CalendarID is the target Google Calendar id (e.g. a
+	// "...@group.calendar.google.com" secondary calendar). REQUIRED when
+	// CalendarSync. Non-secret operator config (CARD_REWARDS_CALENDAR_ID).
+	CalendarID string
+	// GCalCredentials is the raw CARD_REWARDS_GCAL_CREDENTIALS secret JSON
+	// (client_id, client_secret, refresh_token, token_uri). REQUIRED when
+	// CalendarSync. Parsed + validated by cardrewards.ParseGCalCredential at
+	// wiring time; never logged.
+	GCalCredentials string
 	// FetchTimeoutSeconds bounds per-source fetches. REQUIRED when enabled; MUST be > 0.
 	FetchTimeoutSeconds int
 	// Extraction holds the LLM-extraction tunables. REQUIRED when enabled.
@@ -138,9 +147,17 @@ func LoadCardRewardsConfig() (CardRewardsConfig, error) {
 	cfg.CalendarSync = os.Getenv("CARD_REWARDS_CALENDAR_SYNC") == "true"
 	if cfg.CalendarSync {
 		readString("CARD_REWARDS_CALENDAR_UID_PREFIX", &cfg.CalendarUIDPrefix)
+		// Calendar delivery (spec 089) requires a target calendar id (non-secret)
+		// and the Google OAuth credential secret. Both are fail-loud when
+		// calendar_sync is on; the credential VALUE is validated at wiring time
+		// (ParseGCalCredential) and never logged here.
+		readString("CARD_REWARDS_CALENDAR_ID", &cfg.CalendarID)
+		readString("CARD_REWARDS_GCAL_CREDENTIALS", &cfg.GCalCredentials)
 	} else {
 		// Optional when sync is off; carry whatever was provided.
 		cfg.CalendarUIDPrefix = os.Getenv("CARD_REWARDS_CALENDAR_UID_PREFIX")
+		cfg.CalendarID = os.Getenv("CARD_REWARDS_CALENDAR_ID")
+		cfg.GCalCredentials = os.Getenv("CARD_REWARDS_GCAL_CREDENTIALS")
 	}
 
 	// Extraction sub-config.
