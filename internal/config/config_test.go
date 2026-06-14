@@ -44,14 +44,14 @@ func setValidProductionAuthEnv(t *testing.T) {
 // is copied verbatim into cfg.Auth.WebRegistrationInviteToken.
 func TestLoadAuthConfig_WebRegistrationInviteToken_LoadsFromEnv(t *testing.T) {
 	setValidProductionAuthEnv(t)
-	t.Setenv("WEB_REGISTRATION_INVITE_TOKEN", "invite-secret-abc-123")
+	t.Setenv("WEB_REGISTRATION_INVITE_TOKEN", "sample-invite-baseline")
 
 	cfg := &Config{Environment: "production"}
 	if err := loadAuthConfig(cfg); err != nil {
 		t.Fatalf("loadAuthConfig returned error with a valid production baseline + a set invite token: %v", err)
 	}
-	if got := cfg.Auth.WebRegistrationInviteToken; got != "invite-secret-abc-123" {
-		t.Errorf("WebRegistrationInviteToken = %q, want %q (must load from WEB_REGISTRATION_INVITE_TOKEN)", got, "invite-secret-abc-123")
+	if got := cfg.Auth.WebRegistrationInviteToken; got != "sample-invite-baseline" {
+		t.Errorf("WebRegistrationInviteToken = %q, want %q (must load from WEB_REGISTRATION_INVITE_TOKEN)", got, "sample-invite-baseline")
 	}
 }
 
