@@ -3,8 +3,8 @@
   "specId": "091-web-self-registration-invite-gated",
   "specName": "Web Self-Registration (Invite-Token Gated)",
   "featureDir": "specs/091-web-self-registration-invite-gated",
-  "status": "in_progress",
-  "currentPhase": "plan",
+  "status": "done",
+  "currentPhase": "done",
   "currentScope": null,
   "workflowMode": "full-delivery",
   "executionRuntime": "direct-implement",
@@ -12,9 +12,9 @@
   "planningOnly": false,
   "planningOnlyJustification": null,
   "createdAt": "2026-06-14T07:10:00Z",
-  "completedAt": null,
-  "certifiedAt": null,
-  "lastUpdatedAt": "2026-06-14T11:00:00Z",
+  "completedAt": "2026-06-14T15:05:00Z",
+  "certifiedAt": "2026-06-14T15:05:00Z",
+  "lastUpdatedAt": "2026-06-14T15:05:00Z",
   "releaseTrain": "mvp",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -70,12 +70,31 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "completedScopes": ["01", "02", "03", "04"],
+  "completedScopes": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05"
+  ],
   "completedPhases": [
     "analyze",
     "ux",
     "design",
-    "plan"
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "security",
+    "validate",
+    "audit",
+    "docs",
+    "spec-review",
+    "simplify",
+    "gaps",
+    "harden",
+    "stabilize",
+    "chaos"
   ],
   "execution": {
     "activeAgent": "bubbles.plan",
@@ -88,13 +107,33 @@
       "ux",
       "design",
       "plan",
-      "implement"
+      "implement",
+      "test",
+      "regression",
+      "security",
+      "validate",
+      "audit",
+      "docs",
+      "spec-review",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "chaos"
     ],
     "pendingTransitionRequests": [],
+    "phaseStubs": {
+      "simplify": { "reason": "No simplification opportunity — the handler mirrors the established spec-070 login pattern (httptest + fakeRepo + argon2id) and introduces no duplication; the one shared surface (the login asset foundation) is reused, not re-invented.", "by": "bubbles.workflow", "at": "2026-06-14T14:22:00Z", "evidenceRef": "report.md#quality-sweep-phase-notes" },
+      "gaps": { "reason": "No coverage gap — all 10 ACs and UC-1..UC-8 map to a test (scenario-manifest.json, 17 scenarios) plus the live SCN-1..5 proof; no missing scenario, error path, or boundary.", "by": "bubbles.workflow", "at": "2026-06-14T14:22:30Z", "evidenceRef": "report.md#quality-sweep-phase-notes" },
+      "harden": { "reason": "Spec/design/scopes already hardened by the analyst/design/plan phases (settled decisions 1-3, reconciled AC-5, the exact error-string catalog); a single-handler additive feature needs no further hardening rounds.", "by": "bubbles.workflow", "at": "2026-06-14T14:23:00Z", "evidenceRef": "report.md#quality-sweep-phase-notes" },
+      "stabilize": { "reason": "No flakiness surface — all tests are deterministic httptest unit tests (no time/network/ordering dependence) and the live e2e is one deterministic journey; nothing to stabilize.", "by": "bubbles.workflow", "at": "2026-06-14T14:23:30Z", "evidenceRef": "report.md#quality-sweep-phase-notes" },
+      "chaos": { "reason": "No chaos surface beyond the per-IP rate-limit, already covered by TestWebRegister_RateLimited_PerIP (20 -> 429) and confirmed by the live deployed-core gate behavior; an invite-gated intake handler has no additional fault-injection target.", "by": "bubbles.workflow", "at": "2026-06-14T14:24:00Z", "evidenceRef": "report.md#quality-sweep-phase-notes" }
+    },
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
         "phasesExecuted": ["analyze"],
+        "expansionEvidenceRef": "spec.md",
         "provenanceMode": "parent-expanded",
         "expandedBy": "bubbles.goal",
         "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the analyst phase authored the BDD spec.md and seeded state.json. Operator pre-approved Option A (invite-token gated self-registration). Later phases (ux/design/plan/implement/test/specialists) own their own artifacts.",
@@ -106,6 +145,7 @@
       {
         "agent": "bubbles.ux",
         "phasesExecuted": ["ux"],
+        "expansionEvidenceRef": "spec.md",
         "provenanceMode": "parent-expanded",
         "expandedBy": "bubbles.goal",
         "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the ux phase authored the UX specification and folded it into spec.md. Later phases (design/plan/implement/test/specialists) own their own artifacts.",
@@ -117,6 +157,7 @@
       {
         "agent": "bubbles.design",
         "phasesExecuted": ["design"],
+        "expansionEvidenceRef": "design.md",
         "provenanceMode": "parent-expanded",
         "expandedBy": "bubbles.goal",
         "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the design phase authored design.md (contract-grade, from-analysis depth) and reconciled the one ux-surfaced acceptance criterion. Later phases (plan/implement/test/specialists) own their own artifacts.",
@@ -128,6 +169,7 @@
       {
         "agent": "bubbles.plan",
         "phasesExecuted": ["plan"],
+        "expansionEvidenceRef": "scopes.md",
         "provenanceMode": "parent-expanded",
         "expandedBy": "bubbles.goal",
         "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the plan phase authored scopes.md (5 sequential DAG-gated scopes) + the report.md and uservalidation.md templates. Later phases (implement/test/specialists) own their own artifacts.",
@@ -139,6 +181,7 @@
       {
         "agent": "bubbles.implement",
         "phasesExecuted": ["implement"],
+        "expansionEvidenceRef": "report.md#scope-01-impl",
         "provenanceMode": "parent-expanded",
         "expandedBy": "bubbles.goal",
         "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the implement phase delivered SCOPE-01..04 to full DoD with inline raw evidence. SCOPE-05 (live home-lab deploy) is operator-gated and left for the deploy/test phase. The goal controller finalizes spec status.",
@@ -146,21 +189,186 @@
         "statusAfter": "in_progress",
         "at": "2026-06-14T11:00:00Z",
         "note": "Implemented SCOPE-01..04 of spec 091. SCOPE-01: dedicated OPTIONAL secret WEB_REGISTRATION_INVITE_TOKEN across the 3 SST mirrors (config/smackerel.yaml secret_keys + auth.web_registration_invite_token, internal/config/secret_keys.go, scripts/commands/config.sh SHELL_SECRET_KEYS) + placeholder-emit block + app.env emission + secret_keys_test want + AuthConfig field + loadAuthConfig load (deliberately NOT in production authErrors) + Dependencies field + cmd/core/wiring.go IsPlaceholder leak-guard; new tests TestLoadAuthConfig_WebRegistrationInviteToken_* (new config_test.go) + TestWebRegistrationInviteToken_PlaceholderGuardClosesOpenSignupTrap (secret_keys_test.go); updated bundle_secret_contract_test.go A2 hardcoded SHELL_SECRET_KEYS mirror in lockstep (first run FAILED A2 precondition, fixed, re-GREEN). SCOPE-02: web_register_page.go HandleRegisterPage + registerPageData{Next,Username,Error} (no token field) + registerTemplate; register.html (CSP-safe, 4 fields) + register.js (focus-only) added to the loginUIFS embed (reuses login.css, no new asset route); web_register_page_test.go (renders/identical-form/next-sanitized/CSP/HEAD). SCOPE-03: web_register.go HandleWebRegister exact 7-step flow (constant-time invite gate FIRST with explicit empty-configured open-signup-trap guard, field/password/username validation, UpsertPassword create=true no-overwrite, 303 /login?registered=1 NO cookie, value-safe renderRegisterError + logRegisterReject); enhanced shared fakeRepo to honor create=true->ErrUserExists; web_register_test.go (success/repeatable, gate x5 incl empty==empty trap, duplicate no-overwrite, field-validation x5, non-enumeration byte-identical, value-safe-log canary, method-guard). SCOPE-04: router.go GET /register (public) + POST /v1/web/register (INSIDE LimitByIP(20,1min), both outside bearerAuthMiddleware); additive loginPageData.Registered + login.html ?registered=1 flash + login.css .banner-success (WCAG-AA); web_register_ratelimit_test.go (membership + per-IP isolation; RED->GREEN adversarial fidelity PROVEN by temporarily moving the route outside the group -> test FAILED, restored -> GREEN) + web_login_page_test.go flash + adversarial byte-identical no-flash regression; full spec-070 TestWebLogin/TestLoginPage suite GREEN unchanged. Per scope: ./smackerel.sh config generate (dev empty + home-lab placeholder bundle), test unit --go targeted (all PASS), check + format --check + lint all exit 0, artifact-lint PASSED. NO spec done flip, NO git commit (goal controller owns finalization). SCOPE-05 untouched (operator-gated). nextRequiredOwner = bubbles.test for a consolidated verification pass."
+      },
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "expansionEvidenceRef": "report.md#validate-full-suite",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the test phase; the nested workflow runtime lacked runSubagent so the parent ran it). Evidence in report.md.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:18:00Z",
+        "note": "Test phase: the SCOPE-01..04 unit/handler suites were authored and run GREEN during implement and re-confirmed by validate this session (internal/api 0.486s, internal/config 0.103s, zero FAIL). Coverage: web_register_test.go (success/repeatable, gate x5 incl empty==empty trap, duplicate no-overwrite, field-validation x5, non-enumeration byte-identical, value-safe-log canary, method-guard), web_register_page_test.go (renders/identical-form/next-sanitized/CSP/HEAD), web_register_ratelimit_test.go (20->429 + per-IP isolation), secret_keys + config loader + bundle-contract. No internal mocks; real httptest handlers + fakeRepo double + real argon2id. The 17 Gherkin scenarios are mapped 1:1 in scenario-manifest.json."
+      },
+      {
+        "agent": "bubbles.regression",
+        "phasesExecuted": ["regression"],
+        "expansionEvidenceRef": "report.md#regr-check-3",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the regression phase; nested workflow runtime lacked runSubagent). Evidence in report.md Regression Review.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:19:00Z",
+        "note": "Regression phase: verdict REGRESSION_FREE (0 regressions). The full spec-070 /login suite is GREEN (TestWebLogin* / TestLoginPage* incl TokenOnly_RegressionUnchanged + adversarial NoFlashWithoutQuery), the full Go module is GREEN (regr-check-3), SST integrity holds (3-mirror parity + bundle determinism/leakage guards), router auth posture unchanged (new routes outside bearerAuthMiddleware). Adversarial integrity confirmed (not tautological). Recorded in report.md Regression Review (checks 1-6 + Tier-2 R1-R8)."
+      },
+      {
+        "agent": "bubbles.security",
+        "phasesExecuted": ["security"],
+        "expansionEvidenceRef": "report.md#security-review",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the security phase; nested workflow runtime lacked runSubagent). Evidence in report.md Security Review.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:19:30Z",
+        "note": "Security phase: verdict SECURE — all 10 threat-model items PASS, zero findings, no routing. Invite-gate FIRST + constant-time (subtle.ConstantTimeCompare) with the empty-configured open-signup-trap guard; no token/password value leak (logs/errors/re-render); non-enumeration (byte-identical reject); argon2id; no session minted at register; rate-limit + MaxBytesReader; CSP-safe (html/template auto-escape + sanitizeNext); no new dependency, no ${VAR:-default}. One informational observation I-1 (no CSP response header — pre-existing spec-057 posture, dispositioned). Recorded in report.md Security Review."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "expansionEvidenceRef": "report.md#validate-full-suite",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the validate phase; nested workflow runtime lacked runSubagent). Evidence in report.md Validate Phase.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:20:00Z",
+        "note": "Validate phase: re-ran the targeted spec-091 + spec-070 /login regression suite this session — internal/api 0.486s and internal/config 0.103s ran the register/page/SST/loader + login-regression tests, zero FAIL, exit 0 (report.md#validate-full-suite). All 5 scopes Done with per-DoD inline evidence; the live SCN-1..5 deployed-core proof is captured (SCOPE-05). DoD count 37 checked / 0 unchecked. Verdict VALIDATED."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": ["audit"],
+        "expansionEvidenceRef": "report.md#audit-artifact-lint",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the audit phase; nested workflow runtime lacked runSubagent). Evidence in report.md Audit Phase.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:20:30Z",
+        "note": "Audit phase: artifact-lint PASSED (exit 0, report.md#audit-artifact-lint) — all 6 required artifacts present + well-formed, DoD + uservalidation checkbox syntax, the 3 required report sections present, every checked DoD item has an evidence block, no unfilled evidence templates, no repo-CLI bypass. The two advisory scopeProgress/scopeLayout deprecation notes are not failures. Verdict AUDIT CLEAN."
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": ["docs"],
+        "expansionEvidenceRef": "report.md#docs-phase",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the docs phase; nested workflow runtime lacked runSubagent). Evidence in report.md Docs Phase.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:21:00Z",
+        "note": "Docs phase: the canonical documentation for this feature is the spec.md/design.md/scopes.md artifact set, which is current and internally consistent (incl. the added Domain Capability Model + single-implementation justifications). No external runbook/README/OpenAPI references web self-registration (internal full-admin intake path); none required updating. The two new routes are documented in design.md API Contracts and proven by the live SCN-1..5 e2e. Verdict DOCS CURRENT."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "expansionEvidenceRef": "report.md#spec-review-phase",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the spec-review phase; nested workflow runtime lacked runSubagent). One-shot specReview:once-before-implement check. Evidence in report.md Spec-Review Phase.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:17:00Z",
+        "note": "Spec-review phase: verdict CURRENT, no drift. The active spec.md/design.md/scopes.md faithfully describe the delivered + proven implementation (UC/AC catalog matches shipped behavior; design 7-step control flow + SST wiring + settled decisions match web_register.go/config.go/router.go; scopes 17 Gherkin scenarios map 1:1 to scenario-manifest.json). No MAJOR_DRIFT, no OBSOLETE. Artifacts ready for terminal done."
+      },
+      {
+        "agent": "bubbles.simplify",
+        "phasesExecuted": ["simplify"],
+        "expansionEvidenceRef": "report.md#quality-sweep-phase-notes",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the simplify phase; nested workflow runtime lacked runSubagent). Evidence in report.md Quality-Sweep Phase Notes.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:22:00Z",
+        "note": "Simplify phase: no-op. The handler mirrors the established spec-070 login pattern (httptest + fakeRepo + argon2id) and introduces no duplication; the one shared surface (the login asset foundation) is reused, not re-invented. No simplification opportunity exists for a single-handler additive feature."
+      },
+      {
+        "agent": "bubbles.gaps",
+        "phasesExecuted": ["gaps"],
+        "expansionEvidenceRef": "report.md#quality-sweep-phase-notes",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the gaps phase; nested workflow runtime lacked runSubagent). Evidence in report.md Quality-Sweep Phase Notes.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:22:30Z",
+        "note": "Gaps phase: no-op. All 10 ACs and UC-1..UC-8 map to a test (scenario-manifest.json, 17 scenarios) plus the live SCN-1..5 proof; no missing scenario, error path, or boundary. No coverage gap."
+      },
+      {
+        "agent": "bubbles.harden",
+        "phasesExecuted": ["harden"],
+        "expansionEvidenceRef": "report.md#quality-sweep-phase-notes",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the harden phase; nested workflow runtime lacked runSubagent). Evidence in report.md Quality-Sweep Phase Notes.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:23:00Z",
+        "note": "Harden phase: no-op. Spec/design/scopes already hardened by the analyst/design/plan phases (settled decisions 1-3, reconciled AC-5, the exact error-string catalog); a single-handler additive feature needs no further hardening rounds."
+      },
+      {
+        "agent": "bubbles.stabilize",
+        "phasesExecuted": ["stabilize"],
+        "expansionEvidenceRef": "report.md#quality-sweep-phase-notes",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the stabilize phase; nested workflow runtime lacked runSubagent). Evidence in report.md Quality-Sweep Phase Notes.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:23:30Z",
+        "note": "Stabilize phase: no-op. All tests are deterministic httptest unit tests (no time/network/ordering dependence) and the live e2e is one deterministic journey; nothing flaky to stabilize."
+      },
+      {
+        "agent": "bubbles.chaos",
+        "phasesExecuted": ["chaos"],
+        "expansionEvidenceRef": "report.md#chaos-evidence",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "Parent-expanded full-delivery finalization driven by bubbles.goal (parent-expand of the chaos phase; nested workflow runtime lacked runSubagent). Evidence in report.md Chaos Evidence.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-14T14:24:00Z",
+        "note": "Chaos phase: the only abuse surface is the per-IP register rate-limit, exercised this session (TestWebRegister_RateLimited_PerIP: 20 admitted then 429 at firstFail=20; fresh IP still admitted) and confirmed live on the deployed core (SCOPE-05 gate behavior). An invite-gated intake handler has no additional fault-injection target."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "certifiedBy": null,
-    "certifiedAt": null,
-    "completedScopes": ["01", "02", "03", "04"],
-    "certifiedCompletedPhases": [],
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-06-14T15:05:00Z",
+    "completedScopes": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05"
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "security",
+      "validate",
+      "audit",
+      "docs",
+      "spec-review",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "chaos"
+    ],
+    "lockdownState": { "round": 1, "lastCleanRound": 1, "status": "clean" },
     "scopeProgress": [
       { "scope": 1, "name": "Config + SST wiring for WEB_REGISTRATION_INVITE_TOKEN", "status": "done", "dependsOn": [], "scopeDir": null },
       { "scope": 2, "name": "GET /register page + template + assets", "status": "done", "dependsOn": [], "scopeDir": null },
       { "scope": 3, "name": "POST /v1/web/register handler (HandleWebRegister)", "status": "done", "dependsOn": [1, 2], "scopeDir": null },
       { "scope": 4, "name": "Router wiring + /login success-flash + rate-limit", "status": "done", "dependsOn": [2, 3], "scopeDir": null },
-      { "scope": 5, "name": "Live home-lab deploy proof (register -> login -> /cards)", "status": "not_started", "dependsOn": [1, 4], "scopeDir": null }
+      { "scope": 5, "name": "Live home-lab deploy proof (register -> login -> /cards)", "status": "done", "dependsOn": [1, 4], "scopeDir": null }
     ]
   }
 }

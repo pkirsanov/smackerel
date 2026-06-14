@@ -57,6 +57,36 @@ the operator can create several accounts over time with the same token.
   a single SST-managed secret; rotation is an operator config action, not an
   in-app surface.
 
+## Domain Capability Model
+
+Spec 091 introduces exactly **one** product capability — *invite-gated web
+self-registration* — exposed through exactly one new server-rendered screen
+(`GET /register`) and one new intake handler (`POST /v1/web/register`). It is a
+single-capability, single-implementation feature, not a multi-provider /
+adapter / strategy family.
+
+### Single-Capability Justification
+
+The capability-foundation proportionality trigger fires on incidental
+vocabulary (the words *channel*, *strategy*, and *variant* appear in prose
+describing the SST secret, the validation order, and the form state-variants),
+NOT on real implementation pluralism. There is:
+
+- **one** registration capability (no second "kind" of registration),
+- **one** concrete intake path (constant-time invite gate → argon2id create →
+  redirect-to-`/login`), with **zero** provider/adapter/strategy abstraction,
+- **one** managed secret (`WEB_REGISTRATION_INVITE_TOKEN`) as the rollout
+  control (no per-tenant / per-channel token family).
+
+Introducing a provider/adapter seam for a single intake path would be
+speculative generality (YAGNI). The only genuinely *shared* surface — the
+login asset/serving foundation — is **reused** from spec 057 as a second
+consumer (see design.md → Capability Foundation), not re-invented here. The new
+`/register` screen reuses the shared UI primitives defined once under
+`## UI Wireframes → ### UI Primitives`; the POST-failure re-render is the same
+`/register` screen in an error state (not a separate screen), and `/login` is a
+pre-existing spec-057/070 screen reused with an additive success flash.
+
 ## Outcome Contract
 
 **Intent:** An operator can self-create a username/password web account from
@@ -505,10 +535,11 @@ enabled-vs-disabled indistinguishable end-to-end.
 | `GET /login` (page) — **success-flash addition** for `?registered=1` | Operator | **Modify (additive)** | UC-1 (landing), UC-6; AC-8, AC-9 |
 | `register.js` / `register.css`(or reuse `login.css`) static assets | — | **New / reuse** | AC-1 (CSP `script-src 'self'`) |
 
-### UI Primitives (shared with `/login` — UX9)
+### UI Primitives
 
-`/register` and `/login` share UI behavior across ≥2 screens, so these primitives
-are defined once and reused (not re-invented per screen):
+_Shared with `/login` — UX9._ `/register` and `/login` share UI behavior across
+≥2 screens, so these primitives are defined once and reused (not re-invented per
+screen):
 
 | Primitive | Definition | Consumed by | Composition / a11y rule |
 |-----------|------------|-------------|-------------------------|

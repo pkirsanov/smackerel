@@ -1,0 +1,212 @@
+{
+  "specId": "091-web-self-registration-invite-gated",
+  "generatedBy": "bubbles.workflow (full-delivery finalization, parent-expanded by bubbles.goal)",
+  "generatedAt": "2026-06-14T14:30:00Z",
+  "schema": "scenario-manifest/v1",
+  "note": "One entry per Gherkin scenario across scopes.md (17 total). changeType=new (purely additive feature — no changed/replaced/removed contracts), so no lockdown-approvals/invalidation ledger is required (Gate G058/G059). requiredTestType: unit for SCOPE-01..04 (httptest-driven real handlers + fakeRepo double + real argon2id); e2e-ui (live-stack, no interception) for SCOPE-05.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-091-01",
+      "scope": "01",
+      "title": "SST manifest carries the new optional secret and config generation succeeds",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/config/secret_keys_test.go::TestSecretKeysMirror",
+        "internal/config/secret_keys_test.go::TestSecretKeys_MirrorsYAMLManifest",
+        "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInHomeLab"
+      ],
+      "evidenceRefs": ["report.md#scope-01-secret-mirror", "report.md#scope-01-bundle-contract", "report.md#scope-01-config-generate"]
+    },
+    {
+      "scenarioId": "SCN-091-02",
+      "scope": "01",
+      "title": "The token loads from the environment as OPTIONAL (empty default, boot never fails)",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/config/config_test.go::TestLoadAuthConfig_WebRegistrationInviteToken_LoadsFromEnv",
+        "internal/config/config_test.go::TestLoadAuthConfig_WebRegistrationInviteToken_ProductionEmptyBootSucceeds"
+      ],
+      "evidenceRefs": ["report.md#scope-01-loadauthconfig"]
+    },
+    {
+      "scenarioId": "SCN-091-03",
+      "scope": "01",
+      "title": "An un-substituted bundle marker is mapped to empty (disabled), never open signup",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/config/secret_keys_test.go::TestWebRegistrationInviteToken_PlaceholderGuardClosesOpenSignupTrap",
+        "internal/config/secret_keys_test.go::TestIsPlaceholder_TrueFalseMatrix"
+      ],
+      "evidenceRefs": ["report.md#scope-01-placeholder-guard"]
+    },
+    {
+      "scenarioId": "SCN-091-04",
+      "scope": "02",
+      "title": "GET /register renders the canonical CSP-safe form",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_page_test.go::TestRegisterPage_RendersForm"],
+      "evidenceRefs": ["report.md#scope-02-renders"]
+    },
+    {
+      "scenarioId": "SCN-091-05",
+      "scope": "02",
+      "title": "GET /register renders the identical form regardless of gate configuration",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_page_test.go::TestRegisterPage_IdenticalForm"],
+      "evidenceRefs": ["report.md#scope-02-identical"]
+    },
+    {
+      "scenarioId": "SCN-091-06",
+      "scope": "02",
+      "title": "A hostile ?next is sanitized into the hidden field",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_page_test.go::TestRegisterPage_NextSanitized"],
+      "evidenceRefs": ["report.md#scope-02-next"]
+    },
+    {
+      "scenarioId": "SCN-091-07",
+      "scope": "03",
+      "title": "UC-1 Valid invite + new username + matching passwords creates an account (no cookie)",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_test.go::TestWebRegister_Success"],
+      "evidenceRefs": ["report.md#scope-03-success"]
+    },
+    {
+      "scenarioId": "SCN-091-08",
+      "scope": "03",
+      "title": "UC-2/UC-3 Wrong, missing, empty-configured token, or nil store are rejected identically with no row",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_test.go::TestWebRegister_Gate"],
+      "evidenceRefs": ["report.md#scope-03-gate"]
+    },
+    {
+      "scenarioId": "SCN-091-09",
+      "scope": "03",
+      "title": "UC-4 Duplicate username is rejected without overwriting the existing hash",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_test.go::TestWebRegister_Duplicate"],
+      "evidenceRefs": ["report.md#scope-03-duplicate"]
+    },
+    {
+      "scenarioId": "SCN-091-10",
+      "scope": "03",
+      "title": "UC-5 Field-level validation (token valid) returns the exact catalog string with no row",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_test.go::TestWebRegister_FieldValidation"],
+      "evidenceRefs": ["report.md#scope-03-fields"]
+    },
+    {
+      "scenarioId": "SCN-091-11",
+      "scope": "03",
+      "title": "AC-10 Non-enumeration / value-safe",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/api/web_register_test.go::TestWebRegister_NonEnumeration",
+        "internal/api/web_register_test.go::TestWebRegister_ValueSafeLog"
+      ],
+      "evidenceRefs": ["report.md#scope-03-nonenum", "report.md#scope-03-log"]
+    },
+    {
+      "scenarioId": "SCN-091-12",
+      "scope": "04",
+      "title": "UC-8 Both routes are wired correctly and the register POST is rate-limited per IP",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_register_ratelimit_test.go::TestWebRegister_RateLimited_PerIP"],
+      "evidenceRefs": ["report.md#scope-04-ratelimit"]
+    },
+    {
+      "scenarioId": "SCN-091-13",
+      "scope": "04",
+      "title": "UC-1 landing — the /login page renders the success flash on ?registered=1",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["internal/api/web_login_page_test.go::TestLoginPage_RegisteredFlash"],
+      "evidenceRefs": ["report.md#scope-04-flash"]
+    },
+    {
+      "scenarioId": "SCN-091-14",
+      "scope": "04",
+      "title": "UC-7 REGRESSION — the existing /login paths are byte-identical without ?registered=1",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/api/web_login_page_test.go::TestLoginPage_NoFlashWithoutQuery",
+        "internal/api/web_login_credential_test.go::TestWebLogin_TokenOnly_RegressionUnchanged"
+      ],
+      "evidenceRefs": ["report.md#scope-04-noflash", "report.md#scope-04-login-regression"]
+    },
+    {
+      "scenarioId": "SCN-091-15",
+      "scope": "05",
+      "title": "The deployed /register page renders on the live core",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["live-stack curl GET /register on the deployed home-lab core (no interception)"],
+      "evidenceRefs": ["report.md#scope-05-e2e-page"]
+    },
+    {
+      "scenarioId": "SCN-091-16",
+      "scope": "05",
+      "title": "UC-1 + UC-6 Register with the real token, then log in and reach /cards",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["live-stack register -> /login?registered=1 -> login -> GET /cards on the deployed home-lab core (no interception)"],
+      "evidenceRefs": ["report.md#scope-05-e2e-happy"]
+    },
+    {
+      "scenarioId": "SCN-091-17",
+      "scope": "05",
+      "title": "UC-2 A wrong token is rejected on the live core with no row",
+      "requiredTestType": "e2e-ui",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": ["live-stack wrong-token POST /v1/web/register on the deployed home-lab core (no interception)"],
+      "evidenceRefs": ["report.md#scope-05-e2e-wrong"]
+    }
+  ]
+}
