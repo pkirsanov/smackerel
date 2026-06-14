@@ -22,6 +22,7 @@ import (
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/auth/webcreds"
+	"github.com/smackerel/smackerel/internal/auth/webinvite"
 	"github.com/smackerel/smackerel/internal/cardrewards"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
@@ -911,6 +912,19 @@ func wireCardRewardsHandler(svc *coreServices, deps *api.Dependencies) {
 	store := cardrewards.NewStore(svc.pg.Pool)
 	service := cardrewards.NewService(store)
 	webHandler := web.NewCardRewardsWebHandler(service)
+	// Spec 093 — construct the single DB-backed invite repo once and fan it out
+	// to both consumers: the public /register DB-invite gate (deps.WebInvites,
+	// SCOPE-02) and the operator admin invites UI (webHandler.SetInvites,
+	// SCOPE-03). The pool is non-nil here (guarded at the top of this function),
+	// so NewPostgresRepo never trips its nil-guard; mirror the existing fail-soft
+	// pattern (log + return) on the impossible error rather than panicking.
+	inviteRepo, err := webinvite.NewPostgresRepo(svc.pg.Pool)
+	if err != nil {
+		slog.Error("card-rewards: invite repo construction failed", "error", err)
+		return
+	}
+	deps.WebInvites = inviteRepo
+	webHandler.SetInvites(inviteRepo)
 	deps.CardRewardsHandler = api.NewCardRewardsHandler(service)
 	deps.CardRewardsWebHandler = webHandler
 	// Spec 083 Scope 11 — stash the concrete handler so the admin manual-

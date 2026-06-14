@@ -241,6 +241,11 @@ const cardRewardsInsightsTemplates = `
 <p class="meta" data-triggers="disabled">Manual triggers are not configured on this instance.</p>
 {{end}}
 
+<h2 class="card-title">Account access</h2>
+<div class="btn-row">
+  <a class="btn btn-secondary" href="/cards/admin/invites" data-action="account-invites">Account Invites &rarr;</a>
+</div>
+
 <h2 class="card-title">Run history</h2>
 {{if .Runs}}
 <div class="table-wrap">
