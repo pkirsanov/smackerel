@@ -307,3 +307,23 @@ verdict?) is model+GPU-dependent and is a SEPARATE `bubbles.devops` dispatch
 bundle that sets the per-environment `synthesis_model_id` + apply + operator
 re-verify). No commit/push performed here per the owner directive; no live-stack
 result fabricated. `nextRequiredOwner: bubbles.devops`.
+
+## DevOps Execution Outcome + Operator Runbook (2026-06-14)
+
+`bubbles.devops` ran the commit/push/deploy/A-B dispatch. **Claim Source: executed**
+for STEP 1–3 (git + CI observed); **blocked-on-operator** for STEP 4–5 (no live
+result fabricated). 087 ships co-mingled with 088 in one commit — see
+`specs/088-runtime-switchable-models/report.md` → "DevOps Execution Outcome +
+Operator Runbook (2026-06-14)" for the full shared runbook (deploy + the
+gemma4:26b-vs-deepseek-r1:7b A/B). 087-specific summary:
+
+| Step | Outcome |
+|------|---------|
+| 1 — commit | DONE — combined 087+088 commit `99c8d629` (50 files); pii-scan clean; `.kotlin` excluded. |
+| 2 — push | DONE — `origin/main 10ed4a48..99c8d629`; pre-push uniformity lint PASSED; no `--no-verify`. |
+| 3 — CI build/sign | CI lint+test+canary GREEN (087 validated). `build-images` ✓ (core+ML cosign+Rekor signed, SBOM+SLSA, ghcr digest). `build-clients` ✗ (operator Android keystore secret) → `publish-build-manifest` SKIPPED → **no `build-manifest-99c8d629.yaml`**. |
+| 4 — deploy home-lab | BLOCKED-ON-OPERATOR — no build manifest = no Build-Once Deploy-Many input; `deepseek-r1:7b` not resident on the home-lab host; live stack still pre-087/088. |
+| 5 — live A/B | BLOCKED-ON-OPERATOR — depends on STEP 4 + the model pull; no A/B captured. |
+
+**Honest terminal status:** `status` held at `blocked` (NOT `done`) — the live
+A/B + `verify` did not run. `nextRequiredOwner: operator/user-session`.
