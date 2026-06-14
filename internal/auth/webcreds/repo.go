@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -129,6 +130,39 @@ func (r *PostgresRepo) UpsertPassword(ctx context.Context, username, password st
 	}
 	if err != nil {
 		return fmt.Errorf("webcreds: upsert password: %w", err)
+	}
+	return nil
+}
+
+// HashAndInsertTx validates the username, argon2id-hashes the password, and
+// INSERTs a new web_user_credentials row on the caller-supplied tx. It maps a
+// unique-violation (SQLSTATE 23505) to ErrUserExists so the caller's
+// transaction can roll back — used by the spec-093 atomic invite
+// consume+create (internal/auth/webinvite.ConsumeAndCreate), which needs the
+// account INSERT to live on the SAME tx as the guarded invite-claim UPDATE.
+//
+// It does NOT commit or roll back: the caller owns the tx lifecycle. The
+// spec-091 static-secret path keeps using the unchanged UpsertPassword; this
+// free function is additive and is deliberately NOT part of the Repo interface
+// (zero interface churn, zero test-fake breakage).
+func HashAndInsertTx(ctx context.Context, tx pgx.Tx, username, password string) error {
+	if err := ValidateUsername(username); err != nil {
+		return err
+	}
+	hash, err := Hash(password)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx,
+		`INSERT INTO web_user_credentials (username, password_hash) VALUES ($1, $2)`,
+		username, hash,
+	)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrUserExists
+	}
+	if err != nil {
+		return fmt.Errorf("webcreds: insert in tx: %w", err)
 	}
 	return nil
 }

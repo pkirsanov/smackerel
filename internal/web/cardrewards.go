@@ -34,6 +34,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/smackerel/smackerel/internal/auth/webinvite"
 	"github.com/smackerel/smackerel/internal/cardrewards"
 )
 
@@ -60,6 +61,10 @@ type CardRewardsWebHandler struct {
 	// Triggers is the admin manual-trigger seam (Scope 11). Late-wired after
 	// the scheduler is constructed; nil until then.
 	Triggers CardRewardsTriggers
+	// Invites is the spec-093 registration-invite repo. Late-wired via
+	// SetInvites after construction (mirrors Triggers); nil ⇒ the invite
+	// sub-pages return 503.
+	Invites webinvite.Repo
 }
 
 // SetTriggers late-wires the admin manual-trigger seam after the scheduler is
@@ -135,6 +140,7 @@ func NewCardRewardsWebHandler(svc *cardrewards.Service) *CardRewardsWebHandler {
 	}
 	t := template.Must(template.New("cardrewards").Funcs(fm).Parse(cardRewardsTemplates))
 	template.Must(t.Parse(cardRewardsInsightsTemplates))
+	template.Must(t.Parse(cardRewardsInviteTemplates))
 	return &CardRewardsWebHandler{Service: svc, Templates: t}
 }
 
@@ -194,6 +200,13 @@ func (h *CardRewardsWebHandler) RegisterRoutes(r chi.Router) {
 		r.Get("/", h.AdminPage)
 		r.Post("/scrape", h.AdminScrapeNow)
 		r.Post("/sync-calendar", h.AdminSyncCalendarNow)
+		// Spec 093 — admin invites UI. Inherits webAuthMiddleware from the
+		// existing /cards/admin mount (no internal/api/router.go change).
+		r.Route("/invites", func(r chi.Router) {
+			r.Get("/", h.AdminInvitesPage)              // GET  /cards/admin/invites
+			r.Post("/", h.AdminInviteGenerate)          // POST /cards/admin/invites (200 render-once)
+			r.Post("/{id}/revoke", h.AdminInviteRevoke) // POST /cards/admin/invites/{id}/revoke (303 PRG)
+		})
 	})
 }
 

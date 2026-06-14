@@ -13,6 +13,7 @@ import (
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/auth/webcreds"
+	"github.com/smackerel/smackerel/internal/auth/webinvite"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
@@ -177,6 +178,13 @@ type Dependencies struct {
 	// /v1/web/register is disabled (fail-loud at POST, never open signup).
 	// Compared in constant time by HandleWebRegister; never logged.
 	WebRegistrationInviteToken string
+
+	// Spec 093 — DB-backed single-use registration invites. nil when no
+	// Postgres pool (config-validate mode, router unit tests): the /register
+	// DB-invite branch is then simply not taken and the static-secret path is
+	// unchanged. The admin invites UI shares this SAME repo instance via
+	// CardRewardsWebHandler.SetInvites (wired in cmd/core/wiring.go).
+	WebInvites webinvite.Repo
 
 	// Spec 037 Scope 8 — admin web routes for the operator UI
 	// (optional — nil when the agent runtime is not enabled).
