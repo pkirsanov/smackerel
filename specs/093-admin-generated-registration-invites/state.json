@@ -3,18 +3,18 @@
   "specId": "093-admin-generated-registration-invites",
   "specName": "Admin-Generated Registration Invites (DB-Backed, Single-Use)",
   "featureDir": "specs/093-admin-generated-registration-invites",
-  "status": "in_progress",
-  "currentPhase": "implement",
-  "currentScope": "SCOPE-04",
+  "status": "done",
+  "currentPhase": "done",
+  "currentScope": null,
   "workflowMode": "full-delivery",
   "executionRuntime": "direct-implement",
   "planMaturityOnly": false,
   "planningOnly": false,
   "planningOnlyJustification": null,
   "createdAt": "2026-06-14T17:30:00Z",
-  "completedAt": null,
-  "certifiedAt": null,
-  "lastUpdatedAt": "2026-06-14T23:55:00Z",
+  "completedAt": "2026-06-15T00:20:00Z",
+  "certifiedAt": "2026-06-15T00:25:00Z",
+  "lastUpdatedAt": "2026-06-15T00:25:00Z",
   "releaseTrain": "mvp",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -71,17 +71,57 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "completedScopes": ["SCOPE-01", "SCOPE-02", "SCOPE-03"],
-  "completedPhases": ["plan", "implement"],
+  "completedScopes": ["SCOPE-01", "SCOPE-02", "SCOPE-03", "SCOPE-04"],
+  "completedPhases": [
+    "analyze",
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "security",
+    "validate",
+    "audit",
+    "docs",
+    "spec-review",
+    "simplify",
+    "gaps",
+    "harden",
+    "stabilize",
+    "chaos"
+  ],
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
-    "currentScope": "SCOPE-04",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "done",
+    "currentScope": null,
     "executionModel": "parent-expanded-child-mode",
     "runStartedAt": "2026-06-14T17:30:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      "analyze",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "security",
+      "validate",
+      "audit",
+      "docs",
+      "spec-review",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "chaos"
+    ],
     "pendingTransitionRequests": [],
-    "phaseStubs": {},
+    "phaseStubs": {
+      "simplify": { "reason": "Focused single-capability feature: the OR-gate is two literal branches (staticOK then dbLive) in one handler, not a pluggable provider seam; webinvite reuses the proven webcreds Repo/PostgresRepo/nil-guard shape; the invite UI reuses the spec-092 head/cardrewards-nav/foot chrome + .cr-table/.badge/.btn vocabulary. No duplication to extract.", "by": "bubbles.workflow", "at": "2026-06-15T00:18:00Z", "evidenceRef": "report.md#quality-sweep-phase-notes" },
+      "gaps": { "reason": "No coverage gap: SCN-093-01..19 map 1:1 to the webinvite unit + integration tests, the register OR-gate tests, the invite-UI handler tests, and the 20/20 e2e-ui journey; the DB-foundation double-spend gap is covered by TestWebInvite_ConcurrentConsume.", "by": "bubbles.workflow", "at": "2026-06-15T00:18:30Z", "evidenceRef": "report.md#quality-sweep-phase-notes" },
+      "harden": { "reason": "Spec/design/scopes already hardened by the analyst/ux/design/plan phases; the two finding-closure edits (docs/Development.md migration 058 row + scopes.md path-refs) are the only post-plan artifact changes and both are mechanically verified green.", "by": "bubbles.workflow", "at": "2026-06-15T00:19:00Z", "evidenceRef": "report.md#quality-sweep-phase-notes" },
+      "stabilize": { "reason": "No flakiness surface: deterministic Go unit/render tests + a real-PostgreSQL integration lane (the concurrent-consume race uses a start channel for determinism) + spec-077-fixtured e2e with real PRG forms (no time/network/ordering nondeterminism); full suite green on a fresh run.", "by": "bubbles.workflow", "at": "2026-06-15T00:19:30Z", "evidenceRef": "report.md#quality-sweep-phase-notes" },
+      "chaos": { "reason": "The chaos surface is single-use atomicity under concurrent consume (the TOCTOU a double-spend would exploit): TestWebInvite_ConcurrentConsume proves exactly-one-wins, re-proven live as SCN-3 (reuse of a consumed invite yields http=401, zero second account). No new fault-injection target (one additive migration, one repo, two route branches).", "by": "bubbles.workflow", "at": "2026-06-15T00:20:00Z", "evidenceRef": "report.md#chaos-evidence" }
+    },
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
@@ -142,20 +182,56 @@
         "statusAfter": "in_progress",
         "at": "2026-06-14T23:55:00Z",
         "note": "Implemented SCOPE-01 (migration 058_web_registration_invites.sql hash-only table + internal/auth/webinvite package [HashToken hex-sha256, Generate inv_+base64url(32B), IsLive, ConsumeAndCreate one-tx guarded UPDATE...RETURNING + onClaimed, List metadata-only, Revoke, NewPostgresRepo nil-guard] + webcreds.HashAndInsertTx free function [23505->ErrUserExists, UpsertPassword + Repo interface unchanged]); SCOPE-02 (web_register.go OR-gate staticOK-first/dbLive-second/disabled-fail-loud + Step-7 atomic DB-invite branch via ConsumeAndCreate+HashAndInsertTx + Dependencies.WebInvites + wiring fan-out; logRegisterReject + router.go UNCHANGED); SCOPE-03 (internal/web/invites.go 3 handlers + SetInvites + sessionIdentity + view models, invites_templates.go chrome-reusing list/reveal/shared-table with token only on reveal, /invites sub-route in the existing /cards/admin webAuthMiddleware block, /cards/admin Account Invites link, CSP-clean). Evidence (all ./smackerel.sh): test unit --go (3 webinvite + 5 HashAndInsertTx + 5 OrGate/NonEnumerating + 15 AdminInvite* subtests PASS); test integration --go-run TestWebInvite (8 PASS) + TestWebRegisterIntegration (4 PASS) against live Postgres with migration 058; test e2e-ui cardrewards (20 PASS incl. the SCN-093 journey + spec-092 regression + spec-077 CSP). Honest deviations in report.md: DB-backed integration tests live in tests/integration/ (the curated go-integration allowlist excludes internal/auth & internal/api; design file paths were indicative); the anonymous-block Go test uses a faithful group-gate (internal/web imports internal/api, so an in-package api test would cycle) with the REAL webAuthMiddleware proven live by the e2e-ui SCN-093-16 step; the e2e-ui core image was a stale 8h-old project image so it was rebuilt before the passing run. lint + format --check + artifact-lint all exit 0; value-safe (invites handler ZERO slog calls; logRegisterReject logs only username_len+reason). Did NOT commit; did NOT touch SCOPE-04. Next owner: bubbles.test."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["test", "regression", "security", "validate", "audit", "docs", "spec-review", "simplify", "gaps", "harden", "stabilize", "chaos"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "report.md",
+        "expansionReason": "Parent-expanded full-delivery FINALIZATION driven by bubbles.goal: SCOPE-01..03 were already implemented + Done and the feature was BUILT, MERGED (origin/main 117ac27e), and DEPLOYED LIVE to the home-lab core via knb apply.sh --trust-model=ci-keyless (apply outcome=success, migration 058 applied, image digests matched, WEB_REGISTRATION_INVITE_TOKEN substituted). This finalization recorded SCOPE-04 (consolidated verification + live deploy proof) Done and ran the remaining full-delivery verification ceremony. Did NOT commit (the goal controller owns the spec(093): finalization commit). Did NOT modify spec.md or design.md.",
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "at": "2026-06-15T00:20:00Z",
+        "note": "SCOPE-04 Done: recorded the live home-lab deploy proof (SCN-0..8 on the deployed <deploy-host> core: migration 058 applied, generate->register->used->reuse-rejected, 091 static regression, value-safe, ephemeral users cleaned up) plus the consolidated suites. Fresh this-session evidence: full Go unit suite GREEN (./smackerel.sh test unit --go: every package ok incl. the now-closed F-093-R1 internal/docfreshness + F-093-R2 internal/scopesdriftguard meta-gates); ./smackerel.sh check + lint + format --check + artifact-lint.sh all exit 0; value-safe slog scan (invites.go + webinvite repo make ZERO slog calls). Consolidated this-session real evidence: integration TestWebInvite (8 PASS) + TestWebRegisterIntegration (4 PASS) on live ephemeral Postgres; e2e-ui cardrewards 20/20. Finding closure: F-093-R1 (docs/Development.md migration 058 row) RESOLVED by implement; F-093-R2 (scopes.md 2 broken path-refs corrected to real repo_unit_test.go + tests/integration/web_registration_invite_test.go) RESOLVED by plan. Verification phases recorded in report.md (Verification Phases - full-delivery finalization): test/regression/security/validate/audit/docs/spec-review substantive; simplify/gaps/harden/stabilize/chaos honest (chaos = the concurrent-consume single-use proof + live SCN-3). state-transition-guard expected residual: only the commit-gated Check 17 (spec(093): structured commit) owned by the goal controller."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "certifiedBy": null,
-    "certifiedAt": null,
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-06-15T00:25:00Z",
     "lockdownState": {
-      "round": 0,
-      "lastCleanRound": 0,
-      "status": "not_started"
+      "round": 1,
+      "lastCleanRound": 1,
+      "status": "clean"
     },
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": []
+    "completedScopes": [
+      "SCOPE-01",
+      "SCOPE-02",
+      "SCOPE-03",
+      "SCOPE-04"
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "security",
+      "validate",
+      "audit",
+      "docs",
+      "spec-review",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "chaos"
+    ],
+    "scopeProgress": [
+      { "scope": 1, "name": "Migration 058 + webinvite repo + webcreds.HashAndInsertTx", "status": "done", "dependsOn": [], "scopeDir": null },
+      { "scope": 2, "name": "/register OR-gate (DB-invite consume) + wiring", "status": "done", "dependsOn": [1], "scopeDir": null },
+      { "scope": 3, "name": "Admin invites UI (generate / list / revoke)", "status": "done", "dependsOn": [1], "scopeDir": null },
+      { "scope": 4, "name": "Consolidated verification + live home-lab deploy proof", "status": "done", "dependsOn": [2, 3], "scopeDir": null }
+    ]
   }
 }
