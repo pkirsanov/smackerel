@@ -43,7 +43,7 @@ Implemented runtime capabilities:
 - PWA share target for mobile capture and browser extension (Chrome MV3 / Firefox) for desktop capture
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations through `058_web_registration_invites.sql`; migrations 002-017 remain consolidated into `001_initial_schema.sql`
+- Database migrations through `059_user_model_preferences.sql`; migrations 002-017 remain consolidated into `001_initial_schema.sql`
 - NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
@@ -499,6 +499,7 @@ Migrations 002–017 were consolidated into `001_initial_schema.sql` during a sc
 | 056 | `056_twitter_oauth_pkce.sql` | Twitter/X user-context OAuth 2.0 PKCE storage (BUG-056-002): `twitter_oauth_states` (PKCE `code_verifier` binding, 15-min TTL, delete-on-consume) and `twitter_oauth_tokens` (AES-256-GCM-encrypted access/refresh, composite PK) |
 | 057 | `057_card_rewards.sql` | Spec 083 Card Rewards Companion schema — 10 tables (`card_catalog`, `card_runs`, `user_cards`, `card_offers`, `card_selections`, `signup_bonuses`, `rotating_category_observations`, `rotating_categories`, `category_aliases`, `card_recommendations`) with CHECK/FK/UNIQUE constraints and indexes; `CREATE … IF NOT EXISTS` self-idempotent |
 | 058 | `058_web_registration_invites.sql` | Spec 093 admin-generated single-use registration invites — `web_registration_invites` table (`token_hash` lowercase-hex SHA-256, `label`, `created_by`, `created_at`, `expires_at`, `used_at`, `used_by`, `revoked_at`); hashed-at-rest with no plaintext column, `UNIQUE(token_hash)` lookup, atomically marked used on a successful `/register` (single-use, TOCTOU-guarded UPDATE), augmenting spec 091's static `WEB_REGISTRATION_INVITE_TOKEN` bootstrap gate; `CREATE TABLE IF NOT EXISTS` self-idempotent |
+| 059 | `059_user_model_preferences.sql` | Spec 089 per-user sticky open-knowledge `/ask` synthesis-model preference — `user_model_preferences` table (`actor_user_id TEXT PRIMARY KEY` claim-bound principal, `synthesis_model TEXT NOT NULL`, `gather_model TEXT` reserved/nullable for F-STICKY-GATHER, `updated_at TIMESTAMPTZ NOT NULL` app-written, no DB-side default); one row per user (cheap PK read on the `/ask` hot path), upsert on set (`ON CONFLICT (actor_user_id) DO UPDATE`), reset == `DELETE`; mirrors the actor-keyed pattern of `022_recommendations.sql` / `055_*`; NEVER settable by a request-body user id (OWASP A01); `CREATE TABLE IF NOT EXISTS` self-idempotent |
 
 Migration `036_notification_intelligence.sql` is additive and follows the existing application-written ID/timestamp pattern: it uses `CHECK` constraints for enum-like values, JSONB for redaction/rationale envelopes, and no database-side runtime fallback values. Raw source input is stored in `notification_raw_events` before a normalized notification can be processed downstream.
 

@@ -27,6 +27,7 @@ func baseOpenKnowledgeEnv() map[string]string {
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD":             "1.0",
 		"ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST":                          `["web_search","fetch_snippet"]`,
 		"ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS":                       `["deepseek-r1:7b"]`,
+		"ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS":              `["llama3.1:8b"]`,
 		"ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED":               "true",
 		"ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS":                          "30000",
 		"ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS":                    `[]`,
@@ -76,6 +77,7 @@ func TestOpenKnowledgeConfig_MissingEnvVars(t *testing.T) {
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD",
 		"ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST",
 		"ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS",
+		"ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS",
 		"ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED",
 		"ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS",
 		"ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS",
@@ -349,6 +351,136 @@ func TestOpenKnowledgeConfig_SwitchableModelsRequiredWhenEnabled_Spec088(t *test
 			t.Fatalf("empty switchable_models with enabled=false MUST load, got: %v", err)
 		}
 	})
+}
+
+// TestOpenKnowledgeConfig_ToolCapableGatherModels_BaselineMemberRequired_Spec089
+// (ADVERSARIAL) pins the spec-089 (Fork C) tool_capable_gather_models
+// rule: the baseline gather llm_model_id MUST be a member so the
+// no-override gather path always passes; a set that omits the baseline
+// gather is rejected fail-loud, and the real home-lab shape
+// (gather gemma4:26b ∈ [gemma4:26b, llama3.1:8b]) passes. SCN-089-A07.
+func TestOpenKnowledgeConfig_ToolCapableGatherModels_BaselineMemberRequired_Spec089(t *testing.T) {
+	t.Run("baseline_gather_not_a_member_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID"] = "gemma4:26b" // the baseline gather
+		// A tool-capable set that does NOT contain the baseline gather —
+		// the no-override gather turn would resolve to a non-member, so
+		// this MUST be rejected fail-loud.
+		env["ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS"] = `["llama3.1:8b"]`
+		applyOpenKnowledgeEnv(t, env)
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("a tool_capable_gather_models set that omits the baseline gather MUST be rejected (the no-override path must always pass)")
+		}
+		if !strings.Contains(err.Error(), "tool_capable_gather_models") {
+			t.Fatalf("error should name tool_capable_gather_models, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "gemma4:26b") {
+			t.Fatalf("error should name the baseline gather model, got: %v", err)
+		}
+	})
+	t.Run("home_lab_shape_with_baseline_member_passes", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID"] = "gemma4:26b"
+		env["ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS"] = `["gemma4:26b","llama3.1:8b"]`
+		applyOpenKnowledgeEnv(t, env)
+		cfg, err := LoadOpenKnowledge()
+		if err != nil {
+			t.Fatalf("the home-lab tool-capable shape (baseline gemma4:26b is a member) MUST load, got: %v", err)
+		}
+		if len(cfg.ToolCapableGatherModels) != 2 || cfg.ToolCapableGatherModels[0] != "gemma4:26b" {
+			t.Fatalf("unexpected ToolCapableGatherModels: %+v", cfg.ToolCapableGatherModels)
+		}
+	})
+}
+
+// TestOpenKnowledgeConfig_ToolCapableGatherModels_RequiredWhenEnabled_Spec089
+// pins G028 fail-loud for the new set: empty list + enabled rejected; an
+// empty entry rejected; the env var missing rejected; empty allowed when
+// disabled. Mirrors the spec-088 switchable_models cases. SCN-089-A07.
+func TestOpenKnowledgeConfig_ToolCapableGatherModels_RequiredWhenEnabled_Spec089(t *testing.T) {
+	t.Run("empty_when_enabled_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS"] = "[]"
+		applyOpenKnowledgeEnv(t, env)
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("empty tool_capable_gather_models with enabled=true MUST be rejected (FR-8)")
+		}
+		if !strings.Contains(err.Error(), "tool_capable_gather_models") {
+			t.Fatalf("error should name tool_capable_gather_models, got: %v", err)
+		}
+	})
+	t.Run("missing_env_var_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		applyOpenKnowledgeEnv(t, env)
+		if err := os.Unsetenv("ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS"); err != nil {
+			t.Fatalf("unset failed: %v", err)
+		}
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("missing ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS MUST be rejected (fail-loud)")
+		}
+		if !strings.Contains(err.Error(), "ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS") {
+			t.Fatalf("error should name the missing env var, got: %v", err)
+		}
+	})
+	t.Run("empty_entry_when_enabled_rejected", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		// llama3.1:8b is the baseline gather in this fixture, so it is a
+		// member; the empty entry is the only defect under test.
+		env["ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS"] = `["llama3.1:8b",""]`
+		applyOpenKnowledgeEnv(t, env)
+		_, err := LoadOpenKnowledge()
+		if err == nil {
+			t.Fatal("tool_capable_gather_models with an empty entry MUST be rejected")
+		}
+		if !strings.Contains(err.Error(), "tool_capable_gather_models") {
+			t.Fatalf("error should name tool_capable_gather_models, got: %v", err)
+		}
+	})
+	t.Run("empty_when_disabled_ok", func(t *testing.T) {
+		env := baseOpenKnowledgeEnv()
+		env["ASSISTANT_OPEN_KNOWLEDGE_ENABLED"] = "false"
+		env["ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS"] = "[]"
+		applyOpenKnowledgeEnv(t, env)
+		if _, err := LoadOpenKnowledge(); err != nil {
+			t.Fatalf("empty tool_capable_gather_models with enabled=false MUST load, got: %v", err)
+		}
+	})
+}
+
+// TestOpenKnowledgeConfig_HomeLabSynthesisDefaultIs32b_Spec089 pins the
+// shape of the spec-089 home-lab standing default: a config whose resolved
+// synthesis_model_id is deepseek-r1:32b, whose switchable_models contains
+// it, and whose tool-capable gather set carries the baseline gather loads
+// and validates cleanly (the real home-lab shape). SCN-089-A01 (suppl).
+func TestOpenKnowledgeConfig_HomeLabSynthesisDefaultIs32b_Spec089(t *testing.T) {
+	env := baseOpenKnowledgeEnv()
+	// The home-lab resolved shape (config.sh resolves these from the
+	// environments.home-lab.* override layer; here we assert the loaded
+	// contract surfaces them and validates).
+	env["ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID"] = "gemma4:26b"
+	env["ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID"] = "deepseek-r1:32b"
+	env["ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS"] = `["deepseek-r1:32b","deepseek-r1:7b","gemma4:26b"]`
+	env["ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS"] = `["gemma4:26b","llama3.1:8b"]`
+	applyOpenKnowledgeEnv(t, env)
+	cfg, err := LoadOpenKnowledge()
+	if err != nil {
+		t.Fatalf("the home-lab standing-default shape MUST load+validate, got: %v", err)
+	}
+	if cfg.SynthesisModelID != "deepseek-r1:32b" {
+		t.Fatalf("expected synthesis_model_id deepseek-r1:32b (the spec-089 standing default), got %q", cfg.SynthesisModelID)
+	}
+	found := false
+	for _, m := range cfg.SwitchableModels {
+		if m == "deepseek-r1:32b" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("switchable_models MUST contain the standing default deepseek-r1:32b, got %+v", cfg.SwitchableModels)
+	}
 }
 
 // TestOpenKnowledgeConfig_SynthesisRetryBudgetValidated_Spec087 — the

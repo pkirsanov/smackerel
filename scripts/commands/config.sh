@@ -1529,6 +1529,26 @@ fi
 if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS" ]]; then
   ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS="[]"
 fi
+# Spec 089 (Fork C) — tool_capable_gather_models allowlist. Same per-env
+# override pattern as switchable_models (home-lab adds the real
+# tool-capable gather set [gemma4:26b, llama3.1:8b]; dev base = [gemma3:4b]
+# == the baseline gather, a testable no-op). yaml_get (exact flattened-key
+# match) for the override — NOT yaml_get_json — so the dev/test env that
+# omits the key does not bleed home-lab's list across sibling environment
+# blocks; the inline-list value is normalised to compact JSON (spaces
+# stripped; ollama model tags never contain spaces). Legally empty when
+# enabled=false; the Go validator enforces non-empty + baseline membership
+# when enabled, and the envelope guard enforces each entry is profiled.
+ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS=""
+if _ok_gather_override="$(yaml_get "environments.$TARGET_ENV.assistant_open_knowledge_tool_capable_gather_models" 2>/dev/null)"; then
+  ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS="$(printf '%s' "$_ok_gather_override" | tr -d ' ')"
+fi
+if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS" ]]; then
+  ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS="$(yaml_get_json assistant.open_knowledge.tool_capable_gather_models)"
+fi
+if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS" ]]; then
+  ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS="[]"
+fi
 ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED="$(required_value assistant.open_knowledge.web_snippet_cache_enabled)"
 ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS="$(required_value assistant.open_knowledge.llm_timeout_ms)"
 # SCOPE-15 — egress allowlist (extra hosts beyond provider_endpoint).
@@ -2254,6 +2274,7 @@ ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD=${ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_B
 ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD=${ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD}
 ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST=${ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST}
 ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=${ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS}
+ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS=${ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS}
 ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED=${ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED}
 ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS=${ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS}
 ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS=${ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS}

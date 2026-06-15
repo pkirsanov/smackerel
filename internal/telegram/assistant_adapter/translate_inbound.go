@@ -75,6 +75,7 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 	// /ask (open_knowledge) line; populated below when the shortcut
 	// resolves to open_knowledge.
 	modelOverride := ""
+	gatherModelOverride := ""
 
 	switch {
 	case isResetCommand(text):
@@ -107,7 +108,7 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 			// discipline as the BUG-064-001 prefix strip). Other shortcuts keep
 			// their text verbatim.
 			if sid == openKnowledgeScenarioID {
-				text, modelOverride = parseModelFlag(text)
+				text, modelOverride, gatherModelOverride = parseModelFlag(text)
 			}
 			break
 		}
@@ -117,14 +118,15 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 	}
 
 	return contracts.AssistantMessage{
-		UserID:             userID,
-		Transport:          transportName,
-		TransportMessageID: transportMessageID,
-		Text:               text,
-		Kind:               contracts.KindText,
-		ReceivedAt:         receivedAt,
-		TransportMetadata:  metadata,
-		ModelOverride:      modelOverride,
+		UserID:              userID,
+		Transport:           transportName,
+		TransportMessageID:  transportMessageID,
+		Text:                text,
+		Kind:                contracts.KindText,
+		ReceivedAt:          receivedAt,
+		TransportMetadata:   metadata,
+		ModelOverride:       modelOverride,
+		GatherModelOverride: gatherModelOverride,
 	}, nil
 }
 
@@ -133,26 +135,52 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 // the --model= flag parse to this surface only.
 const openKnowledgeScenarioID = "open_knowledge"
 
-// parseModelFlag extracts a leading `--model=<id>` token from the arguments
-// of a slash-shortcut line (spec 088). It returns the text with that token
-// removed — the slash prefix and the rest of the question preserved — and
-// the model id. Only the FIRST token after the shortcut is consumed, and
-// only when it is exactly the `--model=<non-empty>` flag; everything else
-// stays in the text. ollama model tags never contain whitespace, so a single
-// whitespace-delimited token is the whole value. A bare `/ask <q>` (no flag)
-// or a valueless `--model=` returns the text unchanged and an empty override.
-func parseModelFlag(text string) (string, string) {
-	const flag = "--model="
+// parseModelFlag extracts leading `--model=<id>` and/or `--gather-model=<id>`
+// tokens from the arguments of a slash-shortcut line (spec 088 + spec 089).
+// Both flags are order-independent and consumed only as the immediate token(s)
+// after the shortcut; the slash prefix and the rest of the question are
+// preserved. Returns (cleanText, synthesisModel, gatherModel). ollama model
+// tags never contain whitespace, so a single whitespace-delimited token is the
+// whole value. A bare `/ask <q>` returns the text unchanged and both overrides
+// empty; a valueless `--model=` / `--gather-model=` is NOT consumed (left in
+// the text, so the question still reads naturally).
+func parseModelFlag(text string) (string, string, string) {
+	const (
+		modelFlag  = "--model="
+		gatherFlag = "--gather-model="
+	)
 	fields := strings.Fields(text)
-	if len(fields) < 2 || !strings.HasPrefix(fields[1], flag) {
-		return text, ""
+	if len(fields) < 2 {
+		return text, "", ""
 	}
-	model := strings.TrimPrefix(fields[1], flag)
-	if model == "" {
-		return text, ""
+	shortcut := fields[0]
+	args := fields[1:]
+	model, gather := "", ""
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+		// --gather-model= does NOT share a prefix with --model=, so the two
+		// checks are order-independent.
+		if v := strings.TrimPrefix(arg, gatherFlag); v != arg {
+			if v == "" {
+				break // valueless --gather-model= : leave it in the text
+			}
+			gather = v
+			i++
+			continue
+		}
+		if v := strings.TrimPrefix(arg, modelFlag); v != arg {
+			if v == "" {
+				break // valueless --model= : leave it in the text
+			}
+			model = v
+			i++
+			continue
+		}
+		break // first non-flag token: the start of the question
 	}
-	rest := append([]string{fields[0]}, fields[2:]...)
-	return strings.Join(rest, " "), model
+	rest := append([]string{shortcut}, args[i:]...)
+	return strings.Join(rest, " "), model, gather
 }
 
 // translateCallback decodes a *tgbotapi.CallbackQuery whose

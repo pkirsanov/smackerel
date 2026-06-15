@@ -9,6 +9,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 )
 
 // renderOutbound is the pure function under TransportAdapter.Render
@@ -201,22 +202,53 @@ func buildTelegramRendering(
 	return appendModelFooter(rendered, resp, mode), keyboard, nil
 }
 
-// appendModelFooter appends the spec 088 "— model: <id>" attribution footer to
-// a rendered Telegram message iff a runtime model override was applied
+// appendModelFooter appends the spec 088/089 model-attribution footer to a
+// rendered Telegram message iff a runtime selection was applied
 // (resp.ModelAttribution != nil && OverrideApplied). A baseline answer (nil
 // attribution or OverrideApplied=false) is byte-for-byte unchanged (NFR-4 /
 // Principle 6). The footer is a SEPARATE final line (em-dash lead) so a screen
 // reader announces it after the answer; it reads "— model:" (neutral metadata),
 // never "— answered by", so it never contradicts the honest-salvage framing.
+//
+// Spec 089 forms:
+//   - single  `— model: <id> (<source>)` when only the synthesis selection is
+//     non-default (source label: sticky→"your default", per-request→"this
+//     question"; an unclassified source renders the spec-088 bare form);
+//   - dual    `— gather: <g> (<gsrc>) · synth: <s> (<ssrc>)` whenever a gather
+//     override is active (the only time the gather turn is operator-chosen).
 func appendModelFooter(rendered string, resp contracts.AssistantResponse, mode MarkdownMode) string {
-	if resp.ModelAttribution == nil || !resp.ModelAttribution.OverrideApplied {
+	attr := resp.ModelAttribution
+	if attr == nil || !attr.OverrideApplied {
 		return rendered
 	}
-	id := strings.TrimSpace(resp.ModelAttribution.ModelID)
+	id := strings.TrimSpace(attr.ModelID)
 	if id == "" {
 		return rendered
 	}
-	return rendered + "\n" + escapeForMode("— model: "+id, mode)
+	var footer string
+	if attr.GatherOverridden {
+		footer = fmt.Sprintf("— gather: %s%s · synth: %s%s",
+			strings.TrimSpace(attr.GatherModel), modelSourceSuffix(attr.GatherSource),
+			id, modelSourceSuffix(attr.SynthesisSource))
+	} else {
+		footer = "— model: " + id + modelSourceSuffix(attr.SynthesisSource)
+	}
+	return rendered + "\n" + escapeForMode(footer, mode)
+}
+
+// modelSourceSuffix maps a modelswitch source classification to the user-facing
+// footer tag suffix (with a leading space + parens), or "" for an unclassified
+// / default source so the spec-088 single form "— model: <id>" stays
+// byte-for-byte when no source is set. Spec 089.
+func modelSourceSuffix(source string) string {
+	switch source {
+	case modelswitch.SourceSticky:
+		return " (your default)"
+	case modelswitch.SourcePerRequest:
+		return " (this question)"
+	default:
+		return ""
+	}
 }
 
 // statusPrefix returns the first-line status string for in-flight

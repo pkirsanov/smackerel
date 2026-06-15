@@ -67,6 +67,19 @@ type AssistantMessage struct {
 	// no-override path is byte-for-byte the spec-087 behaviour (NFR-4).
 	// A typed field (owner directive), NOT a TransportMetadata key.
 	ModelOverride string
+
+	// GatherModelOverride is the spec 089 (Fork C) per-request,
+	// runtime-switchable GATHER (tool-calling) model selection for the
+	// open-knowledge /ask agent — SEPARATE from ModelOverride (which
+	// re-points the synthesis turn only). UNTRUSTED: a user-supplied raw
+	// model string (e.g. parsed from a Telegram `/ask --gather-model=<id>`
+	// flag) that MUST be validated against the tool-capable gather set
+	// (modelswitch.ResolveGather) BEFORE any gather turn runs; a
+	// non-tool-capable selection is refused fail-loud. The zero value is
+	// the baseline (no gather override) so the no-override path is
+	// byte-for-byte spec 087/088 (NFR-4). A typed field, NOT a
+	// TransportMetadata key.
+	GatherModelOverride string
 }
 
 // MessageKind discriminates the four supported inbound message shapes.

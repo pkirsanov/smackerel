@@ -52,7 +52,22 @@ type OpenKnowledgeConfig struct {
 	// fit the env ollama envelope; that envelope arithmetic is enforced
 	// fail-loud at config-generation in config.go::validateModelEnvelopes
 	// (here we only struct-validate non-empty list + non-empty entries).
-	SwitchableModels        []string
+	SwitchableModels []string
+	// ToolCapableGatherModels is the spec 089 (Fork C) operator-curated
+	// allowlist of models the open-knowledge /ask agent may be runtime-
+	// switched TO on the GATHER (tool-calling) turns (per-request
+	// --gather-model= / API gather_model). Each entry MUST be tool-
+	// calling-capable on Ollama (deepseek-r1* tool-calling is weak;
+	// gemma3:4b errors "does not support tools"), so a non-tool-capable
+	// gather selection is rejected model_not_tool_capable before any
+	// gather turn runs. REQUIRED non-empty when Enabled=true (G028 — no
+	// silent default); the baseline LLMModelID (the no-override gather
+	// model) MUST be a member so the no-override path always passes. Each
+	// entry MUST also have a model_memory_profiles entry; that profile
+	// sanity check is enforced fail-loud at config-generation in
+	// config.go::validateModelEnvelopes (here we struct-validate the
+	// non-empty list + non-empty entries + baseline membership).
+	ToolCapableGatherModels []string
 	PerQueryTokenBudget     int
 	PerQueryUSDBudget       float64
 	MonthlyBudgetUSD        float64
@@ -138,6 +153,7 @@ func LoadOpenKnowledge() (OpenKnowledgeConfig, error) {
 	cfg.PerUserMonthlyBudgetUSD, errs = lookupFloat("ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD", errs)
 	cfg.ToolAllowlist, errs = lookupJSONStringList("ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST", errs)
 	cfg.SwitchableModels, errs = lookupJSONStringList("ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS", errs)
+	cfg.ToolCapableGatherModels, errs = lookupJSONStringList("ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS", errs)
 	cfg.WebSnippetCacheEnabled, errs = strictBool("ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED", errs)
 	cfg.LLMTimeoutMs, errs = lookupInt("ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS", errs)
 	cfg.AllowedEgressHosts, errs = lookupJSONStringList("ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS", errs)
@@ -244,6 +260,34 @@ func (c *OpenKnowledgeConfig) Validate() error {
 				errs = append(errs, "assistant.open_knowledge.switchable_models (contains empty entry)")
 				break
 			}
+		}
+	}
+	// Spec 089 (Fork C) — tool_capable_gather_models is the runtime-
+	// switchable allowlist for the GATHER turns. Struct-level checks:
+	// non-empty list + non-empty entries + the baseline llm_model_id
+	// (the no-override gather model) MUST be a member so the no-override
+	// gather path always passes (the per-entry model_memory_profiles
+	// sanity is enforced in config.go::validateModelEnvelopes, where the
+	// profiles live). G028 fail-loud.
+	if len(c.ToolCapableGatherModels) == 0 {
+		errs = append(errs, "assistant.open_knowledge.tool_capable_gather_models (must be non-empty)")
+	} else {
+		hasEmpty := false
+		baselineMember := false
+		gather := strings.TrimSpace(c.LLMModelID)
+		for _, m := range c.ToolCapableGatherModels {
+			if strings.TrimSpace(m) == "" {
+				hasEmpty = true
+				break
+			}
+			if strings.TrimSpace(m) == gather {
+				baselineMember = true
+			}
+		}
+		if hasEmpty {
+			errs = append(errs, "assistant.open_knowledge.tool_capable_gather_models (contains empty entry)")
+		} else if gather != "" && !baselineMember {
+			errs = append(errs, fmt.Sprintf("assistant.open_knowledge.tool_capable_gather_models (baseline gather llm_model_id %q must be a member so the no-override gather path always passes)", c.LLMModelID))
 		}
 	}
 	// Provider-specific api_key requirement. searxng allows empty;

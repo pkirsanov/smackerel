@@ -194,6 +194,12 @@ type Dependencies struct {
 	// (optional — nil when the agent runtime is not enabled).
 	AgentInvokeHandler *AgentInvokeHandler
 
+	// Spec 089 — GET/PUT/DELETE /v1/agent/model claim-bound per-user sticky
+	// model preference handler (optional — nil when open-knowledge is not
+	// enabled). Reads the shared agenttool.ModelPref() store +
+	// agenttool.SwitchableModels() validator the /ask fast-path uses.
+	AgentModelHandler *AgentModelHandler
+
 	// Spec 038 Scope 1 — drive connector API handlers.
 	DriveHandlers *DriveHandlers
 

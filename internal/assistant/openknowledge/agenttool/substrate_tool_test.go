@@ -16,6 +16,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	ok "github.com/smackerel/smackerel/internal/assistant/openknowledge"
 	okagent "github.com/smackerel/smackerel/internal/assistant/openknowledge/agent"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 )
 
 // TestInit_RegistersSubstrateTool verifies the package init() hook
@@ -200,6 +201,61 @@ func TestMapTurnResult_ModelCarried_BothArms_Spec088(t *testing.T) {
 		}
 		if strings.Contains(string(b), `"model"`) {
 			t.Fatalf("omitempty MUST drop an empty model key, got %s", string(b))
+		}
+	})
+}
+
+// TestMapTurnResult_ModelAndGatherCarried_WithSelectionStampsSources_Spec089 —
+// SCN-089-A12. MapTurnResult carries BOTH the answering Model and the
+// GatherModel on success AND refusal; WithSelection stamps model_source +
+// gather_model_source from the resolved Effective; model + model_source +
+// gather_model + gather_model_source are all present on the JSON when a
+// selection was stamped. The answering model_source classifies the ANSWERING
+// model's selection (synthesis normally, gather on an early StopEndTurn).
+func TestMapTurnResult_ModelAndGatherCarried_WithSelectionStampsSources_Spec089(t *testing.T) {
+	t.Run("map_carries_model_and_gather_both_arms", func(t *testing.T) {
+		success := okagent.TurnResult{Status: okagent.StatusSuccess, FinalText: "A.", TerminationReason: okagent.TerminationFinal, Model: "deepseek-r1:32b", GatherModel: "gemma4:26b"}
+		if env := MapTurnResult(success); env.Model != "deepseek-r1:32b" || env.GatherModel != "gemma4:26b" {
+			t.Fatalf("success envelope MUST carry model+gather, got model=%q gather=%q", env.Model, env.GatherModel)
+		}
+		refused := okagent.TurnResult{Status: okagent.StatusRefused, TerminationReason: okagent.TerminationFabricatedSource, Model: "deepseek-r1:32b", GatherModel: "gemma4:26b"}
+		if env := MapTurnResult(refused); env.Model != "deepseek-r1:32b" || env.GatherModel != "gemma4:26b" {
+			t.Fatalf("refusal envelope MUST carry model+gather, got model=%q gather=%q", env.Model, env.GatherModel)
+		}
+	})
+	t.Run("with_selection_stamps_sources_and_json", func(t *testing.T) {
+		turn := okagent.TurnResult{Status: okagent.StatusSuccess, FinalText: "A.", TerminationReason: okagent.TerminationFinal, Model: "deepseek-r1:7b", GatherModel: "llama3.1:8b"}
+		eff := modelswitch.Effective{
+			SynthesisModel: "deepseek-r1:7b", SynthesisSource: modelswitch.SourceSticky,
+			GatherModel: "llama3.1:8b", GatherSource: modelswitch.SourcePerRequest,
+		}
+		env := WithSelection(MapTurnResult(turn), eff)
+		if env.ModelSource != modelswitch.SourceSticky {
+			t.Fatalf("model_source MUST classify the answering (synthesis) selection, got %q", env.ModelSource)
+		}
+		if env.GatherModel != "llama3.1:8b" || env.GatherModelSource != modelswitch.SourcePerRequest {
+			t.Fatalf("gather attribution MUST be stamped, got gather=%q source=%q", env.GatherModel, env.GatherModelSource)
+		}
+		b, err := json.Marshal(env)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		for _, key := range []string{`"model":"deepseek-r1:7b"`, `"model_source":"sticky"`, `"gather_model":"llama3.1:8b"`, `"gather_model_source":"per_request"`} {
+			if !strings.Contains(string(b), key) {
+				t.Fatalf("envelope JSON MUST contain %s, got %s", key, b)
+			}
+		}
+	})
+	t.Run("answering_model_source_follows_gather_on_early_stop", func(t *testing.T) {
+		// Early-StopEndTurn: the answering model IS the gather model; model_source
+		// MUST classify the GATHER selection (honest per CT-4), not the synthesis.
+		turn := okagent.TurnResult{Status: okagent.StatusSuccess, FinalText: "A.", TerminationReason: okagent.TerminationFinal, Model: "llama3.1:8b", GatherModel: "llama3.1:8b"}
+		eff := modelswitch.Effective{
+			SynthesisModel: "deepseek-r1:32b", SynthesisSource: modelswitch.SourceDefault,
+			GatherModel: "llama3.1:8b", GatherSource: modelswitch.SourcePerRequest,
+		}
+		if env := WithSelection(MapTurnResult(turn), eff); env.ModelSource != modelswitch.SourcePerRequest {
+			t.Fatalf("when the answering model is the gather model, model_source MUST classify the gather selection, got %q", env.ModelSource)
 		}
 	})
 }

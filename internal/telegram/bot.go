@@ -38,6 +38,7 @@ type Bot struct {
 	assembler           *ConversationAssembler
 	mediaAssembler      *MediaGroupAssembler
 	disambiguations     *disambiguationStore
+	modelSelections     *modelSelectionStore // spec 089 SCOPE-05 — armed /model numbered pickers (per-chat, TTL)
 	cookSessions        *CookSessionStore
 	mealPlanHandler     *MealPlanCommandHandler
 	expenseStates       *expenseStateStore
@@ -171,6 +172,10 @@ func NewBot(cfg Config) (*Bot, error) {
 		authToken:       cfg.AuthToken,
 		httpClient:      &http.Client{Timeout: 30 * time.Second},
 		disambiguations: newDisambiguationStore(cfg.DisambiguationTimeoutSeconds),
+		// Spec 089 SCOPE-05 — the /model numbered-picker pending store reuses
+		// the disambiguation prompt TTL (same per-chat numeric-reply window);
+		// no new SST key (in-memory runtime state, not config).
+		modelSelections: newModelSelectionStore(cfg.DisambiguationTimeoutSeconds),
 		cookSessions:    NewCookSessionStore(cfg.CookSessionTimeoutMinutes),
 		expenseStates:   newExpenseStateStore(120),
 		done:            make(chan struct{}),
@@ -477,6 +482,16 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 		return
 	}
 
+	// Priority 2.6: Model selection resolution (spec 089 SCOPE-05 — user replies
+	// with a number to an armed /model numbered picker). Placed AFTER the
+	// annotation/cook disambiguation resolvers and BEFORE the cook-nav/servings
+	// triggers: it returns false unless THIS chat has an armed, unexpired pending
+	// model selection AND the text is a number, so a non-model-pending numeric
+	// reply still reaches the other flows (it never hijacks their numbers).
+	if !msg.IsCommand() && b.handleModelSelectionReply(ctx, msg) {
+		return
+	}
+
 	// Priority 3: Cook session navigation (next, back, ingredients, done, jump)
 	if !msg.IsCommand() && b.cookSessions != nil {
 		session := b.cookSessions.Get(chatID)
@@ -608,6 +623,11 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 			} else {
 				b.reply(msg.Chat.ID, "assistant is not enabled in this install")
 			}
+		case "model":
+			// Spec 089 — claim-bound /model set/show/reset for the open-knowledge
+			// /ask synthesis model. NOT an agent run: a per-user CRUD + discovery
+			// affordance over the shared modelpref store + modelswitch validator.
+			b.handleModelCommand(ctx, msg)
 		case "meal-plan", "meal_plan", "mealplan", "meal":
 			// Meal planning (spec 036) is natural-language only — when the
 			// user passes arguments after the slash, dispatch them through

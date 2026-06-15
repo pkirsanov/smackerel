@@ -424,6 +424,14 @@ func run() error {
 		// value MUST be re-derived. Realistic GPU / home-lab turns complete in
 		// ~40-90s; this is the pathological-slow-CPU-dev backstop. If an
 		// operator raises max_iterations or synthesis_retry_budget, recompute.
+		// Spec 089 — the persistent deepseek-r1:32b default + a per-request
+		// gather override (--gather-model= / API gather_model) + a per-user
+		// sticky preference all only SWAP which model occupies the synthesis or
+		// gather seat on the EXISTING turns; none adds a turn or changes
+		// max_iterations / synthesis_retry_budget, so the 4200s envelope is
+		// unchanged (NFR-2). The 32b default changes TYPICAL latency (~1.9×),
+		// not the MAX. F-RETRYBUDGET (raising synthesis_retry_budget 1→2 →
+		// (6+2)×600s = 4800s) is the only deferred knob that would re-derive it.
 		WriteTimeout: 4200 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}

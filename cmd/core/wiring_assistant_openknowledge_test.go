@@ -290,3 +290,54 @@ func TestOpenKnowledgeAssembler_PanicsOnZeroSourcesMax(t *testing.T) {
 	}()
 	newOpenKnowledgeAssembler(0)
 }
+
+// --- spec 089 boot-log attribution ------------------------------------------
+
+// attrsToMap converts a flat slog key/value attribute slice into a map.
+func attrsToMap(t *testing.T, attrs []any) map[string]any {
+	t.Helper()
+	if len(attrs)%2 != 0 {
+		t.Fatalf("boot-log attrs must be key/value pairs, got odd length %d", len(attrs))
+	}
+	m := make(map[string]any, len(attrs)/2)
+	for i := 0; i < len(attrs); i += 2 {
+		key, ok := attrs[i].(string)
+		if !ok {
+			t.Fatalf("attr key %d is not a string: %v", i, attrs[i])
+		}
+		m[key] = attrs[i+1]
+	}
+	return m
+}
+
+// TestWiring_BootLogNamesSynthesisModelAndToolCapableSet_Spec089 — the
+// open-knowledge boot log names the resolved synthesis_model, the
+// tool_capable_gather_models set, and the sticky_pref_store line, so the
+// operator's hot-swap runbook can grep the line after a core recreate to
+// confirm the new default is live (SCN-089-A13).
+func TestWiring_BootLogNamesSynthesisModelAndToolCapableSet_Spec089(t *testing.T) {
+	okCfg := config.OpenKnowledgeConfig{
+		LLMModelID:              "gemma4:26b",
+		SynthesisModelID:        "deepseek-r1:32b",
+		SwitchableModels:        []string{"deepseek-r1:32b", "deepseek-r1:7b", "gemma4:26b"},
+		ToolCapableGatherModels: []string{"gemma4:26b", "llama3.1:8b"},
+		SynthesisRetryBudget:    1,
+		MaxIterations:           6,
+		PerQueryTokenBudget:     128000,
+	}
+	m := attrsToMap(t, openKnowledgeBootLogAttrs(okCfg, 4, "wired"))
+
+	if m["synthesis_model"] != "deepseek-r1:32b" {
+		t.Fatalf("boot log MUST name synthesis_model=deepseek-r1:32b, got %v", m["synthesis_model"])
+	}
+	if m["sticky_pref_store"] != "wired" {
+		t.Fatalf("boot log MUST name sticky_pref_store=wired, got %v", m["sticky_pref_store"])
+	}
+	tcg, ok := m["tool_capable_gather_models"].([]string)
+	if !ok || len(tcg) != 2 || tcg[0] != "gemma4:26b" || tcg[1] != "llama3.1:8b" {
+		t.Fatalf("boot log MUST name tool_capable_gather_models=[gemma4:26b llama3.1:8b], got %v", m["tool_capable_gather_models"])
+	}
+	if m["model"] != "gemma4:26b" {
+		t.Fatalf("boot log MUST name the gather model=gemma4:26b, got %v", m["model"])
+	}
+}
