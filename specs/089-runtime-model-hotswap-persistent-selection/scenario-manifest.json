@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "featureDir": "specs/089-runtime-model-hotswap-persistent-selection",
+  "featureName": "Runtime Model Hot-Swap & Persistent Selection",
+  "generatedBy": "bubbles.plan (parent-expanded full-delivery, analyze-design-plan prelude)",
+  "generatedAt": "2026-06-14T07:00:00Z",
+  "amends": [],
+  "extends": ["specs/088-runtime-switchable-models"],
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-089-A01" },
+    { "scenarioId": "SCN-089-A02" },
+    { "scenarioId": "SCN-089-A03" },
+    { "scenarioId": "SCN-089-A04" },
+    { "scenarioId": "SCN-089-A05" },
+    { "scenarioId": "SCN-089-A06" },
+    { "scenarioId": "SCN-089-A07" },
+    { "scenarioId": "SCN-089-A08" },
+    { "scenarioId": "SCN-089-A09" },
+    { "scenarioId": "SCN-089-A10" },
+    { "scenarioId": "SCN-089-A11" },
+    { "scenarioId": "SCN-089-A12" },
+    { "scenarioId": "SCN-089-A13" },
+    { "scenarioId": "SCN-089-A14" }
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "SCN-089-A01",
+      "scopeId": "SCOPE-03",
+      "title": "With no per-user sticky and no per-request override, the open-knowledge /ask agent uses the committed-SST persistent default synthesis model (home-lab deepseek-r1:32b) byte-for-byte the spec-088 baseline shape, the gather turns keep the SST baseline tool model, and the answer is attributed to the default model with selection source \"default\" (no Telegram footer; the HTTP envelope always carries model + model_source)",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec089_test.go::TestAgent_NoSelection_UsesSstDefaultSynthesis_ByteForByteBaseline_Spec089",
+        "internal/assistant/facade_modelswitch_spec089_test.go::TestFacade_BareDefault_NoFooter_AttributesModelSourceDefault_Spec089",
+        "internal/api/agent_invoke_test.go::TestAgentInvoke_BareDefault_EnvelopeModel32bSourceDefault_Spec089",
+        "internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_HomeLabSynthesisDefaultIs32b_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-03", "report.md#scope-01"]
+    },
+    {
+      "scenarioId": "SCN-089-A02",
+      "scopeId": "SCOPE-02",
+      "title": "A sticky /model <id> set persists across subsequent /ask turns until changed: the claim-bound modelpref store returns the same synthesis model on every read with no flag repeated (Get-after-Set; upsert one row per user), the resolver applies sticky over the SST default, and the SST persistent default is unchanged for every other user",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/modelpref/store_test.go::TestModelPrefStore_GetAfterSet_PersistsAcrossReads_Spec089",
+        "internal/assistant/openknowledge/modelpref/store_test.go::TestModelPrefStore_Set_UpsertOnConflict_Spec089",
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_ResolveEffective_PrecedencePerRequestOverStickyOverDefault_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-02", "report.md#scope-03"]
+    },
+    {
+      "scenarioId": "SCN-089-A03",
+      "scopeId": "SCOPE-04",
+      "title": "/model with no argument shows the caller's current effective model, the allowed switchable set, the SST default, and the sticky/inherited tag; /model default (or reset) clears the sticky preference via modelpref.Clear and the next bare /ask resolves the SST default again — exposed identically as a Telegram /model command and the HTTP GET/DELETE /v1/agent/model route (neither is an agent run)",
+      "behaviorClass": "functional",
+      "changeType": "new",
+      "requiredTestType": ["unit", "functional"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/telegram/model_command_test.go::TestModelCommand_ShowListsEffectiveAllowedAndDefault_Spec089",
+        "internal/telegram/model_command_test.go::TestModelCommand_ResetClearsStickyAndConfirms_Spec089",
+        "internal/api/agent_model_test.go::TestAgentModel_GetShowsEffective_DeleteResets_Spec089",
+        "internal/assistant/openknowledge/modelpref/store_test.go::TestModelPrefStore_Clear_IdempotentDelete_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-04", "report.md#scope-02"]
+    },
+    {
+      "scenarioId": "SCN-089-A04",
+      "scopeId": "SCOPE-02",
+      "title": "A sticky preference is claim-bound to the authenticated actor_user_id (spec 044) and never leaks across users: the store keyed on actor_user_id never returns user A's preference for user B and a Set for B never mutates A's row (store arm); a PUT /v1/agent/model whose body names a different user id sets/reads only the PASETO subject's preference, the body id ignored (handler arm; OWASP A01)",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/modelpref/store_test.go::TestModelPrefStore_ClaimBound_UserBNeverReadsUserA_Spec089",
+        "internal/api/agent_model_test.go::TestAgentModel_Put_BodyUserIdIgnored_ClaimBoundToSubject_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-02", "report.md#scope-04"]
+    },
+    {
+      "scenarioId": "SCN-089-A05",
+      "scopeId": "SCOPE-03",
+      "title": "Selection precedence is deterministic — per-request override > per-user sticky > SST persistent default: ResolveEffective applies the per-request synthesis (source per_request) when supplied, else the sticky (source sticky), else the SST default (source default); a per-request override applies to one invocation only and does not mutate the sticky; a per-request reject does NOT fall through; an operator-orphaned sticky resolves to the default + a structured log, never breaking every /ask",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_ResolveEffective_PrecedencePerRequestOverStickyOverDefault_Spec089",
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_ResolveEffective_OrphanedStickyFallsToDefault_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-03"]
+    },
+    {
+      "scenarioId": "SCN-089-A06",
+      "scopeId": "SCOPE-01",
+      "title": "The persistent-default footprint headroom is verified safe at config generation, not just the profile number: the NEW standing-default co-residence guard in validateModelEnvelopes fails loud when the resolved synthesis_model_id + the gather llm_model_id profile sum busts OllamaMemoryLimitMiB (deepseek-r1:32b 22528 + gemma4:26b 18432 = 40960 > 28672 refused; <= 49152 at 48G accepted), naming the offending model and the envelope — closing the CT-6 gap (the every-query default is now envelope-checked, not only switchable entries)",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/config/validate_ml_envelope_test.go::TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089",
+        "internal/config/validate_ml_envelope_test.go::TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-01"]
+    },
+    {
+      "scenarioId": "SCN-089-A07",
+      "scopeId": "SCOPE-03",
+      "title": "The gather (tool-calling) model is runtime-selectable via a SEPARATE --gather-model= / gather_model and a non-tool-capable gather is refused fail-loud before any gather turn runs: ResolveGather validates membership in the tool_capable_gather_models SST set (a tool-capable gather is applied to cfg.Model via the per-request clone, singleton unmutated; a non-capable gather yields model_not_tool_capable / rejected_turn gather), and the synthesis turn still resolves by the normal precedence",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_ResolveGather_ToolCapableApplied_NonCapableRejected_Spec089",
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec089_test.go::TestAgent_WithModelOverride_GatherClonePointsCfgModel_SingletonUnmutated_Spec089",
+        "internal/api/agent_invoke_test.go::TestAgentInvoke_GatherModelField_EnvelopeCarriesGatherSource_AndNonCapableRejected_Spec089",
+        "internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_ToolCapableGatherModels_BaselineMemberRequired_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-03", "report.md#scope-01"]
+    },
+    {
+      "scenarioId": "SCN-089-A08",
+      "scopeId": "SCOPE-03",
+      "title": "An off-allowlist / over-envelope / non-tool-capable selection (synthesis OR gather, per-request OR sticky-set) is rejected fail-loud with a byte-identical Rejection contract, never reaches the inference backend, and never silently falls back to a default: the shared modelswitch Rejection short-circuits the facade fast-path (no agent call, no capture — pre-agent request validation) and renders the SAME message the HTTP 400 carries",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit", "functional"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_ResolveEffective_OffAllowlistByteIdenticalContract_Spec089",
+        "internal/assistant/facade_modelswitch_spec089_test.go::TestFacade_OffAllowlistSelection_ShortCircuits_NoAgentCall_NoCapture_Spec089",
+        "internal/api/agent_model_test.go::TestAgentModel_Put_OffAllowlist_400_PreferenceUnchanged_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-03", "report.md#scope-04"]
+    },
+    {
+      "scenarioId": "SCN-089-A09",
+      "scopeId": "SCOPE-03",
+      "title": "No <think> or <CITATIONS> contract scaffolding leaks into the user-visible body under any selected model: <think> is stripped before citation parsing (spec-087, unchanged) and the NEW stripContractScaffolding removes any residual <CITATIONS> fragment / <one synthesized answer> marker from the salvage body arms before finalize, so the scaffolding never reaches the body and never becomes a citation",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec089_test.go::TestAgent_StripContractScaffolding_NoCitationsLeakInSalvageBody_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-03"]
+    },
+    {
+      "scenarioId": "SCN-089-A10",
+      "scopeId": "SCOPE-03",
+      "title": "A blank forced-final synthesis (the 32b-Q6 shape) is rescued by retry-before-salvage: an empty forced-final fires exactly synthesis_retry_budget escalated retries, and only if every retry is still empty/ungrounded does the honest snippet salvage fire WITH sources — the user never receives a silently-empty answer under the standing default or any selection",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec089_test.go::TestAgent_ForcedFinalEmpty_EscalatedRetryThenHonestSalvage_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-03"]
+    },
+    {
+      "scenarioId": "SCN-089-A11",
+      "scopeId": "SCOPE-04",
+      "title": "Telegram and web/HTTP expose the full selection capability (sticky + per-request + gather) identically: the SAME allowlisted sticky, the SAME per-request override, and the SAME off-allowlist string drive the SAME modelswitch validator and the SAME modelpref store on both surfaces, and the applied Effective, the Rejection shape/message, and the attribution are byte-identical across surfaces (the --gather-model= parse mirrors the HTTP gather_model field)",
+      "behaviorClass": "functional",
+      "changeType": "new",
+      "requiredTestType": ["unit", "functional"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/api/agent_model_test.go::TestParity_SameStickyAndOffAllowlist_IdenticalAcrossSurfaces_Spec089",
+        "internal/telegram/assistant_adapter/translate_inbound_test.go::TestTranslateInbound_GatherModelFlagParsedAndStripped_SlashPreserved_Spec089",
+        "internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_ResolveEffective_OffAllowlistByteIdenticalContract_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-04", "report.md#scope-03"]
+    },
+    {
+      "scenarioId": "SCN-089-A12",
+      "scopeId": "SCOPE-03",
+      "title": "Each answer is attributed to the model(s) actually used for each overridable turn AND the selection source: TurnResult.Model (answering model) + TurnResult.GatherModel are stamped once in finalize across all terminal paths; the HTTP envelope always carries model + model_source + gather_model + gather_model_source; the Telegram footer carries the source tags and the dual gather/synth form only when a selection is non-default; two answers from two models or sources are distinguishable",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit", "functional"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/assistant/openknowledge/agenttool/substrate_tool_test.go::TestMapTurnResult_ModelAndGatherCarried_WithSelectionStampsSources_Spec089",
+        "internal/assistant/openknowledge/agent/modelswitch_agent_spec089_test.go::TestAgent_TurnResultModelAndGatherModelStamped_AllTerminalPaths_Spec089",
+        "internal/telegram/assistant_adapter/render_outbound_test.go::TestRenderOutbound_FooterSourceTagsAndDualGatherForm_Spec089",
+        "internal/assistant/contracts/response_test.go::TestModelAttribution_FieldInventory_GatherSource_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-03", "report.md#scope-04"]
+    },
+    {
+      "scenarioId": "SCN-089-A13",
+      "scopeId": "SCOPE-04",
+      "title": "The persistent default is hot-swappable in prod via a documented config procedure (Fork D ~15s core-recreate): docs/Operations.md records the edit-SST -> config generate -> overlay recreates core --no-deps -> verify-via-boot-log-and-live-envelope runbook with its downtime characteristic, and the open-knowledge wiring boot log names the resolved synthesis_model + the tool_capable_gather_models set as the operator's verification hook; the trust perimeter and every other behavior are unchanged",
+      "behaviorClass": "functional",
+      "changeType": "new",
+      "requiredTestType": ["unit", "functional"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "cmd/core/wiring_assistant_openknowledge_test.go::TestWiring_BootLogNamesSynthesisModelAndToolCapableSet_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-04"]
+    },
+    {
+      "scenarioId": "SCN-089-A14",
+      "scopeId": "SCOPE-05",
+      "title": "/model with no argument renders the switchable set as a 1-indexed NUMBERED list (marking the caller's current effective model + the system default) and arms a per-chat pending selection holding the ordered id list shown; a subsequent bare-number reply selects models[N-1], re-validates it against the SHARED modelswitch allowlist (defense in depth), and SETS the sticky synthesis preference CLAIM-BOUND to resolveActorUserID(chatID) (never a message/text-supplied id, OWASP A01); the resolver falls through (returns false) unless THIS chat has an armed unexpired pending selection AND the text is a number (it never hijacks the annotation/cook disambiguation or servings numeric flows); an out-of-range number re-prompts and an off-allowlist (stale armed list) pick is rejected fail-loud, neither changing the stored preference; the existing /model <id> set + /model default/reset behavior is unchanged and it re-uses the SAME store + validator the /model <id> path and the HTTP /v1/agent/model surface use (one store, one validator, SCN-089-A11)",
+      "behaviorClass": "unit",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/telegram/model_selection_test.go::TestModelPickerReply_NumberedListMarksCurrentAndDefault_Spec089",
+        "internal/telegram/model_selection_test.go::TestModelSelectionStore_SetGetClear_Spec089",
+        "internal/telegram/model_selection_test.go::TestModelSelectionStore_Expiry_Spec089",
+        "internal/telegram/model_selection_test.go::TestHandleModelSelectionReply_ValidPickSetsStickyForResolvedActor_Spec089",
+        "internal/telegram/model_selection_test.go::TestHandleModelSelectionReply_ClaimBoundToResolvedActor_Spec089",
+        "internal/telegram/model_selection_test.go::TestHandleModelSelectionReply_OffAllowlistStalePending_RejectsPrefUnchanged_Spec089",
+        "internal/telegram/model_selection_test.go::TestHandleModelSelectionReply_OutOfRange_RepromptsPrefUnchanged_Spec089",
+        "internal/telegram/model_selection_test.go::TestHandleModelSelectionReply_NoArmedPicker_FallsThrough_Spec089",
+        "internal/telegram/model_selection_test.go::TestHandleModelSelectionReply_NonNumberReply_FallsThrough_Spec089",
+        "internal/telegram/model_selection_test.go::TestHandleModelSelectionReply_ExpiredPending_FallsThrough_Spec089"
+      ],
+      "evidenceRefs": ["report.md#scope-05"]
+    }
+  ]
+}

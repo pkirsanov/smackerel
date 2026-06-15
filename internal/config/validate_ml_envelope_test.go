@@ -236,6 +236,150 @@ func TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088(t *testin
 	})
 }
 
+// TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089
+// (ADVERSARIAL) pins the spec-089 SCOPE-01 standing-default co-residence
+// envelope guard — the CT-6 gap close. The STANDING DEFAULT synthesis
+// model (synthesis_model_id) runs on EVERY /ask with no override; before
+// spec 089 it was the ONE large selection NOT envelope-checked (only the
+// switchable entries were). This guard rejects a standing default whose
+// co-resident profile (default + gather) busts OllamaMemoryLimitMiB,
+// naming the offending model + the envelope. Calls validateModelEnvelopes
+// directly on a hand-built Config (the ollama/ml bucket model fields are
+// left empty and skipped). SCN-089-A06 / FR-2.
+func TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089(t *testing.T) {
+	profiles := map[string]int{
+		"gemma4:26b":      18432,
+		"deepseek-r1:7b":  4864,
+		"deepseek-r1:32b": 22528,
+		"llama3.1:8b":     6144,
+	}
+	base := func() *Config {
+		c := &Config{
+			MLModelMemoryProfiles: profiles,
+			MLMemoryLimit:         "4G",
+			MLMemoryLimitMiB:      4096,
+			OllamaMemoryLimit:     "28G",
+			OllamaMemoryLimitMiB:  28672,
+		}
+		c.Assistant.OpenKnowledge.Enabled = true
+		c.Assistant.OpenKnowledge.LLMModelID = "gemma4:26b" // gather (co-resident during synthesis)
+		// A profiled, fitting switchable + tool-capable set so ONLY the
+		// standing-default guard can be the source of a rejection here.
+		c.Assistant.OpenKnowledge.SwitchableModels = []string{"gemma4:26b"}
+		c.Assistant.OpenKnowledge.ToolCapableGatherModels = []string{"gemma4:26b"}
+		return c
+	}
+
+	t.Run("over-envelope standing default rejected at 28G", func(t *testing.T) {
+		c := base()
+		// deepseek-r1:32b standing default co-resident with the gemma4:26b
+		// gather model = 22528 + 18432 = 40960 MiB > 28672 MiB envelope.
+		// This is the every-query default — the exact CT-6 gap.
+		c.Assistant.OpenKnowledge.SynthesisModelID = "deepseek-r1:32b"
+		err := c.validateModelEnvelopes()
+		if err == nil {
+			t.Fatalf("expected fail-loud envelope error for over-envelope STANDING DEFAULT (the CT-6 gap)")
+		}
+		if !strings.Contains(err.Error(), "deepseek-r1:32b") {
+			t.Fatalf("error should name the offending standing-default model, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "synthesis_model_id") {
+			t.Fatalf("error should name synthesis_model_id (standing default), got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "OLLAMA_MEMORY_LIMIT") {
+			t.Fatalf("error should name the OLLAMA_MEMORY_LIMIT envelope, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "envelope exceeded") {
+			t.Fatalf("error should say 'envelope exceeded', got: %v", err)
+		}
+	})
+
+	t.Run("unprofiled standing default rejected as missing profile", func(t *testing.T) {
+		c := base()
+		c.Assistant.OpenKnowledge.SynthesisModelID = "totally-made-up-synth"
+		err := c.validateModelEnvelopes()
+		if err == nil {
+			t.Fatalf("expected fail-loud missing-profile error for an un-profiled standing default")
+		}
+		if !strings.Contains(err.Error(), "totally-made-up-synth") {
+			t.Fatalf("error should name the un-profiled standing default, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "missing model memory profile") {
+			t.Fatalf("error should say 'missing model memory profile', got: %v", err)
+		}
+	})
+}
+
+// TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089 pins
+// the not-over-tight half of the guard: at the raised 48G envelope the
+// same deepseek-r1:32b standing default co-resident with the gemma4:26b
+// gather (40960 <= 49152) PASSES, AND the spec-089 home-lab switchable
+// set [deepseek-r1:32b, deepseek-r1:7b, gemma4:26b] all fit. The guard
+// must not false-positive on the real shipped home-lab configuration.
+// SCN-089-A06 / SCN-089-A01.
+func TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089(t *testing.T) {
+	profiles := map[string]int{
+		"gemma4:26b":      18432,
+		"deepseek-r1:7b":  4864,
+		"deepseek-r1:32b": 22528,
+		"llama3.1:8b":     6144,
+	}
+	c := &Config{
+		MLModelMemoryProfiles: profiles,
+		MLMemoryLimit:         "4G",
+		MLMemoryLimitMiB:      4096,
+		OllamaMemoryLimit:     "48G",
+		OllamaMemoryLimitMiB:  49152,
+	}
+	c.Assistant.OpenKnowledge.Enabled = true
+	c.Assistant.OpenKnowledge.LLMModelID = "gemma4:26b"
+	c.Assistant.OpenKnowledge.SynthesisModelID = "deepseek-r1:32b" // 22528 + 18432 = 40960 <= 49152
+	c.Assistant.OpenKnowledge.SwitchableModels = []string{"deepseek-r1:32b", "deepseek-r1:7b", "gemma4:26b"}
+	c.Assistant.OpenKnowledge.ToolCapableGatherModels = []string{"gemma4:26b", "llama3.1:8b"}
+	if err := c.validateModelEnvelopes(); err != nil {
+		t.Fatalf("the shipped 48G home-lab standing-default + switchable + tool-capable set MUST pass, got: %v", err)
+	}
+}
+
+// TestValidateModelEnvelopes_ToolCapableGatherEntryUnprofiledRejected_Spec089
+// (ADVERSARIAL) pins the per-entry profile sanity for the new
+// tool_capable_gather_models set: a gather-override model with no
+// model_memory_profiles entry cannot be loaded and is rejected fail-loud.
+// SCN-089-A07 (supplementary) / FR-8.
+func TestValidateModelEnvelopes_ToolCapableGatherEntryUnprofiledRejected_Spec089(t *testing.T) {
+	profiles := map[string]int{
+		"gemma4:26b":      18432,
+		"deepseek-r1:32b": 22528,
+	}
+	c := &Config{
+		MLModelMemoryProfiles: profiles,
+		MLMemoryLimit:         "4G",
+		MLMemoryLimitMiB:      4096,
+		OllamaMemoryLimit:     "48G",
+		OllamaMemoryLimitMiB:  49152,
+	}
+	c.Assistant.OpenKnowledge.Enabled = true
+	c.Assistant.OpenKnowledge.LLMModelID = "gemma4:26b"
+	c.Assistant.OpenKnowledge.SynthesisModelID = "deepseek-r1:32b"
+	c.Assistant.OpenKnowledge.SwitchableModels = []string{"gemma4:26b"}
+	// An un-profiled tool-capable gather entry — the gather override could
+	// never be loaded; must fail loud naming the model + the set key.
+	c.Assistant.OpenKnowledge.ToolCapableGatherModels = []string{"gemma4:26b", "phantom-gather-model"}
+	err := c.validateModelEnvelopes()
+	if err == nil {
+		t.Fatalf("expected fail-loud missing-profile error for an un-profiled tool_capable_gather_models entry")
+	}
+	if !strings.Contains(err.Error(), "phantom-gather-model") {
+		t.Fatalf("error should name the un-profiled gather model, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "tool_capable_gather_models") {
+		t.Fatalf("error should name tool_capable_gather_models, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "missing model memory profile") {
+		t.Fatalf("error should say 'missing model memory profile', got: %v", err)
+	}
+}
+
 // TestParseComposeMemoryToMiB asserts the unit-suffix parser handles
 // every form the docker-compose memory contract accepts. Exercises the
 // helper directly so spec 045 envelope sizing is provably correct

@@ -104,9 +104,21 @@ type AssistantResponse struct {
 // from the SST baseline so the Telegram renderer shows the `— model:`
 // footer ONLY when an override was in effect (a baseline answer is
 // byte-for-byte spec-087, NFR-4).
+//
+// Spec 089 extends it for the precedence resolver + gather override:
+// SynthesisSource classifies how the synthesis selection was made
+// (default|sticky|per_request); GatherModel is the gather/tool model
+// that ran (TurnResult.GatherModel); GatherSource classifies how the
+// gather selection was made (default|per_request); GatherOverridden is
+// true when a gather override was in effect (GatherSource != default),
+// which drives the renderer's dual `— gather: … · synth: …` footer.
 type ModelAttribution struct {
-	ModelID         string
-	OverrideApplied bool
+	ModelID          string
+	OverrideApplied  bool
+	SynthesisSource  string
+	GatherModel      string
+	GatherSource     string
+	GatherOverridden bool
 }
 
 // StatusToken is the closed-vocabulary user-facing status token.

@@ -34,6 +34,7 @@ import (
 	"github.com/smackerel/smackerel/internal/agent/userreply"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 // AgentInvokeRunner is the dependency the handler asks for. The
@@ -86,6 +87,13 @@ type AgentInvokeRequest struct {
 	// value is the baseline (no override). Off-allowlist / over-envelope
 	// values yield an HTTP 400 rejection envelope (never a silent default).
 	Model string `json:"model,omitempty"`
+	// GatherModel is the spec 089 (Fork C) OPTIONAL per-request open-knowledge
+	// GATHER (tool-calling) model override — SEPARATE from Model (synthesis).
+	// UNTRUSTED: validated against the tool_capable_gather_models set BEFORE
+	// any gather turn runs; a non-tool-capable value yields an HTTP 400
+	// rejection (error_code model_not_tool_capable, rejected_turn gather).
+	// Empty is the baseline (no gather override).
+	GatherModel string `json:"gather_model,omitempty"`
 }
 
 // AgentInvokeHandlerFunc is the http.HandlerFunc closure registered on
@@ -140,19 +148,35 @@ func (h *AgentInvokeHandler) AgentInvokeHandlerFunc(w http.ResponseWriter, r *ht
 			writeAgentResponse(w, userreply.MalformedRequestResponse("raw_input"))
 			return
 		}
-		// Spec 088 — resolve an optional per-request model override. req.Model
-		// is UNTRUSTED; an off-allowlist / un-profiled / over-envelope model is
-		// rejected fail-loud with HTTP 400 BEFORE any agent/Ollama call (no
-		// silent default, no backend passthrough). A nil allowlist (capability
-		// not wired) yields baseline passthrough, never a panic.
+		// Spec 088/089 — resolve the model selection BEFORE any agent/Ollama
+		// call. Precedence (spec 089): per-request (req.Model / req.GatherModel)
+		// > the caller's claim-bound sticky preference > the SST default. The
+		// route is behind bearerAuthMiddleware (CT-2), so auth.UserIDFromContext
+		// is the PASETO subject — the sticky read is claim-bound for free and a
+		// request-body user id can never reach the key. An off-allowlist
+		// synthesis or a non-tool-capable gather is rejected fail-loud with HTTP
+		// 400 (no silent default, no backend passthrough). A nil allowlist /
+		// nil store yields baseline passthrough, never a panic.
 		var ov modelswitch.Override
+		var eff modelswitch.Effective
+		haveSelection := false
 		if allow := agenttool.SwitchableModels(); allow != nil {
-			resolved, rej := allow.Resolve(req.Model)
+			stickySynth := ""
+			if subject := auth.UserIDFromContext(r.Context()); subject != "" {
+				if ps := agenttool.ModelPref(); ps != nil {
+					if pref, ok, _ := ps.Get(r.Context(), subject); ok {
+						stickySynth = pref.SynthesisModel
+					}
+				}
+			}
+			resolved, rej := allow.ResolveEffective(req.Model, req.GatherModel, stickySynth)
 			if rej != nil {
 				writeOpenKnowledgeRejection(w, rej)
 				return
 			}
-			ov = resolved
+			eff = resolved
+			ov = resolved.Override()
+			haveSelection = true
 		}
 		turn, runErr := agenttool.CurrentAgent().WithModelOverride(ov).Run(r.Context(), prompt)
 		if runErr != nil {
@@ -161,6 +185,9 @@ func (h *AgentInvokeHandler) AgentInvokeHandlerFunc(w http.ResponseWriter, r *ht
 			return
 		}
 		env := agenttool.MapTurnResult(turn)
+		if haveSelection {
+			env = agenttool.WithSelection(env, eff)
+		}
 		writeOpenKnowledgeResponse(w, env)
 		return
 	}
@@ -226,7 +253,12 @@ type openKnowledgeRejectionEnvelope struct {
 	RejectedModel string   `json:"rejected_model"`
 	AllowedModels []string `json:"allowed_models"`
 	DefaultModel  string   `json:"default_model"`
-	Message       string   `json:"message"`
+	// RejectedTurn (spec 089) names the refused turn ("synthesis" | "gather")
+	// so a caller can tell a synthesis rejection from a gather rejection.
+	// omitempty so the spec-088 synthesis-only path is byte-for-byte unchanged
+	// when the resolver leaves it empty.
+	RejectedTurn string `json:"rejected_turn,omitempty"`
+	Message      string `json:"message"`
 }
 
 // writeOpenKnowledgeRejection encodes a modelswitch.Rejection as an HTTP 400
@@ -242,6 +274,7 @@ func writeOpenKnowledgeRejection(w http.ResponseWriter, rej *modelswitch.Rejecti
 		RejectedModel: rej.RejectedModel,
 		AllowedModels: rej.AllowedModels,
 		DefaultModel:  rej.DefaultModel,
+		RejectedTurn:  rej.RejectedTurn,
 		Message:       rej.Message,
 	}
 	if err := json.NewEncoder(w).Encode(env); err != nil && !errors.Is(err, http.ErrBodyNotAllowed) {

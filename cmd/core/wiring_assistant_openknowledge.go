@@ -98,6 +98,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/citeback"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/llm"
 	okmetrics "github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelpref"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tools"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/web"
@@ -262,28 +263,50 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 	// (config-generation already fails loud on an envelope-busting list).
 	allow, err := modelswitch.NewAllowlist(
 		okCfg.SwitchableModels,
-		cfg.MLModelMemoryProfiles, // model_memory_profiles
-		cfg.OllamaMemoryLimitMiB,  // env ollama envelope (0 ⇒ check skipped)
-		okCfg.LLMModelID,          // gather model (co-resident on the synthesis turn)
-		okCfg.SynthesisModelID,    // baseline synthesis = the "default" in rejections
+		cfg.MLModelMemoryProfiles,     // model_memory_profiles
+		cfg.OllamaMemoryLimitMiB,      // env ollama envelope (0 ⇒ check skipped)
+		okCfg.LLMModelID,              // gather model (co-resident on the synthesis turn)
+		okCfg.SynthesisModelID,        // baseline synthesis = the "default" in rejections
+		okCfg.ToolCapableGatherModels, // spec 089 — tool-capable gather set (--gather-model= validates against this; baseline llm_model_id must be a member)
 	)
 	if err != nil {
 		return fmt.Errorf("wireOpenKnowledge: build switchable allowlist: %w", err)
 	}
 	agenttool.SetSwitchableModels(allow)
 
+	// Spec 089 — construct + install the per-user sticky preference store over
+	// the same pgx pool. Both fast-paths' sticky read AND the /model CRUD
+	// surfaces reach it via agenttool.ModelPref(); it is claim-bound — the
+	// store keys ONLY on the actor id the surfaces thread (Telegram
+	// resolveActorUserID / HTTP PASETO subject), never a request-body field.
+	agenttool.SetModelPref(modelpref.NewPostgresStore(svc.pg.Pool))
+
 	slog.Info("open-knowledge subsystem wired",
+		openKnowledgeBootLogAttrs(okCfg, len(registry.Enabled()), "wired")...)
+	return nil
+}
+
+// openKnowledgeBootLogAttrs builds the structured boot-log attributes that name
+// the resolved open-knowledge model-selection surface — spec 089: the standing
+// synthesis_model, the switchable + tool_capable_gather_models sets, and
+// whether the sticky-preference store is wired. This is the operator's
+// hot-swap verification hook: the runbook greps this line after a core recreate
+// to confirm the new default is live. Extracted so the SCN-089-A13 test can
+// assert the named fields without standing up a live subsystem.
+func openKnowledgeBootLogAttrs(okCfg config.OpenKnowledgeConfig, toolCount int, stickyPrefStore string) []any {
+	return []any{
 		"provider", okCfg.Provider,
 		"model", okCfg.LLMModelID,
 		"synthesis_model", okCfg.SynthesisModelID,
 		"switchable_models", okCfg.SwitchableModels,
+		"tool_capable_gather_models", okCfg.ToolCapableGatherModels,
+		"sticky_pref_store", stickyPrefStore,
 		"synthesis_retry_budget", okCfg.SynthesisRetryBudget,
 		"max_iterations", okCfg.MaxIterations,
 		"per_query_token_budget", okCfg.PerQueryTokenBudget,
 		"per_query_usd_budget", okCfg.PerQueryUSDBudget,
-		"tool_count", len(registry.Enabled()),
-	)
-	return nil
+		"tool_count", toolCount,
+	}
 }
 
 // buildOpenKnowledgeWebProvider selects the WebSearchProvider impl
