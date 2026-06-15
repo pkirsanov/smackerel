@@ -99,6 +99,11 @@ func wireAgentBridge(ctx context.Context, svc *coreServices, deps *api.Dependenc
 	}
 
 	deps.AgentInvokeHandler = &api.AgentInvokeHandler{Runner: bridge}
+	// Spec 089 — mount the claim-bound /v1/agent/model surface. The handler is
+	// stateless: it reads the shared agenttool.ModelPref() store +
+	// agenttool.SwitchableModels() validator at request time (installed by
+	// wireOpenKnowledge), and fail-loud 503s when open-knowledge is not enabled.
+	deps.AgentModelHandler = &api.AgentModelHandler{}
 	slog.Info("agent bridge wired",
 		"scenario_dir", agentCfg.ScenarioDir,
 		"scenario_count", len(bridge.KnownIntents()),

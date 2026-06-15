@@ -50,6 +50,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	ok "github.com/smackerel/smackerel/internal/assistant/openknowledge"
 	okagent "github.com/smackerel/smackerel/internal/assistant/openknowledge/agent"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelpref"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 )
 
@@ -85,12 +86,15 @@ var outputSchema = json.RawMessage(`{
   "required": ["status", "body", "refusal_cause", "sources"],
   "additionalProperties": false,
   "properties": {
-    "status":         {"type": "string", "enum": ["success", "refused"]},
-    "body":           {"type": "string"},
-    "refusal_cause":  {"type": "string"},
-    "termination":    {"type": "string"},
-    "model":          {"type": "string"},
-    "sources":        {"type": "array", "items": {"type": "object"}}
+    "status":              {"type": "string", "enum": ["success", "refused"]},
+    "body":                {"type": "string"},
+    "refusal_cause":       {"type": "string"},
+    "termination":         {"type": "string"},
+    "model":               {"type": "string"},
+    "model_source":        {"type": "string"},
+    "gather_model":        {"type": "string"},
+    "gather_model_source": {"type": "string"},
+    "sources":             {"type": "array", "items": {"type": "object"}}
   }
 }`)
 
@@ -134,6 +138,41 @@ func SetSwitchableModels(a *modelswitch.Allowlist) { allowlistRef.Store(a) }
 // (or nil when not wired). Both fast-paths read it nil-safely.
 func SwitchableModels() *modelswitch.Allowlist { return allowlistRef.Load() }
 
+// modelPrefHolder wraps the modelpref.Store interface so it can live in an
+// atomic.Pointer (which needs a concrete element type) without the typed-nil
+// gotcha. A nil holder ⇒ no store wired.
+type modelPrefHolder struct{ store modelpref.Store }
+
+// modelPrefRef is the late-bound spec 089 per-user sticky-preference store
+// installed by SetModelPref. Parallels allowlistRef: one store reached lock-
+// free by BOTH fast-paths' sticky read AND the /model CRUD surfaces, so the
+// sticky capability is the SAME everywhere (SCN-089-A11 parity).
+var modelPrefRef atomic.Pointer[modelPrefHolder]
+
+// SetModelPref installs the runtime per-user sticky preference store (spec
+// 089). Passing nil clears the binding; ModelPref() then returns nil and the
+// fast-paths treat that as "no sticky capability" (default path, never a
+// panic — mirrors the nil-allowlist passthrough). cmd/core wiring calls this
+// once at startup, gated on open_knowledge.enabled.
+func SetModelPref(s modelpref.Store) {
+	if s == nil {
+		modelPrefRef.Store(nil)
+		return
+	}
+	modelPrefRef.Store(&modelPrefHolder{store: s})
+}
+
+// ModelPref returns the currently bound modelpref.Store (or nil when not
+// wired). The facade + HTTP /ask sticky read and the /model set/show/reset
+// CRUD all read it nil-safely.
+func ModelPref() modelpref.Store {
+	h := modelPrefRef.Load()
+	if h == nil {
+		return nil
+	}
+	return h.store
+}
+
 // InputSchema returns a defensive copy of the substrate input schema
 // so callers cannot mutate the package buffer. Used by tests.
 func InputSchema() json.RawMessage {
@@ -165,8 +204,19 @@ type outputEnvelope struct {
 	// the final text (TurnResult.Model). Carried on the HTTP success and
 	// refusal envelopes always (structured metadata); omitempty so a
 	// pre-loop refusal that never ran an LLM round emits no model key.
-	Model   string           `json:"model,omitempty"`
-	Sources []map[string]any `json:"sources"`
+	Model string `json:"model,omitempty"`
+	// ModelSource / GatherModel / GatherModelSource are the spec 089
+	// selection attribution. ModelSource classifies how the answering Model
+	// was selected (default|sticky|per_request); GatherModel is the gather/
+	// tool model that ran (TurnResult.GatherModel); GatherModelSource
+	// classifies how it was selected. GatherModel is stamped by MapTurnResult
+	// (a turn concept); the *_source fields are stamped by WithSelection from
+	// the resolved Effective (a resolver concept). omitempty so the spec-088
+	// envelope (no selection stamp) is byte-for-byte unchanged.
+	ModelSource       string           `json:"model_source,omitempty"`
+	GatherModel       string           `json:"gather_model,omitempty"`
+	GatherModelSource string           `json:"gather_model_source,omitempty"`
+	Sources           []map[string]any `json:"sources"`
 }
 
 // Handler is the substrate ToolHandler. Exported so cmd/core wiring
@@ -207,6 +257,7 @@ func MapTurnResult(turn okagent.TurnResult) outputEnvelope {
 			Body:        turn.FinalText,
 			Termination: string(turn.TerminationReason),
 			Model:       turn.Model,
+			GatherModel: turn.GatherModel,
 			Sources:     marshalSources(turn.Sources),
 		}
 	}
@@ -217,10 +268,33 @@ func MapTurnResult(turn okagent.TurnResult) outputEnvelope {
 		RefusalCause: string(cause),
 		Termination:  string(turn.TerminationReason),
 		Model:        turn.Model,
+		GatherModel:  turn.GatherModel,
 		// Refused turns surface zero sources — the cite-back verifier
 		// already rejected any unverified citations the planner emitted.
 		Sources: []map[string]any{},
 	}
+}
+
+// WithSelection stamps the spec 089 selection-source attribution onto an
+// already-mapped envelope from the resolved Effective. The model ids come from
+// the turn (MapTurnResult); the SOURCES come from the resolver — the caller
+// knows the Effective it resolved, and source is a resolver concept, not a
+// turn concept (FR-11). model_source describes how the ANSWERING model
+// (env.Model) was selected: normally the synthesis model, but on an early
+// StopEndTurn it can be the gather model — mapped honestly (CT-4). gather_model
+// + gather_model_source always describe the gather turn (gather always runs).
+func WithSelection(env outputEnvelope, eff modelswitch.Effective) outputEnvelope {
+	switch {
+	case env.Model == eff.SynthesisModel:
+		env.ModelSource = eff.SynthesisSource
+	case env.Model == eff.GatherModel:
+		env.ModelSource = eff.GatherSource
+	default:
+		env.ModelSource = eff.SynthesisSource
+	}
+	env.GatherModel = eff.GatherModel
+	env.GatherModelSource = eff.GatherSource
+	return env
 }
 
 // MapTerminationToRefusalCause is the closed-vocabulary mapping from

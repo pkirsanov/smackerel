@@ -1050,20 +1050,31 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		}
 
 		env.Routing = decision
-		// Spec 088 — resolve an optional per-request model override for the
-		// open_knowledge fast-path BEFORE the agent runs. msg.ModelOverride
-		// is UNTRUSTED user input; an off-allowlist / un-profiled /
-		// over-envelope model is rejected fail-loud HERE — the agent is
-		// NEVER called and capture-as-fallback is NOT invoked for the
-		// rejected request (pre-agent request validation, not an agent run;
-		// design "Rejection ≠ capture-skip"). A nil allowlist (capability
-		// not wired, or open_knowledge disabled) yields baseline
-		// passthrough, never a panic (SCOPE-02 is independently
-		// non-breaking; the singleton is installed in SCOPE-03 wiring).
+		// Spec 088/089 — resolve the open_knowledge model selection for the
+		// fast-path BEFORE the agent runs. Precedence (spec 089): per-request
+		// override > the user's claim-bound sticky preference > the SST default,
+		// applied per turn (synthesis + gather). msg.ModelOverride /
+		// msg.GatherModelOverride are UNTRUSTED user input; an off-allowlist
+		// synthesis or a non-tool-capable gather is rejected fail-loud HERE —
+		// the agent is NEVER called and capture-as-fallback is NOT invoked for
+		// the rejected request (pre-agent request validation, not an agent run;
+		// design "Rejection ≠ capture-skip"). A nil allowlist / nil store
+		// (capability not wired, or open_knowledge disabled) yields baseline
+		// passthrough, never a panic.
 		var okOverride modelswitch.Override
+		var okEffective modelswitch.Effective
 		if scenarioID == "open_knowledge" {
 			if allow := okagenttool.SwitchableModels(); allow != nil {
-				ov, rej := allow.Resolve(msg.ModelOverride)
+				// Spec 089 — read the user's claim-bound sticky synthesis
+				// preference (msg.UserID is the spec-044 actor, CT-3). A nil
+				// store yields an empty sticky ⇒ the default path.
+				stickySynth := ""
+				if ps := okagenttool.ModelPref(); ps != nil && msg.UserID != "" {
+					if pref, ok, _ := ps.Get(ctx, msg.UserID); ok {
+						stickySynth = pref.SynthesisModel
+					}
+				}
+				eff, rej := allow.ResolveEffective(msg.ModelOverride, msg.GatherModelOverride, stickySynth)
 				if rej != nil {
 					resp = contracts.AssistantResponse{
 						Routing:    &decision,
@@ -1074,7 +1085,8 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 					}
 					break
 				}
-				okOverride = ov
+				okEffective = eff
+				okOverride = eff.Override()
 			}
 		}
 		// Spec 064 SCOPE-17 fast-path — bypass the substrate executor
@@ -1121,8 +1133,12 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		// independently (agenttool.outputEnvelope.Model), always.
 		if scenarioID == "open_knowledge" && result != nil {
 			resp.ModelAttribution = &contracts.ModelAttribution{
-				ModelID:         result.Model,
-				OverrideApplied: !okOverride.IsZero(),
+				ModelID:          result.Model,
+				OverrideApplied:  !okOverride.IsZero(),
+				SynthesisSource:  okEffective.SynthesisSource,
+				GatherModel:      result.GatherModel,
+				GatherSource:     okEffective.GatherSource,
+				GatherOverridden: okEffective.GatherSource == modelswitch.SourcePerRequest,
 			}
 		}
 
@@ -1270,6 +1286,9 @@ func (f *Facade) runOpenKnowledgeDirect(ctx context.Context, sc *agent.Scenario,
 	// final text (honest across success / salvage / refuse / early-
 	// StopEndTurn; CT-3/CT-4).
 	result.Model = turn.Model
+	// Spec 089 — carry the gather/tool model that ran for the dual-form
+	// Telegram footer + the HTTP gather attribution.
+	result.GatherModel = turn.GatherModel
 	return result
 }
 

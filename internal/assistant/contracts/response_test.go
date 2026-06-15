@@ -192,6 +192,30 @@ func TestAssistantResponse_FieldInventory_ModelAttribution_Spec088(t *testing.T)
 	}
 }
 
+// TestModelAttribution_FieldInventory_GatherSource_Spec089 — the spec 089
+// ModelAttribution inventory carries SynthesisSource/GatherModel/GatherSource/
+// GatherOverridden beside the spec-088 ModelID/OverrideApplied; a zero value is
+// the baseline (no attribution surfaced / no footer).
+func TestModelAttribution_FieldInventory_GatherSource_Spec089(t *testing.T) {
+	rt := reflect.TypeOf(ModelAttribution{})
+	for _, name := range []string{"ModelID", "OverrideApplied", "SynthesisSource", "GatherModel", "GatherSource", "GatherOverridden"} {
+		if _, ok := rt.FieldByName(name); !ok {
+			t.Fatalf("ModelAttribution MUST carry the %q field (spec 089)", name)
+		}
+	}
+	var zero ModelAttribution
+	if zero.OverrideApplied || zero.GatherOverridden || zero.SynthesisSource != "" || zero.GatherSource != "" || zero.GatherModel != "" {
+		t.Fatalf("zero-value ModelAttribution MUST be the baseline (no attribution): %+v", zero)
+	}
+	attr := ModelAttribution{
+		ModelID: "deepseek-r1:7b", OverrideApplied: true,
+		SynthesisSource: "per_request", GatherModel: "llama3.1:8b", GatherSource: "per_request", GatherOverridden: true,
+	}
+	if attr.SynthesisSource != "per_request" || attr.GatherModel != "llama3.1:8b" || !attr.GatherOverridden {
+		t.Fatalf("ModelAttribution spec-089 fields not wired: %+v", attr)
+	}
+}
+
 // TestAssistantResponse_NoConfirmAndDisambigSimultaneous — adversarial
 // contract assertion: the renderer assumes ConfirmCard and
 // DisambiguationPrompt are mutually exclusive. Until we add a stricter

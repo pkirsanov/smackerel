@@ -287,6 +287,67 @@ func TestTranslateInbound_ModelFlagParsedAndStripped_SlashPreserved_Spec088(t *t
 	})
 }
 
+// TestTranslateInbound_GatherModelFlagParsedAndStripped_SlashPreserved_Spec089 —
+// ADVERSARIAL. `/ask --gather-model=<g> --model=<s> <q>` parses BOTH flags
+// (order-independent) into GatherModelOverride + ModelOverride and strips both
+// from Text (slash preserved, clean question); a bare /ask yields both empty.
+// Fails if a flag leaks into the question or the slash is dropped.
+func TestTranslateInbound_GatherModelFlagParsedAndStripped_SlashPreserved_Spec089(t *testing.T) {
+	t.Parallel()
+	t.Run("both_flags_parsed_gather_first", func(t *testing.T) {
+		update := updateWithText(123, 42, "/ask --gather-model=llama3.1:8b --model=deepseek-r1:7b which town for pomegranate?")
+		msg, err := translateInbound(update, fixedResolver("u"))
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if msg.GatherModelOverride != "llama3.1:8b" {
+			t.Fatalf("GatherModelOverride = %q, want llama3.1:8b", msg.GatherModelOverride)
+		}
+		if msg.ModelOverride != "deepseek-r1:7b" {
+			t.Fatalf("ModelOverride = %q, want deepseek-r1:7b", msg.ModelOverride)
+		}
+		if msg.Text != "/ask which town for pomegranate?" {
+			t.Fatalf("Text = %q, want the clean question (both flags stripped, slash preserved)", msg.Text)
+		}
+		if strings.Contains(msg.Text, "--gather-model=") || strings.Contains(msg.Text, "--model=") {
+			t.Fatalf("a flag leaked into Text: %q", msg.Text)
+		}
+	})
+	t.Run("both_flags_parsed_model_first_order_independent", func(t *testing.T) {
+		update := updateWithText(123, 42, "/ask --model=deepseek-r1:7b --gather-model=llama3.1:8b q?")
+		msg, err := translateInbound(update, fixedResolver("u"))
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if msg.ModelOverride != "deepseek-r1:7b" || msg.GatherModelOverride != "llama3.1:8b" {
+			t.Fatalf("order-independent parse failed: model=%q gather=%q", msg.ModelOverride, msg.GatherModelOverride)
+		}
+		if msg.Text != "/ask q?" {
+			t.Fatalf("Text = %q, want '/ask q?'", msg.Text)
+		}
+	})
+	t.Run("gather_only", func(t *testing.T) {
+		update := updateWithText(123, 42, "/ask --gather-model=gemma4:26b q?")
+		msg, err := translateInbound(update, fixedResolver("u"))
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if msg.GatherModelOverride != "gemma4:26b" || msg.ModelOverride != "" {
+			t.Fatalf("gather-only parse failed: model=%q gather=%q", msg.ModelOverride, msg.GatherModelOverride)
+		}
+	})
+	t.Run("bare_ask_both_empty", func(t *testing.T) {
+		update := updateWithText(123, 42, "/ask what is the capital of france?")
+		msg, err := translateInbound(update, fixedResolver("u"))
+		if err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if msg.ModelOverride != "" || msg.GatherModelOverride != "" {
+			t.Fatalf("bare /ask must have both overrides empty, got model=%q gather=%q", msg.ModelOverride, msg.GatherModelOverride)
+		}
+	})
+}
+
 // TestTranslateInbound_NilUpdate asserts the adapter refuses a nil
 // update rather than panicking.
 func TestTranslateInbound_NilUpdate(t *testing.T) {

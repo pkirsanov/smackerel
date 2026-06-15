@@ -119,6 +119,7 @@ func spec088WireAgent(t *testing.T, chat okagent.LLMChat) func() {
 		0, // dev envelope: skip the co-residence check
 		"gather-model",
 		"synth-model",
+		[]string{"gather-model"}, // spec 089 tool-capable gather set (baseline gather-model is a member)
 	)
 	if err != nil {
 		t.Fatalf("NewAllowlist: %v", err)
@@ -213,6 +214,7 @@ func TestFacade_OffAllowlistOverride_ShortCircuits_NoAgentCall_NoCapture_Spec088
 		0,
 		"gather-model",
 		"synth-model",
+		[]string{"gather-model"}, // spec 089 tool-capable gather set
 	)
 	if perr != nil {
 		t.Fatalf("parity allowlist build: %v", perr)

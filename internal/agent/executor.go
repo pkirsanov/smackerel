@@ -249,6 +249,7 @@ type InvocationResult struct {
 	SchemaRetries    int                `json:"schema_retries"`
 	Provider         string             `json:"provider,omitempty"`
 	Model            string             `json:"model,omitempty"`
+	GatherModel      string             `json:"gather_model,omitempty"`
 	TokensPrompt     int                `json:"tokens_prompt"`
 	TokensCompletion int                `json:"tokens_completion"`
 	StartedAt        time.Time          `json:"started_at"`

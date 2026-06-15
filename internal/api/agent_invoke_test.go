@@ -101,6 +101,7 @@ func spec088WireAPIAgent(t *testing.T, chat okagent.LLMChat) func() {
 		0,
 		"gather-model",
 		"synth-model",
+		[]string{"gather-model"}, // spec 089 tool-capable gather set
 	)
 	if err != nil {
 		t.Fatalf("NewAllowlist: %v", err)
@@ -230,6 +231,7 @@ func TestAgentInvoke_RejectionEnvelopeByteIdenticalToValidator_Spec088(t *testin
 		0,
 		"gather-model",
 		"synth-model",
+		[]string{"gather-model"}, // spec 089 tool-capable gather set
 	)
 	if err != nil {
 		t.Fatalf("NewAllowlist: %v", err)
@@ -280,4 +282,145 @@ func TestAgentInvoke_RejectionEnvelopeByteIdenticalToValidator_Spec088(t *testin
 			t.Fatalf("allowed_models[%d] = %v, want %q (order + content must match the validator)", i, gotAllowed[i], m)
 		}
 	}
+}
+
+// spec089WireAPIAgent installs a home-lab-shaped open-knowledge agent + the
+// spec-089 allowlist (default=deepseek-r1:32b, gather=gemma4:26b, switchable +=
+// 32b, tool-capable=[gemma4:26b, llama3.1:8b]) into the agenttool singletons.
+// ModelPref is left UNSET (nil) so the sticky read is the default path for
+// these unauthenticated test requests. Returns a cleanup that resets the
+// singletons.
+func spec089WireAPIAgent(t *testing.T, chat okagent.LLMChat) func() {
+	t.Helper()
+	reg := ok.NewRegistry([]string{"fake_api_tool"})
+	if err := reg.Register(spec088APITool{}); err != nil {
+		t.Fatalf("register fake tool: %v", err)
+	}
+	a, err := okagent.New(chat, reg, citeback.Verify, okagent.Config{
+		SystemPrompt:               "test-system-prompt",
+		Model:                      "gemma4:26b",
+		SynthesisModel:             "deepseek-r1:32b",
+		SynthesisRetryBudget:       0,
+		MaxIterations:              2,
+		PerQueryTokenBudget:        1_000_000,
+		PerQueryUSDBudget:          1.0,
+		MonthlyBudgetUSDRemaining:  100.0,
+		PerUserMonthlyUSDRemaining: 100.0,
+		CompactionThresholdRatio:   0.85,
+		CostFn:                     func(int) float64 { return 0 },
+		EnforcementMode:            string(citeback.EnforcementEnforce),
+		SourcesMax:                 5,
+	})
+	if err != nil {
+		t.Fatalf("okagent.New: %v", err)
+	}
+	allow, err := modelswitch.NewAllowlist(
+		[]string{"deepseek-r1:32b", "deepseek-r1:7b", "gemma4:26b"},
+		map[string]int{"gemma4:26b": 18432, "deepseek-r1:7b": 4864, "deepseek-r1:32b": 22528, "llama3.1:8b": 6144},
+		0,                                     // dev envelope: skip the co-residence check
+		"gemma4:26b",                          // gather (baseline)
+		"deepseek-r1:32b",                     // standing default synthesis
+		[]string{"gemma4:26b", "llama3.1:8b"}, // tool-capable gather set
+	)
+	if err != nil {
+		t.Fatalf("NewAllowlist: %v", err)
+	}
+	agenttool.SetAgent(a)
+	agenttool.SetSwitchableModels(allow)
+	return func() {
+		agenttool.SetAgent(nil)
+		agenttool.SetSwitchableModels(nil)
+	}
+}
+
+// TestAgentInvoke_BareDefault_EnvelopeModel32bSourceDefault_Spec089 — a bare
+// invoke (no model, no gather_model) ⇒ the 200 envelope reports the SST default
+// synthesis model with source=default and the baseline gather with
+// source=default. (The literal deepseek-r1:32b is the committed SST default
+// proven by the SCOPE-01 config tests + the downstream live bubbles.devops
+// re-verify; here the unit-level proof is the source classification.)
+func TestAgentInvoke_BareDefault_EnvelopeModel32bSourceDefault_Spec089(t *testing.T) {
+	chat := &spec088APIChat{t: t, responses: []llm.Result{
+		{StopReason: llm.StopToolUse, ToolCalls: []llm.ToolCall{{ID: "w0", Name: "fake_api_tool", Arguments: json.RawMessage(`{}`)}}, TokensUsed: 100},
+		{StopReason: llm.StopEndTurn, FinalText: "A grounded answer.", TokensUsed: 80},
+	}}
+	cleanup := spec089WireAPIAgent(t, chat)
+	defer cleanup()
+
+	rec := spec088Invoke(t, `{"scenario_id":"open_knowledge","raw_input":"compare towns"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var env map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode envelope: %v; body=%s", err, rec.Body.String())
+	}
+	if env["model"] != "deepseek-r1:32b" {
+		t.Fatalf("bare-default model = %v, want deepseek-r1:32b (SST default)", env["model"])
+	}
+	if env["model_source"] != "default" {
+		t.Fatalf("bare-default model_source = %v, want default", env["model_source"])
+	}
+	if env["gather_model"] != "gemma4:26b" {
+		t.Fatalf("bare-default gather_model = %v, want gemma4:26b", env["gather_model"])
+	}
+	if env["gather_model_source"] != "default" {
+		t.Fatalf("bare-default gather_model_source = %v, want default", env["gather_model_source"])
+	}
+}
+
+// TestAgentInvoke_GatherModelField_EnvelopeCarriesGatherSource_AndNonCapableRejected_Spec089
+// — ADVERSARIAL. A tool-capable gather_model threads through ResolveGather →
+// clone → run and the 200 envelope carries gather_model + gather_model_source;
+// a non-tool-capable gather_model ⇒ HTTP 400 with error_code
+// model_not_tool_capable, rejected_turn gather, and NO agent call.
+func TestAgentInvoke_GatherModelField_EnvelopeCarriesGatherSource_AndNonCapableRejected_Spec089(t *testing.T) {
+	t.Run("tool_capable_gather_applied_and_attributed", func(t *testing.T) {
+		chat := &spec088APIChat{t: t, responses: []llm.Result{
+			{StopReason: llm.StopToolUse, ToolCalls: []llm.ToolCall{{ID: "w0", Name: "fake_api_tool", Arguments: json.RawMessage(`{}`)}}, TokensUsed: 100},
+			{StopReason: llm.StopEndTurn, FinalText: "A grounded answer.", TokensUsed: 80},
+		}}
+		cleanup := spec089WireAPIAgent(t, chat)
+		defer cleanup()
+		rec := spec088Invoke(t, `{"scenario_id":"open_knowledge","raw_input":"compare towns","gather_model":"llama3.1:8b"}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+		}
+		var env map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+			t.Fatalf("decode envelope: %v; body=%s", err, rec.Body.String())
+		}
+		if env["gather_model"] != "llama3.1:8b" || env["gather_model_source"] != "per_request" {
+			t.Fatalf("gather attribution = %v/%v, want llama3.1:8b/per_request", env["gather_model"], env["gather_model_source"])
+		}
+		if env["model"] != "deepseek-r1:32b" || env["model_source"] != "default" {
+			t.Fatalf("synthesis attribution = %v/%v, want deepseek-r1:32b/default", env["model"], env["model_source"])
+		}
+		if len(chat.requests) < 1 || chat.requests[0].Model != "llama3.1:8b" {
+			t.Fatalf("the gather/tool turn MUST run the overridden gather model llama3.1:8b; requests=%d", len(chat.requests))
+		}
+	})
+
+	t.Run("non_tool_capable_gather_rejected_400", func(t *testing.T) {
+		chat := &spec088APIChat{t: t} // empty queue: ANY Chat call fails the test
+		cleanup := spec089WireAPIAgent(t, chat)
+		defer cleanup()
+		rec := spec088Invoke(t, `{"scenario_id":"open_knowledge","raw_input":"compare towns","gather_model":"deepseek-r1:7b"}`)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+		}
+		if len(chat.requests) != 0 {
+			t.Fatalf("a non-tool-capable gather MUST NOT reach the agent; got %d LLM call(s)", len(chat.requests))
+		}
+		var env map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+			t.Fatalf("decode rejection: %v; body=%s", err, rec.Body.String())
+		}
+		if env["error_code"] != modelswitch.ReasonNotToolCapable {
+			t.Fatalf("error_code = %v, want %q", env["error_code"], modelswitch.ReasonNotToolCapable)
+		}
+		if env["rejected_turn"] != modelswitch.TurnGather {
+			t.Fatalf("rejected_turn = %v, want %q", env["rejected_turn"], modelswitch.TurnGather)
+		}
+	})
 }

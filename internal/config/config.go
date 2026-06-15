@@ -2320,6 +2320,54 @@ func (c *Config) validateModelEnvelopes() error {
 		}
 	}
 
+	// Spec 089 SCOPE-01 — standing-default co-residence envelope guard
+	// (closes the CT-6 gap). The spec-088 switchable pass above checks
+	// only the runtime-switchable entries, NOT the STANDING DEFAULT
+	// synthesis model (synthesis_model_id) that runs on EVERY /ask with
+	// no override. Spec 088 got away with this because the home-lab
+	// default (deepseek-r1:7b, 4864 MiB) is tiny; spec 089 promotes the
+	// default to a large reasoning model (deepseek-r1:32b, 22528 MiB),
+	// making the every-query model the ONE large selection that was NOT
+	// envelope-checked. This guard applies the SAME co-residence
+	// arithmetic the switchable pass uses — the resolved
+	// synthesis_model_id co-resident with the gather model (llm_model_id)
+	// MUST fit OllamaMemoryLimitMiB — so an over-envelope standing default
+	// is refused fail-loud at config generation (FR-2 / SCN-089-A06).
+	// Each tool_capable_gather_models entry MUST also be profiled (the
+	// gather-override allowlist sanity, FR-8). Gated identically to the
+	// switchable pass: only when open-knowledge is enabled and the ollama
+	// envelope is known (dev has no daemon → OllamaMemoryLimitMiB == 0 →
+	// skipped, matching the runtime validator).
+	if c.Assistant.OpenKnowledge.Enabled && c.OllamaMemoryLimitMiB != 0 {
+		gather := c.Assistant.OpenKnowledge.LLMModelID
+		baseMiB := c.MLModelMemoryProfiles[gather]
+		standingDefault := strings.TrimSpace(c.Assistant.OpenKnowledge.SynthesisModelID)
+		if standingDefault != "" {
+			profileMiB, ok := c.MLModelMemoryProfiles[standingDefault]
+			if !ok {
+				missing = append(missing, fmt.Sprintf("assistant.open_knowledge.synthesis_model_id (standing default) %q has no entry in services.ml.model_memory_profiles", standingDefault))
+			} else {
+				coresident := baseMiB
+				if standingDefault != gather {
+					coresident += profileMiB
+				}
+				if coresident > c.OllamaMemoryLimitMiB {
+					oversized = append(oversized, fmt.Sprintf("assistant.open_knowledge.synthesis_model_id (standing default) %q co-resident with gather model %q requires %d MiB but OLLAMA_MEMORY_LIMIT=%q resolves to %d MiB", standingDefault, gather, coresident, c.OllamaMemoryLimit, c.OllamaMemoryLimitMiB))
+				}
+			}
+		}
+		// Each tool_capable_gather_models entry must have a memory profile
+		// (a switchable gather model cannot be loaded if it is un-profiled).
+		for _, m := range c.Assistant.OpenKnowledge.ToolCapableGatherModels {
+			if strings.TrimSpace(m) == "" {
+				continue // empty entry is reported by OpenKnowledgeConfig.Validate()
+			}
+			if _, ok := c.MLModelMemoryProfiles[m]; !ok {
+				missing = append(missing, fmt.Sprintf("assistant.open_knowledge.tool_capable_gather_models entry %q has no entry in services.ml.model_memory_profiles", m))
+			}
+		}
+	}
+
 	if len(missing) > 0 || len(oversized) > 0 || len(concurrent) > 0 {
 		var parts []string
 		if len(missing) > 0 {

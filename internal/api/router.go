@@ -601,6 +601,19 @@ func NewRouter(deps *Dependencies) http.Handler {
 				}
 			})
 
+			// Spec 089 — GET/PUT/DELETE /v1/agent/model (claim-bound per-user
+			// sticky model preference). Mounted in the SAME bearer-auth /v1 group
+			// as /agent/invoke (CT-2) so auth.UserIDFromContext is the PASETO
+			// subject; the body NEVER carries a user id.
+			r.Group(func(r chi.Router) {
+				if deps.AgentModelHandler != nil {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Get("/agent/model", deps.AgentModelHandler.Get)
+					r.Put("/agent/model", deps.AgentModelHandler.Put)
+					r.Delete("/agent/model", deps.AgentModelHandler.Delete)
+				}
+			})
+
 			// Spec 044 Scope 02 — admin auth surface (POST/GET /v1/auth/*).
 			// Behind bearerAuthMiddleware so callers must authenticate;
 			// each handler additionally enforces admin scope via

@@ -188,6 +188,10 @@ sstKeyCatalog:
     type: string[]
     secret: false
     notes: "Spec 088 — runtime-switchable synthesis models for /ask (per-request --model= / API model); non-empty when enabled; each entry profiled + co-resident-fits the ollama envelope (fail-loud in validateModelEnvelopes); per-environment override via environments.<env>.assistant_open_knowledge_switchable_models"
+  - path: assistant.open_knowledge.tool_capable_gather_models
+    type: string[]
+    secret: false
+    notes: "Spec 089 (Fork C) — runtime-switchable GATHER (tool-calling) models for /ask (per-request --gather-model= / API gather_model); non-empty when enabled; each MUST be tool-calling-capable + profiled; the baseline llm_model_id MUST be a member; per-environment override via environments.<env>.assistant_open_knowledge_tool_capable_gather_models"
   - path: assistant.open_knowledge.web_snippet_cache_enabled
     type: bool
     secret: false

@@ -109,6 +109,7 @@ func spec076ApplyBaseOpenKnowledgeEnv(t *testing.T) {
 		"ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD":             "0",
 		"ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST":                          `[]`,
 		"ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS":                       `[]`,
+		"ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS":              `[]`,
 		"ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED":               "false",
 		"ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS":                          "30000",
 		"ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS":                    `[]`,

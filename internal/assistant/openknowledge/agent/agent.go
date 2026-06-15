@@ -91,6 +91,12 @@ type TurnResult struct {
 	// pre-loop refusal (no LLM round ran). Carried to the HTTP envelope
 	// (always) and the Telegram footer (only-on-override) downstream.
 	Model string
+	// GatherModel is the spec 089 attribution: the gather/tool model that
+	// ran this invocation (a.cfg.Model, already re-pointed by any
+	// WithModelOverride gather clone). Stamped once in finalize beside Model;
+	// carried to the HTTP envelope (gather_model) and the dual-form Telegram
+	// footer when a gather override is active.
+	GatherModel string
 }
 
 // LLMChat is the narrow contract the agent loop needs from the LLM
@@ -270,7 +276,18 @@ func (a *Agent) WithModelOverride(o modelswitch.Override) *Agent {
 		return a
 	}
 	clone := *a
-	clone.cfg.SynthesisModel = o.SynthesisModel
+	// Spec 089 — each turn override is independent: a synthesis override
+	// re-points the forced-final SYNTHESIS turn (cfg.SynthesisModel); a
+	// gather override (Fork C) re-points the gather/tool turns (cfg.Model).
+	// Only the supplied turn(s) change; the SST singleton is never mutated
+	// (C6). A zero override returned early above, so the no-selection path is
+	// byte-for-byte spec 087/088 (NFR-4).
+	if o.SynthesisModel != "" {
+		clone.cfg.SynthesisModel = o.SynthesisModel
+	}
+	if o.GatherModel != "" {
+		clone.cfg.Model = o.GatherModel
+	}
 	return &clone
 }
 
@@ -316,6 +333,12 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		// across all paths. Respect an already-set Model (defensive).
 		if out.Model == "" {
 			out.Model = answeringModel
+		}
+		// Spec 089 — stamp the gather/tool model that ran (a.cfg.Model,
+		// already re-pointed by any WithModelOverride gather clone). Honest
+		// across all terminal paths; respect an already-set value (defensive).
+		if out.GatherModel == "" {
+			out.GatherModel = a.cfg.Model
 		}
 		iters := iterations
 		if iters == 0 {
@@ -466,7 +489,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 			if isForcedFinalTurn && strings.TrimSpace(result.FinalText) == "" {
 				autoSources := a.cappedTraceSources(trace)
 				if len(autoSources) > 0 {
-					body := honestSalvageBody(trace)
+					body := stripContractScaffolding(honestSalvageBody(trace))
 					if body != "" {
 						return finalize(TurnResult{
 							Status:             StatusSuccess,
@@ -492,7 +515,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 				// refusing as fabricated_source would punish a
 				// well-formed answer for a formatting omission.
 				autoSources := a.cappedTraceSources(trace)
-				trimmedText := strings.TrimSpace(result.FinalText)
+				trimmedText := stripContractScaffolding(result.FinalText)
 				if isForcedFinalTurn && len(trace) > 0 && len(autoSources) > 0 && trimmedText != "" {
 					return finalize(TurnResult{
 						Status:             StatusSuccess,
@@ -551,6 +574,10 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 							salvageBody = syn
 						}
 					}
+					// Spec 089 (FR-13) — scrub any residual <CITATIONS> /
+					// contract marker from the salvage body before finalize so
+					// no scaffolding reaches the user body under ANY model.
+					salvageBody = stripContractScaffolding(salvageBody)
 					return finalize(TurnResult{
 						Status:             StatusSuccess,
 						FinalText:          salvageBody,
@@ -814,6 +841,42 @@ func stripThinkBlocks(s string) string {
 	}
 	s = thinkBlockRE.ReplaceAllString(s, "")
 	s = strayOpenThinkRE.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
+}
+
+// contractCitationsBlockRE matches a residual <CITATIONS>...</CITATIONS> block
+// ANYWHERE in the text (not only the trailing parseCitations position), so a
+// malformed / duplicated / mid-text citations block surfaced on a salvage arm
+// is scrubbed before it reaches the user body. Spec 089 (FR-13).
+var contractCitationsBlockRE = regexp.MustCompile(`(?s)<CITATIONS>.*?</CITATIONS>`)
+
+// strayOpenCitationsRE matches a stray, unterminated <CITATIONS> (no closing
+// tag) through end-of-text — the partial-block leak the A/B observed on a
+// truncated forced-final. Run AFTER contractCitationsBlockRE so a well-formed
+// trailing block is removed as a block first. Spec 089 (FR-13).
+var strayOpenCitationsRE = regexp.MustCompile(`(?s)<CITATIONS>.*$`)
+
+// contractMarkerRE matches the "<one synthesized answer …>" contract marker
+// (config/prompt_contracts/open_knowledge.yaml) a model may echo verbatim; it
+// must never leak into the body. Spec 089 (FR-13).
+var contractMarkerRE = regexp.MustCompile(`(?s)<one synthesized answer[^>]*>`)
+
+// stripContractScaffolding removes residual answer-contract scaffolding (a
+// <CITATIONS> block, a stray unterminated <CITATIONS>, or the
+// "<one synthesized answer…>" marker) from a SALVAGE-arm body before finalize,
+// so no contract scaffolding reaches the user body under ANY synthesis model
+// (spec 089 FR-13). A no-op on a clean body (fast-path Contains guard). The
+// happy cited-synthesis path is unaffected — parseCitations already strips the
+// trailing block there; this guards only the salvage arms that surface raw or
+// partial model text. (<think> is stripped earlier by stripThinkBlocks,
+// CT-8 — unchanged.)
+func stripContractScaffolding(s string) string {
+	if !strings.Contains(s, "<CITATIONS>") && !strings.Contains(s, "<one synthesized answer") {
+		return s
+	}
+	s = contractCitationsBlockRE.ReplaceAllString(s, "")
+	s = strayOpenCitationsRE.ReplaceAllString(s, "")
+	s = contractMarkerRE.ReplaceAllString(s, "")
 	return strings.TrimSpace(s)
 }
 

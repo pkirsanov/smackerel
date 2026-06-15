@@ -4528,6 +4528,93 @@ for the full outcome contract and refusal taxonomy.
 >   provenance / no-zero-source, capture-as-fallback, `<think>`-strip +
 >   retry-before-salvage all run on the turn OUTPUT, model-agnostic).
 
+> **Spec 089 — persistent default + per-user sticky + gather override + prod
+> hot-swap (extends spec 088, does NOT amend it).** Spec 088 shipped the
+> per-request synthesis switch; spec 089 adds three more selection axes and a
+> documented prod hot-swap, all sharing ONE precedence resolver
+> (`modelswitch.ResolveEffective`), ONE claim-bound store
+> (`user_model_preferences` / `modelpref`), and ONE attribution shape across
+> Telegram + web/HTTP (SCN-089-A11 parity).
+>
+> - **Persistent default (committed SST).** Home-lab promotes the standing
+>   synthesis default `deepseek-r1:7b → deepseek-r1:32b`
+>   (`environments.home-lab.assistant_open_knowledge_synthesis_model_id`),
+>   raises `ollama_memory_limit` `28G → 48G` (so gather `gemma4:26b` 18432 +
+>   synthesis `deepseek-r1:32b` 22528 = 40960 ≤ 49152), and adds `deepseek-r1:32b`
+>   to `switchable_models` (7b stays the speed escape hatch). The **standing
+>   default is now co-residence-checked** at config-generation
+>   (`validateModelEnvelopes`), closing the spec-088 gap where only the switchable
+>   entries were checked.
+> - **Per-user sticky `/model` (claim-bound; persists).** A user sets a sticky
+>   `/ask` synthesis model once; it applies to every later `/ask` until changed or
+>   reset. Surfaces (identical CRUD via the same store + validator):
+>   - Telegram: `/model` (show effective + switchable + default), `/model <id>`
+>     (set), `/model default` (reset). NOT an agent run — a per-user CRUD.
+>   - Web/HTTP: `GET /v1/agent/model` (show), `PUT /v1/agent/model {"model":"<id>"}`
+>     (set), `DELETE /v1/agent/model` (reset). Behind bearer auth; the actor is the
+>     PASETO subject (`auth.UserIDFromContext`) — the body NEVER carries a user id,
+>     so a spoofed body id is structurally ignored (OWASP A01 / spec 044).
+>   - An off-allowlist set is a fail-loud no-op: the rejection is rendered (HTTP
+>     400) and the existing preference is UNCHANGED. An orphaned sticky (operator
+>     retired the model from `switchable_models`) silently resolves to the SST
+>     default + a structured log — it never breaks every `/ask` for that user.
+> - **Per-request gather override (`--gather-model=` / `gather_model`).** SEPARATE
+>   from `--model=` (synthesis). Re-points the gather/tool turns only, gated by the
+>   NEW `assistant.open_knowledge.tool_capable_gather_models` SST set (home-lab
+>   `[gemma4:26b, llama3.1:8b]`; the baseline `llm_model_id` MUST be a member). A
+>   non-tool-capable gather is refused `model_not_tool_capable` (`rejected_turn:
+>   gather`) BEFORE any gather turn runs — `deepseek-r1*` tool-calling is weak,
+>   `gemma3:4b` errors `does not support tools`. Per-request only (sticky gather
+>   deferred, F-STICKY-GATHER).
+> - **Precedence + source (per turn).**
+>
+>   | Turn | per-request supplied | else sticky supplied | else |
+>   |------|----------------------|----------------------|------|
+>   | Synthesis | per-request wins · source `this question` | sticky wins · source `your default`; orphaned ⇒ default | SST default · no footer |
+>   | Gather | per-request wins · source `this question` | *(sticky gather deferred)* | baseline gather · no footer |
+>
+>   Telegram footer: single `— model: <id> (<source>)` when only synthesis is
+>   non-default; dual `— gather: <g> (<gsrc>) · synth: <s> (<ssrc>)` when a gather
+>   override is active; NO footer on a pure system-default answer (NFR-4 /
+>   Principle 6). HTTP envelope ALWAYS carries `model` + `model_source` +
+>   `gather_model` + `gather_model_source`.
+> - **Prod hot-swap (Fork D — ~15s core-recreate, the documented mechanism).**
+>   To change the standing default (or any SST model surface) in prod:
+>   1. Edit the committed SST (`config/smackerel.yaml`
+>      `environments.<env>.assistant_open_knowledge_synthesis_model_id`, etc.).
+>   2. `./smackerel.sh config generate --env <env>` — fail-loud (an over-envelope
+>      standing default aborts here, naming the model + envelope).
+>   3. The operator-private deploy adapter recreates the core service only
+>      (`--no-deps`, image digests from the running container, ~15s; the ingestion
+>      pipeline is a separate untouched service).
+>   4. **Verify** via the boot log
+>      `open-knowledge subsystem wired … synthesis_model=<new> …
+>      tool_capable_gather_models=… sticky_pref_store=wired` AND a live `/ask`
+>      whose envelope reads `model_source: default` with the new `model`.
+>   True zero-downtime config-hot-reload is deferred (F-HOTRELOAD) — ~15s of `/ask`
+>   unavailability on a deliberate model swap is immaterial for a single-operator
+>   self-hosted assistant.
+> - **Standing-default footprint headroom.** The `model_memory_profiles`
+>   `deepseek-r1:32b=22528 MiB` is a q4-weights + small-ctx ceiling that UNDERSTATES
+>   the real KV-cache-dominated footprint (~64 GB at the model's 131072 ctx) at the
+>   pipeline's `per_query_token_budget=128000`. The real bound is the Docker
+>   `OLLAMA_MEMORY_LIMIT` cgroup cap, which CONSTRAINS ollama's KV-cache: the live
+>   A/B at 48G measured 82 GiB used / 26 GiB free, "no pressure", co-resident with
+>   ingestion (`docs/experiments/open-knowledge-synthesis-model-ab.md`). The profile
+>   is NOT bumped (it is a shared ceiling across the co-residence matrix); an
+>   explicit synthesis `num_ctx` bound is the deferred follow-up (F-FOOTPRINT).
+> - **`WriteTimeout` UNCHANGED at `4200s`.** The 32b default + a gather override +
+>   a sticky preference all only SWAP which model occupies the synthesis or gather
+>   seat on the EXISTING turns; none adds a turn or changes `max_iterations` /
+>   `synthesis_retry_budget`. The 32b default changes TYPICAL latency (~1.9×), not
+>   the MAX. Raising `synthesis_retry_budget` 1→2 (F-RETRYBUDGET) would re-derive
+>   `WriteTimeout` to `(6+2)×600s = 4800s` — the explicit reason it is a deferred
+>   operator knob, not a silent change.
+> - **All spec-064/084/087/088 trust invariants hold under ANY selection** (the
+>   resolver changes WHICH model + WHICH turn, never the trust perimeter). The live
+>   deepseek-r1:32b standing-default deploy (persist 48G + the 32b default +
+>   pull-on-deploy + re-verify) is a SEPARATE downstream `bubbles.devops` dispatch.
+
 ### Enabling / Disabling
 
 The subsystem ships disabled. Operator opts in by flipping

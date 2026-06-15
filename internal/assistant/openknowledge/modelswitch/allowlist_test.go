@@ -20,9 +20,10 @@ func spec088TestAllowlist(t *testing.T) *Allowlist {
 			"deepseek-r1:32b": 22528, // profiled but busts the envelope co-resident with gather
 			"gemma3:4b":       4096,
 		},
-		28672,        // home-lab ollama_memory_limit
-		"gemma4:26b", // gather model (co-resident during synthesis)
-		"gemma4:26b", // default = baseline synthesis model (wireframe marks this "(default)")
+		28672,                  // home-lab ollama_memory_limit
+		"gemma4:26b",           // gather model (co-resident during synthesis)
+		"gemma4:26b",           // default = baseline synthesis model (wireframe marks this "(default)")
+		[]string{"gemma4:26b"}, // spec 089 tool-capable gather set (baseline gemma4:26b is a member)
 	)
 	if err != nil {
 		t.Fatalf("spec088TestAllowlist: unexpected build error: %v", err)
@@ -200,7 +201,7 @@ func TestAllowlist_NewAllowlist_FailLoudBuild_Spec088(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			a, err := NewAllowlist(tc.switchable, profiles, tc.envelopeMiB, tc.gatherModel, tc.defaultModel)
+			a, err := NewAllowlist(tc.switchable, profiles, tc.envelopeMiB, tc.gatherModel, tc.defaultModel, []string{tc.gatherModel})
 			if err == nil {
 				t.Fatalf("expected fail-loud build error for %q, got allowlist %+v", tc.name, a)
 			}
@@ -221,6 +222,7 @@ func TestAllowlist_NewAllowlist_DevEnvelopeSkipped_Spec088(t *testing.T) {
 		0, // dev: no ollama envelope
 		"gemma3:4b",
 		"gemma3:4b",
+		[]string{"gemma3:4b"}, // spec 089 tool-capable gather set
 	)
 	if err != nil {
 		t.Fatalf("dev build (envelope 0) MUST succeed for a profiled set, got: %v", err)
@@ -228,5 +230,159 @@ func TestAllowlist_NewAllowlist_DevEnvelopeSkipped_Spec088(t *testing.T) {
 	ov, rej := a.Resolve("gemma3:4b")
 	if rej != nil || ov.SynthesisModel != "gemma3:4b" {
 		t.Fatalf("dev in-list resolve failed: ov=%q rej=%+v", ov.SynthesisModel, rej)
+	}
+}
+
+// spec089TestAllowlist builds the home-lab-shaped spec-089 allowlist: the
+// standing default is deepseek-r1:32b, the switchable set adds it at the 48G
+// envelope, and the tool-capable gather set is [gemma4:26b, llama3.1:8b] with
+// the baseline gather gemma4:26b a member. llama3.1:8b is tool-capable but NOT
+// switchable (gather ≠ synthesis sets); deepseek-r1:7b is switchable but NOT
+// tool-capable (the weak-tool reasoning model); gemma3:4b is profiled but in
+// neither set (the orphaned-sticky fixture).
+func spec089TestAllowlist(t *testing.T) *Allowlist {
+	t.Helper()
+	a, err := NewAllowlist(
+		[]string{"deepseek-r1:32b", "deepseek-r1:7b", "gemma4:26b"},
+		map[string]int{
+			"gemma4:26b":      18432,
+			"deepseek-r1:7b":  4864,
+			"deepseek-r1:32b": 22528,
+			"llama3.1:8b":     6144,
+			"gemma3:4b":       4096,
+		},
+		49152,                                 // home-lab 48G
+		"gemma4:26b",                          // gather (baseline)
+		"deepseek-r1:32b",                     // standing default synthesis
+		[]string{"gemma4:26b", "llama3.1:8b"}, // tool-capable gather set (baseline gemma4:26b is a member)
+	)
+	if err != nil {
+		t.Fatalf("spec089TestAllowlist: unexpected build error: %v", err)
+	}
+	return a
+}
+
+// SCN-089-A05 (ADVERSARIAL) — ResolveEffective applies precedence per-request >
+// sticky > SST default per turn and classifies the source. Fails if precedence
+// inverts or a source is mis-tagged.
+func TestAllowlist_ResolveEffective_PrecedencePerRequestOverStickyOverDefault_Spec089(t *testing.T) {
+	a := spec089TestAllowlist(t)
+	t.Run("per_request_synth_wins_over_sticky", func(t *testing.T) {
+		eff, rej := a.ResolveEffective("deepseek-r1:7b", "", "gemma4:26b")
+		if rej != nil {
+			t.Fatalf("unexpected rejection: %+v", rej)
+		}
+		if eff.SynthesisModel != "deepseek-r1:7b" || eff.SynthesisSource != SourcePerRequest {
+			t.Fatalf("per-request MUST win over sticky: got %q/%q want deepseek-r1:7b/per_request", eff.SynthesisModel, eff.SynthesisSource)
+		}
+	})
+	t.Run("sticky_wins_when_no_per_request", func(t *testing.T) {
+		eff, rej := a.ResolveEffective("", "", "gemma4:26b")
+		if rej != nil {
+			t.Fatalf("unexpected rejection: %+v", rej)
+		}
+		if eff.SynthesisModel != "gemma4:26b" || eff.SynthesisSource != SourceSticky {
+			t.Fatalf("sticky MUST win when no per-request: got %q/%q want gemma4:26b/sticky", eff.SynthesisModel, eff.SynthesisSource)
+		}
+	})
+	t.Run("default_when_neither", func(t *testing.T) {
+		eff, rej := a.ResolveEffective("", "", "")
+		if rej != nil {
+			t.Fatalf("unexpected rejection: %+v", rej)
+		}
+		if eff.SynthesisModel != "deepseek-r1:32b" || eff.SynthesisSource != SourceDefault {
+			t.Fatalf("the SST default MUST apply: got %q/%q want deepseek-r1:32b/default", eff.SynthesisModel, eff.SynthesisSource)
+		}
+		if eff.GatherModel != "gemma4:26b" || eff.GatherSource != SourceDefault {
+			t.Fatalf("gather MUST default to the baseline: got %q/%q", eff.GatherModel, eff.GatherSource)
+		}
+	})
+}
+
+// SCN-089-A05 — an orphaned sticky (operator-retired) resolves to the SST
+// default, never breaking every /ask for that user; a per-request reject does
+// NOT fall through to sticky/default (explicit refusal).
+func TestAllowlist_ResolveEffective_OrphanedStickyFallsToDefault_Spec089(t *testing.T) {
+	a := spec089TestAllowlist(t)
+	// gemma3:4b is profiled but NOT in the switchable set (retired).
+	eff, rej := a.ResolveEffective("", "", "gemma3:4b")
+	if rej != nil {
+		t.Fatalf("an orphaned sticky MUST NOT reject (it resolves to default): %+v", rej)
+	}
+	if eff.SynthesisModel != "deepseek-r1:32b" || eff.SynthesisSource != SourceDefault {
+		t.Fatalf("orphaned sticky MUST resolve to the SST default, got %q/%q", eff.SynthesisModel, eff.SynthesisSource)
+	}
+	// A per-request reject does NOT fall through.
+	_, rej2 := a.ResolveEffective("gpt-4o", "", "gemma4:26b")
+	if rej2 == nil {
+		t.Fatalf("an off-allowlist per-request synthesis MUST be refused (no fall-through to sticky/default)")
+	}
+	if rej2.RejectedTurn != TurnSynthesis {
+		t.Fatalf("rejected_turn want synthesis, got %q", rej2.RejectedTurn)
+	}
+}
+
+// SCN-089-A07 (ADVERSARIAL) — ResolveGather applies a tool-capable gather and
+// rejects a non-tool-capable one (model_not_tool_capable, rejected_turn=gather)
+// naming the set. Fails if a weak-tool model is accepted for the gather turn.
+func TestAllowlist_ResolveGather_ToolCapableApplied_NonCapableRejected_Spec089(t *testing.T) {
+	a := spec089TestAllowlist(t)
+	t.Run("tool_capable_applied", func(t *testing.T) {
+		for _, m := range []string{"gemma4:26b", "llama3.1:8b"} {
+			g, rej := a.ResolveGather(m)
+			if rej != nil || g != m {
+				t.Fatalf("tool-capable %q MUST resolve, got g=%q rej=%+v", m, g, rej)
+			}
+		}
+	})
+	t.Run("empty_is_baseline", func(t *testing.T) {
+		g, rej := a.ResolveGather("")
+		if rej != nil || g != "" {
+			t.Fatalf("empty gather MUST be the baseline (g=\"\", nil), got g=%q rej=%+v", g, rej)
+		}
+	})
+	t.Run("non_tool_capable_rejected", func(t *testing.T) {
+		// deepseek-r1:7b is switchable (synthesis) but NOT tool-capable.
+		g, rej := a.ResolveGather("deepseek-r1:7b")
+		if rej == nil {
+			t.Fatalf("a non-tool-capable gather MUST be refused (got g=%q)", g)
+		}
+		if rej.ReasonCode != ReasonNotToolCapable {
+			t.Fatalf("reason want %q, got %q", ReasonNotToolCapable, rej.ReasonCode)
+		}
+		if rej.RejectedTurn != TurnGather {
+			t.Fatalf("rejected_turn want gather, got %q", rej.RejectedTurn)
+		}
+		if !strings.Contains(rej.Message, "tool-calling-capable") || !strings.Contains(rej.Message, "gemma4:26b") {
+			t.Fatalf("message must name the constraint + the tool-capable set: %q", rej.Message)
+		}
+	})
+	t.Run("via_resolve_effective", func(t *testing.T) {
+		eff, rej := a.ResolveEffective("", "llama3.1:8b", "")
+		if rej != nil {
+			t.Fatalf("a tool-capable gather override MUST resolve via ResolveEffective: %+v", rej)
+		}
+		if eff.GatherModel != "llama3.1:8b" || eff.GatherSource != SourcePerRequest {
+			t.Fatalf("gather override want llama3.1:8b/per_request, got %q/%q", eff.GatherModel, eff.GatherSource)
+		}
+		_, rej2 := a.ResolveEffective("", "deepseek-r1:7b", "")
+		if rej2 == nil || rej2.RejectedTurn != TurnGather {
+			t.Fatalf("a non-tool-capable gather via ResolveEffective MUST reject with rejected_turn=gather, got %+v", rej2)
+		}
+	})
+}
+
+// SCN-089-A08 (parity seam) — the SAME off-allowlist string yields a
+// byte-identical Rejection every call: the one shared contract both SCOPE-04
+// surfaces render verbatim.
+func TestAllowlist_ResolveEffective_OffAllowlistByteIdenticalContract_Spec089(t *testing.T) {
+	a := spec089TestAllowlist(t)
+	_, r1 := a.ResolveEffective("gpt-4o", "", "")
+	_, r2 := a.ResolveEffective("gpt-4o", "", "")
+	if r1 == nil || r2 == nil {
+		t.Fatalf("the off-allowlist string MUST reject on both calls")
+	}
+	if r1.Message != r2.Message || r1.ReasonCode != r2.ReasonCode || r1.RejectedTurn != r2.RejectedTurn {
+		t.Fatalf("the same off-allowlist string MUST yield a byte-identical Rejection (parity): r1=%+v r2=%+v", r1, r2)
 	}
 }

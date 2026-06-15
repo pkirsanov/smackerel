@@ -7,6 +7,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 )
 
 // TestBuildTelegramRendering_StatusPrefix exercises the in-flight
@@ -254,6 +255,74 @@ func TestBuildTelegramRendering_SilentCaptureNoBody(t *testing.T) {
 	if keyboard != nil {
 		t.Errorf("keyboard = %v; want nil", keyboard)
 	}
+}
+
+// TestRenderOutbound_FooterSourceTagsAndDualGatherForm_Spec089 — ADVERSARIAL.
+// The spec-089 footer renders source tags (sticky→"your default",
+// per-request→"this question"), the single form when only synthesis is
+// non-default, the dual gather/synth form when a gather override is active, and
+// NO footer on a pure system-default answer. Fails if a baseline grows a footer
+// or an override answer loses/garbles its footer.
+func TestRenderOutbound_FooterSourceTagsAndDualGatherForm_Spec089(t *testing.T) {
+	t.Parallel()
+	webSource := []contracts.Source{{
+		ID: "w-1", Title: "WSU", Kind: contracts.SourceWeb,
+		Ref: contracts.WebSourceRef{URL: "https://wsu.test/x", Provider: "searxng", FetchedAt: time.Unix(0, 0), ContentHash: "sha256:x", Snippet: "s"},
+	}}
+	base := contracts.AssistantResponse{Status: contracts.StatusAnswered, Body: "town-B.", Sources: webSource}
+
+	t.Run("single_form_sticky_source", func(t *testing.T) {
+		resp := base
+		resp.ModelAttribution = &contracts.ModelAttribution{ModelID: "deepseek-r1:7b", OverrideApplied: true, SynthesisSource: modelswitch.SourceSticky}
+		rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if !strings.Contains(rendered, "— model: deepseek-r1:7b (your default)") {
+			t.Fatalf("sticky synthesis MUST render '(your default)', got %q", rendered)
+		}
+	})
+
+	t.Run("single_form_per_request_source", func(t *testing.T) {
+		resp := base
+		resp.ModelAttribution = &contracts.ModelAttribution{ModelID: "deepseek-r1:7b", OverrideApplied: true, SynthesisSource: modelswitch.SourcePerRequest}
+		rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if !strings.Contains(rendered, "— model: deepseek-r1:7b (this question)") {
+			t.Fatalf("per-request synthesis MUST render '(this question)', got %q", rendered)
+		}
+	})
+
+	t.Run("dual_form_on_gather_override", func(t *testing.T) {
+		resp := base
+		resp.ModelAttribution = &contracts.ModelAttribution{
+			ModelID: "deepseek-r1:32b", OverrideApplied: true,
+			SynthesisSource: modelswitch.SourceDefault,
+			GatherModel:     "llama3.1:8b", GatherSource: modelswitch.SourcePerRequest, GatherOverridden: true,
+		}
+		rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		want := "— gather: llama3.1:8b (this question) · synth: deepseek-r1:32b"
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("a gather override MUST render the dual form %q, got %q", want, rendered)
+		}
+	})
+
+	t.Run("pure_default_no_footer", func(t *testing.T) {
+		resp := base
+		resp.ModelAttribution = &contracts.ModelAttribution{ModelID: "deepseek-r1:32b", OverrideApplied: false, SynthesisSource: modelswitch.SourceDefault, GatherSource: modelswitch.SourceDefault}
+		rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+		if err != nil {
+			t.Fatalf("err = %v", err)
+		}
+		if strings.Contains(rendered, "— model:") || strings.Contains(rendered, "— gather:") {
+			t.Fatalf("a pure system-default answer MUST NOT grow a footer (NFR-4), got %q", rendered)
+		}
+	})
 }
 
 // TestBuildTelegramRendering_ModelFooterOnOverrideOnly_Spec088 — ADVERSARIAL.

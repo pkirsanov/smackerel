@@ -141,6 +141,14 @@ func TestRun_ConstructedValidEnv_ExitsZero(t *testing.T) {
 		if strings.HasPrefix(ln, "ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=") {
 			lines[i] = `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["bug-045-fixture-llm-6gib"]`
 		}
+		// Spec 089 — point the tool_capable_gather_models allowlist at the
+		// profiled fixture model too. The gather model (llm_model_id) is
+		// overridden above to bug-045-fixture-llm-6gib, so it MUST be a member
+		// of this set (baseline-membership rule) and the entry MUST be
+		// profiled — both satisfied by the single fixture model.
+		if strings.HasPrefix(ln, "ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS=") {
+			lines[i] = `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS=["bug-045-fixture-llm-6gib"]`
+		}
 		if strings.HasPrefix(ln, "PHOTOS_INTELLIGENCE_EMBED_MODEL=") {
 			lines[i] = `PHOTOS_INTELLIGENCE_EMBED_MODEL="bug-045-fixture-embed-512mib"`
 		}
@@ -153,7 +161,7 @@ func TestRun_ConstructedValidEnv_ExitsZero(t *testing.T) {
 	// Snapshot env vars loadEnvFile will overwrite so other tests in
 	// the same `go test` process do not inherit mutations.
 	snapshot := map[string]string{}
-	for _, key := range append(overrideKeys, "ML_MODEL_MEMORY_PROFILES_JSON", "PHOTOS_INTELLIGENCE_EMBED_MODEL", "ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS") {
+	for _, key := range append(overrideKeys, "ML_MODEL_MEMORY_PROFILES_JSON", "PHOTOS_INTELLIGENCE_EMBED_MODEL", "ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS", "ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS") {
 		snapshot[key] = os.Getenv(key)
 		keyCopy := key
 		t.Cleanup(func() {
