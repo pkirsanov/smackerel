@@ -1567,3 +1567,117 @@ done-ceiling work is the live home-lab deploy of the 087→088→089 chain
 **interpreted** (the source control-flow + security-surface judgments, grounded
 in the cited `model_selection.go` line numbers). No live-stack result fabricated;
 no commit/push; no agents dispatched.
+
+---
+
+## DevOps Deploy Execution (bubbles.devops — 2026-06-15)
+
+Operator authorized the live home-lab deploy of the 087→088→089 chain ("1 = deploy").
+This section records the REAL devops outcome (commit → push → CI build/sign → home-lab
+apply → live-verify), executed as far as genuinely possible. No fabricated results; no
+agents dispatched. Host/path identifiers genericized per the no-env-specific-content policy.
+
+### 1. Commit (isolated) — DONE · Claim Source: executed
+- Spec-089 working-tree delta committed as ONE focused commit **`9d934005`**
+  (`feat(089): runtime model hot-swap + persistent selection …`).
+- Isolation verified: staged + committed exactly **55 paths** (36 modified + 19 added),
+  all 089-scoped, via `git commit --only -- <explicit paths>` (race-proof). EXCLUDED +
+  confirmed git-clean: the build artifact `clients/mobile/**/.kotlin/` and the
+  do-not-touch boundary (`internal/cardrewards/`, `ml/app/*`, `specs/083-*`,
+  `tests/integration/cardrewards_extract_test.go`).
+- Pre-commit pii-scan: clean. `55 files changed, 9772 insertions(+), 117 deletions(-)`.
+
+### 2. Push — DONE · Claim Source: executed
+- `git push origin main` (no flags; never `--no-verify`). Pre-push knb deploy-cli-uniformity
+  hook: 4 CLIs conformant. `9744a62e..9d934005  main -> main`; HEAD == origin/main ==
+  `9d934005`. CI Gitleaks run: success (no PII leak).
+
+### 3. CI build / sign — SERVER GREEN; build-manifest blocked by dormant Android client · Claim Source: executed
+- `build` workflow run `27521709403` (push `9d934005`):
+  - **`build-images`: SUCCESS** — core+ML built, cosign keyless+Rekor signed, SBOM+SLSA
+    attested, Trivy-scanned, pushed to ghcr **by digest**:
+    - core: `ghcr.io/pkirsanov/smackerel-core@sha256:0a042187b74732cf874614e585de8a61065f633346cdf6f26ce7411cf4838fe2`
+    - ml:   `ghcr.io/pkirsanov/smackerel-ml@sha256:51c4e944f80bc1166bcb68efdfaa048e54e9f0e89b8c803d2d1eb3071e6c0f0f`
+  - **`build-bundles (home-lab)`: SUCCESS** — deterministic 089 config bundle (48G envelope
+    + `deepseek-r1:32b` synthesis default + `tool_capable_gather_models`) published:
+    - `ghcr.io/pkirsanov/smackerel-config-bundles:home-lab-9d934005595c2d4f1db17d3d43372ec83c7d2880`
+      sha256 `46b5922d4f64f435fb01c029b659fac67cb96b66963cc67da85061a83d38eb5d`
+  - **`build-clients`: FAILURE** — "Materialize Android upload keystore (operator-private
+    secret)" — the documented operator-only gap. Gates `publish-build-manifest` (SKIPPED) →
+    NO `build-manifest-9d934005….yaml`. The server images + bundle are unaffected + fully signed.
+
+### 4. Home-lab apply — ATTEMPTED; cosign+bundle verified; FAILED CLOSED on stale on-target-knb secret gap · Claim Source: executed
+- Sanctioned orchestrator (`./smackerel.sh deploy home-lab`) is correctly fail-closed: its
+  CI-gate requires the (absent) build-manifest; no bypass exists (by design).
+- Followed the precedent for the IDENTICAL build-clients-blocked condition (spec 093 /
+  commit 117ac27e): the knb adapter `apply.sh --trust-model=ci-keyless` lane with the
+  CI-signed digests (a sanctioned trust-lane selection — full cosign-against-Rekor +
+  bundle-hash verification before container start, G074/G081-compliant; NOT a `--skip`/`--force`
+  bypass). Preconditions present on `<deploy-host>`: operator GHCR auth, cosign, oras, SOPS
+  age key + TPM-sealed cred; all four 089 ollama models (`deepseek-r1:32b`, `deepseek-r1:7b`,
+  `gemma4:26b`, `llama3.1:8b`) resident.
+- Apply transcript (value-safe):
+  - trustModel ci-keyless resolved; preconditions OK.
+  - bundle pulled; **bundle sha256 verified == `46b5922d…`** before extraction.
+  - **cosign verify PASSED** for core (`0a042187`) AND ml (`51c4e944`) against Rekor —
+    Certificate subject `https://github.com/pkirsanov/smackerel/.github/workflows/build.yml@refs/heads/main`,
+    Workflow SHA `9d934005` (exact commit). Release proof verified.
+  - images pulled by digest; SOPS decrypted (`secrets_decrypted=true`, `decryption_ms=46`).
+  - **effective-env render FAILED at `stage=substitute-secrets`**:
+    `missing target value for declared secret key: WEB_REGISTRATION_INVITE_TOKEN`
+    (declared=8, substituted=**7**/8). `apply.sh` **failed closed BEFORE any container
+    recreate**; audit `outcome=failure`.
+- **Root cause:** the on-target knb checkout (`<operator-home>/knb`, rev `d1ee19b`, dirty)
+  is STALE — its `smackerel/secrets/home-lab.enc.env` lacks `WEB_REGISTRATION_INVITE_TOKEN`
+  (count 0), whereas the up-to-date local knb (`eaf118e`) HAS it (count 1). The orchestrator's
+  `knb-rev-pin` step normally syncs the on-target knb before applying; the direct adapter call
+  bypassed it. This is NOT an unprovisioned secret — it is on-target knb staleness that only
+  the operator/orchestrator may reconcile (the checkout carries dirty WIP that MUST NOT be discarded).
+- **Live stack impact:** NONE to the running service. Core `aa25e9212298` + ML `fecf30719240`
+  (the prior 117ac27e build; synthesis default still **`deepseek-r1:7b`**) remain **Up + healthy**.
+  `apply.sh`'s extraction (`rm -rf` compose dir → `tar` new bundle) left the on-disk compose dir
+  mid-089-update (placeholder app.env); the running containers persist their config and survive
+  reboots (only an explicit `docker compose up` re-reads the dir — the next successful apply
+  finalizes it). The authoritative deploy pointer was NOT advanced (apply failed before commit).
+
+### 5. Live verify — NOT PERFORMED (089 not live) · Claim Source: not-run
+- The default-is-32b attribution check and the sticky/claim-bound `/v1/agent/model` check were
+  NOT run, because 089 is not live (apply blocked above). No result fabricated. Exact operator
+  commands are in §6.
+
+### 6. Operator runbook to complete activation
+**Option A (recommended — sanctioned orchestrator):**
+1. Make `build-clients` green (provide the Android upload-keystore CI secret) so
+   `build.yml` → `publish-build-manifest` produces `build-manifest-9d934005….yaml`.
+2. `./smackerel.sh deploy home-lab` — the orchestrator syncs the on-target knb (knb-rev-pin),
+   retrieves the manifest, and applies end-to-end (cosign verify → 089 images → 089 SST →
+   migration 059 → rollout verify). This self-heals the mid-update compose dir.
+
+**Option B (direct adapter apply, foregoing the orchestrator):**
+1. On `<deploy-host>`, reconcile the on-target knb `<operator-home>/knb` to a rev that includes
+   `WEB_REGISTRATION_INVITE_TOKEN` in `smackerel/secrets/home-lab.enc.env` (local knb `eaf118e`
+   has it). **Stash/commit the on-target dirty WIP first — do NOT discard it.**
+2. Re-run the adapter apply (root, operator age key):
+   `env SOPS_AGE_KEY_FILE=<operator-home>/.config/sops/age/keys.txt <operator-home>/knb/smackerel/home-lab/apply.sh --trust-model=ci-keyless --image-core=sha256:0a042187…(0a042187b74732cf874614e585de8a61065f633346cdf6f26ce7411cf4838fe2) --image-ml=sha256:51c4e944…(51c4e944f80bc1166bcb68efdfaa048e54e9f0e89b8c803d2d1eb3071e6c0f0f) --config-bundle=home-lab-9d934005595c2d4f1db17d3d43372ec83c7d2880 --config-bundle-sha=46b5922d4f64f435fb01c029b659fac67cb96b66963cc67da85061a83d38eb5d --source-sha=9d934005595c2d4f1db17d3d43372ec83c7d2880`
+   → rm-rf + extract 089 + render (now succeeds) + recreate core+ML + migration 059 on core boot + rollout verify.
+3. Live-verify on the deployed core (value-safe; ephemeral throwaway PASETO minted in-container,
+   never printed, revoked after):
+   - **Default-is-32b:** a no-selection `/ask` via `POST /v1/agent/invoke {"raw_input":"…"}`
+     returns envelope `model: deepseek-r1:32b` / `model_source: default`.
+   - **Sticky + claim-bound:** `PUT /v1/agent/model {"model":"deepseek-r1:7b"}` persists (GET
+     returns it); a body-supplied `user_id` is IGNORED (bound to the bearer subject). Spot-check
+     migration 059 `user_model_preferences` table exists.
+
+**Note:** until a successful apply finalizes it, do NOT run `docker compose up` in the on-target
+compose dir manually — the running stack is healthy and reboot-safe; the next apply repairs the
+on-disk bundle.
+
+**Terminal status:** `blocked` (delivered-pending-activation). Code is committed (`9d934005`)
++ pushed to origin/main + CI-built + cosign-signed + bundle-published; live home-lab activation
+is blocked on operator on-target-knb reconciliation (Option A or B). `certifiedAt` stays null.
+`nextRequiredOwner = operator` (reconcile on-target knb / provide Android keystore secret) →
+then `bubbles.devops` re-runs the apply + live-verify.
+
+`Claim Source:` **executed** (every transcript above is real captured `run_in_terminal` /
+`gh` / `tailscale ssh` output this session; host/path identifiers genericized) +
+**interpreted** (root-cause + trust-lane judgments). No live-stack result fabricated.
