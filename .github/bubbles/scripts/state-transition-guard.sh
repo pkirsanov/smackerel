@@ -840,6 +840,13 @@ echo ""
 # =============================================================================
 echo "--- Check 4A: DoD Format Manipulation Detection (Gate G041) ---"
 total_manipulated=0
+# BUG-005: precompiled patterns (bash builtins replace per-line echo|grep forks).
+# `_c4a_dod_header_re` is matched case-INSENSITIVELY (original grep -qiE); the
+# rest are case-SENSITIVE (original grep -qE).
+_c4a_dod_header_re='^#{1,4}.*Definition of Done|^#{1,4}.*DoD'
+_c4a_heading_re='^#{1,4} '
+_c4a_listitem_re='^\- '
+_c4a_checkbox_re='^\- \[(x| )\] '
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
 
@@ -849,14 +856,19 @@ for scope_path in "${scope_files[@]}"; do
   while IFS= read -r line; do
     line_num=$((line_num + 1))
 
-    # Detect DoD section headers
-    if echo "$line" | grep -qiE '^#{1,4}.*Definition of Done|^#{1,4}.*DoD'; then
+    # Detect DoD section headers (case-INSENSITIVE — matches the original
+    # grep -qiE). BUG-005: bash builtin instead of an echo|grep fork per line.
+    _c4a_is_dod_header=0
+    shopt -s nocasematch
+    [[ "$line" =~ $_c4a_dod_header_re ]] && _c4a_is_dod_header=1
+    shopt -u nocasematch
+    if [[ "$_c4a_is_dod_header" -eq 1 ]]; then
       in_dod=1
       continue
     fi
 
-    # Exit DoD section on next heading or scope boundary
-    if [[ "$in_dod" -eq 1 ]] && echo "$line" | grep -qE '^#{1,4} '; then
+    # Exit DoD section on next heading or scope boundary (case-sensitive)
+    if [[ "$in_dod" -eq 1 ]] && [[ "$line" =~ $_c4a_heading_re ]]; then
       in_dod=0
       continue
     fi
@@ -865,8 +877,8 @@ for scope_path in "${scope_files[@]}"; do
     if [[ "$in_dod" -eq 1 ]]; then
       # Valid formats: "- [ ] " or "- [x] "
       # Invalid: "- (deferred)", "- ~~text~~", "- *text*", "- text" (no checkbox)
-      if echo "$line" | grep -qE '^\- ' && ! echo "$line" | grep -qE '^\- \[(x| )\] '; then
-        fail "DoD format manipulation detected in ${scope_path#$feature_dir/} line $line_num: $(echo "$line" | head -c 100)"
+      if [[ "$line" =~ $_c4a_listitem_re ]] && ! [[ "$line" =~ $_c4a_checkbox_re ]]; then
+        fail "DoD format manipulation detected in ${scope_path#$feature_dir/} line $line_num: ${line:0:100}"
         fun_message format_bypass
         total_manipulated=$((total_manipulated + 1))
       fi
@@ -1922,6 +1934,14 @@ resolve_evidence_by_reference() {
   return 1
 }
 
+# BUG-005: precompiled patterns for the per-[x]-DoD-item evidence-marker scan
+# (bash builtins replace echo|grep forks). `_c9_evidence_marker_re` is matched
+# case-INSENSITIVELY (under nocasematch) to mirror the original grep -qiE; the
+# link/inline patterns are case-SENSITIVE (original grep -qE/-qoE).
+_c9_evidence_marker_re='(→[[:space:]]*Evidence:|Evidence:)'
+_c9_report_link_re='\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)'
+_c9_inline_evidence_re='(Executed:|Command:|Evidence|```|Exit Code:|Raw Output)'
+
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
   scope_dir="$(dirname "$scope_path")"
@@ -1930,8 +1950,19 @@ for scope_path in "${scope_files[@]}"; do
     if [[ -n "$item_line_num" ]]; then
       next_lines="$({ sed -n "$((item_line_num+1)),$((item_line_num+15))p" "$scope_path"; } || true)"
 
+      # BUG-005: precompute the cheap evidence-marker booleans with bash builtins
+      # (was 3 echo|grep forks per [x] DoD line). `_c9_marker` is case-INSENSITIVE
+      # (original grep -qiE); `_c9_link`/`_c9_inline` are case-SENSITIVE. The
+      # expensive tool-log fallback in the chain below stays lazily evaluated.
+      _c9_marker=0; _c9_link=0; _c9_inline=0
+      shopt -s nocasematch
+      [[ "$line" =~ $_c9_evidence_marker_re ]] && _c9_marker=1
+      shopt -u nocasematch
+      [[ "$line" =~ $_c9_report_link_re ]] && _c9_link=1
+      [[ "$next_lines" =~ $_c9_inline_evidence_re ]] && _c9_inline=1
+
       # 1. Inline Evidence: marker on the same line
-      if echo "$line" | grep -qiE '(→[[:space:]]*Evidence:|Evidence:)'; then
+      if [[ "$_c9_marker" -eq 1 ]]; then
         # v4.1.0: if Evidence reference is a markdown link to a report
         # anchor, follow it and require ≥10-line block.
         # NOTE: `|| true` at end keeps `set -euo pipefail` from killing the
@@ -1956,7 +1987,7 @@ for scope_path in "${scope_files[@]}"; do
       # additionally validated by the resolver (≥10-line block required).
       # Plain `report.md` links (no anchor) count as evidence if the file
       # exists at the expected location.
-      elif echo "$line" | grep -qoE '\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)'; then
+      elif [[ "$_c9_link" -eq 1 ]]; then
         # `|| true` guards against pipefail-killed silent exit on edge
         # cases where the outer grep matched but the resubstitution does
         # not (e.g. exotic link shapes).
@@ -1980,7 +2011,7 @@ for scope_path in "${scope_files[@]}"; do
           fi
         fi
       # 3. Inline evidence block within next 15 lines (v4.0.x behavior)
-      elif echo "$next_lines" | grep -qE '(Executed:|Command:|Evidence|```|Exit Code:|Raw Output)'; then
+      elif [[ "$_c9_inline" -eq 1 ]]; then
         checked_with_evidence=$((checked_with_evidence + 1))
       # 4. v5.2 / F1: structured tool-log entry covers this DoD item.
       # Accept the DoD as evidenced when bubbles/scripts/evidence-tool-log-bridge.sh
@@ -2040,6 +2071,20 @@ if [[ ${#report_files[@]} -eq 0 ]]; then
   fail "No report.md files were resolved for this feature"
 fi
 
+# BUG-005: precompiled ERE patterns for the 8 evidence-signal categories used by
+# the per-line legitimacy scan below. Single-quoted so every regex metacharacter
+# (incl. `$`, `[`, `(`, backslashes) is literal to bash `[[ =~ ]]`. Categories
+# i/ii/iv/v/vii are case-INSENSITIVE (original grep -qiE); iii/vi/viii are
+# case-SENSITIVE (original grep -qE) — see the per-line tests below.
+_c11_sig_i_re='(passed|failed|ok$| PASS | FAIL |test result:|Tests:.*suites|✓|✗|PASSED|FAILED)'
+_c11_sig_ii_re='(exit code|Exit Code:|error\[|warning\[|Compiling |Finished |error:|warning:|WARN |ERROR |INFO )'
+_c11_sig_iii_re='([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|json|proto|md)|\./)'
+_c11_sig_iv_re='(in [0-9]+(\.[0-9]+)?(s|ms|m)|elapsed|finished in|Duration|[0-9]+\.[0-9]+s$)'
+_c11_sig_v_re='(cargo |npm |pytest|go test|jest |playwright|vitest|running [0-9]+ test|test result:)'
+_c11_sig_vi_re='[0-9]+ (passed|failed|errors?|warnings?|skipped|ignored|tests?)'
+_c11_sig_vii_re='(HTTP/|status.*[0-9]{3}|curl |GET /|POST /|PUT /|DELETE /|Content-Type)'
+_c11_sig_viii_re='(^[dl-][rwx-]{9} |^[0-9]+:|^\$ |^> )'
+
 for report_path in "${report_files[@]}"; do
   if [[ ! -f "$report_path" ]]; then
     fail "Missing report file: $(relative_artifact_path "$report_path")"
@@ -2061,40 +2106,57 @@ for report_path in "${report_files[@]}"; do
     echo "$pending_placeholders" | sed 's/^/   -> /'
   fi
 
+  # BUG-005: zero-fork evidence-block legitimacy scan. The previous version
+  # forked a subshell per line (echo|grep fence test) and 8x per closed block
+  # (echo "$block_content" | grep), costing ~126s on a 4888-line report.md. All
+  # per-line/per-block forks are now bash builtins; the 8 DISTINCT signal
+  # CATEGORIES are accumulated as flags while reading each in-block line (zero
+  # forks). The verdict is byte-identical: a block is legitimate iff it has >=3
+  # lines AND >=2 DISTINCT matching categories. A naive single `grep -cE` would
+  # count matching LINES (not categories) and would CHANGE the verdict, so it is
+  # intentionally NOT used. Per-line testing also preserves grep's line-oriented
+  # `^`/`$` anchor semantics (each line is matched on its own).
   illegitimate_blocks=0
   total_blocks=0
   in_block=0
   block_lines=0
-  block_content=""
+  sig_i=0; sig_ii=0; sig_iii=0; sig_iv=0; sig_v=0; sig_vi=0; sig_vii=0; sig_viii=0
   while IFS= read -r line; do
-    if [[ "$in_block" -eq 0 ]] && echo "$line" | grep -qE '^```'; then
+    if [[ "$in_block" -eq 0 ]] && [[ "$line" == '```'* ]]; then
       in_block=1
       block_lines=0
-      block_content=""
-    elif [[ "$in_block" -eq 1 ]] && echo "$line" | grep -qE '^```$'; then
+      sig_i=0; sig_ii=0; sig_iii=0; sig_iv=0; sig_v=0; sig_vi=0; sig_vii=0; sig_viii=0
+    elif [[ "$in_block" -eq 1 ]] && [[ "$line" == '```' ]]; then
       in_block=0
       total_blocks=$((total_blocks + 1))
 
       if [[ "$block_lines" -lt 3 ]]; then
         illegitimate_blocks=$((illegitimate_blocks + 1))
       else
-        signals=0
-        echo "$block_content" | grep -qiE '(passed|failed|ok$| PASS | FAIL |test result:|Tests:.*suites|✓|✗|PASSED|FAILED)' && signals=$((signals + 1))
-        echo "$block_content" | grep -qiE '(exit code|Exit Code:|error\[|warning\[|Compiling |Finished |error:|warning:|WARN |ERROR |INFO )' && signals=$((signals + 1))
-        echo "$block_content" | grep -qE '([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|json|proto|md)|\./)' && signals=$((signals + 1))
-        echo "$block_content" | grep -qiE '(in [0-9]+(\.[0-9]+)?(s|ms|m)|elapsed|finished in|Duration|[0-9]+\.[0-9]+s$)' && signals=$((signals + 1))
-        echo "$block_content" | grep -qiE '(cargo |npm |pytest|go test|jest |playwright|vitest|running [0-9]+ test|test result:)' && signals=$((signals + 1))
-        echo "$block_content" | grep -qE '[0-9]+ (passed|failed|errors?|warnings?|skipped|ignored|tests?)' && signals=$((signals + 1))
-        echo "$block_content" | grep -qiE '(HTTP/|status.*[0-9]{3}|curl |GET /|POST /|PUT /|DELETE /|Content-Type)' && signals=$((signals + 1))
-        echo "$block_content" | grep -qE '(^[dl-][rwx-]{9} |^[0-9]+:|^\$ |^> )' && signals=$((signals + 1))
-
+        signals=$((sig_i + sig_ii + sig_iii + sig_iv + sig_v + sig_vi + sig_vii + sig_viii))
         if [[ "$signals" -lt 2 ]]; then
           illegitimate_blocks=$((illegitimate_blocks + 1))
         fi
       fi
     elif [[ "$in_block" -eq 1 ]]; then
       block_lines=$((block_lines + 1))
-      block_content="${block_content}${line}"$'\n'
+      # 8 signal categories accumulated with zero forks. `[[ ... ]] && flag=1`
+      # mirrors the original `grep ... && signals++` and is set -e safe (the
+      # failing test is the non-final operand of an && list). Case-SENSITIVE
+      # categories (iii, vi, viii — original grep -qE) run first with nocasematch
+      # OFF; case-INSENSITIVE categories (i, ii, iv, v, vii — original grep -qiE)
+      # run under `shopt -s nocasematch`. The trailing `shopt -u nocasematch`
+      # both restores the default and guarantees this branch ends with exit 0.
+      [[ "$line" =~ $_c11_sig_iii_re ]]  && sig_iii=1
+      [[ "$line" =~ $_c11_sig_vi_re ]]   && sig_vi=1
+      [[ "$line" =~ $_c11_sig_viii_re ]] && sig_viii=1
+      shopt -s nocasematch
+      [[ "$line" =~ $_c11_sig_i_re ]]   && sig_i=1
+      [[ "$line" =~ $_c11_sig_ii_re ]]  && sig_ii=1
+      [[ "$line" =~ $_c11_sig_iv_re ]]  && sig_iv=1
+      [[ "$line" =~ $_c11_sig_v_re ]]   && sig_v=1
+      [[ "$line" =~ $_c11_sig_vii_re ]] && sig_vii=1
+      shopt -u nocasematch
     fi
   done < "$report_path"
 
@@ -2132,10 +2194,11 @@ for scope_path in "${scope_files[@]}"; do
   current_evidence=""
   duplicate_found="false"
   while IFS= read -r line; do
-    if [[ "$in_evidence" -eq 0 ]] && echo "$line" | grep -qE '^    ```'; then
+    # BUG-005: bash glob builtins replace per-line echo|grep fence forks.
+    if [[ "$in_evidence" -eq 0 ]] && [[ "$line" == '    ```'* ]]; then
       in_evidence=1
       current_evidence=""
-    elif [[ "$in_evidence" -eq 1 ]] && echo "$line" | grep -qE '^    ```$'; then
+    elif [[ "$in_evidence" -eq 1 ]] && [[ "$line" == '    ```' ]]; then
       in_evidence=0
       if [[ -n "$current_evidence" ]]; then
         evidence_hash="$(echo "$current_evidence" | md5sum | cut -d' ' -f1)"
