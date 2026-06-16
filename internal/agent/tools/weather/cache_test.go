@@ -108,3 +108,38 @@ func TestCache_PutReplacesAndKeepsCap(t *testing.T) {
 		t.Errorf("expected replaced value, got %q", got.ForecastLine)
 	}
 }
+
+// SCN-094-A10 — a cache hit preserves the ORIGINAL upstream retrieved_at
+// AND the spec-094 rich structured blocks (current/daily/units), verbatim.
+func TestCache_PreservesRetrievedAt_RichForecast(t *testing.T) {
+	c := NewCache(time.Minute, 4)
+	upstream := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	rich := Forecast{
+		ForecastLine: "Barcelona, ES — clear, 18°C (feels 17°C)\nnext 1 days:\nThu 28: clear, 14–22°C, rain 10%, UV 5",
+		Current: CurrentConditions{
+			Condition: "clear", Temp: 18.4, FeelsLike: 17.1, HumidityPct: 55,
+			Precip: 0.2, WindSpeed: 12.3, WindDir: "NE", UVIndex: 5, Sunrise: "07:12", Sunset: "21:25",
+		},
+		Daily:        []DailyForecast{{Date: "2026-05-28", Condition: "clear", TempMax: 22, TempMin: 14, PrecipProbPct: 10, UVIndexMax: 5}},
+		Units:        ForecastUnits{Temperature: "°C", WindSpeed: "km/h", Precipitation: "mm"},
+		ProviderName: "open-meteo",
+		RetrievedAt:  upstream,
+	}
+	c.Put("open-meteo", "Barcelona", WindowNow, rich)
+	got, ok := c.Get("open-meteo", "Barcelona", WindowNow)
+	if !ok {
+		t.Fatal("expected cache hit")
+	}
+	if !got.RetrievedAt.Equal(upstream) {
+		t.Errorf("retrieved_at mutated by cache: got %s want %s", got.RetrievedAt, upstream)
+	}
+	if len(got.Daily) != 1 || got.Daily[0].Date != "2026-05-28" || got.Daily[0].TempMax != 22 {
+		t.Errorf("rich daily not preserved across cache: %+v", got.Daily)
+	}
+	if got.Current.HumidityPct != 55 || got.Current.WindDir != "NE" || got.Current.Sunrise != "07:12" {
+		t.Errorf("rich current not preserved across cache: %+v", got.Current)
+	}
+	if got.Units.Temperature != "°C" || got.Units.WindSpeed != "km/h" {
+		t.Errorf("units not preserved across cache: %+v", got.Units)
+	}
+}

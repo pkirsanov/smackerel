@@ -88,8 +88,25 @@ func (f *fakeWeatherProvider) Lookup(ctx context.Context, location string, windo
 		return weather.Forecast{}, ctx.Err()
 	}
 
+	// Spec 094 — return a contract-parity rich Forecast (current block +
+	// daily grid + units) so the stress double matches the production
+	// shape. The cache stores/returns the whole value; the §5.2
+	// retrieved_at-preservation invariant is asserted via f.stamp.
+	daily := make([]weather.DailyForecast, 10)
+	for i := range daily {
+		daily[i] = weather.DailyForecast{
+			Date: "2026-05-28", Condition: "clear",
+			TempMax: 22, TempMin: 14, PrecipProbPct: 10, UVIndexMax: 5,
+		}
+	}
 	return weather.Forecast{
-		ForecastLine: location + ": clear, 18.0°C",
+		ForecastLine: location + " — clear, 18°C (feels 17°C)\nhumidity 55% · wind 12 km/h NE · UV 5\nprecip 0.2 mm · sunrise 07:12 · sunset 21:25\n\nnext 10 days:\n…",
+		Current: weather.CurrentConditions{
+			Condition: "clear", Temp: 18, FeelsLike: 17, HumidityPct: 55,
+			Precip: 0.2, WindSpeed: 12, WindDir: "NE", UVIndex: 5, Sunrise: "07:12", Sunset: "21:25",
+		},
+		Daily:        daily,
+		Units:        weather.ForecastUnits{Temperature: "°C", WindSpeed: "km/h", Precipitation: "mm"},
 		ProviderName: f.Name(),
 		RetrievedAt:  f.stamp,
 	}, nil

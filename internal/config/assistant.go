@@ -95,6 +95,15 @@ type AssistantConfig struct {
 	WeatherGeocodeURL  string
 	WeatherForecastURL string
 
+	// Spec 094 — rich-forecast knobs (assistant.skills.weather.*). All
+	// REQUIRED with NO fallback default (smackerel-no-defaults). forecast_days
+	// drives the daily-grid length (1..16, open-meteo's max); the three unit
+	// fields are closed-vocabulary open-meteo unit params validated at load.
+	WeatherForecastDays      int
+	WeatherTemperatureUnit   string
+	WeatherWindSpeedUnit     string
+	WeatherPrecipitationUnit string
+
 	NotificationsEnabled        bool
 	NotificationsConfirmTimeout time.Duration
 
@@ -360,6 +369,26 @@ func loadAssistantConfig(cfg *Config) error {
 	// Spec 061 design §18.3 — provider URLs are REQUIRED.
 	mustString("ASSISTANT_SKILLS_WEATHER_GEOCODE_URL", &cfg.Assistant.WeatherGeocodeURL)
 	mustString("ASSISTANT_SKILLS_WEATHER_FORECAST_URL", &cfg.Assistant.WeatherForecastURL)
+	// Spec 094 — rich-forecast knobs; all REQUIRED, fail-loud, no default.
+	// mustInt enforces presence + integer + >= 1; the 1..16 upper bound and
+	// the closed unit vocabularies are checked immediately below so a bad
+	// value is named in the aggregated [F061-SST-MISSING] error.
+	mustInt("ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS", &cfg.Assistant.WeatherForecastDays, 1)
+	if cfg.Assistant.WeatherForecastDays > 16 {
+		errs = append(errs, fmt.Sprintf("ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS (must be 1..16 — open-meteo max, got %d)", cfg.Assistant.WeatherForecastDays))
+	}
+	mustString("ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT", &cfg.Assistant.WeatherTemperatureUnit)
+	if v := cfg.Assistant.WeatherTemperatureUnit; v != "" && v != "celsius" && v != "fahrenheit" {
+		errs = append(errs, fmt.Sprintf("ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT (unrecognized %q; want celsius|fahrenheit)", v))
+	}
+	mustString("ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT", &cfg.Assistant.WeatherWindSpeedUnit)
+	if v := cfg.Assistant.WeatherWindSpeedUnit; v != "" && v != "kmh" && v != "ms" && v != "mph" && v != "kn" {
+		errs = append(errs, fmt.Sprintf("ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT (unrecognized %q; want kmh|ms|mph|kn)", v))
+	}
+	mustString("ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT", &cfg.Assistant.WeatherPrecipitationUnit)
+	if v := cfg.Assistant.WeatherPrecipitationUnit; v != "" && v != "mm" && v != "inch" {
+		errs = append(errs, fmt.Sprintf("ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT (unrecognized %q; want mm|inch)", v))
+	}
 	mustBool("ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED", &cfg.Assistant.NotificationsEnabled)
 	mustDuration("ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT", &cfg.Assistant.NotificationsConfirmTimeout)
 	mustBool("ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED", &cfg.Assistant.TelegramEnabled)

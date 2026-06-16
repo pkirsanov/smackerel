@@ -42,15 +42,61 @@ const (
 	WindowWeekend  ForecastWindow = "weekend"
 )
 
+// CurrentConditions is the provider-neutral "right now" snapshot for
+// the resolved location (spec 094). Numeric values are expressed in the
+// units named by Forecast.Units; they carry no embedded unit so a
+// consumer renders them with the descriptor. WindDir is an 8-point
+// compass abbreviation (e.g. "NE"); Sunrise/Sunset are local "HH:MM".
+type CurrentConditions struct {
+	Condition   string  `json:"condition"`
+	Temp        float64 `json:"temp"`
+	FeelsLike   float64 `json:"feels_like"`
+	HumidityPct int     `json:"humidity_pct"`
+	Precip      float64 `json:"precip"`
+	WindSpeed   float64 `json:"wind_speed"`
+	WindDir     string  `json:"wind_dir"`
+	UVIndex     float64 `json:"uv_index"`
+	Sunrise     string  `json:"sunrise"`
+	Sunset      string  `json:"sunset"`
+}
+
+// DailyForecast is one provider-neutral daily-outlook row (spec 094).
+// Date is the local calendar date "YYYY-MM-DD".
+type DailyForecast struct {
+	Date          string  `json:"date"`
+	Condition     string  `json:"condition"`
+	TempMax       float64 `json:"temp_max"`
+	TempMin       float64 `json:"temp_min"`
+	PrecipProbPct int     `json:"precip_prob_pct"`
+	UVIndexMax    float64 `json:"uv_index_max"`
+}
+
+// ForecastUnits is the self-describing unit descriptor (display symbols)
+// for the numeric fields on CurrentConditions and DailyForecast.
+type ForecastUnits struct {
+	Temperature   string `json:"temperature"`
+	WindSpeed     string `json:"wind_speed"`
+	Precipitation string `json:"precipitation"`
+}
+
 // Forecast is the provider-neutral result returned to the agent and
 // cached by Cache. RetrievedAt is the wall-clock moment the upstream
 // provider responded; it MUST be propagated unchanged through cache
 // hits so the capability layer can render an accurate "as of …"
 // attribution.
+//
+// Spec 094: Current/Daily/Units are ADDITIVE structured blocks that
+// carry the full rich answer for machine consumers (the web/mobile
+// frontend); ForecastLine remains the rendered, human-readable answer
+// every transport displays. ForecastLine/ProviderName/RetrievedAt are
+// preserved verbatim from spec 061 (name + meaning unchanged).
 type Forecast struct {
-	ForecastLine string    `json:"forecast_line"`
-	ProviderName string    `json:"provider_name"`
-	RetrievedAt  time.Time `json:"retrieved_at"`
+	ForecastLine string            `json:"forecast_line"`
+	Current      CurrentConditions `json:"current"`
+	Daily        []DailyForecast   `json:"daily"`
+	Units        ForecastUnits     `json:"units"`
+	ProviderName string            `json:"provider_name"`
+	RetrievedAt  time.Time         `json:"retrieved_at"`
 }
 
 // Provider is the minimum surface every concrete weather provider must
@@ -127,11 +173,54 @@ var inputSchema = json.RawMessage(`{
 var outputSchema = json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
-  "required": ["forecast_line", "provider_name", "retrieved_at"],
+  "required": ["forecast_line", "current", "daily", "units", "provider_name", "retrieved_at"],
   "properties": {
     "forecast_line": {"type": "string"},
     "provider_name": {"type": "string"},
-    "retrieved_at":  {"type": "string"}
+    "retrieved_at":  {"type": "string"},
+    "units": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["temperature", "wind_speed", "precipitation"],
+      "properties": {
+        "temperature":   {"type": "string"},
+        "wind_speed":    {"type": "string"},
+        "precipitation": {"type": "string"}
+      }
+    },
+    "current": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition", "temp", "feels_like", "humidity_pct", "precip", "wind_speed", "wind_dir", "uv_index", "sunrise", "sunset"],
+      "properties": {
+        "condition":    {"type": "string"},
+        "temp":         {"type": "number"},
+        "feels_like":   {"type": "number"},
+        "humidity_pct": {"type": "integer"},
+        "precip":       {"type": "number"},
+        "wind_speed":   {"type": "number"},
+        "wind_dir":     {"type": "string"},
+        "uv_index":     {"type": "number"},
+        "sunrise":      {"type": "string"},
+        "sunset":       {"type": "string"}
+      }
+    },
+    "daily": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "condition", "temp_max", "temp_min", "precip_prob_pct", "uv_index_max"],
+        "properties": {
+          "date":            {"type": "string"},
+          "condition":       {"type": "string"},
+          "temp_max":        {"type": "number"},
+          "temp_min":        {"type": "number"},
+          "precip_prob_pct": {"type": "integer"},
+          "uv_index_max":    {"type": "number"}
+        }
+      }
+    }
   }
 }`)
 
@@ -166,9 +255,12 @@ type weatherInput struct {
 }
 
 type weatherOutput struct {
-	ForecastLine string `json:"forecast_line"`
-	ProviderName string `json:"provider_name"`
-	RetrievedAt  string `json:"retrieved_at"`
+	ForecastLine string            `json:"forecast_line"`
+	Current      CurrentConditions `json:"current"`
+	Daily        []DailyForecast   `json:"daily"`
+	Units        ForecastUnits     `json:"units"`
+	ProviderName string            `json:"provider_name"`
+	RetrievedAt  string            `json:"retrieved_at"`
 }
 
 func handleWeatherLookup(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
@@ -217,8 +309,18 @@ func handleWeatherLookup(ctx context.Context, raw json.RawMessage) (json.RawMess
 }
 
 func marshalForecast(f Forecast) (json.RawMessage, error) {
+	// Daily is always non-nil on the success path (forecast_days >= 1),
+	// but coalesce a nil slice to an empty array so the strict
+	// output_schema ("daily": {"type":"array"}) never sees a JSON null.
+	daily := f.Daily
+	if daily == nil {
+		daily = []DailyForecast{}
+	}
 	return json.Marshal(weatherOutput{
 		ForecastLine: f.ForecastLine,
+		Current:      f.Current,
+		Daily:        daily,
+		Units:        f.Units,
 		ProviderName: f.ProviderName,
 		RetrievedAt:  f.RetrievedAt.UTC().Format(time.RFC3339),
 	})
