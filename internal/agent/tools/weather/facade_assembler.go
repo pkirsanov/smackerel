@@ -62,11 +62,18 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 )
 
-// weatherFinalPayload mirrors the weather-query-v1.yaml output schema.
-// Field tags match the schema property names exactly; any drift
-// between this struct and the YAML schema is caught by the
-// scenario-lint command and by tool_test.go assertions on
-// marshalForecast output.
+// weatherFinalPayload mirrors the attribution-relevant subset of the
+// weather-query-v1.yaml output schema. The provenance gate's decision
+// (assemble vs. refuse) depends ONLY on forecast_line (the Body) plus
+// the two attribution fields, so this struct intentionally parses only
+// those three. The spec-094 additive fields (current/daily/units) are
+// deliberately NOT declared here — encoding/json drops the unmapped
+// keys, and the facade has no use for them: the rich structured blocks
+// ride through verbatim in the executor's Final (direct_output_from_tool)
+// for machine consumers, while the human Body stays forecast_line. Field
+// tags match the schema property names exactly; any drift between these
+// three and the YAML schema is caught by scenario-lint and by
+// tool_test.go assertions on marshalForecast output.
 type weatherFinalPayload struct {
 	ForecastLine string `json:"forecast_line"`
 	ProviderName string `json:"provider_name"`

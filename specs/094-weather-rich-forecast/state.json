@@ -1,0 +1,221 @@
+{
+  "version": 3,
+  "specId": "094-weather-rich-forecast",
+  "specName": "Weather Rich Conditions + 10-Day Forecast",
+  "featureDir": "specs/094-weather-rich-forecast",
+  "status": "done",
+  "currentPhase": "done",
+  "currentScope": null,
+  "workflowMode": "full-delivery",
+  "executionRuntime": "direct-implement",
+  "planMaturityOnly": false,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "createdAt": "2026-06-16T00:00:00Z",
+  "completedAt": "2026-06-16T20:30:00Z",
+  "certifiedAt": "2026-06-16T20:35:00Z",
+  "lastUpdatedAt": "2026-06-16T20:35:00Z",
+  "releaseTrain": "mvp",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "requiresRevalidation": false,
+  "scopeLayout": "single-file",
+  "flagsIntroduced": [],
+  "specDependsOn": [
+    "specs/061-conversational-assistant"
+  ],
+  "relatesTo": [
+    "specs/065-generic-micro-tools",
+    "specs/069-assistant-http-transport",
+    "specs/073-web-mobile-assistant-frontend"
+  ],
+  "crossRepoProvenance": null,
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "full-delivery",
+      "statusCeiling": "done",
+      "source": "user-request"
+    },
+    "improvementPrelude": {
+      "mode": "analyze-design-plan",
+      "source": "user-request"
+    },
+    "tdd": {
+      "enabled": false,
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "enabled": false,
+      "perScope": false,
+      "perDoD": false,
+      "source": "repo-default-full-delivery-no-commit-enforcement"
+    },
+    "lockdown": {
+      "enabled": true,
+      "artifactFreezeOnDone": true,
+      "source": "repo-default"
+    },
+    "regression": {
+      "enabled": true,
+      "persistentE2E": true,
+      "source": "repo-default"
+    },
+    "validation": {
+      "enabled": true,
+      "evidenceMinLines": 10,
+      "source": "repo-default"
+    },
+    "grill": {
+      "enabled": true,
+      "adversarialRegression": true,
+      "tautologicalGuard": true,
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "completedScopes": ["SCOPE-01", "SCOPE-02", "SCOPE-03"],
+  "completedPhases": [
+    "analyze",
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "security",
+    "validate",
+    "audit",
+    "docs",
+    "spec-review",
+    "simplify",
+    "gaps",
+    "harden",
+    "stabilize",
+    "chaos"
+  ],
+  "execution": {
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "done",
+    "currentScope": null,
+    "executionModel": "parent-expanded-child-mode",
+    "runStartedAt": "2026-06-16T00:00:00Z",
+    "completedPhaseClaims": [
+      "analyze",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "security",
+      "validate",
+      "audit",
+      "docs",
+      "spec-review",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "chaos"
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "spec.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal (no nested runSubagent runtime; full-delivery is not requiresTopLevelRuntime, so parent-expansion is permitted). The analyst phase authored the BDD spec.md and seeded state.json. Operator directive (verbatim): 'weather command should return all info, not just temperature - humidity, rains, sun, uv, wind, etc., also 10 days forecast'.",
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "at": "2026-06-16T00:00:00Z",
+        "note": "Created specs/094-weather-rich-forecast/ with a complete BDD spec.md that ENRICHES the spec-061 SCOPE-07 weather_lookup skill so the conversational `weather` command returns the FULL set of current conditions (condition, temp, feels-like, humidity, precipitation, wind speed+direction, UV, sunrise/sunset) PLUS a config-driven N-day (default 10) daily forecast, instead of today's single terse line 'Barcelona, ES: clear, 18.0C'. GROUNDED against real source: tool.go (Forecast{ForecastLine,ProviderName,RetrievedAt}, ForecastWindow now/today/tomorrow/weekend, outputSchema additionalProperties:false, direct_output_from_tool emits the tool JSON verbatim), open_meteo.go (geocode + forecast current=temperature_2m,weather_code only; today/tomorrow/weekend fall back to current via `_ = window`; weatherCodeToSummary WMO map), facade_assembler.go (Body=forecast_line + ExternalProviderRef, refuse-to-assemble anti-fabrication on missing forecast_line/provider_name/retrieved_at => requires_provenance BS-006 capture), cache.go (LRU keyed by provider|location|window, preserves RetrievedAt per §5.2), weather-query-v1.yaml (output_schema {forecast_line,provider_name,retrieved_at,slot_missing}, direct_output_from_tool), config/smackerel.yaml assistant.skills.weather (enabled/provider/api_key_ref/cache_ttl/geocode_url/forecast_url), executor.go (BS-005 tool return-schema validation + direct-output scenario output_schema validation), render_outbound.go (Body is plain text; escapeForMode applies MarkdownV2 escaping; budgetTruncate honors max_message_chars). Distinguished assistant.skills.weather.* (this spec) from the SEPARATE connectors.weather.* spec-016 ingestion connector (NOT touched). spec.md: Problem (operator quote + the temp-only gap), Goals (rich current + N-day forecast + one-answer-every-surface + provider-neutral + provenance + SST units + zero regression), Non-Goals (no new provider, no connector change, no alerts, no hourly, no per-user units), Domain Capability Model (enriched Forecast primitive + CurrentConditions + DailyForecast sub-primitives), Product Principle Alignment (P2/P6/P7/P8 binding), Release Train (mvp, no new flag), Requirements R1-R12, Acceptance Criteria AC-1..AC-11, 14 Gherkin scenarios SCN-094-A01..A14, and 5 open decisions for design."
+      },
+      {
+        "agent": "bubbles.ux",
+        "phasesExecuted": ["analyze"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "design.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the UX phase authored the binding `## UX` section inside design.md (ux.md is a forbidden sidecar) — the rendered weather message layout, the condition language, and the two exception flows. UX is mandatory even though weather is non-UI-heavy: it owns the rendered text shape across Telegram/HTTP/web/mobile and the status/exception language.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-16T00:05:00Z",
+        "note": "Authored design.md `## UX` (binding). Settled rendered-layout decision (e): a 3-line current block (line1 `<label> - <condition>, <temp>°<U> (feels <feels>°<U>)`; line2 `humidity <H>% · wind <W> <unit> <dir> · UV <uv>`; line3 `precip <P> <unit> · sunrise <HH:MM> · sunset <HH:MM>`) then a blank line, `next <N> days:`, and N compact day rows `<Wkd> <DD>: <condition>, <min>-<max>°<U>, rain <prob>%, UV <uv>`. Rounding rules (ints except 1-decimal precip), 8-point compass, weekday+day label from local date. Phone-fit per Principle 7 (≈14 lines / ≈700 chars pre-escape, well within the 4096 Telegram cap enforced by budgetTruncate). Plain-text only — adapter owns MarkdownV2 escaping (escapeForMode). Condition vocabulary reuses weatherCodeToSummary verbatim (no new status words). Exception flows preserved verbatim from spec 061: location-missing => slot_missing:location ask-for-location; provider-unavailable => facade refuses to assemble (no partial/fabricated readings) => requires_provenance gate => BS-006 capture path."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "design.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the design phase authored design.md (technical design) and settled the five open decisions plus the dual output-schema strategy. Did NOT write scopes.md, implement code, or change status. Next required owner: bubbles.plan.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-16T00:10:00Z",
+        "note": "Authored design.md GROUNDED against real source (executor.go §3e BS-005 tool return-schema validation [outSch.ValidateBytes terminal] AND the direct_output_from_tool path validating the tool JSON against sc.outputSchema [scenario YAML]; tool.go outputSchema additionalProperties:false + marshalForecast; open_meteo.go forecast() current-only + weatherCodeToSummary + geocode comma-retry; facade_assembler.go refuse-to-assemble; cache.go §5.2; assistant.go loader mustString/mustInt/mustDuration + permissiveString for api_key_ref; config.sh ASSISTANT_SKILLS_WEATHER_* read/test-override/emit triplet; wiring_assistant_skills.go NewOpenMeteoProvider+NewCache+SetServices; render_outbound.go escapeForMode+budgetTruncate; stub-providers/fixtures/forecast.json hermetic fixture). SETTLED: (a) output shape = rendered multi-line forecast_line (binding user answer) PLUS additive structured current/daily/units on the tool JSON (for spec-073 frontend); (b) 10-day via a new REQUIRED SST forecast_days knob (1-16) — ForecastWindow enum unchanged and still accepted; (c) current UV = today's daily uv_index_max (open-meteo current has no uv_index); (d) three REQUIRED unit keys temperature_unit{celsius,fahrenheit}/wind_speed_unit{kmh,ms,mph,kn}/precipitation_unit{mm,inch} with closed vocabularies, fail-loud, mapped to open-meteo params + display symbols; (e) UX layout (above). Dual-schema strategy: tool outputSchema widened strict (required:[...6...]+additionalProperties:false); weather-query-v1.yaml output_schema widened additive (current/daily/units optional, required unchanged, slot_missing preserved) so the slot_missing final and the rich tool final both validate. open-meteo one-call request (current 7 vars + daily 7 vars + forecast_days + 3 unit params + timezone=auto); new pure helpers degreesToCompass/dayLabel/renderForecastLine; provider-neutral Forecast gains *CurrentConditions/[]DailyForecast/*ForecastUnits. File-touch map (16 rows across 3 scopes). No change to executor/Provider-interface/Cache/router/connectors.weather."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "scopes.md",
+        "expansionReason": "Parent-expanded full-delivery run driven by bubbles.goal; the plan phase authored scopes.md (3 scopes, single-file), the report.md evidence skeleton, uservalidation.md ([x] baseline), and scenario-manifest.json (14 scenarios), and updated state.json. Did NOT implement code, commit, or change status. Next required owner: bubbles.implement starting SCOPE-01.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-16T00:15:00Z",
+        "note": "Authored scopes.md as a 3-scope single-file DAG (01 -> {02, 03}). SCOPE-01 = the coherent contract change (CurrentConditions/DailyForecast/ForecastUnits types, widened Forecast+marshalForecast+tool outputSchema strict, open_meteo rich one-call fetch+renderForecastLine/degreesToCompass/dayLabel, facade weatherFinalPayload widening, weather-query-v1.yaml output_schema additive) — compile-green using OpenMeteoOptions literals in tests. SCOPE-02 = SST plumbing (4 REQUIRED keys forecast_days+3 units through smackerel.yaml -> config.sh -> assistant.go loaders+closed-vocab/range validation -> cmd/core wiring threads into the provider constructor), fail-loud, no fallback default. SCOPE-03 = consolidated verification (expand stub forecast.json, BS-003 e2e assertion, fakeWeatherProvider p95 parity, cache/window/exception regression, docs/smackerel.md row). Each scope: Status=Not Started, Depends On DAG, Test Plan with one row per test-related DoD item, a checkbox DoD (all unchecked), and SCN linkage. 14 scenarios SCN-094-A01..A14 mapped 1:1 to linkedTests across the weather package + config + stress + e2e. No new feature flag (flagsIntroduced:[]); releaseTrain mvp."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["implement", "test", "regression", "security", "validate", "audit", "docs", "spec-review", "simplify", "gaps", "harden", "stabilize", "chaos"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionEvidenceRef": "report.md",
+        "expansionReason": "Parent-expanded full-delivery DELIVERY + FINALIZATION driven by bubbles.goal (no nested runSubagent runtime; full-delivery is not requiresTopLevelRuntime, so parent-expansion is permitted). Implemented SCOPE-01..03 to DoD with real per-item evidence and ran the full-delivery verification ceremony. Did NOT commit (shared dirty working tree + heavy concurrent Docker load).",
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "at": "2026-06-16T20:35:00Z",
+        "note": "Implemented SCOPE-01 (internal/agent/tools/weather: tool.go CurrentConditions/DailyForecast/ForecastUnits + widened Forecast/weatherOutput/marshalForecast + strict outputSchema additionalProperties:false; open_meteo.go OpenMeteoOptions fail-loud constructor + one-call rich current+daily fetch + renderForecastLine/degreesToCompass/dayLabel/localHHMM; facade_assembler.go unchanged gate + clarifying comment; weather-query-v1.yaml additive output_schema). SCOPE-02 (smackerel.yaml 4 REQUIRED keys forecast_days/temperature_unit/wind_speed_unit/precipitation_unit; config.sh required_value read + .env emit; assistant.go 4 fields + mustInt/mustString loaders + 1..16 range + closed-vocab fail-loud validation; wiring_assistant_skills.go threads OpenMeteoOptions). SCOPE-03 (tests/e2e/stub-providers/fixtures/forecast.json rich 10-day; assistant_bs003_test.sh rich-fixture guard; tests/stress fakeWeatherProvider rich parity; docs/smackerel.md rows + note). Evidence (all ./smackerel.sh + governed golang container): test unit --go weather+config suites GREEN (TestForecast_*, TestNewOpenMeteoProvider_Panics*, TestMarshalForecast_StructuredOutput_ValidatesSchema [agent.CompileSchema BS-005], TestFacade_*, TestCache_PreservesRetrievedAt_RichForecast, TestLoadAssistant_WeatherForecastDays_RequiredAndRanged, TestLoadAssistant_WeatherUnits_Required, TestValidateAssistant_WeatherUnit_ClosedVocabulary + the BS-009 sweep); go test ./... finished OK (whole-tree compile); check (scenario-lint 16/0 — widened contract loads); lint + format --check exit 0; config generate emits 4 keys in dev+test env; in-process p95 6.676ms ≪ 3s, cache hit_ratio 0.945. Honest env-block: the live BS-003 e2e is accel-tier-gated (spec 061) AND the full-stack test-stress/e2e image build timed out (exit 124) on this cpu-tier Docker-contended dev host — artifacts delivered + statically valid (bash -n OK, fixture JSON valid 10 rows), live run deferred to accel/CI per the SCOPE-03 DoD allowance (no fabricated pass). Audit scans clean (no ${VAR:-default} fallback; no open-meteo field-name leak past the provider). Did NOT commit."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-06-16T20:35:00Z",
+    "lockdownState": {
+      "round": 1,
+      "lastCleanRound": 1,
+      "status": "clean"
+    },
+    "completedScopes": [
+      "SCOPE-01",
+      "SCOPE-02",
+      "SCOPE-03"
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "security",
+      "validate",
+      "audit",
+      "docs",
+      "spec-review",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "chaos"
+    ],
+    "scopeProgress": [
+      { "scope": "SCOPE-01", "status": "Done" },
+      { "scope": "SCOPE-02", "status": "Done" },
+      { "scope": "SCOPE-03", "status": "Done" }
+    ],
+    "observations": []
+  }
+}

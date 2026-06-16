@@ -20,31 +20,36 @@ func envSet(t *testing.T, kv map[string]string) {
 // set and mutate specific keys to drive a failure case.
 func minimalAssistantEnv() map[string]string {
 	return map[string]string{
-		"ASSISTANT_ENABLED":                                "true",
-		"ASSISTANT_BORDERLINE_FLOOR":                       "0.75",
-		"ASSISTANT_CONTEXT_WINDOW_TURNS":                   "8",
-		"ASSISTANT_CONTEXT_IDLE_TIMEOUT":                   "30m",
-		"ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL":            "5m",
-		"ASSISTANT_CONTEXT_STATE_KEY":                      "transport_user",
-		"ASSISTANT_SOURCES_MAX":                            "5",
-		"ASSISTANT_BODY_MAX_CHARS":                         "4000",
-		"ASSISTANT_STATUS_MAX_DURATION":                    "60s",
-		"ASSISTANT_DISAMBIGUATE_TIMEOUT":                   "2m",
-		"ASSISTANT_ERROR_CAPTURE_TIMEOUT":                  "10s",
-		"ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM":               "30",
-		"ASSISTANT_RATE_LIMIT_WEATHER_RPM":                 "20",
-		"ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM":           "10",
-		"ASSISTANT_RATE_LIMIT_RECIPE_SEARCH_RPM":           "20",
-		"ASSISTANT_SKILLS_RETRIEVAL_ENABLED":               "true",
-		"ASSISTANT_SKILLS_RETRIEVAL_TOP_K":                 "8",
-		"ASSISTANT_SKILLS_RECIPE_SEARCH_ENABLED":           "true",
-		"ASSISTANT_SKILLS_RECIPE_SEARCH_TOP_K":             "8",
-		"ASSISTANT_SKILLS_WEATHER_ENABLED":                 "false",
-		"ASSISTANT_SKILLS_WEATHER_PROVIDER":                "open-meteo",
-		"ASSISTANT_SKILLS_WEATHER_API_KEY_REF":             "",
-		"ASSISTANT_SKILLS_WEATHER_CACHE_TTL":               "10m",
-		"ASSISTANT_SKILLS_WEATHER_GEOCODE_URL":             "https://geocoding-api.open-meteo.com/v1/search",
-		"ASSISTANT_SKILLS_WEATHER_FORECAST_URL":            "https://api.open-meteo.com/v1/forecast",
+		"ASSISTANT_ENABLED":                      "true",
+		"ASSISTANT_BORDERLINE_FLOOR":             "0.75",
+		"ASSISTANT_CONTEXT_WINDOW_TURNS":         "8",
+		"ASSISTANT_CONTEXT_IDLE_TIMEOUT":         "30m",
+		"ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL":  "5m",
+		"ASSISTANT_CONTEXT_STATE_KEY":            "transport_user",
+		"ASSISTANT_SOURCES_MAX":                  "5",
+		"ASSISTANT_BODY_MAX_CHARS":               "4000",
+		"ASSISTANT_STATUS_MAX_DURATION":          "60s",
+		"ASSISTANT_DISAMBIGUATE_TIMEOUT":         "2m",
+		"ASSISTANT_ERROR_CAPTURE_TIMEOUT":        "10s",
+		"ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM":     "30",
+		"ASSISTANT_RATE_LIMIT_WEATHER_RPM":       "20",
+		"ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM": "10",
+		"ASSISTANT_RATE_LIMIT_RECIPE_SEARCH_RPM": "20",
+		"ASSISTANT_SKILLS_RETRIEVAL_ENABLED":     "true",
+		"ASSISTANT_SKILLS_RETRIEVAL_TOP_K":       "8",
+		"ASSISTANT_SKILLS_RECIPE_SEARCH_ENABLED": "true",
+		"ASSISTANT_SKILLS_RECIPE_SEARCH_TOP_K":   "8",
+		"ASSISTANT_SKILLS_WEATHER_ENABLED":       "false",
+		"ASSISTANT_SKILLS_WEATHER_PROVIDER":      "open-meteo",
+		"ASSISTANT_SKILLS_WEATHER_API_KEY_REF":   "",
+		"ASSISTANT_SKILLS_WEATHER_CACHE_TTL":     "10m",
+		"ASSISTANT_SKILLS_WEATHER_GEOCODE_URL":   "https://geocoding-api.open-meteo.com/v1/search",
+		"ASSISTANT_SKILLS_WEATHER_FORECAST_URL":  "https://api.open-meteo.com/v1/forecast",
+		// Spec 094 — rich-forecast knobs (REQUIRED, no fallback default).
+		"ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS":           "10",
+		"ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT":        "celsius",
+		"ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT":         "kmh",
+		"ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT":      "mm",
 		"ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED":           "false",
 		"ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT":   "5m",
 		"ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED":            "true",
@@ -241,6 +246,99 @@ func TestLoadAssistantConfig_WeatherAPIKeyRef_PermissiveButRequired(t *testing.T
 			t.Fatalf("expected missing-key error for ASSISTANT_SKILLS_WEATHER_API_KEY_REF; got: %v", err)
 		}
 	})
+}
+
+// TestLoadAssistant_WeatherForecastDays_RequiredAndRanged proves spec
+// 094 SCN-094-A04: forecast_days is REQUIRED, integer, and bounded 1..16
+// (open-meteo's max). Missing/out-of-range fails loud naming the key;
+// a valid value loads into the typed field. No silent default.
+func TestLoadAssistant_WeatherForecastDays_RequiredAndRanged(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		env := minimalAssistantEnv()
+		env["ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS"] = ""
+		envSet(t, env)
+		err := loadAssistantConfig(&Config{})
+		if err == nil || !strings.Contains(err.Error(), "ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS") {
+			t.Fatalf("missing forecast_days must fail loud naming the key; got %v", err)
+		}
+	})
+	t.Run("out_of_range", func(t *testing.T) {
+		env := minimalAssistantEnv()
+		env["ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS"] = "99"
+		envSet(t, env)
+		err := loadAssistantConfig(&Config{})
+		if err == nil || !strings.Contains(err.Error(), "1..16") {
+			t.Fatalf("out-of-range forecast_days must fail loud (1..16); got %v", err)
+		}
+	})
+	t.Run("valid", func(t *testing.T) {
+		env := minimalAssistantEnv()
+		env["ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS"] = "7"
+		envSet(t, env)
+		cfg := &Config{}
+		if err := loadAssistantConfig(cfg); err != nil {
+			t.Fatalf("valid forecast_days=7 must load; got %v", err)
+		}
+		if cfg.Assistant.WeatherForecastDays != 7 {
+			t.Errorf("WeatherForecastDays=%d want 7", cfg.Assistant.WeatherForecastDays)
+		}
+	})
+}
+
+// TestLoadAssistant_WeatherUnits_Required proves spec 094 SCN-094-A05:
+// each unit key is REQUIRED with no silent default; a valid set loads
+// into the typed fields.
+func TestLoadAssistant_WeatherUnits_Required(t *testing.T) {
+	for _, key := range []string{
+		"ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT",
+		"ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT",
+		"ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT",
+	} {
+		t.Run(key, func(t *testing.T) {
+			env := minimalAssistantEnv()
+			env[key] = ""
+			envSet(t, env)
+			err := loadAssistantConfig(&Config{})
+			if err == nil || !strings.Contains(err.Error(), key) {
+				t.Fatalf("missing %s must fail loud naming the key; got %v", key, err)
+			}
+		})
+	}
+	t.Run("valid", func(t *testing.T) {
+		envSet(t, minimalAssistantEnv())
+		cfg := &Config{}
+		if err := loadAssistantConfig(cfg); err != nil {
+			t.Fatalf("valid units must load; got %v", err)
+		}
+		if cfg.Assistant.WeatherTemperatureUnit != "celsius" ||
+			cfg.Assistant.WeatherWindSpeedUnit != "kmh" ||
+			cfg.Assistant.WeatherPrecipitationUnit != "mm" {
+			t.Errorf("unit fields not loaded: temp=%q wind=%q precip=%q",
+				cfg.Assistant.WeatherTemperatureUnit, cfg.Assistant.WeatherWindSpeedUnit, cfg.Assistant.WeatherPrecipitationUnit)
+		}
+	})
+}
+
+// TestValidateAssistant_WeatherUnit_ClosedVocabulary proves spec 094
+// SCN-094-A06: an unrecognized unit value is rejected, naming the key
+// AND the offending value (closed vocabulary; no silent coercion).
+func TestValidateAssistant_WeatherUnit_ClosedVocabulary(t *testing.T) {
+	cases := []struct{ key, bad string }{
+		{"ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT", "kelvin"},
+		{"ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT", "knots"},
+		{"ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT", "centimeter"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.bad, func(t *testing.T) {
+			env := minimalAssistantEnv()
+			env[tc.key] = tc.bad
+			envSet(t, env)
+			err := loadAssistantConfig(&Config{})
+			if err == nil || !strings.Contains(err.Error(), tc.key) || !strings.Contains(err.Error(), tc.bad) {
+				t.Fatalf("unrecognized %s=%q must fail loud naming key+value; got %v", tc.key, tc.bad, err)
+			}
+		})
+	}
 }
 
 // TestValidateAssistantConfig_Rule2_BorderlineMustExceedAgentFloor

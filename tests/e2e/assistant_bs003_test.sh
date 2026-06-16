@@ -47,6 +47,20 @@ if [[ "$FORECAST_URL" != *"stub-providers"* ]]; then
   e2e_fail "BS-003: ASSISTANT_SKILLS_WEATHER_FORECAST_URL must point at stub-providers in test env; got '$FORECAST_URL'"
 fi
 
+# Spec 094 — assert the live stub serves the RICH forecast fixture
+# (current humidity/wind/uv-direction + a daily grid). A passing
+# weather_query below therefore also proves the rich current+daily
+# parse/render path end-to-end: a rich-parse regression would error the
+# tool and flip status to weather_unavailable (caught by the adversarial
+# guard later), and a stale temp-only fixture would fail this guard now.
+STUB_FIXTURE="$(docker exec smackerel-test-stub-providers cat /usr/share/nginx/html/fixtures/forecast.json 2>/dev/null || true)"
+for field in '"daily"' '"relative_humidity_2m"' '"uv_index_max"' '"wind_direction_10m"' '"sunrise"'; do
+  if [[ "$STUB_FIXTURE" != *"$field"* ]]; then
+    e2e_fail "BS-003: stub forecast fixture missing spec-094 rich field $field (stale temp-only fixture?)"
+  fi
+done
+echo "  stub serves spec-094 rich fixture (current humidity/wind/uv + 10-day daily grid)"
+
 NONCE="$(date +%s%N)$$"
 UPDATE_ID="$NONCE"
 CHAT_ID=99003

@@ -943,6 +943,15 @@ assistant:
       # the `test` compose profile. Empty value is fail-loud at startup.
       geocode_url: "https://geocoding-api.open-meteo.com/v1/search" # REQUIRED
       forecast_url: "https://api.open-meteo.com/v1/forecast" # REQUIRED
+      # Spec 094 — rich-conditions + N-day forecast knobs. All REQUIRED
+      # (smackerel-no-defaults: no fallback). forecast_days is the daily-grid
+      # length (1..16, open-meteo's max). Units are closed-vocabulary open-meteo
+      # params. A missing/blank/out-of-range value fails config generate /
+      # startup loudly (no default substituted; Gate G028).
+      forecast_days: 10 # REQUIRED: integer 1..16
+      temperature_unit: "celsius" # REQUIRED: celsius|fahrenheit
+      wind_speed_unit: "kmh" # REQUIRED: kmh|ms|mph|kn
+      precipitation_unit: "mm" # REQUIRED: mm|inch
     notifications:
       enabled: false # REQUIRED (off by default until SCOPE-08 wires spec 054 packet)
       confirm_timeout: "5m" # REQUIRED: confirm-card timeout before discarded_timeout

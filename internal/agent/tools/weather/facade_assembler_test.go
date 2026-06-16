@@ -24,6 +24,7 @@ package weather
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -175,4 +176,55 @@ func TestNewFacadeAssembler_PanicsOnNegativeSourcesMax(t *testing.T) {
 		}
 	}()
 	NewFacadeAssembler(-1)
+}
+
+// ---------------------------------------------------------------------
+// Spec 094 — the facade is unchanged at the provenance gate: the
+// additive current/daily/units fields ride through (ignored here) and
+// attribution is still mandatory.
+// ---------------------------------------------------------------------
+
+// richWeatherFinal is a spec-094 tool Final with the structured blocks
+// present. provider_name/retrieved_at are toggled by the callers.
+const richWeatherFinal = `{` +
+	`"forecast_line":"Barcelona, ES — clear, 18°C (feels 17°C)\nnext 1 days:\nThu 28: clear, 14–22°C, rain 10%, UV 5",` +
+	`"current":{"condition":"clear","temp":18.4,"feels_like":17.1,"humidity_pct":55,"precip":0.2,"wind_speed":12.3,"wind_dir":"NE","uv_index":5,"sunrise":"07:12","sunset":"21:25"},` +
+	`"daily":[{"date":"2026-05-28","condition":"clear","temp_max":22,"temp_min":14,"precip_prob_pct":10,"uv_index_max":5}],` +
+	`"units":{"temperature":"°C","wind_speed":"km/h","precipitation":"mm"},` +
+	`"provider_name":"open-meteo","retrieved_at":"2026-05-28T14:03:00Z"}`
+
+// SCN-094-A09 (adversarial) — even with the rich current/daily/units
+// blocks present, a Final missing provider_name MUST NOT assemble; the
+// extra data does not trick the gate into fabricating attribution.
+func TestFacade_MissingProvider_RefusesAssembly(t *testing.T) {
+	asm := NewFacadeAssembler(8)
+	noProvider := strings.Replace(richWeatherFinal, `"provider_name":"open-meteo",`, ``, 1)
+	got := asm(context.Background(), &agent.InvocationResult{
+		Outcome: agent.OutcomeOK,
+		Final:   []byte(noProvider),
+	})
+	if got.Body != "" || len(got.Sources) != 0 {
+		t.Errorf("rich payload missing provider_name MUST refuse; got %+v", got)
+	}
+}
+
+// Spec 094 — a complete rich Final assembles Body=forecast_line + one
+// external-provider Source; the additive blocks are correctly ignored
+// at the gate (not surfaced as Body or Sources).
+func TestFacade_RichPayload_AssemblesBodyAndSource(t *testing.T) {
+	asm := NewFacadeAssembler(8)
+	got := asm(context.Background(), &agent.InvocationResult{
+		Outcome: agent.OutcomeOK,
+		Final:   []byte(richWeatherFinal),
+	})
+	if !strings.HasPrefix(got.Body, "Barcelona, ES — clear") {
+		t.Errorf("Body must be forecast_line verbatim; got %q", got.Body)
+	}
+	if len(got.Sources) != 1 {
+		t.Fatalf("want exactly 1 provider Source; got %d", len(got.Sources))
+	}
+	ref, ok := got.Sources[0].Ref.(contracts.ExternalProviderRef)
+	if !ok || ref.ProviderName != "open-meteo" {
+		t.Errorf("Source must carry the open-meteo ExternalProviderRef; got %+v", got.Sources[0].Ref)
+	}
 }

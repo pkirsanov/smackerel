@@ -149,6 +149,15 @@ func wireWeatherSkillServices(cfg *config.Config, svc *coreServices) error {
 			&http.Client{Timeout: 2 * time.Second},
 			cfg.Assistant.WeatherGeocodeURL,
 			cfg.Assistant.WeatherForecastURL,
+			// Spec 094 — rich-forecast knobs from SST (no fallback default;
+			// the constructor panics fail-loud on a bad days/unit value,
+			// backstopping the loadAssistantConfig validation).
+			weather.OpenMeteoOptions{
+				ForecastDays:      cfg.Assistant.WeatherForecastDays,
+				TemperatureUnit:   cfg.Assistant.WeatherTemperatureUnit,
+				WindSpeedUnit:     cfg.Assistant.WeatherWindSpeedUnit,
+				PrecipitationUnit: cfg.Assistant.WeatherPrecipitationUnit,
+			},
 		)
 	default:
 		return fmt.Errorf("ASSISTANT_SKILLS_WEATHER_PROVIDER %q is not a recognized provider (v1 supports: open-meteo)", cfg.Assistant.WeatherProvider)
@@ -169,6 +178,10 @@ func wireWeatherSkillServices(cfg *config.Config, svc *coreServices) error {
 		"provider", cfg.Assistant.WeatherProvider,
 		"cache_ttl", cfg.Assistant.WeatherCacheTTL,
 		"cache_capacity", cacheCapacity,
+		"forecast_days", cfg.Assistant.WeatherForecastDays,
+		"temperature_unit", cfg.Assistant.WeatherTemperatureUnit,
+		"wind_speed_unit", cfg.Assistant.WeatherWindSpeedUnit,
+		"precipitation_unit", cfg.Assistant.WeatherPrecipitationUnit,
 	)
 	return nil
 }
