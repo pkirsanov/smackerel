@@ -67,6 +67,45 @@ output_schema:
     slot_missing:
       type: string
       enum: [ "location" ]
+    # Spec 094 — ADDITIVE structured blocks. The weather_lookup tool
+    # always emits these on success (its own outputSchema requires them,
+    # additionalProperties:false); they are OPTIONAL here so the
+    # slot_missing final (which carries none of the forecast fields) and
+    # any future minimal final still validate. The scenario schema does
+    # NOT set additionalProperties:false, so the rich tool final
+    # validates on the direct_output_from_tool path. `required` is
+    # unchanged (forecast_line/provider_name/retrieved_at), preserving
+    # the spec-061 contract.
+    units:
+      type: object
+      properties:
+        temperature: { type: string }
+        wind_speed: { type: string }
+        precipitation: { type: string }
+    current:
+      type: object
+      properties:
+        condition: { type: string }
+        temp: { type: number }
+        feels_like: { type: number }
+        humidity_pct: { type: integer }
+        precip: { type: number }
+        wind_speed: { type: number }
+        wind_dir: { type: string }
+        uv_index: { type: number }
+        sunrise: { type: string }
+        sunset: { type: string }
+    daily:
+      type: array
+      items:
+        type: object
+        properties:
+          date: { type: string }
+          condition: { type: string }
+          temp_max: { type: number }
+          temp_min: { type: number }
+          precip_prob_pct: { type: integer }
+          uv_index_max: { type: number }
 
 limits:
   max_loop_iterations: 3

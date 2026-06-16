@@ -118,6 +118,106 @@ func TestWeatherLookup_CacheHitPreservesRetrievedAt(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------
+// Spec 094 — structured output schema + backward-compatible windows.
+// ---------------------------------------------------------------------
+
+func richForecastFixture() Forecast {
+	return Forecast{
+		ForecastLine: "Barcelona, ES — clear, 18°C (feels 17°C)\nhumidity 55% · wind 12 km/h NE · UV 5\nprecip 0.2 mm · sunrise 07:12 · sunset 21:25\n\nnext 1 days:\nThu 28: clear, 14–22°C, rain 10%, UV 5",
+		Current: CurrentConditions{
+			Condition: "clear", Temp: 18.4, FeelsLike: 17.1, HumidityPct: 55,
+			Precip: 0.2, WindSpeed: 12.3, WindDir: "NE", UVIndex: 5, Sunrise: "07:12", Sunset: "21:25",
+		},
+		Daily: []DailyForecast{
+			{Date: "2026-05-28", Condition: "clear", TempMax: 22, TempMin: 14, PrecipProbPct: 10, UVIndexMax: 5},
+		},
+		Units:        ForecastUnits{Temperature: "°C", WindSpeed: "km/h", Precipitation: "mm"},
+		ProviderName: "open-meteo",
+		RetrievedAt:  time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC),
+	}
+}
+
+// SCN-094-A08 — the marshaled tool output carries the structured
+// current/daily/units blocks AND validates against the tool's own
+// strict outputSchema (the same terminal BS-005 check the executor runs).
+func TestMarshalForecast_StructuredOutput_ValidatesSchema(t *testing.T) {
+	out, err := marshalForecast(richForecastFixture())
+	if err != nil {
+		t.Fatalf("marshalForecast: %v", err)
+	}
+
+	sch, err := agent.CompileSchema(outputSchema)
+	if err != nil {
+		t.Fatalf("compile outputSchema: %v", err)
+	}
+	if err := sch.ValidateBytes(out); err != nil {
+		t.Fatalf("marshaled output failed its own outputSchema (BS-005):\n%v\n%s", err, out)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, k := range []string{"forecast_line", "current", "daily", "units", "provider_name", "retrieved_at"} {
+		if _, ok := got[k]; !ok {
+			t.Errorf("structured output missing key %q", k)
+		}
+	}
+	daily, ok := got["daily"].([]any)
+	if !ok || len(daily) != 1 {
+		t.Errorf("daily must be a non-empty array; got %T", got["daily"])
+	}
+
+	// Adversarial: additionalProperties:false MUST reject a stray field.
+	got["unexpected_field"] = "x"
+	bloated, _ := json.Marshal(got)
+	if err := sch.ValidateBytes(bloated); err == nil {
+		t.Errorf("strict outputSchema accepted a stray field; additionalProperties:false regressed")
+	}
+}
+
+// SCN-094-A13 — the now/today/tomorrow/weekend windows still answer
+// (backward compatibility; no contract break).
+func TestHandleWeatherLookup_WindowsStillAccepted(t *testing.T) {
+	fp := &fakeProvider{name: "open-meteo", forecast: richForecastFixture()}
+	SetServices(&Services{Provider: fp, Cache: NewCache(time.Minute, 10)})
+	t.Cleanup(ResetForTest)
+	tool, _ := agent.ByName(ToolName)
+
+	for _, w := range []string{"now", "today", "tomorrow", "weekend"} {
+		in := json.RawMessage(`{"location":"Barcelona","forecast_window":"` + w + `"}`)
+		if _, err := tool.Handler(context.Background(), in); err != nil {
+			t.Errorf("window %q rejected: %v", w, err)
+		}
+	}
+	// An unknown window is still rejected — the enum contract is intact.
+	if _, err := tool.Handler(context.Background(), json.RawMessage(`{"location":"Barcelona","forecast_window":"decade"}`)); err == nil {
+		t.Errorf("unknown window must still be rejected")
+	}
+}
+
+// SCN-094-A12 — an empty/whitespace location errors at the tool boundary
+// (the location-missing handling, unchanged from spec 061) and the
+// provider is never called.
+func TestHandleWeatherLookup_EmptyLocation_Errors(t *testing.T) {
+	fp := &fakeProvider{name: "open-meteo", forecast: richForecastFixture()}
+	SetServices(&Services{Provider: fp, Cache: NewCache(time.Minute, 10)})
+	t.Cleanup(ResetForTest)
+	tool, _ := agent.ByName(ToolName)
+
+	for _, loc := range []string{"", "   "} {
+		in := json.RawMessage(`{"location":"` + loc + `"}`)
+		_, err := tool.Handler(context.Background(), in)
+		if err == nil || !strings.Contains(err.Error(), "weather_lookup_empty_location") {
+			t.Errorf("empty location %q: got %v, want weather_lookup_empty_location", loc, err)
+		}
+	}
+	if fp.calls != 0 {
+		t.Errorf("provider must NOT be called for an empty location; calls=%d", fp.calls)
+	}
+}
+
 func TestWeatherLookup_ProviderError(t *testing.T) {
 	fp := &fakeProvider{name: "open-meteo", err: errors.New("upstream 5xx")}
 	SetServices(&Services{Provider: fp, Cache: NewCache(time.Minute, 10)})

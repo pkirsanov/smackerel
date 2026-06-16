@@ -597,6 +597,10 @@ capability config block uses literal values consistent with the rest of
 | `assistant.skills.weather.provider` | `ASSISTANT_SKILLS_WEATHER_PROVIDER` | string | Provider selector consumed by `internal/agent/tools/weather/provider.go`. v1 supports `open-meteo`. | `open-meteo`. |
 | `assistant.skills.weather.api_key_ref` | `ASSISTANT_SKILLS_WEATHER_API_KEY_REF` | string (optional) | Infisical secret reference. Empty string is valid for providers that do not require an API key (e.g. open-meteo). The loader uses `permissiveString` for this single key. | `""` for open-meteo. |
 | `assistant.skills.weather.cache_ttl` | `ASSISTANT_SKILLS_WEATHER_CACHE_TTL` | Go duration | In-process LRU TTL per `(provider, location, forecast_window)`. Cache hits emit ORIGINAL `retrieved_at`, NOT cache-hit time. | `10m`. |
+| `assistant.skills.weather.forecast_days` | `ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS` | int 1–16 | Spec 094 — number of days in the daily forecast grid (open-meteo max 16). REQUIRED; out-of-range/missing fails startup loudly (no default). | `10`. |
+| `assistant.skills.weather.temperature_unit` | `ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT` | enum `celsius`\|`fahrenheit` | Spec 094 — temperature unit; closed vocabulary, REQUIRED, fail-loud. | `celsius`. |
+| `assistant.skills.weather.wind_speed_unit` | `ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT` | enum `kmh`\|`ms`\|`mph`\|`kn` | Spec 094 — wind-speed unit; closed vocabulary, REQUIRED, fail-loud. | `kmh`. |
+| `assistant.skills.weather.precipitation_unit` | `ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT` | enum `mm`\|`inch` | Spec 094 — precipitation unit; closed vocabulary, REQUIRED, fail-loud. | `mm`. |
 | `assistant.skills.notifications.enabled` | `ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED` | bool | Per-skill enable flag for the notifications skill. | `true`. |
 | `assistant.skills.notifications.confirm_timeout` | `ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT` | Go duration | TTL on a pending notification `ConfirmCard` before it is auto-discarded (audit-row `outcome="discarded_timeout"`). | `5m`. |
 | `assistant.transports.telegram.enabled` | `ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED` | bool | Enable the Telegram reference adapter (SCOPE-05). Validator rule #3 requires at least one transport `enabled=true` when `assistant.enabled=true`. | `true`. |
@@ -641,6 +645,16 @@ backed by four tools registered against the existing Spec 037 tool registry:
 | `retrieval_qa` | `config/prompt_contracts/retrieval-qa-v1.yaml` | `retrieval_search` (`internal/agent/tools/retrieval/`) | read |
 | `weather_query` | `config/prompt_contracts/weather-query-v1.yaml` | `weather_lookup` (`internal/agent/tools/weather/`) | external |
 | `notification_schedule` | `config/prompt_contracts/notification-schedule-v1.yaml` | `notification_propose` + `notification_execute` (`internal/agent/tools/notification/`) | read + write |
+
+> **Spec 094 — rich weather output.** The `weather_query` answer returns the
+> **full** current conditions (condition, temperature, feels-like, humidity,
+> precipitation, wind speed + direction, UV, sunrise/sunset) **plus a
+> config-driven N-day daily forecast** (`assistant.skills.weather.forecast_days`,
+> default 10). The rendered `forecast_line` is the human-readable multi-line
+> answer every transport displays; the tool output additionally carries
+> machine-readable `current` / `daily` / `units` blocks (additive
+> `output_schema`). Provider attribution (`provider_name` + `retrieved_at`) and
+> the cache `retrieved_at`-preservation invariant are unchanged.
 
 Each scenario lives **twice**:
 
@@ -2889,7 +2903,7 @@ docker-compose.yml
 │   │   ├── POST /api/search       # Semantic search
 │   │   ├── GET  /api/digest       # Daily/weekly digest
 │   │   └── GET  /api/health       # Health check
-│   ├── Connector plugins (16 committed)
+│   ├── Connector plugins (17 committed)
 │   │   ├── Gov Alerts (alerts/)
 │   │   ├── Bookmarks (bookmarks/)
 │   │   ├── Browser History (browser/)
@@ -2905,7 +2919,8 @@ docker-compose.yml
 │   │   ├── Twitter/X (twitter/)
 │   │   ├── Weather (weather/)
 │   │   ├── YouTube (youtube/)
-│   │   └── QF Decisions (qfdecisions/ — spec 041 read-only companion)
+│   │   ├── QF Decisions (qfdecisions/ — spec 041 read-only companion)
+│   │   └── Card Rewards (cardrewards/ — spec 083 read-only rotating-category fetch)
 │   │   Planned connectors:
 │   │   ├── Gmail SDK (google-api-go) 🔜
 │   │   ├── Google Calendar SDK (google-api-go) 🔜
