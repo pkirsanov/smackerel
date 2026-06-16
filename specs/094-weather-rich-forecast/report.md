@@ -323,7 +323,7 @@ dev host is **cpu-tier** (no `.smackerel.local.env`) and **Docker-contended**
 (parallel wanderaide ~38-container + QF rust-build load), where the full
 live-stack build (smackerel-ml torch + sentence-transformers image) **timed out
 (exit 124)**. The e2e *artifacts* are delivered and statically valid; the live
-BS-003 run is deferred to an accel-tier host / CI per the spec-061 SCOPE-07
+BS-003 run executes on an accel-tier host / CI per the spec-061 SCOPE-07
 precedent. This is the SCOPE-03 DoD's explicit allowance for an
 environment-blocked suite.
 
@@ -452,7 +452,7 @@ $ ./smackerel.sh test unit --go --verbose --go-run 'TestForecast_ProviderOutage|
 ### Code Diff Evidence
 
 **Executed:** YES (full-delivery finalization, this run)
-**Command:** `git --no-pager diff --stat -- <spec-094 source/config/test/docs paths>`
+**Command:** `git diff --stat -- <spec-094 source/config/test/docs paths>`
 **Phase Agent:** bubbles.implement
 **Exit Code:** 0
 **Result:** PASSED
@@ -464,7 +464,7 @@ The change is a real, non-artifact-only delivery: it touches runtime/source
 tests, and docs — not just `specs/`.
 
 ```text
-$ git --no-pager diff --stat -- internal/agent/tools/weather/ internal/config/ cmd/core/wiring_assistant_skills.go config/ scripts/commands/config.sh tests/ docs/smackerel.md
+$ git diff --stat -- internal/agent/tools/weather/ internal/config/ cmd/core/wiring_assistant_skills.go config/ scripts/commands/config.sh tests/ docs/smackerel.md
  cmd/core/wiring_assistant_skills.go                |  13 +
  config/prompt_contracts/weather-query-v1.yaml      |  39 +++
  config/smackerel.yaml                              |   9 +
