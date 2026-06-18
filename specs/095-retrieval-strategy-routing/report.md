@@ -1245,3 +1245,71 @@ CHAOS_TEST_EXIT=0
 <!-- bubbles:g040-skip-begin -->
 The **live stochastic stack exercise** (sustained randomized abuse against the running Postgres+NATS+ML+Ollama stack) stays env-blocked / deferred on this cpu-tier WSL2 host (OOM-prone — the stress harness triggers a full ML/core Docker image rebuild), owned by `bubbles.test` on accel-tier home-lab/CI under **F-095-E2E-LIVE**. No fabricated chaos PASS is claimed; only the in-process fail-safes above (which need no stack) are asserted here: unknown-contract → safe `vague_recall`, low-confidence → `vague_recall` fallback, nil scorer at ingestion → graceful NULL degrade (NFR-3), scenario-judged + SST bounds (NFR-2), and a NULL evergreen score never excluded (Principle 9).
 <!-- bubbles:g040-skip-end -->
+
+<a id="f095-extingest-recert-2026-06-18"></a>
+## Post-certification reconciliation — F-095-EXT-INGEST inline fix + cosmetic banner/prose (2026-06-18, bubbles.workflow improve-existing, parent-expanded)
+
+> **Provenance:** `runSubagent` is unavailable in this runtime; `bubbles.workflow` (mode `improve-existing`) parent-expanded the implement → test → docs owners directly for three post-`done` reconciliation tasks on the certified spec. **Claim source:** every command block below is live captured output from this 2026-06-18 reconciliation session (home paths redacted to `~`). No foreign WIP (DISC-095-WT-01 / the concurrent spec-096 session) was touched, staged, or committed; the `cmd/core/wiring.go` scorer hunk (~L523) was staged hunk-precisely, leaving the foreign Drive/Telegram retrieve hunks (L315-327) uncommitted. Status stays `done`; this is an additive reconciliation, not a re-open.
+
+### Task 1 — F-095-EXT-INGEST (real gap closed inline)
+
+The spec-058 Chrome-extension ingest publisher (`extPub`, built in `buildAPIDeps`, `cmd/core/wiring.go` ~L523) did NOT carry the evergreen `Scorer` that the connector front door uses (`cmd/core/services.go` injects `artifactPublisher.Scorer = svc.evergreenScorer`), so extension-captured artifacts persisted a NULL `evergreen_score` (safe per Principle 9 / NFR-3, but unscored). Fixed by sharing the SAME scorer:
+
+- NEW `cmd/core/wiring_extension.go` — `shareEvergreenScorer(pub *pipeline.RawArtifactPublisher, scorer *evergreen.Scorer)`: assigns `pub.Scorer = scorer` ONLY when the concrete scorer is non-nil (mirrors the `services.go` connector-path guard; avoids the typed-nil-in-interface trap that would make `pub.Scorer != nil` and panic in `scoreEvergreen`).
+- `cmd/core/wiring.go` (additive, ~L523) — `shareEvergreenScorer(extPub, svc.evergreenScorer)` immediately after `extPub := pipeline.NewRawArtifactPublisher(...)`. `svc.evergreenScorer` is populated in `buildCoreServices` (`cmd/core/main.go` L116), which runs BEFORE `buildAPIDeps` (L127), so it is available; nil when `retrieval.evergreen.enabled=false` ⇒ graceful NULL degrade (NFR-3).
+- NEW `cmd/core/wiring_extension_test.go` — 3 real construction-invariant tests (carries-same-scorer, nil-scorer-safe, nil-publisher-safe).
+
+**Phase Agent:** bubbles.implement + bubbles.test (parent-expanded by bubbles.workflow)
+**Executed:** YES
+**Command:** `./smackerel.sh check`
+
+```text
+$ ./smackerel.sh check
+config-validate: ~/smackerel/config/generated/dev.env.tmp.1161876 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+New `cmd/core` wiring tests + the pipeline / evergreen / extension / routing (no-parallel-store) regression — GREEN:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestShareEvergreenScorer|TestScoreEvergreen|TestBuildEvergreenCandidate|TestMetadataBool|TestNoParallelStore|TestRouterDoesNotReclassify|TestReadsExistingStoreOnly|TestIngest_|TestComputeBucket_|TestPoolExclu|TestIncludeIn|TestAggressiveDecay|TestSearchable|TestPersistedScore|TestEvergreenFromPersistedScore' --verbose
+--- PASS: TestShareEvergreenScorer_WiresScorer (0.00s)
+--- PASS: TestShareEvergreenScorer_NilScorerSafe (0.00s)
+--- PASS: TestShareEvergreenScorer_NilPublisherSafe (0.00s)
+ok      github.com/smackerel/smackerel/cmd/core                            1.337s
+ok      github.com/smackerel/smackerel/internal/api/connectors/extension   (ok)
+ok      github.com/smackerel/smackerel/internal/pipeline                   0.541s
+ok      github.com/smackerel/smackerel/internal/retrieval/evergreen        0.214s
+ok      github.com/smackerel/smackerel/internal/retrieval/routing          0.103s
+# (no FAIL lines across the full ./... -run filtered pass)
+RUN_EXIT=0
+```
+
+Lint — EXIT 0:
+
+```text
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+Web validation passed
+LINT_EXIT=0
+```
+
+This completes SCOPE-07's intent for the SECOND ingestion surface (the extension front door); recorded as an additive `[x]` DoD item under Scope 07.
+
+### Task 2 — stale spec.md status banner reconciled (LOW observation #2 from the closeout spec-review)
+
+`spec.md` lines 3-4 + the Unblocks bullet + the Non-Goals "Implementation" bullet read `specs_hardened` / `product-to-planning` / `planningOnly: true` (the planning-ceiling moment). Updated to the delivered reality the authoritative `state.json` already carries: `Status: done`, `Workflow Mode: full-delivery`, `planningOnly: false`, the 3 ideas implemented + wired + certified.
+
+### Task 3 — stale "routed" prose reconciled (LOW observation #1 from the closeout spec-review)
+
+`scopes.md` SCOPE-07/08 *Implementation Plan* prose + the `pool_eligibility.go` header comment described PKT-095-B/C as "routed" though Increments 2/3 delivered them INLINE. Updated to "DELIVERED INLINE — Increment 2/3" naming the real call-sites (`PublishRawArtifact` scorer; `PoolExclusionSQLPredicate` in `buildSynthesisClusterQuery` + `buildOvernightArtifactsQuery`). The authoritative DoD checkboxes were already correct; only the descriptive lag was fixed.
+
+### Re-certification (G088)
+
+Editing `spec.md`/`scopes.md` post-certification fires Gate G088. The CLEAN once-before-implement spec-review is already recorded (#closeout-2026-06-18), so the G088 remediation applies: top-level `certifiedAt` + `certification.completedAt` were advanced `2026-06-18T15:54:34Z` → `2026-06-18T23:15:00Z` (after the reconciliation edits + the `spec(095)` reconciliation commit). Status stays `done`; `F-095-EXT-INGEST` flipped `routed` → `resolved`; the 3 new `cmd/core` files were added to `deliverableFiles[]`.

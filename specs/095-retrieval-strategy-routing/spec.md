@@ -1,7 +1,7 @@
 # Feature: 095 Retrieval-Strategy Routing + Freshness-Aware Retrieval
 
-**Status:** specs_hardened — planning complete (ceiling: `specs_hardened`)
-**Workflow Mode:** `product-to-planning` (planning only; NO production source edits)
+**Status:** done — delivered + certified (ceiling: `done`)
+**Workflow Mode:** `full-delivery` (delivered: the 3 retrieval ideas are implemented + wired + certified `done`; off-by-default via SST)
 **Release Train:** `next`
 **Owner Directive (2026-06-17):**
 > Borrow 3 genuine gap-closers from a "5 levels of an AI second brain" competitor-concept review, grounded in Smackerel's real architecture. Smackerel already operates at the top of that ladder (semantic search + knowledge graph + automated lifecycle); these are gap-closers, NOT re-implementations.
@@ -18,7 +18,7 @@
 - `internal/intelligence/cooling.go` — the §3.6 "LLM-driven judgment, SST operational bounds" architectural precedent this spec follows for the evergreen judgment.
 
 **Unblocks:**
-- A later full-delivery run that implements scopes SCOPE-01..SCOPE-10 (separate spec/run; `planningOnly: true` here).
+- The full-delivery implementation of scopes SCOPE-01..SCOPE-10 — now DELIVERED in this spec (`planningOnly: false`; the spec was promoted past its original planning ceiling) and certified `done`.
 
 ---
 
@@ -96,7 +96,7 @@ Concretely:
 - **New connectors or new structured-data domains.** Routing reuses what the 17 committed connectors and the existing expenses/subscriptions tables already ingest.
 - **Per-user strategy preferences / a "choose your strategy" UI.** Strategy is inferred, never user-selected (Principle 1, Principle 2).
 - **Financial advice / QF actions (Principle 10).** Aggregates over financial-markets or QF artifacts are descriptive recall only; no trade/mandate/execution output.
-- **Implementation.** This is a planning spec (`product-to-planning`, ceiling `specs_hardened`). Source/test/migration code lands in a later full-delivery run.
+- **Implementation** *(was a planning-ceiling non-goal; SUPERSEDED — DELIVERED).* This started as a planning spec (`product-to-planning`, ceiling `specs_hardened`); it was promoted to `full-delivery` and the 3 ideas were implemented + wired + certified `done` (off-by-default via SST). Source/test/migration code is committed — see scopes.md DoD + report.md.
 
 ---
 
