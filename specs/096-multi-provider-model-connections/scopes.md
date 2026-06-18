@@ -182,7 +182,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
 | 1 | SCOPE-01 — Provider-connection registry + config SST schema (foundation) | config (yaml + `internal/config`) | A01, A04, G02 | unit (registry/validate) + config-gen | 12 | [~] In Progress (10/12 DoD; T1-1 + T1-3 environmental residuals) |
 | 2 | SCOPE-02 — Encrypted credential vault + master-key lifecycle | new `connvault` pkg + migration 061 + secret-keys path | W05 | unit (AEAD) + integration (ephemeral PG) | 12 | [~] In Progress (7/12 DoD; integration leg + T1-1/T1-3 deferred/foreign residuals) |
 | 3 | SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) | Go `llm` + Python `chat.py`/`schemas.py` + agent attribution | A02, A03, G01, G04, G05 | unit + integration + e2e-api (deferred) | 14 | [~] In progress |
-| 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [ ] Not started |
+| 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [~] Unit complete; live legs deferred |
 | 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 060 `model_usage_ledger` | G03 | unit + integration | 12 | [ ] Not started |
 | 6 | SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable) | `/v1/admin/model-connections*` + operator middleware + PWA triad | W01, W02, W03, W04 | unit + integration + e2e-api (deferred) | 13 | [ ] Not started |
 | 7 | SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity | Telegram `/model` + `/v1/agent/model` over the existing validator/store | D02, D03, D05, G06 | unit + e2e-api (deferred) | 13 | [ ] Not started |
@@ -580,7 +580,7 @@ the live hosted answer is an `e2e-api` deferred to the home-lab dispatch
 
 ## Scope 4: SCOPE-04 — Discovery + unified catalog + identifier canonicalization
 
-**Status:** [ ] Not started
+**Status:** [~] In progress — unit leg complete (7 of 11 DoD met + evidenced, T2-7 partial); live `integration`/`e2e-api` legs + closeout gates (`check`/`format`/`artifact-lint`) deferred. See report.md → SCOPE-04.
 **Scope-Kind:** code (new `catalog` pkg + per-kind discovery adapters + agenttool resolver boundary)
 **Depends on:** SCOPE-01
 **Foundation:** false (design §3 foundation #3 — aggregates the SCOPE-01
@@ -692,20 +692,20 @@ verbatim from [scenario-manifest.json](scenario-manifest.json).
 
 **Tier-1 (universal):**
 
-- [ ] D04-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-04.
-- [ ] D04-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-04.
-- [ ] D04-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-04.
-- [ ] D04-T1-4 — Every evidence block in report.md → SCOPE-04 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-04.
+- [ ] D04-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-04. _(DEFERRED — blocked by absent `uservalidation.md`, a closeout artifact owned by `bubbles.plan`; not a SCOPE-04 code gap. Same caveat as SCOPE-01/02/03.)_
+- [ ] D04-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-04. _(DEFERRED to the orchestrator post-implementation; SCOPE-04 compiles clean under `go test ./...` — E1 `finished OK`.)_
+- [ ] D04-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-04. _(DEFERRED — global gate run at closeout by the orchestrator; same foreign-untracked-file caveat as SCOPE-01/02/03.)_
+- [x] D04-T1-4 — Every evidence block in report.md → SCOPE-04 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-04. _(E1 GREEN `UNIT_EXIT=0`, E2 RED-before `RED_EXIT=1`, E3 import greps — all captured.)_
 
 **Tier-2 (role-specific: graceful degradation + leaf purity + G028 + canonicalization):**
 
-- [ ] D04-T2-1 — **Graceful-degradation adversarial (NFR-1):** `TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096` + the integration `TestDiscovery_OneProviderDown_CatalogStillServes_Spec096` prove one provider down → typed `ProviderDiscoveryStatus`, catalog still served, provider NEVER silently dropped; the Ollama path's availability is independent of any hosted provider (NFR-2). → Evidence: report.md → SCOPE-04.
-- [ ] D04-T2-2 — **Leaf-purity checkitem (088 invariant):** a grep/`go list` proves zero project imports into `internal/assistant/openknowledge/modelswitch` — the catalog is INJECTED as the admissible set at construction, never imported into the leaf. → Evidence: report.md → SCOPE-04 (import check).
-- [ ] D04-T2-3 — **One-validator/one-store (088/089 invariant):** discovery feeds the EXISTING `modelswitch.Allowlist` + `modelpref.Store`; NO second validator/store/picker is introduced. → Evidence: report.md → SCOPE-04.
-- [ ] D04-T2-4 — **Fail-loud discovery SST (G028):** `cache_ttl_ms` + `per_provider_timeout_ms` come from SST `> 0` (SCOPE-01); no hardcoded TTL/timeout default appears in the aggregator. → Evidence: report.md → SCOPE-04 (grep).
-- [ ] D04-T2-5 — **Canonicalization round-trip + off-catalog rejection:** split-on-first-`/` round-trips (`TestCanonicalize_SplitOnFirstSlash_RoundTrip_Spec096`), a bare Ollama id normalizes iff installed (`TestCanonicalize_BareOllamaIdNormalized_Spec096`), and an off-catalog id yields the same `modelswitch.Rejection` with NO store write / NO dispatch (`TestValidate_OffCatalogRefused_TypedRejection_Spec096`, ADVERSARIAL). → Evidence: report.md → SCOPE-04.
-- [ ] D04-T2-6 — Each adversarial test is non-tautological with a captured RED-before (a build that silently drops a down provider, or that accepts an off-catalog id, would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-04 RED-before.
-- [ ] D04-T2-7 — All `unit` + `integration` SCOPE-04 tests pass with NO skips; the SCN-096-D04 `e2e-api` leg is handed to the home-lab dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-04 (test run + deferral note).
+- [x] D04-T2-1 — **Graceful-degradation adversarial (NFR-1):** `TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096` + the integration `TestDiscovery_OneProviderDown_CatalogStillServes_Spec096` prove one provider down → typed `ProviderDiscoveryStatus`, catalog still served, provider NEVER silently dropped; the Ollama path's availability is independent of any hosted provider (NFR-2). → Evidence: report.md → SCOPE-04. _(Unit adversarial GREEN across unreachable/auth_failed/timeout + captured RED-before — E1/E2; the `integration` test is the live confirmation, DEFERRED to a clean-stack dispatch under T2-7.)_
+- [x] D04-T2-2 — **Leaf-purity checkitem (088 invariant):** a grep/`go list` proves zero project imports into `internal/assistant/openknowledge/modelswitch` — the catalog is INJECTED as the admissible set at construction, never imported into the leaf. → Evidence: report.md → SCOPE-04 (import check). _(modelswitch imports only `fmt`/`log/slog`/`strings` — E3.)_
+- [x] D04-T2-3 — **One-validator/one-store (088/089 invariant):** discovery feeds the EXISTING `modelswitch.Allowlist` + `modelpref.Store`; NO second validator/store/picker is introduced. → Evidence: report.md → SCOPE-04. _(E3 — `CatalogResolver.Validate` delegates to `modelswitch.Allowlist.Resolve`; `Select` persists via `modelpref.Store`.)_
+- [x] D04-T2-4 — **Fail-loud discovery SST (G028):** `cache_ttl_ms` + `per_provider_timeout_ms` come from SST `> 0` (SCOPE-01); no hardcoded TTL/timeout default appears in the aggregator. → Evidence: report.md → SCOPE-04 (grep). _(E1 — `TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096`: zero/negative ttl + timeout all fail loud at construction.)_
+- [x] D04-T2-5 — **Canonicalization round-trip + off-catalog rejection:** split-on-first-`/` round-trips (`TestCanonicalize_SplitOnFirstSlash_RoundTrip_Spec096`), a bare Ollama id normalizes iff installed (`TestCanonicalize_BareOllamaIdNormalized_Spec096`), and an off-catalog id yields the same `modelswitch.Rejection` with NO store write / NO dispatch (`TestValidate_OffCatalogRefused_TypedRejection_Spec096`, ADVERSARIAL). → Evidence: report.md → SCOPE-04. _(E1 — the bare `gemma3:4b` control validates, so 089 bare-Ollama selections keep working.)_
+- [x] D04-T2-6 — Each adversarial test is non-tautological with a captured RED-before (a build that silently drops a down provider, or that accepts an off-catalog id, would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-04 RED-before. _(E2 — both adversarial tests fail with the injected silent-drop / accept-any regressions, GREEN after revert.)_
+- [ ] D04-T2-7 — All `unit` + `integration` SCOPE-04 tests pass with NO skips; the SCN-096-D04 `e2e-api` leg is handed to the home-lab dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-04 (test run + deferral note). _(PARTIAL — the `unit` leg passes with NO skips (E1); the `integration` `TestDiscovery_OneProviderDown_CatalogStillServes_Spec096` + the `e2e-api` leg are live-stack, DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev.)_
 
 ---
 

@@ -819,6 +819,256 @@ dispatch, not fabricated as passing here.
   deployment / Vertex project+location routing in its owning scope without
   changing this seam.
 
+---
+
+## SCOPE-04 — Model discovery + unified catalog + identifier canonicalization
+
+**Status:** in_progress (7 of 11 DoD items met + evidenced, T2-7 partial; the
+residual are the live-stack `integration`/`e2e-api` leg [T2-7, deferred to a
+clean-stack run] plus the two closeout gates [T1-2 `check` and T1-3
+`format --check`, run by the orchestrator post-implementation] and the
+foreign-owned T1-1 `artifact-lint` [absent `uservalidation.md`, owned by
+`bubbles.plan`] — none are SCOPE-04 code gaps).
+**Executed by:** `bubbles.implement` (parent-expanded full-delivery).
+**Scenarios covered:** SCN-096-D01, SCN-096-D04.
+
+### What shipped
+
+A new pure-Go `catalog` package
+(`internal/assistant/openknowledge/catalog/`) that aggregates every
+effective-enabled connection's models into ONE provider-qualified catalog,
+canonicalizes selection ids at the resolver boundary, and INJECTS the catalog
+as the EXISTING spec-088/089 `modelswitch` validator's admissible set —
+keeping the leaf pure and the one-validator/one-store invariant intact.
+
+1. **Per-kind discovery adapters** (`adapter.go`). A `DiscoveryAdapter`
+   contract (`Discover`) with two concrete adapters: `OllamaAdapter` probes a
+   live `GET <base_url>/api/tags` through an injected `HTTPDoer`, mapping each
+   installed name → an `ollama/<name>` descriptor (free/local, no key; an
+   optional operator capability hint stamps tool_capable/vision/context since
+   `/api/tags` carries none); `HostedAdapter` serves a hosted connection's
+   SST-curated `models[]` from the SCOPE-01 registry verbatim (the curated list
+   IS the source — no live call — with registry capabilities carried through),
+   id `<kind>/<backend-id>`.
+2. **`CatalogAggregator`** (`aggregator.go`). Runs every adapter in parallel,
+   each bounded by the SST `per_provider_timeout_ms`, and merges the reachable
+   subset into ONE `ModelCatalog` of provider-qualified `ModelDescriptor`s
+   (`id` + `connection_id` + `kind` + capabilities). It ALWAYS emits one typed
+   `ProviderDiscoveryStatus{state ∈ ok|unreachable|timeout|auth_failed|disabled,
+   model_count, detail}` per adapter — a slow/down/auth-failed provider degrades
+   gracefully (its models absent) and is NEVER silently dropped; the reachable
+   subset is ALWAYS served. A last-good catalog is cached for the SST
+   `cache_ttl_ms`. Both bounds are fail-loud `> 0` at construction (G028) — NO
+   hardcoded TTL/timeout default lives in the aggregator.
+3. **Identifier canonicalization + resolver boundary** (`canonical.go`).
+   `SplitQualified` splits `<kind>/<backend-id>` on the FIRST `/` (a backend id
+   containing `/`/`:` round-trips). `Canonicalize(raw, installed)` normalizes a
+   bare 089-era Ollama id (`gemma3:4b`) to `ollama/<id>` IFF installed.
+   `CatalogResolver` wraps the catalog as the INJECTED admissible set of the
+   EXISTING `modelswitch.Allowlist`: `Validate` canonicalizes then delegates the
+   membership decision to the leaf's `Resolve` (off-catalog → the SAME
+   `modelswitch.Rejection` shape); `Select` persists a clean canonical id to the
+   EXISTING `modelpref.Store` and writes NOTHING on a rejection (NO dispatch).
+   `modelswitch` is unchanged — `catalog` imports it, never the reverse.
+
+### Change Manifest (this scope's edits only)
+
+```text
+=== SCOPE-04 edits ===
+?? internal/assistant/openknowledge/catalog/catalog.go            (NEW — types: ModelDescriptor/ModelCatalog/ProviderDiscoveryStatus/DiscoveryState/DiscoveryError)
+?? internal/assistant/openknowledge/catalog/adapter.go            (NEW — DiscoveryAdapter + OllamaAdapter (live /api/tags) + HostedAdapter (SST-curated))
+?? internal/assistant/openknowledge/catalog/aggregator.go         (NEW — CatalogAggregator: parallel, SST-bounded, graceful degradation)
+?? internal/assistant/openknowledge/catalog/canonical.go          (NEW — SplitQualified/Canonicalize/CatalogResolver injection boundary)
+?? internal/assistant/openknowledge/catalog/aggregator_test.go    (NEW — SCN-096-D01 unit tests)
+?? internal/assistant/openknowledge/catalog/canonical_test.go     (NEW — SCN-096-D04 unit tests)
+```
+
+No `modelswitch`/`modelpref`/`agenttool`/`agent_model` file is edited — 088/089
+is untouched (additive injection only; the catalog is the new admissible-set
+SOURCE).
+
+### Test Evidence
+
+All evidence below is REAL captured terminal output (line-wrapping is the
+terminal width only; no content edited). Go tests run via the sanctioned
+`./smackerel.sh test unit --go --go-run …` path (the repo's
+`golang:1.25.10-bookworm` container, `go test -run <regex> -count=1 ./...`).
+These are UNIT tests: the Ollama `/api/tags` call is an injected fake
+`HTTPDoer` and the down-provider paths are injected stub adapters — NO live
+Ollama, NO network interception (correctly classified `unit`). All synthetic
+ids/models are non-secret (no credentials in this scope).
+
+#### Evidence E1 — catalog package GREEN (aggregation, graceful degradation, canonicalization, off-catalog rejection)
+
+Command:
+`./smackerel.sh test unit --go --go-run 'Spec096|CatalogAggregator|Canonicalize|Discovery|ProviderDiscoveryStatus' --verbose`
+(overall run `UNIT_EXIT=0`, `[go-unit] go test ./... finished OK`; the
+`catalog` package portion):
+
+```text
+=== RUN   TestCatalogAggregator_AggregatesOllamaAndHostedProviderQualified_Spec096
+=== RUN   TestCatalogAggregator_AggregatesOllamaAndHostedProviderQualified_Spec096/ttl_cache_avoids_reprobe_within_sst_window
+--- PASS: TestCatalogAggregator_AggregatesOllamaAndHostedProviderQualified_Spec096 (0.00s)
+    --- PASS: TestCatalogAggregator_AggregatesOllamaAndHostedProviderQualified_Spec096/ttl_cache_avoids_reprobe_within_sst_window (0.00s)
+=== RUN   TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096
+=== RUN   TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/ollama_unreachable_connect_error
+=== RUN   TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/hosted_auth_failed_typed
+=== RUN   TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/provider_times_out
+--- PASS: TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096 (0.03s)
+    --- PASS: TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/ollama_unreachable_connect_error (0.00s)
+    --- PASS: TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/hosted_auth_failed_typed (0.00s)
+    --- PASS: TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/provider_times_out (0.03s)
+=== RUN   TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096
+=== RUN   TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096/zero_ttl
+=== RUN   TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096/negative_ttl
+=== RUN   TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096/zero_timeout
+=== RUN   TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096/negative_timeout
+--- PASS: TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096 (0.00s)
+    --- PASS: TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096/zero_ttl (0.00s)
+    --- PASS: TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096/negative_ttl (0.00s)
+    --- PASS: TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096/zero_timeout (0.00s)
+    --- PASS: TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096/negative_timeout (0.00s)
+=== RUN   TestCanonicalize_SplitOnFirstSlash_RoundTrip_Spec096
+--- PASS: TestCanonicalize_SplitOnFirstSlash_RoundTrip_Spec096 (0.00s)
+=== RUN   TestCanonicalize_BareOllamaIdNormalized_Spec096
+--- PASS: TestCanonicalize_BareOllamaIdNormalized_Spec096 (0.00s)
+=== RUN   TestValidate_OffCatalogRefused_TypedRejection_Spec096
+--- PASS: TestValidate_OffCatalogRefused_TypedRejection_Spec096 (0.00s)
+PASS
+ok  	github.com/smackerel/smackerel/internal/assistant/openknowledge/catalog	0.097s
+```
+
+The two manifest-named SCN-096-D01 tests + the three SCN-096-D04 tests all
+pass (the `FailLoud…` test additionally backs D04-T2-4). The aggregation test
+asserts the merged catalog is `[ollama/gemma3:4b, ollama/llama3:8b,
+anthropic/claude-3-5-sonnet]` (Ollama group first) with each descriptor's
+`connection_id`/`kind`/capabilities; the graceful-degradation test drives a
+down provider FIRST (so a naive drop loses the reachable subset too) across
+unreachable / typed-auth_failed / genuine-ctx-timeout and asserts a typed
+status is always present.
+
+#### Evidence E2 — captured RED-before (non-tautological, D04-T2-6)
+
+Two temporary mutations were applied and the two adversarial tests re-run, then
+BOTH reverted immediately (the post-revert code is byte-identical to the E1
+GREEN): (a) `aggregator.go` error branch changed to `return` without recording
+the status (silent drop); (b) `canonical.go` `Validate` changed to
+`return canonical, nil` (accept any id, skip the validator).
+
+Command:
+`./smackerel.sh test unit --go --go-run 'TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096|TestValidate_OffCatalogRefused_TypedRejection_Spec096' --verbose`
+(`RED_EXIT=1`):
+
+```text
+    aggregator_test.go:231: down provider "local-ollama" has NO ProviderDiscoveryStatus (silently dropped)
+    aggregator_test.go:231: down provider "openai-main" has NO ProviderDiscoveryStatus (silently dropped)
+    aggregator_test.go:231: down provider "bedrock-main" has NO ProviderDiscoveryStatus (silently dropped)
+--- FAIL: TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096 (0.02s)
+    --- FAIL: TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/ollama_unreachable_connect_error (0.00s)
+    --- FAIL: TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/hosted_auth_failed_typed (0.00s)
+    --- FAIL: TestCatalogAggregator_GracefulDegradation_TypedStatusNeverDropped_Spec096/provider_times_out (0.02s)
+    canonical_test.go:133: off-catalog id "anthropic/claude-OPUS-does-not-exist" was ACCEPTED (canon="anthropic/claude-OPUS-does-not-exist") — must be refused
+--- FAIL: TestValidate_OffCatalogRefused_TypedRejection_Spec096 (0.00s)
+FAIL
+FAIL	github.com/smackerel/smackerel/internal/assistant/openknowledge/catalog
+```
+
+This proves both adversarial tests bite: a silent-drop build fails the
+graceful-degradation test (no typed status for the down provider), and an
+accept-everything build fails the off-catalog rejection test. After reverting
+both mutations the catalog package is GREEN again (E1). No bailout
+early-returns are present in either test.
+
+#### Evidence E3 — leaf purity preserved (D04-T2-2 / D04-T2-3)
+
+```text
+=== A) modelswitch project imports (MUST be empty = pure stdlib leaf) ===
+(none — modelswitch imports zero project packages)
+
+=== modelswitch/*.go import lines (all stdlib) ===
+internal/assistant/openknowledge/modelswitch/allowlist.go:25:   "fmt"
+internal/assistant/openknowledge/modelswitch/allowlist.go:26:   "log/slog"
+internal/assistant/openknowledge/modelswitch/allowlist.go:27:   "strings"
+
+=== C) catalog -> modelswitch/modelpref injection (catalog imports the leaf, never the reverse) ===
+internal/assistant/openknowledge/catalog/canonical.go:24:   ".../openknowledge/modelpref"
+internal/assistant/openknowledge/catalog/canonical.go:25:   ".../openknowledge/modelswitch"
+```
+
+`modelswitch` imports only `fmt` / `log/slog` / `strings` (stdlib) and zero
+project packages — the leaf stays pure. `catalog` is the importer: it INJECTS
+the provider-qualified catalog as the EXISTING validator's admissible set and
+persists through the EXISTING `modelpref.Store` (no second validator/store/
+picker introduced — D04-T2-3).
+
+### DoD mapping (SCOPE-04)
+
+| DoD item | Status | Evidence |
+|----------|--------|----------|
+| D04-T1-1 artifact-lint clean | ⬚ deferred | absent `uservalidation.md` (closeout artifact owned by `bubbles.plan`) — not a SCOPE-04 code gap (same caveat as SCOPE-01/02/03) |
+| D04-T1-2 `check` EXIT 0 | ⬚ deferred | run by the orchestrator post-implementation (kept off this turn to bound it); SCOPE-04 compiles clean under `go test ./...` (E1, `finished OK`) |
+| D04-T1-3 `format --check` EXIT 0 | ⬚ deferred | global gate; run at closeout by the orchestrator (same foreign-untracked-file caveat as SCOPE-01/02/03) |
+| D04-T1-4 evidence is real terminal output | ✅ | E1–E3 (all captured, unedited apart from terminal wrapping) |
+| D04-T2-1 graceful-degradation adversarial (NFR-1) | ✅ | E1 (`…GracefulDegradation_TypedStatusNeverDropped_Spec096`: unreachable/auth_failed/timeout) + E2 RED-before; Ollama path independent of any hosted provider (NFR-2). The live `integration` leg is deferred (T2-7) |
+| D04-T2-2 leaf-purity (088 invariant) | ✅ | E3 (modelswitch imports zero project packages; catalog injects the set) |
+| D04-T2-3 one-validator/one-store (088/089 invariant) | ✅ | E3 + the `CatalogResolver` delegates to `modelswitch.Allowlist.Resolve` + persists via `modelpref.Store` (no new validator/store/picker) |
+| D04-T2-4 fail-loud discovery SST (G028) | ✅ | E1 (`…FailLoudOnNonPositiveSSTBounds_Spec096`: zero/negative ttl + timeout all fail loud); no hardcoded TTL/timeout default in `aggregator.go` |
+| D04-T2-5 canonicalization round-trip + off-catalog rejection | ✅ | E1 (`…SplitOnFirstSlash_RoundTrip`, `…BareOllamaIdNormalized`, `…OffCatalogRefused_TypedRejection`) — bare-Ollama `gemma3:4b` control validates (089 selections keep working) |
+| D04-T2-6 each adversarial test non-tautological with captured RED-before; no bailout early-returns | ✅ | E2 (captured RED-before: both adversarial tests fail with mutations, GREEN after revert) |
+| D04-T2-7 all unit + integration pass, no skips; live `e2e-api` handed to home-lab dispatch | ◐ partial | unit leg done (E1, no skips); the `integration` (`TestDiscovery_OneProviderDown_CatalogStillServes_Spec096`) + SCN-096-D04 `e2e-api` legs are live-stack — DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev |
+
+### Live-stack legs deferred to clean-stack run
+
+Per the plan's deferral note (C7), the live SCOPE-04 rows were NOT run this
+turn:
+
+- `integration`:
+  `tests/integration/model_discovery_test.go::TestDiscovery_OneProviderDown_CatalogStillServes_Spec096`
+  (needs a live ephemeral stack + real Ollama; the unit aggregator + adapters
+  it would exercise are proven here with injected fakes/stubs). The unit
+  graceful-degradation test already proves the down-provider contract in
+  isolation.
+- `e2e-api` (SCN-096-D04): the live off-catalog `/ask` selection-path rejection
+  runs in the home-lab dispatch via the SCOPE-07 selection-surface e2e
+  (`tests/e2e/agent/openknowledge_e2e_test.go`), model/Ollama-dependent — NOT
+  marked passing from dev.
+
+### Findings for downstream scopes
+
+- **SCOPE-05 (model-aware CostFn + budget):** the catalog descriptor's
+  provider-qualified `id` (`<kind>/<backend-id>`) is the stable key into the
+  SCOPE-01 `llm.model_costs` table; SCOPE-05's CostFn should price the
+  `Canonicalize`-d / `SplitQualified`-parsed effective model and treat any
+  `ollama/*` id as `$0` (free/local), a paid id with no rate as a fail-loud
+  refusal.
+- **SCOPE-06 (operator-gated web admin):** the `CatalogAggregator`'s set of
+  adapters is built from the effective-enabled connections; SCOPE-06 should
+  feed the per-connection `last_test_outcome = 'ok'` gate (design §5.1) into
+  the "effective-enabled" predicate so a declared-but-untested hosted slot
+  contributes a `disabled`/absent status rather than a curated list. The
+  `HostedAdapter` is constructed straight from a `config.ModelConnection`, so
+  wiring is a registry+DB read.
+- **SCOPE-07 (combined selection, 088/089 parity)** is the primary consumer:
+  it renders `CatalogAggregator.GetCatalog`'s `(ModelCatalog,
+  []ProviderDiscoveryStatus)` in BOTH the Telegram numbered picker and the web
+  `GET /v1/agent/model` surface — grouping Ollama-local first, showing an
+  UNREACHABLE provider shown-but-disabled with its typed
+  `ProviderDiscoveryStatus` (never hidden), and numbering/selection over the
+  reachable subset only. It installs the `CatalogResolver` (or the
+  catalog-built `modelswitch.Allowlist` via `ModelCatalog.Allowlist`) into the
+  `agenttool` singletons so both surfaces resolve through the SAME injected
+  validator + store. The provider-qualified-vs-bare normalization is already
+  centralized in `Canonicalize`, so SCOPE-07 needs no second normalizer.
+- **Wiring note (SCOPE-06/07):** `ModelCatalog.Allowlist()` builds the existing
+  validator with envelope-skip (`envelopeMiB = 0`) + 0 profiles because catalog
+  membership is pure string equality (a hosted model is not co-resident in the
+  local Ollama envelope); the spec-088 local memory co-residence remains
+  enforced for the Ollama switchable subset at the config-generation layer
+  (`internal/config` envelope guard), unchanged. If SCOPE-07 wants the live
+  picker to ALSO enforce the Ollama memory envelope, it can pass real Ollama
+  profiles + the env envelope when constructing the allowlist for the Ollama
+  subset.
+
 ### Completion Statement (SCOPE-03)
 
 SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) — is
