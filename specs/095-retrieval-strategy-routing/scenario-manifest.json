@@ -1,0 +1,277 @@
+{
+  "specId": "095-retrieval-strategy-routing",
+  "generatedBy": "bubbles.plan (product-to-planning, parent-expanded by bubbles.workflow)",
+  "generatedAt": "2026-06-17T00:00:00Z",
+  "schema": "scenario-manifest/v1",
+  "note": "One entry per representative Gherkin scenario in spec.md §7 (15 testable + 1 docs). changeType=new for every scenario: the feature is purely additive — it adds an intent-aware retrieval-strategy router (Idea 1), a per-artifact-type retrieval contract (Idea 3), and a near-ingestion evergreen signal feeding the existing lifecycle + pool eligibility (Idea 2), all over the SINGLE existing pgvector + knowledge-graph + structured-table store (Principle 5 — no parallel index). No external contract field is removed or repurposed, so no lockdown-approvals / invalidation ledger is required. requiredTestType: unit for every router/contract/strategy/signal/config decision (pure Go, table-driven against in-memory + httptest fixtures, no internal mocks of the unit under test); each carries a persistent scenario-specific E2E regression test (regressionRequired=true) so the single-store invariant, the vague-recall zero-regression contract (NFR-3), and the ephemeral-stays-searchable invariant (Principle 9) stay green. PLANNING ONLY: linkedTests are the INTENDED test-file paths the consuming full-delivery run will author; no test code exists yet (ceiling specs_hardened).",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-095-S01",
+      "scope": "01",
+      "title": "Missing retrieval/evergreen config key aborts startup loudly (no silent default)",
+      "ac": "R16",
+      "idea": "shared",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/config/retrieval_test.go::TestRetrievalConfig_RequiredKeysFailLoud",
+        "tests/e2e/retrieval_routing_config_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-C01",
+      "scope": "02",
+      "title": "Each artifact type declares the query shapes it must satisfy (retrieval contract)",
+      "ac": "R7",
+      "idea": "3",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/contract_test.go::TestContractForDeclaredTypes",
+        "tests/e2e/retrieval_contract_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-C03",
+      "scope": "02",
+      "title": "Unknown type resolves safely to vague_recall (fail-safe, observable)",
+      "ac": "R9",
+      "idea": "3",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/contract_test.go::TestUnknownTypeFailsSafe",
+        "tests/e2e/retrieval_contract_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-A01",
+      "scope": "03",
+      "title": "Query intent selects exactly one strategy and emits a traced StrategySelection",
+      "ac": "R1",
+      "idea": "1",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/router_test.go::TestSelectEmitsTracedSelection",
+        "tests/e2e/retrieval_router_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-C02",
+      "scope": "03",
+      "title": "Router honors the contract's admissible strategies (contract gating)",
+      "ac": "R6",
+      "idea": "1",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/router_test.go::TestContractGatesStrategy",
+        "tests/e2e/retrieval_router_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-G01",
+      "scope": "03",
+      "title": "No parallel store/index/graph is introduced; router does not re-classify (Principle 5, NFR-1)",
+      "ac": "R14",
+      "idea": "1",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/architecture_test.go::TestNoParallelStore",
+        "internal/retrieval/routing/architecture_test.go::TestRouterDoesNotReclassify",
+        "internal/retrieval/routing/architecture_test.go::TestReadsExistingStoreOnly"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-A02",
+      "scope": "04",
+      "title": "Complete-context intent fetches the FULL preserved artifact (not top-k chunks)",
+      "ac": "R2",
+      "idea": "1a",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/strategies/wholedocument/wholedocument_test.go::TestFetchesFullArtifact",
+        "tests/e2e/retrieval_wholedoc_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-A03",
+      "scope": "05",
+      "title": "Aggregate/superlative intent runs a structured aggregate over existing tables (exact extremum)",
+      "ac": "R3",
+      "idea": "1b",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/strategies/structuredaggregate/structuredaggregate_test.go::TestSuperlativeSpend",
+        "tests/e2e/retrieval_aggregate_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-A04",
+      "scope": "06",
+      "title": "Vague recall keeps the existing vector+graph+rerank path unchanged (NFR-3 zero regression)",
+      "ac": "R4",
+      "idea": "1c",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/strategies/vaguerecall/vaguerecall_test.go::TestDelegatesToExistingPipeline",
+        "tests/e2e/retrieval_vague_recall_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-A05",
+      "scope": "06",
+      "title": "Low-confidence intent falls back to vague_recall with a recorded reason",
+      "ac": "R5",
+      "idea": "1c",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/routing/router_test.go::TestLowConfidenceFallback",
+        "internal/assistant/facade_retrieval_routing_test.go::TestFacadeRetrievalRouting_SelectsContractMandatedStrategy",
+        "tests/e2e/retrieval_vague_recall_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    },
+    {
+      "scenarioId": "SCN-095-B01",
+      "scope": "07",
+      "title": "Artifact is scored evergreen vs ephemeral near the ingestion front door",
+      "ac": "R10",
+      "idea": "2",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/evergreen/signal_test.go::TestSignalAttached",
+        "internal/pipeline/ingest_evergreen_test.go::TestBuildEvergreenCandidate",
+        "internal/pipeline/ingest_evergreen_test.go::TestScoreEvergreen_WiredScorerPersists",
+        "internal/pipeline/ingest_evergreen_test.go::TestScoreEvergreen_NilScorerLeavesNull",
+        "tests/e2e/evergreen_ingestion_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan", "report.md#increment-2"]
+    },
+    {
+      "scenarioId": "SCN-095-B05",
+      "scope": "07",
+      "title": "Evergreen judgment is scenario-driven; only operational bounds are SST (docs §3.6)",
+      "ac": "R11",
+      "idea": "2",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/evergreen/signal_test.go::TestScenarioJudgedSSTBounds",
+        "internal/retrieval/evergreen/signal_test.go::TestEvergreenJudgmentNotHardcoded",
+        "internal/retrieval/evergreen/bridge_test.go::TestBridgeEvergreenJudge_ParsesDecision",
+        "internal/retrieval/evergreen/bridge_test.go::TestNoopRetrievalEvergreenRegistered",
+        "config/prompt_contracts/retrieval-evergreen-v1.yaml",
+        "tests/e2e/evergreen_ingestion_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan", "report.md#increment-2"]
+    },
+    {
+      "scenarioId": "SCN-095-B02",
+      "scope": "08",
+      "title": "High-churn ephemeral item routed to aggressive decay but stays fully searchable (Principle 9)",
+      "ac": "R12",
+      "idea": "2",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/evergreen/pool_eligibility_test.go::TestEphemeralStaysSearchable",
+        "internal/retrieval/evergreen/pool_search_isolation_test.go::TestPoolExclusionWiredIntoCandidateBuildersOnly",
+        "tests/e2e/evergreen_pool_exclusion_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan", "report.md#increment-3"]
+    },
+    {
+      "scenarioId": "SCN-095-B03",
+      "scope": "08",
+      "title": "Low-evergreen item excluded from the §10 synthesis candidate pool",
+      "ac": "R12",
+      "idea": "2",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/evergreen/pool_eligibility_test.go::TestSynthesisPoolExcludesLowEvergreen",
+        "internal/intelligence/synthesis_evergreen_test.go::TestBuildSynthesisClusterQuery_ExcludesEphemeralAdditively",
+        "tests/e2e/evergreen_pool_exclusion_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan", "report.md#increment-3"]
+    },
+    {
+      "scenarioId": "SCN-095-B04",
+      "scope": "08",
+      "title": "Low-evergreen item excluded from the §12 digest candidate pool",
+      "ac": "R12",
+      "idea": "2",
+      "requiredTestType": "unit",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": true,
+      "linkedTests": [
+        "internal/retrieval/evergreen/pool_eligibility_test.go::TestDigestPoolExcludesLowEvergreen",
+        "internal/digest/generator_evergreen_test.go::TestBuildOvernightArtifactsQuery_ExcludesEphemeralAdditively",
+        "tests/e2e/evergreen_pool_exclusion_regression_e2e_test.sh"
+      ],
+      "evidenceRefs": ["report.md#plan", "report.md#increment-3"]
+    },
+    {
+      "scenarioId": "SCN-095-DOC-01",
+      "scope": "09",
+      "title": "Retrieval pipeline docs reflect strategy routing + evergreen lifecycle; SST keys documented",
+      "ac": "R15",
+      "idea": "shared",
+      "requiredTestType": "docs",
+      "changeType": "new",
+      "lockdown": false,
+      "regressionRequired": false,
+      "linkedTests": [
+        "docs/smackerel.md#9-retrieval--semantic-search",
+        "docs/Operations.md"
+      ],
+      "evidenceRefs": ["report.md#plan"]
+    }
+  ]
+}

@@ -1008,6 +1008,41 @@ models:
         recipe_search_timeout_ms: 300000
         recipe_search_per_tool_timeout_ms: 150000
 
+# Spec 095 — Retrieval-Strategy Routing + Freshness-Aware Retrieval. SST
+# zero-defaults: every key below is REQUIRED. The Go core refuses to start if
+# any value is missing or invalid (fail-loud [F095-SST-MISSING] in
+# internal/config/retrieval.go::LoadRetrieval — Gate G028 / smackerel-no-defaults).
+# Literal values only — no ${VAR:?...} substitution here (that form is for
+# deploy/compose.deploy.yml only). All routing + evergreen behaviour operates
+# over the SINGLE existing pgvector + knowledge-graph + structured store
+# (Principle 5 — no parallel index); these keys only select a read-path strategy
+# and a lifecycle weighting, they never create a new store.
+retrieval:
+  routing:
+    enabled: true # REQUIRED bool; master switch for retrieval-strategy routing
+    intent_confidence_threshold: 0.65 # REQUIRED float in (0,1]; below this CompiledIntent confidence the router falls back to vague_recall (R5)
+    strategies:
+      whole_document_enabled: true # REQUIRED bool; enable the whole_document strategy (Idea 1a)
+      structured_aggregate_enabled: true # REQUIRED bool; enable the structured_aggregate strategy (Idea 1b)
+      vague_recall_enabled: true # REQUIRED bool; MUST be true — the router's safe fallback cannot be disabled (validator rejects false)
+    # Idea 3 (R7/R8) — per-artifact-type admissible query shapes. A single-line
+    # compact JSON object (artifact type -> ordered shape list), mirroring the
+    # ML_MODEL_MEMORY_PROFILES_JSON SST-JSON precedent. Parsed into the typed
+    # RetrievalContract registry at startup. Closed shape vocabulary:
+    # whole_document_summary | aggregate_spend | dossier | vague_recall. Any
+    # type absent here resolves to ["vague_recall"] (R9 fail-safe). Operator-
+    # overridable; adding a type is an additive edit with no router change.
+    contracts: { "transcript": [ "whole_document_summary", "vague_recall" ], "meeting": [ "whole_document_summary", "vague_recall" ], "subscription": [ "aggregate_spend", "vague_recall" ], "expense": [ "aggregate_spend", "vague_recall" ], "bill": [ "aggregate_spend", "vague_recall" ], "place": [ "dossier", "vague_recall" ], "trip": [ "dossier", "vague_recall" ] }
+  evergreen:
+    enabled: true # REQUIRED bool; master switch for the evergreen ingestion-front-door signal (Idea 2)
+    judgment_source: scenario # REQUIRED enum: scenario (canonical LLM judgment) | tier_signals (deterministic fallback)
+    confidence_floor: 0.60 # REQUIRED float in [0,1]; operational decision-confidence safety gate (NOT a business cutoff — docs §3.6)
+    per_tick_budget: 50 # REQUIRED positive int; per-ingestion-tick evergreen-judgment cap (NFR-2 throughput bound)
+    dedup_window_days: 7 # REQUIRED positive int; re-judge dedup window
+    pools:
+      synthesis_excludes_low_evergreen: false # REQUIRED bool; exclude low-evergreen items from the §10 synthesis candidate pool (R12). Default false = safe additive activation (spec 095 SCOPE-08): the synthesis candidate set is byte-for-byte unchanged until the operator opts in. NULL/not-yet-scored is never excluded (Principle 9); excluded items stay fully searchable (R13).
+      digest_excludes_low_evergreen: false # REQUIRED bool; exclude low-evergreen items from the §12 digest candidate pool (R12). Default false = safe additive activation (spec 095 SCOPE-08): the digest candidate set is byte-for-byte unchanged until the operator opts in. NULL/not-yet-scored is never excluded (Principle 9); excluded items stay fully searchable (R13).
+
 assistant:
   # Spec 061 — Conversational Assistant (Transport-Agnostic). SST zero-defaults:
   # every key is REQUIRED. The Go core refuses to start if any value is missing

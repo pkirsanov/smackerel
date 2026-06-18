@@ -328,6 +328,14 @@ type Config struct {
 	// LoadCaptureFallback() at the tail of Load().
 	CaptureFallback CaptureFallbackConfig
 
+	// Spec 095 SCOPE-01 — Retrieval-Strategy Routing + Freshness-Aware
+	// Retrieval SST. Populated by LoadRetrieval() at the tail of Load()
+	// from RETRIEVAL_* env vars produced by `./smackerel.sh config
+	// generate`. Every field is REQUIRED; missing/invalid keys fail loud
+	// at Load() with the [F095-SST-MISSING] prefix. Validation is
+	// unconditional (no Enabled short-circuit) per design §10.
+	Retrieval RetrievalConfig
+
 	// Spec 075 — legacy retirement window SST. Populated by
 	// LoadLegacyRetirement() at the tail of Load().
 	LegacyRetirement LegacyRetirementConfig
@@ -1508,6 +1516,17 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Assistant.OpenKnowledge = ok
+
+	// Spec 095 SCOPE-01 — Retrieval-Strategy Routing + Freshness-Aware
+	// Retrieval SST. Loaded after the assistant block since the router
+	// consumes the assistant intent substrate at runtime. Fail-loud
+	// [F095-SST-MISSING] on any missing/invalid RETRIEVAL_* key;
+	// validation is unconditional (no Enabled short-circuit) per design §10.
+	retrievalCfg, err := LoadRetrieval()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Retrieval = retrievalCfg
 
 	return cfg, nil
 }

@@ -173,6 +173,7 @@ type Facade struct {
 	executor         ScenarioExecutor
 	registry         ScenarioRegistry
 	intentCompiler   intent.Compiler
+	retrievalRouter  RetrievalStrategySelector
 	manifest         *SkillsManifest
 	contextStore     assistantctx.Store
 	audit            AuditWriter
@@ -266,6 +267,23 @@ func NewFacade(
 func (f *Facade) WithIntentCompiler(c intent.Compiler) *Facade {
 	if c != nil {
 		f.intentCompiler = c
+	}
+	return f
+}
+
+// WithRetrievalRouter attaches the spec 095 SCOPE-06 retrieval-strategy
+// router to the facade. nil-safe: a nil selector leaves the facade in its
+// pre-spec-095 behavior (every retrieval/QA turn keeps the single §9.2
+// vector→graph→rerank path). When set, a retrieval/QA-class CompiledIntent
+// (spec 068) is routed through the injected router and its traced read-path
+// selection (whole_document / structured_aggregate / vague_recall) is carried
+// into IntentEnvelope.StructuredContext.retrieval_strategy so the downstream
+// retrieval_qa path dispatches the selected strategy. The router is injected
+// (never constructed inside the facade) so the facade opens NO store and the
+// no-parallel-store contract (Principle 5 / TestNoParallelStore) is untouched.
+func (f *Facade) WithRetrievalRouter(r RetrievalStrategySelector) *Facade {
+	if r != nil {
+		f.retrievalRouter = r
 	}
 	return f
 }
@@ -851,6 +869,19 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		return resp, nil
 	}
 
+	// --- Step 3.7: spec 095 SCOPE-06 — retrieval-strategy routing (additive) ---
+	//
+	// When a retrieval-strategy router is wired AND this turn produced a
+	// retrieval/QA-class CompiledIntent, ask the router which read-path
+	// strategy serves the turn (whole_document / structured_aggregate /
+	// vague_recall) BEFORE the envelope is built, then carry the traced
+	// selection into StructuredContext below. The router is a PURE decision
+	// over the ALREADY-COMPUTED CompiledIntent (no second LLM round-trip —
+	// NFR-1) and opens NO store (Principle 5). Fully additive: an unwired
+	// router or a non-retrieval intent leaves the pre-spec-095 behavior (the
+	// single §9.2 path) untouched. See retrieval_strategy_routing.go.
+	retrievalSelection := f.selectRetrievalStrategy(compiled, compiledOK, hashedUserID, correlationID)
+
 	// --- Step 4: build envelope + route ---
 	scenarioOverride := shortcutScenarioID
 	if scenarioOverride == "" {
@@ -868,6 +899,15 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			"raw_query":       body,
 			"user_id":         msg.UserID,
 			"compiled_intent": json.RawMessage(compiledIntentRaw),
+		}
+		// Spec 095 SCOPE-06 — additive: carry the traced read-path strategy
+		// into the structured context so the downstream retrieval_qa path
+		// dispatches the selected strategy instead of going straight to the
+		// single §9.2 chunk-vector path. Absent for non-retrieval turns and
+		// when no router is wired (pre-spec-095 behavior unchanged).
+		if retrievalSelection != nil {
+			payload["retrieval_strategy"] = string(retrievalSelection.Strategy)
+			payload["retrieval_strategy_reason"] = string(retrievalSelection.Reason)
 		}
 		if b, err := json.Marshal(payload); err == nil {
 			env.StructuredContext = b

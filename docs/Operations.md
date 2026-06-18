@@ -4777,4 +4777,111 @@ deployment. Brave and Tavily are SaaS; operators choosing them
 accept that the provider sees query strings and source IP. Document
 this for the deployment's privacy posture.
 
+## Retrieval Routing & Evergreen Signal (spec 095)
+
+Spec 095 adds **retrieval-strategy routing** (intent → read-path strategy
+selection) and a **freshness-aware evergreen signal** scored at the ingestion
+front door. Both operate over the SINGLE existing pgvector + knowledge-graph +
+structured store — there is no parallel index (Principle 5); these keys only
+select a read-path strategy and a lifecycle weighting, they never create a new
+store. All behaviour is SST-driven from `config/smackerel.yaml`; every key below
+is REQUIRED and fail-loud — a missing, empty, or out-of-range value aborts
+startup with:
+
+```text
+[F095-SST-MISSING] missing or invalid required retrieval configuration: <key>
+```
+
+There are NO in-source fallback defaults (Gate G028 / NO-DEFAULTS).
+
+### SST keys (authoritative — mirrors `config/smackerel.yaml`)
+
+```yaml
+retrieval:
+  routing:
+    enabled: true                          # master switch for retrieval-strategy routing
+    intent_confidence_threshold: 0.65      # float in (0,1]; below this CompiledIntent confidence the router falls back to vague_recall (R5)
+    strategies:
+      whole_document_enabled: true         # enable the whole_document strategy (Idea 1a)
+      structured_aggregate_enabled: true   # enable the structured_aggregate strategy (Idea 1b)
+      vague_recall_enabled: true           # MUST be true — the router's safe fallback cannot be disabled (validator rejects false)
+    contracts: { "transcript": [ "whole_document_summary", "vague_recall" ], "meeting": [ "whole_document_summary", "vague_recall" ], "subscription": [ "aggregate_spend", "vague_recall" ], "expense": [ "aggregate_spend", "vague_recall" ], "bill": [ "aggregate_spend", "vague_recall" ], "place": [ "dossier", "vague_recall" ], "trip": [ "dossier", "vague_recall" ] }
+  evergreen:
+    enabled: true                          # master switch for the evergreen ingestion-front-door signal (Idea 2)
+    judgment_source: scenario              # enum: scenario (canonical LLM judgment) | tier_signals (deterministic fallback)
+    confidence_floor: 0.60                 # float in [0,1]; operational decision-confidence safety gate (NOT a business cutoff)
+    per_tick_budget: 50                    # positive int; per-ingestion-tick evergreen-judgment cap (NFR-2 throughput bound)
+    dedup_window_days: 7                   # positive int; re-judge dedup window
+    pools:
+      synthesis_excludes_low_evergreen: false   # exclude low-evergreen items from the §10 synthesis candidate pool (R12); DEFAULT false = safe additive activation
+      digest_excludes_low_evergreen: false      # exclude low-evergreen items from the §12 digest candidate pool (R12); DEFAULT false = safe additive activation
+```
+
+#### `retrieval.routing.*`
+
+| Key | Value | Meaning |
+|-----|-------|---------|
+| `enabled` | `true` | Master switch for retrieval-strategy routing. |
+| `intent_confidence_threshold` | `0.65` | Float in (0,1]. Below this `CompiledIntent` confidence the router falls back to `vague_recall` (R5). |
+| `strategies.whole_document_enabled` | `true` | Enable the `whole_document` strategy (Idea 1a). |
+| `strategies.structured_aggregate_enabled` | `true` | Enable the `structured_aggregate` strategy (Idea 1b). |
+| `strategies.vague_recall_enabled` | `true` | MUST be `true` — the router's safe fallback cannot be disabled. Config validation rejects `false` with the named error `RETRIEVAL_ROUTING_STRATEGY_VAGUE_RECALL_ENABLED (must be true — the router's safe fallback cannot be disabled)`. |
+| `contracts` | per-type map (above) | Per-artifact-type admissible query shapes (Idea 3, R7/R8). Closed shape vocabulary: `whole_document_summary` \| `aggregate_spend` \| `dossier` \| `vague_recall`. Any artifact type absent from the map resolves to `[vague_recall]` (R9 fail-safe). Operator-overridable; adding a type is an additive edit with no router change. |
+
+#### `retrieval.evergreen.*`
+
+| Key | Value | Meaning |
+|-----|-------|---------|
+| `enabled` | `true` | Master switch for the evergreen ingestion-front-door signal (Idea 2). |
+| `judgment_source` | `scenario` | Closed enum: `scenario` (canonical LLM `retrieval_evergreen` judgment) or `tier_signals` (deterministic fallback). An unrecognized value is rejected at startup. |
+| `confidence_floor` | `0.60` | Float in [0,1]. Operational decision-confidence safety gate — a low-confidence "ephemeral" call is treated conservatively as evergreen (Principle 9, no wrongful exclusion). NOT a business cutoff. |
+| `per_tick_budget` | `50` | Positive int. Per-ingestion-tick evergreen-judgment cap (NFR-2 throughput bound). |
+| `dedup_window_days` | `7` | Positive int. Re-judge dedup window. |
+| `pools.synthesis_excludes_low_evergreen` | `false` | Exclude low-evergreen items from the §10 synthesis candidate pool (R12). DEFAULT `false` = safe additive activation: the synthesis candidate set is byte-for-byte unchanged until the operator opts in. |
+| `pools.digest_excludes_low_evergreen` | `false` | Exclude low-evergreen items from the §12 digest candidate pool (R12). DEFAULT `false` = safe additive activation: the digest candidate set is byte-for-byte unchanged until the operator opts in. |
+
+### `judgment_source` fallback behaviour (NFR-2)
+
+The evergreen signal NEVER blocks ingestion or search (R13). The judgment path
+degrades gracefully so ingestion always proceeds:
+
+| Condition | Path taken | `evergreen_source` provenance |
+|-----------|-----------|-------------------------------|
+| `judgment_source: scenario` AND the `retrieval_evergreen` scenario judge is wired AND returns successfully | Scenario decides evergreen ↔ ephemeral; the operational `confidence_floor` then gates whether a low-confidence "ephemeral" call is trusted | `scenario` |
+| `judgment_source: scenario` BUT the judge is unavailable (not yet wired) or returns an error | Deterministic `TierSignals` fallback (transient source kinds → ephemeral) so ingestion never blocks | `tier_signals_fallback` |
+| `judgment_source: tier_signals` | Deterministic `TierSignals` source used directly | `tier_signals` |
+
+### Persistence & pool exclusion (migration 060)
+
+The evergreen signal is persisted as two ADDITIVE, nullable columns on the
+EXISTING `artifacts` table (migration `060_artifact_evergreen_signal.sql`) —
+never a parallel store (Principle 5):
+
+| Column | Type | Semantics |
+|--------|------|-----------|
+| `artifacts.evergreen_score` | `REAL` | Signed score: `>= 0` evergreen, `< 0` ephemeral (magnitude = calibrated confidence), `NULL` = not yet scored. No DB-side default — the app-side `evergreen.Scorer` writes it; a missing scorer leaves it `NULL` (NFR-3 graceful degrade). |
+| `artifacts.evergreen_source` | `TEXT` | Judgment provenance (Principle 8 transparency): `scenario`, `tier_signals_fallback`, or `tier_signals`. `NULL` when `evergreen_score` is `NULL`. |
+
+Pool exclusion (when an `*_excludes_low_evergreen` toggle is on) removes
+low-evergreen items ONLY from the §10 synthesis and §12 digest candidate pools.
+It NEVER hides them from search/retrieval — excluded items stay fully searchable
+(R13 / Principle 9). A `NULL` (not-yet-scored) score is **never** excluded; it is
+treated as evergreen.
+
+### Enable / roll back pool exclusion
+
+Pool exclusion ships OFF (`false`) for safe additive activation. To turn it on
+(or roll it back), follow the same flip-regenerate-restart flow used for
+connectors:
+
+1. Edit `config/smackerel.yaml` → set `retrieval.evergreen.pools.synthesis_excludes_low_evergreen` and/or `retrieval.evergreen.pools.digest_excludes_low_evergreen` to `true` (or back to `false` to roll back).
+2. Regenerate config: `./smackerel.sh config generate`
+3. Restart: `./smackerel.sh down && ./smackerel.sh up`
+
+No rebuild or schema change is required — the toggle is read fail-loud at
+startup, and migration 060 is additive-only (manual rollback drops the two
+columns; see the migration's rollback footer). Disabling routing or the
+evergreen signal entirely follows the same flip-regenerate-restart flow on
+`retrieval.routing.enabled` / `retrieval.evergreen.enabled`.
+
 
