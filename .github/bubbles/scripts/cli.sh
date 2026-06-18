@@ -2054,6 +2054,42 @@ cmd_doctor() {
     fi
   fi
 
+  # Check 11: Framework drift advisory (IMP-013) — informational, non-blocking.
+  # Recomputes managed-file checksums against the installed release manifest and
+  # reports drift/missing without affecting the doctor pass/fail tally.
+  if [[ -x "$SCRIPT_DIR/bubbles-drift-check.sh" ]]; then
+    local drift_summary drift_rc
+    drift_summary="$(bash "$SCRIPT_DIR/bubbles-drift-check.sh" 2>/dev/null || true)"
+    bash "$SCRIPT_DIR/bubbles-drift-check.sh" >/dev/null 2>&1 && drift_rc=0 || drift_rc=$?
+    if [[ "${drift_rc:-0}" -eq 0 ]]; then
+      echo -e "  ${GREEN}✅${NC} Framework files are in sync with the release manifest (no drift)"
+      passed=$((passed + 1))
+    else
+      local drift_n missing_n
+      drift_n="$(printf '%s\n' "$drift_summary" | sed -nE 's/^[[:space:]]*drifted[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p')"
+      missing_n="$(printf '%s\n' "$drift_summary" | sed -nE 's/^[[:space:]]*missing[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p')"
+      echo -e "  ${YELLOW}⚠️${NC}  Framework drift advisory: ${drift_n:-?} drifted, ${missing_n:-?} missing vs release manifest (run 'bubbles-drift-check.sh' for detail)"
+    fi
+  fi
+
+  # Check 12: Governance hub snapshot (IMP-014) — informational, non-blocking.
+  # Surfaces the single most-depended-on governance node so an operator sees the
+  # blast-radius landscape; full ranking via 'bubbles-hub-report.sh'.
+  if [[ -x "$SCRIPT_DIR/bubbles-hub-report.sh" ]] && command -v python3 >/dev/null 2>&1; then
+    local hub_top
+    hub_top="$(bash "$SCRIPT_DIR/bubbles-hub-report.sh" --top 1 --format json 2>/dev/null \
+      | python3 -c "import json,sys
+try:
+    d=json.load(sys.stdin); h=d['topHubs'][0]
+    print(f\"{h['node']} (in-degree {h['inDegree']}, {h['kind']})\")
+except Exception:
+    pass" 2>/dev/null || true)"
+    if [[ -n "$hub_top" ]]; then
+      echo -e "  ${GREEN}✅${NC} Governance hub snapshot: top hub is ${hub_top} — run 'bubbles-hub-report.sh' for the full ranking"
+      passed=$((passed + 1))
+    fi
+  fi
+
   echo ""
   echo -e "${BOLD}Adoption Profile Progress${NC}"
   echo -e "${DIM}Profile guidance is advisory and separate from trust or certification.${NC}"

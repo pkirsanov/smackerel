@@ -8,6 +8,26 @@ if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(di
 fi
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Optional --fix: regenerate stale derived artifacts (in dependency order) BEFORE
+# running the freshness gates, so a VERSION/gate bump that staled framework-stats
+# / cheatsheet / capability-ledger-docs / release-manifest is remediated in one
+# command instead of the operator hand-running four generators in the right order.
+RELEASE_CHECK_FIX=0
+case "${1:-}" in
+  --fix) RELEASE_CHECK_FIX=1 ;;
+  -h | --help)
+    echo "Usage: release-check.sh [--fix]"
+    echo "  (no args)  run framework-validate + the derived-artifact freshness gates (check only)"
+    echo "  --fix      regenerate stale derived artifacts (regen-derived.sh) BEFORE checking"
+    exit 0
+    ;;
+  "") ;;
+  *)
+    echo "release-check: unknown argument '$1' (expected --fix or no args)." >&2
+    exit 2
+    ;;
+esac
+
 failures=0
 
 run_check() {
@@ -74,6 +94,17 @@ check_stray_release_files() {
 echo "Bubbles Release Check"
 echo "Repository: $REPO_ROOT"
 echo
+
+if [[ "$RELEASE_CHECK_FIX" -eq 1 ]]; then
+  echo "==> --fix: regenerating derived artifacts in dependency order before checking"
+  if bash "$SCRIPT_DIR/regen-derived.sh"; then
+    echo "PASS: derived artifacts regenerated and fresh"
+  else
+    echo "FAIL: regen-derived reported a still-stale artifact after regeneration"
+    failures=$((failures + 1))
+  fi
+  echo
+fi
 
 run_check "Framework validation" bash "$SCRIPT_DIR/framework-validate.sh"
 run_check "Capability ledger docs freshness" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" --check

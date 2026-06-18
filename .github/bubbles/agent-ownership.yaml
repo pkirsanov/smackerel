@@ -21,6 +21,7 @@ artifacts:
     - bubbles.regression
     - bubbles.code-review
     - bubbles.system-review
+    - bubbles.redteam
   design.md:
     owner:
     - bubbles.design

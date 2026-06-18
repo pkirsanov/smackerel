@@ -2,6 +2,8 @@
 # Files listed here are framework-owned and overwritten on upgrade.
 # DO NOT add project-specific files to these directories.
 bubbles/scripts/action-risk-registry-lint.sh
+bubbles/scripts/adversarial-resolve-selftest.sh
+bubbles/scripts/adversarial-resolve.sh
 bubbles/scripts/agent-ownership-lint-selftest.sh
 bubbles/scripts/agent-ownership-lint.sh
 bubbles/scripts/agnosticity-lint-selftest.sh
@@ -12,6 +14,10 @@ bubbles/scripts/artifact-freshness-guard.sh
 bubbles/scripts/artifact-lint.sh
 bubbles/scripts/batch-promotion-lint-selftest.sh
 bubbles/scripts/batch-promotion-lint.sh
+bubbles/scripts/bubbles-drift-check-selftest.sh
+bubbles/scripts/bubbles-drift-check.sh
+bubbles/scripts/bubbles-hub-report-selftest.sh
+bubbles/scripts/bubbles-hub-report.sh
 bubbles/scripts/capability-consumer-freshness-selftest.sh
 bubbles/scripts/capability-consumer-freshness.sh
 bubbles/scripts/capability-foundation-guard-selftest.sh
@@ -51,6 +57,7 @@ bubbles/scripts/evidence-tool-log-bridge.sh
 bubbles/scripts/finding-closure-selftest.sh
 bubbles/scripts/framework-dogfood-guard-selftest.sh
 bubbles/scripts/framework-dogfood-guard.sh
+bubbles/scripts/framework-validate-tier-selftest.sh
 bubbles/scripts/framework-validate.sh
 bubbles/scripts/fun-mode.sh
 bubbles/scripts/gate-catalog-freshness.sh
@@ -136,6 +143,8 @@ bubbles/scripts/project-scan-setup.sh
 bubbles/scripts/prometheus-adapter-fetch-selftest.sh
 bubbles/scripts/propagation-policy-guard-selftest.sh
 bubbles/scripts/propagation-policy-guard.sh
+bubbles/scripts/regen-derived-selftest.sh
+bubbles/scripts/regen-derived.sh
 bubbles/scripts/registry-consistency-selftest.sh
 bubbles/scripts/regression-baseline-guard-selftest.sh
 bubbles/scripts/regression-baseline-guard.sh
@@ -169,6 +178,10 @@ bubbles/scripts/retro-framework-health-selftest.sh
 bubbles/scripts/retro-framework-health.sh
 bubbles/scripts/runtime-lease-selftest.sh
 bubbles/scripts/runtime-leases.sh
+bubbles/scripts/scaffold-gate-selftest.sh
+bubbles/scripts/scaffold-gate.sh
+bubbles/scripts/scan-lib-selftest.sh
+bubbles/scripts/scan-lib.sh
 bubbles/scripts/scenario-compile-lint-selftest.sh
 bubbles/scripts/scenario-compile-lint.sh
 bubbles/scripts/shellcheck-lint-selftest.sh
@@ -312,6 +325,7 @@ docs/issues/session-aware-runtime-coordination.md
 docs/its-not-rocket-appliances.html
 docs/recipes/README.md
 docs/recipes/add-deployment-target.md
+docs/recipes/adversarial-verification.md
 docs/recipes/ask-the-super-first.md
 docs/recipes/autonomous-goal.md
 docs/recipes/autonomous-sprint.md
@@ -414,6 +428,7 @@ agents/bubbles.iterate.agent.md
 agents/bubbles.plan.agent.md
 agents/bubbles.propagate.agent.md
 agents/bubbles.recap.agent.md
+agents/bubbles.redteam.agent.md
 agents/bubbles.regression.agent.md
 agents/bubbles.releases.agent.md
 agents/bubbles.retro.agent.md
@@ -499,6 +514,7 @@ prompts/bubbles.implement.prompt.md
 prompts/bubbles.iterate.prompt.md
 prompts/bubbles.plan.prompt.md
 prompts/bubbles.recap.prompt.md
+prompts/bubbles.redteam.prompt.md
 prompts/bubbles.regression.prompt.md
 prompts/bubbles.releases.prompt.md
 prompts/bubbles.retro.prompt.md
@@ -542,6 +558,7 @@ skills/bubbles-evidence-capture/SKILL.md
 skills/bubbles-feature-template/SKILL.md
 skills/bubbles-fix-cycle-protocol/SKILL.md
 skills/bubbles-flag-lifecycle/SKILL.md
+skills/bubbles-long-running-commands/SKILL.md
 skills/bubbles-observability-adapter/SKILL.md
 skills/bubbles-product-principle-discovery/SKILL.md
 skills/bubbles-propagation-policy/SKILL.md

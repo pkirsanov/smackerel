@@ -994,6 +994,40 @@ cat <<'EOF' > "$negative_feature_dir/rework-queue.json"
 ]
 EOF
 
+# BUG-006 fixtures: Check 4B canonicality + Check 5 counting must ignore
+# >-prefixed header/summary blockquotes (e.g. a planning rollup line), while
+# still flagging a genuine non-canonical PLAIN scope-status line.
+bug006_blockquote_pass_dir="$tmp_root/specs/930-bug006-status-blockquote-pass"
+cp -R "$positive_feature_dir" "$bug006_blockquote_pass_dir"
+bug006_tmp="$(mktemp)"
+{
+  echo "> **Status:** all scopes Not Started (planning refreshed 2026-06-17)"
+  echo ""
+  cat "$bug006_blockquote_pass_dir/scopes.md"
+} > "$bug006_tmp"
+mv "$bug006_tmp" "$bug006_blockquote_pass_dir/scopes.md"
+
+bug006_noncanonical_neg_dir="$tmp_root/specs/931-bug006-noncanonical-plain-status"
+cp -R "$positive_feature_dir" "$bug006_noncanonical_neg_dir"
+{
+  echo ""
+  echo "## Scope 02: Non-Canonical Status Probe"
+  echo ""
+  echo "**Status:** Deferred"
+} >> "$bug006_noncanonical_neg_dir/scopes.md"
+
+# BUG-007 fixture: Check 8C must NOT fire on benign prose that merely co-mentions
+# a trigger word (session) and a generic word (flow). The note deliberately avoids
+# any shared/global qualifier or fixture/bootstrap/harness infra noun.
+bug007_benign_dir="$tmp_root/specs/932-bug007-benign-session-flow"
+cp -R "$positive_feature_dir" "$bug007_benign_dir"
+{
+  echo ""
+  echo "### Additional Benign Note"
+  echo ""
+  echo "The regression session re-runs the booking user flow end to end."
+} >> "$bug007_benign_dir/scopes.md"
+
 echo "Running agent ownership lint precheck..."
 lint_log="$tmp_root/agent-ownership-lint.log"
 lint_status="$(run_capture "$lint_log" bash "$OWNERSHIP_LINT_SCRIPT")"
@@ -1044,6 +1078,41 @@ else
 fi
 assert_log_contains "$shared_negative_log" "has no Shared Infrastructure Impact Sweep section" "Negative shared fixture triggers the blast-radius planning check"
 assert_log_contains "$shared_negative_log" "has no Change Boundary section" "Negative shared fixture triggers the change-boundary check"
+
+echo "Running BUG-006 header-blockquote status selftest (Check 4B/5 ignore summary blockquotes)..."
+bug006_pass_log="$tmp_root/bug006-blockquote-pass.log"
+bug006_pass_status="$(run_capture "$bug006_pass_log" bash "$GUARD_SCRIPT" "$bug006_blockquote_pass_dir")"
+if [[ "$bug006_pass_status" -eq 0 ]]; then
+  pass "BUG-006: fixture with a header '> **Status:** …' summary blockquote still passes the transition guard"
+else
+  fail "BUG-006: fixture with a header '> **Status:** …' summary blockquote should still pass the transition guard"
+  sed -n '1,220p' "$bug006_pass_log"
+fi
+assert_log_not_contains "$bug006_pass_log" "Non-canonical scope status detected" "BUG-006: header summary blockquote is not flagged as a non-canonical scope status (Check 4B)"
+assert_log_not_contains "$bug006_pass_log" "still marked 'Not Started'" "BUG-006: header summary blockquote does not inflate the Not Started scope count (Check 5)"
+assert_log_contains "$bug006_pass_log" "All scope statuses are canonical" "BUG-006: real plain scope statuses still validated as canonical"
+
+echo "Running BUG-006 non-canonical plain-status selftest (no over-exclusion)..."
+bug006_neg_log="$tmp_root/bug006-noncanonical-neg.log"
+bug006_neg_status="$(run_capture "$bug006_neg_log" bash "$GUARD_SCRIPT" "$bug006_noncanonical_neg_dir")"
+if [[ "$bug006_neg_status" -ne 0 ]]; then
+  pass "BUG-006: a plain non-canonical scope status still fails the transition guard"
+else
+  fail "BUG-006: a plain non-canonical scope status should still fail the transition guard"
+  sed -n '1,220p' "$bug006_neg_log"
+fi
+assert_log_contains "$bug006_neg_log" "Non-canonical scope status detected" "BUG-006: a plain '**Status:** Deferred' scope line is STILL flagged non-canonical (no over-exclusion)"
+
+echo "Running BUG-007 benign session/flow selftest (Check 8C not over-triggered)..."
+bug007_benign_log="$tmp_root/bug007-benign.log"
+bug007_benign_status="$(run_capture "$bug007_benign_log" bash "$GUARD_SCRIPT" "$bug007_benign_dir")"
+if [[ "$bug007_benign_status" -eq 0 ]]; then
+  pass "BUG-007: benign 'session'+'flow' prose fixture still passes the transition guard"
+else
+  fail "BUG-007: benign 'session'+'flow' prose fixture should still pass the transition guard"
+  sed -n '1,220p' "$bug007_benign_log"
+fi
+assert_log_not_contains "$bug007_benign_log" "has no Shared Infrastructure Impact Sweep section" "BUG-007: benign 'session'+'flow' prose does not trigger the shared-infra blast-radius check (Check 8C)"
 
 echo "Running negative packet-field selftest..."
 negative_log="$tmp_root/negative-guard.log"
