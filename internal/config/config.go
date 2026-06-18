@@ -336,6 +336,17 @@ type Config struct {
 	// unconditional (no Enabled short-circuit) per design §10.
 	Retrieval RetrievalConfig
 
+	// Spec 096 SCOPE-01 — Multi-Provider Model Connection registry SST.
+	// Populated by LoadModelConnections() at the tail of Load() from the
+	// LLM_CONNECTIONS_JSON / LLM_DISCOVERY_* / LLM_MODEL_COSTS_JSON env
+	// vars produced by `./smackerel.sh config generate`. The closed-set
+	// loader aborts fail-loud ([F096-SST-MISSING] / [F096-SST-INVALID]) on
+	// a missing env var, an unknown kind, a missing required per-kind
+	// param, a non-positive discovery bound, an env-mode secret absent
+	// from infrastructure.secret_keys, or an enabled non-ollama model with
+	// no model_costs entry (G028, no silent default / no Ollama fallback).
+	ModelConnections ModelConnectionsConfig
+
 	// Spec 075 — legacy retirement window SST. Populated by
 	// LoadLegacyRetirement() at the tail of Load().
 	LegacyRetirement LegacyRetirementConfig
@@ -1516,6 +1527,19 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Assistant.OpenKnowledge = ok
+
+	// Spec 096 SCOPE-01 — Multi-Provider Model Connection registry. Loaded
+	// after the open-knowledge block since the registry sits on the same
+	// llm.* SST surface the agent consumes. Fail-loud closed-set Validate()
+	// runs inside LoadModelConnections (against the canonical SecretKeys()
+	// manifest); a missing env var, unknown kind, missing per-kind param,
+	// non-positive discovery bound, undeclared env-mode secret, or an
+	// enabled non-ollama model with no model_costs entry aborts here.
+	mc, err := LoadModelConnections()
+	if err != nil {
+		return nil, err
+	}
+	cfg.ModelConnections = mc
 
 	// Spec 095 SCOPE-01 — Retrieval-Strategy Routing + Freshness-Aware
 	// Retrieval SST. Loaded after the assistant block since the router
