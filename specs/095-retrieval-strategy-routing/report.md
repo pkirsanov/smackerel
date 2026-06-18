@@ -1106,6 +1106,8 @@ state.json status MUST NOT be set to 'done'.
 No drift misrepresents delivered behavior; no contradictory or obsolete requirement; no parallel-store violation (mechanically held by `TestNoParallelStore`). Spec-review records CLEAN; the two LOW observations are owner-routed cosmetic notes, not done-blockers.
 <!-- bubbles:g040-skip-end -->
 
+**certifiedAt correction (G088 post-cert consistency, 2026-06-18, bubbles.workflow parent-expanded certification owner):** top-level `certifiedAt` + `certification.completedAt` corrected `2026-06-18T08:30:00Z` → `2026-06-18T15:54:34Z` so the certification timestamp follows the planning-truth persistence commit `ada0efc1` (committer date `2026-06-18T15:28:55Z`). No planning-truth file (spec.md/design.md/scopes.md) was edited — the already-recorded **CLEAN** spec-review above covers the committed planning truth; this corrects only the stale timestamp proxy that produced the G088 false positive (`certifiedAt` predated the persistence commit). `post-cert-spec-edit-guard.sh` now exits 0.
+
 ### Validation Evidence
 
 **Phase Agent:** bubbles.validate (parent-expanded by bubbles.workflow)

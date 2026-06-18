@@ -194,7 +194,7 @@
   "specDependsOnNote": "spec 061/064/068 are listed as specIntegratesWith (not hard deps): planning-ceiling promotion does NOT require integration-target implementation completion. Spec 095's plan only consumes their stable contract surfaces read-only — the CompiledIntent schema (spec 068), the nl_routing facade seam (spec 061), and the AgentAnswer full-artifact citation primitive (spec 064). Spec 095 implementation lands after those reach done; that is a full-delivery concern, not a planning concern.",
   "amends": [],
   "unblocks": [],
-  "certifiedAt": "2026-06-18T08:30:00Z",
+  "certifiedAt": "2026-06-18T15:54:34Z",
   "requiresRevalidation": false,
   "flagsIntroduced": [],
   "releaseTrain": "next",
@@ -460,7 +460,7 @@
   },
   "certification": {
     "status": "done",
-    "completedAt": "2026-06-18T08:30:00Z",
+    "completedAt": "2026-06-18T15:54:34Z",
     "evidenceRef": "report.md",
     "certifiedCompletedPhases": ["analyze", "ux", "design", "plan", "implement", "test", "docs", "gaps", "regression", "simplify", "security", "validate", "audit", "stabilize", "harden", "chaos", "spec-review"],
     "completedScopes": [
