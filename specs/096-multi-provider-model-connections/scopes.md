@@ -59,7 +59,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
    `llm.model_costs` SST, loaded NO-DEFAULTS. Pure config + loader; NO
    vault, NO dispatch, NO discovery wiring yet. *(design §5.1, §7)*
 2. **SCOPE-02 — Encrypted credential vault + master-key lifecycle.** The
-   AES-256-GCM `connvault.SecretVault`, migration 060
+   AES-256-GCM `connvault.SecretVault`, migration 061
    `model_provider_connections`, and the fail-loud master-key load +
    rotation. Reversible, authenticated, never-plaintext. *(design §5.2,
    §3 foundation #2)*
@@ -180,7 +180,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
 | # | Scope | Surfaces | Covers SCN | Tests (categories) | DoD items | Status |
 |---|-------|----------|------------|--------------------|-----------|--------|
 | 1 | SCOPE-01 — Provider-connection registry + config SST schema (foundation) | config (yaml + `internal/config`) | A01, A04, G02 | unit (registry/validate) + config-gen | 12 | [~] In Progress (10/12 DoD; T1-1 + T1-3 environmental residuals) |
-| 2 | SCOPE-02 — Encrypted credential vault + master-key lifecycle | new `connvault` pkg + migration 060 + secret-keys path | W05 | unit (AEAD) + integration (ephemeral PG) | 12 | [ ] Not started |
+| 2 | SCOPE-02 — Encrypted credential vault + master-key lifecycle | new `connvault` pkg + migration 061 + secret-keys path | W05 | unit (AEAD) + integration (ephemeral PG) | 12 | [~] In Progress (7/12 DoD; integration leg + T1-1/T1-3 deferred/foreign residuals) |
 | 3 | SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) | Go `llm` + Python `chat.py`/`schemas.py` + agent attribution | A02, A03, G01, G04, G05 | unit + integration + e2e-api (deferred) | 14 | [ ] Not started |
 | 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [ ] Not started |
 | 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 060 `model_usage_ledger` | G03 | unit + integration | 12 | [ ] Not started |
@@ -321,15 +321,15 @@ Every entry is copied verbatim from
 
 ## Scope 2: SCOPE-02 — Encrypted credential vault + master-key lifecycle
 
-**Status:** [ ] Not started
-**Scope-Kind:** code (new `connvault` pkg) + DB (migration 060)
+**Status:** in_progress (7 of 12 DoD items met + evidenced; the residuals are the integration/migrate leg [T2-1/T2-6/T2-7, deferred to a clean-stack run] + two foreign/closeout items [T1-1 `uservalidation.md`, T1-3 a foreign untracked file] — see DoD)
+**Scope-Kind:** code (new `connvault` pkg) + DB (migration 061)
 **Depends on:** SCOPE-01
 **Foundation:** false (the design §3 foundation #2 reversible secret store
 — keyed 1:1 to the SCOPE-01 registry db-mode ids; consumed by the SCOPE-03
 dispatch seam and the SCOPE-06 admin surface)
 
 **Intent:** Land the reversible, authenticated, encrypted-at-rest
-credential vault: migration 060 `model_provider_connections` (operator-
+credential vault: migration 061 `model_provider_connections` (operator-
 global, NO `actor_user_id`) and a `connvault.SecretVault` that
 AES-256-GCM-encrypts the secret bundle under the in-core master key with a
 per-record 96-bit nonce + `AAD(connection_id|kind|key_version)`, persists
@@ -342,7 +342,7 @@ one-way hashed.
 
 ### Surface (design §5.2, §3 foundation #2)
 
-- `internal/db` migration **060** `model_provider_connections` (design
+- `internal/db` migration **061** `model_provider_connections` (design
   §5.2): `connection_id` PK (1:1 to the SST registry id),
   `provider_kind`, `enabled` (app-written, NO DB-side default — G028),
   `secret_ciphertext`/`secret_nonce`/`secret_key_version` (NULL for
@@ -409,21 +409,21 @@ test master key. Entries are copied verbatim from
 
 **Tier-1 (universal):**
 
-- [ ] D02-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T1-4 — Every evidence block in report.md → SCOPE-02 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-02.
-- [ ] D02-T1-5 — 088/089 do-not-amend boundary respected: the vault is additive; no `modelswitch`/`modelpref`/picker behaviour changes. → Evidence: report.md → Change Manifest.
+- [ ] D02-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-02. **DEFERRED (not a code gap):** blocked by the absent `uservalidation.md` — a user-acceptance/closeout artifact authored at validation time (owned by `bubbles.plan`/validation, not `bubbles.implement`).
+- [x] D02-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-02.
+- [ ] D02-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-02. **DEFERRED (not a code gap):** the global format gate fails only on a pre-existing UNTRACKED FOREIGN file from a concurrent session (`internal/connector/qfdecisions/chaos_hardening_test.go`); every SCOPE-02 file is gofmt-clean.
+- [x] D02-T1-4 — Every evidence block in report.md → SCOPE-02 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-02.
+- [x] D02-T1-5 — 088/089 do-not-amend boundary respected: the vault is additive; no `modelswitch`/`modelpref`/picker behaviour changes. → Evidence: report.md → Change Manifest.
 
 **Tier-2 (role-specific: migration + secret-safety + G028):**
 
-- [ ] D02-T2-1 — **Migration discipline:** migration 060 `model_provider_connections` applies cleanly forward, is operator-global (NO `actor_user_id`), uses NO DB-side defaults for `enabled`/`updated_at` (app-written, G028), and `./smackerel.sh` DB-migrate path is green on the ephemeral test DB. → Evidence: report.md → SCOPE-02 (migrate output).
-- [ ] D02-T2-2 — **Secret-safety (binding):** no plaintext credential is ever logged, traced, or returned; `secret_redaction` is last-4 only; the master key NEVER leaves the Go core (the sidecar receives nothing in this scope). → Evidence: report.md → SCOPE-02 (grep for log/return of the bundle + `TestSecretVault_NeverReturnsPlaintext_RedactionLast4_Spec096`).
-- [ ] D02-T2-3 — **Reversible, not hashed:** the vault is AES-256-GCM (decryptable); a grep proves no argon2id/one-way hashing of the credential bundle; the round-trip test recovers the exact secret. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T2-4 — **Authenticated AEAD adversarial:** `TestSecretVault_AADTamperRejected_Spec096` + `TestSecretVault_WrongKeyRejected_Spec096` are non-tautological — each fails if a tampered-AAD or wrong-key ciphertext ever decrypts. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T2-5 — **Master-key fail-loud (G028):** `LLM_PROVIDER_SECRET_MASTER_KEY` is a managed secret loaded fail-loud when a db-mode hosted connection is declared; an absent/empty master key aborts named (no default key, no skip-encryption fallback); rotation (bump `key_version` + re-encrypt-all) is documented. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T2-6 — **Test isolation:** unit + integration tests use synthetic secrets and the ephemeral test Postgres only; no real provider credential and no persistent-store write. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T2-7 — All five SCOPE-02 tests pass with NO skips/ignores; evidence is the real unit + integration run output. → Evidence: report.md → SCOPE-02 (test run).
+- [ ] D02-T2-1 — **Migration discipline:** migration 061 `model_provider_connections` applies cleanly forward, is operator-global (NO `actor_user_id`), uses NO DB-side defaults for `enabled`/`updated_at` (app-written, G028), and `./smackerel.sh` DB-migrate path is green on the ephemeral test DB. → Evidence: report.md → SCOPE-02 (migrate output). **DEFERRED:** the integration/migrate leg was not run this turn to avoid disrupting concurrent sessions on the shared test stack (OOM/contention risk); `061_model_provider_connections.sql` exists and is idempotently applied by the integration test on a clean stack.
+- [x] D02-T2-2 — **Secret-safety (binding):** no plaintext credential is ever logged, traced, or returned; `secret_redaction` is last-4 only; the master key NEVER leaves the Go core (the sidecar receives nothing in this scope). → Evidence: report.md → SCOPE-02 (grep for log/return of the bundle + `TestSecretVault_NeverReturnsPlaintext_RedactionLast4_Spec096`).
+- [x] D02-T2-3 — **Reversible, not hashed:** the vault is AES-256-GCM (decryptable); a grep proves no argon2id/one-way hashing of the credential bundle; the round-trip test recovers the exact secret. → Evidence: report.md → SCOPE-02.
+- [x] D02-T2-4 — **Authenticated AEAD adversarial:** `TestSecretVault_AADTamperRejected_Spec096` + `TestSecretVault_WrongKeyRejected_Spec096` are non-tautological — each fails if a tampered-AAD or wrong-key ciphertext ever decrypts. → Evidence: report.md → SCOPE-02.
+- [x] D02-T2-5 — **Master-key fail-loud (G028):** `LLM_PROVIDER_SECRET_MASTER_KEY` is a managed secret loaded fail-loud when a db-mode hosted connection is declared; an absent/empty master key aborts named (no default key, no skip-encryption fallback); rotation (bump `key_version` + re-encrypt-all) is documented. → Evidence: report.md → SCOPE-02.
+- [ ] D02-T2-6 — **Test isolation:** unit + integration tests use synthetic secrets and the ephemeral test Postgres only; no real provider credential and no persistent-store write. → Evidence: report.md → SCOPE-02. **PARTIAL:** the unit leg uses synthetic secrets only (met); the integration leg — correctly isolated (unique timestamped `connection_id`, `t.Cleanup` row delete, synthetic 32-byte key) — is DEFERRED to a clean-stack run.
+- [ ] D02-T2-7 — All five SCOPE-02 tests pass with NO skips/ignores; evidence is the real unit + integration run output. → Evidence: report.md → SCOPE-02 (test run). **PARTIAL:** 6/6 SCOPE-02 unit tests pass (real run, report.md → SCOPE-02); the 1 integration test (`TestVault_PersistRoundTripTestMasterKey_Spec096`) is DEFERRED to a clean-stack run (it skips without `DATABASE_URL` by design).
 
 ---
 
