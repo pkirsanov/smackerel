@@ -137,7 +137,15 @@ for scope_index in "${!scope_analysis_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
   scope_label="$(scope_analysis_label "$scope_index")"
 
-  if grep -Eiq '\b(shared|global|common|core)\b.*\b(fixture|fixtures|harness|setup|bootstrap|test helper|test infrastructure)\b|\b(auth|login|session|password reset|token refresh|tenant context|role detection|storage injection|init script|addinitscript)\b.*\b(fixture|fixtures|harness|setup|bootstrap|contract|flow)\b|\b(auth fixture|login fixture|global setup|playwright setup|bootstrap helper|shared test helper)\b' "$scope_path"; then
+  # BUG-007: the middle alternation's second arm previously allowed the generic
+  # words (setup|contract|flow), so benign prose like a Test Plan row describing a
+  # "regression session" that re-runs a "user flow" matched (session + flow) and
+  # the scope was wrongly required to carry a Shared Infrastructure Impact Sweep.
+  # Require a real test-infrastructure noun (fixture|fixtures|harness|bootstrap) to
+  # co-occur with the infra subject. The shared/global qualifier arm and the
+  # specific multi-word-phrase arm (which signal GENUINE shared infra) are
+  # unchanged, so real shared fixture/bootstrap work is still caught.
+  if grep -Eiq '\b(shared|global|common|core)\b.*\b(fixture|fixtures|harness|setup|bootstrap|test helper|test infrastructure)\b|\b(auth|login|session|password reset|token refresh|tenant context|role detection|storage injection|init script|addinitscript)\b.*\b(fixture|fixtures|harness|bootstrap)\b|\b(auth fixture|login fixture|global setup|playwright setup|bootstrap helper|shared test helper)\b' "$scope_path"; then
     shared_scope_hits=$((shared_scope_hits + 1))
 
     if grep -Eiq 'Shared Infrastructure Impact Sweep' "$scope_path"; then

@@ -222,6 +222,12 @@ agents:
     delegatesRequired: true
     ownsArtifacts: []
     ownsPhases: []
+  bubbles.redteam:
+    class: diagnostic
+    canAskUserDirectly: false
+    delegatesRequired: true
+    ownsArtifacts: []
+    ownsPhases: [ redteam ]
   bubbles.status:
     class: utility
     canAskUserDirectly: false

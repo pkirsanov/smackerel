@@ -215,6 +215,17 @@ v5Aliases:
     tags: { action: stochastic, scope: portfolio }
     description: Randomized adversarial probing across the portfolio.
 
+  # -------------------- Adversarial (red-team) family --------------------
+  redteam-to-doc:
+    primitive: validate
+    tags: { action: adversarial-probe, finalize: docs }
+    description: Cyrus attacks a finished result -> finding-owned fix -> docs. Off by default.
+
+  production-adversarial-probe:
+    primitive: validate
+    tags: { action: adversarial-prod-probe, scope: production }
+    description: Bounded, armed, read-only chaos-monkey probe of a live system.
+
   # -------------------- Retro family --------------------
   retro-to-simplify:
     primitive: improve

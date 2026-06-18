@@ -603,6 +603,7 @@ This file does NOT enumerate framework capabilities, version-specific features, 
 | "Who owns artifact X?" | `bubbles/agent-ownership.yaml` | Authoritative artifact ownership |
 | "What's the risk of running command X?" | `bubbles/action-risk-registry.yaml` | Safety class is the source of truth |
 | "What's the canonical persona/TPB vocab?" | `docs/CHEATSHEET.md` Persona Convention section | Allowlist is authoritative |
+| "How do I turn on adversarial / red-team verification?" / "What's the adversarial posture / settings?" | `docs/recipes/adversarial-verification.md`, `bubbles/scripts/adversarial-resolve.sh` (precedence resolver), the `.github/bubbles-project.yaml` `adversarial:` block, and the `BUBBLES_ADVERSARIAL` / `BUBBLES_ADVERSARIAL_PASSES` / `BUBBLES_ADVERSARIAL_TEETH` env vars | **Off by default.** `bubbles.redteam` (Cyrus) attacks finished results; modes `redteam-to-doc` + `production-adversarial-probe`. Resolve effective `mode/passes/teeth` by running `adversarial-resolve.sh`; never enumerate — read it live |
 
 **Anti-pattern to avoid in this file:** "New v3.X Capabilities" tables, "Orchestrator Agent Reference" tables, "Goal & Sprint — When to Recommend What" tables, "Build-Once Deploy-Many Awareness" tables, or any other hardcoded enumeration that duplicates a live registry. If a recurring user-question category needs framing, add a row to the table above pointing to the live source — do not embed the source's content here.
 
