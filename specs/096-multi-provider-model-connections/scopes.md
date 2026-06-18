@@ -181,7 +181,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
 |---|-------|----------|------------|--------------------|-----------|--------|
 | 1 | SCOPE-01 — Provider-connection registry + config SST schema (foundation) | config (yaml + `internal/config`) | A01, A04, G02 | unit (registry/validate) + config-gen | 12 | [~] In Progress (10/12 DoD; T1-1 + T1-3 environmental residuals) |
 | 2 | SCOPE-02 — Encrypted credential vault + master-key lifecycle | new `connvault` pkg + migration 061 + secret-keys path | W05 | unit (AEAD) + integration (ephemeral PG) | 12 | [~] In Progress (7/12 DoD; integration leg + T1-1/T1-3 deferred/foreign residuals) |
-| 3 | SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) | Go `llm` + Python `chat.py`/`schemas.py` + agent attribution | A02, A03, G01, G04, G05 | unit + integration + e2e-api (deferred) | 14 | [ ] Not started |
+| 3 | SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) | Go `llm` + Python `chat.py`/`schemas.py` + agent attribution | A02, A03, G01, G04, G05 | unit + integration + e2e-api (deferred) | 14 | [~] In progress |
 | 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [ ] Not started |
 | 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 060 `model_usage_ledger` | G03 | unit + integration | 12 | [ ] Not started |
 | 6 | SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable) | `/v1/admin/model-connections*` + operator middleware + PWA triad | W01, W02, W03, W04 | unit + integration + e2e-api (deferred) | 13 | [ ] Not started |
@@ -429,7 +429,7 @@ test master key. Entries are copied verbatim from
 
 ## Scope 3: SCOPE-03 — Provider-aware `/ask` dispatch (credential seam)
 
-**Status:** [ ] Not started
+**Status:** [~] In progress (unit + resolver + attribution shipped & GREEN; live-stack integration/e2e-api deferred — see report.md → SCOPE-03)
 **Scope-Kind:** code (Go `llm` contract + Python `chat.py`/`schemas.py` + agent attribution)
 **Depends on:** SCOPE-02
 **Foundation:** false (the credential seam that replays the SCOPE-02
@@ -557,24 +557,24 @@ the live hosted answer is an `e2e-api` deferred to the home-lab dispatch
 > call (they assert the composed arguments, not a mocked response) — they
 > are correctly classified `unit`.
 
-### Definition of Done — SCOPE-03 (all unchecked — implementation pending)
+### Definition of Done — SCOPE-03 (implementation in progress — see report.md → SCOPE-03)
 
 **Tier-1 (universal):**
 
-- [ ] D03-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-03.
-- [ ] D03-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-03.
-- [ ] D03-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-03.
-- [ ] D03-T1-4 — Every evidence block in report.md → SCOPE-03 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-03.
+- [ ] D03-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-03. _(Deferred: blocked by absent foreign `uservalidation.md`, owned by `bubbles.plan` — same closeout caveat as SCOPE-01/02; not a SCOPE-03 code gap.)_
+- [ ] D03-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-03. _(Deferred: the orchestrator runs `check` post-implementation to bound this turn; SCOPE-03 Go builds + Python imports are clean.)_
+- [ ] D03-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-03. _(Deferred: global gate run at closeout; same foreign-untracked-file caveat as SCOPE-01/02.)_
+- [x] D03-T1-4 — Every evidence block in report.md → SCOPE-03 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-03.
 
 **Tier-2 (role-specific: 088/089 parity + secret-safety + fail-loud):**
 
-- [ ] D03-T2-1 — **088/089 PARITY (binding):** the no-override Ollama dispatch is byte-for-byte today's `_dispatch_live` — `test_dispatch_live_ollama_kwargs_byte_for_byte` + `test_ollama_branch_carries_no_api_key` are ADVERSARIAL and fail if any provider field leaks into the Ollama path; the 088/089 gather-vs-synthesis fork + per-request>sticky>default precedence are preserved (no behavioural change to the existing path). → Evidence: report.md → SCOPE-03 (parity test output).
-- [ ] D03-T2-2 — **Additive contract:** the Go + Python `ChatRequest` gain only the four new fields; Python stays `extra="forbid"` (`test_chatrequest_extra_forbid_still_holds`); a zero-value Go request is wire-identical to pre-096 (`TestChatRequest_ProviderFieldsAdditive_Spec096`). → Evidence: report.md → SCOPE-03.
-- [ ] D03-T2-3 — **Secret-safety adversarial (binding):** the cleartext `api_key` never appears in any log line, span, or HTTP error body — proven by `test_api_key_never_logged`, `test_error_detail_scrubs_api_key_substring`, and `TestDispatch_SecretNeverInLogsOrErrors_Spec096`. → Evidence: report.md → SCOPE-03 (scrub test output).
-- [ ] D03-T2-4 — **Fail-loud, never-fallback-to-Ollama adversarial:** a missing required key returns typed `llm_misconfigured` (`test_hosted_missing_api_key_typed_error_no_ollama_substitution`) and the resolver refuses a not-effective-enabled target (`TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096`) — both fail if Ollama is ever silently substituted. → Evidence: report.md → SCOPE-03.
-- [ ] D03-T2-5 — **Provider-qualified attribution:** `ModelAttribution`/`TurnResult.Model` is the provider-qualified id (`TestAttribution_ProviderQualified_Spec096`); two providers' answers are distinguishable. → Evidence: report.md → SCOPE-03.
-- [ ] D03-T2-6 — Each adversarial test is non-tautological with a captured RED-before (e.g. a build that leaks a provider field into the Ollama kwargs, or that logs the key, would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-03 RED-before.
-- [ ] D03-T2-7 — All `unit` + `integration` SCOPE-03 tests pass with NO skips; the live hosted `e2e-api` row (`TestAsk_HostedAnswer_AttributedToProviderModel_Spec096`) is explicitly handed to the home-lab `bubbles.devops` dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-03 (test run + deferral note).
+- [x] D03-T2-1 — **088/089 PARITY (binding):** the no-override Ollama dispatch is byte-for-byte today's `_dispatch_live` — `test_dispatch_live_ollama_kwargs_byte_for_byte` + `test_ollama_branch_carries_no_api_key` are ADVERSARIAL and fail if any provider field leaks into the Ollama path; the 088/089 gather-vs-synthesis fork + per-request>sticky>default precedence are preserved (no behavioural change to the existing path). → Evidence: report.md → SCOPE-03 (parity test output).
+- [x] D03-T2-2 — **Additive contract:** the Go + Python `ChatRequest` gain only the four new fields; Python stays `extra="forbid"` (`test_chatrequest_extra_forbid_still_holds`); a zero-value Go request is wire-identical to pre-096 (`TestChatRequest_ProviderFieldsAdditive_Spec096`). → Evidence: report.md → SCOPE-03.
+- [x] D03-T2-3 — **Secret-safety adversarial (binding):** the cleartext `api_key` never appears in any log line, span, or HTTP error body — proven by `test_api_key_never_logged`, `test_error_detail_scrubs_api_key_substring`, and `TestDispatch_SecretNeverInLogsOrErrors_Spec096`. → Evidence: report.md → SCOPE-03 (scrub test output).
+- [x] D03-T2-4 — **Fail-loud, never-fallback-to-Ollama adversarial:** a missing required key returns typed `llm_misconfigured` (`test_hosted_missing_api_key_typed_error_no_ollama_substitution`) and the resolver refuses a not-effective-enabled target (`TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096`) — both fail if Ollama is ever silently substituted. → Evidence: report.md → SCOPE-03.
+- [x] D03-T2-5 — **Provider-qualified attribution:** `ModelAttribution`/`TurnResult.Model` is the provider-qualified id (`TestAttribution_ProviderQualified_Spec096`); two providers' answers are distinguishable. → Evidence: report.md → SCOPE-03.
+- [x] D03-T2-6 — Each adversarial test is non-tautological with a captured RED-before (e.g. a build that leaks a provider field into the Ollama kwargs, or that logs the key, would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-03 RED-before.
+- [ ] D03-T2-7 — All `unit` + `integration` SCOPE-03 tests pass with NO skips; the live hosted `e2e-api` row (`TestAsk_HostedAnswer_AttributedToProviderModel_Spec096`) is explicitly handed to the home-lab `bubbles.devops` dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-03 (test run + deferral note). _(Unit leg done with NO skips — E1–E3; the `integration` (`TestAsk_HostedConnection_ProviderAware_Spec096`) + `e2e-api` rows are DEFERRED to a clean-stack `bubbles.devops` dispatch, not marked passing from dev.)_
 
 ---
 

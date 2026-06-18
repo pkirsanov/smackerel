@@ -29,10 +29,10 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": 2,
+    "currentScope": 3,
     "executionModel": "parent-expanded",
     "runStartedAt": "2026-06-18T00:00:00Z",
-    "lastUpdatedAt": "2026-06-18T09:00:00Z",
+    "lastUpdatedAt": "2026-06-18T10:00:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan"],
     "pendingTransitionRequests": [],
     "executionHistory": [
@@ -95,6 +95,16 @@
         "runStartedAt": "2026-06-18T08:30:00Z",
         "runEndedAt": "2026-06-18T09:00:00Z",
         "summary": "Recorded SCOPE-02 (Encrypted credential vault + master-key lifecycle, SCN-096-W05). Code was already implemented + verified in a prior dispatch that was cut off before writing artifacts; this turn wrote evidence + DoD + state ONLY (NO source/migration/test/config edits, NO push, NO long suites/framework-validate). Shipped (reviewed, not edited): connvault.SecretVault (internal/assistant/openknowledge/connvault/vault.go, NEW pkg) — AES-256-GCM AEAD via crypto/aes + cipher.NewGCM, per-record random 96-bit nonce, AAD = connection_id:provider_kind:secret_key_version, master key scrubbed (zero(raw)) after cipher build, VaultRecord carries only ciphertext+nonce+key_version+last-4 redaction (NO plaintext field), NewSecretVault fail-loud (base64 + exactly-32-byte + positive epoch), LoadVault requires the master key iff a db-mode connection is declared (Ollama-only adds no secret), Rotate bumps key_version + re-encrypts; reversible-not-hashed (argon2id explicitly FORBIDDEN in the doc-comment — the reversible managed-secret class). Persistence: migration 061_model_provider_connections.sql (operator-global, NO actor_user_id, app-written enabled/updated_at, no DB-side defaults) + tests/integration/model_connections_vault_test.go. EVIDENCE (report.md SCOPE-02): ./smackerel.sh test unit --go --go-run SecretVault EXIT 0 — 6/6 unit tests pass (EncryptDecrypt_RoundTrip, NeverReturnsPlaintext_RedactionLast4, AADTamperRejected, WrongKeyRejected, MasterKeyFailLoud [5 subtests incl 2 CONTROL], Rotation_ReEncryptsToNewEpoch), connvault ok 0.044s; ./smackerel.sh check EXIT 0 (Config in sync with SST, env_file drift guard OK, scenario-lint OK); grep proves 0 actual one-way hash usages (the 2 argon2 hits are doc-comment prose L23-24) + AES-256-GCM primitive present + connvault references NO modelswitch/modelpref/picker (088/089 untouched, additive). DoD: 7 of 12 [x] (T1-2 check, T1-4 real-evidence, T1-5 088/089-additive, T2-2 secret-safety, T2-3 reversible-not-hashed, T2-4 AEAD-adversarial, T2-5 master-key-fail-loud). DEFERRED [ ]: T2-1 migration-apply + T2-6 integration-isolation + T2-7 integration-test (the 1 integration test TestVault_PersistRoundTripTestMasterKey_Spec096 skips without DATABASE_URL — deferred to a clean-stack run to avoid OOM/contention on the shared test stack); T1-1 artifact-lint (absent uservalidation.md, a validation/closeout artifact owned by bubbles.plan) + T1-3 format --check (blocked by a pre-existing foreign untracked file internal/connector/qfdecisions/chaos_hardening_test.go; SCOPE-02 files gofmt-clean). Also corrected the stale 'migration 060' references in scopes.md SCOPE-02 to '061' (the actual committed file). SCOPE-02 held at in_progress (integration leg + 2 foreign items pending); top-level status unchanged at in_progress; SCOPE-01 progress, certifiedAt, certification.status, specDependsOn untouched."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-18T09:30:00Z",
+        "runEndedAt": "2026-06-18T10:00:00Z",
+        "summary": "Implemented SCOPE-03 (Provider-aware /ask dispatch, the credential seam) - SCN-096-A02/A03/G01/G04/G05. Additive Go llm.ChatRequest (client.go) += Provider/APIBase/APIKey/ProviderParams (all omitempty; a zero-value request is byte-for-byte the pre-096 wire shape) + Python ChatRequest (ml/app/schemas.py) += the same four optional fields with extra=forbid kept. Redesigned ml/app/routes/chat.py _dispatch_live into the synthesis.py-style provider fork: ollama branch byte-for-byte today (model=ollama_chat/<model>, api_base from req.api_base or OLLAMA_URL, NO api_key) vs hosted branch (_compose_hosted_model <prefix>/<backend> + api_base + per-request cleartext api_key); a missing required key raises typed llm_misconfigured and NEVER substitutes Ollama; every hosted error/log routes through _scrub_secret (type(e).__name__ + provider + model, api_key substring redacted). NEW internal/assistant/openknowledge/llm/dispatch_resolver.go DispatchResolver: provider-qualified id -> SCOPE-01 registry connection -> SCOPE-02 SecretVault.Decrypt -> populated ChatRequest (BARE backend Model + Provider + APIBase + APIKey) + provider-qualified Attribution; not-effective-enabled / credential-missing / decrypt-failed -> typed *ResolveError, NEVER an Ollama fallback; logger-free (no key in logs); CredentialSource interface seam (SCOPE-06 supplies the DB-backed impl). Provider-qualified attribution: the existing 089 TurnResult.Model carries anthropic/claude-3-5-sonnet verbatim (additive, value-only). Tests (manifest-named): ml/tests/test_chat_dispatch_hosted_spec096.py (3), test_chat_dispatch_parity_spec096.py (2 ADVERSARIAL), test_chat_dispatch_secret_scrub_spec096.py (2 ADVERSARIAL); internal/.../llm/client_provider_test.go, dispatch_resolver_test.go; internal/.../agent/attribution_provider_test.go. EVIDENCE (report.md SCOPE-03): Go llm 4 tests / 11 subtests PASS (ok 0.013s) + agent TestAttribution_ProviderQualified anthropic+openai PASS (ok 0.026s) in golang:1.25.10-bookworm; the sanctioned ./smackerel.sh test unit --go --go-run finished OK exit 0 (no 088/089 collateral). Python 7/7 PASS (0.45s, NO skips) in python:3.12-slim with pip install -e ./ml[dev] (litellm injected via sys.modules - it is in the runtime extra, not [dev], matching the repo's other LLM tests). Captured RED-before: scrub no-op + ollama api_key leak -> 3 adversarial tests FAIL (parity x2 + error-detail scrub); test_api_key_never_logged stays GREEN (the log line never carries the key); both mutations reverted, post-revert GREEN restored. Regression: test_tool_roundtrip 11 passed (pre-096 chat contract intact). DoD: 7 of 11 [x] (T1-4 real-evidence + T2-1 parity + T2-2 additive + T2-3 secret-safety + T2-4 fail-loud-never-ollama + T2-5 attribution + T2-6 RED-before); deferred: T1-1 artifact-lint (foreign uservalidation.md), T1-2 check + T1-3 format (orchestrator closeout), T2-7 integration + e2e-api live-stack legs (clean-stack bubbles.devops dispatch). Findings for SCOPE-06: it owns the DB write that persists the encrypted VaultRecord and the production CredentialSource impl feeding this resolver, and should gate effective-enabled on last_test_outcome=ok. 088/089 selection surfaces untouched (additive seam only). NO source/state promotion past in_progress; NO check/format/framework-validate/push this turn."
       }
     ]
   },
@@ -105,7 +115,7 @@
     "scopeProgress": [
       { "scope": 1, "name": "Provider-connection registry + config SST schema (foundation)", "status": "in_progress", "dependsOn": [], "scopeDir": null },
       { "scope": 2, "name": "Encrypted credential vault + master-key lifecycle", "status": "in_progress", "dependsOn": [1], "scopeDir": null },
-      { "scope": 3, "name": "Provider-aware /ask dispatch (credential seam)", "status": "not_started", "dependsOn": [2], "scopeDir": null },
+      { "scope": 3, "name": "Provider-aware /ask dispatch (credential seam)", "status": "in_progress", "dependsOn": [2], "scopeDir": null },
       { "scope": 4, "name": "Discovery + unified catalog + identifier canonicalization", "status": "not_started", "dependsOn": [1], "scopeDir": null },
       { "scope": 5, "name": "Model-aware CostFn + load-bearing USD budget enforcement", "status": "not_started", "dependsOn": [4], "scopeDir": null },
       { "scope": 6, "name": "Operator-gated web admin connection surface (wire/test/enable)", "status": "not_started", "dependsOn": [2, 4], "scopeDir": null },
@@ -148,7 +158,7 @@
   "resolvedBugs": [],
   "failures": [],
   "discoveredIssues": [],
-  "lastUpdatedAt": "2026-06-18T09:00:00Z",
+  "lastUpdatedAt": "2026-06-18T10:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

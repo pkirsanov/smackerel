@@ -90,12 +90,38 @@ type ChatMessage struct {
 }
 
 // ChatRequest is the input envelope.
+//
+// Spec 096 SCOPE-03 — the per-request provider-credential seam. Provider,
+// APIBase, APIKey, and ProviderParams are ADDITIVE: every one is omitempty,
+// so a zero-value ChatRequest (the spec 064/088/089 no-override Ollama caller)
+// serializes byte-for-byte the pre-096 wire shape and the sidecar's
+// _dispatch_live takes the unchanged Ollama branch. A hosted dispatch carries
+// Provider plus the per-request cleartext APIKey the Go core decrypted from the
+// SCOPE-02 vault; Model continues to carry the BACKEND model id (the
+// DispatchResolver strips the provider qualifier — the sidecar recomposes
+// "<kind>/<backend-id>" from Provider + Model). APIKey is transient: it is
+// never logged, traced, or persisted (design §6.2 / §11.5).
 type ChatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []ChatMessage `json:"messages"`
 	Tools       []Tool        `json:"tools,omitempty"`
 	MaxTokens   *int          `json:"max_tokens,omitempty"`
 	Temperature *float64      `json:"temperature,omitempty"`
+	// Provider is the routing discriminant from the closed registry kind
+	// vocabulary ("ollama" | "anthropic" | "openai" | "azure-foundry" |
+	// "google" | "bedrock"). Empty (omitted) keeps the byte-for-byte Ollama
+	// path on the sidecar.
+	Provider string `json:"provider,omitempty"`
+	// APIBase is the provider endpoint/base URL (today's OLLAMA_URL for
+	// ollama; Azure endpoint; OpenAI base_url; …). nil omits the field.
+	APIBase *string `json:"api_base,omitempty"`
+	// APIKey is the cleartext credential the Go core decrypted per request.
+	// nil for ollama. Used transiently by the sidecar; never logged/persisted.
+	APIKey *string `json:"api_key,omitempty"`
+	// ProviderParams carries non-secret per-kind routing extras (Azure
+	// api_version+deployment, OpenAI org, Vertex project+location, Bedrock
+	// region). nil omits the field.
+	ProviderParams map[string]any `json:"provider_params,omitempty"`
 }
 
 // ChatResponse is the sidecar's reply.
