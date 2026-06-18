@@ -131,6 +131,15 @@ class ChatRequest(BaseModel):
     tools: list[Tool] | None = None
     max_tokens: int | None = None
     temperature: float | None = None
+    # Spec 096 SCOPE-03 — the per-request provider-credential seam (mirrors the
+    # four additive fields on the Go llm.ChatRequest). All optional, so the spec
+    # 064/088/089 no-override caller (which omits every one) still validates and
+    # takes the byte-for-byte Ollama branch in _dispatch_live. extra="forbid"
+    # STILL holds — an UNDECLARED field is rejected; these four are now declared.
+    provider: str | None = None
+    api_base: str | None = None
+    api_key: str | None = None
+    provider_params: dict[str, Any] | None = None
 
 
 class ChatResponse(BaseModel):

@@ -142,7 +142,37 @@ def _parse_tool_call_arguments(raw: Any) -> dict[str, Any]:
 
 
 async def _dispatch_live(req: ChatRequest) -> ChatResponse:
-    ollama_url = os.environ.get("OLLAMA_URL")
+    """Spec 096 SCOPE-03 — provider-aware dispatch fork (mirrors the
+    ``synthesis.py`` provider fork). ``provider`` absent or ``"ollama"`` takes
+    the byte-for-byte Ollama path (spec 088/089 parity invariant); any other
+    provider takes the hosted credential branch. A hosted dispatch NEVER falls
+    back to Ollama — a missing credential fails loud (SCN-096-G01).
+    """
+    messages = _translate_messages(req.messages)
+    tools = _translate_tools(req.tools)
+    provider = (req.provider or "").strip().lower()
+    if provider in ("", "ollama"):
+        return await _dispatch_ollama(req, messages, tools)
+    return await _dispatch_hosted(req, messages, tools, provider)
+
+
+async def _dispatch_ollama(
+    req: ChatRequest,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+) -> ChatResponse:
+    """The local Ollama dispatch — BYTE-FOR-BYTE the pre-096 ``_dispatch_live``
+    behaviour (spec 088/089 parity, proven by
+    ``test_chat_dispatch_parity_spec096``). The ``litellm.acompletion`` kwargs
+    for a fixed Ollama request are unchanged and NO ``api_key`` is ever
+    attached.
+
+    ``api_base`` carries today's ``OLLAMA_URL``: the spec 064 caller omits it,
+    so we read ``OLLAMA_URL`` from the environment exactly as before; the spec
+    096 Ollama caller sends the same value explicitly. Either way the composed
+    kwargs are identical.
+    """
+    ollama_url = req.api_base or os.environ.get("OLLAMA_URL")
     if not ollama_url:
         raise HTTPException(
             status_code=500,
@@ -159,9 +189,6 @@ async def _dispatch_live(req: ChatRequest) -> ChatResponse:
         ServiceUnavailableError,
         Timeout,
     )
-
-    messages = _translate_messages(req.messages)
-    tools = _translate_tools(req.tools)
 
     kwargs: dict[str, Any] = {
         # Spec 064 — use ollama_chat/ prefix (litellm /api/chat path) so
@@ -213,6 +240,146 @@ async def _dispatch_live(req: ChatRequest) -> ChatResponse:
             },
         )
 
+    return _build_chat_response(response)
+
+
+# Spec 096 SCOPE-03 — litellm provider-route prefix per smackerel connection
+# kind (design §4 routing column). The kind names map 1:1 to litellm route
+# prefixes except azure-foundry→azure and google→gemini.
+_LITELLM_PROVIDER_PREFIX: dict[str, str] = {
+    "anthropic": "anthropic",
+    "openai": "openai",
+    "azure-foundry": "azure",
+    "google": "gemini",
+    "bedrock": "bedrock",
+}
+
+
+def _compose_hosted_model(provider: str, backend_model: str) -> str:
+    """Compose the litellm provider-qualified model from the connection kind +
+    the BARE backend id (design §6.2). The Go core sends the bare ``model`` +
+    the ``provider`` discriminant; the sidecar recomposes ``<prefix>/<model>``.
+    """
+    prefix = _LITELLM_PROVIDER_PREFIX.get(provider)
+    if prefix is None:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "llm_misconfigured",
+                "message": f"unknown hosted provider {provider!r}; cannot compose a dispatch model",
+            },
+        )
+    return f"{prefix}/{backend_model}"
+
+
+def _scrub_secret(text: str, secret: str | None) -> str:
+    """Spec 096 SCN-096-G05 — redact any occurrence of the cleartext credential
+    from ``text`` before it crosses the wire or reaches a log. litellm
+    exceptions can embed the ``api_key`` in a URL/header; this removes the
+    substring. Load-bearing: without it the hosted error path would leak the
+    key (the adversarial scrub test fails if this is removed).
+    """
+    if secret and secret in text:
+        return text.replace(secret, "***")
+    return text
+
+
+def _hosted_dispatch_error(
+    status_code: int,
+    error_code: str,
+    provider: str,
+    model: str,
+    exc: Exception,
+    api_key: str | None,
+) -> HTTPException:
+    """Build a secret-safe HTTPException for a hosted dispatch failure
+    (design §11.5 / SCN-096-G05). The wire ``detail`` is built from the
+    exception TYPE + provider + model and then scrubbed of any ``api_key``
+    substring as defense in depth; the ``api_key`` is NEVER logged (the log
+    line carries only the exception type + provider + model).
+    """
+    safe = _scrub_secret(f"{type(exc).__name__}: {exc}", api_key)
+    message = f"provider={provider} model={model}: {safe}"
+    logger.warning(
+        "open_knowledge hosted dispatch error (%s): %s provider=%s model=%s",
+        error_code,
+        type(exc).__name__,
+        provider,
+        model,
+    )
+    return HTTPException(status_code=status_code, detail={"error": error_code, "message": message})
+
+
+async def _dispatch_hosted(
+    req: ChatRequest,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+    provider: str,
+) -> ChatResponse:
+    """The hosted-provider dispatch: compose ``<prefix>/<backend-id>`` and route
+    with the per-request cleartext ``api_key`` the Go core decrypted. A missing
+    required ``api_key`` fails loud with a typed ``llm_misconfigured`` and NEVER
+    substitutes the local Ollama model (SCN-096-G01). Secrets are scrubbed from
+    every error/log (SCN-096-G05).
+    """
+    api_key = req.api_key
+    if not api_key:
+        # NO-DEFAULTS / fail-loud (G028): a hosted dispatch with no credential
+        # is a misconfiguration — it is NEVER silently re-routed to Ollama.
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "llm_misconfigured",
+                "message": (
+                    f"hosted provider {provider!r} model {req.model!r} requires an api_key "
+                    f"but none was supplied; refusing to substitute a local model"
+                ),
+            },
+        )
+
+    import litellm
+    from litellm.exceptions import (  # type: ignore[import-not-found]
+        APIConnectionError,
+        APIError,
+        ServiceUnavailableError,
+        Timeout,
+    )
+
+    kwargs: dict[str, Any] = {
+        "model": _compose_hosted_model(provider, req.model),
+        "messages": messages,
+        "timeout": _LIVE_DISPATCH_TIMEOUT_SECONDS,
+        "temperature": req.temperature if req.temperature is not None else 0.0,
+        "api_key": api_key,
+    }
+    if req.api_base:
+        kwargs["api_base"] = req.api_base
+    # Non-secret per-kind routing extras (Azure api_version+deployment, OpenAI
+    # organization, Vertex project+location, Bedrock region). setdefault so they
+    # never clobber model/messages/api_key.
+    for key, value in (req.provider_params or {}).items():
+        kwargs.setdefault(key, value)
+    if tools:
+        kwargs["tools"] = tools
+    if req.max_tokens is not None:
+        kwargs["max_tokens"] = req.max_tokens
+
+    try:
+        response = await litellm.acompletion(**kwargs)
+    except (APIConnectionError, ServiceUnavailableError, Timeout) as e:
+        raise _hosted_dispatch_error(502, "llm_provider_unreachable", provider, req.model, e, api_key)
+    except APIError as e:
+        raise _hosted_dispatch_error(502, "llm_provider_error", provider, req.model, e, api_key)
+    except Exception as e:  # pragma: no cover — defensive
+        raise _hosted_dispatch_error(500, "llm_dispatch_failed", provider, req.model, e, api_key)
+
+    return _build_chat_response(response)
+
+
+def _build_chat_response(response: Any) -> ChatResponse:
+    """Shared litellm-response → ChatResponse translation (provider-agnostic).
+    Unchanged from the pre-096 ``_dispatch_live`` tail.
+    """
     choice_msg = response.choices[0].message
     raw_tool_calls = getattr(choice_msg, "tool_calls", None) or []
     tokens_used = 0
@@ -254,6 +421,7 @@ async def _dispatch_live(req: ChatRequest) -> ChatResponse:
         text=text,
         tokens_used=tokens_used,
     )
+
 
 
 @router.post("/chat", response_model=ChatResponse)
