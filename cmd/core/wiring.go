@@ -519,6 +519,13 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 	// publisher or dedup store; both are guaranteed non-nil here.
 	{
 		extPub := pipeline.NewRawArtifactPublisher(svc.pg.Pool, svc.nc)
+		// Spec 095 F-095-EXT-INGEST — share the connector front door's evergreen
+		// Scorer (built in buildCoreServices, which runs before buildAPIDeps) so
+		// extension-captured artifacts are scored at ingestion identically to
+		// connector ones. nil-safe: when retrieval.evergreen.enabled=false
+		// svc.evergreenScorer is nil and the publisher leaves evergreen_score NULL
+		// (NFR-3, Principle 9) — the same graceful degrade as the connector path.
+		shareEvergreenScorer(extPub, svc.evergreenScorer)
 		extDedup := ingest.NewPostgresDedupStore(svc.pg.Pool)
 		deps.ExtensionIngestHandler = extensioningest.NewHandler(cfg.Extension.Ingest, extPub, extDedup)
 

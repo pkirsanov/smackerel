@@ -385,11 +385,11 @@ Use case: SCN-095-B05 — Judgment is scenario-driven; only bounds are SST
   And when the scenario judge is unavailable, a deterministic TierSignals fallback is used (NFR-2, Principle 9)
 ```
 
-### Implementation Plan (proposed for the consuming run)
+### Implementation Plan (DELIVERED INLINE — Increment 2 / PKT-095-B)
 
 - New `internal/retrieval/evergreen/signal.go` — `EvergreenSignal` type; the scenario-driven judgment (canonical) over retrieved signals, with a deterministic `TierSignals` extension fallback.
-- The live judgment scenario contract (`config/prompt_contracts/retrieval-evergreen-*.yaml`) + its noop-tool registry registration + the production agent-bridge `EvergreenJudge` are routed as PKT-095-B: the agent loader requires every scenario's `allowed_tools` to be registered via `agent.RegisterTool` in a package imported by `cmd/scenario-lint`/`cmd/core`, which is outside this spec's change boundary. The scenario-driven `Scorer` + the injected `EvergreenJudge` interface + the deterministic fallback are delivered and unit-proven here (tests inject a scripted judge); the production LLM wiring lands with the packet.
-- Additive seam at the `AssignTier` front door ([internal/pipeline/tier.go](../../internal/pipeline/tier.go)) — the only `internal/pipeline/` touch; if more than an additive call is needed it is a routed packet to spec 003.
+- The live judgment scenario contract (`config/prompt_contracts/retrieval-evergreen-v1.yaml`) + its noop-tool registry registration + the production agent-bridge `EvergreenJudge` were DELIVERED INLINE in Increment 2 (PKT-095-B — NOT routed to a later packet): the `retrieval_evergreen` contract is registered (scenario-lint 17/0) and the production `BridgeEvergreenJudge` is wired race-free in `cmd/core` (`wireEvergreenScorer`), with a deterministic `TierSignals` fallback when the judge/scenario is unavailable (NFR-2). The scenario-driven `Scorer` + the injected `EvergreenJudge` interface + the deterministic fallback are unit-proven (tests inject a scripted judge).
+- Live ingestion seam — DELIVERED INLINE in Increment 2: the real front door `PublishRawArtifact` ([internal/pipeline/ingest.go](../../internal/pipeline/ingest.go)) ADDITIVELY scores via the injected nil-safe `Scorer` and persists `evergreen_score`/`evergreen_source` (migration 060). The earlier `AssignTier`-level seam had NO live caller (finding G-095-GAPS-01) and was removed as dead code by the simplify phase; `resolveTierFromMetadata` + the tier outcome are byte-for-byte unchanged (NFR-3).
 
 ### Test Plan
 
@@ -418,6 +418,7 @@ Use case: SCN-095-B05 — Judgment is scenario-driven; only bounds are SST
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/evergreen_ingestion_regression_e2e_test.sh` — script delivered + statically valid (`bash -n` EXIT 0; integration-gated on the live migration apply); the live-stack run is env-blocked on this cpu-tier WSL2 host (the full Postgres+NATS+ML+Ollama stack OOMs here — witnessed 2026-06-18 via the stress harness's ML/core image rebuild), no fabricated pass → Evidence: report.md#assurance-2026-06-18 (SCN-095-B01/B05; owner bubbles.test, accel-tier home-lab/CI — F-095-E2E-LIVE)
 - [x] Broader E2E regression suite passes — the in-process regression is GREEN for all spec-095 packages (Phase 1 `./smackerel.sh test unit --go`); the live broader e2e suite (`./smackerel.sh test e2e`, incl. `evergreen_ingestion_regression_e2e_test.sh`) is env-blocked on this cpu-tier host (same OOM gate), documented, no fabricated pass → Evidence: report.md#assurance-2026-06-18 (owner bubbles.test, accel-tier — F-095-E2E-LIVE)
 - [x] Scenario→test mapping in `scenario-manifest.json` (SCN-095-B01, B05) → Evidence: scenario-manifest.json (SCN-095-B01, B05 present)
+- [x] **Post-cert increment (F-095-EXT-INGEST, 2026-06-18) — 2nd ingestion surface scored:** the spec-058 Chrome-extension ingest publisher (`cmd/core/wiring.go` `buildAPIDeps`) now shares the SAME evergreen `Scorer` as the connector front door via the additive `shareEvergreenScorer` helper (`cmd/core/wiring_extension.go`), so extension-captured artifacts are scored at ingestion identically to connector ones (previously NULL/unscored — safe per Principle 9 but unscored). nil-safe (NFR-3): a nil scorer leaves `evergreen_score` NULL. → Evidence: report.md#f095-extingest-recert-2026-06-18 (`cmd/core::TestShareEvergreenScorer_WiresScorer` + `_NilScorerSafe` + `_NilPublisherSafe` GREEN; `check` EXIT 0; `internal/pipeline` + `internal/retrieval/evergreen` + `internal/api/connectors/extension` + `TestNoParallelStore` GREEN)
 
 ---
 
@@ -447,10 +448,10 @@ Use case: SCN-095-B04 — Low-evergreen item is excluded from the digest candida
   Then the low-evergreen artifact is excluded from digest candidacy
 ```
 
-### Implementation Plan (proposed for the consuming run)
+### Implementation Plan (DELIVERED INLINE — Increment 3 / PKT-095-C)
 
-- New `internal/retrieval/evergreen/pool_eligibility.go` — a predicate consulted by the §10 synthesis and §12 digest candidate-pool builders (via thin adapters; the builders are consumed, not rewritten).
-- Aggressive-decay routing feeds the existing `internal/topics/lifecycle.go` / cooling machinery as an earlier input (read-only consumption; any required hook is a routed packet to spec 021/025).
+- New `internal/retrieval/evergreen/pool_eligibility.go` — the pool-eligibility predicate. DELIVERED INLINE in Increment 3 (PKT-095-C — NOT routed): the additive `PoolExclusionSQLPredicate` is wired directly into the §10 synthesis builder (`internal/intelligence/synthesis.go::buildSynthesisClusterQuery`) and the §12 digest builder (`internal/digest/generator.go::buildOvernightArtifactsQuery`), gated on the off-by-default SST switches (default off ⇒ byte-for-byte-unchanged candidate set, NFR-3).
+- Aggressive-decay routing feeds the existing `internal/topics/lifecycle.go` / cooling machinery as an earlier input via the `AggressiveDecay` predicate (read-only consumption of the existing lifecycle; no separate packet was routed — the synthesis/digest pool-exclusion call-sites were delivered inline above).
 
 ### Test Plan
 

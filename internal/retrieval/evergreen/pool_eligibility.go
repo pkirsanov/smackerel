@@ -5,9 +5,12 @@
 // §12 digest candidate pools (R12) and routed to aggressive decay (an EARLIER
 // input to the EXISTING lifecycle, not a fork — Principle 3). They remain FULLY
 // searchable/retrievable (R13, Principle 9) — exclusion is pool-eligibility
-// only, never hiding. The synthesis/digest builders consult this predicate via
-// thin adapters (the builders are read-only substrate under spec 095; the
-// call-site wiring is routed as PKT-095-C to spec 021/025).
+// only, never hiding. The §10 synthesis and §12 digest builders consult this
+// predicate INLINE: Increment 3 (PKT-095-C) wired the additive SQL
+// PoolExclusionSQLPredicate into buildSynthesisClusterQuery
+// (internal/intelligence/synthesis.go) and buildOvernightArtifactsQuery
+// (internal/digest/generator.go), gated on the off-by-default SST switches — no
+// separate packet was routed.
 //
 // References:
 //   - specs/095-retrieval-strategy-routing/spec.md R12, R13, SCN-095-B02/B03/B04
