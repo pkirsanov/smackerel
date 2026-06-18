@@ -74,10 +74,11 @@
       "category": "secondary-frontdoor-deferral",
       "summary": "The spec-058 Chrome-extension ingest path (extensioningest.NewHandler) constructs its OWN pipeline.RawArtifactPublisher in cmd/core/wiring.go (~L523) and does NOT yet share the evergreen Scorer, so extension-ingested artifacts persist a NULL evergreen_score until this is wired.",
       "rationale": "Increment 2 (2026-06-18) wired the evergreen Scorer into the PRIMARY front door (the connector supervisor's publisher in cmd/core/services.go) — the canonical ingestion path for all connectors. The secondary extension-ingest publisher lives in cmd/core/wiring.go, which is foreign-dirty operator WIP (DISC-095-WT-01 — an unrelated 4-line hunk at L315-327). Editing it to inject svc.evergreenScorer would entangle this increment with foreign WIP (forbidden in this shared multi-agent repo). NFR-3-safe: a NULL evergreen_score is treated as evergreen/not-excluded downstream (Principle 9), so extension artifacts are never wrongly excluded — they are simply not yet scored.",
-      "action": "A later increment sets extPub.Scorer = svc.evergreenScorer in cmd/core/wiring.go (a one-line additive change, svc.evergreenScorer already available at that construction point) once the foreign cmd/core/wiring.go WIP clears. Low priority — the primary connector front door is wired + unit-proven.",
-      "status": "routed",
-      "owner": "a later bubbles.goal increment (after cmd/core/wiring.go foreign WIP clears)",
-      "openedAt": "2026-06-18T02:00:00Z"
+      "action": "RESOLVED (follow-up 2026-06-18, bubbles.workflow improve-existing, parent-expanded): the spec-058 extension ingest publisher now shares the SAME evergreen Scorer as the connector front door via the additive shareEvergreenScorer helper (cmd/core/wiring_extension.go) wired into buildAPIDeps (cmd/core/wiring.go ~L523). svc.evergreenScorer is populated in buildCoreServices, which runs BEFORE buildAPIDeps (cmd/core/main.go: buildCoreServices L116 then buildAPIDeps L127), so it is available at the construction site. nil-safe (NFR-3): a nil concrete *evergreen.Scorer is NOT assigned (avoids the typed-nil-in-interface trap), so evergreen_score stays NULL when retrieval.evergreen.enabled=false (Principle 9) — the same graceful degrade as the connector path. The foreign cmd/core/wiring.go hunks (L315-327, Drive/Telegram retrieve wiring) were NOT touched: the scorer-injection hunk at ~L523 was staged hunk-precisely and committed alone. Evidence: report.md#f095-extingest-recert-2026-06-18 (cmd/core::TestShareEvergreenScorer_WiresScorer/_NilScorerSafe/_NilPublisherSafe GREEN; check EXIT 0; internal/pipeline + internal/retrieval/evergreen + internal/api/connectors/extension + routing TestNoParallelStore GREEN).",
+      "status": "resolved",
+      "owner": "bubbles.workflow (improve-existing follow-up, parent-expanded)",
+      "openedAt": "2026-06-18T02:00:00Z",
+      "resolvedAt": "2026-06-18T22:45:00Z"
     },
     {
       "id": "F-095-SPECREVIEW",
@@ -162,6 +163,9 @@
     "cmd/core/services.go",
     "cmd/core/wiring_evergreen.go",
     "cmd/core/main.go",
+    "cmd/core/wiring.go",
+    "cmd/core/wiring_extension.go",
+    "cmd/core/wiring_extension_test.go",
     "cmd/scenario-lint/main.go",
     "tests/stress/retrieval_routing_overhead_stress_test.go",
     "tests/e2e/retrieval_routing_config_regression_e2e_test.sh",
@@ -194,7 +198,7 @@
   "specDependsOnNote": "spec 061/064/068 are listed as specIntegratesWith (not hard deps): planning-ceiling promotion does NOT require integration-target implementation completion. Spec 095's plan only consumes their stable contract surfaces read-only — the CompiledIntent schema (spec 068), the nl_routing facade seam (spec 061), and the AgentAnswer full-artifact citation primitive (spec 064). Spec 095 implementation lands after those reach done; that is a full-delivery concern, not a planning concern.",
   "amends": [],
   "unblocks": [],
-  "certifiedAt": "2026-06-18T15:54:34Z",
+  "certifiedAt": "2026-06-18T23:15:00Z",
   "requiresRevalidation": false,
   "flagsIntroduced": [],
   "releaseTrain": "next",
@@ -460,7 +464,7 @@
   },
   "certification": {
     "status": "done",
-    "completedAt": "2026-06-18T15:54:34Z",
+    "completedAt": "2026-06-18T23:15:00Z",
     "evidenceRef": "report.md",
     "certifiedCompletedPhases": ["analyze", "ux", "design", "plan", "implement", "test", "docs", "gaps", "regression", "simplify", "security", "validate", "audit", "stabilize", "harden", "chaos", "spec-review"],
     "completedScopes": [
