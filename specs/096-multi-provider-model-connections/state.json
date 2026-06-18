@@ -1,0 +1,162 @@
+{
+  "version": 3,
+  "featureDir": "specs/096-multi-provider-model-connections",
+  "featureNumber": "096",
+  "featureName": "Multi-Provider AI Model Connections",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "executionRuntime": "manual",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/064-open-ended-knowledge-agent",
+    "specs/088-runtime-switchable-models",
+    "specs/089-runtime-model-hotswap-persistent-selection"
+  ],
+  "specIntegratesWith": [
+    "specs/044-per-user-bearer-auth"
+  ],
+  "specDependsOnNote": "Spec 096 BUILDS ON specs 088/089 (the open-knowledge model-switch validator + per-user store + precedence + parity) and 064 (the /ask agent loop) and extends them provider-agnostically WITHOUT amending them. Spec 044 is listed as specIntegratesWith: 096 reuses its claim-bound actor_user_id binding for per-user model selection, read-only. The analyst phase consumes these surfaces read-only; full-delivery wiring lands in a later run.",
+  "amends": [],
+  "unblocks": [],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "flagsIntroduced": [],
+  "releaseTrain": "next",
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": 1,
+    "executionModel": "parent-expanded",
+    "runStartedAt": "2026-06-18T00:00:00Z",
+    "lastUpdatedAt": "2026-06-18T08:00:00Z",
+    "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan"],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["bootstrap", "analyze"],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-18T00:00:00Z",
+        "runEndedAt": "2026-06-18T00:00:00Z",
+        "summary": "Created specs/096-multi-provider-model-connections/. Authored spec.md (analyst phase only — no design/scopes/implementation). Problem Statement grounded in 6 verified current-state facts: single global llm: provider (config/smackerel.yaml L80-88; binary Validate() in internal/config/config.go); 3 dispatch paths with inconsistent provider-awareness (ml/app/synthesis.py + drive_classify.py provider-aware; ml/app/routes/chat.py::_dispatch_live HARDCODED ollama_chat/{model}+OLLAMA_URL, no api_key, no provider branch — the primary gap); runtime model-switch exists but Ollama-only (specs 088/089: modelswitch/allowlist.go pure-leaf validator, telegram/model_command.go, api/agent_model.go, one-validator/one-store + per-request>sticky>default precedence); no discovery (/api/tags healthcheck/test-pull only); no web UI for connection setup; secrets operator-global via SST/env, NO reversible per-user vault. Captured the CONFIRMED operator-global (NOT per-user BYOK) decision in Problem Statement, Outcome Contract Hard Constraints, Non-Goals, and Domain Capability Model (single shared graph — no user_id in artifacts/topics/people/edges; connectors already operator-global; per-user layer limited to modelpref selection + per_user_monthly_budget_usd). Three capability layers as Goals G1-G7 + FR-A*/B*/C*/X* + NFR-1..4: (A) multi-connection provider abstraction + provider-aware /ask; (B) web UI add/test/enable/disable + protected-at-rest secrets; (C) discovery aggregation into one provider-qualified catalog + unified selection via existing 088/089 validator/store/precedence. Outcome Contract (G070) populated with concrete Intent/Success Signal/7 Hard Constraints/Failure Condition. Domain Capability Model (AN5 — capability-first triggers apply: 6 provider kinds, adapter/connector pattern, shared Telegram+web surface) with primitives, per-provider connection-param table, variation axes, single-foundation justification, invariants. 21 representative Gherkin scenarios SCN-096-A01..A04 / W01..W05 / D01..D05 / G01..G06 covering every owner-requested case (operator adds+tests Anthropic; adds OpenAI/Foundry/Google/Bedrock; user lists combined list in Telegram + picks hosted; fail-loud on misconfig; budget enforcement on paid model; byte-for-byte no-override Ollama parity). Product Principle Alignment (BLOCKING): P4 Source-Qualified (provider-qualified ids), P8 Trust Through Transparency (model attribution), P1 Local-First (Ollama default, cloud optional), C8/NO-DEFAULTS fail-loud SST, P5/P6/P10 respected — no deviations. Release Train: next (mvp frozen for new specs per spec 095 precedent; flagsIntroduced []). Section 12 'Builds On 088/089 — parity invariants preserved' (one-validator/one-store, synthesis/gather fork, precedence, byte-for-byte no-override, closed-set validation). 6 Open Questions incl. OQ-1 (KEY: secret-storage fork — reversible encrypted-at-rest vault vs env-only; argon2id does NOT fit). Zero source/test/migration diffs. No promotion past in_progress."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap"],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-18T02:00:00Z",
+        "runEndedAt": "2026-06-18T03:00:00Z",
+        "summary": "Authored design.md (DESIGN phase only — no scopes/report/uservalidation/source/tests/migrations). Contract-grade depth from the analyst spec.md + cited committed code. RESOLVED OQ-1..OQ-4 and honored the owner's confirmed decisions: (1) operator-global connections (NO per-user BYOK; no user_id on connection/credential surfaces — consistent with the single shared graph + operator-global connectors); per-user limited to modelpref selection + USD budget. (2) Secret store = single-key AES-256-GCM AEAD in Postgres (migration 060 model_provider_connections), per-record 96-bit nonce + AAD(connection_id|kind|key_version), key_version for rotation, secret_redaction last-4 for display; argon2id explicitly FORBIDDEN (reversible-credential class like CARD_REWARDS_GCAL_CREDENTIALS, NOT the AUTH_AT_REST_HASHING_KEY verifier class); never-return-plaintext write-only credential API. Master key = LLM_PROVIDER_SECRET_MASTER_KEY managed secret (3-mirror secret_keys path), loaded fail-loud G028 (required iff any db-mode hosted connection declared; Ollama-only adds no new secret), never leaves the Go core; documented rotation (re-encrypt-all, key_version bump). (3) Go->sidecar seam: extended /llm/chat ChatRequest additively with provider/api_base/api_key/provider_params; redesigned ml/app/routes/chat.py _dispatch_live to adopt the synthesis.py provider fork (ollama branch byte-for-byte today; hosted branch composes litellm model + api_key); secrets scrubbed from sidecar errors/logs; per-request transmission means no static provider secret on the sidecar. OQ-2 discovery: CatalogAggregator + per-kind adapters (Ollama live /api/tags, hosted SST-curated models[]), SST cache_ttl_ms + per_provider_timeout_ms (fail-loud, no default), typed ProviderDiscoveryStatus per effective-enabled connection (never silently dropped), stale-while-revalidate graceful degradation. OQ-3 budget: model-aware CostFn from SST llm.model_costs (ollama=$0 non-consuming; missing rate for a paid model = fail-loud refusal, never silent $0) + new model_usage_ledger (monthly per-user/global USD spend) making the existing agent.go pre-flight load-bearing before billable dispatch. OQ-4 grammar: <kind>/<backend-model-id> split on FIRST '/', at-most-one-enabled-connection-per-kind => deterministic (connection, backend id); canonicalization at the agenttool resolver boundary normalizes bare 089-era Ollama ids to ollama/<id> so the pure modelswitch leaf stays stdlib-only (admissible set INJECTED at construction, never imported). Two-plane SST-registry/DB-credential model reconciles Config-SST topology with web-UI-entered keys. Preserved ALL 088/089 invariants (one validator/one store, pure leaf, synthesis-vs-gather fork, per-request>sticky>default precedence, byte-for-byte no-override Ollama path, closed-set typed rejection, attribution) mapped 1:1 in a dedicated section; envelope/profile co-residence check scoped to ollama/-kind entries (provider-agnostic extension, not a 088/089 amendment). Web operator surface data contract specified (GET/PUT/POST /v1/admin/model-connections*, operator-gated, redacted reads); UI pixels/flow (OQ-5/OQ-6) deferred to bubbles.ux. Complexity Tracking + Testing Strategy (live-stack authentic, ephemeral test master key, mandatory negative coverage) + planned Trace Topology included. Status stays in_progress (no promotion). FLAGGED for bubbles.analyst: state.json.specDependsOn has two inaccurate directory pointers (specs/088-open-knowledge-model-switching -> specs/088-runtime-switchable-models; specs/089-gather-turn-model-switching -> specs/089-runtime-model-hotswap-persistent-selection); spec.md body already cites correct paths."
+      },
+      {
+        "agent": "bubbles.ux",
+        "phasesExecuted": ["analyze"],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-18T04:00:00Z",
+        "runEndedAt": "2026-06-18T05:00:00Z",
+        "summary": "Appended the UX phase to spec.md (single-file, NO sidecar): four level-2 sections — ## UI Scenario Matrix, ## UX Specification, ## UI Wireframes, ## User Flows. RESOLVED the two ux-owned open questions. OQ-5 (picker capability surfacing, BOTH surfaces): group by provider (Ollama/local group first), provider-qualified ids verbatim (ollama/…, anthropic/…, azure/<deployment>, …); preserved the 088/089 'current' / 'system default' tag vocabulary AND the Telegram numbered-reply selection mechanic (model_command.go) verbatim; UNREACHABLE provider = shown-but-disabled, never hidden (Principle 8) with its typed ProviderDiscoveryStatus, numbering/selection covers ONLY reachable models so a chosen number/option always maps to a dispatchable model, and a persisted current selection on a now-down provider is NOT silently reset (it fails loud at /ask, never an Ollama fallback — FR-X1/G01); cost surfacing = per-group cost class (free·local vs paid) + a pull-triggered (never pushed) paid-model cost note + a budget line shown only when a paid model is in the catalog (Principle 6 pull-not-push, Principle 7 phone-fit); capability surfacing = tool-capable prominent (088/089 gather-turn relevance), context/vision compact. Telegram + web are behavior-parallel (same combined catalog, same order, ONE validator + ONE store, per-request>sticky>default precedence — SCN-096-D03/G06). OQ-6 (operator web connection-setup flow): a three-page PWA triad matching the existing connectors convention (connectors.html → connectors-add.html → connector-detail.html) — S1 list (every SST-declared slot + status: kind, enabled/disabled, last-tested pass/fail + when, secret presence + last-4, model count), S2 add/configure (pick a declared-but-unconfigured db-mode slot → enter that kind's write-only secret fields, with non-secret params shown read-only from the SST registry, honoring the design two-plane model and surfacing that a brand-new provider KIND is an SST/config edit), S3 detail (status banner, Test connection with a TRUTHFUL typed pass/fail that never reports false success and never substitutes Ollama — SCN-096-W04, Enable 409-guarded on credential-present AND last-test-ok, Disable, and a Replace-credential write-only rotation that clears last-test → re-test required). Operator-only boundary made VISIBLE: the triad is operator-gated, not in the user nav, and a non-operator hitting it gets a 403 operator-only notice with no secrets and no setup. Binding Write-Only Secret Affordance Contract in every credential wireframe: display = presence + last-4 + last-tested only; input = type=password, autocomplete=off, empty on load, never pre-filled, never echoed; rotation = enter-a-new-value; NO reveal/copy/decrypt control anywhere (master key never leaves the Go core). Authored 5 screens (S1–S5) with mobile+desktop ASCII wireframes, per-kind credential matrix (Ollama/Anthropic/OpenAI/Azure-Foundry/Google-Vertex+Gemini/Bedrock), failed-test + unreachable + paid-confirm + off-catalog-rejection states; a UX9 UI Primitives inventory (provider group, reachability status pill, selectable vs disabled model row, write-only credential field, read-only SST param list, test-outcome banner, cost confirmation, budget line) with consumers + composition rules + a11y/responsive constraints; per-element interaction states; and Accessibility (role=radiogroup/status/alert, aria-busy, aria-disabled+out-of-tab-order for unreachable rows, focus order, ≥44px targets, color-never-the-only-signal, phone-screen-fit) matched to the live PWA aria conventions. Every UX journey traced to SCN-096-W01..W05 + D01..D05 + G01/G03/G04/G05. CONSUMED the design-owned data contract (/v1/admin/model-connections* admin endpoints, /v1/agent/model selection view, ModelCatalog + ProviderDiscoveryStatus shapes) WITHOUT redesigning it. Residual questions routed to design/plan: (a) the /v1/agent/model view needs additive enrichment — per-entry capabilities[] + cost_class, and an optional month-to-date budget field — to render the cost/capability hints + budget line (design anticipated capability enrichment in design §6.4; UX extends it to cost+budget); (b) the operator-gate mechanism (SST infrastructure.operator_user_ids allowlist vs the live webAuthMiddleware subject) per design §11.4/§18; (c) whether the gather-turn picker hard-filters non-tool-capable models or shows-but-disables them (mirrors the unreachable decision); (d) four new PWA surfaces to be built by implement — model-connections.html, model-connection-add.html, model-connection-detail.html, model-picker.html. Did NOT write scopes.md/report.md/uservalidation.md/scenario-manifest.json, NO source/test/migration edits, and did NOT touch certification.* / specDependsOn / other agents' fields. artifact-lint will still report scopes.md/report.md/uservalidation.md/scenario-manifest.json missing — expected at this phase; bubbles.plan owns them next."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-18T06:00:00Z",
+        "runEndedAt": "2026-06-18T06:30:00Z",
+        "summary": "Authored scopes.md as one coherent 7-scope full-delivery plan (SCOPE-01..07), written across a two-part split to keep each planning turn bounded (Part 1: SCOPE-01..04 + header/Execution Outline/Scope Table; Part 2 this dispatch: replaced the Continuation stub with full SCOPE-05/06/07, added Scope-Table rows 5-7, added After-SCOPE-05/06/07 validation checkpoints, and a Sequential Gate Summary). scenario-manifest.json (20 scenarios SCN-096-A01..G06 over SCOPE-01..07) was already present and is AUTHORITATIVE — every linkedTests entry in scopes.md is copied verbatim and the manifest was NOT modified. Each scope carries a Test Plan (scenario -> concrete manifest test; unit/integration/e2e-api categories) + a tiered DoD (Tier-1 universal + Tier-2 role-specific), all unchecked (implementation pending). Resolved the four residual decisions design.md handed to plan: R1 operator-gate mechanism -> SCOPE-06 (SST infrastructure.operator_user_ids allowlist over the existing internal/auth bearer/session subject; fail-loud when empty while a connection-mutating endpoint is reachable; 403 non-operator / 401 anonymous; pinned by TestAdminModelConnections_OperatorGate_403NonOperator_401Anonymous_Spec096); R2 additive GET /v1/agent/model enrichment (capabilities[] + cost_class + optional MTD budget) preserving allowed_models[] byte-for-byte for 089 clients -> SCOPE-07; R3 non-tool-capable gather selection shown-but-disabled + rejected fail-loud (disable-vs-filter justified, consistent with the unreachable-provider treatment) -> SCOPE-07; R4 model-aware CostFn signature blast-radius on the existing 064/087 USD-budget tests -> SCOPE-05 (DoD re-run checkitem). DAG: SCOPE-01 (foundation) -> 02 -> 03 -> 04 (01 + the SCOPE-03 dispatch seam); SCOPE-05 dep 04; SCOPE-06 dep 02+04; SCOPE-07 dep 04+06. Live hosted-provider e2e-api legs (SCOPE-03/04/06/07: real Anthropic/OpenAI reachability, live Ollama, GPU answers) are deferred to a downstream bubbles.devops home-lab dispatch (C7 terminal posture) — nextRequiredOwner after implement+test. This dispatch wrote scopes.md SCOPE-05/06/07 + the state bookkeeping only; certification.scopeProgress populated SCOPE-01..07 not_started; no promotion past in_progress."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-18T07:00:00Z",
+        "runEndedAt": "2026-06-18T08:00:00Z",
+        "summary": "Implemented SCOPE-01 (Provider-connection registry + config SST schema) ONLY — SCN-096-A01/A04/G02. Added the operator-global llm.connections[] registry + llm.discovery + llm.model_costs[] SST to config/smackerel.yaml (ADDITIVE; the existing llm.provider Ollama-only path is byte-for-byte retained; local-ollama enabled, anthropic/openai/azure-foundry/google/bedrock declared-but-disabled with NO committed secrets). Declared LLM_PROVIDER_SECRET_MASTER_KEY in all 3 secret-key mirrors (yaml infrastructure.secret_keys + internal/config/secret_keys.go + scripts/commands/config.sh SHELL_SECRET_KEYS, appended last; updated the pinned TestSecretKeysMirror want-list). Wired the pipeline (scripts/commands/config.sh): LLM_CONNECTIONS_JSON (per-kind params/models as inline-JSON strings per the ML_MODEL_MEMORY_PROFILES_JSON SST-JSON precedent), LLM_DISCOVERY_CACHE_TTL_MS/PER_PROVIDER_TIMEOUT_MS scalars, LLM_MODEL_COSTS_JSON, + the master-key placeholder block mirroring AUTH_AT_REST_HASHING_KEY. New internal/config/model_connections.go: typed domain (ModelConnection{ID,Kind,Enabled,Params map[string]any,SecretRef{Mode,EnvKey},Models{Strategy,List}}, ModelDiscoveryConfig, ModelCost) + LoadModelConnections + closed-set fail-loud Validate(secretKeys): unknown kind, missing required per-kind param (named conn+param), discovery bound <=0 (named, no default), env-mode secret_ref.env_key not in secret_keys (named), enabled non-ollama model with no model_costs entry (named, never $0). Wired into config.go::Load (self-validating like LoadOpenKnowledge); extended setRequiredEnv so all Load()-based tests stay green. New internal/config/model_connections_test.go: the 7 manifest-named tests, spec-driven + non-tautological adversarial (each mutation paired with a passing control). EVIDENCE (report.md#scope-01): ./smackerel.sh config generate (dev+test) EXIT 0 with the registry + master key present in both generated env files; ./smackerel.sh check EXIT 0 (build+vet+config-sync+scenario-lint); the 7 spec-096 tests + TestSecretKeys_MirrorsYAMLManifest + TestSecretKeysMirror PASS; NO-DEFAULTS grep clean; gofmt clean on changed files; 088/089 selection surfaces (modelswitch/modelpref/telegram model_command/api agent_model) UNTOUCHED. SCOPE-01 status in_progress: 10/12 DoD met; 2 environmental/foreign residuals routed to owners — D01-T1-3 (format --check) blocked solely by a pre-existing untracked FOREIGN file internal/connector/qfdecisions/chaos_hardening_test.go (another session's WIP, must not modify), D01-T1-1 (artifact-lint) blocked solely by missing uservalidation.md (bubbles.plan-owned). NO push, NO framework-validate, NO full suite (scoped per dispatch). Other scopes (02..07) untouched."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      { "scope": 1, "name": "Provider-connection registry + config SST schema (foundation)", "status": "in_progress", "dependsOn": [], "scopeDir": null },
+      { "scope": 2, "name": "Encrypted credential vault + master-key lifecycle", "status": "not_started", "dependsOn": [1], "scopeDir": null },
+      { "scope": 3, "name": "Provider-aware /ask dispatch (credential seam)", "status": "not_started", "dependsOn": [2], "scopeDir": null },
+      { "scope": 4, "name": "Discovery + unified catalog + identifier canonicalization", "status": "not_started", "dependsOn": [1], "scopeDir": null },
+      { "scope": 5, "name": "Model-aware CostFn + load-bearing USD budget enforcement", "status": "not_started", "dependsOn": [4], "scopeDir": null },
+      { "scope": 6, "name": "Operator-gated web admin connection surface (wire/test/enable)", "status": "not_started", "dependsOn": [2, 4], "scopeDir": null },
+      { "scope": 7, "name": "Combined catalog selection across Telegram + web, 088/089 parity", "status": "not_started", "dependsOn": [4, 6], "scopeDir": null }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "discoveredIssues": [],
+  "lastUpdatedAt": "2026-06-18T08:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Analyst-phase bootstrap (2026-06-18). spec.md + state.json only; design.md / scopes.md / report.md / uservalidation.md / scenario-manifest.json are intentionally absent until the downstream chain (design -> ux -> plan) runs. artifact-lint will report those as missing required artifacts — expected at this phase. No promotion past in_progress."
+}

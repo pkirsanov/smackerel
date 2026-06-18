@@ -109,6 +109,8 @@ func TestSecretKeysMirror(t *testing.T) {
 		"KEEP_GOOGLE_APP_PASSWORD",
 		"CARD_REWARDS_GCAL_CREDENTIALS",
 		"WEB_REGISTRATION_INVITE_TOKEN",
+		// Spec 096 SCOPE-01 — multi-provider model-connection vault master key.
+		"LLM_PROVIDER_SECRET_MASTER_KEY",
 	}
 	got := SecretKeys()
 	if !reflect.DeepEqual(got, want) {

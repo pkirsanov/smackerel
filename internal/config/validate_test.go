@@ -1008,6 +1008,17 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ASSISTANT_ANNOTATION_CLASSIFIER_CONFIDENCE_FLOOR", "0.6")
 	t.Setenv("ASSISTANT_ANNOTATION_CLASSIFIER_WARM_CACHE_ENABLED", "true")
 
+	// Spec 096 SCOPE-01 — Multi-Provider Model Connection registry SST.
+	// Defaults mirror config/smackerel.yaml (one enabled local-ollama
+	// connection + the discovery bounds + an empty model_costs list); the
+	// dedicated model_connections_test.go cases exercise the closed-set
+	// fail-loud paths. LoadModelConnections runs on every Load(), so these
+	// MUST be present.
+	t.Setenv("LLM_CONNECTIONS_JSON", `[{"id":"local-ollama","kind":"ollama","enabled":true,"params":"{\"base_url\":\"http://ollama:11434\"}","secret_ref_mode":"","secret_ref_env_key":"","models":"{\"strategy\":\"live\"}"}]`)
+	t.Setenv("LLM_DISCOVERY_CACHE_TTL_MS", "60000")
+	t.Setenv("LLM_DISCOVERY_PER_PROVIDER_TIMEOUT_MS", "4000")
+	t.Setenv("LLM_MODEL_COSTS_JSON", `[]`)
+
 	// Spec 068 SCOPE-1 — Structured Intent Compiler SST baselines.
 	// Defaults mirror config/smackerel.yaml so Load() succeeds; the
 	// dedicated TestIntentCompilerConfigRequiresEverySSTKey exercises
