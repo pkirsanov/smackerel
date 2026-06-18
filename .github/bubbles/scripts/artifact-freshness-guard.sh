@@ -77,6 +77,18 @@ heading_level() {
   echo "$line" | sed -E 's/^(#{1,6}).*/\1/' | awk '{ print length($0) }'
 }
 
+# IMP-012 (de-fork continuation of BUG-005): per-EVERY-line boolean tests below
+# use these bash-regex constants via `[[ "$line" =~ $re ]]` (zero fork) instead
+# of `echo "$line" | grep -qE` (one subshell per line). ERE is byte-identical to
+# the prior grep patterns, so verdicts are unchanged. Case-INSENSITIVE title
+# classifications (run at most once per heading line) keep their `grep -qiE`
+# form, mirroring BUG-005's "extraction/rare paths left as-is" principle.
+_re_heading='^#{1,6} '
+_re_status='\*\*Status:\*\*'
+_re_plan_heading='^#{1,6}[[:space:]]+(Definition of Done|DoD|Test Plan)'
+_re_testtype_row='^\|[[:space:]]*Test Type[[:space:]]*\|'
+_re_dod_item='^- \[( |x)\] '
+
 scope_layout="$(detect_scope_layout)"
 scope_files=()
 scope_index_file="$feature_dir/scopes/_index.md"
@@ -107,7 +119,7 @@ for artifact_path in "$feature_dir/spec.md" "$feature_dir/design.md"; do
 
   while IFS= read -r line; do
     line_num=$((line_num + 1))
-    if ! echo "$line" | grep -qE '^#{1,6} '; then
+    if [[ ! "$line" =~ $_re_heading ]]; then
       continue
     fi
 
@@ -151,7 +163,7 @@ for scope_path in "${scope_files[@]}"; do
   while IFS= read -r line; do
     line_num=$((line_num + 1))
 
-    if echo "$line" | grep -qE '^#{1,6} '; then
+    if [[ "$line" =~ $_re_heading ]]; then
       title="$(heading_title "$line")"
       level="$(heading_level "$line")"
 
@@ -172,19 +184,19 @@ for scope_path in "${scope_files[@]}"; do
       continue
     fi
 
-    if echo "$line" | grep -qE '\*\*Status:\*\*'; then
+    if [[ "$line" =~ $_re_status ]]; then
       fail "${scope_path#$feature_dir/} line $line_num keeps a status marker inside a superseded scope section"
     fi
 
-    if echo "$line" | grep -qE '^#{1,6}[[:space:]]+(Definition of Done|DoD|Test Plan)'; then
+    if [[ "$line" =~ $_re_plan_heading ]]; then
       fail "${scope_path#$feature_dir/} line $line_num keeps an executable planning heading inside a superseded scope section"
     fi
 
-    if echo "$line" | grep -qE '^\|[[:space:]]*Test Type[[:space:]]*\|'; then
+    if [[ "$line" =~ $_re_testtype_row ]]; then
       fail "${scope_path#$feature_dir/} line $line_num keeps a Test Plan table inside a superseded scope section"
     fi
 
-    if echo "$line" | grep -qE '^\- \[( |x)\] '; then
+    if [[ "$line" =~ $_re_dod_item ]]; then
       fail "${scope_path#$feature_dir/} line $line_num keeps DoD checkbox items inside a superseded scope section"
     fi
   done < "$scope_path"

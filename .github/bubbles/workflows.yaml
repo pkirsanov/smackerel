@@ -562,6 +562,7 @@ failureRouting:
   compliance: validate
   audit: audit
   chaos: implement
+  redteam: implement
   environment: devops
 
 retryPolicy:
@@ -936,6 +937,9 @@ phases:
     requiredGates: [ G008 ]
   chaos:
     owner: bubbles.chaos
+    requiredGates: [ G009 ]
+  redteam:
+    owner: bubbles.redteam
     requiredGates: [ G009 ]
   regression:
     owner: bubbles.regression

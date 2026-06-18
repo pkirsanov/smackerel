@@ -34,6 +34,10 @@ source "$SCRIPT_DIR/fun-mode.sh"
 # ─────────────────────────────────────────────────────────────────────────────
 source "$SCRIPT_DIR/guard-lib.sh"
 
+# Shared scan helpers (IMP-009): bubbles_status_lines centralizes the BUG-006
+# blockquote exclusion used by Check 4B + Check 5 so they stay in lockstep.
+source "$SCRIPT_DIR/scan-lib.sh"
+
 feature_dir="${1:-}"
 revert_on_fail="false"
 
@@ -909,7 +913,10 @@ non_canonical_statuses=0
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
 
-  # Find all **Status:** lines
+  # Find all **Status:** lines. Blockquote (>-prefixed) lines are header/summary
+  # prose (e.g. `> **Status:** all scopes Not Started (planning refreshed …)`),
+  # NOT canonical per-scope status declarations — exclude them so a rollup
+  # summary is never mis-read as an invented status value (BUG-006).
   while IFS= read -r status_line; do
     [[ -n "$status_line" ]] || continue
     # Extract the status value after "**Status:**"
@@ -933,7 +940,7 @@ for scope_path in "${scope_files[@]}"; do
         non_canonical_statuses=$((non_canonical_statuses + 1))
         ;;
     esac
-  done < <(grep -E '\*\*Status:\*\*' "$scope_path" || true)
+  done < <(bubbles_status_lines "$scope_path")
 done
 
 if [[ "$non_canonical_statuses" -gt 0 ]]; then
@@ -957,10 +964,13 @@ blocked_scopes=0
 done_scopes=0
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
-  not_started_scopes=$((not_started_scopes + $(grep -cE '\*\*Status:\*\*.*Not Started' "$scope_path" || true)))
-  in_progress_scopes=$((in_progress_scopes + $(grep -cE '\*\*Status:\*\*.*In Progress' "$scope_path" || true)))
-  blocked_scopes=$((blocked_scopes + $(grep -cE '\*\*Status:\*\*.*Blocked' "$scope_path" || true)))
-  done_scopes=$((done_scopes + $(grep -cE '\*\*Status:\*\*.*Done' "$scope_path" || true)))
+  # Count per-scope statuses over the canonical status lines only (blockquote
+  # summary lines excluded via the shared helper — BUG-006 / IMP-009).
+  _scope_status_lines="$(bubbles_status_lines "$scope_path")"
+  not_started_scopes=$((not_started_scopes + $(printf '%s' "$_scope_status_lines" | grep -cE '\*\*Status:\*\*.*Not Started' || true)))
+  in_progress_scopes=$((in_progress_scopes + $(printf '%s' "$_scope_status_lines" | grep -cE '\*\*Status:\*\*.*In Progress' || true)))
+  blocked_scopes=$((blocked_scopes + $(printf '%s' "$_scope_status_lines" | grep -cE '\*\*Status:\*\*.*Blocked' || true)))
+  done_scopes=$((done_scopes + $(printf '%s' "$_scope_status_lines" | grep -cE '\*\*Status:\*\*.*Done' || true)))
 done
 total_scopes=$((not_started_scopes + in_progress_scopes + blocked_scopes + done_scopes))
 

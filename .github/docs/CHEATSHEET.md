@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **40 Agents · 108 Gates · 55 Workflow Modes · 26 Phases**
+> **41 Agents · 108 Gates · 57 Workflow Modes · 27 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -157,6 +157,9 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `sunnyvale liquor-then-look` | `retro-to-review` | *"The liquor shows me where to look. Green Bastard tells me what's broken."* |
 | `sunnyvale cant-just-slap` | `bubbles.ux` | *"You can't just slap things together."* |
 | `sunnyvale same-lot-new-trailer` | `product-to-delivery (with existing impl)` | *"Same lot, boys. New trailer."* |
+| `sunnyvale nothing-is-bulletproof` | `bubbles.redteam` | *"Nothing's bulletproof, boys. Let me prove it."* |
+| `sunnyvale prove-it` | `bubbles.redteam` | *"You say it's done? Prove it."* |
+| `sunnyvale this-is-my-park-now` | `bubbles.redteam` | *"This is my park now. Let's see what holds."* |
 <!-- GENERATED:CHEATSHEET_ALIASES_END -->
 
 ---
@@ -222,6 +225,8 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `adapter-readiness-to-packet` | adapter-ready-to-go | Deliver an adapter to readiness state; packet certifies the adapter is ready for downstream consumption. Terminal status: `delivered_pending_activation`. |
 | `dark-launch-shipped` | dark-and-quiet | Code shipped behind a default-off flag; terminal status `delivered_pending_activation` until flag flip. |
 | `migration-shipped-pending-cutover` | migration-shipped-not-cutover | Migration code shipped but cutover not executed; terminal status `delivered_pending_activation` until operator cutover. |
+| `redteam-to-doc` | prove-it | Adversarial red-team attack on a finished result (Cyrus); finding-owned remediation chain then validate/audit/docs. Off by default. |
+| `production-adversarial-probe` | this-is-my-park-now | Bounded, armed, read-only chaos-monkey probing of a LIVE system (Cyrus on a leash). Requires arming + target allowlist; restore-or-fix; never certifies. |
 <!-- GENERATED:CHEATSHEET_MODES_END -->
 
 **Optional execution tags:** `grillMode`, `tdd` (inner-loop red→green only), `backlogExport` (off|tasks|issues), `specReview` (off|once-before-implement), `socratic`, `socraticQuestions`, `gitIsolation`, `autoCommit` (off|scope|dod), `maxScopeMinutes`, `maxDodMinutes`, `microFixes`, `crossModelReview` (off|codex|terminal)
@@ -326,6 +331,8 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `observability posture` | First-class per-repo declaration under `traceContracts.observability.posture`: `wired` (proves captured telemetry + numeric SLOs in integration/e2e/stress) or `opted-out` (recorded + expiring via `revisitAfter`); undeclared nags. Enforced by G098 (posture declared), G099 (opt-out freshness), G100 (SLO evidence — blocking when wired), and G080 (trace contract — MUST-when-wired). `bubbles doctor` surfaces it, `bubbles.setup focus: observability` declares it, and the `check_observability` MCP tool reports a one-shot verdict. |
 | `framework self-observation` | `bubbles.retro target: framework` (alias `framework-health`). Proposal-first: reads gate-failure logs and stalled-mode counts, writes only into `improvements/`, never auto-mutates framework files. The framework eats its own dog food. |
 | `release train portfolio` | The set of all declared trains under `config/release-trains.yaml`. Surfaced by `release-train-status-all` (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness. |
+| `adversarial verification` | Cyrus (`bubbles.redteam`) attacks a FINISHED result to falsify the "done" claim — evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, and bounded chaos-monkey probing of live systems. It emits findings and NEVER certifies (completion stays with `bubbles.validate`). OFF BY DEFAULT. The missing post-result adversary alongside `bubbles.grill`, which pressure-tests ideas pre-build. |
+| `adversarial posture` | The effective on/off/passes/teeth resolved by `adversarial-resolve.sh` via one precedence chain: per-run directive (`adversarial: on passes: 3`) -> `BUBBLES_ADVERSARIAL*` env -> `.github/bubbles-project.yaml` `adversarial:` block -> framework default `off`. Seamless opt-in; zero behavior change on upgrade. |
 <!-- GENERATED:CHEATSHEET_VOCABULARY_END -->
 
 ---

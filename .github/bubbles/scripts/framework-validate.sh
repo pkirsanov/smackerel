@@ -31,6 +31,83 @@ fi
 failures=0
 skipped=0
 
+# IMP-012 tiering (opt-in, non-breaking). Default tier=full runs EVERY check
+# exactly as before. `--tier=core` runs only the fast, high-signal structural
+# subset (registry/lint/generator/scan selftests) for a quick local signal;
+# the pre-push / release-check path passes no flag, so it is unchanged.
+# `--list-tier=core` DRY-LISTS which checks the core tier would run/skip and
+# exits 0 (no execution) — used by the tiering selftest and by operators.
+VALIDATE_TIER="${BUBBLES_VALIDATE_TIER:-full}"
+LIST_TIER_ONLY="false"
+for _arg in "$@"; do
+  case "$_arg" in
+    --tier=core | --tier=full) VALIDATE_TIER="${_arg#--tier=}" ;;
+    --list-tier=core | --list-tier=full)
+      VALIDATE_TIER="${_arg#--list-tier=}"
+      LIST_TIER_ONLY="true"
+      ;;
+    -h | --help)
+      echo "Usage: framework-validate.sh [--tier=core|full] [--list-tier=core|full]"
+      echo "  (no flag)        run every check (full tier — unchanged default)"
+      echo "  --tier=core      run only the fast structural/lint/generator subset"
+      echo "  --list-tier=core dry-list what the core tier runs/skips, then exit 0"
+      exit 0
+      ;;
+    *)
+      echo "framework-validate: unknown argument '$_arg'." >&2
+      exit 2
+      ;;
+  esac
+done
+
+# A check is CORE (fast, high-signal, deterministic) when its label matches one
+# of these substrings. The set is intentionally small — structural registry/lint
+# consistency + the cheap generator/scan selftests.
+core_check_label() {
+  case "$1" in
+    *"Repository drift report"* | *"Gate-catalog freshness"* | \
+      *"Portable surface agnosticity"* | *"Shellcheck lint"* | \
+      *"Registry consistency"* | *"Gates registry"* | *"YAML schema"* | \
+      *"Cheatsheet generator selftest"* | *"Modes split"* | \
+      *"Scan-lib"* | *"Derived-artifact regen"* | *"Gate scaffolder"* | \
+      *"drift-check selftest"* | *"hub-report selftest"*)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+run_check() {
+  local label="$1"
+  shift
+
+  if [[ "$VALIDATE_TIER" == "core" ]] && ! core_check_label "$label"; then
+    if [[ "$LIST_TIER_ONLY" == "true" ]]; then
+      echo "WOULD-SKIP (non-core): $label"
+    else
+      echo "==> $label"
+      echo "SKIP: $label (tier=core)"
+      skipped=$((skipped + 1))
+      echo
+    fi
+    return 0
+  fi
+
+  if [[ "$LIST_TIER_ONLY" == "true" ]]; then
+    echo "WOULD-RUN: $label"
+    return 0
+  fi
+
+  echo "==> $label"
+  if "$@"; then
+    echo "PASS: $label"
+  else
+    echo "FAIL: $label"
+    failures=$((failures + 1))
+  fi
+  echo
+}
+
 declare -a agnosticity_targets=(
   "CHANGELOG.md"
   "README.md"
@@ -44,20 +121,6 @@ declare -a agnosticity_targets=(
   "bubbles/scripts/framework-validate.sh"
   "bubbles/scripts/release-check.sh"
 )
-
-run_check() {
-  local label="$1"
-  shift
-
-  echo "==> $label"
-  if "$@"; then
-    echo "PASS: $label"
-  else
-    echo "FAIL: $label"
-    failures=$((failures + 1))
-  fi
-  echo
-}
 
 # Wrapper for selftests that only make sense when run inside the framework
 # source tree (those that invoke install.sh, walk VERSION, or assert the
@@ -118,6 +181,9 @@ fi
 if [[ -x "$SCRIPT_DIR/pre-tool-risk-gate-selftest.sh" ]]; then
   run_check "Pre-tool risk gate selftest (v6.1 / R10)" bash "$SCRIPT_DIR/pre-tool-risk-gate-selftest.sh"
 fi
+if [[ -x "$SCRIPT_DIR/adversarial-resolve-selftest.sh" ]]; then
+  run_check "Adversarial-resolve control plane selftest (IMP-002 / S0)" bash "$SCRIPT_DIR/adversarial-resolve-selftest.sh"
+fi
 if [[ -x "$SCRIPT_DIR/tool-capture-shim-selftest.sh" ]]; then
   run_check "Tool-capture shim selftest (v6.1 / R2)" bash "$SCRIPT_DIR/tool-capture-shim-selftest.sh"
 fi
@@ -167,6 +233,12 @@ run_check_self_only "Interop apply selftest" bash "$SCRIPT_DIR/interop-apply-sel
 run_check_self_only "Release manifest freshness" bash "$SCRIPT_DIR/generate-release-manifest.sh" --check
 run_check_self_only "Release manifest selftest" bash "$SCRIPT_DIR/release-manifest-selftest.sh"
 run_check_self_only "Release manifest purity selftest" bash "$SCRIPT_DIR/release-manifest-purity-selftest.sh"
+run_check_self_only "Derived-artifact regen wrapper selftest (IMP-007)" bash "$SCRIPT_DIR/regen-derived-selftest.sh"
+run_check_self_only "Gate scaffolder selftest (IMP-011)" bash "$SCRIPT_DIR/scaffold-gate-selftest.sh"
+run_check_self_only "Framework drift-check selftest (IMP-013)" bash "$SCRIPT_DIR/bubbles-drift-check-selftest.sh"
+run_check_self_only "Governance hub-report selftest (IMP-014)" bash "$SCRIPT_DIR/bubbles-hub-report-selftest.sh"
+run_check_self_only "Scan-lib helpers selftest (IMP-009)" bash "$SCRIPT_DIR/scan-lib-selftest.sh"
+run_check_self_only "Framework-validate tiering selftest (IMP-012)" bash "$SCRIPT_DIR/framework-validate-tier-selftest.sh"
 run_check_self_only "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-selftest.sh"
 run_check_self_only "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
 run_check "Finding closure selftest" bash "$SCRIPT_DIR/finding-closure-selftest.sh"
@@ -368,6 +440,11 @@ if [[ -x "$SCRIPT_DIR/stale-deferral-lint.sh" ]]; then
   # framework's own managed docs. Downstream repos have their own VERSION +
   # product docs, so the lapsed-promise comparison is meaningful only here.
   run_check_self_only "Stale-deferral lint (live)" bash "$SCRIPT_DIR/stale-deferral-lint.sh" "$REPO_ROOT"
+fi
+
+if [[ "$LIST_TIER_ONLY" == "true" ]]; then
+  echo "Tier listing complete (tier=$VALIDATE_TIER). No checks were executed."
+  exit 0
 fi
 
 if [[ "$failures" -gt 0 ]]; then

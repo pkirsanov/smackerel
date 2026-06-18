@@ -143,6 +143,54 @@ printf '#!/usr/bin/env bash\n# orphan prune probe (intentionally stale)\n' > "$l
   && pass "Re-install keeps real framework scripts after prune" \
   || fail "Re-install keeps real framework scripts after prune"
 
+# IMP-008: the orphan prune now also covers agents/prompts/instructions/skills,
+# keyed on the PREVIOUS install's manifest so a framework file removed upstream
+# is pruned while operator-authored files (never in the manifest) survive.
+local_github="$LOCAL_FIXTURE/.github"
+mkdir -p "$local_github/instructions" "$local_github/skills/bubbles-__orphan_probe" "$local_github/skills/operator-custom"
+# (a) framework-pattern orphans recorded in the OLD manifest (= previously
+#     framework-owned) but absent from the new source payload.
+printf -- '---\nname: probe\n---\n' >"$local_github/agents/bubbles.__orphan_probe.agent.md"
+printf -- '---\nname: probe\n---\n' >"$local_github/prompts/bubbles.__orphan_probe.prompt.md"
+printf -- '# orphan instruction probe\n' >"$local_github/instructions/bubbles-__orphan_probe.instructions.md"
+printf -- '# orphan skill probe\n' >"$local_github/skills/bubbles-__orphan_probe/SKILL.md"
+{
+  echo "agents/bubbles.__orphan_probe.agent.md"
+  echo "prompts/bubbles.__orphan_probe.prompt.md"
+  echo "instructions/bubbles-__orphan_probe.instructions.md"
+  echo "skills/bubbles-__orphan_probe/SKILL.md"
+} >>"$local_github/bubbles/.manifest"
+# (b) operator-owned files that are NOT in the manifest — must survive.
+printf -- '# operator instruction\n' >"$local_github/instructions/operator-custom.instructions.md"
+printf -- '# operator skill\n' >"$local_github/skills/operator-custom/SKILL.md"
+
+(
+  cd "$LOCAL_FIXTURE"
+  bash "$ROOT_DIR/install.sh" --local-source "$DIRTY_SOURCE" >/dev/null
+)
+
+[[ ! -e "$local_github/agents/bubbles.__orphan_probe.agent.md" ]] \
+  && pass "Re-install prunes an orphan framework agent (IMP-008)" \
+  || fail "Re-install prunes an orphan framework agent (IMP-008)"
+[[ ! -e "$local_github/prompts/bubbles.__orphan_probe.prompt.md" ]] \
+  && pass "Re-install prunes an orphan framework prompt (IMP-008)" \
+  || fail "Re-install prunes an orphan framework prompt (IMP-008)"
+[[ ! -e "$local_github/instructions/bubbles-__orphan_probe.instructions.md" ]] \
+  && pass "Re-install prunes an orphan framework instruction (IMP-008)" \
+  || fail "Re-install prunes an orphan framework instruction (IMP-008)"
+[[ ! -d "$local_github/skills/bubbles-__orphan_probe" ]] \
+  && pass "Re-install prunes an orphan framework skill directory (IMP-008)" \
+  || fail "Re-install prunes an orphan framework skill directory (IMP-008)"
+[[ -f "$local_github/agents/bubbles.goal.agent.md" ]] \
+  && pass "Re-install keeps real framework agents after prune (IMP-008)" \
+  || fail "Re-install keeps real framework agents after prune (IMP-008)"
+[[ -f "$local_github/instructions/operator-custom.instructions.md" ]] \
+  && pass "Re-install keeps operator-owned instructions not in the manifest (IMP-008)" \
+  || fail "Re-install keeps operator-owned instructions not in the manifest (IMP-008)"
+[[ -f "$local_github/skills/operator-custom/SKILL.md" ]] \
+  && pass "Re-install keeps operator-owned skills not in the manifest (IMP-008)" \
+  || fail "Re-install keeps operator-owned skills not in the manifest (IMP-008)"
+
 (
   cd "$QUOTED_FIXTURE"
   bash "$ROOT_DIR/install.sh" --local-source "$QUOTED_SOURCE" >/dev/null

@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v7.12.1</div>
+  <div class="subtitle">Agent Orchestration System v7.13.0</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -339,7 +339,7 @@
 
 <!-- ═══════════════════════════════ THE ROSTER ═══════════════════════════════ -->
 <!-- GENERATED:FRAMEWORK_STATS_ROSTER_START -->
-<div class="section-title"><img src="../icons/bubbles-glasses.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The Sunnyvale Roster — All 40 Agents</div>
+<div class="section-title"><img src="../icons/bubbles-glasses.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The Sunnyvale Roster — All 41 Agents</div>
 <!-- GENERATED:FRAMEWORK_STATS_ROSTER_END -->
 
 <h3 style="color: var(--accent); margin: 1rem 0 0.5rem;"><img src="../icons/bubbles-glasses.svg" width="20" style="vertical-align: middle;"> Start Here — Universal Entry Point</h3>
@@ -997,6 +997,21 @@
       <td class="maps-to">product-to-delivery (with existing impl)</td>
       <td class="quote-col">"Same lot, boys. New trailer."</td>
     </tr>
+    <tr>
+      <td class="cmd">sunnyvale nothing-is-bulletproof</td>
+      <td class="maps-to">bubbles.redteam</td>
+      <td class="quote-col">"Nothing's bulletproof, boys. Let me prove it."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale prove-it</td>
+      <td class="maps-to">bubbles.redteam</td>
+      <td class="quote-col">"You say it's done? Prove it."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale this-is-my-park-now</td>
+      <td class="maps-to">bubbles.redteam</td>
+      <td class="quote-col">"This is my park now. Let's see what holds."</td>
+    </tr>
 <!-- GENERATED:HTML_ALIASES_TABLE_END -->
   </tbody>
 </table>
@@ -1334,6 +1349,18 @@
     <div class="wf-desc">Migration code shipped but cutover not executed; terminal <code>delivered_pending_activation</code> until operator cutover.</div>
     <div class="wf-quote">"Code's there. Operator's gotta pull the lever."</div>
   </div>
+  <div class="workflow-card">
+    <div class="wf-name">redteam-to-doc</div>
+    <div class="wf-alias">→ sunnyvale prove-it</div>
+    <div class="wf-desc">Adversarial red-team attack on a finished result (Cyrus). Finding-owned remediation chain, then validate/audit/docs. Off by default.</div>
+    <div class="wf-quote">"You say it's done? Prove it."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">production-adversarial-probe</div>
+    <div class="wf-alias">→ sunnyvale this-is-my-park-now</div>
+    <div class="wf-desc">Bounded, armed, read-only chaos-monkey probing of a LIVE system (Cyrus on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.</div>
+    <div class="wf-quote">"This is my park now. Let's see what holds."</div>
+  </div>
 <!-- GENERATED:HTML_MODES_CARDS_END -->
 </div>
 
@@ -1652,6 +1679,14 @@
   <div class="workflow-card">
     <div class="wf-name">release train portfolio</div>
     <div class="wf-desc">The set of all declared trains under <code>config/release-trains.yaml</code>. Surfaced by <code>release-train-status-all</code> (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">adversarial verification</div>
+    <div class="wf-desc">Cyrus (<code>bubbles.redteam</code>) attacks a FINISHED result to falsify the "done" claim — evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, and bounded chaos-monkey probing of live systems. It emits findings and NEVER certifies (completion stays with <code>bubbles.validate</code>). OFF BY DEFAULT. The missing post-result adversary alongside <code>bubbles.grill</code>, which pressure-tests ideas pre-build.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">adversarial posture</div>
+    <div class="wf-desc">The effective on/off/passes/teeth resolved by <code>adversarial-resolve.sh</code> via one precedence chain: per-run directive (<code>adversarial: on passes: 3</code>) -> <code>BUBBLES_ADVERSARIAL*</code> env -> <code>.github/bubbles-project.yaml</code> <code>adversarial:</code> block -> framework default <code>off</code>. Seamless opt-in; zero behavior change on upgrade.</div>
   </div>
 <!-- GENERATED:HTML_VOCABULARY_CARDS_END -->
 </div>
@@ -2292,10 +2327,10 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v7.12.1 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v7.13.0 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
-  <p>108 Gates • 40 Agents • 55 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
+  <p>108 Gates • 41 Agents • 57 Workflow Modes • 27 Phases • 0 Shit Hawks</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
   <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
   <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>
