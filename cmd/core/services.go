@@ -26,6 +26,7 @@ import (
 	"github.com/smackerel/smackerel/internal/pipeline"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
+	"github.com/smackerel/smackerel/internal/retrieval/evergreen"
 	"github.com/smackerel/smackerel/internal/topics"
 	"github.com/smackerel/smackerel/internal/web"
 
@@ -50,6 +51,7 @@ type coreServices struct {
 	searchEngine           *api.SearchEngine
 	digestGen              *digest.Generator
 	intEngine              *intelligence.Engine
+	evergreenScorer        *evergreen.Scorer // spec 095 SCOPE-07 — built in buildCoreServices (nil when retrieval.evergreen.enabled=false); production scenario judge late-bound race-free by wireEvergreenScorer
 	topicLifecycle         *topics.Lifecycle
 	tokenStore             *auth.TokenStore
 	oauthHandler           *auth.OAuthHandler
@@ -255,6 +257,23 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 	// Create intelligence engine for synthesis, alerts, and resurfacing
 	svc.intEngine = intelligence.NewEngine(svc.pg.Pool, svc.nc)
 
+	// Spec 095 SCOPE-08 / PKT-095-C — inject the SST evergreen pool-exclusion
+	// policy into the §10 synthesis and §12 digest candidate-gathering paths.
+	// ADDITIVE + safe activation: the shipped SST defaults are false, so the
+	// candidate queries stay byte-for-byte unchanged until the operator opts in
+	// (retrieval.evergreen.pools.*). When a switch is on, persisted-ephemeral
+	// artifacts (evergreen_score < 0) are dropped from that candidate pool only
+	// (R12); a NULL score is never excluded (Principle 9) and search/retrieval
+	// is never touched, so excluded artifacts stay fully searchable (R13). The
+	// switches are honored independently of evergreen.enabled so already-scored
+	// artifacts can be excluded even if scoring of new ingests is paused.
+	evergreenPoolPolicy := evergreen.PoolPolicy{
+		SynthesisExcludesLowEvergreen: cfg.Retrieval.Evergreen.SynthesisExcludesLowEvergreen,
+		DigestExcludesLowEvergreen:    cfg.Retrieval.Evergreen.DigestExcludesLowEvergreen,
+	}
+	svc.intEngine.SetEvergreenPoolPolicy(evergreenPoolPolicy)
+	svc.digestGen.SetEvergreenPoolPolicy(evergreenPoolPolicy)
+
 	// Create topic lifecycle manager for momentum tracking
 	svc.topicLifecycle = topics.NewLifecycle(svc.pg.Pool)
 
@@ -264,6 +283,26 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 
 	// Wire artifact publisher so connector-produced RawArtifacts flow into the NATS pipeline
 	artifactPublisher := pipeline.NewRawArtifactPublisher(svc.pg.Pool, svc.nc)
+
+	// Spec 095 SCOPE-07 / PKT-095-B — build the evergreen scorer from the
+	// fail-loud SST evergreen config and inject it into the LIVE ingestion front
+	// door BEFORE the supervisor starts any connector sync goroutine (so the
+	// publisher.Scorer field is set with a happens-before, no data race). The
+	// production scenario judge is late-bound race-free by wireEvergreenScorer
+	// once the agent bridge exists; until then (and whenever judgment_source is
+	// tier_signals, or the bridge/scenario is unavailable) the scorer uses the
+	// deterministic TierSignals fallback (NFR-2, Principle 9). When
+	// retrieval.evergreen.enabled is false the scorer stays nil ⇒ the column is
+	// left NULL and ingestion is byte-for-byte unchanged (NFR-3).
+	if cfg.Retrieval.Evergreen.Enabled {
+		svc.evergreenScorer = evergreen.NewScorer(evergreen.EvergreenConfig{
+			JudgmentSource:  cfg.Retrieval.Evergreen.JudgmentSource,
+			ConfidenceFloor: cfg.Retrieval.Evergreen.ConfidenceFloor,
+			PerTickBudget:   cfg.Retrieval.Evergreen.PerTickBudget,
+			DedupWindowDays: cfg.Retrieval.Evergreen.DedupWindowDays,
+		})
+		artifactPublisher.Scorer = svc.evergreenScorer
+	}
 	svc.supervisor.SetPublisher(artifactPublisher)
 
 	// Set up OAuth handler for connector authorization

@@ -38,6 +38,12 @@ import (
 	// loader allowed_tools (BS-010) validation here.
 	_ "github.com/smackerel/smackerel/internal/digest"
 	_ "github.com/smackerel/smackerel/internal/recommendation/tools"
+
+	// Spec 095 SCOPE-07 — the evergreen package registers
+	// noop_retrieval_evergreen at init() so
+	// config/prompt_contracts/retrieval-evergreen-v1.yaml passes loader
+	// allowed_tools (BS-010) validation here.
+	_ "github.com/smackerel/smackerel/internal/retrieval/evergreen"
 )
 
 func main() {
