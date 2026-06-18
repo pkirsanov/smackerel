@@ -32,7 +32,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -53,6 +52,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/skills/recipesearch"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/pipeline"
+	"github.com/smackerel/smackerel/internal/retrieval/routing"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
 )
@@ -190,6 +190,19 @@ func wireAssistantFacade(
 	// stays in place if svc.assistantTracer is nil (defensive — every
 	// production wiring path sets it).
 	facade.WithTracer(svc.assistantTracer)
+
+	// Spec 095 SCOPE-06 — inject the retrieval-strategy router as a
+	// pre-retrieval stage (design §3, mirroring the LookupNLRouting seam).
+	// Built from the fail-loud-validated retrieval.routing SST (loaded in
+	// config.Load). The router is a PURE decision over the already-computed
+	// CompiledIntent and opens NO store (Principle 5 / TestNoParallelStore);
+	// it injects ready-to-fire and activates per retrieval/QA turn once the
+	// spec 068 intent compiler is wired (WithIntentCompiler).
+	retrievalRegistry, err := routing.NewContractRegistry(cfg.Retrieval.Routing)
+	if err != nil {
+		return fmt.Errorf("build retrieval-strategy contract registry: %w", err)
+	}
+	facade.WithRetrievalRouter(routing.NewRouter(cfg.Retrieval.Routing, retrievalRegistry))
 	slog.Info("assistant facade wired",
 		"scenarios", len(scenarios),
 		"borderline_floor", facadeCfg.BorderlineFloor,
@@ -301,17 +314,19 @@ func wireAssistantHTTPAdapter(cfg *config.Config, svc *coreServices, facade cont
 		return fmt.Errorf("construct HTTP adapter: %w", err)
 	}
 	svc.assistantHTTPHandler.SetAdapter(adapter)
-	// SCOPE-2 will replace this pass-through with the real
-	// auth/scope/body/rate/CORS middleware chain. Until then we
-	// install an identity wrapper so SetMiddleware is called
-	// exactly once during wiring (DoD invariant), structural
-	// completeness holds, and the route serves valid turns end to
-	// end for the SCOPE-1d live-wiring integration test. Production
-	// deploys that enable HTTP transport before SCOPE-2 lands MUST
-	// front this with bearer-auth via the existing api.Dependencies
-	// middleware (current router mounts /api/assistant/turn inside
-	// the bearer-auth group).
-	svc.assistantHTTPHandler.SetMiddleware(func(next http.Handler) http.Handler { return next })
+	// SCOPE-2 pre-facade middleware chain, wired in front of the
+	// late-bound adapter. PreFacadeChain composes, in order:
+	// auth.RequireScope(RequiredScope) — 403 for per-user PASETO
+	// sessions lacking the assistant:turn claim (shared-token +
+	// bootstrap sessions bypass by design); perUserRateLimit — 429
+	// per authenticated user at RateLimitPerUserPerMinute; and
+	// bodySizeCap — 413 via http.MaxBytesReader before the adapter's
+	// io.ReadAll, bounded by BodySizeMaxBytes. PreFacadeChain
+	// validates transportCfg fail-loud at construction. Bearer-auth,
+	// CORS, real-IP, and request-id remain router-owned
+	// (internal/api/router.go); this chain only adds the
+	// assistant-route-local layers between bearer-auth and the adapter.
+	svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))
 	slog.Info("assistant HTTP adapter wired and bound",
 		"schema_version", transportCfg.SchemaVersion,
 		"body_size_max_bytes", transportCfg.BodySizeMaxBytes,

@@ -9,7 +9,42 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+
+	"github.com/smackerel/smackerel/internal/retrieval/evergreen"
 )
+
+// buildSynthesisClusterQuery returns the §10 cross-domain synthesis
+// candidate-gathering query (the topic-cluster CTE over the SINGLE existing
+// artifacts/edges/topics store — Principle 5, no parallel index).
+//
+// Spec 095 SCOPE-08: when excludeLowEvergreen is true (SST opt-in,
+// retrieval.evergreen.pools.synthesis_excludes_low_evergreen) the additive
+// evergreen.PoolExclusionSQLPredicate fragment drops persisted-ephemeral
+// candidate artifacts (evergreen_score < 0) from the cluster pool (R12). A NULL
+// score is never excluded (Principle 9) and the exclusion is pool-eligibility
+// only — the §9.2 search/retrieval path is untouched, so an excluded artifact
+// stays fully searchable (R13). When false — the shipped default — the returned
+// SQL is byte-for-byte the pre-opt-in query, so synthesis is unchanged until
+// the operator enables exclusion (safe additive activation).
+func buildSynthesisClusterQuery(excludeLowEvergreen bool) string {
+	return `
+		WITH topic_groups AS (
+			SELECT t.id as topic_id, t.name,
+			       array_agg(e.src_id) as artifact_ids,
+			       COUNT(DISTINCT a.source_id) as source_count
+			FROM edges e
+			JOIN topics t ON t.id = e.dst_id AND e.dst_type = 'topic'
+			JOIN artifacts a ON a.id = e.src_id
+			WHERE e.edge_type = 'BELONGS_TO' AND e.src_type = 'artifact'` +
+		evergreen.PoolExclusionSQLPredicate("a", excludeLowEvergreen) + `
+			GROUP BY t.id, t.name
+			HAVING COUNT(*) >= 3 AND COUNT(DISTINCT a.source_id) >= 2
+		)
+		SELECT topic_id, name, artifact_ids, source_count FROM topic_groups
+		ORDER BY array_length(artifact_ids, 1) DESC
+		LIMIT $1
+	`
+}
 
 // RunSynthesis detects cross-domain clusters and generates insights.
 func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
@@ -19,22 +54,7 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 
 	// Find clusters: artifacts sharing topics from different sources (cross-domain).
 	// R-301 requires clusters span multiple source_ids (email + article + video = different domains).
-	rows, err := e.Pool.Query(ctx, `
-		WITH topic_groups AS (
-			SELECT t.id as topic_id, t.name,
-			       array_agg(e.src_id) as artifact_ids,
-			       COUNT(DISTINCT a.source_id) as source_count
-			FROM edges e
-			JOIN topics t ON t.id = e.dst_id AND e.dst_type = 'topic'
-			JOIN artifacts a ON a.id = e.src_id
-			WHERE e.edge_type = 'BELONGS_TO' AND e.src_type = 'artifact'
-			GROUP BY t.id, t.name
-			HAVING COUNT(*) >= 3 AND COUNT(DISTINCT a.source_id) >= 2
-		)
-		SELECT topic_id, name, artifact_ids, source_count FROM topic_groups
-		ORDER BY array_length(artifact_ids, 1) DESC
-		LIMIT $1
-	`, maxSynthesisTopicGroups)
+	rows, err := e.Pool.Query(ctx, buildSynthesisClusterQuery(e.synthesisExcludesLowEvergreen), maxSynthesisTopicGroups)
 	if err != nil {
 		return nil, fmt.Errorf("query clusters: %w", err)
 	}

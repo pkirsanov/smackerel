@@ -904,6 +904,11 @@ func setRequiredEnv(t *testing.T) {
 	// Spec 061 design §18.3 — external-provider URL injection seam.
 	t.Setenv("ASSISTANT_SKILLS_WEATHER_GEOCODE_URL", "https://geocoding-api.open-meteo.com/v1/search")
 	t.Setenv("ASSISTANT_SKILLS_WEATHER_FORECAST_URL", "https://api.open-meteo.com/v1/forecast")
+	// Spec 094 — rich-forecast knobs (REQUIRED, no fallback default).
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS", "10")
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT", "celsius")
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT", "kmh")
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT", "mm")
 	t.Setenv("ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED", "false")
 	t.Setenv("ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT", "5m")
 	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED", "true")
@@ -1090,6 +1095,25 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("LEGACY_RETIREMENT_THRESHOLD_EVALUATOR_INTERVAL_SECONDS", "300")
 	t.Setenv("LEGACY_RETIREMENT_OBSERVATION_CRON_EXPR", "0 4 * * *")
 	t.Setenv("LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAILY_INVOCATIONS", "100")
+
+	// Spec 095 SCOPE-01 — Retrieval-Strategy Routing + Freshness-Aware
+	// Retrieval SST. Defaults mirror config/smackerel.yaml so unrelated
+	// tests Load() cleanly; dedicated retrieval_test.go cases exercise the
+	// per-field fail-loud paths. Validation is unconditional (no Enabled
+	// short-circuit) so these MUST be present on every Load().
+	t.Setenv("RETRIEVAL_ROUTING_ENABLED", "true")
+	t.Setenv("RETRIEVAL_ROUTING_INTENT_CONFIDENCE_THRESHOLD", "0.65")
+	t.Setenv("RETRIEVAL_ROUTING_STRATEGY_WHOLE_DOCUMENT_ENABLED", "true")
+	t.Setenv("RETRIEVAL_ROUTING_STRATEGY_STRUCTURED_AGGREGATE_ENABLED", "true")
+	t.Setenv("RETRIEVAL_ROUTING_STRATEGY_VAGUE_RECALL_ENABLED", "true")
+	t.Setenv("RETRIEVAL_ROUTING_CONTRACTS", `{"transcript":["whole_document_summary","vague_recall"],"meeting":["whole_document_summary","vague_recall"],"subscription":["aggregate_spend","vague_recall"],"expense":["aggregate_spend","vague_recall"],"bill":["aggregate_spend","vague_recall"],"place":["dossier","vague_recall"],"trip":["dossier","vague_recall"]}`)
+	t.Setenv("RETRIEVAL_EVERGREEN_ENABLED", "true")
+	t.Setenv("RETRIEVAL_EVERGREEN_JUDGMENT_SOURCE", "scenario")
+	t.Setenv("RETRIEVAL_EVERGREEN_CONFIDENCE_FLOOR", "0.60")
+	t.Setenv("RETRIEVAL_EVERGREEN_PER_TICK_BUDGET", "50")
+	t.Setenv("RETRIEVAL_EVERGREEN_DEDUP_WINDOW_DAYS", "7")
+	t.Setenv("RETRIEVAL_EVERGREEN_POOLS_SYNTHESIS_EXCLUDES_LOW_EVERGREEN", "true")
+	t.Setenv("RETRIEVAL_EVERGREEN_POOLS_DIGEST_EXCLUDES_LOW_EVERGREEN", "true")
 
 	// Spec 065 — assistant micro-tools SST.
 	setAllAssistantToolsKeys(t)
@@ -1909,6 +1933,12 @@ func TestExtractDatabasePassword_Shapes(t *testing.T) {
 		{"no-userinfo", "postgres://host/db", ""},
 		{"empty", "", ""},
 		{"no-scheme", "user:secret@host/db", ""},
+		// HARDEN-051-H1 adversarial pin: a malformed URL whose password
+		// carries an unencoded extra '@'. First-'@' (strings.Index)
+		// extraction MUST return the leading token so the FR-051-005
+		// dev-default gate fails closed. A regression to LastIndex would
+		// return "secret@extra" and FAIL this case.
+		{"multi-at", "postgres://" + "user" + ":" + "secret" + "@extra" + "@host/db", "secret"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

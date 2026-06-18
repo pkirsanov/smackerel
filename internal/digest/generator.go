@@ -16,6 +16,7 @@ import (
 	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/retrieval/evergreen"
 )
 
 // Generator assembles and generates daily digests.
@@ -32,11 +33,31 @@ type Generator struct {
 	// the agent bridge is available.
 	hospitalityEval   HospitalityEvaluator
 	hospitalityBounds HospitalityBounds
+
+	// digestExcludesLowEvergreen is the spec 095 SCOPE-08 pool-exclusion switch
+	// for the §12 digest candidate pool, sourced from the SST
+	// (retrieval.evergreen.pools.digest_excludes_low_evergreen) and injected by
+	// cmd/core via SetEvergreenPoolPolicy. Default false (zero value) ⇒ the
+	// digest candidate query is byte-for-byte unchanged until the operator opts
+	// in (safe additive activation). When true, persisted-ephemeral artifacts
+	// (evergreen_score < 0) are dropped from the digest candidate pool (R12); a
+	// NULL score is never excluded (Principle 9) and the artifact stays fully
+	// searchable on the §9.2 path (R13).
+	digestExcludesLowEvergreen bool
 }
 
 // NewGenerator creates a new digest generator.
 func NewGenerator(pool *pgxpool.Pool, nats *smacknats.Client, registry *connector.Registry) *Generator {
 	return &Generator{Pool: pool, NATS: nats, Registry: registry}
+}
+
+// SetEvergreenPoolPolicy injects the spec 095 SCOPE-08 SST pool-exclusion
+// policy. Only the digest switch is consulted by the digest generator (the
+// synthesis switch is honored by internal/intelligence). Called by cmd/core
+// wiring; when never called the zero value keeps the digest candidate pool
+// unchanged (safe additive activation).
+func (g *Generator) SetEvergreenPoolPolicy(p evergreen.PoolPolicy) {
+	g.digestExcludesLowEvergreen = p.DigestExcludesLowEvergreen
 }
 
 // SetHospitalityEvaluator injects the LLM-driven hospitality concern evaluator
@@ -306,13 +327,32 @@ func (g *Generator) getPendingActionItems(ctx context.Context) ([]ActionItem, er
 	return items, nil
 }
 
-func (g *Generator) getOvernightArtifacts(ctx context.Context) ([]ArtifactBrief, error) {
-	rows, err := g.Pool.Query(ctx, `
+// buildOvernightArtifactsQuery returns the §12 digest candidate-gathering query
+// (the overnight artifacts the daily digest summarizes, over the SINGLE
+// existing artifacts store — Principle 5).
+//
+// Spec 095 SCOPE-08: when excludeLowEvergreen is true (SST opt-in,
+// retrieval.evergreen.pools.digest_excludes_low_evergreen) the additive
+// evergreen.PoolExclusionSQLPredicate fragment drops persisted-ephemeral
+// candidates (evergreen_score < 0) from the digest pool (R12). A NULL score is
+// never excluded (Principle 9) and the exclusion is pool-eligibility only — the
+// §9.2 search/retrieval path is untouched, so an excluded artifact stays fully
+// searchable (R13). When false — the shipped default — the returned SQL is
+// byte-for-byte the pre-opt-in query, so the digest is unchanged until the
+// operator enables exclusion (safe additive activation). The artifacts table is
+// unaliased here, so the predicate uses the bare column name.
+func buildOvernightArtifactsQuery(excludeLowEvergreen bool) string {
+	return `
 		SELECT title, artifact_type FROM artifacts
-		WHERE created_at > NOW() - INTERVAL '24 hours'
+		WHERE created_at > NOW() - INTERVAL '24 hours'` +
+		evergreen.PoolExclusionSQLPredicate("", excludeLowEvergreen) + `
 		ORDER BY created_at DESC
 		LIMIT 20
-	`)
+	`
+}
+
+func (g *Generator) getOvernightArtifacts(ctx context.Context) ([]ArtifactBrief, error) {
+	rows, err := g.Pool.Query(ctx, buildOvernightArtifactsQuery(g.digestExcludesLowEvergreen))
 	if err != nil {
 		return nil, err
 	}

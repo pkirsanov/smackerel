@@ -234,6 +234,13 @@ func run() error {
 	// ⇒ seasonal detection disabled.
 	wireSeasonalConfig(svc.intEngine)
 
+	// Spec 095 SCOPE-07 / PKT-095-B — late-bind the production evergreen judge
+	// into the ingestion front-door scorer (built + injected into the connector
+	// publisher in buildCoreServices). Nil scorer (evergreen disabled) or nil
+	// bridge ⇒ no-op; ingestion keeps using the deterministic TierSignals
+	// fallback. Only wired when judgment_source=scenario.
+	wireEvergreenScorer(agentBridge, svc.evergreenScorer, cfg.Retrieval.Evergreen.JudgmentSource)
+
 	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
 	// run in webhook mode, register the POST handler on the existing
 	// chi router OUTSIDE bearer-auth (Telegram does not send our

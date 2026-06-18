@@ -1605,6 +1605,8 @@ flowchart TD
 | **Cross-domain** | "things related to that book about systems" | Find book → expand graph → related artifacts across types |
 | **Meta/self-knowledge** | "what am I spending on subscriptions" | Type filter (bill/subscription) + aggregate |
 
+> **Delivered (spec 095, `next` train):** the §9.2 pipeline above runs a single vector-similarity-first path for every query. Spec 095 adds **intent-routed retrieval strategies** over this same store — a `whole_document` path (fetch the full preserved artifact instead of top-k chunks) and a `structured_aggregate` path (exact SQL aggregate over the existing expenses/subscriptions/bills tables) — selected per query intent from a per-artifact-type retrieval contract, with today's vector path kept as the default and low-confidence fallback. **Delivered** — `internal/retrieval/routing/` ships the `RetrievalStrategyRouter` + the per-artifact-type `RetrievalContract` registry + the `whole_document`/`structured_aggregate`/`vague_recall` strategies, all unit-tested; the single-store invariant is enforced by `TestNoParallelStore`. The facade `retrieval_qa` call-site wiring is routed as PKT-095-A (the `internal/assistant/` substrate is read-only under spec 095); live-stack e2e is deferred to accel-tier (F-095-E2E-LIVE). See [`specs/095-retrieval-strategy-routing`](../specs/095-retrieval-strategy-routing/) and [`releases/v1/features.md`](releases/v1/features.md) (V7).
+
 ### 9.4 Result Formats
 
 **Single best result:**
@@ -1745,6 +1747,8 @@ relevance_score = (
 | Topic goes Archived | Move to archive view. Include in serendipity pool. |
 | Artifact not accessed in 180 days | Reduce relevance score. Eligible for serendipity resurface. |
 | User resurfaces archived topic | Boost back to Active. Log pattern ("user tends to return to X periodically"). |
+
+> **Delivered (spec 095, `next` train):** the lifecycle above decays topics **after the fact** via momentum scoring (§11.1). Spec 095 adds an **earlier** input — an evergreen-vs-ephemeral signal scored near the ingestion front door (`AssignTier`) — that routes low-evergreen, high-churn artifacts to aggressive decay and excludes them from the §10 synthesis and §12 digest candidate pools (such artifacts remain searchable). It **sharpens** this lifecycle; it does not replace momentum decay. **Delivered** — `internal/retrieval/evergreen/` (scenario-driven judgment + deterministic `TierSignals` fallback + synthesis/digest pool-eligibility) + the additive `internal/pipeline/AssignTierWithEvergreen` seam, all unit-tested; the ingest + synthesis/digest call-sites are routed as PKT-095-B/C. See [`specs/095-retrieval-strategy-routing`](../specs/095-retrieval-strategy-routing/) and [`releases/v1/features.md`](releases/v1/features.md) (V7).
 
 ---
 
@@ -2586,6 +2590,16 @@ gantt
 | 5.5 | Build serendipity engine (weekly archive resurface) |
 | 5.6 | Build energy/productivity pattern detection |
 | 5.7 | Build seasonal pattern detection (requires 6mo+ data) |
+
+### Forward-Looking — Planned Capabilities (`next` train)
+
+Beyond the delivered Phase 1–5 product surface, the following capability has been **delivered to its code + unit-test surface** — specced and hardened, then implemented over the single existing store with the request-path integration routed and live e2e deferred — on the `next` release train:
+
+| Capability | Owning spec | Status | Release surface |
+|------------|-------------|--------|-----------------|
+| **Retrieval-strategy routing + freshness-aware retrieval** — intent-routed retrieval strategies (`whole_document` + `structured_aggregate` + `vague_recall` default with low-confidence fallback), a per-artifact-type retrieval contract, and an ingestion-time evergreen-vs-ephemeral signal — all over the **single existing** pgvector + knowledge-graph store (Principle 5 — One Graph, Many Views) | [`specs/095-retrieval-strategy-routing`](../specs/095-retrieval-strategy-routing/) | ✅ Delivered — code + unit tests green (`internal/retrieval/**`); request-path integration routed (PKT-095-A/B/C); live e2e deferred (F-095-E2E-LIVE) | [`releases/v1/features.md`](releases/v1/features.md) (V7) |
+
+Spec 095's full-delivery run authored `internal/retrieval/**` (router + contract registry + the three strategies + evergreen signal + pool-eligibility), the fail-loud `retrieval.*` SST block, and the additive `internal/pipeline/AssignTierWithEvergreen` seam — all unit-tested green, with `TestNoParallelStore` proving no parallel store (Principle 5). The request-path call-sites into the `internal/assistant/` facade, `internal/pipeline` ingest, and `internal/intelligence` synthesis/digest builders are routed as PKT-095-A/B/C (read-only substrate under spec 095's change boundary); the 8 live-stack e2e scripts are deferred to accel-tier (F-095-E2E-LIVE). See the V7 release packet for the idea-to-scope mapping (not restated here).
 
 ---
 

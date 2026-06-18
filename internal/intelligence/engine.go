@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/retrieval/evergreen"
 )
 
 // maxSynthesisTopicGroups limits the number of cross-domain topic clusters
@@ -108,11 +109,31 @@ type Engine struct {
 	// (no hardcoded volume-ratio threshold fallback — the "is this YoY change a
 	// meaningful seasonal pattern?" judgment is the LLM's via seasonal.analyze).
 	seasonal *SeasonalConfig
+
+	// synthesisExcludesLowEvergreen is the spec 095 SCOPE-08 pool-exclusion
+	// switch for the §10 synthesis candidate pool, sourced from the SST
+	// (retrieval.evergreen.pools.synthesis_excludes_low_evergreen) and injected
+	// by cmd/core via SetEvergreenPoolPolicy. Default false (zero value) ⇒ the
+	// synthesis candidate query is byte-for-byte unchanged until the operator
+	// opts in (safe additive activation). When true, persisted-ephemeral
+	// artifacts (evergreen_score < 0) are dropped from the synthesis candidate
+	// pool (R12); a NULL score is never excluded (Principle 9) and the artifact
+	// stays fully searchable on the §9.2 path (R13).
+	synthesisExcludesLowEvergreen bool
 }
 
 // NewEngine creates a new intelligence engine.
 func NewEngine(pool *pgxpool.Pool, nats *smacknats.Client) *Engine {
 	return &Engine{Pool: pool, NATS: nats}
+}
+
+// SetEvergreenPoolPolicy injects the spec 095 SCOPE-08 SST pool-exclusion
+// policy. Only the synthesis switch is consulted by the intelligence engine
+// (the digest switch is honored by internal/digest). Called by cmd/core wiring;
+// when never called the zero value keeps the synthesis candidate pool unchanged
+// (safe additive activation).
+func (e *Engine) SetEvergreenPoolPolicy(p evergreen.PoolPolicy) {
+	e.synthesisExcludesLowEvergreen = p.SynthesisExcludesLowEvergreen
 }
 
 // SetCoolingConfig injects the LLM-driven relationship-cooling evaluator and
