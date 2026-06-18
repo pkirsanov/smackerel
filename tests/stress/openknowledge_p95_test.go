@@ -107,8 +107,9 @@ func TestOpenKnowledge_P95SLAUnderToolLoad(t *testing.T) {
 		MonthlyBudgetUSDRemaining:  1000.0,
 		PerUserMonthlyUSDRemaining: 1000.0,
 		CompactionThresholdRatio:   0.8,
-		CostFn:                     func(int) float64 { return 0 },
-		EnforcementMode:            string(citeback.EnforcementEnforce),
+		// Spec 096 SCOPE-05 — CostFn is now the model-aware seam.
+		CostFn:          func(string, int) (float64, error) { return 0, nil },
+		EnforcementMode: string(citeback.EnforcementEnforce),
 	}
 
 	latencies := make([]time.Duration, turns)

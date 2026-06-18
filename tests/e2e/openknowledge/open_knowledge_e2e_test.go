@@ -195,8 +195,9 @@ func baseCfg(mode citeback.EnforcementMode) agent.Config {
 		MonthlyBudgetUSDRemaining:  10.0,
 		PerUserMonthlyUSDRemaining: 10.0,
 		CompactionThresholdRatio:   0.8,
-		CostFn:                     func(int) float64 { return 0 },
-		EnforcementMode:            string(mode),
+		// Spec 096 SCOPE-05 — CostFn is now the model-aware seam.
+		CostFn:          func(string, int) (float64, error) { return 0, nil },
+		EnforcementMode: string(mode),
 	}
 }
 

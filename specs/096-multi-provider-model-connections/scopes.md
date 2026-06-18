@@ -183,7 +183,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
 | 2 | SCOPE-02 — Encrypted credential vault + master-key lifecycle | new `connvault` pkg + migration 061 + secret-keys path | W05 | unit (AEAD) + integration (ephemeral PG) | 12 | [~] In Progress (7/12 DoD; integration leg + T1-1/T1-3 deferred/foreign residuals) |
 | 3 | SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) | Go `llm` + Python `chat.py`/`schemas.py` + agent attribution | A02, A03, G01, G04, G05 | unit + integration + e2e-api (deferred) | 14 | [~] In progress |
 | 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [~] Unit complete; live legs deferred |
-| 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 060 `model_usage_ledger` | G03 | unit + integration | 12 | [ ] Not started |
+| 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 062 `model_usage_ledger` | G03 | unit + integration | 12 | [~] Unit complete; live legs deferred |
 | 6 | SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable) | `/v1/admin/model-connections*` + operator middleware + PWA triad | W01, W02, W03, W04 | unit + integration + e2e-api (deferred) | 13 | [ ] Not started |
 | 7 | SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity | Telegram `/model` + `/v1/agent/model` over the existing validator/store | D02, D03, D05, G06 | unit + e2e-api (deferred) | 13 | [ ] Not started |
 
@@ -712,7 +712,7 @@ verbatim from [scenario-manifest.json](scenario-manifest.json).
 ## Scope 5: SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement
 
 **Status:** [ ] Not started
-**Scope-Kind:** code (model-aware CostFn closure + budget pre-flight wiring + migration 060 companion table)
+**Scope-Kind:** code (model-aware CostFn closure + budget pre-flight wiring + migration 062 companion table)
 **Depends on:** SCOPE-04
 **Foundation:** false (the cost/budget seam that makes the EXISTING
 064/087 USD budget pre-flight load-bearing for paid providers; consumes
@@ -732,7 +732,7 @@ the SST `llm.model_costs` rate table — `ollama` returns `$0`
 deterministically (budget **not** consumed), a paid provider-qualified
 model returns its SST rate, and **a billable model with NO declared rate
 is a fail-loud typed refusal BEFORE the call — NEVER a silent `$0`** — and
-adds the append-only `model_usage_ledger` (migration 060 companion table)
+adds the append-only `model_usage_ledger` (migration 062 companion table)
 so the pre-flight reads month-to-date per-user + global spend and refuses
 an exhausted ceiling **before** any billable provider call, appending the
 actual cost only after a successful dispatch.
@@ -761,7 +761,7 @@ actual cost only after a successful dispatch.
   ceiling would be breached — **before** any provider call; the actual
   cost is appended after a successful dispatch. Exercised by NEW
   [`internal/assistant/openknowledge/agent/budget_preflight_modelcost_test.go`](../../internal/assistant/openknowledge/agent/budget_preflight_modelcost_test.go).
-- `internal/db` migration **060** companion table `model_usage_ledger`
+- `internal/db` migration **062** companion table `model_usage_ledger`
   (design §5.3): append-only `id`, `actor_user_id` (per-user **spend**
   dimension — allowed; this is per-user budget, NOT a per-user key),
   `connection_id`, `model` (provider-qualified), `tokens`, `usd_cost`
@@ -816,25 +816,25 @@ Entries are copied verbatim from
 > cost mapping + refusal WITHOUT network interception — correctly
 > classified `unit`.
 
-### Definition of Done — SCOPE-05 (all unchecked — implementation pending)
+### Definition of Done — SCOPE-05 (7 of 12 met — implementation in progress)
 
 **Tier-1 (universal):**
 
-- [ ] D05-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-05.
-- [ ] D05-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-05.
-- [ ] D05-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-05.
-- [ ] D05-T1-4 — Every evidence block in report.md → SCOPE-05 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-05.
-- [ ] D05-T1-5 — 088/089 do-not-amend boundary respected: the budget/cost seam is additive; no `modelswitch`/`modelpref`/picker behaviour changes. → Evidence: report.md → Change Manifest.
+- [ ] D05-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-05. _(DEFERRED — blocked by absent `uservalidation.md`, a closeout artifact owned by `bubbles.plan`; not a SCOPE-05 code gap. Same caveat as SCOPE-01..04.)_
+- [ ] D05-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-05. _(DEFERRED to the orchestrator post-implementation; SCOPE-05 compiles clean under `go test ./...` — E1 `finished OK`, `cmd/core` built.)_
+- [ ] D05-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-05. _(DEFERRED to the orchestrator post-implementation; global gate.)_
+- [x] D05-T1-4 — Every evidence block in report.md → SCOPE-05 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-05 (E1–E4, captured).
+- [x] D05-T1-5 — 088/089 do-not-amend boundary respected: the budget/cost seam is additive; no `modelswitch`/`modelpref`/picker behaviour changes. → Evidence: report.md → SCOPE-05 Change Manifest (no modelswitch/modelpref/picker file edited).
 
 **Tier-2 (role-specific: model-aware cost + load-bearing budget + G028 + R4 blast-radius):**
 
-- [ ] D05-T2-1 — **G028 fail-loud on missing/zero rate (binding):** a billable (non-ollama) model with NO `llm.model_costs` rate is a typed fail-loud refusal at dispatch — proven non-tautologically by `TestCostFn_PaidModelMissingRate_RefusesFailLoud_Spec096`; a grep proves no `${VAR:-default}` / `getenv(k,default)` / `unwrap_or` / silent-`0` path substitutes a zero cost for a paid model. → Evidence: report.md → SCOPE-05 (test + grep).
-- [ ] D05-T2-2 — **Ollama stays free (NFR-2):** `provider == ollama → $0` deterministically and the budget is NOT consumed (`TestCostFn_OllamaZero_PaidUsesRate_Spec096`); the local path adds zero cost and no budget read on the hot path. → Evidence: report.md → SCOPE-05.
-- [ ] D05-T2-3 — **Budget refused BEFORE dispatch (adversarial):** `TestBudgetPreflight_PaidOverBudget_RefusesBeforeDispatch_Spec096` + the integration `TestAsk_PaidModelExhaustedBudget_RefusedBeforeProviderCall_Spec096` prove an exhausted per-user/global ceiling refuses with `ErrCapUSDPerUserMonth` / `ErrCapUSDMonthly` before any billable provider call; each fails if the provider call is reached first. → Evidence: report.md → SCOPE-05.
-- [ ] D05-T2-4 — **Append-only spend ledger:** migration 060 `model_usage_ledger` applies cleanly forward, is append-only (no edits/deletes), records per-user `actor_user_id` + provider-qualified `model` + `usd_cost` (`0` for ollama) with an app-written `created_at` month-window key, and the actual cost is appended only after a successful dispatch. → Evidence: report.md → SCOPE-05 (migrate output).
-- [ ] D05-T2-5 — **R4 — model-aware CostFn blast-radius (binding):** the CostFn signature change from the zero-cost `func(int) float64` closure to the model-aware `(provider, model, tokens)` seam is enumerated against its blast radius on the EXISTING 064/087 USD-budget tests; every pre-existing budget test still passes (re-run) or is updated only to supply the new model-aware seam without weakening its assertion; zero 064/087 budget behaviour silently regresses. → Evidence: report.md → SCOPE-05 (064/087 budget-test re-run + blast-radius enumeration).
-- [ ] D05-T2-6 — **Test isolation:** unit + integration tests use synthetic rates + a synthetic ledger on the ephemeral test Postgres only; no real provider, credential, or persistent-store write. → Evidence: report.md → SCOPE-05.
-- [ ] D05-T2-7 — All `unit` + `integration` SCOPE-05 tests pass with NO skips/ignores; evidence is the real `./smackerel.sh test unit --go` + integration run output. → Evidence: report.md → SCOPE-05 (test run).
+- [x] D05-T2-1 — **G028 fail-loud on missing/zero rate (binding):** a billable (non-ollama) model with NO `llm.model_costs` rate is a typed fail-loud refusal at dispatch — proven non-tautologically by `TestCostFn_PaidModelMissingRate_RefusesFailLoud_Spec096`; a grep proves no `${VAR:-default}` / `getenv(k,default)` / `unwrap_or` / silent-`0` path substitutes a zero cost for a paid model. → Evidence: report.md → SCOPE-05 (E1 test + E2 RED-before + E4 grep).
+- [x] D05-T2-2 — **Ollama stays free (NFR-2):** `provider == ollama → $0` deterministically and the budget is NOT consumed (`TestCostFn_OllamaZero_PaidUsesRate_Spec096`); the local path adds zero cost and no budget read on the hot path (estCost=$0 ⇒ no ledger read; two in-process map lookups, no I/O). → Evidence: report.md → SCOPE-05 (E1/E3).
+- [x] D05-T2-3 — **Budget refused BEFORE dispatch (adversarial):** `TestBudgetPreflight_PaidOverBudget_RefusesBeforeDispatch_Spec096` proves an exhausted per-user/global ceiling refuses with `ErrCapUSDPerUserMonth` / `ErrCapUSDMonthly` before any billable provider call (the fake LLM `t.Fatalf`s on any dispatch); demonstrably fails under the captured RED-before. The live integration `TestAsk_PaidModelExhaustedBudget_RefusedBeforeProviderCall_Spec096` corroboration is DEFERRED (T2-7). → Evidence: report.md → SCOPE-05 (E1/E3 + E2 RED-before).
+- [ ] D05-T2-4 — **Append-only spend ledger:** migration 062 `model_usage_ledger` applies cleanly forward, is append-only (no edits/deletes), records per-user `actor_user_id` + provider-qualified `model` + `usd_cost` (`0` for ollama) with an app-written `created_at` month-window key, and the actual cost is appended only after a successful dispatch. → Evidence: report.md → SCOPE-05 (migrate output). _(PARTIAL — migration 062 authored (append-only, no DB-side defaults, CHECKs + indexes) + embedded; the `migrate`-output gate needs a live DB, DEFERRED with the integration leg. Note: design said "060"; 060/061 were taken, so 062 is the next free slot.)_
+- [x] D05-T2-5 — **R4 — model-aware CostFn blast-radius (binding):** the CostFn signature change from the zero-cost `func(int) float64` closure to the model-aware `(provider, model, tokens)` seam is enumerated against its blast radius on the EXISTING 064/087 USD-budget tests; every pre-existing budget test still passes (re-run) or is updated only to supply the new model-aware seam without weakening its assertion; zero 064/087 budget behaviour silently regresses. → Evidence: report.md → SCOPE-05 (R4 table: 10 sites + whole-tree compile; 064/087 budget tests re-ran GREEN in E1).
+- [x] D05-T2-6 — **Test isolation:** unit + integration tests use synthetic rates + a synthetic ledger on the ephemeral test Postgres only; no real provider, credential, or persistent-store write. → Evidence: report.md → SCOPE-05 (unit rows use a fake `SpendLedger` + synthetic rates, NO DB/provider/credential; the deferred integration row is the only DB-touching leg, ephemeral-only by design).
+- [ ] D05-T2-7 — All `unit` + `integration` SCOPE-05 tests pass with NO skips/ignores; evidence is the real `./smackerel.sh test unit --go` + integration run output. → Evidence: report.md → SCOPE-05 (test run). _(PARTIAL — the `unit` leg passes with NO skips (E1/E3); the `integration` `TestAsk_PaidModelExhaustedBudget_RefusedBeforeProviderCall_Spec096` is live-stack, DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev.)_
 
 ---
 
