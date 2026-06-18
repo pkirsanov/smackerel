@@ -55,3 +55,183 @@ bubbles_pruned_find() {
        -o -name coverage -o -name .bubbles-cache -o -name .next -o -name .gradle \) -prune \) \
     -o \( "$@" \)
 }
+
+# =============================================================================
+# Control-plane policy activation (control-plane policy-activation fix)
+# =============================================================================
+# resolve_effective_policy / resolve_effective_policy_source ACTIVATE the
+# Single-Source-of-Truth control-plane defaults so the v3 gates G055-G060 are no
+# longer INERT when a spec omits policySnapshot. Before this, the control-plane
+# checks sourced effective policy ONLY from each spec's state.json policySnapshot,
+# so a missing snapshot left the SST defaults (grill/tdd/lockdown/regression/...)
+# declared-but-unenforced. Precedence (highest first):
+#   1. state.json.policySnapshot.<section>.<key|mode|value>   (per-spec snapshot)
+#   2. <repo_root>/.specify/memory/bubbles.config.json defaults.<section>.<key>  (SST)
+#   3. <framework_default>                                     (hardcoded fallback)
+# The repo config file being ABSENT is handled gracefully (falls through to the
+# framework default). python3 is required for the JSON precedence; without it the
+# resolver falls back to the framework default (never silently skips).
+
+# Internal: print either the resolved value ('value') or its provenance source
+# ('source': snapshot | repo-default | framework-default) for one policy key.
+_resolve_effective_policy_field() {
+  local field="$1" state_file="$2" section="$3" key="$4" framework_default="$5"
+  local repo_root="${6:-}"
+  local config_file=""
+  local sf_dir=""
+
+  if [[ -z "$repo_root" ]]; then
+    if [[ -n "$state_file" ]]; then
+      sf_dir="$(cd "$(dirname "$state_file")" 2>/dev/null && pwd -P)" || sf_dir=""
+    fi
+    if [[ -n "$sf_dir" ]] && command -v git >/dev/null 2>&1 \
+      && git -C "$sf_dir" rev-parse --show-toplevel >/dev/null 2>&1; then
+      repo_root="$(git -C "$sf_dir" rev-parse --show-toplevel 2>/dev/null)" || repo_root=""
+    fi
+    if [[ -z "$repo_root" ]]; then
+      if [[ -n "$sf_dir" ]]; then
+        repo_root="$sf_dir"
+      else
+        repo_root="$PWD"
+      fi
+    fi
+  fi
+  config_file="$repo_root/.specify/memory/bubbles.config.json"
+
+  if command -v python3 >/dev/null 2>&1; then
+    if python3 -c '
+import json, sys
+
+state_file, config_file, section, key, default, field = (
+    sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
+
+
+def load(path):
+    try:
+        with open(path) as handle:
+            return json.load(handle)
+    except Exception:
+        return {}
+
+
+def nonempty(value):
+    return value is not None and str(value).strip() != ""
+
+
+value = None
+source = None
+
+snapshot = load(state_file).get("policySnapshot") or {}
+section_snap = snapshot.get(section) if isinstance(snapshot, dict) else None
+if isinstance(section_snap, dict):
+    for candidate in (key, "mode", "value"):
+        if candidate in section_snap and nonempty(section_snap.get(candidate)):
+            value = section_snap.get(candidate)
+            source = "snapshot"
+            break
+
+if value is None:
+    defaults = load(config_file).get("defaults") or {}
+    section_cfg = defaults.get(section) if isinstance(defaults, dict) else None
+    if isinstance(section_cfg, dict) and key in section_cfg and nonempty(section_cfg.get(key)):
+        value = section_cfg.get(key)
+        source = "repo-default"
+
+if value is None:
+    value = default
+    source = "framework-default"
+
+if field == "source":
+    print(source)
+elif isinstance(value, bool):
+    print("true" if value else "false")
+else:
+    print(str(value))
+' "$state_file" "$config_file" "$section" "$key" "$framework_default" "$field" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  # No python3 (or python failed): fall back to the framework default — never a
+  # silent skip.
+  if [[ "$field" == "source" ]]; then
+    printf '%s\n' "framework-default"
+  else
+    printf '%s\n' "$framework_default"
+  fi
+}
+
+# resolve_effective_policy <state_file> <section> <key> <framework_default> [repo_root]
+# Echoes the effective value for the policy key using the snapshot → SST config →
+# framework-default precedence chain.
+resolve_effective_policy() {
+  _resolve_effective_policy_field "value" "$@"
+}
+
+# resolve_effective_policy_source <state_file> <section> <key> <framework_default> [repo_root]
+# Echoes the provenance of the resolved value: snapshot | repo-default | framework-default.
+resolve_effective_policy_source() {
+  _resolve_effective_policy_field "source" "$@"
+}
+
+# policy_snapshot_present <state_file>
+# Returns 0 when state.json carries a policySnapshot object, 1 otherwise.
+policy_snapshot_present() {
+  local state_file="$1"
+  [[ -f "$state_file" ]] || return 1
+  grep -qE '"policySnapshot"[[:space:]]*:[[:space:]]*\{' "$state_file"
+}
+
+# policy_spec_grandfathered <state_file> <cutoff_YYYY-MM-DD>
+# Grandfather clause for the newly-activated control-plane enforcement: a spec
+# that carries NO policySnapshot AND whose createdAt is missing or strictly
+# before <cutoff> is exempt (returns 0). A spec that DOES carry a policySnapshot,
+# or whose createdAt is on/after the cutoff, gets full enforcement (returns 1).
+# Mirrors the G094 createdAt comparison in capability-foundation-guard.sh.
+policy_spec_grandfathered() {
+  local state_file="$1" cutoff="$2"
+  # A spec that carries policySnapshot always gets full enforcement.
+  if policy_snapshot_present "$state_file"; then
+    return 1
+  fi
+  local created_at="" created_date=""
+  created_at="$(grep -Eo '"createdAt"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" 2>/dev/null \
+    | head -n1 | sed -E 's/.*"createdAt"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true)"
+  created_date="${created_at:0:10}"
+  # Missing createdAt → grandfathered (mirrors G094 missing-createdAt handling).
+  if [[ -z "$created_date" ]]; then
+    return 0
+  fi
+  # Malformed createdAt → fail closed to enforcement (NOT grandfathered).
+  if [[ ! "$created_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    return 1
+  fi
+  # createdAt strictly before the cutoff → grandfathered.
+  if [[ "$created_date" < "$cutoff" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+# detect_red_green_ordering <file...>
+# Layer-2 G060 evidence integrity. Returns 0 only when a RED-stage (failing-proof)
+# marker appears on an EARLIER line than the FIRST GREEN-stage (passing-proof)
+# marker within the SAME file — proving red-was-captured-before-green ordering.
+# The literal word 'tdd'/'scenario-first' alone never matches (it is a rubber
+# stamp, not ordering evidence). Returns 1 when no such ordering exists.
+detect_red_green_ordering() {
+  local red_pattern green_pattern f red_line green_line
+  red_pattern='red[ -]?stage|(^|[^a-z])red:|failing targeted|failing proof|failing test first|required red-stage|test fails|test result:[[:space:]]*failed|--- fail|[1-9][0-9]*[[:space:]]+(tests?[[:space:]]+)?failed'
+  green_pattern='green[ -]?stage|(^|[^a-z])green:|now passes|passing|test result:[[:space:]]*ok|0[[:space:]]+failed|--- pass|[1-9][0-9]*[[:space:]]+(tests?[[:space:]]+)?passed'
+  for f in "$@"; do
+    [[ -f "$f" ]] || continue
+    red_line="$(grep -niE "$red_pattern" "$f" 2>/dev/null | head -n1 | cut -d: -f1 || true)"
+    [[ -n "$red_line" ]] || continue
+    green_line="$(grep -niE "$green_pattern" "$f" 2>/dev/null | head -n1 | cut -d: -f1 || true)"
+    [[ -n "$green_line" ]] || continue
+    if [[ "$red_line" =~ ^[0-9]+$ && "$green_line" =~ ^[0-9]+$ && "$red_line" -lt "$green_line" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
