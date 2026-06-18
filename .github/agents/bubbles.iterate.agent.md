@@ -653,7 +653,7 @@ When the selected mode's `phaseOrder` includes `bootstrap`:
    - Inside every `Definition of Done` section, ALL list items MUST use checkbox format: `- [ ] Description` or `- [x] Description`.
    - If ANY line uses `- (deferred) ...`, `- ~~...~~`, `- *text*`, or `- Text without checkbox` → this is format manipulation to bypass Check 4. Restore the checkbox format and implement the work.
 
-4. **Verify ZERO deferral language in scope artifacts (Gate G036):**
+4. **Verify ZERO deferral language in scope artifacts (Gate G040):**
    ```bash
    grep -ciE 'deferred|defer to|future scope|future work|follow-up|followup|out of scope|not in scope|will address later|address later|revisit later|separate ticket|separate issue|punt|punted|postpone|postponed|skip for now|not implemented yet|not yet implemented|placeholder|temporary workaround' {FEATURE_DIR}/scopes.md
    ```

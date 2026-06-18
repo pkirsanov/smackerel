@@ -17,6 +17,12 @@
 # Check 3G (framework ownership / BUG-001 timeout) intentionally stays inline.
 # =============================================================================
 
+# Control-plane policy-activation fix: the cutoff date for the grandfather clause
+# on newly-activated G060 enforcement. Specs that carry no policySnapshot and whose
+# createdAt predates this date are not retro-broken (see policy_spec_grandfathered
+# in guard-lib.sh). Mirrors the G094 grandfather pattern.
+control_plane_policy_cutoff="2026-06-18"
+
 # =============================================================================
 # CHECK 3A: Policy Snapshot Provenance (Gate G055)
 # =============================================================================
@@ -45,7 +51,18 @@ if grep -qE '"policySnapshot"[[:space:]]*:[[:space:]]*\{' "$state_file"; then
     pass "policySnapshot covers the control-plane defaults required for this run"
   fi
 else
-  fail "state.json missing policySnapshot — control-plane provenance cannot be verified (Gate G055)"
+  # Control-plane policy-activation fix: a missing policySnapshot is no longer a
+  # hard fail. The repo SST config (.specify/memory/bubbles.config.json) IS the
+  # provenance of record when a spec carries no per-spec snapshot, so resolve
+  # provenance from it and PASS with an INFO note. Only a missing snapshot AND a
+  # missing SST config leaves provenance genuinely unverifiable.
+  if [[ -f "$guard_repo_root/.specify/memory/bubbles.config.json" ]]; then
+    pass "policySnapshot absent — control-plane provenance resolved from the repo SST config (.specify/memory/bubbles.config.json)"
+    cp_grill_source="$(resolve_effective_policy_source "$state_file" grill mode off "$guard_repo_root")"
+    info "[G055] Effective control-plane provenance is 'repo-default' — the SST config is the provenance of record when a spec omits policySnapshot (e.g. grill source=${cp_grill_source})"
+  else
+    fail "state.json missing policySnapshot AND no repo SST config at .specify/memory/bubbles.config.json — control-plane provenance cannot be verified (Gate G055)"
+  fi
 fi
 echo ""
 
@@ -146,6 +163,12 @@ echo ""
 # CHECK 3D: Lockdown and regression contract protection (G058/G059)
 # =============================================================================
 echo "--- Check 3D: Lockdown And Regression Contracts (G058/G059) ---"
+# Control-plane policy activation: anchor the regression-immutability reasoning to
+# the SST by resolving it through the snapshot -> SST config -> framework-default
+# chain (the lockdown/regression triggers below still key off scenario-manifest
+# content; this only surfaces the effective default so it is no longer inert).
+cp_regression_immutability="$(resolve_effective_policy "$state_file" regression immutability protected-scenarios "$guard_repo_root")"
+info "[G058/G059] Effective regression immutability policy: ${cp_regression_immutability} (resolved via policySnapshot -> SST config -> framework default)"
 locked_scenario_count=0
 changed_contract_count=0
 if [[ -f "$scenario_manifest_file" ]]; then
@@ -199,21 +222,17 @@ echo ""
 # CHECK 3E: Scenario-first TDD evidence (Gate G060)
 # =============================================================================
 echo "--- Check 3E: Scenario-first TDD Evidence (Gate G060) ---"
-effective_tdd_mode="$({
-  python3 -c "
-import json
-try:
-    with open('$state_file') as f:
-        data = json.load(f)
-    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
-    print(tdd.get('mode', '') or '')
-except Exception:
-    print('')
-" 2>/dev/null
-} || echo "")"
+# Layer 1 (control-plane policy activation): resolve the effective TDD mode from
+# the per-spec policySnapshot, then the repo SST config defaults, then the
+# framework default (scenario-first). Before this fix the mode was read ONLY from
+# policySnapshot.tdd.mode, so a missing snapshot (empirically ~93% of downstream
+# specs) left the SST default INERT and this gate silently skipped.
+effective_tdd_mode="$(resolve_effective_policy "$state_file" tdd mode scenario-first "$guard_repo_root")"
+effective_tdd_source="$(resolve_effective_policy_source "$state_file" tdd mode scenario-first "$guard_repo_root")"
 
 if [[ -z "$effective_tdd_mode" && ( "$state_workflow_mode" == "bugfix-fastlane" || "$state_workflow_mode" == "chaos-hardening" ) ]]; then
   effective_tdd_mode="scenario-first"
+  effective_tdd_source="workflow-forced"
 fi
 
 # Per-packet exemption support (per upstream fix proposal — artifact-only fastlanes)
@@ -283,19 +302,21 @@ if [[ "$effective_tdd_mode" == "scenario-first" ]]; then
       fi
     fi
   else
-    tdd_evidence_found="false"
-    for artifact_path in "${scope_files[@]}" "${report_files[@]}"; do
-      [[ -f "$artifact_path" ]] || continue
-      if grep -qiE 'red[[:space:]-]*green|failing targeted|red evidence|green evidence|scenario-first|tdd' "$artifact_path"; then
-        tdd_evidence_found="true"
-        break
-      fi
-    done
-
-    if [[ "$tdd_evidence_found" == "true" ]]; then
-      pass "Scenario-first TDD evidence is recorded in the scope/report artifacts"
+    # Layer 2 (evidence integrity): require a real RED->GREEN ordering, not a
+    # keyword rubber-stamp. The previous grep passed merely because a report or
+    # template contained the word "tdd"/"scenario-first" — proving nothing about
+    # actual red-before-green ordering. detect_red_green_ordering passes ONLY when
+    # a failing-proof (RED) marker precedes a passing-proof (GREEN) marker in the
+    # SAME report.
+    if detect_red_green_ordering "${scope_files[@]}" "${report_files[@]}"; then
+      pass "Scenario-first TDD red→green ordering is recorded in the scope/report artifacts (mode source: ${effective_tdd_source:-framework-default})"
+    elif policy_spec_grandfathered "$state_file" "$control_plane_policy_cutoff"; then
+      # Grandfather clause: a historical spec (createdAt before the cutoff, or
+      # missing) that never carried a policySnapshot is NOT retro-broken by the
+      # newly-activated enforcement — downgrade to INFO instead of a blocking fail.
+      info "[G060-GRANDFATHERED] Effective TDD mode is scenario-first (source: ${effective_tdd_source:-repo-default}) but this spec predates the ${control_plane_policy_cutoff} activation cutoff and carries no policySnapshot — red→green ordering not enforced retroactively (new specs and snapshot-bearing specs get full enforcement)"
     else
-      fail "Effective TDD mode is scenario-first but no red→green evidence markers were found in scope/report artifacts (Gate G060)"
+      fail "Effective TDD mode is scenario-first (source: ${effective_tdd_source:-repo-default}) but no RED→GREEN ordering was found in the scope/report artifacts — a failing-proof (red) marker MUST appear on an earlier line than a passing-proof (green) marker in the same report; the word 'tdd' alone is not evidence (Gate G060)"
     fi
   fi
 else
