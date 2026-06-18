@@ -388,6 +388,7 @@ SHELL_SECRET_KEYS=(
   KEEP_GOOGLE_APP_PASSWORD
   CARD_REWARDS_GCAL_CREDENTIALS
   WEB_REGISTRATION_INVITE_TOKEN
+  LLM_PROVIDER_SECRET_MASTER_KEY
 )
 
 # Spec 052 FR-052-002 — production-class target mirror.
@@ -654,6 +655,38 @@ LLM_API_KEY="$(required_value llm.api_key)"
 OLLAMA_URL="$(required_value llm.ollama_url)"
 OLLAMA_MODEL="$(tier_interactive_model_or_override ollama_model)"
 OLLAMA_VISION_MODEL="$(tier_interactive_model_or_override ollama_vision_model)"
+
+# Spec 096 SCOPE-01 — Multi-Provider Model Connection registry. The
+# llm.connections[] list is carried as ONE compact JSON array
+# (LLM_CONNECTIONS_JSON) where each connection's per-kind `params` and
+# curated `models` are inline-JSON STRINGS the Go loader re-parses
+# (internal/config/model_connections.go). yaml_get_json walks the YAML
+# list-of-flat-objects and emits the array verbatim; an empty/absent
+# registry yields "[]" (a valid empty registry, NOT a hidden default —
+# the Go validator enforces the per-connection + discovery rules). The
+# discovery bounds are REQUIRED scalars (> 0, fail-loud, no default).
+# model_costs mirrors the ML_MODEL_MEMORY_PROFILES_JSON SST-JSON
+# precedent (a block-style list of flat objects).
+LLM_CONNECTIONS_JSON="$(yaml_get_json llm.connections)"
+if [[ -z "$LLM_CONNECTIONS_JSON" ]]; then
+  LLM_CONNECTIONS_JSON="[]"
+fi
+LLM_DISCOVERY_CACHE_TTL_MS="$(required_value llm.discovery.cache_ttl_ms)"
+LLM_DISCOVERY_PER_PROVIDER_TIMEOUT_MS="$(required_value llm.discovery.per_provider_timeout_ms)"
+LLM_MODEL_COSTS_JSON="$(yaml_get_json llm.model_costs)"
+if [[ -z "$LLM_MODEL_COSTS_JSON" ]]; then
+  LLM_MODEL_COSTS_JSON="[]"
+fi
+# Spec 096 SCOPE-01 — connvault master key (SCOPE-02 consumer). Managed
+# secret: production-class targets emit the placeholder for the knb adapter
+# to substitute; dev/test read the empty yaml value. No ${VAR:-default}
+# fallback (smackerel-no-defaults). Mirrors the AUTH_AT_REST_HASHING_KEY
+# placeholder block.
+if is_production_class_target "$TARGET_ENV" && in_secret_keys "LLM_PROVIDER_SECRET_MASTER_KEY"; then
+  LLM_PROVIDER_SECRET_MASTER_KEY="__SECRET_PLACEHOLDER__LLM_PROVIDER_SECRET_MASTER_KEY__"
+else
+  LLM_PROVIDER_SECRET_MASTER_KEY="$(yaml_get llm.provider_secret_master_key 2>/dev/null)" || LLM_PROVIDER_SECRET_MASTER_KEY=""
+fi
 # Spec 061 SCOPE-06c — retrieval-qa-v1 budget resolves from tier matrix.
 RETRIEVAL_QA_TIMEOUT_MS="$TIER_INTERACTIVE_RETRIEVAL_QA_TIMEOUT_MS"
 RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$TIER_INTERACTIVE_RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS"
@@ -1810,6 +1843,11 @@ COMPOSE_WAIT_TIMEOUT_S=${COMPOSE_WAIT_TIMEOUT_S}
 OLLAMA_URL=${OLLAMA_URL}
 OLLAMA_MODEL=${OLLAMA_MODEL}
 OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL}
+LLM_CONNECTIONS_JSON=${LLM_CONNECTIONS_JSON}
+LLM_DISCOVERY_CACHE_TTL_MS=${LLM_DISCOVERY_CACHE_TTL_MS}
+LLM_DISCOVERY_PER_PROVIDER_TIMEOUT_MS=${LLM_DISCOVERY_PER_PROVIDER_TIMEOUT_MS}
+LLM_MODEL_COSTS_JSON=${LLM_MODEL_COSTS_JSON}
+LLM_PROVIDER_SECRET_MASTER_KEY=${LLM_PROVIDER_SECRET_MASTER_KEY}
 EMBEDDING_MODEL=${EMBEDDING_MODEL}
 DIGEST_CRON=${DIGEST_CRON}
 LOG_LEVEL=${LOG_LEVEL}
