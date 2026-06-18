@@ -47,6 +47,15 @@ var secretKeys = []string{
 	// HandleWebRegister (POST /v1/web/register) only; compared in constant
 	// time; never logged.
 	"WEB_REGISTRATION_INVITE_TOKEN",
+	// Spec 096 SCOPE-01 — multi-provider model-connection vault master key.
+	// AES-256-GCM master key for the SCOPE-02 connvault credential store
+	// (reversible, encrypted-at-rest provider secrets). REQUIRED iff a
+	// db-mode hosted connection is declared (an Ollama-only deployment adds
+	// no new secret); the Go core loads it fail-loud and never lets it out.
+	// Reversible-credential class (like CARD_REWARDS_GCAL_CREDENTIALS), NOT
+	// an argon2id verifier key. SCOPE-01 declares the manifest entry; the
+	// vault load + rotation land in SCOPE-02.
+	"LLM_PROVIDER_SECRET_MASTER_KEY",
 }
 
 // placeholderPrefix and placeholderSuffix bracket the deterministic,

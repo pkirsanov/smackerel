@@ -88,6 +88,130 @@ llm:
   ollama_reasoning_model: deepseek-r1:7b # Spec 045 BUG-045-001 default (4.75 GiB resident; fits 8G envelope)
   ollama_fast_model: gemma3:4b # Spec 045 BUG-045-001 default (4 GiB resident; fits 8G envelope)
 
+  # ───────────────────────────────────────────────────────────────────
+  # Spec 096 SCOPE-01 — Multi-Provider AI Model Connections (registry).
+  #
+  # The existing single-provider `llm.provider` block above is RETAINED
+  # untouched (it still feeds synthesis.py / drive_classify.py / the
+  # healthchecks). The registry below is ADDITIVE: it declares the closed,
+  # operator-global set of provider connections this deployment MAY use.
+  # An Ollama-only dev box keeps working byte-for-byte — only `local-ollama`
+  # is enabled; every hosted slot ships `enabled: false` with NO secret.
+  #
+  # SST source of truth → generated env (scripts/commands/config.sh) →
+  # internal/config/model_connections.go (closed-set fail-loud loader). NO
+  # defaults (Gate G028, smackerel-no-defaults): an unknown kind, a missing
+  # required per-kind param, a non-positive discovery bound, an env-mode
+  # secret absent from infrastructure.secret_keys, or an ENABLED non-ollama
+  # model with no model_costs entry aborts config-generation / startup with
+  # a NAMED error — never a silent default and never an Ollama fallback.
+  #
+  # Secret material is NEVER an inline plaintext value here. A db-mode secret
+  # is entered via the web admin surface and rides the encrypted vault
+  # (SCOPE-02); an env-mode secret rides the managed-secret
+  # infrastructure.secret_keys path. The registry carries only a
+  # secret_ref (mode + optional env_key), never a credential.
+  #
+  # WIRE SHAPE NOTE: `params` and `models` are compact inline-JSON STRINGS
+  # (single-quoted). The config generator's list-of-flat-objects YAML→JSON
+  # step carries them verbatim into LLM_CONNECTIONS_JSON; the Go loader
+  # re-parses them into the typed Params map / Models struct. Keep them on
+  # one line and single-quoted.
+  #
+  # Closed-set kinds: ollama | anthropic | openai | azure-foundry | google | bedrock
+  # Per-kind required non-secret params (design §4):
+  #   ollama:        base_url
+  #   anthropic:     (none)
+  #   openai:        org? base_url?  (both OPTIONAL)
+  #   azure-foundry: endpoint + api_version + deployment  (all REQUIRED)
+  #   google:        Vertex project + location (together) OR Gemini (none)
+  #   bedrock:       region
+  provider_secret_master_key: "" # SECRET (LLM_PROVIDER_SECRET_MASTER_KEY). AES-256-GCM master key for the SCOPE-02 connvault. Empty for dev/test (no db-mode hosted connection is enabled, so no secret is needed); production-class targets receive a placeholder the deploy adapter substitutes. NEVER commit a real key.
+  connections:
+  # local Ollama — the only ENABLED connection by default; preserves the
+  # existing Ollama-only path. No secret (local).
+  - id: "local-ollama"
+    kind: "ollama"
+    enabled: true
+    params: '{"base_url":"http://ollama:11434"}' # ollama: base_url REQUIRED
+    secret_ref_mode: "" # ollama is local: no credential
+    secret_ref_env_key: ""
+    models: '{"strategy":"live"}' # discovered live via GET /api/tags (SCOPE-04)
+  # Anthropic — declared-but-disabled example. Operator enters the api_key
+  # via the web admin surface (db-mode → encrypted vault, SCOPE-02), then
+  # tests + enables it. No secret value is ever committed here.
+  - id: "anthropic-primary"
+    kind: "anthropic"
+    enabled: false
+    params: '{}' # anthropic: no non-secret params
+    secret_ref_mode: "db" # api_key entered via web UI → vault
+    secret_ref_env_key: ""
+    models: '{"strategy":"curated","list":[{"id":"claude-3-5-sonnet","tool_capable":true,"vision":true,"context_window":200000}]}'
+  # OpenAI — declared-but-disabled. org / base_url are OPTIONAL; shown for
+  # documentation. api_key rides the vault (db-mode).
+  - id: "openai-primary"
+    kind: "openai"
+    enabled: false
+    params: '{}' # openai: org? / base_url? both optional — omitted here
+    secret_ref_mode: "db"
+    secret_ref_env_key: ""
+    models: '{"strategy":"curated","list":[{"id":"gpt-4o","tool_capable":true,"vision":true,"context_window":128000}]}'
+  # Microsoft Foundry / Azure OpenAI — the richest per-kind param set
+  # (endpoint + api_version + deployment all REQUIRED). Placeholder
+  # endpoint shown; replace with the real Azure resource at deploy time.
+  - id: "azure-foundry-primary"
+    kind: "azure-foundry"
+    enabled: false
+    params: '{"endpoint":"https://example-resource.openai.azure.com","api_version":"2024-06-01","deployment":"gpt-4o"}'
+    secret_ref_mode: "db"
+    secret_ref_env_key: ""
+    models: '{"strategy":"curated","list":[{"id":"gpt-4o","tool_capable":true,"vision":true,"context_window":128000}]}'
+  # Google — Vertex example (project + location travel together). For
+  # Gemini instead, omit both params (gemini needs no non-secret param).
+  - id: "google-primary"
+    kind: "google"
+    enabled: false
+    params: '{"project":"example-project","location":"us-central1"}'
+    secret_ref_mode: "db" # Vertex service_account JSON (or Gemini api_key) via vault
+    secret_ref_env_key: ""
+    models: '{"strategy":"curated","list":[{"id":"gemini-1.5-pro","tool_capable":true,"vision":true,"context_window":2000000}]}'
+  # Amazon Bedrock — region REQUIRED; AWS credentials ride the vault.
+  - id: "bedrock-primary"
+    kind: "bedrock"
+    enabled: false
+    params: '{"region":"us-east-1"}'
+    secret_ref_mode: "db"
+    secret_ref_env_key: ""
+    models: '{"strategy":"curated","list":[{"id":"anthropic.claude-3-5-sonnet-20241022-v2:0","tool_capable":true,"vision":true,"context_window":200000}]}'
+  # Discovery aggregation bounds (design §6.3). BOTH REQUIRED > 0 whenever
+  # ≥1 connection is declared — NO default (G028). Consumed by the SCOPE-04
+  # CatalogAggregator (stale-while-revalidate cache + per-provider timeout).
+  discovery:
+    cache_ttl_ms: 60000 # last-good catalog reuse window; > 0
+    per_provider_timeout_ms: 4000 # per-connection discovery probe budget; > 0
+  # Provider-qualified (<kind>/<backend-id>) USD rate table. REQUIRED for
+  # every ENABLED non-ollama (billable) model — a billable model with no
+  # entry is a fail-loud refusal at dispatch (SCOPE-05), NEVER a silent $0.
+  # Ollama models are $0 and need no entry. The hosted examples below ship
+  # disabled, so these rates are documentation today; flipping a slot
+  # `enabled: true` requires its models to be priced here.
+  model_costs:
+  - model: "anthropic/claude-3-5-sonnet"
+    input_usd_per_1k: 0.003
+    output_usd_per_1k: 0.015
+  - model: "openai/gpt-4o"
+    input_usd_per_1k: 0.0025
+    output_usd_per_1k: 0.010
+  - model: "azure-foundry/gpt-4o"
+    input_usd_per_1k: 0.0025
+    output_usd_per_1k: 0.010
+  - model: "google/gemini-1.5-pro"
+    input_usd_per_1k: 0.00125
+    output_usd_per_1k: 0.005
+  - model: "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"
+    input_usd_per_1k: 0.003
+    output_usd_per_1k: 0.015
+
 telegram:
   bot_token: ""
   # Spec 082 SCOPE-082-01 — empty by default. A fresh operator MUST set their
@@ -1739,6 +1863,16 @@ infrastructure:
   # constant time; never logged. Real value shipped via the knb deploy
   # adapter at knb/smackerel/secrets/<target>.enc.env.
   - WEB_REGISTRATION_INVITE_TOKEN
+  # Spec 096 SCOPE-01 — multi-provider model-connection vault master key.
+  # AES-256-GCM master key for the SCOPE-02 connvault credential store
+  # (reversible, encrypted-at-rest provider secrets). REQUIRED iff a db-mode
+  # hosted connection is declared (an Ollama-only deployment adds no new
+  # secret); the Go core loads it fail-loud and never lets it out.
+  # Reversible-credential class (like CARD_REWARDS_GCAL_CREDENTIALS), NOT an
+  # argon2id verifier key. SCOPE-01 declares the manifest entry; the vault
+  # load + rotation land in SCOPE-02. Real value shipped via the knb deploy
+  # adapter at knb/smackerel/secrets/<target>.enc.env.
+  - LLM_PROVIDER_SECRET_MASTER_KEY
   # When TARGET_ENV ∈ this list, the SST loader emits placeholders for
   # every key in secret_keys above. dev/test environments are NEVER in
   # this list (they keep inline values for local-dev convenience per
