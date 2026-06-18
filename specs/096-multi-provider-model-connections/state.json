@@ -29,10 +29,10 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": 4,
+    "currentScope": 5,
     "executionModel": "parent-expanded",
     "runStartedAt": "2026-06-18T00:00:00Z",
-    "lastUpdatedAt": "2026-06-18T11:00:00Z",
+    "lastUpdatedAt": "2026-06-18T12:00:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan"],
     "pendingTransitionRequests": [],
     "executionHistory": [
@@ -115,6 +115,16 @@
         "runStartedAt": "2026-06-18T10:30:00Z",
         "runEndedAt": "2026-06-18T11:00:00Z",
         "summary": "Implemented SCOPE-04 (Model discovery + unified catalog + identifier canonicalization) - SCN-096-D01/D04. NEW pure-Go internal/assistant/openknowledge/catalog/ package (catalog.go types, adapter.go, aggregator.go, canonical.go) + the two manifest-named test files (aggregator_test.go, canonical_test.go). Per-kind discovery adapters: OllamaAdapter probes live GET <base_url>/api/tags via an injected HTTPDoer -> ollama/<name> descriptors (free/local; optional operator capability hint since /api/tags carries no caps); HostedAdapter serves a connection SST-curated models[] from the SCOPE-01 registry verbatim (id <kind>/<backend>, capabilities carried). CatalogAggregator runs adapters in parallel bounded by SST per_provider_timeout_ms, merges the reachable subset into ONE provider-qualified ModelCatalog (id+connection_id+kind+capabilities), ALWAYS emits one typed ProviderDiscoveryStatus per adapter (ok|unreachable|timeout|auth_failed|disabled) so a down provider degrades gracefully (models absent) and is NEVER silently dropped; last-good cached for SST cache_ttl_ms; both bounds fail-loud >0 at construction (G028, no hardcoded default). canonical.go: SplitQualified (first-/ split, backend may contain / and :), Canonicalize (bare 089 Ollama id -> ollama/<id> iff installed), CatalogResolver INJECTS the catalog as the EXISTING modelswitch.Allowlist admissible set (Validate -> Resolve; off-catalog -> SAME modelswitch.Rejection, NO modelpref store write, NO dispatch). modelswitch stays a pure stdlib leaf (imports only fmt/log/slog/strings; catalog imports the leaf, never the reverse) - 088/089 validator/store/precedence unchanged, additive admissible-set SOURCE only. EVIDENCE (report.md SCOPE-04): catalog package GREEN via ./smackerel.sh test unit --go --go-run with the scoped Spec096 regex (UNIT_EXIT=0, ok catalog 0.097s) - 6 tests incl 2 ADVERSARIAL (graceful-degradation typed-status-never-dropped across unreachable/auth_failed/timeout; off-catalog typed rejection + no-store-write control); captured RED-before (RED_EXIT=1) for both adversarial tests via injected silent-drop + accept-any regressions, reverted to identical GREEN; leaf-purity import grep. DoD: 7 of 11 [x] (T1-4 real-evidence, T2-1 graceful-degradation, T2-2 leaf-purity, T2-3 one-validator/store, T2-4 fail-loud SST, T2-5 canonicalization+off-catalog, T2-6 RED-before); T2-7 partial (unit pass no skips; live integration model_discovery_test.go + e2e-api deferred to clean-stack bubbles.devops dispatch); T1-1 artifact-lint (absent uservalidation.md, bubbles.plan), T1-2 check + T1-3 format deferred to the orchestrator. NO push, NO framework-validate, NO check/full-suite this turn. Top-level status stays in_progress; no other scope progress / certifiedAt / specDependsOn / certification.status touched."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-18T11:30:00Z",
+        "runEndedAt": "2026-06-18T12:00:00Z",
+        "summary": "Implemented SCOPE-05 (Model-aware CostFn + load-bearing USD budget enforcement) - SCN-096-G03. CostFn type func(int)float64 -> func(model string,tokens int)(float64,error): ollama/* and bare 089 ids -> $0 (budget not consumed, NFR-2); paid <kind>/<backend> -> SST llm.model_costs rate at max(in,out) per-1k; billable model with NO rate -> fail-loud ErrModelRateMissing, NEVER silent $0 (G028 runtime backstop). NEW agent/costfn_modelaware.go (+ costfn_modelaware_test.go: TestCostFn_OllamaZero_PaidUsesRate_Spec096, TestCostFn_PaidModelMissingRate_RefusesFailLoud_Spec096 ADVERSARIAL), agent/spendledger.go (SpendLedger port + UsageRecord), agent/budget_preflight_modelcost_test.go (TestBudgetPreflight_PaidOverBudget_RefusesBeforeDispatch_Spec096 ADVERSARIAL: fake ledger + must-not-call LLM; refuses BEFORE dispatch on an exhausted per-user/global ceiling), usageledger/ledger.go (Postgres SpendLedger; actor from auth.UserIDFromContext, no silent default; month-to-date SUM per-user+global; append-only), migration 062_model_usage_ledger.sql (append-only, no DB-side defaults, CHECKs+indexes; design said 060 but 060/061 were taken so 062 is the next free slot). agent.go: load-bearing pre-flight (maxBillableTurnCostUSD over gather+synthesis models -> ledger read -> refuse ErrCapUSDMonthly/ErrCapUSDPerUserMonth BEFORE any dispatch) + post-success append in finalize; gate inert when ledger nil OR estCost=$0, so the ollama/free path is byte-for-byte unchanged. R4 blast radius: CostFn signature updated at 10 sites (agent.go x3, baseCfg adapter, wiring, facade/api[x2]/integration/stress/e2e callers); 064/087 budget tests (BUG064001 x2, PerTurnBudgetExhaustion, BudgetTracker x5, RetryBudgetExhausted_Spec087, BudgetExhaustedMidLoop_G021) re-ran GREEN. Wiring: NewModelAwareCostFn over cfg.ModelConnections.ModelCosts + usageledger.New(pool). EVIDENCE (report.md SCOPE-05): E1 full scoped run UNIT_EXIT=0 / 'finished OK' (3 new tests + R4 budget tests PASS; cmd/core compiled ok 2.085s); E2 RED-before RED_EXIT=1 (both adversarial tests FAIL under neutered-refusal + disabled-gate mutations, under-budget control PASS) reverted to identical GREEN; E3 post-revert GREEN_EXIT=0; E4 NO-DEFAULTS grep (no silent-$0; fail-loud at costfn:73 + agent.go:443/446 + usageledger:82). 088/089 untouched (additive). DoD: 7 of 12 [x] (T1-4,T1-5,T2-1,T2-2,T2-3,T2-5,T2-6); T2-4 migrate-output + T2-7 live integration PARTIAL/deferred; T1-1 artifact-lint + T1-2 check + T1-3 format deferred to orchestrator/owner. Live integration tests/integration/model_budget_enforcement_test.go (//go:build integration, env-gated t.Skip) authored + deferred. NO push/check/framework-validate."
       }
     ]
   },
@@ -127,7 +137,7 @@
       { "scope": 2, "name": "Encrypted credential vault + master-key lifecycle", "status": "in_progress", "dependsOn": [1], "scopeDir": null },
       { "scope": 3, "name": "Provider-aware /ask dispatch (credential seam)", "status": "in_progress", "dependsOn": [2], "scopeDir": null },
       { "scope": 4, "name": "Discovery + unified catalog + identifier canonicalization", "status": "in_progress", "dependsOn": [1], "scopeDir": null },
-      { "scope": 5, "name": "Model-aware CostFn + load-bearing USD budget enforcement", "status": "not_started", "dependsOn": [4], "scopeDir": null },
+      { "scope": 5, "name": "Model-aware CostFn + load-bearing USD budget enforcement", "status": "in_progress", "dependsOn": [4], "scopeDir": null },
       { "scope": 6, "name": "Operator-gated web admin connection surface (wire/test/enable)", "status": "not_started", "dependsOn": [2, 4], "scopeDir": null },
       { "scope": 7, "name": "Combined catalog selection across Telegram + web, 088/089 parity", "status": "not_started", "dependsOn": [4, 6], "scopeDir": null }
     ],
@@ -168,7 +178,7 @@
   "resolvedBugs": [],
   "failures": [],
   "discoveredIssues": [],
-  "lastUpdatedAt": "2026-06-18T11:00:00Z",
+  "lastUpdatedAt": "2026-06-18T12:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
