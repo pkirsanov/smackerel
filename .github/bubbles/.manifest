@@ -32,6 +32,7 @@ bubbles/scripts/competitive-docs-selftest.sh
 bubbles/scripts/context-compactor-selftest.sh
 bubbles/scripts/context-compactor.sh
 bubbles/scripts/continuation-routing-selftest.sh
+bubbles/scripts/control-plane-policy-activation-selftest.sh
 bubbles/scripts/convergence-cap-guard-selftest.sh
 bubbles/scripts/convergence-cap-guard.sh
 bubbles/scripts/delivery-implementation-delta-guard-selftest.sh
