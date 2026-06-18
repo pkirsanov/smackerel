@@ -57,16 +57,14 @@
 //     loud at wiring time and the agent's New() also refuses an
 //     empty SystemPrompt.
 //
-//  8. CostFn. Spec 064 SCOPE-09 contracts a USD/token rate from
-//     SST. We do not yet have a provider-priced rate table on
-//     OpenKnowledgeConfig; the only operator-meaningful caps are
-//     the per-query/monthly USD budgets. We therefore install a
-//     zero-cost CostFn at wiring time (every call charges $0 USD),
-//     which keeps the per-query USD budget effectively unconsumed
-//     by LLM round-trips. Token caps + iteration caps still bind.
-//     Adding a per-provider rate is owned by a follow-up scope and
-//     tracked as a finding in report.md; that future work supplies
-//     a CostFn that multiplies tokens by the operator's rate.
+//  8. CostFn. Spec 096 SCOPE-05 makes the cost seam MODEL-AWARE over
+//     the SST `llm.model_costs[]` rate table: an ollama/local model
+//     costs $0 (the budget is not consumed), a paid provider-qualified
+//     model is priced from its SST rate, and a billable model with NO
+//     declared rate is refused fail-loud at dispatch (NEVER a silent
+//     $0 — G028). With the SCOPE-05 spend ledger (migration 062) this
+//     makes the per-query / monthly / per-user USD budgets load-bearing
+//     for paid providers while keeping Ollama free.
 //
 //  9. agenttool.SetAgent installs the *okagent.Agent into the
 //     package-level atomic pointer the substrate Handler reads on
@@ -101,6 +99,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelpref"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tools"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/usageledger"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/web"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -213,11 +212,30 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 		return fmt.Errorf("wireOpenKnowledge: load agent system prompt: %w", err)
 	}
 
-	// 8. CostFn — zero-cost stub. Token + iteration caps still bind.
-	//    The per-query USD budget is therefore not exercised by LLM
-	//    calls under this CostFn; that limitation is recorded in
-	//    report.md as a SCOPE-12 follow-up finding.
-	costFn := okagent.CostFn(func(int) float64 { return 0 })
+	// 8. CostFn — spec 096 SCOPE-05 model-aware cost seam over the SST
+	//    llm.model_costs[] rate table. ollama/local → $0 (budget not
+	//    consumed); a paid provider-qualified model → its SST rate; a
+	//    billable model with NO declared rate → a fail-loud refusal at
+	//    dispatch (NEVER a silent $0 — G028). This makes the per-query /
+	//    monthly / per-user USD budgets load-bearing for paid providers.
+	modelRates := make(map[string]okagent.ModelRate, len(cfg.ModelConnections.ModelCosts))
+	for _, mc := range cfg.ModelConnections.ModelCosts {
+		modelRates[mc.Model] = okagent.ModelRate{
+			InputUSDPer1k:  mc.InputUSDPer1k,
+			OutputUSDPer1k: mc.OutputUSDPer1k,
+		}
+	}
+	costFn := okagent.NewModelAwareCostFn(modelRates)
+
+	// 8a. Spend ledger — spec 096 SCOPE-05 month-to-date USD accounting
+	//     (migration 062). Makes the budget pre-flight load-bearing: a
+	//     paid turn is refused before any provider call when the caller's
+	//     month-to-date spend would breach a ceiling, and the realized
+	//     cost is appended after a successful billable turn. The
+	//     ollama/free path never reads or writes it (NFR-2). The
+	//     claim-bound actor comes from the request context (auth), never
+	//     a request body.
+	spendLedger := usageledger.New(svc.pg.Pool)
 
 	// 8b. Metrics registration — SCOPE-14. okMetrics was constructed
 	//     above (step 2b) so SearxNG could be wired with it as a
@@ -240,6 +258,7 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 		PerUserMonthlyUSDRemaining: okCfg.PerUserMonthlyBudgetUSD,
 		CompactionThresholdRatio:   compactionThresholdRatio,
 		CostFn:                     costFn,
+		SpendLedger:                spendLedger,
 		Recorder:                   okMetrics,
 		Logger:                     slog.Default(),
 		EnforcementMode:            okCfg.CitebackEnforcementMode,

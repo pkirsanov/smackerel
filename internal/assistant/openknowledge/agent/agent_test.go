@@ -72,7 +72,14 @@ func newRegistry(t *testing.T, extras ...ok.Tool) *ok.Registry {
 	return r
 }
 
-func baseCfg(maxIter, tokens int, perQueryUSD, monthlyUSD, perUserUSD, ratio float64, cost CostFn) Config {
+// baseCfg keeps accepting the legacy token-only cost closure
+// (func(int) float64) so every pre-096 agent test constructs unchanged.
+// Spec 096 SCOPE-05 changed CostFn to the model-aware
+// func(model string, tokens int) (float64, error) seam; the legacy closure
+// is adapted here (a nil closure maps to a $0 model-aware CostFn). Tests that
+// need true model-aware pricing set cfg.CostFn = NewModelAwareCostFn(...)
+// after calling baseCfg.
+func baseCfg(maxIter, tokens int, perQueryUSD, monthlyUSD, perUserUSD, ratio float64, cost func(int) float64) Config {
 	return Config{
 		SystemPrompt: "test-system-prompt",
 		Model:        "test-model",
@@ -89,8 +96,13 @@ func baseCfg(maxIter, tokens int, perQueryUSD, monthlyUSD, perUserUSD, ratio flo
 		MonthlyBudgetUSDRemaining:  monthlyUSD,
 		PerUserMonthlyUSDRemaining: perUserUSD,
 		CompactionThresholdRatio:   ratio,
-		CostFn:                     cost,
-		EnforcementMode:            string(citeback.EnforcementEnforce),
+		CostFn: func(_ string, tokensUsed int) (float64, error) {
+			if cost == nil {
+				return 0, nil
+			}
+			return cost(tokensUsed), nil
+		},
+		EnforcementMode: string(citeback.EnforcementEnforce),
 		// BUG-064-002 DEFECT 3b — salvage source cap (assistant.sources_max).
 		SourcesMax: 5,
 	}

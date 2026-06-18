@@ -105,10 +105,14 @@ type LLMChat interface {
 	Chat(ctx context.Context, req llm.ChatRequest) (llm.Result, error)
 }
 
-// CostFn maps a single LLM round-trip's TokensUsed to its USD cost.
-// SCOPE-13 wires a function backed by SST pricing; the agent never
-// hardcodes a $/token rate (G028).
-type CostFn func(tokensUsed int) float64
+// CostFn maps a single LLM round-trip (its effective provider-qualified
+// model + combined TokensUsed) to its USD cost. Spec 096 SCOPE-05 made it
+// model-aware: an ollama/local model costs $0 (budget not consumed), a paid
+// provider-qualified model is priced from the SST llm.model_costs rate
+// table, and a billable model with NO declared rate returns a fail-loud
+// typed error (NEVER a silent $0 — the NO-DEFAULTS budget-bypass guard,
+// G028). The agent never hardcodes a $/token rate.
+type CostFn func(model string, tokensUsed int) (float64, error)
 
 // VerifyFn is the cite-back verifier contract. Pass citeback.Verify
 // in production wiring; tests inject a fake.
@@ -141,6 +145,16 @@ type Config struct {
 	// tooling (separate scope); SCOPE-09 just signals.
 	CompactionThresholdRatio float64
 	CostFn                   CostFn
+	// SpendLedger is the spec 096 SCOPE-05 month-to-date USD spend
+	// accounting port that makes the per-user + global USD budgets
+	// load-bearing for paid providers. Optional — nil preserves the exact
+	// pre-096 behaviour (no ledger read, no ledger write); the ollama/free
+	// path is byte-for-byte unchanged regardless of whether a ledger is
+	// wired. When non-nil, a paid (non-ollama) turn is refused BEFORE any
+	// provider dispatch if the caller's month-to-date spend plus this
+	// turn's worst-case cost would breach a ceiling, and the actual cost
+	// is appended after the turn (best-effort).
+	SpendLedger SpendLedger
 	// Recorder receives per-turn and per-tool-call metric events.
 	// Optional — nil is replaced by metrics.Nop{} in New(). Tests
 	// that don't care about metrics may leave this unset.
@@ -178,6 +192,10 @@ type Agent struct {
 	log         *slog.Logger
 	traces      tracewriter.Writer
 	enforcement citeback.EnforcementMode
+	// ledger is the spec 096 SCOPE-05 month-to-date USD spend accounting
+	// port (cfg.SpendLedger). nil ⇒ the load-bearing budget gate is inert
+	// and the pre-096 behaviour is preserved exactly.
+	ledger SpendLedger
 }
 
 // ErrAgentInvalid is the construction error sentinel.
@@ -259,7 +277,9 @@ func New(chat LLMChat, registry *ok.Registry, verify VerifyFn, cfg Config) (*Age
 	if traces == nil {
 		traces = tracewriter.Nop{}
 	}
-	return &Agent{llm: chat, registry: registry, verify: verify, cfg: cfg, rec: rec, log: logger, traces: traces, enforcement: enforcementMode}, nil
+	// Spec 096 SCOPE-05 — SpendLedger is OPTIONAL (nil ⇒ pre-096 behaviour
+	// preserved); no nil-guard here, unlike the required deps above.
+	return &Agent{llm: chat, registry: registry, verify: verify, cfg: cfg, rec: rec, log: logger, traces: traces, enforcement: enforcementMode, ledger: cfg.SpendLedger}, nil
 }
 
 // WithModelOverride returns a shallow, per-invocation copy of the Agent
@@ -346,6 +366,21 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		}
 		a.recordTurnMetrics(iters, out)
 		a.emitTurnLog(turnID, promptHash, iters, out)
+		// Spec 096 SCOPE-05 — append the actual USD spend of a billable turn
+		// to the month-to-date ledger so the NEXT turn's pre-flight sees it.
+		// Ollama turns spend $0 → no ledger write (the local path stays
+		// byte-for-byte; NFR-2). Best-effort: a ledger-write failure is
+		// logged but never fails an answer that was already produced.
+		if a.ledger != nil && budget.USDSpent() > 0 {
+			if ledgerErr := a.ledger.AppendUsage(ctx, UsageRecord{
+				Model:   out.Model,
+				Tokens:  budget.TokensUsed(),
+				USDCost: budget.USDSpent(),
+			}); ledgerErr != nil {
+				a.log.Warn("openknowledge/agent: spend-ledger append failed (answer already produced)",
+					"err", ledgerErr, "turn_id", turnID)
+			}
+		}
 		return out
 	}
 
@@ -381,6 +416,36 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 	// BEFORE the first LLM round and BEFORE any tool dispatches.
 	if a.cfg.PerUserMonthlyUSDRemaining <= 0 {
 		return refuse(TerminationCapUSD, ok.ErrCapUSDPerUserMonth.Error()), nil
+	}
+
+	// Spec 096 SCOPE-05 — model-aware, load-bearing budget pre-flight.
+	// For a paid (non-ollama) effective model, refuse BEFORE any provider
+	// dispatch when the caller's month-to-date ledger spend (per-user or
+	// global) plus this turn's worst-case cost would breach the SST USD
+	// ceiling. The ollama/free path is byte-for-byte unchanged: the cost
+	// estimate is $0, so the ledger is never read and the budget is never
+	// consumed (NFR-2 — no added I/O or latency on the local path). The
+	// gate is inert when no ledger is wired (a.ledger == nil), preserving
+	// the exact pre-096 behaviour for every caller that does not opt in.
+	if a.ledger != nil {
+		estCost, costErr := a.maxBillableTurnCostUSD()
+		if costErr != nil {
+			// A billable model with no declared rate fails loud here, the
+			// runtime NO-DEFAULTS backstop — never a silent $0 bypass (G028).
+			return refuse(TerminationCapUSD, costErr.Error()), nil
+		}
+		if estCost > 0 {
+			perUserSpent, globalSpent, ledgerErr := a.ledger.MonthToDateSpend(ctx)
+			if ledgerErr != nil {
+				return TurnResult{}, fmt.Errorf("openknowledge/agent: budget pre-flight ledger read: %w", ledgerErr)
+			}
+			if globalSpent+estCost > a.cfg.MonthlyBudgetUSDRemaining {
+				return refuse(TerminationCapUSD, ok.ErrCapUSDMonthly.Error()), nil
+			}
+			if perUserSpent+estCost > a.cfg.PerUserMonthlyUSDRemaining {
+				return refuse(TerminationCapUSD, ok.ErrCapUSDPerUserMonth.Error()), nil
+			}
+		}
 	}
 
 	for iter := 0; iter < a.cfg.MaxIterations; iter++ {
@@ -434,7 +499,14 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 			return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat: %w", err)
 		}
 
-		costUSD := a.cfg.CostFn(result.TokensUsed)
+		// Spec 096 SCOPE-05 — price this round-trip by its effective
+		// provider-qualified model (reqModel). A paid model with no SST
+		// rate fails loud here (the NO-DEFAULTS runtime backstop), never a
+		// silent $0; an ollama/local model returns $0 (budget not consumed).
+		costUSD, costErr := a.cfg.CostFn(reqModel, result.TokensUsed)
+		if costErr != nil {
+			return refuse(TerminationCapUSD, costErr.Error()), nil
+		}
 		// Sidecar reports combined TokensUsed; charge as completion.
 		if capErr := budget.RecordLLMCall(0, result.TokensUsed, costUSD); capErr != nil {
 			return refuse(mapCapErr(capErr), capErr.Error()), nil
@@ -470,7 +542,11 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 					if retryErr != nil {
 						return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat (synthesis retry %d): %w", retry+1, retryErr)
 					}
-					if capErr := budget.RecordLLMCall(0, retryResult.TokensUsed, a.cfg.CostFn(retryResult.TokensUsed)); capErr != nil {
+					retryCostUSD, retryCostErr := a.cfg.CostFn(a.cfg.SynthesisModel, retryResult.TokensUsed)
+					if retryCostErr != nil {
+						return refuse(TerminationCapUSD, retryCostErr.Error()), nil
+					}
+					if capErr := budget.RecordLLMCall(0, retryResult.TokensUsed, retryCostUSD); capErr != nil {
 						return refuse(mapCapErr(capErr), capErr.Error()), nil
 					}
 					retryResult.FinalText = stripThinkBlocks(retryResult.FinalText)
