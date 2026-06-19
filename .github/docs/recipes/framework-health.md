@@ -70,6 +70,27 @@ Then it becomes a normal spec with the usual gates.
 
 ---
 
+## Promote a recurring lesson to a skill
+
+Framework self-observation has a second, narrower loop that runs alongside the retro proposal pass. Where the retro pass turns runtime-event signal into an `improvements/` proposal, the **Skill Evolution Loop** turns a *repeated lesson* into a reusable skill — so agents stop relearning the same thing.
+
+```
+bash bubbles/scripts/cli.sh skill-proposals           # show pending proposals
+bash bubbles/scripts/cli.sh skill-proposals --dismiss   # clear them
+```
+
+The flow:
+
+1. **Repetition detected** — `skill-evolution.sh` counts exact-normalized repeated lines in `.specify/memory/lessons.md`. At `triggerThreshold` (default 3) it writes a proposal to `.specify/memory/skill-proposals.md`. *"Same greasy mistake three times, boys."*
+2. **Quality bar** — each proposal carries the creation bar **Reusable · Non-trivial · Specific · Verified**. A one-off or unverified lesson does not qualify.
+3. **Dedup before create** — search the existing `.github/skills/` set and `skills/INVENTORY.md` first; prefer UPDATING a near-match over standing up a duplicate. When the skill set is large, review the least-recently-modified skills for deprecation (anti-hoarding) — promotion and pruning are the two ends of one lifecycle.
+4. **Decision rule** — *do it once → a prompt is fine; recurring + non-obvious + verified → promote to a skill.*
+5. **Author** — when a proposal clears the bar, `bubbles.create-skill` scaffolds the new `SKILL.md` (including the **When NOT to use** and **Works well with** sections) and records it in `skills/INVENTORY.md`.
+
+Like the retro proposal pass, this loop is proposal-first: it never auto-creates a skill. You review the proposal, then author with `bubbles.create-skill`. See the `bubbles-skill-authoring` skill for the full template + quality-bar contract.
+
+---
+
 ## Quote
 
 > *"The liquor helps me see the patterns, Randy."* — Jim Lahey

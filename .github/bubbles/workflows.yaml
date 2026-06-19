@@ -698,6 +698,16 @@ lessonsMemory:
 #       → skill proposal generated → user approves → SKILL.md created/updated
 #       → future workflows load improved skill automatically
 skillEvolution:
+  # IMP-016 promotion policy (documented here; NO behavior change):
+  #   Decision rule: do it once -> a prompt is fine; recurring + non-obvious +
+  #     verified -> promote to a skill.
+  #   Quality bar before creating: Reusable, Non-trivial, Specific, Verified.
+  #   Dedup-before-create: search existing .github/skills/ and
+  #     skills/INVENTORY.md first; prefer UPDATING an existing skill over a new one.
+  #   Anti-hoarding: when the skill set is large, review least-recently-modified
+  #     skills for deprecation rather than only adding.
+  #   skill-evolution.sh emits this guidance in each proposal batch;
+  #   bubbles.create-skill enforces it as a pre-scaffold quality gate.
   enabled: true
   triggerThreshold: 3 # Same lesson pattern 3+ times before proposing
   sourceFile: .specify/memory/lessons.md

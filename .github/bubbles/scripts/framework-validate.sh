@@ -159,6 +159,7 @@ run_check "Tool-log selftest (v5.1 / M1)" bash "$SCRIPT_DIR/tool-log-selftest.sh
 run_check "Evidence-tool-log bridge selftest (v6.0 / B1)" bash "$SCRIPT_DIR/evidence-tool-log-bridge-selftest.sh"
 run_check "Diff-evidence guard selftest (v6.0 / B2)" bash "$SCRIPT_DIR/diff-evidence-guard-selftest.sh"
 run_check "Result-envelope validate selftest (v6.0 / B3)" bash "$SCRIPT_DIR/result-envelope-validate-selftest.sh"
+run_check "Skill-evolution selftest (v7.16.0 / IMP-016)" bash "$SCRIPT_DIR/skill-evolution-selftest.sh"
 run_check_self_only "Installer manifest check (v6.0 / B9)" bash "$SCRIPT_DIR/generate-installer.sh"
 run_check_self_only "Installer manifest selftest (v6.0 / B9)" bash "$SCRIPT_DIR/generate-installer-selftest.sh"
 if [[ -x "$SCRIPT_DIR/migrate-modes-v5-to-v6.sh" ]]; then
@@ -224,7 +225,9 @@ run_check "Instruction budget lint" bash "$SCRIPT_DIR/instruction-budget-lint.sh
 run_check "Agent ownership lint" bash "$SCRIPT_DIR/agent-ownership-lint.sh"
 run_check "Orchestrator tool frontmatter lint (v7.0.3)" bash "$SCRIPT_DIR/orchestrator-tool-frontmatter-lint.sh"
 if [[ -x "$SCRIPT_DIR/mcp-grant-selftest.sh" ]]; then
-  run_check "MCP tool grant selftest (v7.1)" bash "$SCRIPT_DIR/mcp-grant-selftest.sh"
+  # Source-only: asserts the canonical 'bubbles' MCP token; downstream installs
+  # carry a per-repo 'bubbles-<slug>' token, so this can only hold in source.
+  run_check_self_only "MCP tool grant selftest (v7.1)" bash "$SCRIPT_DIR/mcp-grant-selftest.sh"
 fi
 run_check "Action risk registry lint" bash "$SCRIPT_DIR/action-risk-registry-lint.sh"
 run_check_self_only "Capability ledger selftest" bash "$SCRIPT_DIR/capability-ledger-selftest.sh"
@@ -379,11 +382,16 @@ if [[ -x "$SCRIPT_DIR/prometheus-adapter-fetch-selftest.sh" ]]; then
 fi
 
 if [[ -x "$SCRIPT_DIR/observability-posture-guard-selftest.sh" ]]; then
-  run_check "Observability posture guard selftest (G098)" bash "$SCRIPT_DIR/observability-posture-guard-selftest.sh"
+  # Source-only: drives source-tree fixtures under tests/fixtures/observability/
+  # which the installer does not vendor downstream. The live G098 guard below
+  # still runs everywhere.
+  run_check_self_only "Observability posture guard selftest (G098)" bash "$SCRIPT_DIR/observability-posture-guard-selftest.sh"
 fi
 
 if [[ -x "$SCRIPT_DIR/observability-opt-out-guard-selftest.sh" ]]; then
-  run_check "Observability opt-out guard selftest (G099)" bash "$SCRIPT_DIR/observability-opt-out-guard-selftest.sh"
+  # Source-only: drives source-tree observability fixtures (not vendored
+  # downstream). The live G099 guard below still runs everywhere.
+  run_check_self_only "Observability opt-out guard selftest (G099)" bash "$SCRIPT_DIR/observability-opt-out-guard-selftest.sh"
 fi
 
 if [[ -x "$SCRIPT_DIR/observability-posture-guard.sh" ]]; then
@@ -395,7 +403,9 @@ if [[ -x "$SCRIPT_DIR/observability-opt-out-guard.sh" ]]; then
 fi
 
 if [[ -x "$SCRIPT_DIR/observability-slo-guard-selftest.sh" ]]; then
-  run_check "Observability SLO guard selftest (G100)" bash "$SCRIPT_DIR/observability-slo-guard-selftest.sh"
+  # Source-only: drives source-tree observability fixtures (not vendored
+  # downstream). The live G100 guard below still runs everywhere.
+  run_check_self_only "Observability SLO guard selftest (G100)" bash "$SCRIPT_DIR/observability-slo-guard-selftest.sh"
 fi
 
 if [[ -x "$SCRIPT_DIR/observability-slo-guard.sh" ]]; then
@@ -407,7 +417,9 @@ if [[ -x "$SCRIPT_DIR/observability-endpoint-resolve-selftest.sh" ]]; then
 fi
 
 if [[ -x "$SCRIPT_DIR/observability-check-selftest.sh" ]]; then
-  run_check "Observability check twin selftest (wired fixture)" bash "$SCRIPT_DIR/observability-check-selftest.sh"
+  # Source-only: drives source-tree observability fixtures (not vendored
+  # downstream). The live check twin below still runs everywhere.
+  run_check_self_only "Observability check twin selftest (wired fixture)" bash "$SCRIPT_DIR/observability-check-selftest.sh"
 fi
 
 if [[ -x "$SCRIPT_DIR/observability-check.sh" ]]; then
