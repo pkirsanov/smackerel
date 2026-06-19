@@ -200,6 +200,15 @@ type Dependencies struct {
 	// agenttool.SwitchableModels() validator the /ask fast-path uses.
 	AgentModelHandler *AgentModelHandler
 
+	// Spec 096 SCOPE-06 — operator-gated /v1/admin/model-connections* surface
+	// (wire/test/enable/disable model-provider connections) + its operator gate
+	// (R1). Both nil when there is no Postgres pool (config-validate mode) or no
+	// db-mode connection is declared; the routes are then simply not mounted.
+	// When set, the routes are mounted behind bearerAuthMiddleware AND
+	// ModelConnectionsOperatorGate.Middleware (operator-only, claim-bound).
+	ModelConnectionsAdminHandler *ModelConnectionsAdminHandler
+	ModelConnectionsOperatorGate *OperatorGate
+
 	// Spec 038 Scope 1 — drive connector API handlers.
 	DriveHandlers *DriveHandlers
 
