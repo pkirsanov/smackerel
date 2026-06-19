@@ -229,14 +229,22 @@ func TestSecretVault_WrongKeyRejected_Spec096(t *testing.T) {
 
 // TestSecretVault_MasterKeyFailLoud_Spec096 (ADVERSARIAL, G028) — LoadVault
 // enforces the design §11.2 fail-loud predicate: the master key is REQUIRED
-// iff a db-mode connection is declared. CONTROL cases (valid key builds a
-// vault; Ollama-only needs no key) prove the loader can succeed, so the
-// failure cases are not vacuous. This FAILS if the loader ever substituted a
-// default key or skipped encryption when the key was required-but-absent.
+// iff an ENABLED db-mode connection is declared. CONTROL cases (valid key
+// builds a vault; Ollama-only needs no key) prove the loader can succeed, so
+// the failure cases are not vacuous. The disabled-slot case is the REGRESSION
+// GUARD for the boot bug where the default-shipped DISABLED hosted db-mode
+// slots demanded the master key and made a fresh/dev/test stack unbootable.
+// This FAILS if the loader ever substituted a default key, skipped encryption
+// when the key was required-but-absent, or demanded the key for a
+// declared-but-disabled slot.
 func TestSecretVault_MasterKeyFailLoud_Spec096(t *testing.T) {
 	dbModeConns := []config.ModelConnection{
 		{ID: "local-ollama", Kind: "ollama", SecretRef: config.ModelConnectionSecretRef{Mode: config.ModelConnectionSecretModeNone}},
-		{ID: "anthropic-primary", Kind: "anthropic", SecretRef: config.ModelConnectionSecretRef{Mode: config.ModelConnectionSecretModeDB}},
+		{ID: "anthropic-primary", Kind: "anthropic", Enabled: true, SecretRef: config.ModelConnectionSecretRef{Mode: config.ModelConnectionSecretModeDB}},
+	}
+	disabledDBModeConns := []config.ModelConnection{
+		{ID: "local-ollama", Kind: "ollama", Enabled: true, SecretRef: config.ModelConnectionSecretRef{Mode: config.ModelConnectionSecretModeNone}},
+		{ID: "anthropic-disabled", Kind: "anthropic", Enabled: false, SecretRef: config.ModelConnectionSecretRef{Mode: config.ModelConnectionSecretModeDB}},
 	}
 	ollamaOnlyConns := []config.ModelConnection{
 		{ID: "local-ollama", Kind: "ollama", SecretRef: config.ModelConnectionSecretRef{Mode: config.ModelConnectionSecretModeNone}},
@@ -270,6 +278,16 @@ func TestSecretVault_MasterKeyFailLoud_Spec096(t *testing.T) {
 		}
 		if v != nil {
 			t.Fatal("ollama-only must not build a vault")
+		}
+	})
+
+	t.Run("DISABLED db-mode slot + empty key → no vault, no error (REGRESSION GUARD: default-shipped disabled hosted slots must NOT block boot)", func(t *testing.T) {
+		v, err := LoadVault("", 1, disabledDBModeConns)
+		if err != nil {
+			t.Fatalf("a declared-but-DISABLED db-mode slot must NOT require a master key (boot must succeed), got err=%v", err)
+		}
+		if v != nil {
+			t.Fatal("expected nil vault when only disabled db-mode slots are declared and no key is set")
 		}
 	})
 
