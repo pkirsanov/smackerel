@@ -207,8 +207,32 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "discoveredIssues": [],
-  "lastUpdatedAt": "2026-06-19T03:00:00Z",
+  "discoveredIssues": [
+    {
+      "id": "SPEC096-POSTIMPL-001",
+      "type": "defect-and-fix",
+      "severity": "blocking",
+      "status": "resolved",
+      "disposition": "in-scope-fix",
+      "foundDuring": "SCOPE-02/SCOPE-06 integration verification (smackerel-core boot healthcheck)",
+      "foundBy": "bubbles.implement",
+      "summary": "Boot-blocking master-key predicate: connvault.RequiresMasterKey keyed the LLM_PROVIDER_SECRET_MASTER_KEY requirement on db-mode DECLARATION instead of ENABLEMENT. The default config ships 5 DISABLED hosted db-mode slots (anthropic, openai, azure-foundry, google, bedrock), so a fresh/dev/test stack became unbootable: 'fatal startup error: buildAPIDeps: model-connections admin wiring: ... load credential vault: llm: LLM_PROVIDER_SECRET_MASTER_KEY is required ... when one or more llm.connections declare secret_ref.mode=db'. Exposed by the SCOPE-06 activation wiring (commit c60697d1) which loads the vault at boot.",
+      "rootCause": "RequiresMasterKey did not gate on c.Enabled; a declared-but-disabled db-mode slot tripped the fail-loud master-key abort even though no enabled db-mode connection needed a secret.",
+      "fix": "Gated the predicate on c.Enabled && SecretRef.Mode == db in internal/assistant/openknowledge/connvault/vault.go; updated ErrMasterKeyRequired message + RequiresMasterKey/LoadVault/ErrVaultNotConfigured doc comments to say 'enabled'; updated design.md 11.2 fail-loud predicate to 'any ENABLED ...'; added an adversarial regression-guard sub-test to TestSecretVault_MasterKeyFailLoud_Spec096 (DISABLED db-mode slot + empty key must yield (nil, nil) - boot must NOT be blocked). Admin surface still mounts + is operator-gated for declared-but-disabled slots; the master key becomes mandatory only once a db-mode slot is ENABLED; the nil-vault credential-write path fail-louds VAULT_NOT_CONFIGURED.",
+      "filesChanged": [
+        "internal/assistant/openknowledge/connvault/vault.go",
+        "internal/assistant/openknowledge/connvault/vault_test.go",
+        "design.md"
+      ],
+      "evidence": "Unit: ./smackerel.sh test unit --go --go-run 'Spec096' -> '[go-unit] go test ./... finished OK' (49/49 Spec096). RED-before proves the new regression guard is non-tautological (5 pre-existing MasterKeyFailLoud sub-tests still PASS); GREEN-after all 6 sub-tests PASS. Integration: ./smackerel.sh test integration --go-run 'Spec096' -> core boots 'Healthy', TestVault_PersistRoundTripTestMasterKey_Spec096 PASS vs REAL Postgres, 'PASS: go-integration'. See report.md -> 'Post-Implementation Fix - Boot-blocking master-key predicate' (F1-F5).",
+      "deferredLiveLegs": [
+        "TestEnableDisable_CatalogMembershipFollows_Spec096 (SCOPE-06 C7 - needs SPEC096_ADMIN_LIVE_CORE_URL + SPEC096_ADMIN_LIVE_OPERATOR_TOKEN; SKIP, NOT marked passing)",
+        "TestAsk_PaidModelExhaustedBudget_RefusedBeforeProviderCall_Spec096 (SCOPE-05 - needs SPEC096_BUDGET_LIVE_CORE_URL + SPEC096_BUDGET_LIVE_AUTH_TOKEN; SKIP, NOT marked passing)"
+      ],
+      "recordedAt": "2026-06-19T04:00:00Z"
+    }
+  ],
+  "lastUpdatedAt": "2026-06-19T04:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

@@ -738,12 +738,17 @@ relocated to another record or replayed under a different key epoch.
   enforces parity. Provisioned via the deploy adapter's
   `<target>.enc.env`; **never committed**; 32 bytes (256-bit),
   base64-encoded in env.
-- **Fail-loud predicate.** When **any** `llm.connections[]` entry
+- **Fail-loud predicate.** When **any ENABLED** `llm.connections[]` entry
   declares `secret_ref.mode: db` (i.e. the deployment intends to use the
   vault), the master key MUST be present and decode to exactly 32 bytes
   at startup, else **abort non-zero with a named error**, e.g.
   `llm: LLM_PROVIDER_SECRET_MASTER_KEY is required and must be a base64
-  32-byte key when one or more llm.connections declare secret_ref.mode=db`.
+  32-byte key when one or more ENABLED llm.connections declare secret_ref.mode=db`.
+  Declared-but-disabled db-mode hosted slots (the default-shipped
+  anthropic/openai/azure-foundry/google/bedrock templates) do NOT require
+  the key at boot — the admin surface is still mounted + operator-gated for
+  them, and the key becomes mandatory once such a slot is enabled (which
+  requires a credential, which itself requires the configured vault).
   When NO db-mode hosted connection exists (Ollama-only), the key is not
   required — the local-first default adds no new required secret.
 - **Confinement.** Loaded once into the Go core's `SecretVault`; never
