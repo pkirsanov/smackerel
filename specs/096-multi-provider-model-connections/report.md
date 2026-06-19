@@ -1750,4 +1750,189 @@ Affordance Contract; SCOPE-06 stays `in_progress` (activation route-mount + the
 live `integration`/`e2e-api`/`e2e-ui` legs still pending).
 
 
+## SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity
+
+**Status:** in_progress (the unified selection surfaces + 088/089 parity are
+implemented and unit-GREEN; the `check`/`format`/`artifact-lint` closeout gates
+and the live cross-surface `e2e-api` parity legs are DEFERRED — the former to the
+orchestrator closeout, the latter to the home-lab `bubbles.devops` dispatch C7).
+**Executed by:** `bubbles.implement` (parent-expanded full-delivery).
+**Scenarios:** SCN-096-D02, SCN-096-D03, SCN-096-D05, SCN-096-G06.
+**Decisions resolved here:** R2 (additive `GET /v1/agent/model` enrichment
+preserving `allowed_models[]` byte-for-byte), R3 (non-tool-capable gather
+shown-but-disabled + rejected fail-loud).
+
+### What shipped (change manifest)
+
+```text
+=== SCOPE-07 NEW ===
+?? internal/assistant/openknowledge/agenttool/model_catalog_source.go   (late-bound CatalogProvider + BudgetProvider singletons — both surfaces read ONE source; *catalog.CatalogAggregator / agent.SpendLedger satisfy them structurally; nil ⇒ byte-for-byte 089 fallback)
+?? internal/telegram/model_command_multiprovider.go                     (the combined provider-grouped /model picker: Ollama-first, provider-qualified, cost-hinted; only reachable numbered; unreachable shown-but-disabled with typed status; 089 current/system-default tags preserved)
+?? internal/telegram/model_command_multiprovider_test.go                (SCN-096-D02: TestModelPicker_TelegramCombinedProviderGroupedList_Spec096 + TestModelPicker_UnreachableShownDisabledOnlyReachableNumbered_Spec096 ADVERSARIAL)
+?? internal/api/agent_model_multiprovider_test.go                       (SCN-096-D03/D05: GetEnrichedCatalogAdditive_AllowedModelsPreserved ADVERSARIAL + TelegramWebParity_SameValidatorSameStore + StickyHostedPersistsPrecedence)
+?? internal/api/agent_model_parity_spec096_test.go                      (SCN-096-G06: Parity_OneValidatorOneStore_ForkPrecedence_ProviderAgnostic ADVERSARIAL + Parity_NonToolCapableGatherShownDisabled_RejectedFailLoud ADVERSARIAL R3)
+?? web/pwa/model-picker.html                                            (S5 — USER-facing picker; provider-grouped radiogroups, current/default tags, unreachable shown-disabled, NO credential field)
+?? web/pwa/model-picker.js                                              (S5 logic: GET/PUT/DELETE /v1/agent/model; claim-bound {model}-only body; 401→login; textContent-only)
+
+=== SCOPE-07 MODIFIED (additive) ===
+ M internal/telegram/model_command.go     (handleModelCommand no-arg branch → modelPickerReplyCombined; the explicit /model <id> / default paths + numbered-reply mechanic UNCHANGED)
+ M internal/api/agent_model.go            (GET enrichAgentModelView: ADDITIVE catalog[] + provider_statuses[] + budget; allowed_models[] untouched — byte-for-byte 089)
+```
+
+The two new pages auto-embed via the existing `web/pwa/embed.go` glob
+(`//go:embed *.html *.css *.js …`) — no `embed.go` edit. `model-picker.js` matches
+the user-facing convention (`credentials: "same-origin"`, `401 → /login?next=`,
+`textContent`-only, CSP `script-src 'self'`, `role=radiogroup` per provider
+group). **Claim Source: executed** (files created; structure verifiable).
+
+### How the binding contracts are implemented
+
+1. **One validator / one store (088/089 invariant #1, NOT amended).** Both
+   surfaces resolve through the SAME `agenttool` singletons — the EXISTING
+   `modelswitch.Allowlist` (`agenttool.SwitchableModels()`) over the SCOPE-04
+   injected catalog and the EXISTING `modelpref.Store`
+   (`agenttool.ModelPref()`). SCOPE-07 adds NO second validator/store/picker: it
+   adds only a late-bound *read* source (`CatalogProvider`) for the catalog VIEW.
+   `modelswitch` stays a pure stdlib leaf (imports unchanged); the catalog is the
+   injected admissible set, canonicalization stays at the SCOPE-04 boundary.
+   **Claim Source: executed** (pinned by
+   `TestParity_OneValidatorOneStore_…` pointer-identity + bidirectional
+   shared-store round-trip).
+2. **R2 — additive enrichment, `allowed_models[]` byte-for-byte.**
+   `enrichAgentModelView` (GET only) reads the late-bound catalog source and adds
+   `catalog[]` (reachable models + `capabilities[]` + `cost_class` + `context_window`),
+   `provider_statuses[]` (every provider's typed state — for the web picker's
+   shown-but-disabled rendering), and an optional `budget` (month-to-date from the
+   SCOPE-05 SpendLedger, only when a paid model is in the catalog). It NEVER
+   touches `view.AllowedModels` — the enrichment is omitempty sibling fields, so a
+   089-era consumer reading only `allowed_models`/`effective_model`/`sticky_model`/
+   `source` is unaffected. When no catalog source is wired (deferred activation)
+   the GET is the byte-for-byte 089 shape. **Claim Source: executed** (pinned by
+   `TestAgentModel_GetEnrichedCatalogAdditive_AllowedModelsPreserved_Spec096`,
+   which compares `allowed_models` before/after wiring the source).
+3. **R3 — non-tool-capable gather shown-but-disabled + rejected fail-loud.** A
+   non-tool-capable model IS in the synthesis switchable set (SHOWN for
+   transparency, Principle 8) but is NOT in the tool-capable gather set (DISABLED
+   for gather); a direct gather selection of it is rejected fail-loud via the
+   EXISTING `allow.ResolveGather` / `allow.ResolveEffective` (the SAME
+   `modelswitch.Rejection{ReasonNotToolCapable, gather}`), NEVER accepted or
+   silently coerced — mirroring the unreachable-provider treatment. **Claim
+   Source: executed** (pinned by
+   `TestParity_NonToolCapableGatherShownDisabled_RejectedFailLoud_Spec096` with a
+   tool-capable CONTROL proving non-tautology).
+4. **Combined Telegram picker — reachable numbered, unreachable shown-disabled.**
+   `renderCombinedPicker` groups the catalog by provider (Ollama/local FIRST),
+   renders provider-qualified ids with the 089 `current`/`system default` tags + a
+   `🔧 tools` capability marker + a per-group cost hint; only REACHABLE models are
+   numbered (the returned ordered id list IS the armed `pendingModelSelection`, so
+   a numbered reply always maps to a dispatchable model); an unreachable provider
+   is SHOWN with its typed `ProviderDiscoveryStatus`, un-numbered, never dropped.
+   The numbered-reply mechanic + claim-bound `modelpref` persistence
+   (`handleModelSelectionReply`) are UNCHANGED. **Claim Source: executed.**
+5. **Claim-bound web picker, no operator config.** `model-picker.html`/`.js` is the
+   USER-facing picker: it renders the same combined catalog over
+   `GET/PUT/DELETE /v1/agent/model`, the PUT body carries ONLY `{model}` (the
+   actor is the authenticated bearer subject, NEVER a body field), there is NO
+   credential field anywhere, and an unreachable provider renders as a disabled
+   `aria-disabled` group (out of tab order) with its typed status. **Claim
+   Source: executed.**
+
+### Test Evidence
+
+#### Evidence E1 — RED-before (each adversarial test bites; non-tautological)
+
+Four targeted regressions were injected (one per adversarial test), the scoped
+suite was run, and each adversarial test FAILED, then the regressions were
+reverted. Regressions: (a) `renderCombinedPicker` drops unreachable providers;
+(b) `enrichAgentModelView` reorders `allowed_models`; (c) the parity test reads
+the shared store from a fresh (forked) store; (d) the gather catalog declares the
+non-tool model `tool_capable: true` (i.e. "accepts a non-tool gather").
+
+```text
+$ # 4 RED-before regressions injected, then:
+$ ./smackerel.sh test unit --go --go-run 'ModelPicker.*Spec096|GetEnrichedCatalogAdditive|TelegramWebParity_SameValidatorSameStore|StickyHostedPersistsPrecedence|Parity_OneValidatorOneStore|Parity_NonToolCapableGather' --verbose
+    model_command_multiprovider_test.go:184: an unreachable provider MUST be SHOWN (never silently dropped); OpenAI absent from:
+    agent_model_multiprovider_test.go:144: allowed_models[0] changed by enrichment ...
+    agent_model_parity_spec096_test.go:48: HTTP PUT MUST be visible through the [one shared store] ...
+    agent_model_parity_spec096_test.go:138: a non-tool-capable model MUST NOT be in the tool-capable gather set; got [anthropic/claude-3-5-sonnet anthropic/claude-3-5-haiku]
+FAIL    github.com/smackerel/smackerel/internal/api     0.275s
+FAIL    github.com/smackerel/smackerel/internal/telegram        0.122s
+RED_EXIT=1
+```
+
+Each failure line maps to its adversarial guard: unreachable-dropped →
+`TestModelPicker_Unreachable…`; `allowed_models[0]` reorder →
+`TestAgentModel_GetEnrichedCatalogAdditive…`; forked store →
+`TestParity_OneValidatorOneStore…`; accepted non-tool gather →
+`TestParity_NonToolCapableGather…`. **Claim Source: executed** (real failing
+output; regressions reverted before the GREEN run below).
+
+#### Evidence E2 — GREEN (all 7 SCOPE-07 unit tests pass, no skips)
+
+After reverting the four regressions, the scoped suite is GREEN
+(`internal/api` 5 tests + `internal/telegram` 2 tests):
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'ModelPicker.*Spec096|GetEnrichedCatalogAdditive|TelegramWebParity_SameValidatorSameStore|StickyHostedPersistsPrecedence|Parity_OneValidatorOneStore|Parity_NonToolCapableGather' --verbose
+--- PASS: TestAgentModel_GetEnrichedCatalogAdditive_AllowedModelsPreserved_Spec096 (0.00s)
+--- PASS: TestAgentModel_TelegramWebParity_SameValidatorSameStore_Spec096 (0.00s)
+--- PASS: TestAgentModel_StickyHostedPersistsPrecedence_Spec096 (0.00s)
+--- PASS: TestParity_OneValidatorOneStore_ForkPrecedence_ProviderAgnostic_Spec096 (0.00s)
+--- PASS: TestParity_NonToolCapableGatherShownDisabled_RejectedFailLoud_Spec096 (0.00s)
+ok      github.com/smackerel/smackerel/internal/api     0.269s
+--- PASS: TestModelPicker_TelegramCombinedProviderGroupedList_Spec096 (0.00s)
+--- PASS: TestModelPicker_UnreachableShownDisabledOnlyReachableNumbered_Spec096 (0.00s)
+ok      github.com/smackerel/smackerel/internal/telegram        0.082s
+[go-unit] go test ./... finished OK
+GREEN_EXIT=0
+```
+
+**Claim Source: executed** (real passing output; 7/7 SCOPE-07 unit tests, no
+skips — the manifest's SCOPE-07 `unit` linkedTests verbatim).
+
+#### Evidence E3 — live cross-surface e2e-api legs DEFERRED (C7)
+
+The SCOPE-07 `e2e-api` rows
+(`tests/e2e/agent/openknowledge_e2e_test.go::TestTelegram_PickHostedModelPersists_Spec096`,
+`TestWebTelegramModelParity_Spec096`,
+`TestAsk_StickyHostedSelectionPersistsAcrossTurns_Spec096`,
+`TestForkPrecedenceParity_MultiProvider_Spec096`) need a running stack with REAL
+hosted models and are handed to the home-lab `bubbles.devops` dispatch (C7),
+NOT marked passing from dev. The live discovery-aggregator wiring (cmd/core
+installing `agenttool.SetModelCatalogProvider`) is the deferred ACTIVATION:
+the SCOPE-07 unit tests inject a fake catalog/aggregator; the surfaces fall back
+to the byte-for-byte 089 flat list until the aggregator is wired. **Claim Source:
+not-run** (deferred; honest).
+
+### DoD status — SCOPE-07 (9 of 13 met + evidenced; 4 deferred)
+
+| DoD | State | Note |
+|-----|-------|------|
+| D07-T1-1 artifact-lint clean | [ ] | orchestrator closeout (foreign-owned; not run this focused turn) |
+| D07-T1-2 `check` EXIT 0 | [ ] | orchestrator closeout (compiles the whole module; deferred to avoid a cold Dockerized `go build` contending on a memory-pressured host) |
+| D07-T1-3 `format --check` EXIT 0 | [ ] | orchestrator closeout |
+| D07-T1-4 real terminal evidence | [x] | E1 (RED) + E2 (GREEN) are real provenance-tagged output |
+| D07-T1-5 088/089 do-not-amend boundary | [x] | NO second validator/store/picker; `modelswitch` imports unchanged; only a late-bound read source + additive GET fields added — Change Manifest above |
+| D07-T2-1 088/089 parity (adversarial) | [x] | `TestParity_OneValidatorOneStore_…` (pointer-identity + bidirectional shared store) + `TestAgentModel_TelegramWebParity_…` GREEN; RED-before E1 |
+| D07-T2-2 R2 additive, allowed_models byte-for-byte (adversarial) | [x] | `TestAgentModel_GetEnrichedCatalogAdditive_AllowedModelsPreserved_Spec096` GREEN; RED-before E1 |
+| D07-T2-3 R3 non-tool-capable gather (adversarial) | [x] | `TestParity_NonToolCapableGatherShownDisabled_RejectedFailLoud_Spec096` GREEN (with tool-capable CONTROL); RED-before E1 |
+| D07-T2-4 combined provider-grouped catalog | [x] | `TestModelPicker_TelegramCombinedProviderGroupedList_Spec096` + `…UnreachableShownDisabledOnlyReachableNumbered_Spec096` GREEN; RED-before E1 |
+| D07-T2-5 selection persistence + precedence (089 contract) | [x] | `TestAgentModel_StickyHostedPersistsPrecedence_Spec096` GREEN (sticky persists, per-request beats sticky one-shot, store byte-for-byte) |
+| D07-T2-6 live-stack parity + C7 deferral | [ ] | the 4 `e2e-api` rows are handed to the home-lab dispatch (C7), NOT marked passing from dev — E3 |
+| D07-T2-7 adversarial non-tautological + RED-before | [x] | E1 — all 4 adversarial tests captured RED-before; no bailout early-returns |
+| D07-T2-8 all unit pass, no skips; e2e-api deferred | [x] | E2 — 7/7 SCOPE-07 unit GREEN, no skips; `e2e-api` deferred (E3) |
+
+**What remains for the whole feature (096):** (1) the live discovery-aggregator
+ACTIVATION wiring in cmd/core (`agenttool.SetModelCatalogProvider` /
+`SetBudgetProvider` over the SCOPE-06 `connstore.DiscoveryConnections` feed +
+SCOPE-05 ledger) — until then both surfaces serve the byte-for-byte 089 flat
+list; (2) the SCOPE-03/04/06/07 live hosted-provider `e2e-api` legs (real
+Anthropic/OpenAI reachability, live Ollama, GPU answers) — the home-lab
+`bubbles.devops` dispatch (C7); (3) the per-scope `check`/`format`/`artifact-lint`
+closeout gates + the `bubbles.validate` certification. SCOPE-07 stays
+`in_progress` (the code + unit parity GREEN; the closeout gates + live legs +
+activation pending), consistent with SCOPE-01..06.
+
+
+
 
