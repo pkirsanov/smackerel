@@ -38,6 +38,9 @@ scenario_total=0
 row_total=0
 mapped_total=0
 file_reference_total=0
+edge_declared=0
+edge_inferred=0
+edge_ambiguous=0
 report_reference_total=0
 scenario_manifest_total=0
 scenario_manifest_file="$feature_dir/scenario-manifest.json"
@@ -287,6 +290,27 @@ extract_trace_ids() {
   printf '%s\n' "$value" | grep -Eo '(SCN|AC|FR|UC)-[A-Za-z0-9_-]+' || true
 }
 
+# classify_match_kind — IMP-015 Scope B (informational only).
+# Re-derives the confidence of an already-confirmed scenario→target match
+# READ-ONLY: 'declared' iff the scenario's first trace ID also appears in the
+# target; otherwise 'inferred'. Never touches failures/warnings/exit.
+classify_match_kind() {
+  local scenario="$1"
+  local target="$2"
+  local sid tid
+  sid="$(extract_trace_ids "$scenario" | head -n 1 || true)"
+  if [[ -n "$sid" ]]; then
+    while IFS= read -r tid; do
+      [[ -n "$tid" ]] || continue
+      if [[ "$tid" == "$sid" ]]; then
+        printf 'declared\n'
+        return 0
+      fi
+    done < <(extract_trace_ids "$target")
+  fi
+  printf 'inferred\n'
+}
+
 extract_path_candidates() {
   local value="$1"
   printf '%s\n' "$value" | grep -Eo '([A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+' || true
@@ -500,6 +524,24 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     mapped_total=$((mapped_total + 1))
     pass "$scope_label scenario mapped to Test Plan row: $scenario"
 
+    edge_kind="$(classify_match_kind "$scenario" "$matched_row")"
+    if [[ "$edge_kind" == "inferred" ]]; then
+      _amb=0
+      while IFS= read -r _r; do
+        [[ -n "$_r" ]] || continue
+        if scenario_matches_row "$scenario" "$_r"; then
+          _amb=$((_amb + 1))
+        fi
+      done <<< "$test_rows"
+      [[ "$_amb" -gt 1 ]] && edge_kind="ambiguous"
+    fi
+    case "$edge_kind" in
+      declared) edge_declared=$((edge_declared + 1)) ;;
+      ambiguous) edge_ambiguous=$((edge_ambiguous + 1)) ;;
+      *) edge_inferred=$((edge_inferred + 1)) ;;
+    esac
+    info "$scope_label scenario→row match confidence: $edge_kind"
+
     path_candidates="$(extract_path_candidates "$matched_row")"
     if [[ -z "$path_candidates" ]]; then
       fail "$scope_label mapped row has no concrete test file path: $scenario"
@@ -583,6 +625,23 @@ for scope_index in "${!scope_analysis_files[@]}"; do
     else
       dod_fidelity_mapped=$((dod_fidelity_mapped + 1))
       pass "$scope_label scenario maps to DoD item: $scenario"
+      edge_kind="$(classify_match_kind "$scenario" "$matched_dod")"
+      if [[ "$edge_kind" == "inferred" ]]; then
+        _amb=0
+        while IFS= read -r _d; do
+          [[ -n "$_d" ]] || continue
+          if scenario_matches_dod "$scenario" "$_d"; then
+            _amb=$((_amb + 1))
+          fi
+        done <<< "$dod_items"
+        [[ "$_amb" -gt 1 ]] && edge_kind="ambiguous"
+      fi
+      case "$edge_kind" in
+        declared) edge_declared=$((edge_declared + 1)) ;;
+        ambiguous) edge_ambiguous=$((edge_ambiguous + 1)) ;;
+        *) edge_inferred=$((edge_inferred + 1)) ;;
+      esac
+      info "$scope_label scenario→DoD match confidence: $edge_kind"
     fi
   done <<< "$scenarios"
 done
@@ -604,6 +663,7 @@ info "Scenario-to-row mappings: $mapped_total"
 info "Concrete test file references: $file_reference_total"
 info "Report evidence references: $report_reference_total"
 info "DoD fidelity scenarios: $dod_fidelity_total (mapped: $dod_fidelity_mapped, unmapped: $dod_fidelity_unmapped)"
+info "Edge confidence (IMP-015 Scope B): declared=$edge_declared inferred=$edge_inferred ambiguous=$edge_ambiguous"
 
 if [[ "$failures" -gt 0 ]]; then
   echo ""

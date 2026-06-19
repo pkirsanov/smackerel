@@ -1,0 +1,28 @@
+{
+  "name": "graph_neighbors",
+  "description": "Return the reverse-dependency (neighbor) set for ONE Bubbles governance node — which agents, scripts, and workflows depend ON it — as the unchanged JSON payload from bubbles-hub-report.sh --node (IMP-014's read-only, SST-derived governance hub composer). `node` is a script basename (e.g. state-transition-guard.sh), an agents/bubbles_shared/<x>.md shared module, or a Gxxx gate id. Output shape: {node, kind, inDegree, dependents[]} where each dependent is provenance-tagged with `source` + `line`. READ-ONLY: it adds no graph re-derivation and no network — it wraps the already-shipped, already-selftested composer via the bubbles-graph-neighbors.sh bash twin. A REAL node with no dependents legitimately returns inDegree 0 with an empty dependents[]; an UNKNOWN node (not a real script/shared-module/gate) returns a structured error. Use to see the blast radius of changing a node BEFORE you change it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "node": {
+        "type": "string",
+        "description": "The node to look up: a bubbles/scripts[/guards]/*.sh basename, an agents/bubbles_shared/*.md module, or a Gxxx gate id."
+      },
+      "format": {
+        "type": "string",
+        "description": "Output format. Defaults to json (the machine-readable {node,kind,inDegree,dependents[]} payload). Use text for the human-readable form.",
+        "default": "json"
+      }
+    },
+    "required": ["node"]
+  },
+  "script": "bubbles-graph-neighbors.sh",
+  "argsTemplate": ["--node", "${node}", "--format", "${format}"],
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "successExitCodes": [0]
+}
