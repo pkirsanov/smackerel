@@ -64,15 +64,16 @@ const masterKeyBytes = 32
 
 // ErrVaultNotConfigured is returned by Encrypt/Decrypt/Rotate when invoked on
 // a nil/unconfigured vault (no master key loaded). Callers that reach a vault
-// operation on an Ollama-only deployment have a wiring bug — the vault is only
-// constructed when a db-mode connection is declared.
+// operation on an Ollama-only deployment have a wiring bug — the vault is
+// constructed when a master key is present, and the master key is required
+// only for an enabled db-mode connection.
 var ErrVaultNotConfigured = errors.New("connvault: vault not configured (no master key loaded)")
 
 // ErrMasterKeyRequired is the named fail-loud abort (G028) when a db-mode
 // connection is declared but LLM_PROVIDER_SECRET_MASTER_KEY is absent/empty.
 var ErrMasterKeyRequired = errors.New(
 	"llm: LLM_PROVIDER_SECRET_MASTER_KEY is required and must be a base64-encoded 32-byte key " +
-		"when one or more llm.connections declare secret_ref.mode=db")
+		"when one or more ENABLED llm.connections declare secret_ref.mode=db")
 
 // SecretVault holds the in-core AES-256-GCM AEAD bound to the loaded master
 // key plus the current master-key epoch (secret_key_version). It is the only
@@ -128,12 +129,16 @@ func NewSecretVault(masterKeyB64 string, keyVersion int) (*SecretVault, error) {
 	return &SecretVault{gcm: gcm, keyVersion: keyVersion}, nil
 }
 
-// RequiresMasterKey reports whether the registry declares at least one db-mode
-// connection (secret_ref.mode == "db") — the design §11.2 predicate that makes
-// the master key mandatory. An Ollama-only / env-only deployment returns false.
+// RequiresMasterKey reports whether the registry has at least one ENABLED
+// db-mode connection (Enabled && secret_ref.mode == "db") — the design §11.2
+// predicate that makes the master key mandatory. A declared-but-DISABLED
+// db-mode slot (the default-shipped hosted slots) returns false: the operator
+// administers it via the admin surface, and the master key only becomes
+// mandatory once that slot is enabled. An Ollama-only / env-only deployment
+// also returns false.
 func RequiresMasterKey(connections []config.ModelConnection) bool {
 	for _, c := range connections {
-		if c.SecretRef.Mode == config.ModelConnectionSecretModeDB {
+		if c.Enabled && c.SecretRef.Mode == config.ModelConnectionSecretModeDB {
 			return true
 		}
 	}
@@ -142,13 +147,15 @@ func RequiresMasterKey(connections []config.ModelConnection) bool {
 
 // LoadVault constructs the vault per the design §11.2 fail-loud predicate:
 //
-//   - a db-mode connection is declared + the master key is absent/empty
-//     → fail-loud (ErrMasterKeyRequired);
-//   - no db-mode connection + no master key → (nil, nil): an Ollama-only
-//     deployment needs no vault and adds no new required secret;
+//   - an ENABLED db-mode connection is declared + the master key is
+//     absent/empty → fail-loud (ErrMasterKeyRequired);
+//   - no enabled db-mode connection + no master key → (nil, nil): covers an
+//     Ollama-only deployment AND a deployment that ships only declared-but-
+//     disabled db-mode hosted slots — neither needs a vault nor adds a new
+//     required secret at boot;
 //   - a master key is present → it MUST be valid (NewSecretVault validates the
-//     32-byte length), db-mode or not — a configured key is never silently
-//     ignored.
+//     32-byte length), enabled db-mode or not — a configured key is never
+//     silently ignored.
 func LoadVault(masterKeyB64 string, keyVersion int, connections []config.ModelConnection) (*SecretVault, error) {
 	if masterKeyB64 == "" {
 		if RequiresMasterKey(connections) {
