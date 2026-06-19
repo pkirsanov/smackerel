@@ -2135,6 +2135,19 @@ weakening**.
   re-executed (already validated + on `origin/main`). **Claim Source: interpreted**
   (read-only security review of committed sources; no commands run this turn).
 
+---
+
+## Tier-1 Closeout Gates (orchestrator post-implementation)
+
+Final Tier-1 universal gates, re-run at closeout after the foreign-owned
+`uservalidation.md` landed (previously the sole blocking artifact). **Claim
+Source: executed** — real command results.
+
+- **artifact-lint** — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` → **PASSED (EXIT 0)**. All six required artifacts present (`uservalidation.md` now exists — previously the only failure); every structure check green; the Anti-Fabrication Evidence Checks all pass (checked DoD items carry evidence blocks, no unfilled placeholders, no repo-CLI bypass). Clears the deferred artifact-lint residual recorded under SCOPE-01..07.
+- **check** — `./smackerel.sh check` → **EXIT 0**. `go vet` + build clean across the whole tree; `scenario-lint: OK` (17 scenarios registered, 0 rejected). Clears the deferred `check` residual under SCOPE-03..07 (SCOPE-01/02 were already green).
+- **format** — `./smackerel.sh format --check` → **EXIT 1**, but ONLY because of a single FOREIGN untracked file from a concurrent session, `internal/connector/qfdecisions/chaos_hardening_test.go`, which is NOT part of spec-096 and is not ours to format. Every spec-096 source is gofmt-clean: the last committed gap, `internal/api/model_connections_admin_test.go` (SCOPE-06), was formatted at closeout (`gofmt -w` on that one file; `gofmt -l <file>` now empty), leaving the foreign file as the sole `gofmt -l` entry. The spec-096 format obligation is met; the global red is foreign concurrent work, so the global `format --check` gate (D0n-T1-3) stays open.
+- **traceability-guard** — **PASSED (20/20 scenarios mapped)**, recorded earlier (G068 closure).
+
 
 
 

@@ -301,9 +301,9 @@ Every entry is copied verbatim from
 
 **Tier-1 (universal):**
 
-- [ ] D01-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: [report.md](report.md) → SCOPE-01. **RESIDUAL (not a code gap):** artifact-lint's only failure is the missing foreign `uservalidation.md` (owned by `bubbles.plan`, not `bubbles.implement`); all implement-owned lint + anti-fabrication checks pass (E7). Routed to `bubbles.plan`.
+- [x] D01-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: [report.md](report.md) → SCOPE-01 + [report.md](report.md) → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0) — structure + anti-fabrication checks all green.
 - [x] D01-T1-2 — `./smackerel.sh check` EXIT 0 (build + vet + config-sync + scenario-lint). → Evidence: report.md → SCOPE-01.
-- [ ] D01-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-01. **RESIDUAL (not a code gap):** every changed file is gofmt-clean (`gofmt -l` empty, E6); the global command is blocked solely by a pre-existing untracked FOREIGN file (`internal/connector/qfdecisions/chaos_hardening_test.go`, another session's WIP) that must not be modified.
+- [ ] D01-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-01 + report.md → Tier-1 Closeout Gates. **OPEN (not a spec-096 gap):** spec-096 sources are gofmt-clean (the last committed gap, `internal/api/model_connections_admin_test.go`, was formatted at closeout); the global `format --check` remains red ONLY due to a foreign untracked file (`internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work) that must not be modified.
 - [x] D01-T1-4 — Every evidence block in report.md → SCOPE-01 is REAL terminal output (anti-fabrication); no synthesized results. → Evidence: report.md → SCOPE-01.
 - [x] D01-T1-5 — 088/089 do-not-amend boundary respected: zero behavioural change to `modelswitch`/`modelpref`, the Telegram `/model` picker, or `/v1/agent/model`; this scope only adds the SST registry. → Evidence: report.md → Change Manifest (isolated diff).
 
@@ -414,9 +414,9 @@ test master key. Entries are copied verbatim from
 
 **Tier-1 (universal):**
 
-- [ ] D02-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-02. **DEFERRED (not a code gap):** blocked by the absent `uservalidation.md` — a user-acceptance/closeout artifact authored at validation time (owned by `bubbles.plan`/validation, not `bubbles.implement`).
+- [x] D02-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-02 + report.md → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0).
 - [x] D02-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-02. **DEFERRED (not a code gap):** the global format gate fails only on a pre-existing UNTRACKED FOREIGN file from a concurrent session (`internal/connector/qfdecisions/chaos_hardening_test.go`); every SCOPE-02 file is gofmt-clean.
+- [ ] D02-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-02 + report.md → Tier-1 Closeout Gates. **OPEN (not a spec-096 gap):** spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file (`internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work) that must not be modified.
 - [x] D02-T1-4 — Every evidence block in report.md → SCOPE-02 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-02.
 - [x] D02-T1-5 — 088/089 do-not-amend boundary respected: the vault is additive; no `modelswitch`/`modelpref`/picker behaviour changes. → Evidence: report.md → Change Manifest.
 
@@ -570,9 +570,9 @@ the live hosted answer is an `e2e-api` deferred to the home-lab dispatch
 
 **Tier-1 (universal):**
 
-- [ ] D03-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-03. _(Deferred: blocked by absent foreign `uservalidation.md`, owned by `bubbles.plan` — same closeout caveat as SCOPE-01/02; not a SCOPE-03 code gap.)_
-- [ ] D03-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-03. _(Deferred: the orchestrator runs `check` post-implementation to bound this turn; SCOPE-03 Go builds + Python imports are clean.)_
-- [ ] D03-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-03. _(Deferred: global gate run at closeout; same foreign-untracked-file caveat as SCOPE-01/02.)_
+- [x] D03-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-03 + report.md → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0).
+- [x] D03-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-03 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
+- [ ] D03-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-03 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
 - [x] D03-T1-4 — Every evidence block in report.md → SCOPE-03 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-03.
 
 **Tier-2 (role-specific: 088/089 parity + secret-safety + fail-loud):**
@@ -709,9 +709,9 @@ verbatim from [scenario-manifest.json](scenario-manifest.json).
 
 **Tier-1 (universal):**
 
-- [ ] D04-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-04. _(DEFERRED — blocked by absent `uservalidation.md`, a closeout artifact owned by `bubbles.plan`; not a SCOPE-04 code gap. Same caveat as SCOPE-01/02/03.)_
-- [ ] D04-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-04. _(DEFERRED to the orchestrator post-implementation; SCOPE-04 compiles clean under `go test ./...` — E1 `finished OK`.)_
-- [ ] D04-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-04. _(DEFERRED — global gate run at closeout by the orchestrator; same foreign-untracked-file caveat as SCOPE-01/02/03.)_
+- [x] D04-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-04 + report.md → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0).
+- [x] D04-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-04 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
+- [ ] D04-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-04 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
 - [x] D04-T1-4 — Every evidence block in report.md → SCOPE-04 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-04. _(E1 GREEN `UNIT_EXIT=0`, E2 RED-before `RED_EXIT=1`, E3 import greps — all captured.)_
 
 **Tier-2 (role-specific: graceful degradation + leaf purity + G028 + canonicalization):**
@@ -841,9 +841,9 @@ Entries are copied verbatim from
 
 **Tier-1 (universal):**
 
-- [ ] D05-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-05. _(DEFERRED — blocked by absent `uservalidation.md`, a closeout artifact owned by `bubbles.plan`; not a SCOPE-05 code gap. Same caveat as SCOPE-01..04.)_
-- [ ] D05-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-05. _(DEFERRED to the orchestrator post-implementation; SCOPE-05 compiles clean under `go test ./...` — E1 `finished OK`, `cmd/core` built.)_
-- [ ] D05-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-05. _(DEFERRED to the orchestrator post-implementation; global gate.)_
+- [x] D05-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-05 + report.md → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0).
+- [x] D05-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-05 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
+- [ ] D05-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-05 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
 - [x] D05-T1-4 — Every evidence block in report.md → SCOPE-05 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-05 (E1–E4, captured).
 - [x] D05-T1-5 — 088/089 do-not-amend boundary respected: the budget/cost seam is additive; no `modelswitch`/`modelpref`/picker behaviour changes. → Evidence: report.md → SCOPE-05 Change Manifest (no modelswitch/modelpref/picker file edited).
 
@@ -1026,9 +1026,9 @@ from [scenario-manifest.json](scenario-manifest.json).
 
 **Tier-1 (universal):**
 
-- [ ] D06-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-06.
-- [ ] D06-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-06.
-- [ ] D06-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-06.
+- [x] D06-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-06 + report.md → Tier-1 Closeout Gates. **MET:** artifact-lint PASSES (EXIT 0) now that `uservalidation.md` exists.
+- [x] D06-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-06 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
+- [ ] D06-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-06 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean — incl. the now-formatted `internal/api/model_connections_admin_test.go`; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
 - [x] D06-T1-4 — Every evidence block in report.md → SCOPE-06 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-06.
 - [x] D06-T1-5 — **No env-specific content in repo:** the admin surface + PWA triad carry only generic placeholders (no real hostnames/IPs/tailnet identifiers/operator usernames/secret values); `infrastructure.operator_user_ids` is an abstract SST allowlist, real values live in the deploy adapter. → Evidence: report.md → SCOPE-06 (pii-scan / grep).
 
@@ -1207,9 +1207,9 @@ hosted models) are **deferred to the home-lab `bubbles.devops` dispatch
 
 **Tier-1 (universal):**
 
-- [ ] D07-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-07.
-- [ ] D07-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-07.
-- [ ] D07-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-07.
+- [x] D07-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-07 + report.md → Tier-1 Closeout Gates. **MET:** artifact-lint PASSES (EXIT 0) now that `uservalidation.md` exists.
+- [x] D07-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-07 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
+- [ ] D07-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-07 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
 - [x] D07-T1-4 — Every evidence block in report.md → SCOPE-07 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-07.
 - [x] D07-T1-5 — 088/089 do-not-amend boundary respected: selection extends the EXISTING validator/store/picker; NO second validator/store/picker is introduced. → Evidence: report.md → Change Manifest.
 
