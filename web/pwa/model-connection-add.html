@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Add Model Connection — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Add / configure a connection</h1>
+  <p class="subtitle">Wire a provider that config has declared — operator only</p>
+
+  <!--
+    Spec 096 SCOPE-06 Screen S2 — operator-gated add / configure flow.
+    Mirrors connectors-add.html: a provider radiogroup, then that kind's
+    credential form. The provider picker is scoped to declared db-mode slots
+    that LACK a credential — it wires a declared slot, it never invents one
+    (a brand-new provider KIND is an SST/config edit). Non-secret params are
+    shown read-only from the slot; the only credential input is WRITE-ONLY
+    (type=password, autocomplete=off, empty on load, never pre-filled).
+  -->
+
+  <!-- Operator-only boundary: shown when the admin API → 403. -->
+  <section id="operator-only" class="card" aria-labelledby="operator-only-heading" hidden>
+    <h2 id="operator-only-heading">🔒 Operator only</h2>
+    <p class="status status-error" role="alert">
+      This area manages shared AI provider connections and is limited to the
+      Smackerel operator.
+    </p>
+    <p class="footer"><a href="/pwa/">← Back to home</a></p>
+  </section>
+
+  <form id="add-form" class="card" aria-labelledby="add-heading" novalidate>
+    <h2 id="add-heading">Choose a provider to configure</h2>
+
+    <fieldset id="provider-fieldset" aria-busy="true">
+      <legend>Provider</legend>
+      <p
+        id="provider-status"
+        class="status status-loading"
+        role="status"
+        aria-live="polite"
+      >Loading connections…</p>
+      <div
+        id="provider-options"
+        class="radio-group"
+        role="radiogroup"
+        aria-label="Provider connection slot"
+      ></div>
+      <p
+        id="provider-empty"
+        class="status status-empty"
+        role="status"
+        hidden
+      >No declared-unconfigured connection slots. Add a provider kind in config
+        (SST), then run config generate.</p>
+    </fieldset>
+
+    <fieldset id="credential-fieldset" hidden>
+      <legend>Configure <span id="credential-kind-label"></span></legend>
+
+      <div id="params-readonly" hidden>
+        <p class="field-label">From config (read-only)</p>
+        <dl class="connector-detail-fields" id="params-list"></dl>
+        <p class="hint">Parameters come from config. Changing them is an SST
+          edit, not done here.</p>
+      </div>
+
+      <p class="field-label">Credential (write-only)</p>
+      <div id="secret-inputs"></div>
+      <p id="secret-hint" class="hint">Credentials are write-only — entered to
+        set or replace, never displayed and never echoed back.</p>
+    </fieldset>
+
+    <div class="form-actions">
+      <button
+        type="submit"
+        id="save-btn"
+        class="btn btn-primary"
+        disabled
+      >Save credential</button>
+      <p
+        id="add-error"
+        class="status status-error"
+        role="alert"
+        hidden
+      ></p>
+    </div>
+  </form>
+
+  <p class="footer">
+    <a href="/pwa/model-connections.html">← Back to connections</a>
+  </p>
+
+  <script src="/pwa/model-connection-add.js"></script>
+</body>
+</html>
