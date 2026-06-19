@@ -231,6 +231,17 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		CaptureFallbackHashKey:          cfg.CaptureFallback.DedupHashKey,
 	}
 
+	// Spec 096 SCOPE-06 — operator-gated model-connections admin surface +
+	// operator gate (R1) + the DB-backed CredentialSource / effective-enabled
+	// seam. Fail-loud (G028) when the surface is reachable with an empty
+	// operator allowlist in production.
+	modelConnAdmin, modelConnGate, err := buildModelConnectionsAdmin(cfg, svc)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("model-connections admin wiring: %w", err)
+	}
+	deps.ModelConnectionsAdminHandler = modelConnAdmin
+	deps.ModelConnectionsOperatorGate = modelConnGate
+
 	if cfg.QFDecisionsEnabled {
 		qfEvidenceStore := qfdecisions.NewEvidenceExportStore(svc.pg.Pool)
 		qfEvidenceExporter := qfdecisions.NewEvidenceExporter(

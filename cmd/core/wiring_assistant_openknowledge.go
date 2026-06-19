@@ -90,10 +90,14 @@ import (
 
 	"github.com/smackerel/smackerel/internal/config"
 
+	"github.com/smackerel/smackerel/internal/api"
+
 	ok "github.com/smackerel/smackerel/internal/assistant/openknowledge"
 	okagent "github.com/smackerel/smackerel/internal/assistant/openknowledge/agent"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/citeback"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connvault"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/llm"
 	okmetrics "github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelpref"
@@ -401,4 +405,73 @@ func loadOpenKnowledgeAgentPrompt(path string) (string, error) {
 		return "", fmt.Errorf("%s: field %q is empty (REQUIRED non-empty per G028)", path, agentPromptYAMLField)
 	}
 	return s, nil
+}
+
+// modelProviderMasterKeyEpoch is the initial master-key epoch the connection
+// vault encrypts under (secret_key_version). It is the rotation epoch, not a
+// runtime SST value; a future rotation driver (SCOPE-02 §11.3) bumps it. The
+// SCOPE-02 persistence round-trip is pinned to epoch 1.
+const modelProviderMasterKeyEpoch = 1
+
+// buildModelConnectionsAdmin constructs the Spec 096 SCOPE-06 runtime-plane
+// wiring: the DB-backed connstore.Store (the SCOPE-03 CredentialSource AND the
+// single effective-enabled predicate SCOPE-04 discovery consults), the operator
+// gate (R1), and the operator-gated admin handler.
+//
+// It is fail-loud (G028): when a db-mode connection is declared (the
+// credential-mutating /v1/admin/model-connections* surface is reachable) and
+// infrastructure.operator_user_ids is empty in production, it refuses to start
+// an open-by-default operator surface. In dev/test the surface runs fail-closed
+// (the operator gate locks everyone out) with a warning.
+//
+// The connstore.Store is stashed on svc.modelConnStore so the (deferred) live
+// dispatch-resolver / catalog-aggregator wiring reads the SAME seam the admin
+// surface writes — the single effective-enabled gate across dispatch +
+// discovery. Returns (nil, gate, nil) when there is no Postgres pool
+// (config-validate mode) or no db-mode slot: the admin routes are then simply
+// not mounted, but the gate is still validated.
+func buildModelConnectionsAdmin(cfg *config.Config, svc *coreServices) (*api.ModelConnectionsAdminHandler, *api.OperatorGate, error) {
+	if cfg == nil {
+		return nil, nil, errors.New("buildModelConnectionsAdmin: nil config")
+	}
+	conns := cfg.ModelConnections.Connections
+	dbModeDeclared := false
+	for _, c := range conns {
+		if c.SecretRef.Mode == config.ModelConnectionSecretModeDB {
+			dbModeDeclared = true
+			break
+		}
+	}
+	// R1 / G028 fail-loud operator-gate guard: no open-by-default operator
+	// surface. surfaceReachable == "a db-mode slot is declared".
+	if err := api.ValidateOperatorGate(cfg.OperatorUserIDs, dbModeDeclared, cfg.Environment); err != nil {
+		return nil, nil, err
+	}
+	gate := api.NewOperatorGate(cfg.OperatorUserIDs)
+
+	if svc == nil || svc.pg == nil || svc.pg.Pool == nil || !dbModeDeclared {
+		// config-validate mode / no DB, or no db-mode slot to administer: the
+		// gate is validated but no live admin surface is mounted.
+		return nil, gate, nil
+	}
+
+	// The master key is required iff a db-mode connection is declared
+	// (connvault.LoadVault enforces the predicate); an Ollama-only deployment
+	// needs no vault and no new secret.
+	vault, err := connvault.LoadVault(os.Getenv("LLM_PROVIDER_SECRET_MASTER_KEY"), modelProviderMasterKeyEpoch, conns)
+	if err != nil {
+		return nil, nil, fmt.Errorf("model-connections admin: load credential vault: %w", err)
+	}
+
+	store := connstore.NewStore(svc.pg.Pool, conns)
+	svc.modelConnStore = store // SCOPE-03 CredentialSource + SCOPE-04 effective-enabled seam
+
+	timeout := time.Duration(cfg.ModelConnections.Discovery.PerProviderTimeoutMs) * time.Millisecond
+	probe := api.NewHTTPConnectionProbe(&http.Client{Timeout: timeout}, timeout)
+	handler := api.NewModelConnectionsAdminHandler(store, vault, probe)
+
+	slog.Info("spec096 scope06: model-connections admin surface wired",
+		"operator_gate_configured", gate.Configured(),
+		"note", "DB-backed CredentialSource + effective-enabled predicate ready for SCOPE-03 dispatch + SCOPE-04 discovery (live resolver/aggregator wiring deferred to SCOPE-07)")
+	return handler, gate, nil
 }
