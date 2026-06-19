@@ -11,6 +11,9 @@ Create high-signal skills that improve agent performance without bloating contex
 ## Portability
 This is a portable governance skill. Keep it free of project-specific commands, hostnames, ports, and repo-only workflows.
 
+## Scope: project vs personal
+Project-scoped procedures live in `.github/skills/` and travel with the repository. Personal or cross-repo procedural preferences do NOT belong in a project skill — they live in the observation-driven developer profile (`.specify/memory/developer-profile.md`) and the agent's user-memory layer. Do not stand up a parallel personal-skills surface; route personal preferences to those existing layers instead.
+
 ## Non-negotiables
 - Do not hardcode environment-specific hosts, URLs, or ports.
 - Do not invent defaults or fallbacks that hide missing configuration.
@@ -31,6 +34,11 @@ Optional bundled resources:
 - `scripts/`: deterministic helpers
 - `assets/`: templates or reusable artifacts
 
+## Recommended Body Sections
+Beyond the workflow itself, a `SKILL.md` SHOULD include these two sections when applicable. Both are RECOMMENDED, not mandatory — existing skills without them remain valid:
+- **When NOT to use** — explicit negative triggers that route to the correct sibling skill. Stating where the skill does *not* apply sharpens semantic auto-load and reduces wrong-skill activation when several skills share vocabulary.
+- **Works well with** — composition pointers to the sibling skills this one commonly chains with, so a reader knows the natural next or previous step.
+
 ## Writing Guidelines
 - Keep `SKILL.md` short and action-oriented.
 - Use imperative language.
@@ -46,7 +54,18 @@ Optional bundled resources:
 - Prefer editor-native file tools for creating and editing files.
 - Do not tell users to run shell commands to create files that the agent can create directly.
 
+## When to promote a procedure to a skill
+Decision rule: **Do it once → a prompt is fine. Recurring + non-obvious + verified → promote to a skill.**
+
+A one-off instruction belongs in a prompt or a chat message, not a skill. Promote a procedure only when it is *recurring* (you have reached for it more than once), *non-obvious* (it encodes judgment a fresh agent would not guess), and *verified* (you have watched it actually work). This is the same trigger the Skill Evolution Loop applies when it surfaces a repeated-lesson proposal (`skill-evolution.sh` → `.specify/memory/skill-proposals.md`), and the inverse of the `INVENTORY.md` pruning policy that deprecates stale skills. Treat promotion and pruning as the two ends of one lifecycle, governed by the same bar.
+
 ## Quality Bar
+Before a candidate becomes a skill, it must clear the creation bar — **Reusable · Non-trivial · Specific · Verified**:
+- **Reusable** — it applies beyond the single situation that prompted it.
+- **Non-trivial** — it encodes judgment or sequencing a fresh agent would not guess.
+- **Specific** — it targets a concrete task with concrete triggers, not a vague theme.
+- **Verified** — only codify what actually worked; do not transcribe untested theory or duplicate official docs.
+
 A skill is done when:
 - It does not conflict with `.github/copilot-instructions.md`.
 - It introduces no forbidden defaults, hosts, or ports.
