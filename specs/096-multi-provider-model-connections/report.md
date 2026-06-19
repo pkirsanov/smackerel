@@ -1364,4 +1364,211 @@ clean-stack `bubbles.devops` dispatch and the `check`/`format`/`artifact-lint`
 closeout gates are routed to the orchestrator/owner — SCOPE-05 is held at
 `in_progress` rather than fabricating a pass on the deferred legs.
 
+---
+
+## SCOPE-06 — Operator-gated web admin connection surface (backend half)
+
+**Status:** in_progress (BACKEND HALF delivered + evidenced; the operator-gated
+PWA triad — `model-connections.html` / `model-connection-add.html` /
+`model-connection-detail.html` — is a SEPARATE follow-up frontend dispatch, and
+the live `integration` + `e2e-api` legs are deferred to the clean-stack /
+home-lab `bubbles.devops` dispatch (C7)).
+**Executed by:** `bubbles.implement` (parent-expanded full-delivery).
+**Scenarios covered (backend, unit):** SCN-096-W01/W02/W03/W04 (the unit halves
+— write-only redaction, truthful typed test, 409 enable-guard, 404 closed-set,
+per-kind secret fields, operator gate). The W01/W02/W04 live `e2e-api` legs +
+the W03 `integration` leg are DEFERRED.
+
+### What shipped (Go / API only)
+
+1. **Operator gate (R1 RESOLVED).** New SST `infrastructure.operator_user_ids`
+   allowlist (`config/smackerel.yaml` → `scripts/commands/config.sh`
+   `OPERATOR_USER_IDS` CSV → `internal/config/config.go` `OperatorUserIDs`),
+   empty by default (No Env-Specific Content; real ids in the deploy overlay).
+   `internal/api/model_connections_operator_gate.go`: the gate reads the
+   claim-bound bearer subject (`auth.UserIDFromContext`, spec-044 — NEVER a body
+   field); anonymous → `401`, authenticated non-operator → `403`, operator →
+   pass; an EMPTY allowlist is **fail-closed** (everyone rejected, no
+   open-by-default surface). `ValidateOperatorGate` is the G028 fail-loud
+   startup guard: empty allowlist + reachable surface (≥1 db-mode slot) +
+   `production` → abort; dev/test runs fail-closed with a warning (mirrors the
+   repo's MIT-040-S-004 empty-token auth precedent).
+2. **`/v1/admin/model-connections*` surface** (`internal/api/model_connections_admin.go`,
+   mounted in `router.go` behind `bearerAuthMiddleware` + the operator gate):
+   `GET /` (list every db-mode slot + status, no secrets), `GET /{id}`,
+   `PUT /{id}/credential` (write-only → redacted view; `404` non-db-mode; `422`
+   missing per-kind field), `POST /{id}/test` (truthful typed `ok|failed` +
+   `auth_failed|unreachable|timeout`; `409` if no credential), `POST /{id}/enable`
+   (`409` unless credential present AND last-test=`ok`), `POST /{id}/disable`.
+   **Every response omits the plaintext credential** (presence + last-4 +
+   last-test only). `model_connections_probe.go` is the production
+   `HTTPConnectionProbe` (truthful reachability/auth-class; real per-provider
+   semantics validated by the deferred e2e leg).
+3. **DB-backed CredentialSource + effective-enabled predicate**
+   (`internal/assistant/openknowledge/connstore/`). `connstore.Store` owns the
+   migration-061 `model_provider_connections` rows. `EffectiveEnabled(rec,
+   declared)` is THE single gate = registry-declared AND DB-`enabled` AND
+   `last_test_outcome=ok` AND credential present. `Store.Credential(connID)`
+   structurally satisfies the SCOPE-03 `llm.CredentialSource` (returns a record
+   ONLY when effective-enabled → fail-closed → the resolver never Ollama-falls-
+   back). `Store.DiscoveryConnections(ctx)` is the SCOPE-04 feed (same gate).
+   Wired in `cmd/core/wiring_assistant_openknowledge.go` (`buildModelConnectionsAdmin`)
+   + `cmd/core/wiring.go`; the store is stashed on `svc.modelConnStore` so the
+   (deferred) live resolver/aggregator wiring reads the SAME seam the admin
+   surface writes.
+
+No new migration: 061 already carries `last_tested_at` / `last_test_outcome` /
+`last_test_detail`. 088/089 + SCOPE-01..05 are untouched (additive only).
+
+### Test Evidence
+
+All evidence below is REAL captured terminal output (line-wrapping is terminal
+width only; no content edited; home paths shown as `~`). UNIT/handler-level: a
+real `chi` router, an in-memory fake store, a SYNTHETIC vault, and an injected
+fake probe — NO DB, NO network, NO interception. All secret values are
+SYNTHETIC.
+
+#### Evidence E1 — full scoped GREEN run (SCOPE-06 unit tests + SCOPE-01..05 regression + `cmd/core` compile)
+
+Command: `~/smackerel$ ./smackerel.sh test unit --go --go-run 'Spec096|AdminModelConnections|OperatorGate' --verbose`
+(overall `[go-unit] go test ./... finished OK`):
+
+```text
+--- PASS: TestAdminModelConnections_PutCredentialWriteOnly_RedactedView_Spec096 (0.00s)
+--- PASS: TestAdminModelConnections_TestConnection_TruthfulOutcome_Spec096 (0.00s)
+--- PASS: TestAdminModelConnections_PerKindSecretFields_OpenAIFoundryGoogleBedrock_Spec096 (0.00s)
+--- PASS: TestAdminModelConnections_UnknownSlotRejected404_Spec096 (0.00s)
+--- PASS: TestAdminModelConnections_EnableUntested_Blocked409_Spec096 (0.00s)
+--- PASS: TestAdminModelConnections_FailedTest_TypedError_NeverFalseSuccess_Spec096 (0.00s)
+--- PASS: TestAdminModelConnections_OperatorGate_403NonOperator_401Anonymous_Spec096 (0.00s)
+ok      github.com/smackerel/smackerel/internal/api     0.387s
+--- PASS: TestEffectiveEnabled_SingleGate_Spec096 (0.00s)
+    --- PASS: TestEffectiveEnabled_SingleGate_Spec096/not_registry-declared_(UI-invented_slot) (0.00s)
+    --- PASS: TestEffectiveEnabled_SingleGate_Spec096/DB_disabled_(operator_toggled_off) (0.00s)
+    --- PASS: TestEffectiveEnabled_SingleGate_Spec096/last_test_failed_(never_enable_an_unverified_connection) (0.00s)
+    --- PASS: TestEffectiveEnabled_SingleGate_Spec096/untested_(last_test_outcome_empty) (0.00s)
+    --- PASS: TestEffectiveEnabled_SingleGate_Spec096/credential_missing_(no_cipher_material) (0.00s)
+--- PASS: TestHasCredential_RequiresCipherMaterial_Spec096 (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore        0.035s
+ok      github.com/smackerel/smackerel/internal/config  0.046s   (SCOPE-01 regression clean)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/connvault        0.027s   (SCOPE-02 regression clean)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/llm      0.029s   (SCOPE-03 regression clean)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/catalog  0.072s   (SCOPE-04 regression clean)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agent    0.040s   (SCOPE-05 regression clean)
+[go-unit] go test ./... finished OK
+```
+
+The whole tree compiles under `go test ./...`, so the new `cmd/core` wiring
+(`buildModelConnectionsAdmin` + the `connstore.Store` CredentialSource seam +
+the router mount) is compile-checked. SCOPE-01..05 Spec096 tests re-ran GREEN
+in the same run (no regression from the new wiring).
+
+#### Evidence E2 — captured RED-before (three adversarial tests bite; non-tautological)
+
+Three temporary mutations were applied and the adversarial tests re-run, then
+ALL reverted (post-revert code byte-identical to E1; `grep -rn 'RED-BEFORE|if
+false' internal/api/*.go` → no matches): (a) operator gate `!IsOperator` check
+neutered (`if false && …`) so a non-operator passes; (b) `Test` outcome forced
+to a constant `ok`; (c) `Enable` 409-precondition disabled (`if false && …`).
+
+Command: `~/smackerel$ ./smackerel.sh test unit --go --go-run 'AdminModelConnections_OperatorGate|AdminModelConnections_FailedTest|AdminModelConnections_EnableUntested' --verbose`:
+
+```text
+--- FAIL: TestAdminModelConnections_EnableUntested_Blocked409_Spec096 (0.00s)
+--- FAIL: TestAdminModelConnections_FailedTest_TypedError_NeverFalseSuccess_Spec096 (0.00s)
+--- FAIL: TestAdminModelConnections_OperatorGate_403NonOperator_401Anonymous_Spec096 (0.00s)
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/api     0.398s
+```
+
+A gate that admits a non-operator, a probe reported as a false `ok`, and an
+enable that skips the credential+test precondition each flip the matching
+adversarial test to FAIL — the tests are non-tautological. Post-revert the same
+three tests PASS (E1).
+
+#### Evidence E3 — operator-gate SST pipeline (R1, NO-DEFAULTS G028)
+
+Command: `~/smackerel$ ./smackerel.sh config generate && ./smackerel.sh config generate --env test`
+then `grep -n OPERATOR_USER_IDS config/generated/dev.env config/generated/test.env`:
+
+```text
+config-validate: ~/smackerel/config/generated/dev.env.tmp.* OK
+Generated ~/smackerel/config/generated/dev.env
+config-validate: ~/smackerel/config/generated/test.env.tmp.* OK
+Generated ~/smackerel/config/generated/test.env
+config/generated/dev.env:454:OPERATOR_USER_IDS=
+config/generated/test.env:454:OPERATOR_USER_IDS=
+```
+
+`OPERATOR_USER_IDS=` is emitted EMPTY by default (committed config carries
+`infrastructure.operator_user_ids: []` — No Env-Specific Content). The
+fail-loud `ValidateOperatorGate` (empty + reachable + production → abort) +
+fail-closed runtime gate are proven by
+`TestAdminModelConnections_OperatorGate_403NonOperator_401Anonymous_Spec096`
+(E1), which exercises the `401`/`403`/pass paths AND the
+`production`-aborts / `development`-warns / unreachable-passes branches.
+
+#### Evidence E4 — write-only-secret grep (D06-T2-2): no handler returns/logs the plaintext
+
+Command: `~/smackerel$ grep -nE 'Decrypt|api_key|secret_fields' internal/api/model_connections_admin.go | grep -iE 'writeJSON|return|log|slog'`:
+
+```text
+(no match — the only Decrypt call feeds the in-core probe; no JSON/log/return
+path carries the decrypted bundle or any secret field. The redacted view type
+`modelConnectionView` has NO plaintext field; the write-only assertion in
+TestAdminModelConnections_PutCredentialWriteOnly_RedactedView_Spec096 confirms
+the cleartext never appears in the response body.)
+```
+
+### Change Manifest (this scope's edits only)
+
+```text
+=== SCOPE-06 NEW ===
+?? internal/assistant/openknowledge/connstore/store.go                  (Store; EffectiveEnabled predicate; Credential = SCOPE-03 CredentialSource; DiscoveryConnections = SCOPE-04 feed; Upsert/RecordTest/SetEnabled)
+?? internal/assistant/openknowledge/connstore/scan.go                   (nullable-column row scan)
+?? internal/assistant/openknowledge/connstore/store_test.go             (SCN-096-W03 unit: EffectiveEnabled single-gate truth table + HasCredential)
+?? internal/api/model_connections_admin.go                              (operator-gated admin handler: list/get/credential/test/enable/disable; per-kind secret fields; write-only views)
+?? internal/api/model_connections_admin_test.go                         (SCN-096-W01/W02/W03/W04 unit: 6 manifest tests; httptest + fake store + synthetic vault + fake probe)
+?? internal/api/model_connections_operator_gate.go                      (R1 operator gate middleware + ValidateOperatorGate G028 fail-loud)
+?? internal/api/model_connections_operator_gate_test.go                 (SCN-096-W04 unit: OperatorGate 403/401 ADVERSARIAL + fail-loud guard)
+?? internal/api/model_connections_probe.go                              (production HTTPConnectionProbe; truthful typed reachability/auth-class)
+?? tests/integration/model_connections_enable_disable_test.go           (//go:build integration; SCN-096-W03 live leg — env-gated t.Skip, DEFERRED clean-stack; t.Fatal guard prevents green-painting)
+?? tests/e2e/admin/model_connections_e2e_test.go                        (//go:build e2e; SCN-096-W01/W02/W04 live legs — env-gated t.Skip, DEFERRED home-lab; t.Fatal guards prevent green-painting)
+=== SCOPE-06 EDITED ===
+ M config/smackerel.yaml                                                (infrastructure.operator_user_ids: [] — empty default, No Env-Specific Content)
+ M scripts/commands/config.sh                                           (OPERATOR_USER_IDS read [YAML list→CSV] + emit, mirrors trusted_proxies)
+ M internal/config/config.go                                           (OperatorUserIDs []string field + loader)
+ M internal/api/health.go                                              (Dependencies += ModelConnectionsAdminHandler + ModelConnectionsOperatorGate)
+ M internal/api/router.go                                              (mount /v1/admin/model-connections* behind bearerAuth + operator gate)
+ M cmd/core/services.go                                                (coreServices += modelConnStore *connstore.Store seam)
+ M cmd/core/wiring_assistant_openknowledge.go                          (buildModelConnectionsAdmin: store + vault + gate + handler; G028 guard)
+ M cmd/core/wiring.go                                                  (buildAPIDeps wires the admin handler + operator gate into deps)
+```
+
+### DoD status (backend half)
+
+| DoD | State | Note |
+|-----|-------|------|
+| D06-T1-1 artifact-lint | [ ] | foreign-owned: absent `uservalidation.md` (owned by `bubbles.plan`) — not a SCOPE-06 code gap |
+| D06-T1-2 `check` EXIT 0 | [ ] | orchestrator closeout (post-implementation) |
+| D06-T1-3 `format --check` | [ ] | orchestrator closeout |
+| D06-T1-4 real evidence | [x] | E1–E4 are real captured output |
+| D06-T1-5 no env-specific content | [x] | `operator_user_ids` empty default; generic placeholders; PWA triad = follow-up frontend dispatch |
+| D06-T2-1 R1 operator gate (403/401 + fail-loud) | [x] | E1 gate test + E3; `ValidateOperatorGate` G028 |
+| D06-T2-2 write-only secret | [x] | E1 PutCredentialWriteOnly + E4 grep |
+| D06-T2-3 truthful test, never false success | [x] | E1 FailedTest_TypedError + E2 RED-before |
+| D06-T2-4 enable 409-guard + effective-enabled single gate | [ ] | UNIT proven (EnableUntested_Blocked409 + EffectiveEnabled_SingleGate); the live `TestEnableDisable_CatalogMembershipFollows` integration leg is DEFERRED (clean stack, C7) |
+| D06-T2-5 closed-set 404 + per-kind secret fields | [x] | E1 UnknownSlotRejected404 + PerKindSecretFields |
+| D06-T2-6 live-stack authenticity + C7 deferral | [ ] | the `integration` + 3 `e2e-api` legs are DEFERRED to the home-lab `bubbles.devops` dispatch — NOT marked passing from dev; the manifest-named stubs EXIST (`tests/integration/model_connections_enable_disable_test.go`, `tests/e2e/admin/model_connections_e2e_test.go`) as honest env-gated `t.Skip` + `t.Fatal`-guarded scaffolds (compile-checked under their build tags), never green-painted |
+| D06-T2-7 adversarial non-tautological + RED-before | [x] | E2 (3 adversarial tests bite, then reverted) |
+| D06-T2-8 all unit + integration pass, no skips | [ ] | all UNIT pass (E1); `integration` + `e2e-api` legs DEFERRED (honest env-gated stubs, compile-checked, `t.Skip` until the live fixture seeds) |
+
+**7 of 13 met + evidenced.** The 6 residual are foreign-owned (`artifact-lint`),
+orchestrator closeout (`check` / `format`), or honestly deferred live-stack /
+frontend legs (the W03 `integration` catalog-membership leg, the W01/W02/W04
+`e2e-api` legs, and the operator-gated PWA triad) — none are SCOPE-06 backend
+code gaps. SCOPE-06 is held at `in_progress` rather than fabricating a pass on
+the deferred legs.
+
+
 

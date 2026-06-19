@@ -1096,6 +1096,18 @@ if [[ "$RUNTIME_TRUSTED_PROXIES_JSON" != "[]" && -n "$RUNTIME_TRUSTED_PROXIES_JS
   RUNTIME_TRUSTED_PROXIES="$(python3 -c "import json,sys; print(','.join(json.loads(sys.argv[1])))" "$RUNTIME_TRUSTED_PROXIES_JSON" 2>/dev/null)" || RUNTIME_TRUSTED_PROXIES=""
 fi
 
+# Spec 096 SCOPE-06 — operator allowlist for the credential-mutating web admin
+# surface (/v1/admin/model-connections*). Mirrors the trusted_proxies pattern:
+# YAML list → JSON → CSV env var. Empty list (the committed default — No
+# Env-Specific Content) → empty CSV → the Go operator gate is fail-closed (and
+# aborts startup in production when the surface is reachable). Real operator ids
+# are injected by the deploy overlay. See infrastructure.operator_user_ids.
+OPERATOR_USER_IDS_JSON="$(yaml_get_json infrastructure.operator_user_ids 2>/dev/null)" || OPERATOR_USER_IDS_JSON="[]"
+OPERATOR_USER_IDS=""
+if [[ "$OPERATOR_USER_IDS_JSON" != "[]" && -n "$OPERATOR_USER_IDS_JSON" ]]; then
+  OPERATOR_USER_IDS="$(python3 -c "import json,sys; print(','.join(json.loads(sys.argv[1])))" "$OPERATOR_USER_IDS_JSON" 2>/dev/null)" || OPERATOR_USER_IDS=""
+fi
+
 # Connector import paths — SST repo-default fallback (BUG-029-005 / HL-RESCAN-012 / Gate G028).
 # Each of the 4 mount-path vars (BOOKMARKS_IMPORT_DIR, MAPS_IMPORT_DIR, BROWSER_HISTORY_PATH,
 # TWITTER_ARCHIVE_DIR) resolves with precedence: (1) shell env value, (2) yaml value via yaml_get,
@@ -2236,6 +2248,7 @@ CARD_REWARDS_TRACKED_CATEGORIES=${CARD_REWARDS_TRACKED_CATEGORIES}
 CARD_REWARDS_IMPORT_DIR=${CARD_REWARDS_IMPORT_DIR}
 CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
 RUNTIME_TRUSTED_PROXIES=${RUNTIME_TRUSTED_PROXIES}
+OPERATOR_USER_IDS=${OPERATOR_USER_IDS}
 AGENT_SCENARIO_DIR=${AGENT_SCENARIO_DIR}
 AGENT_SCENARIO_GLOB=${AGENT_SCENARIO_GLOB}
 AGENT_HOT_RELOAD=${AGENT_HOT_RELOAD}

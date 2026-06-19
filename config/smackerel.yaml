@@ -1860,6 +1860,17 @@ backup:
   watcher_poll_seconds: 60
 
 infrastructure:
+  # Spec 096 SCOPE-06 — operator allowlist for the credential-mutating web
+  # admin surface (/v1/admin/model-connections*). Each entry is a per-user
+  # bearer SUBJECT (auth.UserIDFromContext / the spec-044 actor_user_id)
+  # permitted to wire/test/enable/disable model-provider connections. EMPTY by
+  # default (No Env-Specific Content): real operator ids are injected by the
+  # deploy overlay, never committed here. Fail-loud (G028): an empty allowlist
+  # while the admin surface is reachable (≥1 db-mode connection declared)
+  # aborts startup in production; in dev/test the surface runs FAIL-CLOSED
+  # (every request 401/403). The gate derives the actor from the bearer
+  # subject — NEVER a request-body field.
+  operator_user_ids: []
   # Spec 052 FR-052-001 — SST-owned secret-key manifest.
   # Keys listed here are NEVER inlined into bundles for targets in
   # production_class_targets below. Instead, the SST loader emits
