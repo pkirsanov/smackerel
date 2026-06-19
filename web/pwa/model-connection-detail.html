@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Model Connection — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1 id="page-title">Connection</h1>
+  <p class="subtitle">Test, enable, disable, or replace a provider credential — operator only</p>
+
+  <!--
+    Spec 096 SCOPE-06 Screen S3 — operator-gated connection detail.
+    Drives GET /v1/admin/model-connections/{id}, POST .../test,
+    POST .../enable, POST .../disable, PUT .../credential. Mirrors
+    connector-detail.html.
+
+    Truthful test (SCN-096-W04): the ok banner is role=status, the failed
+    banner is role=alert with the TYPED detail naming the connection — a
+    failed test is unambiguously failed, never a false success, never an
+    Ollama substitute. Enable is 409-guarded client AND server side: it
+    stays disabled until a credential is present AND last test = ok.
+    Replace credential is write-only (type=password, never pre-filled) and
+    clears the last test → re-test required.
+  -->
+
+  <!-- Operator-only boundary: shown when the admin API → 403. -->
+  <section id="operator-only" class="card" aria-labelledby="operator-only-heading" hidden>
+    <h2 id="operator-only-heading">🔒 Operator only</h2>
+    <p class="status status-error" role="alert">
+      This area manages shared AI provider connections and is limited to the
+      Smackerel operator.
+    </p>
+    <p class="footer"><a href="/pwa/">← Back to home</a></p>
+  </section>
+
+  <section
+    id="detail"
+    class="card"
+    aria-labelledby="detail-heading"
+    aria-busy="true"
+  >
+    <h2 id="detail-heading">Connection</h2>
+    <p
+      id="detail-status"
+      class="status status-loading"
+      role="status"
+      aria-live="polite"
+    >Loading connection…</p>
+
+    <div id="detail-body" hidden>
+      <!--
+        Two live regions present ahead of time so a screen reader announces
+        the outcome on toggle: ok = role=status, failed = role=alert.
+      -->
+      <p id="banner-ok" class="status status-success" role="status" aria-live="polite" hidden>
+        <span class="status-pill" data-status="ok">
+          <span class="status-pill-text">✓ tested ok</span>
+        </span>
+        <span id="banner-ok-detail" class="status-detail"></span>
+      </p>
+      <p id="banner-fail" class="status status-error" role="alert" hidden>
+        <span class="status-pill" data-status="failed">
+          <span class="status-pill-text">✗ test failed</span>
+        </span>
+        <span id="banner-fail-detail" class="status-detail"></span>
+      </p>
+      <p id="banner-info" class="status status-info" role="status" aria-live="polite" hidden></p>
+
+      <dl class="connector-detail-fields">
+        <div>
+          <dt>Kind</dt>
+          <dd id="field-kind">—</dd>
+        </div>
+        <div>
+          <dt>Enabled</dt>
+          <dd id="field-enabled">—</dd>
+        </div>
+        <div>
+          <dt>Credential</dt>
+          <dd id="field-secret">—</dd>
+        </div>
+        <div>
+          <dt>Last tested</dt>
+          <dd id="field-last-tested">—</dd>
+        </div>
+        <div>
+          <dt>Models</dt>
+          <dd id="field-models">—</dd>
+        </div>
+      </dl>
+
+      <div class="connector-card-actions">
+        <button type="button" id="test-btn" class="btn btn-primary">Test connection</button>
+        <button type="button" id="enable-btn" class="btn btn-secondary" hidden>Enable</button>
+        <button type="button" id="disable-btn" class="btn btn-secondary" hidden>Disable</button>
+      </div>
+      <p id="enable-hint" class="hint" hidden>Enabling adds this provider's
+        models to everyone's picker. A passing test is required first.</p>
+      <p id="action-error" class="status status-error" role="alert" hidden></p>
+
+      <fieldset id="rotate-fieldset">
+        <legend>Replace credential</legend>
+        <div id="rotate-inputs"></div>
+        <p id="rotate-hint" class="hint">Write-only — enter a new secret to
+          rotate. The old value is never shown; saving clears the last test, so
+          re-test before re-enabling.</p>
+        <button type="button" id="rotate-btn" class="btn btn-secondary">Replace</button>
+        <p id="rotate-error" class="status status-error" role="alert" hidden></p>
+      </fieldset>
+    </div>
+
+    <p
+      id="detail-error"
+      class="status status-error"
+      role="alert"
+      hidden
+    ></p>
+  </section>
+
+  <p class="footer">
+    <a href="/pwa/model-connections.html">← Back to connections</a>
+  </p>
+
+  <script src="/pwa/model-connection-detail.js"></script>
+</body>
+</html>
