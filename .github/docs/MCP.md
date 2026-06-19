@@ -54,6 +54,7 @@ Restart your client. The `bubbles-<repo-slug>` server should appear with 10 anno
 | `search_code` | `code-search.sh` | Pattern search with auto-selected backend (ripgrep/grep). |
 | `read_spec` | `artifact-lint.sh` | Inventory + lint a spec directory's artifacts. |
 | `list_open_findings` | `finding-closure-selftest.sh` | Surface the active finding-closure contract. |
+| `graph_neighbors` | `bubbles-graph-neighbors.sh` | Return the reverse-dependency (neighbor) set for one governance node — a script basename, an `agents/bubbles_shared/<x>.md` module, or a `Gxxx` gate — as the unchanged `bubbles-hub-report.sh --node` JSON. Thin twin wraps the read-only IMP-014 hub composer; see below. |
 
 Tool definitions live in `.github/bubbles/mcp/tools/*.json`. Each declares an `inputSchema` (JSON Schema) and an `argsTemplate` with `${var}` (required) and `${var?}` (optional, drop-on-empty) placeholders.
 
@@ -61,6 +62,30 @@ Tools also expose MCP annotations so newer clients can plan safely:
 
 - read-only query tools (`check_gate`, `resolve_mode`, `read_spec`, `search_code`, validation/readback tools) advertise `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, and `openWorldHint: false`.
 - `record_evidence` advertises `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: false`, and `openWorldHint: true` because it wraps an arbitrary command and appends to the tool-call log.
+
+### `graph_neighbors` output + error semantics
+
+`graph_neighbors` is a thin twin (`bubbles-graph-neighbors.sh`) over the
+read-only, SST-derived governance hub composer
+[`bubbles-hub-report.sh`](../bubbles/scripts/bubbles-hub-report.sh) (IMP-014). It
+adds no graph logic — it returns the composer's `--node <node> --format json`
+payload unchanged:
+
+```json
+{
+  "node": "state-transition-guard.sh",
+  "kind": "script",
+  "inDegree": 36,
+  "dependents": [
+    { "source": "agents/bubbles.audit.agent.md", "provenance": "script-call", "line": 41 }
+  ]
+}
+```
+
+- `node` (required): a `bubbles/scripts[/guards]/*.sh` basename, an `agents/bubbles_shared/*.md` module, or a `Gxxx` gate id.
+- `format` (optional, default `json`): `json` for the payload above, `text` for the human-readable form.
+- A REAL node with no dependents legitimately returns `inDegree: 0` with an empty `dependents: []` — that is success, not an error.
+- An UNKNOWN node (not a real script / shared module / gate) returns a structured MCP error result (`isError: true`), never a crash.
 
 ---
 

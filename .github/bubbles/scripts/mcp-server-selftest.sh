@@ -45,6 +45,12 @@
 #        evidence command wrapper.
 #   T19. `initialize` negotiates the protocol version: it echoes a supported
 #        requested version and falls back to the latest for an unknown one.
+#   T20. `tools/list` includes `graph_neighbors` (IMP-015 Scope A).
+#   T21. `tools/call` for `graph_neighbors` with node="state-transition-guard.sh"
+#        returns isError=false AND a JSON payload with inDegree >= 1 and a
+#        non-empty dependents[] of {source,provenance,line} objects.
+#   T22. `tools/call` for `graph_neighbors` with an obviously-unknown node
+#        returns a structured error result (isError=true), never a crash.
 #
 # Exit 0 = all assertions pass. Exit 1 = at least one failed.
 
@@ -90,6 +96,7 @@ required_tools=(
   read_spec
   list_open_findings
   check_observability
+  graph_neighbors
 )
 
 # T4 is a static pre-check that doesn't require server boot.
@@ -199,6 +206,12 @@ msgs = [
      "params": {"protocolVersion": "1999-01-01",
                 "capabilities": {},
                 "clientInfo": {"name": "mcp-selftest", "version": "0.0"}}},
+    {"jsonrpc": "2.0", "id": 19, "method": "tools/call",
+     "params": {"name": "graph_neighbors",
+                "arguments": {"node": "state-transition-guard.sh"}}},
+    {"jsonrpc": "2.0", "id": 20, "method": "tools/call",
+     "params": {"name": "graph_neighbors",
+                "arguments": {"node": "definitely-not-a-real-node-xyz.sh"}}},
 ]
 for m in msgs:
     proc.stdin.write(frame(m))
@@ -206,7 +219,7 @@ proc.stdin.flush()
 proc.stdin.close()
 
 replies = {}
-for _ in range(18):  # 18 IDs (notifications/initialized has no reply)
+for _ in range(20):  # 20 IDs (notifications/initialized has no reply)
     r = read_frame(proc.stdout)
     if r is None:
         break
@@ -448,6 +461,70 @@ if [[ "$echo_ver" == "2024-11-05" && "$fallback_ver" == "2025-06-18" ]]; then
   pass "T19: initialize echoes supported version (2024-11-05) and falls back to latest (2025-06-18) for unknown"
 else
   fail "T19: protocol negotiation wrong — echo=$echo_ver (want 2024-11-05), fallback=$fallback_ver (want 2025-06-18)"
+fi
+
+# T20: tools/list includes the IMP-015 graph_neighbors verb.
+ok="$(echo "$tools_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+names = [t.get('name') for t in (r.get('result') or {}).get('tools') or []]
+print('YES' if 'graph_neighbors' in names else 'NO')
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T20: tools/list includes graph_neighbors"
+else
+  fail "T20: tools/list missing graph_neighbors: $tools_reply"
+fi
+
+# T21: graph_neighbors for a known node returns the real reverse-dep payload
+# (inDegree >= 1, non-empty provenance-tagged dependents) wrapping the composer.
+gn_reply="$(get 19)"
+ok="$(echo "$gn_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+res = r.get('result') or {}
+if res.get('isError'):
+    print('NO'); sys.exit(0)
+text = ((res.get('content') or [{}])[0]).get('text', '')
+if '--- stdout ---' not in text or '--- stderr ---' not in text:
+    print('NO'); sys.exit(0)
+stdout_part = text.split('--- stdout ---', 1)[1].split('--- stderr ---', 1)[0].strip()
+try:
+    payload = json.loads(stdout_part)
+except Exception:
+    print('NO'); sys.exit(0)
+deps = payload.get('dependents') or []
+ok = (
+    payload.get('node') == 'state-transition-guard.sh'
+    and isinstance(payload.get('inDegree'), int)
+    and payload.get('inDegree', 0) >= 1
+    and len(deps) >= 1
+    and all(('source' in d and 'provenance' in d and 'line' in d) for d in deps)
+)
+print('YES' if ok else 'NO')
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T21: graph_neighbors known node returned inDegree>=1 with provenance-tagged dependents"
+else
+  fail "T21: graph_neighbors known node payload wrong: $gn_reply"
+fi
+
+# T22: graph_neighbors for an obviously-unknown node returns a STRUCTURED error
+# result (isError=true) surfacing the twin's exit 3 — never a crash, and never a
+# fake empty success.
+gn_bad_reply="$(get 20)"
+ok="$(echo "$gn_bad_reply" | python3 -c "
+import json,sys
+r = json.load(sys.stdin)
+res = r.get('result') or {}
+text = ((res.get('content') or [{}])[0]).get('text', '')
+ok = res.get('isError') is True and 'unknown node' in text
+print('YES' if ok else 'NO')
+")"
+if [[ "$ok" == "YES" ]]; then
+  pass "T22: graph_neighbors unknown node returned a structured error result"
+else
+  fail "T22: graph_neighbors unknown node did not return structured error: $gn_bad_reply"
 fi
 
 echo

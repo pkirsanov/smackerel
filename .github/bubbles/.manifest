@@ -16,6 +16,7 @@ bubbles/scripts/batch-promotion-lint-selftest.sh
 bubbles/scripts/batch-promotion-lint.sh
 bubbles/scripts/bubbles-drift-check-selftest.sh
 bubbles/scripts/bubbles-drift-check.sh
+bubbles/scripts/bubbles-graph-neighbors.sh
 bubbles/scripts/bubbles-hub-report-selftest.sh
 bubbles/scripts/bubbles-hub-report.sh
 bubbles/scripts/capability-consumer-freshness-selftest.sh
@@ -260,6 +261,7 @@ bubbles/mcp/resources/workflows.json
 bubbles/mcp/server.py
 bubbles/mcp/tools/check_gate.json
 bubbles/mcp/tools/check_observability.json
+bubbles/mcp/tools/graph_neighbors.json
 bubbles/mcp/tools/list_open_findings.json
 bubbles/mcp/tools/query_tool_log.json
 bubbles/mcp/tools/read_spec.json

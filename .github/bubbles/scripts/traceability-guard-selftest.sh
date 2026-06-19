@@ -128,6 +128,12 @@ else
   fail "expected 'scenario mapped to Test Plan row' line"
   sed -n '1,120p' "$log1"
 fi
+if grep -Fq 'scenario→row match confidence: inferred' "$log1"; then
+  pass "Case 1 reports inferred edge confidence (no trace id)"
+else
+  fail "expected 'scenario→row match confidence: inferred' in Case 1 log"
+  sed -n '1,120p' "$log1"
+fi
 
 # --- Case 2: scenario without matching Test Plan row → exit non-zero ---
 broken_feature="$TMPDIR/specs/200-broken-feature"
@@ -193,6 +199,99 @@ if grep -Fq 'no traceable Test Plan row' "$log2" \
 else
   fail "expected 'no traceable Test Plan row' or 'no faithful DoD item' in output"
   sed -n '1,160p' "$log2"
+fi
+
+# --- Case 3: scenario + row share a trace id → declared edge ---
+declared_feature="$TMPDIR/specs/300-declared-feature"
+build_clean_feature "$declared_feature"
+
+cat > "$declared_feature/scopes.md" <<'EOF'
+# Scope 01: Declared Trace
+
+**Status:** In Progress
+
+### Gherkin
+
+  Scenario: SCN-07-declared user sees confirmation
+    Given a submitted form
+    When the server responds
+    Then the user sees a confirmation message
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --------- | -------- | ------------- | ----------- | ------- | ----------- |
+| E2E       | e2e-ui   | tests/widget-render.e2e.spec.ts | SCN-07-declared user sees confirmation message | selftest:declared | Yes |
+
+### Definition of Done
+
+- [x] SCN-07-declared user sees confirmation message -> Evidence: report.md#test-evidence
+EOF
+
+echo "[selftest traceability-guard] Case 3: shared trace id → declared edge"
+log3="$TMPDIR/log3.txt"
+set +e
+bash "$GUARD" "$declared_feature" >"$log3" 2>&1
+status3=$?
+set -e
+if [[ "$status3" -eq 0 ]]; then
+  pass "declared-edge feature exits 0 (got $status3)"
+else
+  fail "declared-edge feature should exit 0 (got $status3)"
+  sed -n '1,160p' "$log3"
+fi
+if grep -Fq 'match confidence: declared' "$log3"; then
+  pass "Case 3 reports declared edge confidence (shared trace id)"
+else
+  fail "expected 'match confidence: declared' in Case 3 log"
+  sed -n '1,160p' "$log3"
+fi
+
+# --- Case 4: scenario fuzzy-matches two rows → ambiguous edge ---
+ambiguous_feature="$TMPDIR/specs/400-ambiguous-feature"
+build_clean_feature "$ambiguous_feature"
+
+cat > "$ambiguous_feature/scopes.md" <<'EOF'
+# Scope 01: Ambiguous Trace
+
+**Status:** In Progress
+
+### Gherkin
+
+  Scenario: dashboard renders provided label correctly
+    Given a dashboard label
+    When the dashboard mounts
+    Then the dashboard renders the provided label
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --------- | -------- | ------------- | ----------- | ------- | ----------- |
+| E2E       | e2e-ui   | tests/widget-render.e2e.spec.ts | dashboard renders provided label promptly | selftest:ambiguous-a | Yes |
+| E2E       | e2e-ui   | tests/widget-render.e2e.spec.ts | dashboard renders provided label smoothly | selftest:ambiguous-b | Yes |
+
+### Definition of Done
+
+- [x] dashboard renders provided label promptly -> Evidence: report.md#test-evidence
+EOF
+
+echo "[selftest traceability-guard] Case 4: two fuzzy row matches → ambiguous edge"
+log4="$TMPDIR/log4.txt"
+set +e
+bash "$GUARD" "$ambiguous_feature" >"$log4" 2>&1
+status4=$?
+set -e
+if [[ "$status4" -eq 0 ]]; then
+  pass "ambiguous-edge feature exits 0 (got $status4)"
+else
+  fail "ambiguous-edge feature should exit 0 (got $status4)"
+  sed -n '1,160p' "$log4"
+fi
+if grep -Fq 'scenario→row match confidence: ambiguous' "$log4"; then
+  pass "Case 4 reports ambiguous edge confidence (two fuzzy row matches)"
+else
+  fail "expected 'scenario→row match confidence: ambiguous' in Case 4 log"
+  sed -n '1,160p' "$log4"
 fi
 
 if [[ "$failures" -eq 0 ]]; then
