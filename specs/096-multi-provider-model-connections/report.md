@@ -2148,6 +2148,128 @@ Source: executed** — real command results.
 - **format** — `./smackerel.sh format --check` → **EXIT 1**, but ONLY because of a single FOREIGN untracked file from a concurrent session, `internal/connector/qfdecisions/chaos_hardening_test.go`, which is NOT part of spec-096 and is not ours to format. Every spec-096 source is gofmt-clean: the last committed gap, `internal/api/model_connections_admin_test.go` (SCOPE-06), was formatted at closeout (`gofmt -w` on that one file; `gofmt -l <file>` now empty), leaving the foreign file as the sole `gofmt -l` entry. The spec-096 format obligation is met; the global red is foreign concurrent work, so the global `format --check` gate (D0n-T1-3) stays open.
 - **traceability-guard** — **PASSED (20/20 scenarios mapped)**, recorded earlier (G068 closure).
 
+---
+
+## SCOPE-07 Live-Wiring Activation (deferred-activation completed)
+
+**Status:** ACTIVATED + boot-validated. This subsection records completion of the
+deferred SCOPE-07 live-wiring ACTIVATION — item (1) of "What remains for the whole
+feature (096)" in the SCOPE-07 section above (the `cmd/core` discovery-aggregator /
+budget / dispatch-resolver wiring). The runtime is now functional: the `/model`
+picker shows the live combined catalog, the budget is wired, and `/ask` dispatches
+the selected hosted model to its provider. Only the live hosted-provider `e2e-api`
+leg (a real Anthropic `/ask` actually served by the provider) remains
+home-lab-gated (C7). `state.json` stays `in_progress` / `certification.status:
+in_progress`.
+**Executed by:** `bubbles.implement` (parent-expanded full-delivery).
+**Scenarios:** SCN-096-D02, SCN-096-D03, SCN-096-D05, SCN-096-G06 (runtime
+realization of the SCOPE-07 unit-proven behaviors).
+
+### What was activated
+
+`wireSpec096DiscoveryAndDispatch` (cmd/core) now constructs + installs all three
+late-bound singletons: the CatalogAggregator (`agenttool.SetModelCatalogProvider`),
+the month-to-date USD BudgetProvider (`agenttool.SetBudgetProvider`), and the
+provider-aware DispatchResolver (`agenttool.SetDispatchResolver`). The agent `/ask`
+loop now CONSUMES the resolver at BOTH dispatch points — the primary turn
+(`agent.go` ~L505) and the synthesis-retry turn (`agent.go` ~L556) — via
+`applyProviderDispatch`: a provider-qualified hosted model resolves to its provider
+and dispatches there; a resolver rejection yields a typed refusal
+(`TerminationDispatchRejected` = `dispatch_rejected`), NEVER an Ollama fallback; a
+bare / `ollama/…` model never consults the resolver and stays byte-for-byte on the
+spec-089 path. The `agenttool`→`agent` import cycle (agenttool already imports agent
+via `substrate_tool.go`) was avoided with a one-line `init()` bridge
+(`agenttool/dispatch_bridge.go`) that forwards `agenttool.DispatchResolverProvider`
+into the agent's late-bound source (`okagent.SetDispatchResolverSource`); a nil
+singleton ⇒ untyped nil ⇒ the 089 path, with no ordering constraint between the
+bridge `init()` and the post-init `SetDispatchResolver` wiring. **Claim Source:
+executed** (files present; both `/ask` call sites + the bridge + the seam verified).
+
+### Files touched by the activation
+
+- `cmd/core/services.go` — `+modelConnVault` field (the vault the resolver reads).
+- `cmd/core/wiring_assistant_openknowledge.go` — `wireSpec096DiscoveryAndDispatch`
+  (construct + install catalog/budget/resolver) + its call site + the vault stash.
+- `internal/assistant/openknowledge/agenttool/model_catalog_source.go` — the
+  `DispatchResolver` late-bound seam (`SetDispatchResolver` /
+  `DispatchResolverProvider`).
+- `internal/assistant/openknowledge/agenttool/dispatch_bridge.go` — NEW: the
+  `init()` bridge that breaks the import cycle.
+- `internal/assistant/openknowledge/agent/agent.go` — `+applyProviderDispatch` at
+  BOTH dispatch points (primary turn + synthesis-retry turn).
+- `internal/assistant/openknowledge/agent/dispatch.go` — NEW: `applyProviderDispatch`,
+  `TerminationDispatchRejected`, `isHostedProviderQualified`.
+- `internal/assistant/openknowledge/agent/dispatch_provider_spec096_test.go` — NEW:
+  3 adversarial tests.
+
+### Evidence W1 — RED-before (agent injection), non-tautological
+
+Before `applyProviderDispatch` was wired into the `/ask` loop, the two adversarial
+dispatch tests bite:
+
+```text
+RED_BEFORE_EXIT=1
+TestAgent_HostedModel_DispatchesViaResolver_Spec096            FAILED  Provider="" want "anthropic"
+TestAgent_HostedResolveError_RefusesNoOllamaFallback_Spec096   FAILED  termination="fabricated_source" want "dispatch_rejected"
+```
+
+The hosted turn carried no resolved provider (`Provider=""`) and a hosted
+resolve-error fell through to the wrong termination (`fabricated_source`) instead of
+the typed `dispatch_rejected` refusal — proving the tests fail without the injection.
+**Claim Source: executed** (real failing output; the injection was then added).
+
+### Evidence W2 — GREEN-after (all 3 adversarial dispatch tests pass)
+
+After wiring `applyProviderDispatch` into both dispatch points, all three pass:
+
+- `TestAgent_HostedModel_DispatchesViaResolver_Spec096` — a provider-qualified
+  hosted model resolves → dispatches with `Provider="anthropic"`.
+- `TestAgent_HostedResolveError_RefusesNoOllamaFallback_Spec096` — a hosted resolve
+  error yields `status=refused termination_reason=dispatch_rejected
+  refusal_reason="selected model provider connection is unavailable: decrypt_failed"`,
+  refused BEFORE dispatch, NO Ollama fallback, and the secret is NOT leaked in the
+  refusal.
+- `TestAgent_BareAndOllamaModel_ResolverNotConsulted_ByteForByte089_Spec096` — a
+  bare / `ollama/…` model never consults the resolver and stays byte-for-byte on the
+  089 path.
+
+**Claim Source: executed** (3/3 pass).
+
+### Evidence W3 — combined unit suite (all packages)
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'Spec096'
+[go-unit] go test ./... finished OK
+```
+
+The new agent-dispatch tests run GREEN alongside all existing Spec096 tests and the
+seven 089-fallback / parity tests. **Claim Source: executed.**
+
+### Evidence W4 — boot validation (real stack)
+
+The core image was rebuilt with the activation and brought up against its deps via
+`docker compose`. Core reached `running health=healthy exit=0 restarts=0`, and the
+boot log shows the activation installing all three singletons, then the HTTP server
+listening — no fatal startup error, no panic:
+
+```text
+spec096 scope07: discovery/dispatch activated discovery_adapters=1 connections_declared=6 catalog_installed=true budget_installed=true resolver_installed=true
+HTTP server listening :8080
+```
+
+The Ollama-only default config yields 1 discovery adapter (the 5 disabled hosted
+slots are correctly filtered from the catalog) while all 6 declared connections are
+handed to the resolver. **Claim Source: executed** (real boot log; container
+Healthy).
+
+### Still deferred (home-lab, real key)
+
+The live HOSTED-provider `e2e-api` leg — a real Anthropic `/ask` actually SERVED by
+the provider — remains the `SPEC096_ADMIN_LIVE_*` / `e2e-api` home-lab leg (C7),
+needing a real provider key. The wiring + the 089 fallback + the refusal path are
+unit + boot validated; only the real-provider round-trip needs the key. This is NOT
+claimed passing. **Claim Source: not-run** (deferred; honest).
+
 
 
 
