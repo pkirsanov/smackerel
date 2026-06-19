@@ -317,6 +317,11 @@ Every entry is copied verbatim from
 - [x] D01-T2-6 — Each SCN-096-G02 adversarial test is non-tautological: it fails if the loader ever substitutes a default or tolerates the missing/invalid value (no bailout early-returns). → Evidence: report.md → SCOPE-01 RED-before (neutralised validator).
 - [x] D01-T2-7 — All seven SCOPE-01 unit tests pass with NO skips/ignores; evidence is the real `./smackerel.sh test unit --go` (or `--go-run` for the spec-096 set) output. → Evidence: report.md → SCOPE-01 (test run).
 
+**Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
+
+- [x] D01-T2-8 — **SCN-096-A01** — Operator configures multiple operator-global provider connections: the `llm.connections[]` registry represents ≥2 independent connections (distinct `id`/`kind`/`params`, NO `actor_user_id` — one operator-global shared graph). → Evidence: `internal/config/model_connections_test.go::TestModelConnections_MultipleOperatorGlobalConnections_Spec096` (unit, GREEN) + report.md → SCOPE-01.
+- [x] D01-T2-9 — **SCN-096-A04** — A connection carries provider-specific parameters: per-kind required params load through the generic `Params` map (each kind records its own params, not another kind's) and a missing required param fails loud naming the connection + param. → Evidence: `internal/config/model_connections_test.go::TestModelConnections_PerKindParams_AzureFoundryRichest_Spec096` (unit, GREEN) + report.md → SCOPE-01.
+
 ---
 
 ## Scope 2: SCOPE-02 — Encrypted credential vault + master-key lifecycle
@@ -424,6 +429,10 @@ test master key. Entries are copied verbatim from
 - [x] D02-T2-5 — **Master-key fail-loud (G028):** `LLM_PROVIDER_SECRET_MASTER_KEY` is a managed secret loaded fail-loud when a db-mode hosted connection is declared; an absent/empty master key aborts named (no default key, no skip-encryption fallback); rotation (bump `key_version` + re-encrypt-all) is documented. → Evidence: report.md → SCOPE-02.
 - [x] D02-T2-6 — **Test isolation:** unit + integration tests use synthetic secrets and the ephemeral test Postgres only; no real provider credential and no persistent-store write. → Evidence: report.md → SCOPE-02 + → Post-Implementation Fix (F4). **GREEN:** the unit leg uses synthetic secrets only; the integration leg ran isolated on the ephemeral test Postgres (unique timestamped `connection_id`, `t.Cleanup` row delete, synthetic 32-byte key) — `TestVault_PersistRoundTripTestMasterKey_Spec096` PASS, no persistent-store write.
 - [x] D02-T2-7 — All five SCOPE-02 tests pass with NO skips/ignores; evidence is the real unit + integration run output. → Evidence: report.md → SCOPE-02 (test run) + → Post-Implementation Fix (F1/F4). **GREEN:** 6/6 SCOPE-02 unit tests pass + the integration test (`TestVault_PersistRoundTripTestMasterKey_Spec096`) PASSes against a REAL Postgres (core boots `Healthy`); no skips/ignores.
+
+**Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
+
+- [x] D02-T2-8 — **SCN-096-W05** — Credentials are stored protected and never returned in plaintext: AES-256-GCM at rest, write-only, the returned record exposes only `secret_present` + last-4 redaction (cleartext never surfaced), and the persisted round-trip recovers the bundle from a REAL Postgres. → Evidence: `internal/assistant/openknowledge/connvault/vault_test.go::TestSecretVault_NeverReturnsPlaintext_RedactionLast4_Spec096` (unit ADVERSARIAL, GREEN) + `tests/integration/model_connections_vault_test.go::TestVault_PersistRoundTripTestMasterKey_Spec096` (integration vs real Postgres, GREEN) + report.md → SCOPE-02.
 
 ---
 
@@ -576,6 +585,14 @@ the live hosted answer is an `e2e-api` deferred to the home-lab dispatch
 - [x] D03-T2-6 — Each adversarial test is non-tautological with a captured RED-before (e.g. a build that leaks a provider field into the Ollama kwargs, or that logs the key, would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-03 RED-before.
 - [ ] D03-T2-7 — All `unit` + `integration` SCOPE-03 tests pass with NO skips; the live hosted `e2e-api` row (`TestAsk_HostedAnswer_AttributedToProviderModel_Spec096`) is explicitly handed to the home-lab `bubbles.devops` dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-03 (test run + deferral note). _(Unit leg done with NO skips — E1–E3; the `integration` (`TestAsk_HostedConnection_ProviderAware_Spec096`) + `e2e-api` rows are DEFERRED to a clean-stack `bubbles.devops` dispatch, not marked passing from dev.)_
 
+**Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
+
+- [x] D03-T2-8 — **SCN-096-A02** — The `/ask` agent dispatches to the SELECTED model's provider (provider-aware through the credential seam, never Ollama): the resolver routes a fully-configured hosted connection to its hosted provider (the control case) and never coerces it to a local model. (Live end-to-end `/ask` hosted-answer leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/assistant/openknowledge/llm/dispatch_resolver_test.go::TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096` (unit, GREEN control) + report.md → SCOPE-03.
+- [x] D03-T2-9 — **SCN-096-A03** — With NO model selection, today's Ollama behavior is byte-for-byte unchanged: a zero-value provider-fields request serializes to the exact pre-096 wire shape, so no provider credential or routing change is observable on the Ollama path. → Evidence: `internal/assistant/openknowledge/llm/client_provider_test.go::TestChatRequest_ProviderFieldsAdditive_Spec096` (unit, GREEN) + report.md → SCOPE-03.
+- [x] D03-T2-10 — **SCN-096-G01** — A misconfigured connection fails loud and NEVER falls back to Ollama: the resolver refuses a not-effective-enabled / misconfigured target with a typed reason and never silently re-routes to a local model (ADVERSARIAL). → Evidence: `internal/assistant/openknowledge/llm/dispatch_resolver_test.go::TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-03.
+- [x] D03-T2-11 — **SCN-096-G04** — Every answer is attributed to the model that produced it: `ModelAttribution`/`TurnResult.Model` is provider-qualified (e.g. `anthropic/claude-3-5-sonnet`) so two providers' answers are distinguishable by attribution. (Live hosted-answer attribution leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/assistant/openknowledge/agent/attribution_provider_test.go::TestAttribution_ProviderQualified_Spec096` (unit, GREEN) + report.md → SCOPE-03.
+- [x] D03-T2-12 — **SCN-096-G05** — Provider secrets never leak to users: the decrypted key never appears in a log line, span, or error body on the Go dispatch side (ADVERSARIAL). → Evidence: `internal/assistant/openknowledge/llm/dispatch_resolver_test.go::TestDispatch_SecretNeverInLogsOrErrors_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-03.
+
 ---
 
 ## Scope 4: SCOPE-04 — Discovery + unified catalog + identifier canonicalization
@@ -707,6 +724,10 @@ verbatim from [scenario-manifest.json](scenario-manifest.json).
 - [x] D04-T2-6 — Each adversarial test is non-tautological with a captured RED-before (a build that silently drops a down provider, or that accepts an off-catalog id, would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-04 RED-before. _(E2 — both adversarial tests fail with the injected silent-drop / accept-any regressions, GREEN after revert.)_
 - [ ] D04-T2-7 — All `unit` + `integration` SCOPE-04 tests pass with NO skips; the SCN-096-D04 `e2e-api` leg is handed to the home-lab dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-04 (test run + deferral note). _(PARTIAL — the `unit` leg passes with NO skips (E1); the `integration` `TestDiscovery_OneProviderDown_CatalogStillServes_Spec096` + the `e2e-api` leg are live-stack, DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev.)_
 
+**Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
+
+- [x] D04-T2-8 — **SCN-096-D01** — Discovery aggregates local (Ollama) and hosted models into ONE provider-qualified catalog: Ollama-installed + hosted-curated models merge into one list where each descriptor carries a provider-qualified `id` + `connection_id` + `kind` + capabilities. (Live multi-provider discovery leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/assistant/openknowledge/catalog/aggregator_test.go::TestCatalogAggregator_AggregatesOllamaAndHostedProviderQualified_Spec096` (unit, GREEN) + report.md → SCOPE-04.
+
 ---
 
 ## Scope 5: SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement
@@ -835,6 +856,10 @@ Entries are copied verbatim from
 - [x] D05-T2-5 — **R4 — model-aware CostFn blast-radius (binding):** the CostFn signature change from the zero-cost `func(int) float64` closure to the model-aware `(provider, model, tokens)` seam is enumerated against its blast radius on the EXISTING 064/087 USD-budget tests; every pre-existing budget test still passes (re-run) or is updated only to supply the new model-aware seam without weakening its assertion; zero 064/087 budget behaviour silently regresses. → Evidence: report.md → SCOPE-05 (R4 table: 10 sites + whole-tree compile; 064/087 budget tests re-ran GREEN in E1).
 - [x] D05-T2-6 — **Test isolation:** unit + integration tests use synthetic rates + a synthetic ledger on the ephemeral test Postgres only; no real provider, credential, or persistent-store write. → Evidence: report.md → SCOPE-05 (unit rows use a fake `SpendLedger` + synthetic rates, NO DB/provider/credential; the deferred integration row is the only DB-touching leg, ephemeral-only by design).
 - [ ] D05-T2-7 — All `unit` + `integration` SCOPE-05 tests pass with NO skips/ignores; evidence is the real `./smackerel.sh test unit --go` + integration run output. → Evidence: report.md → SCOPE-05 (test run) + → Post-Implementation Fix (F5). _(PARTIAL — the `unit` leg passes with NO skips (E1/E3); core boot is now proven `Healthy` post-fix, but the `integration` `TestAsk_PaidModelExhaustedBudget_RefusedBeforeProviderCall_Spec096` stays live-stack DEFERRED LIVE — it SKIPs [needs `SPEC096_BUDGET_LIVE_CORE_URL` + `SPEC096_BUDGET_LIVE_AUTH_TOKEN`], NOT marked passing from dev.)_
+
+**Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
+
+- [x] D05-T2-8 — **SCN-096-G03** — Selecting a paid model enforces the USD budgets BEFORE dispatch: a paid model whose estimated cost would breach the per-user or global month-to-date ceiling is refused (`ErrCapUSDPerUserMonth` / `ErrCapUSDMonthly`) before any billable provider call — the fake LLM fails the test if any dispatch is reached (ADVERSARIAL). (Live exhausted-budget integration leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/assistant/openknowledge/agent/budget_preflight_modelcost_test.go::TestBudgetPreflight_PaidOverBudget_RefusesBeforeDispatch_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-05.
 
 ---
 
@@ -1018,6 +1043,13 @@ from [scenario-manifest.json](scenario-manifest.json).
 - [x] D06-T2-7 — Each adversarial test is non-tautological with a captured RED-before (a build that echoes the secret, reports a failed probe as `ok`, enables an untested slot, or lets a non-operator through would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-06 RED-before.
 - [ ] D06-T2-8 — All `unit` + `integration` SCOPE-06 tests pass with NO skips; the live `e2e-api` legs are deferred to the home-lab dispatch (C7). → Evidence: report.md → SCOPE-06 (test run).
 
+**Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
+
+- [x] D06-T2-9 — **SCN-096-W01** — Operator adds an Anthropic connection and tests it: the credential is stored write-only (redacted view, never echoed) and "test connection" reports a truthful pass/fail outcome (persisted `last_test_outcome`). (LIVE operator wire→test→enable against a real Anthropic connection deferred to the home-lab dispatch — C7.) → Evidence: `internal/api/model_connections_admin_test.go::TestAdminModelConnections_PutCredentialWriteOnly_RedactedView_Spec096` (unit ADVERSARIAL, GREEN) + `…::TestAdminModelConnections_TestConnection_TruthfulOutcome_Spec096` (unit, GREEN) + report.md → SCOPE-06.
+- [x] D06-T2-10 — **SCN-096-W02** — Operator adds OpenAI, Microsoft Foundry, Google, and Amazon Bedrock connections: each kind saves its provider-specific write-only secret fields with non-secret params read-only from the SST registry, and each can be tested/enabled/disabled independently. (LIVE four-provider add deferred to the home-lab dispatch — C7.) → Evidence: `internal/api/model_connections_admin_test.go::TestAdminModelConnections_PerKindSecretFields_OpenAIFoundryGoogleBedrock_Spec096` (unit, GREEN) + report.md → SCOPE-06.
+- [x] D06-T2-11 — **SCN-096-W03** — Operator enables and disables a connection: the effective-enabled predicate (registry-declared AND DB `enabled` AND `last_test_outcome = ok` AND credential present) is the single gate, so disabling removes a provider's models from the combined catalog and re-enabling restores them. (The LIVE catalog-membership-follows integration leg is the deferred D06-T2-4 — home-lab C7.) → Evidence: `internal/assistant/openknowledge/connstore/store_test.go::TestEffectiveEnabled_SingleGate_Spec096` (unit, GREEN) + report.md → SCOPE-06.
+- [x] D06-T2-12 — **SCN-096-W04** — A failed test connection reports a typed, actionable error and never a false success: a failed probe yields `outcome:failed` with a typed `detail` (`auth_failed`|`unreachable`|`timeout`) naming the connection, persists `failed` (never the secret), and never substitutes Ollama (ADVERSARIAL); an unknown slot is `404` closed-set. → Evidence: `internal/api/model_connections_admin_test.go::TestAdminModelConnections_FailedTest_TypedError_NeverFalseSuccess_Spec096` (unit ADVERSARIAL, GREEN) + `…::TestAdminModelConnections_UnknownSlotRejected404_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-06.
+
 ---
 
 ## Scope 7: SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity
@@ -1191,6 +1223,12 @@ hosted models) are **deferred to the home-lab `bubbles.devops` dispatch
 - [ ] D07-T2-6 — **Live-stack parity + C7 deferral:** each `e2e-api` row (`TestTelegram_PickHostedModelPersists_Spec096`, `TestWebTelegramModelParity_Spec096`, `TestAsk_StickyHostedSelectionPersistsAcrossTurns_Spec096`, `TestForkPrecedenceParity_MultiProvider_Spec096`) hits the REAL system (Telegram↔web same result) and is handed to the home-lab `bubbles.devops` dispatch (C7), NOT marked passing from dev. → Evidence: report.md → SCOPE-07 (test run + deferral note).
 - [x] D07-T2-7 — Each adversarial test is non-tautological with a captured RED-before (a build that introduces a second validator/store, breaks `allowed_models` byte-parity, or accepts a non-tool-capable gather selection would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-07 RED-before.
 - [x] D07-T2-8 — All `unit` SCOPE-07 tests pass with NO skips; the live cross-surface `e2e-api` parity legs are deferred to the home-lab dispatch (C7). → Evidence: report.md → SCOPE-07 (test run).
+
+**Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
+
+- [x] D07-T2-9 — **SCN-096-D02** — A user lists the combined models in Telegram and picks a hosted model: the `/model` picker renders ONE provider-grouped, provider-qualified, numbered list over the combined catalog and selecting a hosted model sets it as the user's model for subsequent questions. (Live Telegram pick→persist→dispatch leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/telegram/model_command_multiprovider_test.go::TestModelPicker_TelegramCombinedProviderGroupedList_Spec096` (unit, GREEN) + report.md → SCOPE-07.
+- [x] D07-T2-10 — **SCN-096-D03** — The same list and selection are available over HTTP/web (parity): `GET`/`PUT /v1/agent/model` returns the same combined catalog and accepts the same selection as Telegram, both resolving through the SAME `modelswitch` validator + `modelpref` store. (Live cross-surface parity leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/api/agent_model_multiprovider_test.go::TestAgentModel_TelegramWebParity_SameValidatorSameStore_Spec096` (unit, GREEN) + `internal/api/agent_model_parity_spec096_test.go` (parity suite) + report.md → SCOPE-07.
+- [x] D07-T2-11 — **SCN-096-D05** — A user's selection persists across turns: a sticky hosted selection persists via the EXISTING claim-bound `modelpref` store and per-request > sticky > default precedence is honored byte-for-byte the 089 contract. (Live across-turns `/ask` persistence leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/api/agent_model_multiprovider_test.go::TestAgentModel_StickyHostedPersistsPrecedence_Spec096` (unit, GREEN) + report.md → SCOPE-07 (modelpref sticky-pref reuse of the 088/089 store).
 
 ---
 
