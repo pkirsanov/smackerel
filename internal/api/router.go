@@ -614,6 +614,29 @@ func NewRouter(deps *Dependencies) http.Handler {
 				}
 			})
 
+			// Spec 096 SCOPE-06 — operator-gated /v1/admin/model-connections*
+			// surface (wire/test/enable/disable model-provider connections).
+			// Mounted in the SAME bearer-auth /v1 group; the OperatorGate
+			// middleware (R1) additionally restricts it to the
+			// infrastructure.operator_user_ids allowlist (claim-bound subject —
+			// NEVER a body field): 401 anonymous, 403 non-operator. Only mounted
+			// when a live store + operator gate are wired (db-mode connection
+			// declared AND a Postgres pool is present).
+			if deps.ModelConnectionsAdminHandler != nil && deps.ModelConnectionsOperatorGate != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Use(deps.ModelConnectionsOperatorGate.Middleware)
+					r.Route("/admin/model-connections", func(r chi.Router) {
+						r.Get("/", deps.ModelConnectionsAdminHandler.List)
+						r.Get("/{id}", deps.ModelConnectionsAdminHandler.GetOne)
+						r.Put("/{id}/credential", deps.ModelConnectionsAdminHandler.PutCredential)
+						r.Post("/{id}/test", deps.ModelConnectionsAdminHandler.Test)
+						r.Post("/{id}/enable", deps.ModelConnectionsAdminHandler.Enable)
+						r.Post("/{id}/disable", deps.ModelConnectionsAdminHandler.Disable)
+					})
+				})
+			}
+
 			// Spec 044 Scope 02 — admin auth surface (POST/GET /v1/auth/*).
 			// Behind bearerAuthMiddleware so callers must authenticate;
 			// each handler additionally enforces admin scope via
