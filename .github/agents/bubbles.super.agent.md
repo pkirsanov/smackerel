@@ -756,6 +756,8 @@ bash bubbles/scripts/cli.sh skill-proposals          # Show pending proposals
 bash bubbles/scripts/cli.sh skill-proposals --dismiss  # Dismiss all
 ```
 
+Each proposal now carries the quality bar (Reusable · Non-trivial · Specific · Verified) and the promote-to-skill decision rule (do it once → a prompt is fine; recurring + non-obvious + verified → promote to a skill), and prompts a dedup-search of the existing skills + `INVENTORY.md` before authoring (prefer update over a near-duplicate).
+
 ### 13. Developer Profile
 
 ```bash

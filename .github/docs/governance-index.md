@@ -167,6 +167,7 @@ end-to-end flows.
 - [explore-idea.md](recipes/explore-idea.md)
 - [fix-a-bug.md](recipes/fix-a-bug.md)
 - [framework-dogfood.md](recipes/framework-dogfood.md)
+- [framework-health.md](recipes/framework-health.md)
 - [framework-ops.md](recipes/framework-ops.md)
 - [grill-an-idea.md](recipes/grill-an-idea.md)
 - [idea-to-release.md](recipes/idea-to-release.md)

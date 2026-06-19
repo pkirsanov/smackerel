@@ -153,6 +153,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Update Docs](update-docs.md) | "Code changed, managed docs need publishing or cleanup" |
 | [Framework Ops](framework-ops.md) | "I need to manage Bubbles itself — health, framework validation, release hygiene, hooks, gates, upgrades, metrics" |
 | [Framework Dogfood](framework-dogfood.md) | "I need to prove Bubbles framework changes without keeping source-repo specs" |
+| [Framework Self-Observation](framework-health.md) | "Tell me which gates fail most, which modes stall, and promote a recurring lesson into a reusable skill" |
 | [Validation Latency Budgets](validation-latency-budgets.md) | "I need to inspect validation phase latency and budget drift" |
 | [Structured Commits](structured-commits.md) | "I want clean, scope-by-scope git history" |
 | [Custom Gates](custom-gates.md) | "I need project-specific quality checks beyond the built-in framework gates" |

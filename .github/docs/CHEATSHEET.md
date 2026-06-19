@@ -527,13 +527,16 @@ Skills are portable procedural checklists auto-installed to every repo. They act
 | | |
 |---|---|
 | **What It Enforces** | Skills are project-agnostic, short, action-oriented. No hardcoded hosts/ports/URLs. No forbidden defaults. Progressive disclosure (SKILL.md for workflow, references/ for deep docs). |
+| **Authored Skill Shape** | New/edited skills SHOULD carry **When NOT to use** (negative triggers that route to a sibling skill) and **Works well with** (composition pointers); `bubbles.create-skill` scaffolds both stubs. |
 | **Activates When** | Adding procedural workflows, checklists, or reusable resources under `.github/skills/` |
-| **Quality Bar** | No conflict with copilot-instructions · No forbidden defaults · Routes execution through repo-standard workflows · Improves repeatability |
+| **Promote / Quality Bar** | Decision rule: do it once → a prompt is fine; recurring + non-obvious + verified → promote to a skill. Creation bar: Reusable · Non-trivial · Specific · Verified. Plus: no conflict with copilot-instructions · no forbidden defaults · routes execution through repo-standard workflows · improves repeatability. |
 
 **Vocabulary:**
 - *"Specialties"* — Sam's word for skills. Packaged know-how that doesn't expire.
 - *"Progressive disclosure"* — SKILL.md is the field card; references/ are the textbooks. Don't shove the textbook into the field card.
 - *"Project-agnostic"* — no repo names, no port numbers, no CLI commands. Skills travel between parks.
+- *"Once is a favor, thrice is a specialty"* — the promote-to-skill decision rule. Do it once and a prompt's fine; recurring + non-obvious + verified and it earns a SKILL.md.
+- *"Vet check"* — Sam's creation bar before anything becomes a specialty: Reusable · Non-trivial · Specific · Verified.
 
 #### <img src="../icons/lahey-badge.svg" width="24"> The Pre-Flight Walkaround — `bubbles-repo-readiness`
 
@@ -780,7 +783,7 @@ The super resolves intent and generates commands. Workflow delegates to it autom
 | "Let me think about it over a couple smokes" | Let me think about it | Brainstorm mode — explore before building |
 | "Get two birds stoned at once" | Kill two birds with one stone | Parallel scope execution via worktrees |
 | "The park knows what you like" | Personalized from observation | Developer profile auto-resolving taste decisions |
-| "Same greasy mistake three times" | Repeated pattern detected | Skill evolution — lessons promoting to skill proposal |
+| "Same greasy mistake three times" | Repeated pattern detected | Skill evolution — lessons promote to a skill proposal carrying the quality bar (Reusable · Non-trivial · Specific · Verified) + the promote decision rule |
 | "Count the empties, Randy" | Count what's measurable | Activity tracking — only measurable metrics, no guesses |
 | "Lease the lot" | Claim runtime ownership before you start or reuse a shared stack | `bubbles runtime acquire` — make Docker/Compose ownership explicit |
 | "Same stack, same lease" | Reuse the running stack only when the fingerprint matches | `shared-compatible` runtime reuse |

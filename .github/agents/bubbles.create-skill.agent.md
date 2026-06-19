@@ -68,12 +68,24 @@ After question 3, echo back a compact spec:
 
 Then scaffold.
 
+## Pre-Scaffold Quality Gate
+
+Run this gate BEFORE scaffolding. If the candidate fails it, do not create a new skill.
+
+1. **Dedup first (update vs create).** Search the existing `.github/skills/` tree and `skills/INVENTORY.md` for a skill that already covers this intent or these triggers. If an overlapping skill exists, UPDATE it instead of creating a new one (cross-link the two when the overlap is only partial). A second skill that restates an existing one is drift, not coverage.
+2. **Apply the quality bar.** A candidate must be **Reusable · Non-trivial · Specific · Verified**. Reject vague, single-situation, or untested candidates; codify only what has actually been shown to work.
+3. **Apply the decision rule.** *Do it once → a prompt is fine. Recurring + non-obvious + verified → promote to a skill.* A single-use instruction stays a prompt.
+4. **Anti-hoarding.** When the skill set is already large, review the least-recently-modified skills for deprecation rather than only adding. Growth without pruning erodes signal.
+
+These mirror `skills/bubbles-skill-authoring/SKILL.md` (Quality Bar + “When to promote a procedure to a skill”) and the Skill Evolution Loop in `bubbles/workflows.yaml:skillEvolution`.
+
 ## Scaffolding Rules
 
 When generating the skill:
 - Do not hardcode hosts/ports/URLs. Defer to repo configuration and policy sources.
 - Do not prescribe repo-specific build/run commands; defer to `.specify/memory/agents.md` and the repo’s development docs.
 - Keep the skill short (workflow/checklist/decision tree). Put long details in `references/` only if explicitly requested.
+- The generated `SKILL.md` MUST include a **When NOT to use** section stub (negative triggers that route to sibling skills) and a **Works well with** section stub (composition pointers), consistent with `skills/bubbles-skill-authoring/SKILL.md`. Leave them as clearly-marked stubs for the author to complete when no content is known yet.
 
 If the user asks for scripts/templates:
 - Prefer putting reusable scripts under repo root `scripts/` (not inside `.github/skills/`) unless the script is narrowly skill-specific.

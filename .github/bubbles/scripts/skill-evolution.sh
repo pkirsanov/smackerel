@@ -84,6 +84,12 @@ write_proposals() {
     echo "Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     echo "Trigger threshold: ${threshold} repeated lesson entries"
     echo
+    echo "## Before approving any proposal"
+    echo "- Decision rule: do it once → a prompt is fine; recurring + non-obvious + verified → promote to a skill."
+    echo "- Quality bar: Reusable · Non-trivial · Specific · Verified."
+    echo "- Dedup first: search existing .github/skills/ and skills/INVENTORY.md first — prefer UPDATING an existing skill over creating a new one."
+    echo "- Anti-hoarding: when the skill set is large, review least-recently-modified skills for deprecation."
+    echo
     while IFS='|' read -r count pattern; do
       [[ -n "$pattern" ]] || continue
       local_slug="$(slugify "$pattern")"

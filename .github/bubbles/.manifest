@@ -188,6 +188,7 @@ bubbles/scripts/scenario-compile-lint-selftest.sh
 bubbles/scripts/scenario-compile-lint.sh
 bubbles/scripts/shellcheck-lint-selftest.sh
 bubbles/scripts/shellcheck-lint.sh
+bubbles/scripts/skill-evolution-selftest.sh
 bubbles/scripts/skill-evolution.sh
 bubbles/scripts/spec-dashboard.sh
 bubbles/scripts/spec-review-handoff-selftest.sh
