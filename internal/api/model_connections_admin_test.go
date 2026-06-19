@@ -249,9 +249,9 @@ func TestAdminModelConnections_PerKindSecretFields_OpenAIFoundryGoogleBedrock_Sp
 	cases := []struct {
 		id, body string
 	}{
-		{"openai-primary", `{"secret_fields":{"api_key":"sk-openai-synthetic-00000000000WXYZ"}}`},        // gitleaks:allow
-		{"foundry-primary", `{"secret_fields":{"api_key":"azkey-synthetic-0000000000000WXYZ"}}`},          // gitleaks:allow
-		{"google-primary", `{"secret_fields":{"service_account":"{\"type\":\"svc\",\"k\":\"vWXYZ\"}"}}`}, // gitleaks:allow
+		{"openai-primary", `{"secret_fields":{"api_key":"sk-openai-synthetic-00000000000WXYZ"}}`},                                          // gitleaks:allow
+		{"foundry-primary", `{"secret_fields":{"api_key":"azkey-synthetic-0000000000000WXYZ"}}`},                                           // gitleaks:allow
+		{"google-primary", `{"secret_fields":{"service_account":"{\"type\":\"svc\",\"k\":\"vWXYZ\"}"}}`},                                   // gitleaks:allow
 		{"bedrock-primary", `{"secret_fields":{"aws_access_key_id":"AKIASYNTH0000WXYZ","aws_secret_access_key":"awssecretSYNTH000WXYZ"}}`}, // gitleaks:allow
 	}
 	for _, tc := range cases {
