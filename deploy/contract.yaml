@@ -238,3 +238,42 @@ sstKeyCatalog:
     type: string
     secret: false
     notes: Host bind address; loopback by convention for dev/test.
+  # Spec 096 — Multi-Provider AI Model Connections. Home-lab / production
+  # adapter bring-up (deployment agent, out-of-tree adapter): (1) ship a real
+  # LLM_PROVIDER_SECRET_MASTER_KEY in knb/smackerel/secrets/<target>.enc.env
+  # (spec 052 secret-injection); (2) inject the operator's real
+  # OPERATOR_USER_IDS at apply time (env-specific, like hostnames — never
+  # committed); (3) deploy by digest (build-once/deploy-many); (4) ONE-TIME
+  # operator bootstrap of a hosted connection via the admin UI
+  # (PUT credential -> test -> enable) — the credential persists in the
+  # vault/DB across deploys, NOT re-entered per deploy; (5) run the env-gated
+  # live legs as post-deploy verification: SPEC096_ADMIN_LIVE_* (TestAdmin_*_Spec096,
+  # TestEnableDisable_CatalogMembershipFollows_Spec096) + SPEC096_BUDGET_LIVE_*
+  # (TestAsk_PaidModelExhaustedBudget_RefusedBeforeProviderCall_Spec096).
+- spec: 096-multi-provider-model-connections
+  description: Multi-provider AI model connections — operator-global provider registry, AES-256-GCM credential vault, operator-gated admin surface, model-aware cost/budget
+  keys:
+  - path: llm.provider_secret_master_key
+    type: string
+    secret: true
+    notes: "LLM_PROVIDER_SECRET_MASTER_KEY — AES-256-GCM master key for the SCOPE-02 credential vault (reversible encrypted-at-rest provider secrets; NOT an argon2id verifier). base64 decoding to exactly 32 bytes. Registered in infrastructure.secret_keys -> emitted as __SECRET_PLACEHOLDER__ -> adapter substitutes from knb/smackerel/secrets/<target>.enc.env at apply time (spec 052). REQUIRED at boot iff >=1 ENABLED db-mode connection exists (fail-loud G028); an Ollama-only / disabled-hosted deployment needs none. Generate: openssl rand -base64 32. NEVER committed."
+  - path: llm.connections
+    type: object[]
+    secret: false
+    notes: "LLM_CONNECTIONS_JSON — operator-global connection registry (closed-set kinds ollama|anthropic|openai|azure-foundry|google|bedrock). Ships local-ollama ENABLED + 5 hosted slots declared-but-disabled with secret_ref_mode=db (credential entered via the operator admin UI -> vault, never here). params/models are inline-JSON strings carried verbatim into the bundle."
+  - path: llm.discovery.cache_ttl_ms
+    type: int
+    secret: false
+    notes: ">0 whenever >=1 connection is declared (G028). SCOPE-04 catalog stale-while-revalidate window."
+  - path: llm.discovery.per_provider_timeout_ms
+    type: int
+    secret: false
+    notes: ">0 whenever >=1 connection is declared (G028). Per-connection discovery probe budget."
+  - path: llm.model_costs
+    type: object[]
+    secret: false
+    notes: "LLM_MODEL_COSTS_JSON — provider-qualified (<kind>/<backend-id>) USD rate table. REQUIRED for every ENABLED non-ollama model (a billable model with no entry is a fail-loud refusal at dispatch, never a silent $0); Ollama models are $0 and need no entry."
+  - path: infrastructure.operator_user_ids
+    type: string[]
+    secret: false
+    notes: "OPERATOR_USER_IDS (CSV) — allowlist of bearer SUBJECTS (auth.UserIDFromContext / spec-044 actor_user_id) permitted on the /v1/admin/model-connections* credential-mutating surface. [] in this repo (No Env-Specific Content); the deploy adapter INJECTS the real operator id(s) per-target at apply time (env-specific, like hostnames — never committed). Empty -> admin surface FAIL-CLOSED (401/403) and, with a db-mode slot declared, fail-loud startup abort in production (G028)."
