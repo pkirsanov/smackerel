@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/catalog"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/llm"
 )
 
 // CatalogProvider is the late-bound combined provider-qualified catalog source
@@ -104,4 +105,51 @@ func CurrentBudgetProvider() BudgetProvider {
 		return nil
 	}
 	return h.provider
+}
+
+// DispatchResolver is the late-bound spec 096 SCOPE-03 provider-aware dispatch
+// resolver source. *llm.DispatchResolver structurally satisfies it. It maps a
+// selected provider-qualified model id ("<kind>/<backend>") to a populated
+// ChatRequest (decrypting a hosted credential through the SCOPE-02 vault) and
+// NEVER falls back to Ollama for a rejected hosted target (FR-X1 / SCN-096-G01).
+// The agent's /ask dispatch (the deferred SCOPE-07 follow-up) reads it
+// nil-safely: a nil resolver ⇒ not wired ⇒ the byte-for-byte 089 Ollama
+// dispatch path.
+type DispatchResolver interface {
+	// Resolve maps a provider-qualified model id to a populated dispatch (or a
+	// typed *llm.ResolveError). A refusal is NEVER a silent Ollama fallback.
+	Resolve(providerQualifiedModel string) (llm.ResolvedDispatch, error)
+}
+
+// dispatchResolverHolder wraps DispatchResolver for the atomic.Pointer (which
+// needs a concrete element type) without the typed-nil gotcha. A nil holder ⇒
+// no resolver wired.
+type dispatchResolverHolder struct{ resolver DispatchResolver }
+
+// dispatchResolverRef is the late-bound spec 096 dispatch resolver. cmd/core
+// wiring installs it once the live discovery/dispatch activation runs; the
+// (deferred) /ask dispatch reads it via DispatchResolverProvider().
+var dispatchResolverRef atomic.Pointer[dispatchResolverHolder]
+
+// SetDispatchResolver installs the runtime provider-aware dispatch resolver.
+// Passing nil clears the binding; DispatchResolverProvider() then returns nil
+// and the dispatch path falls back to the byte-for-byte 089 Ollama dispatch
+// (deferred-activation baseline, never a panic — mirrors the nil catalog/budget
+// passthrough).
+func SetDispatchResolver(r DispatchResolver) {
+	if r == nil {
+		dispatchResolverRef.Store(nil)
+		return
+	}
+	dispatchResolverRef.Store(&dispatchResolverHolder{resolver: r})
+}
+
+// DispatchResolverProvider returns the currently bound DispatchResolver (or nil
+// when not wired). The (deferred) /ask dispatch reads it nil-safely.
+func DispatchResolverProvider() DispatchResolver {
+	h := dispatchResolverRef.Load()
+	if h == nil {
+		return nil
+	}
+	return h.resolver
 }
