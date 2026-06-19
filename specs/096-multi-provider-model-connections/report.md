@@ -2075,6 +2075,66 @@ touched; the fix is confined to the `connvault` predicate + message + doc
 comments + design §11.2 + the new regression-guard sub-test. The spec stays
 `in_progress` (certification is a separate downstream step).
 
+## Post-Implementation Security Sign-Off — vault master-key predicate (8900a8f6)
+
+A `bubbles.security` READ-ONLY review of commit `8900a8f6` (the
+`RequiresMasterKey` enablement-predicate relaxation) returned **PASS / no
+weakening**.
+
+- **Verdict:** SECURE — PASS (no weakening). The relaxed predicate
+  (`RequiresMasterKey` gating on `c.Enabled && mode==db` instead of `mode==db`)
+  preserves the invariant *"a provider secret is only ever decrypted by an
+  enabled connection whose master key is present at boot."* It changes only WHEN
+  boot fail-louds vs. returns a benign nil vault; it does not touch any
+  decryption guard. Decryption is structurally gated by a non-nil `*SecretVault`,
+  and a non-nil vault structurally requires the master key (`NewSecretVault`
+  rejects an empty/short key). Blast radius is one function (`RequiresMasterKey`,
+  called only by `LoadVault`, whose only production caller is
+  `buildModelConnectionsAdmin`).
+- **Six verified points (each with code + test evidence):**
+  1. **No decrypt without key** — an ENABLED db-mode slot with no key still
+     fail-louds at boot (`ErrMasterKeyRequired`); pinned by
+     `TestSecretVault_MasterKeyFailLoud_Spec096` (`anthropic-primary,
+     Enabled:true`).
+  2. **Disabled never decrypts** — the dispatch resolver rejects a disabled
+     connection before any decrypt (`dispatch_resolver.go` `if !conn.Enabled →
+     RejectConnectionDisabled`); the credential source yields a record only when
+     `EffectiveEnabled` (`connstore`); pinned by
+     `TestDispatch_SecretNeverInLogsOrErrors_Spec096/disabled_target_with_secret_on_disk_rejects_without_leaking`
+     + `TestEffectiveEnabled_SingleGate_Spec096`.
+  3. **Nil-vault is safe** — disabled-only `LoadVault`→`(nil,nil)`;
+     credential-write/test paths fail loud `VAULT_NOT_CONFIGURED` (no plaintext
+     stored/echoed); `Encrypt`/`Decrypt`/`Rotate` nil-receiver guards return
+     `ErrVaultNotConfigured` (no panic, no plaintext).
+  4. **Operator gate unchanged** — surface mounting + gate are computed from
+     `dbModeDeclared` (declaration), independent of `RequiresMasterKey`
+     (enablement); declared-but-disabled slots still mount the operator-gated
+     surface; gate still fail-closed on empty `operator_user_ids` (401/403;
+     `ValidateOperatorGate` aborts production startup on empty allowlist).
+  5. **No secret leakage** — `ErrMasterKeyRequired` names the env var only,
+     `ErrVaultNotConfigured`/`VAULT_NOT_CONFIGURED` name status only; no key value
+     interpolated; reinforced by
+     `TestSecretVault_NeverReturnsPlaintext_RedactionLast4_Spec096`,
+     `TestSecretVault_AADTamperRejected_Spec096`,
+     `TestSecretVault_WrongKeyRejected_Spec096`.
+  6. **Tests cover it** — all named tests exist and pass (report.md F1 `49/49 …
+     finished OK`, F2 RED-before non-tautological).
+- **Defense-in-depth note (informational, not a finding):** `RequiresMasterKey`
+  reads SST `c.Enabled` (config) while the runtime gate `EffectiveEnabled` reads
+  DB `rec.Enabled`. A DB-enabled-but-key-removed-after-the-fact deployment boots
+  with a nil vault instead of aborting, but STILL cannot decrypt — dispatch hits
+  `if r.vault == nil → RejectVaultNotConfigured` and the at-rest AES-256-GCM
+  ciphertext is undecryptable without the key; reaching DB-effective-enabled
+  requires a stored credential, which required a non-nil vault (key present) at
+  store time. Confidentiality holds end-to-end; failure mode is fail-closed
+  (never an Ollama fallback). The live dispatch resolver is also not yet wired
+  (SCOPE-07 deferred), so today the only live vault consumer is the nil-guarded
+  admin handler.
+- **Provenance:** `bubbles.security` read the committed code + test sources at
+  `8900a8f6` + the executed F1/F2 evidence; no files modified; suite not
+  re-executed (already validated + on `origin/main`). **Claim Source: interpreted**
+  (read-only security review of committed sources; no commands run this turn).
+
 
 
 
