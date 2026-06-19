@@ -272,6 +272,17 @@ type Config struct {
 	// in smackerel.yaml → RUNTIME_TRUSTED_PROXIES (comma-separated CIDRs).
 	RuntimeTrustedProxies []string
 
+	// Spec 096 SCOPE-06 — operator allowlist for the credential-mutating web
+	// admin surface (/v1/admin/model-connections*). Each entry is a per-user
+	// bearer SUBJECT (auth.UserIDFromContext / spec-044 actor_user_id) allowed
+	// to wire/test/enable/disable model-provider connections. Empty by default
+	// (No Env-Specific Content): real operator ids are injected by the deploy
+	// overlay. The operator gate is fail-closed on an empty allowlist; an empty
+	// allowlist while the surface is reachable aborts startup in production
+	// (G028). Source: infrastructure.operator_user_ids → OPERATOR_USER_IDS
+	// (comma-separated subjects).
+	OperatorUserIDs []string
+
 	// Shared typed config blocks (SST-compliant — from smackerel.yaml via config generate)
 	Drive           DriveConfig
 	Photos          PhotosConfig
@@ -966,6 +977,18 @@ func Load() (*Config, error) {
 			p = strings.TrimSpace(p)
 			if p != "" {
 				cfg.RuntimeTrustedProxies = append(cfg.RuntimeTrustedProxies, p)
+			}
+		}
+	}
+
+	// Spec 096 SCOPE-06 — parse the operator allowlist (comma-separated bearer
+	// subjects). Empty/absent ⇒ no operators ⇒ the credential-mutating admin
+	// surface is fail-closed (and aborts startup in production when reachable).
+	if operatorIDs := os.Getenv("OPERATOR_USER_IDS"); operatorIDs != "" {
+		for _, id := range strings.Split(operatorIDs, ",") {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				cfg.OperatorUserIDs = append(cfg.OperatorUserIDs, id)
 			}
 		}
 	}

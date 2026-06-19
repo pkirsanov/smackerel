@@ -184,7 +184,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
 | 3 | SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) | Go `llm` + Python `chat.py`/`schemas.py` + agent attribution | A02, A03, G01, G04, G05 | unit + integration + e2e-api (deferred) | 14 | [~] In progress |
 | 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [~] Unit complete; live legs deferred |
 | 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 062 `model_usage_ledger` | G03 | unit + integration | 12 | [~] Unit complete; live legs deferred |
-| 6 | SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable) | `/v1/admin/model-connections*` + operator middleware + PWA triad | W01, W02, W03, W04 | unit + integration + e2e-api (deferred) | 13 | [ ] Not started |
+| 6 | SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable) | `/v1/admin/model-connections*` + operator middleware + PWA triad | W01, W02, W03, W04 | unit + integration + e2e-api (deferred) | 13 | [~] In progress (backend half) |
 | 7 | SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity | Telegram `/model` + `/v1/agent/model` over the existing validator/store | D02, D03, D05, G06 | unit + e2e-api (deferred) | 13 | [ ] Not started |
 
 Sequential gating: **SCOPE-02 cannot start until SCOPE-01 is fully done;
@@ -840,7 +840,7 @@ Entries are copied verbatim from
 
 ## Scope 6: SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable)
 
-**Status:** [ ] Not started
+**Status:** [~] In progress (backend half — 7 of 13 DoD met + evidenced; the operator-gated PWA triad + the live `integration`/`e2e-api` legs + the `check`/`format`/`artifact-lint` closeout gates are deferred — see report.md → SCOPE-06)
 **Scope-Kind:** code (operator-gated admin API + operator middleware) + web (PWA triad)
 **Depends on:** SCOPE-02, SCOPE-04
 **Foundation:** false (the operator runtime-plane surface that wires the
@@ -997,25 +997,25 @@ from [scenario-manifest.json](scenario-manifest.json).
 > seam, asserting the redaction / typed-outcome / gate logic — correctly
 > classified `unit`.
 
-### Definition of Done — SCOPE-06 (all unchecked — implementation pending)
+### Definition of Done — SCOPE-06 (backend half implemented — 7 of 13 met + evidenced; PWA triad + live-stack legs deferred, see report.md → SCOPE-06)
 
 **Tier-1 (universal):**
 
 - [ ] D06-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-06.
 - [ ] D06-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-06.
 - [ ] D06-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-06.
-- [ ] D06-T1-4 — Every evidence block in report.md → SCOPE-06 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-06.
-- [ ] D06-T1-5 — **No env-specific content in repo:** the admin surface + PWA triad carry only generic placeholders (no real hostnames/IPs/tailnet identifiers/operator usernames/secret values); `infrastructure.operator_user_ids` is an abstract SST allowlist, real values live in the deploy adapter. → Evidence: report.md → SCOPE-06 (pii-scan / grep).
+- [x] D06-T1-4 — Every evidence block in report.md → SCOPE-06 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-06.
+- [x] D06-T1-5 — **No env-specific content in repo:** the admin surface + PWA triad carry only generic placeholders (no real hostnames/IPs/tailnet identifiers/operator usernames/secret values); `infrastructure.operator_user_ids` is an abstract SST allowlist, real values live in the deploy adapter. → Evidence: report.md → SCOPE-06 (pii-scan / grep).
 
 **Tier-2 (role-specific: operator gate (R1) + write-only secret + truthful test + live-stack):**
 
-- [ ] D06-T2-1 — **R1 operator gate (binding, adversarial):** the operator-only boundary is enforced by the `infrastructure.operator_user_ids` SST allowlist over the existing `internal/auth` subject; `TestAdminModelConnections_OperatorGate_403NonOperator_401Anonymous_Spec096` proves `403` non-operator / `401` anonymous; an empty `operator_user_ids` while a connection-mutating endpoint is reachable aborts fail-loud at startup (NO-DEFAULTS, G028). → Evidence: report.md → SCOPE-06 (gate test + fail-loud grep).
-- [ ] D06-T2-2 — **Write-only secret (binding):** the stored credential is NEVER echoed, returned, or logged; `PUT …/credential` returns only a redacted view; reads expose only `secret_present` + `secret_redaction` (last-4) + `last_tested_*` — proven by `TestAdminModelConnections_PutCredentialWriteOnly_RedactedView_Spec096` + a grep that no handler logs/returns the bundle. → Evidence: report.md → SCOPE-06.
-- [ ] D06-T2-3 — **Truthful test, never false success, never Ollama (adversarial):** `TestAdminModelConnections_FailedTest_TypedError_NeverFalseSuccess_Spec096` proves a failed probe reports `failed` with a typed `detail` and persists `failed` (never the secret) and never substitutes Ollama; non-tautological (fails if a failed probe is ever reported `ok`). → Evidence: report.md → SCOPE-06.
+- [x] D06-T2-1 — **R1 operator gate (binding, adversarial):** the operator-only boundary is enforced by the `infrastructure.operator_user_ids` SST allowlist over the existing `internal/auth` subject; `TestAdminModelConnections_OperatorGate_403NonOperator_401Anonymous_Spec096` proves `403` non-operator / `401` anonymous; an empty `operator_user_ids` while a connection-mutating endpoint is reachable aborts fail-loud at startup (NO-DEFAULTS, G028). → Evidence: report.md → SCOPE-06 (gate test + fail-loud grep).
+- [x] D06-T2-2 — **Write-only secret (binding):** the stored credential is NEVER echoed, returned, or logged; `PUT …/credential` returns only a redacted view; reads expose only `secret_present` + `secret_redaction` (last-4) + `last_tested_*` — proven by `TestAdminModelConnections_PutCredentialWriteOnly_RedactedView_Spec096` + a grep that no handler logs/returns the bundle. → Evidence: report.md → SCOPE-06.
+- [x] D06-T2-3 — **Truthful test, never false success, never Ollama (adversarial):** `TestAdminModelConnections_FailedTest_TypedError_NeverFalseSuccess_Spec096` proves a failed probe reports `failed` with a typed `detail` and persists `failed` (never the secret) and never substitutes Ollama; non-tautological (fails if a failed probe is ever reported `ok`). → Evidence: report.md → SCOPE-06.
 - [ ] D06-T2-4 — **Enable 409-guard + effective-enabled single gate:** enable is refused `409` unless a credential is present AND `last_test_outcome = ok` (`TestAdminModelConnections_EnableUntested_Blocked409_Spec096`), and the effective-enabled predicate (registry-declared AND DB `enabled` AND `last_test_outcome = ok` AND credential present) is the single gate discovery consults (`TestEnableDisable_CatalogMembershipFollows_Spec096`). → Evidence: report.md → SCOPE-06.
-- [ ] D06-T2-5 — **Closed-set slot + per-kind secret fields:** an `id` not in the SST registry is `404` (`TestAdminModelConnections_UnknownSlotRejected404_Spec096`); each kind saves its provider-specific write-only secret fields with non-secret params read-only from the registry (`TestAdminModelConnections_PerKindSecretFields_OpenAIFoundryGoogleBedrock_Spec096`); a brand-new kind is an SST topology edit, not a UI invention. → Evidence: report.md → SCOPE-06.
+- [x] D06-T2-5 — **Closed-set slot + per-kind secret fields:** an `id` not in the SST registry is `404` (`TestAdminModelConnections_UnknownSlotRejected404_Spec096`); each kind saves its provider-specific write-only secret fields with non-secret params read-only from the registry (`TestAdminModelConnections_PerKindSecretFields_OpenAIFoundryGoogleBedrock_Spec096`); a brand-new kind is an SST topology edit, not a UI invention. → Evidence: report.md → SCOPE-06.
 - [ ] D06-T2-6 — **Live-stack authenticity + C7 deferral:** the `integration` row hits the REAL aggregator/DB with no request interception; each `e2e-api` row (`TestAdmin_WireTestEnableAnthropic_Spec096`, `TestAdmin_AddFourHostedProviders_Independent_Spec096`, `TestAdmin_BadCredential_FailsTruthfully_Spec096`) is explicitly handed to the home-lab `bubbles.devops` dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-06 (test run + deferral note).
-- [ ] D06-T2-7 — Each adversarial test is non-tautological with a captured RED-before (a build that echoes the secret, reports a failed probe as `ok`, enables an untested slot, or lets a non-operator through would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-06 RED-before.
+- [x] D06-T2-7 — Each adversarial test is non-tautological with a captured RED-before (a build that echoes the secret, reports a failed probe as `ok`, enables an untested slot, or lets a non-operator through would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-06 RED-before.
 - [ ] D06-T2-8 — All `unit` + `integration` SCOPE-06 tests pass with NO skips; the live `e2e-api` legs are deferred to the home-lab dispatch (C7). → Evidence: report.md → SCOPE-06 (test run).
 
 ---

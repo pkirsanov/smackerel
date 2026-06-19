@@ -32,6 +32,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore"
 )
 
 // coreServices holds all runtime dependencies built during startup.
@@ -104,6 +105,14 @@ type coreServices struct {
 	// cannot be injected at construction time). May be nil when no
 	// Postgres pool is available.
 	cardRewardsWebHandler *web.CardRewardsWebHandler
+
+	// Spec 096 SCOPE-06 — the runtime (DB) plane store for model-provider
+	// connections. It IS the SCOPE-03 CredentialSource + the single
+	// effective-enabled predicate SCOPE-04 discovery consults; stashed here so
+	// the (deferred) live dispatch-resolver / catalog-aggregator wiring can read
+	// the SAME seam the admin surface writes. nil when no Postgres pool or no
+	// db-mode connection is declared.
+	modelConnStore *connstore.Store
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.
