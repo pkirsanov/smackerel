@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Model Connections — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Model Connections</h1>
+  <p class="subtitle">Local + hosted AI providers this Smackerel can use — operator only</p>
+
+  <!--
+    Spec 096 SCOPE-06 Screen S1 — operator-gated model-connections list.
+    Drives GET /v1/admin/model-connections. Follows the connectors.html
+    convention: keyboard-reachable links/buttons, ARIA status regions, no
+    color-only signals (every status carries text + glyph), and a <template>
+    data-field render contract so no secret is ever placed in markup.
+
+    Operator boundary (FR-B4): an anonymous caller (401) is routed to login;
+    a non-operator caller (403) sees the operator-only notice and NONE of the
+    setup affordances. This page is intentionally NOT in the user-facing nav.
+  -->
+
+  <!-- Operator-only boundary: shown when GET → 403 (FR-B4 / S1 gate state). -->
+  <section id="operator-only" class="card" aria-labelledby="operator-only-heading" hidden>
+    <h2 id="operator-only-heading">🔒 Operator only</h2>
+    <p class="status status-error" role="alert">
+      This area manages shared AI provider connections and is limited to the
+      Smackerel operator.
+    </p>
+    <p class="footer"><a href="/pwa/">← Back to home</a></p>
+  </section>
+
+  <section
+    id="model-connections"
+    class="card"
+    aria-labelledby="model-connections-heading"
+    aria-busy="true"
+  >
+    <h2 id="model-connections-heading">Connections</h2>
+    <p
+      id="model-connections-status"
+      class="status status-loading"
+      role="status"
+      aria-live="polite"
+    >Loading connections…</p>
+    <ul
+      id="model-connections-list"
+      class="connector-list"
+      aria-label="Declared model-provider connections"
+      hidden
+    ></ul>
+    <p
+      id="model-connections-empty"
+      class="status status-empty"
+      role="status"
+      hidden
+    >No provider connections are declared in this deployment's config.</p>
+    <p
+      id="model-connections-error"
+      class="status status-error"
+      role="alert"
+      hidden
+    ></p>
+  </section>
+
+  <p id="add-action" class="form-actions" hidden>
+    <a
+      class="btn btn-primary"
+      href="/pwa/model-connection-add.html"
+      aria-label="Add or configure a model-provider connection"
+    >+ Add / configure a connection</a>
+  </p>
+  <p id="add-note" class="subtitle" hidden>
+    Adding a brand-new provider kind is a config (SST) change — see docs.
+  </p>
+
+  <p class="footer">
+    <a href="/pwa/">← Back to home</a>
+  </p>
+
+  <template id="model-connection-row-template">
+    <li class="connector-card">
+      <div class="connector-card-head">
+        <span class="connector-card-name" data-field="title"></span>
+        <span class="status-pill" data-field="enabled-pill" data-status="">
+          <span class="status-pill-text" data-field="enabled"></span>
+        </span>
+      </div>
+      <dl class="connector-detail-fields">
+        <div>
+          <dt>Kind</dt>
+          <dd data-field="kind"></dd>
+        </div>
+        <div>
+          <dt>Credential</dt>
+          <dd data-field="secret"></dd>
+        </div>
+        <div>
+          <dt>Last tested</dt>
+          <dd data-field="last-tested"></dd>
+        </div>
+        <div>
+          <dt>Models</dt>
+          <dd data-field="models"></dd>
+        </div>
+      </dl>
+      <div class="connector-card-actions">
+        <a class="btn" data-field="cta" href="#">Manage →</a>
+      </div>
+    </li>
+  </template>
+
+  <script src="/pwa/model-connections.js"></script>
+</body>
+</html>

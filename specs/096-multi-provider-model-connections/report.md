@@ -1570,5 +1570,184 @@ frontend legs (the W03 `integration` catalog-membership leg, the W01/W02/W04
 code gaps. SCOPE-06 is held at `in_progress` rather than fabricating a pass on
 the deferred legs.
 
+---
+
+## SCOPE-06 (frontend) — Operator-gated model-connections PWA triad
+
+**Status:** in_progress (FRONTEND HALF delivered — the operator-gated PWA triad
+that drives the already-committed `/v1/admin/model-connections*` API; the live
+`e2e-ui` Playwright legs need the running stack and are DEFERRED to a clean-stack
+dispatch). The Go-side route MOUNTING noted in the backend section is final as a
+CONTRACT; the UI is built against that endpoint contract.
+**Executed by:** `bubbles.implement` (parent-expanded full-delivery, frontend
+dispatch).
+**Surface built:** S1 list, S2 add/configure, S3 detail — per spec.md
+`## UI Wireframes` (S1/S2/S3), `## User Flows`, and the binding
+`### Write-Only Secret Affordance Contract`.
+
+### What shipped (web/pwa only — no Go/API/runtime edits)
+
+```text
+=== SCOPE-06 (frontend) NEW ===
+?? web/pwa/model-connections.html              (S1 — list every db-mode slot + status, operator-gated)
+?? web/pwa/model-connections.js                (S1 logic: GET /v1/admin/model-connections; 401→login, 403→operator-only)
+?? web/pwa/model-connection-add.html           (S2 — pick a declared-unconfigured slot → per-kind write-only secret form)
+?? web/pwa/model-connection-add.js             (S2 logic: scope to secret_present=false; PUT …/{id}/credential)
+?? web/pwa/model-connection-detail.html        (S3 — status banners, Test/Enable/Disable/Replace)
+?? web/pwa/model-connection-detail.js          (S3 logic: POST …/test|enable|disable, PUT …/credential)
+?? web/pwa/tests/model_connections_pwa_guard_test.go  (runnable ui-unit static guard: write-only + operator-gate + truthful-test, with adversarial twins)
+```
+
+These six pages auto-embed via the existing `web/pwa/embed.go` glob
+(`//go:embed *.html *.css *.js …`) — no `embed.go` edit needed. They match the
+`connectors.html → connectors-add.html → connector-detail.html` convention
+exactly: same `card` / `status` / `radio-group[role=radiogroup]` / `btn` /
+`connector-detail-fields` `<dl>` / `status-pill` / `<template data-field>` class
+vocabulary, ARIA roles (`role=status`/`role=alert`/`aria-busy`/`role=radiogroup`),
+`credentials: "same-origin"` cookie-session fetch (spec-070), and
+`textContent`-only rendering (no `innerHTML`; CSP `script-src 'self'` preserved —
+no inline JS).
+
+**Service-worker / manifest registration:** none required. The convention is
+that feature pages are NOT listed in `sw.js` `STATIC_ASSETS` (the precache list
+holds only the app shell — `index.html`/`style.css`/`app.js`/`icon.svg`/
+`manifest.json`/`lib/queue.js`); the `sw.js` fetch handler caches every `/pwa/*`
+asset on demand (cache-first). The connectors triad and `assistant.html` are
+likewise absent from the precache list. `manifest.json` lists no pages either.
+So the three new pages are served + cached by the existing mechanism with no
+edit — matching convention. (Verified by inspection of `web/pwa/sw.js` L2-10 and
+`web/pwa/manifest.json`.) **Claim Source: interpreted** (read the committed
+`sw.js`/`manifest.json` + the connectors-triad precedent).
+
+### How the three binding contracts are implemented
+
+1. **Write-only secret affordance (headline contract).** The only credential
+   inputs are built in JS (`makeSecretInput` in `model-connection-add.js`;
+   `buildRotateInputs` in `model-connection-detail.js`) as
+   `input.type = "password"; input.autocomplete = "off"; input.value = "";`
+   with placeholder `Enter to set/replace — never displayed` and
+   `aria-describedby` a "never displayed" hint. The input is NEVER pre-filled
+   and is never assigned from server data. The stored credential is rendered as
+   **presence + last-4 only** (`secret_present` → `present · ····wxyz`, else
+   `needs credential`) from the redacted admin view — the plaintext is never in
+   the response and never enters the DOM. There is **NO reveal / show-password /
+   copy-secret / unmask control anywhere**. Save → `PUT …/{id}/credential
+   {secret_fields}`; the response is the redacted view (nothing echoed).
+   Rotation = enter a new value into the same write-only field → `PUT …/credential`
+   → the store clears the last test → the UI shows "re-test required". Per-kind
+   secret fields match the backend `validateSecretFields`
+   (`model_connections_admin.go`): anthropic/openai/azure-foundry → `api_key`;
+   bedrock → `aws_access_key_id` + `aws_secret_access_key`; google → one-of
+   `api_key` (Gemini) OR `service_account` (Vertex). Non-secret params are shown
+   read-only from the slot's `params` (generic `<dl>`, not editable — a brand-new
+   KIND is an SST edit). **Claim Source: executed** (files created; structure
+   verifiable in the committed pages).
+2. **Operator-only boundary visible.** Every page's fetch path handles
+   `resp.status === 401` → `routeToLogin()` (`window.location.assign("/login?next="
+   + encodeURIComponent(currentPath))`, the spec-077 `/login?next=` convention)
+   and `resp.status === 403` → `showOperatorOnly()` which reveals the
+   `#operator-only` notice (`🔒 Operator only`, `role=alert`) and HIDES every
+   setup affordance (the list/add button on S1, the whole form on S2, the whole
+   detail card on S3). No secrets, no actions for a non-operator. The pages are
+   intentionally NOT added to the user-facing nav (`index.html` untouched).
+   **Claim Source: executed.**
+3. **Truthful status — a failed test is unambiguously failed (Principle 8 /
+   SCN-096-W04).** `model-connection-detail.js` `renderTestOutcome(result)` has an
+   explicit `result.outcome === "ok"` branch: `ok` → the `#banner-ok` success
+   banner (`role=status`, `✓ tested ok · <when>`); anything else → the
+   `#banner-fail` danger banner (`role=alert`) carrying the **typed detail**
+   (`auth_failed`/`unreachable`/`timeout`) and naming the connection
+   (`<detail>: connection <id> is NOT usable (not substituted)`). There is NO
+   code path mapping a non-ok outcome to success, and **no `ollama` mention in
+   executable code** (a failed hosted test never substitutes Ollama). The
+   **Enable** control reflects the 409 guard: `enableBtn.disabled` stays true
+   until `secret_present && last_test_outcome === "ok"`, and a server `409`
+   (`ENABLE_PRECONDITION`) renders the typed reason — client guard + server guard
+   agree. **Claim Source: executed.**
+
+### Accessibility + responsive (Principle 7)
+
+Matches the connectors triad: one `<h1>` per page; provider/section groups are
+`<h2>`; the add-flow provider picker is `role=radiogroup` with an `aria-label`;
+loading uses `aria-busy="true"` + `role=status aria-live=polite`; failures use
+`role=alert`; status carries **text + glyph** (`● enabled` / `○ disabled` /
+`✓ ok` / `✗ failed`), never color-only; every control is a real
+`<a>`/`<button>`/`<input>` (keyboard operable). No secret is placed in a
+`title`, an `aria-live` region, or a status message — presence/last-4 only.
+
+### Test Evidence
+
+#### Evidence F1 — runnable ui-unit static guard authored (web/pwa/tests/model_connections_pwa_guard_test.go)
+
+This is the repo's no-live-stack `ui-unit` surface (the
+`assistant_source_href_security_guard_test.go` / `assistant_storage_guard_test.go`
+pattern — read the committed PWA source, assert a contract; package
+`webcodegen_drift_test`, reusing the shared `repoRoot` + `stripLineComments`
+helpers). It pins all three binding contracts with non-tautological adversarial
+twins:
+
+```text
+TestModelConnectionsWriteOnlySecretAffordance_Spec096        (type=password, autocomplete=off, value="", "never displayed"; forbids reveal/show/copy/unmask, type="text", value echo/pre-fill; operator-only block in all 3 HTML)
+TestModelConnectionsWriteOnly_Adversarial_Spec096            (proves an echo/reveal regression trips a forbidden pattern; a no-wiring snippet fails the required checks)
+TestModelConnectionsOperatorBoundary_Spec096                 (401→/login?next= AND 403→showOperatorOnly across all 3 JS)
+TestModelConnectionsOperatorBoundary_Adversarial_Spec096     (a fetch handler with no 403 branch fails the required check)
+TestModelConnectionDetailTruthfulTest_NoFalseSuccess_Spec096 (explicit outcome==="ok" branch; #banner-fail role=alert; #banner-ok role=status; NO ollama in executable code)
+TestModelConnectionDetailTruthfulTest_Adversarial_Spec096    (an always-success / ollama-fallback renderer trips the guards)
+```
+
+**Execution: DEFERRED to the orchestrator `check` pass. Claim Source: not-run.**
+The guard is pure static file-reading (no DB/network/live stack), so it runs
+under `./smackerel.sh test unit --go --go-run 'ModelConnections'`. It was NOT run
+in this dispatch to respect the focused-turn / no-full-suite constraint and to
+avoid a cold Dockerized `go test ./...` compile contending with concurrent repo
+work on a memory-pressured host. The orchestrator's post-implementation `check`
+compiles + runs it. The test is verified correct by inspection (every required
+pattern matches the committed pages; every forbidden pattern is absent; the RE2
+regexes are valid; identifiers do not collide with the existing
+`webcodegen_drift_test` package). HONEST: this section claims "authored +
+verified by inspection", NOT "passing".
+
+#### Evidence F2 — live e2e-ui Playwright legs DEFERRED
+
+There is no DOM/jsdom `ui-unit` harness in `web/pwa` (the only JS test runner is
+`@playwright/test`, which drives a real browser against the disposable
+`smackerel-test-e2e-ui` stack — see `web/pwa/package.json` + `playwright.config.ts`).
+A live operator wire→test→enable→rotate browser walk of the triad is therefore an
+`e2e-ui` leg that needs the running stack and is DEFERRED to a clean-stack
+dispatch (consistent with the backend SCOPE-06 `e2e-api`/`integration` C7
+deferral). The static Go guard (F1) is the runnable in-repo substitute that needs
+no stack. **Claim Source: interpreted** (read `package.json` + the existing
+`photos_connectors.spec.ts` `test.fixme` precedent).
+
+### DoD status (frontend half — no NEW checkboxes; plan owns the DoD shape)
+
+The SCOPE-06 DoD (scopes.md) has **no PWA-specific checkbox** — the triad is part
+of the scope **Surface**, not a discrete DoD item — so this frontend dispatch
+adds NO `[x]` and rewrites NO DoD text (that is `bubbles.plan`'s ownership). The
+frontend delivery advances the scope toward closeout; the currently-unchecked
+items remain `[ ]` for the reasons below:
+
+| DoD | State | Frontend note |
+|-----|-------|---------------|
+| D06-T1-1 artifact-lint | [ ] | orchestrator/foreign-owned; not run here (focused turn) |
+| D06-T1-2 `check` EXIT 0 | [ ] | orchestrator closeout — also compiles + runs the new F1 guard |
+| D06-T1-3 `format --check` | [ ] | orchestrator closeout |
+| D06-T1-4 real evidence | [x] | unchanged (backend E1–E4); F-section adds honest provenance-tagged frontend evidence |
+| D06-T1-5 no env-specific content | [x] | upheld — the 3 pages carry only generic placeholders, no real hostnames/IPs/tailnet/operator usernames/secret values |
+| D06-T2-1 R1 operator gate | [x] | unchanged (backend); the UI surfaces the 401/403 boundary visibly (S1/S2/S3 operator-only notice) |
+| D06-T2-2 write-only secret | [x] | unchanged (backend never echoes/returns/logs); the UI side honors the write-only INPUT affordance (type=password, autocomplete=off, never pre-filled, no reveal control) — pinned by the F1 guard |
+| D06-T2-3 truthful test, never false success | [x] | unchanged (backend); the UI renders a failed test as a `role=alert` danger banner, never a success, never an Ollama mention — pinned by the F1 guard |
+| D06-T2-4 enable 409-guard + effective-enabled single gate | [ ] | the live `TestEnableDisable_CatalogMembershipFollows` integration leg is still DEFERRED; the UI reflects the 409 guard (Enable disabled until credential + last-test ok) |
+| D06-T2-5 closed-set 404 + per-kind secret fields | [x] | unchanged (backend); the UI exposes exactly the backend's per-kind secret fields + read-only params |
+| D06-T2-6 live-stack authenticity + C7 deferral | [ ] | the `integration` + `e2e-api` legs remain DEFERRED; the live `e2e-ui` triad walk is likewise DEFERRED (F2) |
+| D06-T2-7 adversarial non-tautological + RED-before | [x] | unchanged (backend E2); the F1 guard ALSO ships adversarial twins |
+| D06-T2-8 all unit + integration pass, no skips | [ ] | backend unit pass; the F1 ui-unit guard is authored + DEFERRED to the orchestrator check (not-run here); `integration`/`e2e-ui` DEFERRED |
+
+No DoD checkbox is newly flipped by this frontend dispatch (honest: the plan
+exposes no PWA-specific item, and the already-`[x]` items were earned by the
+backend). The triad is delivered per the Surface + the binding Write-Only Secret
+Affordance Contract; SCOPE-06 stays `in_progress` (activation route-mount + the
+live `integration`/`e2e-api`/`e2e-ui` legs still pending).
+
 
 

@@ -184,7 +184,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
 | 3 | SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) | Go `llm` + Python `chat.py`/`schemas.py` + agent attribution | A02, A03, G01, G04, G05 | unit + integration + e2e-api (deferred) | 14 | [~] In progress |
 | 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [~] Unit complete; live legs deferred |
 | 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 062 `model_usage_ledger` | G03 | unit + integration | 12 | [~] Unit complete; live legs deferred |
-| 6 | SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable) | `/v1/admin/model-connections*` + operator middleware + PWA triad | W01, W02, W03, W04 | unit + integration + e2e-api (deferred) | 13 | [~] In progress (backend half) |
+| 6 | SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable) | `/v1/admin/model-connections*` + operator middleware + PWA triad | W01, W02, W03, W04 | unit + integration + e2e-api (deferred) | 13 | [~] In progress (backend + PWA triad) |
 | 7 | SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity | Telegram `/model` + `/v1/agent/model` over the existing validator/store | D02, D03, D05, G06 | unit + e2e-api (deferred) | 13 | [ ] Not started |
 
 Sequential gating: **SCOPE-02 cannot start until SCOPE-01 is fully done;
@@ -840,7 +840,7 @@ Entries are copied verbatim from
 
 ## Scope 6: SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable)
 
-**Status:** [~] In progress (backend half — 7 of 13 DoD met + evidenced; the operator-gated PWA triad + the live `integration`/`e2e-api` legs + the `check`/`format`/`artifact-lint` closeout gates are deferred — see report.md → SCOPE-06)
+**Status:** [~] In progress (backend half + frontend PWA triad delivered — 7 of 13 DoD met + evidenced; the live `e2e-ui` triad walk + the `integration`/`e2e-api` legs + the `check`/`format`/`artifact-lint` closeout gates are deferred — see report.md → SCOPE-06 and → SCOPE-06 (frontend))
 **Scope-Kind:** code (operator-gated admin API + operator middleware) + web (PWA triad)
 **Depends on:** SCOPE-02, SCOPE-04
 **Foundation:** false (the operator runtime-plane surface that wires the
@@ -997,7 +997,7 @@ from [scenario-manifest.json](scenario-manifest.json).
 > seam, asserting the redaction / typed-outcome / gate logic — correctly
 > classified `unit`.
 
-### Definition of Done — SCOPE-06 (backend half implemented — 7 of 13 met + evidenced; PWA triad + live-stack legs deferred, see report.md → SCOPE-06)
+### Definition of Done — SCOPE-06 (backend half + frontend PWA triad implemented — 7 of 13 met + evidenced; live-stack legs — integration/e2e-api/e2e-ui — deferred, see report.md → SCOPE-06 and → SCOPE-06 (frontend))
 
 **Tier-1 (universal):**
 
