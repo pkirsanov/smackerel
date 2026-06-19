@@ -185,7 +185,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
 | 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [~] Unit complete; live legs deferred |
 | 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 062 `model_usage_ledger` | G03 | unit + integration | 12 | [~] Unit complete; live legs deferred |
 | 6 | SCOPE-06 — Operator-gated web admin connection surface (wire/test/enable) | `/v1/admin/model-connections*` + operator middleware + PWA triad | W01, W02, W03, W04 | unit + integration + e2e-api (deferred) | 13 | [~] In progress (backend + PWA triad) |
-| 7 | SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity | Telegram `/model` + `/v1/agent/model` over the existing validator/store | D02, D03, D05, G06 | unit + e2e-api (deferred) | 13 | [ ] Not started |
+| 7 | SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity | Telegram `/model` + `/v1/agent/model` over the existing validator/store | D02, D03, D05, G06 | unit + e2e-api (deferred) | 13 | [~] In progress (unit-GREEN; closeout + e2e-api deferred) |
 
 Sequential gating: **SCOPE-02 cannot start until SCOPE-01 is fully done;
 SCOPE-03 until SCOPE-02; SCOPE-04 until SCOPE-01 (registry) AND its
@@ -1022,7 +1022,7 @@ from [scenario-manifest.json](scenario-manifest.json).
 
 ## Scope 7: SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity
 
-**Status:** [ ] Not started
+**Status:** [~] In progress (unified selection surfaces + 088/089 parity implemented and unit-GREEN, 9 of 13 DoD met + evidenced; the `check`/`format`/`artifact-lint` closeout gates + the live `e2e-api` parity legs are deferred — see report.md → SCOPE-07)
 **Scope-Kind:** code (Telegram `/model` picker + `/v1/agent/model` enrichment over the existing validator/store)
 **Depends on:** SCOPE-04, SCOPE-06
 **Foundation:** false (the unified selection surface that renders the
@@ -1171,26 +1171,26 @@ hosted models) are **deferred to the home-lab `bubbles.devops` dispatch
 > + non-tool-capable-gather parity is a pure-mechanism guarantee provable
 > in-repo).
 
-### Definition of Done — SCOPE-07 (all unchecked — implementation pending)
+### Definition of Done — SCOPE-07 (9 of 13 met + evidenced; the `check`/`format`/`artifact-lint` closeout gates + the live `e2e-api` parity legs are deferred — see report.md → SCOPE-07)
 
 **Tier-1 (universal):**
 
 - [ ] D07-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-07.
 - [ ] D07-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-07.
 - [ ] D07-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-07.
-- [ ] D07-T1-4 — Every evidence block in report.md → SCOPE-07 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-07.
-- [ ] D07-T1-5 — 088/089 do-not-amend boundary respected: selection extends the EXISTING validator/store/picker; NO second validator/store/picker is introduced. → Evidence: report.md → Change Manifest.
+- [x] D07-T1-4 — Every evidence block in report.md → SCOPE-07 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-07.
+- [x] D07-T1-5 — 088/089 do-not-amend boundary respected: selection extends the EXISTING validator/store/picker; NO second validator/store/picker is introduced. → Evidence: report.md → Change Manifest.
 
 **Tier-2 (role-specific: 088/089 parity + additive enrichment (R2) + non-tool-capable gather (R3)):**
 
-- [ ] D07-T2-1 — **088/089 parity checkitem (binding, adversarial):** one-validator/one-store, the gather-vs-synthesis fork, and per-request > sticky > default precedence are preserved provider-agnostically — `TestParity_OneValidatorOneStore_ForkPrecedence_ProviderAgnostic_Spec096` FAILS if a second validator/store is introduced; `TestAgentModel_TelegramWebParity_SameValidatorSameStore_Spec096` proves both surfaces resolve through the same singletons. → Evidence: report.md → SCOPE-07 (parity test output).
-- [ ] D07-T2-2 — **R2 additive-enrichment preserves 089 clients (binding, adversarial):** `GET /v1/agent/model` gains `capabilities[]` + `cost_class` (+ optional MTD `budget`) additively while `allowed_models[]` is byte-for-byte preserved (ordering + provider-qualified strings) — `TestAgentModel_GetEnrichedCatalogAdditive_AllowedModelsPreserved_Spec096` fails if any `allowed_models` entry is renamed/reordered/removed. → Evidence: report.md → SCOPE-07.
-- [ ] D07-T2-3 — **R3 non-tool-capable gather (binding, adversarial):** a non-tool-capable model is shown-but-disabled for gather and a direct gather selection of it is rejected fail-loud (same `modelswitch.Rejection`) — `TestParity_NonToolCapableGatherShownDisabled_RejectedFailLoud_Spec096` fails if a non-tool-capable gather selection is ever accepted; the disable-vs-filter choice is justified (shown for transparency, disabled/rejected so a numbered reply never maps to a non-dispatchable gather selection), consistent with the unreachable-provider treatment. → Evidence: report.md → SCOPE-07.
-- [ ] D07-T2-4 — **Combined provider-grouped catalog:** the Telegram `/model` picker renders one provider-grouped, provider-qualified, cost-hinted list (Ollama/local first) with only reachable models numbered and an unreachable provider shown-but-disabled with its typed status (`TestModelPicker_TelegramCombinedProviderGroupedList_Spec096` + `TestModelPicker_UnreachableShownDisabledOnlyReachableNumbered_Spec096`); a numbered reply always maps to a dispatchable model. → Evidence: report.md → SCOPE-07.
-- [ ] D07-T2-5 — **Selection persistence + precedence (089 contract):** a hosted selection persists via the EXISTING claim-bound `modelpref` store and per-request > sticky > default precedence is byte-for-byte the 089 contract with provider-qualified ids only (`TestAgentModel_StickyHostedPersistsPrecedence_Spec096`). → Evidence: report.md → SCOPE-07.
+- [x] D07-T2-1 — **088/089 parity checkitem (binding, adversarial):** one-validator/one-store, the gather-vs-synthesis fork, and per-request > sticky > default precedence are preserved provider-agnostically — `TestParity_OneValidatorOneStore_ForkPrecedence_ProviderAgnostic_Spec096` FAILS if a second validator/store is introduced; `TestAgentModel_TelegramWebParity_SameValidatorSameStore_Spec096` proves both surfaces resolve through the same singletons. → Evidence: report.md → SCOPE-07 (parity test output).
+- [x] D07-T2-2 — **R2 additive-enrichment preserves 089 clients (binding, adversarial):** `GET /v1/agent/model` gains `capabilities[]` + `cost_class` (+ optional MTD `budget`) additively while `allowed_models[]` is byte-for-byte preserved (ordering + provider-qualified strings) — `TestAgentModel_GetEnrichedCatalogAdditive_AllowedModelsPreserved_Spec096` fails if any `allowed_models` entry is renamed/reordered/removed. → Evidence: report.md → SCOPE-07.
+- [x] D07-T2-3 — **R3 non-tool-capable gather (binding, adversarial):** a non-tool-capable model is shown-but-disabled for gather and a direct gather selection of it is rejected fail-loud (same `modelswitch.Rejection`) — `TestParity_NonToolCapableGatherShownDisabled_RejectedFailLoud_Spec096` fails if a non-tool-capable gather selection is ever accepted; the disable-vs-filter choice is justified (shown for transparency, disabled/rejected so a numbered reply never maps to a non-dispatchable gather selection), consistent with the unreachable-provider treatment. → Evidence: report.md → SCOPE-07.
+- [x] D07-T2-4 — **Combined provider-grouped catalog:** the Telegram `/model` picker renders one provider-grouped, provider-qualified, cost-hinted list (Ollama/local first) with only reachable models numbered and an unreachable provider shown-but-disabled with its typed status (`TestModelPicker_TelegramCombinedProviderGroupedList_Spec096` + `TestModelPicker_UnreachableShownDisabledOnlyReachableNumbered_Spec096`); a numbered reply always maps to a dispatchable model. → Evidence: report.md → SCOPE-07.
+- [x] D07-T2-5 — **Selection persistence + precedence (089 contract):** a hosted selection persists via the EXISTING claim-bound `modelpref` store and per-request > sticky > default precedence is byte-for-byte the 089 contract with provider-qualified ids only (`TestAgentModel_StickyHostedPersistsPrecedence_Spec096`). → Evidence: report.md → SCOPE-07.
 - [ ] D07-T2-6 — **Live-stack parity + C7 deferral:** each `e2e-api` row (`TestTelegram_PickHostedModelPersists_Spec096`, `TestWebTelegramModelParity_Spec096`, `TestAsk_StickyHostedSelectionPersistsAcrossTurns_Spec096`, `TestForkPrecedenceParity_MultiProvider_Spec096`) hits the REAL system (Telegram↔web same result) and is handed to the home-lab `bubbles.devops` dispatch (C7), NOT marked passing from dev. → Evidence: report.md → SCOPE-07 (test run + deferral note).
-- [ ] D07-T2-7 — Each adversarial test is non-tautological with a captured RED-before (a build that introduces a second validator/store, breaks `allowed_models` byte-parity, or accepts a non-tool-capable gather selection would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-07 RED-before.
-- [ ] D07-T2-8 — All `unit` SCOPE-07 tests pass with NO skips; the live cross-surface `e2e-api` parity legs are deferred to the home-lab dispatch (C7). → Evidence: report.md → SCOPE-07 (test run).
+- [x] D07-T2-7 — Each adversarial test is non-tautological with a captured RED-before (a build that introduces a second validator/store, breaks `allowed_models` byte-parity, or accepts a non-tool-capable gather selection would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-07 RED-before.
+- [x] D07-T2-8 — All `unit` SCOPE-07 tests pass with NO skips; the live cross-surface `e2e-api` parity legs are deferred to the home-lab dispatch (C7). → Evidence: report.md → SCOPE-07 (test run).
 
 ---
 
