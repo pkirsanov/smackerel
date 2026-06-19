@@ -31,8 +31,9 @@ import (
 	"github.com/smackerel/smackerel/internal/web"
 
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
-	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connvault"
+	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
 )
 
 // coreServices holds all runtime dependencies built during startup.
@@ -113,6 +114,14 @@ type coreServices struct {
 	// the SAME seam the admin surface writes. nil when no Postgres pool or no
 	// db-mode connection is declared.
 	modelConnStore *connstore.Store
+
+	// Spec 096 SCOPE-07 — the SCOPE-02 credential vault (AES-256-GCM AEAD over
+	// db-mode hosted-connection secrets) loaded by buildModelConnectionsAdmin and
+	// stashed here so the SCOPE-07 dispatch-resolver wiring decrypts a hosted
+	// credential through the SAME vault the admin surface writes. nil for an
+	// Ollama-only / no-db-mode deployment (no secret is needed) — downstream
+	// construction MUST tolerate a nil vault.
+	modelConnVault *connvault.SecretVault
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.
