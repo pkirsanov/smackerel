@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Your model — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Your model</h1>
+  <p class="subtitle">Pick the AI model your /ask questions use</p>
+
+  <!--
+    Spec 096 SCOPE-07 Screen S5 — the USER-facing web model picker.
+    Drives the claim-bound GET/PUT/DELETE /v1/agent/model surface (the SAME
+    validator + store the Telegram /model picker uses — one-validator/one-store
+    parity). Renders the SCOPE-04 combined, provider-qualified catalog grouped
+    by provider (Ollama/local first), with the 089 current / system-default
+    tags, a per-group cost hint, and capability chips. An unreachable provider
+    is shown-but-disabled (aria-disabled, out of tab order) with its typed
+    status — never silently dropped (Principle 8).
+
+    This is NOT operator config: there is NO credential field anywhere on this
+    page, and the PUT body carries ONLY {model} — the actor is ALWAYS the
+    authenticated bearer subject (claim-bound, spec 044), never a body field.
+    Each authenticated user picks their OWN selection.
+  -->
+
+  <p id="current-line" class="subtitle" data-field="cur" hidden></p>
+  <p id="budget-line" class="subtitle" data-field="budget" role="status" hidden></p>
+
+  <form id="model-picker-form" class="card" aria-labelledby="model-picker-heading" aria-busy="true" novalidate>
+    <h2 id="model-picker-heading">Choose a model</h2>
+    <p
+      id="picker-status"
+      class="status status-loading"
+      role="status"
+      aria-live="polite"
+    >Loading models…</p>
+
+    <div id="provider-groups" aria-label="Available models"></div>
+
+    <p
+      id="picker-empty"
+      class="status status-empty"
+      role="status"
+      hidden
+    >No models are available in this deployment.</p>
+    <p
+      id="cost-note"
+      class="status"
+      role="status"
+      hidden
+    ></p>
+    <p
+      id="picker-error"
+      class="status status-error"
+      role="alert"
+      hidden
+    ></p>
+
+    <div class="form-actions">
+      <button type="submit" id="use-model" class="btn btn-primary" disabled>Use this model</button>
+      <button type="button" id="reset-model" class="btn btn-secondary">Reset to default</button>
+    </div>
+  </form>
+
+  <p class="footer">
+    <a href="/pwa/assistant.html">← Back to assistant</a>
+  </p>
+
+  <!-- One provider group: a labeled radiogroup (reachable) OR a disabled group. -->
+  <template id="provider-group-template">
+    <fieldset class="provider-group" data-field="group">
+      <legend>
+        <span data-field="group-name"></span>
+        <span class="status-pill" data-field="group-status" data-status="">
+          <span class="status-pill-text" data-field="group-status-text"></span>
+        </span>
+      </legend>
+      <div class="radio-group" role="radiogroup" data-field="radiogroup"></div>
+      <p class="hint" data-field="group-note" hidden></p>
+    </fieldset>
+  </template>
+
+  <!-- One selectable (reachable) model row. -->
+  <template id="model-row-template">
+    <label class="radio">
+      <input type="radio" name="model" data-field="radio">
+      <span class="radio-label">
+        <strong data-field="model-id"></strong>
+        <small data-field="model-meta"></small>
+      </span>
+    </label>
+  </template>
+
+  <script src="/pwa/model-picker.js"></script>
+</body>
+</html>

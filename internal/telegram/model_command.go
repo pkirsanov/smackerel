@@ -44,7 +44,13 @@ func (b *Bot) handleModelCommand(ctx context.Context, msg *tgbotapi.Message) {
 		// arms a per-chat pending selection so a bare-number reply selects
 		// (handleModelSelectionReply). The explicit-id set / reset paths below
 		// are unchanged (the spec-089 `/model <id>` / `/model default` flow).
-		text, models := modelPickerReply(ctx, allow, store, userID)
+		//
+		// Spec 096 SCOPE-07 — when a combined-catalog source is wired the picker
+		// renders the provider-grouped, provider-qualified, cost-hinted list
+		// (only reachable models numbered); when not wired it is the byte-for-
+		// byte 089 flat list. EITHER WAY the armed models[] is the EXACT numbered
+		// set, so a bare-number reply maps to a dispatchable model verbatim.
+		text, models := modelPickerReplyCombined(ctx, agenttool.ModelCatalogProvider(), agenttool.CurrentBudgetProvider(), allow, store, userID)
 		b.modelSelections.set(chatID, &pendingModelSelection{Models: models})
 		b.reply(chatID, text)
 		return
