@@ -95,6 +95,7 @@ import (
 	ok "github.com/smackerel/smackerel/internal/assistant/openknowledge"
 	okagent "github.com/smackerel/smackerel/internal/assistant/openknowledge/agent"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/catalog"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/citeback"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connvault"
@@ -304,6 +305,18 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 	// resolveActorUserID / HTTP PASETO subject), never a request-body field.
 	agenttool.SetModelPref(modelpref.NewPostgresStore(svc.pg.Pool))
 
+	// Spec 096 SCOPE-07 — activate the deferred multi-provider discovery
+	// aggregator + month-to-date USD budget + provider-aware dispatch resolver and
+	// install them behind the late-bound agenttool singletons the unified
+	// selection surfaces read. A no-op (089 fallback preserved) when no connection
+	// is declared or there is no Postgres pool. spendLedger + the system-default
+	// synthesis model are already in scope above. The /ask dispatch injection that
+	// CONSUMES the resolver is the deferred follow-up — nothing reads the resolver
+	// singleton yet.
+	if err := wireSpec096DiscoveryAndDispatch(cfg, svc, spendLedger, okCfg.SynthesisModelID); err != nil {
+		return fmt.Errorf("wireOpenKnowledge: spec096 discovery/dispatch activation: %w", err)
+	}
+
 	slog.Info("open-knowledge subsystem wired",
 		openKnowledgeBootLogAttrs(okCfg, len(registry.Enabled()), "wired")...)
 	return nil
@@ -462,6 +475,11 @@ func buildModelConnectionsAdmin(cfg *config.Config, svc *coreServices) (*api.Mod
 	if err != nil {
 		return nil, nil, fmt.Errorf("model-connections admin: load credential vault: %w", err)
 	}
+	// SCOPE-07 — stash the vault so wireSpec096DiscoveryAndDispatch's dispatch
+	// resolver decrypts hosted credentials through the SAME vault this surface
+	// writes (this line is reached only when a db-mode connection is declared, so
+	// a non-nil vault here implies hosted dispatch is possible).
+	svc.modelConnVault = vault
 
 	store := connstore.NewStore(svc.pg.Pool, conns)
 	svc.modelConnStore = store // SCOPE-03 CredentialSource + SCOPE-04 effective-enabled seam
@@ -474,4 +492,160 @@ func buildModelConnectionsAdmin(cfg *config.Config, svc *coreServices) (*api.Mod
 		"operator_gate_configured", gate.Configured(),
 		"note", "DB-backed CredentialSource + effective-enabled predicate ready for SCOPE-03 dispatch + SCOPE-04 discovery (live resolver/aggregator wiring deferred to SCOPE-07)")
 	return handler, gate, nil
+}
+
+// wireSpec096DiscoveryAndDispatch is the Spec 096 SCOPE-07 live-wiring
+// activation: it constructs the multi-provider discovery aggregator, the
+// month-to-date USD budget source, and the provider-aware dispatch resolver, and
+// installs all three behind the late-bound agenttool singletons the unified
+// selection surfaces (and the deferred /ask dispatch) read.
+//
+// It mirrors buildModelConnectionsAdmin's guards. When there is no Postgres pool
+// (config-validate mode) or no llm.connections[] are declared, it installs
+// NOTHING: the agenttool catalog/budget/resolver singletons stay nil and BOTH
+// surfaces keep the byte-for-byte spec-089 Ollama flat-list fallback. That nil
+// fallback is the load-bearing 089 contract — it MUST be preserved.
+//
+// NO-DEFAULTS (G028): every discovery bound (cache_ttl_ms,
+// per_provider_timeout_ms) and every provider base_url originates in cfg; there
+// is no hardcoded TTL, timeout, or URL here.
+//
+// Adapter set vs resolver set (a deliberate asymmetry):
+//   - Discovery adapters are built ONLY for EFFECTIVE-ENABLED connections — the
+//     aggregator's documented precondition ("one adapter per effective-enabled
+//     connection"). A disabled connection gets no adapter; a HostedAdapter
+//     ALWAYS returns its curated models with StateOK, so including a disabled
+//     connection would wrongly surface its models as reachable in the picker.
+//   - The dispatch resolver is built from the FULL connection set so it can
+//     reject a disabled / credential-less target fail-loud
+//     (RejectConnectionDisabled / RejectCredentialMissing) — NEVER a silent
+//     Ollama fallback (FR-X1). The fuller store-backed effective-enabled
+//     predicate (db-mode credential presence) + live hosted reachability probes
+//     are the deferred /ask-dispatch follow-up.
+//
+// Ordering: buildModelConnectionsAdmin (inside buildAPIDeps) runs BEFORE
+// wireOpenKnowledge, so svc.modelConnVault / svc.modelConnStore are already
+// stashed for a db-mode config by the time this runs; both are nil for the
+// Ollama-only default (the resolver tolerates a nil vault and a nil credential
+// source).
+func wireSpec096DiscoveryAndDispatch(cfg *config.Config, svc *coreServices, spendLedger *usageledger.PostgresLedger, systemDefaultModel string) error {
+	if cfg == nil {
+		return errors.New("wireSpec096DiscoveryAndDispatch: nil config")
+	}
+	// Guard: config-validate mode (no DB pool) ⇒ install nothing, leave the 089
+	// fallback (mirrors buildModelConnectionsAdmin).
+	if svc == nil || svc.pg == nil || svc.pg.Pool == nil {
+		slog.Info("spec096 scope07: discovery/dispatch activation skipped (no Postgres pool — config-validate mode); leaving byte-for-byte 089 fallback")
+		return nil
+	}
+	conns := cfg.ModelConnections.Connections
+	// Guard: no declared connection ⇒ install nothing, leave the 089 fallback.
+	if len(conns) == 0 {
+		slog.Info("spec096 scope07: discovery/dispatch activation skipped (no llm.connections declared); leaving byte-for-byte 089 fallback")
+		return nil
+	}
+
+	// Build one discovery adapter per EFFECTIVE-ENABLED connection. The Ollama
+	// (live) kind probes <base_url>/api/tags bounded by the SST per-provider
+	// timeout; every hosted kind serves its SST-curated models[].
+	discoveryTimeout := time.Duration(cfg.ModelConnections.Discovery.PerProviderTimeoutMs) * time.Millisecond
+	adapters := make([]catalog.DiscoveryAdapter, 0, len(conns))
+	for _, conn := range conns {
+		if !conn.Enabled {
+			continue
+		}
+		if conn.Kind == config.ModelConnectionKindOllama {
+			baseURL, err := ollamaConnectionBaseURL(conn)
+			if err != nil {
+				return fmt.Errorf("wireSpec096DiscoveryAndDispatch: connection %q: %w", conn.ID, err)
+			}
+			adapters = append(adapters, catalog.NewOllamaAdapter(
+				conn.ID,
+				baseURL,
+				&http.Client{Timeout: discoveryTimeout},
+				ollamaCapabilityHints(conn),
+			))
+			continue
+		}
+		adapters = append(adapters, catalog.NewHostedAdapter(conn))
+	}
+
+	// Aggregator over the SST discovery bounds (fail-loud > 0 — no default).
+	agg, err := catalog.NewCatalogAggregator(
+		adapters,
+		cfg.ModelConnections.Discovery.CacheTTLms,
+		cfg.ModelConnections.Discovery.PerProviderTimeoutMs,
+		systemDefaultModel,
+	)
+	if err != nil {
+		return fmt.Errorf("wireSpec096DiscoveryAndDispatch: build catalog aggregator: %w", err)
+	}
+	agenttool.SetModelCatalogProvider(agg)
+
+	// Month-to-date USD budget source (SCOPE-05 spend ledger). The picker
+	// surfaces a budget line ONLY when a paid model is in the catalog.
+	agenttool.SetBudgetProvider(spendLedger)
+
+	// Provider-aware dispatch resolver over the FULL connection set. A nil
+	// credential source (no db-mode connection ⇒ svc.modelConnStore is a typed
+	// nil) MUST be passed as a true nil interface, not a typed-nil *connstore.Store,
+	// so the resolver's nil-source path reports "no credential" instead of
+	// dereferencing a nil receiver. The vault is a concrete pointer the resolver
+	// nil-checks directly, so a nil vault is safe to pass as-is.
+	var creds llm.CredentialSource
+	if svc.modelConnStore != nil {
+		creds = svc.modelConnStore
+	}
+	resolver, err := llm.NewDispatchResolver(conns, svc.modelConnVault, creds)
+	if err != nil {
+		return fmt.Errorf("wireSpec096DiscoveryAndDispatch: build dispatch resolver: %w", err)
+	}
+	agenttool.SetDispatchResolver(resolver)
+
+	slog.Info("spec096 scope07: discovery/dispatch activated",
+		"discovery_adapters", len(adapters),
+		"connections_declared", len(conns),
+		"catalog_installed", true,
+		"budget_installed", true,
+		"resolver_installed", true,
+		"note", "combined catalog + budget + provider-aware dispatch resolver wired; the /ask dispatch loop consumes the resolver (hosted models dispatch to their provider; bare/ollama stay on the 089 path)")
+	return nil
+}
+
+// ollamaConnectionBaseURL extracts the REQUIRED base_url param from an Ollama
+// connection. The SST registry Validate() already guarantees an ollama
+// connection carries a non-empty base_url string
+// (modelConnectionRequiredParams), so this is fail-loud belt-and-suspenders,
+// NEVER a substituted default (G028).
+func ollamaConnectionBaseURL(conn config.ModelConnection) (string, error) {
+	raw, ok := conn.Params["base_url"]
+	if !ok {
+		return "", errors.New("ollama connection is missing the required base_url param")
+	}
+	s, isStr := raw.(string)
+	if !isStr || strings.TrimSpace(s) == "" {
+		return "", fmt.Errorf("ollama connection base_url must be a non-empty string, got %T", raw)
+	}
+	return strings.TrimSpace(s), nil
+}
+
+// ollamaCapabilityHints maps an Ollama connection's OPTIONAL operator-curated
+// models[] into the per-bare-name capability hints the OllamaAdapter stamps onto
+// live-discovered models (the /api/tags payload does not report capabilities).
+// The default live-strategy ollama connection declares no list ⇒ nil ⇒ the zero
+// capability triplet, identical to passing nil. This consumes an existing
+// OPTIONAL SST field; it invents no param (G028).
+func ollamaCapabilityHints(conn config.ModelConnection) map[string]catalog.ModelCapabilities {
+	if len(conn.Models.List) == 0 {
+		return nil
+	}
+	hints := make(map[string]catalog.ModelCapabilities, len(conn.Models.List))
+	for _, m := range conn.Models.List {
+		hints[m.ID] = catalog.ModelCapabilities{
+			ToolCapable:   m.ToolCapable,
+			Vision:        m.Vision,
+			ContextWindow: m.ContextWindow,
+		}
+	}
+	return hints
 }

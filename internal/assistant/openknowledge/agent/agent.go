@@ -494,6 +494,17 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		// baseline Model.
 		answeringModel = reqModel
 		req := llm.ChatRequest{Model: reqModel, Messages: requestMessages, Tools: requestTools}
+		// Spec 096 SCOPE-07 — provider-aware dispatch. A selected hosted
+		// provider-qualified model is routed through the installed resolver
+		// (per-request Provider/APIBase/APIKey/ProviderParams + BARE backend
+		// Model); a resolver rejection REFUSES the turn and NEVER falls back to
+		// Ollama (FR-X1 / SCN-096-G01). A bare/ollama model or a nil resolver
+		// leaves req byte-for-byte unchanged (the spec 089 path). answeringModel
+		// keeps the provider-qualified id for attribution.
+		var dispatchRefusal string
+		if req, dispatchRefusal = applyProviderDispatch(req); dispatchRefusal != "" {
+			return refuse(TerminationDispatchRejected, dispatchRefusal), nil
+		}
 		result, err := a.llm.Chat(ctx, req)
 		if err != nil {
 			return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat: %w", err)
@@ -538,7 +549,14 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 						Role:    llm.RoleUser,
 						Content: synthesisRetryPrompt,
 					})
-					retryResult, retryErr := a.llm.Chat(ctx, llm.ChatRequest{Model: a.cfg.SynthesisModel, Messages: retryMessages, Tools: nil})
+					retryReq := llm.ChatRequest{Model: a.cfg.SynthesisModel, Messages: retryMessages, Tools: nil}
+					// Spec 096 SCOPE-07 — the synthesis-retry turn honors the
+					// same provider-aware dispatch contract as the primary turn.
+					var retryRefusal string
+					if retryReq, retryRefusal = applyProviderDispatch(retryReq); retryRefusal != "" {
+						return refuse(TerminationDispatchRejected, retryRefusal), nil
+					}
+					retryResult, retryErr := a.llm.Chat(ctx, retryReq)
 					if retryErr != nil {
 						return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat (synthesis retry %d): %w", retry+1, retryErr)
 					}
