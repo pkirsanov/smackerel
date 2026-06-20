@@ -1,6 +1,6 @@
 # Spec 082 — MVP / evo-x2 Readiness Hardening
 
-**Status:** in_progress
+**Status:** Done
 **Feature number:** 082
 **Release train:** next
 **Owner workflow:** full-delivery
