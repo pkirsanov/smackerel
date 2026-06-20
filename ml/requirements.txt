@@ -1,15 +1,36 @@
 # Pinned production dependencies for smackerel-ml sidecar.
 # Generated from pyproject.toml — update when dependencies change.
-# spec-047 R12.2: bumped fastapi to 0.115.6 to pull starlette>=0.40.0,
-# resolving CVE-2024-47874 (Starlette DoS via multipart/form-data).
-# fastapi 0.115.6 transitively requires starlette>=0.40.0,<0.42.0.
-fastapi==0.115.6
+#
+# spec-047 R16 (fixable-CVE family, smackerel-ml image): resolve three
+# Trivy-gated CRITICAL/HIGH CVEs that began failing the build.yml
+# `Trivy vulnerability scan — smackerel-ml` step (lineage: R12.2 setuptools,
+# R12.3 starlette, R14 ml-OS, R15 core-openssl):
+#   * CVE-2026-49468 — CRITICAL — litellm <1.84.0 (Authentication Bypass via
+#     Host Header Injection): bump litellm 1.83.14 -> 1.84.0 (patch bump; the
+#     advisory notes no configuration change is required).
+#   * CVE-2026-48818 — HIGH — starlette <1.1.0 (StaticFiles SSRF on Windows)
+#     AND CVE-2026-54283 — HIGH — starlette <1.3.1 (multipart DoS): both need
+#     starlette>=1.3.1 (the higher fix). fastapi 0.115.6 capped
+#     starlette>=0.40.0,<0.42.0, so bump fastapi 0.115.6 -> 0.133.0 — the
+#     minimal fastapi whose spec relaxes the cap to a bare `starlette>=0.40.0`
+#     (0.132.0 still pinned `<1.0.0`), permitting the starlette 1.x line — and
+#     add an explicit starlette==1.3.1 pin (below) for a deterministic,
+#     auditable lock. starlette 1.3.1 also supersedes the earlier
+#     CVE-2024-47874 multipart-DoS fix that the old 0.115.6 comment tracked.
+#     The sidecar uses only the stable lifespan / APIRouter+Depends / Request /
+#     PlainTextResponse / httpx-TestClient subset (no StaticFiles, no multipart
+#     Form/File) — reviewed, so no app-code change is required.
+fastapi==0.133.0
+# starlette is normally transitive via fastapi; pinned explicitly here so the
+# CVE-2026-48818 / CVE-2026-54283 fix (>=1.3.1) is deterministic and visible to
+# `trivy fs ml/requirements.txt`. Must stay >=1.3.1 and within fastapi's range.
+starlette==1.3.1
 uvicorn[standard]==0.32.0
 nats-py==2.9.0
 pydantic==2.12.5
 pydantic-settings==2.6.0
 httpx==0.28.1
-litellm==1.83.14
+litellm==1.84.0
 sentence-transformers==3.3.0
 prometheus_client==0.21.0
 youtube-transcript-api==0.6.3
