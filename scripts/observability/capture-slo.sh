@@ -56,6 +56,37 @@ TARGET_JSON="{}"
 info() { echo "capture-slo: $*"; }
 err()  { echo "capture-slo: $*" >&2; }
 
+# --- Temp file tracking for signal-safe cleanup -----------------------------
+CAPTURE_TMPFILES=()
+
+cleanup_tmpfiles() {
+  for f in "${CAPTURE_TMPFILES[@]}"; do
+    [[ -f "$f" ]] && rm -f "$f"
+  done
+}
+
+# Register cleanup on EXIT (fires on normal exit, error exit via set -e, and
+# signals like SIGINT/SIGTERM). This ensures temp files are always removed even
+# when the user interrupts during load generation.
+trap cleanup_tmpfiles EXIT
+
+# Validation: ensure a parameter is a positive integer within bounds
+validate_positive_int() {
+  local name="$1" value="$2" max="${3:-100000}"
+  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+    err "--$name must be a positive integer (got: '$value')"
+    exit 2
+  fi
+  if [[ "$value" -lt 1 ]]; then
+    err "--$name must be at least 1 (got: $value)"
+    exit 2
+  fi
+  if [[ "$value" -gt "$max" ]]; then
+    err "--$name exceeds maximum ($max) — refusing to avoid resource exhaustion (got: $value)"
+    exit 2
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -172,6 +203,11 @@ cmd_run() {
   [[ -n "$URL" ]] || { err "run requires --url"; usage >&2; exit 2; }
   [[ -n "$SLO" ]] || SLO="$WORKFLOW"
   [[ -n "$OUT" ]] || OUT="$REPO_ROOT/.specify/runtime/observability/${WORKFLOW}.slo.json"
+
+  # Validate numeric parameters to prevent resource exhaustion and undefined behavior
+  validate_positive_int "requests" "$REQUESTS" 100000
+  validate_positive_int "concurrency" "$CONCURRENCY" 500
+
   require_deps
   load_target
 
@@ -191,8 +227,7 @@ cmd_run() {
 
   local samples t0 t1
   samples="$(mktemp)"
-  # shellcheck disable=SC2064
-  trap "rm -f '$samples'" RETURN
+  CAPTURE_TMPFILES+=("$samples")
   t0="$(date +%s)"
   seq "$REQUESTS" \
     | xargs -P "$CONCURRENCY" -I{} curl -s -o /dev/null -w '%{time_total} %{http_code}\n' --max-time 10 "$URL" \

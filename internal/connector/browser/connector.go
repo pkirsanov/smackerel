@@ -410,6 +410,18 @@ func (c *Connector) processEntries(entries []HistoryEntry, prevCursor int64) ([]
 			continue
 		}
 
+		// SEC-R45 (CWE-20): a history URL is untrusted external content. Drop
+		// entries whose scheme is not http/https (javascript:, data:, vbscript:,
+		// …) so a crafted/synced History DB cannot inject a dangerous-scheme URL
+		// into a RawArtifact field (URL/RawContent/SourceRef) that later reaches
+		// an href/render sink as DOM-XSS. Mirrors the markets/twitter/alerts
+		// ingestion-boundary control; counted as skipped for health stats.
+		if !isSafeURL(e.URL) {
+			slog.Warn("browser-history: dropping history entry with unsafe URL scheme")
+			stats.skipped++
+			continue
+		}
+
 		chromeTime := GoTimeToChrome(e.VisitTime)
 		if chromeTime > maxVisitTime {
 			maxVisitTime = chromeTime

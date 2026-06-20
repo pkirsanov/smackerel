@@ -59,7 +59,7 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 		// Estimate next billing date using proper date arithmetic.
 		now := time.Now()
 		billingDay := firstSeen.Day()
-		localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+		localToday := localMidnight(now)
 
 		var nextBilling time.Time
 		if billingFreq == "annual" {
@@ -167,7 +167,7 @@ func (e *Engine) ProduceTripPrepAlerts(ctx context.Context) error {
 			continue
 		}
 		now := time.Now()
-		localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+		localToday := localMidnight(now)
 		daysUntil := calendarDaysBetween(localToday, startDate)
 		if daysUntil < 0 {
 			daysUntil = 0
@@ -253,8 +253,8 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 		daysUntil := 0
 		if d, perr := time.Parse("2006-01-02", deadlineStr); perr == nil {
 			now := time.Now()
-			localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
-			deadlineLocal := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.Local)
+			localToday := localMidnight(now)
+			deadlineLocal := localMidnight(d)
 			daysUntil = calendarDaysBetween(localToday, deadlineLocal)
 			if daysUntil < 0 {
 				daysUntil = 0
@@ -432,4 +432,11 @@ func calendarDaysBetween(from, to time.Time) int {
 	fromUTC := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
 	toUTC := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
 	return int(toUTC.Sub(fromUTC).Hours() / 24)
+}
+
+// localMidnight returns midnight (local time) of the calendar day containing t.
+// The alert producers compare and difference calendar days in the user's local
+// timezone, so this truncates the time-of-day while preserving the local date.
+func localMidnight(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
 }

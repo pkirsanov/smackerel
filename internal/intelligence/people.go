@@ -304,8 +304,5 @@ func classifyInteractionTrend(daysSince, totalInteractions int) string {
 	if daysSince < 7 && totalInteractions > 10 {
 		return "increasing"
 	}
-	if daysSince < 7 {
-		return "stable"
-	}
 	return "stable"
 }

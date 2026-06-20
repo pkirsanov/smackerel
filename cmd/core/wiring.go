@@ -326,6 +326,8 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 	// (which would create an import cycle once internal/drive/tools
 	// registers agent tools that import retrieve).
 	retrieveSearcher := retrieve.NewPostgresSearcher(svc.pg.Pool)
+	// MIT-038-S-006 — pass the max inline bytes as the byte cap for defense-
+	// in-depth protection against memory exhaustion from stale/wrong metadata.
 	retrieveFetcher := retrieve.NewProviderBytesFetcher(svc.pg.Pool, func(ctx context.Context, providerID, connectionID, providerFileID string) (io.ReadCloser, string, error) {
 		provider, ok := drive.DefaultRegistry.Get(providerID)
 		if !ok {
@@ -336,7 +338,7 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 			return nil, "", err
 		}
 		return body.Reader, body.MimeType, nil
-	})
+	}, cfg.Drive.Telegram.MaxInlineSizeBytes)
 	retrievePolicy := drivepolicy.NewEngine()
 	retrieveService := retrieve.NewService(
 		retrieveSearcher,

@@ -36,6 +36,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // TracePublisher is the minimal interface PostgresTracer needs to mirror
@@ -229,6 +231,19 @@ func (t *PostgresTracer) RecordOutcome(traceID string, result *InvocationResult)
 		return
 	}
 
+	// Round 22 devops sweep F-037-DEVOPS-001: emit the per-invocation
+	// Prometheus metrics BEFORE the DB/NATS flush so an operator can
+	// alert on agent degradation (provider-error, timeout, loop-limit)
+	// even during a Postgres or NATS hiccup. Scenario is bucketed to
+	// "unrouted" when routing produced no scenario (unknown-intent).
+	scenarioLabel := result.ScenarioID
+	if scenarioLabel == "" {
+		scenarioLabel = "unrouted"
+	}
+	metrics.AgentInvocations.WithLabelValues(scenarioLabel, string(result.Outcome)).Inc()
+	metrics.AgentInvocationDuration.WithLabelValues(scenarioLabel).
+		Observe(float64(latencyMs(result.StartedAt, result.EndedAt)) / 1000.0)
+
 	ctx, cancel := t.publishCtxFn()
 	defer cancel()
 
@@ -245,14 +260,30 @@ func (t *PostgresTracer) RecordOutcome(traceID string, result *InvocationResult)
 // publishToolCall publishes one agent.tool_call.executed event. NATS
 // errors are logged and swallowed.
 func (t *PostgresTracer) publishToolCall(traceID string, call ExecutedToolCall) {
-	if t.publisher == nil {
-		return
-	}
 	pad := t.padFor(traceID)
 	scenarioID, scenarioVersion := "", ""
 	if pad != nil {
 		scenarioID = pad.tc.Scenario.ID
 		scenarioVersion = pad.tc.Scenario.Version
+	}
+
+	// Round 22 devops sweep F-037-DEVOPS-001: emit the tool-call metric
+	// first, independent of NATS publisher configuration. The tool label
+	// is bucketed to "unregistered" for a hallucinated tool name the LLM
+	// invented (ByName miss) so an adversarial or looping model cannot
+	// explode Prometheus label cardinality; scenario "" -> "unrouted".
+	scenarioLabel := scenarioID
+	if scenarioLabel == "" {
+		scenarioLabel = "unrouted"
+	}
+	toolLabel := "unregistered"
+	if _, ok := ByName(call.Name); ok {
+		toolLabel = call.Name
+	}
+	metrics.AgentToolCalls.WithLabelValues(scenarioLabel, toolLabel, string(call.Outcome)).Inc()
+
+	if t.publisher == nil {
+		return
 	}
 	envelope := map[string]any{
 		"trace_id":         traceID,

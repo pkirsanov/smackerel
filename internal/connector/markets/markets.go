@@ -615,6 +615,30 @@ func isSafeURL(rawURL string) bool {
 	}
 }
 
+// httpGetChecked builds a GET request for u, executes it through the shared
+// bounded-retry helper, redacts credentials from any transport error, and
+// verifies a 200 OK status. It consolidates the identical request/retry/redact/
+// status-check boilerplate previously duplicated across every provider fetch
+// (Finnhub quote, CoinGecko, Finnhub news, FRED). On success the caller owns
+// resp.Body and MUST close it; on any error the response body is already
+// drained and closed.
+func (c *Connector) httpGetChecked(ctx context.Context, u *url.URL, label string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
+	if err != nil {
+		return nil, redactHTTPError(err, label)
+	}
+	if resp.StatusCode != http.StatusOK {
+		statusErr := httpErrorWithSnippet(resp, label)
+		resp.Body.Close()
+		return nil, statusErr
+	}
+	return resp, nil
+}
+
 // fetchFinnhubQuote gets a stock quote from Finnhub.
 func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*StockQuote, error) {
 	if !validSymbolRe.MatchString(symbol) {
@@ -647,20 +671,11 @@ func (c *Connector) doFinnhubQuote(ctx context.Context, finnhubSymbol, displaySy
 	q.Set("token", c.config.FinnhubAPIKey)
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	resp, err := c.httpGetChecked(ctx, u, label)
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
-	if err != nil {
-		return nil, redactHTTPError(err, label)
-	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpErrorWithSnippet(resp, label)
-	}
 
 	var quote StockQuote
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&quote); err != nil {
@@ -704,20 +719,11 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 	q.Set("include_24hr_change", "true")
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	resp, err := c.httpGetChecked(ctx, u, "coingecko")
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
-	if err != nil {
-		return nil, redactHTTPError(err, "coingecko")
-	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpErrorWithSnippet(resp, "coingecko")
-	}
 
 	var result map[string]map[string]float64
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&result); err != nil {
@@ -766,20 +772,11 @@ func (c *Connector) fetchFinnhubCompanyNews(ctx context.Context, symbol, fromDat
 	q.Set("token", c.config.FinnhubAPIKey)
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	resp, err := c.httpGetChecked(ctx, u, "finnhub news")
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
-	if err != nil {
-		return nil, redactHTTPError(err, "finnhub news")
-	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpErrorWithSnippet(resp, "finnhub news")
-	}
 
 	var articles []NewsArticle
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&articles); err != nil {
@@ -807,20 +804,11 @@ func (c *Connector) fetchFREDLatest(ctx context.Context, seriesID string) (*FRED
 	q.Set("sort_order", "desc")
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	resp, err := c.httpGetChecked(ctx, u, "FRED")
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
-	if err != nil {
-		return nil, redactHTTPError(err, "FRED")
-	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpErrorWithSnippet(resp, "FRED")
-	}
 
 	var result struct {
 		Observations []struct {

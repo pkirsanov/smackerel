@@ -5,7 +5,7 @@
   "minimum_chrome_version": "120",
   "description": "Streams bookmarks and browser history into the operator's smackerel-core instance (spec 058).",
   "permissions": ["bookmarks", "history", "storage", "alarms"],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

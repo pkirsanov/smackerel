@@ -267,6 +267,13 @@ func (c *Connector) handshakeWithSidecar(ctx context.Context) error {
 		}
 		return fmt.Errorf("sidecar handshake: %s", msg)
 	}
+	// Validate schema_version parity at handshake time to catch version
+	// mismatches early, before they manifest as confusing sync failures.
+	// This mirrors the strict validation applied to sync responses via
+	// validateGkeepResponse (SCN-059-009) but for the handshake path.
+	if resp.SchemaVersion != gkeepSchemaVersion {
+		return fmt.Errorf("sidecar handshake schema_version = %d, want %d", resp.SchemaVersion, gkeepSchemaVersion)
+	}
 	slog.Info("gkeepapi sidecar handshake ok", "request_id", reqID)
 	return nil
 }

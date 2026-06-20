@@ -370,7 +370,16 @@ func (a *HTTPAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if resp.CaptureRoute {
-		a.capture(r.Context(), userID, req.TransportMessageID, req.Text)
+		// Capture-as-fallback is inviolable (Hard Constraint 5 / BS-001):
+		// the user's prompt MUST persist even if the client has already
+		// disconnected. net/http cancels r.Context() the instant the
+		// connection drops, which would abort the downstream
+		// pipeline.Process Postgres INSERT / NATS publish and silently
+		// lose the prompt. Decouple the durable capture write from
+		// request cancellation while preserving request-scoped values
+		// (request id, trace correlation via middleware.GetReqID).
+		// Spec 069 chaos Round 39 — F-069-CHAOS39-CAPTURE-CTX-CANCEL.
+		a.capture(context.WithoutCancel(r.Context()), userID, req.TransportMessageID, req.Text)
 	}
 
 	out := RenderJSON(resp, req.TransportMessageID, requestID, true)

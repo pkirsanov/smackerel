@@ -221,6 +221,7 @@ async def handle_sync_request(data: dict) -> dict:
                 "status": "ok",
                 "notes": notes,
                 "cursor": new_cursor,
+                "schema_version": KEEP_SCHEMA_VERSION,
             }
 
         except Exception as exc:

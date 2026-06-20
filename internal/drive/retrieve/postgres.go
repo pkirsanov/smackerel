@@ -116,21 +116,33 @@ type ProviderGetFileFunc func(ctx context.Context, providerID, connectionID, pro
 // and provider-specific file id via Postgres, then fetches the bytes
 // through the supplied ProviderGetFileFunc. The fetcher is provider-
 // neutral by construction: it never branches on the provider type.
+//
+// MIT-038-S-006 — Defense-in-depth: maxBytes caps the io.ReadAll in
+// GetArtifactBytes so a malformed provider response or stale size metadata
+// cannot exhaust memory. The cap matches the Telegram inline ceiling
+// (drive.telegram.max_inline_size_bytes) because bytes are only fetched
+// for non-downgraded inline deliveries; retrievals above the ceiling
+// are already downgraded to provider_link before fetching.
 type ProviderBytesFetcher struct {
-	pool    *pgxpool.Pool
-	getFile ProviderGetFileFunc
+	pool     *pgxpool.Pool
+	getFile  ProviderGetFileFunc
+	maxBytes int64
 }
 
-// NewProviderBytesFetcher constructs a BytesFetcher. Both arguments are
-// required; passing nil for either panics so the runtime fails loud.
-func NewProviderBytesFetcher(pool *pgxpool.Pool, getFile ProviderGetFileFunc) *ProviderBytesFetcher {
+// NewProviderBytesFetcher constructs a BytesFetcher. All arguments are
+// required; passing nil for pool/getFile or a non-positive maxBytes panics
+// so the runtime fails loud.
+func NewProviderBytesFetcher(pool *pgxpool.Pool, getFile ProviderGetFileFunc, maxBytes int64) *ProviderBytesFetcher {
 	if pool == nil {
 		panic("retrieve.NewProviderBytesFetcher: pool is required")
 	}
 	if getFile == nil {
 		panic("retrieve.NewProviderBytesFetcher: getFile is required")
 	}
-	return &ProviderBytesFetcher{pool: pool, getFile: getFile}
+	if maxBytes <= 0 {
+		panic("retrieve.NewProviderBytesFetcher: maxBytes must be positive")
+	}
+	return &ProviderBytesFetcher{pool: pool, getFile: getFile, maxBytes: maxBytes}
 }
 
 // GetArtifactBytes implements BytesFetcher.
@@ -160,9 +172,17 @@ func (f *ProviderBytesFetcher) GetArtifactBytes(ctx context.Context, artifactID 
 		return nil, "", errors.New("retrieve: provider returned nil reader")
 	}
 	defer reader.Close()
-	data, err := io.ReadAll(reader)
+	// MIT-038-S-006 — Defense-in-depth: cap the read to maxBytes+1 so we can
+	// detect oversized responses (stale metadata, malformed provider). The
+	// retrieve service already pre-filters by cand.SizeBytes, but that check
+	// relies on metadata which may be stale or zero; this cap is the last line
+	// of defense against memory exhaustion.
+	data, err := io.ReadAll(io.LimitReader(reader, f.maxBytes+1))
 	if err != nil {
 		return nil, "", fmt.Errorf("retrieve: read provider bytes: %w", err)
+	}
+	if int64(len(data)) > f.maxBytes {
+		return nil, "", fmt.Errorf("retrieve: provider returned %d bytes, exceeds max %d", len(data), f.maxBytes)
 	}
 	return data, mime, nil
 }

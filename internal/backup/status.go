@@ -24,7 +24,6 @@ import (
 	"io/fs"
 	"os"
 	"strings"
-	"time"
 )
 
 // Status is the on-disk shape backup.sh writes after each run.
@@ -145,6 +144,3 @@ func MarshalStatus(s Status) ([]byte, error) {
 	s.SchemaVersion = CurrentSchemaVersion
 	return json.MarshalIndent(s, "", "  ")
 }
-
-// Now is a package-level clock indirection so unit tests can pin time.
-var Now = time.Now

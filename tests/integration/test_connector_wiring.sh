@@ -79,16 +79,28 @@ assert_env_exists "FINANCIAL_MARKETS_ALERT_THRESHOLD"
 assert_env_exists "FINANCIAL_MARKETS_SYNC_SCHEDULE"
 assert_env_exists "FINANCIAL_MARKETS_COINGECKO_ENABLED"
 
-# --- All 5 connectors default to enabled: false ---
+# --- Connector enabled defaults ---
+# Original spec 019 contract: all 5 default to enabled: false
+# Superseded by commit 4a90ec5e: weather and gov-alerts intentionally enabled
+# for active use (Bucket A connectors). Test now checks actual intended state.
 echo ""
-echo "--- Default enabled=false check ---"
+echo "--- Default enabled check ---"
+declare -A EXPECTED_ENABLED=(
+  ["DISCORD"]="false"
+  ["TWITTER"]="false"
+  ["WEATHER"]="true"           # Intentionally enabled: 4a90ec5e
+  ["GOV_ALERTS"]="true"        # Intentionally enabled: 4a90ec5e
+  ["FINANCIAL_MARKETS"]="false"
+)
+
 for connector in DISCORD TWITTER WEATHER GOV_ALERTS FINANCIAL_MARKETS; do
   val=$(grep "^${connector}_ENABLED=" "$DEV_ENV" | cut -d= -f2-)
-  if [[ "$val" == "false" ]]; then
-    echo "  PASS: ${connector}_ENABLED defaults to false"
+  expected="${EXPECTED_ENABLED[$connector]}"
+  if [[ "$val" == "$expected" ]]; then
+    echo "  PASS: ${connector}_ENABLED = $val (expected)"
     PASS=$((PASS + 1))
   else
-    echo "  FAIL: ${connector}_ENABLED should default to false, got '$val'" >&2
+    echo "  FAIL: ${connector}_ENABLED = '$val', expected '$expected'" >&2
     FAIL=$((FAIL + 1))
   fi
 done

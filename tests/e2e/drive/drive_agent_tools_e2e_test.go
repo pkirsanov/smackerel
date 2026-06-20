@@ -108,6 +108,7 @@ func TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy(t *testing.T) {
 
 	searcher := retrieve.NewPostgresSearcher(pool)
 	fetchCount := 0
+	const maxInlineBytes int64 = 5 * 1024 * 1024
 	fetcher := retrieve.NewProviderBytesFetcher(pool, func(ctx context.Context, providerID, conn, fileID string) (io.ReadCloser, string, error) {
 		fetchCount++
 		p, ok := registry.Get(providerID)
@@ -119,9 +120,9 @@ func TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy(t *testing.T) {
 			return nil, "", err
 		}
 		return body.Reader, body.MimeType, nil
-	})
+	}, maxInlineBytes)
 	pol := drivepolicy.NewEngine()
-	retriever := retrieve.NewService(searcher, fetcher, pol, 5*1024*1024, retrieve.DefaultReasonTable())
+	retriever := retrieve.NewService(searcher, fetcher, pol, maxInlineBytes, retrieve.DefaultReasonTable())
 
 	drivetools.SetToolServices(&drivetools.ToolServices{
 		Retriever:   retriever,

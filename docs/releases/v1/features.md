@@ -69,6 +69,33 @@ See [`../mvp/features.md`](../mvp/features.md) for the full carry-forward table 
 |----|-----------|----------------|--------------------|--------------:|
 | V6-A | Re-run `bubbles.spec-review` at v1 close; dispatch any remaining MAJOR_DRIFT via `improve-existing` | per-spec | **No** — case-by-case | n/a |
 
+### V7 — Retrieval-strategy routing + freshness-aware retrieval (post-MVP intelligence gap-closers, planning hardened 2026-06-17)
+
+> **Status: PLANNED / specced — NOT delivered.** Owning spec [`specs/095-retrieval-strategy-routing`](../../../specs/095-retrieval-strategy-routing/) is hardened to the `specs_hardened` ceiling (`product-to-planning` mode): `spec.md` + `design.md` + `scopes.md` (9 scopes) + `scenario-manifest.json` (16 `SCN-095-*` scenarios) authored, `planningOnly: true`, `flagsIntroduced: []`, `deliverableFiles: []`. Zero source delivered — `internal/retrieval/` does not exist yet. This row traces to a **real owning spec at `specs_hardened`**, NOT to certified code. Delivery is a separate later-stage full-delivery run (see [Plan-to-Release Traceability](#plan-to-release-traceability)).
+>
+> This V7 group is a **2026-06-17 post-MVP addition**, distinct from the original 2026-06-03 operator-decision V1–V6 set above. Per [`../mvp/features.md`](../mvp/features.md) ("Any new connector after this MVP gate is RELEASE-V1 scope"; "No new spec is required for MVP"), the MVP phase is frozen for new specs, so spec 095 — a NEW spec — is RELEASE-V1-phase scope.
+
+<!-- bubbles:feature id=retrieval-strategy-routing spec=specs/095-retrieval-strategy-routing delivery=optional -->
+<!-- machine-binding note (Gate G101 / release-delivery-reconciliation-guard.sh): delivery=optional is deliberate, NOT required. Spec 095 is planning-only at the specs_hardened ceiling and is not yet validate-certified/delivered. The guard requires every delivery=required feature to bind a TERMINAL + validate-certified spec; 095 stays optional (NOT-ENFORCED) until its full-delivery run reaches done, at which point the v1 finalize refresh flips it to required. The packet-level reconciliation header is intentionally NOT added yet because the V1-V6 rows above still bind to not-yet-created proposed spec slots; full-packet machine reconciliation is a future bubbles.releases backfill. -->
+
+| ID | Capability | Owning spec | New spec required? | Status |
+|----|-----------|-------------|--------------------|--------|
+| V7-A | **Idea 1 — Retrieval-strategy routing by query intent**: `whole_document` + `structured_aggregate` + `vague_recall` default + low-confidence fallback, selected per query intent over the single existing store | [`specs/095-retrieval-strategy-routing`](../../../specs/095-retrieval-strategy-routing/) | No — authored (`specs_hardened`) | PLANNED |
+| V7-B | **Idea 2 — Evergreen-vs-ephemeral classification at the ingestion front door**: freshness signal emitted at `AssignTier`, synthesis/digest pool exclusion + aggressive decay for ephemeral artifacts (which stay searchable) | (same spec 095) | No — authored (`specs_hardened`) | PLANNED |
+| V7-C | **Idea 3 — Per-artifact-type retrieval contract**: in-code registry of per-artifact-type query shapes that drives Idea 1's router | (same spec 095) | No — authored (`specs_hardened`) | PLANNED |
+
+**Idea → scope mapping** (owning spec `specs/095-retrieval-strategy-routing`; 9 scopes / 16 `SCN-095-*` scenarios):
+
+| Idea | Scopes | Surface (planned) |
+|------|--------|-------------------|
+| Shared foundation | SCOPE-01 (fail-loud SST `retrieval.*` config) | `config/smackerel.yaml`, `internal/config/retrieval.go` |
+| Idea 3 — per-artifact-type retrieval contract | SCOPE-02 (RetrievalContract registry) | `internal/retrieval/routing/contract.go` |
+| Idea 1 — retrieval-strategy routing | SCOPE-03 (router + `StrategySelection` trace), SCOPE-04 (`whole_document`), SCOPE-05 (`structured_aggregate`), SCOPE-06 (`vague_recall` default + low-confidence fallback + facade integration) | `internal/retrieval/routing/` |
+| Idea 2 — evergreen-vs-ephemeral | SCOPE-07 (evergreen signal at `AssignTier`), SCOPE-08 (synthesis/digest pool exclusion + aggressive decay) | `internal/retrieval/evergreen/` |
+| Docs | SCOPE-09 (docs-only) | `docs/smackerel.md` §9, `docs/Operations.md` |
+
+**Single-graph invariant (Principle 5 — "One Graph, Many Views"):** all V7 routing + evergreen behavior operates over the ONE existing pgvector + knowledge-graph + structured store — no parallel index / store / graph (enforced by the planned `TestNoParallelStore` architecture test). Recorded so the v1 packet's One-Graph principle is not silently violated by a new retrieval surface.
+
 ## Plan-to-Release Traceability
 
 | v1 item | Target dispatch | Dispatch mode |
@@ -91,10 +118,15 @@ See [`../mvp/features.md`](../mvp/features.md) for the full carry-forward table 
 | V5-A | extend `specs/049-monitoring-stack` | `improve-existing` |
 | V5-B | extend `specs/049-monitoring-stack` | `improve-existing` |
 | V6-A | continuous | `bubbles.spec-review classify` |
+| V7-A/B/C (one cohesive spec) | owning `specs/095-retrieval-strategy-routing` (already at `specs_hardened`) | **full-delivery** run (implement→test→validate→audit→finalize) consuming the `product-to-planning` packet |
 
 ## Capability evidence trace
 
 Every "new in v1" capability traces to a row in the deep review (Gap A, Gap B, recs 3/8/9) and to a proposed spec slot. No capability is claimed as "delivered in v1" — they are all `planned`. The v1 packet refresh (per `idea-to-release-completion` mode `finalReleasesPhasePosition: -2`) will flip capabilities to `delivered` only when their underlying specs reach terminal-for-mode AND audit certifies the spec as `done`.
+
+**V7 (spec 095)** is the first v1 feature that traces to a **real, already-authored owning spec** (`specs/095-retrieval-strategy-routing` at `specs_hardened`) rather than to a not-yet-created proposed slot — its capability claim is evidence-backed by the hardened planning artifacts (spec/design/scopes/16 `SCN-095-*` scenarios), but it remains `planned` (NOT `delivered`): no source exists yet (`internal/retrieval/` absent) and delivery is a separate full-delivery run. It is machine-bound for Gate G101 with `delivery=optional` (not-yet-enforced) per the feature-binding annotation in the V7 section above.
+
+> **Non-blocking finding (future spec-review, NOT fixed here):** the V1–V6 "Proposed slot" numbers above (`specs/077`–`specs/090`) now collide with already-created specs at those numbers (e.g. `specs/077-pwa-browser-test-harness`, `specs/078-cross-surface-surfacing-prioritizer`, `specs/086-local-client-build`, `specs/090-observability-slo-dogfood` all exist with unrelated content). The proposed slots are stale and must be re-numbered to the next free spec numbers when each V-item is actually dispatched. This is out of scope for this 2026-06-17 V7 addition and is surfaced for a future `bubbles.spec-review` / `bubbles.releases` refresh.
 
 ## Sequencing / dependencies
 

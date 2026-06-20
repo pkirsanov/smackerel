@@ -101,6 +101,34 @@ func TestConnectHandshakeOkProceeds(t *testing.T) {
 	}
 }
 
+// TestConnectHandshakeRejectsSchemaVersionMismatch verifies that the
+// handshake validates schema_version parity at Connect time, catching
+// version mismatches early before they manifest as confusing sync failures.
+// This mirrors the strict validation applied to sync responses via
+// validateGkeepResponse (SCN-059-009) but for the handshake path.
+func TestConnectHandshakeRejectsSchemaVersionMismatch(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	fn := &fakeNats{}
+	const badVersion = gkeepSchemaVersion + 999
+	fn.replyFn = func(subject string, data []byte) ([]byte, error) {
+		// Return a valid-looking handshake response but with wrong schema_version.
+		resp := KeepHandshakeResponse{Status: "ok", SchemaVersion: badVersion}
+		return json.Marshal(resp)
+	}
+	c := New("google-keep")
+	c.SetNatsClient(fn)
+	err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true))
+	if err == nil {
+		t.Fatal("expected fail-loud Connect error due to schema_version mismatch")
+	}
+	if !strings.Contains(err.Error(), "schema_version") {
+		t.Errorf("Connect error %q does not mention schema_version", err.Error())
+	}
+	if c.Health(context.Background()) != "error" {
+		t.Errorf("health = %q, want error", c.Health(context.Background()))
+	}
+}
+
 // --- SCN-059-006: sync request/reply covers ---
 
 func TestSyncGkeepapiPublishesRequestAndDecodesResponse(t *testing.T) {
