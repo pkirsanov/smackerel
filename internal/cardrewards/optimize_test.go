@@ -198,3 +198,80 @@ func TestOptimize_InactiveCardExcluded(t *testing.T) {
 		t.Fatalf("source = %q, want none (the only card is inactive)", res.Source)
 	}
 }
+
+// Deterministic tie-breaking when two owned cards offer the SAME effective rate
+// for a category. design §6: "Ties broken by no spend-limit > higher limit >
+// issuer preference"; design §13 names "ties" as a required optimizer unit-test
+// target (Scope 07 Implementation Plan + DoD #1 both list "ties"). The G01..G05
+// scenarios never construct two equal-rate cards, so before this test the whole
+// deterministic tie-break ladder was unexercised.
+//
+// ADVERSARIAL BY CONSTRUCTION: each sub-case (1) feeds the cards in the OPPOSITE
+// order to the expected winner — so the optimizer must actually reorder, not
+// echo input order — and (2) gives the intended WINNER the lexicographically
+// LARGER user_card_id. The final tie-break key is the SMALLER id, so if the
+// named higher-priority tie-break level were removed the optimizer would fall
+// through to that id key (or to input order) and pick the LOSER. The assertions
+// therefore fail on any regression of the level they target — they are not
+// tautological.
+func TestOptimize_TieBreak_DeterministicOrdering(t *testing.T) {
+	// Tie-break 1 — a benefit with NO spend limit beats an equal-rate capped one.
+	// Winner (no-limit) has the larger id, so only tie-break 1 can elect it.
+	t.Run("no-limit beats equal-rate capped", func(t *testing.T) {
+		capped := optCard("tie1-a-capped", "Capped Card",
+			`[{"category":"Groceries","rate":3,"rate_type":"percent","limit_cents":50000}]`, "", "")
+		noLimit := optCard("tie1-z-nolimit", "Unlimited Card",
+			`[{"category":"Groceries","rate":3,"rate_type":"percent"}]`, "", "")
+
+		res := Optimize("Groceries", []CardInputs{capped, noLimit}, nil, optNow())
+
+		if res.RecommendedUserCardID == nil || *res.RecommendedUserCardID != "tie1-z-nolimit" {
+			t.Fatalf("recommended = %v, want tie1-z-nolimit (no-limit beats equal-rate capped)", res.RecommendedUserCardID)
+		}
+		if res.EffectiveLimitCents != nil {
+			t.Fatalf("effective limit = %v, want nil (the unlimited card won)", res.EffectiveLimitCents)
+		}
+		if res.Rate != 3 {
+			t.Fatalf("rate = %v, want 3", res.Rate)
+		}
+	})
+
+	// Tie-break 2 — between two equal-rate CAPPED benefits the higher cap wins.
+	// Winner (higher cap) has the larger id, so only tie-break 2 can elect it.
+	t.Run("higher cap beats equal-rate lower cap", func(t *testing.T) {
+		lowCap := optCard("tie2-a-lowcap", "Low Cap Card",
+			`[{"category":"Dining","rate":3,"rate_type":"percent","limit_cents":50000}]`, "", "")
+		highCap := optCard("tie2-z-highcap", "High Cap Card",
+			`[{"category":"Dining","rate":3,"rate_type":"percent","limit_cents":100000}]`, "", "")
+
+		res := Optimize("Dining", []CardInputs{lowCap, highCap}, nil, optNow())
+
+		if res.RecommendedUserCardID == nil || *res.RecommendedUserCardID != "tie2-z-highcap" {
+			t.Fatalf("recommended = %v, want tie2-z-highcap (higher cap beats equal-rate lower cap)", res.RecommendedUserCardID)
+		}
+		if res.EffectiveLimitCents == nil || *res.EffectiveLimitCents != 100000 {
+			t.Fatalf("effective limit = %v, want 100000 (the higher-cap card won)", res.EffectiveLimitCents)
+		}
+	})
+
+	// Tie-break 3 — fully tied (same rate, both uncapped): a STABLE, reproducible
+	// key (lexicographically smaller user_card_id) decides so recommendations
+	// never flap. Fed larger-id-first, and asserted order-independent.
+	t.Run("stable smaller-id key on a full tie", func(t *testing.T) {
+		larger := optCard("tie3-bbb", "Card BBB",
+			`[{"category":"Travel","rate":2,"rate_type":"percent"}]`, "", "")
+		smaller := optCard("tie3-aaa", "Card AAA",
+			`[{"category":"Travel","rate":2,"rate_type":"percent"}]`, "", "")
+
+		res := Optimize("Travel", []CardInputs{larger, smaller}, nil, optNow())
+		if res.RecommendedUserCardID == nil || *res.RecommendedUserCardID != "tie3-aaa" {
+			t.Fatalf("recommended = %v, want tie3-aaa (stable smaller-id key on a full tie)", res.RecommendedUserCardID)
+		}
+
+		// Determinism: reversing the input order must not change the verdict.
+		res2 := Optimize("Travel", []CardInputs{smaller, larger}, nil, optNow())
+		if res2.RecommendedUserCardID == nil || *res2.RecommendedUserCardID != "tie3-aaa" {
+			t.Fatalf("recommended (reversed input) = %v, want tie3-aaa (must be input-order-independent)", res2.RecommendedUserCardID)
+		}
+	})
+}

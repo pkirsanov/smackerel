@@ -106,3 +106,73 @@ test("attachCSPGuard exposes the SCOPE-3 contract and wires page listeners", () 
     "SCOPE-3 guard must wire console + pageerror listeners and expose the CSP-violation binding + init script",
   );
 });
+
+// ============================================================================
+// BUG-001 Chaos Regression Tests
+// ============================================================================
+
+test("BUG-001: attachCSPGuard warns on unexpected exposeBinding error (chaos regression)", async () => {
+  // TP-077-BUG-001-01 / SCN-077-BUG-001-01
+  // Stub that rejects with an unexpected error (NOT "already exposed")
+  const warnCalls: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) =>
+    warnCalls.push(args.map(String).join(" "));
+
+  const failingPage = {
+    on() {},
+    exposeBinding() {
+      return Promise.reject(new Error("Target page closed"));
+    },
+    addInitScript() {
+      return Promise.reject(new Error("Execution context was destroyed"));
+    },
+  };
+
+  attachCSPGuard(failingPage as never);
+
+  // Must wait for promises to settle
+  await new Promise((r) => setTimeout(r, 50));
+
+  console.warn = originalWarn;
+
+  assert.ok(
+    warnCalls.some((w) => w.includes("[csp.ts] exposeBinding failed")),
+    `Expected warning about exposeBinding failure; got: ${JSON.stringify(warnCalls)}`,
+  );
+  assert.ok(
+    warnCalls.some((w) => w.includes("[csp.ts] addInitScript failed")),
+    `Expected warning about addInitScript failure; got: ${JSON.stringify(warnCalls)}`,
+  );
+});
+
+test("BUG-001: attachCSPGuard silently handles already-bound error (expected case)", async () => {
+  // TP-077-BUG-001-02 / SCN-077-BUG-001-02
+  const warnCalls: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) =>
+    warnCalls.push(args.map(String).join(" "));
+
+  const alreadyBoundPage = {
+    on() {},
+    exposeBinding() {
+      // Playwright's actual error message for duplicate binding
+      return Promise.reject(new Error("Function already exposed"));
+    },
+    addInitScript() {
+      return Promise.resolve();
+    },
+  };
+
+  attachCSPGuard(alreadyBoundPage as never);
+  await new Promise((r) => setTimeout(r, 50));
+
+  console.warn = originalWarn;
+
+  const cspWarnings = warnCalls.filter((w) => w.includes("[csp.ts]"));
+  assert.equal(
+    cspWarnings.length,
+    0,
+    `Should NOT warn for expected already-bound error; got: ${JSON.stringify(cspWarnings)}`,
+  );
+});

@@ -28,6 +28,45 @@ func TestHash_RejectsShortPasswords(t *testing.T) {
 	}
 }
 
+func TestHash_SaltIsUniquePerInvocation(t *testing.T) {
+	// Per-hash random salt (design §2.2, saltLen=16, crypto/rand) is the
+	// load-bearing property that stops identical passwords from producing
+	// identical stored hashes — without it, password reuse leaks across
+	// users and the table becomes precomputable offline.
+	//
+	// CRITICAL: every other hasher test still passes under a CONSTANT salt.
+	// TestHash_RoundTrip, TestVerify_WrongPassword, TestVerify_TamperedHash
+	// and TestVerify_MalformedPHC all hold whether the salt is random or a
+	// fixed/zero block, and the integration rotate test only compares hashes
+	// of DIFFERENT passwords. So a regression that drops the rand.Read(salt)
+	// CSPRNG read (zero salt, shared salt, or a deterministic stub) would
+	// ship completely undetected. This test is the only guard for it: hashing
+	// the SAME password many times MUST yield all-distinct PHC strings.
+	const pw = "correct-horse-battery-staple"
+	const n = 16
+	seen := make(map[string]struct{}, n)
+	for i := 0; i < n; i++ {
+		phc, err := Hash(pw)
+		if err != nil {
+			t.Fatalf("Hash #%d returned err: %v", i, err)
+		}
+		if _, dup := seen[phc]; dup {
+			t.Fatalf("Hash(%q) produced a DUPLICATE PHC string on attempt #%d — "+
+				"salt is not unique per invocation (constant/zero-salt regression). "+
+				"Identical passwords MUST hash to distinct PHC strings.", pw, i)
+		}
+		seen[phc] = struct{}{}
+		// A unique salt is worthless if it is not actually embedded and
+		// usable: every freshly-salted PHC must still verify the password.
+		if err := Verify(phc, pw); err != nil {
+			t.Fatalf("Hash #%d produced a PHC that fails Verify: %v", i, err)
+		}
+	}
+	if len(seen) != n {
+		t.Fatalf("expected %d distinct PHC strings for the same password, got %d", n, len(seen))
+	}
+}
+
 func TestVerify_WrongPassword(t *testing.T) {
 	phc, err := Hash("correct-horse-battery-staple")
 	if err != nil {

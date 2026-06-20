@@ -1262,8 +1262,14 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 		if captureURL != "" {
 			metadata["capture_url"] = captureURL
 		}
-		if captureComment != "" {
-			metadata["capture_comment"] = captureComment
+		// SEC-014-S20-1: the comment is untrusted Discord message content. Strip
+		// control characters (NUL, ANSI/terminal escapes) before storing in
+		// metadata, matching the sanitization RawContent (SEC3-1) and the other
+		// metadata string fields (SEC3-2) already receive. ParseBotCommand only
+		// TrimSpace+truncates, so without this the comment reaches persisted
+		// metadata and downstream log/render sinks verbatim.
+		if sanitizedComment := sanitizeStr(captureComment, maxBotCommandCommentLen); sanitizedComment != "" {
+			metadata["capture_comment"] = sanitizedComment
 		}
 	}
 

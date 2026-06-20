@@ -34,6 +34,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode"
@@ -208,6 +209,15 @@ type IdeaWriter interface {
 	WriteIdea(ctx context.Context, userID, normalizedText string, dec Decision) (artifactID string, err error)
 }
 
+// IdeaCleaner is an optional interface that IdeaWriter implementations
+// can implement to support cleanup of orphaned artifacts. When Record
+// fails after WriteIdea succeeds, captureForUser will attempt cleanup
+// if the writer implements this interface. This follows the compensating
+// transaction pattern established in internal/pipeline/ingest.go.
+type IdeaCleaner interface {
+	DeleteIdea(ctx context.Context, artifactID string) error
+}
+
 // defaultPolicy is the SCOPE-1 reference implementation of Policy.
 // Decide is fully implemented (pure-functional, no IO). Capture
 // requires SCOPE-2/SCOPE-3 collaborators; SCOPE-1 ships the wiring
@@ -295,6 +305,9 @@ func (p *defaultPolicy) Capture(_ context.Context, _ Decision) (CaptureResult, e
 }
 
 // captureForUser is the SCOPE-3 implementation: lookup → write → record.
+// If Record fails after WriteIdea succeeds, attempts to clean up the
+// orphaned artifact following the compensating transaction pattern
+// established in internal/pipeline/ingest.go (lines 124-127).
 func (p *defaultPolicy) captureForUser(ctx context.Context, userID string, dec Decision) (CaptureResult, error) {
 	if p.store == nil || p.writer == nil {
 		return CaptureResult{}, ErrNotWired
@@ -317,6 +330,33 @@ func (p *defaultPolicy) captureForUser(ctx context.Context, userID string, dec D
 		return CaptureResult{}, fmt.Errorf("capturefallback: write idea: %w", err)
 	}
 	if err := p.store.Record(ctx, userID, artifactID, dec); err != nil {
+		// Clean up orphaned artifact on Record failure following the
+		// compensating transaction pattern from internal/pipeline/ingest.go.
+		// This prevents orphan Ideas without dedup metadata that would
+		// cause duplicate captures on subsequent calls with the same text.
+		if cleaner, ok := p.writer.(IdeaCleaner); ok {
+			if cleanupErr := cleaner.DeleteIdea(ctx, artifactID); cleanupErr != nil {
+				slog.Error("capturefallback: failed to clean up orphaned artifact after record failure",
+					slog.String("artifact_id", artifactID),
+					slog.String("user_id", userID),
+					slog.String("cleanup_error", cleanupErr.Error()),
+					slog.String("record_error", err.Error()),
+				)
+			} else {
+				slog.Warn("capturefallback: cleaned up orphaned artifact after record failure",
+					slog.String("artifact_id", artifactID),
+					slog.String("user_id", userID),
+				)
+			}
+		} else {
+			// Writer does not implement IdeaCleaner; log the orphan for
+			// manual cleanup/auditing.
+			slog.Error("capturefallback: orphaned artifact created (writer does not support cleanup)",
+				slog.String("artifact_id", artifactID),
+				slog.String("user_id", userID),
+				slog.String("record_error", err.Error()),
+			)
+		}
 		return CaptureResult{}, fmt.Errorf("capturefallback: record dedup: %w", err)
 	}
 	return CaptureResult{

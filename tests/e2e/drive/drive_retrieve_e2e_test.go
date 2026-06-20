@@ -89,6 +89,7 @@ func TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly(t *testing.T)
 	registry.Register(provider)
 	searcher := retrieve.NewPostgresSearcher(pool)
 	fetchCount := 0
+	const maxInlineBytes int64 = 5 * 1024 * 1024
 	fetcher := retrieve.NewProviderBytesFetcher(pool, func(ctx context.Context, providerID, conn, fileID string) (io.ReadCloser, string, error) {
 		fetchCount++
 		p, ok := registry.Get(providerID)
@@ -100,8 +101,8 @@ func TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly(t *testing.T)
 			return nil, "", err
 		}
 		return body.Reader, body.MimeType, nil
-	})
-	svc := retrieve.NewService(searcher, fetcher, drivepolicy.NewEngine(), 5*1024*1024, retrieve.DefaultReasonTable())
+	}, maxInlineBytes)
+	svc := retrieve.NewService(searcher, fetcher, drivepolicy.NewEngine(), maxInlineBytes, retrieve.DefaultReasonTable())
 	bridge := telegram.NewDriveRetrieveBridge(svc)
 
 	// Direct retrieve for the medical artifact: the lone match returns

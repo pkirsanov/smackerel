@@ -92,6 +92,7 @@ func TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels
 	registry := smdrive.NewRegistry()
 	registry.Register(provider)
 	searcher := retrieve.NewPostgresSearcher(pool)
+	const maxInlineBytes int64 = 5 * 1024 * 1024
 	fetcher := retrieve.NewProviderBytesFetcher(pool, func(ctx context.Context, providerID, conn, fileID string) (io.ReadCloser, string, error) {
 		p, ok := registry.Get(providerID)
 		if !ok {
@@ -102,8 +103,8 @@ func TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels
 			return nil, "", err
 		}
 		return body.Reader, body.MimeType, nil
-	})
-	svc := retrieve.NewService(searcher, fetcher, drivepolicy.NewEngine(), 5*1024*1024, retrieve.DefaultReasonTable())
+	}, maxInlineBytes)
+	svc := retrieve.NewService(searcher, fetcher, drivepolicy.NewEngine(), maxInlineBytes, retrieve.DefaultReasonTable())
 	bridge := telegram.NewDriveRetrieveBridge(svc)
 
 	// 1) Disambiguation list — both receipts match.

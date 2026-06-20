@@ -40,6 +40,7 @@ Action items required to close the v1 gate, grouped by owner. All items are **pl
 | OPS-V1 | Re-run `bubbles.spec-review` at v1 close (V6-A) | portfolio-wide | P1 — gate to v1 declaration |
 | OPS-V2 | `bubbles.devops` validates v1 deployment-narrative technical claims (per [`deployment.md`](deployment.md)) | this packet | P0 before external claim |
 | OPS-V3 | Update `bubbles.train` flag bundles for each new V-spec flag (default-ON in `next` train, default-OFF in `mvp`) | `config/feature-flags.*.yaml` | per-spec |
+| OPS-V4 | **Route release-TRAIN re-targeting for spec 095 (V7)** — recommend `releaseTrain` `mvp` → `next`. `bubbles.plan` owns the change to `specs/095-retrieval-strategy-routing/state.json` `releaseTrain`; `bubbles.train` owns confirming the `next` train is the correct home (no flag-bundle change needed — `flagsIntroduced: []`). Rationale in OQ-V10. `bubbles.releases` does NOT edit either file. | `bubbles.plan` + `bubbles.train` | P1 — before 095 full-delivery dispatch |
 
 ## Owner decisions still pending (open questions)
 
@@ -54,6 +55,7 @@ Action items required to close the v1 gate, grouped by owner. All items are **pl
 | OQ-V7 | Native mobile decision (V3-A) — is operator ready to decide at v1 kickoff, or defer to v1.5? | V3-A | Defer-friendly: V3-A may sit unresolved without blocking V1-A..J / V2 progress. Decision can land late in v1 cycle. |
 | OQ-V8 | V4-A capability map output — is it a single managed doc, or a structured artifact (JSON/YAML) consumed by the trio? | V4-A | Both: managed doc for human reading, structured artifact for automation |
 | OQ-V9 | Monetization conversation — does v1 close trigger a pricing/tier decision? | [`monetization.md`](monetization.md) | Defer; v1 unlocks the conversation but does NOT commit to commercialization |
+| OQ-V10 | **Release-TRAIN targeting for spec 095 (V7)** — `specs/095-retrieval-strategy-routing/state.json` sets `releaseTrain: "mvp"`, but 095 is a NEW post-MVP (RELEASE-V1-phase) spec whose theme ("retrieval-strategy routing + freshness-aware retrieval", synthesis/digest pool exclusion) matches the `next` deployment train's charter verbatim ("Next promotion candidate (synthesis + multi-source coordination)" in [`config/release-trains.yaml`](../../../config/release-trains.yaml)), and OPS-V3 above already states v1-phase specs default-ON in the `next` train / default-OFF in `mvp`. Should 095's `releaseTrain` change `mvp` → `next`? | V7 (spec 095) | **Yes — recommend `next`** (routed to `bubbles.plan` + `bubbles.train` via OPS-V4). `mvp` is defensible only as the single active home-lab destination train, but `next` is the correct promotion train for a new post-MVP synthesis-adjacent capability. `bubbles.releases` does NOT edit the spec `state.json` or `release-trains.yaml`. |
 
 ## Cross-product coordination actions
 
@@ -224,6 +226,26 @@ These are **not** to be dispatched until RELEASE-MVP fully closes (all M-items t
   rationale: |
     Re-run portfolio drift classification at v1 close. Any remaining
     MAJOR_DRIFT items dispatch via improve-existing as before.
+
+# V7 — Retrieval-strategy routing + freshness-aware retrieval (spec 095, planning hardened 2026-06-17)
+# NOTE: 095 is ALREADY authored to specs_hardened (product-to-planning). This is NOT a
+# new-spec dispatch — it is the full-delivery run that consumes the existing planning packet.
+- agent: bubbles.workflow
+  mode: full-delivery
+  target: existing spec (consume planning packet)
+  spec: specs/095-retrieval-strategy-routing
+  reason: release-planning-v1:V7-retrieval-strategy-routing
+  rationale: |
+    Implement->test->validate->audit->finalize the 9 SCOPE-01..09 scopes / 16 SCN-095-*
+    scenarios authored at the specs_hardened ceiling. Ideas: (1) intent-aware
+    retrieval-strategy routing, (2) evergreen-vs-ephemeral ingestion signal, (3)
+    per-artifact-type retrieval contract. All over the single existing store
+    (Principle 5; TestNoParallelStore). flagsIntroduced: []; deliverableFiles: [].
+  precondition: |
+    Release-TRAIN finding (OQ-V10 / OPS-V4): recommend bubbles.plan change
+    specs/095 state.json releaseTrain "mvp" -> "next" (post-MVP synthesis-adjacent
+    capability matches the `next` train charter), with bubbles.train confirming the
+    `next` train home. bubbles.releases does not edit either file.
 ```
 
 ## Carry-forward integrity

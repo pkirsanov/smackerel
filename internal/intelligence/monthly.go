@@ -325,9 +325,39 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 	if report.ReportText == "" {
 		report.ReportText = assembleMonthlyReportText(report)
 	}
-	report.WordCount = len(strings.Fields(report.ReportText))
+	// R-506 hard constraint: the monthly report is delivered "under 500 words".
+	// Enforce the cap on whichever text won — the LLM sidecar's report_text or
+	// the local assembly — mirroring the R-302 250-word cap already enforced in
+	// GenerateWeeklySynthesis. Without this, a verbose LLM report_text or a
+	// data-rich local assembly is delivered over budget, breaking the spec
+	// contract and Product Principle 7 (small, phone-screen-fit output).
+	report.ReportText, report.WordCount = capReportWords(report.ReportText, maxMonthlyReportWords)
 
 	return report, nil
+}
+
+// maxMonthlyReportWords is the R-506 hard delivery budget for the monthly
+// self-knowledge report ("under 500 words"). This is functional behavior, not
+// config — it bounds what the user actually receives so the report stays
+// phone-screen-fit (Product Principle 7), exactly as the R-302 250-word cap
+// bounds the weekly synthesis in GenerateWeeklySynthesis. Treated as the
+// inclusive cap, matching the weekly sibling's `> limit → words[:limit]`
+// convention.
+const maxMonthlyReportWords = 500
+
+// capReportWords truncates text to at most maxWords whitespace-separated words
+// and returns the (possibly truncated) text together with its final word count.
+// It is the single enforcement point for the R-506 monthly-report word budget,
+// applied to whichever report body wins (LLM sidecar output or local
+// assembly). maxWords <= 0 disables truncation. Truncation collapses interior
+// whitespace to single spaces, identical to the R-302 weekly-synthesis cap.
+func capReportWords(text string, maxWords int) (string, int) {
+	words := strings.Fields(text)
+	if maxWords > 0 && len(words) > maxWords {
+		words = words[:maxWords]
+		text = strings.Join(words, " ")
+	}
+	return text, len(words)
 }
 
 func assembleMonthlyReportText(r *MonthlyReport) string {

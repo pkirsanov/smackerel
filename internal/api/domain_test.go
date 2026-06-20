@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -247,5 +248,148 @@ func TestDomainDataHandler_NoBaselineServings(t *testing.T) {
 	json.Unmarshal(rec.Body.Bytes(), &result)
 	if result.Error.Code != "NO_BASELINE_SERVINGS" {
 		t.Errorf("expected NO_BASELINE_SERVINGS error, got %q", result.Error.Code)
+	}
+}
+
+// TestDomainDataHandler_ServingsExceedsMax covers the API serving-scaler abuse
+// cap (servings > 1000 -> 400 INVALID_SERVINGS).
+//
+// Round 29 (stochastic-quality-sweep, test trigger): this cap had no regression
+// test on the API surface even though both Telegram entry points cap and test at
+// 1000 (TestParseScaleTrigger_MaxServingsCap, TestParseCookTrigger_MaxServingsCap).
+// Harden observation HARD-035-OBS-001 relies on this cap being present so a large
+// scale ratio stays unreachable through spec-035 (UC-002 alternative flow A4).
+//
+// Adversarial: if the `> maxServings` guard were removed, the handler would scale
+// and return 200; if it were weakened to `>= maxServings`, the 1000 boundary case
+// below would start failing.
+func TestDomainDataHandler_ServingsExceedsMax(t *testing.T) {
+	domainData := json.RawMessage(`{"domain": "recipe", "title": "Test", "servings": 4}`)
+
+	store := &mockArtifactStore{
+		artifactWithDom: &db.ArtifactWithDomain{
+			ArtifactDetail: db.ArtifactDetail{ID: "art-123"},
+			DomainData:     domainData,
+		},
+	}
+
+	deps := &Dependencies{
+		ArtifactStore: store,
+		StartTime:     time.Now(),
+	}
+
+	r := chi.NewRouter()
+	r.Get("/api/artifacts/{id}/domain", deps.DomainDataHandler)
+
+	// servings=1001 is one above the maxServings=1000 abuse cap.
+	req := httptest.NewRequest(http.MethodGet, "/api/artifacts/art-123/domain?servings=1001", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for servings=1001 (above abuse cap), got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse error response: %v", err)
+	}
+	if result.Error.Code != "INVALID_SERVINGS" {
+		t.Errorf("expected INVALID_SERVINGS error, got %q", result.Error.Code)
+	}
+
+	// Boundary: servings=1000 (exactly the cap) MUST still succeed. This guards
+	// against an off-by-one regression (`>` -> `>=`).
+	req = httptest.NewRequest(http.MethodGet, "/api/artifacts/art-123/domain?servings=1000", nil)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for servings=1000 (at cap boundary), got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestDomainDataHandler_NoDomainData covers the empty-domain_data 404 branch.
+//
+// Round 29 (test trigger): the NO_DOMAIN_DATA path was untested. Adversarial: if
+// the len(a.DomainData)==0 guard were dropped, the handler would fall through to
+// servings parsing / json.Unmarshal of empty bytes and surface a different status.
+func TestDomainDataHandler_NoDomainData(t *testing.T) {
+	store := &mockArtifactStore{
+		artifactWithDom: &db.ArtifactWithDomain{
+			ArtifactDetail: db.ArtifactDetail{ID: "art-123"},
+			DomainData:     nil, // artifact exists but has no domain data
+		},
+	}
+
+	deps := &Dependencies{
+		ArtifactStore: store,
+		StartTime:     time.Now(),
+	}
+
+	r := chi.NewRouter()
+	r.Get("/api/artifacts/{id}/domain", deps.DomainDataHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/artifacts/art-123/domain?servings=8", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for empty domain data, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse error response: %v", err)
+	}
+	if result.Error.Code != "NO_DOMAIN_DATA" {
+		t.Errorf("expected NO_DOMAIN_DATA error, got %q", result.Error.Code)
+	}
+}
+
+// TestDomainDataHandler_ArtifactNotFound covers the store-error 404 branch.
+//
+// Round 29 (test trigger): the ARTIFACT_NOT_FOUND path was untested (the mock in
+// every other test always returns an artifact). Adversarial: if the store error
+// were not mapped to 404, a missing artifact would surface as a 500 or nil-deref
+// panic on a.DomainData below.
+func TestDomainDataHandler_ArtifactNotFound(t *testing.T) {
+	store := &mockArtifactStore{
+		artifactWithDomErr: errors.New("sql: no rows in result set"),
+	}
+
+	deps := &Dependencies{
+		ArtifactStore: store,
+		StartTime:     time.Now(),
+	}
+
+	r := chi.NewRouter()
+	r.Get("/api/artifacts/{id}/domain", deps.DomainDataHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/artifacts/missing/domain?servings=8", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing artifact, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse error response: %v", err)
+	}
+	if result.Error.Code != "ARTIFACT_NOT_FOUND" {
+		t.Errorf("expected ARTIFACT_NOT_FOUND error, got %q", result.Error.Code)
 	}
 }

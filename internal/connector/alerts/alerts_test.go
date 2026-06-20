@@ -2831,6 +2831,77 @@ func TestFetchAirNowAQI_HTTPError(t *testing.T) {
 	}
 }
 
+// TestFetchAirNowAQI_OutOfRangeHourObserved_BoundedTime is an adversarial regression
+// test for C-017-004 (chaos round): a malformed or adversarial AirNow feed can send a
+// HourObserved value far outside the documented 0–23 range. Before the fix,
+// `t.Add(time.Duration(e.HourObserved) * time.Hour)` either overflowed the int64
+// time.Duration (silent wraparound) or produced an ObservationTime decades away,
+// corrupting CapturedAt — which drives digest "most-recent" windowing and alert
+// lifecycle ordering. After the fix, an out-of-range hour is rejected and the
+// observation time is bounded to the observed calendar date (midnight, no offset),
+// while every documented in-range hour (0–23) still applies its offset unchanged.
+func TestFetchAirNowAQI_OutOfRangeHourObserved_BoundedTime(t *testing.T) {
+	date := time.Date(2024, 7, 15, 0, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name      string
+		hour      int
+		wantBound bool // true: offset rejected (time == date); false: offset applied
+	}{
+		{"valid_hour_0", 0, false},
+		{"valid_hour_14", 14, false},
+		{"valid_max_hour_23", 23, false},
+		{"out_of_range_24", 24, true},
+		{"far_future_non_overflow", 1_000_000, true}, // ~114 years ahead, no int64 overflow
+		{"overflow_wraparound", 9_000_000_000, true}, // overflows time.Duration int64
+		{"negative", -1, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := []map[string]interface{}{
+				{
+					"DateObserved":  "2024-07-15 ",
+					"HourObserved":  tc.hour,
+					"AQI":           165,
+					"ParameterName": "PM2.5",
+					"ReportingArea": "San Francisco",
+					"Category":      map[string]interface{}{"Name": "Unhealthy"},
+				},
+			}
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(airnowJSON(entries))
+			}))
+			defer ts.Close()
+
+			c := New("test")
+			c.airnowBaseURL = ts.URL
+
+			obs, err := c.fetchAirNowAQI(context.Background(), 37.77, -122.42, "test-key")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(obs) != 1 {
+				t.Fatalf("expected 1 observation, got %d", len(obs))
+			}
+			got := obs[0].ObservationTime
+			if tc.wantBound {
+				// Out-of-range hour: offset MUST be rejected, time bounded to the date.
+				if !got.Equal(date) {
+					t.Errorf("ObservationTime = %s, want %s (out-of-range HourObserved=%d must not apply offset)",
+						got.Format(time.RFC3339), date.Format(time.RFC3339), tc.hour)
+				}
+			} else {
+				// In-range hour: offset MUST be applied exactly (no regression).
+				want := date.Add(time.Duration(tc.hour) * time.Hour)
+				if !got.Equal(want) {
+					t.Errorf("ObservationTime = %s, want %s (valid HourObserved=%d must apply offset)",
+						got.Format(time.RFC3339), want.Format(time.RFC3339), tc.hour)
+				}
+			}
+		})
+	}
+}
+
 func TestClassifyAQISeverity(t *testing.T) {
 	tests := []struct {
 		aqi  int

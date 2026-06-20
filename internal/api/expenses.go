@@ -91,6 +91,94 @@ func escapeLikeValue(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
+// rowScanner is the minimal pgx.Rows surface the expense row-collection helpers
+// depend on. Extracting it lets the helpers be unit-tested with an in-memory fake
+// (see expenses_rowserr_test.go) without a live database, mirroring the established
+// pattern in internal/list/generator.go. BUG-034-004.
+type rowScanner interface {
+	Next() bool
+	Scan(dest ...any) error
+	Err() error
+}
+
+// expenseCurrencySummary is one currency-grouped total row from the List summary query.
+type expenseCurrencySummary struct {
+	Currency string `json:"currency"`
+	Count    int    `json:"count"`
+	Total    string `json:"total"`
+}
+
+// expenseListItem is one expense row from the List data query.
+type expenseListItem struct {
+	ID      string          `json:"id"`
+	Title   string          `json:"title"`
+	Expense json.RawMessage `json:"expense"`
+	Source  string          `json:"source"`
+}
+
+// exportExpenseRow is one decoded row of the tax-export stream.
+type exportExpenseRow struct {
+	Exp    domain.ExpenseMetadata
+	RowID  string
+	Source string
+	Title  string
+}
+
+// scanExpenseCurrencySummaries collects the currency-grouped totals and the running
+// total count. A per-row Scan failure or a mid-iteration rows.Err() is returned as an
+// error instead of being silently swallowed, so a truncated cursor can never
+// under-report an expense total (Product Principle 8 — trust-through-transparency;
+// BUG-034-004).
+func scanExpenseCurrencySummaries(rows rowScanner) ([]expenseCurrencySummary, int, error) {
+	var summaries []expenseCurrencySummary
+	totalCount := 0
+	for rows.Next() {
+		var cs expenseCurrencySummary
+		if err := rows.Scan(&cs.Currency, &cs.Count, &cs.Total); err != nil {
+			return nil, 0, fmt.Errorf("scan expense currency summary: %w", err)
+		}
+		summaries = append(summaries, cs)
+		totalCount += cs.Count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate expense currency summaries: %w", err)
+	}
+	return summaries, totalCount, nil
+}
+
+// scanExpenseListItems collects the expense list rows. Like
+// scanExpenseCurrencySummaries it propagates per-row and post-iteration errors rather
+// than silently dropping financial rows (BUG-034-004).
+func scanExpenseListItems(rows rowScanner) ([]expenseListItem, error) {
+	var expenses []expenseListItem
+	for rows.Next() {
+		var item expenseListItem
+		if err := rows.Scan(&item.ID, &item.Title, &item.Expense, &item.Source); err != nil {
+			return nil, fmt.Errorf("scan expense list item: %w", err)
+		}
+		expenses = append(expenses, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate expense list items: %w", err)
+	}
+	return expenses, nil
+}
+
+// decodeExportExpenseRow scans and unmarshals one tax-export row. A Scan or Unmarshal
+// failure is returned as an error instead of being silently `continue`d, so a corrupt
+// row can never be silently dropped from a tax-export CSV (BUG-034-004).
+func decodeExportExpenseRow(rows rowScanner) (exportExpenseRow, error) {
+	var expJSON json.RawMessage
+	var out exportExpenseRow
+	if err := rows.Scan(&expJSON, &out.RowID, &out.Source, &out.Title); err != nil {
+		return exportExpenseRow{}, fmt.Errorf("scan expense export row: %w", err)
+	}
+	if err := json.Unmarshal(expJSON, &out.Exp); err != nil {
+		return exportExpenseRow{}, fmt.Errorf("unmarshal expense export row %s: %w", out.RowID, err)
+	}
+	return out, nil
+}
+
 // List handles GET /api/expenses with query filters.
 func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -185,20 +273,11 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	defer summaryRows.Close()
 
-	type currencySummary struct {
-		Currency string `json:"currency"`
-		Count    int    `json:"count"`
-		Total    string `json:"total"`
-	}
-	var summaries []currencySummary
-	totalCount := 0
-	for summaryRows.Next() {
-		var cs currencySummary
-		if err := summaryRows.Scan(&cs.Currency, &cs.Count, &cs.Total); err != nil {
-			continue
-		}
-		summaries = append(summaries, cs)
-		totalCount += cs.Count
+	summaries, totalCount, err := scanExpenseCurrencySummaries(summaryRows)
+	if err != nil {
+		slog.Error("expense summary scan failed", "error", err)
+		writeExpenseError(w, http.StatusInternalServerError, "QUERY_FAILED", "Failed to read expense summary")
+		return
 	}
 
 	// Main data query with pagination
@@ -230,25 +309,17 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	type expenseItem struct {
-		ID      string          `json:"id"`
-		Title   string          `json:"title"`
-		Expense json.RawMessage `json:"expense"`
-		Source  string          `json:"source"`
-	}
-	var expenses []expenseItem
-	for rows.Next() {
-		var item expenseItem
-		if err := rows.Scan(&item.ID, &item.Title, &item.Expense, &item.Source); err != nil {
-			continue
-		}
-		expenses = append(expenses, item)
+	expenses, err := scanExpenseListItems(rows)
+	if err != nil {
+		slog.Error("expense list scan failed", "error", err)
+		writeExpenseError(w, http.StatusInternalServerError, "QUERY_FAILED", "Failed to read expenses")
+		return
 	}
 	if expenses == nil {
-		expenses = []expenseItem{}
+		expenses = []expenseListItem{}
 	}
 	if summaries == nil {
-		summaries = []currencySummary{}
+		summaries = []expenseCurrencySummary{}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -755,9 +826,16 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 	for currencyRows.Next() {
 		var c string
 		if err := currencyRows.Scan(&c); err != nil {
-			continue
+			currencyRows.Close()
+			writeExpenseError(w, http.StatusInternalServerError, "QUERY_FAILED", "Currency query failed")
+			return
 		}
 		currencies[c] = true
+	}
+	if err := currencyRows.Err(); err != nil {
+		currencyRows.Close()
+		writeExpenseError(w, http.StatusInternalServerError, "QUERY_FAILED", "Currency query failed")
+		return
 	}
 	currencyRows.Close()
 
@@ -821,15 +899,23 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var expJSON json.RawMessage
-		var rowID, source, title string
-		if err := rows.Scan(&expJSON, &rowID, &source, &title); err != nil {
-			continue
+		row, err := decodeExportExpenseRow(rows)
+		if err != nil {
+			// The CSV stream may already be partially flushed (csv.Writer buffers
+			// and net/http may have sent the header + early rows), so we cannot
+			// switch to a clean 500 here. Aborting the response is the correct
+			// fail-loud behavior: a silently truncated tax-export CSV returned as
+			// 200 would under-report financial data (Product Principle 8).
+			// http.ErrAbortHandler tells net/http to abort the connection so the
+			// client sees an interrupted download, not a complete-looking partial
+			// file. BUG-034-004.
+			slog.Error("expense export row decode failed; aborting CSV stream", "error", err)
+			panic(http.ErrAbortHandler)
 		}
-		var exp domain.ExpenseMetadata
-		if err := json.Unmarshal(expJSON, &exp); err != nil {
-			continue
-		}
+		exp := row.Exp
+		rowID := row.RowID
+		source := row.Source
+		title := row.Title
 
 		dateStr := ""
 		if exp.Date != nil {
@@ -882,6 +968,12 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 				exp.Classification, source, rowID,
 			})
 		}
+	}
+	if err := rows.Err(); err != nil {
+		// Same rationale as the per-row decode error above: abort rather than
+		// flush a silently truncated tax-export CSV as 200. BUG-034-004.
+		slog.Error("expense export row iteration failed; aborting CSV stream", "error", err)
+		panic(http.ErrAbortHandler)
 	}
 }
 

@@ -25,6 +25,24 @@ const VIOLATION_BUCKETS = new WeakMap<Page, ViolationBucket>();
 const CSP_PATTERN =
   /content security policy|refused to (load|execute|apply|connect|frame|run)|csp_violation|csp violation/i;
 
+/**
+ * BUG-001 fix: Check if an error is the expected "already bound" case.
+ * Playwright throws when exposeBinding/addInitScript is called twice
+ * on the same page. We want to swallow ONLY this expected case, not
+ * all errors (which would mask legitimate failures like page closed,
+ * browser crash, etc.).
+ */
+function isAlreadyBoundError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  // Playwright error messages for duplicate binding/script
+  return (
+    (msg.includes("already") &&
+      (msg.includes("exposed") || msg.includes("bound"))) ||
+    msg.includes("duplicate")
+  );
+}
+
 function bucketFor(page: Page): ViolationBucket {
   let b = VIOLATION_BUCKETS.get(page);
   if (!b) {
@@ -57,6 +75,8 @@ export function attachCSPGuard(page: Page): void {
   // generated against a real CSP header (when one is set in a
   // future production-mode test variant). exposeBinding throws if
   // called twice on the same page, so swallow that specific case.
+  // BUG-001 fix: Only swallow expected "already bound" errors; warn
+  // on unexpected errors so they surface in test output.
   page
     .exposeBinding(
       "__spec077ReportCSPViolation",
@@ -66,8 +86,12 @@ export function attachCSPGuard(page: Page): void {
         );
       },
     )
-    .catch(() => undefined);
+    .catch((err: unknown) => {
+      if (isAlreadyBoundError(err)) return; // Expected: page re-used
+      console.warn("[csp.ts] exposeBinding failed unexpectedly:", err);
+    });
 
+  // BUG-001 fix: Only swallow expected errors; warn on unexpected.
   page
     .addInitScript(() => {
       document.addEventListener("securitypolicyviolation", (event) => {
@@ -86,7 +110,10 @@ export function attachCSPGuard(page: Page): void {
         }
       });
     })
-    .catch(() => undefined);
+    .catch((err: unknown) => {
+      if (isAlreadyBoundError(err)) return; // Expected: page re-used
+      console.warn("[csp.ts] addInitScript failed unexpectedly:", err);
+    });
 }
 
 export function assertNoCSPViolations(page: Page): void {

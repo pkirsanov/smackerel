@@ -669,6 +669,12 @@ func init() {
 		NotificationActionAttempts,
 		NotificationDeliveryAttempts,
 		NotificationProcessingDuration,
+		// Spec 037 LLM scenario-agent metrics — defined in agent.go
+		// (round 22 devops sweep F-037-DEVOPS-001). Back the
+		// smackerel-agent alert group in config/prometheus/alerts.yml.
+		AgentInvocations,
+		AgentInvocationDuration,
+		AgentToolCalls,
 	)
 }
 

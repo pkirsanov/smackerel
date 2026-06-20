@@ -63,6 +63,33 @@ function clearChildren(node) {
   }
 }
 
+// Security (spec 076 security sweep): citation URLs come from web-search
+// tool results, which the server treats as UNTRUSTED — it sanitises
+// snippet text (internal/assistant/openknowledge/web/sanitize.go) but
+// passes result URLs through verbatim (web_search.go: "this tool does not
+// re-validate URLs"; the cite-back verifier only lower-cases the scheme).
+// A "javascript:" / "data:" / "vbscript:" URL assigned to <a href> would
+// execute in the authenticated PWA origin on click (DOM-XSS, OWASP A03).
+// safeHref returns the URL only when it carries an http(s) scheme; any
+// other scheme yields "" so the caller renders plain text (attribution
+// preserved, link neutralised). Locked by
+// tests/assistant_source_href_security_guard_test.go.
+function safeHref(rawURL) {
+  if (typeof rawURL !== "string" || rawURL.length === 0) {
+    return "";
+  }
+  let parsed;
+  try {
+    parsed = new URL(rawURL, window.location.origin);
+  } catch (_e) {
+    return "";
+  }
+  if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+    return rawURL;
+  }
+  return "";
+}
+
 function appendTranscriptRow(role, text) {
   const li = document.createElement("li");
   li.className = "assistant-transcript-row assistant-transcript-" + role;
@@ -107,9 +134,10 @@ function renderResponse(response) {
     for (const s of sources) {
       const li = document.createElement("li");
       const title = (s && typeof s.title === "string") ? s.title : "(untitled source)";
-      if (s && typeof s.url === "string" && s.url.length > 0) {
+      const href = safeHref(s && s.url);
+      if (href) {
         const a = document.createElement("a");
-        a.href = s.url;
+        a.href = href;
         a.textContent = title;
         a.rel = "noopener noreferrer";
         li.appendChild(a);

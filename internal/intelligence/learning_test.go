@@ -310,3 +310,54 @@ func TestEstimateReadingTime_YouTubeRoundsUp(t *testing.T) {
 		t.Errorf("estimateReadingTime(youtube, 91s) = %d, want 2", got)
 	}
 }
+
+// === BUG-006-006: ISO 8601 video duration parsing ===
+
+// TestEstimateReadingTime_YouTubeISO8601 is the adversarial regression for
+// BUG-006-006. The YouTube connector (the sole producer of metadata.duration —
+// see internal/connector/youtube/youtube.go and its fixtures "PT45M"/"PT10M"/
+// "PT5M") stores duration in ISO 8601 form, NOT plain integer seconds. Before
+// the fix, fmt.Sscanf(durationStr, "%d", ...) failed to parse the leading "PT"
+// and every real video fell through to the 15-minute default, so
+// EstimatedMinutes/TotalMinutes/RemainingMinutes were wrong for all videos.
+// Each case below returns 15 under the old code (FAIL) and the true duration
+// after the fix (PASS) — this is adversarial, not tautological.
+func TestEstimateReadingTime_YouTubeISO8601(t *testing.T) {
+	cases := []struct {
+		duration string
+		want     int
+	}{
+		{"PT45M", 45},      // real connector fixture (youtube_test.go)
+		{"PT10M", 10},      // real connector fixture
+		{"PT5M", 5},        // real connector fixture
+		{"PT1H", 60},       // hours-only
+		{"PT1H30M", 90},    // hours + minutes
+		{"PT90S", 2},       // seconds-only rounds up (90s -> 2 min)
+		{"PT2H5M30S", 126}, // 7530s -> 125.5 -> 126 (round up)
+	}
+	for _, c := range cases {
+		got := estimateReadingTime("youtube", 0, c.duration)
+		if got != c.want {
+			t.Errorf("estimateReadingTime(youtube, 0, %q) = %d, want %d (ISO 8601 duration must be honored, not defaulted to 15)", c.duration, got, c.want)
+		}
+	}
+}
+
+// TestEstimateReadingTime_YouTubePlainSecondsStillWorks pins the backward-compat
+// path: a bare integer (legacy/alternate seconds form) must still be honored
+// after the ISO 8601 fix so no existing caller regresses.
+func TestEstimateReadingTime_YouTubePlainSecondsStillWorks(t *testing.T) {
+	if got := estimateReadingTime("youtube", 0, "600"); got != 10 {
+		t.Errorf("estimateReadingTime(youtube, 0, 600s) = %d, want 10", got)
+	}
+}
+
+// TestEstimateReadingTime_YouTubeUnparseableDuration confirms a junk duration
+// still falls back to the 15-minute default rather than panicking or returning 0.
+func TestEstimateReadingTime_YouTubeUnparseableDuration(t *testing.T) {
+	for _, junk := range []string{"PT", "garbage", "P1Y", "--", "PTM"} {
+		if got := estimateReadingTime("youtube", 0, junk); got != 15 {
+			t.Errorf("estimateReadingTime(youtube, 0, %q) = %d, want 15 (fallback)", junk, got)
+		}
+	}
+}

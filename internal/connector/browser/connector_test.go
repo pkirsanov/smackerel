@@ -2134,3 +2134,63 @@ func TestParseBrowserConfig_ZeroDurations_Accepted(t *testing.T) {
 		t.Errorf("expected 0 content_fetch_timeout, got %v", cfg.ContentFetchTimeout)
 	}
 }
+
+// TestProcessEntries_DropsUnsafeSchemeURLs is the R45 adversarial guard for the
+// hostile-URL-injection finding (CWE-20). A browser-history entry is untrusted
+// external content: the urls.url column of a crafted, shared, or profile-synced
+// Chrome History database can hold ANY scheme, and processEntries emits e.URL
+// verbatim as RawArtifact.URL / RawContent / SourceRef. Without a scheme
+// allowlist, a stored "javascript:" / "data:" / "vbscript:" URL would later
+// reach an href/render sink as DOM-XSS — the exact class the sibling markets
+// (isSafeURL), twitter (isSafeURL), and alerts (sanitizeExternalURL) connectors
+// already filter at the ingestion boundary. This pins the same control here.
+//
+// Non-tautological: each dangerous-scheme entry carries a 3-minute dwell
+// (standard tier, well past the metadata-tier privacy gate). On the pre-fix
+// code path every one produced an individual artifact, so len(artifacts)==1
+// FAILED RED; the surviving-URL and stats.skipped assertions confirm only the
+// safe https URL is kept after the fix.
+func TestProcessEntries_DropsUnsafeSchemeURLs(t *testing.T) {
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		DwellFullMin:     5 * time.Minute,
+		DwellStandardMin: 2 * time.Minute,
+		DwellLightMin:    30 * time.Second,
+	}
+
+	now := time.Now()
+	entries := []HistoryEntry{
+		{URL: "javascript:alert(document.cookie)", Title: "XSS bookmarklet", VisitTime: now, DwellTime: 3 * time.Minute, Domain: "javascript"},
+		{URL: "data:text/html,<script>alert(1)</script>", Title: "data URL", VisitTime: now, DwellTime: 3 * time.Minute, Domain: "data"},
+		{URL: "vbscript:msgbox(1)", Title: "vbscript", VisitTime: now, DwellTime: 3 * time.Minute, Domain: "vbscript"},
+		{URL: "https://example.com/real-article", Title: "Real Article", VisitTime: now, DwellTime: 3 * time.Minute, Domain: "example.com"},
+	}
+
+	artifacts, _, stats := c.processEntries(entries, 0)
+
+	// Only the safe https URL must survive; the 3 dangerous-scheme URLs are dropped.
+	if len(artifacts) != 1 {
+		var got []string
+		for _, a := range artifacts {
+			got = append(got, a.URL)
+		}
+		t.Fatalf("expected exactly 1 artifact (only the https URL); got %d — unsafe-scheme URLs leaked into artifacts: %v", len(artifacts), got)
+	}
+	if artifacts[0].URL != "https://example.com/real-article" {
+		t.Errorf("surviving artifact URL = %q, want the safe https URL", artifacts[0].URL)
+	}
+	if stats.skipped != 3 {
+		t.Errorf("expected 3 skipped (the dangerous-scheme URLs), got %d", stats.skipped)
+	}
+
+	// Defense-in-depth: no surviving artifact field may carry a dangerous scheme,
+	// since RawArtifact.URL / RawContent / SourceRef all flow downstream.
+	for _, a := range artifacts {
+		for _, field := range []string{a.URL, a.RawContent, a.SourceRef} {
+			lower := strings.ToLower(field)
+			if strings.HasPrefix(lower, "javascript:") || strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "vbscript:") {
+				t.Errorf("artifact field carries a dangerous scheme: %q", field)
+			}
+		}
+	}
+}

@@ -320,14 +320,17 @@ async def handle_invoke(
     try:
         logger.info(
             "agent.invoke.request trace_id=%s model=%s tools_count=%d "
-            "messages_count=%d temperature=%s max_tokens=%s first_user_msg=%r",
+            "messages_count=%d temperature=%s max_tokens=%s first_user_msg_len=%d",
             trace_id,
             llm_model,
             len(tools or []),
             len(messages),
             effective_temperature,
             token_budget,
-            next((str(m.get("content"))[:300] for m in messages if m.get("role") == "user"), None),
+            # BUG-076-001 — log only the LENGTH of the first user message,
+            # never its raw content (spec 076 Hard Constraint 6: no raw turn
+            # text in logs; mirrors the Go turn-log's prompt_sha256 discipline).
+            next((len(str(m.get("content"))) for m in messages if m.get("role") == "user"), 0),
         )
         response = await completion_fn(**completion_kwargs)
     except Exception as exc:  # noqa: BLE001 — provider errors must not crash the sidecar
@@ -414,13 +417,15 @@ async def handle_invoke(
         "trace_id": trace_id,
         "processing_time_ms": int((time.time() - start) * 1000),
     }
-    # Diagnostic: log what the LLM actually returned so we can see why
-    # the executor's schema validator rejects the substrate scenarios.
+    # Diagnostic: log the SHAPE of what the LLM returned (counts, length,
+    # type) so we can see why the executor's schema validator rejects the
+    # substrate scenarios — never the raw final-answer content
+    # (BUG-076-001 / spec 076 Hard Constraint 6: no raw turn text in logs).
     logger.info(
-        "agent.invoke.envelope trace_id=%s tool_calls_count=%d final_preview=%r final_type=%s",
+        "agent.invoke.envelope trace_id=%s tool_calls_count=%d final_len=%d final_type=%s",
         trace_id,
         len(tool_calls),
-        (str(final)[:300] if final else None),
+        (len(str(final)) if final else 0),
         type(final).__name__,
     )
     return envelope

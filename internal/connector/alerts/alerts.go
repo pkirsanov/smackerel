@@ -1480,7 +1480,19 @@ func (c *Connector) fetchAirNowAQI(ctx context.Context, lat, lon float64, apiKey
 		}
 
 		if t, err := time.Parse("2006-01-02 ", e.DateObserved); err == nil {
-			obs.ObservationTime = t.Add(time.Duration(e.HourObserved) * time.Hour)
+			// AirNow documents HourObserved as 0–23. A malformed or adversarial feed
+			// can send a value far outside that range; using it directly in duration
+			// arithmetic either overflows the int64 time.Duration (silent wraparound)
+			// or yields an ObservationTime decades away, corrupting CapturedAt and the
+			// digest "most-recent" windowing / alert lifecycle ordering it drives
+			// (C-017-004). Reject out-of-range hours and fall back to the observed date.
+			if e.HourObserved >= 0 && e.HourObserved < 24 {
+				obs.ObservationTime = t.Add(time.Duration(e.HourObserved) * time.Hour)
+			} else {
+				slog.Warn("skipping out-of-range AirNow HourObserved; using date without hour offset",
+					"hour_observed", e.HourObserved, "reporting_area", obs.ReportingArea)
+				obs.ObservationTime = t
+			}
 		}
 
 		observations = append(observations, obs)

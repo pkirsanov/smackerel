@@ -218,6 +218,20 @@ func (h *webhookHandler) serveDelivery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// BUG-001 fix: Per-user rate limit check. Run AFTER identity
+	// resolution (we need the user_id) but BEFORE facade invocation.
+	// Meta retries rate-limited messages, so returning 429 is safe.
+	if !h.adapter.AllowUser(canonical.UserID) {
+		webhookRateLimitExceeded.Inc()
+		h.logger.Warn("whatsapp webhook rate limited",
+			"kind", "whatsapp_webhook_rate_limit",
+			"transport_message_id", canonical.TransportMessageID,
+		)
+		w.Header().Set("Retry-After", "60")
+		writeJSONError(w, http.StatusTooManyRequests, "rate_limit_exceeded")
+		return
+	}
+
 	if !h.adapter.IsBound() {
 		// Facade not yet wired — log and ack 200 so Meta does not
 		// retry. Render is owned by SCOPE-2 in any case.

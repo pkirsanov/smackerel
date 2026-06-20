@@ -88,6 +88,63 @@ func TestWebRegister_Success(t *testing.T) {
 	}
 }
 
+// TestWebRegister_Success_HostileNextDropped — a SUCCESSFUL registration that
+// carries a hostile ?next (open-redirect probe) still creates the account, but
+// the 303 Location is the bare /login?registered=1 with the hostile next
+// DROPPED. The success branch runs the supplied next through sanitizeNext and
+// only appends &next= when the result is a safe in-origin path; a hostile
+// "//evil/" sanitises to "/" (== sanitizeNextDefault) and is therefore NOT
+// appended.
+//
+// This adversarially LOCKS the POST-success open-redirect defence. The
+// happy-path TestWebRegister_Success above uses a SAFE next (/cards) that a
+// non-sanitising (vulnerable) success branch would carry byte-identically, so
+// it cannot distinguish sanitizeNext(nextRaw) from a raw passthrough — only a
+// HOSTILE next exposes that gap. It is the POST-redirect twin of the GET-page
+// lock TestRegisterPage_NextSanitized, closing the asymmetry where the GET
+// hidden-field sanitisation was tested but the POST success redirect was not.
+// (Verified non-tautological via mutate-prove-revert: replacing the success
+// branch's sanitizeNext(nextRaw) with a raw `if nextRaw != "" { … nextRaw }`
+// passthrough turns this RED while TestWebRegister_Success stays GREEN.)
+// AC-10 value-safe / spec-057 open-redirect protection reused at POST time.
+func TestWebRegister_Success_HostileNextDropped(t *testing.T) {
+	repo := &fakeRepo{creds: map[string]string{}}
+	deps := newRegisterDeps("the-operator-invite", repo)
+
+	rec := postWebRegisterForm(t, deps, url.Values{
+		"invite-token":     {"the-operator-invite"},
+		"username":         {"operator9"},
+		"password":         {"correct-horse-battery"},
+		"confirm-password": {"correct-horse-battery"},
+		"next":             {"//evil.example.com/"},
+	})
+
+	// Registration still SUCCEEDS — the hostile next neutralises the redirect
+	// target, it does not reject account creation.
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d want 303; body=%s", rec.Code, rec.Body.String())
+	}
+	if _, ok := repo.creds["operator9"]; !ok {
+		t.Errorf("operator9 row was not created; repo=%v", repo.creds)
+	}
+
+	loc := rec.Header().Get("Location")
+	// The hostile next is DROPPED: Location is the bare success destination
+	// with no &next= appended (sanitizeNext("//evil.example.com/") == "/").
+	if loc != registerRedirectPath {
+		t.Errorf("Location=%q want exactly %q (hostile next must be dropped, not carried)", loc, registerRedirectPath)
+	}
+	if strings.Contains(loc, "evil.example.com") {
+		t.Errorf("OPEN REDIRECT: hostile next leaked into the 303 Location: %q", loc)
+	}
+	if strings.Contains(loc, "next=") {
+		t.Errorf("hostile next was carried as a next= param (must be dropped): %q", loc)
+	}
+	if cookieByName(rec, "auth_token") != nil {
+		t.Error("register MUST NOT set the auth_token cookie")
+	}
+}
+
 // TestWebRegister_Gate — the invite-token gate (tokenless). Wrong token,
 // missing token, empty-configured token, and a nil store ALL return 401 with
 // the shared banner, create NO row, and do not panic. UC-2 / UC-3 / AC-4 / AC-5.

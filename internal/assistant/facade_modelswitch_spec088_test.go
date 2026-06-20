@@ -106,9 +106,10 @@ func spec088WireAgent(t *testing.T, chat okagent.LLMChat) func() {
 		MonthlyBudgetUSDRemaining:  100.0,
 		PerUserMonthlyUSDRemaining: 100.0,
 		CompactionThresholdRatio:   0.85,
-		CostFn:                     func(int) float64 { return 0 },
-		EnforcementMode:            string(citeback.EnforcementEnforce),
-		SourcesMax:                 5,
+		// Spec 096 SCOPE-05 — CostFn is now the model-aware seam.
+		CostFn:          func(string, int) (float64, error) { return 0, nil },
+		EnforcementMode: string(citeback.EnforcementEnforce),
+		SourcesMax:      5,
 	})
 	if err != nil {
 		t.Fatalf("okagent.New: %v", err)

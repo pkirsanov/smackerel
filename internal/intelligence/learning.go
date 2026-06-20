@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -258,12 +260,11 @@ func classifyDifficultyHeuristic(title, contentType string, position int) Learni
 func estimateReadingTime(contentType string, contentLength int, durationStr string) int {
 	switch {
 	case strings.Contains(contentType, "youtube"):
-		if durationStr != "" {
-			// Try to parse duration in seconds
-			var seconds int
-			if _, err := fmt.Sscanf(durationStr, "%d", &seconds); err == nil && seconds > 0 {
-				return (seconds + 59) / 60 // round up to nearest minute
-			}
+		// The YouTube connector stores duration as ISO 8601 (e.g. "PT45M").
+		// parseVideoDurationSeconds also accepts a bare integer-seconds form
+		// for backward compatibility. BUG-006-006.
+		if seconds, ok := parseVideoDurationSeconds(durationStr); ok {
+			return (seconds + 59) / 60 // round up to nearest minute
 		}
 		return 15 // default video estimate
 	case strings.Contains(contentType, "article"), strings.Contains(contentType, "url"), strings.Contains(contentType, "pdf"):
@@ -279,6 +280,56 @@ func estimateReadingTime(contentType string, contentLength int, durationStr stri
 	default:
 		return 10 // default for notes and unknown types
 	}
+}
+
+// videoDurationISO8601RE matches the ISO 8601 duration form the YouTube
+// connector writes into metadata.duration (e.g. "PT45M", "PT1H30M",
+// "PT2H5M30S"). The "PT" prefix is required; hours/minutes/seconds are each
+// optional but at least one must be present. Day-and-longer periods are
+// intentionally unsupported — learning resources are sub-day media.
+var videoDurationISO8601RE = regexp.MustCompile(`^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$`)
+
+// parseVideoDurationSeconds converts a stored video-duration string into total
+// seconds. It accepts BOTH the ISO 8601 form the YouTube connector emits
+// ("PT45M") and a bare integer-seconds form ("600") for backward compatibility.
+// Returns (0, false) when the string is empty or unparseable so the caller can
+// fall back to a sane default instead of reporting a zero-length video.
+func parseVideoDurationSeconds(durationStr string) (int, bool) {
+	s := strings.TrimSpace(durationStr)
+	if s == "" {
+		return 0, false
+	}
+	if m := videoDurationISO8601RE.FindStringSubmatch(strings.ToUpper(s)); m != nil {
+		// Reject a bare "PT" with no H/M/S components.
+		if m[1] == "" && m[2] == "" && m[3] == "" {
+			return 0, false
+		}
+		total := 0
+		if m[1] != "" {
+			if h, err := strconv.Atoi(m[1]); err == nil {
+				total += h * 3600
+			}
+		}
+		if m[2] != "" {
+			if mins, err := strconv.Atoi(m[2]); err == nil {
+				total += mins * 60
+			}
+		}
+		if m[3] != "" {
+			if secs, err := strconv.Atoi(m[3]); err == nil {
+				total += secs
+			}
+		}
+		if total <= 0 {
+			return 0, false
+		}
+		return total, true
+	}
+	// Backward-compatible plain integer seconds (e.g. "600").
+	if secs, err := strconv.Atoi(s); err == nil && secs > 0 {
+		return secs, true
+	}
+	return 0, false
 }
 
 // detectGaps identifies missing difficulty levels in a learning path.

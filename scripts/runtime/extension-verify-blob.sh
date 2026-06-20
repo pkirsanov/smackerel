@@ -65,11 +65,32 @@ if ! command -v truncate >/dev/null 2>&1; then
 fi
 
 echo "==> [1/5] Building the chrome-bridge zip (real artifact)"
+# Clear stale chrome-bridge artifacts from prior builds FIRST. The build embeds
+# the git short-SHA in the zip name, so different builds accumulate as
+# differently-named zips in $DIST_DIR. Without this clean, the post-build glob
+# below resolves to whatever sorts first (alphabetically) — which can be a
+# STALE zip from an earlier SHA, not the artifact we just produced — so the
+# proof would sign/verify the wrong bytes and still "PASS" against an old file.
+# $DIST_DIR is gitignored, byte-reproducible build output: safe to clear.
+rm -f "$DIST_DIR"/smackerel-chrome-bridge-*.zip "$DIST_DIR"/smackerel-chrome-bridge-*.zip.sha256
 bash "$BUILD_SCRIPT"
 
-ZIP_PATH="$(ls -1 "$DIST_DIR"/smackerel-chrome-bridge-*.zip 2>/dev/null | head -1 || true)"
-if [[ -z "$ZIP_PATH" || ! -f "$ZIP_PATH" ]]; then
+# Resolve the artifact the build JUST produced. After the pre-build clean the
+# glob must match exactly one zip; refuse to guess if zero or more-than-one
+# are present (a >1 result would mean the stale-zip ambiguity has regressed).
+mapfile -t BRIDGE_ZIPS < <(ls -1 "$DIST_DIR"/smackerel-chrome-bridge-*.zip 2>/dev/null || true)
+if [[ "${#BRIDGE_ZIPS[@]}" -eq 0 ]]; then
   echo "ERROR: build did not produce a chrome-bridge zip under $DIST_DIR" >&2
+  exit 1
+fi
+if [[ "${#BRIDGE_ZIPS[@]}" -gt 1 ]]; then
+  echo "ERROR: expected exactly one freshly-built chrome-bridge zip under $DIST_DIR, found ${#BRIDGE_ZIPS[@]}:" >&2
+  printf '  %s\n' "${BRIDGE_ZIPS[@]}" >&2
+  exit 1
+fi
+ZIP_PATH="${BRIDGE_ZIPS[0]}"
+if [[ ! -f "$ZIP_PATH" ]]; then
+  echo "ERROR: resolved chrome-bridge zip path is not a file: $ZIP_PATH" >&2
   exit 1
 fi
 SHA_SIDECAR="${ZIP_PATH}.sha256"

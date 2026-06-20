@@ -255,6 +255,7 @@ type Adapter struct {
 	cloud            CloudClient
 	capture          CaptureFn
 	dedup            *idempotencyCache
+	limiter          *perUserLimiter // BUG-001 fix: per-user rate limiting
 
 	mu        sync.RWMutex
 	assistant contracts.Assistant
@@ -287,6 +288,7 @@ func NewAdapter(opts Options) (*Adapter, error) {
 		cloud:            opts.Cloud,
 		capture:          opts.Capture,
 		dedup:            newIdempotencyCache(IdempotencyCacheCapacity),
+		limiter:          newPerUserLimiter(opts.RateLimitPerUserPerMinute), // BUG-001 fix
 	}, nil
 }
 
@@ -590,6 +592,14 @@ func (a *Adapter) MaxTextChars() int { return a.maxTextChars }
 // RateLimitPerUserPerMinute returns the SST-supplied per-user rate
 // cap. Exposed for the SCOPE-3 ingress limiter.
 func (a *Adapter) RateLimitPerUserPerMinute() int { return a.rateLimitPerUser }
+
+// AllowUser checks whether the user has budget remaining in the
+// current rate-limit window. Returns true if allowed, false if rate
+// limited. BUG-001 fix: this is the enforcement point for the
+// per-user rate limit that was previously only stored.
+func (a *Adapter) AllowUser(userID string) bool {
+	return a.limiter.Allow(userID)
+}
 
 // decodeInteractivePayload routes a WhatsApp interactive reply id
 // (button or list) to the right AssistantMessage kind. Disambig and

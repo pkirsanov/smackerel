@@ -30,6 +30,23 @@ test("the sideloaded manifest is MV3 with the minimum permissions and a restrict
   const perms = (manifest.permissions ?? []).slice().sort();
   expect(perms).toEqual(["alarms", "bookmarks", "history", "storage"]);
 
+  // Least-privilege host access (spec 058 Finding B, Round R14). The broad
+  // `<all_urls>` grant is FORBIDDEN: `host_permissions` MUST be no broader than
+  // the CSP `connect-src` that governs the extension's only network use — the
+  // single operator-base-URL ingest POST (src/background/transport.ts). The
+  // chrome.bookmarks / chrome.history capture APIs are `permissions` entries and
+  // need no host grant at all. This assertion makes the grant intentional and
+  // tested, and is the adversarial regression guard that fails loudly if anyone
+  // silently re-widens it back to `<all_urls>` (or to cleartext `http://*/*`).
+  const hostPerms = ((manifest as { host_permissions?: string[] }).host_permissions ?? [])
+    .slice()
+    .sort();
+  expect(hostPerms).not.toContain("<all_urls>");
+  expect(hostPerms).not.toContain("http://*/*");
+  expect(hostPerms).toEqual(
+    ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"].slice().sort(),
+  );
+
   // Restrictive CSP: no remote script, object-src self.
   const csp = (manifest.content_security_policy as { extension_pages?: string } | undefined)
     ?.extension_pages ?? "";

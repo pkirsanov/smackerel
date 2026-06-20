@@ -3062,6 +3062,46 @@ func TestNormalize_BotCommand_SetsCaptureType(t *testing.T) {
 	}
 }
 
+// SEC-014-S20-1 (stochastic sweep round 20, security-to-doc): the capture-command
+// comment is extracted from untrusted Discord message content (a crafted
+// "!save <url> <comment>" message) and MUST receive the same control-character
+// sanitization that RawContent (SEC3-1) and every other metadata string field
+// (SEC3-2: author_name/server_name/channel_name/thread_name) already get.
+// Before the fix, ParseBotCommand returned the comment with only TrimSpace +
+// length-truncation, and normalizeMessage stored it verbatim into
+// metadata["capture_comment"] — letting NUL bytes and terminal/ANSI escape
+// sequences flow into persisted artifact metadata and any downstream log/render
+// sink (CWE-117 log injection / CWE-150 escape-sequence injection / NUL-into-storage).
+//
+// Adversarial: this test FAILS on the pre-fix code because the raw comment
+// "good\x00read\x1b[31mX" is stored unsanitized (still contains 0x00 and 0x1b).
+func TestNormalizeMessage_CaptureCommentSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "!save https://example.com/article good\x00read\x1b[31mX",
+		Author:    Author{ID: "222222222222222222", Username: "alice"},
+		ChannelID: "333333333333333333",
+		GuildID:   "444444444444444444",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", []string{"!save", "!capture"})
+
+	comment, ok := artifact.Metadata["capture_comment"].(string)
+	if !ok {
+		t.Fatalf("expected capture_comment string, got %T (%v)", artifact.Metadata["capture_comment"], artifact.Metadata["capture_comment"])
+	}
+	// No disallowed ASCII control characters (everything < 0x20 except \n \r \t) may survive.
+	for _, r := range comment {
+		if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			t.Errorf("capture_comment retains control char %#U in %q", r, comment)
+		}
+	}
+	// Exact sanitized expectation: NUL (0x00) and ESC (0x1b) stripped, printable remainder kept.
+	if comment != "goodread[31mX" {
+		t.Errorf("expected sanitized capture_comment %q, got %q", "goodread[31mX", comment)
+	}
+}
+
 func TestSync_CaptureCommand_ProducesFullTierArtifact(t *testing.T) {
 	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
 		mux.HandleFunc("/channels/111000000000000000/messages", func(w http.ResponseWriter, r *http.Request) {

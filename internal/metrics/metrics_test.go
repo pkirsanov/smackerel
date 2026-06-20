@@ -16,13 +16,32 @@ func TestMetricsRegistered(t *testing.T) {
 	CaptureTotal.WithLabelValues("_test_reg")
 	SearchLatency.WithLabelValues("_test_reg")
 	DomainExtraction.WithLabelValues("_test_reg", "ok")
+	DomainExtractionLatency.WithLabelValues("_test_reg")
 	ConnectorSync.WithLabelValues("_test_reg", "success")
+	// Spec 056 Twitter API connector metrics.
+	ConnectorTwitterAPIRequests.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
+	ConnectorTwitterAPIRetries.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
+	ConnectorTwitterAPIRateLimitReset.WithLabelValues("_test_reg", "_test_reg")
+	ConnectorTwitterAPIRateLimitRemaining.WithLabelValues("_test_reg", "_test_reg")
 	NATSDeadLetter.WithLabelValues("_test_reg")
 	DigestGeneration.WithLabelValues("_test_reg")
+	// Spec 004 Phase 5 intelligence metrics.
+	IntelligenceLatency.WithLabelValues("_test_reg")
+	IntelligenceErrors.WithLabelValues("_test_reg")
+	// Alert delivery metrics.
+	AlertsDelivered.WithLabelValues("_test_reg")
+	AlertDeliveryFailures.Inc()
+	AlertsProduced.WithLabelValues("_test_reg")
+	AlertProducerFailures.WithLabelValues("_test_reg")
 	ListsGenerated.WithLabelValues("_test_reg", "_test_reg")
 	ListGenerationLatency.WithLabelValues("_test_reg")
 	ListItemStatusChanges.WithLabelValues("_test_reg")
 	ListsCompleted.WithLabelValues("_test_reg")
+	ListEventsPublishFailed.WithLabelValues("_test_reg")
+	// Spec 038 Drive metrics.
+	DriveConfirmationsTotal.WithLabelValues("_test_reg", "_test_reg")
+	DrivePolicyDecisionsTotal.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
+	DriveRuleConflictsTotal.WithLabelValues("_test_reg")
 	// Spec 039 Scope 6 — recommendation observability metrics.
 	RecommendationProviderRequests.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
 	RecommendationProviderLatency.WithLabelValues("_test_reg", "_test_reg")
@@ -32,18 +51,35 @@ func TestMetricsRegistered(t *testing.T) {
 	RecommendationSuppression.WithLabelValues("_test_reg")
 	RecommendationRankingConfidence.WithLabelValues("_test_reg")
 	RecommendationLocationPrecision.WithLabelValues("_test_reg", "_test_reg")
+	// Spec 041 QF Companion metrics.
 	QFPacketIngestTotal.WithLabelValues("_test_reg", "_test_reg", "_test_reg", "_test_reg")
 	QFPacketValidationFailures.WithLabelValues("_test_reg")
 	QFEvidenceExportAttempts.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
 	QFCursorLagSeconds.Set(0)
+	QFCursorFastForwardEventsSkipped.Add(0)
 	QFActionBoundaryAttemptsTotal.WithLabelValues("_test_reg")
 	QFCapabilityMismatch.WithLabelValues("_test_reg", "_test_reg")
 	QFUnknownDecisionType.WithLabelValues("_test_reg")
 	QFEngagementSignalAttemptsTotal.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
 	QFEvidenceRevokedTotal.WithLabelValues("_test_reg")
 	QFCallbackAttemptsTotal.WithLabelValues("_test_reg", "_test_reg")
+	QFCallbackSignatureFailuresTotal.WithLabelValues("_test_reg")
+	QFWatchProposalAttemptsTotal.WithLabelValues("_test_reg")
+	QFPersonalContextReadsTotal.WithLabelValues("_test_reg", "_test_reg")
+	QFFreshnessP95Seconds.WithLabelValues("_test_reg")
 	QFDeepLinkRenderTotal.WithLabelValues("_test_reg", "_test_reg")
 	QFTrustObjectRenderFailures.WithLabelValues("_test_reg")
+	// Spec 048 backup metrics.
+	BackupLastSuccessUnixtime.Set(0)
+	BackupSizeBytes.Set(0)
+	BackupRunsTotal.WithLabelValues("_test_reg")
+	// Spec 054 notification intelligence handler metrics.
+	NotificationIngestTotal.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
+	NotificationNormalizationErrors.WithLabelValues("_test_reg", "_test_reg")
+	NotificationDedupeTotal.WithLabelValues("_test_reg", "_test_reg")
+	NotificationActionAttempts.WithLabelValues("_test_reg", "_test_reg")
+	NotificationDeliveryAttempts.WithLabelValues("_test_reg", "_test_reg")
+	NotificationProcessingDuration.WithLabelValues("_test_reg")
 	// Spec 021 Scope 4 — Unified Surfacing Controller metrics.
 	SurfacingNudgesDelivered.WithLabelValues("_test_reg", "_test_reg")
 	SurfacingActedOn.WithLabelValues("_test_reg")
@@ -53,6 +89,10 @@ func TestMetricsRegistered(t *testing.T) {
 	SurfacingBudgetOverrides.WithLabelValues("_test_reg")
 	SurfacingBudgetRemaining.Set(0)
 	SurfacingDeferredExhausted.WithLabelValues("_test_reg")
+	// Spec 037 LLM scenario-agent metrics (round 22 devops F-037-DEVOPS-001).
+	AgentInvocations.WithLabelValues("_test_reg", "_test_reg")
+	AgentInvocationDuration.WithLabelValues("_test_reg")
+	AgentToolCalls.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -60,38 +100,76 @@ func TestMetricsRegistered(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"smackerel_artifacts_ingested_total":                  false,
-		"smackerel_capture_total":                             false,
-		"smackerel_search_latency_seconds":                    false,
-		"smackerel_domain_extraction_total":                   false,
-		"smackerel_connector_sync_total":                      false,
-		"smackerel_nats_deadletter_total":                     false,
-		"smackerel_db_connections_active":                     false,
-		"smackerel_digest_generation_total":                   false,
-		"smackerel_lists_generated_total":                     false,
-		"smackerel_list_generation_latency_seconds":           false,
-		"smackerel_list_item_status_changes_total":            false,
-		"smackerel_lists_completed_total":                     false,
-		"smackerel_recommendation_provider_requests_total":    false,
-		"smackerel_recommendation_provider_latency_seconds":   false,
-		"smackerel_recommendation_candidates_total":           false,
-		"smackerel_recommendation_watch_runs_total":           false,
-		"smackerel_recommendation_delivery_total":             false,
-		"smackerel_recommendation_suppression_total":          false,
-		"smackerel_recommendation_ranking_confidence_total":   false,
-		"smackerel_recommendation_location_precision_total":   false,
-		"smackerel_qf_packet_ingest_total":                    false,
-		"smackerel_qf_packet_validation_failures_total":       false,
-		"smackerel_qf_evidence_export_attempts_total":         false,
-		"smackerel_qf_cursor_lag_seconds":                     false,
-		"smackerel_qf_action_boundary_attempts_total":         false,
-		"smackerel_qf_capability_mismatch_total":              false,
-		"smackerel_qf_unknown_decision_type_total":            false,
-		"smackerel_qf_engagement_signal_attempts_total":       false,
-		"smackerel_qf_evidence_revoked_total":                 false,
-		"smackerel_qf_callback_attempts_total":                false,
-		"smackerel_qf_deep_link_render_total":                 false,
-		"smackerel_qf_trust_object_render_failures_total":     false,
+		"smackerel_artifacts_ingested_total":      false,
+		"smackerel_capture_total":                 false,
+		"smackerel_search_latency_seconds":        false,
+		"smackerel_domain_extraction_total":       false,
+		"smackerel_domain_extraction_duration_ms": false,
+		"smackerel_connector_sync_total":          false,
+		// Spec 056 Twitter API connector metrics.
+		"smackerel_connector_twitter_api_requests_total":           false,
+		"smackerel_connector_twitter_api_retries_total":            false,
+		"smackerel_connector_twitter_api_rate_limit_reset_seconds": false,
+		"smackerel_connector_twitter_api_rate_limit_remaining":     false,
+		"smackerel_nats_deadletter_total":                          false,
+		"smackerel_db_connections_active":                          false,
+		"smackerel_digest_generation_total":                        false,
+		// Spec 004 Phase 5 intelligence metrics.
+		"smackerel_intelligence_latency_seconds": false,
+		"smackerel_intelligence_errors_total":    false,
+		// Alert delivery metrics.
+		"smackerel_alerts_delivered_total":           false,
+		"smackerel_alert_delivery_failures_total":    false,
+		"smackerel_alerts_produced_total":            false,
+		"smackerel_alert_producer_failures_total":    false,
+		"smackerel_lists_generated_total":            false,
+		"smackerel_list_generation_latency_seconds":  false,
+		"smackerel_list_item_status_changes_total":   false,
+		"smackerel_lists_completed_total":            false,
+		"smackerel_list_events_publish_failed_total": false,
+		// Spec 038 Drive metrics.
+		"smackerel_drive_confirmations_total":    false,
+		"smackerel_drive_policy_decisions_total": false,
+		"smackerel_drive_rule_conflicts_total":   false,
+		// Spec 039 Scope 6 recommendation metrics.
+		"smackerel_recommendation_provider_requests_total":  false,
+		"smackerel_recommendation_provider_latency_seconds": false,
+		"smackerel_recommendation_candidates_total":         false,
+		"smackerel_recommendation_watch_runs_total":         false,
+		"smackerel_recommendation_delivery_total":           false,
+		"smackerel_recommendation_suppression_total":        false,
+		"smackerel_recommendation_ranking_confidence_total": false,
+		"smackerel_recommendation_location_precision_total": false,
+		// Spec 041 QF Companion metrics.
+		"smackerel_qf_packet_ingest_total":                      false,
+		"smackerel_qf_packet_validation_failures_total":         false,
+		"smackerel_qf_evidence_export_attempts_total":           false,
+		"smackerel_qf_cursor_lag_seconds":                       false,
+		"smackerel_qf_cursor_fast_forward_events_skipped_total": false,
+		"smackerel_qf_action_boundary_attempts_total":           false,
+		"smackerel_qf_capability_mismatch_total":                false,
+		"smackerel_qf_unknown_decision_type_total":              false,
+		"smackerel_qf_engagement_signal_attempts_total":         false,
+		"smackerel_qf_evidence_revoked_total":                   false,
+		"smackerel_qf_callback_attempts_total":                  false,
+		"smackerel_qf_callback_signature_failures_total":        false,
+		"smackerel_qf_watch_proposal_attempts_total":            false,
+		"smackerel_qf_personal_context_reads_total":             false,
+		"smackerel_qf_freshness_p95_seconds":                    false,
+		"smackerel_qf_deep_link_render_total":                   false,
+		"smackerel_qf_trust_object_render_failures_total":       false,
+		// Spec 048 backup metrics.
+		"smackerel_backup_last_success_unixtime": false,
+		"smackerel_backup_size_bytes":            false,
+		"smackerel_backup_runs_total":            false,
+		// Spec 054 notification intelligence handler metrics.
+		"smackerel_notification_ingest_total":               false,
+		"smackerel_notification_normalization_errors_total": false,
+		"smackerel_notification_dedupe_total":               false,
+		"smackerel_notification_action_attempts_total":      false,
+		"smackerel_notification_delivery_attempts_total":    false,
+		"smackerel_notification_processing_duration_ms":     false,
+		// Spec 021 Scope 4 Unified Surfacing Controller metrics.
 		"smackerel_surfacing_nudges_delivered_total":          false,
 		"smackerel_surfacing_acted_on_total":                  false,
 		"smackerel_surfacing_false_positive_total":            false,
@@ -100,6 +178,10 @@ func TestMetricsRegistered(t *testing.T) {
 		"smackerel_surfacing_budget_overrides_total":          false,
 		"smackerel_surfacing_budget_remaining":                false,
 		"smackerel_surfacing_deferred_budget_exhausted_total": false,
+		// Spec 037 LLM scenario-agent metrics (round 22 devops F-037-DEVOPS-001).
+		"smackerel_agent_invocations_total":           false,
+		"smackerel_agent_invocation_duration_seconds": false,
+		"smackerel_agent_tool_calls_total":            false,
 	}
 
 	for _, fam := range families {

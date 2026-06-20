@@ -22,35 +22,44 @@
 //     15 implemented connectors" with a 15-item list, internally
 //     contradicting BS-004 (16-item list) updated by BUG-024-002.
 //
-// This file closes F2 by pinning a three-surface contract.
+// This file closes F2 by pinning a four-surface contract. BUG-024-006
+// (stochastic-quality-sweep round R29, 2026-06-16) extended the original
+// three-surface contract with the §24-A architecture-tree surface after it
+// silently drifted to 16 while the other three advanced to 17.
 //
 // The contract
 //
 //   - cmd/core/connectors.go contains exactly one slice literal of the form
 //     "[]connector.Connector{ ... }" inside registerConnectors; the number
 //     of comma-separated identifiers in that literal is the runtime
-//     connector count (currently 16).
+//     connector count (currently 17).
 //   - docs/smackerel.md §22.7 declares the connector count via the header
 //     "### 22.7 Committed Connector Inventory (N connectors)" — N MUST
 //     equal the runtime count.
+//   - docs/smackerel.md §24-A declares the connector count via the
+//     architecture-tree header "Connector plugins (N committed)" — N MUST
+//     equal the runtime count. This 4th surface was added by BUG-024-006.
 //   - docs/Development.md "Current Capabilities" list declares the count
 //     via the bullet "- N passive connectors (...)" — N MUST equal the
 //     runtime count.
 //
-// All three must agree. If any one drifts, the live-file test fails with a
+// All four must agree. If any one drifts, the live-file test fails with a
 // precise diagnostic naming the disagreeing surfaces and the observed
 // counts.
 //
 // # Adversarial sub-tests
 //
-// Three adversarial sub-tests prove the assertion is non-tautological:
+// Four adversarial sub-tests prove the assertion is non-tautological:
 //   - AdversarialConnectorsGoLow: synthetic connectors.go with 15 entries +
-//     real docs (count 16) → contract MUST reject.
-//   - AdversarialSmackerelMdHigh: synthetic smackerel.md with header claim
-//     17 + real other surfaces (count 16) → contract MUST reject.
+//     real docs → contract MUST reject.
+//   - AdversarialSmackerelMdHigh: synthetic smackerel.md with §22.7 header
+//     inflated to runtime+1 + real other surfaces → contract MUST reject.
+//   - AdversarialSmackerelMdTreeLow: synthetic smackerel.md with §24-A tree
+//     header stale at runtime-1 + real other surfaces → contract MUST
+//     reject (the exact BUG-024-006 regression).
 //   - AdversarialDevelopmentMdLow: synthetic Development.md with bullet
-//     "- 15 passive connectors" + real other surfaces (count 16) →
-//     contract MUST reject.
+//     "- 15 passive connectors" + real other surfaces → contract MUST
+//     reject.
 //
 // References:
 //   - specs/024-design-doc-reconciliation/spec.md (BS-004, R-006, AC-5)
@@ -87,6 +96,15 @@ var connectorsGoSliceRe = regexp.MustCompile(`\[\]connector\.Connector\{([^}]*)\
 // header diagnostic (which is still actionable — the contract surface
 // moved and needs to be re-pinned here).
 var smackerelMdHeaderRe = regexp.MustCompile(`### 22\.7 Committed Connector Inventory \((\d+) connectors\)`)
+
+// smackerelMdTreeRe matches the §24-A architecture-tree connector-plugins
+// header. The connector count is captured as group 1. §24-A carries the
+// same count as §22.7 by intent but is a distinct surface that drifted
+// undetected at the 16→17 transition (BUG-024-006) — §22.7, the runtime
+// slice, and docs/Development.md all advanced to 17 while §24-A stayed at
+// 16. There is exactly one `Connector plugins (N committed)` line in
+// docs/smackerel.md, so this regex pins it unambiguously.
+var smackerelMdTreeRe = regexp.MustCompile(`Connector plugins \((\d+) committed\)`)
 
 // developmentMdBulletRe matches the "Current Capabilities" connector
 // bullet in docs/Development.md. The connector count is captured as group
@@ -147,6 +165,23 @@ func parseSmackerelMdCount(b []byte) (int, error) {
 	return n, nil
 }
 
+// parseSmackerelMdTreeCount extracts the documented connector count from
+// the §24-A architecture-tree "Connector plugins (N committed)" header in
+// docs/smackerel.md. This is the 4th contract surface, added by
+// BUG-024-006 after §24-A silently drifted to 16 while §22.7, the runtime
+// slice, and docs/Development.md all advanced to 17.
+func parseSmackerelMdTreeCount(b []byte) (int, error) {
+	m := smackerelMdTreeRe.FindSubmatch(b)
+	if m == nil {
+		return 0, fmt.Errorf("docs/smackerel.md does not contain a `Connector plugins (N committed)` §24-A architecture-tree header — the §24-A surface moved; restore the header or update this contract")
+	}
+	n, err := parseIntStrict(string(m[1]))
+	if err != nil {
+		return 0, fmt.Errorf("docs/smackerel.md §24-A `Connector plugins (N committed)` count is not a positive integer: %w", err)
+	}
+	return n, nil
+}
+
 // parseDevelopmentMdCount extracts the documented connector count from
 // the "Current Capabilities" bullet in docs/Development.md.
 func parseDevelopmentMdCount(b []byte) (int, error) {
@@ -179,8 +214,9 @@ func parseIntStrict(s string) (int, error) {
 }
 
 // assertConnectorCountContract returns nil iff cmd/core/connectors.go,
-// docs/smackerel.md §22.7, and docs/Development.md "Current Capabilities"
-// all agree on the same positive connector count.
+// docs/smackerel.md §22.7, docs/smackerel.md §24-A, and docs/Development.md
+// "Current Capabilities" all agree on the same positive connector count.
+// Both §22.7 and §24-A are parsed from the same smackerelMd bytes.
 func assertConnectorCountContract(connectorsGo, smackerelMd, developmentMd []byte) error {
 	runtime, err := parseConnectorsGoCount(connectorsGo)
 	if err != nil {
@@ -200,10 +236,15 @@ func assertConnectorCountContract(connectorsGo, smackerelMd, developmentMd []byt
 		return fmt.Errorf("contract violation (Development.md parse): %w", err)
 	}
 
-	if runtime != smackerel || runtime != development {
+	tree, err := parseSmackerelMdTreeCount(smackerelMd)
+	if err != nil {
+		return fmt.Errorf("contract violation (smackerel.md §24-A parse): %w", err)
+	}
+
+	if runtime != smackerel || runtime != development || runtime != tree {
 		return fmt.Errorf(
-			"contract violation: connector count disagreement — cmd/core/connectors.go=%d, docs/smackerel.md §22.7=%d, docs/Development.md \"- N passive connectors\"=%d — all three MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004",
-			runtime, smackerel, development,
+			"contract violation: connector count disagreement — cmd/core/connectors.go=%d, docs/smackerel.md §22.7=%d, docs/smackerel.md §24-A=%d, docs/Development.md=%d — all four MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004",
+			runtime, smackerel, tree, development,
 		)
 	}
 
@@ -233,7 +274,7 @@ func TestConnectorCountContract_LiveFile(t *testing.T) {
 	}
 
 	runtime, _ := parseConnectorsGoCount(connectorsGo)
-	t.Logf("contract OK: cmd/core/connectors.go + docs/smackerel.md §22.7 + docs/Development.md all agree on %d connectors (spec 024 R-006 + BS-004 + AC-5 in sync)", runtime)
+	t.Logf("contract OK: cmd/core/connectors.go + docs/smackerel.md §22.7 + docs/smackerel.md §24-A + docs/Development.md all agree on %d connectors (spec 024 R-006 + BS-004 + AC-5 in sync)", runtime)
 }
 
 // TestConnectorCountContract_AdversarialConnectorsGoLow proves the
@@ -296,15 +337,20 @@ func TestConnectorCountContract_AdversarialSmackerelMdHigh(t *testing.T) {
 		t.Fatalf("failed to parse runtime connector count: %v", err)
 	}
 
-	// Synthetic smackerel.md with header inflated to runtime+1 — drift from
-	// the real runtime + real Development.md (both equal to runtime).
+	// Synthetic smackerel.md with the §22.7 header inflated to runtime+1 —
+	// drift from the real runtime + real Development.md (both equal to
+	// runtime). The §24-A tree header is held AT the runtime count so the
+	// only disagreeing surface is §22.7 (this test pins the §22.7 inflation
+	// mode specifically; §24-A drift is covered by AdversarialSmackerelMdTreeLow).
 	inflated := runtime + 1
 	fixture := fmt.Sprintf(`# Smackerel
 
 ### 22.7 Committed Connector Inventory (%d connectors)
 
 (table body intentionally omitted — only the header line is parsed)
-`, inflated)
+
+│   ├── Connector plugins (%d committed)
+`, inflated, runtime)
 	err = assertConnectorCountContract(connectorsGo, []byte(fixture), developmentMd)
 	if err == nil {
 		t.Fatalf("adversarial contract test failed: docs/smackerel.md header claiming %d was accepted against runtime (%d) — contract is tautological; it would NOT catch a regression where the §22.7 header is hand-inflated", inflated, runtime)
@@ -348,4 +394,61 @@ func TestConnectorCountContract_AdversarialDevelopmentMdLow(t *testing.T) {
 		t.Fatalf("adversarial contract test failed: error did not name the stale Development.md count: %v", err)
 	}
 	t.Logf("adversarial OK: Development.md=15 vs runtime+smackerel.md=16 is rejected with: %v", err)
+}
+
+// TestConnectorCountContract_AdversarialSmackerelMdTreeLow proves the
+// contract catches the EXACT BUG-024-006 regression: the §24-A
+// architecture-tree header "Connector plugins (N committed)" stale at one
+// below the live count while §22.7, the runtime slice, and
+// docs/Development.md all advanced. Before this packet, §24-A was an
+// unpinned 4th surface, so this exact drift passed GREEN (the live-file
+// test logged "all agree on N" while §24-A silently lagged). The fixture
+// self-adjusts to the live registry size (runtime-1) so it stays
+// adversarial as connectors are added, and it asserts the diagnostic names
+// the §24-A surface specifically — not merely that *some* surface drifted.
+func TestConnectorCountContract_AdversarialSmackerelMdTreeLow(t *testing.T) {
+	root := repoRoot(t)
+	connectorsGo, err := os.ReadFile(filepath.Join(root, "cmd", "core", "connectors.go"))
+	if err != nil {
+		t.Fatalf("failed to read cmd/core/connectors.go: %v", err)
+	}
+	developmentMd, err := os.ReadFile(filepath.Join(root, "docs", "Development.md"))
+	if err != nil {
+		t.Fatalf("failed to read docs/Development.md: %v", err)
+	}
+
+	runtime, err := parseConnectorsGoCount(connectorsGo)
+	if err != nil {
+		t.Fatalf("failed to parse runtime connector count: %v", err)
+	}
+	if runtime < 2 {
+		t.Fatalf("runtime connector count %d is too small to construct a runtime-1 §24-A drift fixture", runtime)
+	}
+
+	// Synthetic docs/smackerel.md whose §22.7 header is CORRECT at the
+	// runtime count but whose §24-A architecture-tree header is stale at
+	// runtime-1 — the precise BUG-024-006 shape (§24-A lagged the 16→17
+	// transition). Runtime + Development.md are passed as the real files
+	// (both equal to runtime), so §24-A is the sole disagreeing surface.
+	stale := runtime - 1
+	fixture := fmt.Sprintf(`# Smackerel
+
+### 22.7 Committed Connector Inventory (%d connectors)
+
+(table body intentionally omitted — only the §22.7 header line is parsed)
+
+│   ├── Connector plugins (%d committed)
+│   │   ├── Gov Alerts (alerts/)
+│   │   └── QF Decisions (qfdecisions/ — spec 041 read-only companion)
+│   │   Planned connectors:
+`, runtime, stale)
+
+	err = assertConnectorCountContract(connectorsGo, []byte(fixture), developmentMd)
+	if err == nil {
+		t.Fatalf("adversarial contract test failed: docs/smackerel.md §24-A tree claiming %d was accepted against runtime (%d) + §22.7 (%d) + Development.md (%d) — §24-A is NOT pinned; this is the exact BUG-024-006 blind spot where §24-A lags the live count and the guard stays GREEN", stale, runtime, runtime, runtime)
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("docs/smackerel.md §24-A=%d", stale)) {
+		t.Fatalf("adversarial contract test failed: error did not name the stale §24-A count (expected `docs/smackerel.md §24-A=%d`): %v", stale, err)
+	}
+	t.Logf("adversarial OK: §24-A=%d vs runtime+§22.7+Development.md=%d is rejected with: %v", stale, runtime, err)
 }

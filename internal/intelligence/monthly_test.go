@@ -2,6 +2,7 @@ package intelligence
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +54,85 @@ func TestAssembleMonthlyReportText_Empty(t *testing.T) {
 	text := assembleMonthlyReportText(r)
 	if !contains(text, "Not enough data") {
 		t.Error("empty report should indicate insufficient data")
+	}
+}
+
+// --- Round 18 chaos-hardening (R-506 "under 500 words" enforcement) ---
+
+func TestCapReportWords_TruncatesOverBudget(t *testing.T) {
+	words := make([]string, 600)
+	for i := range words {
+		words[i] = "word"
+	}
+	text := strings.Join(words, " ")
+
+	capped, n := capReportWords(text, maxMonthlyReportWords)
+	if n != maxMonthlyReportWords {
+		t.Errorf("expected word count %d after cap, got %d", maxMonthlyReportWords, n)
+	}
+	if got := len(strings.Fields(capped)); got != maxMonthlyReportWords {
+		t.Errorf("expected capped text to have %d words, got %d", maxMonthlyReportWords, got)
+	}
+}
+
+func TestCapReportWords_LeavesUnderBudgetUnchanged(t *testing.T) {
+	text := "a short ten word monthly report body stays fully intact"
+	capped, n := capReportWords(text, maxMonthlyReportWords)
+	if capped != text {
+		t.Errorf("under-budget text should be unchanged; got %q", capped)
+	}
+	if want := len(strings.Fields(text)); n != want {
+		t.Errorf("expected word count %d, got %d", want, n)
+	}
+}
+
+func TestCapReportWords_ExactBoundaryUnchanged(t *testing.T) {
+	words := make([]string, maxMonthlyReportWords)
+	for i := range words {
+		words[i] = "w"
+	}
+	text := strings.Join(words, " ")
+	capped, n := capReportWords(text, maxMonthlyReportWords)
+	if n != maxMonthlyReportWords {
+		t.Errorf("exact-boundary word count should be %d, got %d", maxMonthlyReportWords, n)
+	}
+	if capped != text {
+		t.Error("text at exactly the cap should be unchanged")
+	}
+}
+
+// TestGenerateMonthlyReport_LocalAssemblyHonors500WordCap is the Round 18
+// chaos-hardening regression for R-506 ("under 500 words"). It is deliberately
+// adversarial and anti-tautological: it first proves the local assembler CAN
+// blow past the budget when fed a data-rich report, then proves capReportWords
+// (the single enforcement point GenerateMonthlyReport now applies before
+// returning) brings the body back under maxMonthlyReportWords. If the cap were
+// a no-op, the post-cap assertion would fail given the proven over-budget
+// premise — so this test cannot pass without a working cap.
+func TestGenerateMonthlyReport_LocalAssemblyHonors500WordCap(t *testing.T) {
+	r := &MonthlyReport{Month: "2026-04"}
+	for i := 0; i < 200; i++ {
+		r.ExpertiseShifts = append(r.ExpertiseShifts, ExpertiseShift{
+			TopicName:    fmt.Sprintf("Topic%d", i),
+			PrevDepth:    float64(i),
+			CurrentDepth: float64(i + 5),
+			Direction:    "gained",
+		})
+	}
+
+	raw := assembleMonthlyReportText(r)
+	rawWords := len(strings.Fields(raw))
+	if rawWords <= maxMonthlyReportWords {
+		t.Fatalf("adversarial premise broken: expected local assembly to exceed %d words, got %d — test can no longer detect a missing cap",
+			maxMonthlyReportWords, rawWords)
+	}
+
+	capped, n := capReportWords(raw, maxMonthlyReportWords)
+	if n > maxMonthlyReportWords {
+		t.Errorf("capReportWords reported %d words, want <= %d", n, maxMonthlyReportWords)
+	}
+	if got := len(strings.Fields(capped)); got > maxMonthlyReportWords {
+		t.Errorf("capped text has %d words, want <= %d (R-506 under-500-words constraint not enforced)", got, maxMonthlyReportWords)
 	}
 }
 

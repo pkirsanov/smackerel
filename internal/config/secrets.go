@@ -65,10 +65,15 @@ func extractDatabasePassword(databaseURL string) string {
 		return ""
 	}
 	rest := databaseURL[schemeIdx+3:]
-	// Userinfo ends at the first '@' before any path segment. We use
-	// LastIndex over the userinfo portion because passwords can contain
-	// special characters but '@' inside the password would be
-	// percent-encoded by any compliant URL producer.
+	// Userinfo ends at the FIRST '@': per RFC 3986 a literal '@' inside
+	// the userinfo (password) component MUST be percent-encoded, so the
+	// first '@' is always the authority delimiter. We deliberately use
+	// strings.Index (first '@'), NOT LastIndex. For a malformed URL whose
+	// password carries an unencoded extra '@', first-'@' extraction yields
+	// the leading dev-default token so the FR-051-005 gate fails closed;
+	// LastIndex would fold the trailing segment into the password and could
+	// let a dev-default value slip past the gate. Pinned by
+	// TestExtractDatabasePassword_Shapes/multi-at (spec 051 HARDEN-051-H1).
 	atIdx := strings.Index(rest, "@")
 	if atIdx < 0 {
 		return ""
