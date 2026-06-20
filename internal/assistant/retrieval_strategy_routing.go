@@ -62,10 +62,15 @@ func isRetrievalClass(in intent.CompiledIntent) bool {
 }
 
 // selectRetrievalStrategy runs the injected router for a retrieval/QA-class
-// turn and emits the trace-only selection token (Principle 8). It returns nil
-// when no router is wired, the intent did not compile, or the turn is not
-// retrieval/QA-class — in which case the caller leaves the envelope untouched
-// (pre-spec-095 behavior). It opens no store and makes no LLM call (NFR-1).
+// turn and emits the trace-only selection token (Principle 8). The
+// `in intent.CompiledIntent` passed here is the OUTPUT of the spec 068
+// intent.Compiler, produced UPSTREAM in the facade ingress (facade.go) before
+// this seam is ever reached; this router only CONSUMES that already-compiled
+// intent — it never sees raw text and never invokes the intent.Compiler itself
+// (NFR-1 — no second LLM round-trip). It returns nil when no router is wired,
+// the intent did not compile, or the turn is not retrieval/QA-class — in which
+// case the caller leaves the envelope untouched (pre-spec-095 behavior). It
+// opens no store and makes no LLM call (NFR-1).
 func (f *Facade) selectRetrievalStrategy(
 	in intent.CompiledIntent,
 	compiledOK bool,
