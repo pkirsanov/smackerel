@@ -12,6 +12,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { attachCSPGuard, assertNoCSPViolations } from "./_support/csp";
+import { login } from "./_support/cardrewards";
 
 const AUTH_TOKEN = process.env.SMACKEREL_AUTH_TOKEN ?? "";
 
@@ -27,21 +28,6 @@ function requireAuthToken(): string {
 
 function uniqueSuffix(): string {
   return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-}
-
-async function login(page: Page): Promise<void> {
-  const resp = await page.request.post("/v1/web/login", {
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "text/html",
-    },
-    data: new URLSearchParams({
-      token: requireAuthToken(),
-      next: "/cards/offers",
-    }).toString(),
-    maxRedirects: 0,
-  });
-  expect([200, 302, 303]).toContain(resp.status());
 }
 
 async function createCardAPI(
