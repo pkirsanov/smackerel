@@ -955,3 +955,267 @@ $ bash .github/bubbles/scripts/state-transition-guard.sh specs/006-phase5-advanc
 ### Verdict
 
 Spec 006 stays `done`. R10 documentary closure adds operator-runbook navigability without touching runtime, tests, deploy, or security surfaces. Governance baseline is clean (0 BLOCKs since R2). This concludes sweep-2026-05-24-r10.
+
+---
+
+## Improvement Pass — Round 14 (June 2026)
+
+### Trigger: improve-existing (child of stochastic-quality-sweep)
+
+### Findings (2 total, 2 resolved)
+
+| # | Finding | Severity | File | Fix |
+|---|---------|----------|------|-----|
+| IMP-006-R14-001 | `parseSubscription` hardcodes currency to "USD" — EUR (€) and GBP (£) billing emails detected as subscriptions but currency field always shows "USD" regardless of actual symbol/code in email | Medium | `internal/intelligence/subscriptions.go` | Added `amountPatternEUR`, `amountPatternGBP` regexes; new `extractAmountWithCurrency` function that detects currency from text and returns (amount, currency) tuple; `parseSubscription` now uses detected currency |
+| IMP-006-R14-002 | Subscription cancellation emails create new records instead of updating existing — same service can have both "active" and "cancelled" entries because INSERT uses new ULID without checking for existing active subscription | Medium | `internal/intelligence/subscriptions.go` | Added UPDATE query before INSERT to transition existing active subscription to "cancelled" status when cancellation email detected |
+
+### Key Files Changed
+- `internal/intelligence/subscriptions.go` — new multi-currency regex patterns (`amountPatternUSD`, `amountPatternEUR`, `amountPatternGBP`); new `extractAmountWithCurrency(text string) (float64, string)` function with EUR-first priority detection; new `extractAmountFromPattern(text string, pattern *regexp.Regexp) float64` helper; `parseSubscription` updated to use `extractAmountWithCurrency` returning dynamic currency; cancellation status transition UPDATE before INSERT
+- `internal/intelligence/subscriptions_test.go` — `TestExtractAmountWithCurrency_USD`, `TestExtractAmountWithCurrency_EUR`, `TestExtractAmountWithCurrency_GBP`, `TestExtractAmountWithCurrency_DefaultsToUSD`, `TestParseSubscription_EURCurrency`, `TestParseSubscription_GBPCurrency`
+
+### Test Evidence
+```
+$ go test -v -run "TestExtractAmountWithCurrency|TestParseSubscription_EUR|TestParseSubscription_GBP" ./internal/intelligence/...
+=== RUN   TestExtractAmountWithCurrency_USD
+--- PASS: TestExtractAmountWithCurrency_USD (0.00s)
+=== RUN   TestExtractAmountWithCurrency_EUR
+--- PASS: TestExtractAmountWithCurrency_EUR (0.00s)
+=== RUN   TestExtractAmountWithCurrency_GBP
+--- PASS: TestExtractAmountWithCurrency_GBP (0.00s)
+=== RUN   TestExtractAmountWithCurrency_DefaultsToUSD
+--- PASS: TestExtractAmountWithCurrency_DefaultsToUSD (0.00s)
+=== RUN   TestParseSubscription_EURCurrency
+--- PASS: TestParseSubscription_EURCurrency (0.00s)
+=== RUN   TestParseSubscription_GBPCurrency
+--- PASS: TestParseSubscription_GBPCurrency (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/intelligence    0.094s
+```
+
+### Verdict
+
+Spec 006 stays `done`. R14 improvement pass closes two Subscription Tracker (Scope 03) functional gaps: multi-currency support and cancellation status transition. Both fixes are behavioral improvements to existing R-504 implementation with new unit tests covering EUR, GBP, and USD detection patterns. No regression in existing tests. This concludes stochastic-quality-sweep R14 improve trigger.
+
+---
+
+## Stochastic Sweep — Round 17: Chaos-Hardening
+
+**Phase Agent:** bubbles.chaos → bubbles.workflow (orchestrator, parent-expanded child mode)
+**Sweep round:** Round 17 (trigger: `chaos`)
+**Mapped child workflow mode:** `chaos-hardening`
+**Execution model:** `parent-expanded-child-mode` (nested `bubbles.workflow` runtime lacks nested `runSubagent`; parent expanded the mapped `chaos-hardening` mode and ran the chaos probe + finding-owned closure directly per the workflow-orchestration-core fallback contract — `chaos-hardening` is NOT a `requiresTopLevelRuntime` mode, so parent-expansion is permitted)
+**Spec status before round:** done
+**Spec status after round:** done (hardening fix; certification unchanged)
+**Forced TDD:** scenario-first (red proof captured before fix)
+**Findings:** 2 surfaced, 2 closed (1 cancellation false-positive pair under CHA-006-R17-001/002; 1 probe vector cleared with no defect)
+**Bugs spawned:** 0 (parent-only closure, R8/R10 lightweight pattern — see Closure Approach)
+**Surface probed:** Subscription Tracker (Scope 03, R-504) — `internal/intelligence/subscriptions.go`, the Round 14 currency + cancellation surface
+
+### Chaos Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.chaos
+**Command:** `./smackerel.sh test unit --go --go-run '<probe selectors>' --verbose`
+
+### Probe Coverage Summary
+
+The chaos trigger probed the Round 14 subscription parsing/detection surface for resilience, adversarial-input, and false-positive failure modes.
+
+| # | Probe vector | Verdict | Evidence |
+|---|--------------|---------|----------|
+| P1 | Float overflow via crafted billing amount — a ~400-digit `$NNN…` amount could parse to `+Inf` and break `json.Marshal` of the subscription-summary endpoint | PASS — no defect | Scenario-first adversarial tests (`$` + 400×`9` + `.99`) confirmed `extractAmount`/`parseSubscription` return a finite, JSON-marshalable value: `fmt.Sscanf` leaves `0` on overflow and `extractAmountWithCurrency` length-bounds input to 2000 runes via `stringutil.TruncateUTF8`. No fix required; speculative probe tests removed to avoid non-adversarial filler. |
+| P2 | Cancellation-status false positives from bare-substring matching | **FAIL — finding CHA-006-R17-001/002** | See below |
+| P3 | Genuine cancellation events (UK/US spelling, confirmation subject) must still be detected after tightening | PASS (no-regression guard) | `TestParseSubscription_GenuineCancellationStillDetected` (4 subtests) green pre- and post-fix |
+
+### Finding CHA-006-R17-001 / CHA-006-R17-002 — Cancellation false positives
+
+**Class:** code (correctness / data-integrity resilience)
+**Severity:** High — silently flips a user's live subscription to `cancelled`
+**Surface:** `internal/intelligence/subscriptions.go::parseSubscription`
+
+**Root cause:** `parseSubscription` classified subscription status with the bare substrings `"cancel"`, `"cancelled"`, and `"unsubscribe"`:
+
+- CHA-006-R17-001: `"cancel anytime"` — present in a large share of legitimate active-subscription receipts ("you can cancel anytime in settings") — matched `"cancel"` → status `cancelled`.
+- CHA-006-R17-002: `"unsubscribe"` — present as a footer link in virtually every transactional/billing email — matched → status `cancelled`.
+
+**Amplified impact (compounds Round 14 IMP-006-R14-002):** R14 added an UPDATE that, on any `cancelled` parse, runs `UPDATE subscriptions SET status='cancelled', cancelled_at=NOW() WHERE service_name=$1 AND status='active'`. So a routine renewal receipt carrying a standard "Unsubscribe" footer or "cancel anytime" line would actively flip the user's live subscription to `cancelled` in the tracker on its very next receipt — a data-integrity defect, not merely a parse mislabel.
+
+**Fix:** Replaced bare-substring matching with an explicit `cancellationEventPhrases` allowlist of cancellation-EVENT phrases covering both UK (`cancelled`) and US (`canceled`) spellings (e.g. `has been cancelled`, `subscription canceled`, `membership cancelled`, `cancellation confirmation`, `your cancellation`). `"unsubscribe"` is dropped entirely. Future-tense phrasing (`will be cancelled`) is intentionally excluded — a scheduled cancellation leaves the subscription active until period end.
+
+### Test Evidence — RED (pre-fix, proving the finding)
+
+**Executed:** YES
+**Command:** `./smackerel.sh test unit --go --go-run 'TestParseSubscription_CancelAnytimeStaysActive|TestParseSubscription_UnsubscribeFooterStaysActive|TestParseSubscription_GenuineCancellationStillDetected' --verbose`
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestParseSubscription_CancelAnytimeStaysActive|TestParseSubscription_UnsubscribeFooterStaysActive|TestParseSubscription_GenuineCancellationStillDetected' --verbose
+=== RUN   TestParseSubscription_CancelAnytimeStaysActive
+    subscriptions_test.go:591: expected status=active for a 'cancel anytime' renewal receipt, got "cancelled"
+--- FAIL: TestParseSubscription_CancelAnytimeStaysActive (0.00s)
+=== RUN   TestParseSubscription_UnsubscribeFooterStaysActive
+    subscriptions_test.go:613: expected status=active for a receipt with an unsubscribe footer, got "cancelled"
+--- FAIL: TestParseSubscription_UnsubscribeFooterStaysActive (0.00s)
+=== RUN   TestParseSubscription_GenuineCancellationStillDetected
+--- PASS: TestParseSubscription_GenuineCancellationStillDetected (0.00s)
+    --- PASS: TestParseSubscription_GenuineCancellationStillDetected/uk-spelling (0.00s)
+    --- PASS: TestParseSubscription_GenuineCancellationStillDetected/us-spelling (0.00s)
+    --- PASS: TestParseSubscription_GenuineCancellationStillDetected/confirmation (0.00s)
+    --- PASS: TestParseSubscription_GenuineCancellationStillDetected/membership (0.00s)
+FAIL    github.com/smackerel/smackerel/internal/intelligence    0.073s
+```
+
+### Test Evidence — GREEN (post-fix)
+
+**Executed:** YES
+**Command:** `./smackerel.sh test unit --go --go-run 'TestParseSubscription_CancelAnytimeStaysActive|TestParseSubscription_UnsubscribeFooterStaysActive|TestParseSubscription_GenuineCancellationStillDetected' --verbose`
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestParseSubscription_CancelAnytimeStaysActive|TestParseSubscription_UnsubscribeFooterStaysActive|TestParseSubscription_GenuineCancellationStillDetected' --verbose
+=== RUN   TestParseSubscription_CancelAnytimeStaysActive
+--- PASS: TestParseSubscription_CancelAnytimeStaysActive (0.00s)
+=== RUN   TestParseSubscription_UnsubscribeFooterStaysActive
+--- PASS: TestParseSubscription_UnsubscribeFooterStaysActive (0.00s)
+=== RUN   TestParseSubscription_GenuineCancellationStillDetected
+--- PASS: TestParseSubscription_GenuineCancellationStillDetected (0.00s)
+    --- PASS: TestParseSubscription_GenuineCancellationStillDetected/uk-spelling (0.00s)
+    --- PASS: TestParseSubscription_GenuineCancellationStillDetected/us-spelling (0.00s)
+    --- PASS: TestParseSubscription_GenuineCancellationStillDetected/confirmation (0.00s)
+    --- PASS: TestParseSubscription_GenuineCancellationStillDetected/membership (0.00s)
+ok      github.com/smackerel/smackerel/internal/intelligence    0.069s
+```
+
+### Test Evidence — Regression (full subscription suite, no regression; excerpt + package line)
+
+**Executed:** YES
+**Command:** `./smackerel.sh test unit --go --go-run 'Subscription|ExtractAmount|DetectFrequency|CategorizeService|ToMonthly|ContainsAny|StripSenderPrefix|ExtractServiceName' --verbose`
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'Subscription|ExtractAmount|DetectFrequency|CategorizeService|ToMonthly|ContainsAny|StripSenderPrefix|ExtractServiceName' --verbose
+--- PASS: TestParseSubscription_Cancelled (0.00s)
+--- PASS: TestParseSubscription_Trial (0.00s)
+--- PASS: TestParseSubscription_ActiveHappyPath (0.00s)
+--- PASS: TestParseSubscription_EURCurrency (0.00s)
+--- PASS: TestParseSubscription_GBPCurrency (0.00s)
+--- PASS: TestParseSubscription_CancelAnytimeStaysActive (0.00s)
+--- PASS: TestParseSubscription_UnsubscribeFooterStaysActive (0.00s)
+--- PASS: TestParseSubscription_GenuineCancellationStillDetected (0.00s)
+--- PASS: TestSubscriptionsHandler_NilPool_Returns500 (0.00s)
+--- PASS: TestRunSubscriptionDetectionJob_OverlapGuard (0.00s)
+ok      github.com/smackerel/smackerel/internal/intelligence    0.059s
+```
+
+### Key Files Changed
+- `internal/intelligence/subscriptions.go` — added `cancellationEventPhrases` allowlist; `parseSubscription` now classifies `cancelled` status via explicit cancellation-event phrases (UK + US spellings) instead of bare `"cancel"`/`"cancelled"`/`"unsubscribe"` substrings
+- `internal/intelligence/subscriptions_test.go` — added `TestParseSubscription_CancelAnytimeStaysActive`, `TestParseSubscription_UnsubscribeFooterStaysActive`, `TestParseSubscription_GenuineCancellationStillDetected` (4 subtests)
+
+### Closure Approach
+
+Parent-only closure (R8/R10 lightweight pattern). Justification: the finding is a single-function correctness fix on the existing R-504 Subscription Tracker surface — no new schema, contract, connector, deploy, or security surface — and is fully covered by new scenario-first unit tests with captured red→green proof. One-to-one finding accounting: CHA-006-R17-001 (cancel-anytime) and CHA-006-R17-002 (unsubscribe footer) both surfaced → both closed by the `cancellationEventPhrases` change → both proven by the RED→GREEN evidence above. Probe vector P1 (float overflow) surfaced no defect and required no change. No findings reported without remediation.
+
+### Verdict
+
+Spec 006 stays `done`. Round 17 chaos-hardening closes a high-severity cancellation false-positive that compounded the Round 14 cancellation-UPDATE path: routine renewal receipts carrying an "Unsubscribe" footer or "cancel anytime" line would have silently cancelled the user's live subscription. Detection now requires an explicit cancellation-event phrase. No regression in existing tests. This concludes stochastic-quality-sweep Round 17 chaos trigger.
+
+## Stochastic Sweep — Round 18: Chaos-Hardening
+
+**Phase Agent:** bubbles.chaos → bubbles.workflow (orchestrator, parent-expanded child mode)
+**Sweep round:** Round 18 (trigger: `chaos`)
+**Mapped child workflow mode:** `chaos-hardening`
+**Execution model:** `parent-expanded-child-mode` (nested `bubbles.workflow` runtime lacks nested `runSubagent`; parent expanded the mapped `chaos-hardening` mode and ran the chaos probe + finding-owned closure directly per the workflow-orchestration-core fallback contract — `chaos-hardening` is NOT a `requiresTopLevelRuntime` mode, so parent-expansion is permitted)
+**Spec status before round:** done
+**Spec status after round:** done (hardening fix; certification unchanged)
+**Forced TDD:** scenario-first (RED proof captured before fix)
+**Findings:** 1 surfaced, 1 closed (CHA-006-R18-001 — monthly-report word-budget not enforced)
+**Bugs spawned:** 0 (parent-only closure, R8/R10/R17 lightweight pattern — see Closure Approach)
+**Surface probed:** Monthly Self-Knowledge Report (Scope 05, R-506) — `internal/intelligence/monthly.go::GenerateMonthlyReport`
+
+**Different-dimension guarantee:** Round 17 probed *substring-matching false positives* in the Subscription Tracker (`subscriptions.go`). Round 18 deliberately probed a **different resilience dimension** — *output-bound / hard-constraint enforcement* — in a **different scope** (Scope 05 Monthly Report). The subscription cancellation surface was NOT re-probed.
+
+### Chaos Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.chaos
+**Command:** `./smackerel.sh test unit --go --go-run '<probe selectors>' --verbose`
+
+### Probe Coverage Summary
+
+The chaos trigger probed the Monthly Report assembly/delivery surface for the resilience question: *what happens when the report body is unexpectedly large?* (a verbose ML-sidecar `report_text`, or a data-rich local assembly with many expertise shifts / patterns / seasonal lines).
+
+| # | Probe vector | Verdict | Evidence |
+|---|--------------|---------|----------|
+| P1 | R-506 "under 500 words" delivery budget under data-rich/adversarial input | **FAIL — finding CHA-006-R18-001** | `GenerateMonthlyReport` recorded `WordCount` but never truncated; a 200-shift local assembly produced **1007 words** with no cap. See below. |
+| P2 | Sibling weekly synthesis (R-302 250-word cap) — confirm the intended pattern exists and was the missing reference | PASS (reference) | `GenerateWeeklySynthesis` already truncates to 250 words (`synthesis.go`); proves the cap pattern was simply absent from the monthly path. |
+| P3 | Under-budget and exact-boundary inputs must be left intact (no over-truncation) | PASS (no-regression guard) | `TestCapReportWords_LeavesUnderBudgetUnchanged` + `TestCapReportWords_ExactBoundaryUnchanged` green. |
+
+### Finding CHA-006-R18-001 — Monthly report ignores its R-506 word budget
+
+**Class:** code (output-contract / resilience)
+**Severity:** Medium — over-budget report delivered to the user, breaching a documented hard constraint and Product Principle 7 (small, phone-screen-fit output); non–data-corrupting, hence Medium not High.
+**Surface:** `internal/intelligence/monthly.go::GenerateMonthlyReport`
+
+**Root cause:** R-506 specifies the monthly report is delivered **"under 500 words"**, but `GenerateMonthlyReport` only *measured* the body — `report.WordCount = len(strings.Fields(report.ReportText))` — and never truncated it. Both body sources are unbounded: the ML-sidecar `report_text` (`SubjectMonthlyGenerate` reply) is trusted verbatim, and the local `assembleMonthlyReportText` grows with the data (expertise shifts, patterns, seasonal lines, subscription summary). The sibling `GenerateWeeklySynthesis` already enforces its R-302 250-word cap (`synthesis.go`: `if len(words) > 250 { words = words[:250] }`), so the monthly path was the lone unbounded delivery surface.
+
+**Fix:** Added `const maxMonthlyReportWords = 500` and a single pure enforcement helper `capReportWords(text, maxWords) (string, int)`, applied in `GenerateMonthlyReport` to whichever body won (LLM sidecar output OR local assembly) just before return — mirroring the R-302 weekly cap. `maxWords <= 0` disables truncation; the cap is treated as inclusive, matching the weekly sibling's `> limit → words[:limit]` convention.
+
+### Test Evidence — RED (pre-fix, cap temporarily neutralized to prove the regression detects a missing cap)
+
+**Executed:** YES
+**Command:** `./smackerel.sh test unit --go --go-run 'CapReportWords_TruncatesOverBudget|GenerateMonthlyReport_LocalAssemblyHonors500WordCap' --verbose`
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'CapReportWords_TruncatesOverBudget|GenerateMonthlyReport_LocalAssemblyHonors500WordCap' --verbose
+=== RUN   TestCapReportWords_TruncatesOverBudget
+    monthly_test.go:71: expected word count 500 after cap, got 600
+    monthly_test.go:74: expected capped text to have 500 words, got 600
+--- FAIL: TestCapReportWords_TruncatesOverBudget (0.00s)
+=== RUN   TestGenerateMonthlyReport_LocalAssemblyHonors500WordCap
+    monthly_test.go:132: capReportWords reported 1007 words, want <= 500
+    monthly_test.go:135: capped text has 1007 words, want <= 500 (R-506 under-500-words constraint not enforced)
+--- FAIL: TestGenerateMonthlyReport_LocalAssemblyHonors500WordCap (0.01s)
+FAIL    github.com/smackerel/smackerel/internal/intelligence    0.195s
+```
+
+The adversarial test is **non-tautological**: the 200-shift local assembly genuinely produces **1007 words**, so the cap does real work — if the cap is a no-op (as neutralized here) the test fails.
+
+### Test Evidence — GREEN (post-fix, cap restored)
+
+**Executed:** YES
+**Command:** `./smackerel.sh test unit --go --go-run 'CapReportWords|GenerateMonthlyReport_LocalAssemblyHonors500WordCap' --verbose`
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'CapReportWords|GenerateMonthlyReport_LocalAssemblyHonors500WordCap' --verbose
+=== RUN   TestCapReportWords_TruncatesOverBudget
+--- PASS: TestCapReportWords_TruncatesOverBudget (0.00s)
+=== RUN   TestCapReportWords_LeavesUnderBudgetUnchanged
+--- PASS: TestCapReportWords_LeavesUnderBudgetUnchanged (0.00s)
+=== RUN   TestCapReportWords_ExactBoundaryUnchanged
+--- PASS: TestCapReportWords_ExactBoundaryUnchanged (0.00s)
+=== RUN   TestGenerateMonthlyReport_LocalAssemblyHonors500WordCap
+--- PASS: TestGenerateMonthlyReport_LocalAssemblyHonors500WordCap (0.00s)
+ok      github.com/smackerel/smackerel/internal/intelligence    0.050s
+```
+
+### Test Evidence — Regression (full Phase 5 intelligence set, no regression)
+
+**Executed:** YES
+**Command:** `./smackerel.sh test unit --go --go-run 'CapReportWords|GenerateMonthlyReport|MonthlyReport|AssembleMonthlyReport|WeeklySynthesis|Synthesis|ContentAngle|ContentFuel|SeasonalPattern|DetectSeasonalPatterns|ExpertiseShift|Resurface|Subscription|Learning|FrequentLookup|QuickReference|Serendipity' --verbose`
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'CapReportWords|GenerateMonthlyReport|MonthlyReport|AssembleMonthlyReport|WeeklySynthesis|Synthesis|ContentAngle|ContentFuel|SeasonalPattern|DetectSeasonalPatterns|ExpertiseShift|Resurface|Subscription|Learning|FrequentLookup|QuickReference|Serendipity' --verbose
+ok      github.com/smackerel/smackerel/internal/intelligence    0.186s
+(filtered to matched Phase 5 intelligence tests: RUN: 246  PASS: 177  FAIL: 0)
+```
+
+Formatting/vet on the delta: `gofmt -l internal/intelligence/monthly.go internal/intelligence/monthly_test.go` → empty (clean); `go vet ./internal/intelligence/` → exit 0.
+
+### Key Files Changed
+- `internal/intelligence/monthly.go` — added `maxMonthlyReportWords = 500` const and `capReportWords` helper; `GenerateMonthlyReport` now enforces the R-506 word budget on the final report body (LLM or local) instead of only measuring it
+- `internal/intelligence/monthly_test.go` — added `TestCapReportWords_TruncatesOverBudget`, `TestCapReportWords_LeavesUnderBudgetUnchanged`, `TestCapReportWords_ExactBoundaryUnchanged`, `TestGenerateMonthlyReport_LocalAssemblyHonors500WordCap`
+
+### Closure Approach
+
+Parent-only closure (R8/R10/R17 lightweight pattern). Justification: the finding is a single-function output-contract fix on the existing R-506 Monthly Report surface — no new schema, contract, connector, deploy, or security surface — fully covered by new scenario-first unit tests with captured RED→GREEN proof. One-to-one finding accounting: CHA-006-R18-001 (monthly word budget unenforced) surfaced → closed by the `capReportWords` enforcement → proven by the RED→GREEN evidence above. Probe vectors P2 (sibling reference) and P3 (no over-truncation guard) surfaced no defect and required no change beyond their guard tests. No findings reported without remediation.
+
+### Verdict
+
+Spec 006 stays `done`. Round 18 chaos-hardening closes a medium-severity output-contract gap on a **different resilience dimension** (output-bound enforcement) and a **different scope** (Scope 05 Monthly Report) than Round 17's substring-matching fix: the monthly self-knowledge report measured but never enforced its R-506 "under 500 words" budget, so a verbose LLM body or a data-rich local assembly (proven: 1007 words) would be delivered over budget, breaching the spec contract and Product Principle 7. The report body is now capped exactly as the sibling weekly synthesis caps its R-302 250-word budget. No regression across the Phase 5 intelligence suite. This concludes stochastic-quality-sweep Round 18 chaos trigger.

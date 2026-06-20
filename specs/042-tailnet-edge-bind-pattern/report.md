@@ -4415,3 +4415,110 @@ Scope 1 **Status:** Done ; Scope 2 **Status:** Done
 Verdict: spec 042's fail-loud compose contract, mechanical guard, and operator
 docs are shipped, enforced, and tested; the scope statuses now match the
 certified `done` status. Recertified `certifiedAt=2026-06-06T17:30:00Z`.
+
+## Planning-Artifact Reconciliation — `bubbles.plan` — 2026-06-17 (HARDEN-042-R33)
+
+Two coupled planning-artifact findings routed from a stochastic-quality-sweep
+harden probe (Round 33) and tracked as `bugs/BUG-042-007-stale-scenario-manifest-and-traceability-skip/`.
+Both are planning-artifact accuracy/traceability drift, NOT a runtime regression:
+the deployment safety surface (`deploy/compose.deploy.yml` fail-loud bind +
+`internal/deploy/compose_contract_test.go`) was intact and untouched by this pass.
+
+- **F1 (HARDEN-042-R33-001, medium):** `scenario-manifest.json` was pre-supersession
+  stale. `SCN-042-001`'s `then` clause carried the forbidden
+  `${HOST_BIND_ADDRESS:-127.0.0.1}:` default-fallback form (contradicting the
+  active NO-DEFAULTS / fail-loud SST policy); `SCN-042-003` was titled "Compose
+  default is safe for local runs" (superseded loopback-default framing); and
+  `SCN-042-004/005` titles were shuffled relative to the active fail-loud scopes.
+- **F2 (HARDEN-042-R33-003, medium):** active `scopes.md` used a
+  `- **SCN-042-NNN - title**` header format, so the traceability guard's
+  `extract_scenarios` found ZERO scenarios and the run exited 1 silently under
+  `set -e`, skipping the G057/G059 manifest cross-check for spec 042.
+
+These were fixed TOGETHER: reformatting the scopes scenarios activates the
+G057/G059 cross-check, which then validates against the realigned manifest.
+
+### Remediation Applied (planning artifacts only)
+
+- `scopes.md`: active `SCN-042-001..006` reformatted to the working
+  `Scenario: SCN-042-NNN — title` gherkin form (mirroring
+  `specs/035-recipe-enhancements/scopes.md`), preserving the fail-loud semantics
+  (no `:-127.0.0.1` form reintroduced). The two stale HTML-commented duplicate
+  `## Scope N:` headings were relabeled `## Superseded Scope N —` so they no
+  longer match the guard's active-scope regex; the `#### Core Items` /
+  `#### Build Quality Gate` subheadings were neutralized to bold labels so
+  `extract_dod_items` returns the DoD items; one DoD item per scenario was
+  prefixed `Scenario SCN-042-NNN (title) —` for G068 fidelity.
+- `scenario-manifest.json`: realigned all six entries to the active fail-loud
+  scopes — removed the forbidden `:-127.0.0.1` form from `SCN-042-001`,
+  retitled `SCN-042-003` to "Missing bind address fails loud", reassigned/retitled
+  `SCN-042-004` (explicit-loopback, scope 01) and `SCN-042-005` (ops-doc, scope 02),
+  reconciled `requiredTestType` from `e2e-api`/`e2e-ui` to `unit`/`doc-lint` to
+  match the linked compose-contract and doc-lint tests, corrected the linked test
+  IDs to real `TestComposeContract_*` function names, and dropped the placeholder
+  `gherkinHash` fields.
+
+### Before / After Evidence
+
+Before — the guard skipped the cross-check and exited 1 (Finding 2 root cause):
+
+```
+$ grep -cE '^[[:space:]]*Scenario( Outline)?:' specs/042-tailnet-edge-bind-pattern/scopes.md   # pre-fix
+0
+ℹ️  No scope-defined Gherkin scenarios found — scenario manifest cross-check skipped
+```
+
+After — the cross-check is ACTIVE and the guard passes:
+
+```
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/042-tailnet-edge-bind-pattern
+--- Scenario Manifest Cross-Check (G057/G059) ---
+✅ scenario-manifest.json covers 6 scenario contract(s)
+✅ All linked tests from scenario-manifest.json exist
+✅ scenario-manifest.json records evidenceRefs
+...
+--- Gherkin → DoD Content Fidelity (Gate G068) ---
+ℹ️  DoD fidelity: 6 scenarios checked, 6 mapped to DoD, 0 unmapped
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 6
+ℹ️  Scenario-to-row mappings: 6
+ℹ️  Concrete test file references: 6
+ℹ️  Report evidence references: 6
+RESULT: PASSED (0 warnings)
+TRACE_EXIT=0
+```
+
+Artifact lint remains green after the edits:
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/042-tailnet-edge-bind-pattern
+✅ All 4 scope(s) in scopes.md are marked Done
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ All 115 evidence blocks in report.md contain legitimate terminal output
+Artifact lint PASSED.
+ALINT_EXIT=0
+```
+
+Deployment surface confirmed intact (no compose / contract-test changes):
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestComposeContract' --verbose
+--- PASS: TestComposeContract_LiveFile (0.00s)
+--- PASS: TestComposeContract_AdversarialLiteralBind (0.00s)
+--- PASS: TestComposeContract_AdversarialInfraHasPorts (0.00s)
+--- PASS: TestComposeContract_AdversarialMultiPortsBypass (0.00s)
+--- PASS: TestComposeContract_AdversarialMLMultiPortsBypass (0.00s)
+--- PASS: TestComposeContract_AdversarialNetworkModeHostBypass (0.00s)
+--- PASS: TestComposeContract_AdversarialOllamaLiteralBind (0.00s)
+--- PASS: TestComposeContract_AdversarialDefaultFallbackBind (0.00s)
+--- PASS: TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.045s
+COMPOSE_TEST_EXIT=0
+```
+
+Verdict: both routed findings are remediated within the planning-artifact surface
+owned by `bubbles.plan` (`scopes.md`, `scenario-manifest.json`); the traceability
+guard now passes with the G057/G059 manifest cross-check ACTIVE, artifact lint is
+green, and the deployment contract is unchanged and still enforced by all nine
+`TestComposeContract_*` functions. No status or certification change — spec 042
+remains `done`.

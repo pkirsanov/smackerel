@@ -468,3 +468,144 @@ EXIT_CODE=1
 ```
 
 **Claim Source:** executed.
+
+## Gaps Pass (stochastic-quality-sweep, 2026-06-17)
+
+Gap-diagnostic + closure probe by `bubbles.workflow` mapped mode `gaps-to-doc`
+(role: gap-diagnostic; `executionModel: parent-expanded-child-mode`). Protected
+artifacts (`spec.md`, `design.md`, `scopes.md`) were NOT edited — the G088
+known-drift basis is preserved exactly as in the Round-5 stabilize and Round-12
+test passes. Spec status left `done` (gaps-to-doc ceiling is `docs_updated`; no
+promotion attempted). Verdict: 🟢 1 finding, CLOSED with a real adversarial test
+(RED→GREEN). Only spec-070's owned surface was touched.
+
+### Coverage cross-reference (spec requirement → guarding test)
+
+| Spec requirement | Guarding test(s) | Status |
+|------------------|------------------|--------|
+| UC-1 / AC-2 — form login → 303 + cookie = shared AuthToken | `TestWebLogin_Credential_ValidMatch_RedirectsAndSetsCookie` | covered |
+| UC-5 — wrong password → error, no cookie | `TestWebLogin_Credential_WrongPassword_NoCookie` | covered |
+| UC-6 / AC-5 — unknown user → same generic error + timing parity | `TestWebLogin_Credential_UnknownUser_NoCookie_SameError`, `TestVerify_TimingParityWithinConstantFactor` | covered |
+| UC-7 / AC-4 — token-only form regression unchanged | `TestWebLogin_TokenOnly_RegressionUnchanged` | covered |
+| AC-2 — missing-field handling | `TestWebLogin_Credential_MissingPassword`, `…_MissingUsername` | covered |
+| §3.3 — credential post with nil repo rejected (no silent fall-through) | `TestWebLogin_Credential_NilRepo_RejectedWithError` | covered |
+| AC-6 — login form renders username+password, token demoted | `TestLoginPage_RendersCredentialFields` (Round-2 F2) | covered |
+| Security Model — `/v1/web/login` rate-limited 20/min/IP | `TestWebLogin_RateLimited_PerIP`, `…_FreshIPAdmitted` (Round-12) | covered |
+| UC-3 / AC-3 — `users add` creates row; refuses existing; guards | `TestRunUsersAdd_*`, `TestDispatchUsersSubcommand_RoutesToKnownSubcommands` | covered |
+| UC-4 / AC-3 — `users set-password` rotates; refuses missing | `TestRunUsersSetPassword_RotatesExistingUser`, `…_RefusesMissingUser` | covered |
+| CLI invocation contract (missing-arg / unknown-subcommand exit codes) | `TestRunUsersCommand_MissingArgs_Exit2`, `TestDispatchUsersSubcommand_UnknownSubcommand_Exit2` | covered |
+| AC-1 — table + 4 columns; created_at preserved on rotate; last_login bump | `internal/auth/webcreds/repo_pg_test.go` (integration) | covered |
+| §2 hashing — round-trip / wrong-pw / tamper / malformed PHC | `TestHash_RoundTrip`, `TestVerify_WrongPassword`, `…_TamperedHash`, `…_MalformedPHC` | covered |
+| §2.2 — **per-hash random salt (saltLen=16, crypto/rand)** | **none → `TestHash_SaltIsUniquePerInvocation`** | **GAP — CLOSED this round** |
+
+### Finding F-070-GAPS-001 (medium) — per-hash salt uniqueness had no executable guard
+
+Spec 070 §2.2 / Security Model specifies argon2id with a 16-byte salt read from
+`crypto/rand` on every `Hash` call. Per-hash random salt is the property that
+stops identical passwords from producing identical stored hashes (password-reuse
+leak across users + offline precompute). The existing hasher suite had **zero**
+coverage for it: `TestHash_RoundTrip`, `TestVerify_WrongPassword`,
+`TestVerify_TamperedHash`, `TestVerify_MalformedPHC` and the timing-parity test
+all hold whether the salt is random or a fixed/zero block, and the integration
+`TestPostgresRepo_UpsertRotatePreservesCreatedAt` only compares hashes of
+*different* passwords. A regression dropping the `rand.Read(salt)` CSPRNG read
+(zero salt, shared salt, or a deterministic stub) would have shipped undetected.
+Closed by an additive test (`internal/auth/webcreds/hasher_test.go`, +39 lines,
+0 deletions) asserting that hashing the same password 16× yields all-distinct,
+each-still-verifiable PHC strings.
+
+GREEN — new test passes against the real random-salt `Hash` (full hasher set via
+the sanctioned runner; the spec-094 `internal/config` RED tests are excluded by
+the `-run` selector, so they do not execute):
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestHash|TestVerify|TestDummyHash' --verbose
+=== RUN   TestHash_RoundTrip
+--- PASS: TestHash_RoundTrip (0.22s)
+=== RUN   TestHash_RejectsShortPasswords
+--- PASS: TestHash_RejectsShortPasswords (0.00s)
+=== RUN   TestHash_SaltIsUniquePerInvocation
+--- PASS: TestHash_SaltIsUniquePerInvocation (5.28s)
+=== RUN   TestVerify_WrongPassword
+--- PASS: TestVerify_WrongPassword (0.67s)
+=== RUN   TestVerify_TamperedHash
+--- PASS: TestVerify_TamperedHash (0.21s)
+=== RUN   TestVerify_MalformedPHC
+--- PASS: TestVerify_MalformedPHC (0.00s)
+=== RUN   TestDummyHash_VerifiesAgainstNothing
+--- PASS: TestDummyHash_VerifiesAgainstNothing (0.32s)
+=== RUN   TestVerify_TimingParityWithinConstantFactor
+    hasher_test.go:152: median timings: known-wrong=132.785858ms unknown=122.6541ms
+--- PASS: TestVerify_TimingParityWithinConstantFactor (7.58s)
+PASS
+ok      github.com/smackerel/smackerel/internal/auth/webcreds   15.122s
+[go-unit] go test ./... finished OK
+GREEN_EXIT=0
+```
+
+RED (teeth proof) — `Hash` in `internal/auth/webcreds/hasher.go` TEMPORARILY
+forced to a constant salt (`for i := range salt { salt[i] = 0x42 }` after the
+`rand.Read`; reverted immediately, `git diff internal/auth/webcreds/hasher.go`
+empty afterward). The new test FAILS on the exact regression it guards, while
+**every** pre-existing hasher/verify test still PASSES — proving the gap was
+real and the test is non-tautological:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestHash_|TestVerify_' --verbose
+=== RUN   TestHash_RoundTrip
+--- PASS: TestHash_RoundTrip (0.31s)
+=== RUN   TestHash_RejectsShortPasswords
+--- PASS: TestHash_RejectsShortPasswords (0.00s)
+=== RUN   TestHash_SaltIsUniquePerInvocation
+    hasher_test.go:54: Hash("correct-horse-battery-staple") produced a DUPLICATE PHC string on attempt #1 — salt is not unique per invocation (constant/zero-salt regression). Identical passwords MUST hash to distinct PHC strings.
+--- FAIL: TestHash_SaltIsUniquePerInvocation (0.30s)
+=== RUN   TestVerify_WrongPassword
+--- PASS: TestVerify_WrongPassword (1.00s)
+=== RUN   TestVerify_TamperedHash
+--- PASS: TestVerify_TamperedHash (0.45s)
+=== RUN   TestVerify_MalformedPHC
+--- PASS: TestVerify_MalformedPHC (0.00s)
+=== RUN   TestVerify_TimingParityWithinConstantFactor
+--- PASS: TestVerify_TimingParityWithinConstantFactor (8.72s)
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/auth/webcreds   11.141s
+RED_EXIT=1
+```
+
+Restore confirmed (`hasher.go` returned to its exact committed state via the
+edit tool, NOT `git restore`):
+
+```
+$ git --no-pager diff -- internal/auth/webcreds/hasher.go ; echo "exit=$?"
+exit=0   # empty diff — constant-salt mutation fully reverted
+```
+
+Post-restore GREEN re-confirmation against the real-salt `Hash`:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestHash_SaltIsUniquePerInvocation|TestHash_RoundTrip|TestDummyHash' --verbose
+=== RUN   TestHash_RoundTrip
+--- PASS: TestHash_RoundTrip (0.39s)
+=== RUN   TestHash_SaltIsUniquePerInvocation
+--- PASS: TestHash_SaltIsUniquePerInvocation (3.08s)
+=== RUN   TestDummyHash_VerifiesAgainstNothing
+--- PASS: TestDummyHash_VerifiesAgainstNothing (0.24s)
+ok      github.com/smackerel/smackerel/internal/auth/webcreds   3.970s
+[go-unit] go test ./... finished OK
+FINAL_GREEN_EXIT=0
+```
+
+**Claim Source:** executed.
+
+### Foreign attribution (NOT spec 070)
+
+The working tree carries large uncommitted cross-spec sweep work. The known
+pre-existing RED baseline in `internal/config` (spec-094 weather added required
+`ASSISTANT_SKILLS_WEATHER_*` SST keys without updating the shared
+`internal/config/validate_test.go::setRequiredEnv` fixture) is a **spec-094
+defect**, outside spec 070's owned surface — attributed, NOT fixed here. All
+spec-070 evidence above used a `-run` selector that excludes `internal/config`,
+so those tests never executed and contributed nothing to the captured results.
+No other spec's uncommitted files were modified, reverted, committed, or stashed.
+
+**Claim Source:** executed.

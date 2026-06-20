@@ -1,27 +1,30 @@
 {
   "version": 1,
   "featureDir": "specs/042-tailnet-edge-bind-pattern",
-  "generatedAt": "2026-05-08T00:00:00Z",
+  "generatedAt": "2026-06-17T00:00:00Z",
   "scenarios": [
     {
       "scenarioId": "SCN-042-001",
       "scope": "01-compose-contract-and-lint-test",
-      "title": "Backend ports use the configurable bind address",
+      "title": "Backend ports require adapter-provided bind address",
       "gherkin": {
         "given": "the deploy compose file deploy/compose.deploy.yml",
-        "when": "the file is parsed by the Go unit lint test",
-        "then": "the smackerel-core and smackerel-ml ports entries use the prefix ${HOST_BIND_ADDRESS:-127.0.0.1}:"
+        "when": "the file is parsed by the Go compose contract test",
+        "then": "the smackerel-core and smackerel-ml ports entries use the exact fail-loud prefix ${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}: and neither backend service uses a literal or fallback bind prefix"
       },
-      "gherkinHash": "sha256:placeholder-001",
       "behaviorClass": "api",
       "changeType": "new",
-      "requiredTestType": "e2e-api",
+      "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
         {
           "file": "internal/deploy/compose_contract_test.go",
           "testId": "TestComposeContract_LiveFile"
+        },
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_AdversarialDefaultFallbackBind"
         }
       ],
       "evidenceRefs": [
@@ -36,13 +39,12 @@
       "title": "Infra services have no host port mapping",
       "gherkin": {
         "given": "the deploy compose file deploy/compose.deploy.yml",
-        "when": "the file is parsed by the Go unit lint test",
-        "then": "the postgres and nats services have no ports block"
+        "when": "the file is parsed by the Go compose contract test",
+        "then": "the postgres and nats services have no ports block and neither uses network_mode host"
       },
-      "gherkinHash": "sha256:placeholder-002",
       "behaviorClass": "api",
       "changeType": "new",
-      "requiredTestType": "e2e-api",
+      "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
@@ -53,6 +55,10 @@
         {
           "file": "internal/deploy/compose_contract_test.go",
           "testId": "TestComposeContract_AdversarialInfraHasPorts"
+        },
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_AdversarialNetworkModeHostBypass"
         }
       ],
       "evidenceRefs": [
@@ -64,22 +70,25 @@
     {
       "scenarioId": "SCN-042-003",
       "scope": "01-compose-contract-and-lint-test",
-      "title": "Compose default is safe for local runs",
+      "title": "Missing bind address fails loud",
       "gherkin": {
         "given": "the deploy compose file deploy/compose.deploy.yml",
-        "when": "docker compose -f deploy/compose.deploy.yml --env-file config/generated/home-lab.env config renders the file",
-        "then": "the rendered backend port mappings start with 127.0.0.1: because the SST sets HOST_BIND_ADDRESS=127.0.0.1 in home-lab.env"
+        "when": "docker compose -f deploy/compose.deploy.yml config renders the file without HOST_BIND_ADDRESS in the environment or env file",
+        "then": "Compose exits non-zero with the error HOST_BIND_ADDRESS must be set by deploy adapter and no backend service starts from an implicit bind address"
       },
-      "gherkinHash": "sha256:placeholder-003",
       "behaviorClass": "api",
       "changeType": "new",
-      "requiredTestType": "e2e-api",
+      "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
         {
           "file": "internal/deploy/compose_contract_test.go",
           "testId": "TestComposeContract_LiveFile"
+        },
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_AdversarialDefaultFallbackBind"
         }
       ],
       "evidenceRefs": [
@@ -90,23 +99,26 @@
     },
     {
       "scenarioId": "SCN-042-004",
-      "scope": "02-copilot-guardrail-and-operations-doc",
-      "title": "Operations doc tells devops how to reach infra",
+      "scope": "01-compose-contract-and-lint-test",
+      "title": "Explicit loopback is supplied, not defaulted",
       "gherkin": {
-        "given": "the home-lab compose has no host port for postgres or nats",
-        "when": "a devops user reads docs/Operations.md",
-        "then": "the document shows docker exec command shapes for psql and nats CLI access plus the host-Caddy HTTPS access flow"
+        "given": "an adapter-style env file sets HOST_BIND_ADDRESS=127.0.0.1",
+        "when": "docker compose -f deploy/compose.deploy.yml config renders the file",
+        "then": "the rendered backend port mappings bind to 127.0.0.1: traceable to explicit environment input and the compose source contains no fallback bind syntax"
       },
-      "gherkinHash": "sha256:placeholder-004",
-      "behaviorClass": "ui",
+      "behaviorClass": "api",
       "changeType": "new",
-      "requiredTestType": "e2e-ui",
+      "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
         {
-          "file": "docs/Operations.md",
-          "testId": "doc-lint:devops-access-on-home-lab"
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_AdversarialDefaultFallbackBind"
+        },
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_LiveFile"
         }
       ],
       "evidenceRefs": [
@@ -117,23 +129,22 @@
     },
     {
       "scenarioId": "SCN-042-005",
-      "scope": "01-compose-contract-and-lint-test",
-      "title": "Adversarial: literal 127.0.0.1: would FAIL the lint test",
+      "scope": "02-copilot-guardrail-and-operations-doc",
+      "title": "Operations doc explains infra access without host ports",
       "gherkin": {
-        "given": "an in-test fixture compose YAML where the smackerel-core port prefix is the literal 127.0.0.1: (the spec 020 form)",
-        "when": "the lint contract function is called against that fixture",
-        "then": "the function returns a non-nil error naming the violation"
+        "given": "the home-lab deploy compose has no host port for postgres or nats",
+        "when": "a devops user reads docs/Operations.md",
+        "then": "the document shows docker exec command shapes for psql and NATS CLI access through a generic <deploy-host> placeholder plus the host-Caddy HTTPS access flow"
       },
-      "gherkinHash": "sha256:placeholder-005",
-      "behaviorClass": "api",
+      "behaviorClass": "docs",
       "changeType": "new",
-      "requiredTestType": "e2e-api",
+      "requiredTestType": "doc-lint",
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
         {
-          "file": "internal/deploy/compose_contract_test.go",
-          "testId": "TestComposeContract_AdversarialLiteralBind"
+          "file": "docs/Operations.md",
+          "testId": "doc-lint:devops-access-on-home-lab"
         }
       ],
       "evidenceRefs": [
@@ -145,16 +156,15 @@
     {
       "scenarioId": "SCN-042-006",
       "scope": "02-copilot-guardrail-and-operations-doc",
-      "title": "Copilot guardrail prevents regression to literal 127.0.0.1",
+      "title": "Copilot guardrail prevents fallback regression",
       "gherkin": {
         "given": "a future agent reads .github/copilot-instructions.md",
-        "when": "that agent considers re-introducing literal 127.0.0.1: prefixes in deploy/compose.deploy.yml for backend services",
-        "then": "the Tailnet-Edge Bind Pattern subsection under Required Runtime Standards explicitly forbids it and points to spec 042"
+        "when": "that agent edits deploy/compose.deploy.yml or HOST_BIND_ADDRESS docs",
+        "then": "the Tailnet-Edge Bind Pattern subsection requires fail-loud HOST_BIND_ADDRESS substitution for deploy compose backend ports, states 127.0.0.1 is valid only as an explicit value, and identifies fallback bind syntax as forbidden"
       },
-      "gherkinHash": "sha256:placeholder-006",
-      "behaviorClass": "ui",
+      "behaviorClass": "docs",
       "changeType": "new",
-      "requiredTestType": "e2e-ui",
+      "requiredTestType": "doc-lint",
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
