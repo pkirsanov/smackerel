@@ -187,3 +187,19 @@ repo's scope; no knb change is made.
   cosign-keyless, per-env bundle sha256 — all unchanged for what is built.
 - Build-Once-Deploy-Many client integrity: on a release, clients are still built
   once per sourceSha, signed, pushed by digest, and pinned in the manifest.
+
+### Single-Implementation Justification
+
+There is exactly **one** implementation and **no** foundation/overlay split, so
+a Capability Foundation / Concrete Implementations / Variation Axes model does
+not apply. The delivery is four additive `if:` guards + one `workflow_dispatch`
+input on the single existing `build` workflow. The release-intent and
+non-release behaviors are **two branches of one gate**
+(`startsWith(github.ref,'refs/tags/') || github.event.inputs.build_clients ==
+'true'`), not two concrete implementations of a capability — the same jobs,
+steps, and manifest-emission heredoc execute in both branches; only the optional
+`clients.artifacts[]` append is gated. No new abstraction, interface, provider,
+or strategy is introduced; the drift-detector contract test asserts the single
+conditional shape with adversarial coverage. A second concrete implementation
+would contradict the design's minimality invariant (no parser change, no new
+script, no job removed).

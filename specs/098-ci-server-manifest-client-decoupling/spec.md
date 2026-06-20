@@ -1,6 +1,6 @@
 # Spec 098 — CI Server-Manifest / Client-Build Decoupling
 
-**Status:** in_progress
+**Status:** done
 **Workflow mode:** full-delivery · **Status ceiling:** done
 **Relates to:** [085-client-binary-release](../085-client-binary-release/spec.md) (preserves its release contract), [086-local-client-build](../086-local-client-build/spec.md) (clients-absent manifest precedent), [087-open-knowledge-genuine-synthesis](../087-open-knowledge-genuine-synthesis/spec.md) / [088-runtime-switchable-models](../088-runtime-switchable-models/spec.md) (CI-path deploys this unblocks)
 
@@ -130,6 +130,24 @@ operational reliability without altering product behavior. The relevant binding
 contracts are engineering, not product: Build-Once-Deploy-Many (bubbles G074),
 the CI trust boundary (no ssh/apply in CI), and NO-DEFAULTS / fail-loud SST —
 all preserved unchanged.
+
+### Single-Capability Justification
+
+This spec introduces **no** reusable runtime capability and **no** second
+provider/adapter/strategy/variant. The change is a single conditional gate on
+the **one** existing CI build pipeline (`.github/workflows/build.yml`): four
+additive `if:` guards plus one `workflow_dispatch` input decide *whether* the
+already-present `build-clients` job runs and *whether* the already-present
+`publish-build-manifest` job appends an optional clients block. The
+"server-only" and "client-pinning" manifests are **not** two implementations of
+a manifest capability — they are the **same** manifest with an optional
+`clients.artifacts[]` block present or absent, a shape already accepted in this
+repo (the `local-build-manifest` clients-absent precedent that `promote.sh`
+already consumes). The G094 proportionality triggers fire on incidental
+vocabulary ("manifest", "platform", "client", "connector"), not on a real
+capability fork: there is exactly one pipeline, one manifest schema, and one
+consumer path. A capability foundation with concrete implementations and
+variation axes would be over-engineering for a single additive workflow gate.
 
 ## Cross-Repo Implication (knb — documented, NOT changed here)
 
