@@ -5,8 +5,11 @@
 // (token present exactly once), the value-safe error path (no token echoed),
 // the 503-when-nil guard, the PRG revoke + ?notice=race, and CSP-cleanliness
 // (no inline <script> / event handlers). The live-stack flow + the real
-// webAuthMiddleware anonymous-block are covered by the e2e-ui spec and
-// internal/api/web_invites_auth_test.go.
+// webAuthMiddleware anonymous-block are covered by the e2e-ui spec
+// (web/pwa/tests/cardrewards_invites.spec.ts, SCN-093-16); the in-package
+// TestAdminInvites_AnonymousBlocked below uses a faithful group-gate because
+// internal/web imports internal/api, so an in-package api test would
+// import-cycle.
 package web
 
 import (

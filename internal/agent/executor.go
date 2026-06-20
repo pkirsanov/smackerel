@@ -593,31 +593,51 @@ func (e *Executor) Run(parent context.Context, sc *Scenario, env IntentEnvelope)
 				continue
 			}
 
-			// 3d — dispatch with per-tool deadline.
+			// 3d — dispatch with per-tool deadline. invokeToolHandler
+			// contains panics so a panicking tool (a foreseeable bug in
+			// any current or future first-party tool — e.g. an
+			// entropy-starved crypto/rand.Read in the notification tool,
+			// or a nil deref on a schema-valid-but-unexpected payload)
+			// cannot escape the executor. Uncontained, such a panic
+			// crashes the whole Go core process on the
+			// scheduler/telegram/NATS goroutines (those call sites have no
+			// net/http recover) and, on the API path, leaks the tracer pad
+			// and orphans the half-published trace (per-call events
+			// already on the AGENT NATS stream with no persisted
+			// agent_traces row and no agent.complete).
 			toolMeta, _ := ByName(call.Name)
 			perToolMs := toolMeta.PerCallTimeoutMs
 			if perToolMs <= 0 {
 				perToolMs = sc.Limits.PerToolTimeoutMs
 			}
 			toolCtx, toolCancel := context.WithTimeout(ctx, time.Duration(perToolMs)*time.Millisecond)
-			toolResult, toolErr := toolMeta.Handler(toolCtx, call.Arguments)
+			toolResult, toolErr, toolPanicked := invokeToolHandler(toolCtx, toolMeta.Handler, call.Arguments)
 			toolCancel()
 
 			if toolErr != nil {
 				// Tool errors do NOT terminate the loop — the LLM gets
-				// to recover (BS-015).
+				// to recover (BS-015). A contained panic is the
+				// panic-class extension of that rule: recorded as a
+				// tool-error with reason "tool_panic" (distinct from a
+				// returned "tool_error" so operators can spot a crashing
+				// tool) while the loop still continues. The bounded loop
+				// limit caps any deterministically-panicking tool.
+				rejectionReason := "tool_error"
+				if toolPanicked {
+					rejectionReason = "tool_panic"
+				}
 				rec := ExecutedToolCall{
 					Seq:             seq,
 					Name:            call.Name,
 					Arguments:       cloneRaw(call.Arguments),
 					Outcome:         OutcomeToolError,
-					RejectionReason: "tool_error",
+					RejectionReason: rejectionReason,
 					Error:           toolErr.Error(),
 					LatencyMs:       latencyMs(callStart, e.nowFunc()),
 				}
 				result.ToolCalls = append(result.ToolCalls, rec)
 				e.tracer.RecordToolError(traceID, rec)
-				turnMessages = appendToolErrorMessage(turnMessages, call, "tool_error", toolErr.Error())
+				turnMessages = appendToolErrorMessage(turnMessages, call, rejectionReason, toolErr.Error())
 				continue
 			}
 
@@ -719,6 +739,29 @@ func latencyMs(start, end time.Time) int {
 		return 0
 	}
 	return int(d / time.Millisecond)
+}
+
+// invokeToolHandler runs a tool handler with panic containment. A
+// panicking handler is converted into (nil, err, panicked=true) instead
+// of unwinding the stack. This matters because the executor is the
+// generic runner for every current and future tool: an uncontained
+// panic would crash the whole Go core process on the
+// scheduler/telegram/NATS call sites (none of which wrap Bridge.Invoke
+// in a recover the way net/http wraps an HTTP handler) and, on the API
+// path, leak the tracer pad and orphan the half-published trace. The
+// executor treats the returned error as a per-call tool-error (reason
+// "tool_panic") so the §5.1 loop records it and continues, identical to
+// the BS-015 handler-error recovery path.
+func invokeToolHandler(ctx context.Context, handler ToolHandler, args json.RawMessage) (result json.RawMessage, err error, panicked bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = nil
+			err = fmt.Errorf("tool handler panicked: %v", r)
+			panicked = true
+		}
+	}()
+	result, err = handler(ctx, args)
+	return result, err, false
 }
 
 // cloneRaw returns an independent copy of raw so callers cannot mutate

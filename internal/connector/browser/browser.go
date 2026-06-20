@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -95,6 +96,29 @@ func ShouldSkip(url string, skipDomains []string) bool {
 		}
 	}
 	return false
+}
+
+// isSafeURL reports whether rawURL uses an http or https scheme. A browser
+// history entry is untrusted external content: the urls.url column of a
+// crafted, shared, or profile-synced Chrome History database can hold ANY
+// scheme, and the connector emits the URL verbatim as RawArtifact.URL /
+// RawContent / SourceRef. Dropping non-http(s) schemes (javascript:, data:,
+// vbscript:, …) at the ingestion boundary prevents a stored dangerous-scheme
+// URL from later reaching an href/render sink as DOM-XSS (CWE-20). This mirrors
+// the established control in the markets (isSafeURL), twitter (isSafeURL), and
+// alerts (sanitizeExternalURL) connectors. A URL that fails to parse is treated
+// as unsafe (fail-closed).
+func isSafeURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+		return true
+	default:
+		return false
+	}
 }
 
 // ParseChromeHistorySince reads Chrome history entries with visit_time > cursor.

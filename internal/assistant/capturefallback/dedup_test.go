@@ -230,3 +230,112 @@ func TestDedup_CaptureWithoutUserFails(t *testing.T) {
 		t.Fatal("expected Capture(no user) to return ErrMissingUser")
 	}
 }
+
+// failingStore is a DedupStore whose Record method always fails,
+// used to test orphan cleanup behavior.
+type failingStore struct {
+	*MemDedupStore
+	recordErr error
+}
+
+func (s *failingStore) Record(_ context.Context, _ string, _ string, _ Decision) error {
+	return s.recordErr
+}
+
+// cleanableWriter is an IdeaWriter that implements IdeaCleaner for
+// testing orphan cleanup.
+type cleanableWriter struct {
+	stubWriter
+	deletedIDs []string
+	deleteErr  error
+}
+
+func (w *cleanableWriter) DeleteIdea(_ context.Context, artifactID string) error {
+	w.deletedIDs = append(w.deletedIDs, artifactID)
+	return w.deleteErr
+}
+
+// TestCaptureForUser_RecordFailure_CleansUpOrphan verifies that when
+// Record fails after WriteIdea succeeds, the orphaned artifact is
+// cleaned up if the writer implements IdeaCleaner. This tests the
+// compensating transaction pattern added to prevent orphan Ideas
+// without dedup metadata.
+func TestCaptureForUser_RecordFailure_CleansUpOrphan(t *testing.T) {
+	store := &failingStore{
+		MemDedupStore: NewMemDedupStore(),
+		recordErr:     fmt.Errorf("simulated DB constraint violation"),
+	}
+	writer := &cleanableWriter{}
+	clockNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	p := newScope3Policy(t, store, writer, func() time.Time { return clockNow })
+
+	req := Request{
+		UserID:             "user-orphan-test",
+		Transport:          "http",
+		TransportMessageID: "msg-orphan-1",
+		OriginalText:       "test orphan cleanup",
+		Cause:              CauseUnrouted,
+	}
+
+	dec := mustDecide(t, p, req)
+	_, err := p.CaptureForUser(context.Background(), req.UserID, dec)
+	if err == nil {
+		t.Fatal("expected CaptureForUser to fail when Record fails")
+	}
+
+	// Verify WriteIdea was called (artifact created)
+	if got := writer.calls.Load(); got != 1 {
+		t.Errorf("WriteIdea calls = %d, want 1", got)
+	}
+
+	// Verify DeleteIdea was called (orphan cleanup attempted)
+	if len(writer.deletedIDs) != 1 {
+		t.Fatalf("DeleteIdea calls = %d, want 1 (orphan cleanup must be attempted)", len(writer.deletedIDs))
+	}
+	if writer.deletedIDs[0] != "idea-1" {
+		t.Errorf("DeleteIdea called with %q, want %q", writer.deletedIDs[0], "idea-1")
+	}
+}
+
+// TestCaptureForUser_RecordFailure_NoCleanerInterface verifies that
+// when Record fails and the writer does NOT implement IdeaCleaner,
+// the error is still returned (orphan is logged but not cleaned).
+// This ensures backward compatibility with writers that don't support
+// cleanup.
+func TestCaptureForUser_RecordFailure_NoCleanerInterface(t *testing.T) {
+	store := &failingStore{
+		MemDedupStore: NewMemDedupStore(),
+		recordErr:     fmt.Errorf("simulated network error"),
+	}
+	// Use stubWriter which does NOT implement IdeaCleaner
+	writer := &stubWriter{}
+	clockNow := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	p := newScope3Policy(t, store, writer, func() time.Time { return clockNow })
+
+	req := Request{
+		UserID:             "user-no-cleaner-test",
+		Transport:          "telegram",
+		TransportMessageID: "msg-no-cleaner-1",
+		OriginalText:       "test no cleaner interface",
+		Cause:              CauseOpenKnowledgeNoGround,
+	}
+
+	dec := mustDecide(t, p, req)
+	_, err := p.CaptureForUser(context.Background(), req.UserID, dec)
+	if err == nil {
+		t.Fatal("expected CaptureForUser to fail when Record fails")
+	}
+
+	// Verify WriteIdea was called (artifact created, now orphaned)
+	if got := writer.calls.Load(); got != 1 {
+		t.Errorf("WriteIdea calls = %d, want 1", got)
+	}
+
+	// Writer doesn't implement IdeaCleaner, so no cleanup is possible.
+	// The orphan is logged but the error is still returned correctly.
+	// This test ensures the function returns the correct error even
+	// when cleanup isn't available.
+	if err.Error() != "capturefallback: record dedup: simulated network error" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

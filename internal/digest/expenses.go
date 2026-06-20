@@ -111,7 +111,7 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 			var classification, currency, total string
 			var count int
 			if err := summaryRows.Scan(&classification, &currency, &count, &total); err != nil {
-				continue
+				return nil, fmt.Errorf("scan expense digest summary: %w", err)
 			}
 			summary.TotalCount += count
 			switch classification {
@@ -120,6 +120,9 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 			case "personal":
 				summary.PersonalCount += count
 			}
+		}
+		if err := summaryRows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate expense digest summary: %w", err)
 		}
 		if summary.TotalCount > 0 {
 			// Query totals by currency (separate GROUP BY without classification
@@ -138,9 +141,12 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 				for currRows.Next() {
 					var ct ExpenseDigestCurrTotal
 					if err := currRows.Scan(&ct.Currency, &ct.Total); err != nil {
-						continue
+						return nil, fmt.Errorf("scan expense digest currency total: %w", err)
 					}
 					summary.TotalByCurrency = append(summary.TotalByCurrency, ct)
+				}
+				if err := currRows.Err(); err != nil {
+					return nil, fmt.Errorf("iterate expense digest currency totals: %w", err)
 				}
 			}
 			digestCtx.Summary = summary
@@ -174,9 +180,12 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 		for reviewRows.Next() {
 			var item ExpenseDigestReviewItem
 			if err := reviewRows.Scan(&item.Vendor, &item.Amount, &item.Reason); err != nil {
-				continue
+				return nil, fmt.Errorf("scan expense digest review item: %w", err)
 			}
 			digestCtx.NeedsReview = append(digestCtx.NeedsReview, item)
+		}
+		if err := reviewRows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate expense digest review items: %w", err)
 		}
 	}
 
@@ -200,9 +209,12 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 		for suggRows.Next() {
 			var sugg ExpenseDigestSuggestion
 			if err := suggRows.Scan(&sugg.Vendor, &sugg.Amount, &sugg.SuggestedClass, &sugg.Evidence); err != nil {
-				continue
+				return nil, fmt.Errorf("scan expense digest suggestion: %w", err)
 			}
 			digestCtx.Suggestions = append(digestCtx.Suggestions, sugg)
+		}
+		if err := suggRows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate expense digest suggestions: %w", err)
 		}
 	}
 
@@ -226,9 +238,12 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 		for missingRows.Next() {
 			var m ExpenseDigestMissing
 			if err := missingRows.Scan(&m.ServiceName, &m.Amount); err != nil {
-				continue
+				return nil, fmt.Errorf("scan expense digest missing receipt: %w", err)
 			}
 			digestCtx.MissingReceipts = append(digestCtx.MissingReceipts, m)
+		}
+		if err := missingRows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate expense digest missing receipts: %w", err)
 		}
 	}
 
@@ -255,9 +270,12 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 		for unusualRows.Next() {
 			var u ExpenseDigestUnusual
 			if err := unusualRows.Scan(&u.Vendor, &u.Amount); err != nil {
-				continue
+				return nil, fmt.Errorf("scan expense digest unusual charge: %w", err)
 			}
 			digestCtx.UnusualCharges = append(digestCtx.UnusualCharges, u)
+		}
+		if err := unusualRows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate expense digest unusual charges: %w", err)
 		}
 	}
 

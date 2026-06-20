@@ -51,9 +51,40 @@ var (
 		"charge", "receipt", "billing", "subscription", "monthly",
 		"annual", "renewal", "trial", "payment", "invoice",
 	}
-	// Match patterns like $9.99, 9.99 USD, USD 9.99
-	amountPattern = regexp.MustCompile(`\$\s*(\d+\.?\d*)|(\d+\.?\d*)\s*USD|USD\s*(\d+\.?\d*)`)
+	// IMP-006-R14-001: Extended to detect USD ($), EUR (€), and GBP (£) patterns.
+	// Match patterns like $9.99, €9.99, £9.99, 9.99 USD, USD 9.99, 9.99 EUR, etc.
+	amountPatternUSD = regexp.MustCompile(`\$\s*(\d+\.?\d*)|(\d+\.?\d*)\s*USD|USD\s*(\d+\.?\d*)`)
+	amountPatternEUR = regexp.MustCompile(`€\s*(\d+\.?\d*)|(\d+\.?\d*)\s*EUR|EUR\s*(\d+\.?\d*)`)
+	amountPatternGBP = regexp.MustCompile(`£\s*(\d+\.?\d*)|(\d+\.?\d*)\s*GBP|GBP\s*(\d+\.?\d*)`)
 )
+
+// cancellationEventPhrases denote an actual cancellation EVENT in a billing
+// email. CHA-006-R17-001/002: the previous detector used the bare substrings
+// "cancel" and "unsubscribe", which produced pervasive false cancellations —
+// "cancel anytime" appears in a large share of legitimate active-subscription
+// receipts, and an "Unsubscribe" footer link appears in virtually every billing
+// email. Because DetectSubscriptions routes any "cancelled" parse into
+// UPDATE ... SET status='cancelled' WHERE service_name=$1 AND status='active',
+// either false positive would silently cancel a live subscription on its next
+// receipt. We now require an explicit cancellation-event phrase, covering both
+// UK ("cancelled") and US ("canceled") spellings. Future-tense phrasing
+// ("will be cancelled") is intentionally excluded: a scheduled cancellation
+// leaves the subscription active until the period ends.
+var cancellationEventPhrases = []string{
+	"has been cancelled", "has been canceled",
+	"was cancelled", "was canceled",
+	"subscription cancelled", "subscription canceled",
+	"membership cancelled", "membership canceled",
+	"plan cancelled", "plan canceled",
+	"successfully cancelled", "successfully canceled",
+	"you have cancelled", "you have canceled",
+	"you've cancelled", "you've canceled",
+	"we have cancelled", "we have canceled",
+	"we've cancelled", "we've canceled",
+	"order cancelled", "order canceled",
+	"cancellation confirmation", "cancellation confirmed",
+	"your cancellation",
+}
 
 // DetectSubscriptions scans email artifacts for recurring billing patterns per R-504.
 func (e *Engine) DetectSubscriptions(ctx context.Context) ([]Subscription, error) {
@@ -93,6 +124,24 @@ func (e *Engine) DetectSubscriptions(ctx context.Context) ([]Subscription, error
 		sub := parseSubscription(artifactID, title, content, sender)
 		if sub == nil {
 			continue
+		}
+
+		// IMP-006-R14-002: When a cancellation email arrives for an existing
+		// active subscription, update the status instead of creating a duplicate.
+		if sub.Status == "cancelled" {
+			updated, updateErr := e.Pool.Exec(ctx, `
+				UPDATE subscriptions
+				SET status = 'cancelled', cancelled_at = NOW()
+				WHERE service_name = $1 AND status = 'active'
+			`, sub.ServiceName)
+			if updateErr != nil {
+				slog.Warn("update subscription status failed", "service", sub.ServiceName, "error", updateErr)
+			} else if updated.RowsAffected() > 0 {
+				slog.Info("subscription cancelled", "service", sub.ServiceName)
+				detected = append(detected, *sub)
+				continue
+			}
+			// If no existing active subscription found, fall through to insert
 		}
 
 		// Insert into database
@@ -183,13 +232,15 @@ func parseSubscription(artifactID, title, content, sender string) *Subscription 
 		return nil
 	}
 
-	amount := extractAmount(title + " " + content)
-	freq := detectFrequency(title + " " + content)
+	combinedText := title + " " + content
+	amount, currency := extractAmountWithCurrency(combinedText)
+	freq := detectFrequency(combinedText)
 	category := categorizeService(serviceName)
 	status := "active"
-	if containsAny(strings.ToLower(title+" "+content), []string{"cancel", "cancelled", "unsubscribe"}) {
+	lowerText := strings.ToLower(combinedText)
+	if containsAny(lowerText, cancellationEventPhrases) {
 		status = "cancelled"
-	} else if containsAny(strings.ToLower(title+" "+content), []string{"free trial", "trial ends", "trial exp"}) {
+	} else if containsAny(lowerText, []string{"free trial", "trial ends", "trial exp"}) {
 		status = "trial"
 	}
 
@@ -197,7 +248,7 @@ func parseSubscription(artifactID, title, content, sender string) *Subscription 
 		ID:           ulid.Make().String(),
 		ServiceName:  serviceName,
 		Amount:       amount,
-		Currency:     "USD",
+		Currency:     currency,
 		BillingFreq:  freq,
 		Category:     category,
 		Status:       status,
@@ -242,7 +293,10 @@ func extractServiceName(sender, title string) string {
 	return ""
 }
 
-func extractAmount(text string) float64 {
+// extractAmountWithCurrency extracts the amount and currency from text.
+// IMP-006-R14-001: Supports USD ($), EUR (€), and GBP (£) detection.
+// Returns (amount, currency) where currency defaults to "USD" if none detected.
+func extractAmountWithCurrency(text string) (float64, string) {
 	// Limit input to first 2000 chars to bound regex cost on large emails.
 	// Use TruncateUTF8 to avoid splitting multi-byte runes (CWE-135).
 	const maxExtractLen = 2000
@@ -251,7 +305,23 @@ func extractAmount(text string) float64 {
 	}
 	// Strip commas from amounts like "$1,299.99" before matching.
 	normalized := strings.ReplaceAll(text, ",", "")
-	matches := amountPattern.FindStringSubmatch(normalized)
+
+	// Try EUR first (€ symbol is distinctive), then GBP, then USD.
+	if amount := extractAmountFromPattern(normalized, amountPatternEUR); amount > 0 {
+		return amount, "EUR"
+	}
+	if amount := extractAmountFromPattern(normalized, amountPatternGBP); amount > 0 {
+		return amount, "GBP"
+	}
+	if amount := extractAmountFromPattern(normalized, amountPatternUSD); amount > 0 {
+		return amount, "USD"
+	}
+	return 0, "USD" // default to USD if no amount found
+}
+
+// extractAmountFromPattern extracts the first matching amount from the pattern.
+func extractAmountFromPattern(text string, pattern *regexp.Regexp) float64 {
+	matches := pattern.FindStringSubmatch(text)
 	if len(matches) == 0 {
 		return 0
 	}
@@ -263,6 +333,12 @@ func extractAmount(text string) float64 {
 		}
 	}
 	return 0
+}
+
+// extractAmount extracts the amount from text (USD assumed for backward compatibility).
+func extractAmount(text string) float64 {
+	amount, _ := extractAmountWithCurrency(text)
+	return amount
 }
 
 func detectFrequency(text string) string {

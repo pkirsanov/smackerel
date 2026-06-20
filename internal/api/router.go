@@ -79,9 +79,11 @@ func NewRouter(deps *Dependencies) http.Handler {
 
 			// Spec 069 SCOPE-1a — Assistant HTTP transport.
 			// POST /api/assistant/turn routes through the late-bound
-			// HTTPAdapter; the adapter enforces its own body cap and
-			// rate limits and produces a v1 envelope on success and
-			// on error.
+			// HTTPAdapter. The body-size cap (413), per-user rate limit
+			// (429), and assistant:turn scope-claim gate (403) are
+			// enforced by the PreFacadeChain middleware wired in front of
+			// the adapter in cmd/core (wiring_assistant_facade.go); the
+			// adapter produces a v1 envelope on success and on error.
 			if deps.AssistantTurnHandler != nil {
 				r.Method(http.MethodPost, "/assistant/turn", deps.AssistantTurnHandler)
 			}

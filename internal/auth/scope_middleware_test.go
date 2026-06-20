@@ -161,6 +161,63 @@ func TestRequireScope_500OnAbsentSession(t *testing.T) {
 	}
 }
 
+// TestRequireScope_UnknownSessionSourceEnforcedNotBypassed is an
+// adversarial coverage lock on the bypass ALLOWLIST. The bypass switch
+// in RequireScope is the ONLY branch that calls next.ServeHTTP without
+// checking scopes, so it is the single fail-open-capable code path.
+// Spec 060 design §4 makes the bypass an explicit allowlist of exactly
+// {SessionSourceSharedToken, SessionSourceBootstrap}. The existing
+// bypass tests prove those two KNOWN sources pass through; this test
+// pins the complementary default-deny invariant: a session whose
+// Source is NEITHER of those (a hypothetical future / unrecognized
+// source) MUST fall through to per-user scope enforcement, NEVER
+// bypass.
+//
+// If a future refactor turns the bypass switch into a denylist or adds
+// a `default:` pass-through, sub-case A fails loudly — preventing a
+// silent privilege-escalation regression where a newly-introduced
+// SessionSource is accidentally granted all-scopes. Sub-case B proves
+// the assertion is non-tautological: the SAME unknown source is
+// admitted when (and only when) it carries the required scope, so the
+// 403 in sub-case A is meaningfully about the missing scope on the
+// enforcement path, not a blanket deny.
+func TestRequireScope_UnknownSessionSourceEnforcedNotBypassed(t *testing.T) {
+	const unknown = SessionSource("future_unrecognized_source")
+
+	t.Run("absent_scope_rejected_not_bypassed", func(t *testing.T) {
+		sharedBefore := testutil.ToFloat64(metrics.AuthScopeCheckBypassed.WithLabelValues("shared_token"))
+		bootstrapBefore := testutil.ToFloat64(metrics.AuthScopeCheckBypassed.WithLabelValues("bootstrap"))
+		rejectBefore := testutil.ToFloat64(metrics.AuthScopeRejected.WithLabelValues("admin:users", "mallory"))
+
+		mw := RequireScope("admin:users")
+		sess := &Session{Source: unknown, UserID: "mallory", Scopes: nil}
+		rec := serveWithSession(t, mw, sess, "POST", "/v1/admin/users")
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("unknown session source with no scopes MUST be enforced (403), got %d body=%s", rec.Code, rec.Body.String())
+		}
+		rejectAfter := testutil.ToFloat64(metrics.AuthScopeRejected.WithLabelValues("admin:users", "mallory"))
+		if rejectAfter-rejectBefore != 1 {
+			t.Errorf("AuthScopeRejected delta: got %v want 1 (unknown source MUST take the enforcement/reject path)", rejectAfter-rejectBefore)
+		}
+		// The bypass counter MUST NOT move for a non-allowlisted source.
+		sharedAfter := testutil.ToFloat64(metrics.AuthScopeCheckBypassed.WithLabelValues("shared_token"))
+		bootstrapAfter := testutil.ToFloat64(metrics.AuthScopeCheckBypassed.WithLabelValues("bootstrap"))
+		if sharedAfter != sharedBefore || bootstrapAfter != bootstrapBefore {
+			t.Errorf("bypass counter moved for an unknown source — the bypass allowlist MUST be exactly {shared_token, bootstrap}")
+		}
+	})
+
+	t.Run("present_scope_admitted_via_enforcement", func(t *testing.T) {
+		mw := RequireScope("admin:users")
+		sess := &Session{Source: unknown, UserID: "mallory", Scopes: []string{"admin:users"}}
+		rec := serveWithSession(t, mw, sess, "POST", "/v1/admin/users")
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("unknown source WITH the required scope present MUST be admitted by enforcement (202), got %d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
 // TestRequireScope_NotWiredOnExistingEndpoints is a structural guard
 // — spec 060 ships ZERO endpoint wiring. The grep is here so that a
 // future agent who hooks RequireScope into an internal/api/ route as

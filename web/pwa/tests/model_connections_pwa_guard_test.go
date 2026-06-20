@@ -11,15 +11,15 @@
 // check ships with an adversarial twin proving the guard detects a regression.
 //
 // Contracts pinned:
-//   1. WRITE-ONLY SECRET — the only credential input is type=password,
-//      autocomplete=off, empty on load, never pre-filled, never echoed; NO
-//      reveal/show/copy/unmask control, NO text-type secret input, and no
-//      assignment of server data into an input value.
-//   2. OPERATOR BOUNDARY — every page handles 401 (→ /login?next=) and 403
-//      (→ operator-only notice with no setup affordances).
-//   3. TRUTHFUL TEST — the detail page renders a failed probe as a role=alert
-//      danger banner via an explicit outcome==="ok" branch, never a false
-//      success and never an Ollama substitute.
+//  1. WRITE-ONLY SECRET — the only credential input is type=password,
+//     autocomplete=off, empty on load, never pre-filled, never echoed; NO
+//     reveal/show/copy/unmask control, NO text-type secret input, and no
+//     assignment of server data into an input value.
+//  2. OPERATOR BOUNDARY — every page handles 401 (→ /login?next=) and 403
+//     (→ operator-only notice with no setup affordances).
+//  3. TRUTHFUL TEST — the detail page renders a failed probe as a role=alert
+//     danger banner via an explicit outcome==="ok" branch, never a false
+//     success and never an Ollama substitute.
 package webcodegen_drift_test
 
 import (

@@ -197,11 +197,13 @@ func (ec *ExpenseClassifier) GenerateSuggestions(ctx context.Context) (int, erro
 	for rows.Next() {
 		var c candidate
 		if err := rows.Scan(&c.artifactID, &c.vendor); err != nil {
-			continue
+			return 0, fmt.Errorf("scan uncategorized expense candidate: %w", err)
 		}
 		candidates = append(candidates, c)
 	}
-
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate uncategorized expense candidates: %w", err)
+	}
 	created := 0
 	for _, c := range candidates {
 		// Check suppression
