@@ -1000,7 +1000,7 @@ Block summary (verbatim from guard output):
 | state.json workflowMode=improve-existing, releaseTrain=mvp, flagsIntroduced=[] | ✅ |
 | completedPhaseClaims covers run phases | ⚠️ — covers analyze→security but missing required implement/test/audit/chaos/docs (AUDIT-078-A02) |
 | Anti-fabrication (Gate G021) — claims backed by tool output | ⚠️ — most claims have evidence anchors, but identical timestamps trigger fabrication heuristic (AUDIT-078-A04) |
-| No env-specific content (real hostnames, IPs) in spec 078 | ✅ — grep for `Evo-X2|ts\.net|100\.|192\.168\.` in specs/078 returns zero matches |
+| No env-specific content (real hostnames, IPs) in spec 078 | ✅ — grep for `<deploy-host>|ts\.net|100\.|192\.168\.` in specs/078 returns zero matches |
 | No `--no-verify` traces in any phase | ✅ — grep for `--no-verify` in specs/078 returns zero matches |
 | Independent test re-execution (Tier-2) | ✅ — surfacing unit + scheduler + metrics + config packages PASS this session (per Simplify/Stabilize evidence); 3/3 e2e PASS (`/tmp/surf-e2e2.log:233-238`) |
 
@@ -1374,4 +1374,134 @@ the live SLO.
 - `specs/078-cross-surface-surfacing-prioritizer/report.md` (this section appended)
 
 <!-- bubbles:g040-skip-end -->
+
+---
+
+### Regression — 2026-06-17 (stochastic-quality-sweep diagnostic round)
+
+**Agent:** `bubbles.workflow` (parent-expanded `regression-to-doc` mapped child round)
+**Mode:** `regression-to-doc` (statusCeiling `docs_updated`; **DIAGNOSTIC ONLY** — spec 078 stays `done`; no DoD checkbox, scope status, or `state.json` mutation)
+**executionModel:** `parent-expanded-child-mode` (nested `runSubagent` unavailable; phase-owner work expanded in the current runtime — `regression-to-doc` is not top-level-runtime-locked)
+**Trigger:** detect regressions to spec 078's surfacing-prioritizer surface attributable to cross-spec uncommitted working-tree changes (73 uncommitted files across the active sweep).
+**Claim Source:** terminal exec output + read-only `git diff`.
+
+#### Step 1 — Owned-surface test baseline (captured exit codes)
+
+| Command | Result | Exit |
+|---------|--------|------|
+| `go test -count=1 -v ./internal/intelligence/surfacing/...` | 10/10 PASS (`controller_test.go` + `suppression_test.go`; `chaos_test.go` is `//go:build chaos`-gated and excluded by default; benchmarks not run) | `0` |
+| `go test -count=1 ./internal/scheduler/... ./internal/metrics/...` | both `ok` (scheduler 5.067s, metrics 0.097s) | `0` |
+
+`go test ./internal/config/...` was **deliberately not run** this round: the config package carries foreign uncommitted churn (Step 2) and the round guidance is to avoid compiling it; attribution was done via read-only `git diff`. The green `scheduler`/`metrics` runs already prove the config package's NON-test code (`secrets.go`) compiles cleanly as a transitive dependency, so no foreign compile regression flows into spec 078's surface.
+
+Surfacing unit tests observed PASS (10):
+`TestController_BudgetExhaustionDefersNonUrgentCandidates`,
+`TestController_DuplicateContentKeyDedupedAcrossChannels` (the dedupe test named in the 2026-06-16 `scopes.md` citation reconciliation),
+`TestController_AcknowledgedContentSuppressesFollowups`,
+`TestController_UrgentEscalationBypassesExhaustedBudget`,
+`TestController_UrgentEscalationDisabledHoldsCandidate`,
+`TestNewController_FailsLoudOnZeroSST`,
+`TestDedupeIndex_WindowExpiry`,
+`TestBudgetTracker_DailyRollover`,
+`TestInMemoryAck_OpportunisticEvictionDropsExpiredEntries`,
+`TestInMemoryAck_GCKeepsRecentEntriesWithinRetention`.
+
+(The last two confirm STAB-078-S03's unbounded-ack-map finding from the 2026-06-03 stabilize pass has since been closed — opportunistic GC is present and tested. Progress, not regression.)
+
+#### Step 2 — Cross-spec uncommitted attribution
+
+- Working tree carries **73 uncommitted files** (active sweep). The ONLY uncommitted file touching spec 078's surface (`internal/intelligence/surfacing/`, `internal/metrics/surfacing.go`, scheduler wiring, `specs/078-…/`) is **`specs/078-cross-surface-surfacing-prioritizer/scopes.md`** — spec 078's OWN prior-round citation reconciliation (docs-only; no behavior). Expected, not a regression.
+- The `internal/intelligence/surfacing` package has **zero non-stdlib imports** (`context`, `fmt`, `time` only) → structurally immune to the 73-file foreign sweep. All five `*.go` source files are clean (unmodified) in the working tree.
+- **Attribution correction:** the round brief pre-declared a "known" foreign breakage of `internal/config/validate_test.go` from spec-094 weather work (`ASSISTANT_SKILLS_WEATHER_*`). That condition is **not present** in the current working tree. The actual foreign `internal/config` churn is **spec-051 HARDEN-051-H1** database-password-extraction hardening — a self-consistent `secrets.go` (`strings.Index` over `LastIndex`) + `validate_test.go` (`multi-at` adversarial case) matched pair, containing **zero surfacing tokens** and compiling clean. No confirmed config-test redness was observed and none is attributable to spec 078.
+
+#### Step 3 — Metric / decision-vocabulary / producer-wiring drift
+
+| Contract | Design source | Code (committed/clean) | Drift? |
+|----------|---------------|------------------------|--------|
+| 8 `smackerel_surfacing_*` metric families | design §1 | `internal/metrics/surfacing.go` | ✅ names match |
+| 5-value decision vocabulary (`permit`/`deduped`/`suppressed`/`deferred-budget-exhausted`/`escalated`) | design §4 | `types.go` `DecisionKind` | ✅ match |
+| 7-producer enum, 5-channel enum | design §2/§3 | `types.go` | ✅ match |
+| Producer wiring through `controller.Propose(...)` | design §1 | `internal/scheduler/{jobs,scheduler}.go` (tests green) | ✅ no drift |
+
+Pre-existing (committed, NOT sweep-attributable) observations, recorded for completeness and explicitly **out of this diagnostic round's closure scope**:
+- `types.go` header comment reads `normalize → dedupe → suppress → budget → escalate` (5-step) vs design §6's 4-step — the already-filed low/non-blocking **GAP-078-G01**.
+- design §1 box annotates `acted_on_total` / `false_positive_total` as `(producer,channel)` but the committed code declares only the `producer` label — pre-existing design↔code label divergence on a committed file (not in the uncommitted set), so not a sweep regression.
+
+#### Verdict
+
+🟢 **REGRESSION_FREE** for spec 078's owned surfacing-prioritizer surface.
+
+| Dimension | spec-078-owned | foreign |
+|-----------|----------------|---------|
+| Baseline test regressions | 0 | 0 confirmed (config package not compiled this round; spec-051 churn self-consistent) |
+| Metric-name / decision-vocabulary drift | 0 | — |
+| Scheduler producer-wiring drift | 0 | — |
+| New design contradictions | 0 | — |
+
+**Findings:** 0 spec-078-owned regressions; 0 confirmed foreign regressions → no finding-owned closure chain required, no `route_required` packet emitted (the foreign spec-051 config churn is self-consistent WIP owned by that spec's own sweep round, not spec 078's to fix).
+
+**Files changed this round:** `specs/078-cross-surface-surfacing-prioritizer/report.md` (this diagnostic section only). No source, no DoD checkbox, no scope status, no `state.json` change.
+
+**Next required owner:** none (diagnostic complete; spec 078 remains `done`).
+
+### DevOps — 2026-06-17 (stochastic-quality-sweep diagnostic round)
+
+**Agent:** `bubbles.workflow` (parent-expanded `devops-to-doc` mapped child round)
+**Mode:** `devops-to-doc` (statusCeiling `docs_updated`; **DIAGNOSTIC ONLY** — spec 078 stays `done`; no DoD checkbox, scope status, or `state.json` mutation)
+**executionModel:** `parent-expanded-child-mode` (nested `runSubagent` unavailable; phase-owner work expanded in the current runtime — `devops-to-doc` is not top-level-runtime-locked)
+**Trigger:** probe the **CI / build / deploy / observability wiring** that ships spec 078's surfacing prioritizer — a DIFFERENT dimension than the 2026-06-17 `regression-to-doc` round above (which probed baseline test regressions). Surface = surfacing metric families registered + exposed on `/metrics` without name collision; spec-078 prometheus alert/scrape entries; scheduler producer wiring through `controller.Propose`; build/vet/compile of the owned packages.
+**Claim Source:** terminal exec output (captured exit codes) + read-only static inspection.
+
+#### Step 1 — Owned-package build / vet / compile (captured exit codes)
+
+OOM preflight cleared before any compile: `oom-preflight.sh 6000` → `OK — 21689 MB available (need 6000 MB; swap used 564 MB)`. Host `go1.25.10`.
+
+| Command | Result | Exit |
+|---------|--------|------|
+| `go vet -mod=readonly ./internal/intelligence/surfacing/... ./internal/metrics/... ./internal/scheduler/...` | clean (`VET_EXIT=0`) | `0` |
+| `go test -mod=readonly -count=1 ./internal/intelligence/surfacing/... ./internal/metrics/... ./internal/scheduler/...` | all `ok` (surfacing 0.015s, metrics 0.035s, scheduler 5.050s) | `0` |
+
+`internal/config` was **deliberately not compiled as a test target** this round (round guidance + foreign uncommitted churn). The green `scheduler`/`metrics` runs already prove `internal/config`'s NON-test library code compiles cleanly as a transitive dependency, so no foreign compile regression flows into spec 078's surface.
+
+#### Step 2 — Observability: 8 metric families register on the default registry, no collision
+
+`go test -mod=readonly -count=1 -v -run TestMetricsRegistered ./internal/metrics/...` → `--- PASS: TestMetricsRegistered (0.00s)` / `ok` (exit `0`).
+
+- `TestMetricsRegistered` gathers from `prometheus.DefaultGatherer` — the exact registry that `internal/metrics.Handler()` → `promhttp.Handler()` serves at `/metrics` (route wired unauthenticated in `internal/api/router.go`, spec 030) — and asserts all **8** `smackerel_surfacing_*` families present: `nudges_delivered_total`, `acted_on_total`, `false_positive_total`, `dedupe_total`, `suppression_total`, `budget_overrides_total`, `budget_remaining` (gauge), `deferred_budget_exhausted_total`.
+- **No name collision:** `internal/metrics/surfacing.go::init()` registers via `prometheus.MustRegister(...)` on the default registry; a duplicate family name would panic at `init()` and fail the package test. The passing test *is* the collision proof.
+- **Live `/metrics` gauge exposure** of `smackerel_surfacing_budget_remaining` is contracted by the spec-078-owned e2e `tests/e2e/surfacing_budget_test.go::TestSurfacingMetricsExposedOnLiveStack` (asserts `# TYPE smackerel_surfacing_budget_remaining gauge`, with an adversarial regression comment). **Not executed** this round (no-live-stack constraint); statically verified intact — a real `http.Client` scrape of `CoreURL+/metrics`, not mocked → correctly classified `e2e`. The 7 CounterVec children intentionally emit exposition lines only after first observation (documented in the test), and their increment behavior is covered by `controller_test.go`.
+
+#### Step 3 — Prometheus scrape / alert entries
+
+- spec 078 owns **NO** prometheus alert or scrape entry — correctly. Surfacing metrics ride the `smackerel-core` job in `config/prometheus/prometheus.yml.tmpl` (spec-049-owned; `metrics_path: /metrics`, target `smackerel-core:${CORE_CONTAINER_PORT}`). `config/prometheus/alerts.yml` (spec-049-owned) has **zero** surfacing references, and spec 078's spec.md/design.md require only the `/metrics` gauge exposure, not dedicated alert rules → no missing-entry finding.
+- `docs/Operations.md` operator-runbook alerting *guidance* on `surfacing_deferred_budget_exhausted_total` / `surfacing_budget_remaining` is explicitly operator-tunable-via-overlay per spec 078 design (alertmanager routing is the deploy-overlay's surface). Recorded **out of closure scope**, not a spec-078 finding.
+
+#### Step 4 — Scheduler producer wiring through `controller.Propose`
+
+- `cmd/core/main.go` constructs `surfacing.NewController(...)` from SST config + the `metrics.SurfacingMetrics{}` sink and wires it via `sched.SetSurfacingController(...)`.
+- `internal/scheduler/jobs.go::proposeSurfacing(ctx, cand)` routes every candidate through `controller.Propose`, drops on error (`return false`), and permits dispatch only on `DecisionPermit` / `DecisionEscalated`. `go test ./internal/scheduler/...` green (Step 1).
+
+#### Step 5 — CI coverage + foreign attribution
+
+- `.github/workflows/ci.yml` runs `./smackerel.sh test unit --go` (→ `go test ./...`), compiling + running spec 078's three owned packages on every push/PR; a separate direct `go test -count=1 -v` job also runs. Spec 078's surface is CI-covered. (CI definitions are engineering-quality's surface, not spec 078's — informational.)
+- **Foreign attribution:** ci.yml's full-tree `go test ./...` is where any current `internal/config` test redness (the round brief's pre-declared spec-094 `ASSISTANT_SKILLS_WEATHER_*` fixture defect in `validate_test.go::setRequiredEnv`) would surface. This round deliberately did **not** compile `internal/config`, so it neither confirms nor refutes that redness; if present it is a **spec-094 fixture defect (foreign)**, not spec 078's surface. (The prior 2026-06-17 regression round observed the live `internal/config` churn was spec-051 `HARDEN-051-H1`, not spec-094 — exact foreign attribution belongs to those specs' own sweep rounds.) No `route_required` packet from this devops round: foreign `internal/config` churn is self-owned WIP, and spec 078's three owned packages are all green.
+
+#### Verdict
+
+🟢 **HEALTHY** — spec 078's CI / build / deploy / observability surface is wired and green.
+
+| Dimension | spec-078-owned | foreign |
+|-----------|----------------|---------|
+| Owned-package build / `go vet` / unit test | 0 failures | — |
+| Metric-family registration / name collision | 0 | — |
+| `/metrics` gauge-exposure contract | 0 (e2e intact; not run — no-live-stack) | — |
+| Prometheus scrape / alert entries | 0 (none owned; rides core `/metrics` scrape) | spec-049 scrape/alert surface unchanged |
+| Scheduler producer wiring through `Propose` | 0 drift | — |
+| CI coverage | covered | `internal/config` redness (if any) → spec-094 / spec-051 |
+
+**Findings:** 0 spec-078-owned devops/observability findings → no finding-owned closure chain required; no `route_required` packet emitted.
+
+**Files changed this round:** `specs/078-cross-surface-surfacing-prioritizer/report.md` (this diagnostic section only). No source, no DoD checkbox, no scope status, no `state.json` change.
+
+**Next required owner:** none (diagnostic complete; spec 078 remains `done`).
 

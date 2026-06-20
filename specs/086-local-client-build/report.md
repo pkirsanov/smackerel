@@ -6,7 +6,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [scopes.md](scopes.md)
 
 Delivered `./smackerel.sh local-client-build --target home-lab` — the PRODUCER
 side (node n13) of the trust-model-aware client delivery defined by knb spec 028.
-On evo-x2 (`local-operator` trust model) it builds the Flutter Android client
+On <deploy-host> (`local-operator` trust model) it builds the Flutter Android client
 LOCALLY (AAB + APK), operator-signs each artifact with the operator cosign key
 (`cosign sign-blob`, fully offline `--tlog-upload=false`), computes the real
 content sha256, and emits a local build manifest with `trustModel: local-operator`
@@ -18,13 +18,13 @@ sha256 byte-match path accepts it.
 Everything **locally provable** is delivered + tested. Per **FC-4 (no
 fabrication)**, the REAL `flutter build` + REAL operator-sign with the private key
 + REAL placement + green `knb client-binary-conformance.sh` are the approval-gated
-downstream node **n11** (evo-x2 runtime) — explicitly NOT executed or claimed here.
+downstream node **<deploy-node>** (<deploy-host> runtime) — explicitly NOT executed or claimed here.
 
 ## Completion Statement
 
 All three scopes are **Done**; every locally-provable DoD item is `- [x]` with
 inline raw evidence below. The Runtime Execution Boundary (real flutter build +
-real operator-sign + real placement + gate-green) is documented as node n11, NOT
+real operator-sign + real placement + gate-green) is documented as node <deploy-node>, NOT
 checked here. No knb/framework file and no contract was modified.
 
 Concurrency note: a sibling session (spec 087 "Open-Knowledge Genuine
@@ -116,7 +116,7 @@ $ ./smackerel.sh --help
                               home-lab adapter. The knb adapter consumes +
                               verifies; this command BUILDS + SIGNS. Target:
                               home-lab. The REAL flutter build + operator-sign
-                              run on evo-x2.
+                              run on <deploy-host>.
 Exit Code: 0
 ```
 
@@ -200,7 +200,7 @@ exactly 3 recorded `sign-blob` invocations (AAB, APK, manifest), and adjacent
 ### #c-cosign — REAL cosign offline sign-blob → verify-blob round-trip + tamper
 
 Over a FIXTURE blob (a `cp` of an existing file in `scripts/deploy/`, NOT a real
-AAB), using a throwaway disposable keypair — proves the EXACT on-evo-x2
+AAB), using a throwaway disposable keypair — proves the EXACT on-<deploy-host>
 sign/verify contract (`--tlog-upload=false` sign / `--insecure-ignore-tlog`
 verify):
 
@@ -277,7 +277,7 @@ Field-level knb-gate conformance is asserted by the emitter test (provenance
 `local-operator` matches `trustModel`, non-empty 64-hex sha256, local `file://`
 ref). Status is `done` ONLY on this locally-provable surface; per FC-4 the real
 flutter build + real operator-sign + real placement + green knb gate are routed
-to evo-x2 node n11 (NOT certified here).
+to <deploy-host> node <deploy-node> (NOT certified here).
 
 ### Audit Evidence
 
@@ -336,14 +336,14 @@ The real cosign tamper probe (verify a valid signature against mutated bytes →
 
 ---
 
-## Runtime Execution Boundary (node n11 — evo-x2, NOT executed here)
+## Runtime Execution Boundary (node <deploy-node> — <deploy-host>, NOT executed here)
 
-Per FC-4, these REAL on-evo-x2 actions are the approval-gated downstream node and
+Per FC-4, these REAL on-<deploy-host> actions are the approval-gated downstream node and
 are deliberately NOT claimed by this node:
 
 ```text
-$ # node n11 (evo-x2 runtime) — NOT executed here; see scripts/commands/local-client-build.sh
-real flutter build aab/apk ......... Flutter SDK + Android toolchain on evo-x2
+$ # node <deploy-node> (<deploy-host> runtime) — NOT executed here; see scripts/commands/local-client-build.sh
+real flutter build aab/apk ......... Flutter SDK + Android toolchain on <deploy-host>
 real operator cosign sign-blob ..... operator PRIVATE key + real COSIGN_PASSWORD
 real artifact placement ............ knb_client_acquire_local -> verify-blob --key -> sha256 -> serveRoot
 green client-binary-conformance .... knb gate vs the REAL manifest (+ knb mirror)
@@ -364,6 +364,89 @@ real operator key was not used and no real AAB was fabricated.
 - The full-delivery quality phases were executed in parent-expanded form
   (`runSubagent` unavailable) with raw evidence above — disclosed, not fabricated.
   Simplify: the two scripts are minimal and mirror the committed `build-home-lab.sh`
-  precedent. Gaps: every FR has a test; the only open gap is the evo-x2 runtime
-  (node n11), documented as the Runtime Execution Boundary.
+  precedent. Gaps: every FR has a test; the only open gap is the <deploy-host> runtime
+  (node <deploy-node>), documented as the Runtime Execution Boundary.
 - All evidence above is raw terminal / `go test` output captured in this session.
+
+---
+
+## Hardening Round Addendum (stochastic-quality-sweep → `harden-to-doc`, 2026-06-17)
+
+Post-certification robustness pass over the orchestrator's fail-closed surface
+(`scripts/commands/local-client-build.sh`). Status is unchanged — this spec
+stays `done`; no DoD checkbox, scope status, or `state.json` field was altered
+(ceiling `docs_updated` respected; nothing promoted). One genuine edge-case was
+found and closed 1:1 with an adversarial regression.
+
+### Finding F086-H1 — manifest-sign failure left an orphan unsigned manifest
+
+The "no partial manifest" fail-closed invariant (enforced by `assertNoManifest`)
+was honored for the empty-artifact and AAB/APK sign-failure paths — those abort
+*before* the manifest is assembled. But the asymmetric sub-case where the AAB and
+APK signs SUCCEED and only the **manifest** sign fails was untested (the cosign
+shim supported a single global exit code) and the orchestrator left the
+already-written `local-client-manifest-<sha>.yaml` behind unsigned.
+
+**Closure:** added a per-call failure seam (`LCB_COSIGN_FAIL_ON_CALL`) to the
+recording cosign shim and `TestLocalClientBuild_FailClosedManifestSignOrphan`
+(fails only call 3 = the manifest sign). The orchestrator now `rm -f`s the
+partial manifest (+ any partial `.sig`) before aborting `[F086-LCB-05]`.
+
+RED (before the orchestrator fix — the orphan manifest survived):
+
+```text
+$ go test ./internal/deploy/ -run 'TestLocalClientBuild_FailClosedManifestSignOrphan' -count=1 -v
+=== RUN   TestLocalClientBuild_FailClosedManifestSignOrphan
+    local_client_build_test.go:478: fail-closed broken: a partial manifest was written: local-client-manifest-605a9ea30a4101a2b1cca2ac3474c422d0208606.yaml
+--- FAIL: TestLocalClientBuild_FailClosedManifestSignOrphan (0.18s)
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/deploy  0.204s
+FAIL
+go test exit: 1
+```
+
+GREEN (after the orchestrator fix — partial manifest removed on sign failure):
+
+```text
+$ go test ./internal/deploy/ -run 'TestLocalClientBuild_FailClosedManifestSignOrphan' -count=1 -v
+=== RUN   TestLocalClientBuild_FailClosedManifestSignOrphan
+--- PASS: TestLocalClientBuild_FailClosedManifestSignOrphan (0.19s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  0.203s
+go test exit: 0
+```
+
+Full spec-086 surface stays green (11 orchestrator + 4 emitter tests) and the
+modified script is lint-clean:
+
+```text
+$ go test ./internal/deploy/ -run 'TestLocalClientBuild|TestLocalClientManifestEmitter' -count=1 -v
+--- PASS: TestLocalClientBuild_Dispatch (0.03s)
+--- PASS: TestLocalClientBuild_HelpListsCommand (0.02s)
+--- PASS: TestLocalClientBuild_TargetRequired (0.02s)
+--- PASS: TestLocalClientBuild_HappyPath (0.27s)
+--- PASS: TestLocalClientBuild_FailClosedEmptyArtifact (0.15s)
+--- PASS: TestLocalClientBuild_FailClosedEmptyAPK (0.14s)
+--- PASS: TestLocalClientBuild_FailClosedSignFailure (0.16s)
+--- PASS: TestLocalClientBuild_FailClosedManifestSignOrphan (0.19s)
+--- PASS: TestLocalClientBuild_FailClosedMissingCosignPassword (0.01s)
+--- PASS: TestLocalClientBuild_FailClosedMissingOperatorKey (0.01s)
+--- PASS: TestLocalClientBuild_SecretNotLeaked (0.15s)
+--- PASS: TestLocalClientManifestEmitter_ValidDigests (0.01s)
+--- PASS: TestLocalClientManifestEmitter_FailClosedMissingAAB (0.00s)
+--- PASS: TestLocalClientManifestEmitter_FailClosedMalformed (0.00s)
+--- PASS: TestLocalClientManifestEmitter_FailClosedMissingRef (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  1.207s
+go test exit: 0
+$ shellcheck -x scripts/commands/local-client-build.sh
+shellcheck: CLEAN (exit 0)
+$ shfmt -d -i 2 -ci -bn scripts/commands/local-client-build.sh
+shfmt: CLEAN (no diff)
+```
+
+Secret discipline preserved: the edit added no `echo` of `COSIGN_PASSWORD`;
+`TestLocalClientBuild_SecretNotLeaked` still passes (value never emitted;
+presence-only `${COSIGN_PASSWORD:+present}`). FC-4 unchanged — the real
+on-<deploy-host> build/sign/placement (node <deploy-node>) remains the Runtime Execution Boundary,
+not executed or claimed here.
+

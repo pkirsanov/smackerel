@@ -28,7 +28,9 @@
       {"phase": "simplify", "agent": "bubbles.workflow", "timestamp": "2026-05-13T08:40:00Z", "summary": "No simplification opportunities surfaced: contract tests use a single shared assertResourceContract / assertFilesystemContract helper, allowlists are declared as data not duplicated logic, generator uses existing required_value / required_json_value primitives."},
       {"phase": "stabilize", "agent": "bubbles.workflow", "timestamp": "2026-05-13T08:45:00Z", "summary": "Live-stack smoke confirms stability under hardening: postgres, nats, smackerel-core, smackerel-ml all reach Healthy state; no restart loops; ML container HF/sentence-transformers caches function correctly under /tmp/hf-cache and /tmp/st-cache."},
       {"phase": "security", "agent": "bubbles.workflow", "timestamp": "2026-05-13T08:50:00Z", "summary": "Read-only-root + tmpfs allowlist + nosuid/nodev/noexec on /tmp where applicable raises the security floor. Postgres/nats exemption is intentional and documented in design.md table. Resource limits prevent resource exhaustion DoS. ML model envelope validation prevents misconfigured large models from OOM-killing the container at runtime."},
-      {"phase": "docs", "agent": "bubbles.workflow", "timestamp": "2026-05-13T09:00:00Z", "summary": "report.md fully populated with Summary, Completion Statement, Code Diff Evidence, Scope 1 Evidence (8 sections), Scope 2 Evidence (6 sections), Validation Evidence, Audit Evidence, Chaos Evidence, Test Evidence Summary table. scopes.md fully populated with DoD items checked, evidence references, regression-E2E rows, and Evidence Index. design.md, spec.md unchanged from planning round."}
+      {"phase": "docs", "agent": "bubbles.workflow", "timestamp": "2026-05-13T09:00:00Z", "summary": "report.md fully populated with Summary, Completion Statement, Code Diff Evidence, Scope 1 Evidence (8 sections), Scope 2 Evidence (6 sections), Validation Evidence, Audit Evidence, Chaos Evidence, Test Evidence Summary table. scopes.md fully populated with DoD items checked, evidence references, regression-E2E rows, and Evidence Index. design.md, spec.md unchanged from planning round."},
+      {"phase": "harden", "agent": "bubbles.workflow", "timestamp": "2026-06-15T16:05:00Z", "summary": "R03 improve-existing (parent-expanded child mode): executed harden analysis against the mature done spec. Resource-limit, read-only-root, tmpfs-allowlist, and ML-model-envelope contracts are intact and enforced by live-file contract tests (12 internal/deploy + 5 internal/config tests PASS today; report.md R03 Re-Verification #1). Contract pattern correctly extended by later specs to prometheus + searxng. No new hardening gap in the spec-045-owned surface; no source/contract/config changed."},
+      {"phase": "gaps", "agent": "bubbles.workflow", "timestamp": "2026-06-15T16:08:00Z", "summary": "R03 improve-existing (parent-expanded child mode): executed gaps analysis. All 4 Gherkin scenarios (SCN-045-A01..A04) map to DoD items and live contract tests (traceability-guard PASS). Post-certification discovered issues already filed and resolved as BUG-045-001 (ml-envelope cross-service routing) and BUG-045-002 (CI integration). No unfiled coverage gap; no new actionable finding."}
     ]
   },
   "certification": {
@@ -50,6 +52,8 @@
       "audit",
       "chaos",
       "simplify",
+      "gaps",
+      "harden",
       "stabilize",
       "security",
       "docs"
@@ -101,7 +105,9 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit e377cd4b (2026-05-13 'feat(045): deploy resource limits + read-only-root filesystem hardening'): this is spec 045's own original delivery commit, same UTC day as the faithful cert moment certification.completedAt 2026-05-13T09:30:00Z (logical timestamp recorded inside the same delivery). scopes.md flips both scope headers Not Started -> Done and ticks every DoD item [ ] -> [x] with report.md evidence refs; category a. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
-    }
+    },
+    {"agent": "bubbles.workflow", "phase": "harden", "runStartedAt": "2026-06-15T16:00:00Z", "runCompletedAt": "2026-06-15T16:05:00Z", "outcome": "r03_improve_existing_harden_no_new_finding_contracts_intact"},
+    {"agent": "bubbles.workflow", "phase": "gaps", "runStartedAt": "2026-06-15T16:05:00Z", "runCompletedAt": "2026-06-15T16:08:00Z", "outcome": "r03_improve_existing_gaps_no_unfiled_coverage_gap"}
   ],
-  "lastUpdatedAt": "2026-06-06T17:00:00Z"
+  "lastUpdatedAt": "2026-06-15T16:10:00Z"
 }
