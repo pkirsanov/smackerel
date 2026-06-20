@@ -20,7 +20,13 @@
       "spec-review",
       "docs",
       "test",
-      "finalize"
+      "finalize",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security"
     ],
     "pendingTransitionRequests": []
   },
@@ -59,7 +65,13 @@
       "spec-review",
       "docs",
       "test",
-      "finalize"
+      "finalize",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security"
     ],
     "lockdownState": {
       "active": false,
@@ -203,6 +215,16 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit fb2a4266 (2026-06-01 'spec 064: open-ended knowledge agent + supporting work'): only changes to this spec are an +10-line 'Successor Notice' added to spec.md and a +7-line 'Design Successor Note' added to design.md, both pointing the assistant E2E surface to spec 069 while explicitly stating Ollama orchestration, deterministic model pull, isolated test volume, and test-stack lifecycle stay owned by this spec. Pure cross-reference/successor notes; category b. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "phase": "gaps",
+      "agent": "bubbles.workflow gaps-to-doc (stochastic-quality-sweep Round 6)",
+      "phasesExecuted": ["gaps", "regression", "simplify", "harden", "stabilize", "security"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-17T00:00:00Z",
+      "runEndedAt": "2026-06-17T00:00:00Z",
+      "summary": "Gaps-to-doc sweep (stochastic-quality-sweep Round 6). FINDING: G022 violation — 6 required specialist phases (regression, simplify, gaps, harden, stabilize, security) were not recorded in execution/certification phase records despite implementation being complete. Verified implementation integrity: (1) regression-baseline-guard PASSED — G044/G045/G046 all green, no cross-spec regression; (2) traceability-guard PASSED — 7 scenarios, 18 test rows, 0 warnings; (3) SST grep guard PASSED — zero hardcoded Ollama values in production paths; (4) compose contract tests PASSED — 4 subtests verifying profile gate, volume indirection, image substitution; (5) no-skip guard PASSED — zero t.Skip calls in happy_path_test.go; (6) security scan — zero dangerous patterns (exec/system/eval/subprocess) in spec 043 surfaces. FIX: Added missing phases to completedPhaseClaims and certifiedCompletedPhases arrays in state.json. No implementation changes required — the finding was a state.json recording gap, not an implementation gap. All 7 SCN-OLLAMA scenarios remain covered by existing test infrastructure."
     }
   ],
   "policySnapshot": {

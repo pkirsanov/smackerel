@@ -28,7 +28,7 @@ type MapsConfig struct {
     CommuteMinOccurrences int; CommuteWindowDays int; CommuteWeekdaysOnly bool
     TripMinDistanceKm float64; TripMinOvernightHours float64
     LinkTimeExtendMin float64; LinkProximityRadiusM float64
-    MinDistanceM float64; MinDurationMin float64; DefaultTier string
+    MinDistanceM float64; MinDurationMin float64
 }
 type Connector struct { id string; health connector.HealthStatus; config MapsConfig; ... }
 func New(id string) *Connector
@@ -39,7 +39,7 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus
 func (c *Connector) Close() error
 
 // internal/connector/maps/normalizer.go
-func NormalizeActivity(activity TakeoutActivity, sourceFile string, config MapsConfig) connector.RawArtifact
+func NormalizeActivity(activity TakeoutActivity, sourceFile string) connector.RawArtifact
 func buildContent(activity TakeoutActivity) string
 func buildMetadata(activity TakeoutActivity, sourceFile string) map[string]interface{}
 func computeDedupHash(activity TakeoutActivity) string
@@ -50,11 +50,11 @@ type PatternDetector struct { pool *pgxpool.Pool; config MapsConfig }
 type CommutePattern struct { StartClusterID, EndClusterID string; Frequency int; ... }
 type TripEvent struct { DestinationLat, DestinationLng float64; StartDate, EndDate time.Time; ... }
 func NewPatternDetector(pool *pgxpool.Pool, config MapsConfig) *PatternDetector
-func (pd *PatternDetector) DetectCommutes(ctx context.Context, activities []TakeoutActivity) ([]CommutePattern, error)
-func (pd *PatternDetector) DetectTrips(ctx context.Context, activities []TakeoutActivity) ([]TripEvent, error)
+func (pd *PatternDetector) DetectCommutes(ctx context.Context) ([]connector.RawArtifact, error)
+func (pd *PatternDetector) DetectTrips(ctx context.Context) ([]connector.RawArtifact, error)
 func (pd *PatternDetector) LinkTemporalSpatial(ctx context.Context, activities []TakeoutActivity) (int, error)
 func (pd *PatternDetector) InferHome(ctx context.Context) (*LatLng, error)
-func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) error
+func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) ([]connector.RawArtifact, error)
 ```
 
 ```sql

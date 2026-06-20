@@ -112,6 +112,26 @@
         "runStartedAt": "2026-06-07T00:00:00Z",
         "runEndedAt": "2026-06-07T00:00:00Z",
         "summary": "DV-019-003 certification-taxonomy reconciliation (stochastic-quality-sweep Round 4). Migrated the legacy combined 'improve' entry in certification.certifiedCompletedPhases to its post-split components 'simplify' + 'gaps' (Gate G022 specialist-phase split). Truthful basis: the legacy 'improve' work for THIS spec genuinely covered BOTH dimensions. Gap-closure is evidenced by report.md Improvement Sweep R27 (IMP-019-R27-001 Gov Alerts source_earthquake + IMP-019-R27-002 Weather enable_alerts/forecast_days/precision 'entirely missing from SST pipeline', both Fixed) and Improvement Sweep R28 (IMP-019-R28-001 Financial Markets fred_enabled + IMP-019-R28-002 fred_series 'entirely missing from SST pipeline', both Fixed), plus Test Sweep 2026-04-12 missing-test additions (TestAllConnectorsRegistered, test_connector_wiring.sh, TestDuplicateRegistrationRejected). Simplification/structure review is evidenced by the 2026-04-21 Improvement Sweep full-implementation review (registration-pattern consistency, BUG-004 connectors.go/services.go/helpers.go/shutdown.go split, dead-helper identification). Original certification basis preserved: commit e2dcb391 (2026-04-10) 'delivery-lockdown: certify specs 019, 021, 023 done' is unchanged; this is metadata reconciliation, not re-validation, so the Gate G088 grandfather basis holds. No protected artifact (spec.md/design.md/scopes.md) edited. Repo-wide legacy-taxonomy drift also affects siblings 021 (records 'simplify' only) and 023 (records 'gaps' only) from the same cert commit e2dcb391 — flagged for a dedicated migration pass, not fixed here (scope discipline)."
+      },
+      {
+        "agent": "bubbles.regression",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "timestamp": "2026-06-17T00:00:00Z",
+        "summary": "Stochastic-quality-sweep Round 28 regression probe. Finding REG-019-001: test baseline drift in tests/integration/test_connector_wiring.sh — original spec 019 contract 'all 5 default to enabled: false' was superseded by commit 4a90ec5e 'feat(connectors): enable rss, weather, gov-alerts (Bucket A)' which intentionally enabled weather and gov-alerts for active use. Fixed test to expect intentional state (weather=true, gov-alerts=true). All 23 connector packages pass (cmd/core 1.6s, connector supervisor 51.9s, all 5 wired connectors ok). No code regressions, coverage decreases, or cross-spec conflicts. Baseline verification: 17 registrations, all 5 imports present, helper functions at lines 10/15, 5 YAML blocks at lines 517/531/541/560/600, 46 env vars generated. artifact-lint PASSED."
+      },
+      {
+        "agent": "bubbles.chaos",
+        "phasesExecuted": [
+          "chaos"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "timestamp": "2026-06-17T00:00:00Z",
+        "summary": "Stochastic-quality-sweep Round 14 chaos probe (chaos-hardening mode, parent-expanded child mode — nested runSubagent unavailable). Probed the connector-wiring resilience surface for race conditions, edge cases, and failure-mode handling across 7 dimensions; all verified resilient by design, no new actionable finding. (1) NATS-down nil-deref on the Weather/Gov-Alerts svc.nc.Publish method-value captures — CLOSED: cmd/core/services.go:149 connects NATS fail-loud and aborts startup before registerConnectors runs, so svc.nc is guaranteed non-nil. (2) Connector registration failure — CLOSED: fail-loud, registry.Register error returns from registerConnectors and cmd/core/main.go:122 aborts; TestDuplicateRegistrationRejected PASS. (3) Individual connector Connect() failure — CLOSED: graceful Warn+continue per block (intended degradation), siblings unaffected. (4) Connector sync-loop panic — CLOSED: supervisor runWithRecovery (internal/connector/supervisor.go:163) recovers panics with a circuit breaker. (5) Malformed-config parse — CLOSED: parseJSONArrayVal (cmd/core/helpers.go:15) returns nil + slog.Warn (SEC-019-001 fixed); dead fail-soft helpers removed by BUG-020-003. (6) Weather publisher ordering (StartConnector before SetAlertPublisher) — LOW/non-issue: StartConnector schedules a panic-recovered goroutine respecting SyncSchedule; publisher set on immediately-following lines. (7) Shutdown drain — CLOSED: supervisor StopAll bounded 10s WaitGroup drain before NATS/DB close. Evidence: ./smackerel.sh test unit --go --go-run 'TestAllConnectorsRegistered|TestDuplicateRegistrationRejected|TestConnectorStartupGate|TestHealthHandler_ConnectorHealth' --verbose -> all 5 PASS (TestConnectorStartupGate_BooleanIsSoleLoadBearingSignal, TestConnectorStartupGate_AdversarialReintroduction, TestAllConnectorsRegistered, TestDuplicateRegistrationRejected, TestHealthHandler_ConnectorHealth), cmd/core ok 0.691s, internal/api ok 0.461s, WRAPPER_EXIT=0. No protected artifact (spec.md/design.md/scopes.md) edited; spec status remains done."
       }
     ]
   },

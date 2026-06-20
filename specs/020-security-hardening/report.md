@@ -581,6 +581,110 @@ remains `done`. No regression in any pre-existing test.
 
 ---
 
+## DevOps-to-Doc Sweep (2026-06-17) — Stochastic Quality Sweep
+
+**Trigger:** stochastic-quality-sweep round, mapped child workflow `devops-to-doc`
+**Workflow mode:** `devops-to-doc` (statusCeiling `docs_updated`)
+**Execution model:** parent-expanded-child-mode (nested runtime lacked `runSubagent`)
+**Scope ceiling:** spec 020 stays `done` — this sweep is read-only/diagnostic and promotes nothing.
+
+### Sweep Methodology
+
+DevOps + security-gate health probe of the CI/CD + build + deploy surface that
+ships spec 020's security hardening, plus the auth-enforcement code and the
+contract tests that lock its invariants in the CI unit lane:
+
+- CI security / dependency / image-scan gates in `.github/workflows/` (read-only inspection)
+- Auth-enforcement wiring: crypto fail-closed, ML sidecar auth, Web UI auth, OAuth rate-limit (targeted unit execution)
+- Contract/guard tests that lock the host-bind + NATS-config invariants (targeted unit execution)
+- Foreign-baseline attribution for the pre-existing `internal/config` validate RED
+
+### Probed Surfaces
+
+| Surface | Kind | Finding |
+|---------|------|---------|
+| `.github/workflows/ci.yml` — `go mod verify` (supply-chain checksum), `./smackerel.sh lint`, Go+Python unit lanes that run the spec-020 contract tests | CI gate (read-only) | HEALTHY |
+| `.github/workflows/gitleaks.yml` — full-history secret/PII scan, action pinned to commit SHA | CI gate (read-only) | HEALTHY |
+| `.github/workflows/build.yml` — Trivy CRITICAL/HIGH image scan (blocks BEFORE cosign sign), cosign keyless + Rekor, SBOM (syft) attest, SLSA provenance, both images | CI gate (read-only) | HEALTHY |
+| `scripts/deploy/{promote,rollback}.sh` + Build-Once-Deploy-Many digest/signature verify | deploy gate (read-only) | HEALTHY |
+| `internal/auth/store.go` `decrypt()` fail-closed (SEC-003/004) | auth code + unit | GREEN |
+| `internal/api/router.go` `webAuthMiddleware` + `httprate.LimitByIP` (SEC-001/002) | auth code + unit | GREEN |
+| `ml/app/auth.py` `verify_auth` fail-loud + `hmac.compare_digest` (SEC-007) | auth code + unit | GREEN |
+| `internal/deploy/compose_contract_test.go` host-bind contract (SEC-005/016 via spec 042) | CI contract gate + unit | GREEN |
+| `internal/config/docker_security_test.go` NATS-config + port gates (SEC-005/006/016) | CI contract gate + unit | GREEN |
+
+### Test Execution Evidence
+
+Targeted spec-020-owned packages, isolated from the known-RED `internal/config`
+validate suite (foreign spec-094 baseline — see attribution below). OOM-preflight
+passed before compile (18 GB available). Per-request INFO log lines (which carry
+request-id tokens) omitted for PII hygiene; `--- PASS` / `ok` / pytest summary
+lines and exit codes shown verbatim.
+
+```
+$ go test -count=1 -v -run 'TestTokenStore_Decrypt_FailClosed_NotBase64|...FailClosed_TooShort|...FailClosed_GCMFailure|...WrongKey_FailClosed|...NoKey_PlaintextPassthrough|TestTokenStore_EncryptDecrypt' ./internal/auth/
+PASS
+ok  github.com/smackerel/smackerel/internal/auth    0.033s     # AUTH_EXIT=0 — 12 tests incl 4 fail-closed paths
+
+$ go test -count=1 -v -run 'TestWebUI_RequiresAuth_WhenTokenConfigured|TestWebUI_AllowsAll_WhenTokenEmpty|TestOAuthStart_RateLimited|TestOAuthStart_AllowsWithinLimit|TestOAuthCallback_RateLimited' ./internal/api/
+PASS
+ok  github.com/smackerel/smackerel/internal/api     0.231s     # API_EXIT=0 — 401 when configured, 200 dev-mode, 429 on 11th start/callback
+
+$ go test -count=1 -v -run 'TestComposeContract' ./internal/deploy/
+PASS
+ok  github.com/smackerel/smackerel/internal/deploy  0.023s     # DEPLOY_EXIT=0 — incl adversarial literal-bind / :- fallback / infra-ports / network_mode:host
+
+$ go test -count=1 -v -run 'TestDockerCompose_AllPortsBindLocalhost|TestDockerCompose_NATSUsesConfigFile|TestNATSConfTemplate_TokenIsQuoted|TestNATSConfGenerator_EscapesSpecialCharsInToken|TestNATSConf_GeneratedFile_TokenProperlyQuoted|TestNATSConf_HasPayloadAndStorageLimits' ./internal/config/
+PASS
+ok  github.com/smackerel/smackerel/internal/config  0.059s     # CONFIG_SEC020_EXIT=0 — 6 spec-020 NATS/port gates
+
+$ (cd ml && SMACKEREL_AUTH_TOKEN=test-secret SMACKEREL_ENV=test PYTHONPATH=. ./.venv/bin/python -m pytest tests/test_auth.py -v)
+============================== 10 passed in 0.44s ==============================  # ML_AUTH_EXIT=0 — incl non-ASCII / empty-prefix adversarial → 401
+```
+
+All five spec-020 security gates GREEN.
+
+### Discovered Findings (routed, NOT fixed)
+
+Neither finding below is a genuine devops/security-gate finding on spec 020's
+security surface — that surface is HEALTHY (all five gates GREEN above). Both are
+routed under one-to-one accounting; neither is fixed here.
+
+| # | Finding | Class | Owner | Evidence |
+|---|---------|-------|-------|----------|
+| F1 | `internal/config` validate suite RED at baseline: `[F061-SST-MISSING] missing or invalid required assistant configuration: ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS, ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT, ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT, ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT`. The shared `setRequiredEnv` fixture does not set the 4 weather keys the spec-094 assistant weather-skill validation now requires. | FOREIGN (cross-spec) | spec 094 (assistant weather skill) | `go test -count=1 -v -run 'TestValidate_AllPresent$' ./internal/config/` → `--- FAIL: TestValidate_AllPresent`, exit 1, error `[F061-SST-MISSING] ...ASSISTANT_SKILLS_WEATHER_*` |
+| F2 | spec-020 `state.json` omits the `gaps` phase token from both `execution.completedPhaseClaims` and `certification.certifiedCompletedPhases`, even though the gaps phase ran and is evidenced in this report.md (`## Gaps Probe (2026-04-14) — Stochastic Quality Sweep R30`, findings GAP-020-R30-001/002/003 + fixes + test evidence). `artifact-lint.sh` flags this as Gate G022. | spec-020-owned artifact-record (out-of-devops-mandate; pre-existing) | bubbles.validate (certification record) + bubbles.workflow finalize (execution record) | `bash .github/bubbles/scripts/artifact-lint.sh specs/020-security-hardening` → `❌ Required specialist phase 'gaps' missing ... (Gate G022 — FABRICATION)`, exit 1 |
+
+**F1** is entirely a spec-094 weather-skill fixture/validation mismatch with zero
+connection to spec 020's security surface (auth / OAuth / crypto / NATS /
+host-bind). Spec 020's own NATS+port gates in the SAME package are GREEN
+(`CONFIG_SEC020_EXIT=0` above), proving the failure is isolated to the weather
+validate path. Routed to spec 094; NOT fixed here — `internal/config/validate_test.go`
+is a foreign uncommitted artifact owned by spec 094's work.
+
+**F2** is a pre-existing clerical phase-record gap (NOT introduced by this sweep,
+which touched only this report.md). It is an artifact-record / certification
+concern, not a devops/security-gate finding, so it is outside the devops-to-doc
+mandate; and `certifiedCompletedPhases` is bubbles.validate's authority. Routed to
+bubbles.validate for phase-record reconciliation; NOT fixed here. Spec 020's
+actual security posture is unaffected — all five security gates execute GREEN.
+
+### Verdict
+
+**CLEAN — devops/security-gate surface HEALTHY for spec 020.** All five spec-020
+security gates (crypto fail-closed, ML sidecar auth, Web UI auth, OAuth
+rate-limit, host-bind + NATS-config contracts) execute GREEN. CI ships them
+through `go mod verify` + gitleaks + Trivy CRITICAL/HIGH + cosign/SBOM/SLSA + the
+contract-test unit lane — all wired and intact. **Zero genuine spec-020
+security-gate findings.** Two findings discovered and routed under one-to-one
+accounting: F1 (foreign spec-094 weather validate RED) and F2 (pre-existing
+spec-020 `state.json` `gaps` phase-record gap, Gate G022 → bubbles.validate).
+**F2 RESOLVED 2026-06-17** by the harden sweep R13 — see `## Harden Probe
+(2026-06-17) — Stochastic Quality Sweep R13` below.
+Spec 020 remains `done`; nothing promoted.
+
+---
+
 ### TDD Evidence
 
 **Effective TDD mode:** `scenario-first` (per state.json `policySnapshot.tdd.mode`).
@@ -764,4 +868,89 @@ ok      github.com/smackerel/smackerel/internal/api     1.085s
 valid CLEAN result; no work was invented. The supersession of the literal
 `127.0.0.1` host-bind prescription by spec 042 (recorded in `state.json`
 `supersessions`) was re-confirmed consistent with the live deploy compose.
+
+## Harden Probe (2026-06-17) — Stochastic Quality Sweep R13
+
+**Mode:** `harden-to-doc` (parent-expanded child mode; this workflow runtime
+lacks `runSubagent`, so the resolved child mode was executed in-place by
+invoking the phase owners directly per the tool-availability escalation
+contract). **Trigger:** `harden` → mapped child mode `harden-to-doc`.
+**Round:** 13 of the stochastic-quality-sweep. **Status ceiling:** `done`
+(spec already `done`; no promotion attempted).
+
+The harden phase probed spec-020's spec/design/scope quality, scenario
+coverage, requirement clarity, supersession bookkeeping, and
+execution/certification record integrity. The probe surfaced exactly one
+finding — the previously-routed, pre-existing artifact-record gap recorded
+as **F2** in the DevOps-to-Doc Sweep (2026-06-17) section above. It is now
+closed under one-to-one finding accounting.
+
+### Finding
+
+| ID | Severity | Description | Owner | Disposition |
+|----|----------|-------------|-------|-------------|
+| H-R13-001 (≡ F2) | Low (artifact record) | `state.json` omitted the `gaps` phase token from `execution.completedPhaseClaims` and `certification.certifiedCompletedPhases`, even though the gaps phase genuinely ran on 2026-04-14 (sweep R30) and is fully evidenced in this report.md (`## Gaps Probe (2026-04-14)`, findings GAP-020-R30-001/002/003 + fixes + test evidence). `artifact-lint.sh` flagged this as Gate G022 (FABRICATION-by-omission). | bubbles.workflow finalize (execution record) + bubbles.validate (certification record) — both parent-expanded this round | **FIXED** |
+
+### Fix (truthful reconciliation — not fabrication)
+
+The gaps phase was real and evidenced; the record was untruthful **by
+omission**. The fix makes the record match the documented reality:
+
+1. Added the `gaps` token to `execution.completedPhaseClaims` (after `simplify`, matching the canonical required-phase ordering).
+2. Added the `gaps` token to `certification.certifiedCompletedPhases` (same position).
+3. Added a dedicated `bubbles.gaps` provenance entry to `executionHistory` recording the real 2026-04-14 R30 gaps probe (GAP-020-R30-001 CWE-74 NATS token escaping, GAP-020-R30-002 CWE-755 ML non-ASCII bearer, GAP-020-R30-003 OAuth-callback DoD wording), its evidence pointer, and an explicit note that this entry reconciles the record per finding F2.
+
+No requirement, scenario, design decision, scope, DoD item, test, or runtime
+behavior changed. The spec's `done` status is unchanged — this round only
+repaired the phase-record bookkeeping.
+
+### Verification Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.harden → bubbles.workflow finalize / bubbles.validate (parent-expanded)
+**Date:** 2026-06-17
+
+Before the fix (spec-scoped artifact-lint):
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/020-security-hardening
+❌ Required specialist phase 'gaps' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ 1 of 12 required specialist phases are MISSING
+❌ Required specialist phase 'gaps' NOT in execution/certification phase records (Gate G022 violation)
+Artifact lint FAILED with 3 issue(s).
+```
+
+After the fix (spec-scoped artifact-lint):
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/020-security-hardening
+✅ Required specialist phase 'gaps' found in execution/certification phase records
+✅ Required specialist phase 'gaps' recorded in execution/certification phase records
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+Traceability unchanged and intact (spec-scoped traceability-guard):
+
+```
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/020-security-hardening
+ℹ️  Scenarios checked: 18
+ℹ️  Scenario-to-row mappings: 18
+ℹ️  DoD fidelity scenarios: 18 (mapped: 18, unmapped: 0)
+RESULT: PASSED (0 warnings)
+TRACE_EXIT=0
+```
+
+state.json JSON validity re-confirmed after the edit (`python3 -m json.tool` → `JSON_VALID=yes`).
+
+### Verdict
+
+**CLEAN — one pre-existing artifact-record finding closed.** The harden probe
+found spec-020's spec/design/scope semantics, 18-scenario coverage, and
+scenario→test→DoD traceability fully intact (traceability-guard 0 warnings).
+The single finding (F2 / H-R13-001) was the previously-routed `gaps`
+phase-record omission; it is now reconciled truthfully against the existing
+report.md evidence, clearing Gate G022. Spec 020 remains `done`; the only
+change this round was the `state.json` phase-record repair plus this doc
+deliverable.
 

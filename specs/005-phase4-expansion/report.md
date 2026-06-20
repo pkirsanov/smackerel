@@ -1275,3 +1275,138 @@ All 41 Go packages pass. 257 Python tests pass. Exit code: 0.
 $ ./smackerel.sh lint
 All checks passed!
 ```
+
+---
+
+## DevOps Pass (Stochastic Sweep Round 23 — devops trigger)
+
+### Findings
+
+| ID | Finding | Severity | Fix |
+|----|---------|----------|-----|
+| F-005-DEVOPS-001 | `docs/Operations.md` references non-existent `connector_sync_failure_rate_high_24h` alert — the Maps connector docs claim this generic alert covers sync failure monitoring but the alert was never implemented in `config/prometheus/alerts.yml` | Medium | Added `ConnectorSyncFailureRateHigh24h` alert to `config/prometheus/alerts.yml` (new `smackerel-connector-sync` group); updated docs to use correct alert name; added alert to contract test `requiredAlerts` |
+
+### Files Changed
+- `config/prometheus/alerts.yml` — Added `smackerel-connector-sync` group with `ConnectorSyncFailureRateHigh24h` alert (fires when any connector's error rate >10% over 24h)
+- `docs/Operations.md` — Fixed alert name reference from `connector_sync_failure_rate_high_24h` to `ConnectorSyncFailureRateHigh24h`
+- `internal/metrics/prometheus_alerts_contract_test.go` — Added `ConnectorSyncFailureRateHigh24h` to `requiredAlerts` (prevents accidental deletion)
+
+### Test Evidence
+```
+$ go test -v -count=1 -run "TestAlertsContract" ./internal/metrics/...
+=== RUN   TestAlertsContract_LiveFile
+--- PASS: TestAlertsContract_LiveFile (0.00s)
+=== RUN   TestAlertsContract_AdversarialYAMLBreak
+--- PASS: TestAlertsContract_AdversarialYAMLBreak (0.00s)
+=== RUN   TestAlertsContract_AdversarialEmptyExpr
+--- PASS: TestAlertsContract_AdversarialEmptyExpr (0.00s)
+=== RUN   TestAlertsContract_AdversarialUnknownSeverity
+--- PASS: TestAlertsContract_AdversarialUnknownSeverity (0.00s)
+=== RUN   TestAlertsContract_AdversarialDeletedRequiredAlert
+--- PASS: TestAlertsContract_AdversarialDeletedRequiredAlert (0.00s)
+PASS
+ok  github.com/smackerel/smackerel/internal/metrics  0.030s
+
+$ grep -E "^  - alert:" config/prometheus/alerts.yml
+  - alert: SmackerelCoreUnavailable
+  - alert: SmackerelMLUnavailable
+  - alert: SmackerelIngestionStalled
+  - alert: SmackerelNATSDeadLetterPressure
+  - alert: SmackerelDBPoolSaturated
+  - alert: SmackerelMLEmbeddingStarvation
+  - alert: TwitterAPIRateLimitChronicExhaustion
+  - alert: TwitterAPIRetryStorm
+  - alert: SmackerelAlertDeliveryFailing
+  - alert: SmackerelBackupStale
+  - alert: ConnectorSyncFailureRateHigh24h
+
+$ ./smackerel.sh test unit --go
+[go-unit] go test ./... finished OK
+```
+
+---
+
+## Simplify Pass (Stochastic Sweep Round 32 — simplify trigger)
+
+### Probe Summary
+
+Probed the spec-005 implementation surface (maps connector, browser-history
+connector, trip-dossier + people-intelligence) for dead code, over-abstraction,
+and duplication. The surface is mature and heavily hardened by prior rounds; the
+maps package helpers (`activityCoords`, `activityGridCoords`, `sourceRefHash`,
+`computeDedupHash`, `Haversine`) are all live (`Haversine` is used in
+`internal/connector/maps/patterns.go::classifyTrips`), and the browser/people
+helpers are all reachable. One genuine in-scope redundancy was found and removed.
+
+### Findings
+
+| ID | Finding | Severity | Disposition |
+|----|---------|----------|-------------|
+| SIMP-005-R32-1 | `internal/intelligence/people.go::classifyInteractionTrend` had a redundant `if daysSince < 7 { return "stable" }` branch immediately followed by an unconditional `return "stable"` — a provably dead branch (same value as the fallthrough for every input that reaches it). | Low | Removed in-round (behavior-preserving; existing tests already cover the affected input space). |
+
+### Non-Actionable Observation
+
+- One cross-package observation — duplicate haversine math in the
+  `internal/connector/alerts/` package (owned by a different spec) versus
+  `internal/connector/maps/maps.go::Haversine` — was surfaced and formally
+  dispositioned as **SIMP-005-R32-OBS1** in the `## Discovered Issues` ledger
+  below (accepted, no change; consolidation would add cross-package coupling for
+  ~10 lines of standard math).
+
+### Files Changed
+- `internal/intelligence/people.go` — removed the redundant `daysSince < 7`
+  branch in `classifyInteractionTrend` (the function now returns `"stable"` from
+  a single catch-all). Net −3 lines. No behavior change.
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit --go --go-run 'ClassifyInteractionTrend' --verbose
+=== RUN   TestClassifyInteractionTrend
+--- PASS: TestClassifyInteractionTrend (0.00s)
+=== RUN   TestClassifyInteractionTrend_BoundaryValues
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/exactly_7_days_is_stable
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/6_days,_10_interactions_is_stable
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/6_days,_15_interactions_is_increasing
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/exactly_42_days_is_stable
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/43_days,_10_interactions_is_decreasing
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/21_days,_4_interactions_is_stable
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/22_days,_4_interactions_is_decreasing
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/22_days,_5_interactions_is_stable
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/0_days,_0_interactions_is_stable
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/30_days,_0_interactions_is_decreasing
+=== RUN   TestClassifyInteractionTrend_BoundaryValues/50_days,_0_interactions_is_lapsed
+--- PASS: TestClassifyInteractionTrend_BoundaryValues (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/exactly_7_days_is_stable (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/6_days,_10_interactions_is_stable (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/6_days,_15_interactions_is_increasing (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/exactly_42_days_is_stable (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/43_days,_10_interactions_is_decreasing (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/21_days,_4_interactions_is_stable (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/22_days,_4_interactions_is_decreasing (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/22_days,_5_interactions_is_stable (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/0_days,_0_interactions_is_stable (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/30_days,_0_interactions_is_decreasing (0.00s)
+    --- PASS: TestClassifyInteractionTrend_BoundaryValues/50_days,_0_interactions_is_lapsed (0.00s)
+=== RUN   TestClassifyInteractionTrend_ExtremeValues
+--- PASS: TestClassifyInteractionTrend_ExtremeValues (0.00s)
+ok      github.com/smackerel/smackerel/internal/intelligence    0.026s
+WRAPPER_EXIT=0
+```
+
+The boundary battery exercises both the old `daysSince < 7` branch
+(`6 days/10 → stable`, `0 days/0 → stable`) and the catch-all
+(`exactly 7 days → stable`, `21 days/4 → stable`); all return `"stable"` via the
+single catch-all after removal, proving behavior is preserved.
+
+---
+
+## Discovered Issues
+
+Disposition ledger for issues surfaced during the Round 32 simplify sweep
+(2026-06-17). Full evidence is in the "Simplify Pass (Stochastic Sweep Round 32
+— simplify trigger)" section above.
+
+| ID | Date | Finding | Disposition | Reference |
+|----|------|---------|-------------|-----------|
+| SIMP-005-R32-1 | 2026-06-17 | Redundant `daysSince < 7` branch in `classifyInteractionTrend` returned the same `"stable"` value as the unconditional fallthrough directly below it. | **Fixed in-round** — branch removed; behavior preserved (`TestClassifyInteractionTrend`, `_BoundaryValues`, `_ExtremeValues` all green). | `internal/intelligence/people.go`; `specs/005-phase4-expansion/report.md` (Round 32 Simplify Pass) |
+| SIMP-005-R32-OBS1 | 2026-06-17 | `maps.Haversine` (LatLng args) and `alerts.haversineKm` (4-float args) implement the same haversine formula in two packages. | **Accepted (no change)** — `internal/connector/alerts/` is owned by a different spec; consolidating would add a cross-package import edge for ~10 lines of standard math, raising coupling without reducing net complexity. Both implementations are independently unit-tested and correct. | `internal/connector/maps/maps.go`; `internal/connector/alerts/alerts.go`; `specs/005-phase4-expansion/report.md` (Round 32 Simplify Pass) |

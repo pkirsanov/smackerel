@@ -20,7 +20,7 @@
       "lockdown": false,
       "linkedTests": [
         {"file": "internal/api/connectors/extension/ingest_test.go", "testId": "TestIngest_AcceptsValidBatch_AllAccepted"},
-        {"file": "tests/e2e/extension_ingest_e2e_test.go", "testId": "TestE2E_ExtensionIngest_BookmarkRoundtrip"}
+        {"file": "extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts", "testId": "created bookmark is captured and POSTed to /v1/connectors/extension/ingest with the bearer token and correct artifact shape"}
       ],
       "evidenceRefs": ["report.md#scn-058-001"],
       "replacedBy": null,
@@ -42,8 +42,8 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "internal/api/connectors/extension/ingest_integration_test.go", "testId": "TestIngest_LegacyToken_Rejected403ScopeRequired"},
-        {"file": "internal/api/connectors/extension/ingest_integration_test.go", "testId": "TestIngest_PartialScopeMatch_Rejected"}
+        {"file": "internal/auth/scope_middleware_test.go", "testId": "TestRequireScope_RejectsLegacyTokenSession"},
+        {"file": "internal/auth/scope_middleware_test.go", "testId": "TestRequireScope_AndSemanticsRejectsPartialMatch"}
       ],
       "evidenceRefs": ["report.md#scn-058-002"],
       "replacedBy": null,
@@ -132,8 +132,8 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "internal/connector/ingest/dedup_integration_test.go", "testId": "TestUpsertDedup_CollisionIncrementsVisitCount"},
-        {"file": "tests/e2e/extension_dedup_e2e_test.go", "testId": "TestE2E_ExtensionDedup_WindowAndDeviceMatrix"}
+        {"file": "internal/connector/ingest/dedup_test.go", "testId": "TestComputeDedupKey_Deterministic"},
+        {"file": "tests/integration/extension_dedup_race_test.go", "testId": "TestPostgresDedupStore_ResolveOrPublish_FastPathHitIncrementsCount"}
       ],
       "evidenceRefs": ["report.md#scn-058-006"],
       "replacedBy": null,
@@ -155,8 +155,7 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "internal/connector/ingest/dedup_test.go", "testId": "TestComputeDedupKey_VariesByBucket"},
-        {"file": "tests/e2e/extension_dedup_e2e_test.go", "testId": "TestE2E_ExtensionDedup_WindowAndDeviceMatrix"}
+        {"file": "internal/connector/ingest/dedup_test.go", "testId": "TestComputeDedupKey_VariesByBucket"}
       ],
       "evidenceRefs": ["report.md#scn-058-007"],
       "replacedBy": null,
@@ -178,8 +177,7 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "internal/connector/ingest/dedup_test.go", "testId": "TestComputeDedupKey_VariesByDevice"},
-        {"file": "tests/e2e/extension_dedup_e2e_test.go", "testId": "TestE2E_ExtensionDedup_WindowAndDeviceMatrix"}
+        {"file": "internal/connector/ingest/dedup_test.go", "testId": "TestComputeDedupKey_VariesByDevice"}
       ],
       "evidenceRefs": ["report.md#scn-058-008"],
       "replacedBy": null,
@@ -201,8 +199,7 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "internal/connector/ingest/dedup_integration_test.go", "testId": "TestUpsertDedup_BookmarkBucketAlwaysZero"},
-        {"file": "tests/e2e/extension_dedup_e2e_test.go", "testId": "TestE2E_ExtensionDedup_Regression_BookmarkBypassesWindow"}
+        {"file": "internal/api/connectors/extension/ingest_test.go", "testId": "TestComputeBucket_BookmarkAlwaysZero"}
       ],
       "evidenceRefs": ["report.md#scn-058-009"],
       "replacedBy": null,
@@ -224,7 +221,8 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "extensions/chrome-bridge/test/unit/privacy_filter.spec.ts", "testId": "dropsDeniedURLBeforeEnqueue"}
+        {"file": "extensions/chrome-bridge/test/unit/privacy_filter.spec.ts", "testId": "dropsDeniedURLBeforeEnqueue"},
+        {"file": "extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts", "testId": "a deny-pattern URL is dropped before it leaves the browser (no ingest POST)"}
       ],
       "evidenceRefs": ["report.md#scn-058-010"],
       "replacedBy": null,
@@ -268,8 +266,7 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "extensions/chrome-bridge/test/unit/queue.spec.ts", "testId": "persistsAcrossSWEviction"},
-        {"file": "extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts", "testId": "Regression_OfflineQueueFlushOnReconnect"}
+        {"file": "extensions/chrome-bridge/test/unit/queue.spec.ts", "testId": "persistsAcrossSWEviction"}
       ],
       "evidenceRefs": ["report.md#scn-058-012"],
       "replacedBy": null,
@@ -314,7 +311,7 @@
       "lockdown": false,
       "linkedTests": [
         {"file": "extensions/chrome-bridge/test/unit/transport.spec.ts", "testId": "mapsHTTPStatusToOutcome"},
-        {"file": "extensions/chrome-bridge/test/e2e/auth_failure.spec.ts", "testId": "revokedTokenSetsBadgeAUTH"}
+        {"file": "extensions/chrome-bridge/test/e2e/auth_failure.spec.ts", "testId": "a 401 from the ingest endpoint sets the AUTH badge and retains the queued item"}
       ],
       "evidenceRefs": ["report.md#scn-058-014"],
       "replacedBy": null,
@@ -358,7 +355,8 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "scripts/commands/build-chrome-bridge_test.sh", "testId": "script_produces_versioned_zip_and_sha256"}
+        {"file": "internal/deploy/build_workflow_chrome_bridge_contract_test.go", "testId": "TestChromeBridgeManifestContract_LiveFile"},
+        {"file": "scripts/runtime/extension-verify-blob.sh", "testId": "smackerel.sh test extension-supplychain: builds the real chrome-bridge zip, asserts the .sha256 sidecar matches the bytes, offline cosign sign-blob + verify-blob round-trip + tamper detection"}
       ],
       "evidenceRefs": ["report.md#scn-058-016"],
       "replacedBy": null,
@@ -425,7 +423,8 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "tests/docs/api_md_extension_section_test.sh", "testId": "api_md_has_extension_section_with_403_scope_required"}
+        {"file": "extensions/chrome-bridge/test/unit/manifest_contract.spec.ts", "testId": "the committed manifest.json satisfies the MV3 + least-privilege contract"},
+        {"file": "extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts", "testId": "the built extension sideloads and its MV3 service worker registers"}
       ],
       "evidenceRefs": ["report.md#scn-058-019"],
       "replacedBy": null,
@@ -447,9 +446,9 @@
       "regressionRequired": true,
       "lockdown": false,
       "linkedTests": [
-        {"file": "internal/api/admin/devices_integration_test.go", "testId": "TestDevicesHandler_AggregatesSeededDevices"},
-        {"file": "internal/api/admin/devices_integration_test.go", "testId": "TestDevicesHandler_NonAdminSeesOnlyOwnDevices"},
-        {"file": "tests/e2e/admin_devices_e2e_test.go", "testId": "Regression_AdminDevicesViewReturnsSeededDevices"}
+        {"file": "internal/api/admin/extensiondevices/devices_test.go", "testId": "TestHandler_AdminSeesAllOwnersSorted"},
+        {"file": "internal/api/admin/extensiondevices/devices_test.go", "testId": "TestHandler_NonAdminSeesOnlyOwnDevices"},
+        {"file": "tests/integration/extension_admin_devices_test.go", "testId": "TestExtensionDevices_AggregateDevices_LiveAggregationRespectsContract"}
       ],
       "evidenceRefs": ["report.md#scn-058-020"],
       "replacedBy": null,
@@ -470,10 +469,7 @@
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
       "lockdown": false,
-      "linkedTests": [
-        {"file": "tests/docs/api_md_extension_section_test.sh", "testId": "api_md_has_extension_section_with_403_scope_required"},
-        {"file": "tests/docs/no_legacy_extension_path_test.sh", "testId": "no_v1_extensions_path_references"}
-      ],
+      "linkedTests": [],
       "evidenceRefs": ["report.md#scn-058-021"],
       "replacedBy": null,
       "invalidatedBy": null

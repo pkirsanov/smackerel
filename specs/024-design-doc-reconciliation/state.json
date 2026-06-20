@@ -5,7 +5,7 @@
   "status": "done",
   "certifiedAt": "2026-06-06T23:00:00Z",
   "certifiedBy": "bubbles.workflow",
-  "lastUpdatedAt": "2026-06-06T18:00:00Z",
+  "lastUpdatedAt": "2026-06-17T00:00:00Z",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -659,6 +659,17 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "BUG-024-005 harden-sweep finalize: sweep round 7 of 20 (sweep-2026-06-06-r20b, trigger harden, mapped child mode harden-to-doc, executionModel parent-expanded-child-mode). 2 findings (F1+F2), 2 closed, 0 unresolved, 1 bug spawned (BUG-024-005, finalStatus resolved). Parent spec 024 status: done before and after. Per round hard rule: NO COMMIT, NO PUSH — all changes left in the working tree for the parent stochastic-quality-sweep / operator. RESULT-ENVELOPE emitted."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["reconcile"],
+      "workflowMode": "reconcile-to-doc",
+      "executionModel": "parent-expanded-child-mode",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-17T00:00:00Z",
+      "runEndedAt": "2026-06-17T00:00:00Z",
+      "summary": "reconcile-to-doc routed remediation from stochastic-quality-sweep Round 23 (executionModel parent-expanded-child-mode). Finding: TestConnectorCountContract_LiveFile (internal/deploy) RED — connector-count disagreement cmd/core/connectors.go=17, docs/smackerel.md §22.7=18, docs/smackerel.md §24-A=17, docs/Development.md=17 (three of four surfaces at 17, §22.7 the lone outlier). Root cause: an uncommitted erroneous worktree edit bumped §22.7 (header line ~2797 and intro line ~2799) from 17→18 and appended a phantom inventory row 18 (Google Photos, photos/, spec 040); photos/ is a photo-library package that is NOT registered in the runtime connector slice (cmd/core/connectors.go registers exactly 17). Fix (R-006 + BS-004 + AC-5 owned doc reconciliation): reverted all three §22.7 sub-edits — header 18→17, intro All 18→All 17, and removed the phantom Google Photos row — restoring four-surface agreement at 17. Verification: go test -count=1 -run TestConnectorCountContract ./internal/deploy/... captured RED (EXIT 1, §22.7=18) before and GREEN (EXIT 0) after; post-fix grep shows §22.7=(17 connectors) and §24-A=(17 committed) with no §22.7 Google Photos row; git diff --stat docs/smackerel.md is empty (uncommitted erroneous edit fully reverted to HEAD, no spurious change introduced). Boundary: only docs/smackerel.md (reverted) plus this spec-024 report.md/state.json execution record touched; no spec.md/design.md/scopes.md planning-truth edit, no runtime/schema/test change. NO COMMIT, NO PUSH — left in the working tree for the operator. Parent spec 024 status stays done; statusCeiling docs_updated, no promotion."
     }
   ],
   "activeBugs": [],

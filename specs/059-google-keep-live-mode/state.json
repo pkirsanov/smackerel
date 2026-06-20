@@ -3,9 +3,9 @@
   "featureDir": "specs/059-google-keep-live-mode",
   "featureName": "Google Keep Live Sync (gkeepapi production hardening)",
   "status": "done",
-  "certifiedAt": "2026-06-06T17:00:00Z",
+  "certifiedAt": "2026-06-15T14:55:00Z",
   "certifiedBy": "bubbles.workflow",
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-15T14:55:00Z",
   "convergenceHealth": {
     "recapCount": 0,
     "handoffCount": 0,
@@ -196,6 +196,24 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edits: 64a42616 (tier-5 drift cleanup — reconciled stale Test Plan / Change Boundary / Surfaces test-file paths in scopes.md to actual layout: tests/integration/keep_*_test.go -> internal/connector/keep/keep_*_test.go and ml/tests/test_keep_bridge.py -> split test_keep_bridge_handshake.py + test_keep_bridge_warnings.py; test-function names + scenario IDs unchanged). Sole documentation-reconciliation campaign edit since certification; no requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["gaps", "harden", "test", "docs"],
+      "workflowMode": "test-to-doc (R01 stochastic-quality-sweep)",
+      "runStartedAt": "2026-06-15T14:30:00Z",
+      "runEndedAt": "2026-06-15T14:55:00Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "summary": "Round R01 of the stochastic-quality-sweep re-ran the test-to-doc contract. Test phase: ./smackerel.sh test unit --go (focused spec-059 keep selector over a full go test ./... compile) — all SCN-059-001..019 unit-scenario tests PASS (internal/config SecretKeys + boundary, internal/connector/keep breaker/bridge/config, internal/deploy compose contract); ./smackerel.sh test unit --python — 509 passed, 2 skipped (the 2 skips are non-keep live-Ollama tests). The state-transition guard was RED (5 failures) against the certified-done spec, reducing to two root causes: (1) Gate G022 — gaps + harden specialist phases were absent from certifiedCompletedPhases; (2) Gate G095 — two stale narrative phrases in report.md lacked dated disposition. Executed the gaps phase (unit coverage SCN-059-001..019 complete and green; integration-scenario halves remain the routed OBS-059-01..06 cross-spec live-stack harness gaps) and the harden phase (reviewed spec/design/scopes — poll-interval floor consistent at 15 min, no drift; identified low-severity scenario-manifest.json linkedTests file-hint drift, function-name traceability intact, dispositioned non-blocking). Added gaps + harden to certification.certifiedCompletedPhases; advanced top-level and certification certifiedAt + lastEvaluatedAt to the recertification timestamp (Gate G088 remediation); added report.md gaps/harden evidence sections and the dated Discovered Issues section F (Gate G095). No source code or test changes — the six scope deliveries were already complete and green.",
+      "addressedFindings": [
+        "G022-059-GAPS: gaps specialist phase absent from certifiedCompletedPhases — RESOLVED by genuine R01 gaps execution + record.",
+        "G022-059-HARDEN: harden specialist phase absent from certifiedCompletedPhases — RESOLVED by genuine R01 harden execution + record.",
+        "G095-059: two stale narrative deferral phrases (report.md:332 historical TestSST flake, report.md:782 stale 'out of scope' iterate-sweep concern) — RESOLVED by dated Discovered Issues section F dispositions."
+      ],
+      "unresolvedFindings": [
+        "MANIFEST-059-FILEHINT: scenario-manifest.json linkedTests carry post-split file-hint drift (function names accurate + passing; non-blocking, cross-check is a structural no-op for manifest-based specs) — routed to a dedicated bubbles.plan manifest-reconciliation pass."
+      ]
     }
   ],
   "transitionRequests": [
@@ -414,8 +432,8 @@
   ],
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-06-06T17:00:00Z",
-    "lastEvaluatedAt": "2026-05-29T03:03:47Z",
+    "certifiedAt": "2026-06-15T14:55:00Z",
+    "lastEvaluatedAt": "2026-06-15T14:55:00Z",
     "evidenceRefs": [
       "specs/059-google-keep-live-mode/report.md"
     ],
@@ -427,7 +445,7 @@
       "5",
       "6"
     ],
-    "certifiedCompletedPhases": ["spec-review", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "docs", "validate", "audit", "chaos"],
+    "certifiedCompletedPhases": ["spec-review", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "docs", "validate", "audit", "chaos"],
     "scopeProgress": [
       {"scope": 1, "name": "Secret Manifest Wiring", "status": "done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T03:03:47Z"},
       {"scope": 2, "name": "drift_ack_token Config Field + Fail-Loud Connector Validation", "status": "done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T03:03:47Z"},

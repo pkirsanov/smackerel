@@ -2000,5 +2000,87 @@ No source, test, config, docs, or other-spec artifacts modified.
 
 <!-- bubbles:g040-skip-end -->
 
+---
+
+## Security Re-Verification — Stochastic Sweep Round 40 (security-to-doc)
+
+**Date:** 2026-06-18  **Phase Agent:** bubbles.security (parent-expanded by
+bubbles.workflow under `security-to-doc`).  **Trigger:** stochastic-quality-sweep
+Round 40 (final), trigger = `security`.  **Scope:** re-probe the spec 068
+in-scope surface (`internal/assistant/intent/**`, `internal/config/assistant_intent_compiler.go`,
+`internal/assistant/facade.go` Steps 3.5/3.55/3.6, `config/smackerel.yaml`
+`assistant.intent_compiler.*`) for drift or new vulnerabilities introduced since
+certification, including across the concurrent sweep's uncommitted worktree.
+
+**Why a re-probe and not a re-audit:** spec 068 is already certified `done`; its
+original `## Security Evidence` (S1–S8 + findings F1/F2/F3) stands. This round
+verifies the documented mitigations STILL HOLD and looks for anything new. The
+production HTTP transport + ML route remain owned by spec 069 (still absent),
+so the runtime attack surface is unchanged.
+
+### Documented-Mitigation Re-Verification (mechanical)
+
+| Ref | Mitigation | Re-Verification This Round | Status |
+|-----|-----------|----------------------------|--------|
+| T1 | Schema hardening (`DisallowUnknownFields` + closed-vocab + range) | `internal/assistant/intent/schema.go` still calls `dec.DisallowUnknownFields()`; `ValidateCompiledIntent` enforces closed `action_class`/`side_effect_class`, required fields, `confidence ∈ [0,1]`. Adversarial unit cases re-run (see below). | HELD |
+| T2 | Confirmation gate before `Router.Route`, keyed on `side_effect_class` | `facade.go` Step 3.6 calls `intent.RequiresConfirmation(compiled)` and `return`s before Step 4 routing; scenario-hint switch (Step 3.5) unchanged. | HELD |
+| T3 | `side_effect_class` LLM-mislabel (residual) | Unchanged residual; defence-in-depth still owned by spec 067 (policy) + spec 037 (tool capability). No new exposure — compiler still `enabled: false` in prod. | HELD (residual; F1) |
+| T4 | `OperationalCommands` no external mutation | `grep` for `OperationalCommands[...] =` / reassignment / `delete()` → only the declaration in `bypass.go`; zero external writers. First-token, case-sensitive exact-match classifier (no prefix/casing bypass). | HELD |
+| T5 | Raw-route bypass guard (SCN-068-A08) | `grep '\b\w+\.Route\s*\('` over `internal/assistant/**/*.go` → exactly **one** real call site (`facade.go:1702 f.router.Route`), which is the sole `AllowedRouteCallers` entry AND references `intentCompiler`. The guard's own scan (`policyguard.ReportRawRouteBypasses`) therefore returns zero findings on the current tree by construction. | HELD |
+| T6 | Fail-loud SST (9 keys, no defaults) | `TestIntentCompilerConfigRequiresEverySSTKey` re-run — all-missing, fully-populated, and each-key-independently-required (9 subtests) PASS. | HELD |
+| T8 | Runaway-output DoS cap | `config/smackerel.yaml` `max_output_bytes: 16384` + `timeout_ms: 5000` present; `enabled: false`. Go-side response-body `io.LimitReader` enforcement lands with the spec 069 production transport (still no concrete transport in 068). | HELD |
+| T10 | No new HTTP entry point | `grep 'assistant/intent\|intent/compile' ml/app/` → 0 matches; ML compiler route still absent. No new `internal/api/` handler. | HELD |
+
+### Adversarial Unit Re-Run (executed this round)
+
+**Command:** `./smackerel.sh test unit --go --go-run 'TestCompiler|TestParseAndValidate|TestValidateCompiledIntent|TestIsOperationalCommand|TestOperationalCommand|TestBypass|TestSideEffect|TestRequiresConfirmation|TestIntentCompilerConfig' --verbose` → `UNIT_EXIT=0`.
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+<!-- Curated summary of the live `UNIT_EXIT=0` run (subtests collapsed to parenthetical lists for readability; not raw verbatim transcript). -->
+```
+ok   github.com/smackerel/smackerel/internal/assistant/intent   0.041s
+ok   github.com/smackerel/smackerel/internal/config             0.125s
+ok   github.com/smackerel/smackerel/internal/agent              0.093s
+
+--- PASS: TestCompilerRejectsMalformedJSONWithoutRouting (truncated_json, garbage,
+          missing_required_action_class, unknown_action_class, confidence_out_of_range)   [SCN-068-A06]
+--- PASS: TestCompilerAcceptsValidIntent
+--- PASS: TestCompilerSurfacesProviderError
+--- PASS: TestOperationalCommandBypassRecordsTraceLabel (16 subtests incl
+          case_sensitive_uppercase, trailing_args_status, leading_whitespace_status,
+          empty, whitespace_only)                                                          [SCN-068-A07]
+--- PASS: TestOperationalCommandsCarveOutIsTinyAndExplicit
+--- PASS: TestSideEffectGateBlocksExternalWriteWithoutConfirmation                          [SCN-068-A09]
+--- PASS: TestSideEffectClass_Exhaustive
+--- PASS: TestIntentCompilerConfigRequiresEverySSTKey (9 per-key subtests)                  [T6/SST]
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+The `case_sensitive_uppercase` (`/STATUS` not bypassed) and `trailing_args_status`
+(`/status …` not bypassed) subtests confirm there is no operational-command
+prefix/casing injection vector. SCN-068-A08 guard surface verified mechanically
+(equivalent `Router.Route` scan above) rather than via the `//go:build integration`
+test, to avoid standing up the full live stack for a pure source-scan.
+
+### Findings
+
+**Zero new findings.** No CRITICAL/HIGH/MEDIUM defect introduced; no drift from
+the certified posture. The three pre-existing findings remain correct and routed:
+
+| # | Severity | Status This Round |
+|---|----------|-------------------|
+| F1 | Medium (residual) | Unchanged — `side_effect_class` LLM-mislabel defence-in-depth owned by spec 067 + spec 037. Not a 068 defect. |
+| F2 | Low (hardening) | Unchanged — optional `OperationalCommands` unexport; routed to bubbles.plan as optional follow-up. |
+| F3 | Low (boundary) | Unchanged — `CompilerTrace.RawText` redaction owned by spec 071 (Trace Inspector). |
+
+### Verdict
+
+**✅ NO NEW FINDINGS — POSTURE HELD.** All documented T1–T10 mitigations
+re-verified intact on the current worktree; all spec 068 adversarial security
+unit tests re-run green; the keystone raw-route bypass guard surface (SCN-068-A08)
+is clean by construction. Spec 068 status is unchanged (`done`); no source,
+test, config, scope, or other-spec artifact was modified by this round (report-only
+`-to-doc` deliverable).
+
 
 

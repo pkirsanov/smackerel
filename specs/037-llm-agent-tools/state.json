@@ -114,6 +114,15 @@
     "pendingTransitionRequests": [],
     "executionHistory": [
       {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["devops", "implement", "test", "docs"],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-17T00:00:00Z",
+        "runEndedAt": "2026-06-17T00:00:00Z",
+        "summary": "Round 22 stochastic-quality-sweep devops trigger (parent-expanded devops-to-doc; no nested runSubagent). Finding F-037-DEVOPS-001 (medium, observability): the live agent runtime surface emitted DB traces + 2 NATS events but ZERO Prometheus metrics, and alerts.yml had ZERO agent rules, so an operator had no push alarm for provider-error/timeout/allowlist-violation degradation despite the spec.md 'Observability' NFR requiring aggregate per-scenario metrics; design.md never carried that NFR to Prometheus. Analogous to certified F-056-DEVOPS-001 and F-081-DEVOPS-001. Closed in-round: new internal/metrics/agent.go (smackerel_agent_invocations_total{scenario,outcome}, smackerel_agent_invocation_duration_seconds{scenario} histogram, smackerel_agent_tool_calls_total{scenario,tool,result}) with bounded cardinality (scenario->'unrouted' on unknown-intent; tool->'unregistered' for hallucinated names, a hard guard vs an adversarial model exploding labels); emission wired into PostgresTracer.RecordOutcome + publishToolCall (internal/agent/tracer.go); central MustRegister + TestMetricsRegistered updated; new smackerel-agent alert group in config/prometheus/alerts.yml (SmackerelAgentProviderErrors, SmackerelAgentInvocationTimeouts, SmackerelAgentAllowlistViolations) registered in prometheus_alerts_contract_test.go requiredAlerts; docs/Operations.md gains the agent dashboard row + 3 runbook rows. Evidence: new internal/agent/metrics_test.go 4/4 PASS (incl adversarial unregistered-bucket + negative control); internal/deploy TestMonitoring* (T-049-004 alerts metric-validity + T-049-005 docs + adversarial) PASS; internal/metrics TestMetricsRegistered + TestAlertsContract* PASS; ./smackerel.sh check + lint exit 0. Incidentally added the 2 pre-existing spec-081 ML-NATS alerts to the Operations.md runbook (T-049-005 checks all alerts and was already red without them; pure-docs, flagged to spec 081). Pre-existing foreign failure disclosed, NOT caused here: internal/deploy TestConnectorCountContract_LiveFile (docs/smackerel.md S22.7=18 vs runtime 17) from foreign uncommitted connector WIP / BUG-024-006; zero connector files touched. Planning-truth (spec/design/scopes/scenario-manifest/uservalidation) preserved; spec stays certified 'done'. No commit (shared multi-agent working tree)."
+      },
+      {
         "agent": "bubbles.spec-review",
         "phasesExecuted": ["spec-review"],
         "reviewStatus": "CURRENT",
@@ -331,5 +340,5 @@
   "policySnapshot": {
     "workflowMode": "full-delivery"
   },
-  "lastUpdatedAt": "2026-06-06T17:00:00Z"
+  "lastUpdatedAt": "2026-06-17T00:00:00Z"
 }

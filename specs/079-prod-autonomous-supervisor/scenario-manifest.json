@@ -4,7 +4,7 @@
   "generatedAt": "2026-06-03T00:00:00Z",
   "scenarios": [
     {
-      "scenarioId": "SCN-079-001",
+      "scenarioId": "SCN-079-A01",
       "scopeId": "TBD-post-ratification",
       "title": "Anomaly detected with valid write token → bug filed under owning spec with full evidence",
       "behaviorClass": "agent-decision",
@@ -15,7 +15,7 @@
       "evidenceRefs": ["spec.md#scn-079-a01-anomaly-detected-with-valid-write-token--bug-filed"]
     },
     {
-      "scenarioId": "SCN-079-002",
+      "scenarioId": "SCN-079-A02",
       "scopeId": "TBD-post-ratification",
       "title": "Anomaly detected without write token → read-only ledger entry only, no bug filed",
       "behaviorClass": "agent-decision",
@@ -26,7 +26,7 @@
       "evidenceRefs": ["spec.md#scn-079-a02-anomaly-detected-without-write-token--read-only-only"]
     },
     {
-      "scenarioId": "SCN-079-003",
+      "scenarioId": "SCN-079-A03",
       "scopeId": "TBD-post-ratification",
       "title": "Supervisor respects operator quiet hours for non-critical anomalies",
       "behaviorClass": "agent-decision",
@@ -37,7 +37,7 @@
       "evidenceRefs": ["spec.md#scn-079-a03-supervisor-respects-operator-quiet-hours"]
     },
     {
-      "scenarioId": "SCN-079-004",
+      "scenarioId": "SCN-079-A04",
       "scopeId": "TBD-post-ratification",
       "title": "Supervisor defers to an active spec already covering the symptom",
       "behaviorClass": "agent-decision",
@@ -48,7 +48,7 @@
       "evidenceRefs": ["spec.md#scn-079-a04-supervisor-defers-to-an-active-spec"]
     },
     {
-      "scenarioId": "SCN-079-005",
+      "scenarioId": "SCN-079-A05",
       "scopeId": "TBD-post-ratification",
       "title": "Supervisor detects its own noise and self-throttles within budget",
       "behaviorClass": "agent-decision",
@@ -59,7 +59,7 @@
       "evidenceRefs": ["spec.md#scn-079-a05-supervisor-detects-its-own-noise-and-self-throttles"]
     },
     {
-      "scenarioId": "SCN-079-006",
+      "scenarioId": "SCN-079-A06",
       "scopeId": "TBD-post-ratification",
       "title": "Capability token expiry revokes write access mid-flight with no partial state",
       "behaviorClass": "agent-decision",

@@ -343,6 +343,24 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edits: 19b31c0a (OPS-001 banner sweep: spec.md '> **Status:** Draft' -> 'Done') and b1c46991 (tier-4 drift cleanup: scopes.md 'Files created' reconciled internal/connector/discord/normalizer.go, ratelimiter.go, and rest.go plus their _test.go files -> internal/connector/discord/discord.go and discord_test.go because the helpers are package-internal and ship inline on the connector hot path, with explanatory parentheticals). Both reconcile documentation file paths to the shipped layout; function names, SCN-DC scenario refs, test counts (15 unit; 10 unit + 4 integration), and DoD semantics unchanged; implementation unchanged. Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["gaps", "validate", "audit", "docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-06-17T13:45:00Z",
+      "completedAt": "2026-06-17T14:15:00Z",
+      "summary": "Stochastic-quality-sweep Round 9 (sweep-2026-06-17-r9), trigger=gaps, mappedMode=gaps-to-doc, executionModel=parent-expanded-child-mode. Gaps probe compared spec/design/scopes against the shipped internal/connector/discord implementation. Functional coverage CLEAN: all R-003 content types, R-004 metadata, R-007 tiers, R-009 threads, and R-010 bot commands are implemented and tested (150 unit functions, unchanged; no stub/TODO markers in discord.go or gateway.go). Surfaced 2 documentation-reality findings sharing one root cause: F-GAPS-R9-001 (MEDIUM) design.md (Status: Draft) described a github.com/bwmarrin/discordgo + WebSocket Gateway architecture across Resolved Decisions, Dependencies, Data Flow Real-Time, Patterns-to-Avoid, and all 4 component code blocks, but the shipped connector uses stdlib net/http + a REST EventPoller (GatewayClient interface) and has NO discordgo in go.mod/go.sum; F-GAPS-R9-002 (MEDIUM) scopes.md Change Boundary claimed 'go.mod (add discordgo dependency)' (never added) and Scope 4 wording said 'WebSocket Gateway connection with discordgo Session'. Closure = documentation reconciliation only, zero runtime/test/config delta (git scope: specs/014-discord-connector/{design.md,scopes.md,report.md,state.json}). design.md gained an authoritative 'Implementation Reality (Shipped Architecture)' section + Draft->Done banner + 4 inline supersession notes; scopes.md Change Boundary + Scope 4 phase-order line + Scope 04 Description reconciled to the EventPoller reality; report.md gained the Round 9 gaps remediation section. Both findings cross-reference report.md's prior 'Design-implementation alignment: Aligned' adjudication and the V-014-R25-004 history. Per Gate G088, editing certified planning truth (design.md/scopes.md) on a done spec is a recertification event: G088 flags the uncommitted planning edits, and its requiresRevalidation:true remediation is mutually exclusive with G089 for status=done (proven this round: setting requiresRevalidation:true cleared G088 but tripped G089). The reconciliation is therefore delivered in-worktree and the certification finalize (commit the reconciled planning edits + reconcile-to-doc recert stamping certifiedAt after the commit) is routed to the commit owner. Post-edit transition guard: G089 and the other structural checks pass; G088 reports the expected uncommitted-planning-edit detection that resolves on commit + recert. Spec status unchanged at done."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["harden", "docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-06-17T14:20:00Z",
+      "completedAt": "2026-06-17T14:45:00Z",
+      "summary": "Stochastic-quality-sweep Round 10 (sweep-2026-06-17-r10), trigger=harden, mappedMode=harden-to-doc (v6 'validate action:harden finalize:docs'), executionModel=parent-expanded-child-mode (runSubagent unavailable; spec.md reconciliation authored as owner bubbles.analyst, report hygiene on workflow-owned report.md). Harden probe targeted spec/design/scope quality EXCLUDING the Round 9 architecture drift (discordgo/WebSocket vs net/http/REST), which is already reconciled in-worktree. Surfaced 3 NON-architecture findings, all closed in-worktree with zero runtime/test/config delta (discord package byte-identical): H-014-R10-001 (MEDIUM, spec.md) internal read-only contradiction \u2014 Hard Constraints declare absolute read-only but Non-Goals carved out '(except responding to explicit bot commands in capture mode)' and R-010 promised 'Bot responds with a brief confirmation'; the shipped connector is pure read-only (no ChannelMessageSend; ParseBotCommand parses inbound only); reconciled spec.md R-010 + Non-Goals with '(not adopted)' markers matching the Hard Constraint. H-014-R10-002 (LOW, spec.md) orphaned acceptance scenarios \u2014 spec.md Gherkin SCN-DC-001..008 are a namespace disjoint from the certified test-traced manifest SCN-DC-NRM/REST/CONN/GW/THR/CMD (grep confirms 001..008 appear only in spec.md); added a traceability note pointing to scenario-manifest.json/scopes.md and design.md Implementation Reality. H-014-R10-003 (MEDIUM, report.md) Round 9 introduced a Gate G040 deferral-language regression \u2014 its 'Prior posture confirmed' table row 'Deferred R-008 sub-events' sat outside any g040-skip sentinel (Round 9's captured validation showed 1 failure; the live worktree blocked on G040+G088); wrapped that table in a bubbles:g040-skip sentinel. Post-edit guards: artifact-lint PASS, traceability-guard PASS (13/13 scenarios), state-transition-guard clears Check 18/G040 and now blocks only on the EXPECTED Check 30/G088 uncommitted-planning-edit detection (same model as Round 9: in-worktree delivery; commit + reconcile-to-doc recert routed to the commit owner). Spec status unchanged at done."
     }
   ],
   "activeBugs": [],
@@ -393,7 +411,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-17T14:45:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

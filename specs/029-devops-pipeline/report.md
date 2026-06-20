@@ -498,3 +498,83 @@ Full red→green block and per-scenario evidence in `specs/029-devops-pipeline/b
 - **Validation:** `bubbles.validate` confirms 1→0 G088 BLOCK drop via `state-transition-guard.sh` against `specs/029-devops-pipeline`; `artifact-lint.sh` and `traceability-guard.sh` PASSED for both parent spec and BUG packet.
 - **Audit:** `bubbles.audit` confirms `git diff --cached --name-status` lists ONLY paths under `specs/029-devops-pipeline/`; closure commit prefix `bubbles(029/bug-029-007)`; workspace pre-existing dirty paths under other specs (003, 009, 016, 037, 067, bookmarks, weather, tests/integration/policy) are NOT staged and intentionally left alone.
 - **Regression:** `bubbles.regression` re-runs `internal/deploy/{ci_workflow_no_parallel_publish,build_workflow_vuln_gate_contract,compose_contract,dev_compose_default_fallback}_test.go` + `internal/api/health_test.go` against HEAD `e05aef1b` — ALL GREEN. BUG-029-007 changes zero runtime behavior; persistent regression cover stays GREEN by construction.
+
+---
+
+## Chaos-Hardening Sweep — Round 37 (2026-06-17)
+
+**Discovered:** 2026-06-17 (stochastic-quality-sweep, Round 37, trigger=`chaos`, mapped child workflow=`chaos-hardening`, executionModel=`parent-expanded-child-mode`)
+**Probe HEAD baseline:** `605a9ea3`
+**Status:** clean — no new actionable defect
+
+### Probe Scope
+
+Resilience / race-condition / edge-case probe of the spec 029 DevOps pipeline as it stands after the spec 047 Build-Once Deploy-Many (BODM) supersession. Surfaces probed:
+
+- `.github/workflows/build.yml` — full BODM publish pipeline: image build+push, Trivy CRITICAL/HIGH gate, cosign keyless sign, SBOM + SLSA attest, per-env config-bundle generation + determinism verification + OCI push, and `build-manifest-<sourceSha>.yaml` emission.
+- `.github/workflows/ci.yml` — lint/test/build fast gate + cross-language canary + main-only integration job.
+- Concurrent-trigger behavior, partial-publish failure modes, non-deterministic-build edge cases, and malformed/missing-input handling in the manifest emitters.
+
+### Race / Edge-Case Analysis
+
+| # | Probe vector | Failure hypothesis | Verdict |
+|---|--------------|--------------------|---------|
+| CH37-A | Concurrent tag+branch double-trigger on the same `github.sha` (push to `main` of a commit simultaneously tagged `v*`) runs two `build.yml` workflows at once. | Two runs racing on the same image tag / bundle ref / manifest corrupt a downstream deploy. | **NO CORRUPTION.** BODM is content-addressed by `sourceSha`: the manifest pins images by `@sha256:<digest>` (never the mutable `:sourceSha` convenience tag), bundles are verified byte-identical-deterministic before push, and each run's `build-manifest-<sourceSha>.yaml` is a per-`run_id` workflow artifact. Concurrent runs produce redundant-but-identical artifacts; the adapter pulls by digest. Race-tolerant by design. |
+| CH37-B | Non-reproducible image layers make the convenience `:${sourceSha}` tag flip between two digests across concurrent runs. | Operator pulling by `:sourceSha` tag gets a different digest than the manifest pins. | **BENIGN.** The deploy contract resolves images by `@sha256:<digest>` from the build manifest, never by the `:sourceSha` tag. The tag is convenience-only; the digest pin is authoritative. No deploy path consumes the floating tag. |
+| CH37-C | Partial publish: a `build.yml` run dies after the core image is signed but before ml image / bundles / manifest land. | A half-published source SHA leaves a deploy consuming a manifest naming artifacts that were never pushed. | **FAIL-CLOSED.** `publish-build-manifest` declares `needs: [build-images, build-bundles, build-chrome-bridge, build-clients]` — the manifest is emitted ONLY after every artifact job succeeds. The manifest is the deploy entrypoint; absent it, no apply can resolve artifacts. A partial run produces no manifest → no deploy. |
+| CH37-D | Malformed / missing artifact metadata reaching the manifest emitter (empty bundle sha, non-hex digest, missing chrome-bridge name). | Manifest emits an empty `sha256:` field; the adapter hash-verify is silently skipped. | **FAIL-CLOSED.** Every resolve step regex-validates `^[0-9a-f]{64}$` and `[[ -s ]]`-checks each artifact file, `exit 1` on violation; uploads use `if-no-files-found: error`. No empty/malformed value can reach a manifest field. |
+| CH37-E | `cancel-in-progress` concurrency guard absent on a multi-step publish workflow. | (Candidate hardening) | **INTENTIONALLY ABSENT** — see Observation O-37-1. A naive `cancel-in-progress: true` on a multi-artifact publish workflow would introduce a partial-publish vector (cancel mid-sign) strictly WORSE than the benign redundant run it would prevent. Content-addressing already makes concurrent runs idempotent. |
+
+### Non-Blocking Observations (not remediated — rationale recorded)
+
+| ID | Severity | Lane | Location | Observation | Why not remediated this round |
+|----|----------|------|----------|-------------|-------------------------------|
+| O-37-1 | LOW | hygiene | `.github/workflows/build.yml`, `.github/workflows/ci.yml` | No `concurrency:` group; a commit that is both pushed to `main` and tagged `v*` triggers two simultaneous runs on the same `sourceSha`. | Architecture is intentionally race-tolerant via content-addressing (CH37-A/B/C). A naive `cancel-in-progress: true` would risk a partial-publish regression (CH37-E); `cancel-in-progress: false` only serializes without correctness benefit. Eliminating redundant Rekor entries needs a SHA-keyed, publish-safe guard design — out of a chaos round's lane on a `done` spec. Route to a future `harden`/`devops` round if desired. |
+| O-37-2 | LOW | security / least-privilege | `.github/workflows/ci.yml` (`build` job) | The `build` job carries `permissions: packages: write` but only runs `./smackerel.sh build` locally and never pushes (the GHCR publish moved to `build.yml` per BUG-029-004). Unused write scope. | Wrong lane for a chaos trigger (this is a least-privilege/`security` finding, not a resilience/race defect). The exploit path (an actual push/login/tag step in `ci.yml`) is already FORBIDDEN and adversarially tested by `TestCIWorkflow_NoParallelPublishPath_PostBUG029004` + the three `TestCIWorkflow_Adversarial*Reintroduced` cases, so residual risk is mitigated. Route to a `security-to-doc` round to drop the scope. |
+
+### Evidence — Resilience Regression Cover (all GREEN at HEAD `605a9ea3`)
+
+The adversarial contract tests that mechanically fail on reintroduction of any spec 029 CI/CD resilience invariant were re-run via the repo CLI:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'CIWorkflow|CIIntegrationTopology|ComposeEnvFile|DevCompose|VulnGate' --verbose
+--- PASS: TestVulnGateContract_LiveFile (0.00s)
+--- PASS: TestVulnGateContract_AdversarialMissingScan (0.00s)
+--- PASS: TestVulnGateContract_AdversarialScanAfterSign (0.00s)
+--- PASS: TestVulnGateContract_AdversarialWeakSeverity (0.00s)
+--- PASS: TestVulnGateContract_AdversarialNonBlockingExitCode (0.00s)
+--- PASS: TestVulnGateContract_AdversarialMissingManifestEvidence (0.00s)
+--- PASS: TestVulnGateContract_AdversarialIgnoreUnfixedFlipped (0.01s)
+--- PASS: TestVulnGateContract_AdversarialMissingIgnoreUnfixedField (0.00s)
+--- PASS: TestVulnGateContract_AdversarialMissingIgnoreUnfixedManifestKey (0.00s)
+--- PASS: TestVulnGateContract_AdversarialMissingLimitSeveritiesForSarif (0.00s)
+--- PASS: TestVulnGateContract_AdversarialLimitSeveritiesForSarifFalse (0.00s)
+--- PASS: TestVulnGateContract_AdversarialMissingIgnoreUnfixedRationaleManifestKey (0.00s)
+--- PASS: TestVulnGateContract_AdversarialContinueOnError (0.00s)
+--- PASS: TestVulnGateContract_AdversarialNeuteringIf (0.00s)
+--- PASS: TestCIIntegrationTopologyContract (0.00s)
+--- PASS: TestCIIntegrationTopology_AdversarialRejectsReintroducedServiceBlock (0.00s)
+--- PASS: TestCIIntegrationTopology_AdversarialRejectsDockerRunInfraSidecar (0.00s)
+--- PASS: TestCIIntegrationTopology_AdversarialRejectsRawGoTest (0.00s)
+--- PASS: TestCIWorkflow_NoParallelPublishPath_PostBUG029004 (0.00s)
+    --- PASS: .../A_no_docker_push_in_ci_yml (0.00s)
+    --- PASS: .../B_no_ghcr_tagging_in_ci_yml (0.00s)
+    --- PASS: .../C_no_ghcr_login_in_ci_yml (0.00s)
+--- PASS: TestCIWorkflow_AdversarialDockerPushReintroduced (0.00s)
+--- PASS: TestCIWorkflow_AdversarialGhcrTaggingReintroduced (0.00s)
+--- PASS: TestCIWorkflow_AdversarialGhcrLoginReintroduced (0.00s)
+--- PASS: TestComposeEnvFileSharedAcrossCoreAndMlServices (0.00s)
+--- PASS: TestDevComposeContract_NoUnauthorizedDefaultFallbacks (0.00s)
+--- PASS: TestDevComposeContract_AdversarialUnauthorizedDefaultFallback (0.00s)
+--- PASS: TestDevComposeContract_AdversarialAllowlistRespected (0.00s)
+--- PASS: TestDevComposeContract_AdversarialCommentLinesIgnored (0.00s)
+--- PASS: TestDevComposeContract_FailLoudVolumeMounts (0.00s)
+--- PASS: TestDevComposeContract_FailLoudVolumeMounts_Adversarial (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.067s
+```
+
+29 resilience/adversarial contract tests GREEN (incl. nested subtests). The `*Adversarial*Reintroduced` and `*AdversarialUnauthorizedDefaultFallback` cases are genuinely failure-detecting (they assert the guard rejects a reintroduced parallel-publish path / a silent `${X:-default}` fallback), not tautological.
+
+### Verdict
+
+**CLEAN.** No new actionable resilience/race/edge-case defect. The Build-Once Deploy-Many pipeline is race-tolerant by content-addressing and fail-closed on partial-publish / malformed-metadata. Two LOW non-blocking observations (O-37-1 concurrency-guard hygiene, O-37-2 least-privilege) are recorded with non-remediation rationale and a suggested routing lane. Spec 029 status unchanged (`done`). No source/workflow/config mutation this round — documentation-only evidence record.

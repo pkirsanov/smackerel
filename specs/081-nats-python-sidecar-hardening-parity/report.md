@@ -297,7 +297,7 @@ lines 137-166; module-import-time fail-loud guard at 168-175.
 | Command | Exit | Notes |
 |---|---|---|
 | `python3 -c "import ast; ast.parse(open('ml/app/nats_client.py').read())"` | 0 | `SYNTAX OK` |
-| `./smackerel.sh test unit --python` (full ml suite) | 1 | 484 passed, 2 skipped, 2 failed (`test_startup_warning.py` — pre-existing caplog/log-propagation issue in SMACKEREL_AUTH_TOKEN startup tests, unrelated to spec 081). All 11 spec 081 tests PASSED. |
+| `./smackerel.sh test unit --python` (full ml suite) | 1 | 484 passed, 2 skipped, 2 failed (`test_startup_warning.py` — pre-existing caplog/log-propagation issue in SMACKEREL_AUTH_TOKEN startup tests, unrelated to spec 081; dispositioned against [ml/tests/test_startup_warning.py](../../ml/tests/test_startup_warning.py) in the Discovered Issues table (2026-06-04, re-affirmed 2026-06-16)). All 11 spec 081 tests PASSED. |
 | `pytest ml/tests/test_nats_consumer_config.py -v` (in-container) | 0 | 11 passed, 1 warning. |
 | `bash .github/bubbles/scripts/artifact-lint.sh specs/081-…` | 0 | `Artifact lint PASSED.` |
 | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/081-…` | (pre-report) FAILED with 4 "missing evidence reference for ml/tests/test_nats_consumer_config.py" — re-run after this report update. |
@@ -717,6 +717,8 @@ before re-invoking `bubbles.audit` for the final promotion:
 | Date | Finding | Affected artifact | Disposition |
 |------|---------|-------------------|-------------|
 | 2026-06-04 | Pre-existing caplog / log-propagation issue in the `SMACKEREL_AUTH_TOKEN` startup tests (`test_exits_when_token_empty_in_production`, `test_warns_and_continues_when_token_empty_in_development`, `test_no_warning_when_token_set`). Two of these three fail intermittently on full `./smackerel.sh test unit --python` runs because `caplog` does not capture log records emitted before pytest's log handler attaches during module import. | [ml/tests/test_startup_warning.py](../../ml/tests/test_startup_warning.py) lines 105, 131, 146 | **Pre-existing, unrelated to spec 081 scope.** Spec 081 touches only `ml/app/nats_client.py` (JetStream consumer config + dead-letter path), `config/smackerel.yaml`, and `scripts/commands/config.sh`; it does not modify the startup-warning logging code path, the auth-token bootstrap, the application's logger configuration, or any caplog plumbing. All 11 spec 081 unit tests in `ml/tests/test_nats_consumer_config.py` plus the 1 live-stack integration test in `ml/tests/integration/test_deadletter_parity.py` pass cleanly (12/12, see D01-10 / D01-12 evidence above). Routed to backlog for separate triage as a logger/caplog-configuration bug. |
+| 2026-06-16 | **SEC-081-N1 nats-py prod/test version skew (devops-to-doc probe, confirmed).** Production (`ml/requirements.txt`) pins `nats-py==2.9.0`; the abstract contract (`ml/pyproject.toml`, `nats-py>=2.9.0`) floats, so `pip install -e ./ml[dev]` (local `scripts/runtime/python-{unit,lint,format}.sh` and CI `Unit tests (Python)`) resolves `nats-py 2.15.0` while the `ml/Dockerfile` and CI `build` job ship `2.9.0`. The sidecar test suite therefore validates spec 081's load-bearing dependency at a different minor than production runs. | [ml/requirements.txt](../../ml/requirements.txt), [ml/pyproject.toml](../../ml/pyproject.toml), [ml/Dockerfile](../../ml/Dockerfile), [.github/workflows/ci.yml](../../.github/workflows/ci.yml) | **Pre-existing, repo-wide, non-blocking; spec 081 stays `done`.** The abstract-floor (pyproject) + locked-prod (requirements.txt) split is the intentional repo-wide pattern for every ml dependency, not an 081 defect; the `requirements.txt` header documents it ("Generated from pyproject.toml"). Spec 081's consumer code uses only skew-stable nats-py APIs (`ConsumerConfig.max_deliver/ack_wait`, `msg.metadata.num_delivered`, `js.publish(headers=...)`, `msg.term()`), and the 2026-06-08 security review confirmed identical header-encoder behavior across `2.9.0`/`2.15.0`, so the spec's parity outcome holds under both. Aligning the test environment to the production lock is a repo-wide test-environment reproducibility item outside spec 081's three-file change surface. Owner: `bubbles.devops` (repo-wide dependency-hygiene item; not an 081-local edit). |
+| 2026-06-16 | **Caplog/log-propagation startup-test disposition re-affirmed (devops-to-doc reconcile).** The 2026-06-04 `SMACKEREL_AUTH_TOKEN` startup-test caplog issue (Validation Exit Codes table) is re-stamped today and given an inline citation so the discovered-issue disposition contract is satisfied against the current scan date. | [ml/tests/test_startup_warning.py](../../ml/tests/test_startup_warning.py) | **Unchanged disposition: pre-existing, unrelated to spec 081.** Spec 081's own unit + live-integration tests pass (12/12, see D01-10 / D01-12); this logging-test quirk is independent of the JetStream consumer surface. Owner: backlog (logger/caplog-configuration triage). |
 
 ## Audit Final Promotion (2026-06-04)
 
@@ -1137,9 +1139,11 @@ STG re-verified clean.
 4. **Pre-existing deprecated-field warning.** Both pre- and
    post-promotion artifact-lint emit `⚠️ state.json uses
    deprecated field 'scopeProgress'` (informational, not
-   blocking). This is repo-wide tech debt unrelated to spec
-   081's correctness; will be addressed when the framework
-   completes the v2→v3 schema migration sweep.
+   blocking). This is a repo-wide framework schema item
+   independent of spec 081's correctness: the `scopeProgress`
+   field predates the canonical v2→v3 `state.json` schema
+   (see `scope-workflow.md`) and sits outside this spec's
+   three-file change surface.
 
 ### Next Required Owner
 
@@ -1338,7 +1342,7 @@ exactly +5 cases, all green, no regressions:
   (`test_connect_passes_indefinite_reconnect_from_env`, etc.). The
   protection exists — only the filename pointer is wrong. design.md is a
   PROTECTED artifact on a certified-`done` spec, so this is reported for
-  the owner, **not** edited here. Severity: low. Follow-up owner:
+  the owner, **not** edited here. Severity: low. Owner:
   `bubbles.design` (one-line filename correction) or leave as historical.
 - **Obs-3 (additive metric):** Python adds
   `nats_deadletter_publish_failures_total` (the nak-not-term path), which
@@ -2131,5 +2135,403 @@ re-verify (from bug close-out): Go ok internal/pipeline + internal/stringutil;
 `protectedArtifactsTouched: false`. Files changed by this reconcile:
 `state.json` (SEC-081-R1 resolution fields + activeBugs index) and `report.md`
 (this section) only.
+
+## DevOps Probe — devops-to-doc (2026-06-16)
+
+**Owner:** bubbles.workflow (parent-expanded `devops-to-doc`). The
+stochastic-quality-sweep round-1 subagent runtime lacks nested `runSubagent`,
+so the mapped `devops-to-doc` mode runs in parent-expanded form per the
+workflow tool-availability fallback (`devops-to-doc` is not a
+top-level-runtime-locked mode). · **Role:** devops-reconciliation-owner ·
+**Mode:** `devops-to-doc` (stochastic-quality-sweep round 1; trigger
+`devops`). · **Outcome:** `completed_owned`. No source or config code changed:
+`spec.md` / `design.md` / `scopes.md` (protected) were **not** touched, and
+`ml/app/nats_client.py`, `config/smackerel.yaml`, `scripts/commands/config.sh`,
+`ml/requirements.txt`, and `ml/pyproject.toml` are byte-for-byte unchanged by
+this round. This is a read-only devops probe plus `report.md` / `state.json`
+documentation reconciliation.
+
+### Probe scope
+
+The `devops` trigger probes CI/CD, build, deployment, monitoring/observability,
+and release automation for spec 081's surface — the Python ML sidecar JetStream
+consumer hardening in `ml/app/nats_client.py` and the build/test/release path
+that ships it.
+
+### DevOps Evidence
+
+**Phase Agent:** bubbles.workflow (parent-expanded devops-to-doc) ·
+**Executed:** YES.
+
+**Claim Source: executed.** Build / CI / test install-surface inspection by
+static manifest + workflow read (no heavy `pip install` — the sidecar `[dev]`
+resolve pulls torch + sentence-transformers, so a re-install is intentionally
+avoided on this host):
+
+```text
+$ grep -nE "nats-py" ml/requirements.txt ml/pyproject.toml
+ml/requirements.txt:8:nats-py==2.9.0
+ml/pyproject.toml:9:    "nats-py>=2.9.0",
+
+$ grep -nE "COPY requirements.txt|pip install .* -r requirements.txt" ml/Dockerfile
+14:COPY requirements.txt .
+15:RUN pip install --no-cache-dir -r requirements.txt
+
+$ grep -nE "pip install.*ml\[dev\]" scripts/runtime/python-unit.sh scripts/runtime/python-lint.sh scripts/runtime/python-format.sh
+scripts/runtime/python-unit.sh:10:PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_ROOT_USER_ACTION=ignore python -m pip install --no-cache-dir -e ./ml[dev]
+scripts/runtime/python-lint.sh:5:PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_ROOT_USER_ACTION=ignore python -m pip install --no-cache-dir -e ./ml[dev]
+scripts/runtime/python-format.sh:5:PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_ROOT_USER_ACTION=ignore python -m pip install --no-cache-dir -e ./ml[dev]
+
+$ grep -nE "test unit --python|smackerel.sh build" .github/workflows/ci.yml
+91:        ./smackerel.sh test unit --python 2>&1 | tee python-unit-test.log
+174:        ./smackerel.sh build
+
+$ grep -nE "from nats|ConsumerConfig|num_delivered|\.term\(\)|js\.publish" ml/app/nats_client.py
+12:from nats.aio.client import Client as NATSConn
+13:from nats.js.api import ConsumerConfig
+14:from nats.js.client import JetStreamContext
+354:        consumer_config = ConsumerConfig(
+691:        num_delivered = md.num_delivered if md is not None else 0
+722:            await self._js.publish(dl_subject, msg.data, headers=headers)
+740:        await msg.term()
+
+$ git --no-pager log --oneline -2 -- ml/requirements.txt ml/pyproject.toml
+e8fe7b91 fix(059): deliver gkeepapi==0.17.1 pin to ML sidecar build surfaces (BUG-059-001, Path A)
+53ee6996 spec(081): nats python sidecar hardening parity + sweep rounds 4-14 closures
+```
+
+**Build/release surface — healthy.** The production image (`ml/Dockerfile`
+lines 14–15) and the CI `build` job (`ci.yml:174`, `./smackerel.sh build`)
+install the pinned lock `ml/requirements.txt` → `nats-py==2.9.0`. Production
+ships the locked version.
+
+**CI/test surface — confirmed version skew (SEC-081-N1).** Both the local
+test/lint/format scripts (`scripts/runtime/python-{unit,lint,format}.sh`) and
+the CI `Unit tests (Python)` step (`ci.yml:91`, `./smackerel.sh test unit
+--python`) install `-e ./ml[dev]`, resolving the floating `ml/pyproject.toml`
+floor `nats-py>=2.9.0`. The 2026-06-08 security run recorded that resolve as
+`nats-py 2.15.0`. The sidecar test suite (including spec 081's
+`test_nats_client.py` / `test_nats_consumer_config.py`) therefore validates the
+load-bearing dependency at a different minor than the image ships.
+
+**Code robustness across the skew — verified stable.** Spec 081's consumer code
+imports and calls only long-stable nats-py APIs: `ConsumerConfig(max_deliver,
+ack_wait)` (line 354), `msg.metadata.num_delivered` (line 691),
+`js.publish(headers=...)` (line 722), and `msg.term()` (line 740). The
+2026-06-08 security review independently confirmed the header-encoder behavior
+is identical across `2.9.0` and `2.15.0`. Spec 081's Go↔Python parity outcome
+holds under both versions.
+
+### Finding disposition
+
+| Finding | Severity | Disposition | Owner / reference |
+|---|---|---|---|
+| SEC-081-N1 nats-py prod/test version skew | info | accept-as-designed for spec 081 (code skew-stable; parity outcome holds) + route repo-wide | `bubbles.devops` — repo-wide test-environment reproducibility item; see Discovered Issues (2026-06-16) |
+
+The skew is the intentional repo-wide abstract-floor (`pyproject.toml`) +
+locked-prod (`requirements.txt`) split that applies to every ml dependency, not
+an 081 defect; the `requirements.txt` header documents it ("Generated from
+pyproject.toml"). Spec 081's three-file change surface (`ml/app/nats_client.py`,
+`config/smackerel.yaml`, `scripts/commands/config.sh`) does not own the
+dependency-install strategy, so the remediation — make the test environment
+install the production lock so the suite validates what ships — is a repo-wide
+item owned by `bubbles.devops`, not an 081-local edit. Spec 081 stays
+terminal-for-mode `done`.
+
+### State-transition guard reconciliation (G040 + G095)
+
+Running the required state-transition guard (Gate G023) surfaced two
+pre-existing, non-devops documentation blocks that a stricter guard now flags on
+this spec (certified under a looser guard on 2026-06-04/06):
+
+- **Gate G040 (Check 18)** — a forward-deferral phrase in the historical "Audit
+  Final Promotion (2026-06-04)" note about the deprecated `scopeProgress` field
+  was reworded to a present-tense, cited framework-schema disposition (no
+  deferral verb).
+- **Gate G095 (Check 35)** — the caplog/log-propagation phrase in the
+  Validation Exit Codes table now carries an inline citation to
+  `ml/tests/test_startup_warning.py`, and the Discovered Issues table gained a
+  2026-06-16 re-affirmation row.
+
+These edits touch only `report.md` (a non-G088-protected artifact); no planning
+truth (`spec.md` / `design.md` / `scopes.md`) changed.
+
+### Outcome
+
+Spec 081 stays terminal-for-mode `done` under `workflowMode=full-delivery`. The
+devops surface that ships spec 081 is healthy (production installs the pinned
+lock); the one devops observation (SEC-081-N1) is pre-existing, repo-wide,
+non-blocking, and routed to `bubbles.devops`. `protectedArtifactsTouched
+(by this devops probe): false`. Files changed: `report.md` (this section +
+G040/G095 reconcile + Discovered Issues rows) and `state.json` (devops
+executionHistory entry + SEC-081-N1 reconcile annotation).
+
+## Regression Probe — regression-to-doc (2026-06-17)
+
+**Sweep context.** Stochastic-quality-sweep round, `trigger=regression`, mapped
+child mode `regression-to-doc` (statusCeiling `docs_updated` — DIAGNOSTIC ONLY).
+`executionModel: parent-expanded-child-mode` (nested runtime lacked
+`runSubagent`; `regression-to-doc` is not top-level-runtime-locked, so the phase
+owner ran directly). Spec 081 stays terminal-for-mode `done`; no status flip, no
+DoD checkbox change.
+
+**Probe question.** The working tree carries large uncommitted sweep work across
+many OTHER specs. Has any of that foreign, uncommitted change introduced a
+regression to spec 081's owned surface — the Python JetStream consumer config +
+dead-letter parity path (`ml/app/nats_client.py`), the NATS consumer SST keys
+(`config/smackerel.yaml`), and their generator emit (`scripts/commands/config.sh`)?
+
+### Surface isolation (read-only `git status`)
+
+Spec 081's CODE surface is **unmodified vs HEAD** — only its own evidence
+artifacts carry uncommitted addenda (the Round 1 devops-to-doc section above):
+
+```text
+$ git status --porcelain -- ml/app/nats_client.py config/smackerel.yaml scripts/commands/config.sh
+(empty — spec-081 code surface unmodified)
+
+$ git status --porcelain -- internal/stringutil/ internal/pipeline/subscriber.go \
+    internal/pipeline/synthesis_subscriber.go internal/pipeline/domain_subscriber.go \
+    internal/nats/client.go
+(empty — Go dead-letter PARITY surface unmodified)
+
+$ git status --porcelain -- specs/081-nats-python-sidecar-hardening-parity/
+ M specs/081-nats-python-sidecar-hardening-parity/report.md
+ M specs/081-nats-python-sidecar-hardening-parity/state.json
+```
+
+Because both the Python sink (`nats_client.py`) and the Go parity sources
+(`stringutil.SanitizeHeaderValue` + the three pipeline subscribers + the
+JetStream `AllStreams` bindings) are byte-identical to HEAD, no foreign change
+could have introduced consumer-config drift, dead-letter-contract drift, or
+Go↔Python parity drift on this surface.
+
+### Targeted regression run (no live stack)
+
+Ran the four spec-081-owned NATS test modules against the local `ml/.venv`
+(pytest 9.0.3, nats-py present), no Docker stack, ephemeral env only
+(conftest seeds `SMACKEREL_AUTH_TOKEN=""` dev-bypass; tests `monkeypatch.setenv`
+the consumer keys — no prod NATS/monitoring/backup touched):
+
+```text
+$ cd ml && .venv/bin/python -m pytest tests/test_nats_consumer_config.py \
+    tests/test_nats_deadletter.py tests/test_nats_client.py \
+    tests/test_nats_contract.py -v -p no:cacheprovider
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: ~/smackerel/ml ; configfile: pyproject.toml
+collected 56 items
+tests/test_nats_consumer_config.py ... 16 PASSED  (SCN-081-01..04: ConsumerConfig
+    threading, fail-loud env reads, 6-header envelope, publish-before-term nak,
+    _failure_counts removal)
+tests/test_nats_deadletter.py ...... 4 PASSED  (SEC-081-R1/BUG-081-001 CR/LF
+    sanitize-then-truncate Go↔Python parity pin)
+tests/test_nats_client.py ........ 32 PASSED  (init/no-_failure_counts, subject
+    maps, publish, subscribe_all, close, reconnect contract, secret-read contract)
+tests/test_nats_contract.py ..... 4 PASSED  (subscribe/publish/response/critical
+    subject contract vs config/nats_contract.json)
+======================== 56 passed, 1 warning in 0.84s =========================
+EXIT CODE: 0
+```
+
+The single warning is a benign `RuntimeWarning: coroutine '_consume_loop' was
+never awaited` from `test_subscribe_all_threads_consumer_config`, which
+intentionally stubs `asyncio.create_task` to avoid scheduling background
+consumers — expected test behavior, not a regression.
+
+### Consumer-config drift — none
+
+- SST source block present and unmodified: `config/smackerel.yaml`
+  `infrastructure.nats.consumer.max_deliver: 5` / `ack_wait_seconds: 120`.
+- Generator emit present and unmodified: `scripts/commands/config.sh`
+  `NATS_CONSUMER_MAX_DELIVER` / `NATS_CONSUMER_ACK_WAIT_SECONDS` via
+  `required_value` and the env-template heredoc.
+- Materialized test env carries both: `config/generated/test.env`
+  `NATS_CONSUMER_MAX_DELIVER=5`, `NATS_CONSUMER_ACK_WAIT_SECONDS=120`.
+
+### Foreign-attributed conditions (NOT spec-081 regressions)
+
+| Condition | Attribution | Disposition |
+|---|---|---|
+| `internal/config/validate_test.go::setRequiredEnv` missing 4 `ASSISTANT_SKILLS_WEATHER_*` keys → sibling Go `internal/config` validate tests RED | Foreign (spec-094 fixture); spec 081 owns no `internal/config/` surface | Attribute, do NOT fix — out of spec-081 scope |
+| SEC-081-N1 nats-py prod/test version skew (`requirements.txt`==2.9.0 vs `pyproject` floor → 2.15.0) | Pre-existing, repo-wide dependency hygiene; already tracked as `info` observation, reconciled 2026-06-16 (devops-to-doc above) | Attribute, not a new regression — code is skew-stable, parity holds |
+| `ml/app/agent.py` foreign-modified + new `ml/tests/test_agent_log_redaction.py` | Foreign (spec 037 / assistant surface) | `nats_client.py` imports `agent.handle_invoke` lazily inside the consume loop (agent.invoke path only), never at module top-level; cannot regress the consumer-config/dead-letter parity surface or the 56 targeted tests |
+
+### Outcome
+
+**No spec-081-owned regression detected.** `regressionsDetected: 0 spec-081-owned,
+3 foreign-attributed`. The Python consumer-config + dead-letter parity surface is
+GREEN (56/56, exit 0) and byte-identical to HEAD; the Go parity sources are
+unmodified; the SST consumer contract is intact end-to-end. All breakage in the
+working tree is foreign-attributed and routed/tracked elsewhere. Spec 081 stays
+terminal-for-mode `done`. `protectedArtifactsTouched (by this regression probe):
+false` — no planning truth (`spec.md` / `design.md` / `scopes.md`) changed. Files
+changed: `report.md` (this section only).
+
+## DevOps Probe — devops-to-doc (2026-06-17, round 16)
+
+**Owner:** bubbles.workflow (parent-expanded `devops-to-doc`). The
+stochastic-quality-sweep round-16 subagent runtime lacks nested `runSubagent`,
+so the mapped `devops-to-doc` mode runs in parent-expanded form per the workflow
+tool-availability fallback (`devops-to-doc` is not a top-level-runtime-locked
+mode; `executionModel: parent-expanded-child-mode`). · **Role:** devops-execution-owner ·
+**Mode:** `devops-to-doc` (stochastic-quality-sweep round 16; trigger `devops`). ·
+**Outcome:** `completed_owned` — one in-scope monitoring finding
+(**F-081-DEVOPS-001**) discovered AND closed in-round. Protected planning truth
+(`spec.md` / `design.md` / `scopes.md` / `uservalidation.md`) was **not** touched;
+spec 081's three implementation files (`ml/app/nats_client.py`,
+`config/smackerel.yaml`, `scripts/commands/config.sh`) are byte-for-byte unchanged
+by this round.
+
+### Probe scope
+
+The `devops` trigger probes CI/CD, build, deployment, config-SST, and
+monitoring/observability for spec 081's operational surface — the Python ML
+sidecar JetStream dead-letter path in `ml/app/nats_client.py` and the
+build/test/release/observability glue that ships and watches it. Round 1
+(2026-06-16) covered the build/CI dependency-install surface (SEC-081-N1); this
+round focuses on the **monitoring/observability** dimension that prior sweep
+rounds (code, security, gaps, simplify, stabilize, regression) did not probe.
+
+### DevOps Evidence
+
+**Phase Agent:** bubbles.workflow (parent-expanded devops-to-doc) · **Executed:** YES.
+
+**Claim Source: executed.** Surface-by-surface operational inspection of spec 081's
+two FR-081-003 dead-letter metrics and their monitoring wiring:
+
+```text
+$ grep -nE 'Counter\("smackerel_ml_nats_deadletter' ml/app/metrics.py
+98:nats_deadletter_total = Counter(
+99:    "smackerel_ml_nats_deadletter_total",
+108:nats_deadletter_publish_failures_total = Counter(
+109:    "smackerel_ml_nats_deadletter_publish_failures_total",
+
+# Both spec-081 dead-letter metrics are emitted by the live ML sidecar:
+#   smackerel_ml_nats_deadletter_total{stream}              — poison routed to deadletter.<subject>
+#   smackerel_ml_nats_deadletter_publish_failures_total{subject} — DL publish failed → nak loop
+
+$ grep -nE 'smackerel_ml_nats_deadletter' config/prometheus/alerts.yml   # BEFORE this round
+(no matches)
+
+$ grep -nE 'alert:|smackerel_nats_deadletter_total' config/prometheus/alerts.yml | grep -i deadletter
+- alert: SmackerelNATSDeadLetterPressure
+      sum by (stream) (rate(smackerel_nats_deadletter_total[10m])) > 0.05
+```
+
+**Config-SST surface — healthy.** `infrastructure.nats.consumer.{max_deliver,
+ack_wait_seconds}` (`config/smackerel.yaml`) → `required_value` fail-loud reads
+(`scripts/commands/config.sh:565-566`) → emitted as `NATS_CONSUMER_MAX_DELIVER` /
+`NATS_CONSUMER_ACK_WAIT_SECONDS` (`config.sh:1760-1761`). The ML container loads
+the whole generated env via `env_file: ${SMACKEREL_ENV_FILE}`
+(`docker-compose.yml:188-191`), so the two consumer keys reach the runtime. No gap.
+
+**Build / CI surface — healthy.** Production image installs the pinned
+`ml/requirements.txt` (`ml/Dockerfile:14-15`); CI `build` ships it; CI
+`test integration` (`ci.yml:232`) brings up the live ML stack that exercises the
+dead-letter parity integration test. No gap (SEC-081-N1 dependency-skew remains the
+round-1 repo-wide item, unchanged here).
+
+**Monitoring / observability surface — GAP (F-081-DEVOPS-001, fixed this round).**
+Spec 081 (FR-081-003) shipped the Python dead-letter path AND its two metrics, but
+shipped **no Prometheus alert** for either. The pre-existing
+`SmackerelNATSDeadLetterPressure` rule (owned by spec 046, `smackerel-nats` group)
+watches only the **Go** core metric `smackerel_nats_deadletter_total` — its own
+description even anticipates ML enrichment-failure DLQ traffic ("if the failing
+stream is SEARCH/DOMAIN/INTELLIGENCE"), yet post-081 that traffic increments the
+distinct `smackerel_ml_nats_deadletter_total`, which nothing watched. Worse, the
+`smackerel_ml_nats_deadletter_publish_failures_total` path — where the
+publish-before-term invariant (`nats_client.py:729-730`) `nak()`s a poison message
+in an infinite redelivery loop because the dead-letter publish itself is failing —
+had no alarm at all. A stuck, non-progressing consumer was operationally invisible.
+
+### Remediation (F-081-DEVOPS-001) — devops-owned operational config
+
+Closed in-round by wiring the missing alarms to the smoke detector spec 081
+installed. No protected artifact and no spec-081 source/config file touched:
+
+```text
+$ git --no-pager diff --numstat -- config/prometheus/alerts.yml internal/metrics/prometheus_alerts_contract_test.go
+86      0       config/prometheus/alerts.yml                      # 54 = my smackerel-ml-nats group; 32 = prior round's connector-sync group (NOT mine)
+6       0       internal/metrics/prometheus_alerts_contract_test.go
+
+$ grep -nE 'smackerel-ml-nats|SmackerelMLNATSDeadLetter' config/prometheus/alerts.yml
+298:- name: smackerel-ml-nats
+300:  - alert: SmackerelMLNATSDeadLetterPressure              # severity warning, component ml; rate(smackerel_ml_nats_deadletter_total[10m]) > 0.05
+319:  - alert: SmackerelMLNATSDeadLetterPublishFailing        # severity critical, component ml; publish-failure → stuck nak loop
+```
+
+- `config/prometheus/alerts.yml` — new `smackerel-ml-nats` rule group with
+  `SmackerelMLNATSDeadLetterPressure` (warning; ML-side companion to the Go
+  pressure alert) and `SmackerelMLNATSDeadLetterPublishFailing` (critical; fires
+  on any sustained dead-letter publish failure = a stuck consumer). Additive,
+  appended after the prior round's `smackerel-connector-sync` group.
+- `internal/metrics/prometheus_alerts_contract_test.go` — registered both new
+  alerts in the `requiredAlerts` regression guard with owner attribution
+  (`spec 081 round 16 devops sweep F-081-DEVOPS-001`) and documented them in the
+  header comment, so a future edit cannot silently delete operator-facing alerting
+  (same pattern as the spec 056 / spec 005-011 devops-sweep alert additions).
+
+### Test evidence — both alert-contract suites GREEN
+
+**Claim Source: executed.** `timeout 900 ./smackerel.sh test unit --go --go-run
+'TestAlertsContract|TestMonitoringAlertsContract' --verbose` → `WRAPPER_EXIT=0`,
+`[go-unit] go test ./... finished OK`:
+
+```text
+$ timeout 900 ./smackerel.sh test unit --go --go-run 'TestAlertsContract|TestMonitoringAlertsContract' --verbose
+[go-unit] applying -run selector: TestAlertsContract|TestMonitoringAlertsContract
+[go-unit] starting go test ./...
++ go test -v -run 'TestAlertsContract|TestMonitoringAlertsContract' -count=1 ./...
+=== RUN   TestMonitoringAlertsContract_LiveFile
+    monitoring_alerts_contract_test.go:220: contract OK: live alerts.yml satisfies spec 049 FR-049-003 (all 8 required alerts present; every metric reference is in the 100-entry known-emitted set including builtin `up`)
+--- PASS: TestMonitoringAlertsContract_LiveFile (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialFabricatedMetric (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialMissingRequiredAlert (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialEmptyExpr (0.02s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.100s
+
+=== RUN   TestAlertsContract_LiveFile
+--- PASS: TestAlertsContract_LiveFile (0.00s)
+--- PASS: TestAlertsContract_AdversarialYAMLBreak (0.00s)
+--- PASS: TestAlertsContract_AdversarialEmptyExpr (0.00s)
+--- PASS: TestAlertsContract_AdversarialUnknownSeverity (0.00s)
+--- PASS: TestAlertsContract_AdversarialDeletedRequiredAlert (0.00s)
+ok      github.com/smackerel/smackerel/internal/metrics 0.055s
+[go-unit] go test ./... finished OK
+WRAPPER_EXIT=0
+```
+
+`TestMonitoringAlertsContract_LiveFile` (T-049-004) proves both new alerts
+reference metrics that are actually emitted by the live runtime — it walks every
+alert expr and rejects any unknown metric (the AdversarialFabricatedMetric
+sub-test proves the check is non-tautological). `TestAlertsContract_LiveFile`
+proves the new group is structurally valid (severity/component/annotations) and
+that the two new `requiredAlerts` entries are satisfied.
+
+### Finding disposition
+
+| Finding | Severity | Disposition | Owner / reference |
+|---|---|---|---|
+| **F-081-DEVOPS-001** — spec 081 dead-letter metrics (`smackerel_ml_nats_deadletter_total`, `smackerel_ml_nats_deadletter_publish_failures_total`) had no Prometheus alert; ML-side dead-letter pressure and dead-letter-publish-failure (stuck nak loop) were operationally invisible | medium (observability gap on an operationally-critical resilience path; non-blocking — spec 081 functionally correct, metrics emitted) | **FIXED in-round** — added `smackerel-ml-nats` alert group (2 rules) + `requiredAlerts` regression guard; both alert-contract suites GREEN | `bubbles.devops` (parent-expanded); `config/prometheus/alerts.yml`, `internal/metrics/prometheus_alerts_contract_test.go` |
+
+No finding-owned planning chain (`analyst → ux → design → plan`) was triggered:
+the remediation creates **no planning truth** — it wires a Prometheus alert for an
+already-spec'd, already-shipped metric (FR-081-003), which is devops operational
+config that `bubbles.devops` owns directly. This mirrors the repo's established
+precedent for devops-sweep alert findings (`F-056-DEVOPS-001`,
+`F-005-DEVOPS-001`), both closed by adding alerts + a `requiredAlerts` guard
+without a planning packet or bug folder.
+
+### Outcome
+
+Spec 081 stays terminal-for-mode `done` under `workflowMode=full-delivery`. One
+in-scope monitoring finding (F-081-DEVOPS-001) was discovered and **closed
+in-round** with executed test evidence; the rest of the devops surface
+(config-SST, build/CI, env propagation) is healthy. `protectedArtifactsTouched
+(by this devops probe): false`. Files changed by this round:
+`config/prometheus/alerts.yml` (+ `smackerel-ml-nats` group),
+`internal/metrics/prometheus_alerts_contract_test.go` (+ 2 requiredAlerts entries
++ header comment), `report.md` (this section), and `state.json` (devops
+reconcile annotation + F-081-DEVOPS-001 closure record).
 
 
