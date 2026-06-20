@@ -1,0 +1,49 @@
+{
+  "bugId": "BUG-069-002-capture-context-cancellation",
+  "version": 1,
+  "generatedAt": "2026-06-17T00:00:00Z",
+  "parentSpec": "specs/069-assistant-http-transport",
+  "finding": "F-069-CHAOS39-CAPTURE-CTX-CANCEL",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-069-002-SCN-001",
+      "scope": "scope-1",
+      "title": "Capture-as-fallback persists the prompt when the client disconnects mid-turn",
+      "requiredTestType": "unit",
+      "owner": "bubbles.implement",
+      "linkedTests": [
+        {
+          "file": "internal/assistant/httpadapter/capture_disconnect_test.go",
+          "function": "TestHTTPAdapter_CaptureSurvivesClientDisconnect",
+          "type": "unit-go"
+        }
+      ],
+      "evidenceRefs": [
+        "internal/assistant/httpadapter/adapter.go (HTTPAdapter.ServeHTTP capture-as-fallback branch — the fix site)",
+        "cmd/core/wiring_assistant_facade.go::newAssistantHTTPCaptureFn (production CaptureFn -> pipeline.Process)",
+        "internal/pipeline/processor.go::submitForProcessing (storeInitialArtifact INSERT + NATS.Publish, both ctx-honoring)"
+      ],
+      "linkedDoD": "Scope 1 DoD: capture invoked exactly once with a non-cancelled context under client disconnect; prompt text + user id preserved — Scenario 'BUG-069-002-SCN-001 Capture-as-fallback persists the prompt when the client disconnects mid-turn'."
+    },
+    {
+      "scenarioId": "BUG-069-002-SCN-002",
+      "scope": "scope-1",
+      "title": "Adversarial — the regression FAILS against r.Context() and PASSES after context.WithoutCancel",
+      "requiredTestType": "unit",
+      "owner": "bubbles.test",
+      "linkedTests": [
+        {
+          "file": "internal/assistant/httpadapter/capture_disconnect_test.go",
+          "function": "TestHTTPAdapter_CaptureSurvivesClientDisconnect (RED against a.capture(r.Context(), ...) -> GREEN against a.capture(context.WithoutCancel(r.Context()), ...))",
+          "type": "unit-go-red-green"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md (RED run captured against r.Context())",
+        "report.md (GREEN run captured after context.WithoutCancel swap)",
+        "regression-quality-guard.sh --bugfix internal/assistant/httpadapter/capture_disconnect_test.go (adversarial signal detected, 0 violations)"
+      ],
+      "linkedDoD": "Scope 1 DoD: pre-fix RED proof + post-fix GREEN proof; adversarial-signal guard green — Scenario 'BUG-069-002-SCN-002 Adversarial — the regression FAILS against r.Context() and PASSES after context.WithoutCancel'."
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "version": 3,
+  "featureDir": "specs/024-design-doc-reconciliation/bugs/BUG-024-006-s24a-connector-tree-blindspot",
+  "parentFeatureDir": "specs/024-design-doc-reconciliation",
+  "featureName": "BUG-024-006: docs/smackerel.md §24-A architecture-tree connector count stale at 16 (missing Card Rewards) while §22.7 + docs/Development.md + runtime slice agree on 17, plus TestConnectorCountContract 4th-surface blind spot that pins only 3 of the 4 connector-count surfaces",
+  "bugId": "BUG-024-006",
+  "status": "in_progress",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "lastUpdatedAt": "2026-06-16T00:00:00Z",
+  "workflowMode": "bugfix-fastlane",
+  "nextRequiredOwner": "bubbles.devops",
+  "fixSequence": [
+    {
+      "order": 1,
+      "owner": "bubbles.test",
+      "finding": "F3",
+      "task": "Extend internal/deploy/docs_connector_count_contract_test.go: add smackerelMdTreeRe (`Connector plugins \\((\\d+) committed\\)`) + parseSmackerelMdTreeCount + fold §24-A into assertConnectorCountContract as a 4th surface + add TestConnectorCountContract_AdversarialSmackerelMdTreeLow. RED-prove: with §24-A still at 16, TestConnectorCountContract_LiveFile MUST fail (§24-A=16 vs runtime=17)."
+    },
+    {
+      "order": 2,
+      "owner": "bubbles.docs",
+      "finding": "F2",
+      "task": "Reconcile docs/smackerel.md §24-A: line 2892 header (16 committed)→(17 committed); line 2908 glyph └──→├── for QF Decisions; insert `└── Card Rewards (cardrewards/ — spec 083 read-only rotating-category fetch)` leaf. GREEN: re-run the contract test (exit 0, four surfaces agree on 17). Backfill parent governance; land single atomic bubbles(024/bug-024-006) commit; push."
+    }
+  ],
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "docs",
+    "currentScope": null,
+    "runStartedAt": "2026-06-16T00:00:00Z",
+    "runCompletedAt": null,
+    "completedPhaseClaims": ["bug", "test", "docs"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-06-16T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Created BUG-024-006 8-artifact packet for a verified committed-tree defect discovered in stochastic-quality-sweep round R29 (mode: stochastic-quality-sweep, parent-expanded child mode: gaps-to-doc) on specs/024-design-doc-reconciliation, the spec that owns the R-006 connector-inventory accuracy contract for docs/smackerel.md. F2 (MEDIUM, primary): docs/smackerel.md §24-A architecture-tree header (line 2892) reads 'Connector plugins (16 committed)' with a 16-leaf list (lines 2893-2908) ending at QF Decisions and omitting Card Rewards (cardrewards/, spec 083), while §22.7 header (line 2783)='(17 connectors)', docs/Development.md line 31='17 passive connectors', and cmd/core/connectors.go lines 68-72 register 17 — §24-A is the single stale surface. F3 (MEDIUM, root cause): internal/deploy/docs_connector_count_contract_test.go pins only 3 surfaces (connectorsGoSliceRe L81, smackerelMdHeaderRe L89 §22.7, developmentMdBulletRe L95) and has no regex for the §24-A 'Connector plugins (N committed)' line, so §24-A silently drifted to 16 while the 3 pinned surfaces moved to 17 and TestConnectorCountContract_LiveFile still passes GREEN logging 'all agree on 17' (test line 236). Verified with real commands at HEAD 7844283b: grep of both headers, awk dump of the §24-A leaf block showing Card Rewards absent, grep confirming Card Rewards present in the other 3 surfaces, grep of connectors.go slice (L68-72), grep of the test's 3 regexes, and ./smackerel.sh test unit --go --go-run TestConnectorCountContract --verbose (EXIT_CODE=0, internal/deploy ok 0.029s). No fix performed; no commit. Parent spec 024 stays status: done. Routed test→docs."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-06-16T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Extended internal/deploy/docs_connector_count_contract_test.go to pin docs/smackerel.md §24-A 'Connector plugins (N committed)' as a 4th connector-count surface (F3): added smackerelMdTreeRe + parseSmackerelMdTreeCount + folded §24-A into assertConnectorCountContract's four-surface equality + added TestConnectorCountContract_AdversarialSmackerelMdTreeLow. RED-proved with §24-A still stale at 16: ./smackerel.sh test unit --go --go-run TestConnectorCountContract --verbose → --- FAIL: TestConnectorCountContract_LiveFile (cmd/core/connectors.go=17, docs/smackerel.md §22.7=17, docs/smackerel.md §24-A=16, docs/Development.md=17), EXIT_CODE=1; the new adversarial sub-test + the 3 pre-existing adversarial sub-tests all PASS (non-tautological pin, no regression). Evidence: report.md → 'bubbles.test — F3 Test-Extension RED Proof'. No doc edit, no commit; nextRequiredOwner: bubbles.docs."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-06-16T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Reconciled docs/smackerel.md §24-A architecture tree 16→17 (F2): header line 2892 'Connector plugins (16 committed)' → '(17 committed)'; QF Decisions leaf glyph └── → ├──; inserted '└── Card Rewards (cardrewards/ — spec 083 read-only rotating-category fetch)' as the new terminal leaf (17 leaves Gov Alerts → Card Rewards), matching §22.7 row-17 read-only framing (Principle 10 QF Companion boundary). GREEN-proved: ./smackerel.sh test unit --go --go-run TestConnectorCountContract --verbose → --- PASS: TestConnectorCountContract_LiveFile (four surfaces agree on 17) + all 4 adversarial sub-tests PASS + ok internal/deploy 0.079s + EXIT_CODE=0; ./smackerel.sh check → EXIT_CODE=0 (config/SST/scenario-lint clean). Only docs/smackerel.md §24-A touched (git diff: 3 insertions, 2 deletions). Evidence: report.md → 'bubbles.docs — F2 §24-A Reconciliation GREEN Proof'. No commit; parent spec 024 governance recert + consolidated commit deferred to bubbles.devops; spec 024 stays status: done. nextRequiredOwner: bubbles.devops."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "scopes.md"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug", "classification", "routing"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-16T00:00:00Z",
+      "runCompletedAt": "2026-06-16T00:00:00Z",
+      "outcome": "route_required",
+      "nextRequiredOwner": "bubbles.test",
+      "summary": "Discovered + documented + root-caused a genuine committed-tree defect on spec 024's owned R-006 dimension: F2 (MEDIUM) docs/smackerel.md §24-A architecture tree stale at 16 (missing Card Rewards) vs §22.7/Development.md/runtime at 17; F3 (MEDIUM) TestConnectorCountContract pins only 3 of the 4 connector-count surfaces (§24-A 'Connector plugins (N committed)' uncovered), so the drift passes GREEN. Single Scope 1 (both findings share one root cause — §24-A is an unpinned surface that lagged the 16→17 transition). Routed test→docs: bubbles.test pins §24-A as a 4th surface and RED-proves; bubbles.docs reconciles §24-A 16→17 + Card Rewards leaf and turns it GREEN. No fix/commit by bubbles.bug. Packet artifacts: bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["test", "docs"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-16T00:00:00Z",
+      "runCompletedAt": "2026-06-16T00:00:00Z",
+      "outcome": "completed_owned",
+      "nextRequiredOwner": "bubbles.devops",
+      "summary": "F3 (RED, bubbles.test) + F2 (GREEN, bubbles.docs) both closed one-to-one. bubbles.test extended internal/deploy/docs_connector_count_contract_test.go to pin §24-A as a 4th connector-count surface and RED-proved the gap (TestConnectorCountContract_LiveFile FAIL at docs/smackerel.md §24-A=16 vs runtime 17, EXIT_CODE=1; new + 3 pre-existing adversarial sub-tests PASS). bubbles.docs reconciled docs/smackerel.md §24-A header 16→17 and inserted the Card Rewards (cardrewards/, spec 083) leaf after QF Decisions, turning the contract test GREEN (TestConnectorCountContract_LiveFile PASS — four surfaces agree on 17 — all 4 adversarial sub-tests PASS, ok internal/deploy, EXIT_CODE=0); ./smackerel.sh check EXIT_CODE=0. scopes.md DoD: SCN-001 fidelity + post-fix GREEN proof + no-regression items ticked; Scope 1 → In Progress; bug.md → In Progress + Fixed. Deferred to the end-of-sweep bubbles.devops R29 pass: single atomic path-limited commit bubbles(024/bug-024-006), parent spec 024 resolvedBugs[]/executionHistory/report.md governance backfill, and parent guards/recert. No commit performed by bubbles.docs; parent spec 024 untouched and stays status: done."
+    }
+  ]
+}
