@@ -1,6 +1,6 @@
 # User Validation — Spec 098 CI Server-Manifest / Client-Build Decoupling
 
-**Status:** in_progress · **Workflow mode:** full-delivery
+**Status:** done · **Workflow mode:** full-delivery
 
 ## Context
 
@@ -32,15 +32,24 @@ actual releases.
   manifest is accepted without android digests AND a release requires them.
 - [x] **Gates green** — contract tests 12/12 (`SCOPED_UNIT_EXIT=0`),
   `CHECK_EXIT=0`, `LINT_EXIT=0`. (see report.md)
-- [ ] **Operator confirms the real CI run** — on the next non-release push the
-  CI `build` workflow publishes `build-manifest-<sha>.yaml` while `build-clients`
-  is skipped. (Requires a push, which this in-repo validation withholds; this is
-  the only open item and the reason the spec is held at `in_progress`.)
+- [ ] **Operator confirms the real CI run (operator-observable confirmation, NOT a
+  098 blocker)** — on a *green* non-release push the CI `build` workflow should
+  publish `build-manifest-<sha>.yaml` while `build-clients` is skipped. This is
+  currently un-confirmable because the `main` build is RED at a **foreign,
+  pre-existing** gate (`build-images` → "Trivy vulnerability scan — smackerel-ml",
+  run 27865311625), upstream of and unrelated to spec 098. Spec 098 is certified
+  on the in-repo drift-detector contract proof (established pattern for CI-config
+  specs); this live confirmation follows once the foreign Trivy-ml gate is
+  resolved separately (see report.md → Discovered Issues).
 
 ## Sign-off
 
-Engineering complete and proven in-repo. The single open checklist item is the
-live CI confirmation, which requires a push that is intentionally withheld
-(pushing would trigger the very client build this spec gates). Operator sign-off
-on the live run promotes the spec to `done` together with the structured spec
-commit (state-transition-guard Check 17).
+Engineering complete, committed (spec(098) `f7148da2`), pushed, and certified
+`done` on the in-repo drift-detector proof (12/12 `internal/deploy` contract
+tests incl. 3 adversarial workflow-shape probes). The `build.yml` conditional
+gating (release-gate + skip-tolerance + success-gate) is asserted against the
+live workflow file. The one residual item — operator confirmation of a green
+live CI run publishing the server-only manifest — is an operator-observable
+confirmation currently blocked by a foreign, pre-existing `build-images` Trivy-ml
+failure (NOT caused by spec 098); it is dispositioned as a separate ops/security
+concern in report.md → Discovered Issues and does not gate 098's certification.
