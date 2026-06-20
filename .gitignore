@@ -89,6 +89,10 @@ tmp/
 test_output.txt
 integration_output.txt
 *_output.txt
+# Go test coverage profiles (captured by ad-hoc `go test -coverprofile=...` runs)
+coverage.out
+cover.out
+*.out
 # Ad-hoc local debug artifacts at repo root (may contain PII such as filesystem
 # paths or tailnet CGNAT IPs — must never be committed)
 /file_list.txt
