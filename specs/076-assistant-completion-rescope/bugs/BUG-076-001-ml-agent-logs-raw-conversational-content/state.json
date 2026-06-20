@@ -1,0 +1,61 @@
+{
+  "bugId": "BUG-076-001-ml-agent-logs-raw-conversational-content",
+  "parentFeatureDir": "specs/076-assistant-completion-rescope",
+  "title": "ML agent dispatcher logs raw conversational content (user turn + LLM final answer) at INFO",
+  "severity": "medium",
+  "owaspCategory": "A09-security-logging-and-monitoring-failures",
+  "status": "in_progress",
+  "workflowMode": "security-to-doc",
+  "createdAt": "2026-06-16T02:40:00Z",
+  "lastUpdatedAt": "2026-06-16T02:45:00Z",
+  "nextRequiredOwner": "bubbles.validate",
+  "createdViaParent": {
+    "parentWorkflowMode": "stochastic-quality-sweep",
+    "parentRound": 25,
+    "trigger": "security",
+    "mappedChildWorkflowMode": "security-to-doc",
+    "executionModel": "parent-expanded-child-mode"
+  },
+  "findingCount": 1,
+  "findingCategories": [
+    "FC-PII-RAW-CONTENT-IN-LOGS"
+  ],
+  "discoveredBy": "bubbles.security",
+  "completedPhaseClaims": [
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "completedAt": "2026-06-16T02:41:00Z",
+      "summary": "Code-level review of the spec 076 assistant-completion surface surfaced one Medium finding: ml/app/agent.py emits two diagnostic INFO logs (agent.invoke.request first_user_msg, agent.invoke.envelope final_preview) carrying raw user turn text + raw LLM final answer (<=300 chars each) at production log level, violating spec 076 Hard Constraint 6 and the project's Go-side prompt_sha256 redaction discipline. Other axes (tool authz deny-by-default, provenance gate, citeback verifier, egress SSRF deny-by-default, telemetry HMAC privacy, SST fail-loud, role-separated prompts) verified CLEAN."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.security",
+      "completedAt": "2026-06-16T02:44:00Z",
+      "summary": "Redacted both diagnostic logs to length+type metadata (first_user_msg_len, final_len) preserving trace_id and shape diagnostics. Two log-format statements in ml/app/agent.py; no control-flow, envelope, or non-log behavior changed."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.security",
+      "completedAt": "2026-06-16T02:45:00Z",
+      "summary": "Adversarial regression ml/tests/test_agent_log_redaction.py plants canaries in the user turn AND the LLM final answer and asserts absence from all INFO records. Proven RED against the unfixed dispatcher (1 failed, 509 passed) then GREEN after the fix, same session. Evidence in report.md."
+    }
+  ],
+  "deferredToConsolidatedPass": {
+    "owner": "bubbles.validate",
+    "reason": "Spec-level certification (full phase sign-off) and commit are owned by the consolidated end-of-sweep validate pass, not the security trigger. The code fix + adversarial regression are complete and GREEN; only certification bookkeeping + commit remain.",
+    "concurrentWorkObserved": true
+  },
+  "executionHistory": [
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security", "implement", "test"],
+      "statusBefore": "n/a",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-16T02:30:00Z",
+      "runEndedAt": "2026-06-16T02:46:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Security trigger (sweep R25) reviewed the 076 assistant-completion surface, surfaced + owned BUG-076-001 (raw conversational content in ML dispatcher INFO logs), applied the redaction fix, and proved an adversarial regression RED->GREEN. Certification + commit routed to bubbles.validate consolidated pass."
+    }
+  ]
+}

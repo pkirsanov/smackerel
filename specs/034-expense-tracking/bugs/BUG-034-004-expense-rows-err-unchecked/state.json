@@ -1,0 +1,74 @@
+{
+  "version": 3,
+  "bugId": "BUG-034-004",
+  "parentSpec": "034-expense-tracking",
+  "coAffectedSpecs": [],
+  "title": "Expense DB-iteration loops swallow mid-stream errors — under-reported totals / truncated tax-export CSV returned as HTTP 200",
+  "severity": "medium",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "implement",
+    "currentScope": "scope-1",
+    "completedPhases": ["discovery", "documentation", "analysis", "design", "plan", "implement", "test"],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "completedAt": "2026-06-15T00:00:00Z",
+        "evidence": "report.md#files-modified-this-session"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "completedAt": "2026-06-15T00:00:00Z",
+        "evidence": "report.md#after-fix--regression-suite-green-expenses_rowserr_testgo and report.md#adversarial-regression-proof-red"
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": ["discovery", "documentation", "analysis", "design", "plan", "implement", "test"],
+        "startedAt": "2026-06-15T00:00:00Z",
+        "note": "Created the bug artifact set, hardened all 11 expense row-iteration loops to the repo's established rows.Err() convention, extracted three testable rowScanner helpers in internal/api/expenses.go (mirroring internal/list), and added an adversarial regression suite with a captured RED-on-reintroduction proof. Direct implementation per agent contract (no sub-agent dispatch available in this invocation)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "certifierAgent": null,
+    "certifiedAt": null,
+    "unresolvedFindings": [
+      {
+        "id": "BUG-034-004-COMMIT-001",
+        "category": "consolidated commit + parent recertification",
+        "owner": "bubbles.devops",
+        "blockingThisPacket": false,
+        "dodRef": "scopes.md Scope 1 DoD — Consolidated commit of the spec-034 code change + parent recertification",
+        "acceptanceCriteria": "At the end-of-sweep bubbles.devops pass, commit the BUG-034-004 fix together with the other R10 sweep changes, run the full validation surface (check + lint + test unit/integration), and recertify specs/034-expense-tracking. The certified parent's commit-state gate (G088/Check 17) is expected to be dirty until this consolidated commit lands; it MUST NOT be force-passed in this bug packet.",
+        "note": "Engineering fix + adversarial regression are complete and green in-process (see report.md). Commit + recert deferred to the consolidated sweep pass per the R10 sweep contract."
+      }
+    ]
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "workflowMode": { "mode": "bugfix-fastlane", "source": "bubbles.bug" },
+    "validation": { "mode": "certification-required", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "routing": {
+    "nextOwner": "bubbles.devops",
+    "reason": "Engineering fix shipped and proven in-process: all 11 expense row-iteration loops hardened to the repo's established rows.Err() convention, 3 testable rowScanner helpers extracted (internal/api/expenses.go), and an 8-test adversarial regression suite green with a captured RED-on-reintroduction proof (report.md). The single open item — consolidated commit of the certified spec-034 code change + parent recertification — is deferred to the end-of-sweep bubbles.devops pass per the R10 stochastic-quality-sweep contract and recorded as non-blocking unresolvedFinding BUG-034-004-COMMIT-001. Parent spec 034 state.json/certification were NOT modified by this packet."
+  },
+  "createdAt": "2026-06-15T00:00:00Z",
+  "updatedAt": "2026-06-15T00:00:00Z"
+}

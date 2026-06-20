@@ -1,0 +1,152 @@
+{
+  "version": 3,
+  "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-002-capture-context-cancellation",
+  "parentFeatureDir": "specs/069-assistant-http-transport",
+  "featureName": "BUG-069-002: assistant HTTP capture-as-fallback is bound to the request context (r.Context()), so a client disconnect during a CaptureRoute=true turn cancels the durable capture write (Postgres INSERT + NATS publish, both ctx-honoring) and silently loses the user's prompt — violating the inviolable capture-as-fallback contract (Hard Constraint 5 / BS-001)",
+  "bugId": "BUG-069-002",
+  "status": "in_progress",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "lastUpdatedAt": "2026-06-17T00:00:00Z",
+  "workflowMode": "bugfix-fastlane",
+  "statusCeiling": "done",
+  "nextRequiredOwner": "bubbles.test",
+  "finding": "F-069-CHAOS39-CAPTURE-CTX-CANCEL",
+  "discoveredBy": "stochastic-quality-sweep round 39 (chaos-hardening)",
+  "fixSequence": [
+    {
+      "order": 1,
+      "owner": "bubbles.implement",
+      "finding": "F-069-CHAOS39-CAPTURE-CTX-CANCEL",
+      "status": "done",
+      "task": "Author internal/assistant/httpadapter/capture_disconnect_test.go (TestHTTPAdapter_CaptureSurvivesClientDisconnect) — RED against a.capture(r.Context(), ...). Then apply the one-line fix in internal/assistant/httpadapter/adapter.go: a.capture(context.WithoutCancel(r.Context()), ...) — GREEN. Boundary: only adapter.go + the new test file. COMPLETE: RED+GREEN captured in report.md [R1][R3]; fix diff [R2]."
+    },
+    {
+      "order": 2,
+      "owner": "bubbles.test",
+      "finding": "F-069-CHAOS39-CAPTURE-CTX-CANCEL",
+      "status": "pending",
+      "task": "Author the live-stack E2E / integration regression that drives a real HTTP request whose client connection is aborted mid-turn against the bound adapter + a real pipeline.Processor (Postgres + NATS), asserting the captured artifact is persisted despite the disconnect. Requires `./smackerel.sh up` + `./smackerel.sh test integration|e2e`. Then route to bubbles.validate for done-ceiling certification (scenario-specific + broader E2E regression + stress). NOT runnable in the discovery/fix session (no live stack)."
+    }
+  ],
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "test",
+    "currentScope": "scope-1",
+    "runStartedAt": "2026-06-17T00:00:00Z",
+    "runCompletedAt": null,
+    "completedPhaseClaims": ["chaos", "implement", "test", "regression", "audit"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "timestamp": "2026-06-17T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "chaos-hardening Round 39 probe of the assistant HTTP transport. Read the live request path: HTTPAdapter.ServeHTTP renders capture-as-fallback via a.capture(r.Context(), ...); production newAssistantHTTPCaptureFn dispatches pipeline.Processor.Process(ctx, ...) which runs a ctx-honoring Postgres INSERT (storeInitialArtifact) + NATS publish (submitForProcessing). net/http cancels r.Context() on client disconnect -> the capture write aborts with context.Canceled and newAssistantHTTPCaptureFn only slog.Errors it -> the user's prompt is silently lost. Finding F-069-CHAOS39-CAPTURE-CTX-CANCEL (MEDIUM): violates inviolable capture-as-fallback (Hard Constraint 5 / BS-001). Telegram unaffected (long-poll background ctx)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "timestamp": "2026-06-17T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Scenario-first: authored internal/assistant/httpadapter/capture_disconnect_test.go (TestHTTPAdapter_CaptureSurvivesClientDisconnect) which cancels the request context before the capture write and asserts capture invoked with a live ctx + prompt/user preserved. RED captured (capture ran with a cancelled context (err=context canceled), exit 1). Applied the fix in internal/assistant/httpadapter/adapter.go: a.capture(r.Context(), ...) -> a.capture(context.WithoutCancel(r.Context()), ...) with an explanatory comment. GREEN captured (PASS, exit 0). Change confined to adapter.go (1 line + comment) + the new test file. context already imported; Go 1.25.10 supports context.WithoutCancel."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "timestamp": "2026-06-17T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Unit-level regression complete. Full internal/assistant/httpadapter package green (ok ... 0.157s): existing TestChaos069, TestHTTPAssistantTurnGoldenContractV1, TestHTTPAdapterTranslatesTextTurnToAssistantMessage, TestHTTPAdapter_Validate*, TestTransportHintIsClosedVocabularyAndTelemetryOnly + the new regression — no FAIL, capture invoked exactly once unchanged. regression-quality-guard.sh --bugfix internal/assistant/httpadapter/capture_disconnect_test.go: adversarial signal detected, 0 violations (exit 0). PENDING: live-stack E2E regression (disconnect-race against real pipeline) requires `./smackerel.sh up` — not runnable in this session; routed to bubbles.test/bubbles.validate for done-ceiling certification."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "timestamp": "2026-06-17T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Delta = adapter.go capture call (1 line) + new test file. httpadapter package green; no behavioral change to non-capture or Telegram paths; capture invocation count unchanged (exactly once per CaptureRoute=true turn). No tests deleted/skipped/weakened. REGRESSION_FREE for the touched surface (unit scope)."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "timestamp": "2026-06-17T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Security/compliance audit of the changed surface. Exactly one capture call site in adapter.go (line 382) now using context.WithoutCancel (grep -c context.WithoutCancel = 1) — capture-once invariant unchanged (BS-001). The 5xx no-internals-leak path (writeError ... 'assistant_turn_failed', line 368) is unchanged by the fix; TestChaos069 (asserts no 5xx internals leak) stays green. context.WithoutCancel preserves parent Values only (no auth/session leakage; capture takes an explicit userID arg, not ctx-sourced identity). No new secret/PII/financial-action surface (P10 boundary intact). No NO-DEFAULTS violation (no new config). OWASP A01/A03/A05/A07: no findings on changed code. Verdict: SECURE."
+      }
+    ],
+    "completedScopes": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["chaos", "implement", "test", "regression", "audit"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "chaos-hardening Round 39 executed in a runtime without runSubagent; nested workflow delegation / specialist subagents were unavailable (capability missing), so the parent orchestrator parent-expanded the finding-owned bugfix-fastlane phases directly.",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-17T00:00:00Z",
+        "runCompletedAt": "2026-06-17T00:00:00Z",
+        "outcome": "route_required",
+        "nextRequiredOwner": "bubbles.test",
+        "summary": "chaos-hardening Round 39 parent-expanded (no nested runSubagent). Discovered F-069-CHAOS39-CAPTURE-CTX-CANCEL: assistant HTTP capture-as-fallback bound to r.Context() silently drops the user's prompt on client disconnect. LANDED the fix: a.capture(context.WithoutCancel(r.Context()), ...) in internal/assistant/httpadapter/adapter.go, proven by TestHTTPAdapter_CaptureSurvivesClientDisconnect adversarial unit regression (RED->GREEN) + full httpadapter package green + adversarial-signal guard green. ROUTED the remaining done-ceiling certification (live-stack E2E disconnect-race regression + broader E2E suite + stress) to bubbles.test -> bubbles.validate; not runnable in this session (no live stack). One finding, one root cause, one Scope 1 — no cherry-picking. The already-done parent spec 069 artifacts are left untouched; the finding and fix are recorded entirely in this bug packet."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": ["chaos", "implement", "test", "regression", "audit"],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [
+      "Live-stack E2E regression for the client-disconnect race (real HTTP client abort against the bound adapter + real pipeline.Processor with Postgres + NATS) is not runnable in the discovery/fix session — requires `./smackerel.sh up` + `./smackerel.sh test integration|e2e`. Routed to bubbles.test.",
+      "Done-ceiling certification (scenario-specific + broader E2E regression coverage, stress coverage) pending the live-stack run. Routed to bubbles.validate."
+    ],
+    "concerns": [],
+    "notes": "Code fix is LANDED and UNIT-VERIFIED (adversarial RED->GREEN + full httpadapter package green + adversarial-signal guard green). The single-line cancellation decoupling (context.WithoutCancel) closes F-069-CHAOS39-CAPTURE-CTX-CANCEL at the adapter contract level. Full done-ceiling certification requires the live-stack E2E disconnect-race regression, which this session cannot run; status held at in_progress and routed honestly rather than fabricating E2E/stress evidence."
+  },
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "chaos-hardening constraint"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["chaos", "implement", "test", "regression", "audit"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.workflow",
+      "expansionReason": "chaos-hardening Round 39 executed in a runtime without runSubagent; nested workflow delegation was unavailable (capability missing), so the parent parent-expanded the finding-owned bugfix-fastlane phases directly.",
+      "expansionEvidenceRef": "report.md",
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-17T00:00:00Z",
+      "runCompletedAt": "2026-06-17T00:00:00Z",
+      "outcome": "route_required",
+      "nextRequiredOwner": "bubbles.test",
+      "summary": "chaos-hardening Round 39: discovered F-069-CHAOS39-CAPTURE-CTX-CANCEL (capture-as-fallback lost on client disconnect) and LANDED the single-line context.WithoutCancel fix + adversarial RED->GREEN unit regression; full httpadapter package green. Remaining live-stack E2E + stress certification routed to bubbles.test -> bubbles.validate (no live stack this session)."
+    }
+  ]
+}

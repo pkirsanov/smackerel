@@ -1,0 +1,82 @@
+{
+  "version": 3,
+  "featureDir": "specs/006-phase5-advanced/bugs/BUG-006-006-video-duration-iso8601",
+  "featureName": "BUG-006-006: Learning Path Video Duration Never Parsed (ISO 8601 vs seconds)",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": "1",
+    "runStartedAt": "2026-06-17T14:02:00Z",
+    "completedPhaseClaims": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "executionHistory": [
+      {
+        "phase": "planning",
+        "agent": "bubbles.improve+plan",
+        "timestamp": "2026-06-17T14:08:00Z",
+        "outcome": "completed_owned",
+        "summary": "improve trigger (stochastic-quality-sweep round 38) probed spec 006 learning-path estimator. Root-caused: estimateReadingTime parses metadata.duration as bare seconds, but the YouTube connector stores ISO 8601 (PT45M); every video silently defaults to 15 min. Planned a dedicated ISO 8601 + seconds parser."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-06-17T14:19:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added videoDurationISO8601RE + parseVideoDurationSeconds to internal/intelligence/learning.go and rewired the YouTube branch of estimateReadingTime; preserved the bare-seconds path and the 15-min fallback."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-06-17T14:28:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added adversarial TestEstimateReadingTime_YouTubeISO8601 (captured RED before fix: all ISO durations returned 15), plus TestEstimateReadingTime_YouTubePlainSecondsStillWorks and TestEstimateReadingTime_YouTubeUnparseableDuration. All GREEN after fix."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-06-17T14:34:00Z",
+        "outcome": "completed_owned",
+        "summary": "Full internal/intelligence package PASS (ok 0.094s) and full repo ./smackerel.sh test unit --go finished OK — no neighboring test regressed. Spec-scoped artifact-lint and traceability-guard clean for the delta."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-06-17T14:41:00Z",
+        "outcome": "completed_owned",
+        "summary": "Change boundary respected: only internal/intelligence/learning.go, internal/intelligence/learning_test.go, and this bug packet touched. No connector/schema/config/CI surface changed."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-06-17T14:44:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug certified done. All 7 DoD items checked with file:line evidence and RED/GREEN regression captures in report.md."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ]
+  },
+  "policySnapshot": {},
+  "transitionRequests": [],
+  "reworkQueue": []
+}

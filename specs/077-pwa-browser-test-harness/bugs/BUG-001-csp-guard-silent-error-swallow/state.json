@@ -1,0 +1,54 @@
+{
+  "version": 3,
+  "featureDir": "specs/077-pwa-browser-test-harness/bugs/BUG-001-csp-guard-silent-error-swallow",
+  "featureName": "BUG-001 CSP Guard Silent Error Swallowing Fix",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "agent",
+  "convergenceHealth": {
+    "recapCount": 0,
+    "handoffCount": 0,
+    "summarizeHistoryCount": 0,
+    "turnCount": 1,
+    "snapshotCompleteness": 1.0,
+    "slo": "pass"
+  },
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [],
+  "certifiedAt": "2026-06-17T00:00:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": "1",
+    "runStartedAt": "2026-06-17T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "scope": "1",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-06-17T00:00:00Z",
+        "evidenceRef": "report.md#fix-implementation",
+        "notes": "Added isAlreadyBoundError() helper, refined catch handlers to warn on unexpected errors"
+      },
+      {
+        "phase": "test",
+        "scope": "1",
+        "agent": "bubbles.test",
+        "completedAt": "2026-06-17T00:00:00Z",
+        "evidenceRef": "report.md#test-evidence",
+        "notes": "Chaos regression tests pass, existing suite green"
+      }
+    ]
+  },
+  "policySnapshot": {
+    "foundBy": "bubbles.chaos",
+    "foundAt": "2026-06-17T00:00:00Z",
+    "severity": "high",
+    "chaosRound": 20
+  }
+}

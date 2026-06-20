@@ -1,0 +1,81 @@
+{
+  "version": 3,
+  "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-001-prefacade-chain-not-wired",
+  "parentFeatureDir": "specs/069-assistant-http-transport",
+  "featureName": "BUG-069-001: spec 069 SCOPE-2 pre-facade middleware chain (httpadapter.PreFacadeChain) is built + isolated-tested but never wired into the live POST /api/assistant/turn route — cmd/core/wiring_assistant_facade.go:314 installs an identity pass-through, so the default-enabled endpoint runs an unbounded io.ReadAll (CWE-400/770) with no body-size cap, no per-user rate limit, and no assistant:turn scope-claim gate, while state.json certifies SCOPE-2 done",
+  "bugId": "BUG-069-001",
+  "status": "in_progress",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "lastUpdatedAt": "2026-06-16T00:00:00Z",
+  "workflowMode": "bugfix-fastlane",
+  "nextRequiredOwner": "bubbles.implement",
+  "fixSequence": [
+    {
+      "order": 1,
+      "owner": "bubbles.implement",
+      "finding": "F1",
+      "task": "Swap the identity pass-through at cmd/core/wiring_assistant_facade.go:314 — replace `SetMiddleware(func(next http.Handler) http.Handler { return next })` with `SetMiddleware(httpadapter.PreFacadeChain(transportCfg))` (transportCfg already in scope; PreFacadeChain is self-contained, validates fail-loud at construction). Update/remove the SCOPE-1d placeholder comment at lines 305-313. Author a regression test (tests/integration/api/assistant_http_live_wiring_test.go) that drives the REAL api.NewRouter / late-bound SetMiddleware path (NOT mountScope2Route) and asserts SCN-001..SCN-005: over-cap body -> 413, per-user budget -> 429, per-user PASETO without assistant:turn -> 403, shared-token within limits -> 200, and the adversarial RED-before (identity wrapper makes 413/429/403 FAIL) / GREEN-after (PreFacadeChain makes them PASS). Boundary: only cmd/core/wiring_assistant_facade.go + the new test + this bug packet; do NOT touch middleware.go/adapter.go/late_binding.go/config/smackerel.yaml/internal/auth or any other specs/ folder."
+    },
+    {
+      "order": 2,
+      "owner": "bubbles.test",
+      "finding": "F1",
+      "task": "Capture the pre-fix RED run (real-router test FAILS against the identity wrapper) and the post-fix GREEN run (PASSES after the PreFacadeChain swap). Run the broader assistant E2E/integration suite (tests/e2e/assistant/*, tests/integration/api/assistant_http_*) and `./smackerel.sh check` to prove no collateral regression. Record >=10-line raw evidence under each scopes.md DoD item with Phase/Command/Exit Code/Claim Source fields. Route to validate-owned certification for terminal-for-mode promotion."
+    }
+  ],
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "discovery",
+    "currentScope": "scope-1",
+    "runStartedAt": "2026-06-16T00:00:00Z",
+    "runCompletedAt": null,
+    "completedPhaseClaims": ["bug"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-06-16T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Created the BUG-069-001 8-artifact packet (bug.md, spec.md, design.md, scopes.md, report.md, scenario-manifest.json, uservalidation.md, state.json) for a HIGH-severity wiring defect surfaced by stochastic-quality-sweep round R41 (harden-to-doc) on specs/069-assistant-http-transport and independently re-verified with real read-only commands. F1: spec 069 SCOPE-2 built httpadapter.PreFacadeChain (scope -> per-user rate -> body cap) and isolated-tested it, but cmd/core/wiring_assistant_facade.go:314 installs an identity pass-through (`func(next http.Handler) http.Handler { return next }`) instead, so the default-enabled (config/smackerel.yaml:995 http.enabled: true) live route POST /api/assistant/turn runs the adapter's unbounded io.ReadAll (internal/assistant/httpadapter/adapter.go:329; no MaxBytesReader) with no body-size cap (CWE-400/770), no per-user rate limit (SCN-069-A10 429 absent), and no assistant:turn scope-claim gate (Hard Constraint 2 / spec 060 403 absent). PreFacadeChain is wired NOWHERE in production (grep -rn 'PreFacadeChain' cmd/ internal/api/ -> no matches); it appears only in its definition (middleware.go:48), a doc comment (late_binding.go:36), and tests/. The route is bearer-gated (router.go:74) under a global Throttle(100) (router.go:68) — partial mitigations honestly noted: authenticated-DoS not anonymous, and Throttle is global concurrency not per-user/body-size. state.json certifies SCOPE-2 done (status done, completedScopes includes SCOPE-2, scopeProgress.done 7). Root cause: SCOPE-2's production-wiring swap never landed (the SCOPE-1d placeholder admitted at wiring_assistant_facade.go:305-313 and report.md:239 'SCOPE-2 will replace this pass-through with the real auth/scope/body/rate/CORS chain' remains live); tests miss it because the SCOPE-2 integration tests build a synthetic mountScope2Route (assistant_http_auth_test.go:122/136) that hand-wires PreFacadeChain + a fake bearer gate and never exercises api.NewRouter. Fix routed (NOT applied): one-line SetMiddleware(httpadapter.PreFacadeChain(transportCfg)) swap + a real-router regression test, RED-before/GREEN-after. auth.RequireScope bypasses SessionSourceSharedToken+SessionSourceBootstrap (scope_middleware.go:71-77) so dev shared-token still passes. No production code edited; no commit. Parent spec 069 untouched. nextRequiredOwner: bubbles.implement."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "scopes.md"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug", "classification", "routing"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-16T00:00:00Z",
+      "runCompletedAt": "2026-06-16T00:00:00Z",
+      "outcome": "route_required",
+      "nextRequiredOwner": "bubbles.implement",
+      "summary": "Discovered + documented + root-caused a HIGH-severity wiring defect on spec 069's live assistant HTTP route: F1 — httpadapter.PreFacadeChain (body-size cap + per-user rate limit + assistant:turn scope gate) is built and isolated-tested but never wired into production; cmd/core/wiring_assistant_facade.go:314 installs an identity pass-through, so the default-enabled POST /api/assistant/turn runs an unbounded io.ReadAll (adapter.go:329, CWE-400/770) with none of the three controls active, while state.json certifies SCOPE-2 done. Single Scope 1 (one finding, one root cause: the SCOPE-2 production-wiring swap was never completed; the synthetic mountScope2Route test wiring masks it). Routed implement -> test: bubbles.implement swaps SetMiddleware(identity) for SetMiddleware(httpadapter.PreFacadeChain(transportCfg)) and authors a real-router regression test (RED against the identity wrapper, GREEN after the swap); bubbles.test captures RED/GREEN + full regression and routes to validate-owned certification. No fix/commit by bubbles.bug; parent spec 069 untouched. Packet artifacts: bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json."
+    }
+  ]
+}

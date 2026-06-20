@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "featureDir": "specs/034-expense-tracking/bugs/BUG-034-004-expense-rows-err-unchecked",
+  "generatedAt": "2026-06-15T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG034004-001",
+      "scope": "Scope 1",
+      "title": "List summary surfaces a mid-iteration cursor error",
+      "gherkin": {
+        "given": "the expense currency-summary cursor drops mid-iteration",
+        "when": "scanExpenseCurrencySummaries iterates it",
+        "then": "it returns a non-nil error wrapping the cursor error and does not return a truncated summary slice"
+      },
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/api/expenses_rowserr_test.go",
+          "name": "TestScanExpenseCurrencySummaries_PropagatesRowsErr"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#after-fix--regression-suite-green-expenses_rowserr_testgo",
+        "report.md#adversarial-regression-proof-red"
+      ],
+      "testMapping": {
+        "type": "unit",
+        "label": "TestScanExpenseCurrencySummaries_PropagatesRowsErr",
+        "file": "internal/api/expenses_rowserr_test.go"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG034004-002",
+      "scope": "Scope 1",
+      "title": "List data surfaces a per-row scan error",
+      "gherkin": {
+        "given": "the expense list cursor fails to scan row N",
+        "when": "scanExpenseListItems iterates it",
+        "then": "it returns a non-nil error instead of silently dropping row N"
+      },
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/api/expenses_rowserr_test.go",
+          "name": "TestScanExpenseListItems_PropagatesScanError"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#after-fix--regression-suite-green-expenses_rowserr_testgo"
+      ],
+      "testMapping": {
+        "type": "unit",
+        "label": "TestScanExpenseListItems_PropagatesScanError",
+        "file": "internal/api/expenses_rowserr_test.go"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG034004-003",
+      "scope": "Scope 1",
+      "title": "Export decode surfaces a corrupt JSONB row",
+      "gherkin": {
+        "given": "an expense export row whose expense JSON is invalid",
+        "when": "decodeExportExpenseRow decodes it",
+        "then": "it returns a non-nil unmarshal error instead of continue-skipping the row"
+      },
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/api/expenses_rowserr_test.go",
+          "name": "TestDecodeExportExpenseRow_PropagatesUnmarshalError"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#after-fix--regression-suite-green-expenses_rowserr_testgo"
+      ],
+      "testMapping": {
+        "type": "unit",
+        "label": "TestDecodeExportExpenseRow_PropagatesUnmarshalError",
+        "file": "internal/api/expenses_rowserr_test.go"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG034004-004",
+      "scope": "Scope 1",
+      "title": "Adversarial — removing the rows.Err() check fails the test",
+      "gherkin": {
+        "given": "the rows.Err() check is removed from scanExpenseCurrencySummaries",
+        "when": "the regression suite runs",
+        "then": "TestScanExpenseCurrencySummaries_PropagatesRowsErr FAILS"
+      },
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/api/expenses_rowserr_test.go",
+          "name": "TestScanExpenseCurrencySummaries_PropagatesRowsErr"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#adversarial-regression-proof-red"
+      ],
+      "testMapping": {
+        "type": "unit",
+        "label": "TestScanExpenseCurrencySummaries_PropagatesRowsErr",
+        "file": "internal/api/expenses_rowserr_test.go"
+      },
+      "status": "verified"
+    }
+  ]
+}
