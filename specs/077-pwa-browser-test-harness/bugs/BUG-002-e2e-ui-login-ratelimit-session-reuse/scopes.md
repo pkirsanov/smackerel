@@ -4,7 +4,7 @@ Single-scope test-infrastructure fix.
 
 ## Scope 1: Worker-Scoped Login Session Reuse
 
-**Status:** In Progress
+**Status:** In Progress (implementation complete and CI-verified GREEN on commit `0a4a13aa` — CI "E2E UI" run `27878481805`, `e2e-ui` job success; full done-certification pipeline deferred per the state-transition guard — see report.md Completion Statement)
 **Priority:** P0
 **Scope-Kind:** bugfix
 
@@ -49,6 +49,6 @@ Scenario: SCN-077-BUG-002-02 — no cardrewards spec reintroduces a per-test log
 - [x] `npx playwright test --list` loads the full suite (42 tests, exit 0) with no syntax/type errors; the new `_support/*.test.ts` is correctly NOT discovered as a spec → Evidence: report.md "Test Evidence" §2
 - [x] Production limiter `httprate.LimitByIP(20, 1*time.Minute)` + `web_login_ratelimit_test.go` untouched (verified by `git status`: zero `internal/` changes) → Evidence: report.md "Test Evidence" §6
 - [x] `auth_login.spec.ts` real-login flow tests untouched; no `trusted_proxies` / `X-Forwarded-For` spoofing introduced → Evidence: report.md "Test Evidence" §6 (git status, zero internal/ changes)
-- [ ] Authoritative: CI "E2E UI" lane goes green (card-rewards 429s cleared) — **parent-owned** (commit + push + CI), pending
+- [x] Authoritative: CI "E2E UI" lane goes green (card-rewards 429s cleared) → Evidence: report.md "Test Evidence" §7 — CI "E2E UI" run `27878481805` conclusion **success**, `e2e-ui` job **success** (5m42s) on commit `0a4a13aa`; the 9 formerly-429 `cardrewards_*.spec.ts` tests now pass
 
-> The final DoD item is intentionally unchecked: the full e2e-ui harness needs the live stack + Ollama and OOMs the dev host, and commit/push/CI are reserved to the parent orchestrator. The scope status stays **In Progress** (not Done) until the parent's CI "E2E UI" run confirms green.
+> The final DoD item is now satisfied: the CI "E2E UI" lane confirmed GREEN on commit `0a4a13aa` (run `27878481805`, `e2e-ui` job success), clearing the card-rewards 429 failures. The fix's code landed via the parent commit (`50c71583` → HEAD `0a4a13aa`); the full e2e-ui harness was run on the live CI runner (not the OOM-prone dev host). The scope status is held at **In Progress** (not Done) because the bug-packet's full done-certification pipeline (regression/simplify/stabilize/security/validate/audit phases + scenario-specific E2E regression planning) was not executed; the real state-transition guard blocks a `done` promotion. Done-certification is deferred to the parent orchestrator.
