@@ -22,16 +22,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # the explicit final-state pin.
 RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1"
 
-# spec-047 R12.3: force starlette to >=0.49.1,<1.0.0 to fix
-# CVE-2025-62727 (Starlette DoS via Range header merging in
-# FileResponse parsing). Range cap `<1.0.0` is required because
-# starlette 1.0.0 introduced breaking changes that fastapi 0.115.6
-# does not support (Router.__init__ no longer accepts `on_startup`).
-# fastapi 0.115.6 transitively pins `starlette>=0.40.0,<0.42.0`,
-# which locks starlette to 0.41.x \u2014 still vulnerable. We
-# force-upgrade after the requirements install. CVE fix landed in
-# 0.49.1; the 0.49.x line is the safe target for fastapi 0.115.6.
-RUN pip install --no-cache-dir --upgrade "starlette>=0.49.1,<1.0.0"
+# spec-047 R16: force starlette to ==1.3.1 to fix CVE-2026-48818
+# (StaticFiles SSRF on Windows; fix 1.1.0) and CVE-2026-54283
+# (multipart DoS; fix 1.3.1). This is a defensive final-state pin that
+# matches the explicit starlette==1.3.1 in requirements.txt so the
+# patched version is deterministic even if a later step perturbs the
+# transitive resolution. The prior `>=0.49.1,<1.0.0` cap is REMOVED:
+# it was tied to fastapi 0.115.6 (which capped starlette <0.42.0 and
+# broke on the 1.x line). fastapi is now 0.133.0, which permits the
+# starlette 1.x line, so the stale `<1.0.0` cap would otherwise force
+# starlette back to 0.52.1 and re-expose both CVEs. CVE fix landed in
+# 1.3.1; requirements.txt pins the same version.
+RUN pip install --no-cache-dir --upgrade "starlette==1.3.1"
 
 # Preload the embedding model during the image build so live processing does
 # not depend on a first-request network/cache write under the non-root user.
