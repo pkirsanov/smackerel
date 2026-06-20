@@ -1,4 +1,4 @@
-# User Validation — Spec 089 Card-Rewards Google Calendar Delivery
+# User Validation — Spec 097 Card-Rewards Google Calendar Delivery
 
 > Items default to checked `[x]` (validated by the delivering agent). The
 > operator unchecks an item to report it is not working as expected.

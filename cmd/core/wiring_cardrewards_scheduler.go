@@ -83,7 +83,7 @@ func wireCardRewardsScheduler(cfg *config.Config, svc *coreServices, sched *sche
 	reconciler := cardrewards.NewReconciler(store, cfg.CardRewards.Extraction.ConfidenceThreshold, nil)
 	recommender := cardrewards.NewRecommender(store)
 
-	// Calendar delivery (spec 089) — construct the production Google Calendar
+	// Calendar delivery (spec 097) — construct the production Google Calendar
 	// write client + bridge when calendar_sync is enabled. Presence of the
 	// calendar id + credential is already fail-loud at config load
 	// (LoadCardRewardsConfig) when calendar_sync is true, so reaching here with
