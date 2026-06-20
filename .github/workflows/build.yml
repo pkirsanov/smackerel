@@ -16,6 +16,17 @@ on:
       sourceSha:
         description: 'Optional explicit source SHA (defaults to github.sha)'
         required: false
+      # Spec 098 — explicit RELEASE intent override for the mobile-client build.
+      # Default false: a non-release run publishes a SERVER-ONLY manifest (core +
+      # ml + config bundles + chrome-bridge) and SKIPS build-clients, so a missing
+      # operator-private Android signing secret can never block a server deploy. A
+      # tag push (refs/tags/v*) builds clients automatically; this input lets an
+      # operator force a client build off a non-tag ref.
+      build_clients:
+        description: 'Build + sign the mobile clients and pin them in the manifest (release intent). Default false — non-release runs publish a server-only manifest.'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -464,6 +475,14 @@ jobs:
   # ─────────────────────────────────────────────────────────────────
   build-clients:
     needs: build-images
+    # Spec 098 — release-gated. The client build (and its operator-private Android
+    # signing secret) runs ONLY on explicit release intent: a tag push
+    # (refs/tags/v*) or an explicit `build_clients: true` workflow_dispatch. On a
+    # normal push to main this job is SKIPPED, so a missing ANDROID_KEYSTORE_BASE64
+    # secret can never fail this job and block the server manifest
+    # (publish-build-manifest tolerates a skipped build-clients). The release path
+    # is unchanged: on a tag the client is built, signed, pushed by digest, pinned.
+    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_clients == 'true' }}
     runs-on: ubuntu-latest
     env:
       CLIENT_APP_DIR: clients/mobile/assistant/example
@@ -602,6 +621,16 @@ jobs:
 
   publish-build-manifest:
     needs: [ build-images, build-bundles, build-chrome-bridge, build-clients ]
+    # Spec 098 — publish the SERVER manifest even when the mobile-client build was
+    # SKIPPED (non-release push) or absent. build-clients stays in `needs` for
+    # RELEASE ordering (a tagged build must finish + upload its digests before the
+    # clients block is appended), but the manifest MUST NOT be gated on it: a
+    # missing operator-private Android secret on a non-release push must never
+    # block the core+ml server manifest. The explicit success checks for the
+    # server-side jobs keep the manifest fail-closed on what actually matters; a
+    # build-clients FAILURE on a release still blocks it (only success|skipped pass).
+    if: >-
+      ${{ !cancelled() && needs.build-images.result == 'success' && needs.build-bundles.result == 'success' && needs.build-chrome-bridge.result == 'success' && (needs.build-clients.result == 'success' || needs.build-clients.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
     # BUG-047-001 / DEVOPS-HL-002 — pull the per-env bundle-sha artifacts that
@@ -625,10 +654,14 @@ jobs:
 
     # Spec 085 — pull the android client digests build-clients uploaded so the
     # build manifest can pin the AAB + APK by sha256 under clients.artifacts[].
-    # Without these, the contracted android platform would have no digest and the
-    # knb conformance gate check (c) (E025-CLIENT-MANIFEST-NO-DIGEST) would refuse
-    # the deployment fail-closed.
+    # Spec 098 — conditional on a SUCCESSFUL build-clients (release intent only).
+    # On a non-release push build-clients is skipped, this download is skipped,
+    # and the manifest stays SERVER-ONLY: the android platform is NOT contracted,
+    # so the knb conformance gate check (c) (E025-CLIENT-MANIFEST-NO-DIGEST) has
+    # nothing to fail-close on (matching the local-build-manifest precedent). On a
+    # release the digests are pinned exactly as before.
     - name: Download client-sha artifact
+      if: ${{ needs.build-clients.result == 'success' }}
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
       with:
         name: client-shas-${{ needs.build-images.outputs.sourceSha }}
@@ -679,8 +712,10 @@ jobs:
     # Spec 085 — validate + surface the android client digests for the clients
     # block. Fail-closed here too (defense-in-depth alongside the emitter): a
     # missing/malformed digest never reaches the manifest.
+    # Spec 098 — conditional on a SUCCESSFUL build-clients (release intent only).
     - name: Resolve android client digests
       id: resolve-client-shas
+      if: ${{ needs.build-clients.result == 'success' }}
       run: |
         aab_file="client-shas/android-aab.sha"
         apk_file="client-shas/android-apk.sha"
@@ -757,7 +792,12 @@ jobs:
     # single build-manifest-<sourceSha>.yaml. The emitter fail-closes on an
     # empty/malformed digest, so a contracted android platform always carries a
     # non-empty sha256 + cosign-keyless provenance (knb gate check c).
+    # Spec 098 — conditional on a SUCCESSFUL build-clients. When clients are
+    # skipped (non-release) this block is NOT appended and the manifest stays
+    # server-only (android NOT contracted); when clients are built (release) the
+    # block pins them by digest exactly as before.
     - name: Append clients block to build manifest (knb spec 025)
+      if: ${{ needs.build-clients.result == 'success' }}
       env:
         ANDROID_AAB_SHA256: ${{ steps.resolve-client-shas.outputs.aabSha }}
         ANDROID_APK_SHA256: ${{ steps.resolve-client-shas.outputs.apkSha }}

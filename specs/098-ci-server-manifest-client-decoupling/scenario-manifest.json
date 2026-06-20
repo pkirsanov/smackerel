@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "specId": "098-ci-server-manifest-client-decoupling",
+  "feature": "098-ci-server-manifest-client-decoupling",
+  "featureDir": "specs/098-ci-server-manifest-client-decoupling",
+  "scenarioIdPattern": "SCN-098-A0[1-4]",
+  "totalScenarios": 4,
+  "note": "Scenario contract for decoupling the CI mobile-client build from the SERVER deploy manifest. SCN-098-A01 (non-release server-only manifest) + A02 (release still pins clients) + A03 (drift detector enforces the conditional contract) are unit-proven under SCOPE-01 by the lockstep drift-detector test internal/deploy/build_workflow_clients_contract_test.go (live-file + policy + adversarial sub-tests). SCN-098-A04 (deployment docs describe the server-only manifest + knb-gate expectation) is a docs-review scenario under SCOPE-02 evidenced in docs/Deployment.md. Every scenario is linked 1:1 to its owning scope and a report.md evidence anchor.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-098-A01",
+      "scopeId": "SCOPE-01",
+      "title": "Non-release push publishes a server-only manifest",
+      "behaviorClass": "config",
+      "changeType": "modify",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "no ANDROID_KEYSTORE_BASE64 secret is configured and the workflow runs on a push to main (not a tag, no build_clients override)",
+      "when": "the build workflow runs",
+      "then": "build-clients is skipped, publish-build-manifest still runs once the server-side jobs succeed, and a server-only build-manifest (core + ml + bundles + chrome-bridge) is published with the android platform NOT contracted",
+      "linkedTests": [
+        "internal/deploy/build_workflow_clients_contract_test.go::TestClientsDecoupling_LiveFile",
+        "internal/deploy/build_workflow_clients_contract_test.go::TestClientsDecoupling_NonReleaseAcceptedWithoutDigests"
+      ],
+      "evidenceRefs": ["report.md#build-yml-change", "report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-098-A02",
+      "scopeId": "SCOPE-01",
+      "title": "Tagged release still builds and pins the clients",
+      "behaviorClass": "config",
+      "changeType": "modify",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "the operator-private Android signing secrets are configured and the workflow runs on a tag push (refs/tags/v*) or build_clients=true dispatch",
+      "when": "the build workflow runs",
+      "then": "build-clients builds + signs + pushes the AAB + APK by digest, publish-build-manifest pins them under clients.artifacts[], and a build-clients FAILURE on the release still blocks the manifest",
+      "linkedTests": [
+        "internal/deploy/build_workflow_clients_contract_test.go::TestClientsDecoupling_ReleaseRequiresDigests",
+        "internal/deploy/build_workflow_clients_contract_test.go::TestClientsBuildWorkflow_LiveFile"
+      ],
+      "evidenceRefs": ["report.md#build-yml-change", "report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-098-A03",
+      "scopeId": "SCOPE-01",
+      "title": "Drift detector enforces the new conditional contract",
+      "behaviorClass": "config",
+      "changeType": "modify",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "the lockstep contract test parses the live build.yml",
+      "when": "it asserts the conditional decoupling contract",
+      "then": "the release-gate, skip-tolerance, and success-gate are accepted, while an adversarial mutation removing any of them is rejected, and a non-release manifest is accepted without android digests while a release manifest without android digests is rejected",
+      "linkedTests": [
+        "internal/deploy/build_workflow_clients_contract_test.go::TestClientsDecoupling_AdversarialUngatedClientBuild",
+        "internal/deploy/build_workflow_clients_contract_test.go::TestClientsDecoupling_AdversarialNoSkipTolerance",
+        "internal/deploy/build_workflow_clients_contract_test.go::TestClientsDecoupling_AdversarialUnconditionalClientsBlock"
+      ],
+      "evidenceRefs": ["report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-098-A04",
+      "scopeId": "SCOPE-02",
+      "title": "Deployment docs describe the server-only manifest contract",
+      "behaviorClass": "config",
+      "changeType": "modify",
+      "requiredTestType": ["functional"],
+      "regressionRequired": false,
+      "given": "an operator reads docs/Deployment.md",
+      "when": "they look up what CI publishes on a non-release push",
+      "then": "the docs state a server-only manifest (no android platform contracted) is published and promotable, state the knb-side expectation that a server-only manifest must not contract android so E025-CLIENT-MANIFEST-NO-DIGEST has nothing to fail-close on, and note the knb adapter is operator-private and out of repo scope",
+      "linkedTests": ["docs/Deployment.md::server-only-build-manifest-on-non-release-pushes"],
+      "evidenceRefs": ["report.md#docs"]
+    }
+  ]
+}
