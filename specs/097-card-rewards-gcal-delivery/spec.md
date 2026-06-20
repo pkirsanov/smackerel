@@ -1,4 +1,4 @@
-# Spec 089 — Card-Rewards Google Calendar Delivery
+# Spec 097 — Card-Rewards Google Calendar Delivery
 
 **Status:** in_progress
 **Workflow mode:** full-delivery · **Status ceiling:** done
@@ -38,30 +38,30 @@ Calendar.
 
 ## Requirements
 
-- **FR-089-01** — A new client implements `cardrewards.CalDAVClient`
+- **FR-097-01** — A new client implements `cardrewards.CalDAVClient`
   (`PutEvent` / `DeleteEvent`) against the Google Calendar REST API v3, targeting
   a configured `calendar_id`.
-- **FR-089-02** — `PutEvent` is idempotent on the stable `uid`: a re-sync of the
+- **FR-097-02** — `PutEvent` is idempotent on the stable `uid`: a re-sync of the
   same recommendation UPDATES the same event, never duplicates it. (Achieved via
   a deterministic Google event id derived from the UID: get-or-insert, then
   update.)
-- **FR-089-03** — The client mints a fresh access token from the stored refresh
+- **FR-097-03** — The client mints a fresh access token from the stored refresh
   credential on each run (Google access tokens expire hourly; the sync cron is
   monthly), via the standard OAuth2 refresh-token grant.
-- **FR-089-04** — The Google OAuth credential (client_id, client_secret,
+- **FR-097-04** — The Google OAuth credential (client_id, client_secret,
   refresh_token, token_uri) is delivered as a single SST-managed secret
   `CARD_REWARDS_GCAL_CREDENTIALS` (JSON), declared in all three secret-key
   mirrors. `calendar_id` is non-secret operator config (`CARD_REWARDS_CALENDAR_ID`).
-- **FR-089-05** — The config loader is fail-loud: when `card_rewards.enabled` AND
+- **FR-097-05** — The config loader is fail-loud: when `card_rewards.enabled` AND
   `calendar_sync` are both true, a missing/invalid `CARD_REWARDS_CALENDAR_ID` or
   `CARD_REWARDS_GCAL_CREDENTIALS` aborts core boot naming the offending key. When
   `calendar_sync` is false the credential is not required (the bridge stays nil
   and the feature persists recommendations to the Web UI only — SCN-083-H04).
-- **FR-089-06** — `wiring_cardrewards_scheduler.go` constructs the real client +
+- **FR-097-06** — `wiring_cardrewards_scheduler.go` constructs the real client +
   `NewCardCalendarBridge(client, store, true, uidPrefix)` and passes it to the
   pipeline when `calendar_sync` is true and the credential is present; otherwise
   the prior nil-bridge behavior is preserved.
-- **FR-089-07** — No secret value is ever logged. The client logs event UIDs and
+- **FR-097-07** — No secret value is ever logged. The client logs event UIDs and
   calendar-id, never the token/credential.
 
 ## Behavior (Gherkin)

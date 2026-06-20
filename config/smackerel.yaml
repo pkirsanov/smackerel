@@ -789,8 +789,8 @@ card_rewards:
   monthly_recommend_cron: "0 7 1 * *" # REQUIRED when enabled — 1st of month
   calendar_sync: false # opt-in; true on home-lab
   calendar_uid_prefix: "smackerel-cardrec" # REQUIRED when calendar_sync
-  calendar_id: "" # REQUIRED when calendar_sync (spec 089) — target Google Calendar id; non-secret operator config, emitted by the knb deploy adapter from params.yaml (empty here per No Env-Specific Content)
-  gcal_credentials: "" # REQUIRED when calendar_sync (spec 089) — Google OAuth credential JSON {client_id,client_secret,refresh_token,token_uri}; MANAGED SECRET (infrastructure.secret_keys), shipped via knb <target>.enc.env; empty here, never a committed value
+  calendar_id: "" # REQUIRED when calendar_sync (spec 097) — target Google Calendar id; non-secret operator config, emitted by the knb deploy adapter from params.yaml (empty here per No Env-Specific Content)
+  gcal_credentials: "" # REQUIRED when calendar_sync (spec 097) — Google OAuth credential JSON {client_id,client_secret,refresh_token,token_uri}; MANAGED SECRET (infrastructure.secret_keys), shipped via knb <target>.enc.env; empty here, never a committed value
   fetch_timeout_seconds: 20 # REQUIRED when enabled — per-source fetch bound
   extraction:
     model: "" # REQUIRED when enabled — host Ollama model (e.g. gpt-oss:20b)
@@ -1897,7 +1897,7 @@ infrastructure:
   # (sidecar boundary enforced at the application layer, see
   # internal/config/secret_keys_test.go::TestKeepAppPasswordReadOnlyFromSidecarNotCore).
   - KEEP_GOOGLE_APP_PASSWORD
-  # Spec 089 — card-rewards Google Calendar OAuth credential (JSON:
+  # Spec 097 — card-rewards Google Calendar OAuth credential (JSON:
   # client_id, client_secret, refresh_token, token_uri). Read by core's
   # card-rewards calendar write client only when card_rewards.calendar_sync
   # is true; never logged. Real value shipped via the knb deploy adapter at

@@ -1,6 +1,6 @@
 package cardrewards
 
-// Card-rewards Google Calendar write client (spec 089).
+// Card-rewards Google Calendar write client (spec 097).
 //
 // This is the production implementation of the CalDAVClient interface that the
 // CardCalendarBridge (spec 083 Scope 08) writes through. Despite the historical
@@ -8,7 +8,7 @@ package cardrewards
 // Calendar REST API v3 (the existing read path in internal/connector/caldav does
 // the same), so this client speaks REST v3 — not the CalDAV protocol.
 //
-// Idempotency (FR-089-02): every recommendation/re-enrollment carries a STABLE
+// Idempotency (FR-097-02): every recommendation/re-enrollment carries a STABLE
 // application UID (e.g. "smackerel-cardrec-2026-06-restaurants"). Google event
 // ids must be base32hex (lowercase a-v + digits) and 5..1024 chars, so the UID —
 // which contains hyphens — cannot be used directly. We derive a deterministic,
@@ -17,14 +17,14 @@ package cardrewards
 // The same UID therefore always maps to the same calendar event — a re-sync
 // updates in place rather than duplicating (SCN-083-H02).
 //
-// Auth (FR-089-03): the card-rewards calendar credential is an operator-supplied
+// Auth (FR-097-03): the card-rewards calendar credential is an operator-supplied
 // Google OAuth2 installed-app credential (client_id, client_secret,
 // refresh_token, token_uri) delivered as the SST secret
 // CARD_REWARDS_GCAL_CREDENTIALS. Google access tokens expire hourly while the
 // sync cron is monthly, so the client mints a fresh access token from the
 // refresh token on demand (cached until shortly before expiry within a run).
 //
-// No secret value is ever logged (FR-089-07): logs carry the event UID and the
+// No secret value is ever logged (FR-097-07): logs carry the event UID and the
 // calendar id, never the token or credential fields.
 
 import (

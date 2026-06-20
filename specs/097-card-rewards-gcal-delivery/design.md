@@ -1,4 +1,4 @@
-# Design — Spec 089 Card-Rewards Google Calendar Delivery
+# Design — Spec 097 Card-Rewards Google Calendar Delivery
 
 **Spec:** [spec.md](spec.md) · **Scopes:** [scopes.md](scopes.md)
 
@@ -22,17 +22,17 @@ This spec builds the missing write client and wires it.
 Implements the existing `cardrewards.CalDAVClient` interface against the Google
 Calendar REST API v3 for a single target calendar.
 
-- **Idempotency (FR-089-02):** Google event ids must be base32hex (0-9a-v),
+- **Idempotency (FR-097-02):** Google event ids must be base32hex (0-9a-v),
   5..1024 chars; the application UID contains hyphens, so it can't be the event
   id directly. The client derives a deterministic event id = lowercase hex of
   `sha1(uid)` (40 chars, a subset of base32hex). `PutEvent` GETs that id: 404 →
   `POST` insert; 200 → `PUT` update. The same UID always maps to the same event,
   so a re-sync updates rather than duplicates (SCN-083-H02). `DeleteEvent` treats
   404/410 as already-gone (idempotent cleanup).
-- **Auth (FR-089-03):** mints a fresh access token from the operator's refresh
+- **Auth (FR-097-03):** mints a fresh access token from the operator's refresh
   credential via the OAuth2 `refresh_token` grant, cached in-process until ~60s
   before expiry (access tokens last ~1h; the sync cron is monthly).
-- **Value-safety (FR-089-07):** logs nothing; error bodies from Google describe
+- **Value-safety (FR-097-07):** logs nothing; error bodies from Google describe
   API errors, never the bearer token or credential.
 - **Testability:** `apiBase`/`tokenURL` are overridable so the unit tests drive
   it against an httptest server emulating the token + events endpoints (no live
