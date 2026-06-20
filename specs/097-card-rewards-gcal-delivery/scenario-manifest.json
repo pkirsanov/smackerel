@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "specId": "097-card-rewards-gcal-delivery",
+  "feature": "097-card-rewards-gcal-delivery",
+  "featureDir": "specs/097-card-rewards-gcal-delivery",
+  "scenarioIdPattern": "SCN-097-A0[1-3]",
+  "totalScenarios": 4,
+  "note": "Scenario contract for the card-rewards Google Calendar delivery feature. The three canonical behaviours (SCN-097-A01 write+idempotent, A02 disabled->Web-UI-only, A03 enabled-but-misconfigured fail-loud) are unit-proven under SCOPE-01. SCN-097-A01 is ALSO tracked under SCOPE-02 as the live home-lab delivery proof (same behaviour, second delivery proof: a real event written to the operator's Google Calendar with idempotent no-duplicate re-sync). Every scenario is linked 1:1 to its owning scope, an existing Go test, and a report.md evidence anchor.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-097-A01",
+      "scopeId": "SCOPE-01",
+      "title": "Monthly recommendation is written to Google Calendar",
+      "behaviorClass": "client",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "card_rewards.enabled and calendar_sync are true with a valid credential + calendar id",
+      "when": "the card-rewards calendar sync runs for a period",
+      "then": "each recommendation with a recommended card is written as a stable-UID Google Calendar event, and a re-run updates the same event without duplicating it",
+      "linkedTests": ["internal/cardrewards/gcal_client_test.go::TestPutEvent_InsertsThenUpdates_Idempotent"],
+      "evidenceRefs": ["report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-097-A02",
+      "scopeId": "SCOPE-01",
+      "title": "Calendar sync disabled keeps recommendations in the Web UI only",
+      "behaviorClass": "config",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "calendar_sync is false",
+      "when": "the recommend pipeline runs",
+      "then": "no calendar client is constructed, no event is written, and the recommendations remain queryable for the Web UI",
+      "linkedTests": ["internal/config/cardrewards_test.go::TestLoadCardRewardsConfig_DisabledParsesWithoutRequiringConfig"],
+      "evidenceRefs": ["report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-097-A03",
+      "scopeId": "SCOPE-01",
+      "title": "Enabled-but-misconfigured fails loud",
+      "behaviorClass": "config",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "card_rewards.enabled and calendar_sync are true but CARD_REWARDS_GCAL_CREDENTIALS or CARD_REWARDS_CALENDAR_ID is empty",
+      "when": "core boots",
+      "then": "config load fails naming the offending key",
+      "linkedTests": ["internal/config/cardrewards_test.go::TestLoadCardRewardsConfig_FailLoudOnMissingRequired"],
+      "evidenceRefs": ["report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-097-A01",
+      "scopeId": "SCOPE-02",
+      "title": "Monthly recommendation is written to Google Calendar (live home-lab proof)",
+      "behaviorClass": "integration",
+      "changeType": "new",
+      "requiredTestType": ["e2e"],
+      "regressionRequired": false,
+      "given": "the new signed image is deployed on the home-lab host with calendar_sync true and the operator's real Google OAuth credential",
+      "when": "the deployed GoogleCalendarClient runs a card-rewards calendar sync",
+      "then": "a real card-rewards event is written to the operator's Google Calendar with the stable UID; a re-run updates the same event without duplicating it; a delete removes it",
+      "linkedTests": ["internal/cardrewards/gcal_client_test.go::TestPutEvent_InsertsThenUpdates_Idempotent"],
+      "evidenceRefs": ["report.md#live-calendar"]
+    }
+  ]
+}
