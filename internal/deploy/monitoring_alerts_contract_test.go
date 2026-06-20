@@ -13,8 +13,11 @@
 // This test:
 //
 //  1. Extracts every `smackerel_*` metric name registered by the Go
-//     core (internal/metrics/*.go) and the Python sidecar
-//     (ml/app/metrics.py + ml/app/embedder.py docstrings as a fallback).
+//     core (internal/metrics/*.go plus the spec 038 provider-neutral
+//     drive metrics in internal/drive/observability/metrics.go, which
+//     the thin observability package registers directly) and the Python
+//     sidecar (ml/app/metrics.py + ml/app/embedder.py docstrings as a
+//     fallback).
 //  2. Parses config/prometheus/alerts.yml and walks every rule's
 //     `expr:` field.
 //  3. Extracts every `smackerel_<identifier>` reference from each
@@ -149,6 +152,23 @@ func loadKnownEmittedMetrics(t *testing.T) map[string]struct{} {
 	pyMetricsFile := filepath.Join(root, "ml", "app", "metrics.py")
 	if body, err := os.ReadFile(pyMetricsFile); err == nil {
 		for _, m := range pyMetricNameRE.FindAllSubmatch(body, -1) {
+			known[string(m[1])] = struct{}{}
+		}
+	}
+
+	// Walk internal/drive/observability/metrics.go for the spec 038
+	// provider-neutral drive metrics (smackerel_drive_scan_files_total,
+	// _extract_files_total, _save_attempts_total,
+	// _retrieve_decisions_total, _provider_errors_total). These live
+	// OUTSIDE internal/metrics/ — the thin observability package registers
+	// them with the global registry directly — so without this explicit
+	// read the smackerel-drive alert group (spec 038 round 30 devops sweep
+	// F-038-DEVOPS-001) would reference metrics this contract could not
+	// see and would falsely reject. The metric-name declaration form is
+	// identical to internal/metrics/*.go, so goMetricNameRE applies.
+	driveObsFile := filepath.Join(root, "internal", "drive", "observability", "metrics.go")
+	if body, err := os.ReadFile(driveObsFile); err == nil {
+		for _, m := range goMetricNameRE.FindAllSubmatch(body, -1) {
 			known[string(m[1])] = struct{}{}
 		}
 	}

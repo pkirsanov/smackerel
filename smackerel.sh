@@ -40,6 +40,11 @@ Commands:
                               running smackerel-core container (twitter
                               authorize-begin|authorize-finalize|authorize-status:
                               the User-Context OAuth 2.0 PKCE authorize flow).
+  assistant <subcommand>      Spec 071 — passthrough wrapper that forwards args
+                              verbatim to `smackerel-core assistant ...` inside the
+                              running smackerel-core container (replay-intent
+                              <trace_id>: load one persisted IntentTrace row and
+                              run dry-run replay comparison).
   check                       Validate generated config and docker-compose wiring
   lint                        Run Go vet, Python ruff, and web asset validation
   format [--check]            Format Go and Python files, or check formatting
@@ -78,7 +83,7 @@ Commands:
                               home-lab adapter. The knb adapter consumes +
                               verifies; this command BUILDS + SIGNS. Target:
                               home-lab. The REAL flutter build + operator-sign
-                              run on evo-x2.
+                              run on <deploy-host>.
   deploy-target <target> <action> [args]
                               Run a deployment-target adapter action (legacy
                               spec-017/018 form; preserved for backward compat).
@@ -717,6 +722,25 @@ case "$COMMAND" in
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     smackerel_compose "$TARGET_ENV" exec smackerel-core smackerel-core connector "$@"
+    ;;
+  assistant)
+    # Spec 071 SCOPE-03 — passthrough wrapper to `smackerel-core assistant ...`
+    # inside the running smackerel-core container, mirroring the `auth)` and
+    # `connector)` cases. Subcommands:
+    #   replay-intent <trace_id>  Load one persisted IntentTrace row and run
+    #                             it through the dry-run replay comparison.
+    # Args are forwarded verbatim via "$@" — no flag rewriting. Operator MUST
+    # have `./smackerel.sh up` already; if the container is not running, docker
+    # compose exec fails loud (the wrapper does NOT silently start the stack or
+    # fall back to a host-installed binary — Gate G028 / NO-DEFAULTS SST).
+    #
+    # The in-container binary is `smackerel-core` (per Dockerfile ENTRYPOINT).
+    # The first `smackerel-core` arg below is the docker compose service name;
+    # the second is the binary name (identical only because the service and
+    # binary share a name).
+    require_docker
+    smackerel_generate_config "$TARGET_ENV" >/dev/null
+    smackerel_compose "$TARGET_ENV" exec smackerel-core smackerel-core assistant "$@"
     ;;
   backup-restore-test)
     require_docker

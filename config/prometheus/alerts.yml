@@ -250,3 +250,331 @@ groups:
         reproduce, then check the JSON status file for last_error.
         Run `./smackerel.sh backup-restore-test` to verify the
         most recent artifact actually restores cleanly.
+
+# ─────────────────────────────────────────────────────────────────────
+# Connector sync health — fires when any connector's failure rate is
+# elevated over a 24h window. This is the generic connector health
+# signal; connector-specific alerts (e.g. TwitterAPI*) provide deeper
+# diagnostics for high-traffic connectors.
+# Metric: smackerel_connector_sync_total{connector, status}
+# Ref: docs/Operations.md "Google Maps Timeline Connector" section
+# (spec 005 Phase 4 / spec 011 Maps Connector).
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-connector-sync
+  rules:
+  - alert: ConnectorSyncFailureRateHigh24h
+    expr: |
+      (
+        sum by (connector) (rate(smackerel_connector_sync_total{status="error"}[24h]))
+        /
+        (sum by (connector) (rate(smackerel_connector_sync_total[24h])) > 0)
+      ) > 0.1
+    for: 1h
+    labels:
+      severity: warning
+      component: connector
+    annotations:
+      summary: "Connector {{ $labels.connector }} failure rate >10% over 24h"
+      description: |
+        smackerel_connector_sync_total shows connector {{ $labels.connector }}
+        has a failure rate exceeding 10% over the last 24 hours. Likely
+        causes: upstream API unavailable, credentials expired, or
+        connector configuration drift. Check connector logs:
+        `docker logs <core-container> 2>&1 | grep -i {{ $labels.connector }}`
+        and verify the connector's required config in config/smackerel.yaml.
+
+# ─────────────────────────────────────────────────────────────────────
+# ML sidecar NATS dead-letter (spec 081 round 16 devops sweep
+# F-081-DEVOPS-001) — the Python ML sidecar's JetStream consumers route
+# exhausted poison messages to deadletter.<subject> under DISTINCT
+# metric names from the Go core: smackerel_ml_nats_deadletter_total and
+# smackerel_ml_nats_deadletter_publish_failures_total (ml/app/metrics.py,
+# FR-081-003) vs the Go core's smackerel_nats_deadletter_total. The
+# existing SmackerelNATSDeadLetterPressure rule (smackerel-nats group)
+# only watches the Go metric, so ML-side dead-letter pressure — and,
+# critically, publish-to-deadletter failures — shipped unmonitored with
+# spec 081. These two rules close that observability gap.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-ml-nats
+  rules:
+  - alert: SmackerelMLNATSDeadLetterPressure
+    expr: |
+      sum by (stream) (rate(smackerel_ml_nats_deadletter_total[10m])) > 0.05
+    for: 10m
+    labels:
+      severity: warning
+      component: ml
+    annotations:
+      summary: "Sustained ML-sidecar NATS dead-letter rate on stream {{ $labels.stream }}"
+      description: |
+        More than 0.05 messages/second from the Python ML sidecar are
+        landing in the dead-letter queue for stream {{ $labels.stream }}
+        over the last 10 minutes (spec 081 poison-pill routing). This is
+        the ML-side companion to SmackerelNATSDeadLetterPressure, which
+        only watches the Go core's smackerel_nats_deadletter_total.
+        Inspect ML sidecar logs and confirm Ollama/LLM availability if
+        the failing stream is SEARCH/SYNTHESIS — most ML dead-letter
+        traffic is enrichment failures.
+
+  - alert: SmackerelMLNATSDeadLetterPublishFailing
+    expr: |
+      sum by (subject) (rate(smackerel_ml_nats_deadletter_publish_failures_total[10m])) > 0
+    for: 10m
+    labels:
+      severity: critical
+      component: ml
+    annotations:
+      summary: "ML sidecar cannot publish to the dead-letter queue (subject {{ $labels.subject }})"
+      description: |
+        smackerel_ml_nats_deadletter_publish_failures_total is
+        incrementing for subject {{ $labels.subject }}. Per the spec 081
+        publish-before-term invariant (design §4), the ML sidecar nak()s
+        the original message when the dead-letter publish fails, so the
+        poison message is redelivered in a loop and is NOT terminated —
+        forensic evidence is preserved but that consumer is stuck
+        retrying and making no forward progress. Inspect the DEADLETTER
+        stream health (`docker exec <nats-container> nats stream info
+        DEADLETTER`) and confirm it is not at its MaxBytes/MaxMsgs limit;
+        check the ML sidecar logs for the recurring publish error.
+
+# ─────────────────────────────────────────────────────────────────────
+# LLM scenario agent (spec 037 round 22 devops sweep F-037-DEVOPS-001) —
+# the agent is a live runtime surface that routes intents to scenarios,
+# drives an LLM over NATS, and executes allowlisted tools. It persists a
+# DB trace + two NATS events per invocation but shipped with ZERO
+# Prometheus metrics, so an operator had no push-based alert when the
+# agent degraded. internal/metrics/agent.go now emits the backing series;
+# these three rules watch the three highest-value operational dimensions:
+# LLM-provider health, scenario timeout-budget reachability, and the
+# tool-allowlist security boundary. Loop-limit / schema-failure remain
+# observable via smackerel_agent_invocations_total{outcome=...} for
+# dashboards without a dedicated page.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-agent
+  rules:
+  - alert: SmackerelAgentProviderErrors
+    expr: |
+      sum(rate(smackerel_agent_invocations_total{outcome="provider-error"}[10m])) > 0.05
+    for: 10m
+    labels:
+      severity: warning
+      component: agent
+    annotations:
+      summary: "LLM scenario agent provider-error rate elevated"
+      description: |
+        smackerel_agent_invocations_total{outcome="provider-error"} is
+        incrementing faster than 0.05/s over 10 minutes — the agent's LLM
+        driver (NATS request/reply to the ML sidecar, backed by
+        Ollama/cloud) is returning provider errors or empty turns. Every
+        scenario invocation that needs the LLM will fail. Confirm the ML
+        sidecar is up (SmackerelMLUnavailable), check Ollama/LLM
+        availability, and inspect agent_traces rows with outcome
+        'provider-error' for the failing provider/model.
+
+  - alert: SmackerelAgentInvocationTimeouts
+    expr: |
+      sum(rate(smackerel_agent_invocations_total{outcome="timeout"}[15m])) > 0.05
+    for: 15m
+    labels:
+      severity: warning
+      component: agent
+    annotations:
+      summary: "LLM scenario agent invocations timing out"
+      description: |
+        smackerel_agent_invocations_total{outcome="timeout"} is
+        incrementing faster than 0.05/s over 15 minutes — invocations are
+        exceeding their per-scenario wall-clock budget
+        (agent.defaults.timeout_ms_ceiling / scenario timeout_ms). This is
+        usually a model too slow for the configured budget on the current
+        hardware tier. Compare warm model latency against the scenario
+        budget, raise the SST timeout, or select a faster provider/model;
+        inspect agent_traces rows with outcome 'timeout' and the
+        outcome_detail deadline to localise the scenario.
+
+  - alert: SmackerelAgentAllowlistViolations
+    expr: |
+      sum by (scenario) (rate(smackerel_agent_tool_calls_total{result="allowlist-violation"}[10m])) > 0
+    for: 10m
+    labels:
+      severity: warning
+      component: agent
+    annotations:
+      summary: "LLM scenario agent allowlist violations on scenario {{ $labels.scenario }}"
+      description: |
+        smackerel_agent_tool_calls_total{result="allowlist-violation"} is
+        incrementing for scenario {{ $labels.scenario }} over 10 minutes.
+        The agent-enforced tool allowlist (NOT LLM-policy) is rejecting
+        tool calls the model proposed. Sustained violations mean either an
+        active prompt-injection attempt steering the model toward
+        off-allowlist (often write/external) tools, or a scenario whose
+        allowlist drifted out of sync with its prompt. Inspect agent_traces
+        for the scenario, confirm no write tool ever executed (the rejected
+        call never reaches the handler), and review the scenario allowlist.
+
+# ─────────────────────────────────────────────────────────────────────
+# Cloud-drive integration (spec 038 round 30 devops sweep
+# F-038-DEVOPS-001) — the provider-neutral drive surface (Google Drive
+# today) emits five live counters from internal/drive/observability/
+# (smackerel_drive_scan_files_total, _extract_files_total,
+# _save_attempts_total, _retrieve_decisions_total, and
+# _provider_errors_total), incremented by the scan/extract/save/retrieve
+# services. They satisfied the pull/dashboard half of FR-038-017 but
+# shipped with ZERO push-based alert rules, so an operator got no page
+# when the drive provider degraded, when save-back (cross-feature write
+# production, FR-038-004 / FR-038-012) started failing, or when the
+# retrieve boundary — the surface an earlier chaos round hardened against
+# memory exhaustion (io.LimitReader) — began refusing en masse. These
+# three rules close that gap. The metrics live OUTSIDE internal/metrics/,
+# so the alert-contract allowlist
+# (internal/deploy/monitoring_alerts_contract_test.go) was extended in
+# the same change to also walk internal/drive/observability/metrics.go.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-drive
+  rules:
+  - alert: DriveProviderErrors
+    expr: |
+      sum by (provider, work_type) (rate(smackerel_drive_provider_errors_total[10m])) > 0.05
+    for: 10m
+    labels:
+      severity: warning
+      component: drive
+    annotations:
+      summary: "Cloud-drive provider {{ $labels.provider }} erroring on {{ $labels.work_type }}"
+      description: |
+        smackerel_drive_provider_errors_total for provider
+        {{ $labels.provider }} is incrementing faster than 0.05/s over 10
+        minutes on work type {{ $labels.work_type }} (scan / extract /
+        save / retrieve). The drive provider API (e.g. Google Drive) is
+        failing or the stored OAuth bearer token has expired — per spec
+        038 design §2.3 only the access token is persisted, so an expired
+        token moves the connection out of `healthy` and every drive
+        operation fails until the user re-authorizes. Inspect the core
+        logs for the failing work type and confirm connection health via
+        `GET /v1/connectors/drive/connection/{id}`.
+  - alert: DriveSaveBackFailing
+    expr: |
+      sum by (provider) (rate(smackerel_drive_save_attempts_total{outcome="error"}[15m])) > 0.05
+    for: 15m
+    labels:
+      severity: warning
+      component: drive
+    annotations:
+      summary: "Cloud-drive save-back failing for provider {{ $labels.provider }}"
+      description: |
+        smackerel_drive_save_attempts_total{outcome="error"} for provider
+        {{ $labels.provider }} is incrementing faster than 0.05/s over 15
+        minutes. The Save Service write path (FR-038-004 / FR-038-012
+        cross-feature production — meal plans, receipts, digests routed to
+        a drive folder) is failing at the provider boundary. This is
+        distinct from a deliberate policy `refused` / `blocked` outcome.
+        Likely causes: provider quota, a revoked write scope, or provider
+        5xx. Check `GET /v1/drive/save/requests` for the failing rows and
+        the core logs for the provider error class.
+  - alert: DriveRetrieveRefusalSpike
+    expr: |
+      sum by (provider) (rate(smackerel_drive_retrieve_decisions_total{mode="refused"}[10m])) > 0.1
+    for: 15m
+    labels:
+      severity: warning
+      component: drive
+    annotations:
+      summary: "Cloud-drive retrieve refusals elevated for provider {{ $labels.provider }}"
+      description: |
+        smackerel_drive_retrieve_decisions_total{mode="refused"} for
+        provider {{ $labels.provider }} is exceeding 0.1/s over 10 minutes
+        for 15 minutes. The retrieval boundary (FR-038-010 — Telegram and
+        other channels requesting drive files subject to sensitivity,
+        sharing, and channel-safety policy) is refusing en masse. Either a
+        sensitivity/sharing policy regressed and is blocking legitimate
+        retrievals, or a channel is probing the boundary with requests it
+        is not authorized for (this is the same retrieve surface an earlier
+        chaos round hardened against memory exhaustion). Inspect the drive
+        retrieve decision logs (slog `drive retrieve: decision`, which
+        records provider + mode + sensitivity) and confirm the sensitivity
+        policy thresholds match the configured values.
+
+# ─────────────────────────────────────────────────────────────────────
+# Phase-3 intelligence layer (spec 004 round 31 devops sweep
+# F-004-DEVOPS-001) — the synthesis / contextual-alert / weekly-digest
+# subsystem emits live metrics from internal/intelligence/ and
+# internal/digest/ but shipped with asymmetric alert coverage: only the
+# DELIVERY side (smackerel_alert_delivery_failures_total →
+# SmackerelAlertDeliveryFailing) had a rule, while the PRODUCTION side and
+# the DIGEST synthesis path shipped unmonitored. These two rules close
+# that gap:
+#
+#   1. smackerel_alert_producer_failures_total{type} — incremented by
+#      internal/intelligence/alert_timing.go + alert_producers.go whenever
+#      an LLM timing/cooling judgment errors OR the CreateAlert DB insert
+#      fails for a contextual alert (bill reminder, return-window,
+#      trip-prep, relationship-cooling — spec 004 R-304). A chronic
+#      production failure means the user silently misses deadlines: the
+#      spec 004 stated failure condition. This is the production-side twin
+#      of SmackerelAlertDeliveryFailing (delivery-side).
+#
+#   2. smackerel_digest_generation_total{status="fallback"} — incremented
+#      by internal/digest/generator.go when the NATS publish to the ML LLM
+#      generation path (SubjectDigestGenerate) fails and the generator
+#      stores a plain-text fallback digest WITHOUT LLM synthesis (spec 004
+#      R-302). This is a publish-side failure, NOT a consumer dead-letter,
+#      so SmackerelNATSDeadLetterPressure / smackerel-ml-nats do not catch
+#      it. Sustained fallbacks mean the weekly/daily synthesis ("connection
+#      discovered", "patterns noticed") has silently degraded to a flat
+#      list.
+#
+# Both metrics already live in internal/metrics/metrics.go, so the alert
+# allowlist contract (internal/deploy/monitoring_alerts_contract_test.go)
+# already sees them; the two alert names are registered in the structural
+# contract (internal/metrics/prometheus_alerts_contract_test.go) in the
+# same change.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-intelligence
+  rules:
+  - alert: SmackerelIntelligenceAlertProductionFailing
+    expr: |
+      sum by (type) (rate(smackerel_alert_producer_failures_total[15m])) > 0
+    for: 15m
+    labels:
+      severity: warning
+      component: intelligence
+    annotations:
+      summary: "Phase-3 alert production failing for type {{ $labels.type }}"
+      description: |
+        smackerel_alert_producer_failures_total{type="{{ $labels.type }}"}
+        is incrementing over 15 minutes — the spec 004 contextual-alert
+        producers (bill reminders, return-window, trip-prep,
+        relationship-cooling, commitment tracking — R-304) are failing to
+        create alerts. The failure is either an LLM timing/cooling judgment
+        error (NATS request/reply to the ML sidecar) or a CreateAlert DB
+        insert failure. Unlike SmackerelAlertDeliveryFailing — which fires
+        when a PRODUCED alert cannot be delivered to Telegram — this fires
+        on the PRODUCTION side: the alert is never created, so the user
+        silently misses the deadline (the spec 004 stated failure
+        condition). Confirm the ML sidecar is up (SmackerelMLUnavailable),
+        check the alerts table write path / DB health
+        (SmackerelDBPoolSaturated), and inspect the core logs for the
+        "alert timing evaluation failed" / "failed to create … alert" warn
+        lines to localise the failing producer.
+
+  - alert: SmackerelDigestSynthesisDegraded
+    expr: |
+      sum(rate(smackerel_digest_generation_total{status="fallback"}[1h])) > 0
+    for: 30m
+    labels:
+      severity: warning
+      component: intelligence
+    annotations:
+      summary: "Phase-3 digest synthesis degraded — LLM generation path falling back"
+      description: |
+        smackerel_digest_generation_total{status="fallback"} is
+        incrementing over the last hour — the spec 004 daily/weekly
+        synthesis digest (R-302) is failing to publish its context to the
+        ML LLM generation path (NATS subject digest.generate) and the
+        generator is storing plain-text fallback digests WITHOUT LLM
+        synthesis. The high-value "connection discovered" / "patterns
+        noticed" sections silently collapse to a flat stats list. This is a
+        NATS PUBLISH-side failure, not a consumer dead-letter, so
+        SmackerelNATSDeadLetterPressure and the smackerel-ml-nats rules do
+        NOT cover it. Confirm the ML sidecar is up (SmackerelMLUnavailable),
+        verify NATS connectivity from the core, and inspect the core logs
+        for the "NATS publish failed, generating fallback digest" warn line.

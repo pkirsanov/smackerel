@@ -4,7 +4,7 @@
 # Spec 086 — `./smackerel.sh local-client-build --target home-lab`
 #
 # Builds smackerel's Flutter Android client (clients/mobile/assistant) LOCALLY on
-# evo-x2 (AAB + APK), operator-signs each artifact with the operator cosign key,
+# <deploy-host> (AAB + APK), operator-signs each artifact with the operator cosign key,
 # computes the real content sha256, and emits a LOCAL build manifest with
 # `trustModel: local-operator` + `provenance: local-operator` consumable by the
 # knb home-lab adapter's local-operator Lane-A delivery
@@ -17,7 +17,7 @@
 # LOCAL operator-key signing of the two server images). The knb adapter stays
 # consume-only; smackerel BUILDS + SIGNS (FC-2).
 #
-# Trust model: local-operator (single-operator evo-x2). Aligns with
+# Trust model: local-operator (single-operator <deploy-host>). Aligns with
 # smackerel/home-lab/params.yaml::signing.trustModel: local-operator. The
 # ci-keyless path (spec 085) stays parked (FC-1).
 #
@@ -47,7 +47,7 @@
 #   [F086-LCB-06]  git working tree dirty AND --allow-dirty not passed
 #
 # FC-4 (no fabrication): the REAL `flutter build` + REAL operator-sign + REAL
-# placement run ON evo-x2 (node n11). This script's logic is proven locally with
+# placement run ON <deploy-host> (node <deploy-node>). This script's logic is proven locally with
 # a stubbed build + a recording cosign shim (internal/deploy/local_client_build_test.go).
 
 set -euo pipefail
@@ -167,7 +167,7 @@ echo "  builtDirty:   $BUILT_DIRTY"
 echo "=================================================================="
 
 # ---- Step 1: build (LOCAL; stubbable seam) ---------------------------------
-# The REAL `flutter build aab/apk` runs on evo-x2 (node n11). Tests inject a stub
+# The REAL `flutter build aab/apk` runs on <deploy-host> (node <deploy-node>). Tests inject a stub
 # via SMACKEREL_FLUTTER_BUILD_CMD; FC-4 forbids fabricating a real AAB here.
 AAB_SRC="$SMACKEREL_LCB_PROJECT_DIR/build/app/outputs/bundle/release/app-release.aab"
 APK_SRC="$SMACKEREL_LCB_PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
@@ -249,11 +249,21 @@ PUBKEY_SHA="$(sha256sum "$OPERATOR_COSIGN_PUBKEY" | awk '{print $1}')"
   echo "  operatorPubkeySha256: \"$PUBKEY_SHA\""
 } >"$MANIFEST"
 
-"$SMACKEREL_COSIGN_CMD" sign-blob --yes --key "$OPERATOR_COSIGN_KEY" \
-  --tlog-upload=false --output-signature "$MANIFEST.sig" "$MANIFEST" >/dev/null 2>&1 \
-  || lcb_fail F086-LCB-05 "cosign sign-blob failed for manifest"
-[[ -s "$MANIFEST.sig" ]] \
-  || lcb_fail F086-LCB-05 "manifest signature missing/empty: $MANIFEST.sig (fail-closed)"
+# Fail-closed: the manifest is the consumable entry point, so a sign failure
+# MUST NOT leave an unsigned/partial manifest behind. The manifest .yaml is
+# already on disk by this point (assembled above); remove it (and any partial
+# .sig) before aborting so the out-dir never retains an orphan manifest with no
+# valid signature — the same "no partial manifest" invariant the empty-artifact
+# and AAB/APK sign-failure paths already honor (they abort before assembly).
+if ! "$SMACKEREL_COSIGN_CMD" sign-blob --yes --key "$OPERATOR_COSIGN_KEY" \
+  --tlog-upload=false --output-signature "$MANIFEST.sig" "$MANIFEST" >/dev/null 2>&1; then
+  rm -f "$MANIFEST" "$MANIFEST.sig"
+  lcb_fail F086-LCB-05 "cosign sign-blob failed for manifest (removed partial unsigned manifest)"
+fi
+if [[ ! -s "$MANIFEST.sig" ]]; then
+  rm -f "$MANIFEST" "$MANIFEST.sig"
+  lcb_fail F086-LCB-05 "manifest signature missing/empty: $MANIFEST.sig (fail-closed; removed partial unsigned manifest)"
+fi
 
 echo
 echo "=================================================================="
@@ -262,7 +272,7 @@ echo "  aab:        $AAB_OUT (+ .sig)"
 echo "  apk:        $APK_OUT (+ .sig)"
 echo "  manifest:   $MANIFEST (+ .sig)"
 echo
-echo "Next (on evo-x2): the knb home-lab adapter acquires + verifies these LOCAL"
+echo "Next (on <deploy-host>): the knb home-lab adapter acquires + verifies these LOCAL"
 echo "  signed artifacts under trustModel local-operator. cd ~/knb && \\"
 echo "    OPERATOR_COSIGN_PUBKEY=$OPERATOR_COSIGN_PUBKEY \\"
 echo "    bash scripts/deploy/promote.sh --target home-lab --product smackerel \\"
