@@ -1288,3 +1288,119 @@ A/B + `verify` did not run, so the chain is not certifiable from this session.
 Once the operator captures a genuine A/B verdict and `verify` passes, the
 `064→084→087→088` chain can be promoted to `done`. `nextRequiredOwner:
 operator/user-session`.
+
+---
+
+## Stability Diagnostic (stabilize-to-doc, 2026-06-17)
+
+> Round owner: `bubbles.workflow` parent-expanded child mode `stabilize-to-doc`
+> (`executionModel: parent-expanded-child-mode`; this runtime lacks nested
+> `runSubagent`, and `stabilize-to-doc` is NOT top-level-runtime-locked).
+> Dispatched as ONE mapped child round of the top-level stochastic-quality-sweep.
+> `statusCeiling: docs_updated` — spec 088 status is UNCHANGED (`blocked`,
+> blocked-on-operator); this round neither promotes nor certifies. No commit /
+> push / checkout / restore / stash. Surface touched: spec 088 owned artifacts
+> only (this report). Sibling spec 089 untouched (its uncommitted deploy/state
+> WIP was not modified or reverted).
+
+### Probe scope
+
+Stability probe of the runtime-switchable-models surface for performance,
+infrastructure, configuration, deployment, reliability, and resource-usage
+issues — specifically the model-memory-envelope validation, switchable-model
+allowlist enforcement, fail-loud config, OOM-safety of the memory profiles, and
+the per-request hot-path reliability.
+
+### Evidence — spec 088 test surface GREEN
+
+Command (dockerized `golang:1.25.x` repo CLI; `-run Spec088` scoped to avoid the
+spec-094 weather-key fixture RED in the sibling `internal/config` full `Validate`
+suite — see foreign attribution below):
+
+```
+./smackerel.sh test unit --go --go-run 'Spec088' --verbose
+```
+
+Result: `WRAPPER_EXIT=0`. **0 FAIL lines**, **30 top-level `--- PASS`**, **48
+`Spec088` PASS lines** (incl. subtests) across all 8 spec-088 packages. The
+`internal/config` package executed ONLY the two `*_Spec088` tests
+(`...SwitchableModelsRequiredWhenEnabled_Spec088`,
+`...ValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088`) and passed —
+the spec-094-reddened full `Validate` tests were correctly excluded by the
+selector and did NOT run:
+
+```
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch  0.034s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/agent        0.135s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool    0.052s
+ok  github.com/smackerel/smackerel/internal/assistant                            0.432s
+ok  github.com/smackerel/smackerel/internal/assistant/contracts                  0.069s
+ok  github.com/smackerel/smackerel/internal/api                                  0.313s
+ok  github.com/smackerel/smackerel/internal/config                               0.012s
+ok  github.com/smackerel/smackerel/internal/telegram/assistant_adapter           (PASS)
+```
+
+### Stability verdict per dimension — STABLE (defense-in-depth confirmed)
+
+1. **OOM-safety of the memory profiles** — the switchable co-residence rule
+   (gather `llm_model_id` resident + candidate synthesis model ≤ ollama
+   envelope) is enforced at THREE layers with identical arithmetic:
+   config-generation (`config.go::validateModelEnvelopes` switchable pass,
+   gated on `open_knowledge.enabled && OllamaMemoryLimitMiB != 0`), runtime
+   construction (`modelswitch.NewAllowlist` at
+   `cmd/core/wiring_assistant_openknowledge.go`, built from the SAME SST —
+   verified: same switchable set, `MLModelMemoryProfiles`, `OllamaMemoryLimitMiB`,
+   gather `LLMModelID`, default `SynthesisModelID`), and request-time
+   (`Allowlist.reject` → `ReasonOverMemEnvelope`). An envelope-busting switchable
+   list is refused fail-loud at generation AND at wiring AND at request time.
+   The co-residence `baseMiB := profiles[gather]` is non-zero by construction:
+   the baseline gather `llm_model_id` is transitively required to be profiled via
+   spec 089's `tool_capable_gather_models` membership + per-entry profile contract
+   (sibling surface — not modified). Proven by
+   `TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088` (over-envelope
+   / unprofiled / envelope-consistent / dev-skip subtests) and
+   `TestAllowlist_Resolve_ProfiledOverEnvelopeRejected_ModelOverMemEnvelope_Spec088`.
+
+2. **Switchable-model allowlist enforcement** — `Resolve` converts an untrusted
+   model string into a validated `Override` or a typed fail-loud `Rejection`;
+   never a silent default, never a backend passthrough; empty string is the
+   byte-for-byte baseline. Proven by `...OffListRejected...`,
+   `...UnprofiledRejected...`, `...SingleRejectionContract...`,
+   `...BaselineEmptyReturnsZeroOverride...`.
+
+3. **Fail-loud config (G028)** — `NewAllowlist` rejects empty/unprofiled/
+   over-envelope/empty-default/blank-entry sets; `OpenKnowledgeConfig` requires a
+   non-empty `switchable_models` when enabled. Proven by
+   `TestAllowlist_NewAllowlist_FailLoudBuild_Spec088` (5 subtests) and
+   `TestOpenKnowledgeConfig_SwitchableModelsRequiredWhenEnabled_Spec088` (4 subtests).
+
+4. **Hot-path reliability / concurrency (C6 singleton-safety)** — `WithModelOverride`
+   returns a per-request shallow clone with shared concurrency-safe deps; the SST
+   singleton is never mutated; a zero override returns the receiver unchanged
+   (no allocation, byte-for-byte baseline). No per-request heavy-resource
+   allocation, no leak. Proven by `...ClonesSingletonNeverMutated_Spec088` and
+   `...NoOverride_ByteForByteBaseline_Spec088`.
+
+5. **Attribution honesty / trust invariants under override** — `TurnResult.Model`
+   is stamped exactly once in `finalize` across every terminal path (success,
+   honest-salvage, refuse, early-StopEndTurn); fabricated citations still refuse
+   and `<think>` never leaks/cited under an override. Proven by
+   `...TurnResultModelStamped_AllTerminalPaths_Spec088` (4 subtests) and
+   `...TrustContractsHoldUnderOverride_Spec088`.
+
+**No genuine stability finding on spec 088's owned surface.** `findingsTotal: 0`.
+The `blocked` status is blocked-on-operator (CI build-manifest + live home-lab
+`gemma4:26b`-vs-`deepseek-r1:7b` A/B), NOT a stability defect — that operational
+A/B is the separately-owned `operator/user-session` runbook above, not an
+in-repo stabilize finding.
+
+### Foreign attribution (not spec 088 — not fixed this round)
+
+- **`internal/config/validate_test.go` sibling RED** — the spec-094 sweep's
+  `setRequiredEnv` helper is missing four `ASSISTANT_SKILLS_WEATHER_*` keys, so
+  the full `Validate` suite in `internal/config` is RED in the working tree. This
+  is spec-094 fixture WIP, NOT a spec 088 regression; the `-run Spec088` selector
+  scoped around it (config package ran only the two Spec088 tests, both GREEN).
+  Owner: the spec-094 sweep round. Not modified here.
+- **Uncommitted sibling sweep work** across many other specs (incl. spec 089's
+  deploy/state in-flight WIP) was left untouched.

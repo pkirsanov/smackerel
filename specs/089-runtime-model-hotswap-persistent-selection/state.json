@@ -3,10 +3,10 @@
   "featureDir": "specs/089-runtime-model-hotswap-persistent-selection",
   "featureNumber": "089",
   "featureName": "Runtime Model Hot-Swap & Persistent Selection",
-  "status": "blocked",
-  "certifiedAt": null,
-  "certifiedBy": null,
-  "lastUpdatedAt": "2026-06-15T03:50:00Z",
+  "status": "done",
+  "certifiedAt": "2026-06-15T05:10:00Z",
+  "certifiedBy": "bubbles.devops (Option-B keystore-free apply.sh --trust-model=ci-keyless deploy + live home-lab verify)",
+  "lastUpdatedAt": "2026-06-15T05:10:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -65,6 +65,15 @@
       "runStartedAt": "2026-06-15T03:05:00Z",
       "runFinishedAt": "2026-06-15T03:50:00Z",
       "summary": "DevOps deploy dispatch (operator-authorized live home-lab deploy of the 087->088->089 chain). COMMITTED the isolated spec-089 delta as feat(089) commit 9d934005 (exactly 55 paths = 36 modified + 19 added, all 089-scoped, via git commit --only; .kotlin build artifact + do-not-touch boundary EXCLUDED + git-clean; pii-scan clean; 9772 insertions/117 deletions). PUSHED to origin/main (9744a62e..9d934005; pre-push knb-uniformity hook green; never --no-verify; CI Gitleaks success). CI build run 27521709403: build-images SUCCESS (core sha256:0a042187b74732cf874614e585de8a61065f633346cdf6f26ce7411cf4838fe2, ml sha256:51c4e944f80bc1166bcb68efdfaa048e54e9f0e89b8c803d2d1eb3071e6c0f0f -- cosign keyless+Rekor signed, SBOM+SLSA, Trivy, ghcr by digest); build-bundles(home-lab) SUCCESS (deterministic 089 bundle home-lab-9d934005 sha256:46b5922d4f64f435fb01c029b659fac67cb96b66963cc67da85061a83d38eb5d carrying the 48G envelope + deepseek-r1:32b synthesis default + tool_capable_gather_models); build-clients FAILURE (Android upload-keystore operator secret) -> publish-build-manifest SKIPPED -> no CI build-manifest. HOME-LAB APPLY ATTEMPTED via the knb adapter apply.sh --trust-model=ci-keyless (precedented by spec 093 / commit 117ac27e under the IDENTICAL build-clients block): cosign verify PASSED for core+ml against Rekor (cert subject .../build.yml@refs/heads/main, Workflow SHA 9d934005), bundle sha256 verified, images pulled by digest, SOPS decrypted (substituted 7/8 secrets) -- then FAILED CLOSED at effective-env stage=substitute-secrets on missing WEB_REGISTRATION_INVITE_TOKEN, BEFORE any container recreate (audit outcome=failure). ROOT CAUSE: the on-target knb checkout (<operator-home>/knb rev d1ee19b, dirty) is STALE -- its secrets store lacks WEB_REGISTRATION_INVITE_TOKEN that the up-to-date local knb (eaf118e) has; the orchestrator's knb-rev-pin step normally syncs it, but the direct adapter call (forced because the orchestrator's CI-gate requires the absent build-manifest) bypassed that. LIVE STACK UNCHANGED + healthy (still 117ac27e: core aa25e9212298 / ml fecf30719240, synthesis default still deepseek-r1:7b); deploy pointer NOT advanced; on-disk compose dir left mid-089-update (reboot-safe -- only an explicit docker compose up re-reads it; the next successful apply finalizes it). LIVE VERIFY NOT PERFORMED (089 not live) -- no result fabricated. Terminal posture: blocked / delivered-pending-activation. nextRequiredOwner = operator (reconcile the on-target knb OR provide the Android keystore CI secret, per report.md 'DevOps Deploy Execution' runbook Option A/B) -> then bubbles.devops re-runs apply + live-verify. Code is on origin/main + CI cosign-signed + bundle-published; only the live activation is blocked."
+    },
+    {
+      "agent": "bubbles.devops",
+      "phasesExecuted": ["devops-deploy"],
+      "statusBefore": "blocked",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-15T05:00:00Z",
+      "runFinishedAt": "2026-06-15T05:10:00Z",
+      "summary": "DevOps deploy COMPLETED (operator-authorized Option B; keystore-free ci-keyless lane). Cleared the prior blocker: the stale on-target knb was reconciled by (1) stashing all 18 operator WIP files recoverably (stash@{0} 'pre-089-deploy-20260615', NOT dropped), (2) git merge --ff-only to the cached origin (d1ee19b->ccbae4e; git fetch failed for phwp on-target so the cached ref was used), and (3) surgically installing the canonical token-bearing smackerel/secrets/home-lab.enc.env from the up-to-date local knb (eaf118e) over tailscale, backed up at home-lab.enc.env.pre089.bak (the prior on-disk version is ALSO in stash@{0}). With WEB_REGISTRATION_INVITE_TOKEN present, re-ran the knb adapter apply.sh --trust-model=ci-keyless with the CI-signed digests (core sha256:0a042187..., ml sha256:51c4e944...) + bundle home-lab-9d934005 (sha256:46b5922d...): cosign verified core+ml against Rekor (Workflow SHA 9d934005), bundle sha256 verified, images pulled by digest, SOPS decrypted ALL declared secrets, compose dir cleanly re-extracted (fixing the prior half-state), core recreated. LIVE STATE VERIFIED (real captured evidence): core healthy on the new digest 0a042187..., SYNTHESIS_MODEL_ID=deepseek-r1:32b, OLLAMA_MEMORY_LIMIT=48G, SWITCHABLE_MODELS=[deepseek-r1:32b,deepseek-r1:7b,gemma4:26b], TOOL_CAPABLE_GATHER_MODELS=[gemma4:26b,llama3.1:8b], wiring boot log synthesis_model=deepseek-r1:32b; migration 059 applied (user_model_preferences table exists); all 6 containers healthy. LIVE FEATURE VERIFY (throwaway PASETO, never printed, revoked after) via /v1/agent/model: GET fresh user -> effective_model=deepseek-r1:32b source=default; PUT 7b -> sticky persists; PUT with SPOOFED body user_id -> IGNORED, bound to bearer subject (claim-binding PROVEN live); off-allowlist gpt-4o -> rejected model_not_allowlisted fail-loud pref-unchanged; DELETE -> reset to 32b default. 089 IS LIVE. Operator handoff: the on-target knb HEAD advanced d1ee19b->ccbae4e (reflog-recoverable); 18 WIP files preserved in stash@{0}; secrets file backup at home-lab.enc.env.pre089.bak; operator should fix phwp on-target git fetch auth, pull to current, then reconcile the stash + backups at leisure."
     }
   ],
   "policySnapshot": {
@@ -115,9 +124,9 @@
     ]
   },
   "certification": {
-    "status": "blocked",
-    "certifiedAt": null,
-    "certifiedBy": null,
+    "status": "done",
+    "certifiedAt": "2026-06-15T05:10:00Z",
+    "certifiedBy": "bubbles.devops (live home-lab deploy + verify)",
     "lockdownState": { "round": 0, "lastCleanRound": 0 },
     "evidenceRef": "report.md",
     "certifiedCompletedPhases": [
@@ -129,7 +138,8 @@
       "test",
       "security",
       "validate",
-      "audit"
+      "audit",
+      "devops-deploy"
     ],
     "completedScopes": [
       "SCOPE-01",
@@ -285,6 +295,6 @@
       }
     ]
   },
-  "nextRequiredOwner": "bubbles.devops",
+  "nextRequiredOwner": null,
   "notes": "Analyst phase complete (parent-expanded full-delivery). spec.md authored with the §2 footprint-headroom engineering concern captured as a hard requirement (the model_memory_profiles=22528 MiB profile understates deepseek-r1:32b's real ~64 GB KV-cache footprint at the pipeline's 128000-token budget; the standing-default headroom MUST be verified safe co-resident with ingestion). 13 scenarios SCN-089-A01..A13, FR-1..FR-16, NFR-1..NFR-7, C1..C9, and four design forks A-D (A=32b default owner-decided/design-verifies-headroom; B=per-user store; C=gather-override semantics; D=hot-swap mechanism) handed forward. specDependsOn=[specs/088-runtime-switchable-models]; do-not-touch carried forward; principleAlignment includes Principle 8 + Principle 2. Trust perimeter (cite-back / provenance / capture / <think>-strip + retry-before-salvage) preserved model-/selection-agnostically. Terminal posture validated-in-repo; the live home-lab deploy (raised envelope + 32b persistent default + pull-on-deploy + re-verify) is a downstream bubbles.devops dispatch. Next owner: bubbles.ux. UX phase complete (parent-expanded full-delivery): authored uservalidation.md (SCN-089-A01..A13 operator-checkable acceptance items, all UNCHECKED pre-implementation) with the verbatim /model set/show/reset wording, the off-allowlist sticky rejection (preference-unchanged), the gather non-tool-capable rejection (model_not_tool_capable), the precedence+source attribution table, the dual gather/synth footer, the claim-bound HTTP GET/PUT/DELETE /v1/agent/model preference route + extended invoke envelope (model_source/gather_model/gather_model_source/rejected_turn), and the operator hot-swap runbook (Fork D ~15s core-recreate). Appended '## UI Wireframes' + '## User Flows' to spec.md (Telegram/API/runbook mockups + 5 mermaid flows a-e). UX recommendations to design: Fork C = separate --gather-model= flag (do NOT overload --model=, which would risk a non-tool-capable gather); Fork B = set/get-one/delete keyed on actor_user_id; the bare system-default path stays footer-less (Principle 6 / section 11) with '(system default)' attribution surfaced via /model + the always-on API envelope. UX1/UX8 gates pass; no sidecar UX files; execution metadata only (certification.* untouched). Next owner: bubbles.design."
 }

@@ -837,6 +837,77 @@ The state-transition guard returns non-zero with 36 remaining failures. These ar
 
 The implementation itself is real, unit-and-adversarial-green, and committed. Subsequent connector work in this repo should follow the updated planning template that satisfies these guards by construction.
 
+## R01 Test-To-Doc Stochastic-Quality-Sweep Re-Verification (2026-06-15)
+
+Round R01 of the stochastic-quality-sweep re-ran the `test-to-doc` contract on 2026-06-15. The six scope deliveries, source code, and tests are unchanged from certification. This section records the re-verification evidence and the two specialist phases (`gaps`, `harden`) that were genuinely executed this round and were previously absent from `certification.certifiedCompletedPhases` (Gate G022).
+
+### Test Re-Verification Evidence — bubbles.test (Executed: YES)
+
+`./smackerel.sh test unit --go` with a focused selector matching the spec-059 keep test functions, over a full `go test ./...` compile:
+
+```text
+--- PASS: TestSecretKeys_MirrorsYAMLManifest (0.02s)
+--- PASS: TestSecretKeys_KeepAppPasswordRegistered (0.00s)
+--- PASS: TestKeepAppPasswordReadOnlyFromSidecarNotCore (0.06s)
+ok      github.com/smackerel/smackerel/internal/config  0.390s
+--- PASS: TestValidateGkeepResponseAcceptsCanonicalFixtureAndRejectsEveryMutation (0.01s)
+--- PASS: TestDriftBreakerTransitionsClosedTrippingOpenAndResetsOnTokenRotation (0.00s)
+--- PASS: TestDriftCounterIncrementsExactlyOncePerOpenEntry (0.00s)
+--- PASS: TestKeepStructuredLogsDoNotContainEmailOrPassword (0.00s)
+--- PASS: TestSyncGkeepapiPublishesRequestAndDecodesResponse (0.00s)
+--- PASS: TestConnectFailsLoudWhenKeepEmailMissingInLiveMode (0.00s)
+--- PASS: TestConnectDoesNotLeakKeepAppPasswordInError (0.00s)
+--- PASS: TestParseKeepConfigEnforcesPollIntervalFloor (0.00s)
+ok      github.com/smackerel/smackerel/internal/connector/keep  0.144s
+--- PASS: TestComposeEnvFileSharedAcrossCoreAndMlServices (0.02s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.107s
+[go-unit] go test ./... finished OK
+```
+
+`./smackerel.sh test unit --python`:
+
+```text
++ pytest ml/tests -q
+s....................................................................... [ 14%]
+............................s........................................... [ 28%]
+........................................................................ [ 42%]
+........................................................................ [ 56%]
+........................................................................ [ 70%]
+........................................................................ [ 84%]
+........................................................................ [ 98%]
+.......                                                                  [100%]
+509 passed, 2 skipped, 2 warnings in 16.89s
+[py-unit] pytest ml/tests finished OK
+```
+
+All SCN-059-001..019 unit-scenario coverage is green; the 2 Python skips are non-keep live-Ollama tests, not spec-059 coverage.
+
+### Gaps Evidence — bubbles.gaps (Executed: YES)
+
+Gap analysis cross-referenced the 19 scenario contracts in `scenario-manifest.json` against the runnable test surface:
+
+- **Unit-scenario coverage (SCN-059-001..019): complete and green.** Every unit `linkedTest` function exists and PASSES across the Go (`internal/config`, `internal/connector/keep`, `internal/deploy`) and Python (`ml/tests/test_keep_bridge_handshake.py`, `test_keep_bridge_warnings.py`, `test_keep.py`) surfaces.
+- **Integration-scenario halves (SCN-059-002/006/007/008/010/013/015/019): no runnable test.** They reference `tests/integration/keep_*_test.go` files that do not yet exist and are already recorded as `OBS-059-01..06` in `state.json.observations[]` with matching `state.json.transitionRequests[]` entries — routed cross-spec live-stack regression-harness work, owner `bubbles.test`.
+
+No new in-scope gap was found; the integration items remain routed rather than newly deferred.
+
+### Harden Evidence — bubbles.harden (Executed: YES)
+
+Reviewed `spec.md`, `design.md`, and `scopes.md` for drift against the shipped implementation:
+
+```text
+$ grep -nE '15 min|gkeepPollIntervalFloor|poll-interval floor' spec.md design.md scopes.md
+spec.md:59:- Rate-limit conservative — minimum gkeep_poll_interval floor of 15 min in code
+design.md:39:- Min poll-interval floor stays at 15 min (current parseKeepConfig enforcement)
+design.md:43:- OQ-059-01 — RESOLVED: min poll-interval floor is 15 min
+scopes.md:53:- gkeepPollIntervalFloor = 15 * time.Minute (named constant in internal/connector/keep/keep.go)
+```
+
+- **Poll-interval floor narrative is consistent at 15 min** across spec/design/scopes and the `gkeepPollIntervalFloor = 15 * time.Minute` constant; the historical OQ-059-01 "10 min" wording was already reconciled (the only remaining "10 min" string is the scopes.md note recording that the drift was corrected). No action required.
+- **`scenario-manifest.json` `linkedTests` file-hint drift (low severity).** Function names are accurate and every referenced unit function PASSES, but several file hints predate the post-implementation file split (`keep_test.go` into `keep_test.go` + `keep_breaker_test.go` + `keep_bridge_test.go`; `test_keep_bridge.py` into `test_keep_bridge_handshake.py` + `test_keep_bridge_warnings.py`; `TestKeepAppPasswordReadOnlyFromSidecarNotCore` resides in `internal/config/secret_keys_test.go`). The manifest scenario-cross-check is a structural no-op for manifest-based specs (no inline Gherkin in `scopes.md`), so function-level traceability holds and this is a non-blocking traceability-doc note (dispositioned in section F below).
+
+No requirement, scenario, or DoD semantic change resulted; the planning artifacts are sound.
+
 ## Discovered Issues (Gate G095 disposition)
 
 This section catalogs every routed Uncertainty Declaration, acknowledged trade-off, and deferred live-stack follow-up surfaced during the close-out + the mechanical-residual planning round. It satisfies the Gate G095 discovered-issue disposition requirement and the user's explicit residual-blocker instructions for the planning-pattern discharge.
@@ -874,6 +945,15 @@ The following items are recognized for completeness; none of them is required to
 ### E. 2026-05-29 G092 strict-terminal-status migration + G040/G095 remediation sweep
 
 Date: **2026-05-29**. Following the spec 060 precedent, the spec 059 status was migrated from `done_with_concerns` + `legacyStatusCompatibility:true` to strict-G092 `done` + advisory `observations[]` (commit `89a07dd3`). A follow-up commit applied surgical `<!-- bubbles:g040-skip-begin -->` / `<!-- bubbles:g040-skip-end -->` wrappers around legacy brownfield narrative (config YAML "placeholder" terminology in Scope 1, 2, 6; spec-narrative-drift "follow-up" references in Scope 2; the operator-doc generic-placeholders subsection) so that G040 deferral-language scan exits clean against the strict-terminal status. The 6 pre-existing advisory items previously recorded as concerns are now `observations[]` OBS-059-01..06 (severity: advisory, blocking: false, remediationRequired: false, responsibleOwner: bubbles.test). Disposition: **fixed-in-session** (migration committed `89a07dd3`); cross-spec live-stack regression-harness items remain **routed** via `state.json.observations[]` for the repo-wide infrastructure backlog. The `TestSST_NoHardcodedOllamaValues` pre-existing unit-test flake noted in the validation evidence above is unrelated infrastructure backlog (Scope 2 evidence cites `git log ml/app/processor.py` showing the comment predates spec 059); disposition: **routed** to the repo-wide test-stability backlog, not a spec 059 deferral.
+
+### F. 2026-06-15 — R01 test-to-doc stochastic-quality-sweep (G022 phase completion + G095 reconciliation)
+
+Date: **2026-06-15**. Round R01 of the stochastic-quality-sweep re-ran the `test-to-doc` contract. The state-transition guard surfaced two root-cause blocks against the certified-`done` spec; both are dispositioned here, each dated 2026-06-15:
+
+11. **Gate G022 — `gaps` + `harden` specialist phases absent from `certification.certifiedCompletedPhases`.** Disposition: **fixed-in-session (2026-06-15)**. Both phases were genuinely executed this round (see the R01 Test-To-Doc Re-Verification section above: Gaps Evidence and Harden Evidence) and added to `certifiedCompletedPhases`; `certifiedAt` advanced to the recertification timestamp (the Gate G088 remediation act). No code or test change — the six scope deliveries were already complete and green.
+12. **Historical `TestSST_NoHardcodedOllamaValues` failure captured in the Scope 2 / close-out validation evidence (report.md around line 332).** Disposition: **resolved-upstream / routed (2026-06-15)**. The forbidden literal in `ml/app/processor.py` was reworded so the comment no longer carries the `localhost:11434` literal, and the SST grep guard no longer flags it. This was never a spec-059 surface (the comment predates spec 059) and is recorded against the repo-wide test-stability backlog.
+13. **Stale `## Concerns (open after iterate sweep — 2026-05-28)` narrative (report.md around line 782).** Disposition: **superseded (2026-06-15)**. That section describes a former `in_progress` posture and lists specialist phases as not-yet-run; it is historical. The current terminal status is `done` with all 14 `certifiedCompletedPhases` recorded (including the `gaps` + `harden` added this round). The section is retained verbatim for audit continuity.
+14. **`scenario-manifest.json` `linkedTests` file-hint drift (low severity).** Disposition: **routed (2026-06-15)** to a dedicated manifest-reconciliation pass owned by `bubbles.plan`. Function-name traceability is accurate and every referenced unit function PASSES; only the containing-file hints predate the post-implementation file split. Non-blocking — the manifest scenario-cross-check is a structural no-op for manifest-based specs.
 
 ### Status
 

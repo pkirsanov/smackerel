@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-042-007-stale-scenario-manifest-and-traceability-skip",
+  "parentSpec": "042-tailnet-edge-bind-pattern",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane planning-artifact reconcile; scenarios drive guard-verification + evidence-fidelity proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "traceability-guard.sh re-runs captured in report.md: red at exit 1 (scenario manifest cross-check skipped — 0 scenarios found) pre-fix, green at PASSED (cross-check ACTIVE, 6 contracts) post-fix."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-042-007-001",
+      "scope": "Scope 1",
+      "title": "Active scopes.md scenarios reformatted so extract_scenarios finds them",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/traceability-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/traceability-guard.sh", "function": "manual:extract-scenarios-count"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-042-scenario-manifest-and-activate-the-traceability-guard-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "grep -cE '^[[:space:]]*Scenario( Outline)?:' specs/042-tailnet-edge-bind-pattern/scopes.md returns 6; the fail-loud Given/When/Then semantics are preserved with no :-127.0.0.1 form in the active gherkin.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-042-007-002",
+      "scope": "Scope 1",
+      "title": "scenario-manifest.json realigned to the active fail-loud scopes",
+      "requiredTestType": "guard-verification",
+      "testFiles": ["specs/042-tailnet-edge-bind-pattern/scenario-manifest.json"],
+      "linkedTests": [
+        {"file": "specs/042-tailnet-edge-bind-pattern/scenario-manifest.json", "function": "manual:forbidden-form-and-title-scan"}
+      ],
+      "evidenceRefs": [
+        "report.md#implementation-code-diff-evidence",
+        "scopes.md#scope-1-reconcile-spec-042-scenario-manifest-and-activate-the-traceability-guard-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "grep -rn 'HOST_BIND_ADDRESS:-' specs/042-tailnet-edge-bind-pattern/scenario-manifest.json returns nothing; SCN-042-003 is titled 'Missing bind address fails loud'; requiredTestType is unit for compose-contract scenarios and doc-lint for doc scenarios; linked test IDs are real TestComposeContract_* names.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-042-007-003",
+      "scope": "Scope 1",
+      "title": "traceability-guard goes from silent exit 1 to exit 0 with the G057/G059 cross-check ACTIVE",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/traceability-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/traceability-guard.sh", "function": "manual:cross-check-active-and-g068-fidelity"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-red-green-proof",
+        "report.md#validation-evidence",
+        "scopes.md#scope-1-reconcile-spec-042-scenario-manifest-and-activate-the-traceability-guard-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "traceability-guard.sh specs/042-tailnet-edge-bind-pattern exits 0; the Scenario Manifest Cross-Check (G057/G059) is ACTIVE (covers 6 scenario contracts, all linked tests exist); 6/6 scenario->row->file->report; DoD fidelity (G068) 6 mapped, 0 unmapped.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-042-007-004",
+      "scope": "Scope 1",
+      "title": "artifact-lint stays PASSED after the edits",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/artifact-lint.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/artifact-lint.sh", "function": "manual:dod-completion-and-evidence-legitimacy"}
+      ],
+      "evidenceRefs": [
+        "report.md#validation-evidence",
+        "scopes.md#scope-1-reconcile-spec-042-scenario-manifest-and-activate-the-traceability-guard-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "artifact-lint.sh specs/042-tailnet-edge-bind-pattern exits 0 (PASSED): DoD completion gate green, all report.md evidence blocks legitimate, status 'done' unchanged.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-042-007-005",
+      "scope": "Scope 1",
+      "title": "Deployment surface intact — nine TestComposeContract_* functions PASS",
+      "requiredTestType": "regression-e2e",
+      "testFiles": [
+        "internal/deploy/compose_contract_test.go"
+      ],
+      "linkedTests": [
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_LiveFile"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialLiteralBind"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialInfraHasPorts"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialMultiPortsBypass"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialMLMultiPortsBypass"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialNetworkModeHostBypass"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialOllamaLiteralBind"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialDefaultFallbackBind"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-042-scenario-manifest-and-activate-the-traceability-guard-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "./smackerel.sh test unit --go --go-run 'TestComposeContract' exits 0; all nine TestComposeContract_* functions PASS and internal/deploy is ok; BUG-042-007 changes zero runtime behaviour so the deployment contract stays GREEN by construction.",
+      "changeType": "added"
+    }
+  ]
+}

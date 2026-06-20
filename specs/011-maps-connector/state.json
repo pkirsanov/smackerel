@@ -5,7 +5,7 @@
   "status": "done",
   "certifiedAt": "2026-06-06T17:00:00Z",
   "certifiedBy": "bubbles.workflow",
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-17T00:00:00Z",
   "workflowMode": "full-delivery",
   "policySnapshot": {
     "workflowMode": "full-delivery",
@@ -223,6 +223,18 @@
         "runStartedAt": "2026-06-06T17:00:00Z",
         "runEndedAt": "2026-06-06T17:00:00Z",
         "summary": "OPS-002 G088 recert (no-source reconstruction). Reconstructed original certification moment from git: commit b4a6780e (2026-04-09T16:15:36Z) transitioned status in_progress->done ('feat(011): deliver maps connector scopes 2-3 + delivery-lockdown certification'); status held done thereafter. Reviewed 7 post-cert planning edits to THIS spec, all category (b) incidental reconciliation: 7621814a (2026-04-09 same-day artifact-lint scopes.md reconcile, no status/DoD reset); c97ceb91 (2026-04-21 scopes.md evidence reword implement->test-to-doc + test-count refresh); 5cb31145 (2026-05-08 16 trace-failure DoD-trace-prefix on still-checked bullets); 69524036 (2026-05-24 six G068 DoD-trace prefixes on still-checked [x] SCN-MT-004/005/008/010/012/013 bullets); 19b31c0a (2026-05-28 spec.md Status banner Draft->Done); 3f7c0649 (2026-06-05 scopes.md migration path 009_maps.sql->consolidated 001 Allowed-surfaces reconcile); 28711074 (2026-06-05 Test Plan path corrections tests/ -> internal/connector/maps/maps_test.go). No post-promotion requirement/scenario/DoD semantic change; current scopes.md all-Done with 0 unchecked DoD; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+      },
+      {
+        "agent": "bubbles.gaps",
+        "phasesExecuted": [
+          "gaps",
+          "docs"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-17T00:00:00Z",
+        "runCompletedAt": "2026-06-17T00:00:00Z",
+        "summary": "Stochastic-quality-sweep round 34 — gaps trigger -> gaps-to-doc, parent-expanded child workflow mode execution (subagent runtime lacks nested runSubagent). Re-probed implementation-gap surface for spec 011 (already certified done): (1) artifact-lint.sh specs/011-maps-connector PASSED (all required sections + anti-fabrication checks green); (2) traceability-guard.sh PASSED — 21 scenarios checked, 21 mapped to DoD, 0 unmapped, 55 test rows, 21 concrete test-file refs, 21 report evidence refs; (3) zero TODO/FIXME/HACK/STUB/XXX markers and zero panic/os.Exit/context.TODO in internal/connector/maps non-test files; (4) all design-claimed functions present in shipped code (connector.go New/Connect/Sync/Health/Close/PostSync/SetPool; normalizer.go NormalizeActivity/buildContent/buildMetadata/computeDedupHash/assignTier; patterns.go NewPatternDetector/DetectCommutes/DetectTrips/LinkTemporalSpatial/InferHome + classify/normalize helpers); (5) config<->design behavioral consistency OK (config/smackerel.yaml min_overnight_hours: 18 matches design 'Trip: >=1 overnight (>18h)'); (6) 184 maps test/fuzz functions across connector/normalizer/patterns/chaos/harden/improve/stabilize/regression suites; (7) BUG-001 + BUG-011-001 both done. Implementation gaps found: 0. Finding GAPS-R34-01 (low, doc-fidelity): scopes.md 'New Types & Signatures' sketch carried pre-implementation signatures stale vs shipped code AND internally inconsistent with this spec's own report.md L72 (simplify-round removal of NormalizeActivity config param + MapsConfig.DefaultTier). CLOSED IN-ROUND by reconciling the scopes.md signature block to shipped code (removed DefaultTier; dropped NormalizeActivity config param; DetectCommutes/DetectTrips -> (ctx) ([]connector.RawArtifact, error); PostSync -> ([]connector.RawArtifact, error)) — zero behavioral/DoD/scenario/Test-Plan change. Observations routed (not closed): design.md retains pre-implementation pseudo-code (refined PatternDetector API + PostSync orchestration) -> bubbles.design optional non-blocking follow-up; round-18 baseline guard backlog (G022/G028/G040/G053/G055/G056 + regression-E2E/consumer-impact/change-boundary) -> dedicated harden-gaps-to-doc/improve-existing round. Post-fix artifact-lint + traceability-guard re-run PASSED (21/21 mapped, 0 warnings). Spec 011 status/certification unchanged (done); no transition attempted. Terminal-discipline preserved — IDE multi_replace_string_in_file/replace_string_in_file only, zero shell redirection/heredoc. Framework file immutability honored."
       }
     ]
   },

@@ -321,12 +321,60 @@ capture-slo: endpoint http://127.0.0.1:1/api/health is unreachable (HTTP 000). B
 exit=1  file_written=NO
 ```
 
+### Stability Evidence (stochastic-quality-sweep Round 8)
+
+**Phase Agent:** bubbles.stabilize
+**Executed:** 2026-06-17
+**Trigger:** stochastic-quality-sweep Round 8 (stabilize → stabilize-to-doc)
+
+Two stability findings discovered and remediated:
+
+**Finding 1 (Low): Signal handling gap in temp file cleanup**
+- Original: `trap "rm -f '$samples'" RETURN` only fired on function return
+- Issue: If interrupted (SIGINT/SIGTERM) during load generation, temp file orphaned
+- Fix: EXIT trap at script level with cleanup array; fires on any exit condition
+
+**Finding 2 (Medium): Missing parameter validation**
+- Original: `--requests` and `--concurrency` accepted any value
+- Issue: Non-integers, negatives, or extreme values caused undefined behavior
+- Fix: Added `validate_positive_int()` with bounds (requests ≤ 100000, concurrency ≤ 500)
+
+**Remediation evidence:**
+
+```
+$ shellcheck -x scripts/observability/capture-slo.sh && echo SHELLCHECK_CLEAN
+SHELLCHECK_CLEAN
+
+$ bash scripts/observability/capture-slo.sh run --workflow core.health --url http://localhost:1/api/health --requests abc 2>&1
+capture-slo: --requests must be a positive integer (got: 'abc')
+exit=2
+
+$ bash scripts/observability/capture-slo.sh run --workflow core.health --url http://localhost:1/api/health --requests 0 2>&1
+capture-slo: --requests must be at least 1 (got: 0)
+exit=2
+
+$ bash scripts/observability/capture-slo.sh run --workflow core.health --url http://localhost:1/api/health --concurrency 9999 2>&1
+capture-slo: --concurrency exceeds maximum (500) — refusing to avoid resource exhaustion (got: 9999)
+exit=2
+```
+
+**Regression verification (existing functionality preserved):**
+
+```
+$ bash scripts/observability/capture-slo.sh compute --workflow core.health --samples /tmp/within.txt --source fixture --out /tmp/o.json
+capture-slo:   requests total   : 100  (responded: 100, failed: 0)
+capture-slo:   observed p99 ms  : 8.0000   target <= 200
+capture-slo:   verdict          : WITHIN-TARGET
+```
+
 ## Discovered Issues
 
 | Date | Issue | Severity | Disposition | Reference |
 |------|-------|----------|-------------|-----------|
 | 2026-06-14 | Smackerel `posture: wired` carried no SLO registry, so G100 was a permanent no-op here. | Low | Resolved by this spec (adds `core.health` registry + workflow link + captured evidence + scope arming token). | `.github/bubbles-project.yaml`; this report DoD-1/DoD-4 |
 | 2026-06-14 | Core `/api/health` returns HTTP 200 with body `status: degraded` (`services: null`) when optional inference subservices are not warmed; deeper subservice readiness is not surfaced as a distinct HTTP code. | Low | Recorded honestly; NOT remediated here. The HTTP liveness SLO (200 + latency) is genuine and within target; a future spec may split a deeper readiness signal. This dogfood deliberately measures only the HTTP liveness contract. | `internal/api/router.go` HealthHandler; this report DoD-5 |
+| 2026-06-17 | `capture-slo.sh` temp file cleanup used `trap ... RETURN` which doesn't fire on SIGINT/SIGTERM — interrupted runs could orphan temp files in /tmp. | Low | Resolved: Added EXIT trap at script level with cleanup array that fires on any exit condition. | `scripts/observability/capture-slo.sh`; Stability Evidence section |
+| 2026-06-17 | `capture-slo.sh` accepted any value for `--requests` and `--concurrency` without validation — non-integers, negatives, or extreme values caused undefined behavior or resource exhaustion risk. | Medium | Resolved: Added `validate_positive_int()` with bounds checking (requests ≤ 100000, concurrency ≤ 500). | `scripts/observability/capture-slo.sh`; Stability Evidence section |
 
 ## Scope Boundaries
 

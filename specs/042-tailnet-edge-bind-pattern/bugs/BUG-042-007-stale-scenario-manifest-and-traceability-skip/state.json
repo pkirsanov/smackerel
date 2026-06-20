@@ -1,0 +1,238 @@
+{
+  "spec": "BUG-042-007-stale-scenario-manifest-and-traceability-skip",
+  "parentSpec": "042-tailnet-edge-bind-pattern",
+  "status": "done",
+  "certifiedAt": "2026-06-17T21:45:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "workflowMode": "bugfix-fastlane",
+  "executionModel": "parent-expanded-child-mode",
+  "discoveredBy": "stochastic-quality-sweep harden probe Round 33 (HARDEN-042-R33-001, HARDEN-042-R33-003)",
+  "discovered": "2026-06-17",
+  "resolved": "2026-06-17",
+  "completedPhaseClaims": [
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs"
+  ],
+  "certifiedCompletedPhases": [
+    "bootstrap",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs"
+  ],
+  "completedPhaseClaimDetails": [
+    {
+      "phase": "bootstrap",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "8-artifact bugfix-fastlane packet authored under specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-007-stale-scenario-manifest-and-traceability-skip/ (bug.md + spec.md + design.md + scopes.md + scenario-manifest.json + report.md + state.json + uservalidation.md)."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Reformatted active SCN-042-001..006 in parent scopes.md to 'Scenario: SCN-042-NNN — title' gherkin; relabeled the two stale HTML-commented duplicate '## Scope N:' headings to '## Superseded Scope N —'; neutralized '#### Core Items'/'#### Build Quality Gate' to bold; added per-scenario trace-ID prefixes to DoD items. Realigned all six scenario-manifest.json entries to the active fail-loud scopes (forbidden :-127.0.0.1 removed, titles fixed, requiredTestType -> unit/doc-lint, real TestComposeContract_* IDs, placeholder gherkinHash dropped). Zero runtime/source change."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Scenario-first red->green via traceability-guard.sh re-runs: red=exit 1 with 'scenario manifest cross-check skipped' (0 scenarios found) pre-fix; green=PASSED post-fix with the G057/G059 cross-check ACTIVE (6 contracts, 6/6 scenario->row->file->report, 6/6 G068 DoD fidelity). grep -cE '^[[:space:]]*Scenario' scopes.md 0->6. Full block in report.md Test Evidence."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Deployment surface verified intact: ./smackerel.sh test unit --go --go-run TestComposeContract exit 0; nine TestComposeContract_* functions PASS (LiveFile + adversarial LiteralBind/InfraHasPorts/Multi+MLMultiPortsBypass/NetworkModeHostBypass/OllamaLiteralBind/DefaultFallbackBind/PrometheusLiteralBindAndFallbackForms); ok internal/deploy 0.045s. deploy/compose.deploy.yml + internal/deploy/compose_contract_test.go unchanged (GREEN by construction)."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Planning-artifact reconcile produces zero net new abstractions, dead branches, or duplication; the realigned manifest dropped six placeholder gherkinHash fields (net reduction). Existing simplify cover for spec 042's compose-contract surface remains GREEN by construction."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Zero runtime change — the fail-loud compose contract + mechanical guard surface is unchanged; docker compose render behaviour is unaffected by planning-artifact edits."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "No new attack surface; no forbidden ${HOST_BIND_ADDRESS:-127.0.0.1} form reintroduced (manifest scan exits 1/no match; the active gherkin uses only the fail-loud :? form); the NO-DEFAULTS fail-loud SST contract (Gate G028) is preserved. Evidence text uses ~/ redacted paths; no /home/<user>/ leakage."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Parent spec 042: traceability-guard.sh EXIT=0 with G057/G059 cross-check ACTIVE; artifact-lint.sh PASSED (EXIT=0). Bug packet: artifact-lint.sh PASSED. Full block in report.md Validation Evidence."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Anti-fabrication discipline confirmed: every DoD item is backed by a real command (grep / traceability-guard / artifact-lint / ./smackerel.sh test unit --go --go-run TestComposeContract). No DoD item force-ticked. Deployment surface unchanged; exactly two active '## Scope N:' headings remain; nothing committed (working tree only). Full block in report.md Audit Evidence."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "evidence": "Planning-Artifact Reconciliation section appended to parent specs/042-tailnet-edge-bind-pattern/report.md (Before / After Evidence); parent state.json gained a bubbles.plan executionHistory entry + a resolvedBugs entry for this packet."
+    }
+  ],
+  "executionHistory": [
+    {
+      "phase": "bootstrap",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:40:00Z",
+      "evidence": "Authored 8-artifact bugfix-fastlane packet for BUG-042-007-stale-scenario-manifest-and-traceability-skip."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:41:00Z",
+      "evidence": "Reformatted active scenarios to gherkin form; relabeled stale duplicate scope headings; neutralized #### DoD subheadings to bold; added DoD trace-ID prefixes; realigned all six manifest entries to the active fail-loud scopes."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:42:00Z",
+      "evidence": "Red->green traceability-guard proof: red=exit 1 cross-check skipped (0 scenarios), green=PASSED cross-check ACTIVE (6 contracts, 6/6 G068)."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:43:00Z",
+      "evidence": "Deployment surface intact: ./smackerel.sh test unit --go --go-run TestComposeContract exit 0, nine TestComposeContract_* PASS, ok internal/deploy 0.045s."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:43:20Z",
+      "evidence": "Reconcile-no-change: artifact mutations add zero abstractions; six placeholder gherkinHash fields dropped (net reduction)."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:43:40Z",
+      "evidence": "Reconcile-no-change: the fail-loud compose render behaviour is unchanged."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:44:00Z",
+      "evidence": "Reconcile-no-change: no forbidden :-127.0.0.1 form reintroduced; NO-DEFAULTS fail-loud SST preserved; no secrets in staged paths."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:44:30Z",
+      "evidence": "Parent traceability-guard EXIT=0 (cross-check ACTIVE); parent artifact-lint PASSED; bug-packet artifact-lint PASSED."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:45:00Z",
+      "evidence": "Anti-fabrication discipline confirmed: every DoD item backed by a real command; deployment surface unchanged; nothing committed."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.plan",
+      "executionModel": "parent-expanded-specialist",
+      "timestamp": "2026-06-17T21:45:00Z",
+      "evidence": "Parent report.md gained the Planning-Artifact Reconciliation section; parent state.json gained the bubbles.plan executionHistory + resolvedBugs entries."
+    }
+  ],
+  "scenarioCoverage": {
+    "totalScenarios": 5,
+    "coveredScenarios": 5,
+    "fidelity": "5/5"
+  },
+  "completedScopes": [
+    "scope-1-reconcile-spec-042-scenario-manifest-and-activate-the-traceability-guard-single-scope-bugfix-fastlane"
+  ],
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "bubbles-fastlane-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-17T21:45:00Z",
+    "completedScopes": [
+      "scope-1-reconcile-spec-042-scenario-manifest-and-activate-the-traceability-guard-single-scope-bugfix-fastlane"
+    ],
+    "certifiedCompletedPhases": [
+      "bootstrap",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Reconcile spec 042 scenario manifest and activate the traceability guard (single-scope bugfix-fastlane)",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "rollback": "Pure git revert restores the stale manifest + bullet-format scenarios (traceability-guard skip); zero runtime impact."
+}

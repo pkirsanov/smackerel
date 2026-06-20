@@ -474,3 +474,61 @@ $ grep -n "^#### Privacy Consent Opt-In\|^#### End-To-End Operator Walkthrough\|
 - **Spec 011 certification status:** unchanged (`done`). No transition attempted; status-transition guard not triggered.
 - **Terminal-discipline preserved:** all edits via IDE `replace_string_in_file` / `multi_replace_string_in_file`; zero shell redirection or heredoc writes.
 - **Framework file immutability honored:** zero edits to `.github/bubbles/scripts/`, `.github/agents/bubbles_shared/`, `.github/bubbles/workflows.yaml`, `.github/instructions/bubbles-*`.
+
+## Stochastic Quality Sweep — Gaps Probe (2026-06-17, round 34)
+
+**Workflow:** `mode: gaps-to-doc` (parent-expanded child workflow mode — subagent runtime lacks nested `runSubagent`).
+**Owner:** `bubbles.gaps` (probe) + `bubbles.workflow` (orchestration).
+**Execution model:** `parent-expanded-child-mode`.
+
+### Probe Coverage
+
+| Gap Dimension | Result |
+|---|---|
+| `artifact-lint.sh specs/011-maps-connector` | PASS — all required sections + anti-fabrication checks green |
+| `traceability-guard.sh specs/011-maps-connector` (Gate G068) | PASS — 21 scenarios checked, 21 mapped to DoD, 0 unmapped; 55 test rows, 21 concrete test-file refs, 21 report evidence refs |
+| TODO/FIXME/HACK/STUB/XXX markers in `internal/connector/maps/*.go` | 0 |
+| `panic(` / `os.Exit` / `context.TODO` in maps package | 0 |
+| Design-claimed functions present in shipped code | all present — `connector.go` (New, Connect, Sync, Health, Close, PostSync, SetPool), `normalizer.go` (NormalizeActivity, buildContent, buildMetadata, computeDedupHash, assignTier), `patterns.go` (NewPatternDetector, DetectCommutes, DetectTrips, LinkTemporalSpatial, InferHome + classify/normalize helpers) |
+| Config↔design behavioral consistency | OK — `config/smackerel.yaml` `min_overnight_hours: 18` matches design "Trip: ≥1 overnight (>18h)"; `TripMinDistanceKm` + commute thresholds honored in `classifyTrips` / `classifyCommutes` |
+| Maps test surface | 184 test/fuzz functions across connector / normalizer / patterns / chaos / harden / improve / stabilize / regression suites |
+| Bug closure | BUG-001-maps-enabled-flag-ignored = `done`; BUG-011-001-dod-scenario-fidelity-gap = `done` |
+
+### Findings & Closure
+
+| Finding ID | Severity | Description | Closure |
+|---|---|---|---|
+| GAPS-R34-01 | low (doc-fidelity) | `scopes.md` "New Types & Signatures" sketch carried pre-implementation signatures stale vs shipped code AND internally inconsistent with this spec's own `report.md` L72 (which records the simplify-round removal of `NormalizeActivity`'s `config` param + `MapsConfig.DefaultTier`). Stale claims: `MapsConfig{...; DefaultTier string}`; `NormalizeActivity(..., config MapsConfig)`; `DetectCommutes(ctx, activities) ([]CommutePattern, error)`; `DetectTrips(ctx, activities) ([]TripEvent, error)`; `PostSync(...) error`. | **CLOSED IN-ROUND.** Reconciled the `scopes.md` "New Types & Signatures" block to the shipped signatures: removed `DefaultTier`; dropped `NormalizeActivity`'s `config` param; `DetectCommutes` / `DetectTrips` → `(ctx) ([]connector.RawArtifact, error)`; `PostSync(...)` → `([]connector.RawArtifact, error)`. Pure planning-artifact fidelity fix — zero behavioral / DoD / scenario / Test-Plan change. |
+
+### Observations Recorded (Routed, NOT Closed This Round)
+
+| Observation | Severity | Owner / Disposition |
+|---|---|---|
+| `design.md` "Component Design" / "Key methods" / "Pattern Detection Integration" retain pre-implementation pseudo-code (the PatternDetector API + PostSync orchestration were refined during delivery: detection methods query `location_clusters` internally and return normalized `[]connector.RawArtifact`; `PostSync` returns artifacts; the `c.patternDetector` field became `NewPatternDetector(pool, config)`). | low (design-doc lag; acceptable design-time intent for a `Status: Draft` doc) | Routed to `bubbles.design` as an optional, non-blocking narrative-reconciliation follow-up. Authoritative signatures now live in shipped code + the reconciled `scopes.md`. NOT reconciled in-round — a gaps trigger should not rewrite design-time intent. |
+| Pre-existing baseline guard observations from round 18 (Gates G022 / G028 / G040 / G053 / G055 / G056, regression-E2E, consumer-impact, change-boundary) | per round 18 | Still open + routed to a dedicated `harden-gaps-to-doc` / `improve-existing` round. Out of scope for a gaps trigger; not re-litigated here. |
+
+### Post-Fix Verification
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/011-maps-connector
+Artifact lint PASSED.
+
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/011-maps-connector
+ℹ️  Scenarios checked: 21
+ℹ️  Test rows checked: 55
+ℹ️  Concrete test file references: 21
+ℹ️  Report evidence references: 21
+ℹ️  DoD fidelity scenarios: 21 (mapped: 21, unmapped: 0)
+RESULT: PASSED (0 warnings)
+```
+
+### Round Outcome
+
+- **Gap surface coverage:** complete across artifact-lint, DoD-trace fidelity, dead-code markers, hot-path safety, design-claim presence, config↔design consistency, test-surface, and bug closure.
+- **Implementation gaps found:** 0 — the shipped implementation fully covers all design / spec / scope behavioral claims; every scenario maps to a DoD item and a concrete test.
+- **Findings closed this round:** 1/1 (GAPS-R34-01 — `scopes.md` signature reconciliation).
+- **Bugs spawned:** 0 (planning-artifact fidelity fix only; no code change, no planning truth created or repaired beyond the signature sketch).
+- **Observations routed (not closed):** 2 (design.md narrative lag → `bubbles.design`; round-18 baseline backlog → `harden-gaps-to-doc` / `improve-existing`).
+- **Spec 011 certification status:** unchanged (`done`). No transition attempted; status-transition guard not triggered.
+- **Terminal-discipline preserved:** all edits via IDE `replace_string_in_file` / `multi_replace_string_in_file`; zero shell redirection or heredoc writes.
+- **Framework file immutability honored:** zero edits to `.github/bubbles/scripts/`, `.github/agents/bubbles_shared/`, `.github/bubbles/workflows.yaml`, `.github/instructions/bubbles-*`.
