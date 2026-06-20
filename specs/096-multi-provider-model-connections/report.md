@@ -2270,6 +2270,126 @@ needing a real provider key. The wiring + the 089 fallback + the refusal path ar
 unit + boot validated; only the real-provider round-trip needs the key. This is NOT
 claimed passing. **Claim Source: not-run** (deferred; honest).
 
+---
+
+## §13 Observability Wiring (deferred-omission completed)
+
+**Status:** WIRED + unit/boot-validated. This subsection records an **enhancement
+beyond the original 7-scope plan**, NOT a previously-required-but-missing item.
+Design §13 (Observability) was a **deliberate per-scope plan-omission** — §13
+explicitly reads *"OMIT if the scope is not wired / not service-bearing (the plan
+decides per-scope)"* and the plan exercised that omission across SCOPE-01..07.
+Because the repo's observability posture is now **WIRED** (G098 ok — prometheus on
+both the validate and operate planes), design §13's *"MUST-when-wired"* runtime
+contract applies, so for production-readiness of this **cost-bearing multi-provider**
+feature we subsequently chose to wire it. No scope DoD obligated this and **no new
+DoD item was added to `scopes.md`**; it is recorded here as history + evidence only,
+and it does not change any scope or spec status. `state.json` stays `in_progress` /
+`certification.status: in_progress`.
+**Executed by:** `bubbles.implement` (parent-expanded full-delivery).
+**Commit:** `452e17e9`.
+
+### What was wired — Metrics
+
+Closed-vocab, bounded-label series under the `openknowledge_` prefix
+(`internal/assistant/openknowledge/metrics`):
+
+- `openknowledge_provider_dispatch_total{provider}` +
+  `…_provider_dispatch_tokens{provider}` + `…_provider_dispatch_usd_cents{provider}`
+  — per-provider hosted-dispatch count / tokens / spend.
+- `openknowledge_provider_discovery_total{provider,state}` +
+  `…_provider_discovery_latency_seconds{provider}` — per-provider discovery outcome
+  + latency.
+- `openknowledge_model_connection_test_total{kind,outcome}` — admin
+  test-connection outcomes.
+- `openknowledge_vault_decrypt_failures_total{reason}` — vault decrypt failures by
+  typed reason.
+
+(The budget-refusal counter + per-query USD/tokens series from SCOPE-05 already
+existed; the four above are the net-new §13 series.) Every label is a closed set —
+no provider-supplied / unbounded strings — so there is no high-cardinality blow-up
+and no secret can ride a label value.
+
+### What was wired — Spans (OTel, via `internal/assistant/tracing`)
+
+- `model.dispatch` → child `llm.chat` (attrs `provider` / `model` / `turn` /
+  `cost.usd`) — `internal/assistant/openknowledge/agent/dispatch.go`.
+- `model.discovery` → child `provider.discover` (attrs `connection_id` / `kind` /
+  `state` / `model_count` / `latency_ms`) —
+  `internal/assistant/openknowledge/catalog/aggregator.go`.
+- `model.connection.test` (attrs `connection_id` / `kind` / `outcome`) — the admin
+  handler.
+
+The tracer is wired into the agent via `svc.assistantTracer`; the recorder + tracer
+are injected into the catalog aggregator + admin handler through additive
+`WithObservability` seams (no constructor signature break — a nil tracer / `Nop`
+recorder is a no-op).
+
+### Secret-safety (the §13 alarming invariant)
+
+NO `api_key` / decrypted credential bundle / master key appears in ANY metric label
+or span attribute. The new tests are **non-tautological canaries**: they inject the
+live synthetic key into handler/dispatch scope and then assert it never appears in
+any span attribute. The admin canary
+(`internal/api/model_connections_admin_observability_spec096_test.go`) uses a
+`capturingProbe` that records the decrypted secret it was handed — proving the key
+was *live in handler scope* — and then asserts that same value is absent from every
+emitted span attribute.
+
+### 089 preserved (byte-for-byte)
+
+Metrics + spans emit ONLY on the hosted-dispatch path. The bare / `ollama/…` path is
+byte-for-byte the pre-096 spec-089 path: a `Nop` recorder + a nil tracer make every
+emission point a no-op, so the local-Ollama default config produces the identical
+wire + behavior it did before §13 was wired.
+
+### Evidence O1 — unit suite (RED-before / GREEN-after, all packages)
+
+The new metric/span assertions FAIL before the emission was wired and PASS after —
+non-tautological across agent / metrics / catalog / api:
+
+```text
+RED-before (emission points absent):
+  provider dispatches = [], want [anthropic]
+  model.dispatch spans = 0, want 1
+  discovery counter {ollama,ok} = 0, want 1
+  connection-test counter {anthropic,ok} = 0, want 1
+```
+
+```text
+GREEN-after:
+$ ./smackerel.sh test unit --go --go-run 'Spec096'
+[go-unit] go test ./... finished OK
+```
+
+The new observability tests run GREEN alongside all existing Spec096 tests and the
+089 parity / fallback tests. **Claim Source: executed.**
+
+### Evidence O2 — boot validation (real stack)
+
+The core image was rebuilt with the §13 wiring and brought up against its deps. Core
+reached `running health=healthy exit=0 restarts=0`, and the boot log shows the
+tracer initialized + the SCOPE-07 activation, then the HTTP server listening — no
+fatal, no panic:
+
+```text
+assistant tracing initialized
+spec096 scope07: discovery/dispatch activated … resolver_installed=true
+HTTP server listening :8080
+```
+
+otel is disabled under test, so the tracer is a no-op there (spans go live when otel
+is enabled in prod); the metric recorder is live, so the counters emit in both test
+and prod. **Claim Source: executed** (real boot log; container Healthy).
+
+### Honest framing
+
+This wiring is an **enhancement beyond the original plan**, not a closed gap. Design
+§13 permitted per-scope omission and the plan exercised that permission; once the
+repo posture became WIRED, the §13 *"MUST-when-wired"* contract made wiring the
+production-ready choice for a cost-bearing feature. No DoD item was added to
+`scopes.md`; this is history/evidence only and changes no scope or spec status.
+
 
 
 
