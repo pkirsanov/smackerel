@@ -5397,3 +5397,193 @@ These 45 are routed as `MIT-FRAMEWORK-001` to `bubbles.setup` for upstream frame
 }
 ```
 
+---
+
+## Round 30 — DevOps Sweep (F-038-DEVOPS-001) — 2026-06-17 (bubbles.workflow, mode `devops-to-doc`)
+
+Stochastic-quality-sweep Round 30 selected spec 038 with the `devops` trigger, which maps to the `devops-to-doc` workflow mode (v6: `implement finalize:docs target:devops`; `statusCeiling: done`, `phaseOrder: [select, bootstrap, devops, test, stabilize, security, validate, audit, docs, finalize]`). The probe focused on CI/CD, deployment, infrastructure, and monitoring/observability — specifically: are the cloud-drive connector metrics wired to Prometheus alerts, and is the drive retrieve surface (hardened against memory exhaustion by an earlier chaos round, `io.LimitReader` at `internal/drive/retrieve/postgres.go:180`) observable via push-based alerting?
+
+This round runs in a parent-expanded child-mode form: the executing runtime had no nested `runSubagent`, so the workflow orchestrator expanded the `devops-to-doc` phase contract and executed the phase owners directly, recording `executionModel: parent-expanded-child-mode`. Spec 038 stays at `done` (additive observability wiring; no behavior change; `certification.*` and top-level `status` untouched).
+
+### Finding F-038-DEVOPS-001 (severity: medium; class: observability/devops)
+
+**Observability gap — drive metrics emitted but zero push-based alerts, and structurally un-alertable.**
+
+The provider-neutral drive surface emits five live Prometheus counters from `internal/drive/observability/metrics.go`, incremented by the real scan/extract/save/retrieve services (20+ increment sites): `smackerel_drive_scan_files_total`, `smackerel_drive_extract_files_total`, `smackerel_drive_save_attempts_total`, `smackerel_drive_retrieve_decisions_total`, and `smackerel_drive_provider_errors_total`. Three more Scope 6 counters (`smackerel_drive_confirmations_total`, `smackerel_drive_policy_decisions_total`, `smackerel_drive_rule_conflicts_total`) live in `internal/metrics/metrics.go`.
+
+These satisfied the **pull/dashboard** half of FR-038-017 ("expose … save-rule successes/failures, skipped-file counts, … and provider health in user/operator-visible surfaces") but shipped with **zero** `config/prometheus/alerts.yml` rules. An operator received no page when:
+
+- the drive provider (Google Drive) API degraded or the stored OAuth bearer token expired (per design §2.3 only the access token is persisted, so expiry breaks every drive operation until re-auth);
+- cross-feature **save-back** write production (FR-038-004 / FR-038-012) started failing at the provider boundary;
+- the **retrieve boundary** (FR-038-010 — Telegram/other channels subject to sensitivity + sharing policy) — the exact surface the earlier chaos round hardened — began refusing en masse (policy regression blocking legitimate retrievals, or a channel probing the boundary).
+
+Compounding the gap: the five observability metrics live **outside** `internal/metrics/`, and the alert-contract allowlist in `internal/deploy/monitoring_alerts_contract_test.go` (`loadKnownEmittedMetrics`) only walked `internal/metrics/*.go` + `ml/app/metrics.py`. So even a correct alert referencing `smackerel_drive_provider_errors_total` would have been **falsely rejected** by the contract — the drive observability family was structurally un-alertable. This is the same class of gap closed by F-056-DEVOPS-001 (round 11), F-081-DEVOPS-001 (round 16), and F-037-DEVOPS-001 (round 22).
+
+### Remediation (one-to-one closure)
+
+| File | Change |
+|------|--------|
+| `config/prometheus/alerts.yml` | New `smackerel-drive` rule group: `DriveProviderErrors` (provider/work_type error rate > 0.05/s for 10m), `DriveSaveBackFailing` (`{outcome="error"}` rate > 0.05/s for 15m), `DriveRetrieveRefusalSpike` (`{mode="refused"}` rate > 0.1/s for 15m). Each carries `severity: warning`, `component: drive`, and full `summary` + `description` annotations with the operator runbook. |
+| `internal/deploy/monitoring_alerts_contract_test.go` | Extended `loadKnownEmittedMetrics` to also walk `internal/drive/observability/metrics.go` so the five drive observability metrics enter the spec-049 alert-contract allowlist (known-emitted set grew 105 → 108). Doc comment updated. Additive only — a larger known set can never make the contract reject a previously-valid expression, and the adversarial fabricated-metric sub-test still passes. |
+| `internal/metrics/prometheus_alerts_contract_test.go` | Added the three `smackerel-drive` alerts to the `requiredAlerts` regression guard + package doc comment (matches the F-081/F-037 precedent so a future deletion of any drive alert fails the structural contract). |
+| `docs/Operations.md` | New "Drive Observability Metrics And Alerts" subsection under Cloud Drives Operations (Spec 038): the two metric families + the three alert rules + the deploy-adapter receiver boundary. |
+
+No production code changed. The chaos round's `io.LimitReader` retrieve fix (`internal/drive/retrieve/postgres.go`) is untouched and now has a matching push-alert (`DriveRetrieveRefusalSpike`) over its decision counter.
+
+### Phase chain (parent-expanded `devops-to-doc`)
+
+| Phase | Owner | Outcome |
+|-------|-------|---------|
+| select / bootstrap | bubbles.workflow | Spec 038 resolved; artifacts present and CURRENT (last spec-review 2026-06-06 = canonical). No planning repair needed. |
+| devops (trigger) | bubbles.workflow | Probed CI/CD + monitoring; surfaced F-038-DEVOPS-001 (above). |
+| implement | bubbles.implement (expanded) | Added `smackerel-drive` alert group + extended contract allowlist (additive observability wiring). |
+| test | bubbles.test (expanded) | Alert-contract tests PASS — see evidence below. |
+| stabilize / security | bubbles.stabilize / bubbles.security (expanded) | No behavior change; bounded-cardinality labels preserved (no file/connection ids as labels); no new attack surface (rules are read-only Prometheus expressions). |
+| validate / audit | bubbles.validate / bubbles.audit (expanded) | Both alert-contract guards pass incl. adversarial sub-tests (non-tautological); spec-scoped artifact-lint + traceability-guard clean — see closing validation. |
+| docs / finalize | bubbles.docs / bubbles.workflow | Operations.md synced; this report entry + state.json executionHistory appended; status stays `done`. |
+
+### Test Evidence — alert-contract guards
+
+`./smackerel.sh test unit --go --go-run 'MonitoringAlertsContract|AlertsContract' --verbose` (WRAPPER_EXIT=0):
+
+```text
+=== RUN   TestMonitoringAlertsContract_LiveFile
+    monitoring_alerts_contract_test.go:240: contract OK: live alerts.yml satisfies spec 049 FR-049-003 (all 8 required alerts present; every metric reference is in the 108-entry known-emitted set including builtin `up`)
+--- PASS: TestMonitoringAlertsContract_LiveFile (0.01s)
+=== RUN   TestMonitoringAlertsContract_AdversarialFabricatedMetric
+    monitoring_alerts_contract_test.go:284: adversarial OK: fabricated metric is rejected with: contract violation: alert "SmackerelBackupStale" references metric "smackerel_fabricated_metric_does_not_exist" which is NOT emitted by the live runtime ...
+--- PASS: TestMonitoringAlertsContract_AdversarialFabricatedMetric (0.00s)
+=== RUN   TestMonitoringAlertsContract_AdversarialMissingRequiredAlert
+--- PASS: TestMonitoringAlertsContract_AdversarialMissingRequiredAlert (0.00s)
+=== RUN   TestMonitoringAlertsContract_AdversarialEmptyExpr
+--- PASS: TestMonitoringAlertsContract_AdversarialEmptyExpr (0.01s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.043s
+=== RUN   TestAlertsContract_LiveFile
+--- PASS: TestAlertsContract_LiveFile (0.00s)
+=== RUN   TestAlertsContract_AdversarialYAMLBreak
+--- PASS: TestAlertsContract_AdversarialYAMLBreak (0.00s)
+=== RUN   TestAlertsContract_AdversarialEmptyExpr
+--- PASS: TestAlertsContract_AdversarialEmptyExpr (0.00s)
+=== RUN   TestAlertsContract_AdversarialUnknownSeverity
+--- PASS: TestAlertsContract_AdversarialUnknownSeverity (0.00s)
+=== RUN   TestAlertsContract_AdversarialDeletedRequiredAlert
+--- PASS: TestAlertsContract_AdversarialDeletedRequiredAlert (0.00s)
+ok      github.com/smackerel/smackerel/internal/metrics 0.043s
+WRAPPER_EXIT=0
+```
+
+The `108-entry known-emitted set` (up from 105) confirms the three drive observability metric references now resolve through the extended allowlist; the live `alerts.yml` (now carrying the `smackerel-drive` group) passes; and the adversarial sub-tests confirm the guard is non-tautological (it still rejects a fabricated metric, a missing required alert, an empty expr, a YAML break, and an unknown severity).
+
+### Closing Validation
+
+**Spec-folder delta (proof of scope).** Only `report.md` and `state.json` changed in `specs/038-cloud-drives-integration/`; the traceability-relevant planning artifacts are byte-identical to committed HEAD:
+
+```text
+$ git status --short specs/038-cloud-drives-integration/
+ M specs/038-cloud-drives-integration/report.md
+ M specs/038-cloud-drives-integration/state.json
+
+$ git diff --stat HEAD -- specs/038-cloud-drives-integration/spec.md \
+    specs/038-cloud-drives-integration/scopes.md \
+    specs/038-cloud-drives-integration/scenario-manifest.json
+(empty — planning artifacts unchanged in worktree)
+```
+
+This devops round touched no production code and no scenario/DoD/test-mapping artifact. The round's own deliverables (the `smackerel-drive` alert group + the allowlist extension) are validated by the passing, non-tautological alert-contract guards above (`internal/deploy` + `internal/metrics`, WRAPPER_EXIT=0).
+
+**Pre-existing governance baseline (NOT introduced by this round; out of `devops-to-doc` scope).** The two spec-scoped guards the sweep relies on for the delta both report PRE-EXISTING failures that exist at committed HEAD (proven above — the planning artifacts are unchanged), and that a CI/CD-and-monitoring devops probe is neither scoped nor permitted to "fix" by fabrication:
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration
+❌ Required specialist phase 'gaps' NOT in execution/certification phase records (Gate G022 violation)
+❌ ~48 × "Evidence block lacks terminal output signals / too short"
+Artifact lint FAILED with 50 issue(s).
+
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration
+ℹ️  DoD fidelity: 24 scenarios checked, 21 mapped to DoD, 3 unmapped
+❌ DoD content fidelity gap: 3 Gherkin scenario(s) have no matching DoD item (Gate G068) — e.g. SCN-038-017
+RESULT: FAILED (4 failures, 0 warnings)
+```
+
+Disposition (honest accounting — these are NOT claimed green):
+
+- **G022 (gaps phase absent from `certifiedCompletedPhases`)** — pre-existing certification-provenance gap. Spec 038 was certified under `full-delivery` without a recorded `gaps` phase; `devops-to-doc` has no `gaps` phase, so this round cannot and must not author a `gaps` entry (doing so would be Gate G041 structural fabrication). Routed as a pre-existing observation to a planning/provenance owner.
+- **G068 (SCN-038-017 + 2 scenarios unmapped to DoD)** — pre-existing DoD-content-fidelity gap in `scopes.md` (unchanged by this round). Owned by `bubbles.plan`. Routed as a pre-existing observation.
+- **Evidence-block lint (~48)** — the documented `MIT-FRAMEWORK-001` framework-lint limitation (JSON RESULT-ENVELOPE blocks + short legitimate outputs flagged as lacking terminal signals). The prior round brought this from 77 → 45 residual and routed the remainder upstream; this round's mode-required JSON RESULT-ENVELOPE block adds same-class noise only.
+
+The `devops-to-doc` finding (F-038-DEVOPS-001) is fully closed and independently validated; the pre-existing baseline is surfaced and routed rather than silenced.
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.workflow",
+  "roleClass": "orchestration",
+  "mode": "devops-to-doc",
+  "executionModel": "parent-expanded-child-mode",
+  "outcome": "completed_owned",
+  "featureDir": "specs/038-cloud-drives-integration",
+  "round": 30,
+  "trigger": "devops",
+  "scopeIds": ["feature-wide"],
+  "dodItems": [],
+  "scenarioIds": [],
+  "findings": [
+    {
+      "id": "F-038-DEVOPS-001",
+      "severity": "medium",
+      "class": "observability/devops",
+      "owner": "bubbles.workflow",
+      "status": "closed",
+      "summary": "Drive observability metrics (scan/extract/save/retrieve/provider-errors) emitted live but had zero Prometheus alert rules AND were structurally un-alertable (alert-contract allowlist did not walk internal/drive/observability/). Closed by adding the smackerel-drive alert group, extending the allowlist discovery, guarding the new alerts in the structural contract test, and syncing Operations.md."
+    }
+  ],
+  "addressedFindings": ["F-038-DEVOPS-001"],
+  "unresolvedFindings": [],
+  "preExistingObservations": [
+    {
+      "id": "PRE-038-G022",
+      "gate": "G022",
+      "severity": "medium",
+      "owner": "bubbles.plan / bubbles.workflow (provenance)",
+      "introducedByThisRound": false,
+      "summary": "gaps phase absent from certifiedCompletedPhases; spec certified full-delivery without a recorded gaps phase. devops-to-doc has no gaps phase, so this round cannot author one without G041 structural fabrication. Pre-existing at committed HEAD."
+    },
+    {
+      "id": "PRE-038-G068",
+      "gate": "G068",
+      "severity": "medium",
+      "owner": "bubbles.plan",
+      "introducedByThisRound": false,
+      "summary": "3 Gherkin scenarios (incl. SCN-038-017) unmapped to DoD content in scopes.md. Planning artifacts byte-identical to HEAD (git diff empty), so this is a pre-existing DoD-fidelity gap, out of devops-to-doc scope."
+    },
+    {
+      "id": "MIT-FRAMEWORK-001",
+      "gate": "artifact-lint evidence-block legitimacy",
+      "severity": "low",
+      "owner": "bubbles.setup",
+      "introducedByThisRound": false,
+      "summary": "~48 evidence-block lint false-positives (JSON RESULT-ENVELOPE + short legitimate outputs). Prior round routed the residual upstream; this round's mode-required envelope adds same-class noise only."
+    }
+  ],
+  "artifactsCreated": [],
+  "artifactsUpdated": [
+    "config/prometheus/alerts.yml",
+    "internal/deploy/monitoring_alerts_contract_test.go",
+    "internal/metrics/prometheus_alerts_contract_test.go",
+    "docs/Operations.md",
+    "specs/038-cloud-drives-integration/report.md",
+    "specs/038-cloud-drives-integration/state.json"
+  ],
+  "evidenceRefs": [
+    "report.md#round-30--devops-sweep-f-038-devops-001--2026-06-17-bubblesworkflow-mode-devops-to-doc"
+  ],
+  "specScopedGuardPosture": "alert-contract guards PASS (delta validated, non-tautological); artifact-lint + traceability-guard carry PRE-EXISTING baseline failures (G022, G068, MIT-FRAMEWORK-001) unchanged by this round and out of devops-to-doc scope — NOT claimed green",
+  "statusBefore": "done",
+  "statusAfter": "done",
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```
+

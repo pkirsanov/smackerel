@@ -171,6 +171,111 @@ Prior chaos sweeps (Apr 10, Apr 14 R26) discovered and remediated 3 additional d
 
 ---
 
+## Chaos Report — 2026-06-17 (Stochastic Child, Round 12)
+
+**Trigger:** `chaos` (stochastic-quality-sweep child workflow)
+**Mode:** `chaos-hardening` (parent-expanded child mode; v6 form `validate action:chaos-iterative`)
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+**TDD:** scenario-first (RED → GREEN)
+
+### Summary
+
+Chaos probe of the Government Alerts connector targeting unvalidated external-feed
+inputs that flow into arithmetic. The connector's external surface is otherwise
+extensively hardened (coordinates, radii, magnitudes, IDs, URLs, response size,
+control chars, panic recovery, context bounds — all bounds-checked). One untrusted
+external integer was found unchecked: AirNow's `HourObserved`. 1 finding, fixed in
+place with a 7-case adversarial regression test.
+
+### Findings
+
+| ID | Finding | Severity | Resolution |
+|----|---------|----------|------------|
+| C-017-004 | `fetchAirNowAQI` used the external `HourObserved` integer directly in `t.Add(time.Duration(e.HourObserved) * time.Hour)` with no range check. AirNow documents `HourObserved` as 0–23, but a malformed/adversarial feed can send any int. A large value yields a far-future `ObservationTime` (HourObserved=1,000,000 → year **2138**); an enormous value overflows the int64 `time.Duration` and wraps (HourObserved=9,000,000,000 → year **2262**); a negative value yields a pre-date time. `ObservationTime` becomes `CapturedAt`, which drives digest "most-recent" windowing and alert lifecycle ordering — so a single garbage record could pin a stale air-quality alert to the top of every digest forever (or hide it). | Medium | Fixed: reject `HourObserved` outside `[0, 24)`; fall back to the observed date (midnight) with a WARN log. All documented in-range hours (0–23) apply their offset unchanged. |
+
+### Remediation
+
+**C-017-004 Fix — Bounded AirNow HourObserved** (`internal/connector/alerts/alerts.go`, `fetchAirNowAQI`): the `DateObserved`-parse branch now guards the hour offset with `if e.HourObserved >= 0 && e.HourObserved < 24`. In range, `obs.ObservationTime = t.Add(time.Duration(e.HourObserved) * time.Hour)` is applied unchanged. Out of range, the offset is skipped — `obs.ObservationTime = t` (observed date at midnight) — and a `slog.Warn("skipping out-of-range AirNow HourObserved; using date without hour offset", "hour_observed", ..., "reporting_area", ...)` records the rejection. Documented hours 0–23 are unaffected; only out-of-domain integers from a malformed/adversarial feed are neutralized before they reach `time.Duration` arithmetic.
+
+### New Test (1 function, 7 sub-cases)
+
+`TestFetchAirNowAQI_OutOfRangeHourObserved_BoundedTime` — table-driven adversarial +
+positive-control test in `internal/connector/alerts/alerts_test.go`. Valid hours
+(0, 14, 23) assert the offset IS applied (non-tautological positive controls that
+fail if the fix over-rejects); out-of-range hours (24, 1,000,000, 9,000,000,000, -1)
+assert the offset is rejected and the time is bounded to the observed date.
+
+### Evidence
+
+RED baseline (test written before fix — proves the defect is real):
+
+```
+$ go test -count=1 -v -run '^TestFetchAirNowAQI_OutOfRangeHourObserved_BoundedTime$' ./internal/connector/alerts/
+    --- PASS: .../valid_hour_0
+    --- PASS: .../valid_hour_14
+    --- PASS: .../valid_max_hour_23
+    --- FAIL: .../out_of_range_24
+        ObservationTime = 2024-07-16T00:00:00Z, want 2024-07-15T00:00:00Z (HourObserved=24)
+    --- FAIL: .../far_future_non_overflow
+        ObservationTime = 2138-08-13T16:00:00Z, want 2024-07-15T00:00:00Z (HourObserved=1000000)
+    --- FAIL: .../overflow_wraparound
+        ObservationTime = 2262-10-03T00:29:26Z, want 2024-07-15T00:00:00Z (HourObserved=9000000000)
+    --- FAIL: .../negative
+        ObservationTime = 2024-07-14T23:00:00Z, want 2024-07-15T00:00:00Z (HourObserved=-1)
+FAIL
+```
+
+GREEN (after fix):
+
+```
+$ go test -count=1 -v -run '^TestFetchAirNowAQI_OutOfRangeHourObserved_BoundedTime$' ./internal/connector/alerts/
+--- PASS: TestFetchAirNowAQI_OutOfRangeHourObserved_BoundedTime (0.09s)
+    --- PASS: .../valid_hour_0
+    --- PASS: .../valid_hour_14
+    --- PASS: .../valid_max_hour_23
+    --- PASS: .../out_of_range_24
+    --- PASS: .../far_future_non_overflow
+    --- PASS: .../overflow_wraparound
+    --- PASS: .../negative
+ok      github.com/smackerel/smackerel/internal/connector/alerts        0.101s
+```
+
+Full suite + race subset + build:
+
+```
+$ go test ./internal/connector/alerts/ -count=1
+ok      github.com/smackerel/smackerel/internal/connector/alerts        2.525s   (177 test functions, 374 pass lines incl. subtests)
+
+$ go test -race -count=1 -run 'TestSync_Deduplication|TestSync_ConcurrentWithLiveKnownMapWrites|TestKnownMapEviction|TestConcurrentSyncHealth|TestConcurrentCloseHealth|TestClose_DuringSync_HealthRemainsDisconnected|TestSync_AirNow_ProducesArtifacts' ./internal/connector/alerts/
+ok      github.com/smackerel/smackerel/internal/connector/alerts        1.296s
+
+$ go build ./...
+(exit 0)
+```
+
+### Files Changed
+
+- `internal/connector/alerts/alerts.go` — bounded `HourObserved` in `fetchAirNowAQI` (C-017-004 fix)
+- `internal/connector/alerts/alerts_test.go` — added `TestFetchAirNowAQI_OutOfRangeHourObserved_BoundedTime` (7 sub-cases)
+- `specs/017-gov-alerts-connector/report.md` — this report
+- `specs/017-gov-alerts-connector/state.json` — chaos round executionHistory entry
+
+### Change Boundary
+
+`git diff --name-only` confirms only the two alerts source/test files and the two
+spec-017 artifacts above are touched. Zero changes under `cmd/`, `ml/`, `config/`,
+other `internal/` packages, or other specs. Spec status preserved (`done`);
+certification preserved.
+
+### Validation
+
+- Adversarial regression test fails on pre-fix code (RED captured above) and passes post-fix (GREEN) — non-tautological per the 3 valid-hour positive controls.
+- No behavior change for the documented AirNow contract (hours 0–23 unaffected).
+- Full alerts suite green; concurrency race subset clean; `go build ./...` clean.
+
+---
+
 ## Harden Report — 2026-04-22 (Stochastic Child)
 
 **Trigger:** `harden` (stochastic-quality-sweep child workflow)

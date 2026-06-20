@@ -3113,3 +3113,147 @@ VET_EXIT=0
 
 **Verdict:** 🟢 CHAOS-CLEAN.
 
+---
+
+### Security Review Evidence (Stochastic Quality Sweep — R25)
+
+**Executed:** YES
+**Phase Agent:** bubbles.security
+**Window:** 2026-06-16
+**Claim Source:** executed (test runs) + interpreted (static code review; no live PoC stood up)
+**Scope:** Security dimension of the assistant completion/rescope surface
+(`internal/assistant/` completion + rescope logic, intent compilation, tool
+routing, web rendering). Test-coverage completeness was verified in an earlier
+sweep round (R16, test trigger) and is NOT re-litigated here.
+
+#### Threat model
+
+| Attack surface | Trust boundary | Control verified |
+|---|---|---|
+| User turn → open-knowledge agent loop | unauth user text → system prompt | Role-separated messages (no concat) |
+| web_search tool result (public web) | untrusted external text + URLs → LLM/user | Snippet sanitised; **URL→href gap (see SEC-076-01)** |
+| Completion → tool dispatch | LLM-chosen tool name → executor | Deny-all allowlist (`Registry.Lookup`) |
+| Completion/rescope → mutating/QF tools | privilege boundary | No mutating tools in OK loop; side-effect gate; QF action boundary |
+| Completion → web/mobile render | LLM/tool output → DOM | `textContent` everywhere; href scheme gap fixed |
+
+#### Controls verified (evidence)
+
+- **Prompt-injection resistance — RESISTANT.** System prompt is role-separated,
+  not string-concatenated with user input: `agent.Run` builds
+  `[]ChatMessage{{RoleSystem, SystemPrompt}, {RoleUser, userPrompt}}`
+  ([agent.go](../../internal/assistant/openknowledge/agent/agent.go)); the ML
+  sidecar `render_messages` emits a typed `role:system|user|tool` array
+  ([agent.py](../../ml/app/agent.py)). SystemPrompt is SST-loaded and fail-loud
+  on empty (G028) — non-secret contract text, not credentials. Web-search
+  snippets are treated as untrusted and scanned for injection/LLM-chat-token
+  patterns (`SanitizeSnippet`, SCOPE-15); `<think>` chain-of-thought is stripped
+  before it can reach the body or a citation (`stripThinkBlocks`). Tool calls are
+  constrained to a **deny-all-by-default operator allowlist**
+  ([registry.go](../../internal/assistant/openknowledge/registry.go)). `Claim
+  Source: interpreted` (code review) + `executed`
+  (`TestSanitizeSnippet_DetectsPromptInjection_Adversarial`,
+  `TestSanitizeSnippet_DetectsLLMChatTokens` PASS).
+- **Scope / authorization — ENFORCED.** The open-knowledge completion path
+  exposes only read-only tools (`calculator`, `unit_convert`,
+  `internal_retrieval`, `web_search`); no mutating or QF-companion tool is
+  reachable from it. Write / external_write intents require confirmation
+  (`RequiresConfirmation`, `TestSideEffectGateBlocksExternalWriteWithoutConfirmation`
+  PASS). `user_id` is resolved from bearer-auth context, never request body
+  (`HTTPAdapter.Translate`) — no IDOR/privilege-escalation via crafted
+  completion. The Principle-10 QF financial-action boundary rejects
+  `render_metadata_action_request`
+  (`TestEnforceQFActionBoundaryFiresForForbiddenAndPassesForBenign` PASS).
+- **Source attribution (Principle 8) — ENFORCED.** Fabricated citations flip the
+  answer to refusal-with-capture in enforce mode
+  (`TestCiteback_FabricatedSourceFlipsToRefusal` PASS); a requires-provenance
+  scenario that returns a body with zero sources is rewritten to the canonical
+  refusal (`provenance.Enforce`, `TestEnforce_*` PASS). The agent cannot emit an
+  unsourced synthesized claim past the gate.
+- **Secret / PII hygiene — CLEAN.** The turn log records only `prompt_sha256` +
+  tool-name/outcome + counts; raw prompt, LLM responses, tool args, web snippets
+  and API keys are never logged (`emitTurnLog`). Persisted tool traces record
+  argument **keys only**, values dropped (`argKeysFromJSON`). `Claim Source:
+  interpreted` (code review).
+- **Output safety — one gap found + fixed (SEC-076-01).** All assistant body /
+  source-title / control rendering uses `textContent`
+  ([assistant.js](../../web/pwa/assistant.js)) — XSS-safe by construction.
+
+#### SEC-076-01 — DOM-XSS via unvalidated citation URL scheme (MEDIUM) — RESOLVED
+
+**Finding.** `web/pwa/assistant.js` rendered a citation source link with
+`a.href = s.url` and no scheme allowlist. Citation URLs originate from
+`web_search` results, which the server treats as untrusted text
+(`SanitizeSnippet`) but passes through **verbatim for the URL** — `web_search.go`
+states "this tool does not re-validate URLs" and the cite-back verifier only
+lower-cases the scheme (`normalizeURL`), never restricting it. A
+`javascript:` / `data:` / `vbscript:` source URL surviving to the client would
+execute in the authenticated PWA origin on click (OWASP A03, DOM-XSS). The
+asymmetry is the tell: snippet **text** was hardened (SCOPE-15) while the
+URL→`href` sink was not.
+
+**Severity: MEDIUM (constrained likelihood).** Mitigating factors documented
+honestly: the session cookie is HttpOnly (direct cookie theft blocked, but
+same-origin authenticated actions remain possible); the injection path is
+narrow (searxng aggregates http(s) engine results; cite-back requires the URL
+to match a recorded tool-trace entry; a user click is required). No end-to-end
+PoC was executed — this is an evidence-based control-gap finding, not a
+demonstrated exploit.
+
+**Closure (resolved in-place, ≤30-line client control + fail-closed test).**
+- Added `safeHref()` to [assistant.js](../../web/pwa/assistant.js): returns the
+  URL only for an `http:`/`https:` scheme, else `""`; the citation link is gated
+  so a non-http(s) URL renders as plain text (attribution preserved, link
+  neutralised).
+- Added [assistant_source_href_security_guard_test.go](../../web/pwa/tests/assistant_source_href_security_guard_test.go):
+  `TestWebAssistantSourceHrefSchemeGuard_SEC076` locks the scheme allowlist and
+  forbids the bare `a.href = s.url` sink; `..._Adversarial_SEC076` proves the
+  guard catches a regression to the pre-fix shape (mirrors the BUG-073-002
+  static-guard pattern used for the auth-gated assistant page).
+
+#### Verification commands + results
+
+**Claim Source: executed.**
+
+```text
+$ ./smackerel.sh check
+config-validate: OK / Config is in sync with SST / env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts — scenarios registered: 16, rejected: 0 — OK
+EXIT=0
+```
+
+```text
+$ ./smackerel.sh test unit --go --go-run \
+    'TestSideEffectGate|TestRequiresConfirmation|TestVerifyVerdict|TestCiteBack|TestCiteback|TestWebSearch|TestSanitizeSnippet|TestRegistration|TestProvenance|TestEnforce|TestWebAssistantRobustness' --verbose
+ok  internal/assistant/intent                              (TestSideEffectGateBlocksExternalWriteWithoutConfirmation PASS)
+ok  internal/assistant/openknowledge/citeback              (Verify/CiteBack incl. adversarial — PASS)
+ok  internal/assistant/openknowledge/web                   (TestSanitizeSnippet_DetectsPromptInjection_Adversarial PASS)
+ok  internal/assistant/provenance                          (Enforce / EnforceRefusal — PASS)
+ok  internal/connector/qfdecisions                         (TestEnforceQFActionBoundaryFires... PASS)
+[go-unit] go test ./... finished OK   # EXIT=0, zero FAIL
+```
+
+```text
+$ ./smackerel.sh test unit --go --go-run \
+    'TestWebAssistantSourceHrefSchemeGuard|TestWebAssistantRobustnessGuard|...security suite...' --verbose
+--- PASS: TestWebAssistantSourceHrefSchemeGuard_SEC076 (0.00s)
+--- PASS: TestWebAssistantSourceHrefSchemeGuard_Adversarial_SEC076 (0.00s)
+--- PASS: TestWebAssistantRobustnessGuard_BUG_073_002 (0.00s)
+--- PASS: TestWebAssistantCodegen_NoDrift_TP_073_02 (0.00s)
+--- PASS: TestWebAssistantStorageGuard_TP_073_06 (0.00s)
+ok  github.com/smackerel/smackerel/web/pwa/tests           [go-unit] go test ./... finished OK
+```
+
+**Sweep regression check:** prior rounds' (R10/R14/R18/R20/R22) uncommitted
+changes do not break the assistant surface — full `go test ./...` green before
+and after this round's edits. Other specs' uncommitted files were not touched.
+
+**Findings:** 1 MEDIUM (SEC-076-01) — RESOLVED in-place (client control +
+adversarial fail-closed test). 0 Critical / 0 High. The systemic G022
+gaps/harden grandfather is already tracked + routed to validate (R16) and is
+NOT re-routed here. Commit-state deferred to the end-of-sweep bubbles.devops
+queue (no commit performed this round).
+
+**Verdict:** ⚠️ FINDINGS — 1 MEDIUM found and resolved; the completion/rescope
+security posture (prompt-injection resistance, authorization, source
+attribution, secret hygiene) is otherwise sound.
+

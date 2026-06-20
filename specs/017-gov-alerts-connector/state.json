@@ -5,7 +5,7 @@
   "status": "done",
   "certifiedAt": "2026-06-06T18:00:00Z",
   "certifiedBy": "bubbles.workflow",
-  "lastUpdatedAt": "2026-06-06T18:00:00Z",
+  "lastUpdatedAt": "2026-06-17T00:00:00Z",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.validate",
@@ -209,6 +209,17 @@
       "runStartedAt": "2026-06-06T18:00:00Z",
       "runEndedAt": "2026-06-06T18:00:00Z",
       "summary": "Post-reconcile spec-review for the R4 reconcile-to-doc touch. spec.md/design.md/scopes.md planning truth unchanged this round; only report.md gained a dated reconciliation report and state.json was recertified. Verified scopes.md remains all-Done with 0 unchecked DoD, all 6 scopes + 7 phases intact, implementation matches claims (176 tests green). No superseded/redundant content vs adjacent connector specs (016-weather, 019-connector-wiring, 022). certifiedAt advanced to 2026-06-06T18:00:00Z for Gate G088; requiresRevalidation NOT set (spec remains done)."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-17T00:00:00Z",
+      "runFinishedAt": "2026-06-17T00:00:00Z",
+      "summary": "Chaos-hardening (stochastic sweep Round 12, trigger chaos, parent-expanded-child-mode). Probed unvalidated external-feed inputs flowing into arithmetic. Found and fixed 1 issue C-017-004: fetchAirNowAQI used the untrusted AirNow HourObserved integer directly in t.Add(time.Duration(e.HourObserved)*time.Hour) with no range check. A malformed/adversarial feed sending a large HourObserved yields a far-future ObservationTime (1,000,000 -> year 2138) or overflows the int64 time.Duration and wraps (9,000,000,000 -> year 2262); ObservationTime becomes CapturedAt which drives digest most-recent windowing and alert lifecycle ordering, so one garbage record could pin/hide an air-quality alert indefinitely. Every other external coord/radius/magnitude/ID/URL in the connector is already bounds-checked; this integer was the lone gap. Fix: reject HourObserved outside [0,24), fall back to observed date (midnight) with WARN log; documented hours 0-23 unchanged. Scenario-first TDD: added TestFetchAirNowAQI_OutOfRangeHourObserved_BoundedTime (7 sub-cases: 3 valid-hour positive controls + 4 adversarial). RED captured before fix (year 2138/2262 timestamps); GREEN after. Full alerts suite green (177 test functions, 374 pass lines incl subtests, 2.525s); race subset clean (1.296s); go build ./... clean. Change boundary: only internal/connector/alerts/alerts.go + alerts_test.go + report.md + state.json. Spec status preserved (done); certification preserved."
     }
   ]
 }

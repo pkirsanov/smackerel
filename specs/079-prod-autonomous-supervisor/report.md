@@ -104,3 +104,65 @@ $ bash .github/bubbles/scripts/state-transition-guard.sh specs/079-prod-autonomo
 ```
 
 The scenario-first test obligations for SCN-079-A01..A06 transfer to `bubbles.plan` when formal scopes are authored; each implementation scope will carry its own failing-test-first DoD with live-stack evidence per scope-workflow.
+
+---
+
+## Regression Round — 2026-06-17 (stochastic-quality-sweep R4)
+
+**Trigger:** regression
+**Workflow Mode:** regression-to-doc
+**Agent:** bubbles.regression (via bubbles.workflow)
+
+### Finding Discovered
+
+**F1: Scenario ID Mismatch in scenario-manifest.json**
+- **Severity:** Medium (traceability gap)
+- **Description:** `spec.md` canonical Gherkin scenarios use IDs `SCN-079-A01` through `SCN-079-A06`, but `scenario-manifest.json` used `SCN-079-001` through `SCN-079-006`. The `evidenceRefs` correctly linked to the spec headings with the `-A0X` suffix, but the `scenarioId` field used a numeric `-00X` suffix. This breaks traceability between canonical scenarios and the manifest, which downstream tooling (test linkers, scope-scenario mappers) would rely on.
+- **Root Cause:** Initial authoring used inconsistent ID patterns between spec.md and manifest.
+
+### Remediation Applied
+
+Updated `scenario-manifest.json` to use canonical IDs matching spec.md:
+- `SCN-079-001` → `SCN-079-A01`
+- `SCN-079-002` → `SCN-079-A02`
+- `SCN-079-003` → `SCN-079-A03`
+- `SCN-079-004` → `SCN-079-A04`
+- `SCN-079-005` → `SCN-079-A05`
+- `SCN-079-006` → `SCN-079-A06`
+
+### Verification Evidence
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/079-prod-autonomous-supervisor
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+⚠️  uservalidation.md is using legacy checklist layout without '## Checklist' section
+✅ Detected state.json status: specs_hardened
+✅ Detected state.json workflowMode: spec-scope-hardening
+...
+Artifact lint PASSED.
+```
+
+### Observations (Low Severity — Not Blocking)
+
+- `uservalidation.md` uses legacy checklist layout without `## Checklist` section (cosmetic; existing content valid)
+- `state.json` uses deprecated `scopeProgress` field (backward-compatible; no functional impact)
+
+### Regression Coverage Assessment
+
+This spec is planning-only (`planningOnly: true`, status `specs_hardened`). No implementation code exists, so:
+- **Baseline test regressions:** N/A (no tests to regress)
+- **Coverage decreases:** N/A (no coverage baseline)
+- **Design contradictions:** None found between spec.md, design.md, scopes.md, uservalidation.md
+
+### Result
+
+Finding F1 remediated. Scenario IDs now consistent across spec.md and scenario-manifest.json. Artifact lint passed post-fix. No further findings.

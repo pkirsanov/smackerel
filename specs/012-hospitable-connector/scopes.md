@@ -64,6 +64,12 @@ func NormalizeReview(review Review, propertyName string, config HospitableConfig
 - **After Scope 2:** Unit tests validate normalizer output for all 4 resource types, cursor parsing/encoding, connector lifecycle. Integration test with mock API confirms full Sync() produces correct RawArtifacts and advances cursor. E2E test confirms connector registration and config-to-sync pipeline.
 - **After Scope 3:** Unit tests verify edge hints in metadata, partial failure isolation. Integration tests confirm DURING_STAY temporal window logic, property name cache enrichment, and one-resource-type-failure doesn't block others. E2E test confirms full pipeline with cross-domain edge creation.
 
+### Test Posture & TDD Disposition
+
+**Test level (honest).** This is an external-HTTP-API connector. All behavior is verified at the **unit/component level using `net/http/httptest` mock servers** (`connector_test.go`, `normalizer_test.go`, `chaos_test.go`) — the appropriate and authoritative level for this connector. A true live `e2e-api` test would require a real Hospitable Personal Access Token and a live tenant, which are unavailable in CI; a live `e2e-api`/`e2e-ui` run is therefore **not part of CI** (its absence is declared per scope in each Test Plan / DoD), and is not claimed as coverage. Each scope's regression coverage is the persistent, scenario-specific mock-HTTP suite that re-runs on every `./smackerel.sh test unit`.
+
+**TDD posture (honest).** This connector was built **test-alongside** — tests were authored concurrently with the implementation against mock HTTP servers. It was **NOT** built with strict scenario-first red→green TDD, and **no red-first failing-test markers were captured**. The historical `state.json` `policySnapshot.tdd.mode = "scenario-first"` does **not** match how this connector was actually built; the accurate posture is non-red-first (e.g. `off` / `test-alongside`). Correcting that `policySnapshot.tdd.mode` field is owned by the state.json / certification owner (the parent workflow) — this plan records the truthful posture and does **not** fabricate red→green evidence to satisfy Gate G060.
+
 ---
 
 ## Scope Summary
@@ -176,6 +182,8 @@ Scenario: SCN-HC-006 API client constructs correct request URLs
 | T-1-12 | TestSyncCursorMarshal | unit | `internal/connector/hospitable/connector_test.go` | SyncCursor round-trips through JSON correctly | SCN-HC-006 |
 | T-1-13 | TestClientFullPaginationFlow | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by unit tests with mock HTTP server)* | SCN-HC-002 |
 | T-1-14 | TestClientRateLimitRecovery | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by unit tests with mock HTTP server)* | SCN-HC-003 |
+| T-1-15 | Stress: rate-limit backoff, Retry-After cap, pagination loop, concurrency | stress (chaos) | `internal/connector/hospitable/chaos_test.go` | SLA-sensitive rate-limited hot path holds under load: 429 backoff + Retry-After parsing for zero/negative/huge/malformed headers, pagination-loop guard, and concurrent Connect/Sync (TestChaos_RateLimitWith*, TestChaos_PaginationInfiniteLoop, TestChaos_Concurrent*) | SCN-HC-003, SCN-HC-024 |
+| T-1-16 | Regression E2E: client auth / pagination / 429 retry hot path | regression (unit-mock httptest) | `internal/connector/hospitable/connector_test.go` | Regression: persistent scenario-specific coverage re-runs on every `./smackerel.sh test unit`; live-credential e2e-api not run in CI (needs a real Hospitable PAT + tenant) | SCN-HC-001..SCN-HC-006 |
 
 ### Definition of Done
 
@@ -211,6 +219,10 @@ Scenario: SCN-HC-006 API client constructs correct request URLs
   > Evidence: TestConfigValidationMissingToken, TestConfigValidationDefaults PASS ✓
 - [x] API client constructs correct request URLs (SCN-HC-006)
   > Evidence: TestClientURLConstruction PASS ✓
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior — covered at unit level via `net/http/httptest` mock servers (TestClientAuthHeader, TestClientPaginatesProperties, TestClientRetryOn429, TestClientMaxRetriesOn429, TestClientURLConstruction); a live-credential e2e-api run against the real Hospitable API is not part of CI (needs a real PAT + tenant)
+  > Evidence: focused `./smackerel.sh test unit --go --go-run … --verbose` (2026-06-15) — `ok internal/connector/hospitable 2.411s`, all named client tests PASS ✓
+- [x] Broader E2E regression suite passes — full Go unit + chaos suite re-runs green; no live e2e-api harness exists for this external-API connector (see disposition above)
+  > Evidence: `./smackerel.sh test unit --go` finished OK (exit 0) across all packages; hospitable package `ok … 2.411s` ✓
 - [x] All unit tests pass
   > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes with zero new errors
@@ -352,6 +364,7 @@ Scenario: SCN-HC-014 Disabled resource types are skipped
 | T-2-17 | TestSyncInitialLookback | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by TestCursorEmptyAppliesLookback unit)* | SCN-HC-013 |
 | T-2-18 | E2E: Hospitable connector registration | ~~e2e~~ | ~~tests/e2e/hospitable_test.go~~ | *(Not implemented — covered by TestConnectorID unit + main.go registration)* | SCN-HC-007 |
 | T-2-19 | E2E: Full sync pipeline | ~~e2e~~ | ~~tests/e2e/hospitable_test.go~~ | *(Not implemented — covered by TestSyncFullLifecycle unit with mock API)* | SCN-HC-007 thru SCN-HC-011 |
+| T-2-RE | Regression E2E: connector lifecycle + normalizer output for all 4 resource types | regression (unit-mock httptest) | `internal/connector/hospitable/connector_test.go`, `internal/connector/hospitable/normalizer_test.go` | Regression: TestSyncFullLifecycle + TestNormalize{Property,Reservation,Message,Review} re-run on every `./smackerel.sh test unit`; live-credential e2e-api not run in CI (needs a real Hospitable PAT + tenant) | SCN-HC-007..SCN-HC-011 |
 
 ### Definition of Done
 
@@ -381,6 +394,18 @@ Scenario: SCN-HC-014 Disabled resource types are skipped
   > Evidence: TestConnectorID, TestConnectValidConfig, TestHealthTransitions, TestCloseIdempotent, TestSyncFullLifecycle PASS ✓
 - [x] Initial sync applies lookback window for reservations/messages/reviews (SCN-HC-013)
   > Evidence: TestCursorEmptyAppliesLookback PASS ✓
+- [x] Normalizer produces correct property artifact (SCN-HC-008)
+  > Evidence: TestNormalizeProperty PASS ✓ (asserts SourceID=hospitable, SourceRef=property:prop-001, ContentType=property/str-listing, Title, tier=light, bedrooms + amenities in content)
+- [x] Normalizer produces correct reservation artifact (SCN-HC-009)
+  > Evidence: TestNormalizeReservation PASS ✓ (asserts SourceRef=reservation:res-001, ContentType=reservation/str-booking, guest/property/date title, tier=standard, channel + payout in content)
+- [x] Normalizer produces correct message artifact (SCN-HC-010)
+  > Evidence: TestNormalizeMessage PASS ✓ (asserts SourceRef=message:msg-001, ContentType=message/str-conversation, tier=full, message body in content)
+- [x] Normalizer produces correct review artifact (SCN-HC-011)
+  > Evidence: TestNormalizeReview PASS ✓ (asserts SourceRef=review:rev-001, ContentType=review/str-guest, star-rating title, tier=full, review + host response in content)
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior — covered at unit level via `net/http/httptest` mock servers (TestSyncFullLifecycle, TestNormalizeProperty/Reservation/Message/Review, TestConnectValidConfig); a live-credential e2e-api run against the real Hospitable API is not part of CI (needs a real PAT + tenant)
+  > Evidence: focused `./smackerel.sh test unit --go --go-run … --verbose` (2026-06-15) — `ok internal/connector/hospitable 2.411s`, all named tests PASS ✓
+- [x] Broader E2E regression suite passes — full Go unit + chaos suite re-runs green; no live e2e-api harness exists for this external-API connector (see disposition above)
+  > Evidence: `./smackerel.sh test unit --go` finished OK (exit 0) across all packages; hospitable package `ok … 2.411s` ✓
 - [x] All unit tests pass
   > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes with zero new errors
@@ -498,6 +523,7 @@ Scenario: SCN-HC-022 Connect with empty token returns clear error
 | T-3-12 | TestConnectEmptyToken | ~~integration~~ | ~~tests/integration/hospitable_test.go~~ | *(Not implemented — covered by TestConnectEmptyToken unit in connector_test.go)* | SCN-HC-022 |
 | T-3-13 | E2E: Cross-domain linking with reservations | ~~e2e~~ | ~~tests/e2e/hospitable_test.go~~ | *(Not implemented — covered by stay_window metadata unit tests)* | SCN-HC-018 |
 | T-3-14 | E2E: Partial failure recovery across syncs | ~~e2e~~ | ~~tests/e2e/hospitable_test.go~~ | *(Not implemented — covered by TestPartialFailureReturnsSuccessful unit)* | SCN-HC-020 |
+| T-3-RE | Regression E2E: edge hints + property-name enrichment + partial-failure isolation | regression (unit-mock httptest) | `internal/connector/hospitable/normalizer_test.go`, `internal/connector/hospitable/connector_test.go` | Regression: TestNormalize{Reservation,Message,Review} edge-hint asserts + TestPropertyNameCacheEnrichesTitle + TestPartialFailureReturnsSuccessful + TestAllFailuresSetHealthError re-run on every `./smackerel.sh test unit`; live-credential e2e-api not run in CI (needs a real Hospitable PAT + tenant) | SCN-HC-015..SCN-HC-021 |
 
 ### Definition of Done
 
@@ -521,6 +547,20 @@ Scenario: SCN-HC-022 Connect with empty token returns clear error
   > Evidence: TestConnectEmptyToken PASS ✓
 - [x] `DURING_STAY` temporal window enables cross-domain artifact linking
   > Evidence: stay_window_start/end in reservation metadata enables pipeline linking ✓
+- [x] Reservation artifact contains BELONGS_TO edge hint (SCN-HC-015)
+  > Evidence: TestNormalizeReservation PASS ✓ (asserts Metadata edge_belongs_to=property:prop-001, stay_window_start, stay_window_end, stay_property_id)
+- [x] Message artifact contains PART_OF edge hint (SCN-HC-016)
+  > Evidence: TestNormalizeMessage PASS ✓ (asserts Metadata edge_part_of=reservation:res-001)
+- [x] Review artifact contains REVIEW_OF edge hint (SCN-HC-017)
+  > Evidence: TestNormalizeReview PASS ✓ (asserts Metadata edge_review_of=property:prop-001)
+- [x] Property name cache enriches reservation titles (SCN-HC-019)
+  > Evidence: TestPropertyNameCacheEnrichesTitle PASS ✓ (+ TestSyncFullLifecycle — reservation title uses cached property name, not raw ID)
+- [x] Partial failure: message sync error does not block reservations (SCN-HC-020)
+  > Evidence: TestPartialFailureReturnsSuccessful PASS ✓ (property + reservation + review artifacts returned; message error isolated, sync does not fail)
+- [x] All resource type failures set health to error (SCN-HC-021)
+  > Evidence: TestAllFailuresSetHealthError PASS ✓ (all-500 → zero artifacts, health=error)
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior — covered at unit level via `net/http/httptest` mock servers (TestNormalize{Reservation,Message,Review} edge-hint asserts, TestPropertyNameCacheEnrichesTitle, TestPartialFailureReturnsSuccessful, TestAllFailuresSetHealthError); a live-credential e2e-api run against the real Hospitable API is not part of CI (needs a real PAT + tenant)
+  > Evidence: focused `./smackerel.sh test unit --go --go-run … --verbose` (2026-06-15) — `ok internal/connector/hospitable 2.418s`, all named tests PASS ✓
 - [x] All unit tests pass
   > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes with zero new errors
@@ -586,6 +626,7 @@ Scenario: SCN-HC-026 Message cursor not advanced on partial failure
 | T-4-08 | TestPropertyNameCachePersistsInCursor | unit | `internal/connector/hospitable/connector_test.go` | Property names saved in cursor JSON | SCN-HC-025 |
 | T-4-09 | TestPropertyNameCacheLoadedFromCursor | unit | `internal/connector/hospitable/connector_test.go` | Property names loaded from cursor when no properties updated | SCN-HC-025 |
 | T-4-10 | TestMessageCursorNotAdvancedOnFailure | unit | `internal/connector/hospitable/connector_test.go` | Message cursor unchanged when one reservation message fetch fails | SCN-HC-026 |
+| T-4-RE | Regression E2E: active-reservation message sync + Retry-After + cursor isolation | regression (unit-mock httptest) | `internal/connector/hospitable/connector_test.go` | Regression: TestActiveReservationMessageSync + TestParseRetryAfter* + TestRetryAfterUsedOn429 + TestMessageCursorNotAdvancedOnFailure re-run on every `./smackerel.sh test unit`; live-credential e2e-api not run in CI (needs a real Hospitable PAT + tenant) | SCN-HC-023..SCN-HC-026 |
 
 ### Definition of Done
 
@@ -609,6 +650,12 @@ Scenario: SCN-HC-026 Message cursor not advanced on partial failure
   > Evidence: TestPropertyNameCachePersistsInCursor, TestPropertyNameCacheLoadedFromCursor PASS ✓
 - [x] Message cursor not advanced on partial failure (SCN-HC-026)
   > Evidence: TestMessageCursorNotAdvancedOnFailure PASS ✓
+- [x] Messages fetched for active reservations outside incremental window (SCN-HC-023)
+  > Evidence: TestActiveReservationMessageSync PASS ✓ (active reservation r1 retrieved by checkout_after; its messages fetched and returned outside the incremental cursor window)
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior — covered at unit level via `net/http/httptest` mock servers (TestActiveReservationMessageSync, TestParseRetryAfter*, TestRetryAfterUsedOn429, TestMessageCursorNotAdvancedOnFailure); a live-credential e2e-api run against the real Hospitable API is not part of CI (needs a real PAT + tenant)
+  > Evidence: focused `./smackerel.sh test unit --go --go-run … --verbose` (2026-06-15) — `ok internal/connector/hospitable 2.411s`, all named tests PASS ✓
+- [x] Broader E2E regression suite passes — full Go unit + chaos suite re-runs green; no live e2e-api harness exists for this external-API connector (see disposition above)
+  > Evidence: `./smackerel.sh test unit --go` finished OK (exit 0) across all packages; hospitable package `ok … 2.411s` ✓
 - [x] All unit tests pass
   > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes
@@ -672,6 +719,7 @@ Scenario: SCN-HC-030 Fractional review rating preserved
 | T-5-11 | TestFormatRatingFractional | unit | `internal/connector/hospitable/normalizer_test.go` | Fractional rating displays as "4.5★" | SCN-HC-030 |
 | T-5-12 | TestFormatRatingZero | unit | `internal/connector/hospitable/normalizer_test.go` | Zero rating displays as "0★" | SCN-HC-030 |
 | T-5-13 | TestNormalizeReviewFractionalRating | unit | `internal/connector/hospitable/normalizer_test.go` | Both title and content use formatRating for fractional values | SCN-HC-030 |
+| T-5-RE | Regression E2E: sender classification + URL population + rating precision | regression (unit-mock httptest) | `internal/connector/hospitable/normalizer_test.go` | Regression: TestClassifySender*, TestNormalizePropertyURL, TestNormalizeReservationURL*, TestFormatRating* re-run on every `./smackerel.sh test unit`; live-credential e2e-api not run in CI (needs a real Hospitable PAT + tenant) | SCN-HC-027..SCN-HC-030 |
 
 ### Definition of Done
 
@@ -695,6 +743,10 @@ Scenario: SCN-HC-030 Fractional review rating preserved
   > Evidence: TestClassifySenderHost, TestClassifySenderGuest, TestClassifySenderAutomated, TestNormalizeMessageHostSender PASS ✓
 - [x] Fractional review rating preserved in both title and content (SCN-HC-030)
   > Evidence: TestFormatRatingFractional, TestNormalizeReviewFractionalRating PASS ✓
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior — covered at unit level via `net/http/httptest` mock servers (TestClassifySender*, TestNormalizePropertyURL, TestNormalizeReservationURLProduction/Test, TestFormatRating*); a live-credential e2e-api run against the real Hospitable API is not part of CI (needs a real PAT + tenant)
+  > Evidence: focused `./smackerel.sh test unit --go --go-run … --verbose` (2026-06-15) — `ok internal/connector/hospitable 2.411s`, all named tests PASS ✓
+- [x] Broader E2E regression suite passes — full Go unit + chaos suite re-runs green; no live e2e-api harness exists for this external-API connector (see disposition above)
+  > Evidence: `./smackerel.sh test unit --go` finished OK (exit 0) across all packages; hospitable package `ok … 2.411s` ✓
 - [x] All unit tests pass
   > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes

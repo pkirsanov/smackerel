@@ -997,3 +997,72 @@ Capturefallback foundation tests cover the worst-case inviolability path (`TestI
 **Certified At:** 2026-06-02T07:30:00Z.
 **Executed Phases:** implement, stabilize, test, spec-review, simplify, security, regression, docs, validate, audit, chaos — all with executed evidence recorded above and in prior sections.
 
+---
+
+## Stabilize Pass: Round 16 Stochastic Quality Sweep (bubbles.stabilize, 2026-06-17)
+
+**Phase:** stabilize
+**Agent:** bubbles.stabilize (within stabilize-to-doc workflow)
+**Round:** 16 of stochastic-quality-sweep parent
+
+### Finding Identified
+
+**F074-STABILIZE-R16-ORPHAN-CLEANUP**: Non-atomic WriteIdea + Record operation in `captureForUser` (policy.go lines 313-320).
+
+| Field | Value |
+|-------|-------|
+| Severity | Medium |
+| Location | `internal/assistant/capturefallback/policy.go` lines 313-320 |
+| Description | If `WriteIdea` succeeds but `Record` fails (DB constraint violation, network error, etc.), an orphan Idea artifact exists without dedup metadata. Subsequent calls won't find the dedup entry → duplicate Ideas created. |
+| Pattern Applied | Compensating transaction pattern (from `internal/pipeline/ingest.go` lines 124-127) |
+
+### Implementation Delivered
+
+**Files Changed:**
+- `internal/assistant/capturefallback/policy.go`:
+  - Added `log/slog` import
+  - Added `IdeaCleaner` interface:
+    ```go
+    type IdeaCleaner interface {
+        DeleteIdea(ctx context.Context, artifactID string) error
+    }
+    ```
+  - Updated `captureForUser` with compensating cleanup on Record failure: type-asserts writer to IdeaCleaner, calls DeleteIdea if available, logs orphan with ERROR level if not
+
+- `internal/assistant/capturefallback/dedup_test.go`:
+  - Added `failingStore` type (DedupStore with failing Record)
+  - Added `cleanableWriter` type (stubWriter + IdeaCleaner)
+  - Added `TestCaptureForUser_RecordFailure_CleansUpOrphan` — verifies orphan cleanup when IdeaCleaner is available
+  - Added `TestCaptureForUser_RecordFailure_NoCleanerInterface` — verifies error is returned when IdeaCleaner is NOT available
+
+### Test Evidence
+
+**Command:** `go test -v -count=1 ./internal/assistant/capturefallback/...`
+
+**Claim Source:** executed.
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+=== RUN   TestCaptureForUser_RecordFailure_CleansUpOrphan
+2026/06/17 06:26:28 WARN capturefallback: cleaned up orphaned artifact after record failure artifact_id=idea-1 user_id=user-orphan-test
+--- PASS: TestCaptureForUser_RecordFailure_CleansUpOrphan (0.00s)
+=== RUN   TestCaptureForUser_RecordFailure_NoCleanerInterface
+2026/06/17 06:26:28 ERROR capturefallback: orphaned artifact created (writer does not support cleanup) artifact_id=idea-1 user_id=user-no-cleaner-test record_error="simulated network error"
+--- PASS: TestCaptureForUser_RecordFailure_NoCleanerInterface (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/assistant/capturefallback      0.380s
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+**Build/Vet:** `go build ./internal/assistant/capturefallback/... && go vet ./internal/assistant/capturefallback/...` — PASS
+
+### Finding Closure
+
+| Finding ID | Status | Evidence |
+|-----------|--------|----------|
+| F074-STABILIZE-R16-ORPHAN-CLEANUP | Resolved | Compensating cleanup implemented + unit tests pass |
+
+### Uncertainty Declaration
+
+None. The fix is complete with passing tests.
+

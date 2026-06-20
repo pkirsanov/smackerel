@@ -415,3 +415,119 @@ touched, and no phase was fabricated.
   distinct `harden` phase claim.
 
 Gate G022 artifact-lint delta after reconciliation: 5 → 0.
+
+---
+
+## Hardening Round — harden-to-doc (2026-06-17, stochastic-quality-sweep parent)
+
+Mode `harden-to-doc` (statusCeiling `docs_updated`). Robustness/edge-case audit
+of the deployment secret/auth contract against the on-disk implementation
+(`internal/config/config.go::loadAuthConfig` + `::Validate`,
+`internal/config/secrets.go`, `internal/auth/startup.go::ValidateRuntimeAuthStartup`,
+`scripts/commands/config.sh` dev-default block). The FR-051-001..007 contract,
+the two-layer defense-in-depth enforcement, and the FR-051-007 redaction
+guarantee were all re-verified intact. One genuine low-severity hardening
+finding was surfaced and closed 1:1; no other churn was introduced.
+
+### HARDEN-051-H1 — misleading comment + untested edge case in the security-sensitive DB-password parser
+
+**Finding.** `extractDatabasePassword` in
+[internal/config/secrets.go](../../internal/config/secrets.go) — the helper that
+feeds the FR-051-005 dev-default-password gate — carried a self-contradictory,
+factually-wrong comment. It claimed *"We use LastIndex over the userinfo
+portion"* while the code correctly used `strings.Index` (first `@`). The
+multi-`@` edge case was **untested**, so a future "align-code-to-comment" edit
+could silently switch to `LastIndex` and change the security parse: for a
+malformed URL whose password carries an unencoded extra `@`, `LastIndex` folds
+the trailing segment into the password (`secret@extra` instead of `secret`),
+which would let a dev-default value slip past the gate. Behavior was already
+correct/fail-closed, so this is a latent-regression-risk + missing-coverage
+finding, not a live vulnerability.
+
+**Fix (2 surgical edits, spec-051-owned surface only).**
+1. [internal/config/secrets.go](../../internal/config/secrets.go) —
+   rewrote the comment to accurately describe the first-`@` (`strings.Index`)
+   semantics, the RFC 3986 rationale (a literal `@` in userinfo MUST be
+   percent-encoded, so the first `@` is the authority delimiter), and why
+   first-`@` fails closed for the gate. Behavior unchanged.
+2. [internal/config/validate_test.go](../../internal/config/validate_test.go) —
+   added an adversarial `multi-at` case to `TestExtractDatabasePassword_Shapes`
+   that pins first-`@` extraction and would FAIL under a `LastIndex` regression.
+
+**Red→Green adversarial proof.** Temporarily flipping `strings.Index` →
+`strings.LastIndex` makes the new case fail (proving it is adversarial, not
+tautological); restoring `strings.Index` makes it pass:
+
+```text
+# RED — temporary LastIndex regression
+$ go test ./internal/config/ -run 'TestExtractDatabasePassword_Shapes/multi-at' -v -count=1
+=== RUN   TestExtractDatabasePassword_Shapes/multi-at
+    validate_test.go:1911: extractDatabasePassword(<postgres URL with unencoded extra '@' in password>)
+        = "secret@extra", want "secret"
+--- FAIL: TestExtractDatabasePassword_Shapes/multi-at (0.00s)
+FAIL
+ok? FAIL  github.com/smackerel/smackerel/internal/config  0.021s
+
+# GREEN — restored strings.Index (first '@')
+$ go test ./internal/config/ -run 'TestExtractDatabasePassword_Shapes' -v -count=1
+=== RUN   TestExtractDatabasePassword_Shapes
+    --- PASS: TestExtractDatabasePassword_Shapes/standard (0.00s)
+    --- PASS: TestExtractDatabasePassword_Shapes/with-query (0.00s)
+    --- PASS: TestExtractDatabasePassword_Shapes/no-password (0.00s)
+    --- PASS: TestExtractDatabasePassword_Shapes/no-userinfo (0.00s)
+    --- PASS: TestExtractDatabasePassword_Shapes/empty (0.00s)
+    --- PASS: TestExtractDatabasePassword_Shapes/no-scheme (0.00s)
+    --- PASS: TestExtractDatabasePassword_Shapes/multi-at (0.00s)
+--- PASS: TestExtractDatabasePassword_Shapes (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/config  0.012s
+```
+
+**No-regression cohort (FR-051-007 redaction + dev-default gate + docs-static).**
+
+```text
+$ go test ./internal/config/ -run 'TestExtractDatabasePassword_Shapes|TestIsDevDBPassword_KnownValues|TestValidate_RejectsDevDBPassword_Production|TestErrorPaths_NeverEchoSignatureKey|TestErrorPaths_NeverEchoBootstrapToken|TestErrorPaths_NeverEchoDBPassword|TestErrorPaths_RuntimeAuthStartup_NeverEchoesSecrets|TestDocs_NameAllCanonicalAuthKeys|TestDocs_DoNotMentionForbiddenAliases|TestDocs_CanaryReadsBaseline' -v -count=1
+--- PASS: TestDocs_NameAllCanonicalAuthKeys (0.00s)
+--- PASS: TestDocs_DoNotMentionForbiddenAliases (0.00s)
+--- PASS: TestDocs_CanaryReadsBaseline (0.00s)
+--- PASS: TestErrorPaths_NeverEchoSignatureKey (0.00s)
+--- PASS: TestErrorPaths_NeverEchoBootstrapToken (0.00s)
+--- PASS: TestErrorPaths_NeverEchoDBPassword (0.00s)
+--- PASS: TestErrorPaths_RuntimeAuthStartup_NeverEchoesSecrets (0.00s)
+--- PASS: TestValidate_RejectsDevDBPassword_Production (0.00s)
+--- PASS: TestIsDevDBPassword_KnownValues (0.00s)
+--- PASS: TestExtractDatabasePassword_Shapes (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/config  0.090s
+```
+
+`gofmt -l internal/config/secrets.go internal/config/validate_test.go` → empty
+(clean); `go vet ./internal/config/` → no findings referencing the edited
+symbols. No secret value was echoed in any command or evidence block
+(redaction contract honored — the test token `secret` is a non-credential
+fixture literal, not a real secret).
+
+### Out-of-boundary observation (routed, NOT fixed) — spec 094 shared-fixture drift
+
+While running the spec-051 cohort, the spec-051 test
+`TestValidate_AcceptsDevDBPasswordInDev` was observed RED in the current working
+tree. Root cause is **external to spec 051**: the in-flight weather spec (094)
+added newly-required SST keys (`ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS`,
+`ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT`,
+`ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT`,
+`ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT`) enforced by
+`internal/config/assistant.go::loadAssistantConfig` (`mustInt`/required), but the
+shared `setRequiredEnv` fixture in `internal/config/validate_test.go` was not
+updated to set them, so `Load()` fails with `[F061-SST-MISSING]` before the
+spec-051 dev-default acceptance path is reached. This failure was present at
+baseline (before any spec-051 edit) and is byte-identical after — it is **not**
+caused by this hardening round and is **not** spec 051's contract surface to
+repair. Routed to the spec-094 / shared-fixture owner; not modified here per the
+sweep boundary (touch only spec 051's owned surface).
+
+### Round outcome
+
+`completed_owned` — one genuine hardening finding (HARDEN-051-H1) closed 1:1 with
+a Red→Green adversarial regression; FR-051-001..007 contract re-verified intact;
+no churn beyond the finding; status left at `done` (statusCeiling `docs_updated`
+respected — not promoted).

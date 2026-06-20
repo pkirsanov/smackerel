@@ -450,6 +450,17 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed post-cert planning edit fb2a4266 (2026-06-01 'spec 064: open-ended knowledge agent + supporting work'): only change to this spec is an +11-line 'Design Successor Note' prepended to design.md that points future outbound channels to the spec 061/069 TransportAdapter contract while explicitly stating 'This spec stays done' and 'This spec still owns ntfy-specific source ingestion'. Pure cross-reference/successor note; category b. No post-promotion requirement/scenario/DoD semantic change; implementation unchanged. certifiedAt advanced to 2026-06-06T17:00:00Z for Gate G088."
+    },
+    {
+      "agent": "bubbles.gaps",
+      "phasesExecuted": [
+        "gaps"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-06-17T00:00:00Z",
+      "completedAt": "2026-06-17T00:05:00Z",
+      "summary": "Round 20 stochastic-quality-sweep gaps probe (gaps-to-doc, parent-expanded; read-only). Gap analysis of the implemented ntfy adapter against spec.md/design.md/scopes.md. Confirmed GAP-055-G01: this grandfathered done/full-delivery certification (validate-promoted 2026-05-26T14:15:13Z, recertified 2026-06-06 via category-b G088 successor note) now fails current done-mode artifact-lint Gate G022 because gaps and harden were added to the full-delivery required-phase set and were never executed for this spec; stale 'blocked for final artifact certification' prose remains in spec.md/design.md/scopes.md. Investigated and cleared a suspected production stream-transport wiring gap (NewAdapter defaults streamClient to NewHTTPStreamClient). No source, certification-metadata, or status change was made by this gaps pass; certifiedCompletedPhases is unchanged and remains validate-owned. Evidence: report.md#gaps-phase-evidence-2026-06-17-round-20-stochastic-sweep. Routed to bubbles.validate (grandfather vs. re-certification decision) and bubbles.harden (execute the missing hardening phase if re-certifying)."
     }
   ],
   "activeBugs": [],

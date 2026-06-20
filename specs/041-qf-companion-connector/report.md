@@ -273,3 +273,58 @@ for p in set(claims + certified):
 
 The iteration source is the parsed JSON arrays only; the markdown body is never scanned for reserved-phase tokens. The 7 original BLOCKs + 1 summary rollup from the 2026-05-23T02:22:37Z cycle are no longer reproducible against the current guard.
 
+## Chaos Hardening Sweep — 2026-06-17
+
+**Claim Source:** executed
+**Phase Agent:** bubbles.workflow (mode: chaos-hardening; executionModel: parent-expanded-child-mode)
+**Executed:** YES
+
+Stochastic-quality-sweep chaos round against the QF companion connector's parse / normalize / render / action-boundary surface. A new deterministic, hermetic, single-package adversarial suite (`internal/connector/qfdecisions/chaos_hardening_test.go`) feeds random, semi-random, and explicitly hostile QF decision packets and asserts the four read-only invariants: no panic, closed output vocabulary, read-only boundary held, and metadata-preserved-or-fail-closed. Product Principle 10 boundary verified (not violated): 10,541 probes produced zero panics, zero boundary leaks, and zero fabricated financial actions; every render stayed `read_only=true` / `action_eligible=false`. The connector is robust — no genuine chaos finding, and no source-code remediation is needed. This sweep is additive test coverage only.
+
+Probe families (deterministic seed `0x5101041`):
+
+- chaos[A] Normalize under adversarial structured packets — 5000 probes, 2534 trusted artifacts (closed vocabulary + verbatim trust-metadata preserved), 2466 fail-closed diagnostics, 0 panics.
+- chaos[B] Malformed raw-JSON bytes → decode → normalize — 1523 probes, 1517 decode fail-closed, 6 normalized, 0 panics.
+- chaos[C] Render surface under hostile action-hint metadata — 2000 probes, 1530 forbidden-hint action-boundary kicks, every card `read_only=true` / `action_eligible=false`, 0 panics.
+- chaos[D] Forbidden-action vocabulary exhaustiveness — 8/8 forbidden verbs fire the boundary, 1500 benign candidates inert (no fabricated rejection).
+- chaos[E] `envelopeCapturedAt` garbage-timestamp tolerance — 510 probes, garbage falls back to UTC, valid RFC3339 parses verbatim, 0 panics.
+
+**Command (families A+B, clean capture):** `go test ./internal/connector/qfdecisions/ -run 'TestChaosHardening_NormalizeNeverPanicsAndHoldsReadOnlyBoundary|TestChaosHardening_MalformedJSONBytesFailClosedNeverPanic' -v -count=1`
+**Exit Code:** 0
+**Output:**
+
+```text
+$ go test ./internal/connector/qfdecisions/ -run 'TestChaosHardening_NormalizeNeverPanicsAndHoldsReadOnlyBoundary|TestChaosHardening_MalformedJSONBytesFailClosedNeverPanic' -v -count=1
+=== RUN   TestChaosHardening_NormalizeNeverPanicsAndHoldsReadOnlyBoundary
+    chaos_hardening_test.go:452: chaos[A] normalize probes=5000 produced=2534 fail_closed=2466 panics=0
+--- PASS: TestChaosHardening_NormalizeNeverPanicsAndHoldsReadOnlyBoundary (1.51s)
+=== RUN   TestChaosHardening_MalformedJSONBytesFailClosedNeverPanic
+    chaos_hardening_test.go:548: chaos[B] json probes=1523 decode_fail_closed=1517 normalized=6 panics=0
+--- PASS: TestChaosHardening_MalformedJSONBytesFailClosedNeverPanic (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/qfdecisions   1.548s
+AB_EXIT=0
+```
+
+**Command (full suite, all five families):** `go test ./internal/connector/qfdecisions/ -run TestChaosHardening -v -count=1`
+**Exit Code:** 0
+**Output (verdict tail; the render probes also emit thousands of `action_boundary_kick outcome=rejected` audit-envelope lines — the boundary correctly firing — which are summarized by the `forbidden_hint_kicks` counter above):**
+
+```text
+$ go test ./internal/connector/qfdecisions/ -run TestChaosHardening -v -count=1
+[... 2000 render probes emit action_boundary_kick / deep_link_render audit-envelope lines here; omitted, summarized by forbidden_hint_kicks=1530 ...]
+    chaos_hardening_test.go:658: chaos[C] render probes=2000 panics=0 forbidden_hint_kicks=1530 (all cards read_only=true action_eligible=false)
+--- PASS: TestChaosHardening_RenderSurfaceAlwaysReadOnlyUnderHostileMetadata (0.43s)
+=== RUN   TestChaosHardening_ForbiddenActionVocabularyExhaustiveBenignInert
+    chaos_hardening_test.go:716: chaos[D] forbidden_verbs=8 benign_probes=1500 (all benign inert)
+--- PASS: TestChaosHardening_ForbiddenActionVocabularyExhaustiveBenignInert (0.00s)
+=== RUN   TestChaosHardening_EnvelopeCapturedAtGarbageNeverPanics
+    chaos_hardening_test.go:766: chaos[E] captured_at probes=510 (garbage falls back, valid parses)
+--- PASS: TestChaosHardening_EnvelopeCapturedAtGarbageNeverPanics (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/qfdecisions   2.315s
+CHAOS_EXIT=0
+```
+
+No production source, spec, design, scopes, user validation, scenario manifest, runtime config, or `state.json` field was changed by this sweep; the certified `done` status is unchanged.
+

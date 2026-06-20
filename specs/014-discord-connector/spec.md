@@ -58,7 +58,7 @@ Discord is listed in the design doc's connector ecosystem (section 22.4) using `
 
 ## Non-Goals
 
-- **Write-back to Discord** — The connector is read-only; it never sends messages, reactions, or modifies any server content (except responding to explicit bot commands in capture mode)
+- **Write-back to Discord** — The connector is read-only; it never sends messages, reactions, or modifies any server content. *(Reconciliation, sweep-2026-06-17 `harden`, Round 10: the original parenthetical carve-out "except responding to explicit bot commands in capture mode" was **not** adopted — the shipped connector sends nothing to Discord, including command confirmations. This now matches the read-only Hard Constraint and R-010.)*
 - **Voice channel transcription** — Discord voice/stage channels are out of scope; only text-based content in voice channel text chats is ingested
 - **Full server archival** — The connector is not a Discord backup tool; it selectively ingests from configured channels, not entire servers
 - **Direct message ingestion** — DMs are private and out of scope for passive ingestion; only explicit bot-command captures in DMs are supported
@@ -277,13 +277,21 @@ Discord threads are treated as linked artifact chains:
 
 ### R-010: Bot Command Capture
 
+> **Reconciliation (sweep-2026-06-17 `harden`, Round 10).** The shipped connector is
+> **pure read-only** per the Hard Constraints — it sends **nothing** to Discord. Inbound
+> `!save`/`!capture` ingestion **is** implemented (`ParseBotCommand` + `classifyMessage`),
+> but the two write-back / transport bullets below were **not adopted** and are marked
+> *(not adopted)*. This note reconciles a pre-existing internal contradiction between this
+> requirement, the read-only Hard Constraints, and the Non-Goals; it does not change
+> shipped behavior.
+
 The connector supports explicit capture commands:
 
 - User sends `!save https://example.com This is great` in any channel the bot can see
 - Bot extracts the URL and optional comment
 - URL is routed through the standard capture pipeline (like Telegram share capture)
-- Bot responds with a brief confirmation (if the channel allows bot messages)
-- Commands work in DMs with the bot as well
+- Bot responds with a brief confirmation (if the channel allows bot messages) — *(not adopted: superseded by the read-only Hard Constraints; the shipped connector never sends messages to Discord)*
+- Commands work in DMs with the bot as well — *(not adopted in current scope: DM capture is tracked under [scopes.md](scopes.md) → "Deferred Items")*
 - Command prefix is configurable (default: `!save`, `!capture`)
 
 ---
@@ -313,6 +321,16 @@ A server's #resources channel has 15 pinned messages containing curated learning
 ---
 
 ## Gherkin Scenarios
+
+> **Traceability note (sweep-2026-06-17 `harden`, Round 10).** The feature-level
+> acceptance scenarios below (`SCN-DC-001`…`SCN-DC-008`) are illustrative narratives from
+> the original specification. The **canonical, test-traced** scenario set is the per-scope
+> Gherkin in [scopes.md](scopes.md) plus [scenario-manifest.json](scenario-manifest.json)
+> (`SCN-DC-NRM-*`, `SCN-DC-REST-*`, `SCN-DC-CONN-*`, `SCN-DC-GW-*`, `SCN-DC-THR-*`,
+> `SCN-DC-CMD-*`); that set is authoritative for certification and traceability. Where a
+> scenario below references real-time "Gateway"/"WebSocket" behavior (`SCN-DC-002`,
+> `SCN-DC-007`), the shipped real-time path is bounded REST polling — see
+> [design.md](design.md) → "Implementation Reality (Shipped Architecture)".
 
 ```gherkin
 Scenario: SCN-DC-001 Initial backfill from configured channels

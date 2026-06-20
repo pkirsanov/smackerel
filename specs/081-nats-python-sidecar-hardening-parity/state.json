@@ -134,7 +134,28 @@
         "followUpOwner": "bubbles.devops",
         "followUpAction": "dependency-hygiene-optional",
         "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#security-scan--reconcile-to-doc-2026-06-07",
-        "summary": "nats-py version skew: production ml/requirements.txt pins nats-py==2.9.0; the dev/test env (ml/pyproject.toml nats-py>=2.9.0) resolved to nats-py 2.15.0 in this run. The header-encoder behavior relevant to SEC-081-R1 is identical across both, so the security verdict is unchanged; tracking note for repo dependency hygiene only. Not introduced by 081."
+        "summary": "nats-py version skew: production ml/requirements.txt pins nats-py==2.9.0; the dev/test env (ml/pyproject.toml nats-py>=2.9.0) resolved to nats-py 2.15.0 in this run. The header-encoder behavior relevant to SEC-081-R1 is identical across both, so the security verdict is unchanged; tracking note for repo dependency hygiene only. Not introduced by 081.",
+        "reconcileMode": "devops-to-doc",
+        "reconciledBy": "bubbles.workflow",
+        "reconciledAt": "2026-06-16T18:12:00Z",
+        "devopsEvidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#devops-probe--devops-to-doc-2026-06-16",
+        "devopsDisposition": "Confirmed by the 2026-06-16 devops-to-doc probe (stochastic-quality-sweep round 1, trigger=devops) with hard build/CI evidence: ml/Dockerfile + CI build install requirements.txt (nats-py==2.9.0); local scripts/runtime/python-{unit,lint,format}.sh + CI 'Unit tests (Python)' install -e ./ml[dev] (floating pyproject floor nats-py>=2.9.0; recorded resolve 2.15.0). Pre-existing, repo-wide (the abstract-floor pyproject + locked-prod requirements.txt split is the intentional pattern across every ml dependency), non-blocking. Spec 081 consumer code uses only skew-stable nats-py APIs (ConsumerConfig.max_deliver/ack_wait, msg.metadata.num_delivered, js.publish(headers=...), msg.term()); the 2026-06-08 security review confirmed identical header-encoder behavior across 2.9.0/2.15.0, so spec 081's parity outcome holds under both. Aligning the test environment to the production lock is a repo-wide test-environment reproducibility item owned by bubbles.devops, outside spec 081's three-file change surface; NOT an 081-local edit. Spec 081 stays terminal-for-mode done."
+      },
+      {
+        "id": "F-081-DEVOPS-001",
+        "severity": "medium",
+        "blocking": false,
+        "source": "bubbles.devops",
+        "followUpOwner": "none",
+        "followUpAction": "fixed-in-round",
+        "reconcileMode": "devops-to-doc",
+        "reconciledBy": "bubbles.workflow",
+        "reconciledAt": "2026-06-17T00:00:00Z",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#devops-probe--devops-to-doc-2026-06-17-round-16",
+        "resolved": true,
+        "resolvedBy": "config/prometheus/alerts.yml smackerel-ml-nats group + internal/metrics/prometheus_alerts_contract_test.go requiredAlerts guard",
+        "resolvedAt": "2026-06-17T00:00:00Z",
+        "summary": "Monitoring/observability gap (devops dimension), discovered by the 2026-06-17 devops-to-doc probe (stochastic-quality-sweep round 16, trigger=devops) and FIXED IN-ROUND. Spec 081 (FR-081-003) shipped the Python ML sidecar dead-letter path AND its two Prometheus metrics (smackerel_ml_nats_deadletter_total{stream}, smackerel_ml_nats_deadletter_publish_failures_total{subject}) but shipped NO alert rule for either. The pre-existing SmackerelNATSDeadLetterPressure rule (spec 046, smackerel-nats group) watches only the Go core metric smackerel_nats_deadletter_total, so ML-side dead-letter pressure was unmonitored and the publish-failure path (a stuck nak/redeliver loop when the dead-letter publish itself fails, per the publish-before-term invariant) had no alarm at all. Closed by adding the smackerel-ml-nats alert group (SmackerelMLNATSDeadLetterPressure warning + SmackerelMLNATSDeadLetterPublishFailing critical) to config/prometheus/alerts.yml and registering both in the internal/metrics/prometheus_alerts_contract_test.go requiredAlerts regression guard (owner attribution: spec 081 round 16 devops sweep F-081-DEVOPS-001). Validated GREEN: TestMonitoringAlertsContract_LiveFile (every alert references a live-emitted metric in the 100-entry known-emitted set) + TestAlertsContract_LiveFile (structural + required-alert), 9/9 PASS; internal/deploy ok 0.100s + internal/metrics ok 0.055s; go test ./... exit 0. Remediation is devops-owned operational config (alert rules) plus its test guard; no planning truth, no protected artifact, and no spec-081 source/config file (ml/app/nats_client.py, config/smackerel.yaml, scripts/commands/config.sh) changed. Mirrors the established F-056-DEVOPS-001 / F-005-DEVOPS-001 devops-sweep precedent (alert + requiredAlerts guard, no planning packet). Spec 081 stays terminal-for-mode done."
       }
     ]
   },
@@ -455,6 +476,28 @@
         "outcome": "completed_owned",
         "summary": "RECONCILE-TO-DOC recording (bubbles.workflow dispatch; no code changed; spec.md/design.md/scopes.md NOT touched). Recorded the four genuinely-executed specialist phases that ran after the 2026-06-08T00:18Z route_required (gaps/simplify/stabilize/security), each backed by a distinct real evidence section in report.md with terminal-output signals: gaps (MINOR_GAPS_REMAIN; +5 malformed-consumer-env adversarial tests; Python 487->492), simplify (APPROPRIATELY SIMPLE; 0 edits; 492), stabilize (STABLE on 5 dimensions; 492), security (4/5 OWASP CLEAN; 1 LOW SEC-081-R1). Added all four to certification.certifiedCompletedPhases + execution.completedPhaseClaims with evidence anchors plus specialist executionHistory entries. Logged SEC-081-R1 (LOW, OWASP A03, defense-in-depth) as a NON-BLOCKING certification.concern trackedBy BUG-081-001 (status blocked), routedTo bubbles.plan/bubbles.implement; added top-level activeBugs index. Recorded clean-pass observations OBS-081-1/2/3 + OBS-STAB-01 + SEC-081-N1. artifact-lint 9 -> 0 (PASSED): all four missing-phase G022 issues cleared. Spec 081 stays terminal-for-mode done; SEC-081-R1 is a tracked non-blocking concern, not an 081 regression.",
         "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#reconcile-to-doc--four-phases-recorded-and-sec-081-r1-concern-logged-2026-06-08"
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "devops",
+        "reconcileMode": "devops-to-doc",
+        "timestamp": "2026-06-16T18:12:00Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "outcome": "completed_owned",
+        "summary": "DevOps probe (stochastic-quality-sweep round 1, trigger=devops; parent-expanded devops-to-doc because the round-1 subagent runtime lacked nested runSubagent). Probed CI/CD + build + test install surface for the Python sidecar NATS consumer. Confirmed SEC-081-N1 nats-py prod/test version skew: ml/Dockerfile + CI build install requirements.txt (nats-py==2.9.0); local scripts/runtime/python-{unit,lint,format}.sh + CI 'Unit tests (Python)' install -e ./ml[dev] (floating pyproject floor nats-py>=2.9.0; recorded resolve 2.15.0). Disposition: pre-existing, repo-wide (intentional abstract-floor + locked-prod split across every ml dep), non-blocking; spec 081 code uses only skew-stable nats-py APIs and the 2026-06-08 security review confirmed identical header-encoder behavior across 2.9.0/2.15.0, so parity holds. Routed the repo-wide test-env reproducibility item to bubbles.devops; NOT an 081-local edit. Also reconciled two pre-existing state-transition-guard blocks a stricter guard now flags (G040 'Follow-up owner:' phrase -> 'Owner:'; G095 caplog inline citation + 2026-06-16 Discovered Issues rows). No source/config code changed; spec.md/design.md/scopes.md untouched. artifact-lint PASSED; state-transition-guard TRANSITION PERMITTED (exit 0). Spec 081 stays terminal-for-mode done.",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#devops-probe--devops-to-doc-2026-06-16"
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phase": "devops",
+        "reconcileMode": "devops-to-doc",
+        "timestamp": "2026-06-17T00:00:00Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "outcome": "completed_owned",
+        "summary": "DevOps probe (stochastic-quality-sweep round 16, trigger=devops; parent-expanded devops-to-doc because the round-16 subagent runtime lacked nested runSubagent; executionModel parent-expanded-child-mode). Probed config-SST + build/CI + monitoring/observability for spec 081's operational surface. config-SST healthy (NATS_CONSUMER_MAX_DELIVER/ACK_WAIT_SECONDS fail-loud required_value reads in scripts/commands/config.sh -> emitted -> ML container loads the whole generated env via env_file in docker-compose.yml). build/CI healthy (ml/Dockerfile + CI build ship the pinned requirements.txt; CI test integration exercises the dead-letter parity integration test). FOUND + FIXED IN-ROUND one in-scope monitoring finding F-081-DEVOPS-001: spec 081's two FR-081-003 dead-letter metrics (smackerel_ml_nats_deadletter_total, smackerel_ml_nats_deadletter_publish_failures_total) had no Prometheus alert; the existing SmackerelNATSDeadLetterPressure rule watches only the Go core metric smackerel_nats_deadletter_total, so ML-side dead-letter pressure and the publish-failure stuck-nak-loop were operationally invisible. Closed by adding the smackerel-ml-nats alert group (pressure warning + publish-failing critical) to config/prometheus/alerts.yml and registering both alerts in the internal/metrics/prometheus_alerts_contract_test.go requiredAlerts regression guard. Validated: both alert-contract suites GREEN (TestAlertsContract_* 5/5 + TestMonitoringAlertsContract_* 4/4; internal/metrics + internal/deploy ok; go test ./... exit 0). No finding-owned planning chain triggered (no planning truth created — wiring an alert for an already-spec'd, already-shipped metric is devops operational config, mirroring the F-056-DEVOPS-001 / F-005-DEVOPS-001 precedent). No protected artifact and no spec-081 source/config file changed. Spec 081 stays terminal-for-mode done.",
+        "evidenceRef": "specs/081-nats-python-sidecar-hardening-parity/report.md#devops-probe--devops-to-doc-2026-06-17-round-16"
       }
     ]
   },

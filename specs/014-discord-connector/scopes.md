@@ -8,7 +8,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ### Change Boundary
 
-**Allowed surfaces:** `internal/connector/discord/` (new package), `config/smackerel.yaml` (add connector section), `go.mod` (add discordgo dependency).
+**Allowed surfaces:** `internal/connector/discord/` (new package), `config/smackerel.yaml` (add connector section). *(No `go.mod` dependency was added — the shipped connector uses only the Go standard library; the original plan to add `github.com/bwmarrin/discordgo` was not adopted. See design.md → "Implementation Reality (Shipped Architecture)".)*
 
 **Excluded surfaces:** No changes to existing connector implementations. No changes to existing pipeline, search, digest, or web handlers. No changes to existing NATS streams. No database migrations needed.
 
@@ -17,7 +17,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 1. **Scope 1: Normalizer & Message Classification** — Parse Discord message types, classify content, assign processing tiers, convert to `RawArtifact` with full metadata per R-004. Pure Go, depends on `discordgo` types only.
 2. **Scope 2: REST Client & Backfill** — Implement REST API message history fetching with pagination, per-channel cursors, rate limit handling, and pinned message retrieval.
 3. **Scope 3: Discord Connector & Config** — Implement the `Connector` interface (ID, Connect, Sync, Health, Close), config schema in `smackerel.yaml`, registry registration, and StateStore cursor persistence. REST-only sync is end-to-end functional.
-4. **Scope 4: Gateway Event Handler** — Add WebSocket Gateway connection with `discordgo` Session, real-time message capture, thread detection, reconnection handling, and event buffering.
+4. **Scope 4: Gateway Event Handler** — Add the `EventPoller` REST poller (the `GatewayClient` interface) for near-real-time message capture, thread detection, reconnection handling, and event buffering. *(Shipped as bounded REST polling, not a `discordgo` WebSocket session — see design.md → "Implementation Reality (Shipped Architecture)".)*
 5. **Scope 5: Thread Ingestion** — Auto-follow threads in monitored channels, fetch thread message history, create linked artifact chains with thread context metadata.
 6. **Scope 6: Bot Command Capture** — Implement `!save`/`!capture` command handling for explicit user-initiated captures from any visible channel.
 
@@ -285,7 +285,7 @@ Scenario: SCN-DC-CONN-001 Connector lifecycle
 
 ### Description
 
-Add WebSocket Gateway connection for real-time message capture. Events are buffered and drained during Sync(). Includes reconnection handling and missed-message recovery via REST backfill.
+Add near-real-time message capture via the `EventPoller` REST poller behind the `GatewayClient` interface. Events are buffered and drained during Sync(). Includes reconnection handling (exponential backoff) and missed-message recovery via REST backfill. *(Shipped as bounded REST polling, not a `discordgo` WebSocket session — see design.md → "Implementation Reality (Shipped Architecture)".)*
 
 ### Use Cases (Gherkin)
 

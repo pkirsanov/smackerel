@@ -1040,3 +1040,83 @@ and the shell tests above exercise the full delivery flow. The unit tests under
 `internal/telegram/*_test.go` exercise every `SC-TSC*` Gherkin scenario at the bot-handler level
 without needing live Telegram traffic. Together they provide complete persistent regression
 coverage for every new and changed behavior in spec 008.
+
+---
+
+## Maintenance Simplification Round (Round 27 — 2026-06-17)
+
+**Phase Agent:** `bubbles.simplify` (stochastic-quality-sweep Round 27, mode `simplify-to-doc`)
+**Status impact:** None — spec remains `Done`. This is a behavior-preserving refactor; no
+spec/design/scope content changed and no re-certification occurred.
+
+### Simplification Applied — Forwarded-Artifact Capture Deduplication
+
+The `simplify` trigger probe found ~40 lines of near-identical logic duplicated between
+`captureSingleForward` (assembler absent) and `flushSingleForward` (assembler flushed a
+one-message buffer) in `internal/telegram/forward.go`: both built the same `forwardContext`
+string, the same `forward_meta` map, and ran the same URL-vs-plain-text capture/reply branches.
+The BUG-002 comment had explicitly noted this as deliberate mirroring to keep single-forward
+shape identical across both paths.
+
+The two bodies were consolidated into a single source of truth,
+`(*Bot).captureForwardArtifact(ctx, chatID, text, meta)`. `captureSingleForward` and
+`flushSingleForward` are now thin wrappers that prepare their `(chatID, text, meta)` inputs and
+delegate, so the two paths can no longer drift — which strengthens the exact invariant the
+BUG-002 comment was protecting. Net change: one production file, ~35 fewer lines, zero behavior
+change.
+
+### Test Evidence — Green Before and After (Behavior Preserved)
+
+Green baseline BEFORE the refactor (forward/flush/single-forward suite):
+
+```
+$ ./smackerel.sh test unit --go --go-run 'Forward|Flush|SCN008005|BUG002|HandleForwarded'
+ok      github.com/smackerel/smackerel/internal/telegram        9.911s
+[go-unit] go test ./... finished OK
+```
+
+Green AFTER the refactor (same suite, zero FAIL lines):
+
+```
+$ ./smackerel.sh test unit --go --go-run 'Forward|Flush|SCN008005|BUG002|HandleForwarded'
+ok      github.com/smackerel/smackerel/internal/telegram        9.995s
+[go-unit] go test ./... finished OK
+WRAPPER_EXIT=0
+```
+
+Full Go unit suite (whole-repo regression proof, no name filter):
+
+```
+$ ./smackerel.sh test unit --go
+ok      github.com/smackerel/smackerel/internal/telegram        28.105s
+[go-unit] go test ./... finished OK
+FULL_UNIT_EXIT=0
+```
+
+Lint (`go vet ./...`) and format check clean on the changed file:
+
+```
+$ ./smackerel.sh lint
+LINT_EXIT=0
+$ gofmt -l internal/telegram/forward.go
+GOFMT_RC=0
+```
+
+### Deferred Observation (Non-Blocking)
+
+The probe also noted a dead `ctx context.Context` field stored in both `ConversationAssembler`
+and `MediaGroupAssembler` (assigned in the constructors but never read — `asyncFlush` correctly
+uses `context.Background()` so shutdown flushes are not cancelled). Removing it cleanly requires
+dropping the unused constructor parameter, which ripples across ~20 call sites (mostly tests).
+That was deliberately NOT done this round to honor the mode's `preferSmallChangedSurface`
+constraint; it is recorded here as a low-value/high-churn cleanup candidate for a future
+dedicated pass. It is behavior-correct as-is.
+
+### Pre-Existing Finding Surfaced (Out Of Scope)
+
+`artifact-lint.sh` for this spec reports a pre-existing Gate G022 gap: the `gaps` specialist
+phase is absent from this spec's committed execution/certification phase records (the spec was
+certified under `full-delivery` without a recorded `gaps` phase). This predates Round 27, is not
+part of this round's delta (only `internal/telegram/forward.go` was modified), and was NOT
+fabricated into the records. It is routed as a separate finding for a dedicated gaps/certification
+pass.

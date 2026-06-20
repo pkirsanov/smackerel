@@ -311,7 +311,9 @@ Scenario: SCN-023-09 Connector sync interval from config
 
 **Log exclusion design:** Two string comparisons at the top of the existing middleware — minimal change, no new middleware, no regex. This covers both Docker HEALTHCHECK and external monitors.
 
-**Sync interval design:** `parseSimplisticCronInterval()` handles `*/N * * * *` (every N minutes) and `0 */N * * *` (every N hours). Falls back to 5 minutes for complex expressions — acceptable for initial implementation.
+**Sync interval design:** `parseSyncInterval()` handles `*/N * * * *` (every N minutes) and `0 */N * * *` (every N hours). Falls back to 5 minutes for complex expressions — acceptable for initial implementation.
+
+> Note (2026-06-16): Symbol name reconciled to the as-implemented `parseSyncInterval` (see `internal/connector/supervisor.go`). The earlier `parseSimplisticCronInterval` name was a planning-time placeholder that was never used in code; `report.md` already cited the real symbol.
 
 ### Test Plan
 
@@ -355,8 +357,8 @@ Scenario: SCN-023-09 Connector sync interval from config
   $ grep -nE 'time\.After\(5 \* time\.Minute\)' internal/connector/supervisor.go
   (no matches)
   ```
-- [x] `parseSimplisticCronInterval()` handles `*/N * * * *` and `0 */N * * *` patterns
-  Evidence: `internal/connector/supervisor.go` — `getSyncInterval` at line 399 parses cron via this helper
+- [x] `parseSyncInterval()` handles `*/N * * * *` and `0 */N * * *` patterns
+  Evidence: `internal/connector/supervisor.go` — `getSyncInterval` at line 399 parses cron via this helper (`parseSyncInterval`)
   ```
   $ go test -count=1 ./internal/connector/
   ok      github.com/smackerel/smackerel/internal/connector       42.731s

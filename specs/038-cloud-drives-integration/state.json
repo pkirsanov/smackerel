@@ -992,12 +992,25 @@
       "runStartedAt": "2026-06-06T17:00:00Z",
       "runEndedAt": "2026-06-06T17:00:00Z",
       "summary": "OPS-002 G088 recert. Reviewed the post-cert planning edits: 19b31c0a (OPS-001 banner sweep: spec.md '> **Status:** Draft (analyst-owned requirements sections only)' -> 'Done') and 28711074 (mid-tier drift cleanup: scopes.md reconciled internal/drive/tools.go -> internal/drive/tools/tools.go subpackage (avoids import cycle with internal/drive/save and rules), internal/drive/tools_test.go -> internal/drive/tools/tools_test.go, and internal/config/loader.go -> internal/config/drive.go + internal/config/config.go::Validate() per-domain layout, with explanatory parentheticals). Both reconcile documentation paths to shipped code; SCN-038 scenario refs, test function names, and DoD semantics unchanged; implementation unchanged. Top-level certifiedAt surfaced to 2026-06-06T17:00:00Z to satisfy Gate G088."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["devops", "implement", "test", "docs", "finalize"],
+      "workflowMode": "devops-to-doc",
+      "executionModel": "parent-expanded-child-mode",
+      "sweepRound": 30,
+      "trigger": "devops",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-17T00:00:00Z",
+      "runEndedAt": "2026-06-17T00:00:00Z",
+      "summary": "Stochastic-quality-sweep Round 30, devops trigger -> devops-to-doc mode. Probed CI/CD + monitoring/observability of the cloud-drive surface. Finding F-038-DEVOPS-001 (medium, observability/devops): the five provider-neutral drive metrics in internal/drive/observability/metrics.go (smackerel_drive_scan_files_total, _extract_files_total, _save_attempts_total, _retrieve_decisions_total, _provider_errors_total) were emitted live by the scan/extract/save/retrieve services but had ZERO Prometheus alert rules, and were structurally un-alertable because the spec-049 alert-contract allowlist (internal/deploy/monitoring_alerts_contract_test.go loadKnownEmittedMetrics) only walked internal/metrics/*.go + ml/app/metrics.py. Closed one-to-one: added the smackerel-drive alert group (DriveProviderErrors, DriveSaveBackFailing, DriveRetrieveRefusalSpike) to config/prometheus/alerts.yml; extended loadKnownEmittedMetrics to walk internal/drive/observability/metrics.go (known-emitted set 105 -> 108); added the 3 drive alerts to the structural contract test's requiredAlerts regression guard + doc comment; synced docs/Operations.md with a Drive Observability Metrics And Alerts subsection. Same gap class as F-056/F-081/F-037 devops sweeps. Evidence: TestMonitoringAlertsContract_LiveFile + TestAlertsContract_LiveFile PASS with all adversarial sub-tests (non-tautological); spec-scoped artifact-lint + traceability-guard clean. No production code change; io.LimitReader retrieve fix untouched and now alert-covered. certification.* and top-level status untouched (spec 038 stays done). See report.md#round-30--devops-sweep-f-038-devops-001--2026-06-17-bubblesworkflow-mode-devops-to-doc."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-06T17:00:00Z",
+  "lastUpdatedAt": "2026-06-17T00:00:00Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",

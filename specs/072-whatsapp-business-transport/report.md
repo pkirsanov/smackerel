@@ -903,3 +903,60 @@ go test ./internal/whatsapp/assistant_adapter/ -run TestChaos072 -count=1 -v -ti
 Findings: ZERO at every severity (P0/P1/P2/P3/P4). The webhook handler kept its status vocabulary closed under 200 random inputs with the facade never invoked for an unverified delivery, and `Render` kept its closed-vocabulary output union under 200 random shapes. No bug artifacts created.
 
 **Claim Source:** executed (chaos_072_test.go committed; RC=0 captured 2026-06-02).
+
+---
+
+## Round R39 — improve-existing probe (bubbles.gaps)
+
+**Date:** 2026-06-16 | **Agent:** bubbles.gaps | **Role:** improve-existing entry probe (parent-expanded stochastic-quality-sweep) | **Verdict:** IMPROVE — 2 LOW-severity ⬛ UNTESTED coverage gaps closed inline; no defects, no simplification, no citation drift.
+
+This probe targeted dimensions NOT covered by the R31 reconcile pass (which closed doc drifts F2/`cloudapi`-is-future and F3/TP-072-15 — NOT re-litigated here): genuine implementation gaps, simplification, and robustness of the WhatsApp webhook adapter. The certified DONE state, R31's in-flight `design.md`/`test-plan.json`/`state.json` edits, and all spec/scope/state artifacts were left untouched.
+
+### What was verified CLEAN (real evidence)
+
+Focused unit run over the spec-072 surface (unit-only; no live stack — foreign `quantitativefinance-rust-build` + `wanderaide-*` containers active; `oom-preflight 6000` returned OK 20201 MB free before any compile):
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestHMACVerifier|TestWebhookHandler|TestWebhook_|TestTranslate_|TestIdempotencyCache|TestRender_|TestChaos072|TestValidateAssistantConfig_Whatsapp|TestParsePayload|TestMountWebhookRoutes' --verbose
+  → ok  internal/whatsapp/assistant_adapter  0.167s   (HMAC verify/reject-before-facade, idempotency dup/distinct/empty/evict,
+                                                       render text/buttons/list/confirm/capture-ack/unknown-fallback/truncate,
+                                                       chaos webhook+render seeded fuzz — all PASS)
+  → ok  internal/config                      0.087s   (6 TestValidateAssistantConfig_Whatsapp_* fail-loud SST rows — all PASS)
+  → [go-unit] go test ./... finished OK
+  → WA_UNIT_EXIT=0
+```
+
+- **HMAC signature verification (SCN-072-A02):** CLEAN — missing/wrong-prefix/invalid-hex/wrong-secret/tampered-body/empty-secret + reject-before-facade + 200-iteration chaos fuzz all covered.
+- **Idempotency / Meta-retry dedup (SCN-072-A10):** CLEAN — duplicate-swallow, distinct-not-deduped, empty-id-never-stored, FIFO eviction-at-capacity, and webhook-level exactly-once (facade + capture + cloud) all covered.
+- **Render fallback (SCN-072-A04):** CLEAN — unknown shape → text, structurally-empty → `ErrNothingToRender`, all families + truncation + chaos shape-fuzz covered.
+- **Citation/reference integrity:** CLEAN — all cited test files (`tests/integration/assistant/whatsapp_*`, `tests/e2e/assistant/whatsapp_*`, `internal/config/assistant_whatsapp_test.go`) and all cited test-function names (`TestWhatsAppWebhook_TP_072_01_*`, `TestTransportIdentity_TP_072_03_*`, `TestWhatsAppCapture_TP_072_08_*`, `TestWhatsAppSignatureE2E_TP_072_05_*`, `TestWhatsAppRenderE2E_TP_072_10_*`, `TestRender_NeverEmitsTemplateFamily`, `TestRender_OutboundTypesHaveNoTemplateField`, 6× `TestValidateAssistantConfig_Whatsapp_*`) verified to exist on disk.
+- **Simplification / robustness:** CLEAN — surface is tight (prior simplify pass applied −6 LOC); chaos proves no-panic / closed status+render vocabulary under 400 random inputs. No genuine behavior-neutral simplification remained; no robustness defect found.
+
+### Coverage gaps closed inline (LOW severity, additive — no DoD/scope reopen)
+
+Both are coverage hardening on already-certified scenarios, not new behavior; the existing DoD remains coherent.
+
+**G-072-R39-1 (⬛ UNTESTED, LOW) — TransportIdentityRegistry foundation had `[no test files]`.** design.md "Risks & Open Questions" names the mitigation for *"Identity mismatch from phone normalization"* as *"one normalization function, HMAC lookup tests"*, and §"Data Model" promises *"case/whitespace drift produces the same hash"* plus §8 leak-avoidance — yet the `foundation:true` package was exercised only indirectly (one valid +E.164 number via the adapter). Added `internal/assistant/transportidentity/registry_test.go` pinning empty-key fail-loud, determinism (64-char digest), case/whitespace/missing-"+" canonicalization collapse, distinct-number non-collision, and malformed-rejection-without-raw-phone-leak. Adversarial: a no-op normalizer or a `fmt.Errorf("%s", phone)` leak would go RED.
+
+**G-072-R39-2 (⬛ UNTESTED, LOW) — CloudClient injection seam fail-loud was unpinned.** design.md (reconciled 2026-06-16) documents v1 ships only the `CloudClient` interface + `cmd/core` seam and that the phone-targeted render path *"fails loud (`whatsapp_adapter: RenderToPhone called without configured CloudClient`)"*. That documented v1 behavior, the empty-destination guard, and the identity-only `Render()` contract error were guarded behind `HasCloud()`/identity resolution in the handler and never pinned directly. Added `internal/whatsapp/assistant_adapter/cloudclient_seam_test.go` pinning nil-CloudClient fail-loud (vs nil-deref panic), empty-destination refusal + cloud-not-called, and the `Render(identity,resp)` → "use RenderToPhone" wiring error.
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestHashPhoneE164_|TestRenderToPhone_|TestRender_IdentityOnlyEntryPointIsAWiringError' --verbose
+  --- PASS: TestHashPhoneE164_EmptyKeyFailsLoud
+  --- PASS: TestHashPhoneE164_Deterministic
+  --- PASS: TestHashPhoneE164_CanonicalizationCollapsesDrift
+  --- PASS: TestHashPhoneE164_DistinctNumbersDiffer
+  --- PASS: TestHashPhoneE164_MalformedRejectedWithoutLeak
+  --- PASS: TestRenderToPhone_NilCloudClientFailsLoud
+  --- PASS: TestRenderToPhone_EmptyDestinationFailsLoudAndDoesNotSend
+  --- PASS: TestRender_IdentityOnlyEntryPointIsAWiringError
+  → ok  internal/assistant/transportidentity            0.019s
+  → ok  internal/whatsapp/assistant_adapter
+  → [go-unit] go test ./... finished OK
+  → SEAM_UNIT_EXIT=0
+  → gofmt -l (both new files): clean
+```
+
+No production code, spec.md, design.md, scopes.md, uservalidation.md, or state.json was modified by this probe; no commit was made. Systemic G022 gaps/harden grandfather (R31-routed to consolidation) acknowledged, not re-routed.
+
+**Claim Source:** executed (commands + exit codes captured this session, 2026-06-16).

@@ -142,12 +142,14 @@ Extracted `deliverAlertBatch()` as a standalone function in `internal/scheduler/
 | Scenario | Test Location | Status |
 |----------|---------------|--------|
 | SCN-021-001 Alert delivery sweep | `scheduler_test.go:TestCronEntries_WithEngine` | PASS |
-| SCN-021-004/005 Bill alert dedup | `engine_test.go:TestProduceBillAlerts_NilPool` + validation tests | PASS |
+| SCN-021-004/005 Bill alert dedup | `engine_test.go:TestAllProducers_NilPoolErrors` (consolidated; exercises `ProduceBillAlerts` nil-pool/dedup guard) + validation tests | PASS |
 | SCN-021-009 LogSearch wiring | `search_test.go:TestSearchHandler_SuccessWithResults` + LogSearch mock tests | PASS |
 | SCN-021-012/013 Health freshness | `health_test.go` — stale/degraded + healthy status tests | PASS |
 | SCN-021-014 Telegram failure retry | `scheduler.go:370-376` — `SendAlertMessage` error → `continue` | Structurally verified |
 | Concurrent mutex safety | `scheduler_test.go:TestCronConcurrencyGuard_*` (5 tests) | PASS |
 | Timezone billing | `engine_test.go:TestBillingDate_LocalMidnightNotUTCTruncate` | PASS |
+
+_(Citation reconciled 2026-06-16: the SCN-021-004/005 row's former `engine_test.go:TestProduceBillAlerts_NilPool` citation was consolidated into the table-driven `TestAllProducers_NilPoolErrors` (`internal/intelligence/engine_test.go:1111`, which exercises all four producers' nil-pool guard including `ProduceBillAlerts`) during a later simplify round; bill-alert nil-pool/dedup coverage is unchanged. The former per-producer `TestProduceBillAlerts_*` names no longer exist on disk, grep-verified 2026-06-16.)_
 
 ### Regression Verdict
 
@@ -223,6 +225,8 @@ All 3 scopes implemented and unit tests passing. The intelligence delivery pipel
 | `TestProduceTripPrepAlerts_CancelledContext` | `engine_test.go` | H1: Pre-cancelled context coverage |
 | `TestProduceReturnWindowAlerts_CancelledContext` | `engine_test.go` | H1: Pre-cancelled context coverage |
 | `TestProduceRelationshipCoolingAlerts_CancelledContext` | `engine_test.go` | H1: Pre-cancelled context coverage |
+
+_(Citation reconciled 2026-06-16: the four per-producer `TestProduce*Alerts_CancelledContext` rows above are preserved as the dated historical record of the tests added in this 2026-04-13 hardening sweep. They were later consolidated into the single table-driven `TestAllProducers_CancelledContext` (`internal/intelligence/engine_test.go:1653`, which exercises the cancelled-context path for all four producers) during a simplify round; the per-producer names no longer exist on disk (grep-verified 2026-06-16) and cancelled-context coverage is unchanged under the consolidated name.)_
 
 ### Full Suite Results
 
@@ -682,6 +686,8 @@ $ go test -count=1 ./internal/scheduler/ ./internal/intelligence/ ./internal/api
 $ go test -count=1 -race ./internal/scheduler/ 2>&1 | tail -3
 ok  	github.com/smackerel/smackerel/internal/scheduler	6.071s
 ```
+
+_(Annotation 2026-06-16: the captured run above is historical chaos-phase evidence and is preserved verbatim — the `=== RUN` / `--- PASS` lines naming `TestProduceBillAlerts_CancelledContext` are NOT rewritten. That per-producer test was later consolidated into the table-driven `TestAllProducers_CancelledContext` (`internal/intelligence/engine_test.go:1653`) during a simplify round; the captured output records what ran at the time. The consolidated name is grep-verified on disk 2026-06-16; the former per-producer name no longer exists.)_
 
 Chaos coverage spans 5 prior chaos+harden+security findings (C1–C5) plus the originally-implemented mutex partitioning (8 independent cron-group mutexes), DST-safe calendar arithmetic, fresh-install staleness guard, cancelled-context safety in producers, and adversarial mock-driven alert delivery. Race detector clean across `internal/scheduler/`. Per phase-relevance contract for cron + DB-binding packages, chaos coverage is satisfied via dedicated adversarial unit tests rather than a separate chaos suite.
 
@@ -1271,4 +1277,96 @@ Artifact lint PASSED.
 ```
 
 Delta: 3 issues → 0. No protected artifact touched.
+
+---
+
+## Round 21 Simplify Sweep (2026-06-17, simplify-to-doc, stochastic R21)
+
+**Trigger:** stochastic-quality-sweep parent round 21, trigger `simplify` → mapped child mode `simplify-to-doc`.
+
+**Mode:** simplify-to-doc, executed parent-expanded (workflow runtime lacked `runSubagent`, so the `simplify` phase owner work was performed directly; `simplify-to-doc` is not a top-level-runtime-only mode, so parent-expansion is permitted).
+
+**Probe scope:** the spec-021 production surface — `internal/intelligence/alert_producers.go`, `internal/intelligence/alerts.go`, `internal/scheduler/jobs.go` (alert delivery sweep), plus the producer/date-math helpers. Three review passes were applied: code reuse / duplication, code quality, and efficiency.
+
+### Findings
+
+| ID | Pass | Surface | Disposition |
+|----|------|---------|-------------|
+| SIMP-021-R21-001 | code-reuse / duplication | `alert_producers.go` (4 sites) | **Fixed** — extracted `localMidnight(t)` helper |
+
+**SIMP-021-R21-001 — local-midnight idiom duplicated 4× in production.** The expression `time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)` (truncate to local-timezone midnight) was hand-inlined at four production sites: `ProduceBillAlerts` (`localToday`), `ProduceTripPrepAlerts` (`localToday`), and `ProduceReturnWindowAlerts` (both `localToday` and `deadlineLocal`). The file already co-locates date helpers `clampDay` and `calendarDaysBetween`, so a named `localMidnight` helper removes the duplication, matches the established local convention, and makes the truncation intent explicit. Behavior is identical (same expression, single definition).
+
+**Deliberately NOT changed (rejected to avoid over-abstraction — simplify, do not redesign):**
+- The three structurally-similar producers (`ProduceBillAlerts` / `ProduceTripPrepAlerts` / `ProduceReturnWindowAlerts`) were **not** collapsed into a generic abstraction. They are semantically distinct (bill estimates the next billing date from `first_seen`; trip reads `start_date`; return parses a metadata `return_deadline`). Unifying them would be a redesign, not a simplification.
+- The independent `localToday` recomputations in `alert_producers_test.go` were **not** rewired to the production helper — tests intentionally recompute expected values independently; coupling them to the implementation would weaken test independence.
+
+### Code Diff Evidence (Gate G053 — executed git-backed proof)
+
+**Claim Source:** `git diff -- internal/intelligence/alert_producers.go` (real working-tree diff).
+
+```text
+$ git diff --stat -- internal/intelligence/alert_producers.go
+ internal/intelligence/alert_producers.go | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+$ git diff -- internal/intelligence/alert_producers.go
+@@ -59,7 +59,7 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
+ 		billingDay := firstSeen.Day()
+-		localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
++		localToday := localMidnight(now)
+@@ -167,7 +167,7 @@ func (e *Engine) ProduceTripPrepAlerts(ctx context.Context) error {
+ 		now := time.Now()
+-		localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
++		localToday := localMidnight(now)
+@@ -253,8 +253,8 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
+ 			now := time.Now()
+-			localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+-			deadlineLocal := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.Local)
++			localToday := localMidnight(now)
++			deadlineLocal := localMidnight(d)
+@@ -433,3 +433,10 @@ func calendarDaysBetween(from, to time.Time) int {
+ }
++
++// localMidnight returns midnight (local time) of the calendar day containing t.
++// The alert producers compare and difference calendar days in the user's local
++// timezone, so this truncates the time-of-day while preserving the local date.
++func localMidnight(t time.Time) time.Time {
++	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
++}
+```
+
+### Test Evidence (no regression — behavior-preserving refactor)
+
+**Claim Source:** `./smackerel.sh test unit --go` run after the edit (host/user prompt redacted per PII policy; `/workspace` is the in-container repo root).
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'ClampDay|CalendarDaysBetween|Billing|Produce|Cooling|TripPrep|ReturnWindow|DeliverPendingAlerts|DeliverAlert' --verbose
+--- PASS: TestBillingDate_LocalMidnightNotUTCTruncate (0.00s)
+--- PASS: TestClampDay (0.00s)
+--- PASS: TestCalendarDaysBetween (0.00s)
+--- PASS: TestAllProducers_NilPoolErrors (0.00s)
+--- PASS: TestAllProducers_CancelledContext (0.00s)
+--- PASS: TestCalendarDaysBetween_SameDayDifferentTimes (0.00s)
+--- PASS: TestOverdueDays_UsesCalendarDaysBetween (0.00s)
+--- PASS: TestTripPrepDaysUntil_UsesCalendarDays (0.00s)
+--- PASS: TestTripPrepDaysUntil_DSTSpringForward (0.00s)
+--- PASS: TestReturnWindowDateRegex_Validation (0.00s)
+ok      github.com/smackerel/smackerel/internal/intelligence    0.138s
+ok      github.com/smackerel/smackerel/internal/intelligence/surfacing  0.009s
+ok      github.com/smackerel/smackerel/internal/scheduler       0.054s
+WRAPPER_EXIT=0
+
+$ gofmt -l internal/intelligence/alert_producers.go
+(no output — CLEAN)
+```
+
+`TestBillingDate_LocalMidnightNotUTCTruncate` directly guards the local-midnight-not-UTC semantics that `localMidnight` preserves; it stays green, confirming the extraction is behavior-identical.
+
+### Round 21 verdict
+
+- One genuine duplication finding (SIMP-021-R21-001) fixed within the `simplify` phase owner's surface (product code + this report evidence only).
+- Two over-abstraction temptations explicitly rejected and recorded.
+- Real test execution: all affected date-math / producer / delivery tests green; `internal/intelligence`, `internal/intelligence/surfacing`, and `internal/scheduler` packages `ok`; wrapper exit 0; `gofmt` clean.
+- Behavior-preserving refactor — no DoD checkbox changed, no scope status changed, no `spec.md` / `design.md` / `scopes.md` / `state.json` certification edited.
+- Spec status remains `done`; no de-promotion, no re-certification required.
 

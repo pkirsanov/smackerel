@@ -627,6 +627,8 @@ the dependency graph downstream of this spec.
 | F-065-MISSING-E2E | 2026-06-02 | Handed to spec 076 (rescope close-out) | scopes.md → Superseded Scopes 2/3/4 |
 | F-065-BROADER-SUITE | 2026-06-02 | Handed to spec 076 (rescope close-out) | scopes.md → Superseded Scopes 2/3/4 |
 | F061-SCENARIO-MISSING | 2026-06-02 | Handed to spec 076 (overlay registration) | scopes.md → Superseded Scope 4 |
+| GAP-065-G095-E2E-PHRASE | 2026-06-15 | Round R04 (gaps-to-doc) disposition: the SCOPE-3 overlay E2E descriptions (`tests/e2e/assistant/microtools_http_test.go`) use honest test-no-op wording (the test returns without asserting when the LLM does not engage the tool). That overlay E2E is owned by spec 076; no spec-065 work is outstanding. Cited per Gate G095. | `specs/076-assistant-completion-rescope` + `## Gaps Re-Verification (bubbles.gaps, 2026-06-15)` |
+| GAP-065-CANARY-DOC-DRIFT | 2026-06-15 | Round R04 (gaps-to-doc) reconciliation: the `microtools_foundation_did_not_register_any_tool` subtest (spec-065 Scope-1 no-auto-register evidence at certification) was superseded by `import_registered_microtools_match_shipped_reality` in BUG-031-008 after spec 076 shipped (location_normalize + entity_resolve now register at package import). The standalone `internal/agent/tools/microtools/registry_canary_test.go` path was never authored — the assertion always lived inside the integration canary file. Manifest + report tables reconciled additively; foundation code unchanged. | specs/031-live-stack-testing/bugs/BUG-031-008-integration-job-stabilization + `## Gaps Re-Verification (bubbles.gaps, 2026-06-15)` |
 
 ### Code Diff Evidence
 
@@ -641,7 +643,7 @@ edits planning artifacts only.
 | `internal/agent/tools/microtools/envelope_test.go` | `TestMicroToolEnvelopeSchemaRejectsMissingSource` — schema rejection unit suite (zero source, missing provider/kind/retrieved_at/attribution, bytes-path rejection, valid envelope acceptance). |
 | `internal/config/assistant_tools.go` | Required SST key validation surface; `AssistantToolsMissingKeyError` fails startup with the named missing key for each of the 12 `ASSISTANT_TOOLS_*` keys; no fallback geocoder is silently chosen. |
 | `internal/config/assistant_tools_test.go` | `TestAssistantToolsConfigRequiresEveryMicroToolKey` — five sub-cases prove every key is required and out-of-range values are rejected. |
-| `internal/agent/tools/microtools/registry_canary_test.go` | `microtools_foundation_did_not_register_any_tool` subtest — asserts that importing the foundation package alone does NOT register any concrete tool, locking the SCOPE-1 design boundary. |
+| `tests/integration/assistant/microtools_registry_canary_test.go` (foundation-boundary subtest) | Foundation registration-boundary subtest. **2026-06-15 reconciliation:** at certification this was the `microtools_foundation_did_not_register_any_tool` subtest asserting the foundation import registers no concrete tool; BUG-031-008 subsequently replaced it with `import_registered_microtools_match_shipped_reality` after spec 076 shipped (`location_normalize` + `entity_resolve` register at import; `unit_convert` + `calculator` stay lazy). The standalone `internal/agent/tools/microtools/registry_canary_test.go` path originally listed here was never authored — the assertion always lived inside the integration canary file. See `## Gaps Re-Verification (bubbles.gaps, 2026-06-15)`. |
 | `tests/integration/assistant/microtools_registry_canary_test.go` | `TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate` — live-stack canary across the existing spec 037 registry. |
 | `tests/e2e/assistant/microtools_config_e2e_test.go` | `TestMicroToolsE2E_MissingLocationProviderFailsStartup` — strips `ASSISTANT_TOOLS_LOCATION_NORMALIZE_PROVIDER` from the resolved test env and asserts `cmd/core` aborts with the named key. |
 | `internal/agent/tools/microtools/chaos_065_test.go` | `TestChaos065_*` (4 functions × 150 probes = 600 envelope-validation probes) — SLA stress smoke. |
@@ -747,7 +749,7 @@ The state-transition-guard's prior 34-block verdict was reduced to a passing tra
 | `internal/agent/tools/microtools/envelope_test.go` | ✅ present (`TestMicroToolEnvelopeSchemaRejectsMissingSource` 7 sub-cases) |
 | `internal/config/assistant_tools.go` | ✅ present (`AssistantToolsMissingKeyError`, 12 required `ASSISTANT_TOOLS_*` keys) |
 | `internal/config/assistant_tools_test.go` | ✅ present (`TestAssistantToolsConfigRequiresEveryMicroToolKey` 5 sub-cases) |
-| `internal/agent/tools/microtools/registry_canary_test.go` | ✅ present (foundation-no-auto-register subtest) |
+| `tests/integration/assistant/microtools_registry_canary_test.go` (foundation-boundary subtest) | ✅ present — registration boundary asserted by the `import_registered_microtools_match_shipped_reality` subtest. **2026-06-15 reconciliation:** the `microtools_foundation_did_not_register_any_tool` subtest it replaced was retired by BUG-031-008 after spec 076 shipped; the standalone `internal/agent/tools/microtools/registry_canary_test.go` path was never authored. See `## Gaps Re-Verification (bubbles.gaps, 2026-06-15)`. |
 | `tests/integration/assistant/microtools_registry_canary_test.go` | ✅ present (`TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate` 4 sub-tests) |
 | `tests/e2e/assistant/microtools_config_e2e_test.go` | ✅ present (`TestMicroToolsE2E_MissingLocationProviderFailsStartup`) |
 | `internal/agent/tools/microtools/chaos_065_test.go` | ✅ present (`TestChaos065_*` 4 functions × 150 probes = 600 SLA probes) |
@@ -786,6 +788,81 @@ EXIT=0
 **Coverage:** 4 chaos test functions × 150 probes per tool = 600 stochastic probes (seeded PRNG, override via `MICROTOOLS_CHAOS_SEED`; per-tool streams seed+0|1|2|3). Each probe asserts: no panic (`recover()`), `ValidateEnvelopeBytes` on raw output, `Source.{Provider,Attribution,Kind.Valid}` preserved, `SchemaVersion` pinned, bounded handler error strings. Adversarial inputs: random arithmetic + garbage for calculator; random value/from/to/substance including unknown units and Unicode for unit_convert; stub provider yielding 0/1/N candidates and provider errors against multilingual + emoji + whitespace inputs for location_normalize; deliberately out-of-range scores stressing the [0,1] clamp for entity_resolve.
 
 **Chaos verdict:** ✅ Zero P0–P4 findings across 600 probes; capability-foundation invariants hold; bounded handler timings observed.
+
+---
+
+## Gaps Re-Verification (bubbles.gaps, 2026-06-15)
+
+**Phase:** gaps. **Agent:** bubbles.gaps (parent-expanded by bubbles.workflow under the `gaps-to-doc` Round R04 quality sweep). **Date:** 2026-06-15. **Target ceiling:** `done`. **Claim Source:** executed (state-transition-guard + foundation unit suite) / interpreted (on-disk traceability cross-check).
+
+Deep gap analysis of spec 065 against its design, scenario manifest, and Scope-1 DoD, plus an on-disk reality cross-check. Because the spec was certified `done` on 2026-06-06 — before later gates and a downstream test change landed — three documentation-and-record gaps surfaced. None is a code regression in the certified foundation slice.
+
+### Gap inventory and disposition
+
+| Gap | Class | Evidence | Disposition (this round) |
+|-----|-------|----------|--------------------------|
+| G022: `gaps` + `harden` specialist phases absent from execution/certification records | Missing phase record | `state-transition-guard.sh` Check 6 + `artifact-lint.sh` (2 of 12 phases missing) | Remediated: genuine gaps analysis (this section) and harden re-verification (next section) executed and recorded in `state.json` execution/certification phase records. |
+| G095: forbidden deferral phrase in the SCOPE-3 overlay E2E descriptions | Uncited disposition | `discovered-issue-disposition-guard.sh` flag on the `microtools_http_test.go` description prose | Remediated: `## Discovered Issues` row `GAP-065-G095-E2E-PHRASE` dated 2026-06-15 added; the overlay E2E is owned by spec 076 (`specs/076-assistant-completion-rescope`). |
+| Canary-subtest reference drift (manifest + report tables point at a never-authored file and a retired subtest name) | Documentation drift | On-disk: `internal/agent/tools/microtools/registry_canary_test.go` absent; the `microtools_foundation_did_not_register_any_tool` subtest replaced by `import_registered_microtools_match_shipped_reality` in BUG-031-008 | Remediated: `scenario-manifest.json` linkedTests repointed to the real integration file + current subtest; Code Diff Evidence + Audit Evidence rows reconciled; `## Discovered Issues` row `GAP-065-CANARY-DOC-DRIFT` added. |
+
+### Canary-subtest drift — accurate attribution (not misattributed to spec 065)
+
+At certification (2026-06-06) the foundation registration boundary was guarded by the `microtools_foundation_did_not_register_any_tool` subtest, which asserted that importing `internal/agent/tools/microtools/` registered no concrete tool. After spec 076 (`specs/076-assistant-completion-rescope`) shipped the overlay tools, `location_normalize` and `entity_resolve` register at package import via `init()`→`agent.RegisterTool`, so BUG-031-008 (`specs/031-live-stack-testing/bugs/BUG-031-008-integration-job-stabilization`, Cluster 3a) replaced that subtest with `import_registered_microtools_match_shipped_reality`. The replacement is non-tautological — it still asserts `unit_convert` and `calculator` do NOT register on bare import. That was a downstream change owned by BUG-031-008; it is recorded here only to reconcile spec-065's stale references and is NOT attributed to spec 065. The standalone `internal/agent/tools/microtools/registry_canary_test.go` file named in the original Code Diff Evidence + Audit tables and in `scenario-manifest.json` was never authored — the assertion always lived inside `tests/integration/assistant/microtools_registry_canary_test.go`.
+
+### Foundation re-verification (fresh, on-disk)
+
+The certified Scope-1 foundation slice (envelope schema validation + SST fail-loud config) is still green on disk.
+
+**Command:** `./smackerel.sh test unit --go --go-run '^(TestMicroToolEnvelopeSchemaRejectsMissingSource|TestAssistantToolsConfigRequiresEveryMicroToolKey)$' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed.
+
+```
+=== RUN   TestMicroToolEnvelopeSchemaRejectsMissingSource
+--- PASS: TestMicroToolEnvelopeSchemaRejectsMissingSource (0.00s)
+    --- PASS: TestMicroToolEnvelopeSchemaRejectsMissingSource/zero_source_rejected (0.00s)
+    --- PASS: TestMicroToolEnvelopeSchemaRejectsMissingSource/missing_provider_rejected (0.00s)
+    --- PASS: TestMicroToolEnvelopeSchemaRejectsMissingSource/missing_kind_rejected (0.00s)
+    --- PASS: TestMicroToolEnvelopeSchemaRejectsMissingSource/missing_retrieved_at_rejected (0.00s)
+    --- PASS: TestMicroToolEnvelopeSchemaRejectsMissingSource/missing_attribution_rejected (0.00s)
+    --- PASS: TestMicroToolEnvelopeSchemaRejectsMissingSource/bytes_path_rejects_missing_source (0.00s)
+    --- PASS: TestMicroToolEnvelopeSchemaRejectsMissingSource/valid_envelope_accepted (0.00s)
+ok      github.com/smackerel/smackerel/internal/agent/tools/microtools  0.011s
+=== RUN   TestAssistantToolsConfigRequiresEveryMicroToolKey
+--- PASS: TestAssistantToolsConfigRequiresEveryMicroToolKey (0.00s)
+    --- PASS: TestAssistantToolsConfigRequiresEveryMicroToolKey/all_missing_names_every_key (0.00s)
+    --- PASS: TestAssistantToolsConfigRequiresEveryMicroToolKey/missing_only_location_provider_names_that_key (0.00s)
+    --- PASS: TestAssistantToolsConfigRequiresEveryMicroToolKey/fully_populated_no_errors (0.00s)
+    --- PASS: TestAssistantToolsConfigRequiresEveryMicroToolKey/confidence_floor_out_of_range_rejected (0.00s)
+    --- PASS: TestAssistantToolsConfigRequiresEveryMicroToolKey/non_strict_bool_rejected (0.00s)
+ok      github.com/smackerel/smackerel/internal/config  0.041s
+[go-unit] go test ./... finished OK
+==== UNIT_EXIT=0 ====
+```
+
+### Verdict
+
+🟢 **GAPS RECONCILED** — no code gap in the certified foundation slice; the surfaced gaps are post-certification gate drift (G022), an uncited overlay-E2E phrase (G095), and canary-subtest documentation drift introduced by downstream BUG-031-008. All three are remediated in this round by genuine analysis plus additive documentation reconciliation. Scopes 2/3/4 remain owned by spec 076; the gaps analysis introduces no new spec-065 implementation work.
+
+## Harden Re-Verification (bubbles.harden, 2026-06-15)
+
+**Phase:** harden. **Agent:** bubbles.harden (parent-expanded by bubbles.workflow under `gaps-to-doc` Round R04). **Date:** 2026-06-15. **Claim Source:** executed (foundation unit suite, shared with the gaps section) / interpreted (robustness review of the foundation contract).
+
+Robustness and edge-case audit of the certified capability-foundation slice. This pass hardens the foundation contract by re-confirming its negative-path and boundary guarantees against the on-disk implementation; it introduces no source changes.
+
+### Hardening checkpoints
+
+| Checkpoint | Guarantee | On-disk evidence |
+|-----------|-----------|------------------|
+| Envelope negative path | Malformed `Source` (zero value, missing provider / kind / retrieved_at / attribution) is rejected; the bytes path rejects a missing source; a valid envelope is accepted | `TestMicroToolEnvelopeSchemaRejectsMissingSource` 7 sub-cases PASS (fresh run above) |
+| SST fail-loud | All 12 `ASSISTANT_TOOLS_*` keys are required; a missing key is named; an out-of-range confidence floor and a non-strict bool are rejected | `TestAssistantToolsConfigRequiresEveryMicroToolKey` 5 sub-cases PASS (fresh run above) |
+| No-defaults compliance | `AssistantToolsMissingKeyError` aborts startup on an empty key; no fallback geocoder is silently chosen | `internal/config/assistant_tools.go` (12-key validation) |
+| Registration boundary | Foundation import registers only the tools shipped reality declares; double registration is guarded (`sync.Once` / `agent.RegisterTool` panics on duplicate); the handler returns `not_configured` when services are unset | `tests/integration/assistant/microtools_registry_canary_test.go::import_registered_microtools_match_shipped_reality` (on disk; GREEN per BUG-031-008) |
+| SLA stress envelope invariants | 600 seeded stochastic probes hold envelope/source/schema invariants with zero panics | `internal/agent/tools/microtools/chaos_065_test.go` (`## Chaos Evidence` above) |
+
+### Verdict
+
+🟢 **HARDEN RE-VERIFICATION CLEAN** — the foundation contract's negative-path, fail-loud, no-defaults, registration-boundary, and SLA-stress guarantees all hold on disk. No new robustness defect surfaced; the only post-certification drift is documentary and is reconciled by the gaps section above.
 
 
 

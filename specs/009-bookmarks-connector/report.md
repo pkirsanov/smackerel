@@ -841,3 +841,75 @@ The strongest evidence: `go build ./...` exits 0 after deleting an exported func
 **Re-certification:** Parent spec 009 `state.json::certifiedAt` bumped from `2026-04-09T01:40:00Z` (preserved as `originalCompletedAt`) to `2026-06-05T22:00:00Z`. Gate G088 triggered the bump because this round modified spec.md and design.md (8 surgical reference-site rewrites) which were certified planning truth. Intermediate re-certifications by prior sweep rounds at 2026-06-04T02:30:00Z and 2026-06-05T20:50:00Z are noted in `state.json::executionHistory`. `originalCompletedAt` preserves the canonical initial 2026-04-09 sign-off date.
 
 **Known scan disposition (G028 FAKE_INTEGRATION carry-over):** The implementation-reality-scan continues to flag 2 lines in `bookmarks.go` (lines 41 and 47, both `return nil, fmt.Errorf(...)` inside `ParseChromeJSON`) as FAKE_INTEGRATION heuristic false-positives. These are legitimate Go error-return idioms that pre-date simplify R6 by many cycles (original 2026-04-09 certification). Simplify R6 did NOT touch any line flagged by the scan — verified by `git diff HEAD -- internal/connector/bookmarks/bookmarks.go | grep -E '^(\+|-).*return nil'` returning empty output. Disposition same as spec 009 R10 close-out (state.json executionHistory at 2026-05-25T17:30:00Z) and BUG-009-002 R30 close-out. Tracked as `observations[OBS-009-SIMP-R6-001]` in state.json with severity `low`, `blocking: false`.
+
+### Regression Quality Sweep R13 — Stochastic Sweep (2026-06-17)
+
+**Trigger:** stochastic-quality-sweep Round 13, trigger `regression`, mode `regression-to-doc`
+**Scope:** Test baseline verification, coverage trend, cross-spec conflict detection
+
+#### Pre-Sweep Assessment
+
+- **Current test baseline:** 192 top-level test functions in `internal/connector/bookmarks/` (up from original 26; growth from bug fixes BUG-009-001 through BUG-009-004)
+- **Prior regression sweep (2026-04-11):** Fixed R001 (symlink path traversal regression test)
+- **All 4 bugs:** BUG-009-001 (DoD scenario fidelity), BUG-009-002 (NormalizeURL chaos R30), BUG-009-003 (topic mapping cancel R10), BUG-009-004 (FolderToTopicMapping dead surface) — all `done`
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| — | — | — | No regressions found | Clean |
+
+#### Verification Evidence
+
+**Regression baseline guard:**
+```
+$ bash .github/bubbles/scripts/regression-baseline-guard.sh specs/009-bookmarks-connector --verbose
+🐾 Regression Baseline Guard
+   Spec: specs/009-bookmarks-connector
+── G044: Regression Baseline ──
+  ⚠️  No test baseline comparison table found in report.md (first run may establish baseline)
+── G045: Cross-Spec Regression ──
+  ℹ️  Found 90 done specs (of 94 total) that need cross-spec regression verification
+  ✅ Cross-spec inventory completed
+── G046: Spec Conflict Detection ──
+  ✅ No route/endpoint collisions detected across specs
+── Summary ──
+🐾 Regression baseline guard: PASSED
+```
+
+**Bookmarks connector unit tests (192 tests):**
+```
+$ go test -v -count=1 ./internal/connector/bookmarks/... 2>&1 | tail -5
+--- PASS: TestSimplifyR6_FolderToTopicMapping_Removed (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/bookmarks     0.250s
+```
+
+**Symlink security regression test (R001):**
+```
+$ go test -v -count=1 ./internal/connector/bookmarks/... -run "Symlink"
+=== RUN   TestSyncSkipsSymlinks
+--- PASS: TestSyncSkipsSymlinks (0.00s)
+PASS
+```
+
+**All connector packages (20 packages):**
+```
+$ go test -count=1 ./internal/connector/...
+ok      github.com/smackerel/smackerel/internal/connector               55.654s
+ok      github.com/smackerel/smackerel/internal/connector/bookmarks     0.316s
+ok      github.com/smackerel/smackerel/internal/connector/browser       0.097s
+ok      github.com/smackerel/smackerel/internal/connector/caldav        0.055s
+... (all 20 packages pass)
+```
+
+#### Cross-Spec Conflict Analysis
+
+- No shared mutable state between bookmarks connector and other file-scanning connectors
+- Registration in `cmd/core/main.go` uses unique connector ID `"bookmarks"`
+- Config SST key `connectors.bookmarks.*` is unique — no overlap with other connector config keys
+- No route/endpoint collisions detected across 90 done specs
+
+#### Summary
+
+Round 13 regression sweep found no regressions. All 192 bookmarks connector tests pass. Symlink path traversal security regression test (R001) remains in place and passing. All 4 associated bugs remain in `done` status. Cross-spec conflict detection shows no collisions. Test baseline has grown from original 26 to 192 due to bug fix coverage additions — this is expected healthy growth, not regression.

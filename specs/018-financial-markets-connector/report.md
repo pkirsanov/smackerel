@@ -69,6 +69,52 @@ func TestRegression_InfNanBackfillLimit(t *testing.T) {
 
 ## Reports
 
+### Simplify Sweep: 2026-06-17
+
+**Trigger:** stochastic-quality-sweep R35 → simplify-to-doc
+**Scope:** `internal/connector/markets/markets.go`
+**Execution model:** parent-expanded-child-mode (nested workflow runtime without `runSubagent`; phase owners executed directly per the workflow-execution-loops parent-expansion contract)
+
+#### Findings
+
+| # | Finding | Kind | Severity | Remediated |
+|---|---------|------|----------|------------|
+| SIMPLIFY-018-R35-001 | The HTTP GET request-build → `connector.DoWithRetry` → `redactHTTPError` → 200-status-check sequence was duplicated verbatim across all four provider fetches (`doFinnhubQuote`, `fetchCoinGeckoPrices`, `fetchFinnhubCompanyNews`, `fetchFREDLatest`) — ~9 lines × 4 sites of identical boilerplate, with the retry/redact/status contract spread across four call sites that could drift apart over time | Duplication | LOW | Yes |
+
+#### Deliberate Non-Findings (probed, intentionally NOT changed)
+
+- **`NewsArticle.Image`** — decoded from the Finnhub JSON payload but never read. Retained as a deliberate DTO field that documents the upstream API response shape; removing it yields no behavior change and trades away API-shape documentation. Non-blocking; left as-is.
+- The remaining structure (per-provider rate limiter, health state machine, daily-summary time gate, symbol resolver) is already at an appropriate level of abstraction after R02/R17/R26/R28/R60 hardening — no over-abstraction or dead code found.
+
+#### Remediation Applied
+
+1. **SIMPLIFY-018-R35-001: Extract shared provider-fetch HTTP helper** — Introduced one private method `httpGetChecked(ctx, u *url.URL, label string) (*http.Response, error)` that consolidates the build-request → bounded-retry → credential-redact → 200-status-check sequence. Each of the four fetch functions now calls `httpGetChecked` and keeps only its own URL-building and response-decoding logic. Behavior is preserved exactly:
+   - URL-build failure → returned unredacted (pre-network error), unchanged.
+   - Transport error → `redactHTTPError(err, label)` with the provider label, unchanged.
+   - Non-200 → `httpErrorWithSnippet(resp, label)` and the response body is drained+closed, unchanged (previously the caller's deferred `Close()` handled this; the helper now closes on its error path).
+   - 200 → caller owns `resp.Body` and closes it via `defer`, unchanged.
+
+   No public API change, no new dependency, no scenario or requirement change, no metadata/artifact-shape change. Net effect: ~36 lines of duplicated boilerplate replaced by a single 9-line helper, giving one source of truth for the provider-fetch HTTP contract.
+
+#### Tests Added
+
+None — this is a pure behavior-preserving refactor. Per the mode's `requireRedGreenProofWhenBehaviorChanges` constraint, no new red→green proof is required because observable behavior does not change. The existing 152-function markets suite is the regression proof: every branch of the extracted helper is already exercised by `retry_test.go` (429 + `Retry-After` recovery for Finnhub and CoinGecko), `Test*_HTTPError`, `Test*_MalformedJSON`, `Test*_MalformedBaseURL`, `TestHTTPErrorResponseDrain`, `TestFinnhubErrorResponseIncludesBody`, and `TestRedactHTTPError_*`. All remained green after the refactor.
+
+#### Evidence
+
+- Markets package tests pass through the repo CLI after the refactor:
+
+```
+$ ./smackerel.sh test unit --go --go-run '<markets-suite selector>'
+[go-unit] applying -run selector: ParseMarketsConfig|FetchFinnhub|FetchCoinGecko|FetchFRED|...
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.349s
+[go-unit] go test ./... finished OK
+WRAPPER_EXIT=0
+```
+
+- A prior full-selector run (`Sync|Connect|Close|Finnhub|CoinGecko|FRED|...`) over `go test ./...` also returned `WRAPPER_EXIT=0` / `go test ./... finished OK`, confirming the refactor breaks no compilation and no test in any package.
+- No planning truth was created or repaired (no spec/design/scope/scenario change), so the finding-owned planning chain (`analyst → ux → design → plan`) was correctly not invoked; only the delivery phases (`implement → test → docs`) applied.
+
 ### Validation Reconciliation: 2026-04-14
 
 **Trigger:** stochastic-quality-sweep R05 → reconcile-to-doc (validate trigger)

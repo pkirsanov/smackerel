@@ -653,3 +653,62 @@ The single STG failure is exclusively the G088 worktree edit; the other 34 check
 
 NOT committed, NOT pushed — all changes left in the working tree for the parent stochastic-quality-sweep / operator. The single atomic commit (subject prefix `bubbles(024/bug-024-005):`) and pre-push validation are owned by that downstream step and run as part of the next push, not inside Round 7. PII redaction: zero `/home/<user>/...` paths in this section's evidence blocks. Parent spec 024 status stays `done` end-to-end; no runtime/schema/NATS/docs-product change.
 
+---
+
+## Connector-Count §22.7 Reconciliation — reconcile-to-doc (2026-06-17)
+
+**Trigger:** Routed remediation from stochastic-quality-sweep Round 23.
+**Mode:** `reconcile-to-doc` (statusCeiling `docs_updated`; spec 024 stays `done`).
+**Execution model:** `parent-expanded-child-mode`. **Owner:** `bubbles.workflow`.
+
+### Finding (RED)
+
+`TestConnectorCountContract_LiveFile` (`internal/deploy`) was failing: the four connector-count surfaces that R-006 + BS-004 + AC-5 require to agree disagreed — `cmd/core/connectors.go=17`, `docs/smackerel.md §22.7=18`, `docs/smackerel.md §24-A=17`, `docs/Development.md=17`. Three of four surfaces were at 17; `§22.7` was the lone outlier at 18.
+
+```
+$ go test -count=1 -run TestConnectorCountContract ./internal/deploy/...
+--- FAIL: TestConnectorCountContract_LiveFile (0.00s)
+    docs_connector_count_contract_test.go:273: live connector-count contract violated (spec 024 R-006 + BS-004 + AC-5): contract violation: connector count disagreement — cmd/core/connectors.go=17, docs/smackerel.md §22.7=18, docs/smackerel.md §24-A=17, docs/Development.md=17 — all four MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/deploy  0.025s
+GO_TEST_EXIT=1
+```
+
+### Root Cause
+
+An uncommitted erroneous worktree edit had bumped `docs/smackerel.md §22.7` away from the runtime truth in three places:
+1. Header (line ~2797): `### 22.7 Committed Connector Inventory (17 connectors)` → `(18 connectors)`.
+2. Intro (line ~2799): `All 17 connectors are implemented under …` → `All 18 connectors …`.
+3. A phantom inventory row 18 was appended: `| 18 | Google Photos | photos/ | Media | … (spec 040) |`.
+
+No 18th connector was added to the runtime registry. `cmd/core/connectors.go` registers exactly **17** connectors in its `[]connector.Connector{…}` slice, and `internal/connector/photos/` is a photo-library package that is **not** a registered connector. §24-A (`Connector plugins (17 committed)`) and `docs/Development.md` (`17 passive connectors`) were already correct at 17. The correct count is **17**.
+
+### Fix (R-006-owned doc reconciliation)
+
+Reverted all three erroneous §22.7 sub-edits — header `18→17`, intro `All 18→All 17`, and removal of the phantom Google Photos row — restoring four-surface agreement at 17. Only `docs/smackerel.md` was changed; `cmd/core/connectors.go`, `internal/deploy/docs_connector_count_contract_test.go`, §24-A, and `docs/Development.md` were untouched (already at 17).
+
+### Verification (GREEN)
+
+```
+$ go test -count=1 -run TestConnectorCountContract ./internal/deploy/...
+ok      github.com/smackerel/smackerel/internal/deploy  0.029s
+GO_TEST_EXIT=0
+
+$ grep -n "Committed Connector Inventory (\|Connector plugins (" docs/smackerel.md
+2797:### 22.7 Committed Connector Inventory (17 connectors)
+2906:│   ├── Connector plugins (17 committed)
+
+$ grep -n "Google Photos" docs/smackerel.md
+1291:| **API** | Google Photos API or local EXIF |
+# only an unrelated API reference remains; the phantom §22.7 connector row is gone
+
+$ git --no-pager diff --stat -- docs/smackerel.md
+# empty — the uncommitted erroneous edit is fully reverted to HEAD; no spurious change introduced
+```
+
+All four surfaces now agree on **17**; the contract test passes.
+
+### Disposition
+
+Doc-reconciliation only — no spec.md/design.md/scopes.md planning-truth edit, no runtime/schema/test change. **NOT committed, NOT pushed** — left in the working tree for the operator. Parent spec 024 status stays `done` (statusCeiling `docs_updated`; no promotion). Only `docs/smackerel.md` (reverted to HEAD) and this spec-024 `report.md` / `state.json` execution record were touched.
+

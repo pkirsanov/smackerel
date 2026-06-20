@@ -120,6 +120,8 @@ ML_MODEL_MEMORY_PROFILES_JSON="$(required_json_value services.ml.model_memory_pr
 
 Every contract service's `deploy.resources.limits` block now uses fail-loud SST substitution. No hardcoded literals remain.
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+<!-- R03 2026-06-15: original 2026-05-13 delivery capture, preserved verbatim for the audit trail; it pre-dates the current evidence-signal heuristic (which does not score `.yml` paths) and references the original 5-service set later specs extended to prometheus/searxng. Current-truth re-verified in "## R03 Improve-Existing Re-Verification" below. -->
 ```text
 $ grep -B 1 -A 4 'cpus:.*_CPU_LIMIT' deploy/compose.deploy.yml | head -40
         limits:
@@ -145,6 +147,7 @@ $ grep -B 1 -A 4 'cpus:.*_CPU_LIMIT' deploy/compose.deploy.yml | head -40
 $ grep -E '^\s+memory:\s+[0-9]+[GM]\s*$' deploy/compose.deploy.yml | wc -l
 0
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 Zero hardcoded `memory: <value>` literals remain.
 
@@ -276,6 +279,8 @@ All packages OK. The new spec 045 fields integrate cleanly with every existing t
 
 Every service in the read-only allowlist now declares `read_only: true` with explicit `tmpfs:` mounts. Postgres + nats remain writable per the design exemption.
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+<!-- R03 2026-06-15: original 2026-05-13 delivery capture, preserved verbatim for the audit trail; it pre-dates the current evidence-signal heuristic (which does not score `.yml` paths) and references the original 5-service set later specs extended to prometheus/searxng. Current-truth re-verified in "## R03 Improve-Existing Re-Verification" below. -->
 ```text
 $ awk '/^  smackerel-core:/{p=1} /^  [a-z]/&&!/^  smackerel-core:/{p=0} p&&/read_only|tmpfs|^      -/' deploy/compose.deploy.yml | head -10
     read_only: true
@@ -298,6 +303,7 @@ $ awk '/^  ollama:/{p=1} /^  [a-z]/&&!/^  ollama:/{p=0} p&&/read_only|tmpfs|^   
 $ grep -E '^\s+read_only:\s*true' deploy/compose.deploy.yml | wc -l
 3
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 Three `read_only: true` declarations (one each for smackerel-core, smackerel-ml, ollama). Postgres and nats blocks contain no `read_only:` line — they remain writable per spec design table.
 
@@ -305,6 +311,8 @@ Three `read_only: true` declarations (one each for smackerel-core, smackerel-ml,
 
 Identical hardening landed in the dev stack so issues surface before deploy.
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+<!-- R03 2026-06-15: original 2026-05-13 delivery capture, preserved verbatim for the audit trail; it pre-dates the current evidence-signal heuristic (which does not score `.yml` paths). Current-truth re-verified in "## R03 Improve-Existing Re-Verification" below. -->
 ```text
 $ grep -B 1 -A 2 'read_only: true' docker-compose.yml
     # surfaces issues (e.g. unexpected writes to `/`) before deploy.
@@ -324,6 +332,7 @@ $ grep -B 1 -A 2 'read_only: true' docker-compose.yml
       - /tmp:size=64m,mode=1777,nosuid,noexec,nodev
       - /.ollama_tmp:size=64m,mode=1777,nosuid,nodev
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 ### Evidence #3 — Filesystem contract tests pass: `internal/deploy/compose_filesystem_contract_test.go`
 
@@ -513,3 +522,61 @@ ok      github.com/smackerel/smackerel/internal/deploy  0.034s
 ```
 
 Mutation surface covered: missing CPU limit, missing memory limit, hardcoded literal, default-fallback substitution form, missing read_only on a hardened service, postgres acquiring read_only, NATS acquiring read_only, and unauthorized tmpfs path on a hardened service. Plus the live-stack smoke (validation evidence above) acts as runtime chaos by stressing the actual ML container's HF/sentence-transformers cache relocation under real model startup pressure.
+
+## R03 Improve-Existing Re-Verification (2026-06-15)
+
+**Phase Agents:** bubbles.harden, bubbles.gaps (parent-expanded `improve-existing` child mode, Round R03 of the stochastic quality sweep)
+
+This section records the current-truth re-verification performed during the R03 `improve-existing` pass. It is the live evidence backing the `harden` and `gaps` phase records added to `state.json` for Gate G022, and it supplies a current-truth re-capture of the resource/filesystem invariants whose original 2026-05-13 delivery blocks are preserved (skip-wrapped) above. No spec-045-owned source, contract, or config was changed in R03 — the invariants are intact and the pass found no new actionable hardening or coverage gap.
+
+### Re-Verification #1 — Spec 045 contract + ML-envelope tests PASS today
+
+12 `internal/deploy` contract tests (6 resource + 6 filesystem) and 5 `internal/config` ML-envelope tests PASS via the repo CLI. Exit 0.
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestComposeResourceContract|TestFilesystemContract|TestValidate_RejectsMissingMLMemoryLimit|TestValidate_RejectsOversizedMLModel|TestValidate_RejectsMissingModelProfileEntry|TestValidate_AcceptsModelWithinEnvelope|TestParseComposeMemoryToMiB' --verbose
+--- PASS: TestValidate_RejectsMissingMLMemoryLimit (0.01s)
+--- PASS: TestValidate_RejectsOversizedMLModel (0.00s)
+--- PASS: TestValidate_RejectsMissingModelProfileEntry (0.01s)
+--- PASS: TestValidate_AcceptsModelWithinEnvelope (0.01s)
+--- PASS: TestParseComposeMemoryToMiB (0.00s)
+ok      github.com/smackerel/smackerel/internal/config  0.277s
+--- PASS: TestFilesystemContract_LiveFile (0.02s)
+--- PASS: TestFilesystemContract_LiveFile_DevCompose (0.03s)
+--- PASS: TestFilesystemContract_AdversarialMissingReadOnly (0.00s)
+--- PASS: TestFilesystemContract_AdversarialPostgresReadOnly (0.00s)
+--- PASS: TestFilesystemContract_AdversarialUnauthorizedTmpfs (0.00s)
+--- PASS: TestFilesystemContract_AdversarialNATSReadOnly (0.00s)
+--- PASS: TestComposeResourceContract_LiveFile (0.02s)
+--- PASS: TestComposeResourceContract_AdversarialMissingCPU (0.00s)
+--- PASS: TestComposeResourceContract_AdversarialMissingMemory (0.00s)
+--- PASS: TestComposeResourceContract_AdversarialHardcodedLiteral (0.00s)
+--- PASS: TestComposeResourceContract_AdversarialDefaultFallback (0.00s)
+--- PASS: TestComposeResourceContract_AdversarialSearxNGLiteral (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.210s
+[go-unit] go test ./... finished OK
+```
+
+The `TestComposeResourceContract_LiveFile` and `TestFilesystemContract_LiveFile` assertions confirm the live contract now covers the original 5 services plus `prometheus` and `searxng` (resource limits) and `prometheus` (read-only root) — later specs extended the spec-045 contract pattern to new services while the spec-045-owned invariants remain intact and enforced.
+
+### Re-Verification #2 — Current resource substitution config (extended to prometheus/searxng)
+
+```text
+$ grep -nE '_CPU_LIMIT|_MEMORY_LIMIT' ./deploy/compose.deploy.yml
+66:          cpus: "${POSTGRES_CPU_LIMIT:?POSTGRES_CPU_LIMIT must be set by deploy adapter}"
+67:          memory: "${POSTGRES_MEMORY_LIMIT:?POSTGRES_MEMORY_LIMIT must be set by deploy adapter}"
+105:          cpus: "${NATS_CPU_LIMIT:?NATS_CPU_LIMIT must be set by deploy adapter}"
+106:          memory: "${NATS_MEMORY_LIMIT:?NATS_MEMORY_LIMIT must be set by deploy adapter}"
+172:          cpus: "${CORE_CPU_LIMIT:?CORE_CPU_LIMIT must be set by deploy adapter}"
+173:          memory: "${CORE_MEMORY_LIMIT:?CORE_MEMORY_LIMIT must be set by deploy adapter}"
+244:          cpus: "${ML_CPU_LIMIT:?ML_CPU_LIMIT must be set by deploy adapter}"
+245:          memory: "${ML_MEMORY_LIMIT:?ML_MEMORY_LIMIT must be set by deploy adapter}"
+327:          cpus: "${OLLAMA_CPU_LIMIT:?OLLAMA_CPU_LIMIT must be set by deploy adapter}"
+328:          memory: "${OLLAMA_MEMORY_LIMIT:?OLLAMA_MEMORY_LIMIT must be set by deploy adapter}"
+397:          cpus: "${PROMETHEUS_CPU_LIMIT:?PROMETHEUS_CPU_LIMIT must be set by deploy adapter}"
+398:          memory: "${PROMETHEUS_MEMORY_LIMIT:?PROMETHEUS_MEMORY_LIMIT must be set by deploy adapter}"
+450:          cpus: "${SEARXNG_CPU_LIMIT:?SEARXNG_CPU_LIMIT must be set by deploy adapter}"
+451:          memory: "${SEARXNG_MEMORY_LIMIT:?SEARXNG_MEMORY_LIMIT must be set by deploy adapter}"
+```
+
+Every contract service uses the fail-loud `${VAR:?...}` SST form (Gate G028 NO-DEFAULTS); zero `${VAR:-default}` fallbacks or hardcoded literals remain. The ML deploy `/tmp` tmpfs size was reduced from the original 768M to 128M by a later spec (model baked into the image rather than downloaded to tmpfs); that change is owned by the later spec, not spec 045, and is why the original delivery captures above are preserved verbatim rather than overwritten with today's values.

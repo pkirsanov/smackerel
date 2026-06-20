@@ -2,8 +2,51 @@
 
 > **Author:** bubbles.design
 > **Date:** April 9, 2026
-> **Status:** Draft
+> **Status:** Done
 > **Spec:** [spec.md](spec.md)
+
+---
+
+## Implementation Reality (Shipped Architecture)
+
+> **Reconciliation (sweep-2026-06-17 `gaps-to-doc`, Round 9).** This section is the
+> authoritative description of what actually shipped. Where it differs from the
+> original "Design Brief", "Resolved Decisions", "Dependencies", "Data Flow —
+> Real-Time (Gateway)", "Patterns to Avoid", or the Component Design code blocks
+> below, **this section wins**; those passages are retained as the original
+> pre-implementation design sketch. report.md ("Design–implementation alignment")
+> already accepted this divergence as *Aligned*; the planning artifacts are
+> reconciled here so design.md no longer misrepresents the shipped system.
+
+**No third-party Discord library.** The connector does **not** depend on
+`github.com/bwmarrin/discordgo` — it is absent from `go.mod` and `go.sum`. It talks
+to the Discord REST API directly through the Go standard-library `net/http` client
+(`Connector.doDiscordRequest`) and its own internal message types
+(`DiscordMessage` / `apiMessage` in `internal/connector/discord/discord.go`).
+
+**Real-time capture is REST polling, not a WebSocket Gateway.** "Gateway" in this
+connector is the `GatewayClient` interface satisfied by `EventPoller`
+(`internal/connector/discord/gateway.go`): it polls each monitored channel via REST
+every `defaultPollInterval` (5s), buffers `MESSAGE_CREATE` events on a channel, and
+drains them during `Sync()`. There is no WSS connection and no `discordgo.Session`.
+The `GatewayClient` interface is the swap seam a real WebSocket implementation can
+satisfy without changing `Sync()`; the intent-bit constants
+(`IntentGuilds`/`IntentGuildMessages`/`IntentMessageContent`) are recorded for that
+compatibility.
+
+**Functional coverage is unchanged.** Every spec requirement is delivered against
+this architecture: message-type classification (`classifyMessage`), R-004 metadata
+(`normalizeMessage`), tier assignment (`assignTier`), REST backfill + pagination
+(`fetchChannelMessages`), pinned messages (`fetchPinnedMessages`), active/archived
+threads (`fetchActiveThreads` / `fetchArchivedThreads`), bot-command capture
+(`ParseBotCommand`), rate-limit handling (`updateRateLimits` / `parseRetryAfter`),
+and per-channel snowflake cursors. See scopes.md DoD evidence and report.md test
+evidence (150 unit test functions, green with `-race`).
+
+**History.** Scope 4 was once claimed done with no `gateway.go` at all (validate
+finding `V-014-R25-004`); the REST `EventPoller` was then implemented to satisfy the
+real-time requirement without a WebSocket dependency. This reconciliation closes the
+residual design-doc drift from that episode.
 
 ---
 
@@ -28,11 +71,15 @@ Add a Discord connector that ingests messages from user-configured channels usin
 
 ### Patterns to Avoid
 
+> **Superseded — see [Implementation Reality](#implementation-reality-shipped-architecture):** the shipped connector intentionally uses bounded REST polling (`EventPoller`, 5s interval) behind the swappable `GatewayClient` interface. The "Polling-only approach" caveat below reflects the original design intent, not the shipped decision.
+
 - **Direct WebSocket management** — use `discordgo`'s built-in Gateway session management, not raw WebSocket handling
 - **Polling-only approach** — unlike RSS, Discord has a real-time Gateway; ignoring it wastes the real-time capability
 - **Server-wide ingestion** — never scan all channels in a server; only explicitly configured channels
 
 ### Resolved Decisions
+
+> **Superseded — see [Implementation Reality](#implementation-reality-shipped-architecture):** `discordgo` was **not** adopted; the connector uses the Go stdlib `net/http` client and a REST `EventPoller` instead of a WebSocket Gateway.
 
 - **Library:** `github.com/bwmarrin/discordgo` v0.28+ for both REST and Gateway
 - **Connector ID:** `"discord"`
@@ -109,6 +156,8 @@ Add a Discord connector that ingests messages from user-configured channels usin
 ---
 
 ## Component Design
+
+> **Original design sketch — see [Implementation Reality](#implementation-reality-shipped-architecture):** the `discordgo`-based code blocks in this section are the pre-implementation sketch. The shipped code uses the Go stdlib `net/http` client and internal `DiscordMessage` / `apiMessage` types; the `Normalizer` and `gateway.go` handler shapes below were realized as package-level functions (`normalizeMessage`, `classifyMessage`, `assignTier`) and the `EventPoller` REST poller.
 
 ### 1. `internal/connector/discord/discord.go` — Connector Interface
 
@@ -473,8 +522,10 @@ No new NATS streams or subjects required. Discord artifacts flow through the exi
 
 ## Dependencies
 
+> **Superseded — see [Implementation Reality](#implementation-reality-shipped-architecture):** the shipped connector adds **no** third-party dependency. The row below records the original plan; `discordgo` is absent from `go.mod` / `go.sum`. The connector uses only the Go standard library (`net/http`, `encoding/json`).
+
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| `github.com/bwmarrin/discordgo` | v0.28+ | Discord Bot API (REST + Gateway) |
+| `github.com/bwmarrin/discordgo` | v0.28+ | Discord Bot API (REST + Gateway) — *not adopted; see note above* |
 
 No Python sidecar changes needed — Discord messages are text-based and flow through the standard ML processing pipeline.

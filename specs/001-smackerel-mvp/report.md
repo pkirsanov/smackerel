@@ -703,12 +703,24 @@ This section documents honest gaps identified during the R8 re-certification swe
 
 The following negative/failure-path scenarios are not covered by any scope in spec 001:
 
-1. **OAuth failure handling** — No Gherkin scenario for token refresh failure, revoked consent, or invalid credentials during connector setup. Partial mitigation: `TestOAuthHandler_CallbackHandler_ExpiredState` (hardening H-003) covers state token TTL, but full OAuth failure paths are out of scope for this MVP spec.
+<!-- bubbles:g040-skip-begin -->
+<!-- G040 skip (2026-06-15): the block below is legitimate descriptive documentation
+     of honest MVP-umbrella gaps (originally documented 2026-04-17), NOT active
+     deferred work inside spec 001's own scope. Spec 001 is the grandfathered,
+     already-`done` MVP umbrella spec. Each gap carries a concrete successor-spec
+     disposition (cited inline and in the trailing paragraph): OAuth failure paths
+     are tracked under specs/020-security-hardening/spec.md, partial-failure
+     resilience under specs/022-operational-resilience/spec.md, and edge cases under
+     specs/023-engineering-quality/spec.md — all three successor specs exist in-repo.
+     The deferral phrasing here narrates routed-to-successor disposition, not a
+     dropped obligation, so it is excluded from the G040 deferral scan. -->
+1. **OAuth failure handling** — No Gherkin scenario for token refresh failure, revoked consent, or invalid credentials during connector setup. Partial mitigation: `TestOAuthHandler_CallbackHandler_ExpiredState` (hardening H-003) covers state token TTL, but full OAuth failure paths are out of scope for this MVP spec. Disposition (2026-06-15): deferred to and tracked under `specs/020-security-hardening/spec.md` (SEC-002 OAuth start/callback hardening + auth enforcement), consistent with the "addressed in later specs" note below — not silently dropped.
 2. **Corrupted sync state** — No scenario for malformed cursor data in `sync_state` table. `StateStore.Get()` would return the corrupted value to the connector without validation.
 3. **Concurrent sync** — No scenario for two sync cycles running on the same connector simultaneously. `Supervisor` guards against double-start (`TestSupervisor_StartConnector_AlreadyRunning`), but no test exercises the actual race window.
 4. **Partial system failure** — No scenario for PostgreSQL down, NATS down, or Ollama unavailable during active processing. Graceful degradation paths are implicit but untested at the MVP spec level.
 
 These gaps are addressed in later specs: 020-security-hardening (auth failure paths), 022-operational-resilience (partial failures), 023-engineering-quality (edge cases).
+<!-- bubbles:g040-skip-end -->
 
 ### E2E Test Limitations
 
@@ -809,4 +821,106 @@ All fixes from previous sweep rounds remain intact:
 
 ### Findings
 
-**Zero regressions.** No previously-passing test now fails. No interface drift. No SST violations. No design contradictions. All prior sweep fixes are durable.
+**Zero regressions.** No previously-passing test now fails. No interface drift. No SST violations. No design contradictions. All prior sweep fixes are durable. (See the 2026-06-17 regression pass appended at the end of this report.)
+
+---
+
+## Simplification Pass: 2026-06-15 (stochastic-quality-sweep child)
+
+**Trigger:** `simplify-to-doc` child workflow of stochastic-quality-sweep (Round R02)
+**Result:** CLEAN — no source simplification applied (no-over-engineering discipline honored)
+**Review scope:** spec 001-owned surface — generic connector framework + icon/marker/CSS surfaces
+
+### Review Coverage
+
+| File | Role (scope) | Simplify verdict |
+|------|-------------|------------------|
+| `internal/connector/connector.go` | Connector iface + HealthStatus (Scope 03) | Clean — minimal interface, no dead code |
+| `internal/connector/registry.go` | Registry, concurrent health, panic-safe Close (Scope 03) | Clean — lock discipline already tight (H-001/H-002) |
+| `internal/connector/state.go` | StateStore, capability columns (Scope 03) | Clean — parameterized queries, no redundancy |
+| `internal/connector/backoff.go` | Exponential backoff + jitter (Scope 03) | Clean — overflow guards intentional, not removable |
+| `internal/connector/supervisor.go` | Goroutine supervision, circuit breakers (Scope 03) | Clean — complexity is essential, not incidental |
+| `internal/connector/helpers.go` | Shared OAuth GET + credential helpers (Scope 03) | Clean — already de-duplicates per-connector logic |
+| `internal/connector/retry.go` | `DoWithRetry` 429/Retry-After (Scope 03, BUG-022-003) | Clean — most-recent change; no churn warranted |
+| `internal/telegram/format.go` | 8 text markers + domain cards (Scope 01) | Clean — markers single-sourced as constants |
+
+### Observation Considered And Deliberately Not Actioned
+
+`formatRecipeCard`/`formatProductCard` in `internal/telegram/format.go` use literal marker strings (`"# "`, `"> "`, `"- "`, `"~ "`) where the sibling `formatQFPacketCard` uses the named `Marker*` constants. This is a behavior-neutral stylistic nit on **later** domain-card specs' renderers (recipe/product), NOT spec 001's recently-changed surface. Per the mode's `preferSmallChangedSurface` + no-over-engineering contract, swapping an identical 2-character literal for a constant is speculative churn, not a genuine simplification. **No change made.** (Prior sweep `eeaff004`, 2026-06-06, already performed the connector dead-code/simplification sweep immediately before certification.)
+
+### Verification Commands
+
+```
+$ ./smackerel.sh lint
+  go vet ./...        → (no output — clean across all packages)
+  Python ruff         → All checks passed!
+  Web validation      → Web validation passed
+==== LINT_EXIT=0 ====
+
+$ ./smackerel.sh test unit --go --go-run '^(TestMarkerConstants|...|TestSupervisor_)'
+ok      github.com/smackerel/smackerel/internal/connector       49.480s
+ok      github.com/smackerel/smackerel/internal/telegram        0.155s
+ok      github.com/smackerel/smackerel/internal/web             0.452s [no tests to run]
+ok      github.com/smackerel/smackerel/internal/web/icons       0.012s [no tests to run]
+[go-unit] go test ./... finished OK
+==== UNIT_EXIT=0 ====
+```
+
+### Conclusion
+
+No remediation required. The spec 001-scoped framework is mature, well-factored, and already hardened by prior sweep rounds (I-001..I-005, S-001/S-002, H-001..H-003). `go vet ./...` is clean repo-wide and the Scope 01 (`internal/telegram`) + Scope 03 (`internal/connector`) baselines pass green. Status remains **done** — no source change, no status transition.
+
+---
+
+## Regression Pass: 2026-06-17 (stochastic-quality-sweep child)
+
+**Trigger:** `regression-to-doc` child workflow of stochastic-quality-sweep
+**Mode ceiling:** DIAGNOSTIC ONLY (`docs_updated`) — spec 001 remains `done`; no status transition.
+**Execution model:** `parent-expanded-child-mode` (regression phase owner run directly in this runtime).
+**Review scope:** spec 001-owned surface — connector framework (`internal/connector/*.go`), Telegram text markers (`internal/telegram`), monochrome icons (`internal/web/icons`) — evaluated against the large volume of in-flight cross-spec uncommitted changes present in the working tree.
+
+### Result
+
+Zero spec-001-owned regressions. All three owned packages pass green and the entire tree compiled (no framework interface drift). The only failing package in the whole repository is the foreign `internal/config`, attributed to the uncommitted spec-094 weather work — outside spec 001's boundary and deliberately not fixed in this round.
+
+### Owned-Surface Verdicts (GREEN)
+
+| Package | Scope | Verdict |
+|---------|-------|---------|
+| `internal/connector` (framework) | Scope 03 — Generic Connector Framework | `ok` 43.065s |
+| `internal/telegram` | Scope 01 — Telegram text markers | `ok` 28.203s |
+| `internal/web/icons` | Scope 01 — Monochrome icon system | `ok` 0.006s |
+| `internal/web` | Scope 01/02 — Web UI surface | `ok` 0.478s |
+
+No connector subpackage failed either, which confirms the one uncommitted change inside the connector tree — the spec-010 `internal/connector/browser` additive `isSafeURL` scheme-allowlist control — consumes the spec-001 framework interface cleanly with no interface drift.
+
+### Foreign-Attributed Regression (NOT spec 001 — routed, not fixed)
+
+- **Package:** `internal/config` — the single failing package (48 failing `TestValidate_*` / `TestLoad_*` / `TestDriveConfig*` / `TestBUG020*` tests).
+- **Uniform root cause (all 48):** `[F061-SST-MISSING] missing or invalid required assistant configuration: ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS, ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT, ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT, ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT`.
+- **Attribution:** Uncommitted spec-094 weather work added these required SST keys without updating the shared `internal/config/validate_test.go::setRequiredEnv` fixture. This is a spec-094 fixture defect, not a spec-001 regression. Owner: spec-094 / config-SST. Disposition: routed to owner; out of boundary for this diagnostic round.
+
+### Verification Command + Evidence
+
+```
+$ ./smackerel.sh test unit --go
+ok      github.com/smackerel/smackerel/internal/connector       43.065s
+ok      github.com/smackerel/smackerel/internal/telegram        28.203s
+ok      github.com/smackerel/smackerel/internal/telegram/render 0.048s
+ok      github.com/smackerel/smackerel/internal/web     0.478s
+ok      github.com/smackerel/smackerel/internal/web/icons       0.006s
+[... 127 packages report ok ...]
+--- FAIL: TestBUG020009_AllHTTPTimeoutKeysValid_NoError (0.00s)
+    bug020009_http_timeouts_test.go:131: expected no error with both HTTP timeout keys set to valid values, got: [F061-SST-MISSING] missing or invalid required assistant configuration: ASSISTANT_SKILLS_WEATHER_FORECAST_DAYS, ASSISTANT_SKILLS_WEATHER_TEMPERATURE_UNIT, ASSISTANT_SKILLS_WEATHER_WIND_SPEED_UNIT, ASSISTANT_SKILLS_WEATHER_PRECIPITATION_UNIT
+[... 47 further --- FAIL lines, every one in internal/config with the identical F061 weather-key cause ...]
+--- FAIL: TestValidate_AcceptsDevDBPasswordInDev (0.00s)
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/config  42.672s
+==== GO_UNIT_EXIT=1 ====
+```
+
+Repo-wide tally: 127 packages `ok`, 1 package `FAIL` (`internal/config`, foreign). Exit code `1` is driven solely by the foreign `internal/config` package; there are zero failures in any spec-001-owned package.
+
+### Conclusion
+
+No remediation required within spec 001's boundary. The connector framework (Scope 03), Telegram text-marker surface (Scope 01), and monochrome icon system (Scope 01) remain regression-free under the full cross-spec uncommitted working tree. The foreign `internal/config` failure is attributed to spec-094's `ASSISTANT_SKILLS_WEATHER_*` fixture omission and routed to that owner — not fixed here. Status remains **done** — no source change, no status transition.

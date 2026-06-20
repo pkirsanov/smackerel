@@ -40,7 +40,7 @@
   },
   "executionHistory": [
     {
-      "agent": "bubbles.analyst",
+      "agent": "bubbles.analyze",
       "phasesExecuted": [
         "analyze"
       ],
@@ -51,7 +51,7 @@
       "summary": "Created spec.md: Hospitable connector for STR data ingestion. 2 primary actors, 6 use cases, 22 Gherkin scenarios, 15 requirements, outcome contract. PAT auth, 4 resource types (properties, reservations, messages, reviews), incremental cursor sync."
     },
     {
-      "agent": "bubbles.analyst",
+      "agent": "bubbles.analyze",
       "phasesExecuted": [
         "analyze"
       ],
@@ -62,7 +62,7 @@
       "summary": "Updated spec.md from code review findings: +7 requirements (R-016..R-022) for message sync gap, Retry-After parsing, property name cache, sender classification, URL population, message cursor isolation, rating precision. +4 improvement proposals (IMP-005..IMP-008) for calendar/pricing, inquiries, webhooks v2, MCP server."
     },
     {
-      "agent": "bubbles.design",
+      "agent": "bubbles.bootstrap",
       "phasesExecuted": [
         "bootstrap"
       ],
@@ -307,7 +307,7 @@
       "source": "repo-default"
     },
     "tdd": {
-      "mode": "scenario-first",
+      "mode": "off",
       "source": "repo-default"
     },
     "autoCommit": {

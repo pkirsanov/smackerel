@@ -1056,3 +1056,272 @@ ok  github.com/smackerel/smackerel/internal/connector/discord  7.861s
 ```
 
 No behavior changes — all 150 discord test functions pass unchanged.
+
+---
+
+### Security-To-Doc Sweep (Stochastic Round 20) — 2026-06-17
+
+**Trigger:** `security` probe via stochastic-quality-sweep (round 20 of 20)
+**Mode:** `security-to-doc` (statusCeiling `docs_updated`; spec status unchanged — stays `done`)
+**Agent:** `bubbles.workflow` (child of stochastic sweep; `executionModel: parent-expanded-child-mode`)
+
+#### Context
+
+Final sweep round. A sibling connector (browser, spec 010) was hardened this
+cycle with an `isSafeURL` scheme-allowlist dropping `javascript:`/`data:`/`vbscript:`
+at the ingestion boundary. This round threat-modeled the Discord connector for the
+analogous untrusted-external-content vector (message content, embed/attachment/capture
+URLs, bot-token hygiene, rate-limit bounds, fail-closed parsing) and found the URL
+vector already fully covered — but surfaced one residual data-flow gap missed by the
+Pass-3 sanitization sweep.
+
+#### Findings (1 genuine security issue identified)
+
+| # | Finding | OWASP / CWE | Severity | Status |
+|---|---------|-------------|----------|--------|
+| SEC-014-S20-1 | `metadata["capture_comment"]` stored without control-character sanitization — the comment from an untrusted `!save <url> <comment>` / `!capture …` bot message is returned by `ParseBotCommand` with only `TrimSpace` + length-truncation and stored verbatim by `normalizeMessage`. Every sibling untrusted text field (RawContent SEC3-1; author/server/channel/thread names SEC3-2; embed title/desc; reaction emoji) already passes through `sanitizeControlChars`/`sanitizeStr`. NUL bytes and ANSI/terminal escape sequences therefore reach persisted artifact metadata and downstream log/render sinks unsanitized. | A03 Injection / CWE-117 (log injection), CWE-150 (escape-sequence injection) | Medium | Fixed |
+
+#### Prior posture confirmed (no remaining issue — URL vector already hardened)
+
+| Check | Result |
+|-------|--------|
+| Embed URL sink (`metadata["embeds"][].URL`) | Solid — `sanitizeEmbedURL` → `isSafeURL` (http/https only + SSRF) |
+| Attachment URL sink (`metadata["attachments"][].URL`) | Solid — `sanitizeEmbedURL` → `isSafeURL` |
+| Capture URL sink (`metadata["capture_url"]`) | Solid — `ParseBotCommand` pre-filters non-`http(s)` prefix + `isSafeURL` (also rejects control-char URLs via `url.Parse` error) |
+| `javascript:`/`data:`/`vbscript:`/`file:`/`gopher:`/`ftp:` schemes | Solid — `isSafeURL` allowlists `http`/`https` only (Go lowercases scheme); covered by `TestIsSafeURL_RejectsNonHTTPSchemes` |
+| Artifact `URL` field | Solid — constructed only from snowflake-validated GuildID/ChannelID/MessageID |
+| Bot-token / secret hygiene | Solid — token set only in `Authorization` header; never logged; auth never echoed in error bodies (`truncateErrorBody` carries only Discord's error JSON) |
+| Rate-limit / resource bounds | Solid — NaN/Inf guards + caps on `Retry-After` / `X-RateLimit-Reset` (BUG-014-002); artifact/thread/channel/poller caps |
+| Fail-closed parsing | Solid — invalid snowflakes skipped; unsafe URLs dropped; cursor scope enforced |
+
+#### Remediation Summary
+
+**Files modified (spec-014 owned surface only):**
+
+- `internal/connector/discord/discord.go`:
+  - SEC-014-S20-1: `normalizeMessage()` now stores the capture comment via
+    `sanitizeStr(captureComment, maxBotCommandCommentLen)` (control-char strip
+    keeping `\n`/`\r`/`\t` + length cap), and only when the sanitized result is
+    non-empty. Closes the lone untrusted text field that bypassed the SEC3-1/SEC3-2
+    sanitization control. `ParseBotCommand` is called only from this site, so the
+    storage-boundary fix fully closes the gap.
+
+- `internal/connector/discord/discord_test.go`:
+  - Added `TestNormalizeMessage_CaptureCommentSanitized` — adversarial regression:
+    a `!save <url> good\x00read\x1b[31mX` message must yield a `capture_comment`
+    with no disallowed control chars and exact value `goodread[31mX`. Fails on the
+    pre-fix code (verbatim `good\x00read\x1b[31mX`), passes after the fix.
+
+#### Validation (RED → GREEN, native single-package to avoid the unrelated `internal/config` spec-094 RED fixture)
+
+```
+$ oom-preflight.sh 6000
+oom-preflight: OK — 18684 MB available (need 6000 MB; swap used 1721 MB).
+
+# RED (pre-fix) — regression catches the bug
+$ go test -run 'TestNormalizeMessage_CaptureCommentSanitized' ./internal/connector/discord/... -v
+    discord_test.go:3096: capture_comment retains control char U+0000 in "good\x00read\x1b[31mX"
+    discord_test.go:3096: capture_comment retains control char U+001B in "good\x00read\x1b[31mX"
+    discord_test.go:3101: expected sanitized capture_comment "goodread[31mX", got "good\x00read\x1b[31mX"
+--- FAIL: TestNormalizeMessage_CaptureCommentSanitized (0.00s)
+FAIL    github.com/smackerel/smackerel/internal/connector/discord       0.018s
+GO_TEST_EXIT=1
+
+# GREEN (post-fix) — new + existing capture/bot-command tests pass
+$ go test -run 'TestNormalizeMessage_CaptureCommentSanitized|TestNormalize_BotCommand_SetsCaptureType|TestParseBotCommand' ./internal/connector/discord/... -v
+--- PASS: TestParseBotCommand_SSRFProtection (0.00s)
+--- PASS: TestParseBotCommand (0.00s)
+--- PASS: TestParseBotCommand_CommentTruncated (0.00s)
+--- PASS: TestParseBotCommand_CommentWithURLTruncated (0.00s)
+--- PASS: TestNormalize_BotCommand_SetsCaptureType (0.00s)
+--- PASS: TestNormalizeMessage_CaptureCommentSanitized (0.00s)
+ok      github.com/smackerel/smackerel/internal/connector/discord       0.042s
+TARGETED_EXIT=0
+
+# Full discord package suite — zero regressions
+$ go test ./internal/connector/discord/...
+ok      github.com/smackerel/smackerel/internal/connector/discord       9.009s
+FULL_EXIT=0
+
+$ gofmt -l internal/connector/discord/discord.go internal/connector/discord/discord_test.go   # empty = clean
+$ go vet ./internal/connector/discord/...
+VET_OK
+```
+
+One-to-one finding closure: 1 finding identified, 1 fixed with adversarial
+regression, 0 routed. No foreign artifact modified (the uncommitted
+`internal/config/*` and `internal/connector/browser/*` changes belong to other
+specs' sweep work and were left untouched). Spec status unchanged at `done`.
+
+---
+
+### Gaps-To-Doc Sweep (Stochastic Round 9) — 2026-06-17
+
+**Trigger:** `gaps` probe via stochastic-quality-sweep (round 9)
+**Mode:** `gaps-to-doc` (statusCeiling `done`; spec status unchanged — stays `done`)
+**Agent:** `bubbles.workflow` (child of stochastic sweep; `executionModel: parent-expanded-child-mode`)
+
+#### Context
+
+Round 9 ran the gaps trigger against the shipped `internal/connector/discord`
+implementation (`discord.go` 1626 LOC + `gateway.go` 277 LOC), comparing every
+spec/design/scope claim against the code. Functional coverage is intact — R-003
+content types, R-004 metadata, R-007 tiers, R-009 threads, and R-010 bot commands
+are each implemented and exercised by the unchanged 150-function unit suite, with
+zero stub/TODO markers in the referenced impl files. The probe surfaced one residual
+documentation-reality gap with two artifact touchpoints: the planning artifacts still
+describe a `github.com/bwmarrin/discordgo` + WebSocket Gateway architecture that was
+never adopted.
+
+#### Findings (2 documentation-reality findings, 1 root cause)
+
+| # | Finding | Severity | Status |
+|---|---------|----------|--------|
+| F-GAPS-R9-001 | `design.md` (Status: Draft) described a `github.com/bwmarrin/discordgo` v0.28+ and WebSocket Gateway architecture across Target State, Resolved Decisions, Dependencies, Data Flow (Real-Time), Patterns-to-Avoid, and all four Component Design code blocks. The shipped connector carries NO `discordgo` dependency (absent from `go.mod`/`go.sum`) and uses stdlib `net/http` plus a REST `EventPoller` (the `GatewayClient` interface), not a WebSocket session. report.md already adjudicated the divergence "Aligned", but design.md was never reconciled. | Medium | Reconciled (in-worktree) |
+| F-GAPS-R9-002 | `scopes.md` Change Boundary listed `go.mod (add discordgo dependency)` (never added) and Scope 4 said "WebSocket Gateway connection with `discordgo` Session". | Medium | Reconciled (in-worktree) |
+
+#### Prior posture confirmed (no functional gap)
+
+<!-- bubbles:g040-skip-begin -->
+| Requirement | Result |
+|---|---|
+| R-003 content types | Implemented — `classifyMessage` covers all 9 types incl `discord/thread`, `discord/capture` |
+| R-004 metadata | Implemented — `normalizeMessage` populates message_id / server_id / server_name / channel_id / channel_name / author_id / author_name / thread_id / thread_name / reply_to_id / pinned / reaction_count / reactions / attachments / embeds / mentions / has_links |
+| R-007 tiers | Implemented — `assignTier` (pinned / ≥5 reactions / links → full; attachments / code / replies → standard; short → metadata) |
+| R-009 threads | Implemented — `fetchActiveThreads` / `fetchArchivedThreads` / `collectThreadMessages` |
+| R-010 bot commands | Implemented — `ParseBotCommand` plus `classifyMessage` capture-prefix detection |
+| Deferred R-008 sub-events | Already tracked under the g040-sentinel-wrapped "Deferred Items" table |
+<!-- bubbles:g040-skip-end -->
+
+#### Remediation Summary
+
+Documentation reconciliation only — **zero runtime/test/config delta**. No `.go`,
+`.yaml`, or test file was touched; the discord package is byte-identical and the
+certified 150-function suite stands unchanged.
+
+**Files modified (spec-014 planning surface only):**
+
+- `design.md`: added an authoritative `## Implementation Reality (Shipped Architecture)` section (no discordgo; stdlib `net/http`; REST `EventPoller` rather than a WebSocket Gateway; `GatewayClient` swap seam; full functional coverage; `V-014-R25-004` history), flipped the status banner Draft→Done, and added four inline "Superseded — see Implementation Reality" notes on Resolved Decisions, Patterns to Avoid, Component Design, and Dependencies.
+- `scopes.md`: corrected the Change Boundary (the `go.mod` discordgo dependency was not adopted), the Scope 4 phase-order line, and the Scope 04 Description to the `EventPoller` REST-poller reality.
+- `report.md`: this section.
+- `state.json`: Round 9 `executionHistory` provenance entry.
+
+#### Validation
+
+```
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/014-discord-connector
+--- Check 31: Inter-Spec Dependency Enforcement (Gate G089) ---
+✅ PASS: Inter-spec dependencies are stable or explicitly flagged for revalidation (Gate G089)
+--- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---
+🔴 BLOCK: Post-certification spec edit guard failed — Gate G088
+🔴 TRANSITION BLOCKED: 1 failure(s), 1 warning(s)
+```
+
+#### Certification finalize (routed)
+
+Editing certified planning truth (`design.md` / `scopes.md`) on a `done` spec is a
+recertification event. G088 (post-cert spec edit) flags the uncommitted planning
+edits; its `requiresRevalidation:true` remediation is mutually exclusive with G089
+for `status=done` (verified this round — setting the flag cleared G088 but tripped
+G089). An uncommitted sweep round therefore cannot self-finalize the certification.
+The reconciliation is delivered in-worktree; the finalize — **commit the reconciled
+planning edits, then a `reconcile-to-doc` recert that records a `bubbles.spec-review`
+CURRENT entry and stamps `certifiedAt` after the commit** — is routed to the commit
+owner. G089 and the remaining transition-guard checks are green; only G088's expected
+uncommitted-planning-edit detection remains, and it clears on commit + recert.
+
+Finding closure: 2 documentation-reality findings surfaced, 2 reconciled in-worktree,
+0 left unaddressed; certification recert routed (a bookkeeping step, not a fix-quality
+gap).
+
+---
+
+### Harden-To-Doc Sweep (Stochastic Round 10) — 2026-06-17
+
+**Trigger:** `harden` probe via stochastic-quality-sweep (round 10)
+**Mode:** `harden-to-doc` (v6 form `validate action:harden finalize:docs`; statusCeiling `done`; spec status unchanged — stays `done`)
+**Agent:** `bubbles.workflow` (child of stochastic sweep; `executionModel: parent-expanded-child-mode`). `runSubagent` is unavailable in this runtime, so the harden trigger and its finding-owned closure ran parent-expanded: the spec.md reconciliation was authored as the spec.md owner `bubbles.analyst`, and the report-hygiene fix on the workflow-owned `report.md`.
+
+#### Context
+
+Round 10 ran the harden trigger against the spec/design/scope quality of
+`specs/014-discord-connector`, explicitly EXCLUDING the discordgo-vs-`net/http` /
+WebSocket-vs-REST architecture drift already reconciled in-worktree by Round 9
+(`gaps`). The probe targeted internal consistency, requirement clarity, scenario
+traceability, and report-artifact hygiene. Functional coverage and the certified
+150-function unit suite were not re-litigated (Round 9 confirmed them clean; the
+`internal/connector/discord` package is byte-identical this round). Three
+NON-architecture findings surfaced; all three were closed in-worktree.
+
+#### Findings (3 new; 3 closed in-worktree)
+
+<!-- bubbles:g040-skip-begin -->
+| # | Finding | Artifact | Severity | Status |
+|---|---------|----------|----------|--------|
+| H-014-R10-001 | Internal read-only contract contradiction. spec.md Hard Constraints declare absolute read-only ("never send messages, react, or modify any server content"), but Non-Goals carved out "(except responding to explicit bot commands in capture mode)" and R-010 promised "Bot responds with a brief confirmation". The shipped connector is pure read-only — there is no `ChannelMessageSend`/send path (`grep` over `internal/connector/discord/` shows only inbound `discord/reply` classification and the test mock's `/users/@me` responder); `ParseBotCommand` only parses inbound `!save`/`!capture`. scopes.md "Deferred Items" already recorded that implementation followed the Hard Constraint, but spec.md itself stayed internally contradictory. | spec.md | Medium | Reconciled (in-worktree) |
+| H-014-R10-002 | Orphaned acceptance scenarios. spec.md "Gherkin Scenarios" define `SCN-DC-001`…`SCN-DC-008`, a namespace disjoint from the certified, test-traced manifest (`SCN-DC-NRM/REST/CONN/GW/THR/CMD` in scenario-manifest.json + scopes.md). A repo-wide grep confirms `SCN-DC-001`…`SCN-DC-008` appear ONLY in spec.md; the 8 feature-level narratives map to no scope, DoD, test, or manifest entry. traceability-guard traces only the 13 scope-level scenarios. | spec.md | Low | Reconciled (in-worktree) |
+| H-014-R10-003 | G040 deferral-language lint regression in report.md. Round 9's "Prior posture confirmed" table row "Deferred R-008 sub-events …" sat outside any `g040-skip` sentinel, tripping Check 18 (Gate G040). Round 9's own captured validation block recorded only 1 failure (G088), so the row landed after that capture; the live worktree blocked on G040 + G088. | report.md | Medium | Fixed (in-worktree) |
+<!-- bubbles:g040-skip-end -->
+
+#### Remediation Summary
+
+Documentation reconciliation + report hygiene only — **zero runtime/test/config
+delta**. No `.go`, `.yaml`, or test file was touched; the discord package is
+byte-identical and the certified 150-function suite stands unchanged.
+
+**Files modified (spec-014 surface only):**
+
+- `spec.md` (owner `bubbles.analyst`, parent-expanded): (H-014-R10-001) added a reconciliation blockquote under R-010 plus an inline `(not adopted)` marker on the two write-back/transport bullets, and a Non-Goals reconciliation note, so the read-only contract is now internally consistent — the shipped connector sends nothing to Discord; inbound `!save`/`!capture` ingestion is what ships. (H-014-R10-002) added a traceability note at the head of "Gherkin Scenarios" pointing to the canonical scenario-manifest.json / scopes.md scenario set, and to design.md → "Implementation Reality" for the two real-time narratives (`SCN-DC-002`, `SCN-DC-007`).
+- `report.md`: (H-014-R10-003) wrapped the Round 9 "Prior posture confirmed" table in a `bubbles:g040-skip` sentinel (the offending cell already referenced that exact mechanism); plus this section.
+- `state.json`: Round 10 `executionHistory` provenance entry + `lastUpdatedAt` bump.
+
+#### Validation
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/014-discord-connector
+✅ All 18 evidence blocks in report.md contain legitimate terminal output
+✅ No narrative summary phrases detected in report.md
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/014-discord-connector
+ℹ️  Scenarios checked: 13
+ℹ️  DoD fidelity scenarios: 13 (mapped: 13, unmapped: 0)
+RESULT: PASSED (0 warnings)
+TRACE_EXIT=0
+
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/014-discord-connector
+--- Check 18: Deferral Language Scan (Gate G040) ---
+✅ PASS: Zero deferral language found in scope and report artifacts (Gate G040)
+--- Check 22: DoD-Gherkin Content Fidelity (Gate G068) ---
+✅ PASS: All 13 Gherkin scenarios have faithful DoD items (Gate G068)
+--- Check 29B: Delivery Implementation Delta (Gate G093) ---
+✅ PASS: Delivery implementation delta is present or mode ceiling exempts it (Gate G093)
+--- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---
+🔴 BLOCK: Post-certification spec edit guard failed — Gate G088. Run 'bash ~/smackerel/.github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/014-discord-connector' for full diagnostic
+--- Check 31: Inter-Spec Dependency Enforcement (Gate G089) ---
+✅ PASS: Inter-spec dependencies are stable or explicitly flagged for revalidation (Gate G089)
+🔴 TRANSITION BLOCKED: 1 failure(s), 1 warning(s)
+STG_EXIT=1
+```
+
+Before this round the live worktree blocked on 2 failures (Check 18/G040 + Check
+30/G088). After H-014-R10-003 the G040 regression is cleared, so only the EXPECTED
+Check 30/G088 uncommitted-planning-edit detection remains. The lone warning is the
+pre-existing Check 8 "no concrete test file paths in Test Plan" note (the suite is
+httptest-based at unit level, traced via scenario-manifest.json `linkedTests`).
+
+#### Certification finalize (routed)
+
+Same model as Round 9: editing certified planning truth (now also `spec.md`) on a
+`done` spec is a recertification event that G088 flags while the edits are uncommitted.
+The reconciliation is delivered in-worktree; the finalize — commit the reconciled
+`spec.md` / `report.md` / `state.json` together with the accumulated Round 9 planning
+edits, then a `reconcile-to-doc` recert that records a `bubbles.spec-review` CURRENT
+entry and stamps `certifiedAt` after the commit — is routed to the commit owner. Spec
+status unchanged at `done`.
+
+Finding closure: 3 new findings surfaced (2 in spec.md, 1 in report.md), 3 closed
+in-worktree, 0 left unaddressed; 0 routed for fix work (the certification recert is the
+same bookkeeping step Round 9 already routed, not a fix-quality gap).
+

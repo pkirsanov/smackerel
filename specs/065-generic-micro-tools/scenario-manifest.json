@@ -20,7 +20,7 @@
       "linkedTests": [
         { "file": "internal/config/assistant_tools_test.go", "testId": "TestAssistantToolsConfigRequiresEveryMicroToolKey", "category": "unit" },
         { "file": "internal/agent/tools/microtools/envelope_test.go", "testId": "TestMicroToolEnvelopeSchemaRejectsMissingSource", "category": "unit" },
-        { "file": "internal/agent/tools/microtools/registry_canary_test.go", "testId": "microtools_foundation_did_not_register_any_tool", "category": "unit" },
+        { "file": "tests/integration/assistant/microtools_registry_canary_test.go", "testId": "TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate/import_registered_microtools_match_shipped_reality", "category": "unit" },
         { "file": "tests/integration/assistant/microtools_registry_canary_test.go", "testId": "TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate", "category": "integration" },
         { "file": "tests/e2e/assistant/microtools_config_e2e_test.go", "testId": "TestMicroToolsE2E_MissingLocationProviderFailsStartup", "category": "Regression E2E API" }
       ],
