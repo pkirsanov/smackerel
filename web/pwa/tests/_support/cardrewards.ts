@@ -7,7 +7,7 @@
  * /v1/web/login + /api/* surfaces against the disposable `smackerel-test-e2e-ui`
  * stack, exactly like the Scope 10 specs.
  */
-import { expect, type Page } from "@playwright/test";
+import { expect, type BrowserContext, type Page } from "@playwright/test";
 
 const AUTH_TOKEN = process.env.SMACKEREL_AUTH_TOKEN ?? "";
 
@@ -40,9 +40,45 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-// login exchanges the shared dev token for an auth_token cookie on the shared
-// browser context (page.request shares the cookie jar with page.goto).
+// A cookie shape as returned by BrowserContext.cookies(). Derived structurally
+// so this does not depend on `Cookie` being a named export (it is not a stable
+// export across @playwright/test versions).
+type StoredCookie = Awaited<ReturnType<BrowserContext["cookies"]>>[number];
+
+// Worker-scoped cache of the auth_token cookie. Playwright runs each worker in
+// its own OS process and evaluates this module once per worker, so this
+// module-level value is per-worker. The FIRST login() in a worker performs the
+// real /v1/web/login POST exactly once and captures the resulting auth_token
+// cookie; every later login() in that same worker REPLAYS the cached cookie
+// onto the fresh per-test context via BrowserContext.addCookies — WITHOUT
+// re-POSTing.
+//
+// Why this matters: /v1/web/login is rate-limited in production by
+// `httprate.LimitByIP(20, 1*time.Minute)` (internal/api/router.go, owned by
+// spec 070) as a credential-stuffing defense, and that limiter is itself under
+// test (internal/api/web_login_ratelimit_test.go) — so it MUST stay exactly
+// as-is. With ~40 card-rewards tests sharing a single CI runner IP, a per-test
+// login blew past 20/IP/min and the later tests got HTTP 429
+// ("/v1/web/login must accept the dev token; got 429"). Caching collapses the
+// whole suite to ONE real login per worker (~2 total), keeping it far under the
+// limit while still exercising the real login surface at least once per worker.
+//
+// Correctness: the disposable e2e-ui stack runs in dev-token mode
+// (AuthConfig.Enabled=false), so every login exchanges the same shared
+// SMACKEREL_AUTH_TOKEN for an equivalent session — a single captured cookie
+// authenticates the whole worker. `next` only affects the (ignored,
+// maxRedirects:0) redirect target of the first POST; per-test navigation is
+// still driven by each test's own page.goto(...).
+let cachedAuthCookie: StoredCookie | null = null;
+
+// login establishes an authenticated session on `page`'s browser context. The
+// first call per worker performs the real /v1/web/login POST; subsequent calls
+// reuse the cached auth_token cookie (see cachedAuthCookie above).
 export async function login(page: Page, next = "/cards"): Promise<void> {
+  if (cachedAuthCookie) {
+    await page.context().addCookies([cachedAuthCookie]);
+    return;
+  }
   const resp = await page.request.post("/v1/web/login", {
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -55,6 +91,18 @@ export async function login(page: Page, next = "/cards"): Promise<void> {
     [200, 302, 303],
     `/v1/web/login must accept the dev token; got ${resp.status()}`,
   ).toContain(resp.status());
+  // page.request shares the cookie jar with the browser context, so the
+  // auth_token Set-Cookie from the login response is now on the context.
+  const auth = (await page.context().cookies()).find(
+    (c) => c.name === "auth_token",
+  );
+  if (!auth) {
+    throw new Error(
+      "/v1/web/login succeeded but no auth_token cookie was set; cannot " +
+        "establish a reusable session for the card-rewards e2e-ui worker.",
+    );
+  }
+  cachedAuthCookie = auth;
 }
 
 export interface SeededCard {
