@@ -50,6 +50,19 @@ type DispatchResolver interface {
 // the user sees a generic refusal and never the provider error or credential.
 const TerminationDispatchRejected TerminationReason = "dispatch_rejected"
 
+// dispatchSpanName is the spec 096 §13 span emitted around each HOSTED provider
+// dispatch in the /ask loop. Its attrs are provider/model/turn/cost.usd ONLY —
+// NEVER the credential (the §13 alarming secret-safety invariant).
+const dispatchSpanName = "model.dispatch"
+
+// dispatchTurnGather / dispatchTurnSynthesis are the closed `turn` span-attr
+// vocabulary: a gather/tool round vs the spec-087 forced-final synthesis round
+// (and its retries).
+const (
+	dispatchTurnGather    = "gather"
+	dispatchTurnSynthesis = "synthesis"
+)
+
 // dispatchSourceHolder wraps the late-bound resolver accessor for atomic
 // storage (a concrete element type avoids the typed-nil interface gotcha).
 type dispatchSourceHolder struct{ source func() DispatchResolver }
@@ -116,27 +129,29 @@ func isHostedProviderQualified(model string) bool {
 // so the local path never even reads the resolver singleton — NFR-2). A hosted
 // resolve FAILURE returns a non-empty, secret-free refusal reason; the caller
 // MUST refuse the turn and MUST NOT fall back to Ollama (FR-X1 / SCN-096-G01).
-func applyProviderDispatch(req llm.ChatRequest) (out llm.ChatRequest, refusal string) {
+func applyProviderDispatch(req llm.ChatRequest) (out llm.ChatRequest, refusal string, reason llm.RejectReason) {
 	if !isHostedProviderQualified(req.Model) {
-		return req, "" // bare/ollama ⇒ byte-for-byte 089 path; resolver never touched.
+		return req, "", "" // bare/ollama ⇒ byte-for-byte 089 path; resolver never touched.
 	}
 	resolver := installedDispatchResolver()
 	if resolver == nil {
-		return req, "" // hosted id but no resolver wired ⇒ deferred-activation 089 fallback.
+		return req, "", "" // hosted id but no resolver wired ⇒ deferred-activation 089 fallback.
 	}
 	resolved, err := resolver.Resolve(req.Model)
 	if err != nil {
 		// NEVER an Ollama fallback. Surface only the typed, secret-free reject
 		// category — never the wrapped vault cause, the connection identity, or
-		// the credential.
-		return req, dispatchRefusalReason(err)
+		// the credential. The typed reason is ALSO returned for the spec 096 §13
+		// vault-decrypt-failure metric (the recorder's closed allow-set drops any
+		// non-vault reason).
+		return req, dispatchRefusalReason(err), resolveErrReason(err)
 	}
 	req.Provider = resolved.Request.Provider
 	req.APIBase = resolved.Request.APIBase
 	req.APIKey = resolved.Request.APIKey
 	req.ProviderParams = resolved.Request.ProviderParams
 	req.Model = resolved.Request.Model // BARE backend id for the wire/sidecar.
-	return req, ""
+	return req, "", ""
 }
 
 // dispatchRefusalReason renders a non-secret refusal string from a resolve
@@ -150,4 +165,17 @@ func dispatchRefusalReason(err error) string {
 		return base + ": " + string(re.Reason)
 	}
 	return base
+}
+
+// resolveErrReason extracts the typed, secret-free RejectReason from a resolve
+// error for the spec 096 §13 openknowledge_vault_decrypt_failures_total metric.
+// A non-*ResolveError (no typed reason) yields the empty reason — the recorder's
+// closed allow-set then drops the increment (G021). The reason token NEVER
+// carries credential material (it is a fixed enum: decrypt_failed, …).
+func resolveErrReason(err error) llm.RejectReason {
+	var re *llm.ResolveError
+	if errors.As(err, &re) {
+		return re.Reason
+	}
+	return ""
 }

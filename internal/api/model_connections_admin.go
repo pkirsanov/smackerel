@@ -36,9 +36,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/connvault"
+	okmetrics "github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/tracing"
 	"github.com/smackerel/smackerel/internal/config"
 )
 
@@ -88,18 +91,53 @@ type ModelConnectionsAdminHandler struct {
 	vault *connvault.SecretVault
 	probe ConnectionProbe
 	now   func() time.Time
+	// Spec 096 §13 — connection-test observability seam. recorder is NEVER nil
+	// (the constructor defaults it to okmetrics.Nop{}); tracer is nil until
+	// WithObservability wires the boot tracer, and a nil tracer makes the
+	// model.connection.test span a no-op. The probe decrypts a credential, but
+	// nothing emitted through this seam carries a secret (only connection_id /
+	// kind / the closed ok|failed outcome).
+	recorder okmetrics.Recorder
+	tracer   *tracing.Tracer
 }
 
 // NewModelConnectionsAdminHandler builds the handler. vault may be nil only for
 // an Ollama-only deployment (no db-mode slot) — a db-mode credential write then
 // fails loud rather than persisting an unencrypted secret.
 func NewModelConnectionsAdminHandler(store modelConnStore, vault *connvault.SecretVault, probe ConnectionProbe) *ModelConnectionsAdminHandler {
-	return &ModelConnectionsAdminHandler{store: store, vault: vault, probe: probe, now: time.Now}
+	return &ModelConnectionsAdminHandler{store: store, vault: vault, probe: probe, now: time.Now, recorder: okmetrics.Nop{}}
 }
 
 // WithNow overrides the clock (tests assert tested_at). Returns the receiver.
 func (h *ModelConnectionsAdminHandler) WithNow(now func() time.Time) *ModelConnectionsAdminHandler {
 	h.now = now
+	return h
+}
+
+// connectionTestSpanName is the spec 096 §13 operator connection-test span. Its
+// attrs are connection_id/kind/outcome — all secret-free (connection_id is the
+// operator-visible slug; kind + outcome are the closed vocab). The probe's
+// free-form Detail is DELIBERATELY excluded so no endpoint specifics can leak.
+const connectionTestSpanName = "model.connection.test"
+
+// WithObservability wires the spec 096 §13 connection-test observability seam:
+// the openknowledge metrics Recorder (the operator connection-test counter) and
+// the assistant Tracer (the model.connection.test span). A nil recorder falls
+// back to the no-op okmetrics.Nop{}; a nil tracer disables span emission while
+// the metric path still runs. Additive + non-blocking — an Ollama-only /
+// metrics-disabled deployment keeps the Nop recorder + nil tracer and emits
+// nothing. Returns the receiver for chaining (mirrors the catalog aggregator).
+//
+// SECRET-SAFETY: the Test handler decrypts a credential to probe, but this seam
+// only ever receives the connection_id (operator-visible slug), the closed kind,
+// and the closed ok|failed outcome — NEVER the api_key, the decrypted bundle, or
+// the probe's free-form Detail.
+func (h *ModelConnectionsAdminHandler) WithObservability(recorder okmetrics.Recorder, tracer *tracing.Tracer) *ModelConnectionsAdminHandler {
+	if recorder == nil {
+		recorder = okmetrics.Nop{}
+	}
+	h.recorder = recorder
+	h.tracer = tracer
 	return h
 }
 
@@ -271,6 +309,25 @@ func (h *ModelConnectionsAdminHandler) Test(w http.ResponseWriter, r *http.Reque
 		slog.Warn("model-connections admin: record test failed", "connection", conn.ID, "error", err)
 		writeError(w, http.StatusInternalServerError, "RECORD_TEST_FAILED", "could not record test outcome")
 		return
+	}
+	// Spec 096 §13 — emit the connection-test observability AFTER the truthful
+	// outcome is recorded. SECRET-SAFETY: only the connection_id (operator slug),
+	// the closed kind, and the closed ok|failed outcome are emitted — NEVER the
+	// decrypted secret or the probe's free-form Detail (which can carry endpoint
+	// specifics). A Nop recorder + nil tracer make this a no-op (additive,
+	// non-blocking — the truthful test/record behaviour above is unchanged).
+	h.recorder.IncConnectionTest(conn.Kind, outcome)
+	if h.tracer != nil {
+		_, span := h.tracer.StartSpan(r.Context(), connectionTestSpanName, "", "", "", "", "",
+			attribute.String("connection_id", conn.ID),
+			attribute.String("kind", conn.Kind),
+			attribute.String("outcome", outcome),
+		)
+		spanStatus, spanErrorCause := "ok", ""
+		if outcome != connstore.TestOutcomeOK {
+			spanStatus, spanErrorCause = "error", outcome
+		}
+		tracing.EndSpan(span, spanStatus, spanErrorCause)
 	}
 	writeJSON(w, http.StatusOK, testResultView{Outcome: outcome, Detail: detail, TestedAt: at})
 }

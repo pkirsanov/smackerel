@@ -21,6 +21,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	okmetrics "github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/tracing"
 )
 
 // CatalogAggregator aggregates per-kind discovery adapters into a unified
@@ -32,6 +38,14 @@ type CatalogAggregator struct {
 	perProviderTimeout time.Duration
 	systemDefault      string
 	now                func() time.Time
+
+	// Spec 096 §13 — discovery observability. recorder is NEVER nil (the
+	// constructor defaults it to okmetrics.Nop{}); tracer is nil until
+	// WithObservability wires the boot tracer, and a nil tracer makes the
+	// discovery spans no-ops. Both are wired by cmd/core's SCOPE-07 activation.
+	// Discovery touches NO credential, so nothing emitted here carries a secret.
+	recorder okmetrics.Recorder
+	tracer   *tracing.Tracer
 
 	mu     sync.Mutex
 	cached *cachedCatalog
@@ -66,6 +80,7 @@ func NewCatalogAggregator(adapters []DiscoveryAdapter, cacheTTLms, perProviderTi
 		perProviderTimeout: time.Duration(perProviderTimeoutMs) * time.Millisecond,
 		systemDefault:      systemDefault,
 		now:                time.Now,
+		recorder:           okmetrics.Nop{},
 	}, nil
 }
 
@@ -73,6 +88,23 @@ func NewCatalogAggregator(adapters []DiscoveryAdapter, cacheTTLms, perProviderTi
 // Returns the receiver for chaining.
 func (a *CatalogAggregator) WithNow(now func() time.Time) *CatalogAggregator {
 	a.now = now
+	return a
+}
+
+// WithObservability wires the spec 096 §13 discovery observability surface: the
+// openknowledge metrics Recorder (per-provider reachability counter + latency
+// histogram) and the assistant Tracer (model.discovery → provider.discover
+// spans). A nil recorder falls back to the no-op okmetrics.Nop{}; a nil tracer
+// disables span emission while the metric path still runs. Returns the receiver
+// for chaining. Discovery touches NO credential, so nothing this surface emits
+// can carry a secret (the span attrs are connection_id/kind/state/model_count/
+// latency_ms and the metric labels are the closed provider+state vocab).
+func (a *CatalogAggregator) WithObservability(recorder okmetrics.Recorder, tracer *tracing.Tracer) *CatalogAggregator {
+	if recorder == nil {
+		recorder = okmetrics.Nop{}
+	}
+	a.recorder = recorder
+	a.tracer = tracer
 	return a
 }
 
@@ -94,11 +126,31 @@ func (a *CatalogAggregator) GetCatalog(ctx context.Context) (ModelCatalog, []Pro
 	return catalog, statuses
 }
 
+// Spec 096 §13 — the discovery span names. model.discovery is the per-build root
+// span; provider.discover is one child per adapter. The child attrs are
+// connection_id/kind/state/model_count/latency_ms — all secret-free (discovery
+// never touches a credential), and the free-form Detail is DELIBERATELY excluded.
+const (
+	discoveryRootSpanName  = "model.discovery"
+	discoveryChildSpanName = "provider.discover"
+)
+
 // build runs every adapter in parallel, each bounded by the per-provider
 // timeout, and assembles the catalog in adapter (declaration) order. A failing
 // adapter contributes NO models but ALWAYS a typed status — graceful
-// degradation, never a silent drop.
+// degradation, never a silent drop. It ALSO emits the spec 096 §13 discovery
+// observability per provider (reachability counter + latency histogram + a
+// provider.discover span under one model.discovery root); a nil tracer / the Nop
+// recorder make that emission a no-op, so the aggregation behaviour is unchanged.
 func (a *CatalogAggregator) build(ctx context.Context) (ModelCatalog, []ProviderDiscoveryStatus) {
+	// Open the model.discovery root span (nil tracer ⇒ no spans; rootCtx == ctx).
+	// Ended after every provider.discover child completes (post wg.Wait()).
+	rootCtx := ctx
+	var rootSpan trace.Span
+	if a.tracer != nil {
+		rootCtx, rootSpan = a.tracer.StartSpan(ctx, discoveryRootSpanName, "", "", "", "", "")
+	}
+
 	type slot struct {
 		models []ModelDescriptor
 		status ProviderDiscoveryStatus
@@ -110,23 +162,30 @@ func (a *CatalogAggregator) build(ctx context.Context) (ModelCatalog, []Provider
 		wg.Add(1)
 		go func(i int, ad DiscoveryAdapter) {
 			defer wg.Done()
-			cctx, cancel := context.WithTimeout(ctx, a.perProviderTimeout)
+			cctx, cancel := context.WithTimeout(rootCtx, a.perProviderTimeout)
 			defer cancel()
 
 			st := ProviderDiscoveryStatus{ConnectionID: ad.ConnectionID(), Kind: ad.Kind()}
+			start := time.Now()
 			models, err := ad.Discover(cctx)
+			latency := time.Since(start)
 			if err != nil {
 				st.State, st.Detail = classifyDiscoveryError(cctx, err)
 				st.ModelCount = 0
 				slots[i] = slot{status: st} // models absent — but status ALWAYS recorded
-				return
+			} else {
+				st.State = StateOK
+				st.ModelCount = len(models)
+				slots[i] = slot{models: models, status: st}
 			}
-			st.State = StateOK
-			st.ModelCount = len(models)
-			slots[i] = slot{models: models, status: st}
+			a.emitDiscoveryObservability(rootCtx, st, latency)
 		}(i, ad)
 	}
 	wg.Wait()
+
+	if rootSpan != nil {
+		tracing.EndSpan(rootSpan, "ok", "")
+	}
 
 	catalog := ModelCatalog{Default: a.systemDefault}
 	statuses := make([]ProviderDiscoveryStatus, 0, len(a.adapters))
@@ -135,6 +194,35 @@ func (a *CatalogAggregator) build(ctx context.Context) (ModelCatalog, []Provider
 		statuses = append(statuses, s.status)
 	}
 	return catalog, statuses
+}
+
+// emitDiscoveryObservability records the spec 096 §13 per-provider discovery
+// reachability counter + latency histogram and, when a tracer is wired, opens a
+// `provider.discover` child span (under the model.discovery root carried by
+// rootCtx) with ONLY secret-free attrs: connection_id, kind, state, model_count,
+// latency_ms. Discovery touches NO credential, so neither a metric label nor a
+// span attr can carry a secret — and the free-form Detail is DELIBERATELY
+// excluded (only the closed `state` token is emitted, via the span attr and the
+// EndSpan error_cause). Safe to call concurrently from the per-adapter
+// goroutines: the Recorder and the OTel span API are goroutine-safe.
+func (a *CatalogAggregator) emitDiscoveryObservability(rootCtx context.Context, st ProviderDiscoveryStatus, latency time.Duration) {
+	a.recorder.IncProviderDiscovery(st.Kind, string(st.State))
+	a.recorder.ObserveProviderDiscoveryLatency(st.Kind, latency.Seconds())
+	if a.tracer == nil {
+		return
+	}
+	_, span := a.tracer.StartSpan(rootCtx, discoveryChildSpanName, "", "", "", "", "",
+		attribute.String("connection_id", st.ConnectionID),
+		attribute.String("kind", st.Kind),
+		attribute.String("state", string(st.State)),
+		attribute.Int("model_count", st.ModelCount),
+		attribute.Int64("latency_ms", latency.Milliseconds()),
+	)
+	status, errorCause := "ok", ""
+	if st.State != StateOK {
+		status, errorCause = "error", string(st.State)
+	}
+	tracing.EndSpan(span, status, errorCause)
 }
 
 // classifyDiscoveryError maps an adapter error onto the closed DiscoveryState

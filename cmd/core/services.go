@@ -122,6 +122,14 @@ type coreServices struct {
 	// Ollama-only / no-db-mode deployment (no secret is needed) — downstream
 	// construction MUST tolerate a nil vault.
 	modelConnVault *connvault.SecretVault
+
+	// Spec 096 §13 — the operator-gated model-connections admin handler, stashed
+	// at (pre-router) construction in buildModelConnectionsAdmin so the SCOPE-07
+	// open-knowledge wiring can late-bind its connection-test observability (the
+	// SAME okMetrics Recorder + the boot tracer) AFTER okMetrics is constructed in
+	// wireOpenKnowledge. nil when no Postgres pool or no db-mode connection is
+	// declared (no admin surface is mounted).
+	modelConnAdmin *api.ModelConnectionsAdminHandler
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.
