@@ -120,12 +120,88 @@ func assertClientsBuildRawMarkers(raw []byte) error {
 		}
 	}
 
-	// Same sourceSha (Build-Once Deploy-Many) + publish needs build-clients.
+	// Same sourceSha (Build-Once Deploy-Many) + publish keeps build-clients in needs.
 	if !strings.Contains(rawStr, "needs.build-images.outputs.sourceSha") {
 		return fmt.Errorf("contract violation: build-clients does not consume needs.build-images.outputs.sourceSha (it MUST build the SAME sourceSha as the images; FR-CBR-002)")
 	}
+	// Spec 098 — build-clients stays in publish-build-manifest's `needs` for
+	// RELEASE ordering (a tagged build must finish + upload its digests before the
+	// clients block is appended). It is NO LONGER an unconditional manifest
+	// dependency — publish-build-manifest tolerates a SKIPPED build-clients (see
+	// assertConditionalClientsDecoupling). The marker is retained because dropping
+	// the `needs` edge entirely would race the clients-block append against an
+	// unfinished client build on a release.
 	if !strings.Contains(rawStr, "build-clients ]") {
-		return fmt.Errorf("contract violation: publish-build-manifest does not list build-clients in its needs (the manifest MUST include the client digests)")
+		return fmt.Errorf("contract violation: publish-build-manifest does not keep build-clients in its needs (spec 098 — build-clients stays in `needs` for release ORDERING so a tagged client build finishes before its digests are appended)")
+	}
+	return nil
+}
+
+// assertConditionalClientsDecoupling verifies the spec-098 conditional contract
+// that decouples the CI mobile-client build from the SERVER deploy manifest:
+//
+//  1. build-clients is gated on RELEASE intent (a tag push OR an explicit
+//     build_clients workflow_dispatch). Without this gate it always runs and
+//     re-blocks the server manifest on a missing operator-private Android secret
+//     — the exact defect spec 098 closes.
+//  2. publish-build-manifest TOLERATES a skipped build-clients
+//     (needs.build-clients.result == 'skipped'), so a non-release push still
+//     publishes a server-only manifest.
+//  3. The clients-block contribution steps are SUCCESS-gated
+//     (if: needs.build-clients.result == 'success'), so a non-release manifest is
+//     server-only (android NOT contracted) and a release manifest pins the
+//     clients by digest.
+//
+// Checks 1+2 are job-level `if:`/`needs:` markers (asserted on the raw string,
+// which the parsed-step model does not carry). Check 3 is asserted on the PARSED
+// publish-build-manifest steps so removing a SINGLE step's success-gate is caught
+// even though the job-level `if:` still mentions 'success'.
+func assertConditionalClientsDecoupling(doc *workflowDoc, rawStr string) error {
+	if !strings.Contains(rawStr, "startsWith(github.ref, 'refs/tags/')") {
+		return fmt.Errorf("contract violation: build-clients is not gated on release intent (startsWith(github.ref, 'refs/tags/')) — it would always run and re-block the server manifest on a missing Android secret (spec 098 FR-098-01)")
+	}
+	if !strings.Contains(rawStr, "github.event.inputs.build_clients") {
+		return fmt.Errorf("contract violation: build-clients release gate has no explicit workflow_dispatch override (github.event.inputs.build_clients) — an operator could not force a client build without a tag (spec 098 FR-098-01)")
+	}
+	if !strings.Contains(rawStr, "needs.build-clients.result == 'skipped'") {
+		return fmt.Errorf("contract violation: publish-build-manifest does not tolerate a skipped build-clients (needs.build-clients.result == 'skipped') — a non-release push would skip the manifest and re-block the server deploy (spec 098 FR-098-02)")
+	}
+	publishJob, ok := doc.Jobs["publish-build-manifest"]
+	if !ok {
+		return fmt.Errorf("contract violation: jobs.publish-build-manifest missing")
+	}
+	const successGate = "needs.build-clients.result == 'success'"
+	for _, want := range []string{
+		"Download client-sha artifact",
+		"Resolve android client digests",
+		"Append clients block to build manifest (knb spec 025)",
+	} {
+		var step *workflowStep
+		for i := range publishJob.Steps {
+			if publishJob.Steps[i].Name == want {
+				step = &publishJob.Steps[i]
+				break
+			}
+		}
+		if step == nil {
+			return fmt.Errorf("contract violation: publish-build-manifest is missing the %q step that contributes the android clients block (spec 085/098)", want)
+		}
+		if !strings.Contains(step.If, successGate) {
+			return fmt.Errorf("contract violation: publish-build-manifest step %q is not success-gated on build-clients (if: %q lacks %q) — a non-release server-only manifest would still contract the android platform with no digest, tripping the knb E025-CLIENT-MANIFEST-NO-DIGEST gate (spec 098 FR-098-04)", want, step.If, successGate)
+		}
+	}
+	return nil
+}
+
+// assertManifestClientsPolicy encodes the spec-098 manifest CONTENT contract: a
+// non-release build publishes a SERVER-ONLY manifest (android NOT contracted —
+// no client digests — so the knb E025-CLIENT-MANIFEST-NO-DIGEST gate has nothing
+// to fail-close on), while a RELEASE build (tag or explicit build_clients
+// dispatch) MUST pin the android client by digest (Build-Once Deploy-Many client
+// integrity). Returns nil if the policy holds.
+func assertManifestClientsPolicy(isRelease, manifestHasClientDigests bool) error {
+	if isRelease && !manifestHasClientDigests {
+		return fmt.Errorf("contract violation: a release build published a manifest WITHOUT android client digests — a release MUST pin the clients by digest (Build-Once Deploy-Many client integrity; spec 098 FR-098-04)")
 	}
 	return nil
 }
@@ -144,6 +220,12 @@ func TestClientsBuildWorkflow_LiveFile(t *testing.T) {
 	}
 	if err := assertClientsBuildRawMarkers(raw); err != nil {
 		t.Fatalf("live-file build-clients marker contract: %v", err)
+	}
+
+	// Spec 098 — the conditional decoupling contract (release-gated client build +
+	// skip-tolerant server manifest + success-gated clients block).
+	if err := assertConditionalClientsDecoupling(doc, string(raw)); err != nil {
+		t.Fatalf("live-file spec-098 conditional decoupling contract: %v", err)
 	}
 
 	// id-token: write must be present at workflow level for cosign keyless.
@@ -225,4 +307,128 @@ func TestClientsBuildWorkflow_AdversarialMissingReproMarker(t *testing.T) {
 		t.Fatalf("adversarial: error did not mention reproducibility: %v", err)
 	}
 	t.Logf("adversarial OK: missing repro marker rejected with: %v", err)
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Spec 098 — conditional server-manifest / client-build decoupling tests.
+// ─────────────────────────────────────────────────────────────────
+
+// TestClientsDecoupling_LiveFile asserts the live build.yml satisfies the
+// spec-098 conditional decoupling contract (release-gated client build,
+// skip-tolerant server manifest, success-gated clients block).
+func TestClientsDecoupling_LiveFile(t *testing.T) {
+	doc, raw := loadBuildWorkflow(t)
+	if err := assertConditionalClientsDecoupling(doc, string(raw)); err != nil {
+		t.Fatalf("live build.yml violates the spec-098 conditional decoupling contract: %v", err)
+	}
+	t.Logf("contract OK: build-clients is release-gated, publish-build-manifest tolerates a skipped client build, and the clients block is success-gated (spec 098)")
+}
+
+// TestClientsDecoupling_NonReleaseAcceptedWithoutDigests proves a non-release
+// build publishes a server-only manifest WITHOUT android client digests and that
+// this is ACCEPTED — the exact server-deploy unblock spec 098 delivers.
+func TestClientsDecoupling_NonReleaseAcceptedWithoutDigests(t *testing.T) {
+	if err := assertManifestClientsPolicy(false /*isRelease*/, false /*hasDigests*/); err != nil {
+		t.Fatalf("policy regression: a non-release server-only manifest (no android digests) was REJECTED, but it must be accepted (spec 098 FR-098-02/04): %v", err)
+	}
+	t.Logf("policy OK: a non-release manifest without android digests is accepted (server-only)")
+}
+
+// TestClientsDecoupling_ReleaseRequiresDigests proves a RELEASE build that
+// published a manifest WITHOUT android digests is REJECTED — release client
+// integrity (Build-Once Deploy-Many) cannot silently regress — while a release
+// manifest WITH digests is accepted.
+func TestClientsDecoupling_ReleaseRequiresDigests(t *testing.T) {
+	err := assertManifestClientsPolicy(true /*isRelease*/, false /*hasDigests*/)
+	if err == nil {
+		t.Fatal("adversarial: a release manifest WITHOUT android client digests was ACCEPTED — release client integrity is unenforced (spec 098 FR-098-04)")
+	}
+	if !strings.Contains(err.Error(), "release MUST pin the clients") {
+		t.Fatalf("adversarial: rejection message does not name the release pin requirement: %v", err)
+	}
+	if err := assertManifestClientsPolicy(true, true); err != nil {
+		t.Fatalf("policy regression: a release manifest WITH android digests was rejected: %v", err)
+	}
+	t.Logf("adversarial OK: a release manifest without android digests is rejected; with digests it is accepted")
+}
+
+// TestClientsDecoupling_AdversarialUngatedClientBuild proves the contract
+// rejects a workflow where build-clients is NOT release-gated — the regression
+// that re-couples the server manifest to the operator-private Android secret.
+func TestClientsDecoupling_AdversarialUngatedClientBuild(t *testing.T) {
+	doc, raw := loadBuildWorkflow(t)
+	tampered := strings.Replace(string(raw),
+		"    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event.inputs.build_clients == 'true' }}\n",
+		"",
+		1,
+	)
+	if tampered == string(raw) {
+		t.Fatal("adversarial setup failure: could not strip the build-clients release gate — the live form may have changed; refresh this test")
+	}
+	err := assertConditionalClientsDecoupling(doc, tampered)
+	if err == nil {
+		t.Fatal("adversarial regression: a build-clients job with NO release gate was ACCEPTED — it would always run and re-block the server manifest on a missing Android secret")
+	}
+	// A pre-existing tag-gated step elsewhere in build.yml also matches
+	// startsWith(github.ref,'refs/tags/'), so the unique signal that the
+	// build-clients gate is gone is the missing github.event.inputs.build_clients
+	// dispatch override (check 1b). Both release-gate messages contain "release".
+	if !strings.Contains(err.Error(), "release") {
+		t.Fatalf("adversarial regression: rejection message does not mention the release gate: %v", err)
+	}
+	t.Logf("adversarial OK: an ungated build-clients is rejected with: %v", err)
+}
+
+// TestClientsDecoupling_AdversarialNoSkipTolerance proves the contract rejects a
+// publish-build-manifest that does NOT tolerate a skipped client build — the
+// original defect where a skipped build-clients skips the manifest and blocks
+// the server deploy.
+func TestClientsDecoupling_AdversarialNoSkipTolerance(t *testing.T) {
+	doc, raw := loadBuildWorkflow(t)
+	tampered := strings.Replace(string(raw),
+		"needs.build-clients.result == 'skipped'",
+		"needs.build-clients.result == 'success'",
+		1,
+	)
+	if tampered == string(raw) {
+		t.Fatal("adversarial setup failure: could not rewrite the skip-tolerance marker — the live form may have changed; refresh this test")
+	}
+	err := assertConditionalClientsDecoupling(doc, tampered)
+	if err == nil {
+		t.Fatal("adversarial regression: a publish-build-manifest with no skipped-client tolerance was ACCEPTED — a non-release push would skip the manifest and block the server deploy")
+	}
+	if !strings.Contains(err.Error(), "skipped") {
+		t.Fatalf("adversarial regression: rejection message does not mention skip tolerance: %v", err)
+	}
+	t.Logf("adversarial OK: a manifest with no skip-tolerance is rejected with: %v", err)
+}
+
+// TestClientsDecoupling_AdversarialUnconditionalClientsBlock proves the contract
+// rejects an UNCONDITIONAL clients-block append (success-gate stripped from the
+// step). Mutates the PARSED doc and leaves raw intact, proving check 3 is
+// independent of the job-level `if:` (which still mentions 'success'). An
+// unconditional append on a non-release run would contract the android platform
+// with no digest, tripping the knb E025-CLIENT-MANIFEST-NO-DIGEST gate.
+func TestClientsDecoupling_AdversarialUnconditionalClientsBlock(t *testing.T) {
+	doc, raw := loadBuildWorkflow(t)
+	job := doc.Jobs["publish-build-manifest"]
+	mutated := false
+	for i := range job.Steps {
+		if job.Steps[i].Name == "Append clients block to build manifest (knb spec 025)" {
+			job.Steps[i].If = "" // strip the success-gate → unconditional append
+			mutated = true
+		}
+	}
+	if !mutated {
+		t.Fatal("adversarial setup failure: could not find the Append clients block step to strip its if: — refresh this test")
+	}
+	doc.Jobs["publish-build-manifest"] = job
+	err := assertConditionalClientsDecoupling(doc, string(raw))
+	if err == nil {
+		t.Fatal("adversarial regression: an unconditional clients-block append was ACCEPTED — a non-release server-only manifest would contract android with no digest, tripping the knb E025 gate")
+	}
+	if !strings.Contains(err.Error(), "success-gated") {
+		t.Fatalf("adversarial regression: rejection message does not mention the success-gate: %v", err)
+	}
+	t.Logf("adversarial OK: an unconditional clients-block append is rejected with: %v", err)
 }

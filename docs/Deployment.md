@@ -239,6 +239,45 @@ git push (main / tag) → tests → buildx → trivy CRITICAL/HIGH scan (FAILS w
 The CI workflow has **no SSH key**, **no host credentials**, **no `apply` invocation**.
 It cannot mutate any deploy target.
 
+### Server-only build manifest on non-release pushes (Spec 098)
+
+The mobile-client build is **decoupled** from the server deploy manifest. A
+missing Android signing secret can never block a home-lab SERVER deploy.
+
+- **Non-release push (e.g. push to `main`):** the `build-clients` job is
+  **skipped** (it requires the operator-private `ANDROID_KEYSTORE_BASE64` secret
+  and has no unsigned fallback — spec 085 FR-CBR-007). `publish-build-manifest`
+  still runs once the server-side jobs (`build-images`, `build-bundles`,
+  `build-chrome-bridge`) succeed, and publishes a **server-only**
+  `build-manifest-<sourceSha>.yaml`: `smackerel-core` + `smackerel-ml` images +
+  per-env config bundles + chrome-bridge. The **android platform is NOT
+  contracted** — there is no `clients.artifacts[]` block. This is the same
+  clients-absent shape `./smackerel.sh build --target home-lab` already emits
+  (`dist/local-build-manifests/local-build-manifest-<sourceSha>.yaml`), and
+  `scripts/deploy/promote.sh` promotes it through the identical core + ml +
+  bundle path (it never reads a `clients:` block).
+- **Tagged release (`refs/tags/v*`) or explicit `build_clients: true`
+  `workflow_dispatch`:** `build-clients` runs and the manifest pins the AAB +
+  APK by `sha256` under `clients.artifacts[]` exactly as spec 085 requires
+  (Build-Once-Deploy-Many client integrity is preserved). A `build-clients`
+  **failure** on a release still blocks the manifest.
+
+A static contract test
+(`internal/deploy/build_workflow_clients_contract_test.go`) drift-protects this:
+`build-clients` must be release-gated, `publish-build-manifest` must tolerate a
+**skipped** client build, and the clients-block steps must be **success-gated**
+on `build-clients`. Adversarial sub-tests prove a non-release manifest is
+accepted WITHOUT android digests AND that a release manifest WITHOUT android
+digests is rejected.
+
+**knb-side expectation (operator-private adapter — out of this repo's scope):** a
+server-only manifest must **not contract the android platform**, so the knb
+conformance gate check (c) `E025-CLIENT-MANIFEST-NO-DIGEST` (which fail-closes
+when a *contracted* android platform has *no digest*) has nothing to fail-close
+on. This matches the `local-build-manifest`, which carries no `clients:` block at
+all. The knb deploy-adapter overlay owns this behavior; this repo only guarantees
+the manifest shape above.
+
 ### Vulnerability Gate (Spec 047 — Deployability Prerequisite)
 
 **Every image (`smackerel-core`, `smackerel-ml`) is scanned by Trivy
