@@ -102,6 +102,24 @@ GREEN: guard reports 0 findings under internal/assistant, test PASS, RC=0
 ```
 <!-- bubbles:evidence-legitimacy-skip-end -->
 
+### CI Confirmation (2026-06-20) — live `integration` job GREEN on commit `0a4a13aa`
+
+The authoritative end-to-end signal — the `CI` workflow's `integration` job — is
+now confirmed GREEN on the live CI runner (no longer just locally):
+
+- **Run:** `27878481800` (`CI` workflow) — conclusion **success**, status **completed**.
+- **Commit:** `0a4a13aa1a5173538f52dbeead876e7e9dc4580a` (current `origin/main` HEAD).
+- **Job:** `integration` — **success**; the companion `lint-and-test`, `build`, and
+  `cross-language-canary` jobs were also **success** on the same run.
+- The code fix itself landed in commit `50c71583`; this run on HEAD `0a4a13aa`
+  confirms `TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent` now
+  reports zero raw-route bypass findings under `internal/assistant` in the live CI
+  `integration` job — the exact finding this bug closes.
+
+Verified independently this session with
+`gh run view 27878481800 --json conclusion,headSha,jobs`
+(conclusion=`success`, headSha=`0a4a13aa…`, `integration` job=`success`).
+
 ## Adversarial Regression Guard
 
 No redundant new guard test is added. The regression guard is the PRE-EXISTING
@@ -195,8 +213,10 @@ The `CI` workflow's `integration` job ran
 `TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent` and failed with
 `retrieval_strategy_routing.go: missing intent.Compiler step before Router.Route`.
 With the provenance comment added, that test now passes (zero findings under
-`internal/assistant`), so the `CI` integration job would now be GREEN for this
-finding once the change is committed by the parent.
+`internal/assistant`), so the `CI` integration job is now GREEN for this finding.
+This is no longer forward-looking: the change is committed (HEAD `0a4a13aa`) and
+the live CI `integration` job is confirmed **success** (run `27878481800`) — see
+"CI Confirmation (2026-06-20)" above.
 
 ## Completion Statement
 
@@ -204,5 +224,17 @@ The pre-existing CI-red `integration`-job finding (spec-068 guard false-positive
 on `retrieval_strategy_routing.go`) is CLOSED. The fix is a single truthful
 doc-comment hunk; the guard, its allowlist, every policy file, and all runtime
 behavior are unchanged. Real same-session red→green evidence is captured above;
-the Go unit suite, `check`, and `lint` are all green. Commit/push is reserved for
-the parent `bubbles.goal`.
+the Go unit suite, `check`, and `lint` are all green, and the live CI
+`integration` job is confirmed GREEN (run `27878481800` success on HEAD
+`0a4a13aa`). The underlying defect is therefore resolved.
+
+Bug-packet status is held at `in_progress` (deferred), NOT `done`: the real
+state-transition guard blocks a `done` promotion (11 findings) because this
+comment-only fix did not execute the full bugfix-fastlane certification pipeline
+(regression/simplify/stabilize/security phases) and has no scenario-specific E2E
+regression coverage (Check 8A) — a doc-comment provenance fix has no E2E surface.
+Recording those phases or inventing that E2E coverage would be fabrication, which
+the no-fabrication / no-bypass policy forbids. This matches the BUG-073-003
+light-touch-fix precedent (done-certification deferred, gates inapplicable). See
+state.json `commitStatusNote`. Commit/push and any done-certification decision
+are reserved for the parent `bubbles.goal`.

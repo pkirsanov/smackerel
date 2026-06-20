@@ -169,9 +169,30 @@ $ git status --porcelain
 
 Zero changes under `internal/` — `internal/api/router.go` and `internal/api/web_login_ratelimit_test.go` are untouched. `auth_login.spec.ts` is untouched.
 
+### 7. CI Confirmation (2026-06-20) — "E2E UI" lane GREEN on commit `0a4a13aa`
+
+The authoritative end-to-end signal — the CI "E2E UI" lane — is now confirmed GREEN on the live runner:
+
+```
+$ gh run view 27878481805 --json workflowName,conclusion,headSha,status,jobs
+workflow:   E2E UI
+status:     completed
+conclusion: success
+headSha:    0a4a13aa1a5173538f52dbeead876e7e9dc4580a
+jobs:       e2e-ui = success   (✓ e2e-ui in 5m42s; ✓ Run PWA browser e2e-ui harness)
+```
+
+- **Run:** `27878481805` (`E2E UI` workflow) — conclusion **success**, status **completed**, `e2e-ui` job **success**.
+- **Commit:** `0a4a13aa1a5173538f52dbeead876e7e9dc4580a` (current `origin/main` HEAD; the fix landed via parent commit `50c71583` and is green on HEAD `0a4a13aa`).
+- The 9 `cardrewards_*.spec.ts` tests that previously failed with HTTP 429 on `/v1/web/login` (discovery run `27877380385`, commit `50c71583`) now pass — the worker-scoped session-reuse cache keeps the suite under the spec-070 `httprate.LimitByIP(20, 1*time.Minute)` web-login limiter on the shared CI runner IP.
+
+Verified independently this session with `gh run view 27878481805 --json conclusion,headSha,jobs` (conclusion=`success`, headSha=`0a4a13aa…`, `e2e-ui` job=`success`).
+
 ## Completion Statement
 
-Implementation and all locally-runnable verification are complete: the worker-scoped cache is in place, the three local logins are routed through the shared cached helper, the adversarial regression passes (2/2) and is proven to fail when the cache is disabled, `playwright test --list` loads all 42 tests, and `git status` confirms zero changes under `internal/` (the production limiter is untouched). This bug is intentionally **not** marked done: the authoritative end-to-end signal is the CI "E2E UI" run, and commit + push + CI are reserved to the parent orchestrator. Status stays `in_progress` pending that parent-owned CI confirmation.
+Implementation and all locally-runnable verification are complete: the worker-scoped cache is in place, the three local logins are routed through the shared cached helper, the adversarial regression passes (2/2) and is proven to fail when the cache is disabled, `playwright test --list` loads all 42 tests, and `git status` confirms zero changes under `internal/` (the production limiter is untouched). The authoritative end-to-end signal — the CI "E2E UI" lane — is now GREEN: run `27878481805` (`e2e-ui` job) conclusion **success** on HEAD `0a4a13aa` cleared the 9 card-rewards 429 failures (see Test Evidence §7).
+
+This bug is **not** marked `done`, however: the real state-transition guard (`bash .github/bubbles/scripts/state-transition-guard.sh`) BLOCKS a `done` promotion (29 findings) because this test-only fix was never taken through the full bugfix-fastlane certification pipeline — Gate G022 requires regression/simplify/stabilize/security/validate/audit phases (only implement+test were executed); Check 8A requires scenario-specific E2E regression DoD+TestPlan structure; Gate G093 requires an implementation/test delta in the certifying change (the code fix is in prior commit `50c71583`, so a specs-only close-out cannot satisfy it); plus G055/G057/G068/G053 artifact-shape gaps. Per the no-fabrication / no-bypass policy, status is HELD at `in_progress` (deferred) — matching the BUG-073-003 light-touch-fix precedent. Full done-certification is reserved for the parent orchestrator (bubbles.goal).
 
 ## Files Changed
 
@@ -188,5 +209,5 @@ Card-rewards specs already routed through the shared helper and therefore needed
 
 ## Pending (parent-owned)
 
-- Commit + push (the parent reserves this).
-- The next CI "E2E UI" run is the authoritative confirmation that the 9 card-rewards 429 failures are cleared; the parent will iterate from fresh logs if any spec still fails.
+- The code fix is already committed + pushed (`50c71583` → HEAD `0a4a13aa`) and CI-verified GREEN (CI "E2E UI" run `27878481805`, `e2e-ui` job success). This bug's functional outcome is achieved.
+- Full bugfix-fastlane done-certification is deferred to the parent: it requires either (a) executing the remaining pipeline phases (regression/simplify/stabilize/security/validate/audit) and adding the scenario-manifest + scenario-specific E2E regression planning the state-transition guard demands, then certifying in the same change that carries the code delta (Gate G093); or (b) accepting the deferred `in_progress` state per the BUG-073-003 precedent for light-touch test-infrastructure fixes.

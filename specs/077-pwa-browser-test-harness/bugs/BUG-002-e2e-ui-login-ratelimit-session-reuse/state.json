@@ -29,10 +29,16 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [],
-  "pendingCertification": {
+  "ciConfirmation": {
     "owner": "parent orchestrator (bubbles.goal)",
     "gate": "CI \"E2E UI\" GitHub Actions lane (./smackerel.sh test e2e-ui)",
-    "reason": "Authoritative end-to-end confirmation is the next CI \"E2E UI\" run after the parent commits + pushes. The full e2e-ui harness needs the live stack + Ollama and was NOT run locally (OOM-prone dev host). All locally-runnable verification (regression, playwright --list, static grep, adversarial proof) passed."
+    "runId": "27878481805",
+    "job": "e2e-ui",
+    "conclusion": "success",
+    "headSha": "0a4a13aa1a5173538f52dbeead876e7e9dc4580a",
+    "confirmedAt": "2026-06-20T17:46:42Z",
+    "reason": "Authoritative end-to-end confirmation arrived: CI \"E2E UI\" run 27878481805 (e2e-ui job) conclusion success on HEAD 0a4a13aa cleared the 9 cardrewards 429 failures. Local verification (regression, playwright --list, static grep, adversarial proof) had already passed.",
+    "remainingCertificationBlocker": "The CI E2E-UI gate is GREEN, but the real state-transition guard still BLOCKS a 'done' promotion (29 findings): Gate G022 needs the full pipeline (regression/simplify/stabilize/security/validate/audit) which this test-only fix never executed; Check 8A needs scenario-specific E2E regression DoD+TestPlan rows; Gate G093 requires an implementation/test delta in the certifying change but the code fix is in prior commit 50c71583 (this close-out touches only specs/); plus G055/G057/G068/G053 artifact-shape gaps. Per the no-fabrication / no-bypass policy, status is HELD at in_progress (deferred) — matching the BUG-073-003 light-touch-fix precedent. Full done-certification is reserved for the parent bubbles.goal."
   },
   "execution": {
     "activeAgent": null,

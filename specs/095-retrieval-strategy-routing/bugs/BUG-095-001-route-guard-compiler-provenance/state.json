@@ -1,9 +1,9 @@
 {
   "spec": "BUG-095-001-route-guard-compiler-provenance",
   "parentSpec": "095-retrieval-strategy-routing",
-  "status": "done",
-  "certifiedAt": "2026-06-20T12:30:00Z",
-  "certifiedBy": "bubbles.workflow",
+  "status": "in_progress",
+  "certifiedAt": null,
+  "certifiedBy": null,
   "workflowMode": "bugfix-fastlane",
   "executionModel": "parent-expanded-child-mode",
   "discovered": "2026-06-20",
@@ -11,7 +11,15 @@
   "baselineHead": "d684f7bc",
   "severity": "medium",
   "commitStatus": "pending-parent-owned",
-  "commitStatusNote": "Fix is implemented and verified (real same-session red→green + unit + check + lint). Commit/push is explicitly reserved for the parent bubbles.goal per task constraints; this bug packet does not commit, push, or run the state-transition guard.",
+  "commitStatusNote": "Fix is implemented and verified (real same-session red→green + unit + check + lint) and now CONFIRMED by the live CI integration job (run 27878481800 success on HEAD 0a4a13aa). HOWEVER, the real state-transition guard BLOCKS a 'done' promotion (11 findings): Gate G056 needs certification.scopeProgress+lockdownState; Gate G022 needs the full pipeline (regression/simplify/stabilize/security) which this comment-only fix never executed; Check 8A needs scenario-specific E2E regression coverage that does not exist for a doc-comment provenance fix. Per the no-fabrication / no-bypass policy, status is HELD at in_progress (deferred) — matching the BUG-073-003 light-touch-fix precedent (done-certification deferred, gates inapplicable). Commit/push reserved for the parent bubbles.goal.",
+  "ciConfirmation": {
+    "workflow": "CI",
+    "job": "integration",
+    "runId": "27878481800",
+    "conclusion": "success",
+    "headSha": "0a4a13aa1a5173538f52dbeead876e7e9dc4580a",
+    "confirmedAt": "2026-06-20T17:46:42Z"
+  },
   "origin": {
     "surfacedBy": "ci-integration-job",
     "workflow": "CI",
@@ -37,7 +45,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "certifiedCompletedPhases": [
       "implement",
       "test",
@@ -75,5 +83,5 @@
     }
   ],
   "resolution": "The spec-068 raw-route bypass guard flagged retrieval_strategy_routing.go because it references the compiler OUTPUT type intent.CompiledIntent but never the literal intent.Compiler (Compiled vs Compiler). The file is genuinely downstream of the spec-068 compiler. Fix: add a truthful intent.Compiler provenance doc comment to selectRetrievalStrategy — documenting the real invariant and satisfying the guard the same way the sibling facade.go does. Makes the CI integration-job finding green; no guard/allowlist/policy edit, no runtime change.",
-  "lastUpdatedAt": "2026-06-20T12:30:00Z"
+  "lastUpdatedAt": "2026-06-20T17:46:42Z"
 }
