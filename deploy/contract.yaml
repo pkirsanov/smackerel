@@ -81,7 +81,7 @@ signing:
 # provenance-signed (Rekor) — the SAME scheme as the two images above — stored
 # as an immutable OCI artifact in `ref` addressed by sha256, and pinned by
 # digest in build-manifest-<sourceSha>.yaml under clients.artifacts[]. Lane A
-# (evo-x2 self-host) is delivered by the existing knb home-lab adapter consuming
+# (<deploy-host> self-host) is delivered by the existing knb home-lab adapter consuming
 # the digest (knb client-delivery-lib.sh — smackerel never builds clients in any
 # adapter); Lane B (Play Store) is coded but default-OFF behind the
 # clientReleaseLaneB flag and never auto-runs.
@@ -102,7 +102,7 @@ clients:
   artifacts:
   - platform: android
     variant: "-" # single-variant platform
-    kind: [aab, apk] # AAB → Lane B (Play Store); APK → Lane A (sideload on evo-x2)
+    kind: [ aab, apk ] # AAB → Lane B (Play Store); APK → Lane A (sideload on <deploy-host>)
     ref: ghcr.io/pkirsanov/smackerel-clients # OCI artifact repo; digest pinned in the build manifest
     provenance: cosign-keyless # always-on CI provenance (Rekor); same scheme as the images
     embeds: [] # android embeds nothing; an ios entry would embed [watchos]
