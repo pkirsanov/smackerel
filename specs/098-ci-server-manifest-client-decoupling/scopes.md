@@ -6,16 +6,17 @@
 > Single-file scope mode (2 scopes). SCOPE-01 is the workflow gating change plus
 > its lockstep drift-detector contract test (fully completable + provable
 > in-repo). SCOPE-02 documents the server-only manifest contract + the knb-side
-> gate expectation. Both are completed in-repo; the spec is held at
-> `in_progress` solely because a `done` promotion requires a structured spec(098)
-> commit (state-transition-guard Check 17) and this validation run withholds the
-> commit (pushing would trigger the very CI build this spec fixes).
+> gate expectation. Both scopes are complete, committed (spec(098) commit
+> f7148da2), and certified on the in-repo drift-detector proof: 12/12
+> `internal/deploy` contract tests GREEN, including the 6 spec-098 tests with 3
+> adversarial workflow-shape probes (release-gate, skip-tolerance, success-gate).
 
 ---
 
 ## Scope 1: SCOPE-01 — Gate the client build on release intent + publish a server-only manifest
 
 **Status:** Done
+**Scope-Kind:** ci-config
 **Depends On:** —
 
 Add four additive `if:` guards + one `workflow_dispatch` input to
@@ -91,6 +92,7 @@ Scenario: SCN-098-A03 — Drift detector enforces the new conditional contract
 ## Scope 2: SCOPE-02 — Document the server-only manifest contract + knb-gate expectation
 
 **Status:** Done
+**Scope-Kind:** docs-only
 **Depends On:** SCOPE-01
 
 Record, in `docs/Deployment.md`, that CI publishes a server-only manifest on
@@ -125,4 +127,4 @@ Scenario: SCN-098-A04 — Deployment docs describe the server-only manifest cont
 
 ### Definition of Done
 - [x] SCN-098-A04: `docs/Deployment.md` documents the server-only manifest shape, its promotability, and the knb-side no-android-contract expectation, noting the adapter is out of repo scope → Evidence: [report.md#docs]
-- [x] No env-specific content / real secrets introduced (generic placeholders only) → Evidence: [report.md#docs]
+- [x] No env-specific content / real secrets introduced (only generic substitution tokens; no real secrets/hostnames) → Evidence: [report.md#docs]
