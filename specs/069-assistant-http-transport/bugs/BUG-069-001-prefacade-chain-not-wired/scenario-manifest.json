@@ -1,0 +1,108 @@
+{
+  "bugId": "BUG-069-001-prefacade-chain-not-wired",
+  "version": 1,
+  "generatedAt": "2026-06-16T00:00:00Z",
+  "parentSpec": "specs/069-assistant-http-transport",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-069-001-SCN-001",
+      "scope": "scope-1",
+      "title": "Live route caps body size (413) through the real cmd/core wiring",
+      "requiredTestType": "integration",
+      "owner": "bubbles.implement",
+      "linkedTests": [
+        {
+          "file": "tests/integration/api/assistant_http_live_wiring_test.go",
+          "function": "TestAssistantHTTPLiveWiring_BodyCapReturns413 (real api.NewRouter wiring with SetMiddleware(PreFacadeChain(transportCfg)), NOT mountScope2Route)",
+          "type": "integration-go"
+        }
+      ],
+      "evidenceRefs": [
+        "cmd/core/wiring_assistant_facade.go:314 (identity pass-through — the defect)",
+        "internal/assistant/httpadapter/adapter.go:329 (unbounded io.ReadAll)",
+        "internal/assistant/httpadapter/middleware.go:101 (bodySizeCap -> http.MaxBytesReader, currently unwired)",
+        "config/smackerel.yaml:997 (body_size_max_bytes: 65536)"
+      ],
+      "linkedDoD": "Scope 1 DoD: live POST /api/assistant/turn returns 413 for an over-cap body with no facade call, bounded read — Scenario 'BUG-069-001-SCN-001 Live route caps body size (413) through the real cmd/core wiring'."
+    },
+    {
+      "scenarioId": "BUG-069-001-SCN-002",
+      "scope": "scope-1",
+      "title": "Live route rate-limits per user (429) through the real wiring",
+      "requiredTestType": "integration",
+      "owner": "bubbles.implement",
+      "linkedTests": [
+        {
+          "file": "tests/integration/api/assistant_http_live_wiring_test.go",
+          "function": "TestAssistantHTTPLiveWiring_PerUserRateLimitReturns429",
+          "type": "integration-go"
+        }
+      ],
+      "evidenceRefs": [
+        "internal/assistant/httpadapter/middleware.go:69 (perUserRateLimit — currently unwired)",
+        "config/smackerel.yaml:998 (rate_limit_per_user_per_minute: 60)",
+        "internal/api/router.go:68 (global Throttle(100) — NOT per-user; insufficient)"
+      ],
+      "linkedDoD": "Scope 1 DoD: per-user budget exceeded yields 429 with no facade call, keyed per user — Scenario 'BUG-069-001-SCN-002 Live route rate-limits per user (429) through the real wiring'."
+    },
+    {
+      "scenarioId": "BUG-069-001-SCN-003",
+      "scope": "scope-1",
+      "title": "Live route enforces the assistant:turn scope-claim gate (403) for per-user PASETO",
+      "requiredTestType": "integration",
+      "owner": "bubbles.implement",
+      "linkedTests": [
+        {
+          "file": "tests/integration/api/assistant_http_live_wiring_test.go",
+          "function": "TestAssistantHTTPLiveWiring_MissingScopeReturns403",
+          "type": "integration-go"
+        }
+      ],
+      "evidenceRefs": [
+        "internal/auth/scope_middleware.go:44 (RequireScope — currently unwired into the live route)",
+        "config/smackerel.yaml:1002 (required_scope: assistant:turn)",
+        "specs/069-assistant-http-transport/spec.md:112 (Hard Constraint 2 — spec 060 scope claim)"
+      ],
+      "linkedDoD": "Scope 1 DoD: per-user PASETO session without assistant:turn yields 403, no facade call — Scenario 'BUG-069-001-SCN-003 Live route enforces the assistant:turn scope-claim gate (403) for per-user PASETO'."
+    },
+    {
+      "scenarioId": "BUG-069-001-SCN-004",
+      "scope": "scope-1",
+      "title": "Dev shared-token still passes after the fix (no regression)",
+      "requiredTestType": "integration",
+      "owner": "bubbles.test",
+      "linkedTests": [
+        {
+          "file": "tests/integration/api/assistant_http_live_wiring_test.go",
+          "function": "TestAssistantHTTPLiveWiring_SharedTokenStillPasses",
+          "type": "integration-go"
+        }
+      ],
+      "evidenceRefs": [
+        "internal/auth/scope_middleware.go:71-77 (SessionSourceSharedToken + SessionSourceBootstrap bypass)",
+        "config/smackerel.yaml:1003 (shared_user_id: shared)"
+      ],
+      "linkedDoD": "Scope 1 DoD: SessionSourceSharedToken within limits reaches the facade with a normal v1 success envelope — Scenario 'BUG-069-001-SCN-004 Dev shared-token still passes after the fix (no regression)'."
+    },
+    {
+      "scenarioId": "BUG-069-001-SCN-005",
+      "scope": "scope-1",
+      "title": "Adversarial — the regression test FAILS against the identity-wrapper wiring and PASSES after the swap",
+      "requiredTestType": "integration",
+      "owner": "bubbles.test",
+      "linkedTests": [
+        {
+          "file": "tests/integration/api/assistant_http_live_wiring_test.go",
+          "function": "RED before swap (SetMiddleware identity pass-through) -> 413/429/403 assertions FAIL; GREEN after swap (SetMiddleware PreFacadeChain(transportCfg)) -> PASS",
+          "type": "integration-go-red-green"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md (RED run captured against the identity-wrapper wiring)",
+        "report.md (GREEN run captured after the PreFacadeChain swap)",
+        "grep -rn 'PreFacadeChain' cmd/ internal/api/ (>= 1 production match after fix)"
+      ],
+      "linkedDoD": "Scope 1 DoD: pre-fix RED proof (identity wrapper) + post-fix GREEN proof (PreFacadeChain) — Scenario 'BUG-069-001-SCN-005 Adversarial — the regression test FAILS against the identity-wrapper wiring and PASSES after the swap'."
+    }
+  ]
+}

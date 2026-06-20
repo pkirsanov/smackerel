@@ -1,0 +1,19 @@
+{
+  "version": 3,
+  "bugDir": "specs/072-whatsapp-business-transport/bugs/BUG-001-rate-limiting-not-enforced",
+  "bugNumber": "BUG-001",
+  "bugName": "Per-User Rate Limiting Not Enforced",
+  "status": "done",
+  "severity": "HIGH",
+  "foundInSpec": "072-whatsapp-business-transport",
+  "rootCause": "Implementation gap — SST value stored but enforcement never wired",
+  "lastUpdatedAt": "2026-06-17T12:54:00Z",
+  "workflowMode": "bugfix-fastlane",
+  "statusCeiling": "done",
+  "observations": [
+    {
+      "severity": "low",
+      "note": "Integration test TP-BUG001-04 pending — requires live WhatsApp Business API stack. Unit test coverage is complete."
+    }
+  ]
+}

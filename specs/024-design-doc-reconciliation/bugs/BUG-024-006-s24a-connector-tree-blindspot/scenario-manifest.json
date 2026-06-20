@@ -1,0 +1,108 @@
+{
+  "bugId": "BUG-024-006-s24a-connector-tree-blindspot",
+  "version": 1,
+  "generatedAt": "2026-06-16T00:00:00Z",
+  "parentSpec": "specs/024-design-doc-reconciliation",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-024-006-SCN-001",
+      "scope": "scope-1",
+      "title": "§24-A architecture tree reflects the live registry count of 17 (incl. Card Rewards)",
+      "requiredTestType": "doc-review",
+      "owner": "bubbles.docs",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "grep -n 'Connector plugins (' docs/smackerel.md  # -> (17 committed)",
+          "type": "grep-validation"
+        },
+        {
+          "file": "docs/smackerel.md",
+          "function": "awk 'NR>=2892 && NR<=2913' docs/smackerel.md | grep -ic 'card.*reward'  # -> >= 1",
+          "type": "grep-validation"
+        },
+        {
+          "file": "cmd/core/connectors.go",
+          "function": "grep -n 'connector.Connector{|cardRewardsConn,' cmd/core/connectors.go  # slice = 17 (lines 68-72)",
+          "type": "slice-count"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md:2892",
+        "docs/smackerel.md:2908",
+        "docs/smackerel.md:2783",
+        "cmd/core/connectors.go:68-72"
+      ],
+      "linkedDoD": "Scope 1 DoD: docs/smackerel.md §24-A header line 2892 reads 'Connector plugins (17 committed)' with a Card Rewards leaf after QF Decisions — Scenario 'BUG-024-006-SCN-001 §24-A architecture tree reflects the live registry count of 17'."
+    },
+    {
+      "scenarioId": "BUG-024-006-SCN-002",
+      "scope": "scope-1",
+      "title": "TestConnectorCountContract pins §24-A as a 4th surface with adversarial proof",
+      "requiredTestType": "unit",
+      "owner": "bubbles.test",
+      "linkedTests": [
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "TestConnectorCountContract_LiveFile",
+          "type": "unit-go"
+        },
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "TestConnectorCountContract_AdversarialSmackerelMdTreeLow",
+          "type": "unit-go-adversarial"
+        }
+      ],
+      "evidenceRefs": [
+        "internal/deploy/docs_connector_count_contract_test.go:81 (connectorsGoSliceRe — existing)",
+        "internal/deploy/docs_connector_count_contract_test.go:89 (smackerelMdHeaderRe — existing §22.7)",
+        "internal/deploy/docs_connector_count_contract_test.go:95 (developmentMdBulletRe — existing)",
+        "internal/deploy/docs_connector_count_contract_test.go (NEW smackerelMdTreeRe — §24-A 4th surface)"
+      ],
+      "linkedDoD": "Scope 1 DoD: assertConnectorCountContract folds §24-A 'Connector plugins (N committed)' as a 4th surface via smackerelMdTreeRe + parseSmackerelMdTreeCount + a new adversarial sub-test — Scenario 'BUG-024-006-SCN-002 TestConnectorCountContract pins §24-A as a 4th surface with adversarial proof'."
+    },
+    {
+      "scenarioId": "BUG-024-006-SCN-003",
+      "scope": "scope-1",
+      "title": "Adversarial RED proves the §24-A pin is non-tautological before the doc fix turns it GREEN",
+      "requiredTestType": "unit",
+      "owner": "bubbles.test",
+      "linkedTests": [
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose  # RED before §24-A edit (§24-A=16 vs runtime=17), GREEN after",
+          "type": "unit-go-red-green"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md (RED run captured before docs/smackerel.md §24-A edit)",
+        "report.md (GREEN run captured after docs/smackerel.md §24-A edit)"
+      ],
+      "linkedDoD": "Scope 1 DoD: pre-fix RED proof (§24-A=16 vs runtime=17) + post-fix GREEN proof (exit 0) — Scenario 'BUG-024-006-SCN-003 Adversarial RED proves the §24-A pin is non-tautological before the doc fix turns it GREEN'."
+    },
+    {
+      "scenarioId": "BUG-024-006-SCN-004",
+      "scope": "scope-1",
+      "title": "Parent spec 024 governance backfill records BUG-024-006 closure without leaving status: done",
+      "requiredTestType": "doc-review",
+      "owner": "bubbles.docs",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c 'import json; d=json.load(open(\"specs/024-design-doc-reconciliation/state.json\")); assert any(b.get(\"bugId\",\"\").startswith(\"BUG-024-006\") for b in d.get(\"resolvedBugs\", []))'  # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/report.md",
+          "function": "grep -cE '^## BUG-024-006' specs/024-design-doc-reconciliation/report.md  # == 1",
+          "type": "grep-validation"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/state.json (resolvedBugs[] + executionHistory + lastUpdatedAt)",
+        "specs/024-design-doc-reconciliation/report.md (## BUG-024-006 section)"
+      ],
+      "linkedDoD": "Scope 1 DoD: parent state.json::resolvedBugs[] contains BUG-024-006; lastUpdatedAt bumped; report.md carries the resolution section; spec 024 stays status: done — Scenario 'BUG-024-006-SCN-004 Parent spec 024 governance backfill records BUG-024-006 closure without leaving status: done'."
+    }
+  ]
+}
