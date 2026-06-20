@@ -1112,3 +1112,174 @@ ok      github.com/smackerel/smackerel/internal/pipeline        0.035s
 ### Outcome
 
 Round-relevant work for `harden-to-doc` on phase3-intelligence: hardening probe executed across all 9 declared dimensions; one mechanical wire-boundary input-validation gap fixed deterministically (HARD-004-R14-001) with 6 adversarial regression tests; three judgment-requiring hardening concerns logged for downstream specialists (HARD-004-R14-002 cron API surface, HARD-004-R14-003 LLM prompt-injection defenses, HARD-004-R14-004 cron-side bounded retry parity). All four affected Go packages remain green. Spec status remains `done`.
+
+---
+
+## DevOps-To-Doc Probe — Stochastic Sweep Child (2026-06-17)
+
+**Probe Owner:** `bubbles.workflow` (mode: `devops-to-doc`, statusCeiling `docs_updated`)
+**Scope:** CI/build/deploy/observability probe over the phase-3 intelligence
+deliverables — build/compile of the intelligence packages, CI test-lane
+coverage, scheduler producer cron wiring (synthesis / weekly synthesis /
+pre-meeting briefs / alert production + delivery), and metrics/alert-rule
+exposure. Phase 004 is an **umbrella** spec; the concrete CI, scheduler, and
+monitoring infrastructure is owned by sibling specs, so findings are attributed
+rather than mechanically edited into foreign surfaces.
+**Baseline Continuity:** Builds on R14 `harden-to-doc` baseline. No code
+regression detected at probe entry; the whole Go tree compiles green.
+
+### Real DevOps / Build Baseline
+
+Sanctioned CLI wrapper (`go test ./...` inside the Go-only container) compiles
+every package and runs the phase-3 producer + observability tests:
+
+```
+$ ./smackerel.sh test unit --go --go-run 'Synthesis|AlertDeliveryMetrics|AlertProducerFailuresMetric|MonitoringAlertsContract' --verbose
+--- PASS: TestMonitoringAlertsContract_LiveFile (0.01s)
+--- PASS: TestMonitoringAlertsContract_AdversarialFabricatedMetric (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialMissingRequiredAlert (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialEmptyExpr (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.052s
+ok      github.com/smackerel/smackerel/internal/digest  0.060s [no tests to run]
+--- PASS: TestRunSynthesis_EmptyPool (0.00s)
+--- PASS: TestRunSynthesis_CancelledContext (0.00s)
+--- PASS: TestSynthesisConfidence_ExactFormula (0.00s)
+ok      github.com/smackerel/smackerel/internal/intelligence    0.085s
+--- PASS: TestAlertDeliveryMetrics (0.01s)
+--- PASS: TestAlertProducerFailuresMetric (0.00s)
+ok      github.com/smackerel/smackerel/internal/metrics 0.071s
+--- PASS: TestRunSynthesisJob_OverlapGuard (0.00s)
+--- PASS: TestRunWeeklySynthesisJob_OverlapGuard (0.00s)
+ok      github.com/smackerel/smackerel/internal/scheduler       0.063s
+[go-unit] go test ./... finished OK
+WRAPPER_EXIT=0
+```
+
+The whole `./...` tree compiles (`finished OK`, exit 0); the four phase-3 Go
+packages (`intelligence`, `digest`, `scheduler`, `metrics`) plus the
+monitoring-contract package (`deploy`) are all green.
+
+### Probe Surface Coverage
+
+| Dimension | Source surface | Owner | Result |
+|-----------|----------------|-------|--------|
+| Build / compile of intelligence packages | `internal/{intelligence,digest,scheduler,knowledge,domain}` | spec 004 deliverables | Healthy — full `go test ./...` compiles; phase-3 packages `ok`. |
+| CI test-lane coverage | `.github/workflows/ci.yml` `lint-and-test` (`go mod verify` + `./smackerel.sh lint` + `config generate` + `test unit --go/--python`) | spec 047 (CI) | Healthy — the Go unit lane runs `go test ./...`, so every phase-3 package is exercised on each push/PR. |
+| Scheduler producer cron wiring | `scheduleEngineJobs()` in `internal/scheduler/scheduler.go` | spec 022 (operational resilience) | Present — all 10 phase-3 producers wired (synthesis `0 2 * * *`, resurfacing `0 8 * * *`, pre-meeting briefs `*/5 * * * *`, weekly synthesis `0 16 * * 0`, monthly report, subscription detection, frequent lookups, alert delivery sweep `*/15 * * * *`, daily alert production `0 6 * * *`, relationship cooling). Overlap guards green (`TestRunSynthesisJob_OverlapGuard`, `TestRunWeeklySynthesisJob_OverlapGuard`). |
+| Metrics instrumentation + registration | `internal/metrics/metrics.go` | spec 021 (surfacing) / spec 004 producers | Healthy — `DigestGeneration`, `AlertsDelivered`, `AlertDeliveryFailures`, `AlertsProduced`, `AlertProducerFailures`, `IntelligenceLatency/Errors` all in the `init()` `MustRegister` block and exposed via `Handler()` (promhttp). Metric tests green (`TestAlertDeliveryMetrics`, `TestAlertProducerFailuresMetric`). |
+| Prometheus alert-rule exposure | `config/prometheus/alerts.yml` | spec 049 (monitoring) / devops-sweep closure | **Closed this round (F-004-DEVOPS-001).** Delivery side was already covered (`SmackerelAlertDeliveryFailing`); the production side (`smackerel_alert_producer_failures_total`) and digest-synthesis path (`smackerel_digest_generation_total{status="fallback"}`) now have the new `smackerel-intelligence` group (`SmackerelIntelligenceAlertProductionFailing`, `SmackerelDigestSynthesisDegraded`), registered in the structural contract. Contract tests green (`TestMonitoringAlertsContract_*`, `TestAlertsContract_*`). |
+
+### Findings Triaged This Round
+
+| ID | Source | Severity | Status | Disposition |
+|----|--------|----------|--------|-------------|
+| DEVOPS-004-001 | Observability asymmetry: `smackerel_alert_producer_failures_total` (emitted by `internal/intelligence/alert_timing.go` + `alert_producers.go` for the spec 004 R-304 contextual-alert producers) and `smackerel_digest_generation_total{status="fallback"}` (emitted by `internal/digest/generator.go` for the R-302 synthesis digest) are registered and scrapeable, but `config/prometheus/alerts.yml` shipped **no** alert rule for either — whereas the delivery-side twin `smackerel_alert_delivery_failures_total` has the dedicated rule `SmackerelAlertDeliveryFailing`. Confirmed by grep: zero `alerts.yml` hits for `producer_failures` / `digest_generation` / `synthesis`. An operator relying on the shipped bundle would not be paged on a chronic alert-**production** failure (user silently misses deadlines — the spec 004 stated failure condition) or on a degraded LLM digest-synthesis path. | Low | **Closed (in-place)** | Closed the same way the established devops-sweep precedent closed identical metrics-without-alerts findings — spec 056 round 11 (F-056-DEVOPS-001), spec 081 round 16 (F-081-DEVOPS-001), spec 037 round 22 (F-037-DEVOPS-001), spec 038 round 30 (F-038-DEVOPS-001) — each added a dedicated alert group to `config/prometheus/alerts.yml` and registered it in the structural contract test, attributed to the probing spec's round. The devops-to-doc mode requires terminal finding closure (`requireTerminalFindingClosure: true`), so routing-and-deferring is not a valid terminal disposition for this surface. Added the `smackerel-intelligence` group (2 rules) + registered both alerts in `internal/metrics/prometheus_alerts_contract_test.go`. See **Round 31 Closure** below for the diff + green-test evidence. (The initial probe pass had recorded this as "routed to spec 049"; that disposition is **superseded** by this in-place closure to honor the precedent.) |
+
+### Round 31 Closure — F-004-DEVOPS-001 (in-place)
+
+**Disposition upgrade.** The initial probe pass recorded DEVOPS-004-001 as
+"routed to spec 049 (foreign-owned)." That is superseded: the established
+devops-sweep precedent in THIS repo closes identical metrics-without-alerts
+findings in-place by editing `config/prometheus/alerts.yml` and registering the
+new group in the structural contract test, attributed to the probing spec's
+round — proven by the four prior closures already shipped in the same files:
+
+| Precedent | Group added | Contract registration |
+|-----------|-------------|-----------------------|
+| spec 056 round 11 (F-056-DEVOPS-001) | `smackerel-connector-twitter` | `requiredAlerts` |
+| spec 081 round 16 (F-081-DEVOPS-001) | `smackerel-ml-nats` | `requiredAlerts` |
+| spec 037 round 22 (F-037-DEVOPS-001) | `smackerel-agent` | `requiredAlerts` |
+| spec 038 round 30 (F-038-DEVOPS-001) | `smackerel-drive` | `requiredAlerts` + metric-source walk |
+| **spec 004 round 31 (F-004-DEVOPS-001)** | **`smackerel-intelligence`** | **`requiredAlerts`** |
+
+The devops-to-doc mode requires terminal finding closure
+(`requireTerminalFindingClosure: true`); routing-and-deferring is not a valid
+terminal disposition when the precedent and the closure surface both exist.
+
+**What was added (two surfaces, both relevant to spec 004's metrics):**
+
+1. `config/prometheus/alerts.yml` — new `smackerel-intelligence` group with two
+   conservative warning rules:
+   - `SmackerelIntelligenceAlertProductionFailing` —
+     `sum by (type) (rate(smackerel_alert_producer_failures_total[15m])) > 0`
+     for 15m. The production-side twin of `SmackerelAlertDeliveryFailing`:
+     fires when the R-304 contextual-alert producers (bill reminders,
+     return-window, trip-prep, relationship-cooling, commitment tracking) fail
+     to create an alert (LLM timing/cooling judgment error OR `CreateAlert` DB
+     insert failure), so the user silently misses the deadline.
+   - `SmackerelDigestSynthesisDegraded` —
+     `sum(rate(smackerel_digest_generation_total{status="fallback"}[1h])) > 0`
+     for 30m. Fires when the R-302 synthesis digest fails to publish to the ML
+     LLM generation path (NATS `digest.generate`) and falls back to a
+     plain-text digest without synthesis. This is a publish-side failure, NOT a
+     consumer dead-letter, so `SmackerelNATSDeadLetterPressure` /
+     `smackerel-ml-nats` do not cover it.
+2. `internal/metrics/prometheus_alerts_contract_test.go` — both alert names
+   registered in the `requiredAlerts` slice (owner: `spec 004 round 31 devops
+   sweep F-004-DEVOPS-001`) + the doc-comment provenance block. Both metrics
+   already live in `internal/metrics/metrics.go`, so the
+   `internal/deploy/monitoring_alerts_contract_test.go` known-emitted allowlist
+   already sees them — no metric-source-walk extension was needed (unlike spec
+   038's drive metrics).
+
+No spec-004 runtime source was changed — both metrics were already emitted; this
+round closes the alert-coverage gap only.
+
+**Regression protection (non-tautological).** Both alert names are now in the
+structural contract's `requiredAlerts`. `TestAlertsContract_LiveFile` walks that
+slice and fails if any `(group|alert)` pair is missing, so deleting the
+`smackerel-intelligence` group would now fail the build — exercised by the
+existing `TestAlertsContract_AdversarialDeletedRequiredAlert` sub-test. The
+`internal/deploy` contract independently proves each new `expr` references a
+live-emitted metric (`TestMonitoringAlertsContract_AdversarialFabricatedMetric`
+proves a fabricated metric name is rejected).
+
+**Test evidence (sanctioned CLI wrapper, exit 0):**
+
+```
+$ ./smackerel.sh test unit --go --go-run 'MonitoringAlertsContract|AlertsContract|AlertDeliveryMetrics|AlertProducerFailuresMetric' --verbose
+--- PASS: TestMonitoringAlertsContract_LiveFile (0.01s)
+--- PASS: TestMonitoringAlertsContract_AdversarialFabricatedMetric (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialMissingRequiredAlert (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialEmptyExpr (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.029s
+--- PASS: TestAlertDeliveryMetrics (0.00s)
+--- PASS: TestAlertProducerFailuresMetric (0.00s)
+--- PASS: TestAlertsContract_LiveFile (0.00s)
+--- PASS: TestAlertsContract_AdversarialYAMLBreak (0.00s)
+--- PASS: TestAlertsContract_AdversarialEmptyExpr (0.00s)
+--- PASS: TestAlertsContract_AdversarialUnknownSeverity (0.00s)
+--- PASS: TestAlertsContract_AdversarialDeletedRequiredAlert (0.00s)
+ok      github.com/smackerel/smackerel/internal/metrics 0.015s
+WRAPPER_EXIT=0
+```
+
+### Attribution Summary
+
+- **1** spec-004-owned observability finding (DEVOPS-004-001) **closed in-place**
+  this round, following the established devops-sweep precedent (specs 056 / 081 /
+  037 / 038). Covers both the alert-production-failure dimension (R-304) and the
+  digest-synthesis-fallback dimension (R-302).
+- Build, CI coverage, producer cron wiring, and metric instrumentation for the
+  phase-3 deliverables were all healthy at probe entry — no defect there.
+- Surfaces touched: `config/prometheus/alerts.yml` (+1 group, 2 rules),
+  `internal/metrics/prometheus_alerts_contract_test.go` (+2 `requiredAlerts`
+  entries + doc comment), and this `report.md`. No spec-004 runtime source was
+  modified (the metrics were already emitted); no unrelated foreign surface was
+  touched.
+
+### Outcome
+
+Round-relevant work for `devops-to-doc` on phase3-intelligence: CI/build/
+observability probe executed across five declared dimensions; the whole Go tree
+compiles green and the four phase-3 packages plus the monitoring-contract
+package pass. The one spec-004-owned observability finding (DEVOPS-004-001 — the
+phase-3 alert-production and digest-synthesis metrics shipped without alert
+rules) was **closed in-place** by adding the `smackerel-intelligence` alert group
+and registering both rules in the structural contract test, exactly as the
+prior devops-sweep rounds (056 / 081 / 037 / 038) closed their equivalents. Both
+alerts-contract tests and the producer/digest metric tests report PASS (wrapper
+exit 0, evidence block above). Spec
+status remains `done` (the closure is an alert-coverage + contract + docs change
+to an already-certified spec; no status promotion performed, consistent with how
+the 037 / 038 rounds added alert groups to already-`done` specs).

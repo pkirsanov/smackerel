@@ -939,3 +939,300 @@ Both findings are exactly the same class as BUG-037-002 (artifact-only traceabil
 
 `completed_owned` — 2 G068 findings closed via artifact-only DoD tag repair; 1 observation routed up; spec status remains `done`; traceability guard now PASSES (33/33 scenarios mapped to DoD); artifact-lint PASSES; no implementation change.
 
+---
+
+## Chaos Round 19 — Executor Tool-Handler Panic Containment (resilience hardening)
+
+**Mode:** `chaos-hardening` (v6: `validate action:chaos-iterative`) · **Trigger:** chaos ·
+**Agent:** parent-expanded `bubbles.chaos` → `bubbles.implement`/`bubbles.test` roles ·
+**Run window:** 2026-06-17 · **Spec status:** remains `done` (resilience hardening on a
+certified spec; no DoD/scope/status change).
+
+This round probes the RESILIENCE / race-condition / edge-case dimensions that the
+Round 8 security pass (SQL injection, auth, XSS, allowlist bypass, schema validation,
+DoS, secret redaction, SSRF, concurrency) did not cover. The security review was NOT
+re-run.
+
+### Finding CHAOS-037-R19-F1 — tool-handler panics escape the executor (FIXED)
+
+**Class:** resilience / blast-radius. **Severity:** high. **Probe:** executor loop
+edge cases + tool-call failure paths.
+
+The executor (`internal/agent/executor.go`) is the generic runner for every current
+and future tool. Its §5.1 dispatch called `toolMeta.Handler(toolCtx, call.Arguments)`
+with **no panic containment**. A panicking handler therefore unwound out of
+`Executor.Run`:
+
+- **Reachable today.** `internal/agent/tools/notification/services.go:124` does
+  `panic(fmt.Sprintf("notification: crypto/rand.Read failed: %v", err))` — a runtime
+  panic path inside a tool handler (entropy exhaustion / short read). The microtools
+  chaos suite (`internal/agent/tools/microtools/chaos_065_test.go`) already wraps every
+  handler in `recover()` at the TEST boundary, acknowledging handlers can panic — but
+  the executor did not contain it in production.
+- **Blast radius (crash).** `internal/scheduler/agent_bridge.go:63` (`FireScenario` →
+  `runner.Invoke`), the telegram bridge, and `internal/annotation/classifier_bridge.go:70`
+  call `Bridge.Invoke` directly on their own goroutines with **no `net/http` recover** —
+  an uncontained handler panic crashes the **entire Go core process**.
+- **Blast radius (audit corruption).** On the API path `net/http`'s per-request recover
+  saves the process, but the tracer **pad leaks** (`PostgresTracer.Begin` without the
+  paired `RecordOutcome`) and the trace is **orphaned**: per-call
+  `agent.tool_call.executed` events were already published to the AGENT NATS stream, but
+  no `agent_traces` row is written and no `agent.complete` is published.
+- **Taxonomy gap.** Design §failure-taxonomy rows BS-003…BS-021 cover allowlist,
+  arg/return schema, hallucinated tool, schema-retry, loop-limit, timeout, and
+  handler-*error* (BS-015 = handler *returns* an error). None cover a handler that
+  *panics*. This violates spec G7 ("detect and recover from adversarial conditions …
+  tool errors") and the Hard Constraint that tool failures "MUST be detected, surfaced,
+  and recoverable … MUST NOT silently corrupt artifact metadata."
+
+**Fix (implemented).** `internal/agent/executor.go`:
+
+- New `invokeToolHandler(ctx, handler, args) (result, err, panicked)` wraps the handler
+  in `defer/recover`, converting a panic into `(nil, "tool handler panicked: <v>", true)`
+  instead of unwinding the stack.
+- Dispatch now records a contained panic as a per-call `tool-error` with the distinct
+  `RejectionReason: "tool_panic"` (so operators can tell a crashing tool from one that
+  returned an error), then **continues** the §5.1 loop — identical recovery semantics to
+  BS-015. Because `Run` always reaches `finalize`, `RecordOutcome` always flushes the
+  trace (pad deleted, row written), closing the audit-corruption window. The bounded
+  loop limit (≤32) caps any deterministically-panicking tool.
+
+**Adversarial regression (new):** `internal/agent/executor_panic_test.go`
+
+- `TestExecutor_ToolPanicContained_LoopRecovers` — a tool whose handler panics
+  (`crypto/rand.Read: EOF`) followed by a recovery tool + final. Asserts `Run` RETURNS
+  (a propagated panic fails the test goroutine), call[0] is `tool-error`/`tool_panic`
+  with the panic value captured in the trace `Error`, the loop recovered to `ok`, and the
+  spy tracer's `RecordOutcome` fired exactly once (trace flushed — no orphan). With the
+  `recover` removed, the test goroutine panics and FAILS (non-tautological).
+- `TestExecutor_ToolPanicDeterministic_HitsLoopLimit` — a tool that panics every turn
+  terminates at `loop-limit` with N contained `tool_panic` records, proving the bounded
+  loop caps a persistently-crashing tool rather than spinning or crashing.
+
+### Test Evidence (executed, real captured output — no redirection)
+
+```
+$ ./smackerel.sh test unit --go --go-run 'ToolPanic' --verbose
+=== RUN   TestExecutor_ToolPanicContained_LoopRecovers
+--- PASS: TestExecutor_ToolPanicContained_LoopRecovers (0.00s)
+=== RUN   TestExecutor_ToolPanicDeterministic_HitsLoopLimit
+--- PASS: TestExecutor_ToolPanicDeterministic_HitsLoopLimit (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/agent   0.024s
+```
+
+Broad no-regression run across the agent surface (executor, tracer, loader, replay,
+router, registry, redact, normalize, judgment, schema, sideeffect, bridge, BS-series):
+
+```
+$ ./smackerel.sh test unit --go --go-run 'Executor|BS0|BS1|BS2|Tracer|Loader|Replay|Router|Registry|Redact|Normalize|Judgment|Schema|Sideeffect|Bridge'
+[go-unit] go test ./... finished OK
+WRAPPER_EXIT=0
+```
+
+### Files Touched (chaos round 19)
+
+- `internal/agent/executor.go` (panic containment: new `invokeToolHandler` helper +
+  `tool_panic` rejection-reason branch in §5.1 dispatch)
+- `internal/agent/executor_panic_test.go` (new — two adversarial regressions)
+- `specs/037-llm-agent-tools/report.md` (this evidence section)
+
+### Files NOT Touched (chaos round 19)
+
+- `specs/037-llm-agent-tools/spec.md`, `design.md`, `scopes.md`, `scenario-manifest.json`,
+  `uservalidation.md`, `state.json` (planning-truth + status preserved per artifact
+  ownership; spec stays certified `done`)
+- All other source, all ML sidecar code, all framework files
+
+### Routed Up (NOT closed in this round)
+
+- **DESIGN-037-R19-BS-TOOLPANIC:** the new `tool_panic` outcome is a behavior the
+  design failure-taxonomy (BS-003…BS-021) does not yet name. Registering a formal
+  `BS-0XX (tool-handler panic → contained tool-error)` row in `design.md` and a matching
+  fidelity scenario in `scenario-manifest.json`/`scopes.md` is planning-truth owned by
+  `bubbles.design` / `bubbles.plan`. Not edited here to respect certified-artifact
+  ownership boundaries; routed to the sweep parent as a follow-up planning packet. The
+  runtime behavior is fully implemented and regression-tested regardless.
+
+### Round Verdict
+
+`completed_owned` — 1 high-severity resilience finding (CHAOS-037-R19-F1) closed in-round
+via executor panic containment + 2 adversarial regressions (both PASS); broad agent-suite
+no-regression run green (`WRAPPER_EXIT=0`); 1 design-taxonomy follow-up routed up to the
+planning owner; spec status remains `done`.
+
+---
+
+## Round 22 — DevOps Sweep: Agent Observability Wiring (F-037-DEVOPS-001)
+
+**Trigger:** `devops` (stochastic-quality-sweep round 22) → `devops-to-doc` workflow mode
+(parent-expanded; no nested `runSubagent`). **Probe dimension:** CI/CD, deployment,
+infrastructure, and monitoring/observability — explicitly the dimensions NOT exercised by
+round 8 (security, clean) or round 19 (chaos, panic containment).
+
+### Finding F-037-DEVOPS-001 (severity: medium — operational observability gap)
+
+The LLM scenario agent is a live runtime surface (routes intents → scenarios, drives an
+LLM over NATS, executes allowlisted tools, persists a trace per invocation). It emitted DB
+trace rows (`agent_traces`) and two NATS events (`agent.tool_call.executed`,
+`agent.complete`) but **zero Prometheus metrics**, and `config/prometheus/alerts.yml` had
+**zero agent alert rules** — so an operator running the monitoring stack had no push-based
+alarm when the agent degraded (LLM provider unreachable → `provider-error`; scenario
+timeout budget structurally unreachable → `timeout`, the exact spec-061 production failure
+class; a prompt-injection burst tripping tool allowlists → `allowlist-violation`).
+
+- `spec.md` "### Observability" NFR explicitly requires "Aggregate metrics by scenario:
+  invocation count, success / unknown-intent / schema-failure / loop-limit / tool-error /
+  timeout counts, p50/p95 latency, average tool calls per invocation" plus "Allowlist
+  violations and hallucinated tool calls counted per scenario." `design.md` never carried
+  that NFR into a Prometheus design, and `internal/metrics/*.go` + `ml/app/metrics.py` had
+  no `smackerel_agent_*` series.
+- Every comparable subsystem (ingestion, search, connectors, NATS core + ML, DB, ML
+  embedding, backup, alert delivery) already had Prometheus alerting; the agent was the
+  conspicuous gap. Directly analogous to the certified precedents F-056-DEVOPS-001
+  (Twitter connector) and F-081-DEVOPS-001 (ML-sidecar NATS dead-letter), which added a
+  metric + alert + contract-test registration the same way.
+- The AGENT NATS stream's dead-letter pressure is already covered generically by the
+  existing `SmackerelNATSDeadLetterPressure` rule (`sum by (stream)`), so this finding is
+  scoped to **invocation outcomes**, not NATS transport.
+
+### Fix (implement → test → docs)
+
+Three bounded Prometheus metrics + three focused alert rules + contract-test registration
++ runbook docs:
+
+- **`internal/metrics/agent.go`** (new) — `smackerel_agent_invocations_total{scenario,
+  outcome}`, `smackerel_agent_invocation_duration_seconds{scenario}` (histogram, p50/p95
+  NFR), `smackerel_agent_tool_calls_total{scenario, tool, result}`. Cardinality is bounded
+  by construction: `scenario` falls back to `"unrouted"` (unknown-intent); `tool` is
+  bucketed to `"unregistered"` for a hallucinated tool name the LLM invented (registry
+  `ByName` miss) — a hard guard so an adversarial/looping model cannot mint unbounded
+  label values; `outcome`/`result` are closed `agent.Outcome` enums.
+- **`internal/agent/tracer.go`** — `PostgresTracer.RecordOutcome` emits the invocation
+  counter + duration histogram before the DB/NATS flush (so metrics survive a Postgres or
+  NATS hiccup); `publishToolCall` (the funnel for `RecordToolCall`/`RecordRejection`/
+  `RecordToolError`/`RecordReturnInvalid`) emits the per-call counter, with the
+  cardinality-safe `tool` bucketing, independent of NATS publisher configuration.
+- **`internal/metrics/metrics.go`** — registers the three metrics in the central
+  `MustRegister` block.
+- **`config/prometheus/alerts.yml`** — new `smackerel-agent` group:
+  `SmackerelAgentProviderErrors` (LLM-provider health), `SmackerelAgentInvocationTimeouts`
+  (timeout-budget reachability), `SmackerelAgentAllowlistViolations` (tool-allowlist
+  security boundary).
+- **`internal/metrics/prometheus_alerts_contract_test.go`** — registers the three alerts
+  in `requiredAlerts` (regression guard, matching the 056/081 precedent).
+- **`internal/metrics/metrics_test.go`** — `TestMetricsRegistered` initializes + expects
+  the three new series.
+- **`docs/Operations.md`** — adds the LLM Scenario Agent dashboard-inventory row and the
+  three agent alert-runbook rows (T-049-005 requires every alert be documented).
+
+### Test Evidence (executed, real captured output — no redirection)
+
+New tracer metric-wiring unit tests (`internal/agent/metrics_test.go`), including the
+adversarial cardinality-guard proof + negative control:
+
+```
+$ go test ./internal/agent/ -run 'TestPostgresTracer_(RecordOutcome|ToolCall)' -v
+=== RUN   TestPostgresTracer_RecordOutcome_EmitsInvocationMetrics
+--- PASS: TestPostgresTracer_RecordOutcome_EmitsInvocationMetrics (0.00s)
+=== RUN   TestPostgresTracer_RecordOutcome_UnroutedScenarioBucket
+--- PASS: TestPostgresTracer_RecordOutcome_UnroutedScenarioBucket (0.00s)
+=== RUN   TestPostgresTracer_ToolCall_HallucinatedNameBucketedUnregistered
+--- PASS: TestPostgresTracer_ToolCall_HallucinatedNameBucketedUnregistered (0.00s)
+=== RUN   TestPostgresTracer_ToolCall_RegisteredAllowlistViolation
+--- PASS: TestPostgresTracer_ToolCall_RegisteredAllowlistViolation (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/agent   0.111s
+```
+
+Monitoring contract tests — T-049-004 (every alert expr references a runtime-emitted
+metric) + T-049-005 (every alert documented) + their adversarial sub-tests:
+
+```
+$ go test ./internal/deploy/ -run 'Monitoring' -v
+--- PASS: TestMonitoringAlertsContract_LiveFile (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialFabricatedMetric (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialMissingRequiredAlert (0.00s)
+--- PASS: TestMonitoringAlertsContract_AdversarialEmptyExpr (0.00s)
+--- PASS: TestMonitoringDocsContract_LiveFile (0.00s)
+--- PASS: TestMonitoringDocsContract_AdversarialMissingHeading (0.00s)
+--- PASS: TestMonitoringDocsContract_AdversarialMissingAlertMention (0.00s)
+ok      github.com/smackerel/smackerel/internal/deploy  0.032s
+```
+
+Structural alerts contract + metric registration (`internal/metrics`):
+
+```
+$ go test ./internal/metrics/ -run 'Alerts|MetricsRegistered' -v
+--- PASS: TestMetricsRegistered (0.00s)
+--- PASS: TestAlertsContract_LiveFile (0.00s)
+--- PASS: TestAlertsContract_AdversarialYAMLBreak (0.00s)
+--- PASS: TestAlertsContract_AdversarialEmptyExpr (0.00s)
+--- PASS: TestAlertsContract_AdversarialUnknownSeverity (0.00s)
+--- PASS: TestAlertsContract_AdversarialDeletedRequiredAlert (0.00s)
+ok      github.com/smackerel/smackerel/internal/metrics 0.029s
+```
+
+Whole-tree gates:
+
+```
+$ ./smackerel.sh check    # go vet ./... + config-validate + scenario-lint + env-drift
+... Config is in sync with SST / env_file drift guard: OK / scenario-lint: OK
+CHECK_EXIT=0
+
+$ ./smackerel.sh lint     # Go + Python + web
+LINT_WRAPPER_EXIT=0
+```
+
+Docs-contract coverage simulation (every `- alert:` name in `alerts.yml` is present in
+`docs/Operations.md`): `all 16 alert names present in Operations.md`.
+
+### Pre-Existing Failure NOT Caused By This Round (honest disclosure)
+
+The full `./smackerel.sh test unit --go` suite reports one failing package,
+`internal/deploy` → `TestConnectorCountContract_LiveFile`: `docs/smackerel.md §22.7=18`
+vs runtime connector count `17`. This is a **pre-existing connector-inventory docs drift**
+from foreign uncommitted working-tree changes (the shared multi-agent tree has
+`docs/smackerel.md` + connector files modified and a `BUG-024-006` connector-tree-blindspot
+bug folder untracked). This round touched **zero** connector files or `docs/smackerel.md`;
+the per-package runs above isolate this round's surfaces and are all green. The
+connector-count contract is spec-024 territory and is left to its owner.
+
+### Files Touched (devops round 22)
+
+- `internal/metrics/agent.go` (new — 3 bounded metrics)
+- `internal/metrics/metrics.go` (central `MustRegister` += 3)
+- `internal/metrics/metrics_test.go` (`TestMetricsRegistered` += 3)
+- `internal/metrics/prometheus_alerts_contract_test.go` (`requiredAlerts` += 3)
+- `internal/agent/tracer.go` (metric emission in `RecordOutcome` + `publishToolCall`)
+- `internal/agent/metrics_test.go` (new — 4 wiring tests incl. cardinality-guard)
+- `config/prometheus/alerts.yml` (new `smackerel-agent` alert group, 3 rules)
+- `docs/Operations.md` (dashboard row + 3 agent alert-runbook rows)
+- `specs/037-llm-agent-tools/report.md` + `state.json` (this evidence + history entry)
+
+### Incidentally Closed (pre-existing, co-located in the runbook I had to edit)
+
+The T-049-005 docs contract checks **all** alerts; it was already red on this tree because
+the spec-081 ML-NATS alerts (`SmackerelMLNATSDeadLetterPressure`,
+`SmackerelMLNATSDeadLetterPublishFailing`) were in `alerts.yml` + the contract test but
+never added to the `docs/Operations.md` Alert Runbook. My round could not produce a green
+docs contract without them (they iterate before the agent group), so I added their two
+runbook rows alongside the agent rows — a pure-docs, no-behavior-change addition in the
+same table. Flagged to spec 081 for awareness.
+
+### Files NOT Touched (devops round 22)
+
+- `specs/037-llm-agent-tools/spec.md`, `design.md`, `scopes.md`, `scenario-manifest.json`,
+  `uservalidation.md` (planning-truth + scope status preserved; spec stays certified
+  `done`). The agent's three metrics realize the existing `spec.md` "### Observability"
+  NFR, so no requirement change was needed.
+- All connector files, `docs/smackerel.md`, and any other spec's artifacts.
+
+### Round Verdict
+
+`completed_owned` — 1 medium-severity observability finding (F-037-DEVOPS-001) closed
+in-round via 3 bounded agent metrics + 3 operator alerts + contract-test registration +
+runbook docs; all metric-wiring, contract, and docs tests PASS (incl. adversarial); whole
+-tree `check` + `lint` green; spec status remains `done`. One pre-existing foreign
+connector-count contract failure disclosed and left to its owner.
+

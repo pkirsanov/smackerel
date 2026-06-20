@@ -920,4 +920,245 @@ above confirms it PASSES. The row should be flipped to `[x]` with the real
 evidence anchor. `scopes.md` is owned by `bubbles.plan`; this probe does not
 edit it.
 
+---
+
+## Test-To-Doc Round — Client-Surface Coverage + R14 Manifest Contract Unit Lift (2026-06-17)
+
+**Owner:** `bubbles.workflow` (parent-expanded `test-to-doc` child mode; the
+stochastic-quality-sweep subagent runtime lacks nested `runSubagent`, so the
+mapped mode ran in parent-expanded form — `executionModel: parent-expanded-child-mode`;
+`test-to-doc` is not top-level-runtime-locked). **Status ceiling:** `docs_updated` —
+spec 058 stays `blocked` (the sole genuinely-irreducible row, the keyless-OIDC
+CI-release Rekor binding, is unchanged and not addressed here). **Claim Source:**
+executed (commands + exit codes captured below) / interpreted (coverage-gap analysis).
+
+### Test re-verification — vitest client surface (Executed: YES)
+
+The MV3 extension's deterministic unit suite (vitest, `environment: node`,
+`fake-indexeddb` — no browser, no live stack) re-run from `extensions/chrome-bridge/`:
+
+```text
+$ node_modules/.bin/vitest run
+ RUN  v1.6.1 ~/smackerel/extensions/chrome-bridge
+ ✓ test/unit/dwell_gate.spec.ts (5)
+ ✓ test/unit/validation.spec.ts (7)
+ ✓ test/unit/transport.spec.ts (9)
+ ✓ test/unit/backoff.spec.ts (4)
+ ✓ test/unit/privacy_filter.spec.ts (7)
+ ✓ test/unit/queue.spec.ts (7)
+ Test Files  6 passed (6)
+      Tests  39 passed (39)
+VITEST_EXIT=0
+```
+
+Baseline green: SCN-058-010..015 client-surface unit coverage (privacy filter,
+dwell gate, IndexedDB WAL queue + corrupted-row drainer, exponential backoff
+curve, transport status mapping, options validators) all PASS, matching the
+`state.json` "vitest 39/39" claim.
+
+### Coverage gap found + closed (finding-owned closure, one-to-one)
+
+**Finding T2D-058-01 (test gap — actionable, in-scope).** The Round-R14
+least-privilege `host_permissions` hardening (spec 058 Finding B; the uncommitted
+`extensions/chrome-bridge/manifest.json` change that narrows `<all_urls>` →
+`["https://*/*", "http://localhost/*", "http://127.0.0.1/*"]`) had its ONLY
+regression guard inside the Playwright e2e spec
+`test/e2e/sideload_smoke.spec.ts`. That lane needs a real built extension + real
+headless Chromium (`./smackerel.sh test e2e-ext`) and does NOT run in the fast
+vitest unit feedback loop. The adjacent MV3 minimum-permissions (design §4) and
+restrictive-CSP invariants were likewise unit-unguarded. `manifest.json` is a
+static JSON file, so this contract is unit-checkable with a pure read+assert —
+the appropriate tier (mirroring the repo's static-manifest contract pattern in
+`internal/web/extension_parity_contract_test.go`, which covers the *other*,
+`web/extension/` manifest, not spec 058's chrome-bridge manifest).
+
+**Closure.** Authored `test/unit/manifest_contract.spec.ts` (7 tests) lifting the
+static-JSON-checkable subset of the e2e manifest assertions into the unit tier: a
+shared pure `validateManifestContract()` validator + a live-file test asserting
+the committed manifest is compliant, plus 5 adversarial twins proving the
+validator rejects `<all_urls>`, cleartext `http://*/*`, an over-broad permission
+(`tabs`), a dropped capture permission (`history`), and a CSP allowing
+`'unsafe-eval'`. No production/source change — test-only, within spec 058's owned
+`extensions/chrome-bridge/` surface.
+
+**GREEN (Executed: YES)** — full suite after adding the contract test, plus a
+clean `tsc --noEmit` typecheck (`test/unit/**` is in the tsconfig `include`):
+
+```text
+$ node_modules/.bin/tsc --noEmit ; echo TSC_EXIT=$?
+TSC_EXIT=0
+$ node_modules/.bin/vitest run
+ ✓ test/unit/manifest_contract.spec.ts (7)
+ ... (6 prior files) ...
+ Test Files  7 passed (7)
+      Tests  46 passed (46)
+VITEST_EXIT=0
+```
+
+**RED proof (non-tautology, Executed: YES)** — `host_permissions` transiently
+widened back to `["<all_urls>"]` in `manifest.json` (spec 058's own file), then
+restored byte-for-byte (`git diff` afterward shows ONLY the R14 hardening, nothing
+from the mutate). The two live-file tests fail with the precise violations; the 5
+adversarial twins (synthetic manifests) correctly still pass:
+
+```text
+$ node_modules/.bin/vitest run test/unit/manifest_contract.spec.ts   # manifest = ["<all_urls>"]
+ × the committed manifest.json satisfies the MV3 + least-privilege contract
+   AssertionError: expected [ …(2) ] to deeply equal []
+   + "host_permissions MUST NOT include the over-broad grant \"<all_urls>\" (R14 least-privilege)"
+   + "host_permissions must be exactly the least-privilege set [...], got [\"<all_urls>\"]"
+ × pins the exact R14 least-privilege host_permissions set on the committed manifest
+ ✓ adversarial: forbids re-widening host_permissions back to <all_urls>
+ ✓ adversarial: forbids re-widening host_permissions to cleartext http://*/*
+ ✓ adversarial: rejects an over-broad permission beyond the MV3 minimum set (e.g. tabs)
+ ✓ adversarial: rejects a dropped capture permission (e.g. history removed)
+ ✓ adversarial: rejects a CSP that allows 'unsafe-eval'
+ Tests  2 failed | 5 passed (7)
+VITEST_RED_EXIT=1
+# manifest.json then restored to the R14 least-privilege set; full suite re-run 46/46 GREEN, exit 0.
+```
+
+### Honest test-level accounting (anti-fabrication)
+
+- **vitest client surface (SCN-058-010..015 + the new manifest contract):**
+  re-run this round, 46/46 PASS, exit 0 (captured above).
+- **Playwright e2e lane** (`sideload_smoke`, `bookmark_roundtrip`, `auth_failure`,
+  `options_setup` via `./smackerel.sh test e2e-ext`): **NOT run this round** — it
+  requires real headless Chromium + a freshly built extension; not invoked to
+  avoid a heavy browser/stack run under the active foreign-Docker/build load
+  noted for this sweep round. No live-browser result is claimed.
+- **Go bridge-receiver packages** (`internal/config` extension cfg,
+  `internal/api/connectors/extension`, `internal/connector/ingest` dedup,
+  `internal/api/admin/extensiondevices`, `internal/deploy` build-manifest
+  contract): **NOT re-run this round** — no Go code changed, and the
+  containerized `go test ./...` compile would entangle a large volume of foreign
+  uncommitted sweep work + risk OOM. These were last verified green by
+  `bubbles.validate` 2026-06-09 (exit 0, per `state.json`); that record stands.
+
+### Ceiling respected
+
+Diagnostic + test-only round. No `state.json` certification field, scope status,
+DoD checkbox, or `spec.md`/`design.md`/`scopes.md` content was modified. Spec 058
+remains `blocked`; it is NOT promoted past `docs_updated`. Files changed this
+round: `extensions/chrome-bridge/test/unit/manifest_contract.spec.ts` (new) and
+this `report.md` section (`manifest.json` net-unchanged — mutated then restored
+for the RED proof).
+
+## Scenario Manifest linkedTests Reconciliation — F-058-T25-01 (2026-06-17)
+
+**Owner:** `bubbles.plan` (planning-owned artifact: `scenario-manifest.json`).
+**Routed finding:** F-058-T25-01 (stochastic-quality-sweep test probe). **Status
+ceiling:** unchanged — spec 058 stays `blocked` (the external KEYLESS-OIDC
+CI-release Rekor row is untouched). **Claim Source:** executed (file-existence +
+test-title verification via `file_search`/`grep` against the live worktree;
+`artifact-lint.sh` exit 0 captured below) / interpreted (tier-coverage analysis).
+
+### Finding
+
+`scenario-manifest.json` `linkedTests` pointed at **9 test files that do not
+exist** in the repo. Root cause: BUG-058-002 reshaped the e2e tier into
+Playwright specs and the live-Postgres integration tier landed via
+BUG-058-EXTERNAL-INFRA-MISSING Blocker-2 (DI-058-08, 2026-06-05), but the manifest
+pointers were only partially reconciled. The behaviors **are** covered by real
+tests — only the manifest pointers were stale. Two entries also carried a wrong
+testId inside a real file (SCN-012, SCN-014) and one named the wrong Go package
+(SCN-020: `internal/api/admin/devices_*` vs the real
+`internal/api/admin/extensiondevices/`).
+
+Dangling files removed (all confirmed absent on disk this round):
+`tests/e2e/extension_ingest_e2e_test.go`,
+`internal/api/connectors/extension/ingest_integration_test.go`,
+`internal/connector/ingest/dedup_integration_test.go`,
+`tests/e2e/extension_dedup_e2e_test.go`,
+`scripts/commands/build-chrome-bridge_test.sh`,
+`tests/docs/api_md_extension_section_test.sh`,
+`tests/docs/no_legacy_extension_path_test.sh`,
+`internal/api/admin/devices_integration_test.go`,
+`tests/e2e/admin_devices_e2e_test.go`.
+
+### Reconciliation (each pointer now resolves to a verified real test)
+
+| SCN | Stale pointer (removed/fixed) | Reconciled real coverage | Tier |
+|-----|-------------------------------|--------------------------|------|
+| 001 | `tests/e2e/extension_ingest_e2e_test.go` | `internal/api/connectors/extension/ingest_test.go::TestIngest_AcceptsValidBatch_AllAccepted` + `extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts` ("created bookmark is captured and POSTed…") | unit + e2e |
+| 002 | `ingest_integration_test.go` (×2) | `internal/auth/scope_middleware_test.go::TestRequireScope_RejectsLegacyTokenSession` (uses the exact `extension:bookmarks,history` tuple + `/v1/connectors/extension/ingest` path + asserts `403 scope_required`) + `…::TestRequireScope_AndSemanticsRejectsPartialMatch` | unit (middleware) |
+| 006 | `dedup_integration_test.go`, `extension_dedup_e2e_test.go` | `internal/connector/ingest/dedup_test.go::TestComputeDedupKey_Deterministic` + **live-PG** `tests/integration/extension_dedup_race_test.go::TestPostgresDedupStore_ResolveOrPublish_FastPathHitIncrementsCount` (sequential collision → visit_count=2, second deduped) | unit + integration |
+| 007 | `extension_dedup_e2e_test.go` | `internal/connector/ingest/dedup_test.go::TestComputeDedupKey_VariesByBucket` | unit |
+| 008 | `extension_dedup_e2e_test.go` | `internal/connector/ingest/dedup_test.go::TestComputeDedupKey_VariesByDevice` | unit |
+| 009 | `dedup_integration_test.go`, `extension_dedup_e2e_test.go` | `internal/api/connectors/extension/ingest_test.go::TestComputeBucket_BookmarkAlwaysZero` | unit |
+| 010 | (unit only) | `…/test/unit/privacy_filter.spec.ts::dropsDeniedURLBeforeEnqueue` + `…/test/e2e/bookmark_roundtrip.spec.ts` ("a deny-pattern URL is dropped before it leaves the browser (no ingest POST)") | unit + e2e |
+| 012 | `bookmark_roundtrip.spec.ts::Regression_OfflineQueueFlushOnReconnect` (testId never existed) | `…/test/unit/queue.spec.ts::persistsAcrossSWEviction` | unit |
+| 014 | `auth_failure.spec.ts::revokedTokenSetsBadgeAUTH` (testId never existed) | `…/test/unit/transport.spec.ts::mapsHTTPStatusToOutcome` + `…/test/e2e/auth_failure.spec.ts` ("a 401 from the ingest endpoint sets the AUTH badge and retains the queued item") | unit + e2e |
+| 016 | `scripts/commands/build-chrome-bridge_test.sh` | `internal/deploy/build_workflow_chrome_bridge_contract_test.go::TestChromeBridgeManifestContract_LiveFile` + `scripts/runtime/extension-verify-blob.sh` (`./smackerel.sh test extension-supplychain`) | unit + supply-chain |
+| 019 | `tests/docs/api_md_extension_section_test.sh` | `…/test/unit/manifest_contract.spec.ts` ("the committed manifest.json satisfies the MV3 + least-privilege contract") + `…/test/e2e/sideload_smoke.spec.ts` ("the built extension sideloads and its MV3 service worker registers") | unit + e2e |
+| 020 | `internal/api/admin/devices_integration_test.go` (×2, wrong pkg), `tests/e2e/admin_devices_e2e_test.go` | `internal/api/admin/extensiondevices/devices_test.go::TestHandler_AdminSeesAllOwnersSorted` + `…::TestHandler_NonAdminSeesOnlyOwnDevices` + **live-PG** `tests/integration/extension_admin_devices_test.go::TestExtensionDevices_AggregateDevices_LiveAggregationRespectsContract` | unit + integration |
+| 021 | `api_md_extension_section_test.sh`, `no_legacy_extension_path_test.sh` | **empty** (`linkedTests: []`) — see Uncertainty Declaration below | none |
+
+`manifest_contract.spec.ts` (the 7-test R14 contract added in the prior round,
+previously unmapped by any scenario) is now mapped to **SCN-058-019** — it is the
+unit-tier twin of the e2e `sideload_smoke.spec.ts` manifest/permissions assertion.
+
+### Uncertainty Declarations (honest not-run tiers — NOT pointed at fake files)
+
+Per the repo's evidence-provenance convention (`evidence-rules.md`), the following
+higher tiers are genuinely **not-run**; the manifest lists only the real lower-tier
+test(s), and these gaps are recorded here rather than fabricated as linked files:
+
+- **SCN-058-002** — **Claim Source: not-run** for the live-stack wire POST of a
+  legacy/under-scoped token against the mounted route. The scope-gating contract
+  IS proven at the handler/middleware tier (`TestRequireScope_RejectsLegacyTokenSession`
+  exercises the real `auth.RequireScope("extension:bookmarks,history")` against
+  `/v1/connectors/extension/ingest` and asserts the `403 scope_required` body +
+  `AuthScopeRejected` metric). A full live-stack HTTP POST is not separately run.
+- **SCN-058-007 / 008 / 009** — **Claim Source: not-run** for a dedicated live-PG
+  "produces two distinct rows" / "bookmark bucket=0 collapses 24h-apart" assertion.
+  The deterministic keyer (different bucket/device → different key; bookmark bucket
+  always 0) is proven at unit tier; the live upsert path's distinct-row outcome for
+  these specific variants is not separately asserted (SCN-006's live race/fast-path
+  test exercises the shared upsert machinery).
+- **SCN-058-011 (dwell) / 013 (backoff)** — **Claim Source: not-run** at the e2e-ui
+  tier. Deliberately **not** linked to `bookmark_roundtrip.spec.ts`: that spec's
+  three tests assert bookmark POST, deny-pattern drop, and removal-tombstone — it
+  asserts **neither** a short-visit dwell-drop **nor** the backoff curve, so linking
+  it would overstate coverage. The genuine proofs are unit-tier
+  (`dwell_gate.spec.ts::dropsVisitBelowThreshold`, `backoff.spec.ts::followsDesignedCurve`).
+- **SCN-058-012** — **Claim Source: not-run** at the e2e-ui tier (the "5 queued
+  items survive a real SW eviction" assertion). Proven at unit tier
+  (`queue.spec.ts::persistsAcrossSWEviction`, fake-indexeddb).
+- **SCN-058-021** — **Claim Source: not-run / no automated coverage exists.** This is
+  a doc-content scenario ("API.md documents the endpoint + authorization matrix").
+  No doc-assertion test exists (the two stale `tests/docs/*.sh` pointers never
+  existed); `linkedTests` is honestly empty. Verified by manual doc review only
+  (docs/API.md §"Chrome Extension Bridge Ingestion" + the `403 scope_required`
+  shape). NOT marked as covered.
+
+### Verification (Executed: YES)
+
+```text
+$ python3  # every linkedTests[].file checked against disk
+Total linkedTests file refs: 31
+ALL LINKED-TEST FILES EXIST ON DISK
+Scenarios with empty linkedTests: ['SCN-058-021']
+
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/058-chrome-extension-bridge 'SCN-058-[0-9]{3}'
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+`traceability-guard.sh`'s scenario-manifest cross-check (G057/G059) — the guard
+that path-checks `linkedTests[].file` — reports "No scope-defined Gherkin
+scenarios found … skipped" for spec 058 (scopes.md does not use the bare
+`Scenario:` keyword the guard counts), so the manifest path-check is structurally
+skipped here; the equivalent check was performed directly (31/31 files exist).
+The guard's separate pre-existing per-scope exit-1 is unrelated to this edit —
+`scenario-manifest.json` is consumed only by the skipped cross-check.
+
+### Ceiling respected
+
+Planning-artifact-only reconciliation. Files changed: `scenario-manifest.json`
+(linkedTests reconciled), this `report.md` section, and a `state.json`
+`executionHistory` append. No `state.json` certification field, scope status, DoD
+checkbox, `spec.md`/`design.md`/`scopes.md` content, or any source/test file was
+modified. Spec 058 remains `blocked`.
+
 

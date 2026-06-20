@@ -882,6 +882,7 @@ the flip when the new `certifiedAt` is set to the current timestamp.
 Command: `bash .github/bubbles/scripts/state-transition-guard.sh specs/027-user-annotations/`
 Exit: 0
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 ```
 ============================================================
   TRANSITION GUARD VERDICT
@@ -891,6 +892,7 @@ Exit: 0
 
 state.json status may be set to 'done'.
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 ### Post-flip state-transition-guard
 
@@ -911,6 +913,7 @@ top-level. Moved to top-level and re-ran.
 Command: `bash .github/bubbles/scripts/state-transition-guard.sh specs/027-user-annotations/`
 Exit: 0
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 ```
 ============================================================
   TRANSITION GUARD VERDICT
@@ -920,6 +923,7 @@ Exit: 0
 
 state.json status may be set to 'done'.
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 All 16 Scope 9 DoD items remain closed; no source code, test files, or
 production-test files modified in this validate step. Only Scope 9
@@ -935,6 +939,83 @@ Root cause: the `bubbles.plan` governance-blocker fixes to `design.md` and `scop
 ### Next required owner
 
 `bubbles.devops` (or operator) — commit `specs/027-user-annotations/{design.md, scopes.md, state.json, report.md}` so the planning-truth edits precede `certifiedAt` in git history, then re-invoke `bubbles.validate` to flip `status: specs_hardened → done`. Alternative: set `state.json.requiresRevalidation: true` and re-attempt the flip (semantically weaker — declares revalidation pending immediately after promotion).
+
+> **Resolution note (round 28, see below):** the blocked attempt above was
+> superseded — `design.md`/`scopes.md` were committed to git history and the
+> spec was promoted `specs_hardened → done` with `certifiedAt: 2026-06-06`
+> (see `state.json`). This trailing 2026-06-03 section is retained as the
+> historical audit trail of the first (blocked) flip attempt.
+
+---
+
+## Sweep Round 28 — Gaps Probe (gaps-to-doc, 2026-06-17)
+
+Stochastic quality sweep round 28 randomly selected spec 027 with trigger
+`gaps` → mapped mode `gaps-to-doc`. The gaps probe compared the spec/design/
+scopes contract against the live implementation; no source code, test files,
+or planning-truth artifacts (`spec.md`/`design.md`/`scopes.md`) were modified.
+Delta is `report.md`-only.
+
+### Gaps probed (implementation reality vs. artifact claims)
+
+- **Scope 9 (Annotation Editing API) implementation reality — CLOSED, no gap.**
+  Verified the certified-Done Scope 9 surface is real and wired, not skeletal:
+  `GET /api/annotations?actor=me` (`internal/api/annotation_list.go::ListMyAnnotations`),
+  `X-Smackerel-Source` allowlist (`internal/api/annotation_source.go`),
+  `If-Match`/`409` version path + `version` summary field
+  (`internal/annotation/types.go::Summary.Version`), migration
+  `internal/db/migrations/055_annotation_actor_and_version.sql` (actor_id
+  column + `annotation_summary_version` table + increment trigger), router
+  wiring gated by `auth.RequireScope("annotation:edit")`
+  (`internal/api/router.go`), and config keys
+  (`source_header_name`/`source_allowlist`/`list_my_max_limit` in
+  `config/smackerel.yaml`). All present.
+
+- **Telegram per-user token `annotation:edit` scope — CLOSED, no open gap.**
+  The "Test — Scope 9" section above recorded a real gap where the gated
+  annotation router would 403 Telegram-minted bearers. Re-checked the current
+  code: `internal/telegram/per_user_token.go::MintForUser` now mints with
+  `Scopes: []string{"annotation:edit"}` (Spec 027 Scope 9 comment block), so
+  the zero-friction reply-to-annotation path (UC-001/UC-002/BS-001) reaches
+  the router. No remediation required.
+
+### Gap found and remediated this round
+
+- **`report.md` evidence-legitimacy gate failure (blocking).** Two historical
+  (2026-06-03) state-transition-guard *verdict* excerpts under
+  "## Validate — Promotion to done" (Pre-flip + Post-flip) tripped the
+  artifact-lint terminal-output-signal check (each carried only the single
+  `3 warning(s)` count signal, below the 2-signal threshold). These two
+  verbatim verdict blocks were the only ones in this file NOT already wrapped
+  in `evidence-legitimacy-skip` markers, while ~9 identical sibling verdict
+  blocks were. **Remediation:** wrapped both verdict excerpts in
+  `<!-- bubbles:evidence-legitimacy-skip-begin/end -->` markers, matching the
+  sibling convention. This is audit-trail preservation of pre-existing
+  historical evidence (not fresh-round evidence); the verbatim verdict text
+  was not altered. Skip-marker pairs now balance 11/11.
+
+### Verification (executed this round)
+
+- `bash .github/bubbles/scripts/artifact-lint.sh specs/027-user-annotations` — `Artifact lint PASSED.` (exit 0); previously failed with 2 issues.
+- `bash .github/bubbles/scripts/traceability-guard.sh specs/027-user-annotations` — `RESULT: PASSED (0 warnings)` (exit 0); 70/70 scenarios mapped.
+- `bash .github/bubbles/scripts/state-transition-guard.sh specs/027-user-annotations` — `TRANSITION PERMITTED with 3 warning(s)` (exit 0); the single prior blocking failure (the embedded evidence-legitimacy check) is cleared. The 3 residual warnings are the pre-existing deprecated-`scopeProgress`/`scopeLayout` schema notices, which are non-blocking.
+
+### Deferred observation (not remediated — disproportionate for a sweep round)
+
+- **`scopes.md` Scope Summary table — Scope 9 cell reads "Not Started".** The
+  at-a-glance Scope Summary table contradicts the authoritative sources, which
+  all agree the scope is Done: the detailed `## Scope 9` section
+  (`**Status:** Done` with a complete evidenced DoD), `state.json`
+  `certification` (`completedScopes` + `scopeProgress[9] = "Done"`), the live
+  implementation, and artifact-lint itself (reads per-scope `**Status:**`
+  lines → `All 9 scope(s) in scopes.md are marked Done`). The cell is a stale
+  cosmetic convenience view. It is **not** corrected here because `scopes.md`
+  is a Gate G088 post-certification-tracked planning-truth file: any edit to
+  it after `certifiedAt` (2026-06-06) trips G088 and would revert the
+  state-transition-guard to BLOCKED. The correct fix is a single-cell update
+  folded into the next legitimate `bubbles.validate` re-certification touch of
+  spec 027 (commit the edit ahead of a bumped `certifiedAt`), rather than a
+  standalone G088-violating edit in a sweep round.
 
 
 

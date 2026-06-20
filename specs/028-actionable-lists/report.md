@@ -849,3 +849,98 @@ EXIT_CODE=0
 Spec 028 remains `done`: all 8 scopes shipped, the delivered 34/34 SCN-AL contract is
 gap-free + wired + GREEN, and all 12 required specialist phases are now genuinely recorded.
 The 3 GAP concerns are routed follow-ups owned by `bubbles.plan`, not blocking defects.
+
+---
+
+## Simplify-to-Doc Sweep (Round 15 — 2026-06-17)
+
+Stochastic-quality-sweep parent, round 15, trigger `simplify` → child mode `simplify-to-doc`.
+Spec 028 is already certified `done`; this round re-probes the spec's changed-file surface for
+simplification opportunities (dead code, over-abstraction, duplication, inefficiency). Executed
+in **parent-expanded** form: the nested workflow runtime for this round lacks a sub-agent
+dispatch tool, so the `simplify-to-doc` phase owner (`bubbles.simplify`) was run directly in the
+current runtime per the tool-availability parent-expansion fallback. No protected artifact
+(spec.md / design.md / scopes.md), source, or test file changed this round.
+
+### Probe Surface (read-only)
+
+The simplify probe examined the full shipped spec-028 changed-file set across the three review
+dimensions (reuse / quality / efficiency):
+
+| File | Examined for |
+|---|---|
+| `internal/list/types.go` | type/interface duplication, dead types |
+| `internal/list/generator.go` | pipeline duplication, dead branches, resolver fan-out |
+| `internal/list/store.go` | query duplication, transaction/counter logic, N+1 |
+| `internal/list/recipe_aggregator.go` | merge-loop complexity, duplication vs other aggregators |
+| `internal/list/reading_aggregator.go` (Reading + Compare) | per-source loop duplication, dead struct fields |
+| `internal/intelligence/lists.go` | consumer duplication, dead code |
+| `internal/recipe/quantity.go` | parse/normalize duplication, redundant compilation |
+| `internal/api/lists.go` | handler body-decode duplication, dead handlers |
+
+### Finding: surface is already at an appropriate simplicity level
+
+The probe surfaced **no actionable simplification with positive ROI**. The prior `simplify` phase
+(recorded under BUG-028-003) and subsequent harden/efficiency passes already collapsed the obvious
+targets — the DRY/efficiency invariants are visibly in place at HEAD:
+
+- **Body decoding is already extracted** — `internal/api/lists.go::decodeListBody` is the single
+  shared JSON-body + size-cap + 413-mapping helper used by every mutating handler (no per-handler
+  copy-paste).
+- **Row scanning is already extracted** — `internal/list/generator.go::scanSources` is the single
+  row-iteration + `rows.Err()` helper shared by all three `PostgresArtifactResolver` query methods.
+- **Completion stats are already a single query** — `Store.CompleteList` uses one
+  `SELECT … COUNT(*) FILTER (…)` aggregate rather than four separate `QueryRow` round-trips
+  (a prior efficiency consolidation, comment-anchored in-file).
+- **Counters are self-healing, not duplicated increment logic** — `UpdateItemStatus` /
+  `AddManualItem` / `RemoveItem` each recompute `total_items` / `checked_items` from `COUNT(*)`
+  inside the same transaction; there is no scattered increment/decrement code to unify.
+- **Regexes are compiled once** — `internal/recipe/quantity.go` hoists `fractionRe` / `simpleRe` /
+  `fractionOnlyRe` to package scope; no per-call `regexp.MustCompile`.
+
+### Candidates considered and deliberately NOT actioned
+
+Per the simplify contract (`preferSmallChangedSurface`, "simplify, do not redesign", and the File
+Deletion Safety Gate), the following were evaluated and correctly left unchanged because actioning
+them would either change observable behavior or constitute over-abstraction:
+
+| Candidate | Why no change |
+|---|---|
+| Extract the per-source loop shared by `ReadingAggregator` and `CompareAggregator` | The two loops share only scaffolding (`for i, src := range`, fallback `"X %d"` name, single-source seed). Their content-building bodies differ entirely (read-time string vs brand/price/rating join). Extracting would require a content-builder callback — over-abstraction the contract forbids for negative ROI. |
+| Delete parsed-but-unrendered fields (`compareData.Specs`/`compareSpec`, `compareRate.Count`, `comparePrice.Currency`, `readingData.Domain`/`compareData.Domain`) | These are populated by `json.Unmarshal` and document the domain_data contract. The File Deletion Safety Gate classifies useful-but-unwired surface as a latent feature gap to PRESERVE, not dead code to delete. `compareData.Specs` (render product specs) and `comparePrice.Currency` (the Unit is currently hard-set to `"USD"`) are latent feature gaps consistent with the spec's existing deferred-backlog disposition (`BACKLOG-028-*`, `GAP-028-*`), not simplify targets. Deleting them would erase schema intent. |
+| Collapse the trivial fallback-name one-liner (`"Article %d"` / `"Product %d"`) into a shared helper | One line, two call sites, differing prefix — extraction adds indirection for negative ROI. |
+
+These are advisory observations for auditability; they are **not** open simplify findings (no
+dead-code delete, no duplication extraction, no over-abstraction collapse was warranted), so the
+`requireTerminalFindingClosure` obligation is satisfied with zero code-change findings.
+
+### Green baseline (probe ran against a passing tree)
+
+The spec-028 packages compile vet-clean (Go rejects unused imports/locals at build; `go test` runs
+the default `go vet` subset) and pass under the disposable Go unit runner — the probe examined a
+live, passing baseline and made no change to it:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'Aggregator|Generator|ParseQuantity|NormalizeIngredient|NormalizeUnit|FormatIngredient|CategorizeIngredient|EstimateReadTime|ListHandler|HandleListCompleted|ListLists|UpdateItemStatus|AddManualItem|RemoveItem|CompleteList|ArchiveList|CheckItem|AddItem'
+[go-unit] starting go test ./...
+ok      github.com/smackerel/smackerel/internal/api     0.285s
+ok      github.com/smackerel/smackerel/internal/intelligence    0.092s
+ok      github.com/smackerel/smackerel/internal/list    0.038s
+ok      github.com/smackerel/smackerel/internal/recipe  0.023s
+ok      github.com/smackerel/smackerel/internal/telegram        0.211s
+[go-unit] go test ./... finished OK
+WRAPPER_EXIT=0
+```
+
+### Outcome
+
+- Round work: simplify probe ran across the full spec-028 changed-file surface; zero actionable
+  simplification (no dead-code delete, no duplication extraction, no over-abstraction collapse) —
+  the surface is already minimal. Two latent feature-gap observations (`compareData.Specs`
+  unrendered, `comparePrice.Currency` ignored) are recorded as advisory and align with the
+  existing deferred-backlog disposition; they are not simplify targets.
+- Spec 028 certification status: unchanged (`done`). This round adds a simplify-probe evidence
+  anchor to an already-certified spec; it does not re-promote, re-validate, or change any
+  protected artifact, source, test, config, or certification field.
+- Changed files: `specs/028-actionable-lists/report.md` (this section) + `specs/028-actionable-lists/state.json`
+  (one `bubbles.simplify` executionHistory provenance entry). No source/test/config change. No git push.

@@ -1636,5 +1636,179 @@ in the working tree (helper landed, contract test PASSes); the C-A12
 and C-B5 home-lab live-smoke concerns are unaffected by this fix and
 remain operator-owned.
 
+### Security Sweep (security-to-doc) — 2026-06-17
+
+Date: 2026-06-17. Mode: `security-to-doc` (statusCeiling `docs_updated`).
+Diagnostic re-review of the bundle/secret-injection contract's CURRENT 8-key
+surface — the original 4 (`POSTGRES_PASSWORD`, `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`,
+`AUTH_AT_REST_HASHING_KEY`, `AUTH_BOOTSTRAP_TOKEN`) plus 4 added by downstream
+specs (`TELEGRAM_BOT_TOKEN`, `KEEP_GOOGLE_APP_PASSWORD`,
+`CARD_REWARDS_GCAL_CREDENTIALS`, `WEB_REGISTRATION_INVITE_TOKEN` from specs
+059/089/091). No DoD checkbox flips, no `state.json` change, no source edits.
+
+**Threat-model axes reviewed:** plaintext-secret-in-bundle prohibition;
+env-injection vs sealed-secret handling; deterministic-bundle guarantee;
+bundle-hash verification; no-secret-in-logs; OWASP A02 (cryptographic
+failures) / A05 (security misconfiguration) / A07 (auth failures) / A09
+(logging failures) + SLSA supply-chain.
+
+**Verdict: SECURE on spec 052's owned surface. No genuine spec-052 security
+finding. Returned `completed_diagnostic`.**
+
+Executed evidence (PoC):
+
+1. Bundle no-leak + determinism contract (primary PoC) —
+   `./smackerel.sh test unit --go --go-run 'BundleSecretContract' --verbose`:
+
+   ```
+   --- PASS: TestBundleSecretContract_NoLiteralSecretsInHomeLab (10.29s)
+   --- PASS: TestBundleSecretContract_AdversarialA1_DriftDetector (3.65s)
+   --- PASS: TestBundleSecretContract_AdversarialA2_LeakageDetector (3.84s)
+   --- PASS: TestBundleSecretContract_AdversarialA3_DeterminismDetector (7.66s)
+   --- PASS: TestBundleSecretContract_AdversarialA4_OptOutDetector (3.75s)
+   ok  github.com/smackerel/smackerel/internal/deploy  29.221s
+   [go-unit] go test ./... finished OK
+   ```
+
+   Proves: every key in `config.SecretKeys()` (all 8) emits as
+   `__SECRET_PLACEHOLDER__<KEY>__` in the home-lab bundle `app.env`; no
+   `DevDBPasswords` literal appears; the sibling `secret-keys.yaml` carries
+   key NAMES only and matches `SecretKeys()`; two consecutive generations are
+   byte-identical (A3 determinism); placeholder mode is opt-in keyed on
+   `production_class_targets` (A4) and manifest-gated, not implicit (A2).
+
+2. Manifest/format/predicate + auth-side L3 + auth↔config format parity —
+   `./smackerel.sh test unit --go --go-run '^(TestSecretKeys_MirrorsYAMLManifest|TestSecretKeysMirror|TestPlaceholderFormat|TestPlaceholder_FormatStability|TestIsPlaceholder_TrueFalseMatrix|TestValidateRuntimeAuthStartup_RejectsPlaceholderValues|TestValidateRuntimeAuthStartup_PlaceholderFormatParity)$' --verbose`:
+   all PASS (`ok internal/config`, `ok internal/auth`). Proves 3-mirror
+   Go↔yaml parity, pure key-derived placeholder format (no nonce/timestamp),
+   the 14-case `IsPlaceholder` predicate (no false positives/negatives), and
+   the auth-side runtime rejection + auth↔config inlined-constant parity.
+
+3. Config-side L3 runtime placeholder rejection + KEY-name-only redaction —
+   `./smackerel.sh test unit --go --go-run '^(TestValidate_RejectsPlaceholderValues|TestRuntimeRejection_NameKeyOnly_NoValueLeakage)$' --verbose` (WRAPPER_EXIT=0):
+
+   ```
+   --- PASS: TestValidate_RejectsPlaceholderValues (0.07s)
+       --- PASS: .../POSTGRES_PASSWORD (0.02s)
+       --- PASS: .../AUTH_SIGNING_ACTIVE_PRIVATE_KEY (0.01s)
+       --- PASS: .../AUTH_AT_REST_HASHING_KEY (0.02s)
+       --- PASS: .../AUTH_BOOTSTRAP_TOKEN (0.01s)
+   --- PASS: TestRuntimeRejection_NameKeyOnly_NoValueLeakage (0.01s)
+   ok  github.com/smackerel/smackerel/internal/config  0.164s
+   ```
+
+   Proves: `Validate()` refuses to start when a managed secret still equals
+   its placeholder marker, and the rejection error names the KEY only — never
+   the marker literal, never the resolved value (FR-051-007 + FR-052-007).
+
+Interpreted evidence (code review): the L3 `Validate()` loop in
+`internal/config/config.go` iterates `SecretKeys()` dynamically and reads
+`os.Getenv(key)` for the non-Postgres keys, so the runtime rejection logic
+covers all 8 keys even though the explicit adversarial unit test in (3)
+exercises the 4 original keys. Every spec-052 error path in
+`scripts/commands/config.sh`, `internal/config/config.go`, and
+`internal/auth/startup.go` names the offending KEY only (no value echo).
+
+Low non-blocking observations (foreign-owned — NOT spec-052 defects, not fixed
+here):
+
+- O1: The config-runtime L3 adversarial unit test
+  (`TestValidate_RejectsPlaceholderValues`) explicitly drives placeholders into
+  the 4 original keys only; the 4 keys added by specs 059/089/091 rely on the
+  dynamic `SecretKeys()` loop + the bundle contract for coverage. Extending the
+  explicit adversarial matrix is owned by those downstream specs.
+- O2: `internal/config` carries a baseline-RED from uncommitted spec-094
+  weather work (`setRequiredEnv` does not set the now-required
+  `ASSISTANT_SKILLS_WEATHER_*` keys that `internal/config/assistant.go`
+  requires). The spec-052 tests above are unaffected (they pass under their own
+  `-run` selectors); the RED is in other `internal/config` tests. Attributed to
+  spec-094; not fixed here.
+
+This note is informational only. No DoD checkbox flips and no source-code edits
+are made by this note.
+
+### Simplify Sweep (simplify-to-doc) — 2026-06-17
+
+Date: 2026-06-17. Mode: `simplify-to-doc` (statusCeiling `docs_updated`).
+Diagnostic simplification review of spec 052's owned source surface — placeholder
+generation, the 3-mirror secret-key list, the production-class predicate, and the
+deterministic-bundle builder. No DoD checkbox flips, no `state.json` change, no
+source edits, no status promotion (spec 052 stays `done`).
+
+**Surface reviewed for genuine simplification (dead code, duplication, needless
+complexity, unused abstraction):**
+
+- `internal/config/secret_keys.go` — `SecretKeys()`, `Placeholder()`,
+  `IsPlaceholder()` (3 pure functions) + 2 consts + 1 slice. Minimal; no dead
+  code, no duplication.
+- `scripts/commands/config.sh` helpers/arrays — `SHELL_SECRET_KEYS`,
+  `SHELL_PRODUCTION_CLASS_TARGETS`, `is_production_class_target`, `in_secret_keys`,
+  `secret_keys_list`, `production_class_targets_list`.
+- POSTGRES_PASSWORD 3-way resolution (env-override / placeholder / yaml) and the
+  3 spec-052-owned AUTH_* placeholder-emission blocks.
+- `internal/config/config.go::Validate()` FR-052-007 `SecretKeys()` rejection loop.
+- The `secret-keys.yaml` emission + deterministic `tar` bundle builder.
+
+**Verdict: ALREADY MINIMAL / WELL-FACTORED on spec 052's owned surface. No
+genuine, boundary-safe, behavior-preserving simplification exists. Returned
+`completed_diagnostic` with ZERO source edits.** This matches the prior
+full-delivery `simplify` phase verdict recorded in `state.json`
+certifiedCompletedPhases.
+
+**Candidates considered and explicitly REJECTED** (documented so a future naive
+simplify pass does not break the contract):
+
+1. `secret_keys_list()` / `production_class_targets_list()` have NO call sites in
+   source or tests, so they *look* like dead code. They are NOT removable: both
+   are mandated by **certified DoD item A1** ("helpers `secret_keys_list`,
+   `production_class_targets_list`, `is_production_class_target`, `in_secret_keys`
+   are defined per design.md §4 step 1") and by design.md §4 step 1. They are the
+   symmetric read-API companion to the two membership predicates. Removing them
+   would require editing a certified-`done` spec's DoD/design — forbidden artifact
+   manipulation and outside the `docs_updated` ceiling.
+2. The 3 spec-052-owned AUTH_* placeholder blocks share an `if
+   is_production_class_target && in_secret_keys; then <placeholder> else <yaml>`
+   shape and could collapse into a helper. REJECTED: the identical shape is also
+   used by 4 sibling-spec-owned blocks (`TELEGRAM_BOT_TOKEN`/008,
+   `KEEP_GOOGLE_APP_PASSWORD`/059, `CARD_REWARDS_GCAL_CREDENTIALS`/089,
+   `WEB_REGISTRATION_INVITE_TOKEN`/091) interleaved in the same region. Migrating
+   only the 3 spec-052 blocks yields a half-migrated abstraction used by 3 of 7
+   structurally-identical call sites; migrating all 7 breaches artifact-ownership
+   boundaries. The explicit inline form keeps each spec's FR comment attached to
+   its block and stays greppable.
+3. `placeholderPrefix` / `placeholderSuffix` duplicated between
+   `internal/config/secret_keys.go` and `internal/auth/startup.go` is a deliberate
+   spec-044 decoupling that avoids an `internal/auth → internal/config` import
+   cycle (parity gated by `internal/auth/startup_placeholder_test.go`).
+   Architecture decision, not a simplification target.
+
+Executed evidence (baseline green, this session — proves the reviewed surface
+compiles and the contract holds; zero edits so before == after trivially). Two
+runs: (a) full unfiltered `WRAPPER_EXIT=0` + `[go-unit] go test ./... finished
+OK`; (b) focused re-run below.
+`./smackerel.sh test unit --go --go-run 'BundleSecretContract' --verbose`:
+
+```
+=== RUN   TestBundleSecretContract_NoLiteralSecretsInHomeLab
+--- PASS: TestBundleSecretContract_NoLiteralSecretsInHomeLab (21.09s)
+=== RUN   TestBundleSecretContract_AdversarialA1_DriftDetector
+--- PASS: TestBundleSecretContract_AdversarialA1_DriftDetector (4.15s)
+=== RUN   TestBundleSecretContract_AdversarialA2_LeakageDetector
+--- PASS: TestBundleSecretContract_AdversarialA2_LeakageDetector (4.04s)
+=== RUN   TestBundleSecretContract_AdversarialA3_DeterminismDetector
+--- PASS: TestBundleSecretContract_AdversarialA3_DeterminismDetector (9.03s)
+=== RUN   TestBundleSecretContract_AdversarialA4_OptOutDetector
+--- PASS: TestBundleSecretContract_AdversarialA4_OptOutDetector (4.60s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  42.930s
+```
+
+The `-run BundleSecretContract` selector compiles `./...` but executes only the 5
+contract subtests; the spec-094 baseline-RED in other `internal/config` tests is
+excluded by the selector (`internal/config` shows `[no tests to run]`).
+
+This note is informational only. No DoD checkbox flips and no source-code edits
+are made by this note.
+
 <!-- bubbles:g040-skip-end -->
 

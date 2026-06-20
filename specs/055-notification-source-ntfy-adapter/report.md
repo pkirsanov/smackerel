@@ -5038,5 +5038,55 @@ Spec 055 is certified as `done_with_concerns`. The concern is historical report 
 **Claim Source:** interpreted
 **Interpretation:** This docs pass reconciled stale active status/current-state prose and mechanically demoted historical report code fences that lacked artifact-lint terminal-output signals. Demoted transcript text is preserved unchanged with tilde fences and is archival, not promotion evidence. Parent final promotion remains blocked by G088 until the dirty planning-truth edits are recertified or made stable.
 
+## Gaps Phase Evidence 2026-06-17: Round 20 Stochastic Sweep
+
+**Phase:** gaps
+**Agent:** bubbles.gaps
+**Claim Source:** executed
+**Scope:** Read-only gap probe of the implemented ntfy adapter against `spec.md`, `design.md`, and `scopes.md`. No source, test, or certification metadata was changed by this gaps pass. One certification-integrity gap (`GAP-055-G01`) is confirmed and routed; one suspected transport-wiring gap was investigated and cleared.
+
+### GAP-055-G01 Done Certification Fails Current Gate (Gate Drift) — Routed
+
+`state.json` declares `status="done"`, `certification.status="done"`, `certifiedAt="2026-06-06T17:00:00Z"`, and `workflowMode="full-delivery"`. The spec was legitimately promoted to `done` by `bubbles.validate` on 2026-05-26T14:15:13Z (a recorded `executionHistory` `blocked`→`done` transition after commit `ebff7226` stabilized the recertified planning truth), passing artifact-lint as it existed then. `certifiedAt` was later advanced to 2026-06-06T17:00:00Z by a category-b Gate G088 successor-note recertification that made no requirement, scenario, or DoD change.
+
+Under the current done-mode gate, artifact-lint FAILS Gate G022: the `full-delivery` required-specialist-phase set now includes `gaps` and `harden`, but `certification.certifiedCompletedPhases` omits both, and neither phase appears in `executionHistory` — they were never executed for this spec. This is post-certification gate drift on a grandfathered `done` spec, not a fabricated prior certification.
+
+A secondary, non-blocking inconsistency: the active narratives in `spec.md`, `design.md`, and `scopes.md` retain "blocked for final artifact certification" prose that contradicts the current `done` state and should be reconciled.
+
+Closure is a certification-owner decision and cannot be made inside a `gaps-to-doc` pass: `harden` evidence does not exist and may not be fabricated, and `certifiedCompletedPhases` is a validation-owned surface.
+
+Command: `bash .github/bubbles/scripts/artifact-lint.sh specs/055-notification-source-ntfy-adapter`
+Exit Code: 1
+
+~~~text
+✅ Required specialist phase 'implement' found in execution/certification phase records
+✅ Required specialist phase 'test' found in execution/certification phase records
+✅ Required specialist phase 'regression' found in execution/certification phase records
+✅ Required specialist phase 'simplify' found in execution/certification phase records
+❌ Required specialist phase 'gaps' missing from execution/certification phase records (Gate G022 — FABRICATION)
+❌ Required specialist phase 'harden' missing from execution/certification phase records (Gate G022 — FABRICATION)
+✅ Required specialist phase 'stabilize' found in execution/certification phase records
+✅ Required specialist phase 'security' found in execution/certification phase records
+✅ Required specialist phase 'docs' found in execution/certification phase records
+✅ Required specialist phase 'validate' found in execution/certification phase records
+✅ Required specialist phase 'audit' found in execution/certification phase records
+✅ Required specialist phase 'chaos' found in execution/certification phase records
+❌ 2 of 12 required specialist phases are MISSING
+...
+Artifact lint FAILED with 5 issue(s).
+~~~
+
+### Investigated And Cleared: Production Stream-Transport Wiring
+
+The probe checked whether production runtime wiring leaves stream-mode ntfy sources without a transport client. `cmd/core/wiring.go` calls `ntfysource.StartConfiguredAdapters(...)` without `WithRuntimeStreamClient`, which initially looked like a startup-failure gap for `transport_mode="stream"`. This is NOT a defect: `internal/notification/source/ntfy/types.go` constructs every adapter with a default `streamClient: NewHTTPStreamClient(nil)`, and `HTTPStreamClient.Subscribe` falls back to `http.DefaultClient`. Unauthenticated stream sources operate on the default client; authenticated stream sources surface a clear "auth mode requires a secret-resolved transport client" error that drives bounded reconnect and disconnected health (fail-loud, per the no-defaults contract). No code change is warranted.
+
+### Disposition
+
+| ID | Type | Detail | Routed To |
+|----|------|--------|-----------|
+| GAP-055-G01 | Certification gate drift | Grandfathered `done`/`full-delivery` certification (promoted 2026-05-26, passing the then-current gate) now fails done-mode artifact-lint Gate G022 because `gaps` and `harden` were added to the required-phase set and were never executed; stale "blocked for final artifact certification" prose remains in `spec.md`/`design.md`/`scopes.md`. | `bubbles.validate` to decide grandfather vs. re-certification; if re-certifying, `bubbles.harden` executes the missing hardening phase first. |
+
+**Verdict:** `route_required`. The gaps probe and its documentation are complete; finding closure is a certification-owner decision (grandfather vs. re-harden and re-certify).
+
 
 

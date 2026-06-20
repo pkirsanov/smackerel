@@ -53,7 +53,7 @@ Component map:
 | Webhook handlers | `internal/api` route binding to adapter | GET verify and POST delivery |
 | Identity store | `internal/assistant/transportidentity` | Generic transport identity mapping |
 | Renderer | `internal/whatsapp/assistant_adapter/render.go` | Pure response-to-message mapping |
-| Cloud API client | `internal/whatsapp/cloudapi` | Signed outbound HTTP calls to Meta |
+| Cloud API client (deferred) | `CloudClient` interface in `internal/whatsapp/assistant_adapter`; concrete `internal/whatsapp/cloudapi` deferred to a future increment | Signed outbound HTTP calls to Meta (v1 ships the injection seam only) |
 | Config loader | `internal/config/assistant.go` extension | Fail-loud WhatsApp SST validation |
 
 ## Capability Foundation
@@ -116,11 +116,24 @@ The adapter methods behave as follows:
 | `Start()` | binds facade and registers ready state only after config and webhook verifier are valid |
 | `Stop()` | drains in-flight requests; no new webhook accepts after stop begins |
 
-### WhatsApp Cloud API Client
+### WhatsApp Cloud API Client (deferred to a future increment)
 
-Package: `internal/whatsapp/cloudapi`.
+> **Design reconciliation (2026-06-16):** This section was reconciled to the
+> as-shipped v1. v1 ships the `CloudClient` interface plus its `cmd/core`
+> injection seam; the concrete `internal/whatsapp/cloudapi` client is deferred
+> to a future increment. Earlier wording presented `cloudapi` as a concrete
+> shipped package.
 
-The client owns outbound API URL construction and authorization headers. It receives the Meta API base URL and API version from required SST keys. It never builds those values from hardcoded runtime fallbacks.
+v1 ships only the `CloudClient` interface — the narrow outbound seam declared in
+`internal/whatsapp/assistant_adapter/adapter.go` — plus its `cmd/core` injection
+point. Until a concrete client is wired, the adapter's phone-targeted render path
+fails loud (`whatsapp_adapter: RenderToPhone called without configured
+CloudClient`). The concrete `internal/whatsapp/cloudapi` package is a future
+increment and does not yet exist on disk.
+
+When built, the client will own outbound API URL construction and authorization
+headers. It will receive the Meta API base URL and API version from required SST
+keys, and will never build those values from hardcoded runtime fallbacks.
 
 ### Transport Identity Registry
 

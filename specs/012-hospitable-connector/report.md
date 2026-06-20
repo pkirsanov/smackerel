@@ -1,13 +1,13 @@
 # Report: 012 — Hospitable Connector
 
 > **Status:** Done
-> **Last Updated:** 2026-04-21
+> **Last Updated:** 2026-06-17
 
 ---
 
 ## Summary
 
-Hospitable Connector delivered under delivery-lockdown mode. 5 scopes completed: (1) API Client, Types & Config; (2) Connector Implementation & Normalizer; (3) Edge Hints, Cross-Domain Linking & Hardening; (4) Message Sync Reliability & Client Hardening; (5) Normalizer Quality Fixes. Implementation: types.go, client.go, connector.go, normalizer.go in `internal/connector/hospitable/`. 202 unit tests across 3 test files (connector_test.go: 69, normalizer_test.go: 56, chaos_test.go: 77) — all pass. PAT authentication, paginated fetching, rate limit handling, 4 resource types (property, reservation, message, review), incremental cursor sync, knowledge graph edge hints, partial failure isolation, property name cache. Security hardening includes SSRF protection on pagination URLs, response body size limits, and extensive chaos testing.
+Hospitable Connector delivered under delivery-lockdown mode. 5 scopes completed: (1) API Client, Types & Config; (2) Connector Implementation & Normalizer; (3) Edge Hints, Cross-Domain Linking & Hardening; (4) Message Sync Reliability & Client Hardening; (5) Normalizer Quality Fixes. Implementation: types.go, client.go, connector.go, normalizer.go in `internal/connector/hospitable/`. 217 unit tests across 3 test files (connector_test.go: 72, normalizer_test.go: 60, chaos_test.go: 85) — all pass. PAT authentication, paginated fetching, rate limit handling, 4 resource types (property, reservation, message, review), incremental cursor sync, knowledge graph edge hints, partial failure isolation, property name cache. Security hardening includes SSRF protection on pagination URLs, response body size limits, and extensive chaos testing.
 
 ## Completion Statement
 
@@ -16,6 +16,80 @@ All 5 scopes are Done. All DoD items verified with passing tests. `./smackerel.s
 ## Known Gaps
 
 Integration tests (`tests/integration/hospitable_test.go`) and E2E tests (`tests/e2e/hospitable_test.go`) listed in scope test plans were never implemented. All test coverage is via unit tests with mock HTTP servers. This is acceptable for the connector pattern (no live API in CI) but means the test plans in scopes.md overstate the integration/E2E coverage.
+
+---
+
+## Regression Probe (2026-06-17)
+
+**Trigger:** `regression-to-doc` via stochastic-quality-sweep (round 23)
+**Probe agent:** bubbles.regression (inline / parent-expanded)
+**Result:** Spec 012 clean — no regression in the Hospitable package; coverage grew +15 tests. One **foreign** cross-spec regression observed (connector-count contract, owned by spec 024) — routed, not fixed here.
+
+### Probe Summary
+
+Probed for (a) test-baseline regressions, (b) coverage decreases, and (c) cross-spec conflicts against the live worktree. Ran the full Go unit suite (`./smackerel.sh test unit --go`), the spec-scoped regression baseline guard (G044), artifact-lint, and the traceability guard.
+
+The Hospitable package compiles and passes all tests. The connector remains correctly registered in `cmd/core/connectors.go` (line 46 `hospitableConnector.New("hospitable")`, registration slice line 70, auto-start block lines 182–199) and is counted among the runtime's 17 connectors. No spec-012-owned regression.
+
+**Test baseline comparison (Hospitable package):**
+
+| Test file | Prior baseline | Current (2026-06-17) | Delta |
+|-----------|---------------|----------------------|-------|
+| connector_test.go | 69 | 72 | +3 |
+| normalizer_test.go | 56 | 60 | +4 |
+| chaos_test.go | 77 | 85 | +8 |
+| **Total** | **202** | **217** | **+15 (coverage increased — no decrease)** |
+
+The +15 reflects tests added by intervening sweep rounds (security R82, etc.). No tests were removed or weakened.
+
+**Findings:**
+
+| # | Area | Severity | Detail | Disposition |
+|---|------|----------|--------|-------------|
+| R23-1 | Cross-spec: connector-count contract | Medium | `TestConnectorCountContract_LiveFile` (`internal/deploy`) FAILS: `docs/smackerel.md §22.7=18` disagrees with runtime `cmd/core/connectors.go=17` (and `§24-A=17`, `docs/Development.md=17`). Three of four surfaces agree on 17; §22.7 is the outlier. Git confirms this is an **uncommitted worktree edit from a prior sweep round** — HEAD `§22.7 = "(17 connectors)"`, working tree bumped to `"(18 connectors)"` (line 2797/2799) with no 18th connector added to the runtime (`cmd/core/connectors.go` unmodified at 17). Foreign to spec 012 — owned by **spec 024** (`specs/024-design-doc-reconciliation`, R-006 + BS-004 + AC-5). The Hospitable connector itself is correctly registered and counted in the 17. | **ROUTED to spec 024 owner** — not fixed here (artifact-ownership boundary; see RESULT-ENVELOPE route packet) |
+| R23-2 | report.md Summary stale test count | Cosmetic | Summary said 202 (69/56/77); actual is 217 (72/60/85) after intervening sweep rounds. | Fixed: Summary reconciled to 217 in this update |
+
+**Regression evidence (full Go unit suite — relevant excerpt):**
+
+```text
+$ ./smackerel.sh test unit --go
+ok      github.com/smackerel/smackerel/internal/connector/hospitable    (cached)
+...
+--- FAIL: TestConnectorCountContract_LiveFile (0.00s)
+    docs_connector_count_contract_test.go:273: live connector-count contract violated (spec 024 R-006 + BS-004 + AC-5): contract violation: connector count disagreement — cmd/core/connectors.go=17, docs/smackerel.md §22.7=18, docs/smackerel.md §24-A=17, docs/Development.md=17 — all four MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/deploy  27.087s
+FAIL
+UNIT_EXIT=1
+```
+
+The only failing package is `internal/deploy` (the cross-spec contract test). Every connector package — including `internal/connector/hospitable` — passes.
+
+**Spec-scoped guard evidence:**
+
+```text
+$ bash .github/bubbles/scripts/regression-baseline-guard.sh specs/012-hospitable-connector --verbose
+── G045: Cross-Spec Regression ──
+  ℹ️  Found 90 done specs (of 94 total) that need cross-spec regression verification
+  ✅ Cross-spec inventory completed
+── G046: Spec Conflict Detection ──
+  ✅ No route/endpoint collisions detected across specs
+🐾 Regression baseline guard: PASSED
+
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/012-hospitable-connector
+Artifact lint PASSED.
+
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/012-hospitable-connector
+RESULT: PASSED (0 warnings)
+```
+
+**Verification:**
+- `./smackerel.sh test unit --go` — `internal/connector/hospitable` passes; only `internal/deploy` connector-count contract fails (foreign, spec 024)
+- `regression-baseline-guard.sh specs/012-hospitable-connector --verbose` — PASSED
+- `artifact-lint.sh specs/012-hospitable-connector` — PASSED
+- `traceability-guard.sh specs/012-hospitable-connector` — PASSED (0 warnings)
+
+**No spec-012 code changes. The foreign connector-count regression is routed to spec 024's owner and is out of scope for the Hospitable connector.**
 
 ---
 
@@ -648,3 +722,59 @@ All checks passed!
 $ ./smackerel.sh check
 Config is in sync with SST
 ```
+
+---
+
+## Implementation Delta Reconstruction (R07 stochastic-quality-sweep, 2026-06-15)
+
+**Trigger:** stochastic-quality-sweep Round R07 → validate (state.json / report.md / certification cluster closure)
+**Agent:** bubbles.validate
+**Purpose:** Reconstruct the historical delivery delta from git for Gate G053 (Code Diff Evidence) and Gate G093 (delivery implementation delta). The Hospitable connector implementation landed on 2026-04-09/2026-04-10, weeks before this re-sweep; the code is present and exercised by unit tests under `internal/connector/hospitable/`. Every line below cites real git output — no diffs are fabricated.
+
+### Code Diff Evidence
+
+Non-test implementation source: `internal/connector/hospitable/types.go`, `internal/connector/hospitable/client.go`, `internal/connector/hospitable/connector.go`, `internal/connector/hospitable/normalizer.go`. Test source: `internal/connector/hospitable/connector_test.go`, `internal/connector/hospitable/normalizer_test.go`, `internal/connector/hospitable/chaos_test.go`.
+
+Introducing commits (file-add events), confirmed via `git log --diff-filter=A -- internal/connector/hospitable/`: commit `9da8f167` (2026-04-09T14:19:40+00:00, "quality: stochastic sweep — 10 rounds, 36 fixes across 6 specs") added the six core files; commit `bae69ad0` (2026-04-10T03:17:56+00:00, "quality: stochastic sweep — 20 rounds across specs 001-012") added `chaos_test.go` and hardened the rest. Per-commit diffstats follow.
+
+First introduction — `git show --stat 9da8f167` scoped to the connector:
+
+```terminal
+$ git show 9da8f167 --stat -- internal/connector/hospitable/
+ internal/connector/hospitable/client.go          | 310 +++++++
+ internal/connector/hospitable/connector.go       | 367 +++++++++
+ internal/connector/hospitable/connector_test.go  | 995 +++++++++++++++++++++++
+ internal/connector/hospitable/normalizer.go      | 309 +++++++
+ internal/connector/hospitable/normalizer_test.go | 383 +++++++++
+ internal/connector/hospitable/types.go           |  85 ++
+ 6 files changed, 2449 insertions(+)
+```
+
+Hardening + chaos expansion — `git show --stat bae69ad0` scoped to the connector:
+
+```terminal
+$ git show bae69ad0 --stat -- internal/connector/hospitable/
+ internal/connector/hospitable/chaos_test.go      | 1318 ++++++++++++++++++++++
+ internal/connector/hospitable/client.go          |   21 +-
+ internal/connector/hospitable/connector.go       |   19 +-
+ internal/connector/hospitable/connector_test.go  |   38 +
+ internal/connector/hospitable/normalizer.go      |    8 +-
+ internal/connector/hospitable/normalizer_test.go |   16 +
+ 6 files changed, 1409 insertions(+), 11 deletions(-)
+```
+
+Current tracked implementation — `git ls-files | xargs wc -l`:
+
+```terminal
+$ git ls-files internal/connector/hospitable/ | xargs wc -l
+  2888 internal/connector/hospitable/chaos_test.go
+   348 internal/connector/hospitable/client.go
+   532 internal/connector/hospitable/connector.go
+  2072 internal/connector/hospitable/connector_test.go
+   446 internal/connector/hospitable/normalizer.go
+   953 internal/connector/hospitable/normalizer_test.go
+    85 internal/connector/hospitable/types.go
+  7324 total
+```
+
+**Provenance note (G093):** This is a historical-delivery re-sweep. The four non-test source files (`types.go`, `client.go`, `connector.go`, `normalizer.go`) plus three test files are the real, non-artifact delivery delta outside `specs/` and `.specify/`. The delta is git-backed (commits `9da8f167`, `bae69ad0`) and was not produced by this R07 validation pass; this section reconstructs the pre-existing delivery so the delivery-delta and code-diff gates evaluate the genuine implementation rather than only the R07 planning edits.

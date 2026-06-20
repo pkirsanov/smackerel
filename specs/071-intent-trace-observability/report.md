@@ -940,3 +940,55 @@ Verdict downgrade confirmed:
 The remaining warning is non-blocking, pre-existing since cert 2026-06-02, and the corresponding observation in `state.json` routes the follow-up to `bubbles.docs` for the next spec-review cycle.
 
 **Claim Source:** executed; raw command outputs above captured from the post-commit verification run in this session.
+
+---
+
+## Regression Sweep — Round R15 (`bubbles.regression` / stochastic-quality-sweep, 2026-06-15)
+
+Diagnostic-only cross-spec/baseline regression pass triggered by a parent-expanded
+`regression-to-doc` child workflow. Verifies that the sweep's uncommitted working-tree
+changes — **R10/BUG-034-004** (`internal/api/expenses.go`, `internal/digest/expenses.go`,
+`internal/intelligence/expenses.go` `rows.Err()` hardening + new
+`internal/api/expenses_rowserr_test.go`) and **R14** (`scripts/runtime/extension-verify-blob.sh`,
+`extensions/chrome-bridge/manifest.json`, `extensions/chrome-bridge/test/e2e/sideload_smoke.spec.ts`) —
+did not regress spec 071's IntentTrace observability surface or the broader baseline. No
+spec 071 artifact (spec/design/scopes/state/certification) was modified by this pass.
+
+### Verdict: 🟢 REGRESSION_FREE
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Config/SST drift baseline | `./smackerel.sh check` | exit 0 — "Config is in sync with SST", env_file drift guard OK, scenario-lint 16 registered/0 rejected |
+| Broad baseline (full module compile + every Go unit test) | `./smackerel.sh test unit --go` | exit 0 — `go test ./...` finished OK; R10-touched `internal/api` (ok 5.841s), `internal/digest` (ok 0.436s), `internal/intelligence` (ok 0.050s) all ran **fresh (not cached)** and passed |
+| Spec 071 + R10 targeted slice (verbose, `-count=1`) | `./smackerel.sh test unit --go --go-run '<intenttrace+config+metrics+expenses regex>' --verbose` | exit 0 — `internal/assistant/intenttrace` ok, `internal/config` ok, `internal/metrics` ok, `internal/api` ok, `internal/digest` ok, `internal/intelligence` ok |
+| Observability health (G098 posture / G100 SLO / G080 trace) | `bash .github/bubbles/scripts/observability-check.sh` | exit 0 — `overall: ok`; posture WIRED, SLO ok, trace no-op (no live capture; non-blocking), prometheus adapters wired per plane |
+
+### Spec 071 scenario → unit evidence traced (all PASS this round)
+
+- SCN-071-A01 (one trace per turn): `TestStoreRecorder_RecordsSampledRow` — PASS
+- SCN-071-A02 (sampled-out envelope): `TestStoreRecorder_SampledOutEnvelope`, `TestRatioSampler_*` (5) — PASS
+- SCN-071-A03 (source-policy redaction): `TestDefaultRedactor_*` (3), `TestChaos071_Redactor_NeverLeaksRawAndCountIsHonest` — PASS
+- SCN-071-A04 (read-only replay): `TestStoreReplay_*` (7, incl. `_DryRunnerSideEffectIsBlocked`), `TestChaos071_StoreReplay_NeverPanicsOnRandomRows` — PASS
+- SCN-071-A05 (SST fail-loud, NO-DEFAULTS): `TestIntentTraceConfigRequiresEverySSTKey` (+8 subtests, every key independently required) — PASS
+- SCN-071-A10 (golden schema pin): `TestSchemaVersionV1IsPinned`, `TestGoldenV1PayloadRoundTrip`, `TestGoldenV1PayloadHashPinned`, `TestClosedVocabulariesPinned` — PASS
+- Shared metrics/alert surface (amends spec 030/049): `TestTraceHeaders_*`, `TestExtractTraceID*`, `TestTraceRoundTrip`, `TestAlertsContract_*` (incl. adversarial) — PASS
+
+### Cross-spec isolation (R10/R14 ∩ spec 071 surface = ∅)
+
+- R10/R14 changed files contain zero references to `IntentTrace` / `intent_trace` / `intenttrace` / `assistant_intent_traces` / `replay-intent` (grep: no matches).
+- Spec 071's owned surface (`internal/assistant/intenttrace/**`, `internal/config/assistant_intent_trace.go`, `internal/metrics/trace.go`, `config/prometheus/**`) contains zero references to `expenses` / `chrome-bridge` / `extension-verify` (grep: no matches).
+- R10 `internal/api/expenses.go` and `internal/digest/expenses.go` diffs add zero trace/metrics/observability/intent/prometheus/otel/span lines (the `internal/intelligence/expenses.go` change is a localized `ExpenseClassifier.GenerateSuggestions` `rows.Err()` + scan-error propagation hardening). No route collision, no shared-table mutation, no observability-contract conflict.
+
+### Scope honesty note (anti-fabrication)
+
+This round proves spec 071's surface at the **unit + full-module-compile + observability-guard**
+level and proves the R10/R14 changes broke nothing in the broader Go unit baseline. The
+**live-stack scenarios** (SCN-071-A01 integration, A06 dashboard panels, A07 refusal join,
+A08 bypass-guard E2E, A09 retention TTL sweep) were **not re-run this round** — they require
+`./smackerel.sh test integration` / `test e2e` against the full live stack and were already
+recorded green at certification (2026-06-06). They were intentionally skipped here because
+R10/R14 touch neither the intent-trace runtime path nor any observability wiring (proven by the
+zero-overlap isolation check above), so re-running the full live stack would be disproportionate
+to the regression risk. No live-stack scenario is claimed to have passed in this round.
+
+**Claim Source:** executed; results captured verbatim from `./smackerel.sh check`, `./smackerel.sh test unit --go` (broad + targeted `--go-run` slice), and `observability-check.sh` runs in this session (R15, 2026-06-15).

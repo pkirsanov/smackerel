@@ -360,3 +360,76 @@ Chaos surface covered:
 - Retention algorithm: 8 adversarial cases that would each catch a different naive regression.
 - Status contract: 8 adversarial cases proving secrets cannot leak, schema versions are validated, status strings are bounded, and watcher behaviour stays sane across all edge cases.
 - Alert contract: `TestMonitoringAlertsContract_AdversarialFabricatedMetric` proves the spec 049 contract would catch a future regression that referenced a non-existent metric in the `SmackerelBackupStale` expression.
+
+## Simplify-to-Doc Round (2026-06-17)
+
+**Phase Agent:** bubbles.workflow (simplify role, mapped child of stochastic-quality-sweep; executionModel: parent-expanded-child-mode)
+**Mode:** `simplify-to-doc` (statusCeiling: docs_updated — spec 048 left at its existing certified `done`; state.json NOT promoted)
+**Scope reviewed:** spec 048 owned surface — `internal/backup/{retention,status,watcher}.go`, `internal/metrics/backup.go`, `internal/metrics/backup_sink.go`. (Backup shell scripts and shared SST/wiring files were read but are foreign-owned for code edits.)
+
+### Review outcome
+
+The backup package is small and well-factored. Exactly **one** genuine simplification was found and applied; everything else was already minimal (no dead code, no duplication, no over-abstraction to remove).
+
+| Finding | Type | Disposition |
+|---------|------|-------------|
+| SIMP-048-01 | Dead code / unused abstraction | **Fixed** — removed `var Now = time.Now` and the `"time"` import (imported solely for it) from `internal/backup/status.go`. |
+
+**SIMP-048-01 detail:** `status.go` exported `var Now = time.Now` with a doc comment claiming it existed "so unit tests can pin time." A whole-repo search (`git grep "backup.Now" / "= time.Now"`) found **zero** readers — production and tests alike. The unit tests pin time by passing a `now` parameter directly into `SelectKept(now, …)`, never through the package-level `Now`. The variable was a vestigial, never-wired clock indirection whose doc comment was actively misleading, and it was the only consumer of the `"time"` import in this file. Removing both is behavior-neutral (nothing read the symbol) and shrinks the package's exported surface. `internal/backup` is an internal package, so no external module could reference it either.
+
+Symbols deliberately **kept** (verified still referenced, NOT dead): `ParseArtifactTime` (tested by `TestParseArtifactTime`, mapped T-048-001h), `MarshalStatus`/`CurrentSchemaVersion` (used by `status_test.go` + each other), `DefaultPolicy` (used across `retention_test.go`), `NewWatcher`/`NewBackupMetricsSink` (wired in `cmd/core/main.go`), `forbiddenSecretSubstrings`/`statusAllowed` (used by `validate()`).
+
+### Evidence (one-to-one closure: 1 finding → 1 applied fix, proven behavior-neutral)
+
+Native single-package test was used intentionally (`go test ./internal/backup/...`) instead of `./smackerel.sh test unit --go`, to avoid compiling the sibling `internal/config` package whose `validate_test.go::setRequiredEnv` is independently RED from spec-094's `ASSISTANT_SKILLS_WEATHER_*` fixture gap (attributed, not in scope here).
+
+```text
+# BEFORE (baseline, unchanged tree)
+$ go test -count=1 -v ./internal/backup/...
+... 18 tests / sub-tests ...
+PASS
+ok      github.com/smackerel/smackerel/internal/backup  0.072s
+$ gofmt -l internal/backup/status.go   # (empty == clean)
+
+# AFTER (Now + time import removed)
+$ go test -count=1 -v ./internal/backup/...
+=== RUN   TestSelectKept_LongHistory_KeepsExactSlots
+--- PASS: TestSelectKept_LongHistory_KeepsExactSlots (0.00s)
+=== RUN   TestSelectKept_SameDayCollapsesToOneDailySlot
+--- PASS: TestSelectKept_SameDayCollapsesToOneDailySlot (0.00s)
+=== RUN   TestSelectKept_WeeklySlotsUseISOWeeks
+--- PASS: TestSelectKept_WeeklySlotsUseISOWeeks (0.00s)
+=== RUN   TestSelectKept_EmptyInput
+--- PASS: TestSelectKept_EmptyInput (0.00s)
+=== RUN   TestSelectKept_FewerThanBudget
+--- PASS: TestSelectKept_FewerThanBudget (0.00s)
+=== RUN   TestSelectKept_DoesNotMutateInput
+--- PASS: TestSelectKept_DoesNotMutateInput (0.00s)
+=== RUN   TestRetentionPolicy_Validate
+--- PASS: TestRetentionPolicy_Validate (0.00s)
+=== RUN   TestParseArtifactTime
+--- PASS: TestParseArtifactTime (0.00s)
+=== RUN   TestLoadStatus_RoundTrip
+--- PASS: TestLoadStatus_RoundTrip (0.00s)
+=== RUN   TestLoadStatus_MissingFile
+--- PASS: TestLoadStatus_MissingFile (0.00s)
+=== RUN   TestLoadStatus_RejectsZeroSchemaVersion
+--- PASS: TestLoadStatus_RejectsZeroSchemaVersion (0.00s)
+=== RUN   TestLoadStatus_RejectsUnknownStatus
+--- PASS: TestLoadStatus_RejectsUnknownStatus (0.00s)
+=== RUN   TestLoadStatus_RejectsSecretSubstrings
+--- PASS: TestLoadStatus_RejectsSecretSubstrings (0.01s)
+=== RUN   TestWatcher_PollIdempotentAndMonotonic
+--- PASS: TestWatcher_PollIdempotentAndMonotonic (0.00s)
+=== RUN   TestWatcher_PollMissingFile
+--- PASS: TestWatcher_PollMissingFile (0.00s)
+=== RUN   TestWatcher_NilSinkPanics
+--- PASS: TestWatcher_NilSinkPanics (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/backup  0.025s
+$ go vet ./internal/backup/...        # clean
+$ gofmt -l internal/backup/status.go  # (empty == clean)
+$ git grep -n "backup.Now\|= time.Now" -- internal/backup/   # no-residual-references
+```
+
+The identical test set passes before and after, `go vet` and `gofmt` are clean, and no reference to the removed symbol remains. Backup doctrine respected: no test or code path writes to a repo-tree backup destination (the change only deletes an unused variable).

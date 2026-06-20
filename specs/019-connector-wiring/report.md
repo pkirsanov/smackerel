@@ -661,3 +661,125 @@ Artifact lint PASSED.
 ### Repo-wide pattern (flagged, not fixed here)
 
 Siblings `021-intelligence-delivery` (records `simplify`, not `gaps`) and `023-engineering-quality` (records `gaps`, not `simplify`) were certified in the same lockdown commit `e2dcb391` and also fail `artifact-lint.sh` on the same Gate G022 legacy-taxonomy drift. They are left for a dedicated repo-wide migration pass — this round reconciles 019 only (scope discipline).
+
+---
+
+## Regression Sweep — Round 28 Stochastic Quality Sweep (2026-06-17)
+
+**Trigger:** Stochastic quality sweep — regression trigger on connector wiring.
+**Scope:** Test baseline regressions, coverage decreases, cross-spec conflicts.
+
+### Findings
+
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| REG-019-001 | Low | Test baseline drift in `tests/integration/test_connector_wiring.sh`. Original spec 019 contract: "All 5 connectors default to `enabled: false`". Later commit `4a90ec5e feat(connectors): enable rss, weather, gov-alerts (Bucket A)` intentionally enabled `weather` and `gov-alerts` for active use. Integration test still checked old contract, causing 2 failures. | **Fixed** — Updated test to expect intentional state: weather=true, gov-alerts=true, discord/twitter/financial-markets=false. Added comment documenting supersession by commit 4a90ec5e. |
+
+### Test Evidence
+
+**Before fix:**
+```
+=== Results: 30 passed, 2 failed ===
+  FAIL: WEATHER_ENABLED should default to false, got 'true'
+  FAIL: GOV_ALERTS_ENABLED should default to false, got 'true'
+```
+
+**After fix:**
+```
+=== Results: 32 passed, 0 failed ===
+  PASS: WEATHER_ENABLED = true (expected)
+  PASS: GOV_ALERTS_ENABLED = true (expected)
+SCN-019-004: PASS
+```
+
+### Connector Package Regression Check
+
+All 23 connector packages pass:
+
+```
+$ go test -count=1 ./cmd/core/... ./internal/connector/...
+ok      github.com/smackerel/smackerel/cmd/core 1.612s
+ok      github.com/smackerel/smackerel/internal/connector       51.945s
+ok      github.com/smackerel/smackerel/internal/connector/alerts        3.832s
+ok      github.com/smackerel/smackerel/internal/connector/discord       9.725s
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.736s
+ok      github.com/smackerel/smackerel/internal/connector/twitter       3.872s
+ok      github.com/smackerel/smackerel/internal/connector/weather       37.535s
+[...18 more packages ok...]
+```
+
+### Cross-Spec Conflict Check
+
+No conflicts detected. Spec 016 (weather connector), spec 017 (gov-alerts connector), and spec 094 (weather rich forecast) explicitly document their boundaries:
+- Spec 016/017 own the connector implementation
+- Spec 094 explicitly states it does NOT touch `connectors.weather.*`
+- Commit 4a90ec5e was an intentional operator decision to enable Bucket A connectors
+
+### Baseline Verification
+
+| Baseline Claim | Current State | Verified |
+|----------------|---------------|----------|
+| 15+ connector registrations | 17 registrations | ✅ |
+| 5 connector imports (discord/twitter/weather/alerts/markets) | All present | ✅ |
+| Helper functions (parseJSONArray, parseJSONArrayVal) | Present at lines 10, 15 | ✅ |
+| 5 YAML config blocks | Lines 517, 531, 541, 560, 600 | ✅ |
+| 46 connector env vars generated | 46 vars in dev.env | ✅ |
+| Full Go unit suite passes | All packages ok | ✅ |
+
+### Completion Statement
+
+Regression sweep complete. One test baseline drift finding (REG-019-001) discovered and fixed. No code regressions, coverage decreases, or cross-spec conflicts identified. Spec 019 remains correctly implemented.
+
+---
+
+## Chaos Sweep — Round 14 Stochastic Quality Sweep (2026-06-17)
+
+**Trigger:** Stochastic quality sweep — chaos trigger on connector wiring (chaos-hardening mode, parent-expanded child mode: nested `runSubagent` was unavailable, so the resolved mode's phase owners were invoked directly per the workflow tool-availability fallback).
+**Scope:** Resilience, race conditions, and failure-mode handling of the spec 019 wiring surface — connector registration, per-connector auto-start, fail-loud startup ordering, NATS nil-safety, supervisor panic recovery, parse-helper edge cases, and shutdown drain.
+
+### Probed Dimensions
+
+| # | Dimension | Probe | Verdict |
+|---|-----------|-------|---------|
+| 1 | NATS-down nil-deref on `svc.nc.Publish` method-value captures (Weather + Gov Alerts auto-start blocks) | Source trace of NATS connect ordering vs. `registerConnectors` | **CLOSED** — `cmd/core/services.go:149` connects NATS fail-loud (`return nil, fmt.Errorf("NATS connection: %w", err)`) BEFORE `registerConnectors` runs; `svc.nc` is guaranteed non-nil, so the method-value captures cannot deref nil. |
+| 2 | Connector registration failure | `TestDuplicateRegistrationRejected` + source trace of error propagation | **CLOSED** — fail-loud: `registry.Register` error returns from `registerConnectors`, and `cmd/core/main.go:122` aborts startup on that error. |
+| 3 | Individual connector `Connect()` failure | Source review of all 5 auto-start blocks | **CLOSED** — graceful degradation: each block logs `slog.Warn("<x> connector failed to start")` and continues; one failing connector does not block the others or crash the core. |
+| 4 | Connector sync-loop panic | Source review of supervisor | **CLOSED** — `internal/connector/supervisor.go:163` `runWithRecovery` recovers panics in the connector goroutine and applies a panic circuit breaker. |
+| 5 | Malformed-config parse (`WEATHER_LOCATIONS`, `GOV_ALERTS_LOCATIONS`, `FINANCIAL_MARKETS_WATCHLIST`, …) | Source review of parse helpers | **CLOSED** — `cmd/core/helpers.go:15` `parseJSONArrayVal` returns `nil` + `slog.Warn` on bad input (SEC-019-001 already fixed); the dead fail-soft `parseFloatEnv`/`parseJSONObject*` helpers were removed by BUG-020-003. |
+| 6 | Weather publisher ordering race (`StartConnector` called before `SetAlertPublisher`) | Source trace of supervisor start semantics | **LOW / non-issue** — `StartConnector` (`supervisor.go:85`) schedules a panic-recovered goroutine that respects `SyncSchedule`; the publisher + NWS URL are set on the immediately-following lines, before any scheduled sync can fire. |
+| 7 | Shutdown drain (connectors still in-flight when NATS/DB close) | Source review of supervisor `StopAll` | **CLOSED** — `StopAll` cancels all connectors and waits on the `WaitGroup` with a bounded 10 s timeout before downstream resources close. |
+
+### Test Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.chaos
+**Command:** `./smackerel.sh test unit --go --go-run 'TestAllConnectorsRegistered|TestDuplicateRegistrationRejected|TestConnectorStartupGate|TestHealthHandler_ConnectorHealth' --verbose`
+
+Focused re-run of the spec 019 wiring resilience contracts under fresh test binaries (`-count=1`) via the sanctioned CLI (excerpt of the relevant lines from the `./...` run):
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestAllConnectorsRegistered|TestDuplicateRegistrationRejected|TestConnectorStartupGate|TestHealthHandler_ConnectorHealth' --verbose
+[go-unit] applying -run selector: TestAllConnectorsRegistered|TestDuplicateRegistrationRejected|TestConnectorStartupGate|TestHealthHandler_ConnectorHealth
+[go-unit] starting go test ./...
+=== RUN   TestConnectorStartupGate_BooleanIsSoleLoadBearingSignal
+--- PASS: TestConnectorStartupGate_BooleanIsSoleLoadBearingSignal (0.00s)
+=== RUN   TestConnectorStartupGate_AdversarialReintroduction
+--- PASS: TestConnectorStartupGate_AdversarialReintroduction (0.00s)
+=== RUN   TestAllConnectorsRegistered
+--- PASS: TestAllConnectorsRegistered (0.00s)
+=== RUN   TestDuplicateRegistrationRejected
+--- PASS: TestDuplicateRegistrationRejected (0.00s)
+ok      github.com/smackerel/smackerel/cmd/core 0.691s
+=== RUN   TestHealthHandler_ConnectorHealth
+--- PASS: TestHealthHandler_ConnectorHealth (0.00s)
+ok      github.com/smackerel/smackerel/internal/api     0.461s
+WRAPPER_EXIT=0
+```
+
+### Findings
+
+None. All 7 probed resilience dimensions are sound by design; the wiring fails loud where startup integrity requires it (NATS, registration) and degrades gracefully where a single connector misbehaves (per-connector `Connect()` + sync-loop panic recovery). No new actionable chaos finding for Round 14.
+
+### Completion Statement
+
+Chaos sweep complete. Zero new findings. Spec 019 connector wiring is resilient under the probed failure modes; spec status remains `done`. No code, protected-artifact (spec.md/design.md/scopes.md), or test changes were required.

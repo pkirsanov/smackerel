@@ -136,7 +136,22 @@
       "title": "Connector sync interval from config",
       "requiredTestType": "unit",
       "linkedTests": [
-        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval"}
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_CronMinutes"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_CronHours"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_GoDuration"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_GoDurationHours"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_Empty"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_ComplexCron"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_InvalidText"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_CronMinutesOverflow"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_CronHoursOverflow"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_GoDurationExceedsCap"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval_NormalValuesUnaffected"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestGetSyncInterval_FromConfig"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestGetSyncInterval_FromSourceConfig"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestGetSyncInterval_Default"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestGetSyncInterval_EmptySchedule"},
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestGetSyncInterval_OAuthConnectorSchedules"}
       ],
       "evidenceRefs": [
         "internal/connector/supervisor.go::getSyncInterval, parseSimplisticCronInterval",

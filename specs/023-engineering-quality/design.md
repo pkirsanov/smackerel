@@ -598,7 +598,7 @@ func getSyncInterval(cfg ConnectorConfig) time.Duration {
 
     // Parse SyncSchedule cron expression for simple cases
     if cfg.SyncSchedule != "" {
-        if d := parseSimplisticCronInterval(cfg.SyncSchedule); d > 0 {
+        if d := parseSyncInterval(cfg.SyncSchedule); d > 0 {
             return d
         }
     }
@@ -608,7 +608,9 @@ func getSyncInterval(cfg ConnectorConfig) time.Duration {
 }
 ```
 
-For the initial implementation, `parseSimplisticCronInterval` handles the common `*/N * * * *` (every N minutes) and `0 */N * * *` (every N hours) patterns. This covers all currently-configured connectors without adding a cron dependency.
+For the initial implementation, `parseSyncInterval` handles the common `*/N * * * *` (every N minutes) and `0 */N * * *` (every N hours) patterns. This covers all currently-configured connectors without adding a cron dependency.
+
+> **Symbol-name reconciliation (2026-06-16):** The `parseSimplisticCronInterval` name used in earlier drafts of this section was a design-time placeholder that was never used in code. The as-implemented symbol is `parseSyncInterval` (`internal/connector/supervisor.go:489`), which parses both Go duration strings and the simplistic cron patterns described above. The two references in this section were reconciled to the real symbol name; `report.md` already cites — and `scopes.md` now cites — `parseSyncInterval`.
 
 #### Supervisor Changes
 
