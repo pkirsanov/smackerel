@@ -28,12 +28,15 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	ok "github.com/smackerel/smackerel/internal/assistant/openknowledge"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/citeback"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/llm"
 	okmetrics "github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tracewriter"
+	"github.com/smackerel/smackerel/internal/assistant/tracing"
 )
 
 // SCOPE-12 (spec 064): the hard-coded SCOPE-09 placeholder prompt has
@@ -170,6 +173,13 @@ type Config struct {
 	// falls back to tracewriter.Nop{} so tests and harnesses that
 	// do not exercise persistence can leave it unset.
 	TraceWriter tracewriter.Writer
+	// Tracer emits the spec 096 §13 `model.dispatch` span around each HOSTED
+	// provider dispatch (attrs provider/model/turn/cost.usd ONLY — NEVER the
+	// credential). Optional — nil leaves span emission a no-op via the nil-safe
+	// tracing.Tracer.StartSpan, so this agent-local half ships without the
+	// cmd/core OTLP wiring (the deferred other half); the bare/ollama (089) path
+	// emits no span regardless of whether a tracer is wired.
+	Tracer *tracing.Tracer
 	// EnforcementMode wires citeback verdicts to either log-only
 	// (shadow) or refuse-with-capture (enforce). Spec 076 SCOPE-2c
 	// (SCN-064-A06) — REQUIRED, no silent default (G028).
@@ -192,6 +202,10 @@ type Agent struct {
 	log         *slog.Logger
 	traces      tracewriter.Writer
 	enforcement citeback.EnforcementMode
+	// tracer emits the spec 096 §13 model.dispatch span on HOSTED dispatches.
+	// nil-safe: a nil tracer makes StartSpan/EndSpan no-ops (both the 089 path
+	// and the un-wired agent-local half emit nothing).
+	tracer *tracing.Tracer
 	// ledger is the spec 096 SCOPE-05 month-to-date USD spend accounting
 	// port (cfg.SpendLedger). nil ⇒ the load-bearing budget gate is inert
 	// and the pre-096 behaviour is preserved exactly.
@@ -279,7 +293,7 @@ func New(chat LLMChat, registry *ok.Registry, verify VerifyFn, cfg Config) (*Age
 	}
 	// Spec 096 SCOPE-05 — SpendLedger is OPTIONAL (nil ⇒ pre-096 behaviour
 	// preserved); no nil-guard here, unlike the required deps above.
-	return &Agent{llm: chat, registry: registry, verify: verify, cfg: cfg, rec: rec, log: logger, traces: traces, enforcement: enforcementMode, ledger: cfg.SpendLedger}, nil
+	return &Agent{llm: chat, registry: registry, verify: verify, cfg: cfg, rec: rec, log: logger, traces: traces, enforcement: enforcementMode, tracer: cfg.Tracer, ledger: cfg.SpendLedger}, nil
 }
 
 // WithModelOverride returns a shallow, per-invocation copy of the Agent
@@ -459,6 +473,9 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		requestTools := tools
 		requestMessages := messages
 		reqModel := a.cfg.Model
+		// Spec 096 §13 — the model.dispatch span's `turn` attr: a gather/tool round
+		// by default; the forced-final synthesis round (first switch case) flips it.
+		turnKind := dispatchTurnGather
 		switch {
 		case iter == a.cfg.MaxIterations-1 && len(trace) > 0:
 			requestTools = nil
@@ -469,6 +486,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 			// prompt preserves the spec-084 "write your final answer NOW"
 			// trigger phrase.
 			reqModel = a.cfg.SynthesisModel
+			turnKind = dispatchTurnSynthesis
 			requestMessages = append(append([]llm.ChatMessage{}, messages...), llm.ChatMessage{
 				Role:    llm.RoleUser,
 				Content: synthesisFinalPrompt,
@@ -502,19 +520,26 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		// leaves req byte-for-byte unchanged (the spec 089 path). answeringModel
 		// keeps the provider-qualified id for attribution.
 		var dispatchRefusal string
-		if req, dispatchRefusal = applyProviderDispatch(req); dispatchRefusal != "" {
+		var dispatchReason llm.RejectReason
+		if req, dispatchRefusal, dispatchReason = applyProviderDispatch(req); dispatchRefusal != "" {
+			// Spec 096 §13 — a hosted resolve failure increments the typed,
+			// secret-free vault-decrypt-failure counter (the recorder drops any
+			// unknown/non-vault reason) BEFORE the turn refuses. NEVER an Ollama
+			// fallback (FR-X1 / SCN-096-G01).
+			a.rec.IncVaultDecryptFailure(string(dispatchReason))
 			return refuse(TerminationDispatchRejected, dispatchRefusal), nil
 		}
-		result, err := a.llm.Chat(ctx, req)
-		if err != nil {
-			return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat: %w", err)
+		// Spec 096 §13 + SCOPE-05 — dispatch this round and price it by its
+		// effective provider-qualified model (reqModel). A HOSTED dispatch
+		// (req.Provider set by the resolver) also emits the per-provider dispatch
+		// metric + a model.dispatch span (provider/model/turn/cost.usd only, NEVER
+		// the credential); the bare/ollama (089) path emits neither and is
+		// byte-for-byte unchanged. A paid model with no SST rate fails loud here
+		// (the NO-DEFAULTS runtime backstop), never a silent $0.
+		result, costUSD, chatErr, costErr := a.runChatRound(ctx, req, reqModel, turnKind, turnID)
+		if chatErr != nil {
+			return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat: %w", chatErr)
 		}
-
-		// Spec 096 SCOPE-05 — price this round-trip by its effective
-		// provider-qualified model (reqModel). A paid model with no SST
-		// rate fails loud here (the NO-DEFAULTS runtime backstop), never a
-		// silent $0; an ollama/local model returns $0 (budget not consumed).
-		costUSD, costErr := a.cfg.CostFn(reqModel, result.TokensUsed)
 		if costErr != nil {
 			return refuse(TerminationCapUSD, costErr.Error()), nil
 		}
@@ -553,14 +578,17 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 					// Spec 096 SCOPE-07 — the synthesis-retry turn honors the
 					// same provider-aware dispatch contract as the primary turn.
 					var retryRefusal string
-					if retryReq, retryRefusal = applyProviderDispatch(retryReq); retryRefusal != "" {
+					var retryReason llm.RejectReason
+					if retryReq, retryRefusal, retryReason = applyProviderDispatch(retryReq); retryRefusal != "" {
+						a.rec.IncVaultDecryptFailure(string(retryReason))
 						return refuse(TerminationDispatchRejected, retryRefusal), nil
 					}
-					retryResult, retryErr := a.llm.Chat(ctx, retryReq)
-					if retryErr != nil {
-						return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat (synthesis retry %d): %w", retry+1, retryErr)
+					// Spec 096 §13 — the synthesis-retry round is a SYNTHESIS-turn
+					// dispatch; a hosted retry emits the per-provider metric + span.
+					retryResult, retryCostUSD, retryChatErr, retryCostErr := a.runChatRound(ctx, retryReq, a.cfg.SynthesisModel, dispatchTurnSynthesis, turnID)
+					if retryChatErr != nil {
+						return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat (synthesis retry %d): %w", retry+1, retryChatErr)
 					}
-					retryCostUSD, retryCostErr := a.cfg.CostFn(a.cfg.SynthesisModel, retryResult.TokensUsed)
 					if retryCostErr != nil {
 						return refuse(TerminationCapUSD, retryCostErr.Error()), nil
 					}
@@ -1211,6 +1239,62 @@ func terminationToBudgetScope(r TerminationReason) string {
 	default:
 		return ""
 	}
+}
+
+// runChatRound executes ONE llm.Chat round and prices it via CostFn. For a
+// HOSTED provider dispatch (req.Provider set by applyProviderDispatch from the
+// resolver) it ALSO emits the spec 096 §13 cost-bearing observability: a
+// per-provider dispatch counter, a model.dispatch span whose attrs are ONLY
+// provider/model/turn/cost.usd (NEVER req.APIKey, the decrypted bundle, or the
+// master key), and — after pricing — the per-provider token + USD-cents
+// histograms. A bare/ollama round (req.Provider == "") is byte-for-byte the
+// pre-096/089 path: no counter, no span, the Chat call runs on the caller ctx
+// unchanged (NFR-2).
+//
+// Returns (result, costUSD, chatErr, costErr): chatErr is an infrastructure
+// transport failure (the caller returns it wrapped); costErr is a fail-loud
+// pricing failure (the caller refuses TerminationCapUSD). The two-error split
+// preserves the exact pre-096 control flow + error messages at both call sites.
+func (a *Agent) runChatRound(ctx context.Context, req llm.ChatRequest, costModel, turnKind, turnID string) (result llm.Result, costUSD float64, chatErr error, costErr error) {
+	if req.Provider == "" {
+		// Bare/ollama — byte-for-byte 089 path: no span, no provider metric.
+		result, chatErr = a.llm.Chat(ctx, req)
+		if chatErr != nil {
+			return llm.Result{}, 0, chatErr, nil
+		}
+		costUSD, costErr = a.cfg.CostFn(costModel, result.TokensUsed)
+		if costErr != nil {
+			return result, 0, nil, costErr
+		}
+		return result, costUSD, nil, nil
+	}
+
+	// HOSTED provider dispatch — spec 096 §13 cost-bearing observability.
+	a.rec.IncProviderDispatch(req.Provider)
+	// SECRET-SAFETY: the span carries the provider kind + the BARE backend model
+	// id + the turn kind only; the credential (req.APIKey), the decrypted bundle,
+	// and the master key are NEVER attrs. turnID is the non-secret per-turn
+	// correlation id. The Chat call runs in spanCtx so it nests as a child.
+	spanCtx, span := a.tracer.StartSpan(ctx, dispatchSpanName,
+		"", "", turnID, "", "",
+		attribute.String("provider", req.Provider),
+		attribute.String("model", req.Model),
+		attribute.String("turn", turnKind),
+	)
+	result, chatErr = a.llm.Chat(spanCtx, req)
+	if chatErr != nil {
+		tracing.EndSpan(span, "error", "llm_chat_error")
+		return llm.Result{}, 0, chatErr, nil
+	}
+	costUSD, costErr = a.cfg.CostFn(costModel, result.TokensUsed)
+	if costErr != nil {
+		tracing.EndSpan(span, "error", "cost_unpriced")
+		return result, 0, nil, costErr
+	}
+	a.rec.ObserveProviderDispatch(req.Provider, result.TokensUsed, costUSD*100.0)
+	span.SetAttributes(attribute.Float64("cost.usd", costUSD))
+	tracing.EndSpan(span, "ok", "")
+	return result, costUSD, nil, nil
 }
 
 // recordTurnMetrics emits the per-turn histograms and any

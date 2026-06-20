@@ -265,6 +265,7 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 		CostFn:                     costFn,
 		SpendLedger:                spendLedger,
 		Recorder:                   okMetrics,
+		Tracer:                     svc.assistantTracer,
 		Logger:                     slog.Default(),
 		EnforcementMode:            okCfg.CitebackEnforcementMode,
 		// BUG-064-002 DEFECT 3b — cap salvaged sources to the SST
@@ -313,7 +314,7 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 	// synthesis model are already in scope above. The /ask dispatch injection that
 	// CONSUMES the resolver is the deferred follow-up — nothing reads the resolver
 	// singleton yet.
-	if err := wireSpec096DiscoveryAndDispatch(cfg, svc, spendLedger, okCfg.SynthesisModelID); err != nil {
+	if err := wireSpec096DiscoveryAndDispatch(cfg, svc, spendLedger, okCfg.SynthesisModelID, okMetrics); err != nil {
 		return fmt.Errorf("wireOpenKnowledge: spec096 discovery/dispatch activation: %w", err)
 	}
 
@@ -487,6 +488,11 @@ func buildModelConnectionsAdmin(cfg *config.Config, svc *coreServices) (*api.Mod
 	timeout := time.Duration(cfg.ModelConnections.Discovery.PerProviderTimeoutMs) * time.Millisecond
 	probe := api.NewHTTPConnectionProbe(&http.Client{Timeout: timeout}, timeout)
 	handler := api.NewModelConnectionsAdminHandler(store, vault, probe)
+	// Spec 096 §13 — stash the handler so wireSpec096DiscoveryAndDispatch can
+	// late-bind its connection-test observability with the SAME okMetrics Recorder
+	// the agent/catalog use (okMetrics is constructed later in wireOpenKnowledge,
+	// after this runs) plus the boot tracer.
+	svc.modelConnAdmin = handler
 
 	slog.Info("spec096 scope06: model-connections admin surface wired",
 		"operator_gate_configured", gate.Configured(),
@@ -528,7 +534,7 @@ func buildModelConnectionsAdmin(cfg *config.Config, svc *coreServices) (*api.Mod
 // stashed for a db-mode config by the time this runs; both are nil for the
 // Ollama-only default (the resolver tolerates a nil vault and a nil credential
 // source).
-func wireSpec096DiscoveryAndDispatch(cfg *config.Config, svc *coreServices, spendLedger *usageledger.PostgresLedger, systemDefaultModel string) error {
+func wireSpec096DiscoveryAndDispatch(cfg *config.Config, svc *coreServices, spendLedger *usageledger.PostgresLedger, systemDefaultModel string, recorder okmetrics.Recorder) error {
 	if cfg == nil {
 		return errors.New("wireSpec096DiscoveryAndDispatch: nil config")
 	}
@@ -579,6 +585,21 @@ func wireSpec096DiscoveryAndDispatch(cfg *config.Config, svc *coreServices, spen
 	)
 	if err != nil {
 		return fmt.Errorf("wireSpec096DiscoveryAndDispatch: build catalog aggregator: %w", err)
+	}
+	// Spec 096 §13 — wire the discovery observability surface onto the aggregator:
+	// the SAME openknowledge metrics Recorder the agent uses (per-provider
+	// reachability counter + latency histogram) and the boot tracer
+	// (model.discovery → provider.discover spans). nil-safe: a no-op tracer (otel
+	// disabled) keeps the spans no-ops, and discovery touches NO credential, so
+	// nothing emitted here can carry a secret.
+	agg.WithObservability(recorder, svc.assistantTracer)
+	// Spec 096 §13 — late-bind the operator connection-test observability onto the
+	// admin handler (built earlier in buildModelConnectionsAdmin, before okMetrics
+	// existed) with the SAME recorder + boot tracer the aggregator/agent use.
+	// nil-safe: the handler is non-nil exactly when a db-mode connection is
+	// declared. SECRET-SAFETY: the seam only carries connection_id/kind/outcome.
+	if svc.modelConnAdmin != nil {
+		svc.modelConnAdmin.WithObservability(recorder, svc.assistantTracer)
 	}
 	agenttool.SetModelCatalogProvider(agg)
 
