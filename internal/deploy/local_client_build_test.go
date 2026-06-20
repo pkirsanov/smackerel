@@ -7,7 +7,7 @@
 // a SCRIPTED-FIXTURE build (SMACKEREL_FLUTTER_BUILD_CMD) and a RECORDING cosign
 // shim (SMACKEREL_COSIGN_CMD). Per FC-4 (no fabrication), this node does NOT run a
 // real `flutter build` or a real operator-sign — the REAL build/sign/placement
-// run ON evo-x2 (node n11). This test proves the surrounding logic is correct:
+// run ON <deploy-host> (node <deploy-node>). This test proves the surrounding logic is correct:
 //
 //	SCN-086-A01 — `./smackerel.sh local-client-build` dispatches to the orchestrator
 //	SCN-086-A02 — a missing/unsupported --target fails loud ([F086-LCB-01])
@@ -46,7 +46,7 @@ const lcbFlutterStub = `#!/usr/bin/env bash
 set -euo pipefail
 # Scripted fixture flutter: args are "build aab" | "build apk". Writes fixture bytes to the
 # standard Flutter release output paths (relative to cwd = project dir). FC-4:
-# this is a fixture writer; the real flutter build runs on evo-x2 (node n11).
+# this is a fixture writer; the real flutter build runs on <deploy-host> (node <deploy-node>).
 case "${2:-}" in
   aab)
     mkdir -p build/app/outputs/bundle/release
@@ -66,8 +66,16 @@ esac
 const lcbCosignShim = `#!/usr/bin/env bash
 set -euo pipefail
 # Recording cosign shim: append argv to LCB_COSIGN_LOG and materialize the
-# requested --output-signature file (unless LCB_COSIGN_EXIT forces a failure).
+# requested --output-signature file. Failure-injection seams:
+#   LCB_COSIGN_EXIT=<n>          fail EVERY call with exit n (global).
+#   LCB_COSIGN_FAIL_ON_CALL=<k>  fail ONLY the k-th sign-blob call (1-based,
+#                                exit 1); all other calls succeed. The
+#                                orchestrator signs in order AAB(1), APK(2),
+#                                manifest(3), so k=3 fails ONLY the manifest sign
+#                                while AAB+APK succeed — the manifest-orphan path
+#                                a single global LCB_COSIGN_EXIT cannot reach.
 printf '%s\n' "$*" >>"$LCB_COSIGN_LOG"
+call_no="$(wc -l <"$LCB_COSIGN_LOG" | tr -d ' ')"
 sig=""
 prev=""
 for a in "$@"; do
@@ -78,6 +86,10 @@ ec="${LCB_COSIGN_EXIT:-0}"
 if [[ "$ec" != "0" ]]; then
   echo "stub cosign: forced failure (LCB_COSIGN_EXIT=$ec)" >&2
   exit "$ec"
+fi
+if [[ -n "${LCB_COSIGN_FAIL_ON_CALL:-}" && "$call_no" == "${LCB_COSIGN_FAIL_ON_CALL}" ]]; then
+  echo "stub cosign: forced failure on call $call_no (LCB_COSIGN_FAIL_ON_CALL)" >&2
+  exit 1
 fi
 [[ -n "$sig" ]] && printf 'FIXTURE-SIG' >"$sig"
 exit 0
@@ -147,7 +159,7 @@ func newLCBFixture(t *testing.T, aabBytes, apkBytes string, cosignExit int) lcbF
 		// Make the orchestrator's `git rev-parse HEAD` work under the
 		// Docker test surface (golang container runs as root; the host-owned
 		// /workspace mount otherwise trips git's "dubious ownership" guard).
-		// Test-harness only — the real evo-x2 run is by the repo owner, so the
+		// Test-harness only — the real <deploy-host> run is by the repo owner, so the
 		// orchestrator script itself never needs this.
 		"GIT_CONFIG_COUNT=1",
 		"GIT_CONFIG_KEY_0=safe.directory",
@@ -173,6 +185,28 @@ func itoa(n int) string {
 		b = append([]byte{'-'}, b...)
 	}
 	return string(b)
+}
+
+// lcbEnvWithout returns a copy of env with EVERY entry for key removed, so the
+// orchestrator child sees the variable as genuinely absent and its fail-loud
+// guard (lcb_require_env / ${VAR:?}) must fire. Removing all matches is robust
+// even if the parent shell already exported key.
+func lcbEnvWithout(env []string, key string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(env))
+	for _, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// lcbEnvReplace returns a copy of env with key set to exactly val (any prior
+// entries removed first, so the child sees one unambiguous value).
+func lcbEnvReplace(env []string, key, val string) []string {
+	return append(lcbEnvWithout(env, key), key+"="+val)
 }
 
 // runOrchestrator execs scripts/commands/local-client-build.sh directly.
@@ -243,6 +277,35 @@ func TestLocalClientBuild_Dispatch(t *testing.T) {
 	}
 }
 
+// TestLocalClientBuild_HelpListsCommand proves the SECOND clause of SCN-086-A01
+// ("And `./smackerel.sh --help` lists local-client-build") — the usage() entry,
+// the half of DoD a01 the dispatch test does NOT cover. The dispatch test only
+// proves routing (a no-target invocation surfaces [F086-LCB-01]); it never asserts
+// the command is DISCOVERABLE in --help. Adversarial: it fails if the usage()
+// line is ever dropped, independent of whether the dispatch arm still works.
+func TestLocalClientBuild_HelpListsCommand(t *testing.T) {
+	cli := filepath.Join(repoRoot(t), "smackerel.sh")
+	cmd := exec.Command("bash", cli, "--help")
+	cmd.Env = os.Environ()
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	code := 0
+	if ee, ok := err.(*exec.ExitError); ok {
+		code = ee.ExitCode()
+	} else if err != nil {
+		t.Fatalf("`smackerel.sh --help` exec error: %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("`smackerel.sh --help` exited %d, expected 0; stderr=%s", code, stderr.String())
+	}
+	help := stdout.String() + stderr.String()
+	if !strings.Contains(help, "local-client-build") {
+		t.Fatalf("`./smackerel.sh --help` does not list `local-client-build` (usage() entry missing — SCN-086-A01 clause 2); help=%s", help)
+	}
+}
+
 // TestLocalClientBuild_TargetRequired proves SCN-086-A02: a missing or
 // unsupported --target fails loud with [F086-LCB-01] and builds nothing.
 func TestLocalClientBuild_TargetRequired(t *testing.T) {
@@ -252,7 +315,7 @@ func TestLocalClientBuild_TargetRequired(t *testing.T) {
 		t.Fatalf("missing --target was not rejected with [F086-LCB-01]; code=%d stderr=%s", code, stderr)
 	}
 	// Unsupported --target.
-	_, stderr2, code2 := runOrchestrator(t, os.Environ(), "--target", "evo-x2")
+	_, stderr2, code2 := runOrchestrator(t, os.Environ(), "--target", "<deploy-host>")
 	if code2 == 0 || !strings.Contains(stderr2, "F086-LCB-01") {
 		t.Fatalf("unsupported --target was not rejected with [F086-LCB-01]; code=%d stderr=%s", code2, stderr2)
 	}
@@ -357,6 +420,22 @@ func TestLocalClientBuild_FailClosedEmptyArtifact(t *testing.T) {
 	assertNoManifest(t, fx.outDir)
 }
 
+// TestLocalClientBuild_FailClosedEmptyAPK proves the APK half of SCN-086-C02: a
+// non-empty AAB but an EMPTY built APK still aborts [F086-LCB-03] with NO
+// manifest. It is distinct from the empty-AAB case above because it exercises the
+// SECOND, asymmetric `[[ -s "$APK_SRC" ]]` guard — an accidental drop of the APK
+// non-empty check would be caught here even while the empty-AAB test stays green
+// (i.e. this is not a duplicate; it closes a real uncovered branch).
+func TestLocalClientBuild_FailClosedEmptyAPK(t *testing.T) {
+	fx := newLCBFixture(t, "FIXTURE-AAB", "", 0) // non-empty AAB, EMPTY APK
+	_, stderr, code := runOrchestrator(t, fx.env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	if code == 0 || !strings.Contains(stderr, "F086-LCB-03") {
+		t.Fatalf("empty APK not rejected with [F086-LCB-03]; code=%d stderr=%s", code, stderr)
+	}
+	// Fail-closed: the APK guard fires before sign/emit, so NO manifest exists.
+	assertNoManifest(t, fx.outDir)
+}
+
 // TestLocalClientBuild_FailClosedSignFailure proves SCN-086-C03: a cosign sign
 // failure aborts [F086-LCB-05] and writes NO manifest.
 func TestLocalClientBuild_FailClosedSignFailure(t *testing.T) {
@@ -364,6 +443,89 @@ func TestLocalClientBuild_FailClosedSignFailure(t *testing.T) {
 	_, stderr, code := runOrchestrator(t, fx.env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
 	if code == 0 || !strings.Contains(stderr, "F086-LCB-05") {
 		t.Fatalf("sign failure not rejected with [F086-LCB-05]; code=%d stderr=%s", code, stderr)
+	}
+	assertNoManifest(t, fx.outDir)
+}
+
+// TestLocalClientBuild_FailClosedManifestSignOrphan proves the MANIFEST stage of
+// the fail-closed "NO partial manifest" invariant — the same invariant
+// assertNoManifest enforces for the empty-artifact and first-sign-failure paths.
+// It targets the asymmetric sub-case a single global LCB_COSIGN_EXIT cannot
+// reach: the AAB(call 1) and APK(call 2) signs SUCCEED, but the manifest sign
+// (call 3) FAILS. By that point the orchestrator has ALREADY written
+// local-client-manifest-<sha>.yaml to the out-dir; a fail-closed orchestrator
+// MUST remove that just-written unsigned manifest rather than leave an orphan
+// .yaml with no valid .sig (the manifest is the consumable entry point the knb
+// adapter reads). Adversarial: if the manifest-sign failure branch ever stops
+// removing the partial manifest, the orphan survives and this test goes RED via
+// assertNoManifest — exactly the regression being guarded. Distinct from
+// TestLocalClientBuild_FailClosedSignFailure, whose global exit fails the FIRST
+// (AAB) sign and therefore aborts BEFORE any manifest is ever written.
+func TestLocalClientBuild_FailClosedManifestSignOrphan(t *testing.T) {
+	fx := newLCBFixture(t, "FIXTURE-AAB", "FIXTURE-APK", 0)
+	// AAB(1) + APK(2) sign OK; ONLY the manifest sign (call 3) fails.
+	env := lcbEnvReplace(fx.env, "LCB_COSIGN_FAIL_ON_CALL", "3")
+	_, stderr, code := runOrchestrator(t, env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	if code == 0 {
+		t.Fatalf("orchestrator exited 0 when the manifest sign failed (fail-OPEN on a partial manifest); stderr=%s", stderr)
+	}
+	if !strings.Contains(stderr, "F086-LCB-05") {
+		t.Fatalf("manifest sign failure not reported with [F086-LCB-05]; code=%d stderr=%s", code, stderr)
+	}
+	// The AAB + APK signs succeeded (so only the manifest sign failed), but the
+	// out-dir MUST NOT retain an unsigned orphan manifest. Fail-closed: no
+	// local-client-manifest-*.yaml may remain after the manifest sign fails.
+	assertNoManifest(t, fx.outDir)
+}
+
+// TestLocalClientBuild_FailClosedMissingCosignPassword proves the trust-input
+// fail-closed contract for the local-operator model's core SECRET. With a valid
+// target, present build/cosign tool seams, and present operator key+pubkey files,
+// but COSIGN_PASSWORD ABSENT, the orchestrator MUST abort [F086-LCB-01] BEFORE any
+// build/sign and write NO manifest. Without the operator passphrase the
+// local-operator trust chain cannot be honored, so the only safe outcome is to
+// fail CLOSED. Adversarial: removing `lcb_require_env COSIGN_PASSWORD` (or giving
+// it a default) would let the build proceed past a missing secret — this test
+// fails in exactly that case. NOTE: this is the secret's ABSENCE guard; the
+// existing TestLocalClientBuild_SecretNotLeaked covers the no-leak guard for a
+// PRESENT secret — the two are complementary, not duplicates.
+func TestLocalClientBuild_FailClosedMissingCosignPassword(t *testing.T) {
+	fx := newLCBFixture(t, "FIXTURE-AAB", "FIXTURE-APK", 0)
+	env := lcbEnvWithout(fx.env, "COSIGN_PASSWORD") // trust secret genuinely absent
+	_, stderr, code := runOrchestrator(t, env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	if code == 0 {
+		t.Fatalf("orchestrator exited 0 with COSIGN_PASSWORD absent (fail-OPEN on a missing trust secret); stderr=%s", stderr)
+	}
+	if !strings.Contains(stderr, "F086-LCB-01") {
+		t.Fatalf("missing COSIGN_PASSWORD not rejected with [F086-LCB-01]; code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "COSIGN_PASSWORD") {
+		t.Fatalf("fail-closed error did not name COSIGN_PASSWORD (the absent trust secret); stderr=%s", stderr)
+	}
+	assertNoManifest(t, fx.outDir)
+}
+
+// TestLocalClientBuild_FailClosedMissingOperatorKey proves the trust-input
+// fail-closed contract for the local-operator model's signing KEY. With everything
+// else valid but OPERATOR_COSIGN_KEY pointing at a NON-EXISTENT file, the
+// orchestrator MUST abort [F086-LCB-01] naming OPERATOR_COSIGN_KEY, before any
+// build/sign, and write NO manifest. A local-operator build with no operator key
+// cannot be operator-signed, so it MUST fail CLOSED rather than emit an unsigned
+// or partially-built manifest. Adversarial: dropping the `[[ -f "$OPERATOR_COSIGN_KEY" ]]`
+// guard would let signing be attempted against a missing key — this test fails then.
+func TestLocalClientBuild_FailClosedMissingOperatorKey(t *testing.T) {
+	fx := newLCBFixture(t, "FIXTURE-AAB", "FIXTURE-APK", 0)
+	missingKey := filepath.Join(t.TempDir(), "absent", "cosign-operator.key")
+	env := lcbEnvReplace(fx.env, "OPERATOR_COSIGN_KEY", missingKey)
+	_, stderr, code := runOrchestrator(t, env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	if code == 0 {
+		t.Fatalf("orchestrator exited 0 with OPERATOR_COSIGN_KEY missing (fail-OPEN on an absent signing key); stderr=%s", stderr)
+	}
+	if !strings.Contains(stderr, "F086-LCB-01") {
+		t.Fatalf("missing OPERATOR_COSIGN_KEY not rejected with [F086-LCB-01]; code=%d stderr=%s", code, stderr)
+	}
+	if !strings.Contains(stderr, "OPERATOR_COSIGN_KEY") {
+		t.Fatalf("fail-closed error did not name OPERATOR_COSIGN_KEY (the absent signing key); stderr=%s", stderr)
 	}
 	assertNoManifest(t, fx.outDir)
 }

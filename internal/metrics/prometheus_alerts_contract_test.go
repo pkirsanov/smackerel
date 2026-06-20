@@ -27,6 +27,22 @@
 //     with SmackerelNATSDeadLetterPressure
 //     - spec 050 (ml-sidecar-health-isolation): smackerel-ml-embedding
 //     group with SmackerelMLEmbeddingStarvation
+//     - spec 081 round 16 (devops sweep finding F-081-DEVOPS-001):
+//     smackerel-ml-nats group with SmackerelMLNATSDeadLetterPressure
+//     and SmackerelMLNATSDeadLetterPublishFailing
+//     - spec 037 round 22 (devops sweep finding F-037-DEVOPS-001):
+//     smackerel-agent group with SmackerelAgentProviderErrors,
+//     SmackerelAgentInvocationTimeouts, and SmackerelAgentAllowlistViolations
+//     - spec 038 round 30 (devops sweep finding F-038-DEVOPS-001):
+//     smackerel-drive group with DriveProviderErrors, DriveSaveBackFailing,
+//     and DriveRetrieveRefusalSpike (provider-neutral cloud-drive surface;
+//     metrics emitted by internal/drive/observability/)
+//     - spec 004 round 31 (devops sweep finding F-004-DEVOPS-001):
+//     smackerel-intelligence group with
+//     SmackerelIntelligenceAlertProductionFailing (production-side twin of
+//     the delivery-side SmackerelAlertDeliveryFailing) and
+//     SmackerelDigestSynthesisDegraded (digest LLM-synthesis fallback);
+//     metrics emitted by internal/intelligence/ + internal/digest/
 //
 // Adversarial sub-tests prove the contract function would FAIL on each
 // failure mode (yaml shape break, empty expr, unknown severity, deleted
@@ -81,6 +97,17 @@ var requiredAlerts = []requiredAlert{
 	{group: "smackerel-connector-twitter", alert: "TwitterAPIRateLimitChronicExhaustion", owner: "spec 056 round 11 devops sweep F-056-DEVOPS-001"},
 	{group: "smackerel-connector-twitter", alert: "TwitterAPIRetryStorm", owner: "spec 056 round 11 devops sweep F-056-DEVOPS-001"},
 	{group: "smackerel-backup", alert: "SmackerelBackupStale", owner: "spec 048 backup-restore-automation"},
+	{group: "smackerel-connector-sync", alert: "ConnectorSyncFailureRateHigh24h", owner: "spec 005 / 011 maps connector devops F-005-DEVOPS-001"},
+	{group: "smackerel-ml-nats", alert: "SmackerelMLNATSDeadLetterPressure", owner: "spec 081 round 16 devops sweep F-081-DEVOPS-001"},
+	{group: "smackerel-ml-nats", alert: "SmackerelMLNATSDeadLetterPublishFailing", owner: "spec 081 round 16 devops sweep F-081-DEVOPS-001"},
+	{group: "smackerel-agent", alert: "SmackerelAgentProviderErrors", owner: "spec 037 round 22 devops sweep F-037-DEVOPS-001"},
+	{group: "smackerel-agent", alert: "SmackerelAgentInvocationTimeouts", owner: "spec 037 round 22 devops sweep F-037-DEVOPS-001"},
+	{group: "smackerel-agent", alert: "SmackerelAgentAllowlistViolations", owner: "spec 037 round 22 devops sweep F-037-DEVOPS-001"},
+	{group: "smackerel-drive", alert: "DriveProviderErrors", owner: "spec 038 round 30 devops sweep F-038-DEVOPS-001"},
+	{group: "smackerel-drive", alert: "DriveSaveBackFailing", owner: "spec 038 round 30 devops sweep F-038-DEVOPS-001"},
+	{group: "smackerel-drive", alert: "DriveRetrieveRefusalSpike", owner: "spec 038 round 30 devops sweep F-038-DEVOPS-001"},
+	{group: "smackerel-intelligence", alert: "SmackerelIntelligenceAlertProductionFailing", owner: "spec 004 round 31 devops sweep F-004-DEVOPS-001"},
+	{group: "smackerel-intelligence", alert: "SmackerelDigestSynthesisDegraded", owner: "spec 004 round 31 devops sweep F-004-DEVOPS-001"},
 }
 
 var allowedSeverities = map[string]bool{

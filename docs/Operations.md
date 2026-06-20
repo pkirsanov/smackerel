@@ -83,8 +83,8 @@ ports as home-lab activation values.
 
 | Surface | Placeholder-only access path | Home-lab adapter port | Owner boundary |
 |---------|------------------------------|-----------------------|----------------|
-| Core API and web UI | `https://smk.<tailnet>.ts.net` through host Caddy to `127.0.0.1:41001` | `41001` | KNB adapter writes explicit `HOST_BIND_ADDRESS`; host Caddy owns TLS/tailnet identity. |
-| ML sidecar health/devops | `https://smk-ml.<tailnet>.ts.net` through host Caddy to `127.0.0.1:41002` | `41002` | KNB adapter writes route and bind; host-owned `devops_auth` gates access. |
+| Core API and web UI | `https://smk.<tailnet-fqdn>` through host Caddy to `127.0.0.1:41001` | `41001` | KNB adapter writes explicit `HOST_BIND_ADDRESS`; host Caddy owns TLS/tailnet identity. |
+| ML sidecar health/devops | `https://smk-ml.<tailnet-fqdn>` through host Caddy to `127.0.0.1:41002` | `41002` | KNB adapter writes route and bind; host-owned `devops_auth` gates access. |
 | PostgreSQL | `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres ...` | No host port | Compose service is internal only. |
 | NATS | `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats ...` | No host port | Compose service is internal only. |
 | Status | `./smackerel.sh deploy-target <target> status` or adapter `status.sh` | Read-only | Product dispatcher delegates to adapter `status.sh` when executable and otherwise prints a generic read-only fallback. |
@@ -622,7 +622,7 @@ table), consolidated from the historical
 | Required config when enabled | `import_dir` (must exist, must be a directory, must NOT be a symlink that can be retargeted), `sync_schedule` (cron string consumed by the supervisor), `watch_interval` (per-cycle scan interval, defaults to `5m` in `config/smackerel.yaml`), `archive_processed` (boolean — when `true`, processed files are moved into the `<import_dir>/archive/` subdirectory), `min_distance_m`, `min_duration_min`, `clustering.location_radius_m`, and the commute/trip/link tuning under the same connector key. All required values must be provided via `config/smackerel.yaml`; missing or zero/negative values fail loudly at `Connect()` time via `parseMapsConfig`. There are no Go-side fallback defaults. |
 | Container mount | `deploy/compose.deploy.yml` and `docker-compose.yml` mount the host import directory read-only at `/data/maps-import` via the fail-loud `${MAPS_IMPORT_DIR:?Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up}:/data/maps-import:ro` form. The deploy adapter MUST set `MAPS_IMPORT_DIR` explicitly in `app.env`; missing or empty values abort Compose at substitution time. |
 | Connector health | `HealthDisconnected` (before `Connect()` succeeds), `HealthHealthy` (after `Connect()` and between sync cycles), `HealthSyncing` (during an active `Sync()` call), `HealthError` (import directory unreachable, consent check failed, oversized/unparseable file outside the per-cycle tolerance, or panic during sync — panics are recovered and reflected in health). |
-| Observability — sync counts | Inherited from `internal/connector/supervisor.go`: each cycle emits `smackerel_connector_sync_total{connector="google-maps-timeline",status="success|error"}` and the connector-generic `connector_sync_failure_rate_high_24h` alert covers it. |
+| Observability — sync counts | Inherited from `internal/connector/supervisor.go`: each cycle emits `smackerel_connector_sync_total{connector="google-maps-timeline",status="success|error"}` and the connector-generic `ConnectorSyncFailureRateHigh24h` alert (in `config/prometheus/alerts.yml`) covers it. |
 | Observability — structured logs | `slog.Info` on connect (`"google maps timeline connector connected"`), per-cycle (`"google maps timeline sync complete"`), and post-sync (`"post-sync patterns complete"`). `slog.Warn` for oversized files (>50MB warning, >200MB hard skip), unparseable files (skipped and marked processed to prevent retry loops), failed location-cluster inserts, pattern-detection step failures. No PII, no raw coordinates dumped. |
 | Secret management | N/A — the connector is file-import only. No API keys, no OAuth, no `MAPS_*_TOKEN`/`MAPS_*_SECRET` env vars in any Compose surface. |
 | Rollback | Disable: set `connectors.google-maps-timeline.enabled: false`, regenerate config, restart — the supervisor skips the connector on next cycle. Image rollback: `./smackerel.sh deploy-target <target> rollback` (pointer-swap, no rebuild). Schema rollback is not required — the `location_clusters` table is additive only. |
@@ -1628,6 +1628,7 @@ enforces this for alert rules.
 | 8 | Alert Delivery | Operator notification pipeline health | `rate(smackerel_alert_delivery_failures_total[15m])` |
 | 9 | Connector Sync | Per-connector success/failure trends | `rate(smackerel_connector_sync_total[15m])` split by `connector`, `status` |
 | 10 | Domain Extraction | Schema extraction success by domain | `rate(smackerel_domain_extraction_total[15m])` split by `schema`, `status` |
+| 11 | LLM Scenario Agent | Invocation outcomes, latency, and tool-call results per scenario (spec 037) | `rate(smackerel_agent_invocations_total[15m])` split by `scenario`, `outcome`; `histogram_quantile(0.95, rate(smackerel_agent_invocation_duration_seconds_bucket[5m]))`; `rate(smackerel_agent_tool_calls_total[15m])` split by `scenario`, `result` |
 
 ### Alert Runbook
 
@@ -1651,6 +1652,13 @@ email distribution) is deploy-adapter overlay scope.
 | `SmackerelBackupStale` | warning | `smackerel_artifacts_ingested_total` | No ingestion for 24h — connectors stuck or backup pipeline silent. |
 | `TwitterAPIRateLimitChronicExhaustion` | warning | `max_over_time(smackerel_connector_twitter_api_rate_limit_reset_seconds[15m])` | Twitter API rate-limit reset window above 60s sustained for 30m — verify bearer-token tier, reduce SST `services.connectors.twitter.poll_seconds`, or narrow active source lists. |
 | `TwitterAPIRetryStorm` | warning | `rate(smackerel_connector_twitter_api_retries_total[5m])` | Twitter retry rate ≥ 0.2/s for 10m — check connector logs for the failing endpoint/reason, verify Tailscale connectivity to `api.twitter.com`, inspect `smackerel_connector_twitter_api_requests_total{status}` for 5xx / 429 patterns. |
+| `SmackerelMLNATSDeadLetterPressure` | warning | `rate(smackerel_ml_nats_deadletter_total[10m])` | ML sidecar (Python) dead-letter pressure on a stream (spec 081 poison-pill routing) — inspect ML sidecar logs and confirm Ollama/LLM availability for SEARCH/SYNTHESIS streams. Companion to `SmackerelNATSDeadLetterPressure`, which only watches the Go core metric. |
+| `SmackerelMLNATSDeadLetterPublishFailing` | critical | `rate(smackerel_ml_nats_deadletter_publish_failures_total[10m])` | ML sidecar cannot publish to the DEADLETTER stream — per the spec 081 publish-before-term invariant it nak()s and redelivers the poison message in a loop, so that consumer makes no forward progress. Check the DEADLETTER stream MaxBytes/MaxMsgs and the recurring publish error in ML logs. |
+| `SmackerelAgentProviderErrors` | warning | `rate(smackerel_agent_invocations_total{outcome="provider-error"}[10m])` | LLM scenario-agent (spec 037) provider-error rate elevated — the agent's LLM driver (NATS → ML sidecar → Ollama/cloud) is failing. Confirm the ML sidecar is up, check LLM availability, inspect `agent_traces` rows with outcome `provider-error`. |
+| `SmackerelAgentInvocationTimeouts` | warning | `rate(smackerel_agent_invocations_total{outcome="timeout"}[15m])` | Agent invocations exceeding their per-scenario wall-clock budget — usually a model too slow for the configured `timeout_ms` on the current hardware tier. Compare warm model latency to the scenario budget, raise the SST timeout, or select a faster provider/model. |
+| `SmackerelAgentAllowlistViolations` | warning | `rate(smackerel_agent_tool_calls_total{result="allowlist-violation"}[10m])` | Agent-enforced tool-allowlist rejections on scenario `{{ $labels.scenario }}` — possible active prompt-injection steering the model to off-allowlist (write/external) tools, or a scenario whose allowlist drifted. Inspect `agent_traces`; confirm no write tool ever reached its handler. |
+| `SmackerelIntelligenceAlertProductionFailing` | warning | `rate(smackerel_alert_producer_failures_total[15m])` | Phase-3 contextual-alert producers (bill reminders, return-window, trip-prep, relationship-cooling, commitment tracking — spec 004 R-304) are failing to CREATE alerts for type `{{ $labels.type }}` (an LLM timing/cooling judgment error, or a `CreateAlert` DB insert failure). Production-side twin of `SmackerelAlertDeliveryFailing` — the alert is never created, so the user silently misses the deadline. Confirm the ML sidecar is up (`SmackerelMLUnavailable`), check the alerts-table write path / DB health (`SmackerelDBPoolSaturated`), and inspect the core logs for the `alert timing evaluation failed` / `failed to create … alert` warn lines to localise the failing producer. |
+| `SmackerelDigestSynthesisDegraded` | warning | `rate(smackerel_digest_generation_total{status="fallback"}[1h])` | The spec 004 daily/weekly synthesis digest (R-302) is failing to publish to the ML LLM generation path (NATS subject `digest.generate`) and the generator is storing plain-text fallback digests WITHOUT LLM synthesis — the `connection discovered` / `patterns noticed` sections collapse to a flat stats list. NATS publish-side failure, so `SmackerelNATSDeadLetterPressure` / the `smackerel-ml-nats` rules do NOT cover it. Confirm the ML sidecar is up (`SmackerelMLUnavailable`), verify NATS connectivity from the core, and inspect the core logs for the `NATS publish failed, generating fallback digest` warn line. |
 
 ### Metrics Access Boundary
 
@@ -3031,6 +3039,32 @@ The next monitor cycle falls back to a bounded rescan of in-scope folders, compu
 
 `drive_connections`, `drive_oauth_states`, `drive_files`, `drive_folders`, `drive_cursors`, `drive_rules`, `drive_save_requests`, `drive_folder_resolutions`, `drive_rule_audit`, `drive_scan_jobs`, `drive_provider_work_queue`, `drive_confirmations`, `drive_share_changes`, plus the consolidated migrations 021/024/030. Backups produced by `./smackerel.sh backup` cover all of them.
 
+### Drive Observability Metrics And Alerts
+
+The provider-neutral drive surface emits two metric families. The first five live in `internal/drive/observability/metrics.go` and are incremented by the scan / extract / save / retrieve services (one counter + one structured log per outcome). The labels are bounded enums — never a connection id or file id.
+
+| Metric | Type | Labels | Purpose |
+|--------|------|--------|---------|
+| `smackerel_drive_scan_files_total` | Counter | `provider`, `outcome` | Files observed by the scan/monitor pipeline (ok/skipped/blocked/error). |
+| `smackerel_drive_extract_files_total` | Counter | `provider`, `outcome` | Files through extraction/classification (ok/skipped/blocked/error). |
+| `smackerel_drive_save_attempts_total` | Counter | `provider`, `outcome` | Save-back attempts (ok/skipped/blocked/refused/error). |
+| `smackerel_drive_retrieve_decisions_total` | Counter | `provider`, `mode` | Retrieve decisions (bytes/secure_link/provider_link/refused/disambiguate). |
+| `smackerel_drive_provider_errors_total` | Counter | `provider`, `work_type` | Provider-side error events (scan/extract/save/retrieve). |
+
+A second set of Scope 6 policy/confirmation counters lives in `internal/metrics/metrics.go`: `smackerel_drive_confirmations_total{status,channel}` (low-confidence confirmation resolutions), `smackerel_drive_policy_decisions_total{surface,decision,sensitivity}` (sensitivity policy verdicts), and `smackerel_drive_rule_conflicts_total{rule_id}` (Save Rule conflict audit per stable-winner rule).
+
+All counters pre-instantiate their bounded label families at container start, so the HELP/TYPE lines are visible at `/metrics` before the first drive operation fires.
+
+**Push-based alerts** (`config/prometheus/alerts.yml`, group `smackerel-drive`, spec 038 round 30 devops sweep `F-038-DEVOPS-001`):
+
+| Alert | Expression (summary) | Fires when |
+|-------|----------------------|------------|
+| `DriveProviderErrors` | `rate(smackerel_drive_provider_errors_total[10m]) > 0.05` per `(provider, work_type)`, for 10m | The drive provider API is failing or the stored OAuth bearer token expired (only the access token is persisted — design §2.3 — so expiry breaks every drive operation until re-auth). |
+| `DriveSaveBackFailing` | `rate(smackerel_drive_save_attempts_total{outcome="error"}[15m]) > 0.05` per `provider`, for 15m | Cross-feature write production (FR-038-004 / FR-038-012 — meal plans, receipts, digests routed to a folder) is failing at the provider boundary (distinct from deliberate `refused`/`blocked`). |
+| `DriveRetrieveRefusalSpike` | `rate(smackerel_drive_retrieve_decisions_total{mode="refused"}[10m]) > 0.1` per `provider`, for 15m | The retrieval boundary (FR-038-010 — Telegram/other channels subject to sensitivity + sharing policy) is refusing en masse: a regressed policy blocking legitimate retrievals, or a channel probing the boundary. This is the surface an earlier chaos round hardened against memory exhaustion. |
+
+Alertmanager routing (Telegram, PagerDuty, etc.) is deliberately NOT shipped in this repo — receivers belong to the deploy-adapter overlay so the product repo stays target-agnostic. The `smackerel-drive` group references metrics emitted outside `internal/metrics/`, so the alert-contract allowlist in `internal/deploy/monitoring_alerts_contract_test.go` walks `internal/drive/observability/metrics.go`; a fabricated or renamed drive metric in an alert expression fails that contract at `./smackerel.sh test unit --go`.
+
 ## Cloud Photo Libraries Operations (Spec 040)
 
 The cloud-photos surface (Immich and PhotoPrism providers in scope today) is operated through the `/v1/photos/*` endpoints, the `PHOTOS` NATS stream, and the `photo_*` PostgreSQL tables.
@@ -3227,7 +3261,7 @@ or shorten `OLLAMA_KEEP_ALIVE`.
 The home-lab `ollama_memory_limit` was raised `20G → 28G` (Spec 082) precisely
 because the old 20G floor was sized for `gemma4:26b` alone (18432 MiB) and the
 `+ llama3.1:8b` agent default/fast model pushed the resident set to 24576 MiB,
-over-subscribing the cgroup. The evo-x2 host has ~109 GiB RAM, so 28G leaves
+over-subscribing the cgroup. The <deploy-host> host has ~109 GiB RAM, so 28G leaves
 ~4 GiB headroom for KV-cache growth.
 
 ## QF Companion Connector Operations (Spec 041 Scope 5)

@@ -455,3 +455,189 @@ func TestSubscriptionOverlap_DeterministicOrder(t *testing.T) {
 		}
 	}
 }
+
+// === IMP-006-R14-001: Multi-currency detection ===
+
+func TestExtractAmountWithCurrency_USD(t *testing.T) {
+	tests := []struct {
+		text           string
+		expectedAmount float64
+		expectedCurr   string
+	}{
+		{"Your charge: $9.99", 9.99, "USD"},
+		{"Payment of 14.99 USD received", 14.99, "USD"},
+		{"USD 29.00 was charged", 29.00, "USD"},
+		{"Premium plan: $1,299.99/year", 1299.99, "USD"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			amount, currency := extractAmountWithCurrency(tt.text)
+			if diff := amount - tt.expectedAmount; diff > 0.01 || diff < -0.01 {
+				t.Errorf("extractAmountWithCurrency(%q) amount = %v, want %v", tt.text, amount, tt.expectedAmount)
+			}
+			if currency != tt.expectedCurr {
+				t.Errorf("extractAmountWithCurrency(%q) currency = %q, want %q", tt.text, currency, tt.expectedCurr)
+			}
+		})
+	}
+}
+
+func TestExtractAmountWithCurrency_EUR(t *testing.T) {
+	tests := []struct {
+		text           string
+		expectedAmount float64
+		expectedCurr   string
+	}{
+		{"Your charge: €9.99", 9.99, "EUR"},
+		{"Payment of 14.99 EUR received", 14.99, "EUR"},
+		{"EUR 29.00 was charged", 29.00, "EUR"},
+		{"Premium plan: €1,299.99/year", 1299.99, "EUR"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			amount, currency := extractAmountWithCurrency(tt.text)
+			if diff := amount - tt.expectedAmount; diff > 0.01 || diff < -0.01 {
+				t.Errorf("extractAmountWithCurrency(%q) amount = %v, want %v", tt.text, amount, tt.expectedAmount)
+			}
+			if currency != tt.expectedCurr {
+				t.Errorf("extractAmountWithCurrency(%q) currency = %q, want %q", tt.text, currency, tt.expectedCurr)
+			}
+		})
+	}
+}
+
+func TestExtractAmountWithCurrency_GBP(t *testing.T) {
+	tests := []struct {
+		text           string
+		expectedAmount float64
+		expectedCurr   string
+	}{
+		{"Your charge: £9.99", 9.99, "GBP"},
+		{"Payment of 14.99 GBP received", 14.99, "GBP"},
+		{"GBP 29.00 was charged", 29.00, "GBP"},
+		{"Premium plan: £1,299.99/year", 1299.99, "GBP"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			amount, currency := extractAmountWithCurrency(tt.text)
+			if diff := amount - tt.expectedAmount; diff > 0.01 || diff < -0.01 {
+				t.Errorf("extractAmountWithCurrency(%q) amount = %v, want %v", tt.text, amount, tt.expectedAmount)
+			}
+			if currency != tt.expectedCurr {
+				t.Errorf("extractAmountWithCurrency(%q) currency = %q, want %q", tt.text, currency, tt.expectedCurr)
+			}
+		})
+	}
+}
+
+func TestExtractAmountWithCurrency_DefaultsToUSD(t *testing.T) {
+	// No amount found -> defaults to USD with 0 amount
+	amount, currency := extractAmountWithCurrency("No amount here")
+	if amount != 0 {
+		t.Errorf("expected 0 amount, got %v", amount)
+	}
+	if currency != "USD" {
+		t.Errorf("expected USD default, got %q", currency)
+	}
+}
+
+func TestParseSubscription_EURCurrency(t *testing.T) {
+	sub := parseSubscription("aid1", "Your monthly charge €9.99", "Thank you for your payment", "billing@netflix.com") // gitleaks:allow
+	if sub == nil {
+		t.Fatal("expected non-nil subscription")
+	}
+	if sub.Currency != "EUR" {
+		t.Errorf("expected currency=EUR, got %s", sub.Currency)
+	}
+	if sub.Amount != 9.99 {
+		t.Errorf("expected amount 9.99, got %v", sub.Amount)
+	}
+}
+
+func TestParseSubscription_GBPCurrency(t *testing.T) {
+	sub := parseSubscription("aid1", "Your monthly charge £7.99", "Thank you for your payment", "billing@spotify.com")
+	if sub == nil {
+		t.Fatal("expected non-nil subscription")
+	}
+	if sub.Currency != "GBP" {
+		t.Errorf("expected currency=GBP, got %s", sub.Currency)
+	}
+	if sub.Amount != 7.99 {
+		t.Errorf("expected amount 7.99, got %v", sub.Amount)
+	}
+}
+
+// === CHA-006-R17-001: "cancel anytime" in an active receipt must stay active ===
+//
+// parseSubscription previously classified status with the bare substrings
+// "cancel" and "unsubscribe". The phrase "cancel anytime" appears in a large
+// share of legitimate active-subscription receipts ("you can cancel anytime in
+// settings"). Because DetectSubscriptions routes any "cancelled" parse into an
+// UPDATE ... SET status='cancelled' WHERE service_name=$1 AND status='active',
+// a normal renewal receipt would silently cancel the user's live subscription
+// in the tracker. The fixture uses the real instructional phrase that triggers
+// the bug, so it cannot pass tautologically.
+func TestParseSubscription_CancelAnytimeStaysActive(t *testing.T) {
+	sub := parseSubscription(
+		"aid1",
+		"Your monthly charge $9.99",
+		"Thank you for your payment. You can cancel anytime in your account settings.",
+		"billing@netflix.com", // gitleaks:allow
+	)
+	if sub == nil {
+		t.Fatal("expected non-nil subscription")
+	}
+	if sub.Status != "active" {
+		t.Errorf("expected status=active for a 'cancel anytime' renewal receipt, got %q", sub.Status)
+	}
+}
+
+// === CHA-006-R17-002: an "Unsubscribe" footer link must stay active ===
+//
+// Virtually every transactional/billing email carries an "Unsubscribe" footer
+// link. Treating the bare token "unsubscribe" as a cancellation signal meant
+// nearly every detected subscription would be marked cancelled on its very next
+// receipt. The fixture embeds the ubiquitous footer phrasing that triggers the
+// bug.
+func TestParseSubscription_UnsubscribeFooterStaysActive(t *testing.T) {
+	sub := parseSubscription(
+		"aid1",
+		"Your Spotify Premium receipt",
+		"Amount charged: $9.99. If you no longer wish to receive these emails, unsubscribe here.",
+		"billing@spotify.com",
+	)
+	if sub == nil {
+		t.Fatal("expected non-nil subscription")
+	}
+	if sub.Status != "active" {
+		t.Errorf("expected status=active for a receipt with an unsubscribe footer, got %q", sub.Status)
+	}
+}
+
+// === CHA-006-R17-003 (no-regression guard): genuine cancellations still detected ===
+//
+// The tightened detector must still flag real cancellation EVENTS, in both UK
+// ("cancelled") and US ("canceled") spellings, and from a confirmation subject.
+// This guards against over-tightening the fix into under-detection.
+func TestParseSubscription_GenuineCancellationStillDetected(t *testing.T) {
+	cases := []struct {
+		name  string
+		title string
+	}{
+		{"uk-spelling", "Your subscription has been cancelled"},
+		{"us-spelling", "Your subscription has been canceled"},
+		{"confirmation", "Cancellation confirmation for your plan"},
+		{"membership", "Your membership was canceled"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sub := parseSubscription("aid1", tc.title, "We're sorry to see you go.", "billing@netflix.com") // gitleaks:allow
+			if sub == nil {
+				t.Fatal("expected non-nil subscription")
+			}
+			if sub.Status != "cancelled" {
+				t.Errorf("expected status=cancelled for %q, got %q", tc.title, sub.Status)
+			}
+		})
+	}
+}
