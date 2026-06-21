@@ -95,6 +95,24 @@ Scenario: Enabled-but-misconfigured fails loud
   existing write-scoped credential via the secret).
 - Two-way calendar sync / reading back manual edits.
 
+## Capability Framing
+
+### Single-Capability Justification
+
+This spec introduces **no** reusable runtime capability and **no** second
+provider/adapter/strategy/variant. It delivers exactly **one** capability —
+writing card-rewards recommendations to the operator's configured Google
+Calendar — through **one** concrete client (`GoogleCalendarClient`) implementing
+the **existing** `cardrewards.CalDAVClient` interface (`PutEvent` / `DeleteEvent`).
+The G094 proportionality triggers fire on incidental vocabulary ("connector",
+"CalDAV", "adapter", "driver") that names the **pre-existing** read-path
+connector (`internal/connector/caldav`) and the knb deploy adapter, not on a real
+capability fork: there is one write client, one target calendar, and one consumer
+(the card-rewards bridge from spec 083). A Domain Capability Model with multiple
+providers, concrete implementations, and variation axes would be over-engineering
+for a single additive write client. The matching **Single-Implementation
+Justification** is recorded in `design.md`.
+
 ## Release Train
 
 Targets the `mvp` train (the `card_rewards` flag's owning train); default-off on

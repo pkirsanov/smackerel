@@ -93,3 +93,23 @@ Build-once: a push to smackerel `main` triggers `.github/workflows/build.yml`
 bundle; `card_rewards.calendar_sync` flips to true on home-lab and the gcal
 secret is substituted from sops at apply time. A monthly-recommend run (or the
 admin "sync calendar now" trigger) then writes events to the calendar.
+
+## Capability Framing
+
+### Single-Implementation Justification
+
+There is exactly **one** implementation and **no** foundation/overlay split, so a
+Capability Foundation / Concrete Implementations / Variation Axes model does not
+apply. `GoogleCalendarClient` is the single concrete implementation of the
+**existing** `cardrewards.CalDAVClient` interface; no second calendar provider,
+transport variant, or strategy is introduced or planned. The read-path
+`internal/connector/caldav` is a separate, pre-existing concern (a one-way event
+reader that GETs `/calendars/primary/events` into the knowledge graph) and is
+explicitly **NOT** a second implementation of this write capability — it shares
+the "CalDAV" name only and has no insert/update path. The G094 triggers
+("connector", "adapter", "driver") count incidental vocabulary naming that read
+connector and the knb deploy adapter, not a real implementation fork. A second
+concrete provider would contradict this spec's minimality (one focused 343-LOC
+write client next to the bridge it feeds). If a second calendar backend is ever
+needed, **that** spec would introduce the capability foundation; this spec does
+not.
