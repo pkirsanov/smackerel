@@ -121,6 +121,19 @@ value is absent. The `${HOST_BIND_ADDRESS:-127.0.0.1}` fallback form is
 historical/superseded, forbidden for Smackerel deploy surfaces, and is not
 active deploy guidance.
 
+The same injection mechanism owns home-lab's **model selection and Ollama
+memory envelope**. The deploy adapter's per-target `params.yaml` carries a
+`model_selection:` block; `apply.sh` appends the resolved model env vars (the
+`LLM_MODEL`, `OLLAMA_*_MODEL`, `AGENT_PROVIDER_*_MODEL`,
+`ASSISTANT_OPEN_KNOWLEDGE_*` and `PHOTOS_INTELLIGENCE_*_MODEL` fields) plus
+`OLLAMA_MEMORY_LIMIT` into `app.env` after the generated values
+(last-occurrence-wins — the same pattern as `HOST_BIND_ADDRESS`). The product
+repo's bundle ships only the generic commodity base (identical to dev), so the
+operator's real, hardware-specific model set and envelope never live in this
+repo. The Go core's `validateModelEnvelopes` check then validates the
+adapter-injected selection against the adapter-injected envelope at container
+start. See [`docs/Operations.md`](Operations.md) “Model Envelope Sizing.”
+
 **Layer 3 — Go runtime** (`config.Validate()` + `auth.ValidateRuntimeAuthStartup()`):
 
 At process startup, the runtime checks every managed key against its
@@ -891,6 +904,12 @@ fails loud at startup if any is missing, empty, or a dev default:
 - [ ] Confirm the adapter writes `HOST_BIND_ADDRESS`, `OLLAMA_RENDER_GID`,
       `OLLAMA_VIDEO_GID`, and all `*_CPU_LIMIT`/`*_MEMORY_LIMIT` values into
       `app.env` (Compose fails loud at substitution time if any is missing).
+- [ ] Confirm the adapter injects the `model_selection` model env vars
+      (`LLM_MODEL`, `OLLAMA_*_MODEL`, `AGENT_PROVIDER_*_MODEL`,
+      `ASSISTANT_OPEN_KNOWLEDGE_*`, `PHOTOS_INTELLIGENCE_*_MODEL`) + the matching
+      `OLLAMA_MEMORY_LIMIT` into `app.env`. The in-repo bundle ships the
+      commodity base; the Go core's `validateModelEnvelopes` fails loud at
+      container start if the injected model set busts the injected envelope.
 
 ### 4. Compose profile enablement (the "it deployed but X is dead" footguns)
 
