@@ -57,13 +57,13 @@ func validEnv() map[string]string {
 		"AGENT_PROVIDER_DEFAULT_PROVIDER":            "ollama",
 		"AGENT_PROVIDER_DEFAULT_MODEL":               "gemma4:26b",
 		"AGENT_PROVIDER_REASONING_PROVIDER":          "ollama",
-		"AGENT_PROVIDER_REASONING_MODEL":             "deepseek-r1:32b",
+		"AGENT_PROVIDER_REASONING_MODEL":             "gpt-oss:20b",
 		"AGENT_PROVIDER_FAST_PROVIDER":               "ollama",
 		"AGENT_PROVIDER_FAST_MODEL":                  "gpt-oss:20b",
 		"AGENT_PROVIDER_VISION_PROVIDER":             "ollama",
 		"AGENT_PROVIDER_VISION_MODEL":                "gemma4:26b",
 		"AGENT_PROVIDER_OCR_PROVIDER":                "ollama",
-		"AGENT_PROVIDER_OCR_MODEL":                   "deepseek-ocr:3b",
+		"AGENT_PROVIDER_OCR_MODEL":                   "gemma4:26b",
 	}
 }
 
@@ -101,8 +101,8 @@ func TestLoadConfig_HappyPath(t *testing.T) {
 	if cfg.Routing.FallbackScenarioID != "" {
 		t.Errorf("FallbackScenarioID = %q, want empty", cfg.Routing.FallbackScenarioID)
 	}
-	if got := cfg.ProviderRouting["reasoning"]; got.Provider != "ollama" || got.Model != "deepseek-r1:32b" {
-		t.Errorf("ProviderRouting[reasoning] = %+v, want {ollama deepseek-r1:32b}", got)
+	if got := cfg.ProviderRouting["reasoning"]; got.Provider != "ollama" || got.Model != "gpt-oss:20b" {
+		t.Errorf("ProviderRouting[reasoning] = %+v, want {ollama gpt-oss:20b}", got)
 	}
 	if cfg.Defaults.TimeoutMs != 120000 {
 		t.Errorf("Defaults.TimeoutMs = %d, want 120000", cfg.Defaults.TimeoutMs)

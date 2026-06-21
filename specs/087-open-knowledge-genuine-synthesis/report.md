@@ -327,3 +327,22 @@ gemma4:26b-vs-deepseek-r1:7b A/B). 087-specific summary:
 
 **Honest terminal status:** `status` held at `blocked` (NOT `done`) — the live
 A/B + `verify` did not run. `nextRequiredOwner: operator/user-session`.
+
+---
+
+## SUPERSESSION NOTE — home-lab model optimization (2026-06-20)
+
+Record-only; this spec's status and history are unchanged. The split-synthesis
+home-lab model this spec introduced
+(`environments.home-lab.assistant_open_knowledge_synthesis_model_id: deepseek-r1:7b`)
+has been superseded by the operator's optimized home-lab model set:
+**`gpt-oss:20b`** (the tool-capable synthesis / substrate model) + **`gemma4:26b`**
+(gather / vision / ml). Those are the only two models the operator's home-lab
+Ollama host pulls, so `config/smackerel.yaml`
+`environments.home-lab.assistant_open_knowledge_synthesis_model_id` now resolves
+to `gpt-oss:20b` and the deepseek synthesis arm is retired from the home-lab
+active selection. The spec-087 synthesis-split machinery and trust invariants
+(cite-back, provenance, `<think>`-strip + retry-before-salvage) are unchanged —
+only WHICH model runs the forced-final synthesis turn changed. See
+`docs/experiments/open-knowledge-synthesis-model-ab.md` (superseded) and
+`docs/Operations.md` → "Model Envelope Sizing".

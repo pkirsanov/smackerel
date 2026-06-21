@@ -3165,6 +3165,41 @@ Migration `025_photo_libraries.sql` plus `029_photo_scope3_lifecycle_dedupe_remo
 
 ## Model Envelope Sizing (Spec 045 / BUG-045-001)
 
+> **SUPERSESSION — home-lab model optimization (2026-06-20).** The operator has
+> standardized the home-lab Ollama host on a two-model set: **`gpt-oss:20b`**
+> (the tool-capable synthesis / substrate model — `assistant.open_knowledge`
+> synthesis + `agent.provider_routing` default/fast) and **`gemma4:26b`** (chat /
+> vision / open-knowledge gather / ml sidecar — `llm.*`, `agent.provider_routing`
+> vision, `assistant.open_knowledge.llm_model_id`). This is the only set the
+> home-lab host pulls, so every `environments.home-lab` model field in
+> `config/smackerel.yaml` now resolves to one of those two. This **supersedes the
+> spec-089 `deepseek-r1:32b` standing synthesis default** narrated in the Spec 089
+> blockquote later in this document (and the spec-088 `deepseek-r1:7b` /
+> spec-087 split that preceded it) — those remain as the historical record of how
+> the home-lab synthesis model evolved, not the current selection. Envelope: the
+> optimized synthesis working set is `gpt-oss:20b` (14336) co-resident with the
+> `gemma4:26b` gather (18432) = 32768 MiB ≤ 49152 MiB (`ollama_memory_limit: 48G`,
+> kept for headroom). The `deepseek-r1:7b` (reasoning) and `deepseek-ocr:3b` (OCR)
+> entries below remain the **commodity 8G-envelope defaults** for dev/test, but on
+> home-lab the three remaining model-selection fields that previously emitted them
+> — `AGENT_PROVIDER_REASONING_MODEL`, `AGENT_PROVIDER_OCR_MODEL`, and
+> `PHOTOS_INTELLIGENCE_OCR_MODEL` — are now **per-env overridable** (`config.sh`
+> resolves them through `env_override_value`, mirroring `OLLAMA_MEMORY_LIMIT` /
+> `OLLAMA_ENABLED`) and the `environments.home-lab` block pins them to the pulled
+> set: reasoning → `gpt-oss:20b`, OCR → `gemma4:26b`, photos OCR → `gemma4:26b`.
+> Net effect: **zero `deepseek-*` model selections appear in the resolved home-lab
+> env** (the only residual `deepseek` token is the env-independent
+> `model_memory_profiles` sizing catalog, which is identical in every env and is
+> not a model selection). Both are on-demand specialists, so each is checked for
+> INDIVIDUAL fit against the 48G home-lab envelope only (NOT the co-resident
+> interactive sum in `validateModelEnvelopes`): `gpt-oss:20b` (14336 MiB) and
+> `gemma4:26b` (18432 MiB) each fit 49152 MiB alone, so **the envelope math is
+> unchanged** (no new resident model is introduced — both already serve the
+> home-lab interactive set). `OLLAMA_REASONING_MODEL` / `OLLAMA_OCR_MODEL` are
+> still not emitted by `config.sh` at all; `deepseek-r1:32b` remains only an
+> **opt-up catalog** entry in `model_memory_profiles`, no longer a home-lab active
+> selection.
+
 Smackerel's local-inference model selection MUST fit two independent memory envelopes:
 
 | Envelope | Source value (`config/smackerel.yaml`) | Default | Bucket members |

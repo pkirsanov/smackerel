@@ -1404,3 +1404,19 @@ in-repo stabilize finding.
   Owner: the spec-094 sweep round. Not modified here.
 - **Uncommitted sibling sweep work** across many other specs (incl. spec 089's
   deploy/state in-flight WIP) was left untouched.
+
+---
+
+## SUPERSESSION NOTE — home-lab model optimization (2026-06-20)
+
+Record-only; this spec's status and history are unchanged. The home-lab
+switchable synthesis set this spec shipped
+(`environments.home-lab.assistant_open_knowledge_switchable_models: [gemma4:26b, deepseek-r1:7b]`)
+has been superseded by the operator's optimized home-lab model set: the
+switchable set is now **`[gpt-oss:20b, gemma4:26b]`** — the only two models the
+operator's home-lab Ollama host pulls. `gpt-oss:20b` is the standing synthesis
+default and `gemma4:26b` is the gather model; the deepseek switchable arms are
+retired from the home-lab active selection. The spec-088 runtime-switch
+machinery, the `switchable_models` co-residence envelope guard
+(`validateModelEnvelopes`), and the trust invariants are unchanged — only the
+offered model set changed. See `docs/Operations.md` → "Model Envelope Sizing".
