@@ -391,7 +391,7 @@ report does not contain them — non-tautological, since a naive "dump the env"
 implementation would fail it. The `--env`/`--repo-root` flags are required with
 no default (Gate G028), so there is no silent-fallback attack surface.
 
-### Audit Evidence {#audit-evidence}
+### Audit Evidence
 
 **Executed:** YES
 **Command:** `go test ./internal/preflight/... -count=1 -v` (host-native scoped suite — isolation-safe under the live concurrent Docker build; rationale below) + `./smackerel.sh pre-flight` (OK path) + `SMACKEREL_PREFLIGHT_OVERRIDE=1 ./smackerel.sh pre-flight` (override path) + source inspection of `internal/preflight` / `cmd/preflight` secret + read-only discipline

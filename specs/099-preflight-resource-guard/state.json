@@ -5,7 +5,7 @@
   "feature": "099-preflight-resource-guard",
   "featureDir": "specs/099-preflight-resource-guard",
   "featureName": "Pre-Flight Resource Guard",
-  "status": "in_progress",
+  "status": "done",
   "mode": "full-delivery",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
@@ -15,9 +15,10 @@
   "executionRuntime": "direct-implement",
   "executionModelDetail": "Net-new feature delivered directly in-session, parent-expanded by bubbles.workflow because the active workflow runtime lacked the runSubagent tool (the established pattern for specs 085/089/097/098 in this repo). All phases (analyst, ux, design, plan, implement, test, validate, audit, docs + quality sweep) are authored/executed directly with real captured evidence in report.md.",
   "createdAt": "2026-06-21T00:00:00Z",
-  "updatedAt": "2026-06-21T23:14:00Z",
+  "updatedAt": "2026-06-21T23:45:02Z",
+  "certifiedAt": "2026-06-21T23:45:02Z",
   "requiresRevalidation": false,
-  "inProgressReason": "bubbles.validate (second real runSubagent dispatch, 2026-06-21) RE-CONFIRMED the green runtime bar host-side, all exit 0: config generate (dev.env+test.env carry PREFLIGHT_MIN_AVAILABLE_RAM_MB=6000 + _DISK_GB=15); pre-flight OK (RAM 25559 MB >= 6000, Disk 538.8 GB >= 15) + SMACKEREL_PREFLIGHT_OVERRIDE=1 (loud WARNING); scoped go unit+contract 22/22 PASS 0 skips (ok internal/preflight 0.061s); check; lint; artifact-lint (status=in_progress) PASSED; traceability-guard PASSED (0 warnings); state-transition-guard (in_progress) TRANSITION PERMITTED. Authored the validate-owned canonical ### Validation Evidence strict section in report.md. A REAL done-flip probe (status+certification.status flipped to done IN PLACE, state-transition-guard re-run, then reverted to the exact pre-probe bytes) returned exit 1 = TRANSITION BLOCKED with 4 failures: Check 13 artifact-lint mode gate (report.md still lacks ### Audit Evidence + ### Chaos Evidence, each needing Executed/Command/Phase Agent), Check 17 (no structured spec(099)/bubbles(099/...) commit; only feat(099) exists), Check 21 (spec-review phase absent from phase records), Check 30/G088 (no top-level certifiedAt on the bare probe flip). The decisive blockers (Audit+Chaos canonical sections, spec-review phase, structured commit) are foreign-owned (bubbles.audit/bubbles.chaos/bubbles.plan) or commit-forbidden by the owner no-commit directive - NOT forgeable by bubbles.validate. Routed to bubbles.workflow; status held honestly at in_progress (no fabricated done). G091 Check 28 PASSES. Evidence: report.md#final-certification.",
+  "certifiedReason": "bubbles.validate (final full-delivery certification, real specialist dispatch, 2026-06-21) flipped 099 to done after confirming the Check 13 fix landed (all four canonical strict report.md headings bare: ### Validation Evidence / ### Audit Evidence / ### Spec Review / ### Chaos Evidence; the Audit Evidence Executed/Command/Phase Agent triplet body intact) and re-running state-transition-guard at status=done -> exit 0 TRANSITION PERMITTED, plus artifact-lint at status=done -> exit 0 with the Audit Evidence section now captured. All four full-delivery done-gates pass: Check 13 (artifact-lint strict sections), Check 17 (structured spec(099) commit 6029e4eb in history), Check 21 (spec-review phase recorded + Check 6B specialist provenance), Check 30/G088 (top-level certifiedAt set). No fabricated evidence; the orchestrator owns the done-flip settle-commit. Evidence: report.md#final-certification.",
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
     "tdd": {"mode": "off", "source": "repo-default"},
@@ -205,13 +206,23 @@
         "statusAfter": "in_progress",
         "at": "2026-06-21T23:14:00Z",
         "note": "Real bubbles.chaos subagent dispatch (full-delivery convergence finalization). For a host-side CLI resource guard there is no live network service / request surface / stateful store to fault-inject, so the chaos abuse surface is the spec's OWN adversarial rejection tests. Re-ran them host-native (NOT the dockerized ./smackerel.sh test unit: a concurrent build was churning the shared Docker daemon with the host in swap, so a dockerized full-module compile risked a mid-run container wedge / OOM exit-137 non-defect; the single tiny internal/preflight package compiles host-side in ~40 ms with no such contention - the same isolation-safe path the validate/regression/audit finalization dispatches used). Command: go test ./internal/preflight/... -count=1 -v -run 'TestParseThresholds_|TestGuardWiring_|TestConfigWiring_|TestPreflightRun_|TestEvaluate_' -> 17/17 adversarial/rejection probes PASS, 0 skips, CHAOS_REJECTION_PROBES_EXIT=0, ok internal/preflight 0.040s. Abuse probes exercised: 4 fail-loud SST parse rejections (missing/empty/non-numeric/non-positive thresholds, NO-DEFAULTS G028) + TestPreflightRun_MissingKeyReturnsError; the 2 adversarial wiring drift-detectors (TestGuardWiring_AdversarialMissingBuildGuard surgically removes the build-block guard, TestGuardWiring_AdversarialHelperNotRunningEvaluator neuters the cmd/preflight invocation - both mirror compose_contract_test.go and assert the contract REJECTS the mutation, i.e. non-tautological); below-threshold rejection (TestEvaluate_BelowThreshold, TestPreflightRun_BelowThresholdExitsOne) + override (OverrideBelowThresholdExitsZeroWithWarning) + no-secret (TestPreflightRun_NoSecretEcho). No defect surfaced; no findings routed elsewhere. Authored the canonical ### Chaos Evidence strict section in report.md (inside the current certifying window, peer to the validate/audit strict sections). chaos was already in completedPhases; status held honestly at in_progress."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "expandedBy": null,
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "at": "2026-06-21T23:45:02Z",
+        "note": "Final full-delivery certification dispatch (4th/final real specialist run, the done-flip owner). Confirmed the Check 13 fix landed: all four canonical strict headings in report.md are bare (### Validation Evidence / ### Audit Evidence / ### Spec Review / ### Chaos Evidence) and the Audit Evidence Executed/Command/Phase Agent triplet body is intact, so artifact-lint's end-anchored extractor now captures the section. Re-ran state-transition-guard at status=in_progress -> exit 0 (TRANSITION PERMITTED, 3 non-blocking warnings: Check 7 completedAt, Check 8 test-path, Check 11 one evidence block). Flipped status+certification.status to done, set certifiedBy=bubbles.validate + top-level/cert certifiedAt, then re-ran state-transition-guard at status=done -> exit 0 TRANSITION PERMITTED and artifact-lint at status=done -> exit 0 with the Audit Evidence section captured (no 'requires populated section: ### Audit Evidence' failure). All four done-gates pass: Check 13 (artifact-lint strict sections), Check 17 (structured spec(099) commit 6029e4eb in history), Check 21 (spec-review phase recorded, Check 6B specialist provenance), Check 30/G088 (certifiedAt set). Did NOT git commit - the orchestrator owns the done-flip settle-commit. Evidence: report.md#final-certification."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "certifiedBy": null,
-    "certifiedAt": null,
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-06-21T23:45:02Z",
     "lockdownState": "unlocked",
     "completedScopes": [
       "SCOPE-01",
