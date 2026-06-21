@@ -5,7 +5,7 @@
   "feature": "097-card-rewards-gcal-delivery",
   "featureDir": "specs/097-card-rewards-gcal-delivery",
   "featureName": "Card-Rewards Google Calendar Delivery",
-  "status": "in_progress",
+  "status": "done",
   "mode": "full-delivery",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
@@ -13,10 +13,10 @@
   "executionRuntime": "direct-implement",
   "executionModelDetail": "Direct in-session feature build, parent-expanded by bubbles.workflow because the workflow runtime lacked the runSubagent tool. SCOPE-01 implemented + unit-proven; SCOPE-02 is the live home-lab delivery proof. The full-delivery certification ceremony was run this session and recorded in report.md + executionHistory.",
   "createdAt": "2026-06-14T04:00:00Z",
-  "updatedAt": "2026-06-21T19:50:00Z",
-  "certifiedAt": null,
+  "updatedAt": "2026-06-21T21:12:15Z",
+  "certifiedAt": "2026-06-21T21:12:15Z",
   "requiresRevalidation": false,
-  "inProgressReason": "SCOPE-01 (Google Calendar write client + SST config + secret-key 3-mirror + scheduler wiring) is unit-proven; SCOPE-02 (live home-lab delivery) is proven on the real host (image fc931c6a / core 73dd65dd deployed healthy with calendar delivery wired; the deployed GoogleCalendarClient wrote a real event to the operator's 'Credit cards' calendar: insert -> idempotent no-dup re-sync -> delete). The full-delivery certification ceremony ran 2026-06-20 with real evidence in report.md + executionHistory. A gate-remediation pass on 2026-06-21 closed all residual governance blocks (G027 completedScopes count, Check 8A scenario-specific + broader E2E regression planning rows, G053 git-backed Code Diff Evidence, G068 DoD-Gherkin fidelity, G094 single-capability/single-implementation justification) with NO code change; state-transition-guard now returns exit 0 ('TRANSITION PERMITTED', 3 non-blocking warnings) and Check 17 is already satisfied by the structured spec(097) commit c7f31b29 (the 089->097 rename, contrary to the earlier 'uncommitted rename' note). Status is held at in_progress pending the operator's scoped settle-commit of these uncommitted governance edits and the final done-flip. One spec-096-originated failure (spec 096's bundle-secret A2 fixture) is recorded under Discovered Issues and is routed to spec 096.",
+  "certifiedReason": "Certified done on 2026-06-21 by a real bubbles.validate subagent dispatch (provenanceMode subagent-dispatch). Every gate re-executed green this session with captured output + exit codes: scoped Go unit suite incl BundleSecret (SCOPED_UNIT_EXIT=0; internal/deploy ok 31.489s, so the prior spec-096 A2 failure no longer reproduces), full Go unit suite (FULL_UNIT_EXIT=0), ./smackerel.sh check (CHECK_EXIT=0), ./smackerel.sh lint (LINT_EXIT=0), artifact-lint (exit 0, PASSED), traceability-guard (exit 0, RESULT: PASSED 0 warnings, DoD fidelity 4/4), and state-transition-guard (exit 0, TRANSITION PERMITTED). SCOPE-02 live home-lab delivery was not re-run (one-time operator-credential proof at report.md#live-calendar). The orchestrator bubbles.workflow owns the settle-commit. The spec-096 A2 fixture remains nominally routed to spec 096 but no longer reproduces a RED.",
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
     "tdd": {"mode": "off", "source": "repo-default"},
@@ -40,8 +40,8 @@
     "SCOPE-02"
   ],
   "scopeProgress": [
-    {"scopeDir": "SCOPE-01", "name": "Google Calendar write client + config + wiring", "status": "Done", "dependsOn": []},
-    {"scopeDir": "SCOPE-02", "name": "Live home-lab delivery proof", "status": "Done", "dependsOn": ["SCOPE-01"]}
+    {"scopeDir": "SCOPE-01", "name": "Google Calendar write client + config + wiring", "status": "Done", "dependsOn": [], "completedAt": "2026-06-14T06:00:00Z"},
+    {"scopeDir": "SCOPE-02", "name": "Live home-lab delivery proof", "status": "Done", "dependsOn": ["SCOPE-01"], "completedAt": "2026-06-20T02:30:00Z"}
   ],
   "completedPhases": ["analyze", "design", "plan", "implement", "test", "regression", "security", "spec-review", "simplify", "gaps", "harden", "stabilize", "chaos", "docs", "validate", "audit"],
   "execution": {
@@ -205,13 +205,23 @@
         "statusAfter": "in_progress",
         "at": "2026-06-21T19:50:00Z",
         "note": "Artifact-only remediation (no rebuild/retest; code unchanged). Closed: G027 completedScopes count (reformatted certification.completedScopes multi-line so the guard counts 2), Check 8A scenario-specific + broader E2E regression DoD/Test-Plan rows on both scopes (spec-012 httptest-unit + live-not-in-CI convention), G053 git-backed Code Diff Evidence (real git show/log of fc931c6a + c7f31b29), G068 DoD-Gherkin fidelity (faithful SCN-097-A01 DoD items on both scopes), G094 single-capability (spec.md) + single-implementation (design.md) justification. state-transition-guard now exit 0 ('TRANSITION PERMITTED with 3 warning(s)'). Check 17 is already satisfied by the structured spec(097) commit c7f31b29 (the earlier 'uncommitted rename of 089' note is stale). Status held at in_progress pending the operator's scoped settle-commit + done-flip; no commit/push taken per dispatch constraint. The spec-096 A2 fixture remains routed to spec 096."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "subagent-dispatch",
+        "expandedBy": null,
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "at": "2026-06-21T21:12:15Z",
+        "note": "Real bubbles.validate subagent dispatch (not parent-expanded): independently re-executed the full green bar this session and certified done. Gates + exit codes: scoped Go unit incl BundleSecret (./smackerel.sh test unit --go --go-run 'GoogleCalendar|CardRewards|GCal|SecretKeys|BundleSecret') SCOPED_UNIT_EXIT=0 with internal/cardrewards ok, internal/config ok, internal/deploy ok 31.489s (the prior spec-096 A2 leakage-detector failure no longer reproduces); full Go unit ./smackerel.sh test unit --go FULL_UNIT_EXIT=0; ./smackerel.sh check CHECK_EXIT=0; ./smackerel.sh lint LINT_EXIT=0; artifact-lint.sh exit 0 (PASSED); traceability-guard.sh exit 0 (RESULT: PASSED, 0 warnings, DoD fidelity 4/4); state-transition-guard.sh exit 0 (TRANSITION PERMITTED). SCOPE-02 live home-lab delivery NOT re-run (one-time operator-credential proof at report.md#live-calendar). No git commit taken — bubbles.workflow owns the settle-commit."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "certifiedBy": null,
-    "certifiedAt": null,
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-06-21T21:12:15Z",
     "lockdownState": "unlocked",
     "completedScopes": [
       "SCOPE-01",
@@ -219,8 +229,8 @@
     ],
     "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "test", "regression", "security", "spec-review", "simplify", "gaps", "harden", "stabilize", "chaos", "docs", "validate", "audit"],
     "scopeProgress": [
-      {"scope": 1, "name": "Google Calendar write client + config + wiring", "status": "done", "dependsOn": [], "evidenceFile": "report.md"},
-      {"scope": 2, "name": "Live home-lab delivery proof", "status": "done", "dependsOn": ["SCOPE-01"], "evidenceFile": "report.md"}
+      {"scope": 1, "name": "Google Calendar write client + config + wiring", "status": "done", "dependsOn": [], "evidenceFile": "report.md", "completedAt": "2026-06-14T06:00:00Z"},
+      {"scope": 2, "name": "Live home-lab delivery proof", "status": "done", "dependsOn": ["SCOPE-01"], "evidenceFile": "report.md", "completedAt": "2026-06-20T02:30:00Z"}
     ]
   }
 }
