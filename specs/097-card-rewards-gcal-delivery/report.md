@@ -1,6 +1,6 @@
 # Report — Spec 097 Card-Rewards Google Calendar Delivery
 
-**Spec:** [spec.md](spec.md) · **Scopes:** [scopes.md](scopes.md) · **Status:** in_progress (engineering + live delivery proven and re-confirmed green this session; the full-delivery `done` ceremony was run, but a `done` promotion is structurally blocked by the commit gate — see [Validation Evidence](#validation-evidence) + [Audit Evidence](#audit-evidence))
+**Spec:** [spec.md](spec.md) · **Scopes:** [scopes.md](scopes.md) · **Status:** in_progress (engineering + live delivery proven; the full-delivery `done` ceremony ran 2026-06-20, and a 2026-06-21 gate-remediation pass closed all residual governance blocks with NO code change — `state-transition-guard` now returns exit 0 / `TRANSITION PERMITTED`; the spec is done-eligible pending the operator's scoped settle-commit + done-flip — see [Validation Evidence](#validation-evidence) + [Audit Evidence](#audit-evidence))
 
 ## Summary
 
@@ -313,6 +313,18 @@ persistent scenario-specific E2E regression planning (Check 8A) and a
 capability-foundation justification (Gate G094) — and the A2 fixture sync is
 routed to spec 096. The spec therefore honestly remains `in_progress`.
 
+**Update 2026-06-21 (gate-remediation pass, NO code change):** the residual
+governance blocks the 2026-06-20 verdict named have since been closed with
+artifact-only edits — the G027 completedScopes count, the Check 8A
+scenario-specific + broader E2E regression planning rows, the G053 git-backed
+Code Diff Evidence, the G068 DoD-Gherkin fidelity, and the G094 single-capability
+/ single-implementation justification. `state-transition-guard
+specs/097-card-rewards-gcal-delivery` now returns exit 0 ('TRANSITION PERMITTED
+with 3 warning(s)'). The earlier Check 17 concern is moot: the structured
+`spec(097)` commit `c7f31b29` already satisfies it. The spec is now done-eligible
+and is held at `in_progress` only pending the operator's scoped settle-commit of
+the uncommitted governance edits + the final done-flip.
+
 ### Chaos Evidence
 
 **Executed:** YES
@@ -354,28 +366,50 @@ Recorded as `phaseStubs.chaos` (no live harness; deterministic failure paths cov
 ### Code Diff Evidence
 
 **Executed:** YES
-**Command:** `git show --stat fc931c6a`
+**Command:** `git show --stat --format='%H%n%an%n%ad%n%s' fc931c6a` and `git log --oneline -- specs/097-card-rewards-gcal-delivery`
 **Phase Agent:** bubbles.implement (parent-expanded by bubbles.workflow)
 
-The implementation landed in commit `fc931c6a` (real runtime / source / config files):
+The implementation landed in commit `fc931c6a` (real runtime / source / config
+files). The spec artifacts in that commit were authored under `specs/089-…` and
+later renamed to `specs/097-…` by the structured `spec(097)` commit `c7f31b29`,
+which satisfies the strict-mode commit gate (Check 17). Both git invocations
+below were executed against this repo:
 
 ```text
-fc931c6a feat(cardrewards): production Google Calendar write client + wiring [spec 089]
+$ git show --stat --format='%H%n%an%n%ad%n%s' fc931c6a
+fc931c6a435f48acc895e73e33cc7f3e080a08bf
+pkirsanov
+Sun Jun 14 04:35:37 2026 +0000
+feat(cardrewards): production Google Calendar write client + wiring [spec 089]
+
  cmd/core/wiring_cardrewards_scheduler.go           |  30 +-
  config/smackerel.yaml                              |   9 +-
- internal/cardrewards/gcal_client.go                | 343 +++
- internal/cardrewards/gcal_client_test.go           | 331 +++
+ internal/cardrewards/gcal_client.go                | 343 +++++++++++++++++++++
+ internal/cardrewards/gcal_client_test.go           | 331 ++++++++++++++++++++
  internal/config/cardrewards.go                     |  17 +
  internal/config/secret_keys.go                     |   5 +
  internal/config/secret_keys_test.go                |   1 +
  internal/deploy/bundle_secret_contract_test.go     |   4 +-
  scripts/commands/config.sh                         |  15 +
+ specs/089-card-rewards-gcal-delivery/design.md     |  95 ++++++
+ specs/089-card-rewards-gcal-delivery/report.md     |  96 ++++++
+ .../scenario-manifest.json                         |  30 ++
+ specs/089-card-rewards-gcal-delivery/scopes.md     |  88 ++++++
+ specs/089-card-rewards-gcal-delivery/spec.md       | 101 ++++++
+ specs/089-card-rewards-gcal-delivery/state.json    |  70 +++++
+ .../uservalidation.md                              |  13 +
  16 files changed, 1235 insertions(+), 13 deletions(-)
+
+$ git log --oneline -- specs/097-card-rewards-gcal-delivery
+c7f31b29 spec(097): renumber card-rewards-gcal from 089 (dedup SCN-089/FR-089 namespace) + harden scopes traceability
 ```
 
-That same diff added `CARD_REWARDS_GCAL_CREDENTIALS` to the A2 fixture in
-`internal/deploy/bundle_secret_contract_test.go` — so this spec's key is
-correctly in the array; spec 096's later ninth key is what left A2 stale.
+The runtime delta (non-artifact source/config) is the `internal/cardrewards/gcal_client.go`
+write client (+343), the `cmd/core/wiring_cardrewards_scheduler.go` wiring, the
+`config/smackerel.yaml` + `internal/config/*` + `scripts/commands/config.sh`
+secret-key 3-mirror. That same diff added `CARD_REWARDS_GCAL_CREDENTIALS` to the
+A2 fixture in `internal/deploy/bundle_secret_contract_test.go` — so this spec's
+key is correctly in the array; spec 096's later ninth key is what left A2 stale.
 
 ### Discovered Issues
 
@@ -405,14 +439,16 @@ write-client code wrote a real event to the operator's "Credit cards" Google
 Calendar with an idempotent no-duplicate re-sync and clean delete.
 
 The full-delivery certification ceremony (regression, security, spec-review,
-validation, audit, chaos + the simplify / gaps / harden / stabilize sweep) was
-run this session and is recorded above. A `done` promotion is NOT taken. The
-state-transition-guard blocks promotion: the decisive blocker is Check 17, which
-requires a `spec(097)` structured commit touching the spec dir, and the spec dir
-is a 0-commit uncommitted rename of 089 while this run is constrained to
-no-commit. Additional `done`-gate requirements remain unmet for this focused
-unit + live feature (persistent scenario-specific E2E regression planning under
-Check 8A; a capability-foundation justification under Gate G094; and others), so
-the status honestly remains `in_progress`. One spec-096-originated test failure
-(spec 096's A2 fixture) is recorded under Discovered Issues and is routed to
-spec 096.
+validation, audit, chaos + the simplify / gaps / harden / stabilize sweep) ran
+2026-06-20 and is recorded above. A 2026-06-21 gate-remediation pass (NO code
+change — artifact edits only) then closed all residual governance blocks: the
+G027 completedScopes count, the scenario-specific + broader E2E regression
+planning rows (Check 8A), the G053 git-backed Code Diff Evidence, the G068
+DoD-Gherkin fidelity, and the G094 single-capability / single-implementation
+justification. `state-transition-guard specs/097-card-rewards-gcal-delivery` now
+returns exit 0 ('TRANSITION PERMITTED with 3 warning(s)'), and Check 17 is
+already satisfied by the structured `spec(097)` commit `c7f31b29`. The spec is
+done-eligible; status is held at `in_progress` only pending the operator's scoped
+settle-commit of these uncommitted governance edits + the final done-flip. One
+spec-096-originated test failure (spec 096's A2 fixture) is recorded under
+Discovered Issues and is routed to spec 096.

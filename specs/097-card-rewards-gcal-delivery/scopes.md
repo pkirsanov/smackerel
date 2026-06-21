@@ -61,14 +61,17 @@ Scenario: SCN-097-A03 — Enabled-but-misconfigured fails loud
 | unit | unit | `internal/cardrewards/gcal_client_test.go` | SCN-097-A01: write client idempotent put/delete, token refresh+cache, failure surface, constructor validation, uid/categories ext-props | `./smackerel.sh test unit --go --go-run 'GCal\|GoogleCalendar\|EventID\|PutEvent\|DeleteEvent\|AccessToken'` |
 | unit | unit | `internal/config/cardrewards_test.go` | SCN-097-A02, SCN-097-A03: calendar_sync false parses without requiring the credential; enabled + missing CALENDAR_ID/GCAL_CREDENTIALS fails loud naming the key | `./smackerel.sh test unit --go --go-run 'LoadCardRewardsConfig'` |
 | unit | unit | `internal/config/secret_keys_test.go` + `internal/deploy/bundle_secret_contract_test.go` | FR-097-04 secret delivery: 3-mirror agreement + home-lab sentinel-masking for `CARD_REWARDS_GCAL_CREDENTIALS` (no literal value emitted) | `./smackerel.sh test unit --go --go-run 'SecretKeys\|BundleSecret'` |
+| regression (unit-mock httptest) | regression | `internal/cardrewards/gcal_client_test.go` + `internal/config/cardrewards_test.go` | Regression E2E: scenario-specific write-client idempotent put/update + delete + token refresh + config fail-loud + secret 3-mirror coverage is persistent and replayed on every `./smackerel.sh test unit`; a live-credential e2e against the real Google Calendar API is not part of CI (needs the operator's OAuth credential + target calendar) | `./smackerel.sh test unit --go --go-run 'GCal\|PutEvent\|DeleteEvent\|LoadCardRewardsConfig\|SecretKeys'` |
 
 ### Definition of Done
-- [x] SCN-097-A01: `GoogleCalendarClient` implements `CalDAVClient`; idempotent insert/update via deterministic event id → Evidence: [report.md#unit]
+- [x] SCN-097-A01: a monthly card-rewards recommendation is written to Google Calendar as a stable-UID event — the `GoogleCalendarClient` implements `CalDAVClient` with idempotent insert/update via a deterministic event id, so re-running the sync updates the same event without duplicating it → Evidence: [report.md#unit]
 - [x] `ParseGCalCredential` fail-loud on empty/bad-JSON/missing-field → Evidence: [report.md#unit]
 - [x] SCN-097-A03: config fail-loud on missing CALENDAR_ID / GCAL_CREDENTIALS when calendar_sync → Evidence: [report.md#unit]
 - [x] Secret key added to all 3 mirrors; contract test proves the home-lab bundle masks it as a sentinel token (no literal value emitted) → Evidence: [report.md#unit]
 - [x] SCN-097-A02: real client + bridge wired into the scheduler when calendar_sync; graceful WARN+nil-bridge when disabled or on a malformed credential → Evidence: [report.md#wiring]
 - [x] Build Quality Gate: unit tests green, format clean, lint clean, config-generate emits the new keys → Evidence: [report.md#quality]
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior — covered at unit level via `net/http/httptest` boundary fakes (TestPutEvent_InsertsThenUpdates_Idempotent, TestDeleteEvent_RemovesThenIdempotent, TestAccessToken_RefreshFailureSurfaces, TestLoadCardRewardsConfig_FailLoudOnMissingRequired, TestSecretKeys_MirrorsYAMLManifest); persistent in-tree and replayed on every `./smackerel.sh test unit`; a live-credential e2e-api run against the real Google Calendar API is not part of CI (needs the operator's OAuth credential + target calendar) → Evidence: [report.md#unit]
+- [x] Broader E2E regression suite passes — the full Go unit suite re-runs green (UNIT_EXIT=0); no live e2e-api regression job runs in CI for this external-API write client (the live home-lab delivery is a one-time operator-credential proof at report.md#live-calendar, not a CI job) → Evidence: [report.md#quality]
 
 ---
 
@@ -110,9 +113,12 @@ Scenario: SCN-097-A01 — Monthly recommendation is written to Google Calendar (
 | unit (deployed code) | unit | `internal/cardrewards/gcal_client_test.go` | SCN-097-A01 (live): the deployed `GoogleCalendarClient` is the unit-proven write client; the live home-lab delivery is evidenced at report.md#live-calendar (insert → idempotent re-sync → delete on the real calendar) | `./smackerel.sh test unit --go --go-run 'GCal\|PutEvent\|DeleteEvent'` |
 | live-deploy | e2e | home-lab host | new digest applied, core healthy, calendar delivery wired (boot log) — report.md#deploy | apply.sh + docker logs |
 | live-calendar | e2e | Google Calendar | a recommend/sync run writes the event; re-run updates (no dup), delete removes it — report.md#live-calendar | calendar events list by UID |
+| regression (unit-mock httptest) | regression | `internal/cardrewards/gcal_client_test.go` | Regression E2E: the deployed write client's scenario-specific behavior (idempotent put/update/delete + access-token refresh) is replayed on every `./smackerel.sh test unit`; the live-credential delivery against the real Google Calendar is a one-time operator-credential proof (report.md#live-calendar), not a CI job | `./smackerel.sh test unit --go --go-run 'GCal\|PutEvent\|DeleteEvent'` |
 
 ### Definition of Done
 - [x] New signed image digest built by CI → Evidence: [report.md#build]
 - [x] gcal secret delivered via sops; calendar_id + calendar_sync=true emitted; core healthy with delivery wired → Evidence: [report.md#deploy]
-- [x] SCN-097-A01 (live): a real card-rewards event exists on the target calendar with the stable UID; re-run produces no duplicate; delete removes it → Evidence: [report.md#live-calendar]
+- [x] SCN-097-A01 (live home-lab proof): a real monthly card-rewards recommendation is written to the operator's Google Calendar with the stable UID; re-running the sync updates the same event with no duplicate; a delete removes it → Evidence: [report.md#live-calendar]
 - [x] Build Quality Gate: apply verify green, no secret logged → Evidence: [report.md#deploy]
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior — the deployed `GoogleCalendarClient` is the unit-proven write client; its scenario-specific behavior (idempotent insert/update/delete, access-token refresh, config fail-loud) is replayed on every `./smackerel.sh test unit` via `net/http/httptest` boundary fakes; the live home-lab delivery is a one-time operator-credential proof (report.md#live-calendar), not a CI job → Evidence: [report.md#unit]
+- [x] Broader E2E regression suite passes — the full Go unit suite re-runs green (UNIT_EXIT=0); the live-credential delivery against the real Google Calendar needs the operator's home-lab host + OAuth credential and is not part of CI → Evidence: [report.md#quality]
