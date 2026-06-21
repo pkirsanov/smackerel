@@ -11,6 +11,7 @@ bubbles/scripts/agnosticity-lint.sh
 bubbles/scripts/aliases.sh
 bubbles/scripts/artifact-freshness-guard-selftest.sh
 bubbles/scripts/artifact-freshness-guard.sh
+bubbles/scripts/artifact-lint-selftest.sh
 bubbles/scripts/artifact-lint.sh
 bubbles/scripts/batch-promotion-lint-selftest.sh
 bubbles/scripts/batch-promotion-lint.sh

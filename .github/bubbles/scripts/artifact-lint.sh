@@ -1417,6 +1417,25 @@ fi
 #   CAUTION: this is an audit-trail-preservation tool — it MUST NOT be applied
 #   to fresh-round evidence; new rounds must produce legitimate terminal output.
 #
+# Certifying-window boundary (report.md ONLY, opt-in, at most ONE per file):
+#       <!-- bubbles:certifying-window-begin -->
+#   A single sentinel that splits report.md into a prior-window history region
+#   (every code block BEFORE the marker) and the current certifying window
+#   (every code block AFTER it). Pre-marker blocks are treated like the
+#   evidence-legitimacy-skip region — counted as skipped, NOT enforced — because
+#   they were authored and validated in prior specialist rounds (often before
+#   this signal heuristic existed). Post-marker blocks are done-strict-checked
+#   exactly as before. This lets a long-running spec promote to 'done' by
+#   placing ONE append-only marker at the start of its fresh evidence, instead
+#   of retroactively rewriting hundreds of historical blocks (which the
+#   append-only audit rule forbids).
+#   INTEGRITY: the exemption is strictly opt-in PER FILE. A report.md with NO
+#   marker is enforced in full, exactly as today (the marker can never silently
+#   disable Check 3 fleet-wide). More than one marker fails loud (ambiguous
+#   window start). Like the skip region, this is an audit-trail-preservation
+#   tool — the marker MUST mark the real current-window start and MUST NEVER be
+#   used to hide fresh fabricated evidence.
+#
 # Terminal output signals (at least 2 required per block):
 #   - Test runner patterns: "passed", "failed", "ok", "FAIL", "test result:", "Tests:", "✓", "✗"
 #   - Exit/status patterns: "exit code", "Exit Code:", "error[", "warning[", "Compiling", "Finished"
@@ -1440,6 +1459,19 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
   code_block_skip=0
   skip_begin_count=0
   skip_end_count=0
+  # Certifying-window boundary marker (opt-in, report.md only): pre-marker code
+  # blocks are prior-window history (exempt); post-marker blocks stay done-strict.
+  # The exemption applies ONLY when exactly one marker is present — a marker-less
+  # report.md is enforced in full (no silent fleet-wide disable). >1 fails loud.
+  in_pre_window=0
+  code_block_prewindow=0
+  evidence_prewindow_skipped=0
+  cw_marker_count=$(grep -cF -- '<!-- bubbles:certifying-window-begin -->' "$current_report_file" || true)
+  if [[ "$cw_marker_count" -gt 1 ]]; then
+    fail "Multiple <!-- bubbles:certifying-window-begin --> markers ($cw_marker_count) in $(relative_artifact_path "$current_report_file") — at most one is allowed (it marks the single current certifying-window start)"
+  elif [[ "$cw_marker_count" -eq 1 ]]; then
+    in_pre_window=1
+  fi
   while IFS= read -r line; do
     if [[ "$in_code_block" -eq 0 ]] && [[ "$line" == *"<!-- bubbles:evidence-legitimacy-skip-begin -->"* ]]; then
       skip_begin_count=$((skip_begin_count + 1))
@@ -1453,15 +1485,28 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
       prev_line="$line"
       continue
     fi
+    if [[ "$in_code_block" -eq 0 ]] && [[ "$line" == *"<!-- bubbles:certifying-window-begin -->"* ]]; then
+      in_pre_window=0
+      prev_line="$line"
+      continue
+    fi
     if [[ "$in_code_block" -eq 0 ]] && echo "$line" | grep -qE '^```'; then
       in_code_block=1
       code_block_lines=0
       code_block_content=""
       code_block_header="$prev_line"
       code_block_skip=$in_skip_region
+      code_block_prewindow=$in_pre_window
     elif [[ "$in_code_block" -eq 1 ]] && echo "$line" | grep -qE '^```$'; then
       in_code_block=0
       evidence_sections_checked=$((evidence_sections_checked + 1))
+
+      if [[ "$code_block_prewindow" -eq 1 ]]; then
+        evidence_prewindow_skipped=$((evidence_prewindow_skipped + 1))
+        code_block_prewindow=0
+        prev_line="$line"
+        continue
+      fi
 
       if [[ "$code_block_skip" -eq 1 ]]; then
         evidence_skipped=$((evidence_skipped + 1))
@@ -1536,6 +1581,9 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
   fi
   if [[ "$evidence_skipped" -gt 0 ]]; then
     echo "ℹ️  Skipped $evidence_skipped evidence blocks under <!-- bubbles:evidence-legitimacy-skip --> markers in $(relative_artifact_path "$current_report_file")"
+  fi
+  if [[ "$evidence_prewindow_skipped" -gt 0 ]]; then
+    echo "ℹ️  Skipped $evidence_prewindow_skipped evidence blocks before <!-- bubbles:certifying-window-begin --> (prior-window history) in $(relative_artifact_path "$current_report_file")"
   fi
 
   if [[ "$illegitimate_evidence" -eq 0 ]] && [[ "$evidence_sections_checked" -gt 0 ]]; then

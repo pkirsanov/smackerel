@@ -183,6 +183,73 @@ modes:
       requirePhaseEvidenceBeforeAdvance: true
       blockOnMissingSpecialistExecution: true
 
+  # delivery-lockdown — pre-v6 (v5) name of full-delivery. The v5→v6 mode
+  # collapse renamed it to full-delivery: identical maximum-assurance delivery
+  # semantics (full-delivery additionally adds the v6 `redteam` phase and moves
+  # the shared constraints into templates). This v5 KEY is retained so persisted
+  # artifacts (state.json.workflowMode: delivery-lockdown) keep resolving via the
+  # grandfather path (BUBBLES_MODE_GRANDFATHER=1 / --grandfather). New operator
+  # input MUST use full-delivery (v6 form: `implement action:full-delivery
+  # target:spec`). The block below is the faithful v5 original under which the
+  # affected specs were worked.
+  delivery-lockdown:
+    description: Maximum-assurance delivery loop. Runs the full improvement and certification chain repeatedly until validate certifies done or returns a documented blocked verdict. Optional improvement preludes can front-load analyst/UX/design/plan passes for a bounded number of rounds.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, implement, test, regression, simplify, gaps, harden, stabilize, devops, security, validate, audit, chaos, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 5
+    constraints:
+      continueOnBlocked: false
+      finalGlobalPassRequired: true
+      requireDesignBeforeImplement: true
+      allowBootstrapIterations: true
+      bootstrapAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      bootstrapLoopExit: design_spec_scopes_ready
+      forceSequentialPerSpec: true
+      requirePerSpecPhaseCompletion: [ simplify, gaps, harden, stabilize, security, validate, audit, chaos, docs ]
+      requireQualityLoopUntilCertifiedDone: true
+      restartLoopAtPhase: implement
+      allowImprovementPrelude: true
+      improvementPreludeDefault: off
+      improvementPreludeRoundLimitDefault: null
+      specReviewDefault: once-before-implement
+      useChildWorkflows: true
+      childWorkflowBundles:
+        testVerification: test-to-doc
+        qualitySweep: harden-gaps-to-doc
+        validationCertification: validate-to-doc
+        bugClosure: bugfix-fastlane
+      improvementPreludeProfiles:
+        analyze-design-plan: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+        analyze-ux-design-plan: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      blockedOnlyWhenValidateBlocked: true
+      requireImplementedVsClaimedReconciliation: true
+      requireNoSkippedTests: true
+      requireNoPreexistingFailingTests: true
+      requireNoInternalMocksExceptExternalDeps: true
+      requireGherkinE2eCoverage: true
+      requireCoveragePolicyCompliance: true
+      requireChaosInQualitySweep: true
+      requireIssuePromotionToScenarioOrBug: true
+      requireScenarioExpansionTests: true
+      requireRegressionTestsForNewBugs: true
+      requireAllDiscoveredBugsClosedInRun: true
+      runUntilAllSpecsDone: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requirePhaseEvidenceBeforeAdvance: true
+      blockOnMissingSpecialistExecution: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
   bugfix-fastlane:
     description: Focused bug loop with mandatory reproduction and verification. Loops until validate certifies the fix or returns a documented blocked verdict.
     inherits: [ base-delivery, delivery-gate-baseline, delivery-quality-constraints ]
