@@ -15,9 +15,9 @@
   "executionRuntime": "direct-implement",
   "executionModelDetail": "Net-new feature delivered directly in-session, parent-expanded by bubbles.workflow because the active workflow runtime lacked the runSubagent tool (the established pattern for specs 085/089/097/098 in this repo). All phases (analyst, ux, design, plan, implement, test, validate, audit, docs + quality sweep) are authored/executed directly with real captured evidence in report.md.",
   "createdAt": "2026-06-21T00:00:00Z",
-  "updatedAt": "2026-06-21T08:35:00Z",
+  "updatedAt": "2026-06-21T23:14:00Z",
   "requiresRevalidation": false,
-  "inProgressReason": "Substantive work is COMPLETE and re-verified this finalization (host-native go1.25.10): 22/22 internal/preflight unit+contract tests PASS with 0 skips (PREFLIGHT_TEST_EXIT=0); ./smackerel.sh config generate emits PREFLIGHT_MIN_AVAILABLE_RAM_MB=6000 + _DISK_GB=15 into dev.env + test.env; ./smackerel.sh pre-flight exits 0 (OK) and the SMACKEREL_PREFLIGHT_OVERRIDE=1 path exits 0 with a loud WARNING; artifact-lint is clean. This run CLOSED the six spec-099-ownable governance gaps: G022 Check 6 (regression+security evidenced; simplify/gaps/harden/stabilize/chaos recorded as verified no-op phaseStubs), G022 Check 6B (executionHistory parent-expanded provenance for every claimed phase), Check 8A (SCOPE-01/02 -> Scope-Kind contract-only), Check 8B (SCOPE-02 Consumer Impact Sweep), G053 Check 13B (report.md Code Diff Evidence), and G094 Check 34 (Single-Capability + Single-Implementation Justifications); the G040 deferral-language hit was also cleared. Status stays in_progress because two conditions remain OUTSIDE 099's ownership: the framework G091 planning-chain gate (repo-wide, framework-owned, immutable here) and the spec(099) commit gate (Check 17), which the orchestrator satisfies with a scoped commit after this no-commit run.",
+  "inProgressReason": "bubbles.validate (second real runSubagent dispatch, 2026-06-21) RE-CONFIRMED the green runtime bar host-side, all exit 0: config generate (dev.env+test.env carry PREFLIGHT_MIN_AVAILABLE_RAM_MB=6000 + _DISK_GB=15); pre-flight OK (RAM 25559 MB >= 6000, Disk 538.8 GB >= 15) + SMACKEREL_PREFLIGHT_OVERRIDE=1 (loud WARNING); scoped go unit+contract 22/22 PASS 0 skips (ok internal/preflight 0.061s); check; lint; artifact-lint (status=in_progress) PASSED; traceability-guard PASSED (0 warnings); state-transition-guard (in_progress) TRANSITION PERMITTED. Authored the validate-owned canonical ### Validation Evidence strict section in report.md. A REAL done-flip probe (status+certification.status flipped to done IN PLACE, state-transition-guard re-run, then reverted to the exact pre-probe bytes) returned exit 1 = TRANSITION BLOCKED with 4 failures: Check 13 artifact-lint mode gate (report.md still lacks ### Audit Evidence + ### Chaos Evidence, each needing Executed/Command/Phase Agent), Check 17 (no structured spec(099)/bubbles(099/...) commit; only feat(099) exists), Check 21 (spec-review phase absent from phase records), Check 30/G088 (no top-level certifiedAt on the bare probe flip). The decisive blockers (Audit+Chaos canonical sections, spec-review phase, structured commit) are foreign-owned (bubbles.audit/bubbles.chaos/bubbles.plan) or commit-forbidden by the owner no-commit directive - NOT forgeable by bubbles.validate. Routed to bubbles.workflow; status held honestly at in_progress (no fabricated done). G091 Check 28 PASSES. Evidence: report.md#final-certification.",
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
     "tdd": {"mode": "off", "source": "repo-default"},
@@ -42,14 +42,14 @@
     "SCOPE-02",
     "SCOPE-03"
   ],
-  "completedPhases": ["analyst", "ux", "design", "plan", "implement", "test", "docs", "validate", "regression", "security", "audit", "simplify", "gaps", "harden", "stabilize", "chaos"],
+  "completedPhases": ["analyst", "ux", "design", "plan", "implement", "test", "docs", "validate", "spec-review", "regression", "security", "audit", "simplify", "gaps", "harden", "stabilize", "chaos"],
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "finalize",
     "currentScope": null,
     "executionModel": "parent-expanded-child-mode",
     "runStartedAt": "2026-06-21T00:00:00Z",
-    "completedPhaseClaims": ["analyst", "ux", "design", "plan", "implement", "test", "docs", "validate", "regression", "security", "audit", "simplify", "gaps", "harden", "stabilize", "chaos"],
+    "completedPhaseClaims": ["analyst", "ux", "design", "plan", "implement", "test", "docs", "validate", "spec-review", "regression", "security", "audit", "simplify", "gaps", "harden", "stabilize", "chaos"],
     "pendingTransitionRequests": [],
     "phaseStubs": {
       "simplify": {"reason": "Pure-core / host-I/O split is already minimal: one Evaluate, one Run, no new abstraction or duplicate path to collapse. Nothing to simplify.", "by": "bubbles.workflow", "at": "2026-06-21T08:17:30Z", "evidenceRef": "report.md#quality-sweep-phase-notes"},
@@ -154,6 +154,57 @@
         "statusAfter": "in_progress",
         "at": "2026-06-21T08:35:00Z",
         "note": "Governance-closure finalization under the owner no-commit directive. Closed the six spec-099-ownable gaps: G022 Check 6 (regression+security evidenced; simplify/gaps/harden/stabilize/chaos -> phaseStubs), Check 6B (parent-expanded executionHistory provenance for every claimed phase), Check 8A (SCOPE-01/02 Scope-Kind contract-only), Check 8B (SCOPE-02 Consumer Impact Sweep), G053 Check 13B (Code Diff Evidence), G094 Check 34 (Single-Capability + Single-Implementation Justifications). Also cleared the G040 deferral-language hit (placeholders -> substitution tokens). Remaining: the framework G091 gate (repo-wide, not 099-closable here) + the spec(099) commit gate (Check 17), which the orchestrator satisfies after this run."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "expandedBy": null,
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-21T21:58:54Z",
+        "note": "Real runSubagent dispatch (not parent-expanded) as the full-delivery certification owner. Re-executed the green runtime bar: config generate exit 0 (6000/15 emitted into dev.env + test.env); pre-flight exit 0 (OK, RAM 27529 MB >= 6000) + SMACKEREL_PREFLIGHT_OVERRIDE=1 exit 0 (loud WARNING); full ./smackerel.sh test unit --go exit 0 + scoped 22/22 PASS, 0 skips; check exit 0; lint exit 0; artifact-lint (in_progress) exit 0; traceability-guard PASSED. Did NOT promote to done: a test done-flip + artifact-lint at status=done surfaced unmet full-delivery done-gates (missing 'spec-review' phase; missing '### Validation/Audit/Chaos Evidence' sections; uniform scope completedAt) plus the structured spec(099) commit (Check 17) - all owner-routed to bubbles.workflow, none fabricated. Reverted to in_progress to avoid a fabricated done. G091 Check 28 PASSES. Evidence: report.md#final-certification."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "specialist",
+        "expandedBy": null,
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-21T22:42:00Z",
+        "note": "Second real runSubagent dispatch (full-delivery certification owner). Independently RE-RAN the green bar host-side, all exit 0: config generate (dev.env+test.env carry 6000/15); pre-flight OK (RAM 25559 MB >= 6000, Disk 538.8 GB >= 15) + SMACKEREL_PREFLIGHT_OVERRIDE=1 (loud WARNING); scoped go unit+contract 22/22 PASS 0 skips (ok internal/preflight 0.061s); check; lint; artifact-lint (in_progress) PASSED; traceability-guard RESULT PASSED 0 warnings; state-transition-guard (in_progress) TRANSITION PERMITTED. Authored the validate-owned canonical ### Validation Evidence strict section in report.md. Then ran a REAL done-flip probe (flipped status+certification.status to done IN PLACE, re-ran state-transition-guard -> exit 1 TRANSITION BLOCKED, 4 failures: Check 13 artifact-lint mode gate [report.md lacks ### Audit Evidence + ### Chaos Evidence], Check 17 [no structured spec(099) commit; only feat(099)], Check 21 [spec-review phase absent], Check 30/G088 [no certifiedAt on bare probe flip]) and REVERTED to the exact pre-probe bytes - no fabricated done. Decisive blockers (Audit+Chaos sections, spec-review phase, structured commit) are foreign-owned / commit-forbidden by the owner directive; not forgeable here. Routed to bubbles.workflow. G091 Check 28 PASSES. Evidence: report.md#final-certification."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": ["spec-review"],
+        "provenanceMode": "specialist",
+        "expandedBy": null,
+        "reviewStatus": "CURRENT",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-21T23:05:00Z",
+        "note": "Real spec-review subagent dispatch (full-delivery convergence finalization). Audited the active spec.md/design.md/scopes.md against the shipped code: internal/preflight/preflight.go (pure core Thresholds/Resources/Result + ParseThresholds fail-loud + Evaluate + FormatReport no-secret + Run, plus host-I/O ReadMemAvailableMB/ReadDiskAvailableMB/LoadEnvFile/Truthy), cmd/preflight/main.go glue (--env/--repo-root required, NO-DEFAULTS), scripts/runtime/preflight.sh dockerized fallback, the smackerel_assert_host_resources helper wired into build/up/test integration|e2e|e2e-ui|stress + the standalone pre-flight) case in smackerel.sh, the runtime.preflight SST block (6000/15) in config/smackerel.yaml emitted via config.sh required_value into dev.env+test.env, and the docs/Development.md + README.md sections. Review status CURRENT: zero drift between planned (FR-099-01..07, design D1-D7) and delivered behavior; SCN-099-A01..A07 each map to a real non-tautological test in the correct scope (SCOPE-01 A02/A03/A04/A06, SCOPE-02 A01/A05, SCOPE-03 A07) and traceability-guard reports 7/7 mapped, 0 unmapped. No stale, redundant, or superseded active truth found. Recorded the canonical ### Spec Review section in report.md."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": ["audit"],
+        "provenanceMode": "specialist",
+        "expandedBy": null,
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-21T23:08:00Z",
+        "note": "Real bubbles.audit subagent dispatch (full-delivery convergence finalization) — independent re-verification separate from implement/validate (Gate G021, independent-auditor separation). Re-ran the full spec-099 suite host-native (go test ./internal/preflight/... -count=1 -v, go1.25.10): 22/22 PASS, 0 skips, PREFLIGHT_AUDIT_EXIT=0, ok 0.026s. Used the host-native scoped path (NOT the dockerized ./smackerel.sh test unit --go) because a concurrent QuantitativeFinance Rust build + cargo test + docker buildx gateway build were churning the shared Docker daemon (host ~6 GB into swap), so a dockerized full-module compile risked a mid-run container wedge / OOM exit-137 non-defect — the same isolation-safe path the validate + regression finalization dispatches used; TestConfigWiring_GeneratedEnvCarriesThresholds re-confirms the SST flow from the real dev.env/test.env. Ran the sanctioned ./smackerel.sh pre-flight: OK exit 0 (RAM 17903 MB vs required 6000, Disk 537.3 GB vs required 15) + SMACKEREL_PREFLIGHT_OVERRIDE=1 exit 0 (loud WARNING). Confirmed secret + read-only discipline by source scan: internal/preflight has zero net/http/os.Create/os.WriteFile/.Write/exec/Getenv matches (reads only /proc/meminfo + statfs + the generated env file); cmd/preflight's only os.Getenv is the SMACKEREL_PREFLIGHT_OVERRIDE flag (not a secret); FormatReport interpolates only the 4 numeric values; TestPreflightRun_NoSecretEcho GREEN; --env/--repo-root required with no default (G028). No defect surfaced; no findings routed elsewhere. Authored the canonical ### Audit Evidence section (report.md#audit-evidence)."
+      },
+      {
+        "agent": "bubbles.chaos",
+        "phasesExecuted": ["chaos"],
+        "provenanceMode": "specialist",
+        "expandedBy": null,
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-06-21T23:14:00Z",
+        "note": "Real bubbles.chaos subagent dispatch (full-delivery convergence finalization). For a host-side CLI resource guard there is no live network service / request surface / stateful store to fault-inject, so the chaos abuse surface is the spec's OWN adversarial rejection tests. Re-ran them host-native (NOT the dockerized ./smackerel.sh test unit: a concurrent build was churning the shared Docker daemon with the host in swap, so a dockerized full-module compile risked a mid-run container wedge / OOM exit-137 non-defect; the single tiny internal/preflight package compiles host-side in ~40 ms with no such contention - the same isolation-safe path the validate/regression/audit finalization dispatches used). Command: go test ./internal/preflight/... -count=1 -v -run 'TestParseThresholds_|TestGuardWiring_|TestConfigWiring_|TestPreflightRun_|TestEvaluate_' -> 17/17 adversarial/rejection probes PASS, 0 skips, CHAOS_REJECTION_PROBES_EXIT=0, ok internal/preflight 0.040s. Abuse probes exercised: 4 fail-loud SST parse rejections (missing/empty/non-numeric/non-positive thresholds, NO-DEFAULTS G028) + TestPreflightRun_MissingKeyReturnsError; the 2 adversarial wiring drift-detectors (TestGuardWiring_AdversarialMissingBuildGuard surgically removes the build-block guard, TestGuardWiring_AdversarialHelperNotRunningEvaluator neuters the cmd/preflight invocation - both mirror compose_contract_test.go and assert the contract REJECTS the mutation, i.e. non-tautological); below-threshold rejection (TestEvaluate_BelowThreshold, TestPreflightRun_BelowThresholdExitsOne) + override (OverrideBelowThresholdExitsZeroWithWarning) + no-secret (TestPreflightRun_NoSecretEcho). No defect surfaced; no findings routed elsewhere. Authored the canonical ### Chaos Evidence strict section in report.md (inside the current certifying window, peer to the validate/audit strict sections). chaos was already in completedPhases; status held honestly at in_progress."
       }
     ]
   },
@@ -167,7 +218,7 @@
       "SCOPE-02",
       "SCOPE-03"
     ],
-    "certifiedCompletedPhases": ["analyst", "ux", "design", "plan", "implement", "test", "docs", "validate", "regression", "security", "audit", "simplify", "gaps", "harden", "stabilize", "chaos"],
+    "certifiedCompletedPhases": ["analyst", "ux", "design", "plan", "implement", "test", "docs", "validate", "spec-review", "regression", "security", "audit", "simplify", "gaps", "harden", "stabilize", "chaos"],
     "scopeProgress": [
       {"scope": 1, "name": "SST thresholds + Go resource evaluator + unit tests", "status": "done", "dependsOn": [], "evidenceFile": "report.md", "certifiedAt": "2026-06-21T07:48:28Z"},
       {"scope": 2, "name": "CLI wiring (heavy-op gates + pre-flight subcommand) + drift contract test", "status": "done", "dependsOn": ["SCOPE-01"], "evidenceFile": "report.md", "certifiedAt": "2026-06-21T07:48:28Z"},
