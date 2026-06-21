@@ -58,9 +58,13 @@
 // Pattern mirrored from
 // tests/integration/agent_provider_default_test_override_test.go (the
 // SST -> env-file boundary precedent) and the home-lab generation harness in
-// scripts/commands/config_home_lab_runtime_env_test.sh (production-class
-// generation needs no real secret — POSTGRES_PASSWORD resolves to a
-// placeholder marker for home-lab).
+// scripts/commands/config_home_lab_runtime_env_test.sh (Sub-test 1 supplies a
+// non-dev-default Postgres password so the production-class home-lab generate
+// clears the spec 051 FR-051-005 dev-default guard). This test takes the
+// equivalent env-override route: it sets a non-dev-default POSTGRES_PASSWORD
+// (config.sh resolution path 1) so plain `config.sh --env home-lab` proceeds.
+// Placeholder emission for POSTGRES_PASSWORD is a --bundle-mode behavior and is
+// not used by this plain-generate invocation.
 package integration
 
 import (
@@ -99,9 +103,14 @@ func repoRootForAgentProviderHomeLabOverride(t *testing.T) string {
 // resolved env-file text. SMACKEREL_HARDWARE_TIER is pinned so resolution is
 // hermetic w.r.t. the ambient shell (config.sh requires the tier and is
 // normally fed it by the smackerel.sh wrapper, which this direct exec
-// bypasses). No POSTGRES_PASSWORD is set: for the production-class home-lab
-// target config.sh emits a placeholder marker rather than requiring a real
-// secret, so the generation needs no credential material.
+// bypasses). A non-dev-default POSTGRES_PASSWORD override is supplied because
+// plain `config.sh --env home-lab` is production-class and rejects the
+// dev-default Postgres password (spec 051 FR-051-005); the env override
+// (resolution path 1) clears that generator-side guard. Placeholder emission
+// for POSTGRES_PASSWORD is a --bundle-mode behavior and is NOT exercised by
+// this direct invocation. The value is a non-secret test literal; it does not
+// affect the model fields this test asserts, and dev (non-production-class) is
+// unaffected by the override.
 func generateEnvForHomeLabOverrideTest(t *testing.T, root, targetEnv, outDir string) string {
 	t.Helper()
 	scriptPath := filepath.Join(root, "scripts", "commands", "config.sh")
@@ -109,6 +118,13 @@ func generateEnvForHomeLabOverrideTest(t *testing.T, root, targetEnv, outDir str
 	cmd.Env = append(os.Environ(),
 		"SMACKEREL_GENERATED_DIR="+outDir,
 		"SMACKEREL_HARDWARE_TIER=cpu",
+		// Production-class home-lab generation rejects the dev-default Postgres
+		// password (spec 051 FR-051-005). config.sh honours a POSTGRES_PASSWORD
+		// env override (resolution path 1); supply a clearly-non-default test
+		// value so generation proceeds. NOT a real secret — only unblocks the
+		// generator-side dev-default guard; models (the assertion target) are
+		// unaffected. dev (non-production-class) is unaffected by the override.
+		"POSTGRES_PASSWORD=homelab-override-integration-test-not-the-dev-default",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
