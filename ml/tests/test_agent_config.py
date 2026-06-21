@@ -36,13 +36,13 @@ def _valid_env() -> dict[str, str]:
         "AGENT_PROVIDER_DEFAULT_PROVIDER": "ollama",
         "AGENT_PROVIDER_DEFAULT_MODEL": "gemma4:26b",
         "AGENT_PROVIDER_REASONING_PROVIDER": "ollama",
-        "AGENT_PROVIDER_REASONING_MODEL": "deepseek-r1:32b",
+        "AGENT_PROVIDER_REASONING_MODEL": "gpt-oss:20b",
         "AGENT_PROVIDER_FAST_PROVIDER": "ollama",
         "AGENT_PROVIDER_FAST_MODEL": "gpt-oss:20b",
         "AGENT_PROVIDER_VISION_PROVIDER": "ollama",
         "AGENT_PROVIDER_VISION_MODEL": "gemma4:26b",
         "AGENT_PROVIDER_OCR_PROVIDER": "ollama",
-        "AGENT_PROVIDER_OCR_MODEL": "deepseek-ocr:3b",
+        "AGENT_PROVIDER_OCR_MODEL": "gemma4:26b",
     }
 
 
@@ -65,7 +65,7 @@ def test_load_agent_config_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.routing_embedding_model == ""  # explicit opt-out
     assert cfg.defaults_timeout_ms_ceiling == 120000
     assert cfg.provider_routing["reasoning"].provider == "ollama"
-    assert cfg.provider_routing["reasoning"].model == "deepseek-r1:32b"
+    assert cfg.provider_routing["reasoning"].model == "gpt-oss:20b"
 
 
 @pytest.mark.parametrize("key", ALL_AGENT_ENV_KEYS)

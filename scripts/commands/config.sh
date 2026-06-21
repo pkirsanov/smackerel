@@ -862,11 +862,22 @@ PHOTOS_POLICY_ARCHIVE_ACTION_TOKEN_TTL_SECONDS="$(required_value photos.policy.a
 PHOTOS_POLICY_DELETE_ACTION_TOKEN_TTL_SECONDS="$(required_value photos.policy.delete_action_token_ttl_seconds)"
 PHOTOS_POLICY_TELEGRAM_MAX_INLINE_SIZE_BYTES="$(required_value photos.policy.telegram_max_inline_size_bytes)"
 PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE="$(required_value photos.policy.actions_max_scope_size)"
-PHOTOS_INTELLIGENCE_CLASSIFY_MODEL="$(required_value photos.intelligence.classify_model)"
+# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a big-RAM
+# host (e.g. home-lab) opts the photos VISION specialists up to its pulled
+# model set via environments.<env>.photos_intelligence_{classify,sensitivity,
+# aesthetic,ocr}_model; otherwise the commodity base
+# (photos.intelligence.<field>_model) wins, fail-loud if missing. All four are
+# ollama-routed (loaded in the ollama container — see validateModelEnvelopes),
+# so the commodity gemma3:4b (classify/sensitivity/aesthetic) and
+# deepseek-ocr:3b (ocr) defaults must be kept off any host that does not pull
+# them. EMBED is intentionally NOT overridden: it is ml-sidecar-routed
+# (sentence-transformers in the smackerel_ml container, not Ollama), so it can
+# never point the assistant at an unpulled Ollama model.
+PHOTOS_INTELLIGENCE_CLASSIFY_MODEL="$(env_override_value photos_intelligence_classify_model photos.intelligence.classify_model)"
 PHOTOS_INTELLIGENCE_EMBED_MODEL="$(required_value photos.intelligence.embed_model)"
-PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL="$(required_value photos.intelligence.sensitivity_model)"
-PHOTOS_INTELLIGENCE_AESTHETIC_MODEL="$(required_value photos.intelligence.aesthetic_model)"
-PHOTOS_INTELLIGENCE_OCR_MODEL="$(required_value photos.intelligence.ocr_model)"
+PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL="$(env_override_value photos_intelligence_sensitivity_model photos.intelligence.sensitivity_model)"
+PHOTOS_INTELLIGENCE_AESTHETIC_MODEL="$(env_override_value photos_intelligence_aesthetic_model photos.intelligence.aesthetic_model)"
+PHOTOS_INTELLIGENCE_OCR_MODEL="$(env_override_value photos_intelligence_ocr_model photos.intelligence.ocr_model)"
 PHOTOS_INTELLIGENCE_MAX_INFLIGHT_PER_CONNECTOR="$(required_value photos.intelligence.max_inflight_per_connector)"
 PHOTOS_PROVIDER_IMMICH_ENABLED="$(required_value photos.providers.immich.enabled)"
 PHOTOS_PROVIDER_IMMICH_BASE_URL="$(required_value photos.providers.immich.base_url)"
@@ -1405,7 +1416,13 @@ AGENT_PROVIDER_DEFAULT_PROVIDER="$(required_value agent.provider_routing.default
 # tier-correct interactive model on both tiers.
 AGENT_PROVIDER_DEFAULT_MODEL="$(tier_interactive_model_or_override agent_provider_default_model)"
 AGENT_PROVIDER_REASONING_PROVIDER="$(required_value agent.provider_routing.reasoning.provider)"
-AGENT_PROVIDER_REASONING_MODEL="$(required_value agent.provider_routing.reasoning.model)"
+# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a big-RAM
+# host (e.g. home-lab) opts the reasoning specialist up to its pulled model
+# set via environments.<env>.agent_provider_reasoning_model; otherwise the
+# commodity base (agent.provider_routing.reasoning.model) wins, fail-loud if
+# missing. Keeps the deepseek-r1:7b commodity default off any host that does
+# not pull it.
+AGENT_PROVIDER_REASONING_MODEL="$(env_override_value agent_provider_reasoning_model agent.provider_routing.reasoning.model)"
 AGENT_PROVIDER_FAST_PROVIDER="$(required_value agent.provider_routing.fast.provider)"
 # Spec 061 SCOPE-06c — fast tier model also resolves from tier × interactive.
 AGENT_PROVIDER_FAST_MODEL="$(tier_interactive_model_or_override agent_provider_fast_model)"
@@ -1414,7 +1431,12 @@ AGENT_PROVIDER_VISION_PROVIDER="$(required_value agent.provider_routing.vision.p
 # separate vision model on 0.5b); accel can opt-up via environments.<env>.
 AGENT_PROVIDER_VISION_MODEL="$(tier_interactive_model_or_override agent_provider_vision_model)"
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
-AGENT_PROVIDER_OCR_MODEL="$(required_value agent.provider_routing.ocr.model)"
+# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a big-RAM
+# host (e.g. home-lab) opts the OCR specialist up to its pulled model set via
+# environments.<env>.agent_provider_ocr_model; otherwise the commodity base
+# (agent.provider_routing.ocr.model) wins, fail-loud if missing. Keeps the
+# deepseek-ocr:3b commodity default off any host that does not pull it.
+AGENT_PROVIDER_OCR_MODEL="$(env_override_value agent_provider_ocr_model agent.provider_routing.ocr.model)"
 
 # Assistant (spec 061 — Conversational Assistant, Transport-Agnostic). SST
 # zero-defaults: every key is REQUIRED. Missing values → exit non-zero with

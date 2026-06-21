@@ -6,6 +6,17 @@
 real `/ask` pipeline (`POST /v1/agent/invoke`, `scenario_id: open_knowledge`).
 **Validates:** spec 087 (split synthesis model) + spec 088 (runtime model switch).
 
+> **SUPERSEDED (2026-06-20) — home-lab optimized to `gpt-oss:20b`.** This A/B
+> concluded `deepseek-r1:32b` was the quality-first standing synthesis default
+> (promoted in spec 089). The operator has since optimized the home-lab Ollama
+> host to a two-model set — **`gpt-oss:20b`** (synthesis / substrate) +
+> **`gemma4:26b`** (gather / vision / ml) — and no longer pulls the deepseek
+> arms. `environments.home-lab.assistant_open_knowledge_synthesis_model_id` is
+> now `gpt-oss:20b`, superseding the `deepseek-r1:32b` standing default this
+> experiment recommended. This historical A/B record is retained verbatim as the
+> evidence trail for how the synthesis model evolved; it is NOT the current
+> selection.
+
 > Raw responses are captured verbatim in the **Raw Data** appendix below. Every
 > body is real captured output from the live home-lab agent loop, not a summary.
 
