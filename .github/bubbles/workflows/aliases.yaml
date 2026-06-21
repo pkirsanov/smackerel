@@ -84,6 +84,17 @@ v5Aliases:
     tags: { action: full-delivery, target: spec }
     description: Maximum-assurance delivery of a known spec.
 
+  # delivery-lockdown is the pre-v6 (v5) NAME of full-delivery (renamed in the
+  # v5→v6 mode collapse). Retained as a grandfathered registry key so persisted
+  # artifacts (state.json.workflowMode: delivery-lockdown) keep resolving; new
+  # operator input MUST use full-delivery. The extra `lifecycle: lockdown` tag
+  # keeps the (primitive, tag-set) tuple UNIQUE vs full-delivery, satisfying the
+  # uniqueness invariant.
+  delivery-lockdown:
+    primitive: implement
+    tags: { action: full-delivery, target: spec, lifecycle: lockdown }
+    description: v5 name for full-delivery (pre-v6 collapse). Grandfathered registry key; new operator input MUST use full-delivery.
+
   product-to-delivery:
     primitive: implement
     tags: { action: full-delivery, target: product, prelude: analyze-design-plan }
