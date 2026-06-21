@@ -196,6 +196,14 @@ The stack runs 4 containers under the `smackerel` Compose project:
 | `postgres` | PostgreSQL 16 + pgvector | `42001` |
 | `nats` | NATS JetStream message bus | `42002` |
 
+> **Tip — resource pre-flight:** heavy ops (`build`, `up`,
+> `test integration|e2e|e2e-ui|stress`) first run a resource pre-flight that
+> checks host RAM/disk against the SST minimums in `config/smackerel.yaml`
+> (`runtime.preflight.*`) and fail fast with an actionable message instead of
+> being OOM-killed. Run it standalone with `./smackerel.sh pre-flight`; bypass
+> with `SMACKEREL_PREFLIGHT_OVERRIDE=1` (proceeds with a loud warning). See
+> [docs/Development.md](docs/Development.md) → Resource Pre-Flight Guard.
+
 ## Configuration
 
 All configuration lives in **`config/smackerel.yaml`**. After editing, always run:
