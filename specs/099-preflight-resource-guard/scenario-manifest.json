@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "specId": "099-preflight-resource-guard",
+  "feature": "099-preflight-resource-guard",
+  "featureDir": "specs/099-preflight-resource-guard",
+  "scenarioIdPattern": "SCN-099-A0[1-7]",
+  "totalScenarios": 7,
+  "note": "Scenario contract for the local resource pre-flight guard. SCN-099-A02/A03/A04/A05 (evaluator below-threshold, fail-loud missing key, override warning, no-secret) are unit-proven under SCOPE-01 by internal/preflight/preflight_test.go. SCN-099-A06 (SST thresholds flow to generated env) is proven by the generated env files + the SCOPE-02 wiring contract test. SCN-099-A01 (standalone pre-flight passes with headroom) + SCN-099-A05 (heavy-op wiring drift detector) are proven under SCOPE-02 by internal/preflight/wiring_contract_test.go plus a real ./smackerel.sh pre-flight run. SCN-099-A07 (docs) is a docs-review scenario under SCOPE-03. Every scenario links 1:1 to its owning scope and a report.md evidence anchor.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-099-A01",
+      "scopeId": "SCOPE-02",
+      "title": "Standalone pre-flight passes when the host has headroom",
+      "behaviorClass": "functional",
+      "changeType": "add",
+      "requiredTestType": ["unit", "functional"],
+      "regressionRequired": true,
+      "given": "the host has more than the SST minimums (PREFLIGHT_MIN_AVAILABLE_RAM_MB / _DISK_GB) free",
+      "when": "the operator runs ./smackerel.sh pre-flight",
+      "then": "the command prints current-vs-required for RAM and disk and exits 0",
+      "linkedTests": [
+        "internal/preflight/preflight_test.go::TestPreflightRun_AtOrAboveThresholdExitsZero",
+        "smackerel.sh::pre-flight"
+      ],
+      "evidenceRefs": ["report.md#preflight-run", "report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-099-A02",
+      "scopeId": "SCOPE-01",
+      "title": "Below threshold reports current-vs-required and exits 1",
+      "behaviorClass": "functional",
+      "changeType": "add",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "SST minimums for RAM and disk and observed host resources below at least one minimum",
+      "when": "the evaluator runs",
+      "then": "it returns a non-zero exit code and the report states current free RAM/disk vs the required minimum plus remediation",
+      "linkedTests": [
+        "internal/preflight/preflight_test.go::TestPreflightRun_BelowThresholdExitsOne",
+        "internal/preflight/preflight_test.go::TestEvaluate_BelowThreshold"
+      ],
+      "evidenceRefs": ["report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-099-A03",
+      "scopeId": "SCOPE-01",
+      "title": "A missing threshold key fails loud (NO-DEFAULTS)",
+      "behaviorClass": "error",
+      "changeType": "add",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "an env map missing PREFLIGHT_MIN_AVAILABLE_RAM_MB or _DISK_GB (or empty / non-numeric / non-positive)",
+      "when": "the evaluator parses thresholds",
+      "then": "it errors naming the offending key and never substitutes a silent default",
+      "linkedTests": [
+        "internal/preflight/preflight_test.go::TestParseThresholds_MissingKeyFailsLoud",
+        "internal/preflight/preflight_test.go::TestParseThresholds_NonPositiveFailsLoud"
+      ],
+      "evidenceRefs": ["report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-099-A04",
+      "scopeId": "SCOPE-01",
+      "title": "Override bypasses the gate with a loud WARNING",
+      "behaviorClass": "functional",
+      "changeType": "add",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "observed resources below the minimum and the override flag set",
+      "when": "the evaluator runs",
+      "then": "it returns exit code 0 and the report contains a loud WARNING that the check was overridden",
+      "linkedTests": [
+        "internal/preflight/preflight_test.go::TestPreflightRun_OverrideBelowThresholdExitsZeroWithWarning"
+      ],
+      "evidenceRefs": ["report.md#unit"]
+    },
+    {
+      "scenarioId": "SCN-099-A05",
+      "scopeId": "SCOPE-02",
+      "title": "Heavy ops invoke the guard; the contract test proves wiring",
+      "behaviorClass": "config",
+      "changeType": "add",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "the live smackerel.sh",
+      "when": "the drift-detector contract test parses it",
+      "then": "build, up, and test integration|e2e|e2e-ui|stress each call smackerel_assert_host_resources, the helper invokes cmd/preflight, the pre-flight command exists, and an adversarial mutation removing the guard from a heavy-op block is rejected",
+      "linkedTests": [
+        "internal/preflight/wiring_contract_test.go::TestGuardWiring_LiveFile",
+        "internal/preflight/wiring_contract_test.go::TestGuardWiring_AdversarialMissingBuildGuard",
+        "internal/preflight/wiring_contract_test.go::TestGuardWiring_AdversarialHelperNotRunningEvaluator"
+      ],
+      "evidenceRefs": ["report.md#unit", "report.md#wiring"]
+    },
+    {
+      "scenarioId": "SCN-099-A06",
+      "scopeId": "SCOPE-01",
+      "title": "SST thresholds flow to the generated env files",
+      "behaviorClass": "config",
+      "changeType": "add",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "given": "config/smackerel.yaml sets runtime.preflight.min_available_ram_mb and min_available_disk_gb",
+      "when": "./smackerel.sh config generate runs",
+      "then": "config/generated/dev.env and test.env carry PREFLIGHT_MIN_AVAILABLE_RAM_MB and PREFLIGHT_MIN_AVAILABLE_DISK_GB with positive integer values",
+      "linkedTests": [
+        "internal/preflight/wiring_contract_test.go::TestConfigWiring_GeneratedEnvCarriesThresholds"
+      ],
+      "evidenceRefs": ["report.md#config"]
+    },
+    {
+      "scenarioId": "SCN-099-A07",
+      "scopeId": "SCOPE-03",
+      "title": "Docs describe the resource guard and its boundary",
+      "behaviorClass": "config",
+      "changeType": "add",
+      "requiredTestType": ["functional"],
+      "regressionRequired": false,
+      "given": "an operator reads docs/Development.md",
+      "when": "they look up resource pre-flight",
+      "then": "the docs state which heavy ops are gated and which are not, the SST thresholds (runtime.preflight.*) and the override env var, and that the guard protects local CLI ops only, not the home-lab apply",
+      "linkedTests": ["docs/Development.md::resource-pre-flight-guard"],
+      "evidenceRefs": ["report.md#docs"]
+    }
+  ]
+}

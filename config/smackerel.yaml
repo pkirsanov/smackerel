@@ -64,6 +64,28 @@ runtime:
   # finding and the trusted-proxy gate design.
   trusted_proxies: []
 
+  # Spec 099 — Local resource pre-flight guard thresholds (SST source of truth).
+  # Before each heavy ./smackerel.sh operation (build, up, and the live-stack
+  # test categories integration/e2e/e2e-ui/stress), the resource guard
+  # (cmd/preflight -> internal/preflight) checks host available RAM
+  # (MemAvailable from /proc/meminfo) and available disk (repo filesystem)
+  # against these minimums and fails fast with an actionable message instead of
+  # letting a doomed run OOM-die (exit 137) or fill the disk minutes in.
+  # These are CONCRETE SST values (allowed); a MISSING/empty key fails loud
+  # naming the key (Gate G028 / NO-DEFAULTS) — there is no hidden code default.
+  # These guard LOCAL dev CLI ops only; the home-lab apply pre-flight is
+  # knb-deploy-adapter-owned and out of this repo's scope. Override with
+  # SMACKEREL_PREFLIGHT_OVERRIDE=1 (proceeds with a loud WARNING).
+  # See specs/099-preflight-resource-guard/.
+  preflight:
+    # Minimum host MemAvailable (MB) required to start a heavy op. ~6 GB floor:
+    # a heavy build/integration compile + container bring-up peaks at 6-10 GB.
+    min_available_ram_mb: 6000
+    # Minimum available disk (GB) on the repo filesystem required to start a
+    # heavy op. Ollama models (several GB each) + Docker image layers make 15 GB
+    # a sensible floor.
+    min_available_disk_gb: 15
+
 cors:
   # Allowed origins for cross-origin requests (empty = same-origin only).
   # Set when the API is accessed from a different domain/port (e.g., a separate frontend).

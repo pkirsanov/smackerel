@@ -746,6 +746,11 @@ if [[ "$TARGET_ENV" == "dev" && -z "$SMACKEREL_AUTH_TOKEN" ]]; then
 fi
 HOST_BIND_ADDRESS="$(required_value runtime.host_bind_address)"
 COMPOSE_WAIT_TIMEOUT_S="$(required_value runtime.compose_wait_timeout_s)"
+# Spec 099 — local resource pre-flight thresholds (SST; fail-loud on missing key,
+# Gate G028 / NO-DEFAULTS). Consumed by cmd/preflight -> internal/preflight via
+# the generated env file (smackerel_assert_host_resources).
+PREFLIGHT_MIN_AVAILABLE_RAM_MB="$(required_value runtime.preflight.min_available_ram_mb)"
+PREFLIGHT_MIN_AVAILABLE_DISK_GB="$(required_value runtime.preflight.min_available_disk_gb)"
 DIGEST_CRON="$(required_value runtime.digest_cron)"
 EMBEDDING_MODEL="$(required_value runtime.embedding_model)"
 LOG_LEVEL="$(required_value runtime.log_level)"
@@ -1910,6 +1915,8 @@ SMACKEREL_AUTH_TOKEN=${SMACKEREL_AUTH_TOKEN}
 SMACKEREL_ENV=${SMACKEREL_ENV}
 HOST_BIND_ADDRESS=${HOST_BIND_ADDRESS}
 COMPOSE_WAIT_TIMEOUT_S=${COMPOSE_WAIT_TIMEOUT_S}
+PREFLIGHT_MIN_AVAILABLE_RAM_MB=${PREFLIGHT_MIN_AVAILABLE_RAM_MB}
+PREFLIGHT_MIN_AVAILABLE_DISK_GB=${PREFLIGHT_MIN_AVAILABLE_DISK_GB}
 OLLAMA_URL=${OLLAMA_URL}
 OLLAMA_MODEL=${OLLAMA_MODEL}
 OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL}

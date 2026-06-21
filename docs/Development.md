@@ -75,6 +75,7 @@ Use `./smackerel.sh` for runtime work and keep the committed Bubbles validation 
 | Integration tests | `./smackerel.sh test integration` | Run live-stack foundation integration validation |
 | E2E tests | `./smackerel.sh test e2e` | Run compose start, persistence, and config-failure E2E checks |
 | Stress smoke | `./smackerel.sh test stress` | Run disposable test-stack shell and Go stress validation |
+| Resource pre-flight | `./smackerel.sh pre-flight` | Check host RAM/disk vs the SST minimums (`runtime.preflight.*`) before heavy ops; exit 0 ok, 1 below threshold (auto-run before build/up/test integration\|e2e\|e2e-ui\|stress) |
 | Start stack | `./smackerel.sh up` | Start the foundation runtime |
 | Stop stack | `./smackerel.sh down [--volumes]` | Stop the current runtime stack; optionally remove named volumes |
 | Backup database | `./smackerel.sh backup` | Create a compressed pg_dump backup in `backups/` |
@@ -113,6 +114,7 @@ Required command families:
 | End-to-end tests | `./smackerel.sh test e2e` |
 | Stress tests | `./smackerel.sh test stress` |
 | Full dev stack | `./smackerel.sh up` |
+| Resource pre-flight | `./smackerel.sh pre-flight` |
 | Stack shutdown | `./smackerel.sh down [--volumes]` |
 | Database backup | `./smackerel.sh backup` |
 | Health and status | `./smackerel.sh status` |
@@ -120,6 +122,36 @@ Required command families:
 | Cleanup | `./smackerel.sh clean smart|full|status|measure` |
 
 Direct `go`, `python`, `docker compose`, `pytest`, `playwright`, or `npm` commands must not become the documented runtime interface. The CLI owns orchestration, config generation, build freshness checks, cleanup safety, and test environment selection.
+
+### Resource Pre-Flight Guard (Spec 099)
+
+Before each heavy operation — `build`, `up`, and the live-stack test categories
+`integration`, `e2e`, `e2e-ui`, `stress` — the CLI runs a resource pre-flight that
+verifies the host has enough free RAM and disk to survive the run, failing fast
+with an actionable message instead of letting the operation be OOM-killed (exit
+137) or run the disk out minutes in. It mirrors the existing host-port
+preflight, adding the resource dimension.
+
+- **Standalone check:** `./smackerel.sh pre-flight` (exit `0` = ok, `1` = below
+  threshold). It prints current-vs-required for RAM (`MemAvailable` from
+  `/proc/meminfo`) and disk (the repo filesystem). Read-only — mutates nothing.
+- **Gated ops:** `build`, `up`, `test integration|e2e|e2e-ui|stress`. Light /
+  read-only ops are NOT gated: `status`, `logs`, `config generate`, `check`,
+  `down`, `clean`, `test unit`, and `test e2e-ext` (self-contained, no live stack).
+- **SST thresholds:** `config/smackerel.yaml` → `runtime.preflight`:
+  `min_available_ram_mb` and `min_available_disk_gb`. They flow through the
+  generated env files as `PREFLIGHT_MIN_AVAILABLE_RAM_MB` /
+  `PREFLIGHT_MIN_AVAILABLE_DISK_GB`. A missing/empty key fails loud naming it
+  (NO-DEFAULTS / Gate G028) — there is no hidden code default.
+- **Override:** `SMACKEREL_PREFLIGHT_OVERRIDE=1` bypasses the gate and proceeds
+  with a loud `WARNING` (never silently).
+- **Evaluation logic:** Go (`cmd/preflight` + `internal/preflight`), unit-tested,
+  with a lockstep drift-detector contract test
+  (`internal/preflight/wiring_contract_test.go`) that asserts the guard stays
+  wired into every heavy-op path.
+- **Scope boundary:** this guards LOCAL developer CLI operations only. The
+  home-lab / production apply pre-flight on the real deploy host is owned by the
+  operator-private knb deploy adapter and is out of this repo's scope.
 
 ### Docker-Only Development
 
