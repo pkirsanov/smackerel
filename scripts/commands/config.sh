@@ -463,9 +463,11 @@ ML_CPU_LIMIT="$(required_value deploy_resources.smackerel_ml.cpus)"
 ML_MEMORY_LIMIT="$(required_value deploy_resources.smackerel_ml.memory)"
 OLLAMA_CPU_LIMIT="$(required_value deploy_resources.ollama.cpus)"
 # Spec 045 BUG-045-001 — ollama envelope is per-environment overridable so a
-# big-RAM host (e.g. home-lab) can opt-up to gemma4:26b / gpt-oss:20b /
-# deepseek-r1:32b without forcing the same envelope on dev/test/laptop.
-# Override by setting environments.<env>.ollama_memory_limit in smackerel.yaml.
+# production-class target (e.g. home-lab) can run gemma4:26b / gpt-oss:20b /
+# deepseek-r1:32b without forcing the same envelope on dev/test/laptop. For
+# such targets the deploy adapter injects OLLAMA_MEMORY_LIMIT into app.env at
+# apply (the in-repo bundle ships the commodity deploy_resources.ollama.memory
+# base); any env may also set environments.<env>.ollama_memory_limit directly.
 OLLAMA_MEMORY_LIMIT="$(env_override_value ollama_memory_limit deploy_resources.ollama.memory)"
 # Spec 049 FR-049-005(c) — Prometheus resource envelope. Fail-loud SST;
 # the deploy adapter MUST emit PROMETHEUS_CPU_LIMIT and
@@ -620,8 +622,9 @@ LLM_PROVIDER="$(required_value llm.provider)"
 # smackerel.sh before any subcommand runs) selects the interactive-role model
 # for all 6 model env vars below and the interactive-role retrieval-qa
 # timeouts. Fail-loud per smackerel-no-defaults: missing/empty/invalid tier
-# aborts here with [F061-HARDWARE-TIER-*]. Per-env overrides (e.g. home-lab
-# opt-up to gemma4:26b) remain a tier-orthogonal layer: if
+# aborts here with [F061-HARDWARE-TIER-*]. Per-env overrides (e.g. the deploy
+# adapter's app.env injection for a production-class target like home-lab)
+# remain a tier-orthogonal layer: if
 # environments.<env>.<key> is set, it wins; otherwise the tier matrix value.
 if [[ -z "${SMACKEREL_HARDWARE_TIER-}" ]]; then
   echo "[F061-HARDWARE-TIER-MISSING] SMACKEREL_HARDWARE_TIER is required (set in .smackerel.local.env at repo root to cpu or accel; copy .smackerel.local.env.example to start). See specs/061-conversational-assistant/scopes.md SCOPE-06c." >&2
@@ -862,11 +865,13 @@ PHOTOS_POLICY_ARCHIVE_ACTION_TOKEN_TTL_SECONDS="$(required_value photos.policy.a
 PHOTOS_POLICY_DELETE_ACTION_TOKEN_TTL_SECONDS="$(required_value photos.policy.delete_action_token_ttl_seconds)"
 PHOTOS_POLICY_TELEGRAM_MAX_INLINE_SIZE_BYTES="$(required_value photos.policy.telegram_max_inline_size_bytes)"
 PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE="$(required_value photos.policy.actions_max_scope_size)"
-# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a big-RAM
-# host (e.g. home-lab) opts the photos VISION specialists up to its pulled
-# model set via environments.<env>.photos_intelligence_{classify,sensitivity,
-# aesthetic,ocr}_model; otherwise the commodity base
-# (photos.intelligence.<field>_model) wins, fail-loud if missing. All four are
+# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a
+# production-class target (e.g. home-lab) sets the photos VISION specialists
+# to its pulled model set via the deploy adapter, which injects the
+# environments.<env>.photos_intelligence_{classify,sensitivity,aesthetic,ocr}_model
+# equivalents into app.env at apply; otherwise the commodity base
+# (photos.intelligence.<field>_model) wins, fail-loud if missing. The in-repo
+# bundle therefore ships the commodity base. All four are
 # ollama-routed (loaded in the ollama container — see validateModelEnvelopes),
 # so the commodity gemma3:4b (classify/sensitivity/aesthetic) and
 # deepseek-ocr:3b (ocr) defaults must be kept off any host that does not pull
@@ -1416,12 +1421,13 @@ AGENT_PROVIDER_DEFAULT_PROVIDER="$(required_value agent.provider_routing.default
 # tier-correct interactive model on both tiers.
 AGENT_PROVIDER_DEFAULT_MODEL="$(tier_interactive_model_or_override agent_provider_default_model)"
 AGENT_PROVIDER_REASONING_PROVIDER="$(required_value agent.provider_routing.reasoning.provider)"
-# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a big-RAM
-# host (e.g. home-lab) opts the reasoning specialist up to its pulled model
-# set via environments.<env>.agent_provider_reasoning_model; otherwise the
-# commodity base (agent.provider_routing.reasoning.model) wins, fail-loud if
-# missing. Keeps the deepseek-r1:7b commodity default off any host that does
-# not pull it.
+# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a
+# production-class target (e.g. home-lab) sets the reasoning specialist to its
+# pulled model set via the deploy adapter, which injects the
+# environments.<env>.agent_provider_reasoning_model equivalent into app.env at
+# apply; otherwise the commodity base (agent.provider_routing.reasoning.model)
+# wins, fail-loud if missing. The in-repo bundle ships the deepseek-r1:7b
+# commodity default; the adapter keeps it off any host that does not pull it.
 AGENT_PROVIDER_REASONING_MODEL="$(env_override_value agent_provider_reasoning_model agent.provider_routing.reasoning.model)"
 AGENT_PROVIDER_FAST_PROVIDER="$(required_value agent.provider_routing.fast.provider)"
 # Spec 061 SCOPE-06c — fast tier model also resolves from tier × interactive.
@@ -1431,11 +1437,13 @@ AGENT_PROVIDER_VISION_PROVIDER="$(required_value agent.provider_routing.vision.p
 # separate vision model on 0.5b); accel can opt-up via environments.<env>.
 AGENT_PROVIDER_VISION_MODEL="$(tier_interactive_model_or_override agent_provider_vision_model)"
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
-# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a big-RAM
-# host (e.g. home-lab) opts the OCR specialist up to its pulled model set via
-# environments.<env>.agent_provider_ocr_model; otherwise the commodity base
-# (agent.provider_routing.ocr.model) wins, fail-loud if missing. Keeps the
-# deepseek-ocr:3b commodity default off any host that does not pull it.
+# Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a
+# production-class target (e.g. home-lab) sets the OCR specialist to its pulled
+# model set via the deploy adapter, which injects the
+# environments.<env>.agent_provider_ocr_model equivalent into app.env at apply;
+# otherwise the commodity base (agent.provider_routing.ocr.model) wins,
+# fail-loud if missing. The in-repo bundle ships the deepseek-ocr:3b commodity
+# default; the adapter keeps it off any host that does not pull it.
 AGENT_PROVIDER_OCR_MODEL="$(env_override_value agent_provider_ocr_model agent.provider_routing.ocr.model)"
 
 # Assistant (spec 061 — Conversational Assistant, Transport-Agnostic). SST
@@ -1564,9 +1572,13 @@ if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID" ]]; then
   ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID="$(yaml_get assistant.open_knowledge.llm_model_id)"
 fi
 # Spec 087 — synthesis-turn model. Per-environment override layer mirrors
-# llm_model_id: home-lab sets assistant_open_knowledge_synthesis_model_id
-# (deepseek-r1:7b); the base key is the dev default (gemma3:4b). yaml_get
-# (not required_value) because the value is legally empty when enabled=false.
+# llm_model_id: the base key is the commodity default (gemma3:4b), and any
+# env that sets environments.<env>.assistant_open_knowledge_synthesis_model_id
+# overrides it. The in-repo home-lab bundle ships the commodity base; the
+# operator's real home-lab synthesis model is injected by the deploy adapter
+# into app.env at apply (the model_selection block, last-occurrence-wins).
+# yaml_get (not required_value) because the value is legally empty when
+# enabled=false.
 ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID="$(yaml_get "environments.$TARGET_ENV.assistant_open_knowledge_synthesis_model_id" 2>/dev/null || true)"
 if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID" ]]; then
   ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID="$(yaml_get assistant.open_knowledge.synthesis_model_id)"
@@ -1582,8 +1594,9 @@ if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST" ]]; then
   ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST="[]"
 fi
 # Spec 088 — switchable_models allowlist. Per-environment override layer
-# mirrors synthesis_model_id (home-lab adds the real gemma4:26b /
-# deepseek-r1:7b A/B set). The env override is resolved via yaml_get
+# mirrors synthesis_model_id (the in-repo bundle ships the commodity base;
+# the operator's real home-lab switchable set is injected by the deploy
+# adapter at apply). The env override is resolved via yaml_get
 # (exact flattened-key match) NOT yaml_get_json: yaml_get_json walks the
 # YAML tree and would bleed across sibling environment blocks when the
 # active env omits the key (returning home-lab's list for dev/test);
@@ -1604,9 +1617,10 @@ if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS" ]]; then
   ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS="[]"
 fi
 # Spec 089 (Fork C) — tool_capable_gather_models allowlist. Same per-env
-# override pattern as switchable_models (home-lab adds the real
-# tool-capable gather set [gemma4:26b, llama3.1:8b]; dev base = [gemma3:4b]
-# == the baseline gather, a testable no-op). yaml_get (exact flattened-key
+# override pattern as switchable_models (the in-repo bundle ships the
+# commodity base [gemma3:4b] == the baseline gather, a testable no-op; the
+# operator's real home-lab tool-capable gather set is injected by the deploy
+# adapter at apply). yaml_get (exact flattened-key
 # match) for the override — NOT yaml_get_json — so the dev/test env that
 # omits the key does not bleed home-lab's list across sibling environment
 # blocks; the inline-list value is normalised to compact JSON (spaces

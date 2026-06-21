@@ -3165,40 +3165,29 @@ Migration `025_photo_libraries.sql` plus `029_photo_scope3_lifecycle_dedupe_remo
 
 ## Model Envelope Sizing (Spec 045 / BUG-045-001)
 
-> **SUPERSESSION — home-lab model optimization (2026-06-20).** The operator has
-> standardized the home-lab Ollama host on a two-model set: **`gpt-oss:20b`**
-> (the tool-capable synthesis / substrate model — `assistant.open_knowledge`
-> synthesis + `agent.provider_routing` default/fast) and **`gemma4:26b`** (chat /
-> vision / open-knowledge gather / ml sidecar — `llm.*`, `agent.provider_routing`
-> vision, `assistant.open_knowledge.llm_model_id`). This is the only set the
-> home-lab host pulls, so every `environments.home-lab` model field in
-> `config/smackerel.yaml` now resolves to one of those two. This **supersedes the
-> spec-089 `deepseek-r1:32b` standing synthesis default** narrated in the Spec 089
-> blockquote later in this document (and the spec-088 `deepseek-r1:7b` /
-> spec-087 split that preceded it) — those remain as the historical record of how
-> the home-lab synthesis model evolved, not the current selection. Envelope: the
-> optimized synthesis working set is `gpt-oss:20b` (14336) co-resident with the
-> `gemma4:26b` gather (18432) = 32768 MiB ≤ 49152 MiB (`ollama_memory_limit: 48G`,
-> kept for headroom). The `deepseek-r1:7b` (reasoning) and `deepseek-ocr:3b` (OCR)
-> entries below remain the **commodity 8G-envelope defaults** for dev/test, but on
-> home-lab the three remaining model-selection fields that previously emitted them
-> — `AGENT_PROVIDER_REASONING_MODEL`, `AGENT_PROVIDER_OCR_MODEL`, and
-> `PHOTOS_INTELLIGENCE_OCR_MODEL` — are now **per-env overridable** (`config.sh`
-> resolves them through `env_override_value`, mirroring `OLLAMA_MEMORY_LIMIT` /
-> `OLLAMA_ENABLED`) and the `environments.home-lab` block pins them to the pulled
-> set: reasoning → `gpt-oss:20b`, OCR → `gemma4:26b`, photos OCR → `gemma4:26b`.
-> Net effect: **zero `deepseek-*` model selections appear in the resolved home-lab
-> env** (the only residual `deepseek` token is the env-independent
-> `model_memory_profiles` sizing catalog, which is identical in every env and is
-> not a model selection). Both are on-demand specialists, so each is checked for
-> INDIVIDUAL fit against the 48G home-lab envelope only (NOT the co-resident
-> interactive sum in `validateModelEnvelopes`): `gpt-oss:20b` (14336 MiB) and
-> `gemma4:26b` (18432 MiB) each fit 49152 MiB alone, so **the envelope math is
-> unchanged** (no new resident model is introduced — both already serve the
-> home-lab interactive set). `OLLAMA_REASONING_MODEL` / `OLLAMA_OCR_MODEL` are
-> still not emitted by `config.sh` at all; `deepseek-r1:32b` remains only an
-> **opt-up catalog** entry in `model_memory_profiles`, no longer a home-lab active
-> selection.
+> **SUPERSESSION — home-lab model selection is deploy-adapter-owned
+> (single-source).** Home-lab's model selection AND its Ollama memory envelope
+> are no longer pinned in `config/smackerel.yaml`. They are operator/hardware-
+> specific and owned by the deploy adapter's per-target `params.yaml`
+> `model_selection:` block; the adapter's `apply.sh` injects the resolved model
+> env vars + `OLLAMA_MEMORY_LIMIT` into the bundle's `app.env` at apply time
+> (appended after the generated values, last-occurrence-wins — the same pattern
+> as `HOST_BIND_ADDRESS`). The in-repo home-lab bundle therefore ships the
+> **generic commodity base, identical to dev**: the tier-matrix interactive
+> model plus the base `agent.provider_routing.*` / `photos.intelligence.*` /
+> `assistant.open_knowledge.*` model fields and the `8G`
+> `deploy_resources.ollama.memory` envelope. The 17 per-env home-lab model keys
+> that previously lived here (and the spec-087/088/089 deepseek / gpt-oss:20b /
+> gemma4:26b narrative in the blockquotes below) are retained only as the
+> historical record of how the home-lab set evolved — they are no longer the
+> in-repo selection. The `model_memory_profiles` catalog still profiles the
+> operator models (`gpt-oss:20b`, `gemma4:26b`, `deepseek-r1:32b`) so the
+> **runtime** `validateModelEnvelopes` check (at container start, against the
+> adapter-injected values) validates the operator's real selection against the
+> operator's real envelope. Enforced by
+> `tests/integration/agent_provider_homelab_model_override_test.go`
+> (`TestHomeLabDoesNotHardcodeModels`), which fails if any of the 17 home-lab
+> model fields diverges from dev's commodity base.
 
 Smackerel's local-inference model selection MUST fit two independent memory envelopes:
 
@@ -3291,13 +3280,20 @@ or shorten `OLLAMA_KEEP_ALIVE`.
 |-----|--------------------------|-----------|-----------------------|--------|
 | dev | `gemma3:4b` + `qwen2.5:0.5b-instruct` | 5120 | 8G (8192) | fits |
 | test | `qwen2.5:0.5b-instruct` | 1024 | 8G (8192) | fits |
-| home-lab | `gemma4:26b` + `llama3.1:8b` | 24576 | **28G (28672)** | fits |
+| home-lab (in-repo bundle) | commodity base (== dev) | ≤ 5120 | 8G (8192) | fits |
+| home-lab (operator set, adapter-injected at apply) | `gpt-oss:20b` + `gemma4:26b` | 32768 | 48G (49152) | fits — validated at container start |
 
-The home-lab `ollama_memory_limit` was raised `20G → 28G` (Spec 082) precisely
-because the old 20G floor was sized for `gemma4:26b` alone (18432 MiB) and the
-`+ llama3.1:8b` agent default/fast model pushed the resident set to 24576 MiB,
-over-subscribing the cgroup. The <deploy-host> host has ~109 GiB RAM, so 28G leaves
-~4 GiB headroom for KV-cache growth.
+The in-repo home-lab bundle ships the commodity base, so its in-repo concurrent
+interactive set fits the `8G` commodity envelope exactly like dev. The
+operator's real home-lab interactive set — `gpt-oss:20b` (14336) + `gemma4:26b`
+(18432) = 32768 MiB — and its `48G` (`OLLAMA_MEMORY_LIMIT`) envelope are
+injected by the deploy adapter into `app.env` at apply (the `model_selection:`
+block in the adapter's per-target `params.yaml`). Because those values land at
+apply, not at in-repo `config generate`, the concurrent-set guard validates the
+resolved operator selection at **container start** (the same
+`validateModelEnvelopes` codepath runs in the Go core's startup config load),
+not at in-repo generate time. The `model_memory_profiles` catalog ships the
+operator models so that runtime check has the sizing data it needs.
 
 ## QF Companion Connector Operations (Spec 041 Scope 5)
 
