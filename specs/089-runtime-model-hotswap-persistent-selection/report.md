@@ -1681,3 +1681,24 @@ then `bubbles.devops` re-runs the apply + live-verify.
 `Claim Source:` **executed** (every transcript above is real captured `run_in_terminal` /
 `gh` / `tailscale ssh` output this session; host/path identifiers genericized) +
 **interpreted** (root-cause + trust-lane judgments). No live-stack result fabricated.
+
+---
+
+## SUPERSESSION NOTE — home-lab model optimization (2026-06-20)
+
+Record-only; this spec's status, certification, and history are unchanged. The
+standing home-lab synthesis default this spec promoted
+(`deepseek-r1:7b → deepseek-r1:32b`, with `deepseek-r1:32b` added to
+`switchable_models` and `ollama_memory_limit` raised to `48G`) has been
+superseded by the operator's optimized home-lab model set: the standing
+synthesis default is now **`gpt-oss:20b`** (14336 MiB) and the switchable set is
+**`[gpt-oss:20b, gemma4:26b]`** — the only two models the operator's home-lab
+Ollama host pulls. The `deepseek-r1:32b` / `deepseek-r1:7b` synthesis arms are
+retired from the home-lab active selection; `ollama_memory_limit` stays `48G`
+(now carrying headroom: `gpt-oss:20b` 14336 + `gemma4:26b` gather 18432 = 32768 ≤
+49152). The spec-089 selection-precedence resolver, per-user sticky `/model`,
+gather override, and the standing-default co-residence guard
+(`validateModelEnvelopes`) are unchanged — only WHICH models are
+offered/defaulted changed. See
+`docs/experiments/open-knowledge-synthesis-model-ab.md` (superseded) and
+`docs/Operations.md` → "Model Envelope Sizing".

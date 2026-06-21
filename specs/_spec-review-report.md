@@ -1,11 +1,209 @@
 # Spec Review Report — Portfolio Audit (detect + classify)
 
-**Generated:** 2026-06-02 by `bubbles.spec-review` (alias: Gary Laser Eyes)
-**Mode:** detect + classify (no compaction)
-**Scope:** All `specs/0*/` (76 numbered specs) + `specs/_ops/*` (2 ops packets)
-**Depth:** quick (state.json + git history + targeted file-existence checks; not full per-spec behavioural cross-check)
+**Generated:** 2026-06-20 by `bubbles.spec-review` (alias: Gary Laser Eyes)
+**Mode:** detect + classify (no compaction); read-only `spec-review-to-doc`
+**Scope:** All `specs/NNN-*/` (98 numbered specs, 001–098) + `specs/_ops/*` (8 packets)
+**Depth:** quick (state.json + git history + targeted file-existence/drift checks; not full per-spec behavioural cross-check)
+
+> This refresh supersedes the stale **2026-06-02 baseline** (which itself was
+> flagged stale by spec 082) and the **2026-06-10 go-live addendum**. Both are
+> preserved verbatim below under **[Historical Record](#historical-record)** for
+> audit trail. Where they disagree with this refresh, the refresh wins. This is
+> the full portfolio re-classification the 2026-06-10 addendum deferred.
 
 ---
+
+## Summary (2026-06-20 refresh)
+
+| Trust level | Count | Notes |
+|-------------|-------|-------|
+| **CURRENT** (fresh) | 89 | Spec accurately reflects current implementation. Safe to treat as source of truth. Includes 089 (freshly reconciled — see below). |
+| **MINOR_DRIFT** (mostly fresh) | 3 | Cosmetic / annotation staleness only — contracts sound. `039`, `067` (deleted-file prose, carried from 2026-06-02), `098` (now-stale CI-RED / manifest-skipped discovered-issue note). |
+| **MAJOR_DRIFT** | 0 | None. |
+| **OBSOLETE** | 0 | None. |
+| **PARTIAL / in-progress / blocked** | 6 | Non-terminal but honestly self-documented. blocked: `058`, `084`, `087`, `088`; in_progress: `096`, `097`. |
+
+**Coverage:** 98 numbered specs (001–098) + 8 `_ops` packets. The `_ops` packets:
+`OPS-001-spec-banner-sweep` and `OPS-002-g088-certifiedat-backfill` are
+`specs_hardened` (terminal-for-mode); `F-057-V-001-e2e-ui-harness` (resolved by
+spec 077) and the five `sweep-round-*` packets are README-only historical/by-design
+records (no `state.json`). None are drift.
+
+**Status reconciliation (verified live, state.json authority):**
+90 `done` + 2 `specs_hardened` (`063`, `079`) + 4 `blocked` (`058`, `084`, `087`,
+`088`) + 2 `in_progress` (`096`, `097`) = 98. `089` is `done`.
+
+**No spec requires rewrite. Zero MAJOR_DRIFT, zero OBSOLETE.** The only true drift
+is three cosmetic MINOR_DRIFT items; the six non-terminal specs each honestly
+document their own state in `state.json`.
+
+### Headline findings
+
+1. **Portfolio grew 76 → 98 numbered specs** since the 2026-06-02 baseline (specs
+   `077`–`098` are all post-baseline). This refresh classifies the full set.
+2. **CI is GREEN on HEAD `ad372f13`** (Actions run `27879677569`) after the
+   `smackerel-ml` Trivy CVE remediation — litellm `CVE-2026-49468` +
+   starlette `CVE-2026-48818`/`CVE-2026-54283`, fixed in commits `4debc4f0`
+   (litellm 1.84.0 + fastapi/starlette ≥1.3.1) and `d684f7bc` (correct the ml
+   Dockerfile starlette force-upgrade to `==1.3.1`). The build workflow now
+   publishes a build-manifest. **Any spec note implying CI is red on the ml image
+   or that no manifest is published is now stale** — the single spec carrying such
+   a note is `098` (MINOR_DRIFT, below).
+3. **Uncommitted working-tree model reconciliation.** A model-config sync is live
+   in the working tree (10 modified files, NOT committed): it repoints the
+   home-lab assistant synthesis selection from `deepseek-r1:32b` / `llama3.1:8b`
+   to the operator's optimized `gpt-oss:20b` + `gemma4:26b` set and adds
+   **record-only** supersession notes to specs `087`/`088`/`089` + the A/B
+   experiment doc. `config/smackerel.yaml`'s home-lab block is now deepseek/llama-free.
+   Verified: status / certification / history for `087`/`088`/`089` are **unchanged**
+   (only `notes` / `report.md` annotations were appended); `087`'s `state.json` was
+   not touched at all (only its `report.md`). No un-annotated "current home-lab
+   model = deepseek/llama" claim remains elsewhere — the residual deepseek/llama
+   mentions in `045`/`052`/`071`/`072`/`084` are all incidental/historical
+   (memory-profile catalogs, git-log quote evidence, wiring notes, resolution
+   rationale), not current-selection contracts.
+4. **`096`'s own `state.json` `notes` are internally stale** — they still narrate
+   the 2026-06-18 analyst-bootstrap claim that `design.md`/`scopes.md`/`report.md`
+   are "intentionally absent," but all seven artifacts now exist and SCOPE-01..07
+   + §13 observability have landed. The spec is correctly `in_progress` (not
+   promotable); the stale notes are a within-spec annotation lag, not a trust
+   contradiction.
+5. **The four blocked specs are honest, not drifted.** `058` is gated solely on a
+   keyless-OIDC / public-Rekor signing row that requires a real tagged CI release;
+   `084`/`087`/`088` are validated-in-repo and gated on the owner-directed
+   `bubbles.devops` deploy handoff (the CI-green precondition is now satisfied;
+   the live home-lab apply + GPU A/B re-verify remain operator-owned).
+
+---
+
+## Method (2026-06-20)
+
+1. Read `state.json` (`status`, `certification.status`, `mode`, `releaseTrain`,
+   `blockedReason`, `notes`) for all 98 numbered specs + 8 `_ops` packets.
+2. Reconciled the live status tally against the portfolio (90/2/4/2 split confirmed).
+3. Cross-checked recent commits (`git log --since=2026-06-09`) and the
+   uncommitted working tree (`git status --short` = 10 modified files) against
+   spec coverage areas.
+4. Verified the CVE remediation chain (commits `4debc4f0`, `d684f7bc`, HEAD
+   `ad372f13`) and that the build workflow is green / publishes a manifest.
+5. Inspected the uncommitted model-config reconciliation diffs (state.json `notes`
+   + `report.md` supersession blocks for `087`/`088`/`089`; `config/smackerel.yaml`
+   home-lab block) to confirm they are record-only and status-preserving.
+6. Re-tested the 2026-06-02 MINOR_DRIFT signals: confirmed
+   `internal/api/domain_intent.go` is still deleted and `039`/`067` still carry the
+   prose references.
+7. Grepped the portfolio for stale "CI red / manifest not published / unresolved
+   CVE" claims and for un-annotated deepseek/llama current-selection claims.
+
+Depth caveat: full behavioural cross-check (Gherkin-vs-code) was not performed for
+every spec — only where signals indicated drift.
+
+---
+
+## Findings by Trust Level (2026-06-20)
+
+### MAJOR_DRIFT — Do NOT rely on spec until fixed
+
+_None._
+
+### OBSOLETE — Ignore entirely
+
+_None._
+
+### MINOR_DRIFT — Usable but verify
+
+| Spec | Status | Drift | Action |
+|------|--------|-------|--------|
+| `specs/039-recommendations-engine` | done | `spec.md` evidence still cites `internal/api/domain_intent.go` (deleted by spec 066 SCOPE-4) as live evidence of price-filter parsing; the spec self-notes supersession. Cosmetic prose-only. Carried unchanged from 2026-06-02. | Re-point the evidence cell at the spec 068 compiled-intent path on next touch. No guard impact. |
+| `specs/067-intent-driven-policy-enforcement` | done | `design.md` / `spec.md` inventory still list `internal/api/domain_intent.go` as a current legacy surface (deleted by 066). Historical-record framing is plausible (067 is the policy spec that motivated 066's deletion) but reads present-tense. Carried unchanged from 2026-06-02. | Re-frame as past-tense ("retired by spec 066 SCOPE-4") on next touch. |
+| `specs/098-ci-server-manifest-client-decoupling` | done | `state.json` (l.159) + `report.md` (l.340) carry a validation note recording the foreign `build-images` "Trivy vulnerability scan — smackerel-ml" step as **RED** (run `27865311625`) and the consequent **skipped `publish-build-manifest`**, with the live server-only-manifest path "not exercised" under Discovered Issues. **That condition was remediated** by the CVE fix (`4debc4f0` + `d684f7bc`); CI is green on HEAD with a manifest published. The spec's own contract is independently proven in-repo (12/12 contract tests GREEN) — only the embedded CI-state annotation drifted. | On next touch, update the Discovered-Issues note to record that the Trivy-ml gate is now green and the server-only-manifest path is exercisable / exercised. Optional `bubbles.docs` sync if `docs/Deployment.md` go-live inputs reference the old red-CI state. |
+
+### PARTIAL / in-progress / blocked (not drift)
+
+| Spec | State | Notes |
+|------|-------|-------|
+| `specs/058-chrome-extension-bridge` | blocked | All external-infra blockers discharged (MV3 e2e harness 11/11 PASS, live-Postgres + HTMX admin landed, build-manifest contract + supply-chain proofs PASSING). The **sole irreducible remaining DoD row** is keyless-OIDC: `cosign sign-blob` under a GitHub Actions OIDC token recorded in a real public-Rekor entry — requires a tagged CI release and cannot be honestly produced on a dev box. Honestly self-documented; out of MVP go-live scope. |
+| `specs/084-open-knowledge-reasoning-loop` | blocked | Validated-in-repo: 3 scopes Done, 9/9 unit tests GREEN, `check`/`format`/`artifact-lint`/`traceability-guard` pass. Gated on the owner-directed `bubbles.devops` handoff (isolated push + CI + home-lab apply + operator live re-verify). CI-green precondition now satisfied; live deploy remains operator-owned. `certifiedAt` correctly null. |
+| `specs/087-open-knowledge-genuine-synthesis` | blocked | Same validated-in-repo / devops-handoff gate as 084. **Freshly reconciled** (uncommitted): `report.md` now carries a record-only supersession note (deepseek-r1:7b synthesis arm → `gpt-oss:20b` + `gemma4:26b`). Status/certification unchanged. |
+| `specs/088-runtime-switchable-models` | blocked | Same gate; 40/40 DoD + 30/30 spec-088 tests GREEN in-repo. **Freshly reconciled** (uncommitted): `report.md` + `state.json` `notes` carry the record-only supersession note (switchable set → `[gpt-oss:20b, gemma4:26b]`). Status/certification unchanged. |
+| `specs/096-multi-provider-model-connections` | in_progress | Genuinely mid-flight: SCOPE-01..07 + §13 observability landed across 2026-06-18..20; all seven artifacts present. **Caveat:** the `state.json` `notes` field is internally stale (still claims the 2026-06-18 analyst-bootstrap artifact absence). Correctly non-terminal; not promotable past `in_progress`. |
+| `specs/097-card-rewards-gcal-delivery` | in_progress | Renumbered from `089` on 2026-06-20 (commit `c7f31b29`) to de-duplicate the `SCN-089`/`FR-089` namespace against the runtime-model-hotswap spec that now owns `089`. Fresh by definition; `lastUpdated` 2026-06-20. |
+
+### CURRENT — Safe to use as source of truth
+
+All **89** numbered specs **not** listed in the MINOR_DRIFT or PARTIAL/blocked
+sections above classify as CURRENT, on the same quick-depth basis as prior audits:
+`status` terminal-for-mode, `certification.status` matching `status`, no post-cert
+commits to their primary code paths that contradict the spec, and no references to
+files deleted/moved by later specs.
+
+CURRENT = `001`–`098` minus `{039, 058, 067, 084, 087, 088, 096, 097, 098}`. By range:
+
+```
+001–038            (38 specs)
+040–057            (18 specs)
+059–066            ( 8 specs)
+068–083            (16 specs)  ← incl. 063, 079 specs_hardened (terminal-for-mode)
+085, 086           ( 2 specs)
+089                ( 1 spec)   ← freshly reconciled (see note)
+090–095            ( 6 specs)
+                   = 89 CURRENT
+```
+
+Freshly-reconciled CURRENT:
+- **`089-runtime-model-hotswap-persistent-selection`** (done) — its `report.md` +
+  `state.json` `notes` now carry the record-only home-lab model supersession note
+  (`deepseek-r1:32b` standing default → `gpt-oss:20b` + `gemma4:26b`). Status =
+  `done`, certification unchanged. Annotation is uncommitted working-tree state.
+
+Verify-before-trust caveats inside CURRENT (unchanged from prior audits):
+- **Phase roadmap specs (`001`–`006`)** are intentionally high-level — historical
+  roadmap, not implementation contract.
+- **Recent interconnected assistant/model specs (`061`, `063`, `064`, `068`–`074`,
+  `078`, `080`–`083`, `085`, `086`, `089`–`095`)** were certified during heavy
+  churn; their internal coverage is fresh, but cross-spec scenario-ID references
+  should be spot-checked before reuse.
+- The model-reconciliation working tree is **uncommitted**: the committed tree
+  still carries the pre-reconciliation deepseek/llama narrative for `087`/`088`/`089`
+  until the operator commits the 10-file changeset.
+
+---
+
+## Auto-Dispatch Decisions (2026-06-20, Phase 5)
+
+| Trigger | Required dispatch | Status |
+|---------|-------------------|--------|
+| Any `done`/`specs_hardened` spec at **MAJOR_DRIFT** or **OBSOLETE** | `bubbles.workflow mode=improve-existing` | **None required** — zero MAJOR_DRIFT, zero OBSOLETE in the portfolio. |
+| MINOR_DRIFT (`039`, `067`, `098`) | None auto-required (per skill: MINOR_DRIFT does not auto-dispatch) | Added to follow-up suggestions. |
+| Managed-docs impact from MAJOR_DRIFT | `bubbles.docs` | **None required** — no MAJOR_DRIFT. `098`'s stale CI-state note is recorded as an optional `bubbles.docs` follow-up only (read-only mode — not dispatched). |
+
+**`route_required` packets:** none. No certified spec is at MAJOR_DRIFT/OBSOLETE,
+so no `bubbles.workflow mode=improve-existing` dispatch is owed. This is a read-only
+`spec-review-to-doc` audit; outcome = `docs_updated`.
+
+---
+
+## Validation Checklist (2026-06-20)
+
+- [x] Every queued spec analyzed (98 numbered + 8 `_ops` = 106 entries).
+- [x] Every spec has a trust classification with supporting evidence (CURRENT grouped; non-CURRENT enumerated individually).
+- [x] Status tally reconciled against live `state.json` (90 done / 2 specs_hardened / 4 blocked / 2 in_progress).
+- [x] File-path references in MINOR_DRIFT findings verified against filesystem (`internal/api/domain_intent.go` confirmed deleted; `098` note lines confirmed at `state.json:159` / `report.md:340`).
+- [x] Git history used actual commit data (`ad372f13`, `4debc4f0`, `d684f7bc`, `c7f31b29`; Actions runs `27879677569`, `27865311625`).
+- [x] Uncommitted model-reconciliation changeset verified record-only / status-preserving for `087`/`088`/`089`.
+- [x] Report written to `specs/_spec-review-report.md` (this refresh; prior body preserved under Historical Record).
+- [x] Compact mode NOT engaged (detect + classify only).
+- [x] No MAJOR_DRIFT/OBSOLETE → no mandatory dispatch; no `state.json`/status/certification modified by this audit.
+- [x] No knb/operator PII in the report (generic home-lab/operator framing only).
+
+---
+
+# Historical Record
+
+> **Append-only / preserved verbatim.** The two sections below are the original
+> **2026-06-02 baseline** and the **2026-06-10 addendum**. They are superseded by
+> the 2026-06-20 refresh above and retained for audit trail only. Where they
+> disagree with the refresh, the refresh wins.
 
 ## Summary
 
