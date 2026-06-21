@@ -60,6 +60,12 @@ Commands:
   test extension-supplychain [--help] Run the LOCAL cosign sign + verify-blob proof for the chrome-bridge sideload
                               zip (sha256 binding + offline sign/verify + tamper detection) (spec 058 Scope 4)
   up                          Start the stack for the current environment
+  pre-flight                  Spec 099 — check host RAM/disk vs the SST minimums
+                              (config/smackerel.yaml runtime.preflight.*) before
+                              heavy ops; exit 0 = ok, 1 = below threshold.
+                              SMACKEREL_PREFLIGHT_OVERRIDE=1 bypasses with a loud
+                              WARNING. Auto-run before build, up, and
+                              test integration|e2e|e2e-ui|stress.
   down [--volumes]            Stop the stack; optionally remove named volumes
   status                      Show docker status and health endpoint output
   logs [service]              Stream docker compose logs
@@ -440,6 +446,32 @@ while True:
 PY
 }
 
+smackerel_assert_host_resources() {
+  # Spec 099 — local resource pre-flight. Before a heavy op (build, up,
+  # test integration|e2e|e2e-ui|stress) verify host MemAvailable + repo-fs
+  # available disk meet the SST minimums (config/smackerel.yaml
+  # runtime.preflight.* -> generated env PREFLIGHT_MIN_AVAILABLE_*). The Go
+  # evaluator (cmd/preflight -> internal/preflight) exits non-zero when below
+  # threshold, printing current-vs-required + remediation; that aborts the
+  # heavy op BEFORE it can OOM-die (exit 137) or fill the disk. Set
+  # SMACKEREL_PREFLIGHT_OVERRIDE=1 to bypass with a loud WARNING.
+  #
+  # Primary path: host-native `go run` (fast, no container; real /proc/meminfo
+  # + statfs on the real repo path). Fallback (no host Go): the dockerized
+  # golang runner — host-correct because run_go_tooling sets NO --memory cgroup
+  # limit (so /proc/meminfo reports HOST MemAvailable) and bind-mounts the repo
+  # at /workspace (so statfs follows to the HOST repo filesystem).
+  local target_env="$1"
+  local status=0
+  if command -v go >/dev/null 2>&1; then
+    ( cd "$SCRIPT_DIR" && go run ./cmd/preflight --env "$target_env" --repo-root "$SCRIPT_DIR" ) || status=$?
+  else
+    require_docker
+    run_go_tooling /workspace/scripts/runtime/preflight.sh "$target_env" || status=$?
+  fi
+  return "$status"
+}
+
 smackerel_prepare_test_stack_for_up() {
   local env_file="$1"
 
@@ -673,6 +705,7 @@ case "$COMMAND" in
     fi
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
+    smackerel_assert_host_resources "$TARGET_ENV"
     build_args=(build)
     if [[ "$NO_CACHE" == true ]]; then
       build_args+=(--no-cache)
@@ -968,6 +1001,7 @@ case "$COMMAND" in
         require_docker
         smackerel_generate_config test >/dev/null
         env_file="$(smackerel_require_env_file test)"
+        smackerel_assert_host_resources test
         pg_host_port="$(smackerel_env_value "$env_file" "POSTGRES_HOST_PORT")"
         nats_host_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_HOST_PORT")"
         pg_container_port="$(smackerel_env_value "$env_file" "POSTGRES_CONTAINER_PORT")"
@@ -1121,6 +1155,12 @@ case "$COMMAND" in
         fi
 
         smackerel_acquire_e2e_suite_lock test
+
+        # Spec 099 — resource pre-flight BEFORE the e2e suite brings up the
+        # disposable test stack (the shell-lifecycle block boots it at the first
+        # `--env test up`). Generate config first so the thresholds exist.
+        smackerel_generate_config test >/dev/null
+        smackerel_assert_host_resources test
 
         e2e_child_pid=""
         e2e_child_pgid=""
@@ -1709,6 +1749,7 @@ case "$COMMAND" in
         smackerel_acquire_test_suite_lock test "stress"
         smackerel_generate_config test >/dev/null
         env_file="$(smackerel_require_env_file test)"
+        smackerel_assert_host_resources test
 
         core_external_url="$(smackerel_require_env_value "$env_file" CORE_EXTERNAL_URL)"
         core_container_port="$(smackerel_require_env_value "$env_file" CORE_CONTAINER_PORT)"
@@ -1788,6 +1829,13 @@ Options:
 E2EUI_HELP
           exit 0
         fi
+        # Spec 099 — resource pre-flight before the heavy Playwright UI lane
+        # (full disposable test stack). Skip for the read-only
+        # --print-compose-project informational flag.
+        if [[ "${1:-}" != "--print-compose-project" ]]; then
+          smackerel_generate_config test >/dev/null
+          smackerel_assert_host_resources test
+        fi
         exec bash "$SCRIPT_DIR/scripts/runtime/web-e2e-ui.sh" "$@"
         ;;
       e2e-ext)
@@ -1816,6 +1864,7 @@ E2EUI_HELP
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     env_file="$(smackerel_require_env_file "$TARGET_ENV")"
+    smackerel_assert_host_resources "$TARGET_ENV"
     compose_wait_timeout_s="$(smackerel_env_value "$env_file" "COMPOSE_WAIT_TIMEOUT_S")"
     if [[ -z "$compose_wait_timeout_s" ]]; then
       echo "ERROR: COMPOSE_WAIT_TIMEOUT_S missing from generated config" >&2
@@ -1852,6 +1901,14 @@ E2EUI_HELP
     else
       smackerel_compose "$TARGET_ENV" logs
     fi
+    ;;
+  pre-flight)
+    # Spec 099 — standalone host resource pre-flight. Exit 0 = host has >= the
+    # SST-configured minimum available RAM + disk for heavy ops; exit 1 = below
+    # threshold (prints current-vs-required + remediation). Read-only; mutates
+    # no runtime state. Honors SMACKEREL_PREFLIGHT_OVERRIDE=1 (warn + exit 0).
+    smackerel_require_env_file "$TARGET_ENV" >/dev/null
+    smackerel_assert_host_resources "$TARGET_ENV"
     ;;
   clean)
     SUBCOMMAND="${1:-}"
