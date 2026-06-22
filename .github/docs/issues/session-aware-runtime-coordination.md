@@ -324,6 +324,27 @@ The framework already owns the orchestration layer, parallel-scope semantics, an
 - [x] `bubbles.super doctor` can detect orphaned or stale runtime resources — `bubbles/scripts/cli.sh doctor` invokes `runtime-leases.sh doctor`
 - [x] Repo CLI integration can adopt lease-aware Compose project naming without breaking current single-session flows — selftest "Downstream CLI runtime summary works from installed .github layout" / "Downstream CLI can acquire a runtime lease" / "Downstream CLI can release a runtime lease" prove the downstream installation path
 
+### Resource-Weighted Admission (shipped extension)
+
+The original lease model coordinated ownership, compatibility, and exclusivity, but it had **no host-capacity dimension**: nothing stopped two *different* heavy builds (different purpose, different fingerprint, no compose collision) from starting at once and OOM-killing the host (exit 137), nor from orphan-hanging when one session removed another's mid-build container. That is the unaddressed half of Failure Mode #5 ("fight over … build caches" / hidden contention) and the recurring real-world failure that hand-rolled watchdog + memory-polling push-grab loops were papering over.
+
+Weighted admission closes that gap by adding a single resource-weight budget on top of the existing lease registry. It is **opt-in and fully backward-compatible**:
+
+- **Config (`bubbles.config.json` → `runtime`):**
+  - `capacityWeight` (number, default **0**). `0` = admission **disabled** — a fresh install behaves exactly as before until a host operator sets a budget. When `> 0`, weighted admission is active and represents the host's total concurrent heavy-work budget.
+  - `weightClasses` (optional object; built-in default `{ "light": 1, "medium": 4, "heavy": 8 }`) maps a named class to its unit cost.
+- **`acquire` options:**
+  - `--weight <light|medium|heavy>` — resolves to units via `weightClasses` (default `light`).
+  - `--weight-units <N>` — explicit integer units; takes precedence over `--weight`.
+  - `--wait <seconds>` — if admission would refuse, block and re-poll (releasing the registry lock between polls) until capacity frees or the timeout elapses, then refuse. Omitted = immediate structured refusal.
+- **Lease record:** a numeric `weight` field is persisted per lease and shown by `format_lease_line` / `lookup`. A legacy lease with no `weight` reads as `0`, so pre-existing registries keep parsing.
+- **Admission semantics:** before creating a new lease, Bubbles sums `weight` over **effectively-active** leases only. Stale/expired/released leases do **not** count — so a dead session's heavy lease frees its budget automatically via TTL/stale downgrade (the orphan-hang fix). If `active_sum + new_weight > capacityWeight`, the acquire is refused (or waits, with `--wait`) with a structured message and a `runtime_lease_capacity_refused` framework event.
+- **Observability:** `summary` and `doctor` print `Runtime capacity: <active_sum>/<capacityWeight> weight units` (or `disabled` when `capacityWeight=0`).
+
+Selftest coverage (in `runtime-lease-selftest.sh`) includes a heavy acquire under budget, an **adversarial** second-heavy refusal (which fails if the gate is removed), capacity freeing on release, a stale-lease-frees-capacity case (orphan-hang analog), `--wait` immediate-refuse / wait-loop-timeout / post-release-success, `--weight-units` precedence + exact-boundary admission, and a backward-compat case proving two heavy leases both acquire when `capacityWeight` is unset.
+
+Downstream wiring (product repo CLIs invoking `runtime acquire --purpose build --weight heavy` before a heavy build, and an `exclusive` land lease before a push) is intentionally a **separate later task** — the framework primitive is shipped here.
+
 ### Known Follow-Ups (Not Blocking This Flip)
 
 These rollout-plan items remain optional enhancements rather than gaps in the shipped capability:

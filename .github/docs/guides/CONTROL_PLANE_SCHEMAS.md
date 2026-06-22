@@ -470,6 +470,7 @@ Runtime file: `.specify/runtime/resource-leases.json`
       "startedAt": "2026-04-01T12:00:00Z",
       "lastHeartbeatAt": "2026-04-01T12:05:00Z",
       "expiresAt": "2026-04-01T12:25:00Z",
+      "weight": 8,
       "status": "active"
     }
   ]
@@ -483,6 +484,7 @@ bubbles runtime leases
 bubbles runtime summary
 bubbles runtime doctor
 bubbles runtime acquire --purpose validation --share-mode shared-compatible --fingerprint-file docker-compose.yml
+bubbles runtime acquire --purpose build --weight heavy --wait 600
 bubbles runtime attach <lease-id>
 bubbles runtime heartbeat <lease-id>
 bubbles runtime release <lease-id>
@@ -494,6 +496,7 @@ bubbles runtime reclaim-stale
 - `.specify/runtime/` is runtime-generated and stays untracked except for `.gitignore`
 - `shared-compatible` reuse requires an exact compatibility fingerprint match
 - `exclusive` leases block concurrent acquisition for the same repo/purpose/environment tuple
+- weighted admission is opt-in via `runtime.capacityWeight` (`bubbles.config.json` → `runtime`, default `0` = disabled); when `> 0`, `acquire` sums the per-lease `weight` over effectively-active leases and refuses (or `--wait`s) when `active_sum + new_weight` would exceed the budget, so two heavy builds cannot OOM one host. `weightClasses` (default `{ light: 1, medium: 4, heavy: 8 }`) maps `--weight` names to units; `--weight-units N` overrides. `summary`/`doctor` print `Runtime capacity: <active>/<capacityWeight> weight units`
 - `doctor` must surface stale leases and active compose/fingerprint conflicts
 - status and doctor surfaces may summarize the registry, but the registry itself is the runtime source of truth
 

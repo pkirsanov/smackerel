@@ -636,6 +636,15 @@
     </div>
   </div>
   <div class="card">
+    <div class="icon"><img src="../icons/green-bastard-mask.svg" alt="Green Bastard (Masked)"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.redteam</div>
+      <div class="character">Green Bastard (Masked)</div>
+      <div class="role">Post-result adversary. Attacks a finished result to falsify "done" with evidence-first counterexamples. Off by default. Never certifies.</div>
+      <div class="quote">"Nothing's bulletproof, boys. Let me prove it."</div>
+    </div>
+  </div>
+  <div class="card">
     <div class="icon"><img src="../icons/orangie-fishbowl.svg" alt="Orangie's Fishbowl"></div>
     <div class="info">
       <div class="agent-name">bubbles.system-review</div>
@@ -1352,13 +1361,13 @@
   <div class="workflow-card">
     <div class="wf-name">redteam-to-doc</div>
     <div class="wf-alias">→ sunnyvale prove-it</div>
-    <div class="wf-desc">Adversarial red-team attack on a finished result (Cyrus). Finding-owned remediation chain, then validate/audit/docs. Off by default.</div>
+    <div class="wf-desc">Adversarial red-team attack on a finished result (Green Bastard). Finding-owned remediation chain, then validate/audit/docs. Off by default.</div>
     <div class="wf-quote">"You say it's done? Prove it."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">production-adversarial-probe</div>
     <div class="wf-alias">→ sunnyvale this-is-my-park-now</div>
-    <div class="wf-desc">Bounded, armed, read-only chaos-monkey probing of a LIVE system (Cyrus on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.</div>
+    <div class="wf-desc">Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.</div>
     <div class="wf-quote">"This is my park now. Let's see what holds."</div>
   </div>
 <!-- GENERATED:HTML_MODES_CARDS_END -->
@@ -1395,6 +1404,10 @@
   <div class="workflow-card">
     <div class="wf-name">workflow run-state</div>
     <div class="wf-desc">Durable per-run coordination state that makes resume, runtime reuse, and packet routing explicit instead of guesswork.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">runtime capacity</div>
+    <div class="wf-desc">Weighted runtime-lease admission: heavy builds and tests acquire leases by weight (<code>--weight light|medium|heavy</code>, or <code>--weight-units N</code>), and the lease registry refuses (or <code>--wait</code>s) when the host weight budget (<code>runtime.capacityWeight</code> in <code>bubbles.config.json</code>) would be exceeded — so concurrent sessions can't OOM the box or stomp each other's build. Disabled by default (<code>capacityWeight: 0</code>); stale or released leases free their slot automatically. The park only has so many parking spots, boys.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">typed framework event</div>
@@ -1682,7 +1695,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">adversarial verification</div>
-    <div class="wf-desc">Cyrus (<code>bubbles.redteam</code>) attacks a FINISHED result to falsify the "done" claim — evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, and bounded chaos-monkey probing of live systems. It emits findings and NEVER certifies (completion stays with <code>bubbles.validate</code>). OFF BY DEFAULT. The missing post-result adversary alongside <code>bubbles.grill</code>, which pressure-tests ideas pre-build.</div>
+    <div class="wf-desc">Green Bastard (<code>bubbles.redteam</code>) attacks a FINISHED result to falsify the "done" claim — evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, and bounded chaos-monkey probing of live systems. It emits findings and NEVER certifies (completion stays with <code>bubbles.validate</code>). OFF BY DEFAULT. The missing post-result adversary alongside <code>bubbles.grill</code>, which pressure-tests ideas pre-build.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">adversarial posture</div>

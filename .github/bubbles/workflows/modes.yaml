@@ -440,7 +440,7 @@ modes:
       requireIntegrationCompleteness: true
 
   redteam-to-doc:
-    description: Run adversarial red-team attacks on a finished result (Cyrus); if an attack exposes a real weakness, execute the full finding-owned planning/remediation chain before completing validation, audit, docs, and finalize. Off by default — resolves posture via adversarial-resolve.sh; redteam emits findings and never certifies.
+    description: Run adversarial red-team attacks on a finished result (Green Bastard); if an attack exposes a real weakness, execute the full finding-owned planning/remediation chain before completing validation, audit, docs, and finalize. Off by default — resolves posture via adversarial-resolve.sh; redteam emits findings and never certifies.
     statusCeiling: done
     phaseOrder: [ select, redteam, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
@@ -466,7 +466,7 @@ modes:
       adversarialControlPlane: true
 
   production-adversarial-probe:
-    description: Bounded, armed, read-only adversarial probing of a LIVE / production system (Cyrus on a leash — the chaos-monkey mode). Requires explicit arming AND a target allowlist; observes and injects bounded hostile input on the READ-ONLY operate plane only; restores any mutated state before completing; never certifies and never edits source.
+    description: Bounded, armed, read-only adversarial probing of a LIVE / production system (Green Bastard on a leash — the chaos-monkey mode). Requires explicit arming AND a target allowlist; observes and injects bounded hostile input on the READ-ONLY operate plane only; restores any mutated state before completing; never certifies and never edits source.
     statusCeiling: validated
     terminalAliases: [ validated ]
     phaseOrder: [ select, redteam, finalize ]

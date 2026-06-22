@@ -227,16 +227,84 @@ config_string_value() {
   fi
 }
 
+default_weight_class_units() {
+  case "$1" in
+    light) printf '%s\n' 1 ;;
+    medium) printf '%s\n' 4 ;;
+    heavy) printf '%s\n' 8 ;;
+    *) printf '%s\n' '' ;;
+  esac
+}
+
+resolve_weight_class_units() {
+  local class_name="$1"
+  local fallback value=''
+
+  fallback="$(default_weight_class_units "$class_name")"
+
+  if [[ -f "$CONTROL_PLANE_CONFIG" ]]; then
+    value="$(RUNTIME_WEIGHT_CONFIG="$CONTROL_PLANE_CONFIG" python3 - "$class_name" <<'PY'
+import json
+import os
+import sys
+
+class_name = sys.argv[1]
+path = os.environ.get('RUNTIME_WEIGHT_CONFIG', '')
+
+
+def find_weight_classes(node):
+    if isinstance(node, dict):
+        candidate = node.get('weightClasses')
+        if isinstance(candidate, dict):
+            return candidate
+        for child in node.values():
+            found = find_weight_classes(child)
+            if found is not None:
+                return found
+    elif isinstance(node, list):
+        for child in node:
+            found = find_weight_classes(child)
+            if found is not None:
+                return found
+    return None
+
+
+try:
+    with open(path, 'r', encoding='utf-8') as handle:
+        payload = json.load(handle)
+except (FileNotFoundError, ValueError):
+    sys.exit(0)
+
+classes = find_weight_classes(payload)
+if isinstance(classes, dict):
+    value = classes.get(class_name)
+    if isinstance(value, bool):
+        sys.exit(0)
+    if isinstance(value, int):
+        sys.stdout.write(str(value))
+PY
+)"
+    if [[ "$value" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+  fi
+
+  printf '%s\n' "$fallback"
+}
+
 load_runtime_defaults() {
   if [[ -f "$CONTROL_PLANE_CONFIG" ]]; then
     CFG_RUNTIME_TTL_MINUTES="$(config_number_value runtime leaseTtlMinutes 20 "$CONTROL_PLANE_CONFIG")"
     CFG_RUNTIME_STALE_AFTER_MINUTES="$(config_number_value runtime staleAfterMinutes 60 "$CONTROL_PLANE_CONFIG")"
     CFG_RUNTIME_REUSE_POLICY="$(config_string_value runtime reusePolicy fingerprint-match-only "$CONTROL_PLANE_CONFIG")"
+    CFG_RUNTIME_CAPACITY_WEIGHT="$(config_number_value runtime capacityWeight 0 "$CONTROL_PLANE_CONFIG")"
   else
     CFG_RUNTIME_TTL_MINUTES=20
     # shellcheck disable=SC2034  # default surfaced for env consumption by lease ops.
     CFG_RUNTIME_STALE_AFTER_MINUTES=60
     CFG_RUNTIME_REUSE_POLICY="fingerprint-match-only"
+    CFG_RUNTIME_CAPACITY_WEIGHT=0
   fi
 }
 
@@ -265,6 +333,21 @@ acquire_registry_lock() {
   else
     die "Runtime lease registry is busy. Another session may be updating it."
   fi
+}
+
+# Non-fatal lock attempt for the capacity --wait poll loop: returns 1 instead of
+# dying when the registry is momentarily busy, so a waiting acquire keeps polling
+# rather than aborting on transient contention from another session.
+try_acquire_registry_lock() {
+  ensure_runtime_registry
+
+  if mkdir "$RUNTIME_LOCK_DIR" 2>/dev/null; then
+    lock_acquired=true
+    trap 'release_registry_lock' EXIT INT TERM
+    return 0
+  fi
+
+  return 1
 }
 
 release_registry_lock() {
@@ -469,6 +552,25 @@ effective_status() {
   printf '%s\n' "$status"
 }
 
+# Sum the weight units of every effectively-active lease in the supplied lines.
+# Stale/expired/released leases do NOT count, so a dead session's heavy lease
+# frees host capacity via TTL/stale exactly like the orphan-hang it replaces.
+sum_active_weight() {
+  local lines="$1"
+  local line total=0 unit
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    if [[ "$(effective_status "$line")" == "active" ]]; then
+      unit="$(field_from_line "$line" weight)"
+      [[ "$unit" =~ ^[0-9]+$ ]] || unit=0
+      total=$((total + unit))
+    fi
+  done <<< "$lines"
+
+  printf '%s\n' "$total"
+}
+
 build_lease_line() {
   local lease_id="$1"
   local repo="$2"
@@ -488,8 +590,13 @@ build_lease_line() {
   local last_heartbeat_at="${16}"
   local expires_at="${17}"
   local status="${18}"
+  local weight="${19:-0}"
 
-  printf '%s\n' "{\"leaseId\":\"$(json_escape "$lease_id")\",\"repo\":\"$(json_escape "$repo")\",\"sessionId\":\"$(json_escape "$session_id")\",\"agent\":\"$(json_escape "$agent")\",\"worktree\":\"$(json_escape "$worktree")\",\"branch\":\"$(json_escape "$branch")\",\"purpose\":\"$(json_escape "$purpose")\",\"environment\":\"$(json_escape "$environment")\",\"composeProject\":\"$(json_escape "$compose_project")\",\"stackGroup\":\"$(json_escape "$stack_group")\",\"shareMode\":\"$(json_escape "$share_mode")\",\"compatibilityFingerprint\":\"$(json_escape "$compatibility_fingerprint")\",\"resources\":\"$(json_escape "$resources")\",\"attachedSessions\":\"$(json_escape "$attached_sessions")\",\"startedAt\":\"$(json_escape "$started_at")\",\"lastHeartbeatAt\":\"$(json_escape "$last_heartbeat_at")\",\"expiresAt\":\"$(json_escape "$expires_at")\",\"status\":\"$(json_escape "$status")\"}"
+  if [[ ! "$weight" =~ ^[0-9]+$ ]]; then
+    weight=0
+  fi
+
+  printf '%s\n' "{\"leaseId\":\"$(json_escape "$lease_id")\",\"repo\":\"$(json_escape "$repo")\",\"sessionId\":\"$(json_escape "$session_id")\",\"agent\":\"$(json_escape "$agent")\",\"worktree\":\"$(json_escape "$worktree")\",\"branch\":\"$(json_escape "$branch")\",\"purpose\":\"$(json_escape "$purpose")\",\"environment\":\"$(json_escape "$environment")\",\"composeProject\":\"$(json_escape "$compose_project")\",\"stackGroup\":\"$(json_escape "$stack_group")\",\"shareMode\":\"$(json_escape "$share_mode")\",\"compatibilityFingerprint\":\"$(json_escape "$compatibility_fingerprint")\",\"resources\":\"$(json_escape "$resources")\",\"attachedSessions\":\"$(json_escape "$attached_sessions")\",\"startedAt\":\"$(json_escape "$started_at")\",\"lastHeartbeatAt\":\"$(json_escape "$last_heartbeat_at")\",\"expiresAt\":\"$(json_escape "$expires_at")\",\"status\":\"$(json_escape "$status")\",\"weight\":${weight}}"
 }
 
 rebuild_line_with_updates() {
@@ -518,7 +625,8 @@ rebuild_line_with_updates() {
     "$(field_from_line "$line" startedAt)" \
     "$last_heartbeat_at" \
     "$expires_at" \
-    "$status"
+    "$status" \
+    "$(field_from_line "$line" weight)"
 }
 
 update_lease_line() {
@@ -595,10 +703,12 @@ generated_compose_project() {
 
 format_lease_line() {
   local line="$1"
-  local fingerprint
+  local fingerprint weight_display
 
   fingerprint="$(field_from_line "$line" compatibilityFingerprint)"
-  printf 'leaseId=%s repo=%s purpose=%s env=%s shareMode=%s status=%s composeProject=%s owner=%s attachedSessions=%s stackGroup=%s fingerprint=%s\n' \
+  weight_display="$(field_from_line "$line" weight)"
+  weight_display="${weight_display:-0}"
+  printf 'leaseId=%s repo=%s purpose=%s env=%s shareMode=%s status=%s composeProject=%s owner=%s attachedSessions=%s stackGroup=%s weight=%s fingerprint=%s\n' \
     "$(field_from_line "$line" leaseId)" \
     "$(field_from_line "$line" repo)" \
     "$(field_from_line "$line" purpose)" \
@@ -609,6 +719,7 @@ format_lease_line() {
     "$(field_from_line "$line" sessionId)" \
     "$(field_from_line "$line" attachedSessions)" \
     "$(field_from_line "$line" stackGroup)" \
+    "$weight_display" \
     "${fingerprint#sha256:}"
 }
 
@@ -771,6 +882,11 @@ $line"
   done <<< "$active_lines"
 
   echo "Runtime leases: active=$active stale=$stale released=$released conflicts=$conflicts"
+  if [[ "${CFG_RUNTIME_CAPACITY_WEIGHT:-0}" -gt 0 ]]; then
+    echo "Runtime capacity: $(sum_active_weight "$active_lines")/${CFG_RUNTIME_CAPACITY_WEIGHT} weight units"
+  else
+    echo "Runtime capacity: disabled (runtime.capacityWeight=0)"
+  fi
 }
 
 cmd_doctor() {
@@ -816,6 +932,42 @@ cmd_doctor() {
   return 0
 }
 
+# Scan effectively-active leases for an exclusive or compose-project collision
+# against the pending acquire. Dies (after releasing the lock) on the first hard
+# conflict. Extracted so the capacity --wait path can re-check after waking.
+assert_no_active_conflicts() {
+  local conflict_lines="$1"
+  local conflict_repo="$2"
+  local conflict_purpose="$3"
+  local conflict_environment="$4"
+  local conflict_share_mode="$5"
+  local conflict_explicit_compose="$6"
+  local conflict_compose_project="$7"
+  local line current_status
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    current_status="$(effective_status "$line")"
+    if [[ "$current_status" != "active" ]]; then
+      continue
+    fi
+
+    if [[ "$conflict_explicit_compose" == true && "$(field_from_line "$line" composeProject)" == "$conflict_compose_project" ]]; then
+      release_registry_lock
+      die "Compose project '$conflict_compose_project' is already owned by active lease $(field_from_line "$line" leaseId)"
+    fi
+
+    if [[ "$conflict_share_mode" == "exclusive" \
+      && "$(field_from_line "$line" repo)" == "$conflict_repo" \
+      && "$(field_from_line "$line" purpose)" == "$conflict_purpose" \
+      && "$(field_from_line "$line" environment)" == "$conflict_environment" \
+      && "$(field_from_line "$line" shareMode)" == "exclusive" ]]; then
+      release_registry_lock
+      die "Exclusive runtime already active for ${conflict_purpose}/${conflict_environment}: $(field_from_line "$line" leaseId)"
+    fi
+  done <<< "$conflict_lines"
+}
+
 cmd_acquire() {
   local purpose=''
   local environment='dev'
@@ -833,6 +985,8 @@ cmd_acquire() {
   local repo_name
   local worktree branch started_at expires_at compatibility_fingerprint
   local lines line current_status attached_sessions replacement_line explicit_compose=false
+  local weight_class='' weight_units_explicit='' wait_seconds='' new_weight=0 weight_label='' active_sum=0
+  local wait_interval='' waited=0 admitted=false
 
   load_runtime_defaults
 
@@ -859,6 +1013,9 @@ cmd_acquire() {
         ;;
       --session-id) session_id="$2"; shift 2 ;;
       --agent) agent="$2"; shift 2 ;;
+      --weight) weight_class="$2"; shift 2 ;;
+      --weight-units) weight_units_explicit="$2"; shift 2 ;;
+      --wait) wait_seconds="$2"; shift 2 ;;
       *) die "Unknown runtime acquire option: $1" ;;
     esac
   done
@@ -869,6 +1026,21 @@ cmd_acquire() {
     shared-compatible|exclusive|disposable|persistent-protected) ;;
     *) die "Invalid share mode: $share_mode" ;;
   esac
+
+  if [[ -n "$weight_units_explicit" ]]; then
+    [[ "$weight_units_explicit" =~ ^[0-9]+$ ]] || die "weight-units must be a non-negative integer"
+    new_weight="$weight_units_explicit"
+    weight_label="${new_weight} units"
+  else
+    [[ -n "$weight_class" ]] || weight_class="light"
+    new_weight="$(resolve_weight_class_units "$weight_class")"
+    [[ "$new_weight" =~ ^[0-9]+$ ]] || die "Unknown weight class '$weight_class' (expected light|medium|heavy, a configured runtime.weightClasses entry, or --weight-units <N>)"
+    weight_label="$weight_class"
+  fi
+
+  if [[ -n "$wait_seconds" ]]; then
+    [[ "$wait_seconds" =~ ^[0-9]+$ ]] || die "wait must be a non-negative integer (seconds)"
+  fi
 
   if [[ -z "$ttl_minutes" ]]; then
     ttl_minutes="$CFG_RUNTIME_TTL_MINUTES"
@@ -939,34 +1111,53 @@ cmd_acquire() {
     done <<< "$lines"
   fi
 
-  while IFS= read -r line; do
-    [[ -n "$line" ]] || continue
-    current_status="$(effective_status "$line")"
-    if [[ "$current_status" != "active" ]]; then
-      continue
-    fi
+  assert_no_active_conflicts "$lines" "$repo_name" "$purpose" "$environment" "$share_mode" "$explicit_compose" "$compose_project"
 
-    if [[ "$explicit_compose" == true && "$(field_from_line "$line" composeProject)" == "$compose_project" ]]; then
-      release_registry_lock
-      die "Compose project '$compose_project' is already owned by active lease $(field_from_line "$line" leaseId)"
+  # Resource-weighted admission: only enforced when the host operator sets
+  # runtime.capacityWeight > 0. Sums the weight of effectively-active leases so a
+  # second heavy build cannot OOM the host, and so a stale/expired heavy lease
+  # frees its budget automatically (effective_status downgrade, not a record).
+  if [[ "$CFG_RUNTIME_CAPACITY_WEIGHT" -gt 0 ]]; then
+    active_sum="$(sum_active_weight "$lines")"
+    if [[ $((active_sum + new_weight)) -gt "$CFG_RUNTIME_CAPACITY_WEIGHT" ]]; then
+      if [[ -n "$wait_seconds" && "$wait_seconds" -gt 0 ]]; then
+        release_registry_lock
+        wait_interval="${BUBBLES_RUNTIME_WAIT_INTERVAL_SECONDS:-3}"
+        waited=0
+        admitted=false
+        while [[ "$waited" -lt "$wait_seconds" ]]; do
+          sleep "$wait_interval"
+          waited=$((waited + wait_interval))
+          if ! try_acquire_registry_lock; then
+            continue
+          fi
+          lines="$(lease_lines)"
+          active_sum="$(sum_active_weight "$lines")"
+          if [[ $((active_sum + new_weight)) -le "$CFG_RUNTIME_CAPACITY_WEIGHT" ]]; then
+            admitted=true
+            break
+          fi
+          release_registry_lock
+        done
+        if [[ "$admitted" != true ]]; then
+          record_framework_event "runtime_lease_capacity_refused" "blocked" "purpose=${purpose} weight=${new_weight} active=${active_sum} capacity=${CFG_RUNTIME_CAPACITY_WEIGHT} waited=${waited}s" "owned_mutation"
+          die "Runtime capacity exceeded: ${active_sum}/${CFG_RUNTIME_CAPACITY_WEIGHT} weight units in use; this ${purpose} lease needs ${new_weight} (weight=${weight_label}). Wait for an active lease to release, retry with --wait <sec>, or run: bash bubbles/scripts/cli.sh runtime doctor"
+        fi
+        assert_no_active_conflicts "$lines" "$repo_name" "$purpose" "$environment" "$share_mode" "$explicit_compose" "$compose_project"
+      else
+        release_registry_lock
+        record_framework_event "runtime_lease_capacity_refused" "blocked" "purpose=${purpose} weight=${new_weight} active=${active_sum} capacity=${CFG_RUNTIME_CAPACITY_WEIGHT}" "owned_mutation"
+        die "Runtime capacity exceeded: ${active_sum}/${CFG_RUNTIME_CAPACITY_WEIGHT} weight units in use; this ${purpose} lease needs ${new_weight} (weight=${weight_label}). Wait for an active lease to release, retry with --wait <sec>, or run: bash bubbles/scripts/cli.sh runtime doctor"
+      fi
     fi
-
-    if [[ "$share_mode" == "exclusive" \
-      && "$(field_from_line "$line" repo)" == "$repo_name" \
-      && "$(field_from_line "$line" purpose)" == "$purpose" \
-      && "$(field_from_line "$line" environment)" == "$environment" \
-      && "$(field_from_line "$line" shareMode)" == "exclusive" ]]; then
-      release_registry_lock
-      die "Exclusive runtime already active for ${purpose}/${environment}: $(field_from_line "$line" leaseId)"
-    fi
-  done <<< "$lines"
+  fi
 
   lease_id="$(generate_lease_id)"
   if [[ -z "$compose_project" ]]; then
     compose_project="$(generated_compose_project "$repo_name" "$environment" "$purpose" "$share_mode" "$lease_id" "$compatibility_fingerprint")"
   fi
 
-  line="$(build_lease_line "$lease_id" "$repo_name" "$session_id" "$agent" "$worktree" "$branch" "$purpose" "$environment" "$compose_project" "$stack_group" "$share_mode" "$compatibility_fingerprint" "$resources" "$session_id" "$started_at" "$started_at" "$expires_at" active)"
+  line="$(build_lease_line "$lease_id" "$repo_name" "$session_id" "$agent" "$worktree" "$branch" "$purpose" "$environment" "$compose_project" "$stack_group" "$share_mode" "$compatibility_fingerprint" "$resources" "$session_id" "$started_at" "$started_at" "$expires_at" active "$new_weight")"
   if [[ -n "$lines" ]]; then
     lines="$lines
 $line"
@@ -976,7 +1167,7 @@ $line"
   write_runtime_registry "$lines"
   release_registry_lock
 
-  record_framework_event "runtime_lease_acquired" "success" "leaseId=$(field_from_line "$line" leaseId) composeProject=$(field_from_line "$line" composeProject)" "owned_mutation"
+  record_framework_event "runtime_lease_acquired" "success" "leaseId=$(field_from_line "$line" leaseId) composeProject=$(field_from_line "$line" composeProject) weight=${new_weight}" "owned_mutation"
   echo "✅ Acquired runtime lease"
   format_lease_line "$line"
 }
@@ -1223,6 +1414,12 @@ Acquire options:
   --resource <kind:name>          Record container/volume/network/image ownership (repeatable)
   --session-id <id>               Override derived session id
   --agent <name>                  Override agent name
+  --weight <class>                Capacity weight class light|medium|heavy (default: light)
+  --weight-units <n>              Explicit integer weight units (overrides --weight)
+  --wait <seconds>                Block up to <seconds> for capacity before refusing (default: no wait)
+
+Capacity admission is active only when bubbles.config.json runtime.capacityWeight > 0.
+Optional runtime.weightClasses overrides the built-in {light:1, medium:4, heavy:8} map.
 EOF
 }
 

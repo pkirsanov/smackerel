@@ -184,6 +184,23 @@ Typical flow:
 - doctor before cleanup if sessions appear to be colliding
 - release when the owning session is done
 
+To stop two heavy builds from OOM-killing one shared host, give the host a weight
+budget (`runtime.capacityWeight` under `runtime` in `.specify/memory/bubbles.config.json`,
+disabled by default at `0`) and weight each heavy acquire so the registry holds or
+refuses the second build instead of letting both run at once:
+
+```bash
+# Refuse immediately if the host is already at budget:
+bash .github/bubbles/scripts/cli.sh runtime acquire --purpose build --weight heavy
+# Or wait up to 600s for a slot to free, then refuse:
+bash .github/bubbles/scripts/cli.sh runtime acquire --purpose build --weight heavy --wait 600
+```
+
+`summary` and `doctor` print `Runtime capacity: <active>/<capacityWeight> weight units`
+(or `disabled` when `capacityWeight=0`). Stale or released leases free their slot
+automatically. See [Coordinate Runtime Leases](runtime-coordination.md) for the full
+`--weight` / `--weight-units` / `--wait` / `capacityWeight` surface.
+
 For downstream repos using the installed framework layout, the same surface is available through `.github/bubbles/scripts/cli.sh`:
 
 ```bash
