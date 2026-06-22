@@ -230,7 +230,7 @@ v5Aliases:
   redteam-to-doc:
     primitive: validate
     tags: { action: adversarial-probe, finalize: docs }
-    description: Cyrus attacks a finished result -> finding-owned fix -> docs. Off by default.
+    description: Green Bastard attacks a finished result -> finding-owned fix -> docs. Off by default.
 
   production-adversarial-probe:
     primitive: validate
