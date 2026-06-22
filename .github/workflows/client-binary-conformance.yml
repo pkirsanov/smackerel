@@ -7,9 +7,11 @@
 # developer's local pre-push hook — is still caught. No --skip / --force /
 # --insecure / --no-verify bypass flag exists here or on the gate (C3 inherited).
 #
-# The knb overlay is operator-private; the cross-repo checkout uses the
-# operator-provisioned KNB_CHECKOUT_TOKEN secret (read-only access to the knb
-# repo), exactly like other operator-private CI material in this project.
+# The knb overlay is operator-private; the cross-repo checkout uses a short-lived
+# GitHub App installation token, minted per run by actions/create-github-app-token
+# from the operator-provisioned KNB_APP_ID + KNB_APP_PRIVATE_KEY secrets (the App
+# has read-only Contents on the knb repo only). The token auto-expires (~1h), so
+# there is no static PAT to rotate.
 name: client-binary-conformance
 
 on:
@@ -32,11 +34,20 @@ jobs:
       with:
         path: smackerel
 
+    - name: Mint knb-overlay read token (GitHub App)
+      id: knb_token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        app-id: ${{ secrets.KNB_APP_ID }}
+        private-key: ${{ secrets.KNB_APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+        repositories: knb
+
     - name: Checkout knb overlay (client-binary gate authority)
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       with:
         repository: ${{ github.repository_owner }}/knb
-        token: ${{ secrets.KNB_CHECKOUT_TOKEN }}
+        token: ${{ steps.knb_token.outputs.token }}
         path: knb
 
     - name: Run client-binary conformance gate (--repo)
