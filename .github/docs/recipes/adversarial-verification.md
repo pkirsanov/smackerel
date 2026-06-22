@@ -1,8 +1,8 @@
-# <img src="../../icons/cyrus-sunglasses.svg" width="28"> Adversarial Verification (Red-Team)
+# <img src="../../icons/green-bastard-mask.svg" width="28"> Adversarial Verification (Red-Team)
 
 > *"Nothing's bulletproof, boys. Let me prove it."*
 
-Use this when you want a finished result **attacked**, not just checklisted — Cyrus (`bubbles.redteam`) tries to make the "done" claim **false** with evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, or a bounded chaos-monkey probe against a live system.
+Use this when you want a finished result **attacked**, not just checklisted — Green Bastard (`bubbles.redteam`) tries to make the "done" claim **false** with evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, or a bounded chaos-monkey probe against a live system.
 
 `bubbles.redteam` pairs with `bubbles.grill`: grill pressure-tests *ideas before* you build; red-team attacks *results after* you build. It emits **findings** and **never certifies** — completion authority stays with `bubbles.validate`.
 
@@ -57,7 +57,7 @@ bash bubbles/scripts/adversarial-resolve.sh --repo-root .
 
 - **Release:** on a release-phase scenario (`bubbles.goal` / `bubbles.sprint` release mode), red-team runs a pre-ship adversarial pass on high-risk delivered features (riskClass-gated). Findings route through the normal fix-cycle.
 - **Ops / incident:** available alongside `incident-fastlane` as the "attack the hypothesis" probe — does the fix actually hold under hostile input?
-- **Production chaos-monkey:** `production-adversarial-probe` runs Cyrus on a leash — **armed + allowlisted only**, read-only operate plane (it never mutates/silences prod telemetry), bounded + seeded, and **restore-or-fix** before the round completes (cleanup failure is a blocking stop).
+- **Production chaos-monkey:** `production-adversarial-probe` runs Green Bastard on a leash — **armed + allowlisted only**, read-only operate plane (it never mutates/silences prod telemetry), bounded + seeded, and **restore-or-fix** before the round completes (cleanup failure is a blocking stop).
 
 ## When It Helps Most
 

@@ -137,6 +137,7 @@ The registry is responsible for:
 3. storing a compatibility fingerprint derived from repo state and declared runtime inputs
 4. generating safe Compose project names for compatible reuse or isolated duplication
 5. surfacing stale leases and active conflicts in `bubbles status`, `bubbles doctor`, and `bubbles runtime ...`
+6. optionally enforcing a host-capacity budget (`runtime.capacityWeight`) by summing each lease's resource `weight` over effectively-active leases, so two heavy builds cannot start at once and OOM the shared host (opt-in; disabled by default)
 
 This keeps source-level parallelism (`gitIsolation`, worktrees, parallel scopes) from accidentally colliding at the container/runtime layer.
 
