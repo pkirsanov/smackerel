@@ -159,7 +159,8 @@ func (h *NotificationHandlers) Summary(w http.ResponseWriter, r *http.Request) {
 
 func (h *NotificationHandlers) SnoozeIncident(w http.ResponseWriter, r *http.Request) {
 	incidentID := chi.URLParam(r, "incident_id")
-	if _, err := h.store.GetIncident(r.Context(), incidentID); err != nil {
+	incident, err := h.store.GetIncident(r.Context(), incidentID)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "notification_incident_not_found", "notification incident not found")
 			return
@@ -182,6 +183,12 @@ func (h *NotificationHandlers) SnoozeIncident(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusInternalServerError, "notification_snooze_failed", "failed to record notification snooze")
 		return
 	}
+	// Spec 054 Scope 9 — an operator snooze IS an acknowledgment of the
+	// incident. Feed it to the shared surfacing ack registry keyed by the
+	// incident correlation key so same-incident follow-up nudges are suppressed
+	// across every surface (SCN-054-030 production feed). No-op when no shared
+	// controller/ack is wired.
+	h.service.AcknowledgeIncident(incident.IncidentKey)
 	writeJSON(w, http.StatusAccepted, map[string]any{"suppression": suppression})
 }
 

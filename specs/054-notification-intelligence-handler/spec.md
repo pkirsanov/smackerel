@@ -1187,56 +1187,69 @@ Spec 055 must not provide:
 
 ## Coordination with Unified Surfacing Controller
 
-Spec 054's decision engine MUST become a SUBORDINATE producer to the global unified
-surfacing controller introduced by spec 021 M1a (`specs/021-intelligence-delivery`).
-It no longer owns final cross-surface dispatch or rate budgeting. Instead, every
-notification decision that would have triggered user-facing output is emitted as
-a `SurfacingProposal` event to the controller, which arbitrates against the
-GLOBAL per-day nudge budget and the cross-surface acknowledgment state.
+Spec 054's decision engine is a SUBORDINATE producer to the global unified
+surfacing controller delivered by **spec 078
+(`specs/078-cross-surface-surfacing-prioritizer`)**. It no longer owns final
+cross-surface dispatch or rate budgeting. The delivered controller is a
+**synchronous call interface**, NOT an event bus: there is no `SurfacingProposal`
+event, no proposal ingress, and no acknowledgment fan-out bus. Every notification
+decision that would trigger user-facing output builds a
+`surfacing.SurfacingCandidate`, calls
+`surfacing.Controller.Propose(ctx, candidate) (SurfacingDecision, error)`, and
+queues a delivery only on a permit/escalated verdict, so the GLOBAL per-day nudge
+budget, cross-channel dedupe, and acknowledgment-driven suppression are honored.
 
-**Hard dependency:** Spec 021 M1a scope (unified surfacing controller + proposal
-ingress + acknowledgment fan-out) MUST be implemented before spec 054 Scope 9 is
-implemented. Until then, Scope 9 remains `not_started` and the legacy
-in-engine dispatch path stays active behind the existing decision pipeline.
+**Dependency status:** SATISFIED (2026-06-23). The unified surfacing controller
+milestone was rescoped from spec 021 into spec 078 (commit `640b95d0`); the
+controller is on trunk at `internal/intelligence/surfacing/`. The acknowledgment
+surface is pull-based suppression (`surfacing.InMemoryAck.Acknowledge` +
+`SuppressionWindow.IsSuppressed`), not a push bus. Rollback is the nil-controller
+legacy direct-dispatch fallback (mirrors `scheduler.proposeSurfacing`); no new
+feature-gate SST key is introduced (the existing `surfacing.*` SST governs and
+fails loud in `NewController`).
 
 ### Coordination Scenarios
 
 ```gherkin
-Scenario: SCN-054-027 Notification engine emits proposal and defers final dispatch
-  Given the unified surfacing controller from spec 021 is enabled
-  And a notification decision classifies as user-facing severity "informational"
+Scenario: SCN-054-027 Decision engine routes through the surfacing controller instead of direct dispatch
+  Given the shared spec 078 surfacing controller is wired into the notification service
+  And a notification decision resolves to a user-facing output
   When the notification decision engine reaches its dispatch step
-  Then it MUST publish a SurfacingProposal event addressed to the controller
-  And it MUST NOT directly invoke an output channel
-  And the proposal MUST carry the decision id, source-qualified context,
-    severity class, urgency class, requested surfaces, and a redacted preview
-  And the controller's arbitration decision MUST be the authoritative dispatch outcome
+  Then it MUST build a surfacing.SurfacingCandidate carrying producer "notification",
+    the mapped output Channel, the incident correlation key as ContentKey, a
+    severity-derived Priority, and the urgency TimeCritical flag
+  And it MUST call Controller.Propose and treat the returned SurfacingDecision as authoritative
+  And it MUST queue an output delivery only when the decision kind is "permit" or "escalated"
+  And it MUST NOT queue a delivery that bypasses the controller when a controller is wired
 
-Scenario: SCN-054-028 Controller suppresses notification when global budget exceeded
-  Given the global per-day nudge budget for the active operator is exhausted
-  And the notification engine emits a non-urgent SurfacingProposal
-  When the controller arbitrates the proposal
-  Then the controller MUST return decision "suppressed" with reason "global-budget-exceeded"
-  And the notification engine MUST persist the suppression outcome against the decision record
-  And no output channel MUST be invoked for that proposal
-  And the suppression MUST be observable via metrics and audit trail without leaking payload
+Scenario: SCN-054-028 Controller defers non-urgent notification when the global budget is exhausted
+  Given the shared global daily nudge budget is already exhausted by other producers
+  And the notification engine proposes a non-urgent user-facing decision
+  When the controller arbitrates the candidate
+  Then it MUST return SurfacingDecision kind "deferred-budget-exhausted" with reason "daily_budget_exhausted"
+  And the notification engine MUST persist that arbitration outcome against the decision record
+  And no output delivery MUST be queued for that decision
+  And the deferral MUST be observable via surfacing metrics without leaking payload
 
-Scenario: SCN-054-029 Urgent-class decisions bypass the soft budget
-  Given a notification decision classifies as urgency class "urgent"
-  And the global per-day nudge budget is already exhausted
-  When the notification engine emits the SurfacingProposal with urgency "urgent"
-  Then the controller MUST arbitrate as "deliver" regardless of the soft budget
-  And the controller MUST record the urgent bypass against the budget ledger
-  And downstream output channels MUST receive the proposal exactly once per requested surface
+Scenario: SCN-054-029 Urgent notification escalates past the exhausted global budget
+  Given the shared global daily nudge budget is already exhausted
+  And urgent escalation is enabled in SST (surfacing.urgent_escalation_enabled)
+  And the notification engine proposes an urgent decision with Priority 1 and TimeCritical true
+  When the controller arbitrates the candidate
+  Then it MUST return SurfacingDecision kind "escalated" with reason "urgent_escalation"
+  And the notification engine MUST queue the output delivery exactly once
+  And the urgent override MUST be recorded in the controller budget ledger and surfacing metrics
 
-Scenario: SCN-054-030 Acknowledgment on one surface suppresses duplicates on others
-  Given a notification decision was fanned out to multiple surfaces via the controller
-  And the user acknowledges the notification on any one surface
-  When the controller propagates the acknowledgment event
-  Then the notification engine MUST mark sibling proposals for the same decision as "superseded-by-ack"
-  And the engine MUST cancel any not-yet-dispatched sibling proposals for that decision
-  And duplicate output MUST NOT be delivered on any other surface
-  And the acknowledgment chain MUST be observable in the decision's audit trail
+Scenario: SCN-054-030 Acknowledgment suppresses sibling and follow-up notifications for the same incident
+  Given a notification decision fans the same incident correlation key out as ContentKey
+  When the first candidate is permitted and recorded in the dedupe index
+  Then a sibling candidate carrying the same ContentKey within the dedupe window collapses to "deduped"
+  And when the operator acknowledges the incident the notification ack path records it on the shared
+    registry via Acknowledge(correlationKey)
+  And a subsequent candidate for the same ContentKey within the suppression window returns "suppressed"
+    with reason "acknowledged-by-user"
+  And no duplicate or follow-up output MUST be delivered on any other surface
+  And the acknowledgment and suppression MUST be observable in the decision audit trail and surfacing metrics
 ```
 
 ### Boundary Notes

@@ -370,50 +370,50 @@
     {
       "id": "SCN-054-027",
       "scopeId": "SCOPE-9",
-      "title": "Decision Engine Emits SurfacingProposal Instead Of Direct Dispatch",
+      "title": "Decision Engine Routes Through Surfacing Controller Instead Of Direct Dispatch",
       "requiredTestType": ["unit", "e2e-api"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/decision_surfacing_test.go", "testTitle": "TestDecisionEnginePublishesSurfacingProposalInsteadOfDirectDispatch", "category": "unit" },
+        { "file": "internal/notification/decision_surfacing_test.go", "testTitle": "TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch", "category": "unit" },
         { "file": "tests/e2e/notification_surfacing_controller_api_test.go", "testTitle": "TestNotificationSurfacingControllerEndToEndArbitrationAndAck", "category": "e2e-api" }
       ],
-      "liveTestExpectation": "E2E API proves notification decisions are routed through the spec 021 surfacing controller and that no direct output-channel dispatch path remains active when the controller is enabled."
+      "liveTestExpectation": "E2E API proves notification decisions are routed through the spec 078 surfacing controller via synchronous Controller.Propose and that the engine queues output only on a permit/escalated verdict, never bypassing the controller when one is wired."
     },
     {
       "id": "SCN-054-028",
       "scopeId": "SCOPE-9",
-      "title": "Controller Suppresses Non-Urgent Proposal When Global Budget Exhausted",
+      "title": "Controller Defers Non-Urgent Notification When Global Nudge Budget Is Exhausted",
       "requiredTestType": ["integration", "e2e-api"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/surfacing_controller_integration_test.go", "testTitle": "TestControllerSuppressesNonUrgentProposalWhenGlobalBudgetExhausted", "category": "integration" },
+        { "file": "internal/notification/surfacing_controller_integration_test.go", "testTitle": "TestNonUrgentNotificationDeferredWhenGlobalBudgetExhausted", "category": "integration" },
         { "file": "tests/e2e/notification_surfacing_controller_api_test.go", "testTitle": "TestNotificationSurfacingControllerEndToEndArbitrationAndAck", "category": "e2e-api" }
       ],
-      "liveTestExpectation": "Integration test against ephemeral stack proves the controller returns suppressed with reason global-budget-exceeded and the engine persists the outcome on the decision record."
+      "liveTestExpectation": "Integration test against an ephemeral stack proves the controller returns SurfacingDecision kind deferred-budget-exhausted with reason daily_budget_exhausted, the engine persists that outcome on the decision record, and no delivery is queued."
     },
     {
       "id": "SCN-054-029",
       "scopeId": "SCOPE-9",
-      "title": "Urgent-Class Decisions Bypass Soft Global Budget",
+      "title": "Urgent Notification Escalates Past The Exhausted Global Budget",
       "requiredTestType": ["unit", "e2e-api"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/decision_surfacing_test.go", "testTitle": "TestUrgentDecisionMarksProposalForBudgetBypass", "category": "unit" },
+        { "file": "internal/notification/decision_surfacing_test.go", "testTitle": "TestUrgentNotificationEscalatesPastExhaustedGlobalBudget", "category": "unit" },
         { "file": "tests/e2e/notification_surfacing_controller_api_test.go", "testTitle": "TestNotificationSurfacingControllerEndToEndArbitrationAndAck", "category": "e2e-api" }
       ],
-      "liveTestExpectation": "E2E API proves urgent-class proposals are delivered even when the soft global budget is exhausted, and the bypass is recorded in the controller's ledger."
+      "liveTestExpectation": "E2E API proves an urgent decision (Priority 1 + TimeCritical) is arbitrated escalated even when the global budget is exhausted, is delivered exactly once, and the override is recorded in the controller budget ledger."
     },
     {
       "id": "SCN-054-030",
       "scopeId": "SCOPE-9",
-      "title": "Acknowledgment On One Surface Cancels Sibling Proposals",
+      "title": "Acknowledgment Suppresses Sibling And Follow-Up Notifications For The Same Incident",
       "requiredTestType": ["integration", "e2e-api"],
       "regressionRequired": true,
       "linkedTests": [
-        { "file": "internal/notification/surfacing_controller_integration_test.go", "testTitle": "TestAcknowledgmentOnOneSurfaceCancelsSiblingProposals", "category": "integration" },
+        { "file": "internal/notification/surfacing_controller_integration_test.go", "testTitle": "TestAcknowledgmentSuppressesSiblingAndFollowUpNotifications", "category": "integration" },
         { "file": "tests/e2e/notification_surfacing_controller_api_test.go", "testTitle": "TestNotificationSurfacingControllerEndToEndArbitrationAndAck", "category": "e2e-api" }
       ],
-      "liveTestExpectation": "Integration and E2E API tests prove acknowledgment on any one surface propagates through the AcknowledgmentBus and supersedes sibling proposals so no duplicate output is delivered."
+      "liveTestExpectation": "Integration and E2E API tests prove same-ContentKey siblings collapse via deduped to one delivery, and that after Acknowledge(correlationKey) a subsequent same-ContentKey candidate returns suppressed (acknowledged-by-user) so no duplicate or follow-up output is delivered."
     }
   ]
 }
