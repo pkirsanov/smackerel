@@ -1,5 +1,14 @@
 # Report 089 — Runtime Model Hot-Swap & Persistent Selection
 
+> **Post-certification supersession note (2026-06-23 reconciliation).** This
+> report records `deepseek-r1:32b` as the standing home-lab synthesis default
+> (the value certified live on 2026-06-15). That standing default was
+> **superseded 2026-06-21 by `qwen3:30b-a3b`** (committed `config/smackerel.yaml`
+> ~L1230 / commit `05b9f677`; selection delegated to the deploy-adapter
+> `params.yaml`; lineage `deepseek-r1:32b` → interim `gpt-oss:20b` →
+> `qwen3:30b-a3b`). 089's status (`done`) and certification are UNCHANGED — this
+> is a forward breadcrumb so reading 089 in isolation is not misleading.
+
 > **SKELETON — authored by `bubbles.plan` at the planning phase, BEFORE
 > any implementation.** Every scope section below is **PENDING**: it
 > carries NO evidence yet. The `bubbles.implement` / `bubbles.test`

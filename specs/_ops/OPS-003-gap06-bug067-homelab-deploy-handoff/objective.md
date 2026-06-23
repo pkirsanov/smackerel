@@ -3,7 +3,11 @@
 > **Owner:** `bubbles.devops`
 > **Kind:** Deployment handoff (operator activation packet)
 > **Target:** `home-lab`
-> **Deploy source SHA:** `78b293cc` (current `main` HEAD; CI builds this tip)
+> **Deploy source SHA:** the current `main` tip at push time (resolve to the real
+> pushed HEAD). CI builds + signs from that tip; the **runtime payload** in this
+> packet was committed at `78b293cc` — an interior commit, not HEAD. The two
+> newer commits (`ded6a2a8` OPS-003 docs, `ca0a9039` gitignore) change no runtime
+> payload.
 > **Status:** `delivered_pending_activation` — runtime work is committed; the
 > live home-lab apply is deferred to the operator and intentionally NOT run
 > from this session (host is saturated with concurrent heavy builds).
@@ -13,7 +17,7 @@
 ## Summary
 
 This packet hands off **two runtime-relevant changes** committed this session
-(6 commits ahead of `origin/main`, not yet pushed) for deployment to the
+(8 commits ahead of `origin/main`, not yet pushed) for deployment to the
 `home-lab` target via the Build-Once Deploy-Many pipeline (Bubbles gate
 **G081 / G074**).
 
@@ -26,9 +30,10 @@ This packet hands off **two runtime-relevant changes** committed this session
 > bundle / `app.env` MUST provide `ML_LOG_LEVEL` (recommended value `info`).
 > If it is missing, the ML sidecar **fails loud at startup**. See
 > [PRE-DEPLOY REQUIRED CONFIG](runbook.md#pre-deploy-required-config) in the
-> runbook. The new SST key is **already in the bundle generation path** for
-> SHA `78b293cc` — the only failure mode is reusing a **stale** bundle built
-> before this SHA (see the caveat in the runbook).
+runbook. The new SST key is **already in the bundle generation path** as of
+SHA `78b293cc` (and present in every commit since, including the pushed HEAD) —
+the only failure mode is reusing a **stale** bundle built before this SHA (see
+the caveat in the runbook).
 
 ### Neither change needs a flag or a migration
 
@@ -42,7 +47,7 @@ This packet hands off **two runtime-relevant changes** committed this session
 
 ---
 
-## The 6 commits (oldest → newest)
+## The 8 commits (oldest → newest)
 
 | SHA | Subject | Deploy-relevant? |
 |-----|---------|------------------|
@@ -52,9 +57,14 @@ This packet hands off **two runtime-relevant changes** committed this session
 | `37e058ea` | chore(spec-054): promote to done — G088 cleared after planning-truth commit | No — state.json promotion only |
 | `8595e3a6` | docs(architecture): document spec 054 Scope 9 notification surfacing-controller integration (GAP-06) | No — architecture doc note |
 | `78b293cc` | fix(ml): BUG-067-001 `ML_LOG_LEVEL` fail-loud SST + portfolio reconciliation | **Yes — DEPLOYMENT-CRITICAL config key** |
+| `ded6a2a8` | docs(ops): home-lab deployment handoff for GAP-06 + BUG-067-001 (OPS-003) | No — this packet's doc only |
+| `ca0a9039` | chore: gitignore agent-local memories/ directory | No — gitignore only |
 
-**Deploy source SHA = `78b293cc`** (the HEAD tip; CI builds + signs `core` and
-`ml` images and generates the per-env config bundle from this SHA).
+**Runtime payload committed at `78b293cc`** (an interior commit). CI builds +
+signs `core` and `ml` images and generates the per-env config bundle from **the
+pushed `main` tip** (the real HEAD at push time, currently `ca0a9039`), which
+includes `78b293cc` plus the two later doc/gitignore-only commits. Resolve the
+deploy source to the actual pushed HEAD rather than a hardcoded interior SHA.
 
 ---
 

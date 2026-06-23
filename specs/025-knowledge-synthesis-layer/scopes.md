@@ -982,9 +982,9 @@ Scenario: Health endpoint includes knowledge stats
 <!-- bubbles:g040-skip-begin -->
 ## Scope 9: Calendar-Triggered Briefs
 
-**Status:** Done (post-release-deferred; gated on spec-021-m1a unified surfacing controller — see Post-Release Scope Exception)
+**Status:** Done (post-release-deferred; gated on spec-078-m1a unified surfacing controller — see Post-Release Scope Exception)
 **Priority:** P1 (release-planning MVP M1b)
-**Depends On:** Scope 2 (synthesis pipeline), Scope 8 (briefs/digest integration), spec 021 M1a unified surfacing controller
+**Depends On:** Scope 2 (synthesis pipeline), Scope 8 (briefs/digest integration), spec 078 M1a unified surfacing controller
 **Surfaces:** `internal/scheduler`, `internal/intelligence/briefs.go`, `internal/connector/caldav` (read-only consumer), `SurfacingProposal` event type
 
 ### Gherkin Scenarios
@@ -996,7 +996,7 @@ Scenario: SCN-025-24 — Lead-time scheduler fires a brief before an upcoming ca
   When the scheduler tick at 14:30 evaluates upcoming events
   Then a calendar-triggered brief job is enqueued for the meeting
   And the brief is synthesised via the existing intelligence briefs pipeline using the meeting's source-qualified context
-  And the resulting brief is emitted as a SurfacingProposal addressed to the spec 021 unified surfacing controller with proposalSource "calendar-brief"
+  And the resulting brief is emitted as a SurfacingProposal addressed to the unified surfacing controller (spec 078) with proposalSource "calendar-brief"
   And it is not delivered directly to any output channel
 
 Scenario: SCN-025-25 — Lead-time policy is per category and configurable
@@ -1020,30 +1020,30 @@ Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposal
 
 **Files / surfaces to add or modify:**
 
-- internal/scheduler/calendar_briefs.go (post-release-deferred; this scope is one of the two `SurfacingProposal` producers that hard-depends on spec 021 M1a) — periodic job that scans CalDAV cache for upcoming events within active lead-time windows and enqueues brief synthesis requests.
+- internal/scheduler/calendar_briefs.go (post-release-deferred; this scope is one of the two `SurfacingProposal` producers that hard-depends on spec 078 M1a) — periodic job that scans CalDAV cache for upcoming events within active lead-time windows and enqueues brief synthesis requests.
 - `internal/intelligence/briefs.go` — reuse existing brief synthesis; add a `briefSource` discriminator (`digest|calendar|promise`) so callers can mark provenance without changing core synthesis behaviour.
 - `internal/connector/caldav` — read-only `ListUpcomingEvents(ctx, horizon)` accessor against the existing cache (no schema change beyond reading already-stored event rows).
 - `internal/knowledge/store.go` — add `RecordCalendarBriefEmission(ctx, calDavEventId, leadTimePolicyVersion, proposalId)` and `LookupCalendarBriefEmission(...)` for dedupe tracking.
-- `internal/api` — no new external endpoint; brief emission flows through the spec 021 `SurfacingProposalSink`.
+- `internal/api` — no new external endpoint; brief emission flows through the spec 078 `SurfacingProposalSink`.
 - `config/smackerel.yaml` — fail-loud SST keys for `intelligence.calendar_briefs.enabled` (no default) and per-category lead-time map (no default; missing category emits no briefs and logs explicitly).
 
-**Coordination with spec 021 M1a:** every brief MUST be emitted as a `SurfacingProposal` addressed to the unified surfacing controller. This producer MUST NOT call output-channel adapters directly. If `intelligence.surfacing_controller_required=true` and the controller is unreachable, the producer fails loud and the job is requeued.
+**Coordination with spec 078 M1a:** every brief MUST be emitted as a `SurfacingProposal` addressed to the unified surfacing controller. This producer MUST NOT call output-channel adapters directly. If `intelligence.surfacing_controller_required=true` and the controller is unreachable, the producer fails loud and the job is requeued.
 
 ### Consumer Impact Sweep
 
 - Existing `internal/intelligence/briefs.go` callers (daily digest pipeline) are unchanged in behaviour; new callers attach the `briefSource` discriminator only.
 - CalDAV connector cache schema is read-only from this scope; no migrations.
-- Spec 021 unified surfacing controller receives a new `proposalSource` value `calendar-brief`; spec 021 owns arbitration/budget rules.
+- The unified surfacing controller (spec 078) receives a new `proposalSource` value `calendar-brief`; spec 078 owns arbitration/budget rules.
 
 ### Shared Infrastructure Impact Sweep
 
-- `SurfacingProposalSink` is owned by spec 021; consume the published contract verbatim.
+- `SurfacingProposalSink` is owned by spec 078; consume the published contract verbatim.
 - Scheduler tick cadence is shared infrastructure — this scope MUST register through the existing scheduler registry, not spin up a new ticker goroutine.
 
 ### Change Boundary
 
 - **Allowed file families:** internal/scheduler/calendar_briefs.go (post-release-deferred), dedupe helpers in `internal/knowledge/store.go`, read-only CalDAV cache accessor, new SST keys, briefs `briefSource` discriminator, tests.
-- **Excluded surfaces:** edits to spec 021 controller internals, edits to CalDAV connector ingest/write paths, edits to output-channel adapter contracts, edits to the canonical `SurfacingProposal` schema.
+- **Excluded surfaces:** edits to spec 078 controller internals, edits to CalDAV connector ingest/write paths, edits to output-channel adapter contracts, edits to the canonical `SurfacingProposal` schema.
 
 ### Test Plan
 
@@ -1060,7 +1060,7 @@ Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposal
 
 - [x] Lead-time scheduler fires calendar-triggered briefs at the configured lead-time before each upcoming CalDAV event. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Per-category lead-time policy is loaded from SST config with fail-loud behaviour and is versioned for dedupe. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
-- [x] Every calendar brief is emitted as a `SurfacingProposal` addressed to the spec 021 unified surfacing controller; zero direct output-channel calls from this producer. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Every calendar brief is emitted as a `SurfacingProposal` addressed to the unified surfacing controller (spec 078); zero direct output-channel calls from this producer. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Dedupe by `(calDavEventId, leadTimePolicyVersion)` prevents duplicate proposals across scheduler re-evaluations. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Scheduler job registers through the existing scheduler registry; no ad-hoc goroutines. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Scenario-specific unit, integration, and e2e-api tests for SCN-025-24, SCN-025-25, SCN-025-26 pass. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
@@ -1069,7 +1069,7 @@ Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposal
 - [x] Broader E2E regression suite passes. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh lint`, `./smackerel.sh format --check` pass with zero warnings. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Artifact lint and traceability guard pass. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
-- [x] Docs updated for the calendar-brief producer and spec 021 surfacing controller dependency boundary. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Docs updated for the calendar-brief producer and spec 078 surfacing controller dependency boundary. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 
 ---
 
@@ -1080,9 +1080,9 @@ Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposal
 <!-- bubbles:g040-skip-begin -->
 ## Scope 10: Reminder & Promise Engine
 
-**Status:** Done (post-release-deferred; gated on spec-021-m1a unified surfacing controller and scope 9 producer pattern — see Post-Release Scope Exception)
+**Status:** Done (post-release-deferred; gated on spec-078-m1a unified surfacing controller and scope 9 producer pattern — see Post-Release Scope Exception)
 **Priority:** P1 (release-planning MVP M1b)
-**Depends On:** Scope 1 (knowledge store), Scope 2 (synthesis pipeline), Scope 9 (calendar-brief producer pattern), spec 021 M1a unified surfacing controller
+**Depends On:** Scope 1 (knowledge store), Scope 2 (synthesis pipeline), Scope 9 (calendar-brief producer pattern), spec 078 M1a unified surfacing controller
 **Surfaces:** `internal/scheduler`, `internal/knowledge` (promise store), `internal/intelligence`, `SurfacingProposal` event type
 
 ### Gherkin Scenarios
@@ -1100,7 +1100,7 @@ Scenario: SCN-025-28 — Pending promise fires when its trigger condition is sat
   And an arrival event for the bookshelf order is ingested
   When the scheduler tick re-evaluates pending promises
   Then the promise transitions to status "fired"
-  And a SurfacingProposal with proposalSource "promise" is published to the spec 021 unified surfacing controller carrying the original promise summary and the triggering artifact id
+  And a SurfacingProposal with proposalSource "promise" is published to the unified surfacing controller (spec 078) carrying the original promise summary and the triggering artifact id
   And no output-channel adapter is invoked directly by the promise engine
 
 Scenario: SCN-025-29 — Promise expires when its expiration policy elapses without trigger or acknowledgment
@@ -1117,31 +1117,31 @@ Scenario: SCN-025-29 — Promise expires when its expiration policy elapses with
 
 **Files / surfaces to add or modify:**
 
-- internal/db/migrations/0NN_promises.sql (post-release-deferred; this scope's promise engine is the second of the two `SurfacingProposal` producers that hard-depends on spec 021 M1a) — add `knowledge_promises` table with columns: `id`, `status` (`pending|fired|acknowledged|expired`), `trigger_condition_json`, `source_artifact_ids`, `requested_at`, `expires_at`, `fired_at`, `acknowledged_at`, `proposal_id`, `audit_jsonb`.
+- internal/db/migrations/0NN_promises.sql (post-release-deferred; this scope's promise engine is the second of the two `SurfacingProposal` producers that hard-depends on spec 078 M1a) — add `knowledge_promises` table with columns: `id`, `status` (`pending|fired|acknowledged|expired`), `trigger_condition_json`, `source_artifact_ids`, `requested_at`, `expires_at`, `fired_at`, `acknowledged_at`, `proposal_id`, `audit_jsonb`.
 - internal/knowledge/promises.go (post-release-deferred) — CRUD + status transitions; transitions are guarded (`pending → fired|expired`, `fired → acknowledged|expired`).
 - internal/scheduler/promises.go (post-release-deferred) — periodic tick that (a) re-evaluates pending promises against new ingest signals and (b) advances expired promises to `expired` state.
 - internal/intelligence/promises.go (post-release-deferred) — promise → `SurfacingProposal` translator, reusing the synthesis pipeline for human-readable summary fidelity.
 - `internal/api` — no new external endpoint in this scope; promise capture is invoked from the assistant intent surface (consumed via existing intent ingestion path).
 - `config/smackerel.yaml` — fail-loud SST keys for `intelligence.promises.enabled` (no default), `intelligence.promises.default_expiration_days` (no default), `intelligence.promises.max_active_per_user` (no default).
 
-**Coordination with spec 021 M1a:** firings MUST flow through the unified surfacing controller — the promise engine is a `SurfacingProposal` producer, not a dispatcher. Acknowledgment events from spec 021's `AcknowledgmentBus` MUST mark the originating promise as `acknowledged` so it never re-fires.
+**Coordination with spec 078 M1a:** firings MUST flow through the unified surfacing controller — the promise engine is a `SurfacingProposal` producer, not a dispatcher. Acknowledgment events from spec 078's `AcknowledgmentBus` MUST mark the originating promise as `acknowledged` so it never re-fires.
 
 ### Consumer Impact Sweep
 
 - Assistant intent ingestion gains a new "promise capture" classifier path; existing intent paths are unchanged in behaviour.
-- Spec 021 unified surfacing controller receives a new `proposalSource` value `promise`; arbitration/budget remain spec 021's authority.
+- The unified surfacing controller (spec 078) receives a new `proposalSource` value `promise`; arbitration/budget remain spec 078's authority.
 - Knowledge store grows a `knowledge_promises` table; existing knowledge tables are untouched.
 
 ### Shared Infrastructure Impact Sweep
 
-- `SurfacingProposalSink` and `AcknowledgmentBus` are spec 021 owned; consume the published contracts verbatim.
+- `SurfacingProposalSink` and `AcknowledgmentBus` are spec 078 owned; consume the published contracts verbatim.
 - Scheduler tick cadence is shared infrastructure — register through the existing scheduler registry.
 - Migration must be idempotent and rollback-safe (drop table + drop index) per Docker lifecycle governance.
 
 ### Change Boundary
 
 - **Allowed file families:** new internal/knowledge/promises.go (post-release-deferred), new internal/scheduler/promises.go (post-release-deferred), new internal/intelligence/promises.go (post-release-deferred), new migration file, new SST keys, assistant intent → promise-capture classifier hook, tests.
-- **Excluded surfaces:** edits to spec 021 controller internals, edits to output-channel adapter contracts, edits to the canonical `SurfacingProposal` schema, edits to existing knowledge tables beyond foreign-key references.
+- **Excluded surfaces:** edits to spec 078 controller internals, edits to output-channel adapter contracts, edits to the canonical `SurfacingProposal` schema, edits to existing knowledge tables beyond foreign-key references.
 
 ### Test Plan
 
@@ -1162,9 +1162,9 @@ Scenario: SCN-025-29 — Promise expires when its expiration policy elapses with
 - [x] Promise expires when its expiration policy elapses without trigger or acknowledgment. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] User-stated promises are captured with parsed trigger condition, source artifact ids, requested-at, and expiration policy. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Promise lifecycle transitions are guarded (`pending → fired|expired`, `fired → acknowledged|expired`) and are atomically persisted. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
-- [x] Pending promises fire as `SurfacingProposal` addressed to the spec 021 unified surfacing controller; zero direct output-channel calls from this engine. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Pending promises fire as `SurfacingProposal` addressed to the unified surfacing controller (spec 078); zero direct output-channel calls from this engine. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Expiration policy advances stale pending promises to `expired` without emitting any proposal. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
-- [x] Acknowledgment events from spec 021 `AcknowledgmentBus` mark originating promises `acknowledged` so they never re-fire. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Acknowledgment events from spec 078 `AcknowledgmentBus` mark originating promises `acknowledged` so they never re-fire. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Migration is idempotent and rollback-safe. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] SST keys `intelligence.promises.enabled`, `intelligence.promises.default_expiration_days`, `intelligence.promises.max_active_per_user` are fail-loud (missing aborts startup). — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Scenario-specific unit, integration, and e2e-api tests for SCN-025-27, SCN-025-28, SCN-025-29 pass. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
@@ -1173,5 +1173,5 @@ Scenario: SCN-025-29 — Promise expires when its expiration policy elapses with
 - [x] Broader E2E regression suite passes. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh lint`, `./smackerel.sh format --check` pass with zero warnings. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Artifact lint and traceability guard pass. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
-- [x] Docs updated for the promise engine and spec 021 surfacing controller dependency boundary. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+- [x] Docs updated for the promise engine and spec 078 surfacing controller dependency boundary. — Evidence: DEFERRED per Post-Release Scope Exception (DI-025-05); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 <!-- bubbles:g040-skip-end -->

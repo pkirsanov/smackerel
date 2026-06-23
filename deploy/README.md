@@ -8,9 +8,11 @@ The same `git SHA` produces:
 1. **One immutable application image** per service (`smackerel-core`, `smackerel-ml`),
    identified by `repository@sha256:<digest>`, signed with cosign keyless and accompanied by
    SBOM + SLSA provenance attestations.
-2. **One immutable config bundle per environment** (`dev`, `prod`, `home-lab`, ...),
+2. **One immutable config bundle per environment** (`dev`, `test`, `home-lab`),
    identified by `<env>-<sourceSha>`. Bundles are deterministic tarballs of the env files
-   produced by `./smackerel.sh config generate --env <env> --bundle`.
+   produced by `./smackerel.sh config generate --env <env> --bundle`. CI builds exactly
+   these three environments (`.github/workflows/build.yml` `build-bundles` matrix); there
+   is no `prod` bundle.
 3. **One mutable deployment manifest per target** (`deploy/<target>/manifest.yaml`),
    pinning a specific `<image digest>` + `<config bundle hash>` pair for that target.
 
@@ -22,23 +24,39 @@ bundle hash, and MUST be idempotent. `rollback` is a pure pointer-swap on `manif
 
 ## Layout
 
+This in-tree `deploy/` directory holds only the **generic, target-agnostic**
+deploy surface — the SST-derived contract, the deploy Compose file, the copyable
+skeleton, and the observability overlay. It deliberately contains **no
+operator-coupled adapter** (no real FQDNs/IPs/site files):
+
 ```
 deploy/
-├── README.md           ← this file
-├── contract.yaml       ← SST-derived build/deploy contract (consumed by adapters)
+├── README.md            ← this file
+├── contract.yaml        ← SST-derived build/deploy contract (consumed by adapters)
+├── compose.deploy.yml   ← deploy-time Compose (fail-loud HOST_BIND_ADDRESS interpolation)
 ├── _example/
-│   └── target-skeleton/  ← stubbed skeleton; copy to start a new target
-└── home-lab/           ← per-target adapter: home-lab installation
-    ├── README.md
-    ├── params.yaml     ← target-specific knobs (rollout strategy, replicas, hostnames)
-    ├── manifest.yaml   ← current deployment pointer (image digest + bundle hash)
-    ├── preconditions.sh
-    ├── bootstrap.sh
-    ├── apply.sh
-    ├── rollback.sh
-    ├── verify.sh
-    ├── status.sh       ← optional read-only adapter status; product CLI falls back if absent
-    └── teardown.sh
+│   └── target-skeleton/ ← stubbed skeleton; copy to start a new target
+└── observability/       ← telemetry overlay consumed by adapters
+```
+
+The operator-coupled **home-lab adapter is out-of-tree**: it lives in the
+operator-private overlay (the `knb` repo) and is resolved by `DEPLOY_TARGETS_ROOT`
+(see *Adapter Locality* below), never in this repo. Its internal shape is the
+[`_example/target-skeleton/`](_example/target-skeleton/) expanded with real
+target values:
+
+```
+${DEPLOY_TARGETS_ROOT}/smackerel/home-lab/   ← per-target adapter (operator-private)
+├── README.md
+├── params.yaml      ← target-specific knobs (rollout strategy, replicas, hostnames)
+├── manifest.yaml    ← current deployment pointer (image digest + bundle hash)
+├── preconditions.sh
+├── bootstrap.sh
+├── apply.sh
+├── rollback.sh
+├── verify.sh
+├── status.sh        ← optional read-only adapter status; product CLI falls back if absent
+└── teardown.sh
 ```
 
 ## Adapter Locality (In-Tree vs Out-of-Tree)

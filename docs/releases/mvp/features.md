@@ -66,8 +66,8 @@ All capabilities below were certified `done` (or equivalent terminal-for-mode) b
 | NATS JetStream bus + production hardening | 002, 046 | delivered |
 | Python ML sidecar (FastAPI + Ollama) | 002, 050 | delivered |
 | Universal capture/processing pipeline | 002, 003 | delivered |
-| Knowledge graph + topic lifecycle | 003, 063 | delivered |
-| Semantic search (vague-in / precise-out) | 003 + 068 + 063 | delivered |
+| Knowledge graph + topic lifecycle | 003 | delivered (063 AI-enrichment layer is planning-only, `specs_hardened` — see note below) |
+| Semantic search (vague-in / precise-out) | 003 + 068 | delivered (063 AI-enrichment layer is planning-only, `specs_hardened` — see note below) |
 | Daily/weekly digest + Telegram delivery | 021 (subset) | delivered |
 | Pre-meeting briefs + contextual alerts (baseline) | 021, 025 | delivered |
 | Maps timeline + trip dossier + people intelligence | 005 + 011, 005 + 015, 005 + IMAP/CalDAV | delivered |
@@ -92,7 +92,8 @@ All capabilities below were certified `done` (or equivalent terminal-for-mode) b
 | Browser login redirect | 057 | delivered (`done_with_concerns` — see [`actions.md`](actions.md)) |
 | Chrome extension bridge | 058 | deferred → release-v1 (now `blocked` on an operator-owned cosign CI release — see MVP item M5b / [`actions.md`](actions.md)) |
 | Google Keep live mode | 059 | delivered |
-| Conversational assistant + knowledge AI enrichment + open-ended knowledge agent | 061, 063, 064 | delivered |
+| Conversational assistant + open-ended knowledge agent (delivers the knowledge-AI enrichment capability) | 061, 064 | delivered |
+| Knowledge-AI enrichment (planning-hardening spec) | 063 | `specs_hardened` — planning-only (`product-to-planning`; authored zero source/test/migration diffs). The enrichment **capability** is delivered by 061/064; spec 063 itself is NOT a delivered implementation |
 | Domain extraction pipeline | 026 | delivered (scenario-manifest drift resolved by MVP item M4) |
 | Assistant HTTP transport + intent-trace observability | 069, 071 | delivered |
 | Web username/password login + web/mobile assistant frontend | 070, 073 | delivered |
@@ -141,7 +142,7 @@ Any new connector after this MVP gate is RELEASE-V1 scope.
 | ID | Capability | Owning spec(s) | Delivery shape | Status |
 |----|------------|----------------|----------------|--------|
 | **M1a** | Global user-interruption-budget controller ("Next Smackerel" prioritizer) — owns budget across digest + push + Telegram + web + ntfy + email-out, with measurable SLOs (≤ N nudges/day, target acted-on-rate, false-positive ceiling) | [`078-cross-surface-surfacing-prioritizer`](../../../specs/078-cross-surface-surfacing-prioritizer/) | Delivered as a dedicated spec that **adopted pre-existing in-tree controller groundwork**; **rescoped OUT of 021** by commit `640b95d0`. 5-channel × 7-producer controller, 5-decision vocabulary, `surfacing_*` metric families, SST keys | **delivered** (078 `done`, validate-certified, `releaseTrain: mvp`) |
-| **M1b** | Calendar-triggered briefs (lead-time scheduled producers tied to CalDAV upcoming events) | [`025-knowledge-synthesis-layer`](../../../specs/025-knowledge-synthesis-layer/) Scope 9 | Portfolio-approved post-release deferral **DI-025-05**. The sole blocker — the M1a global interruption-budget controller — is now satisfied by spec 078 | **deferred → release-v1** (DI-025-05; not MVP-required) |
+| **M1b** | Calendar-triggered briefs — the **configurable per-category lead-time** generalization (e.g. 1-day trip briefs). NOTE: the marquee fixed **30-minute pre-meeting brief is already delivered in MVP** (spec 021); only the configurable lead-time generalization defers | [`025-knowledge-synthesis-layer`](../../../specs/025-knowledge-synthesis-layer/) Scope 9 | Portfolio-approved post-release deferral **DI-025-05**. **Clarification (do not read as "calendar briefs absent in MVP"):** the 30-minute pre-meeting brief IS delivered and wired in MVP via spec 021 — [`internal/intelligence/briefs.go`](../../../internal/intelligence/briefs.go) `GeneratePreMeetingBriefs` queries calendar events 25–35 min out and is registered as `ProducerPreMeetingBriefs` in the spec-078 surfacing controller. What defers to release-v1 is ONLY the configurable per-category lead-time generalization. The sole remaining blocker for that generalization — the M1a global interruption-budget controller — is now satisfied by spec 078 | **deferred → release-v1** (DI-025-05; the lead-time generalization only — the 30-min pre-meeting brief shipped via spec 021) |
 | **M1c (basic)** | Basic time-based reminders ("ping me at Y") — scheduler-backed | [`054-notification-intelligence-handler`](../../../specs/054-notification-intelligence-handler/) + `internal/agent/tools/notification` + Telegram `/remind` | Basic time-based reminder path delivered and carried into MVP | **delivered (basic path)** |
 | **M1c (full engine)** | Conditional / arrival promise engine ("ping me if X hasn't happened by Y", "remind me when Z arrives") | [`025-knowledge-synthesis-layer`](../../../specs/025-knowledge-synthesis-layer/) Scope 10 | Portfolio-approved post-release deferral **DI-025-05** | **deferred → release-v1** (DI-025-05; not MVP-required) |
 | **M2a** | Wiki / graph-browse UI surface in web — views by topic / person / place / time; rendered cross-links | [`073-web-mobile-assistant-frontend`](../../../specs/073-web-mobile-assistant-frontend/) Scope 5 | Graph-browse pivot views + cross-link rendering delivered on the web/mobile assistant front-end | **delivered** (073 Scope 5 `done`, validate-certified) |
@@ -154,6 +155,26 @@ Any new connector after this MVP gate is RELEASE-V1 scope.
 | **M5d** | `_ops/OPS-001` EB-7 idempotence verification | [`_ops/OPS-001-spec-banner-sweep`](../../../specs/_ops/OPS-001-spec-banner-sweep/) | `validate-only` grep verification | **delivered** (OPS-001 `specs_hardened` = terminal-for-mode, validate-certified) |
 
 **MVP delivery summary.** M1a / M2a / M2b / M4 / M5d are **delivered and validate-certified** — these are the Gate G101 `delivery=required` bindings. M1c's basic time-based reminder path is **delivered** and carried; M5a / M5c are **delivered** (`done`) but classified **carried** (kept out of the required set by a pre-existing Gate G022 specialist-phase-record artifact-lint gap on those two specs); M3 is **delivered** via a single instruction-file edit (no owning spec, `spec=none`). M1b, the M1c full conditional/arrival promise engine, and M5b are **portfolio-approved deferrals to release-v1** (M1b / M1c-full: DI-025-05, with the former sole blocker now satisfied by spec 078; M5b: 058 `blocked` on an operator-owned cosign CI release). Note: M1a was delivered through a **dedicated spec (078)** that adopted pre-existing in-tree controller groundwork rescoped out of 021 by commit `640b95d0`, rather than by extending 021 in place — so the earlier "no new spec is required for MVP" framing no longer holds for M1a.
+
+### Post-reconciliation mvp-train specs (outside the M-series product-feature catalog)
+
+The M-series catalog above was frozen at the 2026-06-06 readiness reconciliation. The
+2026-06-23 reconciliation flagged two `releaseTrain: mvp` specs that reached terminal `done`
+*after* that freeze — within the MVP window — as absent from this delivery record (finding
+F-13). Both sit **outside** the M1–M5 product-feature catalog by design (one is a
+delivery-channel extension, the other is build/infra), so neither is added to the M-series
+table nor bound as a Gate G101 `delivery=required` feature. They are recorded here for
+release-train completeness:
+
+| Spec | Capability | Train | Status | Why outside the M-series catalog |
+|------|------------|-------|--------|----------------------------------|
+| [`097-card-rewards-gcal-delivery`](../../../specs/097-card-rewards-gcal-delivery/) | Card-rewards → Google Calendar delivery channel | `mvp` | `done` (full-delivery, validate-certified) | Delivery-channel extension of the card-rewards companion family — not a standalone M-series product feature |
+| [`099-preflight-resource-guard`](../../../specs/099-preflight-resource-guard/) | Pre-flight host-resource (OOM) guard for the build/test runtime | `mvp` | `done` (full-delivery, validate-certified) | Build/infra hardening — no end-user product surface |
+
+These rows are informational lineage only; they are NOT Gate G101 `delivery=required`
+bindings and do not change the enforced required set (M1a / M2a / M2b / M4 / M5d). This
+record is not asserted to be an exhaustive census of post-freeze mvp-train specs — it captures
+the two specs flagged by finding F-13.
 
 ## Plan-to-Release Traceability
 
@@ -177,6 +198,18 @@ Any new connector after this MVP gate is RELEASE-V1 scope.
 Every "delivered" claim in the carry-forward table traces to a spec folder under [`specs/`](../../../specs/) whose `state.json` was certified at `done` (or terminal-for-mode equivalent) per [`specs/_spec-review-report.md`](../../../specs/_spec-review-report.md) audit on 2026-06-02. No capability is claimed delivered without a spec reference. No capability is fabricated.
 
 Every new-in-MVP delivery claim is machine-bound by the Gate G101 annotations at the top of this file and was verified against validate-certified, terminal `state.json` truth on 2026-06-06 (the `delivery=required` entries — M1a / M2a / M2b / M4 / M5d — each bind a spec whose completed phases include `validate`). Deferrals (M1b, M1c full engine, M5b) and carried items (M1c basic, M5a, M5c) are recorded but not delivery-enforced. No capability is claimed delivered without a spec reference, and no capability is fabricated. Spec 081 (Python NATS parity) is `done` on the `next` train and is intentionally out of this MVP packet — recorded here only as next-train lineage.
+
+## Release-train classification (grandfathered pre-078 specs)
+
+The [release-trains policy](../../Release_Trains.md) ([`config/release-trains.yaml`](../../../config/release-trains.yaml))
+expects every spec to declare a `releaseTrain` field. Spec **078** is the first spec authored
+under that policy and the first to carry the field; the ~81 numbered specs predating 078 (the
+Phase 1–5 carry-forward set) do **not** carry a per-spec `releaseTrain` field. Their MVP-train
+membership is established **by this packet's Gate G101 per-feature binding annotations**
+(grandfathered), not by a per-spec field. This gap is intentional and explicit: the pre-078
+specs are **NOT** being backfilled — the packet annotations are the authoritative train-membership
+record for the MVP delivery set. All new specs (078+) carry `releaseTrain` directly, so the gap
+does not grow.
 
 ## Deprecations in MVP
 

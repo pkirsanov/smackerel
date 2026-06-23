@@ -2563,6 +2563,8 @@ gantt
 
 **Exit criteria:** Weekly synthesis surfaces genuine cross-domain insights. Pre-meeting briefs are useful. Bill reminders are accurate.
 
+> **Note (status granularity):** the delivered baselines are the fixed 30-minute pre-meeting brief (3.3) plus basic time-based and overdue-commitment reminders (3.4–3.5). The generalized sub-producer variants — configurable lead-time calendar briefs (**M1b**) and the conditional/arrival promise engine (**M1c full engine**) — are deferred to `release-v1` (tracked as **DI-025-05**; see [`releases/mvp/features.md`](releases/mvp/features.md)).
+
 ### Phase 4: Expansion ✅ Delivered
 
 **Goal:** Location intelligence, browser integration, trip assembly, people intelligence.

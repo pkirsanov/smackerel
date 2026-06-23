@@ -1460,7 +1460,7 @@ stateDiagram-v2
 The knowledge synthesis layer is extended with a calendar-aware producer that
 fires synthesised briefs at a configurable lead-time before upcoming CalDAV
 calendar events. Briefs are emitted as `SurfacingProposal` events addressed to
-the spec 021 unified surfacing controller; the producer never invokes an output
+the unified surfacing controller (spec 078); the producer never invokes an output
 channel directly.
 
 ### Scenarios
@@ -1472,7 +1472,7 @@ Scenario: SCN-025-24 — Lead-time scheduler fires a brief before an upcoming ca
   When the scheduler tick at 14:30 evaluates upcoming events
   Then a calendar-triggered brief job is enqueued for the meeting
   And the brief is synthesised via the existing intelligence briefs pipeline using the meeting's source-qualified context
-  And the resulting brief is emitted as a SurfacingProposal addressed to the spec 021 unified surfacing controller with proposalSource "calendar-brief"
+  And the resulting brief is emitted as a SurfacingProposal addressed to the unified surfacing controller (spec 078) with proposalSource "calendar-brief"
   And it is not delivered directly to any output channel
 
 Scenario: SCN-025-25 — Lead-time policy is per category and configurable
@@ -1494,7 +1494,7 @@ Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposal
 
 ### Acceptance Criteria
 
-- Calendar-triggered briefs MUST flow through the spec 021 unified surfacing controller; no direct output-channel calls from this producer.
+- Calendar-triggered briefs MUST flow through the unified surfacing controller (spec 078); no direct output-channel calls from this producer.
 - Lead-time policy MUST be per-category, fail-loud SST (no default), and versioned for dedupe.
 - Dedupe key is `(calDavEventId, leadTimePolicyVersion)`; re-evaluation within the same window MUST NOT enqueue a second proposal.
 - CalDAV connector cache is consumed read-only.
@@ -1506,8 +1506,8 @@ Scenario: SCN-025-26 — Dedupe with existing briefs prevents duplicate proposal
 The knowledge synthesis layer is extended with a user-stated promise engine
 that captures future-intent reminders, persists them with a trigger condition
 and expiration policy, and fires them as `SurfacingProposal` events when the
-trigger is satisfied. All firings flow through the spec 021 unified surfacing
-controller; the engine never dispatches output directly.
+trigger is satisfied. All firings flow through the unified surfacing controller
+(spec 078); the engine never dispatches output directly.
 
 ### Scenarios
 
@@ -1524,7 +1524,7 @@ Scenario: SCN-025-28 — Pending promise fires when its trigger condition is sat
   And an arrival event for the bookshelf order is ingested
   When the scheduler tick re-evaluates pending promises
   Then the promise transitions to status "fired"
-  And a SurfacingProposal with proposalSource "promise" is published to the spec 021 unified surfacing controller carrying the original promise summary and the triggering artifact id
+  And a SurfacingProposal with proposalSource "promise" is published to the unified surfacing controller (spec 078) carrying the original promise summary and the triggering artifact id
   And no output-channel adapter is invoked directly by the promise engine
 
 Scenario: SCN-025-29 — Promise expires when its expiration policy elapses without trigger or acknowledgment
@@ -1540,7 +1540,7 @@ Scenario: SCN-025-29 — Promise expires when its expiration policy elapses with
 ### Acceptance Criteria
 
 - Promise lifecycle states are `pending|fired|acknowledged|expired`; transitions are guarded and atomically persisted.
-- Firings MUST be emitted as `SurfacingProposal` to the spec 021 controller; zero direct output-channel calls.
+- Firings MUST be emitted as `SurfacingProposal` to the unified surfacing controller (spec 078); zero direct output-channel calls.
 - Expiration MUST NOT emit a proposal.
-- Acknowledgment events from spec 021 `AcknowledgmentBus` MUST mark the originating promise `acknowledged` so it never re-fires.
+- Acknowledgment events from the spec 078 `AcknowledgmentBus` MUST mark the originating promise `acknowledged` so it never re-fires.
 - SST keys are fail-loud: missing config aborts startup.
