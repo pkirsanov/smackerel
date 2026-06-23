@@ -1,0 +1,246 @@
+{
+  "bugId": "BUG-067-001-ml-log-level-nodefaults-overage-exception",
+  "parentFeatureDir": "specs/067-intent-driven-policy-enforcement",
+  "title": "ML_LOG_LEVEL NO-DEFAULTS violation + over-age policy exception (masked by magic-constant test caps)",
+  "severity": "medium",
+  "status": "done",
+  "certifiedAt": "2026-06-22T15:45:00Z",
+  "certifiedBy": "bubbles.workflow",
+  "workflowMode": "bugfix-fastlane",
+  "createdAt": "2026-06-22T14:00:00Z",
+  "createdBy": "bubbles.workflow",
+  "createdViaWorkflow": "bugfix-fastlane",
+  "createdViaParent": {
+    "parentWorkflowMode": "bugfix-fastlane",
+    "trigger": "operator-directed",
+    "mappedChildWorkflowMode": "bugfix-fastlane",
+    "executionModel": "parent-expanded-child-mode",
+    "expansionReason": "active runtime exposes no runSubagent/agent tool; bugfix-fastlane is not a top-level-runtime-required mode, so each phase owner's work is executed inline by bubbles.workflow"
+  },
+  "summary": "Spec 067's gaps + harden phases surfaced and routed two entangled findings at certification: GAP-067-G01 (the live-but-latent NO-DEFAULTS violation ml/app/main.py:22 os.environ.get('ML_LOG_LEVEL','INFO') kept legal only by the over-age exception G067-A05-ml-log-level, expires_on 2026-12-01 = 162 days vs the 90-day SST cap; nothing emits ML_LOG_LEVEL so the sidecar always uses the literal INFO) and GAP-067-G02 (every real-baseline policy guard test overrides ExceptionMaxAgeDays to 365*10/180 magic constants, masking G01, violating spec 067 Hard Constraint 2). This bug SST-ifies the fix: lands services.ml.log_level, wires ML_LOG_LEVEL emission into config generation, makes ml/app/main.py read it fail-loud, deletes the exception entirely, anchors the 4 real-baseline tests to the real SST cap, and lands an adversarial regression (TestRealBaselineHasNoOverAgeExceptionsAtRealCap + TestValidateExceptionFlagsOverAgeAtRealCap) proven RED->GREEN.",
+  "findingCount": {
+    "block": 2,
+    "warn": 0,
+    "totalDrift": 2
+  },
+  "findingCategories": [
+    {
+      "id": "GAP-067-G01",
+      "gate": "G067-A05/G067-A07",
+      "description": "Live NO-DEFAULTS violation ml/app/main.py:22 (os.environ.get('ML_LOG_LEVEL','INFO')) kept legal only by over-age exception G067-A05-ml-log-level (162 d > 90 d cap); ML_LOG_LEVEL emitted by nothing so the sidecar always uses the literal INFO.",
+      "closingScope": "BUG-067-001:Scope-1"
+    },
+    {
+      "id": "GAP-067-G02",
+      "gate": "spec-067-hard-constraint-2",
+      "description": "Real-baseline policy guard tests override ExceptionMaxAgeDays to 365*10/180 magic constants instead of the real 90-day SST cap, so the over-age exception never trips a gate (masks G01).",
+      "closingScope": "BUG-067-001:Scope-2"
+    }
+  ],
+  "scopes": [
+    {
+      "scopeId": "BUG-067-001:Scope-1",
+      "title": "SST-ify ML_LOG_LEVEL + fail-loud sidecar + delete the policy exception",
+      "status": "Done",
+      "owner": "bubbles.design+bubbles.plan+bubbles.implement",
+      "closesFindings": 1
+    },
+    {
+      "scopeId": "BUG-067-001:Scope-2",
+      "title": "Close the magic-constant test hole + adversarial regression",
+      "status": "Done",
+      "owner": "bubbles.implement+bubbles.test",
+      "closesFindings": 1
+    }
+  ],
+  "executionHistory": [
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["select", "bootstrap", "design", "plan"],
+      "statusBefore": "n/a",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-22T14:00:00Z",
+      "runEndedAt": "2026-06-22T14:20:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.workflow",
+      "expansionReason": "Active runtime has no runSubagent/agent tool; bugfix-fastlane is not a top-level-runtime-required mode, so bubbles.workflow performed the bug/design/plan phases inline. Bug packet (8 artifacts) authored: bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json. Root cause grounded in spec 067 GAP-067-G01/G02 routed findings + directly-captured Before-Fix reproduction in report.md.",
+      "expansionEvidenceRef": "report.md",
+      "summary": "Authored the full BUG-067-001 packet and captured the Before-Fix reproduction (over-age exception 162 d > 90 d cap; zero ML_LOG_LEVEL config emission; forbidden default ml/app/main.py:22; 4 magic-constant masking caps). Designed the SST-ify fix (land services.ml.log_level -> emit ML_LOG_LEVEL -> fail-loud read -> delete exception) + the test-hole fix (SST-anchored cap helper + 2 adversarial tests). Routed to inline implement."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-22T14:20:00Z",
+      "runEndedAt": "2026-06-22T15:00:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Applied the SST-ify fix: config/smackerel.yaml services.ml.log_level:info; scripts/commands/config.sh ML_LOG_LEVEL extract + emit (single heredoc -> dev/test/bundle); ml/app/main.py fail-loud read (removed 2 policy-exception markers + the literal INFO default, added ML_LOG_LEVEL to required keys, allowlist + setLevel); policy-exception-baseline.json -> exceptions:[]. Closed the test hole: realPolicyExceptionMaxAgeDays helper reads the cap from config/smackerel.yaml; the 4 real-baseline caps anchored to it (no_defaults_python L26, no_defaults_go L26, keyword_map L43, keyword_routing L50). Wired ML_LOG_LEVEL into ml/tests/test_main.py + ml/tests/test_startup_warning.py so the now-required key does not short-circuit existing assertions. Verified config generation emits ML_LOG_LEVEL into dev.env (L379), test.env (L379), and the deploy bundle app.env (L378)."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-22T15:00:00Z",
+      "runEndedAt": "2026-06-22T15:15:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Adversarial regression proven RED->GREEN in the same session. RED (before fix, real 90-day cap): TestRealBaselineHasNoOverAgeExceptionsAtRealCap FAILED with G067-A07 for the still-present G067-A05-ml-log-level (expires_on=2026-12-01 > 90 d); the teeth test TestValidateExceptionFlagsOverAgeAtRealCap PASSED even at RED (non-tautological: 162-day fixture flagged G067-A07, 80-day fixture not flagged). GREEN (after fix): both adversarial tests + the 4 cap-anchored real-corpus tests all PASS at the real SST cap. Evidence in report.md Test Evidence section."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-22T15:15:00Z",
+      "runEndedAt": "2026-06-22T15:25:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Broader regression GREEN on the surface this change touches: full policy-guard integration package go test -tags integration ./tests/integration/policy/... ok (0.842s); full ml sidecar Python unit suite ./smackerel.sh test unit --python = 517 passed, 2 skipped (the 3 startup_warning tests that initially broke on the new required ML_LOG_LEVEL were fixed by wiring the value into their _run_lifespan helper, not by weakening). Browser/live-stack E2E not applicable (zero runtime/UI surface); the operator constrained this run to avoid the full live stack on a memory-pressured host. No findings to route."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-22T15:25:00Z",
+      "runEndedAt": "2026-06-22T15:28:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance. The realPolicyExceptionMaxAgeDays helper centralizes the cap read and removes 4 magic constants (a net simplification); the fail-loud read mirrors the existing SMACKEREL_ENV allowlist pattern in the same function; no abstraction or indirection introduced. Nothing to simplify further."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-22T15:28:00Z",
+      "runEndedAt": "2026-06-22T15:31:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance. Bounded stability review: zero Docker/Compose/container-lifecycle/schema/NATS changes; one new required SST key (ML_LOG_LEVEL) emitted into every env + the deploy bundle (verified) so the fail-loud sidecar boots in all environments; no new persistent state; no shared-fixture coupling. Policy guards remain pure file-system scanners with zero runtime state."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-22T15:31:00Z",
+      "runEndedAt": "2026-06-22T15:34:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "SECURE / improvement. Removing the literal log-level default and making the read fail-loud strengthens the NO-DEFAULTS posture; the co-located /embed model field now reports the embedder real model name rather than an env echo. No secrets, hostnames, IPs, or PII added; no new attack surface; OWASP Top 10 not applicable (config + governance only)."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-22T15:25:00Z",
+      "runEndedAt": "2026-06-22T15:40:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Certification: ./smackerel.sh check = Config in sync with SST + env_file drift guard OK + scenario-lint OK; ./smackerel.sh lint = ruff All checks passed + go vet clean + web validation passed; gofmt -l on the 4 changed policy test files empty. artifact-lint on the bug packet + on the parent specs/067 both exit 0. format --check has one hit on a committed file outside this change set that this bug does not modify (internal/connector/qfdecisions/chaos_hardening_test.go). Both scope DoDs ticked with inline evidence; status promoted to done."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-22T15:40:00Z",
+      "runEndedAt": "2026-06-22T15:45:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Verdict SHIP. G01 + G02 both closed at the root. Anti-fabrication: every checked DoD item maps to a real captured command; RED and GREEN captured same session against the same working tree; the adversarial case fails if the over-age exception or a widened cap is reintroduced. Change set isolated to the 6 source/config files + 4 policy test files + 1 Python test file + this bug packet; concurrent-session edits to specs/025|027|039|098 and docs/releases were not touched or staged. No NO-DEFAULTS fallback introduced (the fix removes one)."
+    }
+  ],
+  "completedPhaseClaims": [
+    "select",
+    "bootstrap",
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit"
+  ],
+  "completedPhases": [
+    "select",
+    "bootstrap",
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit"
+  ],
+  "completedPhaseClaimDetails": [
+    {"phase": "select", "agent": "bubbles.workflow", "completedAt": "2026-06-22T14:02:00Z", "summary": "Operator-directed bugfix-fastlane targeting specs/067-intent-driven-policy-enforcement; bug owns policy-exception-baseline.json fix."},
+    {"phase": "bootstrap", "agent": "bubbles.workflow", "completedAt": "2026-06-22T14:10:00Z", "summary": "BUG-067-001 packet (8 artifacts) authored; Before-Fix reproduction captured in report.md."},
+    {"phase": "design", "agent": "bubbles.workflow", "completedAt": "2026-06-22T14:15:00Z", "summary": "SST-ify fix designed (D1-D6) grounded in the sibling Python-only ML key pattern (no Go struct mirror); exception eliminated at root."},
+    {"phase": "plan", "agent": "bubbles.workflow", "completedAt": "2026-06-22T14:20:00Z", "summary": "2-scope plan with Regression E2E rows + gate-required DoD checkboxes; scenario-manifest.json G057 fields populated for 5 scenarios."},
+    {"phase": "implement", "agent": "bubbles.workflow", "completedAt": "2026-06-22T15:00:00Z", "summary": "6 source/config edits + 4 policy test cap edits + 2 Python test wiring edits applied; config generation emits ML_LOG_LEVEL for dev/test/bundle."},
+    {"phase": "test", "agent": "bubbles.workflow", "completedAt": "2026-06-22T15:15:00Z", "summary": "Adversarial regression RED->GREEN captured same session; teeth test proves non-tautological."},
+    {"phase": "regression", "agent": "bubbles.workflow", "completedAt": "2026-06-22T15:25:00Z", "summary": "Full policy package GREEN; 517 ml Python tests GREEN; live-stack E2E not applicable (no runtime/UI surface)."},
+    {"phase": "simplify", "agent": "bubbles.workflow", "completedAt": "2026-06-22T15:28:00Z", "summary": "n/a with provenance — SST cap helper removes 4 magic constants; fail-loud read mirrors existing SMACKEREL_ENV pattern; no new abstraction."},
+    {"phase": "stabilize", "agent": "bubbles.workflow", "completedAt": "2026-06-22T15:31:00Z", "summary": "n/a with provenance — no Docker/Compose/schema/NATS changes; ML_LOG_LEVEL emitted into every env + bundle; no new persistent state."},
+    {"phase": "security", "agent": "bubbles.workflow", "completedAt": "2026-06-22T15:34:00Z", "summary": "SECURE / improvement — fail-loud removes a NO-DEFAULTS gap; no secrets/PII; OWASP N/A (config + governance only)."},
+    {"phase": "validate", "agent": "bubbles.workflow", "completedAt": "2026-06-22T15:40:00Z", "summary": "check + lint GREEN; SST drift guard OK; artifact-lint bug + parent exit 0; both scope DoDs ticked."},
+    {"phase": "audit", "agent": "bubbles.workflow", "completedAt": "2026-06-22T15:45:00Z", "summary": "SHIP; anti-fabrication clean; change set isolated; no NO-DEFAULTS fallback introduced."}
+  ],
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "BUG-067-001:Scope-1",
+      "BUG-067-001:Scope-2"
+    ],
+    "totalScopes": 2,
+    "certifiedBy": "bubbles.workflow",
+    "certifiedAt": "2026-06-22T15:45:00Z",
+    "certifiedCompletedPhases": [
+      "select",
+      "bootstrap",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "scopeProgress": [
+      {"scope": "BUG-067-001:Scope-1", "status": "done", "completedAt": "2026-06-22T15:40:00Z", "dodTotal": 8, "dodChecked": 8},
+      {"scope": "BUG-067-001:Scope-2", "status": "done", "completedAt": "2026-06-22T15:40:00Z", "dodTotal": 6, "dodChecked": 6}
+    ],
+    "lockdownState": {
+      "state": "lockdown-complete",
+      "round": 1,
+      "lastCleanRound": 1,
+      "reason": "bugfix-fastlane single-round closure; both findings closed with adversarial RED->GREEN proof"
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "governanceVersion": "2.2.0",
+    "recordedAt": "2026-06-22T15:45:00Z",
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "protected-scenarios", "source": "workflow-forced"},
+    "validation": {"value": "certification-required", "source": "repo-default"},
+    "continueOnBlocked": {"value": false, "source": "repo-default"},
+    "requireGreenTests": {"value": true, "source": "workflow-forced"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "nextRequiredOwner": "none",
+  "failures": [],
+  "lastUpdatedAt": "2026-06-22T15:45:00Z"
+}

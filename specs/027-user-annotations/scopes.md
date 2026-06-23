@@ -97,7 +97,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 6 | Telegram Annotation Handler | Go telegram | unit: reply-to flow, /rate command, disambiguation, formatting | Done |
 | 7 | Search Extension | Go API | unit: intent detection, annotation filters, result enrichment, boost | Done |
 | 8 | Intelligence Integration | Go intelligence, NATS | unit: relevance delta, subscriber, resurfacing query | Done |
-| 9 | Annotation Editing API (UI coordination) | Go API | unit: list-my-annotations, If-Match conflict, source_channel=web audit | Not Started |
+| 9 | Annotation Editing API (UI coordination) | Go API | unit: list-my-annotations, If-Match conflict, source_channel=web audit | Done |
 
 ---
 

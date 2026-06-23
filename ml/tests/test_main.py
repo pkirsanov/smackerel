@@ -31,6 +31,8 @@ def clear_required_env(monkeypatch):
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
         "SMACKEREL_AUTH_TOKEN",
         "SMACKEREL_ENV",
+        # Spec 067 BUG-067-001 — ML sidecar log level SST contract.
+        "ML_LOG_LEVEL",
         # Spec 050 — ML sidecar health/worker isolation SST contract.
         "ML_EMBEDDING_WORKERS",
         "ML_EMBEDDING_QUEUE_MAX",
@@ -56,6 +58,8 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
     monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
     monkeypatch.setenv("SMACKEREL_ENV", "test")
+    # Spec 067 BUG-067-001 — ML sidecar log level SST contract.
+    monkeypatch.setenv("ML_LOG_LEVEL", "info")
     # Spec 050 — ML sidecar health/worker isolation SST contract.
     monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
@@ -83,6 +87,7 @@ def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatc
     monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
     monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
     monkeypatch.setenv("SMACKEREL_ENV", "test")
+    monkeypatch.setenv("ML_LOG_LEVEL", "info")
     monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
@@ -111,6 +116,8 @@ def _set_required_env_minus(monkeypatch, environment: str, *, auth_token: str | 
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
     monkeypatch.setenv("SMACKEREL_ENV", environment)
+    # Spec 067 BUG-067-001 — ML sidecar log level SST contract.
+    monkeypatch.setenv("ML_LOG_LEVEL", "info")
     # Spec 050 — ML sidecar health/worker isolation SST contract.
     monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")

@@ -53,6 +53,10 @@ def _run_lifespan(auth_token: str, environment: str, caplog) -> list[logging.Log
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED": "false",
         "SMACKEREL_AUTH_TOKEN": auth_token,
         "SMACKEREL_ENV": environment,
+        # Spec 067 BUG-067-001 — ML sidecar log level SST contract (required;
+        # read fail-loud by _check_required_config). Tests here exercise the
+        # auth-token branch only, so we pass a valid level.
+        "ML_LOG_LEVEL": "info",
         # Spec 050 — ML sidecar health/worker isolation SST contract.
         # All three values are required for _check_required_config() to
         # succeed; tests in this module exercise the auth-token branch

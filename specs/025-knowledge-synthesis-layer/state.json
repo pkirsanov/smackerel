@@ -55,20 +55,20 @@
     "postReleaseExceptions": [
       {
         "scope": "scope-9-calendar-triggered-briefs",
-        "name": "Calendar-Triggered Briefs (post-release; gated on spec-021-m1a unified surfacing controller)",
+        "name": "Calendar-Triggered Briefs (post-release; scheduled for release-v1 — M1a unified surfacing controller blocker cleared via spec 078)",
         "status": "blocked",
-        "rationale": "Scope 9 is a SurfacingProposal producer that MUST emit through the spec 021 M1a unified surfacing controller. Spec 021 M1a has not yet landed; implementing scope 9 ahead of M1a would either (a) require building against an unstable contract or (b) force scope 9 to call output channels directly, violating the controller-first architectural invariant. Added to spec 025 as planning-only at 2026-06-03 per release-planning dispatch RELEASE-MVP:M1b; explicitly deferred to post-spec-021-M1a delivery at portfolio level.",
-        "unblockGate": "Spec 021 M1a unified surfacing controller (SurfacingProposalSink + AcknowledgmentBus contracts) lands and is consumable from internal/scheduler.",
+        "rationale": "Scope 9 is a SurfacingProposal producer that MUST emit through the M1a unified surfacing controller (SurfacingProposalSink + AcknowledgmentBus). That sole architectural blocker is now SATISFIED: the M1a controller was rescoped out of spec 021 and DELIVERED as spec 078 (Cross-Surface Surfacing Prioritizer; state.json status=done, releaseTrain=mvp), landing on trunk at commit 640b95d0 (internal/intelligence/surfacing/*) and consumable from internal/scheduler. The deferral decision is UNCHANGED: scope 9 REMAINS intentionally scheduled for the release-v1 train per the portfolio-approved exception DI-025-05 — it is not in the mvp producer set and is not yet implemented. Added to spec 025 as planning-only at 2026-06-03 per release-planning dispatch RELEASE-MVP:M1b; the producer is sequenced for release-v1 and is no longer gated on a missing controller.",
+        "unblockGate": "SATISFIED — M1a unified surfacing controller (SurfacingProposalSink + AcknowledgmentBus contracts) delivered via spec 078 and consumable from internal/scheduler. Remaining work is the release-v1-scheduled implementation of the scope 9 producer per exception DI-025-05; no outstanding upstream gate.",
         "approvedAt": "2026-06-03T07:00:00Z",
         "approvedBy": "portfolio-planning (release-planning dispatch RELEASE-MVP:M1b)",
         "discoveredIssueRef": "DI-025-05"
       },
       {
         "scope": "scope-10-reminder-promise-engine",
-        "name": "Reminder & Promise Engine (post-release; gated on spec-021-m1a unified surfacing controller and scope 9 producer pattern)",
+        "name": "Reminder & Promise Engine (post-release; scheduled for release-v1 — M1a unified surfacing controller blocker cleared via spec 078; sequenced after scope 9 producer pattern)",
         "status": "blocked",
-        "rationale": "Scope 10 depends on (a) the spec 021 M1a unified surfacing controller for proposal arbitration and acknowledgment bus, and (b) the scope 9 calendar-brief producer pattern as a reference implementation. Both prerequisites are deferred to post-release. Added to spec 025 as planning-only at 2026-06-03 per release-planning dispatch RELEASE-MVP:M1b; explicitly deferred to post-spec-021-M1a + post-scope-9 delivery at portfolio level.",
-        "unblockGate": "Spec 021 M1a unified surfacing controller delivered AND scope 9 calendar-brief producer pattern implemented and certified.",
+        "rationale": "Scope 10 depends on (a) the M1a unified surfacing controller for proposal arbitration and acknowledgment bus, and (b) the scope 9 calendar-brief producer pattern as a reference implementation. Prerequisite (a) is now SATISFIED: the M1a controller was rescoped out of spec 021 and DELIVERED as spec 078 (Cross-Surface Surfacing Prioritizer; state.json status=done, releaseTrain=mvp), landing on trunk at commit 640b95d0 (internal/intelligence/surfacing/*). Prerequisite (b) remains pending only because scope 9 is itself release-v1-scheduled, not because of any missing upstream contract. The deferral decision is UNCHANGED: scope 10 REMAINS intentionally scheduled for the release-v1 train per the portfolio-approved exception DI-025-05. Added to spec 025 as planning-only at 2026-06-03 per release-planning dispatch RELEASE-MVP:M1b; sequenced after scope 9 on the release-v1 train.",
+        "unblockGate": "M1a unified surfacing controller prerequisite SATISFIED — delivered via spec 078. Remaining prerequisite is the scope 9 calendar-brief producer pattern, which is itself release-v1-scheduled per exception DI-025-05; no outstanding upstream contract gate.",
         "approvedAt": "2026-06-03T07:00:00Z",
         "approvedBy": "portfolio-planning (release-planning dispatch RELEASE-MVP:M1b)",
         "discoveredIssueRef": "DI-025-05"

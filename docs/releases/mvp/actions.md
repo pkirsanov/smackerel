@@ -2,11 +2,21 @@
 
 Action items required to close the MVP gate, grouped by owner. All items are **planning outputs of this packet, not work performed by this packet**. The `route_required` dispatches in the [Next Dispatches](#next-dispatches) section below are the operator's playbook.
 
+> **Reconciliation note (2026-06-06).** The action items below were planning
+> outputs of the 2026-06-03 MVP packet and have since been **delivered and
+> reconciled** (2026-06-06). [`features.md`](features.md) (Gate G101-bound) is now
+> the **authoritative delivery record**: per its MVP delivery summary, M1a / M2a /
+> M2b / M4 / M5d are delivered and validate-certified; M1c-basic is delivered;
+> M5a / M5c are delivered-and-carried; M3 is delivered; and M1b, the M1c full
+> conditional/arrival promise engine, and M5b are portfolio-approved deferrals to
+> release-v1. This `actions.md` is retained as a **historical planning snapshot**,
+> not the live action ledger.
+
 ## Engineering (route via `bubbles.workflow` dispatches)
 
 | ID | Action | Owner spec | Priority |
 |----|--------|-----------|----------|
-| ENG-1 | Implement M1a (global interruption-budget controller) via adjustment to spec 021 | 021 | P0 — MVP-blocking |
+| ENG-1 | Implement M1a (global interruption-budget controller) — **delivered** via a dedicated new spec `078-cross-surface-surfacing-prioritizer`, which adopted pre-existing in-tree controller groundwork rescoped OUT of 021 by commit `640b95d0` (not an in-place adjustment to 021) | 078 | P0 — MVP-blocking |
 | ENG-2 | Implement M1b (calendar-triggered briefs) via adjustment to spec 025 | 025 | P0 — MVP-blocking |
 | ENG-3 | Implement M1c (reminder/promise engine) via adjustment to spec 054 | 054 | P0 — MVP-blocking |
 | ENG-4 | Implement M2 (wiki/graph-browse) via adjustments to specs 073 + 027 | 073, 027 | P0 — MVP-blocking |
@@ -61,6 +71,8 @@ Per non-goal discipline:
 The operator should dispatch these AFTER this release packet closes. They are **not executed by this packet** (planning only).
 
 ```yaml
+# HISTORICAL SNAPSHOT (2026-06-03 planning) — superseded by features.md delivery
+# reconciliation (2026-06-06). Retained for provenance; not the live dispatch list.
 - agent: bubbles.workflow
   mode: improve-existing
   spec: specs/026-domain-extraction
@@ -93,7 +105,7 @@ The operator should dispatch these AFTER this release packet closes. They are **
 
 - agent: bubbles.workflow
   mode: improve-existing
-  spec: specs/021-intelligence-delivery
+  spec: specs/078-cross-surface-surfacing-prioritizer  # superseded: M1a delivered via spec 078 (commit 640b95d0), rescoped out of 021
   reason: release-planning:MVP-gap-C-surfacing-controller
   rationale: |
     Add unified "Next Smackerel" prioritizer that owns the GLOBAL user-interruption

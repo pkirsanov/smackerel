@@ -40,7 +40,7 @@ func TestKeywordMapGuard_RealCorpusRunsAndProducesWellFormedFindings(t *testing.
 	if err != nil {
 		t.Fatalf("LoadBaseline: %v", err)
 	}
-	cfg := PolicyConfig{ExceptionMaxAgeDays: 180}
+	cfg := PolicyConfig{ExceptionMaxAgeDays: realPolicyExceptionMaxAgeDays(t)}
 	vs, err := KeywordMapGuard(repo, baseline, time.Now(), cfg)
 	if err != nil {
 		t.Fatalf("KeywordMapGuard: %v", err)
