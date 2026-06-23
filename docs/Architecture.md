@@ -103,6 +103,23 @@ digest).
 Adding a new producer or channel is a deliberate code change — both enums in
 `types.go` are bounded so cardinality on the metric labels stays finite.
 
+**Notification intelligence handler (spec 054 Scope 9).** The event-driven
+notification decision engine (`internal/notification/`) is an additional
+subordinate producer (`ProducerNotification`): when a decision is user-facing
+(`RequiresOutput`) it builds a `SurfacingCandidate` (operator-console output
+mapped to the `web_push` channel, the incident correlation key as `ContentKey`,
+a severity-derived `Priority`, and the urgency `TimeCritical` flag), calls
+`Controller.Propose`, treats the verdict as authoritative, and queues a delivery
+only on `permit`/`escalated`. `cmd/core` shares the SAME `Controller` and
+`InMemoryAck` instances across the scheduler producers AND the notification
+engine, so notifications honor the one global nudge budget (GAP-06 cohesion); an
+operator incident acknowledgment (snooze) feeds `Acknowledge(correlationKey)` so
+sibling/follow-up nudges are suppressed. A nil controller is the explicit legacy
+direct-dispatch rollback (mirrors `scheduler.proposeSurfacing`); spec 054 makes
+exactly one additive change to this package (the `ProducerNotification` enum
+constant) and never forks the controller contract. See
+[`specs/054-notification-intelligence-handler/`](../specs/054-notification-intelligence-handler/) Scope 9.
+
 **Authoritative references:**
 
 - [`specs/078-cross-surface-surfacing-prioritizer/`](../specs/078-cross-surface-surfacing-prioritizer/) — controller adoption spec, design, scopes.
