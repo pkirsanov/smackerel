@@ -344,20 +344,32 @@ func run() error {
 	// SST-validated daily-budget / dedupe / suppression / urgent-
 	// escalation contract into every producer that dispatches to
 	// Telegram / web push / ntfy / email-out.
+	//
+	// Spec 054 Scope 9 — the SAME controller and ack registry are shared with
+	// the notification decision engine so user-facing notifications honor the
+	// one global interruption budget, cross-channel dedupe, and ack-suppression
+	// state (GAP-06 cohesion). sharedAck is lifted to a named var so the
+	// notification incident-ack path can record acks the controller observes.
+	sharedAck := surfacing.NewInMemoryAck()
 	if surfacingCtrl, err := surfacing.NewController(surfacing.Config{
 		DailyNudgeBudget:        cfg.Surfacing.DailyNudgeBudget,
 		SuppressionWindowHours:  cfg.Surfacing.SuppressionWindowHours,
 		DedupeWindowHours:       cfg.Surfacing.DedupeWindowHours,
 		UrgentEscalationEnabled: cfg.Surfacing.UrgentEscalationEnabled,
-	}, surfacing.NewInMemoryAck(), metrics.SurfacingMetrics{}); err != nil {
+	}, sharedAck, metrics.SurfacingMetrics{}); err != nil {
 		slog.Error("surfacing controller wiring failed (SST validation)", "error", err)
 	} else {
 		sched.SetSurfacingController(surfacingCtrl)
+		if svc.notificationService != nil {
+			svc.notificationService.SetSurfacingController(surfacingCtrl)
+			svc.notificationService.SetSurfacingAck(sharedAck)
+		}
 		slog.Info("surfacing controller wired",
 			"daily_budget", cfg.Surfacing.DailyNudgeBudget,
 			"dedupe_window_hours", cfg.Surfacing.DedupeWindowHours,
 			"suppression_window_hours", cfg.Surfacing.SuppressionWindowHours,
-			"urgent_escalation_enabled", cfg.Surfacing.UrgentEscalationEnabled)
+			"urgent_escalation_enabled", cfg.Surfacing.UrgentEscalationEnabled,
+			"notification_producer_wired", svc.notificationService != nil)
 	}
 
 	// Subscribe intelligence engine to annotation events (spec 027)

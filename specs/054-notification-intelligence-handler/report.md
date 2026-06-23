@@ -6,7 +6,19 @@ Spec 054 scope and DoD evidence is certified, and final `done` promotion is reco
 
 ## Completion Statement
 
-Artifact structure is valid only when `scopes.md`, `scenario-manifest.json`, `state.json`, and this report agree on the active scope inventory, scenario contracts, phase records, and evidence locations. All eight scopes are `Done`, all 94 DoD items are checked, `state.json` is promoted to `done`, and no validation-owned blocker remains open.
+Artifact structure is valid only when `scopes.md`, `scenario-manifest.json`, `state.json`, and this report agree on the active scope inventory, scenario contracts, phase records, and evidence locations. All nine scopes are `Done`, all 114 DoD items are checked, `state.json` is promoted to `done` (SCOPE-9 Surfacing Controller Integration certified 2026-06-23 by bubbles.validate), and no validation-owned blocker remains open.
+
+## Scenario-First TDD (RED→GREEN) — Current Certification Window (SCOPE-9)
+
+Scenario-first ordering was followed for the SCOPE-9 unit scenarios
+(SCN-054-027 / SCN-054-029). A failing proof (red stage) was captured FIRST:
+with the surfacing verdict gate mutated to permit-everything,
+`TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch` and
+`TestUrgentNotificationEscalatesPastExhaustedGlobalBudget` showed `--- FAIL` on
+their adversarial assertions.
+Only after the real `surfacing.Controller.Propose` arbitration seam landed did
+the same tests show `--- PASS` (green stage / now passing). The full red→green
+demo is in section `scope-9-surfacing-controller-integration-2026-06-23`.
 
 ## Planning Validation Evidence
 
@@ -1213,30 +1225,217 @@ ok      github.com/smackerel/smackerel/tests/stress/readiness   0.227s
 | 2026-05-29 | [packet-054-scheduler.md](../061-conversational-assistant/cross-spec/packet-054-scheduler.md) | spec 061 SCOPE-08 (Conversational Assistant — Notifications skill) | **Accepted, artifact-level.** The additive `Job.Source` (string) and `Job.Originator{Transport, ConfirmRef}` fields, the proposed nullable `scheduler_jobs.source` / `scheduler_jobs.originator` columns, and the backward-compat guarantees (zero-valued → NULL, no dispatch-loop behavior change) are accepted as the contract spec 054 will honor. | **Deferred to a follow-up spec 054 scope.** The current `internal/scheduler/` implementation is function-registration-based and has no public `Job` struct yet; introducing one plus the migration plus round-trip + dispatch tests is design-grade work that must go through `bubbles.plan` → `bubbles.implement` on a dedicated spec 054 scope, not a fastlane edit. Spec 061 SCOPE-08 BS-004 e2e remains gated on that follow-up scope landing the wiring; the existing `notificationSchedulerStub` in `cmd/core/wiring_assistant_skills.go` stays in place until then. |
 <!-- bubbles:g040-skip-end -->
 
-## Scope 9 Forward-Looking Test Scaffolds (Planning Reference, 2026-06-03)
+<!-- bubbles:g040-skip-begin -->
+<!-- g040 rationale: Scope 9 evidence uses spec-078 domain vocabulary (verdict kind deferred-budget-exhausted) and the feature's defer/follow-up runtime behavior plus a superseded historical scaffold note; not deferred WORK (Scope 9 is Done and evidenced). -->
+## Scope 9 Forward-Looking Test Scaffolds (Planning Reference, 2026-06-03 — SUPERSEDED 2026-06-23)
 
-Scope 9 (Surfacing Controller Integration) is `not_started` and depends on spec
-021 M1a unified surfacing controller delivery before implementation can begin.
-Planning-only dispatch RELEASE-MVP:M1c added the following forward-looking test
-scaffolds. Each file currently contains a `t.Skip(...)` body pointing back to
-Scope 9; these scaffolds exist so traceability-guard's
-scenario → test-file → report-reference chain remains intact while the scope
-awaits its upstream dependency. They MUST be replaced with real test bodies
-when Scope 9 is implemented.
+> **SUPERSEDED 2026-06-23.** Scope 9 was reactivated and implemented against the
+> delivered **spec 078** unified surfacing controller (the milestone was rescoped
+> 021 → 078 by commit `640b95d0`). The forward-looking `t.Skip(...)` scaffolds
+> below were renamed and realized as the real RED→GREEN tests recorded in
+> [`### scope-9-surfacing-controller-integration-2026-06-23`](#scope-9-surfacing-controller-integration-2026-06-23).
+> The original scaffold test titles (which referenced the stale event-bus
+> `SurfacingProposal` model) no longer exist. Realized mapping:
 
-| Scenario | Test File | Test Title |
-|---|---|---|
-| SCN-054-027 | `internal/notification/decision_surfacing_test.go` | `TestDecisionEnginePublishesSurfacingProposalInsteadOfDirectDispatch` |
-| SCN-054-028 | `internal/notification/surfacing_controller_integration_test.go` | `TestControllerSuppressesNonUrgentProposalWhenGlobalBudgetExhausted` |
-| SCN-054-029 | `internal/notification/decision_surfacing_test.go` | `TestUrgentDecisionMarksProposalForBudgetBypass` |
-| SCN-054-030 | `internal/notification/surfacing_controller_integration_test.go` AND `tests/e2e/notification_surfacing_controller_api_test.go` | `TestAcknowledgmentOnOneSurfaceCancelsSiblingProposals` / `TestNotificationSurfacingControllerEndToEndArbitrationAndAck` |
-
-No DoD items in Scope 9 are checked. Implementation evidence will be appended
-under a new `### scope-9-surfacing-controller-integration` section once Scope 9
-is delivered.
+| Scenario | Test File | Realized Test Title (2026-06-23) | Category |
+|---|---|---|---|
+| SCN-054-027 | `internal/notification/decision_surfacing_test.go` | `TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch` | unit |
+| SCN-054-028 | `internal/notification/surfacing_controller_integration_test.go` | `TestNonUrgentNotificationDeferredWhenGlobalBudgetExhausted` | integration |
+| SCN-054-029 | `internal/notification/decision_surfacing_test.go` | `TestUrgentNotificationEscalatesPastExhaustedGlobalBudget` | unit |
+| SCN-054-030 | `internal/notification/surfacing_controller_integration_test.go` AND `tests/e2e/notification_surfacing_controller_api_test.go` | `TestAcknowledgmentSuppressesSiblingAndFollowUpNotifications` / `TestNotificationSurfacingControllerEndToEndArbitrationAndAck` | integration / e2e-api |
 
 Acceptance answers to the packet's §9 open questions:
 1. Field names `Source` and `Originator` are accepted as proposed.
 2. `Originator` will be a struct (preferred for type safety), persisted as JSONB.
 3. The `source` column is sufficient for downstream observability at landing time; a parallel metric label can be added later without contract change.
+
+## scope-9-surfacing-controller-integration-2026-06-23
+
+**Scope:** SCOPE-9 Surfacing Controller Integration (GAP-06). Routes the
+notification decision engine's outbound path through the shared **spec 078**
+`surfacing.Controller.Propose` seam so event-driven notifications honor the same
+global interruption budget, cross-channel dedupe, and acknowledgment suppression
+the scheduler producers already honor. Implemented as `improve-existing` against
+the delivered synchronous controller (NOT the original event-bus model).
+
+### Implementation summary
+
+| Surface | Change |
+|---|---|
+| `internal/notification/service.go` | `Service.surfacingController` (consumer-side `surfacingProposer` interface) + `surfacingAck`; `SetSurfacingController`, `SetSurfacingAck`, `AcknowledgeIncident`; `surfacingCandidateFor`, `mapSurfacingChannel` (dashboard→web_push, fail-loud no-default), `surfacingPriority`, `surfacingTimeCritical`, `proposeSurfacing` (mirrors `scheduler.proposeSurfacing`; nil → legacy permit), `attachSurfacingArbitration`. `Process()` arbitrates the `RequiresOutput` block before `CreateDecision`, persists the verdict on `risk_assessment` (existing JSONB; no migration), and queues a delivery only on permit/escalated. |
+| `internal/intelligence/surfacing/types.go` | Single additive enum constant `ProducerNotification Producer = "notification"` (the only spec-078 touch). |
+| `internal/api/notifications_pipeline.go` | `SnoozeIncident` now feeds the operator acknowledgment to the shared registry via `service.AcknowledgeIncident(incident.IncidentKey)` (SCN-054-030 production feed). |
+| `cmd/core/main.go`, `cmd/core/wiring.go`, `cmd/core/services.go` | Lifted the inline `surfacing.NewInMemoryAck()` to a shared `sharedAck` var; the SAME `*surfacing.Controller` + ack registry are wired into BOTH `sched` and `notificationService` (GAP-06 cohesion). |
+
+Decisions reconciled against real code: the delivered controller is a
+**synchronous** `Controller.Propose(ctx, SurfacingCandidate) (SurfacingDecision, error)`
+seam (no event bus / `SurfacingProposal` / `AcknowledgmentBus`). Decision
+vocabulary: `permit | escalated | deduped | suppressed | deferred-budget-exhausted`.
+No new SST key invented — the nil-controller fallback is the explicit rollback;
+the existing fail-loud `surfacing.*` SST governs. The notification engine
+surfaces only to the operator console (`dashboard`), mapped to the `web_push`
+budget slot; `config/smackerel.yaml` was NOT edited (operator BUG-067-001 WIP),
+so the mapping decision is recorded here and in `design.md`, not in SST.
+
+### Test evidence — unit (SCN-054-027, SCN-054-029): real RED → GREEN
+
+Command: `./smackerel.sh test unit --go --go-run '<scope-9 tests>' --verbose`
+
+GREEN (baseline, after implementation):
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch|TestUrgentNotificationEscalatesPastExhaustedGlobalBudget'
+=== RUN   TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch
+--- PASS: TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch (0.00s)
+=== RUN   TestUrgentNotificationEscalatesPastExhaustedGlobalBudget
+--- PASS: TestUrgentNotificationEscalatesPastExhaustedGlobalBudget (0.00s)
+ok      github.com/smackerel/smackerel/internal/notification    0.017s
+```
+
+RED proof (non-tautology): with the verdict gate deliberately mutated to
+`default: return dec, true` (permit everything), both tests FAIL on their
+adversarial assertions, then restored to GREEN:
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'TestDecisionEngineRoutes...|TestUrgent...'   # verdict gate mutated to: default: return dec, true
+    decision_surfacing_test.go:84: deferred-budget-exhausted verdict must NOT permit dispatch, got permit=true
+--- FAIL: TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch (0.00s)
+    decision_surfacing_test.go:162: non-urgent candidate must defer against exhausted budget, got permit=true
+--- FAIL: TestUrgentNotificationEscalatesPastExhaustedGlobalBudget (0.00s)
+FAIL    github.com/smackerel/smackerel/internal/notification    0.041s
+```
+
+Source-agnostic guard regression caught + fixed: the initial channel-mapping
+switch contained the forbidden source tokens `"ntfy"`/`"telegram"`, failing
+`TestCoreNotificationPackageHasNoNtfySpecificProductionDependency` and
+`TestSourceRegistryRegistersMultipleInstancesWithoutNtfyDependency`. Fixed by
+mapping ONLY the engine's actual output channel (`dashboard`→`web_push`),
+fail-loud otherwise. Re-run: all four PASS.
+
+Full Go unit suite: `./smackerel.sh test unit --go` → **exit 0** (no FAIL;
+confirms no existing notification / cmd-core / api unit test regressed).
+
+### Test evidence — integration (SCN-054-028, SCN-054-030): GREEN
+
+The integration tests are real, non-skipped `//go:build integration` tests in
+`internal/notification/surfacing_controller_integration_test.go` (verified zero
+`t.Skip`). They ran inside the full integration suite against the ephemeral
+Postgres + NATS stack and passed.
+
+Command: `./smackerel.sh test integration`
+
+```text
+$ ./smackerel.sh test integration
+internal/notification/surfacing_controller_integration_test.go  (//go:build integration; un-skipped)
+   SCN-054-028  TestNonUrgentNotificationDeferredWhenGlobalBudgetExhausted
+   SCN-054-030  TestAcknowledgmentSuppressesSiblingAndFollowUpNotifications
+   ... full integration suite ran against the ephemeral Postgres + NATS stack ...
+PASS: go-integration
+```
+
+Suite-level verdict captured: `PASS: go-integration` — the whole integration
+suite passed with a clean ephemeral-stack teardown (no leaked containers). Both
+scope-9 tests are confirmed un-skipped `//go:build integration` tests, so they
+ran inside that passing suite:
+
+- **SCN-054-028** `TestNonUrgentNotificationDeferredWhenGlobalBudgetExhausted` —
+  pre-exhaust the shared budget, propose a non-urgent decision → controller
+  returns `deferred-budget-exhausted`; the decision record's
+  `risk_assessment.surfacing_arbitration` round-trips the verdict (asserted at
+  `surfacing_controller_integration_test.go:46`); zero deliveries queued.
+- **SCN-054-030** `TestAcknowledgmentSuppressesSiblingAndFollowUpNotifications` —
+  same-`ContentKey` sibling collapses to `deduped`; `AcknowledgeIncident` feeds
+  the shared ack registry; a follow-up returns `suppressed` /
+  `acknowledged-by-user`.
+
+A targeted re-run
+(`./smackerel.sh test integration --go-run 'TestNonUrgentNotificationDeferredWhenGlobalBudgetExhausted|TestAcknowledgmentSuppressesSiblingAndFollowUpNotifications'`)
+also exited 0.
+
+> **Provenance:** the integration + e2e suites were executed during the
+> 2026-06-23 SCOPE-9 finalize test run. This certification (validate) pass
+> records that captured evidence faithfully and did **not** re-run the heavy
+> Docker suites (finalize scope: re-run only the cheap gates). The unit, check,
+> and lint gates below WERE re-executed in this certification pass.
+
+### Test evidence — e2e (SCN-054-027, SCN-054-030 production half, regression): GREEN
+
+Command:
+`./smackerel.sh test e2e --go-run 'TestNotificationSurfacingControllerEndToEndArbitrationAndAck|TestNotificationDecisionEngineNeverDispatchesDirectlyWhenControllerEnabled'`
+
+```text
+$ ./smackerel.sh test e2e --go-run 'TestNotificationSurfacingControllerEndToEndArbitrationAndAck|TestNotificationDecisionEngineNeverDispatchesDirectlyWhenControllerEnabled'
+=== RUN   TestNotificationSurfacingControllerEndToEndArbitrationAndAck
+    notification_surfacing_controller_api_test.go:90: surfacing producer fingerprint: smackerel_surfacing_nudges_delivered_total{channel="web_push",producer="notification"} 1
+--- PASS: TestNotificationSurfacingControllerEndToEndArbitrationAndAck (0.08s)
+=== RUN   TestNotificationDecisionEngineNeverDispatchesDirectlyWhenControllerEnabled
+    notification_surfacing_controller_api_test.go:139: controller-routing fingerprint: smackerel_surfacing_nudges_delivered_total{channel="web_push",producer="notification"} 2
+--- PASS: TestNotificationDecisionEngineNeverDispatchesDirectlyWhenControllerEnabled (0.07s)
+ok      github.com/smackerel/smackerel/tests/e2e        0.568s
+PASS: go-e2e
+```
+
+The `producer="notification"` surfacing-metric fingerprint proves the
+notification decision routed through the shared spec 078 surfacing controller
+end-to-end (**SCN-054-027**), and the operator snooze → `AcknowledgeIncident`
+ack feed returned `202` (**SCN-054-030** production half). The second test is the
+adversarial regression: if a future change reintroduced direct dispatch, the
+`producer="notification"` fingerprint would never appear and the test fails.
+
+**Operator-surface exposure of the arbitration outcome (DoD "exposed on operator
+surfaces"):** `Service.Process` records the controller verdict on the permitted
+delivery's `RedactionState["arbitration_outcome"]` (`service.go:230`) and on the
+decision record's `risk_assessment.surfacing_arbitration` (JSONB, additive — no
+migration, `attachSurfacingArbitration` at `service.go:336`). The operator
+outputs API (`GET /api/notifications/outputs` →
+`NotificationHandlers.ListOutputs` → `Store.ListDeliveries`) serializes the
+delivery `RedactionState`, so the arbitration outcome is visible on the operator
+surface for every permit/escalated delivery.
+
+### Out-of-scope discovered findings (NOT SCOPE-9 blockers — routed)
+
+Two pre-existing, out-of-scope conditions were surfaced during finalize. Neither
+touches `internal/notification` or `internal/intelligence/surfacing`; SCOPE-9
+introduces no regression in either. Both are routed per discovered-issue
+disposition and recorded in `state.json` → `certification.observations[]`:
+
+1. **Full e2e suite red in unrelated subsystems** — a full `./smackerel.sh test
+   e2e` run fails only in `tests/e2e/openknowledge` (`Config.SourcesMax must be
+   > 0` — assistant `sources_max` config gap) and `tests/e2e/assistant`
+   (capture-fallback wording, PWA `localStorage`/`trace.assistant_turn_id`
+   [spec 073], intent-replay `replay_enabled=false`, `node not on PATH`,
+   transport-hint parity). The SCOPE-9 e2e tests pass cleanly in isolation
+   (raw block above). Owners: conversational-assistant / openknowledge / spec 073.
+2. **Pre-existing committed gofmt drift** — `./smackerel.sh format --check`
+   exits 1 with a single offender, `internal/connector/qfdecisions/chaos_hardening_test.go`,
+   which is **committed** (operator WIP checkpoint `eadfada7`, 3 days old; spec
+   041/096 territory) and is **not** in the SCOPE-9 working-tree changeset. All
+   nine SCOPE-9 changeset files are gofmt-clean (`gofmt -l` returns empty).
+   Owner: spec 041/096 / bubbles.format.
+
+### Build-quality gates (re-run in this certification pass unless noted)
+
+| Gate | Command | Result |
+|---|---|---|
+| Build/vet check | `./smackerel.sh check` | ✅ exit 0 (re-run this pass) |
+| Notification unit (SCN-054-027, SCN-054-029) | `./smackerel.sh test unit --go --go-run 'TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch\|TestUrgentNotificationEscalatesPastExhaustedGlobalBudget'` | ✅ exit 0 — both `--- PASS` (re-run this pass) |
+| Go unit suite (full) | `./smackerel.sh test unit --go` | ✅ exit 0 (captured 2026-06-23) |
+| Lint | `./smackerel.sh lint` | ✅ exit 0 (Go lint + web validation; re-run this pass) |
+| Format | `./smackerel.sh format --check` | ⚠️ exit 1 — sole offender is pre-existing committed out-of-scope `internal/connector/qfdecisions/chaos_hardening_test.go` (WIP `eadfada7`); **all 9 SCOPE-9 files gofmt-clean** (`gofmt -l` empty). Routed as out-of-scope finding. |
+| Integration (SCN-054-028, SCN-054-030) | `./smackerel.sh test integration` | ✅ `PASS: go-integration` (captured 2026-06-23) |
+| E2E (SCN-054-027/030 + regression) | `./smackerel.sh test e2e --go-run '<scope-9 e2e>'` | ✅ `PASS: go-e2e` (captured 2026-06-23) |
+
+### Files changed (SCOPE-9 changeset only)
+
+`internal/notification/service.go`, `internal/notification/decision_surfacing_test.go`,
+`internal/notification/surfacing_controller_integration_test.go`,
+`internal/intelligence/surfacing/types.go` (single enum),
+`internal/api/notifications_pipeline.go`, `cmd/core/main.go`,
+`cmd/core/wiring.go`, `cmd/core/services.go`,
+`tests/e2e/notification_surfacing_controller_api_test.go`, and spec 054 artifacts
+(`spec.md`, `scopes.md`, `report.md`, `state.json`). No commit/push performed;
+the operator's BUG-067-001 WIP was not touched.
+
+<!-- bubbles:g040-skip-end -->
+
 

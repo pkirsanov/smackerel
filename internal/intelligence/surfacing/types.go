@@ -37,6 +37,12 @@ const (
 	ProducerMonthlyReport    Producer = "monthly_report"
 	ProducerPreMeetingBriefs Producer = "pre_meeting_briefs"
 	ProducerFrequentLookups  Producer = "frequent_lookups"
+	// ProducerNotification identifies the spec 054 notification intelligence
+	// handler as the origin of a surfacing candidate. Additive enum extension
+	// (the enum doc above invites this) — spec 054 Scope 9 routes user-facing
+	// notification decisions through the shared controller as a subordinate
+	// producer; it does NOT fork the controller contract.
+	ProducerNotification Producer = "notification"
 )
 
 // DecisionKind enumerates the controller's terminal verdicts. The five
