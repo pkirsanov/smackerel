@@ -62,11 +62,16 @@ type coreServices struct {
 	recommendationStore    *recstore.Store
 	recommendationRegistry *recprovider.Registry
 	notificationStore      *notification.Store
-	ntfyStore              *ntfysource.Store
-	ntfyRuntime            *ntfysource.Runtime
-	driveSaveService       *save.Service
-	driveRetrieveService   *retrieve.Service // spec 038 Scope 7 — drive retrieval
-	mealPlanSaveBack       *mealplan.DriveSaveBack
+	// notificationService is constructed in buildAPIDeps. Stashed here so the
+	// late surfacing-controller wiring in run() can share ONE *surfacing.Controller
+	// and ONE *surfacing.InMemoryAck across BOTH the scheduler producers and the
+	// notification decision engine (spec 054 Scope 9 — GAP-06 cohesion fix).
+	notificationService  *notification.Service
+	ntfyStore            *ntfysource.Store
+	ntfyRuntime          *ntfysource.Runtime
+	driveSaveService     *save.Service
+	driveRetrieveService *retrieve.Service // spec 038 Scope 7 — drive retrieval
+	mealPlanSaveBack     *mealplan.DriveSaveBack
 
 	// BUG-034-004 follow-up — meal-plan handler must be constructed
 	// BEFORE api.NewRouter so /api/meal-plans routes register. The

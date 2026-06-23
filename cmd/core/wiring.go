@@ -181,6 +181,10 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		return nil, nil, nil, fmt.Errorf("notification decision policy: %w", err)
 	}
 	notificationService := notification.NewService(svc.notificationStore, notificationEngine)
+	// Spec 054 Scope 9 — stash the service so run()'s surfacing-controller
+	// wiring can inject the shared controller + ack registry into it (the same
+	// instances the scheduler producers get), unifying the global nudge budget.
+	svc.notificationService = notificationService
 	if err := ntfysource.BootstrapConfiguredSources(ctx, cfg.NtfySourcesJSON, svc.notificationStore, time.Now().UTC()); err != nil {
 		return nil, nil, nil, fmt.Errorf("ntfy notification sources: %w", err)
 	}

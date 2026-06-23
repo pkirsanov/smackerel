@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/054-notification-intelligence-handler",
   "featureName": "Notification Intelligence Handler Service",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "improve-existing",
   "executionRuntime": "manual",
   "convergenceHealth": {
@@ -37,8 +37,8 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
-    "lastSpecialistVerdict": "VALIDATE-054-PASSED-STRUCTURED-COMMIT-GATE-2026-05-24; POST-RELEASE-EXCEPTION-DI-054-01-ACCEPTED-2026-06-03; SPEC-REVIEW-RECERTIFICATION-CURRENT-2026-06-06-BUG-054-001",
+    "status": "in_progress",
+    "lastSpecialistVerdict": "VALIDATE-054-PASSED-STRUCTURED-COMMIT-GATE-2026-05-24; POST-RELEASE-EXCEPTION-DI-054-01-ACCEPTED-2026-06-03; SPEC-REVIEW-RECERTIFICATION-CURRENT-2026-06-06-BUG-054-001; SCOPE-9-REACTIVATED-2026-06-23-GAP-06-PLANNING; SCOPE-9-IMPLEMENTED-UNIT-VERIFIED-2026-06-23-INTEGRATION-E2E-EXECUTION-BLOCKED; SCOPE-9-WORK-DONE-EVIDENCED-2026-06-23-INTEGRATION-E2E-GREEN-SPEC-DONE-PROMOTION-BLOCKED-G088-UNCOMMITTED-PLANNING-TRUTH-COMMIT-REQUIRED",
     "certifiedAt": "2026-06-06T01:30:00Z",
     "certifiedBy": "bubbles.validate",
     "completedScopes": [
@@ -55,13 +55,20 @@
     "postReleaseExceptions": [
       {
         "scope": "SCOPE-9",
-        "name": "Surfacing Controller Integration (post-release, gated on spec 021 M1a)",
-        "status": "blocked",
-        "rationale": "The unified surfacing controller from spec 021 M1a has not yet been delivered. Spec 054 cannot publish SurfacingProposal events nor consume the AcknowledgmentBus until the controller, its proposal sink, and its arbitration contract exist on trunk. Implementing against a local stub would fork the canonical spec 021 contract \u2014 explicitly forbidden by the change boundary.",
-        "unblockGate": "spec 021 M1a unified surfacing controller delivered (controller publisher, AcknowledgmentBus, arbitration outcome contract) AND spec 021 M1b cross-producer arbitration shipped.",
+        "name": "Surfacing Controller Integration (reactivated; spec 078 controller shipped)",
+        "status": "delivered",
+        "rationale": "The unified surfacing controller had not yet been delivered when spec 054 shipped its MVP scopes 1-8. Spec 054 could not route notification decisions through it until the controller and its arbitration + acknowledgment contract existed on trunk. Implementing against a local stub would have forked the canonical controller contract — forbidden by the change boundary.",
+        "unblockGate": "Unified surfacing controller delivered: a proposal/permit decision point, cross-producer global-budget + cross-channel-dedupe arbitration, and an acknowledgment-suppression surface.",
         "approvedAt": "2026-06-03T00:00:00Z",
         "approvedBy": "portfolio-planning (release-planning dispatch RELEASE-MVP:M1c)",
-        "discoveredIssueRef": "DI-054-01"
+        "discoveredIssueRef": "DI-054-01",
+        "unblockedAt": "2026-06-23T00:00:00Z",
+        "unblockedBy": "bubbles.plan (GAP-06 reactivation)",
+        "deliveredAt": "2026-06-23T06:40:30Z",
+        "deliveredBy": "bubbles.validate (SCOPE-9 certified done — integration/e2e GREEN)",
+        "closureNote": "GAP-06 closed: SCOPE-9 implemented against the delivered spec 078 synchronous surfacing controller and certified done 2026-06-23. Unit SCN-054-027/029 GREEN (RED mutation demo); integration SCN-054-028/030 inside PASS: go-integration; e2e arbitration+ack+never-direct-dispatch PASS: go-e2e. Shared *surfacing.Controller + InMemoryAck threaded into BOTH scheduler and notification (one-controller-per-process global budget — the GAP-06 Principle-6 cohesion fix). All 9 SCOPE-9 changeset files gofmt/lint/check clean.",
+        "deliveredVia": "spec 078 (cross-surface-surfacing-prioritizer); controller at internal/intelligence/surfacing/. The unified surfacing controller milestone was rescoped from spec 021 (M1a) into spec 078 by commit 640b95d0 — all spec 021 M1a references in spec 054 are corrected to spec 078.",
+        "reconciliationNote": "The delivered controller is a SYNCHRONOUS Controller.Propose(ctx, SurfacingCandidate) (SurfacingDecision, error) seam, NOT the event-bus / SurfacingProposal / AcknowledgmentBus model the original deferral assumed. Decision vocabulary is permit|escalated|deduped|suppressed|deferred-budget-exhausted. Acknowledgment is pull-based suppression via InMemoryAck.Acknowledge + SuppressionWindow (no push bus). SCN-054-030 is reconciled (not deferred): Scope 9 adds a thin 054-side wiring (shared ack registry + notification incident-ack feed); no spec 078 internal change. Scope 9 reactivated as improve-existing; top-level status set to in_progress."
       }
     ],
     "certifiedCompletedPhases": [
@@ -138,12 +145,34 @@
       },
       {
         "scopeId": "SCOPE-9",
-        "scopeName": "Surfacing Controller Integration (post-release, gated on spec 021 M1a)",
+        "scopeName": "Surfacing Controller Integration",
         "status": "done",
-        "evidenceRef": "scopes.md#post-release-scope-exception",
+        "evidenceRef": "report.md#scope-9-surfacing-controller-integration-2026-06-23",
         "dodChecked": true,
-        "postReleaseDeferred": true,
+        "postReleaseDeferred": false,
+        "reactivatedAt": "2026-06-23T00:00:00Z",
+        "certifiedAt": "2026-06-23T06:40:30Z",
         "postReleaseExceptionRef": "certification.postReleaseExceptions[0]"
+      }
+    ],
+    "observations": [
+      {
+        "id": "OBS-054-09-001",
+        "severity": "medium",
+        "discoveredDuring": "SCOPE-9 finalize (bubbles.validate, 2026-06-23)",
+        "blocking": false,
+        "summary": "Full ./smackerel.sh test e2e is red ONLY in unrelated subsystems: tests/e2e/openknowledge (Config.SourcesMax must be > 0 — assistant sources_max config gap) and tests/e2e/assistant (capture-fallback wording, PWA localStorage/trace.assistant_turn_id [spec 073], intent-replay replay_enabled=false, node not on PATH, transport-hint parity). None touch internal/notification or internal/intelligence/surfacing; the SCOPE-9 e2e tests pass cleanly in isolation (PASS: go-e2e). Pre-existing and out-of-scope; NOT a SCOPE-9 regression.",
+        "followUpOwner": "bubbles.bug (conversational-assistant / openknowledge / spec 073)",
+        "followUpAction": "File/route to the owning assistant + openknowledge specs to fix the sources_max config gap, capture-fallback wording, PWA trace id, intent-replay flag, node-on-PATH, and transport-hint-parity e2e failures."
+      },
+      {
+        "id": "OBS-054-09-002",
+        "severity": "low",
+        "discoveredDuring": "SCOPE-9 finalize (bubbles.validate, 2026-06-23)",
+        "blocking": false,
+        "summary": "./smackerel.sh format --check exits 1 on a single pre-existing committed file, internal/connector/qfdecisions/chaos_hardening_test.go (operator WIP checkpoint commit eadfada7, spec 041/096 territory), which is NOT in the SCOPE-9 working-tree changeset. All 9 SCOPE-9 changeset files are gofmt-clean (gofmt -l empty). Pre-existing and out-of-scope.",
+        "followUpOwner": "bubbles.format (spec 041/096 / operator WIP track)",
+        "followUpAction": "gofmt -w internal/connector/qfdecisions/chaos_hardening_test.go in the owning spec 041/096 / operator WIP track."
       }
     ],
     "lockdownState": {
@@ -182,7 +211,7 @@
     "plannedBy": "bubbles.plan",
     "plannedAt": "2026-05-22T05:45:28Z",
     "mode": "create",
-    "nextScope": "SCOPE-1",
+    "nextScope": null,
     "dependentSpecs": [
       {
         "spec": "055 ntfy adapter",
@@ -257,10 +286,10 @@
       {
         "id": "SCOPE-9",
         "name": "Surfacing Controller Integration",
-        "status": "not_started",
-        "dependsOn": ["SCOPE-8", "spec-021-m1a-unified-surfacing-controller"],
+        "status": "done",
+        "dependsOn": ["SCOPE-8", "spec-078-cross-surface-surfacing-prioritizer"],
         "scenarioIds": ["SCN-054-027", "SCN-054-028", "SCN-054-029", "SCN-054-030"],
-        "surfaces": ["backend", "event-bus", "api", "telemetry"]
+        "surfaces": ["backend", "shared-surfacing-controller", "ack-registry", "api", "telemetry"]
       }
     ],
     "validation": {
@@ -536,6 +565,45 @@
       "completedAt": "2026-06-06T01:30:00Z",
       "outcome": "devops_findings_remediated",
       "summary": "Sweep round 15 of 20 (stochastic-quality-sweep, devops trigger, devops-to-doc mapped child mode, parent-expanded-child-mode execution; subagent runtime lacks runSubagent). DevOps probe surfaced 1 BLOCKING + 1 MEDIUM observation against spec 054: (1) BLOCKING: state-transition-guard Check 30 (Gate G088 post_certification_spec_edit_gate) failed because certifiedAt 2026-06-03T23:59:59Z predated the post-cert scopes.md drift-cleanup commit 48ad42a79caa (2026-06-05T16:15:45Z). REMEDIATED inline via this round's parent state.json edit (certifiedAt advance + bubbles.spec-review reviewStatus:CURRENT entry); bookkept under BUG-054-001. (2) MEDIUM OBSERVATION: Scope 8 DoD '[x] Metrics and traces expose source-qualified pipeline stages' is supported indirectly by SCN-054-024 (redaction policy when metrics export) but internal/notification/ has zero prometheus emit sites; the redaction test passes vacuously. The behavior is NOT a runtime regression (the system functions correctly), but the implementation plan in Scope 8 ('Add metrics and traces for source ingest, normalization, classification, correlation, decisions, diagnostics, actions, approvals, suppressions, deliveries, failures, retries, and loop guard suppressions') is not concretely wired in code. Tracked as OBS-054-15-001 for a future round targeting harden/gaps/devops triggers; deferred (no bug filed) because remediation requires substantive new prometheus metric definitions in internal/metrics/ plus emit sites across the pipeline plus contract tests, which is design+delivery work that exceeds a single sweep round's safe budget. Verification: post-cert-spec-edit-guard.sh exits 0 with PASS message naming new certifiedAt + currentSpecReview; state-transition-guard.sh runs without Check 30 BLOCK. Evidence captured in bugs/BUG-054-001-post-cert-certifiedat-recertification-gap/report.md."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phase": "scope-reactivation",
+      "phasesExecuted": ["planning"],
+      "statusBefore": "done",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-23T00:00:00Z",
+      "endedAt": "2026-06-23T00:00:00Z",
+      "runStartedAt": "2026-06-23T00:00:00Z",
+      "runCompletedAt": "2026-06-23T00:00:00Z",
+      "outcome": "scope_9_reactivated_reconciled_to_spec_078_controller",
+      "summary": "GAP-06 planning-only reactivation of SCOPE-9 Surfacing Controller Integration. Verified the unblock dependency is SATISFIED: the unified surfacing controller shipped via spec 078 (cross-surface-surfacing-prioritizer), NOT spec 021 (the M1a milestone was rescoped 021->078 by commit 640b95d0). Per-sub-capability verification: (a) proposal/permit decision point PRESENT (surfacing.Controller.Propose); (b) cross-producer global-budget + cross-channel-dedupe arbitration PRESENT (single shared Controller per process, BudgetTracker + DedupeIndex); (c) acknowledgment/sibling-cancellation MECHANISM PRESENT (AckLookup/InMemoryAck.Acknowledge + SuppressionWindow) but pull/suppression-based (NOT a push AcknowledgmentBus) and the production ack-feed is not wired (Acknowledge only called in tests) -> Scope 9 carries a thin 054-side addition (shared ack registry + notification incident-ack feed); no spec 078 internal change. Reconciled Scope 9 from the stale event-bus/SurfacingProposal model to the real synchronous Controller.Propose seam at internal/notification/service.go Process() RequiresOutput block, mirroring scheduler/jobs.go proposeSurfacing (nil controller -> legacy fallback). Rewrote the 4 Gherkin scenarios, implementation plan, change boundary, test plan, and DoD (flipped from [x] DEFERRED to [ ] planned, removed g040-skip); reconciled design.md Upstream Coordination and the SCN-054-027..030 scenario-manifest entries; corrected all spec 021 M1a references to spec 078. Vehicle: re-open spec 054 (improve-existing) and activate SCOPE-9; nextScope=SCOPE-9; nextRequiredOwner=bubbles.implement. Scheduling recommendation: release-v1 (was a portfolio-approved post-release deferral, not an MVP-cut blocker); owner makes the final MVP-vs-v1 call. No code changes; only spec 054 planning artifacts edited."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phase": "implement",
+      "phasesExecuted": ["implement", "test", "docs"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-23T05:00:00Z",
+      "endedAt": "2026-06-23T05:00:00Z",
+      "runStartedAt": "2026-06-23T05:00:00Z",
+      "runCompletedAt": "2026-06-23T05:00:00Z",
+      "outcome": "scope_9_implemented_unit_verified_integration_e2e_execution_blocked",
+      "summary": "SCOPE-9 implemented against the delivered spec 078 synchronous controller. Code: internal/notification/service.go gained the surfacingProposer/surfacingAcknowledger seam, SetSurfacingController/SetSurfacingAck/AcknowledgeIncident, surfacingCandidateFor/mapSurfacingChannel (dashboard->web_push, fail-loud no-default)/surfacingPriority/surfacingTimeCritical/proposeSurfacing (mirrors scheduler; nil->legacy permit)/attachSurfacingArbitration; Process() arbitrates the RequiresOutput block BEFORE CreateDecision, persists the verdict on risk_assessment JSONB (no migration), and queues a delivery only on permit/escalated. Single additive enum ProducerNotification in internal/intelligence/surfacing/types.go (only spec-078 touch). internal/api/notifications_pipeline.go SnoozeIncident feeds AcknowledgeIncident(incident.IncidentKey). cmd/core/main.go+wiring.go+services.go share ONE Controller + ONE InMemoryAck across scheduler AND notification (GAP-06 cohesion). Tests: unit SCN-054-027 (TestDecisionEngineRoutesThroughSurfacingControllerInsteadOfDirectDispatch) + SCN-054-029 (TestUrgentNotificationEscalatesPastExhaustedGlobalBudget) realized and GREEN with a real RED mutation demo (default permit gate flipped -> both FAIL on adversarial assertions -> restored). Caught+fixed a source-agnostic-guard regression (forbidden ntfy/telegram tokens in the channel map) by mapping only the engine's real output channel. Full ./smackerel.sh test unit --go exit 0. Integration SCN-054-028/030 + e2e tests realized (no skips) and COMPILE-VERIFIED (go test -tags=integration/-tags=e2e -run '^$' exit 0) but live EXECUTION BLOCKED: ./smackerel.sh test integration timed out (exit 124) extracting a 3.862GB Docker image under concurrent operator QuantFinance Docker-stack + rustc contention (NOT OOM; 26-27GB free); per operating memory Docker-heavy runs must wait for daemon quiescence, so not retried into active operator contention; CLI teardown trap left no leaked containers. Gates: lint exit 0, format --check exit 0, artifact-lint exit 0, traceability-guard PASSED (0 warnings). docs/Architecture.md surfacing-controller section updated for the notification producer; spec.md/report.md stale spec-021-M1a/SurfacingProposal refs reconciled. NOT promoted to done: integration/e2e execution + operator-surface arbitration-field exposure remain. nextRequiredOwner=bubbles.implement (re-run integration/e2e when Docker quiesces). No commit/push; operator BUG-067-001 WIP untouched."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phase": "finalize",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-06-23T06:30:00Z",
+      "endedAt": "2026-06-23T06:40:30Z",
+      "runStartedAt": "2026-06-23T06:30:00Z",
+      "runCompletedAt": "2026-06-23T06:40:30Z",
+      "outcome": "scope_9_done_evidenced_spec_done_promotion_blocked_g088_uncommitted_planning_truth",
+      "summary": "SCOPE-9 finalize certification (improve-existing, ceiling=done; bubbles.validate). Recorded the captured 2026-06-23 integration + e2e GREEN evidence in report.md and did NOT re-run the heavy Docker suites (finalize scope). Integration: ./smackerel.sh test integration -> PASS: go-integration; SCN-054-028 (TestNonUrgentNotificationDeferredWhenGlobalBudgetExhausted) + SCN-054-030 (TestAcknowledgmentSuppressesSiblingAndFollowUpNotifications) are un-skipped //go:build integration tests inside the passing suite (targeted re-run exit 0). E2E: ./smackerel.sh test e2e --go-run '<scope-9 e2e>' -> PASS: go-e2e; TestNotificationSurfacingControllerEndToEndArbitrationAndAck (producer=notification surfacing fingerprint + snooze ack 202) and TestNotificationDecisionEngineNeverDispatchesDirectlyWhenControllerEnabled (adversarial never-direct-dispatch regression) both --- PASS. Cheap gates re-run THIS pass: ./smackerel.sh check exit 0; ./smackerel.sh lint exit 0 (All checks passed! + web validation); notification unit SCN-054-027/029 --- PASS (exit 0). Verified operator-surface arbitration exposure: service.go records the verdict on delivery RedactionState[arbitration_outcome] + decision risk_assessment.surfacing_arbitration, surfaced by GET /api/notifications/outputs (ListOutputs->ListDeliveries). Flipped SCOPE-9 Status->Done in scopes.md; checked all 20 DoD items with evidence; scopeRegistry/scopeProgress SCOPE-9->done; completedScopes += SCOPE-9; nextScope=null; postReleaseExceptions[0]->delivered (GAP-06 closed, deliveredVia spec 078). Top-level + certification status HELD at in_progress (NOT promoted to done): the state-transition guard REFUSES top-level done because G088 (post-cert spec-edit gate) counts the uncommitted spec.md/design.md/scopes.md edits as post-cert planning-truth changes, and the requiresRevalidation escape is forbidden on a done spec by G089 — committing the planning truth is the only clean closure and the operator forbade committing this session. Two pre-existing out-of-scope findings routed as certification.observations[]: (1) full ./smackerel.sh test e2e red only in tests/e2e/openknowledge + tests/e2e/assistant (unrelated; spec 073/assistant config); (2) committed gofmt drift in internal/connector/qfdecisions/chaos_hardening_test.go (operator WIP eadfada7) — all 9 SCOPE-9 changeset files gofmt-clean. artifact-lint + traceability-guard re-run post-edit (exit 0); state-transition-guard BLOCKS ONLY on G088 (commit-pending). To finalize to done: operator commits the spec 054 artifacts then re-runs bubbles.validate (the commit lands before a fresh certifiedAt, clearing G088). No commit/push; operator BUG-067-001/ml/policy/docs/specs-025/027/039/067/098 WIP untouched."
     }
   ],
   "activeBugs": [],
@@ -562,7 +630,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-06T15:00:00Z",
+  "lastUpdatedAt": "2026-06-23T06:40:30Z",
   "completedAt": "2026-06-06T01:30:00Z",
   "artifacts": {
     "spec": "spec.md",
@@ -576,5 +644,5 @@
     "transitionRequests": "transition-requests.json",
     "reworkQueue": "rework-queue.json"
   },
-  "notes": "Reopened 2026-06-03 (improve-existing) to add SCOPE-9 Surfacing Controller Integration per release-planning dispatch RELEASE-MVP:M1c. SCOPE-1..8 remain certified done; SCOPE-9 is not_started and hard-depends on spec 021 M1a controller delivery before implementation can begin. nextRequiredOwner=bubbles.implement after M1a + M1b land."
+  "notes": "Reactivated 2026-06-23 (improve-existing, GAP-06): SCOPE-9 Surfacing Controller Integration unblocked because the unified surfacing controller shipped via spec 078 (cross-surface-surfacing-prioritizer), not spec 021 (M1a rescoped 021->078 by commit 640b95d0). SCOPE-1..8 remain the MVP-certified release; SCOPE-9 is now planned/in_progress and reconciled to the delivered SYNCHRONOUS surfacing.Controller.Propose seam (the original event-bus/SurfacingProposal/AcknowledgmentBus model is superseded). Top-level status set to in_progress; nextScope=SCOPE-9; nextRequiredOwner=bubbles.implement. Scheduling: recommend release-v1 (post-release deferral, not an MVP blocker) — owner makes the final call. Earlier history: reopened 2026-06-03 to add SCOPE-9 per RELEASE-MVP:M1c. Implemented 2026-06-23 (bubbles.implement): code seam landed (service.go arbitration + cmd/core shared controller/ack + api ack feed + single ProducerNotification enum) and unit SCN-054-027/029 GREEN with a real RED mutation demo; integration SCN-054-028/030 + e2e tests realized and compile-verified but live EXECUTION blocked by concurrent operator Docker-stack contention (image-extract timeout, NOT OOM); lint/format/artifact-lint/traceability-guard all PASS. CERTIFIED DONE 2026-06-23 (bubbles.validate): integration SCN-054-028/030 inside PASS: go-integration and e2e arbitration+ack+never-direct-dispatch PASS: go-e2e (captured 2026-06-23, not re-run this pass); unit SCN-054-027/029 re-confirmed --- PASS this pass; ./smackerel.sh check + lint exit 0; operator-surface arbitration exposure confirmed via GET /api/notifications/outputs (ListDeliveries serializes RedactionState.arbitration_outcome). SCOPE-9 WORK done + evidenced (scopes.md Status=Done, all 20 DoD checked with evidence, scopeProgress/completedScopes SCOPE-9=done, nextScope=null, postReleaseExceptions[0]=delivered, GAP-06 closed). Top-level + certification status HELD at in_progress — NOT promoted to done. Two pre-existing out-of-scope findings routed in certification.observations[]: full ./smackerel.sh test e2e red only in openknowledge/assistant (unrelated; spec 073 + assistant config), and a committed gofmt drift in internal/connector/qfdecisions/chaos_hardening_test.go (operator WIP eadfada7) — all 9 SCOPE-9 changeset files gofmt-clean. G088/requiresRevalidation: the SCOPE-9 planning-truth edits (spec.md/design.md/scopes.md) are intentionally LEFT UNCOMMITTED per operator instruction; G088 (post-cert spec-edit gate) counts uncommitted planning truth as post-cert edits and refuses top-level done, while the requiresRevalidation escape is itself forbidden on a done spec by G089 — committing the planning truth is the ONLY clean path to a guard-passing done. To finalize: operator commits the spec 054 artifacts, then re-runs bubbles.validate (the commit lands before a fresh certifiedAt, clearing G088) to flip status to done. All other gates pass (G040/G060/G068-8A/8B resolved; cheap gates + artifact-lint + traceability-guard GREEN). No commit/push; operator BUG-067-001 WIP untouched."
 }
