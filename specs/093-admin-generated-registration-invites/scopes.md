@@ -73,10 +73,10 @@ New files: `internal/db/migrations/058_web_registration_invites.sql`, `internal/
 
 | # | Scope | Depends On | Surfaces | Status |
 |---|-------|------------|----------|--------|
-| 01 | Migration `058` + `webinvite` repo + `webcreds.HashAndInsertTx` | — | DB (migration), Backend (repo), Security | Not Started |
-| 02 | `/register` OR-gate (DB-invite consume) + wiring | 01 | Backend, Security | Not Started |
-| 03 | Admin invites UI (generate / list / revoke) | 01 | UI (server-rendered), Backend | Not Started |
-| 04 | Consolidated verification + live home-lab deploy proof | 02, 03 | Deploy, UI (live e2e), Backend | Not Started |
+| 01 | Migration `058` + `webinvite` repo + `webcreds.HashAndInsertTx` | — | DB (migration), Backend (repo), Security | Done |
+| 02 | `/register` OR-gate (DB-invite consume) + wiring | 01 | Backend, Security | Done |
+| 03 | Admin invites UI (generate / list / revoke) | 01 | UI (server-rendered), Backend | Done |
+| 04 | Consolidated verification + live home-lab deploy proof | 02, 03 | Deploy, UI (live e2e), Backend | Done |
 
 **Roots:** SCOPE-01 is the single shared data foundation (the `webinvite` repo + migration + `HashAndInsertTx`). SCOPE-02 (the public `/register` consume) and SCOPE-03 (the operator admin UI) are two **independent verticals** that each consume the SCOPE-01 repo (`cmd/core/wiring.go` constructs it once and fans it out to both via `deps.WebInvites` and `webHandler.SetInvites`). They are executed sequentially `02 → 03`; neither functionally blocks the other. SCOPE-04 consolidates and proves the full feature live.
 

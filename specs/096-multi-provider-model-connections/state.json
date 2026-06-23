@@ -19,7 +19,7 @@
   "specIntegratesWith": [
     "specs/044-per-user-bearer-auth"
   ],
-  "specDependsOnNote": "Spec 096 BUILDS ON specs 088/089 (the open-knowledge model-switch validator + per-user store + precedence + parity) and 064 (the /ask agent loop) and extends them provider-agnostically WITHOUT amending them. Spec 044 is listed as specIntegratesWith: 096 reuses its claim-bound actor_user_id binding for per-user model selection, read-only. The analyst phase consumes these surfaces read-only; full-delivery wiring lands in a later run.",
+  "specDependsOnNote": "Spec 096 BUILDS ON specs 088/089 (the open-knowledge model-switch validator + per-user store + precedence + parity) and 064 (the /ask agent loop) and extends them provider-agnostically WITHOUT amending them. Spec 044 is listed as specIntegratesWith: 096 reuses its claim-bound actor_user_id binding for per-user model selection, read-only. These dependency surfaces are consumed read-only; SCOPE-01..07 full-delivery wiring has substantially landed on trunk (gated by an empty-by-default operator allowlist, inert until an operator configures it), with the workflow ladder not yet promoted past plan.",
   "amends": [],
   "unblocks": [],
   "certifiedAt": null,
@@ -272,5 +272,5 @@
     "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Analyst-phase bootstrap (2026-06-18). spec.md + state.json only; design.md / scopes.md / report.md / uservalidation.md / scenario-manifest.json are intentionally absent until the downstream chain (design -> ux -> plan) runs. artifact-lint will report those as missing required artifacts — expected at this phase. No promotion past in_progress."
+  "notes": "Notes-accuracy correction 2026-06-23: all seven artifacts now exist (spec.md, design.md, scopes.md, report.md ~150KB, uservalidation.md, scenario-manifest.json, state.json) and SCOPE-01..07 + §13 observability + uservalidation + security sign-off have landed on trunk; the admin surface lives in internal/api/model_connections_admin.go etc., gated by an empty-by-default operator allowlist (inert until an operator configures it). The full-delivery workflow ladder is not yet promoted past plan (completedPhaseClaims stops at plan); status stays in_progress and releaseTrain stays next. No status change or certification re-open by this correction."
 }
