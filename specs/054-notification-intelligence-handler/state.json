@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/054-notification-intelligence-handler",
   "featureName": "Notification Intelligence Handler Service",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "improve-existing",
   "executionRuntime": "manual",
   "convergenceHealth": {
@@ -13,7 +13,7 @@
     "snapshotCompleteness": 1.0,
     "slo": "pass"
   },
-  "certifiedAt": "2026-06-06T01:30:00Z",
+  "certifiedAt": "2026-06-23T07:47:40Z",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -37,9 +37,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "lastSpecialistVerdict": "VALIDATE-054-PASSED-STRUCTURED-COMMIT-GATE-2026-05-24; POST-RELEASE-EXCEPTION-DI-054-01-ACCEPTED-2026-06-03; SPEC-REVIEW-RECERTIFICATION-CURRENT-2026-06-06-BUG-054-001; SCOPE-9-REACTIVATED-2026-06-23-GAP-06-PLANNING; SCOPE-9-IMPLEMENTED-UNIT-VERIFIED-2026-06-23-INTEGRATION-E2E-EXECUTION-BLOCKED; SCOPE-9-WORK-DONE-EVIDENCED-2026-06-23-INTEGRATION-E2E-GREEN-SPEC-DONE-PROMOTION-BLOCKED-G088-UNCOMMITTED-PLANNING-TRUTH-COMMIT-REQUIRED",
-    "certifiedAt": "2026-06-06T01:30:00Z",
+    "status": "done",
+    "lastSpecialistVerdict": "VALIDATE-054-PASSED-STRUCTURED-COMMIT-GATE-2026-05-24; POST-RELEASE-EXCEPTION-DI-054-01-ACCEPTED-2026-06-03; SPEC-REVIEW-RECERTIFICATION-CURRENT-2026-06-06-BUG-054-001; SCOPE-9-REACTIVATED-2026-06-23-GAP-06-PLANNING; SCOPE-9-IMPLEMENTED-UNIT-VERIFIED-2026-06-23-INTEGRATION-E2E-EXECUTION-BLOCKED; SCOPE-9-WORK-DONE-EVIDENCED-2026-06-23-INTEGRATION-E2E-GREEN-SPEC-DONE-PROMOTION-BLOCKED-G088-UNCOMMITTED-PLANNING-TRUTH-COMMIT-REQUIRED; SPEC-054-PROMOTED-DONE-2026-06-23-G088-CLEARED-PLANNING-TRUTH-COMMITTED-cf490e55",
+    "certifiedAt": "2026-06-23T07:47:40Z",
     "certifiedBy": "bubbles.validate",
     "completedScopes": [
       "SCOPE-1",
@@ -604,6 +604,19 @@
       "runCompletedAt": "2026-06-23T06:40:30Z",
       "outcome": "scope_9_done_evidenced_spec_done_promotion_blocked_g088_uncommitted_planning_truth",
       "summary": "SCOPE-9 finalize certification (improve-existing, ceiling=done; bubbles.validate). Recorded the captured 2026-06-23 integration + e2e GREEN evidence in report.md and did NOT re-run the heavy Docker suites (finalize scope). Integration: ./smackerel.sh test integration -> PASS: go-integration; SCN-054-028 (TestNonUrgentNotificationDeferredWhenGlobalBudgetExhausted) + SCN-054-030 (TestAcknowledgmentSuppressesSiblingAndFollowUpNotifications) are un-skipped //go:build integration tests inside the passing suite (targeted re-run exit 0). E2E: ./smackerel.sh test e2e --go-run '<scope-9 e2e>' -> PASS: go-e2e; TestNotificationSurfacingControllerEndToEndArbitrationAndAck (producer=notification surfacing fingerprint + snooze ack 202) and TestNotificationDecisionEngineNeverDispatchesDirectlyWhenControllerEnabled (adversarial never-direct-dispatch regression) both --- PASS. Cheap gates re-run THIS pass: ./smackerel.sh check exit 0; ./smackerel.sh lint exit 0 (All checks passed! + web validation); notification unit SCN-054-027/029 --- PASS (exit 0). Verified operator-surface arbitration exposure: service.go records the verdict on delivery RedactionState[arbitration_outcome] + decision risk_assessment.surfacing_arbitration, surfaced by GET /api/notifications/outputs (ListOutputs->ListDeliveries). Flipped SCOPE-9 Status->Done in scopes.md; checked all 20 DoD items with evidence; scopeRegistry/scopeProgress SCOPE-9->done; completedScopes += SCOPE-9; nextScope=null; postReleaseExceptions[0]->delivered (GAP-06 closed, deliveredVia spec 078). Top-level + certification status HELD at in_progress (NOT promoted to done): the state-transition guard REFUSES top-level done because G088 (post-cert spec-edit gate) counts the uncommitted spec.md/design.md/scopes.md edits as post-cert planning-truth changes, and the requiresRevalidation escape is forbidden on a done spec by G089 — committing the planning truth is the only clean closure and the operator forbade committing this session. Two pre-existing out-of-scope findings routed as certification.observations[]: (1) full ./smackerel.sh test e2e red only in tests/e2e/openknowledge + tests/e2e/assistant (unrelated; spec 073/assistant config); (2) committed gofmt drift in internal/connector/qfdecisions/chaos_hardening_test.go (operator WIP eadfada7) — all 9 SCOPE-9 changeset files gofmt-clean. artifact-lint + traceability-guard re-run post-edit (exit 0); state-transition-guard BLOCKS ONLY on G088 (commit-pending). To finalize to done: operator commits the spec 054 artifacts then re-runs bubbles.validate (the commit lands before a fresh certifiedAt, clearing G088). No commit/push; operator BUG-067-001/ml/policy/docs/specs-025/027/039/067/098 WIP untouched."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phase": "promotion",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "startedAt": "2026-06-23T07:47:40Z",
+      "endedAt": "2026-06-23T07:50:05Z",
+      "runStartedAt": "2026-06-23T07:47:40Z",
+      "runCompletedAt": "2026-06-23T07:50:05Z",
+      "outcome": "spec_054_promoted_done_g088_cleared_planning_truth_committed",
+      "summary": "Promoted spec 054 to terminal status=done (improve-existing, statusCeiling=done; bubbles.validate). The G088 post-cert spec-edit-gate blocker recorded by the prior 2026-06-23T06:40:30Z finalize run is RESOLVED: the SCOPE-9 planning truth (spec.md/design.md/scopes.md/report.md/scenario-manifest.json/state.json) plus the SCOPE-9 code changeset were committed as cf490e55 'feat(notification): budget-govern event-driven notifications via spec-078 surfacing controller (spec 054 Scope 9; closes GAP-06)' at committer time 2026-06-23T07:44:44Z. Promotion edits (state.json only): flipped top-level status and certification.status in_progress->done; set fresh top-level certifiedAt and certification.certifiedAt=2026-06-23T07:47:40Z (AFTER cf490e55, so git log --since finds no post-cert planning-truth commit and the spec/design/scopes working tree is clean); appended SPEC-054-PROMOTED-DONE token to lastSpecialistVerdict; refreshed lastUpdatedAt=2026-06-23T07:47:40Z. Did NOT set requiresRevalidation (G089 forbids the revalidation escape on a done spec). certifiedCompletedPhases and completedScopes left unchanged (all 9 scopes Done + the improve-existing specialist ladder already recorded; SCOPE-9 certified 2026-06-23T06:40:30Z with integration PASS: go-integration + e2e PASS: go-e2e raw evidence committed in report.md). Did NOT re-run the integration/e2e/unit suites (the committed SCOPE-9 evidence is authoritative). Verification: bash .github/bubbles/scripts/state-transition-guard.sh specs/054-notification-intelligence-handler -> exit 0, verdict 'TRANSITION PERMITTED with 1 warning(s)' (the single warning is Check 8 'No concrete test file paths found in Test Plan ... all may be placeholders', non-blocking; Check 30 G088 post-cert spec-edit and Check 31 G089 inter-spec dependency both PASS; all 39 checks green). Promotion edit left uncommitted in the working tree for the orchestrator to commit; only specs/054-notification-intelligence-handler/state.json was touched."
     }
   ],
   "activeBugs": [],
@@ -630,7 +643,7 @@
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-06-23T06:40:30Z",
+  "lastUpdatedAt": "2026-06-23T07:47:40Z",
   "completedAt": "2026-06-06T01:30:00Z",
   "artifacts": {
     "spec": "spec.md",
