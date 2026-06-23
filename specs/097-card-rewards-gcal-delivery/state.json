@@ -16,6 +16,7 @@
   "updatedAt": "2026-06-21T21:12:15Z",
   "certifiedAt": "2026-06-21T21:12:15Z",
   "requiresRevalidation": false,
+  "releaseTrain": "mvp",
   "certifiedReason": "Certified done on 2026-06-21 by a real bubbles.validate subagent dispatch (provenanceMode subagent-dispatch). Every gate re-executed green this session with captured output + exit codes: scoped Go unit suite incl BundleSecret (SCOPED_UNIT_EXIT=0; internal/deploy ok 31.489s, so the prior spec-096 A2 failure no longer reproduces), full Go unit suite (FULL_UNIT_EXIT=0), ./smackerel.sh check (CHECK_EXIT=0), ./smackerel.sh lint (LINT_EXIT=0), artifact-lint (exit 0, PASSED), traceability-guard (exit 0, RESULT: PASSED 0 warnings, DoD fidelity 4/4), and state-transition-guard (exit 0, TRANSITION PERMITTED). SCOPE-02 live home-lab delivery was not re-run (one-time operator-credential proof at report.md#live-calendar). The orchestrator bubbles.workflow owns the settle-commit. The spec-096 A2 fixture remains nominally routed to spec 096 but no longer reproduces a RED.",
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
