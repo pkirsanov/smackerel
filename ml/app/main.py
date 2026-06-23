@@ -11,15 +11,19 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 from .auth import _AUTH_TOKEN, verify_auth
-from .embedder import _model, generate_embedding
+from .embedder import _model, _model_name, generate_embedding
 from .nats_client import NATSClient
 from .nats_contract import validate_runtime_streams_on_startup
 
 # ruff: noqa: E501
-# smackerel:policy-exception id=G067-A05-ml-log-level rule=G067-A05 owner=ml-sidecar expires=2026-12-01 reason="logging bootstrap uses literal default until ml.log_level SST key lands; owning fix tracked outside spec 067"
+# Bootstrap logging is configured at import WITHOUT a level so the module never
+# reads a NO-DEFAULTS config fallback at import scope (importing this module in
+# tests must not require ML_LOG_LEVEL). The SST-owned log level
+# (config/smackerel.yaml services.ml.log_level -> ML_LOG_LEVEL) is a required
+# key validated in _check_required_config() and applied fail-loud at startup
+# (the sidecar exits if ML_LOG_LEVEL is missing/empty/invalid). Spec 067
+# BUG-067-001.
 logging.basicConfig(
-    # smackerel:policy-exception id=G067-A05-ml-log-level rule=G067-A05 owner=ml-sidecar expires=2026-12-01 reason="logging bootstrap uses literal default until ml.log_level SST key lands; owning fix tracked outside spec 067"
-    level=os.environ.get("ML_LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
     stream=sys.stdout,
     force=True,
@@ -36,6 +40,10 @@ def _check_required_config() -> dict[str, str]:
         "OLLAMA_URL",
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
         "SMACKEREL_ENV",
+        # Spec 067 BUG-067-001 — ML sidecar log level (services.ml.log_level).
+        # SST-owned and required (fail-loud); allowlist-validated and applied
+        # via logging.getLogger().setLevel below.
+        "ML_LOG_LEVEL",
         # Spec 050 FR-050-001/002/003 — ML sidecar health/worker isolation
         # contract. All three values are SST-owned and required (fail-loud).
         # The sidecar refuses to start if any is missing, empty, or invalid.
@@ -67,6 +75,18 @@ def _check_required_config() -> dict[str, str]:
     if missing:
         logger.error("Missing required configuration: %s", ", ".join(missing))
         sys.exit(1)
+
+    # Spec 067 BUG-067-001 — apply the SST-owned log level fail-loud. ML_LOG_LEVEL
+    # is in the required keys above, so a missing/empty value already exited.
+    # Allowed values mirror the Go core LOG_LEVEL contract (debug|info|warn|error).
+    log_level = required["ML_LOG_LEVEL"].upper()
+    if log_level not in ("DEBUG", "INFO", "WARN", "ERROR"):
+        logger.error(
+            "ML_LOG_LEVEL must be one of debug|info|warn|error, got %r",
+            required["ML_LOG_LEVEL"],
+        )
+        sys.exit(1)
+    logging.getLogger().setLevel(log_level)
 
     fallback_enabled = required["ML_PROCESSING_DEGRADED_FALLBACK_ENABLED"].lower()
     if fallback_enabled not in ("true", "false"):
@@ -254,7 +274,11 @@ async def embed(req: EmbedRequest) -> EmbedResponse:
         raise HTTPException(status_code=503, detail=f"embedder unavailable: {exc}") from exc
     if not vec:
         raise HTTPException(status_code=503, detail="embedder returned empty vector")
-    return EmbedResponse(vector=vec, dim=len(vec), model=os.getenv("EMBEDDING_MODEL", ""))
+    # Spec 067 BUG-067-001 — report the embedder's actual loaded model name
+    # (no os.getenv default fallback). The sidecar always encodes with
+    # embedder._model_name, so reporting it is both fail-loud-clean and more
+    # truthful than echoing a possibly-divergent EMBEDDING_MODEL env value.
+    return EmbedResponse(vector=vec, dim=len(vec), model=_model_name)
 
 
 app.include_router(authed_router)

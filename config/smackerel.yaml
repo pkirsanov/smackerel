@@ -1683,6 +1683,12 @@ services:
     shutdown_timeout_s: 25
   ml:
     container_port: 8081
+    # Spec 067 BUG-067-001 — ML sidecar log level (ml-owned SST key; distinct
+    # from the core runtime.log_level). Emitted as ML_LOG_LEVEL into every
+    # generated env + the deploy bundle by scripts/commands/config.sh, and read
+    # fail-loud by ml/app/main.py::_check_required_config (no literal default).
+    # Allowed values: debug | info | warn | error.
+    log_level: info
     health_cache_ttl_s: 30
     readiness_timeout_s: 60
     processing_degraded_fallback_enabled: false

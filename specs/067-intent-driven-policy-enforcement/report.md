@@ -570,4 +570,147 @@ Spec already at `status: done` since 2026-06-02; no status transition required. 
 - **State-transition guard WARN: 4/15 evidence blocks lack terminal output signals — PRE-EXISTING.** The stricter state-guard heuristic (separate from artifact-lint, which PASSED) flags 4 historical evidence blocks. None of these are Round 3 additions (all Round 3 blocks carry `$ ./smackerel.sh ...` prefixes + `Exit Code: 0` + ≥3 lines of real test output). The 4 weak blocks are part of the 2026-06-02 deferral language review and audit-fix subsections. Non-blocking; deferred to the appropriate future round.
 - **State-transition guard WARN: Test Plan placeholders — PRE-EXISTING.** `scopes.md` Test Plan rows use plain file references without an explicit "concrete-test-file-path" marker that the state-guard heuristic recognizes. Round 3 did not edit `scopes.md`. Non-blocking; deferred.
 
+## Gaps Analysis (bubbles.gaps, 2026-06-22)
+
+**Phase:** gaps. **Agent:** bubbles.gaps. **Run:** 2026-06-22. **Context:** G022-faithful backfill — the `gaps` specialist phase was never recorded in the original 2026-06-02 delivery. This section and the matching `state.json` `execution.completedPhaseClaims[]` entry record the genuine analysis performed now. Top-level `status`/`certification` are unchanged (spec stays `done`).
+
+### Scope of analysis (what was cross-checked)
+
+Every spec 067 contract was checked against the implementation it governs:
+
+- **SCN-067-A01..A08 → guards + named tests.** All eight design-table test functions exist and pass:
+  - A01 principle alignment → `tests/integration/policy/scenario_yaml_guard.go::PrincipleAlignmentGuard` + `TestPrincipleAlignmentGuardReportsMissingBlockWithPolicySource`, `TestPrincipleAlignmentGuardRealCorpusIsClean`.
+  - A02 prompt cap → `ScenarioPromptCapGuard` + `TestScenarioPromptCapGuardReportsScenarioCountAndConfiguredCap` (SST cap `scenario_prompt_max_lines: 120`).
+  - A03/A04 keyword routing/map → `keyword_routing_guard.go::KeywordRoutingGuard` / `KeywordMapGuard` + `TestKeywordRoutingGuardReportsAPIRoutingRegexWithFileLine`, `TestKeywordMapGuardReportsTelegramAndAnnotationUserTextMaps`.
+  - A05/A06 NO-DEFAULTS Python/Go → `no_defaults_guard.go::PythonNoDefaultsGuard` / `GoNoDefaultsGuard` + `TestNoDefaultsPythonGuardReportsRuntimeFallbackWithPolicySource`, `TestNoDefaultsGoGuardReportsLiteralFallbackAfterRuntimeRead`.
+  - A07 exception ratchet → `baseline.go::RatchetExceptions` / `ValidateException` + `policy_exception_guard_test.go`.
+  - A08 SST threshold fail-loud → `internal/config/policy.go::LoadPolicyConfig` + `internal/config/policy_test.go`.
+- **Legacy retirement (spec 066 SCOPE-4):** confirmed `internal/api/domain_intent.go` is absent; `TestLegacyKeywordSurface_DomainIntentFileAndSymbolAbsent` PASS keeps it retired. spec.md/design.md references to that path are explicitly labelled historical illustrations. **Correctly reflected.**
+- **SST config:** `config/smackerel.yaml` `policy:` block carries all four required keys (`scenario_prompt_max_lines: 120`, `policy_exception_baseline_path`, `policy_exception_max_age_days: 90`, `intent_bypass_guard_enabled: true`) with no `:-` fallback forms.
+- **Scenario corpus:** all 27 YAMLs under `config/prompt_contracts/` carry a valid `principleAlignment` block (proven by `TestPrincipleAlignmentGuardRealCorpusIsClean` PASS).
+
+**Executed evidence (Claim Source: executed):**
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+$ go test -tags=integration -count=1 -timeout 300s ./tests/integration/policy/...
+ok      github.com/smackerel/smackerel/tests/integration/policy 0.992s    INTEGRATION_POLICY_EXIT=0
+
+$ go test -count=1 ./internal/config/ -run TestPolicy -v
+--- PASS: TestPolicyConfigRequiresScenarioPromptMaxLines (0.00s)
+--- PASS: TestPolicyConfigRequiresAllPolicyKeys (0.00s)  [4 subtests: all four POLICY_* keys]
+--- PASS: TestPolicyConfigRejectsMalformedScenarioPromptMaxLines (0.00s)  [abc, 0, -1, 1.5]
+--- PASS: TestPolicyConfigLoadsWithAllKeysPresent (0.00s)
+ok      github.com/smackerel/smackerel/internal/config  0.013s    CONFIG_EXIT=0
+
+$ go test -tags=e2e -count=1 -timeout 300s ./tests/e2e/policy/...
+ok      github.com/smackerel/smackerel/tests/e2e/policy 0.015s    E2E_EXIT=0
+
+$ echo "$(( ( $(date -d 2026-12-01 +%s) - $(date -d 2026-06-22 +%s) ) / 86400 )) days"
+162 days
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+### Findings (3 — all routed; none fixed inline)
+
+**GAP-067-G01 — Committed policy exception exceeds the SST max-age cap (policy-compliance; live but latent). Owner: ml-sidecar / operator (routed).**
+
+- `policy-exception-baseline.json` entry `G067-A05-ml-log-level` has `expires_on: 2026-12-01`. SST `policy.policy_exception_max_age_days = 90`. From 2026-06-22 that is **162 days** (executed `date` delta above; from the 2026-06-02 issue date it is 182 days) — over the cap by 72 days.
+- `baseline.go::ValidateException` (the `if expires.Sub(now) > maxDelta` branch) classifies any exception expiring more than `ExceptionMaxAgeDays` days out as a **G067-A07** violation ("policy-exception exceeds policy.policy_exception_max_age_days"). The committed exception meets that branch under the real SST cap.
+- The over-budget date is mirrored in `ml/app/main.py:19` and `ml/app/main.py:21` (source annotations `expires=2026-12-01`, the line-21 one immediately above the offending `ML_LOG_LEVEL` read at line 22), `policy-exception-baseline.json:11`, and this report (lines 142–143). It is referenced cross-spec by `specs/076-assistant-completion-rescope/bugs/BUG-076-001-...`.
+- Why it never fires today: see GAP-067-G02 — no test evaluates the real baseline at the real 90-day cap.
+- Disposition: **routed, not fixed inline.** The value is entangled across source annotations + baseline + spec-owned report evidence + a cross-spec bug reference, and the resolution is an owner/operator judgment call (re-issue the exception with `expires_on` ≤ 90 days out; OR land the `ml.log_level` SST key to remove the exception; OR operator raises `policy_exception_max_age_days`). Beyond the gaps in-scope-safe threshold.
+- Claim Source: executed (date delta + green suite) + interpreted (`ValidateException` control-flow review).
+
+**GAP-067-G02 — Max-age cap is unenforced against the real baseline; guard tests embed magic max-age constants (test-integrity; violates spec Hard Constraint 2). Owner: bubbles.test (routed).**
+
+- Every test that loads the committed `policy-exception-baseline.json` overrides `ExceptionMaxAgeDays` far above the real 90: `no_defaults_python_guard_test.go:26` → `365 * 10`; `no_defaults_go_guard_test.go:26` → `365 * 10`; `keyword_map_guard_test.go:43` → `180`; `keyword_routing_guard_test.go:50` → `180`. The dedicated ratchet tests (`policy_exception_guard_test.go`) use synthetic in-memory baselines (`expires_on: 2026-06-30`, `validCfg()` cap 90), never the committed file. So no test runs `RatchetExceptions`/`ValidateException` over the real baseline at the real SST cap, and the green suite (above) masks GAP-067-G01.
+- spec.md Hard Constraint 2: "Threshold values come from SST. No magic constants embedded in the guard test code." The `365*10` / `180` literals are exactly such magic constants and they defeat the cap where it is load-bearing (the committed exception set).
+- Disposition: **routed to bubbles.test.** Add a real-baseline-vs-real-SST-cap regression (source the cap from SST, not a literal) and replace the magic `ExceptionMaxAgeDays` overrides in the real-corpus tests. Multi-test work plus a design call on time-dependent enforcement — bigger than a gaps inline fix.
+- Claim Source: executed (grep of the four overrides + green suite) + interpreted (Hard Constraint 2 mapping).
+
+**GAP-067-G03 — Scope 3 Test Plan names a non-existent e2e test (doc drift, low). Owner: bubbles.plan (routed).**
+
+- `scopes.md` Scope 3 Test Plan row names `TestIntentPolicyGuardE2E_KeywordRoutingFailuresNameOwnerAction` in `tests/e2e/policy/intent_policy_guard_output_test.go`. That function does not exist. The function actually in that file is `TestIntentPolicyGuardE2E_RawRouteBypassNamesCompilerStep`, itself a **spec 068** test (header "Spec 068 Scope 4 — SCN-068-A08"). The Scope 3 DoD evidence line already references the real name, so functional e2e coverage for SCN-067-A03/A04 exists; only the Test Plan table cell drifted.
+- Disposition: **routed to bubbles.plan** (scopes.md is planning-owned). Cosmetic; non-blocking.
+- Claim Source: executed (grep: planned name absent, actual name present).
+
+### Verdict
+
+⚠️ MINOR_GAPS_REMAIN. The implementation faithfully realizes SCN-067-A01..A08 and the SST + legacy-retirement contracts (all named tests pass; real corpus clean), but the exception-expiry cap is not actually enforced against the committed baseline (G02), which leaves one over-budget committed exception (G01) that nothing catches, plus one cosmetic Test Plan name drift (G03). All three are routed to their owners; none were fixed inline because each is foreign-owned and/or entangled beyond the gaps in-scope-safe threshold. Top-level `status` remains `done` per the backfill mandate.
+
+## Harden Pass (bubbles.harden, 2026-06-22)
+
+**Phase:** harden. **Agent:** bubbles.harden. **Run:** 2026-06-22T16:03:45Z. **Context:** G022-faithful backfill (operator option B1) — the `harden` specialist phase was the last one missing from the original 2026-06-02 delivery. This section and the matching `state.json` `execution.completedPhaseClaims[]` + `certification.certifiedCompletedPhases` entries record the genuine hardening performed now. Top-level `status` / `certification.status` / `certifiedAt` are unchanged (spec stays `done`).
+
+### What this harden pass did
+
+1. **Re-ran every spec-067 test surface independently** (not relying on prior phase claims). All green.
+2. **Upgraded GAP-067-G01 from interpreted to directly-executed proof.** The gaps pass established G01 via a date delta + `ValidateException` control-flow *interpretation*. This harden pass ran the **real production `ValidateException`** over the **real committed `policy-exception-baseline.json`** at the **real SST cap** (`policy.policy_exception_max_age_days = 90`), `now = time.Now()`, via a throwaway integration test that was deleted immediately after capture (left zero residue — re-ran the suite clean afterwards). The committed exception trips **G067-A07**.
+3. **Re-validated GAP-067-G02 and GAP-067-G03** — both still hold exactly as the gaps pass described.
+
+**Executed evidence (Claim Source: executed):**
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```
+$ go test -count=1 ./internal/config/ -run TestPolicy -v
+--- PASS: TestPolicyConfigRequiresScenarioPromptMaxLines (0.00s)
+--- PASS: TestPolicyConfigRequiresAllPolicyKeys (0.00s)  [4 subtests: SCENARIO_PROMPT_MAX_LINES, EXCEPTION_BASELINE_PATH, EXCEPTION_MAX_AGE_DAYS, INTENT_BYPASS_GUARD_ENABLED]
+--- PASS: TestPolicyConfigRejectsMalformedScenarioPromptMaxLines (0.00s)  [abc, 0, -1, 1.5]
+--- PASS: TestPolicyConfigLoadsWithAllKeysPresent (0.00s)
+ok      github.com/smackerel/smackerel/internal/config  0.031s    CONFIG_EXIT=0
+
+$ go test -tags=e2e -count=1 -timeout 300s ./tests/e2e/policy/...
+ok      github.com/smackerel/smackerel/tests/e2e/policy 0.015s    E2E_EXIT=0
+
+$ go test -tags=integration -count=1 -timeout 300s ./tests/integration/policy/...
+ok      github.com/smackerel/smackerel/tests/integration/policy 0.979s    INTEGRATION_EXIT=0
+
+# Directly-executed G01 proof (throwaway test, run then deleted):
+$ go test -tags=integration -count=1 -v -run TestHardenG01CommittedBaselineExceedsRealCap ./tests/integration/policy/...
+=== RUN   TestHardenG01CommittedBaselineExceedsRealCap
+    now=2026-06-22  cap=90 days  committed_exceptions=1
+    G01-PROOF rule=G067-A07 name="policy-exception exceeds policy.policy_exception_max_age_days" exc_id=G067-A05-ml-log-level expires=2026-12-01 detail="exception \"G067-A05-ml-log-level\" expires_on=2026-12-01 is more than 90 days from now"
+    G01 CONFIRMED: 1 committed exception(s) trip the real 90-day SST cap at now=2026-06-22
+--- PASS: TestHardenG01CommittedBaselineExceedsRealCap (0.00s)
+ok      github.com/smackerel/smackerel/tests/integration/policy 0.037s    G01_PROOF_EXIT=0
+
+# Throwaway removed; suite re-confirmed clean (zero residue):
+$ git status --short tests/integration/policy/    # (empty)
+$ go test -tags=integration -count=1 -timeout 300s ./tests/integration/policy/...
+ok      github.com/smackerel/smackerel/tests/integration/policy 1.018s    INTEGRATION_RECHECK_EXIT=0
+
+# Corroborating SST-vs-baseline snapshot:
+$ grep -n policy_exception_max_age_days config/smackerel.yaml   ->  900:  policy_exception_max_age_days: 90
+$ grep -n '"id"\|expires_on' policy-exception-baseline.json     ->  6: "id": "G067-A05-ml-log-level"   11: "expires_on": "2026-12-01"
+$ echo $(( ( $(date -d 2026-12-01 +%s) - $(date -d 2026-06-22 +%s) ) / 86400 )) days   ->  162 days
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+### Scope/DoD completeness re-check
+
+All 4 scopes are `Done` with `[x]` DoD items carrying inline evidence; `scopeProgress` = 4/4 done; the wired integration + e2e + config suites are green. The implementation faithfully realizes every SCN-067-A01..A08 contract (re-confirmed by the suites above). No scope was reopened by this pass — the three findings are policy-compliance / test-integrity / doc-drift concerns, not scope-incompleteness.
+
+### Findings disposition (validate + extend gaps; 0 fixed inline; 3 routed)
+
+| Finding | Severity | Harden verdict | Owner (routed) |
+|---------|----------|----------------|----------------|
+| GAP-067-G01 — committed exception `G067-A05-ml-log-level` (`expires_on: 2026-12-01`, 162 d) exceeds SST 90-day cap; `ValidateException` returns G067-A07 | medium (live but latent) | **CONFIRMED — directly executed** (real `ValidateException` over the real committed baseline at cap=90; proof above) | ml-sidecar / operator |
+| GAP-067-G02 — no test evaluates the real baseline at the real 90-day cap; real-corpus tests override `ExceptionMaxAgeDays` to `365*10` / `180` magic constants (spec Hard Constraint 2) | medium (root cause; masks G01) | **CONFIRMED — re-validated** | bubbles.test |
+| GAP-067-G03 — Scope 3 Test Plan names non-existent e2e `TestIntentPolicyGuardE2E_KeywordRoutingFailuresNameOwnerAction` | low (doc drift) | **CONFIRMED — re-validated** | bubbles.plan |
+
+**Why nothing was fixed inline (honest in-scope-safe boundary):**
+
+- **G01 is explicitly route-only and entangled.** The over-budget date lives across `ml/app/main.py:19+21` source annotations, `policy-exception-baseline.json`, this report, AND a cross-spec reference (`specs/076-.../bugs/BUG-076-001`). The genuine resolutions are owner/operator calls (re-issue the exception with `expires_on` ≤ 90 d out; OR land the `ml.log_level` SST key to delete the exception; OR operator raises `policy_exception_max_age_days`) — reaching into the ml-sidecar source or the cross-spec bug from a done CI-guard spec would violate artifact ownership. Routed, not patched.
+- **G02 is test-owned AND blocked by G01.** A genuine real-baseline-at-real-cap regression cannot be added green today: it would either fail the build (assert-clean while G01 is open) or bake in an inverted assert-the-bug that must flip once G01 is remediated. That coupling is bubbles.test's design call. Routed.
+- **G03 is planning-owned.** `scopes.md` is a `bubbles.plan` artifact; harden is diagnostic and must not edit it. Routed.
+
+### Tier 1 / Tier 2 (harden profile) result
+
+Build/compile clean for the policy surfaces (the four suites above compile `tests/integration/policy`, `tests/e2e/policy`, and `internal/config`). No skip markers, no proxy/no-op tests introduced, no regressions introduced (this pass changed zero source/test files — the only artifacts touched are this `report.md` append and the `state.json` harden-phase record). No fabrication: every claim above is backed by the executed output captured this session.
+
+### Verdict
+
+⚠️ **PARTIALLY_HARDENED.** Spec 067's implementation is faithful and all of its wired tests genuinely pass, but there is a **directly-confirmed, currently-unenforced** policy-compliance violation (G01) whose masking root cause (G02) and a cosmetic doc drift (G03) remain open. All three are foreign-owned / entangled and are routed to their owners (ml-sidecar/operator, bubbles.test, bubbles.plan) — none were fixed inline. This pass added a directly-executed proof for G01 (upgrading the gaps pass's interpreted claim) and recorded the genuine `harden` specialist phase. Top-level `status` / `certification.status` / `certifiedAt` unchanged — spec stays `done` per the G022 backfill mandate.
+
 

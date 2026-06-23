@@ -446,6 +446,10 @@ ML_PROCESSING_DEGRADED_FALLBACK_ENABLED="$(env_override_value ml_processing_degr
 ML_EMBEDDING_WORKERS="$(required_value services.ml.embedding_workers)"
 ML_EMBEDDING_QUEUE_MAX="$(required_value services.ml.embedding_queue_max)"
 ML_HEALTH_LATENCY_SLA_MS="$(required_value services.ml.health_latency_sla_ms)"
+# Spec 067 BUG-067-001 — ML sidecar log level (services.ml.log_level). Required
+# SST value, read fail-loud by ml/app/main.py; no literal default. Emitted into
+# every generated env (dev/test) and the deploy bundle app.env below.
+ML_LOG_LEVEL="$(required_value services.ml.log_level)"
 
 # Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope + ML model
 # memory profile extraction. Every key is required (fail-loud SST). The
@@ -2214,6 +2218,7 @@ ML_PROCESSING_DEGRADED_FALLBACK_ENABLED=${ML_PROCESSING_DEGRADED_FALLBACK_ENABLE
 ML_EMBEDDING_WORKERS=${ML_EMBEDDING_WORKERS}
 ML_EMBEDDING_QUEUE_MAX=${ML_EMBEDDING_QUEUE_MAX}
 ML_HEALTH_LATENCY_SLA_MS=${ML_HEALTH_LATENCY_SLA_MS}
+ML_LOG_LEVEL=${ML_LOG_LEVEL}
 KNOWLEDGE_ENABLED=${KNOWLEDGE_ENABLED}
 KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS=${KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS}
 KNOWLEDGE_LINT_CRON=${KNOWLEDGE_LINT_CRON}

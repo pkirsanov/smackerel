@@ -1,0 +1,84 @@
+{
+  "bugId": "BUG-067-001-ml-log-level-nodefaults-overage-exception",
+  "parentFeatureDir": "specs/067-intent-driven-policy-enforcement",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-067-001-001",
+      "title": "ML sidecar fails loud when ML_LOG_LEVEL is missing",
+      "specFile": "spec.md",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "ml/tests/test_main.py::test_check_required_config_requires_named_keys",
+        "ml/app/main.py"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test"
+      ],
+      "testCoverage": "unit (Python): _check_required_config() lists ML_LOG_LEVEL in required keys; a missing/empty value exits sys.exit(1); proven by the ml/tests/test_main.py suite green under ./smackerel.sh test unit --python."
+    },
+    {
+      "scenarioId": "SCN-BUG-067-001-002",
+      "title": "ML sidecar applies a valid SST log level with no default fallback and no policy-exception marker",
+      "specFile": "spec.md",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "ml/tests/test_main.py::test_check_required_config_allows_ollama_without_api_key",
+        "ml/app/main.py",
+        "tests/integration/policy/no_defaults_python_guard_test.go::TestPythonNoDefaultsGuard_RealCorpusIsClean"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-implement",
+        "report.md#phase-test"
+      ],
+      "testCoverage": "unit (Python) + integration (file-system): valid ML_LOG_LEVEL is accepted and applied via logging.getLogger().setLevel; ml/app/main.py contains no os.environ.get('ML_LOG_LEVEL', <literal>) and no # smackerel:policy-exception marker; PythonNoDefaultsGuard real-corpus scan is clean at the real SST cap."
+    },
+    {
+      "scenarioId": "SCN-BUG-067-001-003",
+      "title": "config generation emits ML_LOG_LEVEL for dev and test",
+      "specFile": "spec.md",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "config/smackerel.yaml",
+        "scripts/commands/config.sh",
+        "config/generated/dev.env",
+        "config/generated/test.env"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-implement"
+      ],
+      "testCoverage": "integration (config-gen static): ./smackerel.sh config generate resolves services.ml.log_level and emits a non-empty ML_LOG_LEVEL= into config/generated/dev.env AND config/generated/test.env; the single env-render emission point also feeds the deploy bundle app.env."
+    },
+    {
+      "scenarioId": "SCN-BUG-067-001-004",
+      "title": "The committed baseline is clean at the real SST cap",
+      "specFile": "spec.md",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "policy-exception-baseline.json",
+        "tests/integration/policy/no_defaults_python_guard_test.go::TestRealBaselineHasNoOverAgeExceptionsAtRealCap",
+        "tests/integration/policy/no_defaults_python_guard_test.go::TestPythonNoDefaultsGuard_RealCorpusIsClean",
+        "config/smackerel.yaml"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test",
+        "report.md#phase-regression"
+      ],
+      "testCoverage": "integration (file-system): every committed baseline exception validates clean via ValidateException at the real cap (90, read from config/smackerel.yaml); G067-A05-ml-log-level removed; PythonNoDefaultsGuard real-corpus produces zero findings at the real cap."
+    },
+    {
+      "scenarioId": "SCN-BUG-067-001-005",
+      "title": "The guard flags a future over-age exception at the real cap (adversarial, RED-if-reintroduced)",
+      "specFile": "spec.md",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/policy/no_defaults_python_guard_test.go::TestValidateExceptionFlagsOverAgeAtRealCap",
+        "tests/integration/policy/no_defaults_python_guard_test.go::TestRealBaselineHasNoOverAgeExceptionsAtRealCap",
+        "tests/integration/policy/baseline.go"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test"
+      ],
+      "testCoverage": "integration (adversarial): a synthetic 162-day exception (the shape of the removed entry) is flagged G067-A07 at the real 90-day cap; an 80-day exception is NOT flagged; TestRealBaselineHasNoOverAgeExceptionsAtRealCap proven RED against the unfixed baseline then GREEN after removal, same session."
+    }
+  ]
+}
