@@ -104,3 +104,6 @@ cover.out
 
 # Bubbles framework-health proposals (downstream-local)
 improvements/
+
+# Agent-local repository memory (never commit — may contain machine-local PII tokens)
+/memories/
