@@ -51,6 +51,8 @@ These are surfaced for operator decision and parked here per the agent's non-int
 | OQ-6 | For M2 wiki surface, are write-side annotations stored as new artifacts (linked back to source) or as overlays on existing source artifacts? | M2 | Recommend: overlays linked back via annotation edges — preserves source immutability per Principle 4 |
 | OQ-7 | M3 ratification: is operator ready to flip ALL 10 principles simultaneously, or stage them (e.g., 1, 2, 3, 6, 7, 8, 9, 10 BLOCKING and 4, 5 advisory until codebase audited)? | M3 | Operator decision — packet does not assume. `bubbles.docs` dispatch should confirm before editing. |
 
+> **Clarifying note (2026-06-23):** OQ-1 concerns the **Tier-1 daily NUDGE ceiling N** — shipped as `5` in `surfacing.daily_nudge_budget` and enforced by the spec-078 surfacing controller — which is a DIFFERENT budget from the **Tier-3 `< 3 system-initiated prompts/week` (non-urgent) SLO** ([`docs/smackerel.md`](../../smackerel.md) §1.4 success-metrics table). The "3/day" suggested-default above is the daily nudge ceiling, not the weekly prompt SLO; see the three-tier interruption-budget taxonomy comment in `config/smackerel.yaml` (`surfacing:` block).
+
 ## Cross-product coordination actions
 
 | ID | Action | Counterparty |

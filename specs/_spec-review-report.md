@@ -5,15 +5,89 @@
 **Scope:** All `specs/NNN-*/` (98 numbered specs, 001–098) + `specs/_ops/*` (8 packets)
 **Depth:** quick (state.json + git history + targeted file-existence/drift checks; not full per-spec behavioural cross-check)
 
-> This refresh supersedes the stale **2026-06-02 baseline** (which itself was
-> flagged stale by spec 082) and the **2026-06-10 go-live addendum**. Both are
-> preserved verbatim below under **[Historical Record](#historical-record)** for
-> audit trail. Where they disagree with this refresh, the refresh wins. This is
-> the full portfolio re-classification the 2026-06-10 addendum deferred.
+> **Layered newest-on-top.** The **2026-06-23 reconciliation refresh** (below)
+> supersedes the **2026-06-20 portfolio audit** for the model-target headline and
+> the `097`/`098`/`099` status lines. The 2026-06-20 audit — which itself
+> superseded the stale **2026-06-02 baseline** (flagged by spec 082) and the
+> **2026-06-10 go-live addendum**, both preserved under
+> **[Historical Record](#historical-record)** — is retained verbatim beneath the
+> 2026-06-23 section for audit trail. Where any two layers disagree, the newest
+> wins. (The 2026-06-20 header above describes that audit's 98-spec scope; the
+> portfolio is now 99 numbered specs, 001–099 — see the 2026-06-23 refresh.)
+
+---
+
+## Summary (2026-06-23 reconciliation refresh)
+
+This refresh reconciles five 2026-06-20 annotations to committed `HEAD` reality
+(the model-config sync that was "uncommitted working-tree" on 2026-06-20 has
+since landed; `097` certified `done`; `099` shipped):
+
+1. **Model-target headline CORRECTED — committed reality is `qwen3:30b-a3b`, not
+   `gpt-oss:20b`.** The 2026-06-20 refresh (headline #3 + the `087`/`088`/`089`
+   notes) recorded the home-lab open-knowledge *synthesis* target as the
+   uncommitted-working-tree `gpt-oss:20b` (+ `gemma4:26b` gather). That interim
+   value was **discarded, never committed**. The committed standing synthesis
+   default is now **`qwen3:30b-a3b`** (`config/smackerel.yaml` ~L1230, commit
+   `05b9f677`, pushed; selection delegated to the deploy-adapter `params.yaml`;
+   lineage `deepseek-r1:32b` → interim `gpt-oss:20b` → `qwen3:30b-a3b`). The
+   GATHER model remains `gemma4:26b`. Any note citing `gpt-oss:20b` as the
+   current synthesis target is stale.
+2. **Model reconciliation is now COMMITTED (was "uncommitted working tree").**
+   The 2026-06-20 caveat ("the committed tree still carries the
+   pre-reconciliation deepseek/llama narrative … until the operator commits the
+   10-file changeset") is discharged: `config/smackerel.yaml`'s `qwen3:30b-a3b`
+   profile + synthesis migration is committed (`05b9f677`, pushed), and the
+   BUG-067-001 ML NO-DEFAULTS fix is committed (`78b293cc`;
+   `policy-exception-baseline.json` is now empty). The 2026-06-23 annotation pass
+   refreshed `087`/`088` `blockedReason` + `devopsExecution.deploy` and added the
+   `089` `report.md` qwen3 supersession breadcrumb to match.
+3. **`097-card-rewards-gcal-delivery` → `done`** (was `in_progress`). Certified
+   `done` (commit `3688666a`, "spec(097): certify card-rewards gcal delivery
+   done"; renumbered from `089` via `c7f31b29`). Reclassifies **CURRENT**; it
+   leaves the PARTIAL/in-progress set.
+4. **`099-preflight-resource-guard` added — `done`, `releaseTrain: mvp`.** New
+   post-`098` spec (certified `done`, commits `7034f49f` / `6029e4eb`).
+   Classifies **CURRENT**. Portfolio is now **99 numbered specs (001–099)**.
+5. **`098` CI-red Trivy MINOR_DRIFT reconciled.** The embedded "Trivy
+   smackerel-ml RED → `publish-build-manifest` SKIPPED" condition is resolved at
+   the infrastructure level: the ml CVE remediation (`4debc4f0` + `d684f7bc`)
+   turned CI green, and the portfolio-reconciliation commit `78b293cc`
+   (BUG-067-001 ML fail-loud SST + portfolio reconciliation, which also refreshed
+   the `docs/releases/mvp/features.md` go-live inputs) closed the go-live drift;
+   CI now publishes a server-only build-manifest. `098`'s own inline
+   Discovered-Issues note is a cosmetic update-on-next-touch (the spec's contract
+   is independently GREEN in-repo); the *drift* is reconciled.
+
+### Status tally (2026-06-23, state.json authority)
+
+92 `done` + 2 `specs_hardened` (`063`, `079`) + 4 `blocked` (`058`, `084`,
+`087`, `088`) + 1 `in_progress` (`096`) = **99**. Deltas vs 2026-06-20: `097`
+`in_progress`→`done`; `099` added (`done`); `096` remains genuinely mid-flight.
+The four blocked specs remain honest, validated-in-repo, gated on the
+operator-owned `bubbles.devops` home-lab apply + live re-verify (`058` on the
+keyless-OIDC / public-Rekor CI-release row).
+
+### Trust-level deltas vs 2026-06-20
+
+| Spec | 2026-06-20 | 2026-06-23 | Reason |
+|------|-----------|-----------|--------|
+| `097` | in_progress (PARTIAL) | **CURRENT** (done) | Certified done `3688666a`. |
+| `099` | not covered | **CURRENT** (done) | New spec; done; mvp train. |
+| `098` | MINOR_DRIFT (Trivy-red note) | **CURRENT** (drift reconciled) | CI green (`4debc4f0`/`d684f7bc`) + `78b293cc`; inline note cosmetically pending. |
+| `087`/`088` | blocked (gpt-oss note) | blocked (qwen3 reconciled) | `blockedReason`/`deploy` refreshed; status unchanged. |
+| `089` | CURRENT (gpt-oss note) | CURRENT (qwen3 breadcrumb) | `report.md` supersession breadcrumb → `qwen3:30b-a3b`. |
+
+> **`MINOR_DRIFT` carry-overs `039` / `067`** are unchanged by this refresh (still
+> cosmetic deleted-file prose); re-point on next touch as before.
 
 ---
 
 ## Summary (2026-06-20 refresh)
+
+> **SUPERSEDED 2026-06-23** for the model-target headline (#3) and the
+> `097`/`098`/`099` status lines — see the **2026-06-23 reconciliation refresh**
+> above. Preserved verbatim for audit trail.
 
 | Trust level | Count | Notes |
 |-------------|-------|-------|
