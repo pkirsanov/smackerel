@@ -1,0 +1,116 @@
+{
+  "version": 3,
+  "featureDir": "specs/_ops/OPS-003-gap06-bug067-homelab-deploy-handoff",
+  "featureName": "OPS-003: Home-Lab Deploy Handoff — GAP-06 + BUG-067-001",
+  "status": "delivered_pending_activation",
+  "certifiedAt": "2026-06-23T00:00:00Z",
+  "certifiedBy": "bubbles.devops",
+  "workflowMode": "adapter-readiness-to-packet",
+  "scopeKind": "deploy-pointer",
+  "planningOnly": false,
+  "deliveryHandoff": true,
+  "deliveryHandoffJustification": "Operator activation packet for two already-committed runtime changes (GAP-06 / spec 054 Scope 9 and BUG-067-001 / ML_LOG_LEVEL fail-loud SST). The runtime delivery and its certification live in their own packets (specs/054-notification-intelligence-handler promoted to done; BUG-067-001 fix in commit 78b293cc). This OPS-003 packet ships ONLY the home-lab deploy/verify/rollback handoff documentation (objective.md + runbook.md). The live home-lab apply is deferred to the operator and was intentionally NOT run this session: the host is saturated with concurrent heavy builds, so no build / deploy / push / CI / docker command was executed. Terminates at delivered_pending_activation (mode adapter-readiness-to-packet, terminalAliases [delivered_pending_activation]); NOT promoted to done because live-runtime activation evidence is the operator's to produce at apply time.",
+  "deliverableFiles": [
+    "specs/_ops/OPS-003-gap06-bug067-homelab-deploy-handoff/objective.md",
+    "specs/_ops/OPS-003-gap06-bug067-homelab-deploy-handoff/runbook.md"
+  ],
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-06-23T00:00:00Z",
+    "phaseStubs": {
+      "implement": { "reason": "Handoff packet ships documentation only; the runtime delivery (GAP-06 + BUG-067-001) already shipped in commits cf490e55 and 78b293cc under their own packets." },
+      "test": { "reason": "No new runtime code in this packet; the shipped changes were tested in specs/054 (unit SCN-054-027/029, integration SCN-054-028/030, e2e arbitration+ack) and BUG-067-001. Live home-lab runtime evidence is deferred to operator apply." },
+      "chaos": { "reason": "Scope kind is deploy-pointer; live chaos/runtime exercise defers to operator activation at apply time." },
+      "stress": { "reason": "No SLA owned by this handoff packet; SLO checks happen on the live home-lab stack at apply time." }
+    },
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.devops",
+        "phasesExecuted": [
+          "discovery",
+          "documentation"
+        ],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "missing",
+        "statusAfter": "delivered_pending_activation",
+        "runStartedAt": "2026-06-23T00:00:00Z",
+        "runEndedAt": "2026-06-23T00:00:00Z",
+        "summary": "Authored the home-lab deploy handoff packet for this session's two runtime-relevant shippable changes: GAP-06 (spec 054 Scope 9 — notification decision engine routes user-facing decisions through the shared spec-078 surfacing controller; observable post-deploy via smackerel_surfacing_*{producer=\"notification\"} on the core /metrics) and BUG-067-001 (ML sidecar NO-DEFAULTS fix requiring fail-loud ML_LOG_LEVEL). READ-ONLY inspection only — NO build/deploy/push/CI/docker command was run (host saturated with concurrent heavy builds). Verified the ML_LOG_LEVEL flow end-to-end: SST key services.ml.log_level (value 'info') in config/smackerel.yaml -> scripts/commands/config.sh emits ML_LOG_LEVEL via required_value (fail-loud) -> single env render template -> renamed to app.env in the deploy bundle path (config.sh: grep -v '^# Generated: ' OUTPUT_FILE > STAGE_DIR/app.env). CAVEAT CONFIRMED: ML_LOG_LEVEL IS in the bundle generation path for SHA 78b293cc; the only failure mode is reusing a stale pre-78b293cc bundle with the new ml image. Endpoint paths corrected to repo reality: core liveness /api/health (not /healthz), core readiness /readyz, ml /health (returns model_loaded). Documented push -> CI (.github/workflows/build.yml) -> promote.sh -> apply -> verify -> rollback (pointer-swap) with exact commands, deploy source SHA 78b293cc, and home-lab ports 41001/41002. Noted related pending home-lab deploys (specs 084/087/088) and the A/B synthesis model supersession (deepseek-r1:7b -> qwen3:30b-a3b) to reconcile at apply time. Left the packet UNCOMMITTED for the orchestrator to commit. Terminates at delivered_pending_activation; live activation is the operator's call."
+      }
+    ]
+  },
+  "policySnapshot": {
+    "workflowMode": "adapter-readiness-to-packet",
+    "tdd": {
+      "mode": "exempt",
+      "source": "ops-artifact-only"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "certification": {
+    "status": "delivered_pending_activation",
+    "certifiedBy": "bubbles.devops",
+    "certifiedAt": "2026-06-23T00:00:00Z",
+    "completedScopes": [
+      "Scope 1"
+    ],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "documentation"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Author the home-lab deploy/verify/rollback handoff for GAP-06 + BUG-067-001",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ],
+    "lockdownState": {
+      "active": true,
+      "lockedScenarioIds": [],
+      "deferredActivations": [
+        {
+          "item": "Live home-lab apply + verify of core+ml images and the home-lab-<sourceSha> config bundle (with ML_LOG_LEVEL present)",
+          "tag": "awaiting-operator-commit",
+          "condition": "operator pushes the 6 commits, CI publishes build-manifest-<sourceSha>.yaml, and the operator runs promote.sh/apply against the real home-lab host once the dev host quiesces",
+          "unblocker": "operator",
+          "expectedActivation": "operator runs `bash scripts/deploy/promote.sh --target home-lab --build-manifest <path>` then `./smackerel.sh deploy-target home-lab verify`"
+        }
+      ]
+    }
+  },
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-06-23T00:00:00Z",
+  "scopeLayout": "single-file",
+  "notes": "Deploy source SHA 78b293cc. NEW required SST key this session: services.ml.log_level -> ML_LOG_LEVEL (recommended 'info'); ML sidecar fails loud without it. ML_LOG_LEVEL verified present in the deploy bundle app.env path for 78b293cc — the only risk is reusing a stale pre-78b293cc bundle. Related pending home-lab deploys: specs 084/087/088 (open-knowledge reasoning + genuine synthesis + runtime-switchable models/GPU A/B); A/B synthesis model superseded deepseek-r1:7b -> qwen3:30b-a3b (reconcile at apply). Packet left uncommitted for the orchestrator. No build/deploy/push/CI/docker command was run while authoring this packet."
+}
