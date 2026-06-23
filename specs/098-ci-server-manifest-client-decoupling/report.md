@@ -17,10 +17,16 @@ documents the server-only manifest shape and the knb-side gate expectation.
 All evidence below is real captured output. The spec is `done`: the deliverable
 (build.yml gating + lockstep drift-detector test + docs) is committed (spec(098)
 commit `f7148da2`) and pushed to `origin/main`, and is certified on the in-repo
-drift-detector proof. The live CI run on `main` is currently RED at a **foreign,
-pre-existing** gate (`build-images` → "Trivy vulnerability scan — smackerel-ml"),
-unrelated to spec 098's changed surface — recorded and dispositioned under
-[Discovered Issues](#discovered-issues).
+drift-detector proof. At certification time (2026-06-20) the live CI run on
+`main` was RED at a **foreign, pre-existing** gate (`build-images` → "Trivy
+vulnerability scan — smackerel-ml"), unrelated to spec 098's changed surface —
+recorded and dispositioned under [Discovered Issues](#discovered-issues).
+**Update 2026-06-22:** that foreign Trivy-ml condition has since been remediated
+(CVE fixes `4debc4f0` + `d684f7bc`, merged to `main`); the `build` workflow is
+now GREEN on HEAD (latest `main` runs are `completed success`, e.g. run
+`27925329084` on 2026-06-22), so `publish-build-manifest` runs and publishes the
+server-only `build-manifest-<sourceSha>.yaml` — the live server-only-manifest
+path is now exercised.
 
 ## SCOPE-01 — build.yml change (before/after) {#build-yml-change}
 
@@ -356,6 +362,16 @@ X build-images in 4m17s
 X Process completed with exit code 1
 ```
 
+**Update 2026-06-22 (cosmetic CI-state reconciliation, bubbles.docs):** the
+foreign `build-images` Trivy-ml CVEs were fixed by commits `4debc4f0`
+(litellm/fastapi/starlette bump) + `d684f7bc` (ml `Dockerfile` `starlette==1.3.1`),
+both merged to `main`. The `build` workflow is now GREEN on HEAD — the latest
+`main` runs are `completed success` (e.g. run `27925329084`, 2026-06-22) — so
+`build-images` → `publish-build-manifest` runs and publishes the server-only
+`build-manifest-<sourceSha>.yaml`. The server-only-manifest path is therefore now
+exercised live; the 2026-06-20 `gh run view 27865311625` capture above is retained
+as the historical certification-time record.
+
 ### Chaos Evidence
 
 **Executed:** YES (adversarial workflow-shape probes — the chaos surface for a static CI-config change)
@@ -390,12 +406,15 @@ test), the following quality-sweep phases are recorded as no-op stubs in
 ## Discovered Issues
 
 None originating from spec 098's changed surface. One foreign, pre-existing CI
-condition was observed during validation and is dispositioned below.
+condition was observed during validation and is dispositioned below. **It was
+subsequently remediated on 2026-06-22** — see the resolution row at the foot of
+the table.
 
 | Date | Finding | Origin | Disposition + Reference |
 |------|---------|--------|-------------------------|
 | 2026-06-20 | The `build` workflow on `main` is RED: `build-images` fails at "Trivy vulnerability scan — smackerel-ml" (exit 1). Because it fails upstream, `build-clients` + `publish-build-manifest` are skipped as failed-dependencies, so the live server-only-manifest path was NOT exercised on `main`. | **Foreign + pre-existing** — `build-images`/Trivy is a job spec 098 never touched; the identical failure is on the pre-098 run, predating `f7148da2`. | **Route out** as a separate ops/security concern (smackerel-ml image vulnerability gate). Out of spec 098's scope; no fix made here per the touch-098-only constraint. Ref: CI run 27865311625 (HEAD `51701a5c`); pre-098 run 27856198803 (`ba0a38d5`). |
 | 2026-06-20 | Live operator confirmation of the server-only manifest publish on a green non-release build remains pending (blocked by the foreign Trivy-ml failure above). | Operator-observable confirmation. | Certify 098 on the in-repo drift-detector contract proof (established pattern for CI-config specs); live confirmation follows once the foreign `build-images` Trivy-ml gate is resolved separately. Ref: [#unit](#unit), [uservalidation.md](uservalidation.md). |
+| 2026-06-22 | **RESOLUTION of both 2026-06-20 findings above.** The foreign `build-images` Trivy-ml CVEs were fixed (commits `4debc4f0` litellm/fastapi/starlette bump + `d684f7bc` ml `Dockerfile` `starlette==1.3.1`, both merged to `main`), so the `build` workflow is now GREEN on `main`/HEAD. `build-images` → `publish-build-manifest` therefore runs and publishes the server-only `build-manifest-<sourceSha>.yaml`; the live server-only-manifest path is now exercised, matching the contract proven in-repo. | Operator-observable confirmation — now satisfied. | Trivy-ml gate GREEN; manifest published. Verified via the last `build.yml` runs on `main` all `completed success` (e.g. run `27925329084`, 2026-06-22). Remediation is foreign to spec 098's surface; 098's deliverable (`f7148da2`) is unchanged. |
 
 The pre-existing working-tree WIP from specs 096/097 is foreign to spec 098 and
 was left untouched; spec 098's deliverable is committed in `f7148da2` exactly as
@@ -413,12 +432,16 @@ decoupled from mobile-client signing: a non-release push with no Android secret
 now publishes a server-only manifest rather than failing to publish one, exactly
 as the live `build.yml` asserts.
 
-The live CI confirmation of that path on `main` is currently blocked by a
-**foreign, pre-existing** failure — `build-images` fails the "Trivy vulnerability
-scan — smackerel-ml" step, which is upstream of and unrelated to spec 098's
-changed surface (098 never touched `build-images`/Trivy). That condition is
-recorded and dispositioned under [Discovered Issues](#discovered-issues) as a
-separate ops/security concern; it does not reflect on spec 098's contract, which
-is independently proven in-repo. This is the established certification pattern for
-CI-config specs: a static drift-detector contract test parsing the live workflow
-is the done evidence; the live run is an operator-observable confirmation.
+At certification (2026-06-20) the live CI confirmation of that path on `main` was
+blocked by a **foreign, pre-existing** failure — `build-images` failed the "Trivy
+vulnerability scan — smackerel-ml" step, which is upstream of and unrelated to
+spec 098's changed surface (098 never touched `build-images`/Trivy). That
+condition was recorded and dispositioned under [Discovered Issues](#discovered-issues)
+as a separate ops/security concern; it does not reflect on spec 098's contract,
+which is independently proven in-repo. This is the established certification
+pattern for CI-config specs: a static drift-detector contract test parsing the
+live workflow is the done evidence; the live run is an operator-observable
+confirmation. **Update 2026-06-22:** the foreign Trivy-ml gate has since been
+remediated (CVE fixes `4debc4f0` + `d684f7bc`); the `build` workflow is GREEN on
+HEAD and `publish-build-manifest` publishes the server-only manifest, so the
+operator-observable path is now exercised.

@@ -1,14 +1,5 @@
 {
   "schema_version": "v1",
   "policy": "specs/067-intent-driven-policy-enforcement",
-  "exceptions": [
-    {
-      "id": "G067-A05-ml-log-level",
-      "rule_id": "G067-A05",
-      "path": "ml/app/main.py",
-      "owner": "ml-sidecar",
-      "reason": "logging bootstrap uses literal default until ml.log_level SST key lands; owning fix tracked outside spec 067",
-      "expires_on": "2026-12-01"
-    }
-  ]
+  "exceptions": []
 }

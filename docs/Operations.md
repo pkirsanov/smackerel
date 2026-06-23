@@ -370,6 +370,269 @@ by the SST-generated env file or by the deploy adapter, and Compose must fail
 loudly if it is missing. The deploy adapter is the only surface that decides
 what goes on the public NIC.
 
+## Incident Response Runbook
+
+Smackerel ships **21 Prometheus alert rules** in
+[`config/prometheus/alerts.yml`](../config/prometheus/alerts.yml) (mounted
+read-only at `/etc/prometheus/alerts.yml`; the
+`TestMonitoringAlertsContract_LiveFile` contract test blocks any rule whose
+metric is not actually emitted by the runtime). This section is the guided
+per-incident playbook for the highest-likelihood alerts — each entry gives a
+**Symptom → Investigate → Remediate** path built **only** from the Tailnet-Edge
+access patterns documented above (Pattern P1 — `docker exec` over
+`tailscale ssh` for Postgres/NATS; Pattern P5 — host-Caddy for the HTTP UIs)
+plus the `./smackerel.sh` lifecycle/rollback surface. The terse one-line firing
+action and exact backing metric for *every* rule (not just the ones below) live
+in the [Alert Runbook](#alert-runbook) table further down.
+
+**Alert routing is not wired yet.** Alertmanager receivers (Telegram,
+PagerDuty, email) are deploy-adapter overlay scope, deferred to **RELEASE-V1** —
+so today an operator is **not** paged. Alerts are observed by *inspecting*
+Prometheus, not by push:
+
+- Open the Prometheus **Alerts** tab, or query `ALERTS{alertstate="firing"}`.
+- Liveness is the synthetic `up{job="smackerel-core"}` /
+  `up{job="smackerel-ml"}` series (the availability alerts key off `up == 0`).
+- The `/metrics` scrape endpoint is unauthenticated and **compose-network-only**
+  on home-lab (reach it through the Prometheus UI, not a host `curl`); on local
+  dev it is `http://127.0.0.1:40001/metrics`.
+- Every backing metric is listed in the [Alert Runbook](#alert-runbook) and
+  [Dashboard Inventory](#dashboard-inventory) tables.
+
+Every networked command below is bounded (`curl --max-time 5`,
+`docker logs --since <window>`); nothing blocks indefinitely. Container names
+resolve from `docker ps` and follow the `smackerel-<target>-*` compose-project
+naming (e.g. `smackerel-<target>-postgres`); `<core-container>` /
+`<ml-container>` below are those resolved names.
+
+### Triage first (every incident)
+
+```bash
+# 1. Is the container running, restarting, or gone? (resolves the real names)
+tailscale ssh <deploy-host> -- docker ps --filter name=smackerel-<target>
+
+# 2. Why? Bounded 15-minute log window (full output, no follow):
+tailscale ssh <deploy-host> -- docker logs --since 15m <core-container>
+
+# 3. Product-side status (delegates to the adapter status.sh):
+./smackerel.sh deploy-target <target> status
+
+# 4. HTTP health — local dev (loopback):
+curl --max-time 5 http://127.0.0.1:40001/api/health    # core
+curl --max-time 5 http://127.0.0.1:40002/health        # ml
+# Home-lab: reach the same endpoints over the Pattern P5 host-Caddy route
+# (see "HTTP UIs (Pattern P5: Host Caddy on the Tailscale IP)" above).
+```
+
+### Core or ML unavailable — `SmackerelCoreUnavailable` / `SmackerelMLUnavailable`
+
+**Symptom.** Critical alert; `up{job="smackerel-core"}` (or `…-ml`) has been `0`
+for ≥ 2 min — Prometheus cannot scrape the target. When **ML** is down the Go
+core silently falls back to text search (spec 050), so users may not notice, but
+ingestion enrichment is paused.
+
+**Investigate.**
+
+```bash
+tailscale ssh <deploy-host> -- docker ps --filter name=smackerel-<target>
+tailscale ssh <deploy-host> -- docker logs --since 15m <core-container>   # or <ml-container>
+# Core depends on Postgres + NATS — confirm those are healthy FIRST (Pattern P1):
+tailscale ssh <deploy-host> -- docker exec smackerel-<target>-postgres \
+    pg_isready -U smackerel -d smackerel
+tailscale ssh <deploy-host> -- docker exec smackerel-<target>-nats nats stream report
+# HTTP health:
+curl --max-time 5 http://127.0.0.1:40001/api/health     # local dev core
+curl --max-time 5 http://127.0.0.1:40002/health         # local dev ml
+```
+
+**Remediate.**
+
+```bash
+# Restart the unhealthy container in place (no rebuild):
+tailscale ssh <deploy-host> -- docker restart <core-container>     # or <ml-container>
+# If the failure began right after a deploy, roll back to the previous pointer
+# (pure pointer-swap — NEVER rebuilds):
+./smackerel.sh deploy-target <target> rollback
+```
+
+### Search degraded / elevated latency — `SmackerelMLEmbeddingStarvation`
+
+**Symptom.** Warning alert; `rate(smackerel_ml_embedding_rejected_total[5m]) > 0`
+— the bounded embedding ThreadPoolExecutor (spec 050) is rejecting work at its
+queue cap and search has fallen back to text-only matching (degraded quality, not
+an outage). A hard ML outage instead surfaces as `SmackerelMLUnavailable`.
+
+> There is **no dedicated search-latency alert rule** shipped today. P95 search
+> latency is observed on **Dashboard #6 (Search Latency)** via the
+> `smackerel_search_latency_seconds` histogram
+> (`histogram_quantile(0.95, rate(smackerel_search_latency_seconds_bucket[5m]))`
+> split by `mode`) — not by a page.
+
+**Investigate.**
+
+```bash
+# Confirm which ML signal is firing (Prometheus):
+#   rate(smackerel_ml_embedding_rejected_total[5m]) > 0   -> pool starvation
+#   up{job="smackerel-ml"} == 0                            -> ML down
+tailscale ssh <deploy-host> -- docker logs --since 15m <ml-container>
+```
+
+**Remediate.** Raise `services.ml.embedding_workers` /
+`services.ml.embedding_queue_max` in `config/smackerel.yaml` (SST), or scale the
+ML CPU envelope (`deploy_resources.smackerel_ml.cpus`). Text-fallback keeps
+search serving while you do.
+
+```bash
+./smackerel.sh config generate
+./smackerel.sh down && ./smackerel.sh up        # local dev
+# Home-lab: the SST change ships in a new config bundle and is applied via the
+# adapter — ./smackerel.sh deploy-target <target> apply (see Deployment.md).
+```
+
+### NATS dead-letter pressure — `SmackerelNATSDeadLetterPressure`
+
+**Symptom.** Warning; sustained dead-letter rate (> 0.05 msg/s for 10 min) on a
+stream. The Python ML sidecar has its own companions:
+`SmackerelMLNATSDeadLetterPressure` (ML-side DLQ rate, spec 081) and the
+**critical** `SmackerelMLNATSDeadLetterPublishFailing` (the sidecar cannot even
+publish to `DEADLETTER`, so it `nak()`s and redelivers the poison message in a
+loop — that consumer makes no forward progress).
+
+> The shipped NATS alerts watch dead-letter **rate**, not raw stream depth or
+> consumer ack-lag — those are **Dashboard #3 (NATS Pressure)**, not alert rules.
+
+**Investigate (Pattern P1).**
+
+```bash
+tailscale ssh <deploy-host> -- docker exec smackerel-<target>-nats nats stream report
+tailscale ssh <deploy-host> -- docker exec smackerel-<target>-nats nats stream info DEADLETTER
+tailscale ssh <deploy-host> -- docker exec smackerel-<target>-nats nats consumer report DEADLETTER
+# Most DLQ traffic is enrichment failures — check the ML sidecar + LLM:
+tailscale ssh <deploy-host> -- docker logs --since 15m <ml-container>
+```
+
+**Remediate.** Confirm Ollama/LLM availability (most DLQ is enrichment failures
+on SEARCH/SYNTHESIS streams). For the **publish-failing** case, check whether
+`DEADLETTER` is at its `MaxBytes`/`MaxMsgs` cap — that is the spec 046 envelope;
+raise the entry in `infrastructure.nats.stream_max_bytes` (SST), regenerate, and
+restart. Restart the ML container to clear a wedged consumer:
+
+```bash
+tailscale ssh <deploy-host> -- docker restart <ml-container>
+```
+
+### Postgres connection-pool saturation — `SmackerelDBPoolSaturated`
+
+**Symptom.** Warning; `smackerel_db_connections_active >= 9` (90% of the default
+10 `max_conns`) for 5 min — new requests queue or 503.
+
+> This is the **only shipped Postgres alert rule**. There is no shipped
+> disk-pressure or long-running-query alert — investigate those directly with
+> the queries below.
+
+**Investigate (Pattern P1).**
+
+```bash
+# Offending sessions / long-running queries:
+tailscale ssh <deploy-host> -- docker exec -it smackerel-<target>-postgres \
+    psql -U smackerel -d smackerel -c \
+    "SELECT pid, state, now() - query_start AS runtime, left(query, 80) \
+     FROM pg_stat_activity WHERE state <> 'idle' ORDER BY runtime DESC LIMIT 20;"
+# Disk headroom on the data volume:
+tailscale ssh <deploy-host> -- docker exec smackerel-<target>-postgres \
+    df -h /var/lib/postgresql/data
+```
+
+**Remediate.** Bump `infrastructure.postgres.max_conns` in the SST (regenerate +
+restart locally, or re-apply via the adapter on home-lab), or terminate a runaway
+backend:
+
+```bash
+tailscale ssh <deploy-host> -- docker exec -it smackerel-<target>-postgres \
+    psql -U smackerel -d smackerel -c "SELECT pg_terminate_backend(<pid>);"
+```
+
+### Backup stale — `SmackerelBackupStale`
+
+**Symptom.** Warning; `(time() - smackerel_backup_last_success_unixtime) > 90000`
+while the core is up — **no successful backup in ~25h**. It also fires on a
+brand-new host that has never produced a backup (the gauge is still `0`), which
+is the intended behavior.
+
+**Investigate.**
+
+```bash
+# Reproduce the backup manually and read the failure:
+./smackerel.sh backup
+# Confirm the on-disk JSON status file advanced (last_error tells you why not).
+# Verify the latest artifact actually restores cleanly:
+./smackerel.sh backup-restore-test
+```
+
+**Remediate.** Fix the cause surfaced by `last_error` (timer not firing,
+`pg_dump` failing, or an unreadable/missing status file), then re-run
+`./smackerel.sh backup` and confirm `smackerel_backup_last_success_unixtime`
+advances. Full restore-drill / BCDR procedures are out of scope here — see the
+[deeper-recovery pointer](#deeper-recovery-bcdr--restore-drills) below.
+
+### Connector sync errors — `ConnectorSyncFailureRateHigh24h`
+
+**Symptom.** Warning; a connector's error rate exceeds 10% over 24h
+(`smackerel_connector_sync_total{status="error"}` / total, by `connector`). The
+high-traffic Twitter connector has deeper-diagnostic companions:
+`TwitterAPIRateLimitChronicExhaustion` (reset window > 60s for 30 min) and
+`TwitterAPIRetryStorm` (retries > 0.2/s for 10 min).
+
+**Investigate.**
+
+```bash
+# The alert labels the connector — localise in the core logs:
+tailscale ssh <deploy-host> -- docker logs --since 30m <core-container> 2>&1 | grep -i <connector>
+# Per-connector / Twitter detail (Prometheus):
+#   rate(smackerel_connector_sync_total{status="error"}[24h]) by (connector)
+#   max_over_time(smackerel_connector_twitter_api_rate_limit_reset_seconds[15m])
+#   rate(smackerel_connector_twitter_api_retries_total[5m]) by (endpoint, reason)
+```
+
+**Remediate.** Verify the connector's credentials, upstream reachability, and its
+config block in `config/smackerel.yaml`. For Twitter, confirm the bearer-token
+tier and reduce `services.connectors.twitter.poll_seconds` or narrow active
+source lists. To silence a noisy connector, disable it and let the supervisor
+skip it on the next cycle:
+
+```bash
+# config/smackerel.yaml:  connectors.<name>.enabled: false
+./smackerel.sh config generate
+./smackerel.sh down && ./smackerel.sh up        # local dev; home-lab re-applies via the adapter
+```
+
+### Break-glass / emergency stop
+
+```bash
+# Local dev — stop the whole stack (named volumes are PRESERVED):
+./smackerel.sh down
+
+# Home-lab / production — the deploy ADAPTER owns lifecycle. Stop on the host
+# via the adapter-owned compose (no rebuild, no data loss):
+tailscale ssh <deploy-host> -- sudo docker compose -f <COMPOSE_DIR>/docker-compose.yml down
+
+# PREFERRED recovery for a bad deploy (not a full stop): pointer-swap rollback.
+# It re-points the manifest at the previous signed digests and restarts —
+# it NEVER rebuilds images or regenerates bundles:
+./smackerel.sh deploy-target <target> rollback
+```
+
+Because Smackerel is Build-Once Deploy-Many, `rollback` is always a pure
+pointer-swap to the previous immutable artifacts. If you find yourself wanting to
+rebuild to recover, stop — that is not the rollback path.
+
+### Deeper recovery (BCDR & restore drills)
+
+Backup **restoration**, scheduled **restore-drills**, and full **BCDR**
+exercises live in [`docs/Upkeep_Runbook.md`](Upkeep_Runbook.md) (`restore-test.sh`,
+`bcdr-drill.sh`) and the knb deploy-adapter overlay (`<knb-repo>/docs/BCDR_Plan.md`)
+— they are out of scope for this incident runbook.
+
 ## Bundle Secret Substitution (spec 052)
 
 For production-class targets (`home-lab`, `production`, and any future
@@ -1649,7 +1912,7 @@ email distribution) is deploy-adapter overlay scope.
 | `SmackerelDBPoolSaturated` | warning | `smackerel_db_connections_active` | Connection pool ≥ 9/10 for 5m — bump `infrastructure.postgres.max_conns` or hunt slow queries. |
 | `SmackerelMLEmbeddingStarvation` | warning | `rate(smackerel_ml_embedding_rejected_total[5m])` | ThreadPoolExecutor rejecting work — raise `services.ml.embedding_workers/queue_max` or scale CPU envelope. |
 | `SmackerelAlertDeliveryFailing` | critical | `rate(smackerel_alert_delivery_failures_total[15m])` | Operator notifications failing — check Telegram bot token + chat mapping. |
-| `SmackerelBackupStale` | warning | `smackerel_artifacts_ingested_total` | No ingestion for 24h — connectors stuck or backup pipeline silent. |
+| `SmackerelBackupStale` | warning | `smackerel_backup_last_success_unixtime` | No successful backup in ~25h (`time() - last_success > 90000` while core is up; also fires on a brand-new host that never backed up) — run `./smackerel.sh backup` to reproduce, read the status-file `last_error`, then `./smackerel.sh backup-restore-test`. |
 | `TwitterAPIRateLimitChronicExhaustion` | warning | `max_over_time(smackerel_connector_twitter_api_rate_limit_reset_seconds[15m])` | Twitter API rate-limit reset window above 60s sustained for 30m — verify bearer-token tier, reduce SST `services.connectors.twitter.poll_seconds`, or narrow active source lists. |
 | `TwitterAPIRetryStorm` | warning | `rate(smackerel_connector_twitter_api_retries_total[5m])` | Twitter retry rate ≥ 0.2/s for 10m — check connector logs for the failing endpoint/reason, verify Tailscale connectivity to `api.twitter.com`, inspect `smackerel_connector_twitter_api_requests_total{status}` for 5xx / 429 patterns. |
 | `SmackerelMLNATSDeadLetterPressure` | warning | `rate(smackerel_ml_nats_deadletter_total[10m])` | ML sidecar (Python) dead-letter pressure on a stream (spec 081 poison-pill routing) — inspect ML sidecar logs and confirm Ollama/LLM availability for SEARCH/SYNTHESIS streams. Companion to `SmackerelNATSDeadLetterPressure`, which only watches the Go core metric. |

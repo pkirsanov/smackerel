@@ -23,7 +23,7 @@ func TestGoNoDefaultsGuard_RealCorpusIsClean(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadBaseline: %v", err)
 	}
-	cfg := PolicyConfig{ExceptionMaxAgeDays: 365 * 10}
+	cfg := PolicyConfig{ExceptionMaxAgeDays: realPolicyExceptionMaxAgeDays(t)}
 	vs, err := GoNoDefaultsGuard(repo, baseline, time.Now(), cfg)
 	if err != nil {
 		t.Fatalf("GoNoDefaultsGuard: %v", err)

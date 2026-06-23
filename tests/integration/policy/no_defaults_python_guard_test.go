@@ -7,6 +7,8 @@ package policy
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +25,7 @@ func TestPythonNoDefaultsGuard_RealCorpusIsClean(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadBaseline: %v", err)
 	}
-	cfg := PolicyConfig{ExceptionMaxAgeDays: 365 * 10}
+	cfg := PolicyConfig{ExceptionMaxAgeDays: realPolicyExceptionMaxAgeDays(t)}
 	vs, err := PythonNoDefaultsGuard(repo, baseline, time.Now(), cfg)
 	if err != nil {
 		t.Fatalf("PythonNoDefaultsGuard: %v", err)
@@ -175,5 +177,104 @@ MODEL = os.environ.get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 	}
 	if len(vs) != 0 {
 		t.Fatalf("accepted exception still flagged: %+v", vs)
+	}
+}
+
+// realPolicyExceptionMaxAgeDays reads the SST cap
+// (policy.policy_exception_max_age_days) directly from the committed
+// config/smackerel.yaml so policy tests validate the REAL committed
+// baseline at the REAL cap instead of an inflated magic constant.
+//
+// Spec 067 BUG-067-001 (GAP-067-G02): the prior real-baseline tests
+// overrode ExceptionMaxAgeDays to 365*10 / 180, which masked an
+// over-age committed exception. Anchoring to the single source of
+// truth removes both the magic constant and the masking.
+func realPolicyExceptionMaxAgeDays(t *testing.T) int {
+	t.Helper()
+	repo := repoRootForTest(t)
+	yamlPath := filepath.Join(string(repo), "config", "smackerel.yaml")
+	raw, err := os.ReadFile(yamlPath)
+	if err != nil {
+		t.Fatalf("read SST config %s: %v", yamlPath, err)
+	}
+	re := regexp.MustCompile(`(?m)^\s*policy_exception_max_age_days:\s*([0-9]+)\s*$`)
+	m := re.FindSubmatch(raw)
+	if m == nil {
+		t.Fatalf("policy.policy_exception_max_age_days not found in %s", yamlPath)
+	}
+	days, err := strconv.Atoi(string(m[1]))
+	if err != nil {
+		t.Fatalf("policy.policy_exception_max_age_days not an integer in %s: %v", yamlPath, err)
+	}
+	if days <= 0 {
+		t.Fatalf("policy.policy_exception_max_age_days must be positive, got %d", days)
+	}
+	return days
+}
+
+// TestRealBaselineHasNoOverAgeExceptionsAtRealCap — Spec 067
+// BUG-067-001 adversarial regression for GAP-067-G01/G02. Loads the
+// REAL committed policy-exception-baseline.json and validates EVERY
+// exception via the production ValidateException at the REAL SST cap
+// (policy.policy_exception_max_age_days, read from config/smackerel.yaml
+// by realPolicyExceptionMaxAgeDays).
+//
+// RED-if-reintroduced: the removed G067-A05-ml-log-level entry had
+// expires_on=2026-12-01 (~162 days out at fix time), exceeding the
+// 90-day cap, which ValidateException flags as G067-A07. If any
+// over-age exception is re-added to the committed baseline, this test
+// fails. The prior real-baseline tests could NOT catch it because they
+// overrode the cap to 365*10 / 180 (the GAP-067-G02 masking).
+func TestRealBaselineHasNoOverAgeExceptionsAtRealCap(t *testing.T) {
+	repo := repoRootForTest(t)
+	baselinePath := filepath.Join(string(repo), "policy-exception-baseline.json")
+	baseline, err := LoadBaseline(baselinePath)
+	if err != nil {
+		t.Fatalf("LoadBaseline: %v", err)
+	}
+	cfg := PolicyConfig{ExceptionMaxAgeDays: realPolicyExceptionMaxAgeDays(t)}
+	now := time.Now()
+	for _, e := range baseline.Exceptions {
+		if v := ValidateException(e, now, cfg); v != nil {
+			t.Errorf("committed baseline exception %q violates the real %d-day SST cap: %s — %s",
+				e.ID, cfg.ExceptionMaxAgeDays, v.RuleID, v.Detail)
+		}
+	}
+}
+
+// TestValidateExceptionFlagsOverAgeAtRealCap — Spec 067 BUG-067-001.
+// Proves TestRealBaselineHasNoOverAgeExceptionsAtRealCap is NOT
+// tautological: at the REAL SST cap, a synthetic exception ~162 days
+// out (the exact over-age shape of the removed G067-A05-ml-log-level
+// entry) MUST be flagged G067-A07, and a synthetic exception within
+// the cap (80 days) MUST NOT be flagged. If a future change widens the
+// cap to mask over-age exceptions again (the GAP-067-G02 test hole),
+// the over-age assertion below fails.
+func TestValidateExceptionFlagsOverAgeAtRealCap(t *testing.T) {
+	capDays := realPolicyExceptionMaxAgeDays(t)
+	cfg := PolicyConfig{ExceptionMaxAgeDays: capDays}
+	now := time.Now()
+
+	overAge := Exception{
+		ID: "FIXTURE-over-age-ml-log-level", RuleID: "G067-A05",
+		Path: "ml/app/main.py", Owner: "ml-sidecar",
+		Reason:    "adversarial fixture mirroring the removed over-age exception",
+		ExpiresOn: now.AddDate(0, 0, 162).Format("2006-01-02"),
+	}
+	v := ValidateException(overAge, now, cfg)
+	if v == nil {
+		t.Fatalf("over-age exception (162 d) MUST be flagged at the real %d-day cap, got nil", capDays)
+	}
+	if v.RuleID != "G067-A07" {
+		t.Fatalf("over-age exception RuleID = %q, want G067-A07", v.RuleID)
+	}
+
+	// No false positive within the cap.
+	inRange := overAge
+	inRange.ID = "FIXTURE-in-range"
+	inRange.ExpiresOn = now.AddDate(0, 0, 80).Format("2006-01-02")
+	if v := ValidateException(inRange, now, cfg); v != nil {
+		t.Fatalf("in-range exception (80 d) must be clean at the real %d-day cap, got %s — %s",
+			capDays, v.RuleID, v.Detail)
 	}
 }

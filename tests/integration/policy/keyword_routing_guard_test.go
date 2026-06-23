@@ -47,7 +47,7 @@ func TestKeywordRoutingGuard_RealCorpusRunsAndProducesWellFormedFindings(t *test
 	if err != nil {
 		t.Fatalf("LoadBaseline: %v", err)
 	}
-	cfg := PolicyConfig{ExceptionMaxAgeDays: 180}
+	cfg := PolicyConfig{ExceptionMaxAgeDays: realPolicyExceptionMaxAgeDays(t)}
 	vs, err := KeywordRoutingGuard(repo, baseline, time.Now(), cfg)
 	if err != nil {
 		t.Fatalf("KeywordRoutingGuard: %v", err)
