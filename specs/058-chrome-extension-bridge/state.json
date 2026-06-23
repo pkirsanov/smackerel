@@ -9,7 +9,7 @@
     {"id": "MANUAL-SIDELOAD-WALKTHROUGH-AUTOMATION", "summary": "SCN-058-019 sideload-by-docs walkthrough is a manual operator scenario with no automation path; the runbook in docs/Operations.md is the only artifact.", "resolutionPath": "Either accept manual-only status permanently (close as 'wontfix-automated, doc-validated') or build a CI-side Chrome MV3 sideload smoke harness (loads signed zip, verifies cosign, asserts badge matrix) — runs on CI runners; must be validated there. Operator decision required. RESOLVED 2026-06-07 by bugs/BUG-058-002-mv3-e2e-sideload-harness — option (b) delivered LOCALLY (owner confirmed build/deploy is local) as sideload_smoke.spec.ts; runs via ./smackerel.sh test e2e-ext.", "status": "resolved"},
     {"id": "RESIDUAL-NOT-RUN-DOD-ROWS", "summary": "After the two infra blockers were discharged by BUG-058-002, the cosign verify-blob supply-chain row is now LOCALLY PROVEN to the maximum extent possible off-CI: scripts/runtime/extension-verify-blob.sh (./smackerel.sh test extension-supplychain) builds the real chrome-bridge zip, asserts the .sha256 sidecar matches the bytes, performs a real offline cosign sign-blob + verify-blob round-trip with an ephemeral key, and proves tamper detection (a truncated copy FAILS verify-blob) — PASS 2026-06-07; re-verified 2026-06-09 (exit 0). The Regression_BuildManifestRecordsZipSHA256 build-manifest contract-test assertion is LANDED (internal/deploy/build_workflow_chrome_bridge_contract_test.go, 1 live + 3 adversarial PASS; re-verified 2026-06-09, exit 0). The ONLY genuinely-irreducible remainder is the KEYLESS-OIDC identity binding (cosign sign-blob --yes under a GitHub Actions OIDC token) recorded in a real public-Rekor entry — that needs a tagged release signed by CI's OIDC identity and CANNOT be produced or honestly faked on a developer box (and uploading test signatures to the public Rekor would be forbidden shared-system pollution).", "resolutionPath": "On a tagged release, CI's keyless cosign signs the zip and writes the Rekor entry; run cosign verify-blob against that released artifact's certificate + Rekor entry to close the keyless-identity row. The verify-blob mechanics + sha256 binding + tamper detection are already proven locally via ./smackerel.sh test extension-supplychain. Must be validated on a real release, not fabricated.", "status": "open"}
   ],
-  "certifiedAt": "2026-05-28T15:40:00Z",
+  "certifiedAt": null,
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -52,7 +52,6 @@
     "audit": { "reason": "Stubbed: audit-equivalent review performed during implement — (a) spec 060 RequireScope middleware audit covers the scope-gating contract, (b) auth.RequireScope wiring in internal/api/router.go was reviewed during the Scope 1 implement pass, (c) extension MV3 manifest minimum permissions reviewed against the design §4 requirement, (d) bearer token masking + Reveal toggle reviewed in src/options/index.ts. No separate audit-phase artifact would add value beyond these in-line reviews." },
     "chaos": { "reason": "Stubbed: spec 058 has no new failure mode that warrants chaos testing. The transport.ts retry/backoff is already adversarial-tested at unit tier (test/unit/transport.spec.ts covers classifyStatus for {401,403}→auth_terminal, {400,413,422}→batch_terminal, {500,503}→retryable; test/unit/backoff.spec.ts proves the 7-attempt curve {1s,2s,5s,15s,60s,5m,30m} ±10% jitter + the 8th attempt 24h dead-letter cap). The queue's corrupted-row drainer is adversarial-tested (test/unit/queue.spec.ts SCN-058-015 skipsCorruptedRow + dedupKeyTupleIncludesDeviceID adversarial twin). No background worker, queue consumer, or distributed state outside the client extension exists." }
   },
-  "certifiedAt": "2026-05-28T15:40:00Z",
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": null,
@@ -188,7 +187,7 @@
   },
   "certification": {
     "status": "blocked",
-    "certifiedAt": "2026-05-28T15:40:00Z",
+    "certifiedAt": null,
     "lastEvaluatedAt": "2026-06-03T00:00:00Z",
     "evidenceRefs": [
       "specs/058-chrome-extension-bridge/report.md"

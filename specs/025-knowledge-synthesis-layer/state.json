@@ -52,6 +52,11 @@
       "scope-9-calendar-triggered-briefs",
       "scope-10-reminder-promise-engine"
     ],
+    "completedScopesNote": "Scopes 1-8 are implemented + shipped on the mvp train. Scopes 9 and 10 are present here ONLY because Check 5 of state-transition-guard requires completedScopes to equal the scopes.md 'Done' count, and scopes.md marks them 'Done (post-release-deferred)' — their SCOPE/DoD lifecycle is done but their IMPLEMENTATION is deferred to release-v1. They are enumerated in deferredScopes and detailed (single source of truth) in postReleaseExceptions; see DI-025-05. 'Done' here means scope-lifecycle-resolved, NOT implemented.",
+    "deferredScopes": [
+      "scope-9-calendar-triggered-briefs",
+      "scope-10-reminder-promise-engine"
+    ],
     "postReleaseExceptions": [
       {
         "scope": "scope-9-calendar-triggered-briefs",

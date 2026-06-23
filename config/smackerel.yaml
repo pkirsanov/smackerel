@@ -389,6 +389,22 @@ knowledge_graph_api:
 # (smackerel-no-defaults policy). Startup fails loud if any field is
 # missing or non-positive.
 surfacing:
+  # Interruption-budget taxonomy — THREE distinct tiers, frequently mistaken for
+  # one self-contradictory number. They are NOT in conflict; each governs a
+  # different thing:
+  #   Tier 1 — daily cross-channel NUDGE budget = daily_nudge_budget below. HARD
+  #     ceiling enforced by the spec-078 surfacing controller
+  #     (internal/intelligence/surfacing/controller.go, BudgetTracker.TryConsume in
+  #     Propose()). Non-urgent candidates beyond it are DEFERRED; only priority-1 +
+  #     time-critical candidates escalate past it (urgent_escalation_enabled).
+  #   Tier 2 — contextual-ALERT cap ~2/day. HARD, but enforced UPSTREAM in the
+  #     alert producers (e.g. the Telegram cap in alerts.GetPendingAlerts), NOT in
+  #     this controller — the controller only owns the global cross-channel ceiling.
+  #   Tier 3 — system-initiated PROMPTS < 3/week (non-urgent). A MEASURED
+  #     SUCCESS-METRIC / SLO TARGET (docs/smackerel.md §1.4 success-metrics table),
+  #     NOT a hard cap. The Tier-1 daily caps + dedupe + suppression keep the rate
+  #     low but do not structurally guarantee <3/week; it is observed/tuned, not
+  #     enforced.
   daily_nudge_budget: 5 # max user-visible nudges per day across all surfaces
   suppression_window_hours: 4 # acked items suppress follow-ups for this window
   dedupe_window_hours: 6 # same content_key collapses within this window
@@ -1228,7 +1244,7 @@ assistant:
     provider_api_key: "" # REQUIRED ("" allowed for searxng; brave/tavily must be non-empty when enabled)
     llm_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 064 SCOPE-17 — quality-first dev default. ~4GB resident, sound JSON-schema following + tool-use behavior. First call cold-loads ~30-60s; subsequent calls are fast. Used for the GATHER (tool-calling) turns; the forced-final SYNTHESIS turn uses synthesis_model_id below.
     synthesis_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 087 — model for the tools-stripped forced-final SYNTHESIS turn (and its retries). Dev default == llm_model_id (no effective split; dev has no Ollama daemon and gemma3:4b cannot synthesize the comparison class either, so dev is not the proof environment). Home-lab override (params.yaml model_selection.assistant_open_knowledge_synthesis_model_id, the effective last-wins value) = qwen3:30b-a3b (the operator-optimized standing synthesis default per 2026-06-21, superseding the interim gpt-oss:20b and spec 089's deepseek-r1:32b; 20480 MiB, co-resident with gemma4:26b gather (18432) = 38912 MiB inside the 49152 MiB / 48G home-lab envelope; the standing-default co-residence guard in validateModelEnvelopes enforces this fail-loud).
-    switchable_models: [ "gemma3:4b" ] # REQUIRED non-empty when enabled. Spec 088 — the allowlist of models /ask may be runtime-switched TO on the SYNTHESIS turn (per-request --model= / API model). Dev = [gemma3:4b] (== baseline synthesis; switching to it is a no-op but keeps the path testable; dev has no Ollama daemon). Each entry MUST have a model_memory_profiles entry AND co-resident-fit the env ollama envelope when loaded alongside llm_model_id (gather) — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-10). Home-lab override below sets the real home-lab set (gpt-oss:20b + gemma4:26b). NEVER a silent default.
+    switchable_models: [ "gemma3:4b" ] # REQUIRED non-empty when enabled. Spec 088 — the allowlist of models /ask may be runtime-switched TO on the SYNTHESIS turn (per-request --model= / API model). Dev = [gemma3:4b] (== baseline synthesis; switching to it is a no-op but keeps the path testable; dev has no Ollama daemon). Each entry MUST have a model_memory_profiles entry AND co-resident-fit the env ollama envelope when loaded alongside llm_model_id (gather) — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-10). Home-lab override (params.yaml model_selection.assistant_open_knowledge_switchable_models) sets the real operator-selected synthesis-switch set; the standing synthesis default is qwen3:30b-a3b (per 2026-06-21), consistent with synthesis_model_id above (gpt-oss:20b was the superseded interim). NEVER a silent default.
     tool_capable_gather_models: [ "gemma3:4b" ] # REQUIRED non-empty when enabled. Spec 089 — the allowlist of models the GATHER (tool-calling) turn may be runtime-switched TO (--gather-model= / API gather_model). Each MUST be tool-calling-capable on Ollama (gemma3:4b errors "does not support tools" under tools=[], but it IS the dev baseline gather and dev has no daemon, so dev = [gemma3:4b] == llm_model_id is a testable no-op; the home-lab override sets the real tool-capable set [gemma4:26b]). The baseline llm_model_id MUST be a member (the no-override gather path always passes). Each entry MUST have a model_memory_profiles entry — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-8). NEVER a silent default.
     max_iterations: 6 # REQUIRED: > 0 when enabled. Spec 084 — raised 4->6 = 5 tool-calling turns + 1 forced-synthesis turn for multi-hop reasoning (comparison/why/recommend questions need evidence on every side before answering; the agent strips tools on the last iteration to force a text answer). Model matrix unchanged (gemma4:26b home-lab / gemma3:4b dev).
     synthesis_retry_budget: 1 # REQUIRED: >= 0 when enabled. Spec 087 — number of stronger-prompt SYNTHESIS retries when the forced-final synthesis turn comes back empty/ungrounded, BEFORE the honest snippet salvage fires. 1 = one escalated "you already analyzed this; WRITE the verdict now, no <think>, no preamble" retry (rescues deepseek-r1's "thinks but does not conclude" failure mode). 0 = no retry (the exact spec-084 salvage timing). NOT a hidden default: 0 is an explicit, documented operator choice. Raising this raises the WriteTimeout worst case (cmd/core/main.go: (max_iterations + synthesis_retry_budget) * llm_timeout_ms).
