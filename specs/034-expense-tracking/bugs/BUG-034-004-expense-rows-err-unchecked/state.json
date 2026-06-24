@@ -5,8 +5,8 @@
   "coAffectedSpecs": [],
   "title": "Expense DB-iteration loops swallow mid-stream errors — under-reported totals / truncated tax-export CSV returned as HTTP 200",
   "severity": "medium",
-  "status": "in_progress",
-  "certifiedAt": "2026-06-24T06:01:52Z",
+  "status": "done",
+  "certifiedAt": "2026-06-24T07:30:14Z",
   "certifiedBy": "bubbles.workflow",
   "workflowMode": "bugfix-fastlane",
   "execution": {
@@ -39,11 +39,11 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": ["Scope 1"],
     "certifiedCompletedPhases": ["implement", "test", "regression", "security", "audit", "validate"],
     "certifierAgent": "bubbles.workflow",
-    "certifiedAt": "2026-06-24T06:01:52Z",
+    "certifiedAt": "2026-06-24T07:30:14Z",
     "scopeProgress": {"total": 1, "notStarted": 0, "inProgress": 0, "done": 1, "blocked": 0},
     "lockdownState": "n/a-no-locked-scenarios",
     "unresolvedFindings": []
