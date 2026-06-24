@@ -4,10 +4,10 @@
   "parentFeatureDir": "specs/024-design-doc-reconciliation",
   "featureName": "BUG-024-006: docs/smackerel.md §24-A architecture-tree connector count stale at 16 (missing Card Rewards) while §22.7 + docs/Development.md + runtime slice agree on 17, plus TestConnectorCountContract 4th-surface blind spot that pins only 3 of the 4 connector-count surfaces",
   "bugId": "BUG-024-006",
-  "status": "in_progress",
-  "certifiedAt": null,
-  "certifiedBy": null,
-  "lastUpdatedAt": "2026-06-24T14:00:00Z",
+  "status": "done",
+  "certifiedAt": "2026-06-24T14:34:28Z",
+  "certifiedBy": "bubbles.iterate",
+  "lastUpdatedAt": "2026-06-24T14:34:28Z",
   "workflowMode": "bugfix-fastlane",
   "nextRequiredOwner": null,
   "fixSequence": [
@@ -99,9 +99,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "certifiedBy": null,
-    "certifiedAt": null,
+    "status": "done",
+    "certifiedBy": "bubbles.iterate",
+    "certifiedAt": "2026-06-24T14:34:28Z",
     "completedScopes": [
       "Scope 1 — Pin §24-A as a 4th contract-test surface + reconcile §24-A 16→17 (Card Rewards leaf)"
     ],
