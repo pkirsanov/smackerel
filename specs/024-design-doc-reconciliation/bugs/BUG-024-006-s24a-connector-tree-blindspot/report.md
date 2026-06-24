@@ -289,4 +289,55 @@ EXIT_CODE=0
 
 ### Hand-off
 
-F2 (§24-A docs↔runtime drift) and F3 (contract-test 4th-surface blind spot) are both closed: F3 by the `bubbles.test` RED proof, F2 by this `bubbles.docs` GREEN proof. The consolidated path-limited commit and the parent spec 024 governance recertification are **deferred to the end-of-sweep `bubbles.devops` pass** (stochastic-quality-sweep R29) — this agent performs NO commit and does NOT recertify spec 024. `nextRequiredOwner: bubbles.devops` (deferred consolidated commit + parent recert). Spec 024 stays `status: done` throughout.
+F2 (§24-A docs↔runtime drift) and F3 (contract-test 4th-surface blind spot) are both closed: F3 by the `bubbles.test` RED proof, F2 by this `bubbles.docs` GREEN proof. The consolidated path-limited commit and the parent spec 024 governance recertification are **routed to the end-of-sweep `bubbles.devops` pass** (stochastic-quality-sweep R29) — this agent performs NO commit and does NOT recertify spec 024. `nextRequiredOwner: bubbles.devops` (consolidated commit + parent recert, owned downstream). Spec 024 stays `status: done` throughout.
+
+## bubbles.docs — Parent Governance Backfill + GREEN Re-Verification (2026-06-24)
+
+**Owner:** `bubbles.docs`. **Scope:** the parent spec 024 governance recertification half of the 2026-06-16 hand-off (the consolidated commit half remains the orchestrator's). **Surfaces touched:** `specs/024-design-doc-reconciliation/state.json` + `specs/024-design-doc-reconciliation/report.md` (parent governance) and this BUG packet's `scopes.md`/`bug.md`/`state.json` only.
+
+### State of the fix (already committed)
+
+The F2 doc reconciliation and F3 contract-test pin from the 2026-06-16 session are **already committed to `main`** — they are not pending working-tree edits. Verified at `HEAD` (clean working tree):
+
+```text
+$ git --no-pager show HEAD:docs/smackerel.md | grep -n 'Connector plugins (\|Card Rewards (cardrewards'
+2922:│   ├── Connector plugins (17 committed)
+2939:│   │   └── Card Rewards (cardrewards/ — spec 083 read-only rotating-category fetch)
+
+$ grep -n 'smackerelMdTreeRe\|parseSmackerelMdTreeCount\|AdversarialSmackerelMdTreeLow' internal/deploy/docs_connector_count_contract_test.go | head -3
+107:var smackerelMdTreeRe = regexp.MustCompile(`Connector plugins \((\d+) committed\)`)
+173:func parseSmackerelMdTreeCount(b []byte) (int, error) {
+409:func TestConnectorCountContract_AdversarialSmackerelMdTreeLow(t *testing.T) {
+```
+
+Because §24-A is committed at 17, a **fresh live-file RED cannot be reproduced** without reverting committed truth. The original live RED is preserved in this report's "bubbles.test — F3 Test-Extension RED Proof" (2026-06-16, `EXIT_CODE=1`); today the RED condition is permanently encoded in the **passing** `TestConnectorCountContract_AdversarialSmackerelMdTreeLow` sub-test (it rejects synthetic §24-A=16 vs runtime=17).
+
+### GREEN re-verification on the current tree (Claim Source: executed, 2026-06-24)
+
+`./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose`:
+
+```text
+=== RUN   TestConnectorCountContract_LiveFile
+    docs_connector_count_contract_test.go:277: contract OK: cmd/core/connectors.go + docs/smackerel.md §22.7 + docs/smackerel.md §24-A + docs/Development.md all agree on 17 connectors (spec 024 R-006 + BS-004 + AC-5 in sync)
+--- PASS: TestConnectorCountContract_LiveFile (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialConnectorsGoLow (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialSmackerelMdHigh (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialDevelopmentMdLow (0.00s)
+--- PASS: TestConnectorCountContract_AdversarialSmackerelMdTreeLow (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  0.048s
+[go-unit] go test ./... finished OK
+EXIT_CODE=0
+```
+
+### Governance backfill applied
+
+- Parent `state.json`: appended a BUG-024-006 `resolvedBugs[]` entry + a `bubbles.docs` `[docs, finalize]` `executionHistory` entry; bumped `lastUpdatedAt` `2026-06-17`→`2026-06-24`. Validated parseable; `resolvedBugs` ids end with `BUG-024-006-s24a-connector-tree-blindspot`.
+- Parent `report.md`: added the `## BUG-024-006 — §24-A …` resolution section (RED historical + GREEN today + boundary + pre-existing note).
+- This packet: `scopes.md` DoD guards-differential + governance-backfill items `[x]`; `bug.md` Verified `[x]`; `state.json` governance `executionHistory` entry + `currentPhase: finalize`.
+
+Gate G088 **PASS** (Check 30) — the backfill edits only `state.json`/`report.md` (governance), not `spec.md`/`design.md`/`scopes.md` planning truth, so `certifiedAt 2026-06-06T23:00:00Z` is unchanged.
+
+### Remaining + disposition
+
+The only remaining item is the **orchestrator's consolidated central commit** (the bug's terminal `done` transition is gated on it); bug `state.json` stays `in_progress` with `nextRequiredOwner: bubbles.devops`. **No commit/push** performed by this session. **Pre-existing, out-of-scope:** the parent state-transition-guard (4 blocks) + artifact-lint (5 issues) flag missing `gaps`+`harden` specialist phases (full-delivery required-phase gate drift post-dating the 2026-06-06 certification) — present identically before and after this backfill, not introduced by BUG-024-006, and not cleanly fixable within its scope (no `bubbles.gaps`/`bubbles.harden` provenance source for Check 6B). Parent spec 024 stays `status: done` throughout.
