@@ -1202,6 +1202,8 @@ No spec-088 substance rework is required.
 `064→084→087→088` chain. **Claim Source: executed** for STEP 1–3 (git + `gh run`
 observed); **blocked-on-operator** for STEP 4–5 (no live result fabricated).
 
+> **SHA reconciliation (2026-06-24):** the commit pushed below as `99c8d629` was rebased to **`9d0716b3`** during reconcile-20260612 (`f686b88d`); `9d0716b3` is the current on-main commit carrying the combined 087+088 work (verify: `git show 9d0716b3`). Every `99c8d629` reference below — the commit, the push range, the CI re-run target, `build-manifest-99c8d629.yaml`, and the `home-lab-99c8d629` config bundle — should be read as `9d0716b3` / `build-manifest-9d0716b3.yaml` / `home-lab-9d0716b3`. The historical STEP 1–2 text records the original push SHA and is left intact.
+
 ### What completed (executed)
 
 | Step | Outcome |
