@@ -4,12 +4,9 @@ handoffs:
   - label: Technical Design
     agent: bubbles.design
     prompt: Create technical design from enriched spec.md with wireframes (mode: from-analysis).
-  - label: Cinematic Implementation
-    agent: bubbles.cinematic-designer
-    prompt: Implement the wireframes with premium visual treatment.
-  - label: Standard Implementation
+  - label: Implementation
     agent: bubbles.implement
-    prompt: Implement the wireframes with standard UI treatment.
+    prompt: Implement the wireframes. If spec.md declares a `### Design Language` (e.g. cinematic), implement reads it and auto-loads the matching design-language skill plus the project UI skill.
 ---
 
 ## Agent Identity
@@ -46,14 +43,14 @@ UX content MUST be written to `{FEATURE_DIR}/spec.md` under `## UI Wireframes` a
 | "Splitting for organization" because spec.md is long | Single source of truth: `spec.md` |
 | Linking from spec.md to an external UX file | Inline ASCII wireframes in spec.md |
 
-**Why:** Downstream agents (`bubbles.design`, `bubbles.implement`, `bubbles.cinematic-designer`) read wireframes from `spec.md`. Sidecar UX files break the handoff contract and are invisible to validation gates UX1–UX5.
+**Why:** Downstream agents (`bubbles.design`, `bubbles.implement`) read wireframes from `spec.md`. Sidecar UX files break the handoff contract and are invisible to validation gates UX1–UX5.
 
 **Enforcement:** `validation-profiles.md` UX1 checks `spec.md` for `## UI Wireframes`. UX8 (new) checks that no forbidden sidecar UX file exists. `artifact-lint.sh` fails if any forbidden file is present in the feature directory.
 
 **Non-goals:**
 - Business requirements discovery (→ bubbles.analyst)
 - Technical architecture or API design (→ bubbles.design)
-- Pixel-perfect visual implementation with animations (→ bubbles.cinematic-designer)
+- Pixel-perfect visual implementation with animations (→ bubbles.implement, applying the design-language skill)
 - Scope decomposition (→ bubbles.plan)
 - Implementing code changes (→ bubbles.implement)
 
@@ -90,6 +87,8 @@ Supported options:
 - `skip_competitive: true` — Skip competitor web research
 - `mode: reconcile|redesign|replace` — Reconcile existing UX, rework it heavily, or fully supersede it
 - `redesign: true` — Compatibility shorthand for `mode: redesign`
+- `design-language: <name>` — Select the feature's design language (e.g., `cinematic`, or a project UI skill name). Only languages the repo has enabled under `.github/bubbles-project.yaml` `designLanguages.enabled` are selectable; otherwise the feature uses the repo's local UI skills only. See Design Language Resolution below.
+- `preset: <id>` — When `design-language: cinematic`, choose the aesthetic preset: `A` (Organic Tech), `B` (Midnight Luxe), `C` (Brutalist Signal), or `D` (Vapor Clinic).
 
 ### Natural Language Input Resolution (MANDATORY when no structured options provided)
 
@@ -107,6 +106,23 @@ When the user provides free-text input WITHOUT structured parameters, infer them
 | "improve the user flow for checkout" | mode: reconcile, focus: checkout flow |
 | "reconcile the checkout UX" | mode: reconcile, focus: checkout |
 | "replace the current onboarding UX" | mode: replace, focus: onboarding |
+| "make it cinematic" / "premium / flagship treatment" | design-language: cinematic |
+| "use the Midnight Luxe look" | design-language: cinematic, preset: B |
+
+### Design Language Resolution
+
+Resolve the feature's design language by precedence (first match wins):
+
+1. explicit `design-language:` option on this invocation,
+2. the feature's existing `### Design Language` in `spec.md` (**sticky** — keep a prior choice on reconcile/redesign unless explicitly overridden),
+3. the repo default `.github/bubbles-project.yaml` → `designLanguages.default`,
+4. none → reference the repo's local UI skills only and do NOT write a `### Design Language` section.
+
+Rules:
+- A language is **selectable only if** it is listed under `.github/bubbles-project.yaml` → `designLanguages.enabled`. If asked for one the repo has not enabled, do NOT select it: fall through to local UI skills and note in the report that the operator must enable it first (add it to `designLanguages.enabled`).
+- When a language resolves, load its skill (framework `bubbles-cinematic-design` for `cinematic`, or the project UI skill) and write the `### Design Language` section in `spec.md` (Phase 5). `bubbles.implement` reads that section and applies the same skill — so every later `ux`/`implement` run picks the choice up implicitly.
+- `.github/bubbles-project.yaml` is **operator-owned — NEVER auto-write it.** If a language is chosen but `designLanguages.default` is unset, RECOMMEND in the report that the operator set `designLanguages.default` so every later spec inherits it; do not write the file yourself.
+- Local UI skills (e.g. `web-ui`) always auto-load on UI work; this resolution governs only the optional framework design-language skill.
 
 ---
 
@@ -114,7 +130,7 @@ When the user provides free-text input WITHOUT structured parameters, infer them
 
 **This agent designs HOW users interact with the system, not what the system does or how it's built.**
 
-Unlike `/bubbles.analyst` (what to build), `/bubbles.design` (how to build it), or `/bubbles.cinematic-designer` (premium visual implementation), `/bubbles.ux`:
+Unlike `/bubbles.analyst` (what to build), `/bubbles.design` (how to build it), or `/bubbles.implement` (the build — including premium/cinematic output via the selected design-language skill), `/bubbles.ux`:
 
 - **Creates wireframe specifications** — ASCII layouts that define screen structure, component placement, and information hierarchy
 - **Maps interaction flows** — How users navigate between screens, what triggers transitions, what state changes occur
@@ -124,17 +140,17 @@ Unlike `/bubbles.analyst` (what to build), `/bubbles.design` (how to build it), 
 
 **PRINCIPLE: Wireframes are contracts for what users will see and do. Every business scenario must map to a screen flow.**
 
-### Relationship to `bubbles.cinematic-designer`
+### Relationship to `bubbles.implement` and design-language skills
 
-| Aspect | `bubbles.ux` | `bubbles.cinematic-designer` |
+| Aspect | `bubbles.ux` | `bubbles.implement` |
 |--------|-----------|---------------------------|
 | **Phase** | Pre-implementation (requirements) | Implementation (code) |
-| **Output** | ASCII wireframes + mermaid flows in spec.md | Actual frontend component code |
-| **Detail** | Layout structure + interactions + states | Pixel-perfect animations + scroll effects |
-| **Scope** | All screens across all surfaces | Premium/marketing pages only |
-| **Usage** | Every feature with UI | Invoked for cinematic experiences |
+| **Output** | ASCII wireframes + mermaid flows + `### Design Language` in spec.md | Actual frontend component code |
+| **Detail** | Layout structure + interactions + states + design-language selection | Pixel-perfect build, applying the selected design-language skill |
+| **Scope** | All screens across all surfaces | Every UI build, premium or standard |
+| **Usage** | Every feature with UI | Reads `### Design Language`; auto-loads the cinematic skill (if selected) + the project UI skill |
 
-`bubbles.ux` creates the wireframe spec → `bubbles.cinematic-designer` or `bubbles.implement` builds it.
+`bubbles.ux` selects the design language and writes the wireframe spec → `bubbles.implement` reads `### Design Language` and builds it, applying the matching design-language skill. (The former standalone `bubbles.cinematic-designer` agent is retired; its presets/patterns now live in the `bubbles-cinematic-design` skill.)
 
 ---
 
@@ -288,6 +304,12 @@ Add/update UI sections in `spec.md`. Preserve all existing sections. Add:
 ```markdown
 ## UI Wireframes
 
+### Design Language
+[ONLY when a design language resolved — see Design Language Resolution. Omit this section entirely when the feature uses local UI skills only.]
+- **Language:** <name> (e.g., cinematic) | **Preset:** <id + name, if cinematic>
+- **Source skill:** <the skill the implementer loads — `bubbles-cinematic-design` or the project UI skill>
+- **Applies to:** <which screens below, and any per-screen notes>
+
 ### Screen Inventory
 [from Phase 1]
 
@@ -317,6 +339,7 @@ Within UX-owned sections, reconcile instead of blindly appending. Remove invalid
    - User flows mapped
    - Accessibility considerations
    - Responsive adaptations
+   - Design language resolved (+ preset), or "local UI skills only"; if a language was chosen but `.github/bubbles-project.yaml` `designLanguages.default` is unset, recommend the operator set it for repo-wide stickiness (do NOT auto-write that operator-owned file)
    - Next recommended step: `/bubbles.design` (mode: from-analysis)
 
 ---
