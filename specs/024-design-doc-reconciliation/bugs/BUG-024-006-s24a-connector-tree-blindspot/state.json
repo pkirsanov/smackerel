@@ -7,7 +7,7 @@
   "status": "in_progress",
   "certifiedAt": null,
   "certifiedBy": null,
-  "lastUpdatedAt": "2026-06-16T00:00:00Z",
+  "lastUpdatedAt": "2026-06-24T00:00:00Z",
   "workflowMode": "bugfix-fastlane",
   "nextRequiredOwner": "bubbles.devops",
   "fixSequence": [
@@ -26,7 +26,7 @@
   ],
   "execution": {
     "activeAgent": null,
-    "currentPhase": "docs",
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-06-16T00:00:00Z",
     "runCompletedAt": null,
@@ -101,6 +101,17 @@
       "outcome": "completed_owned",
       "nextRequiredOwner": "bubbles.devops",
       "summary": "F3 (RED, bubbles.test) + F2 (GREEN, bubbles.docs) both closed one-to-one. bubbles.test extended internal/deploy/docs_connector_count_contract_test.go to pin §24-A as a 4th connector-count surface and RED-proved the gap (TestConnectorCountContract_LiveFile FAIL at docs/smackerel.md §24-A=16 vs runtime 17, EXIT_CODE=1; new + 3 pre-existing adversarial sub-tests PASS). bubbles.docs reconciled docs/smackerel.md §24-A header 16→17 and inserted the Card Rewards (cardrewards/, spec 083) leaf after QF Decisions, turning the contract test GREEN (TestConnectorCountContract_LiveFile PASS — four surfaces agree on 17 — all 4 adversarial sub-tests PASS, ok internal/deploy, EXIT_CODE=0); ./smackerel.sh check EXIT_CODE=0. scopes.md DoD: SCN-001 fidelity + post-fix GREEN proof + no-regression items ticked; Scope 1 → In Progress; bug.md → In Progress + Fixed. Deferred to the end-of-sweep bubbles.devops R29 pass: single atomic path-limited commit bubbles(024/bug-024-006), parent spec 024 resolvedBugs[]/executionHistory/report.md governance backfill, and parent guards/recert. No commit performed by bubbles.docs; parent spec 024 untouched and stays status: done."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["docs", "finalize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-24T00:00:00Z",
+      "runCompletedAt": "2026-06-24T00:00:00Z",
+      "outcome": "completed_owned",
+      "nextRequiredOwner": "bubbles.devops",
+      "summary": "Deferred parent-governance reconciliation + GREEN re-verification (the remaining half of the 2026-06-16 bubbles.docs hand-off). The F2 doc §24-A fix + F3 contract-test §24-A pin are ALREADY committed to main (verified at HEAD: docs/smackerel.md §24-A 'Connector plugins (17 committed)' + Card Rewards (cardrewards/, spec 083) leaf; internal/deploy/docs_connector_count_contract_test.go §24-A pin smackerelMdTreeRe + parseSmackerelMdTreeCount + TestConnectorCountContract_AdversarialSmackerelMdTreeLow). This session completed the deferred parent spec 024 governance backfill: appended a BUG-024-006 resolvedBugs[] entry + a bubbles.docs [docs, finalize] executionHistory entry + a '## BUG-024-006 …' report.md resolution section to specs/024-design-doc-reconciliation, and bumped its lastUpdatedAt 2026-06-17→2026-06-24; Gate G088 PASS (governance-only state.json/report.md edit, no planning-truth change). Re-verified GREEN on the current tree: ./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose → TestConnectorCountContract_LiveFile PASS (four surfaces agree on 17) + 4 adversarial sub-tests PASS (incl. AdversarialSmackerelMdTreeLow rejecting synthetic §24-A=16 vs runtime=17) + ok internal/deploy + EXIT_CODE=0. Marked scopes.md DoD (guards-differential + governance-backfill [x]) and bug.md Verified [x]. Bug stays status: in_progress with nextRequiredOwner bubbles.devops because the terminal done transition is gated on the orchestrator-owned consolidated commit; NO COMMIT/PUSH performed by this session. Pre-existing OUT-OF-SCOPE: parent carries missing 'gaps'+'harden' specialist-phase blocks (full-delivery required-phase gate drift post-dating the 2026-06-06 certification), unchanged by this backfill. Parent spec 024 stays status: done."
     }
   ]
 }

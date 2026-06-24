@@ -23,10 +23,10 @@ Round R29 of the stochastic-quality-sweep (`mode: stochastic-quality-sweep`, par
 - [x] Confirmed by sweep round R29 gaps-to-doc probe (real commands, captured below)
 - [x] In Progress
 - [x] Fixed
-- [ ] Verified
+- [x] Verified
 - [ ] Closed
 
-> **Fix-complete (2026-06-16), pending consolidation.** F3 RED-proved by `bubbles.test` (contract test extended to pin §24-A as a 4th surface) and F2 GREEN-closed by `bubbles.docs` (`docs/smackerel.md` §24-A header `16 committed` → `17 committed` + Card Rewards leaf inserted after QF Decisions). `./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose` exits 0 with four-surface agreement on 17; `./smackerel.sh check` exits 0. **Verified** and **Closed** remain unchecked because the consolidated path-limited commit and the parent spec 024 governance recertification are deferred to the end-of-sweep `bubbles.devops` pass (stochastic-quality-sweep R29). See report.md → "bubbles.docs — F2 §24-A Reconciliation GREEN Proof".
+> **Fix-complete (2026-06-16); parent governance backfilled (2026-06-24); Closed pending the orchestrator's central commit.** F3 RED-proved by `bubbles.test` (contract test extended to pin §24-A as a 4th surface) and F2 GREEN-closed by `bubbles.docs` (`docs/smackerel.md` §24-A header `16 committed` → `17 committed` + Card Rewards leaf inserted after QF Decisions) — both are **committed to `main`** (verified at `HEAD`: §24-A `(17 committed)` + the Card Rewards leaf; contract-test §24-A 4th-surface pin present). **Verified** is now marked: `./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose` re-run on the current tree exits 0 with four-surface agreement on 17, and `AdversarialSmackerelMdTreeLow` PASS permanently encodes the §24-A=16-vs-17 RED. The deferred **parent spec 024 governance recertification** (resolvedBugs[] + executionHistory + report.md `## BUG-024-006 …` section + lastUpdatedAt bump) is now **complete** (2026-06-24, `bubbles.docs`; Gate G088 PASS — governance-only edit). **Closed** remains unchecked only because the consolidated path-limited commit is owned by the orchestrator's central commit pass. See report.md → "bubbles.docs — F2 §24-A Reconciliation GREEN Proof".
 
 ## Reproduction Steps
 

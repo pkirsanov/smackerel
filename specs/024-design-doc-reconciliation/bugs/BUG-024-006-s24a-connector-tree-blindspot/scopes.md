@@ -141,19 +141,19 @@ The BUG-024-006 fix commit MUST stay strictly inside the boundary below; anythin
    - Phase: Test / Regression
    - Evidence: `ok github.com/smackerel/smackerel/internal/deploy 0.079s` with `TestConnectorCountContract_LiveFile` + all four `TestConnectorCountContract_Adversarial*` sub-tests PASS (the 3 pre-existing BUG-024-003 adversarial sub-tests `AdversarialConnectorsGoLow`/`AdversarialSmackerelMdHigh`/`AdversarialDevelopmentMdLow` + the new `AdversarialSmackerelMdTreeLow`) — see report.md → "F2 GREEN Run Evidence"
    - Claim Source: SCN-002 (executed 2026-06-16 — report.md F2 GREEN Proof)
-- [ ] All four framework guards green on parent spec 024 AND on the BUG-024-006 packet folder (state-transition-guard, artifact-lint, traceability-guard, artifact-freshness-guard); spec 024 stays `status: done`
+- [x] All four framework guards green on parent spec 024 AND on the BUG-024-006 packet folder (state-transition-guard, artifact-lint, traceability-guard, artifact-freshness-guard); spec 024 stays `status: done`
    - Phase: Validate
-   - Evidence: guard outputs at pre-edit baseline (no new BLOCKS); `artifact-lint.sh specs/024-design-doc-reconciliation/bugs/BUG-024-006-s24a-connector-tree-blindspot` exits 0
-   - Claim Source: SCN-004 (pending)
-- [ ] Parent spec 024 governance backfill: `resolvedBugs[]` extended with BUG-024-006; `lastUpdatedAt` bumped; `report.md` carries a `## BUG-024-006 …` resolution section with adversarial RED→GREEN proof
+   - Evidence: BUG-024-006 packet `artifact-lint.sh` exits 0 (PASS). Parent guards are differential vs the pre-edit baseline — the governance backfill introduced **no new BLOCKS**: Gate G088 PASS (Check 30 — governance-only `state.json`/`report.md` edit, no `spec.md`/`design.md`/`scopes.md` planning-truth change; `certifiedAt 2026-06-06T23:00:00Z` unchanged); parent state-transition-guard + artifact-lint carry the SAME pre-existing 4 STG blocks / 5 artifact-lint issues (missing `gaps`+`harden` specialist phases — full-delivery required-phase gate drift post-dating the 2026-06-06 certification), identical before and after this backfill and out-of-scope for BUG-024-006 (no `bubbles.gaps`/`bubbles.harden` provenance source for Check 6B). Every other parent gate (G087, G089, G090, G092, G093, G094, G095, G097, G098, G099, G100) PASS; spec 024 stays `status: done`.
+   - Claim Source: SCN-004 (executed 2026-06-24 — bubbles.docs guard differential; see parent report.md "## BUG-024-006 …")
+- [x] Parent spec 024 governance backfill: `resolvedBugs[]` extended with BUG-024-006; `lastUpdatedAt` bumped; `report.md` carries a `## BUG-024-006 …` resolution section with adversarial RED→GREEN proof
    - Phase: Docs / Finalize
-   - Evidence: `python3 -c "import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert any(b.get('bugId','').startswith('BUG-024-006') for b in d.get('resolvedBugs', []))"` exits 0
-   - Claim Source: SCN-004 (pending)
+   - Evidence: `python3 -c "import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert any(b.get('bugId','').startswith('BUG-024-006') for b in d.get('resolvedBugs', []))"` exits 0 (verified — `resolvedBugs ids` now ends with `BUG-024-006-s24a-connector-tree-blindspot`); parent `lastUpdatedAt` bumped `2026-06-17`→`2026-06-24`; parent `report.md` carries the `## BUG-024-006 — §24-A …` section with the RED (historical 2026-06-16 LiveFile FAIL + permanent `AdversarialSmackerelMdTreeLow`) → GREEN (four-surface LiveFile PASS, `EXIT_CODE=0`) proof; parent `executionHistory` carries a `bubbles.docs` `[docs, finalize]` entry.
+   - Claim Source: SCN-004 (executed 2026-06-24 — bubbles.docs governance backfill)
 - [ ] Single atomic commit with subject prefix `bubbles(024/bug-024-006):`; path-limited `git add`; zero stray files; `git push origin main` without `--no-verify`
    - Phase: Finalize
-   - Evidence: `git log --oneline -1 --format='%s'` begins with `bubbles(024/bug-024-006):`; `git diff HEAD~1..HEAD --name-only` shows only allowed paths
-   - Claim Source: SCN-004 (pending)
+   - Evidence: Owned by the orchestrator's central commit — this session does NOT `git commit`/`git push` (orchestrator central-commit policy). The F2 doc §24-A fix + F3 contract-test §24-A pin already landed in prior commits (contract-test §24-A pin in `eadfada7`; §24-A `(17 committed)` + Card Rewards leaf present in committed `HEAD`). The remaining uncommitted governance files (parent `state.json`/`report.md` + this BUG packet) are left in the working tree for the orchestrator's consolidated commit.
+   - Claim Source: SCN-004 (orchestrator-owned)
 - [ ] Bug marked Fixed/Verified in bug.md and state.json status promoted to terminal-for-mode (bugfix-fastlane → done) by the fix owners
    - Phase: Finalize
-   - Evidence: bug.md status `[x] Fixed`; state.json status `done` with bugfix-fastlane required specialist phases present
-   - Claim Source: all (pending)
+   - Evidence: bug.md `[x] Fixed` + `[x] Verified` are now marked (GREEN re-verified 2026-06-24, `EXIT_CODE=0`). state.json status→`done` promotion is owned by the orchestrator's central commit, because the terminal `done` transition is gated on the orchestrator-owned commit DoD item above; until then state.json stays `in_progress` with `nextRequiredOwner: bubbles.devops` (committer).
+   - Claim Source: all (Fixed/Verified executed 2026-06-24; done-promotion orchestrator-owned)

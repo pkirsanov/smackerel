@@ -712,3 +712,66 @@ All four surfaces now agree on **17**; the contract test passes.
 
 Doc-reconciliation only — no spec.md/design.md/scopes.md planning-truth edit, no runtime/schema/test change. **NOT committed, NOT pushed** — left in the working tree for the operator. Parent spec 024 status stays `done` (statusCeiling `docs_updated`; no promotion). Only `docs/smackerel.md` (reverted to HEAD) and this spec-024 `report.md` / `state.json` execution record were touched.
 
+---
+
+## BUG-024-006 — §24-A architecture-tree connector count (16 → 17, +Card Rewards) + TestConnectorCountContract 4th-surface blind spot (2026-06-16 fix; 2026-06-24 governance backfill)
+
+**Trigger:** stochastic-quality-sweep round R29 (mapped child mode `gaps-to-doc`, parent-expanded), 2026-06-16.
+**Mode:** `bugfix-fastlane`. **Packet:** `specs/024-design-doc-reconciliation/bugs/BUG-024-006-s24a-connector-tree-blindspot`.
+**Owners:** `bubbles.test` (F3 RED) → `bubbles.docs` (F2 GREEN) → `bubbles.docs` (governance backfill, this section).
+**Parent spec 024 status:** `done` before and after (statusCeiling `docs_updated`; no promotion).
+
+### Findings (both closed one-to-one)
+
+- **F2 (MEDIUM, primary — docs↔runtime drift):** `docs/smackerel.md` §24-A architecture-tree header read `Connector plugins (16 committed)` with a 16-leaf list ending at QF Decisions, omitting Card Rewards (`cardrewards/`, spec 083). §22.7 header, `docs/Development.md` line 31, and `cmd/core/connectors.go` all said 17 — §24-A was the lone stale surface on spec 024's owned R-006 connector-inventory dimension.
+- **F3 (MEDIUM, root cause — forward-detection blind spot):** `internal/deploy/docs_connector_count_contract_test.go` pinned only 3 of the 4 connector-count surfaces (slice literal, §22.7 header, Development.md bullet); the §24-A `Connector plugins (N committed)` line was uncovered, so §24-A drifted to 16 while the 3 pinned surfaces moved to 17 and `TestConnectorCountContract_LiveFile` still passed GREEN logging "all agree on 17".
+
+### Fix (committed to main — verified at HEAD by this governance pass)
+
+- **F3 (`bubbles.test`):** extended the contract test — added `smackerelMdTreeRe = regexp.MustCompile(`Connector plugins \((\d+) committed\)`)` + `parseSmackerelMdTreeCount` + folded §24-A into `assertConnectorCountContract`'s four-surface equality + new `TestConnectorCountContract_AdversarialSmackerelMdTreeLow` sub-test.
+- **F2 (`bubbles.docs`):** reconciled `docs/smackerel.md` §24-A — header `16 committed` → `17 committed`; QF Decisions leaf glyph `└──` → `├──`; inserted `└── Card Rewards (cardrewards/ — spec 083 read-only rotating-category fetch)` as the 17th leaf (Gov Alerts → Card Rewards), matching §22.7 row-17 read-only framing (Principle 10 QF Companion boundary).
+
+Both are present in committed `HEAD`: `git show HEAD:docs/smackerel.md` → line 2922 `│   ├── Connector plugins (17 committed)` and line 2939 `│   │   └── Card Rewards (cardrewards/ — spec 083 read-only rotating-category fetch)`; the §24-A pin is present in the committed contract test.
+
+### RED proof (anti-tautology)
+
+The live-file RED was captured by `bubbles.test` in the 2026-06-16 prior session (see the BUG-024-006 packet `report.md` → "bubbles.test — F3 Test-Extension RED Proof": `--- FAIL: TestConnectorCountContract_LiveFile` with `docs/smackerel.md §24-A=16` vs runtime/§22.7/Development.md=17, `EXIT_CODE=1`). Because §24-A is now reconciled and **committed at 17**, a fresh live-file RED cannot be reproduced without reverting committed truth. The RED condition is instead **permanently encoded** in the passing `TestConnectorCountContract_AdversarialSmackerelMdTreeLow` sub-test, which rejects a synthetic §24-A=16 vs runtime=17 (proving the §24-A pin is non-tautological).
+
+### GREEN proof (re-verified on the current tree, 2026-06-24, Claim Source: executed)
+
+Command (sanctioned repo CLI): `./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose`
+
+```text
+=== RUN   TestConnectorCountContract_LiveFile
+    docs_connector_count_contract_test.go:277: contract OK: cmd/core/connectors.go + docs/smackerel.md §22.7 + docs/smackerel.md §24-A + docs/Development.md all agree on 17 connectors (spec 024 R-006 + BS-004 + AC-5 in sync)
+--- PASS: TestConnectorCountContract_LiveFile (0.00s)
+=== RUN   TestConnectorCountContract_AdversarialConnectorsGoLow
+    docs_connector_count_contract_test.go:315: adversarial OK: connectors.go=15 vs docs=16 is rejected with: contract violation: connector count disagreement — cmd/core/connectors.go=15, docs/smackerel.md §22.7=17, docs/smackerel.md §24-A=17, docs/Development.md=17 — all four MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004
+--- PASS: TestConnectorCountContract_AdversarialConnectorsGoLow (0.00s)
+=== RUN   TestConnectorCountContract_AdversarialSmackerelMdHigh
+    docs_connector_count_contract_test.go:361: adversarial OK: smackerel.md=18 vs runtime+Development.md=17 is rejected with: contract violation: connector count disagreement — cmd/core/connectors.go=17, docs/smackerel.md §22.7=18, docs/smackerel.md §24-A=17, docs/Development.md=17 — all four MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004
+--- PASS: TestConnectorCountContract_AdversarialSmackerelMdHigh (0.00s)
+=== RUN   TestConnectorCountContract_AdversarialDevelopmentMdLow
+    docs_connector_count_contract_test.go:396: adversarial OK: Development.md=15 vs runtime+smackerel.md=16 is rejected with: contract violation: connector count disagreement — cmd/core/connectors.go=17, docs/smackerel.md §22.7=17, docs/smackerel.md §24-A=17, docs/Development.md=15 — all four MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004
+--- PASS: TestConnectorCountContract_AdversarialDevelopmentMdLow (0.00s)
+=== RUN   TestConnectorCountContract_AdversarialSmackerelMdTreeLow
+    docs_connector_count_contract_test.go:453: adversarial OK: §24-A=16 vs runtime+§22.7+Development.md=17 is rejected with: contract violation: connector count disagreement — cmd/core/connectors.go=17, docs/smackerel.md §22.7=17, docs/smackerel.md §24-A=16, docs/Development.md=17 — all four MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004
+--- PASS: TestConnectorCountContract_AdversarialSmackerelMdTreeLow (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  0.048s
+[go-unit] go test ./... finished OK
+EXIT_CODE=0
+```
+
+**Interpretation (Claim Source: executed):** the live-file contract now passes with the four-surface diagnostic explicitly naming `docs/smackerel.md §24-A` in the agreement set (all four = 17), and all four adversarial sub-tests pass — including the new §24-A `AdversarialSmackerelMdTreeLow`, which proves the pin would catch a §24-A revert to 16. No regression in the three pre-existing BUG-024-003 adversarial sub-tests.
+
+### Governance backfill (this section, 2026-06-24, `bubbles.docs`)
+
+The 2026-06-16 fix routed parent-governance recertification to an end-of-sweep pass. This pass completed it: appended a BUG-024-006 `resolvedBugs[]` entry + a `bubbles.docs` `executionHistory` entry to this spec's `state.json`, bumped `lastUpdatedAt` `2026-06-17` → `2026-06-24`, and added this report section. Gate G088 PASS (Check 30) — the backfill edits only `state.json` + `report.md` (governance), not `spec.md`/`design.md`/`scopes.md` planning truth, so `certifiedAt` `2026-06-06T23:00:00Z` is unchanged.
+
+### Boundary & disposition
+
+Only `docs/smackerel.md` §24-A (committed) + `internal/deploy/docs_connector_count_contract_test.go` (committed) + the BUG-024-006 packet + this spec-024 `state.json`/`report.md` were touched. §22.7 and `docs/Development.md` (already 17) were NOT re-touched; no runtime/schema/NATS/compose/web template/prompt contract/Telegram command/deploy script change. **NOT committed by this pass** — the consolidated path-limited commit is owned by the orchestrator's central commit step.
+
+**Pre-existing, out-of-scope (documented, not introduced by BUG-024-006):** the parent state-transition-guard (4 blocks) + artifact-lint (5 issues) flag missing `gaps` + `harden` specialist phases — full-delivery required-phase gate drift post-dating the 2026-06-06 certification. These are present identically at the pre-edit baseline and after this backfill; they are not fixable within BUG-024-006's scope (no `bubbles.gaps`/`bubbles.harden` provenance source for the Check 6B phase-claim-provenance gate). Gate G088 and every other parent gate (G087, G089, G090, G092, G093, G094, G095, G097, G098, G099, G100) PASS.
+
