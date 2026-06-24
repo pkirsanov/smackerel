@@ -64,3 +64,15 @@ return envelope, control flow, or any non-log behavior.
 |---|---|
 | Removing content reduces debuggability | Length + type + `trace_id` retained; the original goal (schema-rejection triage) is fully served by shape metadata. |
 | Regression test is tautological | Adversarial: plants canaries in BOTH the user turn and the final answer and asserts absence; proven RED against the unfixed code in the same session. |
+
+### Single-Implementation Justification
+
+This fix is a single concrete implementation: redact two diagnostic
+`INFO` logs to non-reversible length+type metadata. There is no second
+provider, variant, or channel — and therefore no foundation/concrete
+split. The "provider routing" reference in *Blast radius* is descriptive
+only: it records that provider routing is UNCHANGED, not that a new
+provider is introduced. A length+type redaction applied to exactly two
+`logger.info` call sites has a single implementation surface, so a
+capability-foundation design would add structure with no second consumer
+to justify it.
