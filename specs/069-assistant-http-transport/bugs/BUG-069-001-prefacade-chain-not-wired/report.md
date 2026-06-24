@@ -435,3 +435,74 @@ Discovery, documentation, and root-cause analysis are complete and evidence-back
 Artifact lint PASSED.
 ARTIFACT_LINT_EXIT=0
 ```
+
+---
+
+### Verify-First Reconciliation Re-Verification — bubbles.implement (2026-06-24)
+
+**Phase:** implement · **Owner:** bubbles.implement · **Claim Source:** executed · **Outcome:** stale-ledger reconciliation (NO re-implementation)
+
+A `bubbles.implement` pass was dispatched to execute the F1 (wiring) + F2 (test) fix. **Verify-first found the fix AND its real-router regression test ALREADY COMMITTED** to the working tree (commit `eadfada7`), with every implement/test DoD item in [scopes.md](scopes.md) already `[x]` — but `state.json` was stale (`currentPhase: discovery`, `completedPhaseClaims: ["bug"]`, `nextRequiredOwner: bubbles.implement`). No production code was re-written (that would have been duplicate work). This pass independently re-verified the committed state is healthy and reconciled the ledger.
+
+**[RV1] Wiring present + identity pass-through gone + working tree clean**
+**Commands / Exit Codes:** `grep -rn 'PreFacadeChain' cmd/ internal/api/`=0 (production match) · `grep -rn 'func(next http.Handler) http.Handler { return next }' cmd/`=1 (no matches) · `git status --short`=clean
+
+```text
+$ grep -rn 'PreFacadeChain' cmd/ internal/api/
+cmd/core/wiring_assistant_facade.go:318:	// late-bound adapter. PreFacadeChain composes, in order:
+cmd/core/wiring_assistant_facade.go:324:	// io.ReadAll, bounded by BodySizeMaxBytes. PreFacadeChain
+cmd/core/wiring_assistant_facade.go:329:	svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))
+internal/api/router.go:84:			// enforced by the PreFacadeChain middleware wired in front of
+$ grep -rn 'func(next http.Handler) http.Handler { return next }' cmd/   # identity pass-through
+(no matches — exit 1)
+$ git --no-pager log --oneline -1 -- cmd/core/wiring_assistant_facade.go cmd/core/wiring_assistant_http_prefacade_regression_test.go
+eadfada7 chore(wip): prior-session code checkpoint — bug-fix code + spec 096 ...
+$ git status --short cmd/core/ specs/069-assistant-http-transport/bugs/BUG-069-001-prefacade-chain-not-wired/
+(clean — no uncommitted changes)
+```
+
+**[RV2] Regression test GREEN through the REAL `wireAssistantHTTPAdapter` wiring (413 / 429 / 403 / shared-token-200)**
+**Command:** `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` — **Exit Code:** 0
+
+```text
+=== RUN   TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/missing_turn_scope_returns_403_before_facade
+2026/06/24 04:08:51 INFO assistant HTTP adapter wired and bound schema_version=v1 body_size_max_bytes=65536 rate_limit_per_user_per_minute=60 required_scope=assistant:turn
+2026/06/24 04:08:51 WARN auth: scope_rejected event=scope_rejected required_scope=assistant:turn user_id=user-403 token_scopes=[connector:ingest] endpoint=/api/assistant/turn
+--- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/oversized_body_returns_413_before_facade (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/per_user_rate_limit_returns_429 (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/missing_turn_scope_returns_403_before_facade (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/shared_token_within_limits_returns_200 (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/cmd/core 0.531s
+[go-unit] go test ./... finished OK
+SMACKEREL_UNIT_EXIT=0
+```
+
+**[RV3] Broader assistant unit suite + check + lint — no collateral regression**
+**Commands / Exit Codes:** `./smackerel.sh test unit --go --go-run 'HTTPAdapter|HTTPAssistant|Chaos069|PreFacadeChain|TransportHint|AssistantHTTP' --verbose`=0 · `./smackerel.sh check`=0 · `./smackerel.sh lint`=0
+
+```text
+# assistant HTTP unit suite — all GREEN, no FAIL line anywhere
+--- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute (0.00s)
+--- PASS: TestHTTPAdapterTranslatesTextTurnToAssistantMessage (0.00s)
+--- PASS: TestHTTPAdapter_ValidateRejectsUnknownHint (0.00s)
+--- PASS: TestHTTPAdapter_ValidateRejectsBadSchemaVersion (0.00s)
+--- PASS: TestChaos069 (0.08s)
+--- PASS: TestHTTPAssistantTurnGoldenContractV1 (0.00s)
+--- PASS: TestTransportHintIsClosedVocabularyAndTelemetryOnly (0.00s)
+--- PASS: TestAssistantHTTPTransportConfigRequiresEverySSTKey (0.02s)
+[go-unit] go test ./... finished OK   ->  SMACKEREL_ASSIST_EXIT=0
+
+# ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scenarios registered: 17, rejected: 0 — OK
+SMACKEREL_CHECK_EXIT=0
+
+# ./smackerel.sh lint
+Web validation passed
+SMACKEREL_LINT_EXIT=0
+```
+
+**Ledger reconciliation applied:** `state.json` → `completedPhaseClaims` now includes `implement`; `currentPhase` → `validate`; `nextRequiredOwner` → `bubbles.validate`; `lastUpdatedAt` → 2026-06-24. `status` left `in_progress` and `certification.*` untouched (validate-owned). The F2 test-phase DoD items in [scopes.md](scopes.md) were already evidenced (bubbles.test) and are re-verified GREEN above, so the sole remaining step is validate-owned terminal-for-mode (`bugfix-fastlane → done`) certification — no separate bubbles.test re-run is warranted.
