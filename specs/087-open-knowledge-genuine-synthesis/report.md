@@ -317,6 +317,8 @@ result fabricated). 087 ships co-mingled with 088 in one commit — see
 Operator Runbook (2026-06-14)" for the full shared runbook (deploy + the
 gemma4:26b-vs-deepseek-r1:7b A/B). 087-specific summary:
 
+> **SHA reconciliation (2026-06-24):** the commit pushed below as `99c8d629` was rebased to **`9d0716b3`** during reconcile-20260612 (`f686b88d`); `9d0716b3` is the current on-main commit carrying the combined 087+088 work (verify: `git show 9d0716b3`). Read every `99c8d629` reference below — commit, push range, and `build-manifest-99c8d629.yaml` — as `9d0716b3` / `build-manifest-9d0716b3.yaml`. The historical text records the original push SHA and is left intact.
+
 | Step | Outcome |
 |------|---------|
 | 1 — commit | DONE — combined 087+088 commit `99c8d629` (50 files); pii-scan clean; `.kotlin` excluded. |
