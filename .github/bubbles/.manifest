@@ -249,6 +249,7 @@ bubbles/schemas/scenario-manifest.schema.json
 bubbles/schemas/tool-call.schema.json
 bubbles/schemas/workflows.schema.json
 bubbles/registry/gates.yaml
+bubbles/registry/optional-skills.txt
 bubbles/mcp/clients/claude.json
 bubbles/mcp/clients/cline.json
 bubbles/mcp/clients/cursor.json
@@ -415,7 +416,6 @@ agents/bubbles.analyst.agent.md
 agents/bubbles.audit.agent.md
 agents/bubbles.bug.agent.md
 agents/bubbles.chaos.agent.md
-agents/bubbles.cinematic-designer.agent.md
 agents/bubbles.clarify.agent.md
 agents/bubbles.code-review.agent.md
 agents/bubbles.commands.agent.md
@@ -502,7 +502,6 @@ prompts/bubbles.analyst.prompt.md
 prompts/bubbles.audit.prompt.md
 prompts/bubbles.bug.prompt.md
 prompts/bubbles.chaos.prompt.md
-prompts/bubbles.cinematic-designer.prompt.md
 prompts/bubbles.clarify.prompt.md
 prompts/bubbles.code-review.prompt.md
 prompts/bubbles.commands.prompt.md
@@ -552,6 +551,9 @@ skills/bubbles-artifact-ownership-routing/SKILL.md
 skills/bubbles-backup-bcdr-doctrine/SKILL.md
 skills/bubbles-bug-template/SKILL.md
 skills/bubbles-capability-foundation-design/SKILL.md
+skills/bubbles-cinematic-design/SKILL.md
+skills/bubbles-cinematic-design/references/patterns.md
+skills/bubbles-cinematic-design/references/presets.md
 skills/bubbles-config-bundle-per-train/SKILL.md
 skills/bubbles-config-sst/SKILL.md
 skills/bubbles-deployment-target-adapter/SKILL.md

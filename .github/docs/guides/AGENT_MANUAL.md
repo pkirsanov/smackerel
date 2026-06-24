@@ -148,7 +148,6 @@ Diagnostic/certification rule:
 | Agent | Use When | Primary References |
 |------|----------|--------------------|
 | `bubbles.setup` | set up or refresh framework-owned `.github` assets and project config guidance | `scope-templates.md`, `artifact-lifecycle.md` |
-| `bubbles.cinematic-designer` | implement premium, high-polish UI output in real frontend code | prompt-specific guidance plus shared governance index |
 | `bubbles.releases` | produce or refresh phase release packets (vision/features/actions/business-plan/deployment/marketing/monetization/ops-scalability), enforce Product Direction Surfaces trio + carry-forward, coordinate cross-product releases | `docs/guides/PRODUCT_DIRECTION_SURFACES.md`, `skills/bubbles-product-principle-discovery/SKILL.md` |
 
 ## Utilities

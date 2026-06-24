@@ -207,6 +207,7 @@ Core requirements:
   - Data flow (which API feeds which component)
   - Props and state management approach
   - Event handlers and side effects
+  - If `spec.md` declares a `### Design Language` (e.g. cinematic), specify components against that language's vocabulary applied through the project UI skill's tokens/components; `bubbles.implement` reads `### Design Language` and auto-loads the matching design-language skill.
 - **Authorization Matrix:**
   | Endpoint | Admin | Host | Guest | Public |
   |----------|-------|------|-------|--------|

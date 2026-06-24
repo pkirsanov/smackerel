@@ -44,7 +44,6 @@ declare -A _AGENT_ALIASES=(
   [water-under-the-fridge]="bubbles.simplify"
   [keep-the-park-online]="bubbles.devops"
   [have-a-good-one]="bubbles.handoff"
-  [skid-row]="bubbles.cinematic-designer"
   [somethings-prowlin]="bubbles.regression"
   [the-super]="bubbles.super"
   [not-how-that-works]="bubbles.test"

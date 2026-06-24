@@ -138,6 +138,7 @@ Before execution, validate:
    - `{FEATURE_DIR}/spec.md` (required)
    - `{FEATURE_DIR}/design.md` (required for implementation)
    - `{FEATURE_DIR}/scopes.md` must contain substantive scopes, not empty/skeletal placeholders
+   - If `spec.md` declares a `### Design Language` (e.g. cinematic), load that design-language skill (`bubbles-cinematic-design` for cinematic) **plus** the project UI skill, and build UI surfaces with that vocabulary applied through the project's design tokens/components. If the named skill is absent (repo not opted in), build with the project UI skill only.
    - If `design.md` is missing or stale: invoke `bubbles.design` via `runSubagent` with `mode: non-interactive`, then continue only after design ownership is satisfied
    - If any required artifact is empty, skeletal, or placeholder-only: STOP implementation and invoke the owning planning agent(s) first
 

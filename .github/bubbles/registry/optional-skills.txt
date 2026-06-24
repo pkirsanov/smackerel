@@ -1,0 +1,17 @@
+# Optional (opt-in) framework skills
+#
+# A skill listed here is NOT vendored into a downstream repo by default.
+# install.sh copies it ONLY when the downstream repo opts in by listing the skill
+# (or its design-language name) under `.github/bubbles-project.yaml`
+# `designLanguages.enabled`; otherwise install skips it, and prunes it if a prior
+# opt-in was removed. `bubbles-drift-check.sh` treats a listed skill that is absent
+# locally as legitimately opted-out (NOT a MISSING drift), and
+# `generate-release-manifest.sh` records this set under the manifest's
+# `optionalSkills` array so the trust model is opt-in-aware.
+#
+# Format per line: `<skill-dir-name> <enablement-token>` (whitespace-separated).
+# A skill is ENABLED when the downstream `.github/bubbles-project.yaml`
+# `designLanguages` block contains <enablement-token> (substring match — so either
+# the friendly language alias `cinematic` or the full skill name matches).
+# `#` comments and blank lines are ignored.
+bubbles-cinematic-design cinematic

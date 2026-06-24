@@ -266,6 +266,18 @@ scans:
         - '\\bfalse\\b'
         - '\\bmissing\\b'
 
+# Design-language opt-in (per repo). Lists the optional framework design-language
+# skills this repo vendors + the repo-wide default. An optional skill (declared in
+# bubbles/registry/optional-skills.txt, e.g. bubbles-cinematic-design) is installed
+# ONLY when its token appears here; otherwise it stays physically absent (and
+# therefore non-loading). bubbles.ux resolves a feature's design language by
+# precedence (explicit option -> spec.md `### Design Language` -> default -> none)
+# and writes the choice into spec.md; bubbles.implement reads it and loads the skill.
+# This file is operator-owned — agents recommend changes here but never auto-write it.
+designLanguages:
+  enabled: [cinematic]   # opt-in tokens (friendly alias or full skill name); gate vendoring
+  default: cinematic     # repo-wide default written into every UI spec's `### Design Language`
+
 # Managed-doc registry overrides
 docsRegistryOverrides:
   managedDocs:

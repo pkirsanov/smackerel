@@ -271,12 +271,6 @@ agents:
     delegatesRequired: true
     ownsArtifacts: [ product-code ]
     ownsPhases: [ simplify ]
-  bubbles.cinematic-designer:
-    class: execution-owner
-    canAskUserDirectly: false
-    delegatesRequired: true
-    ownsArtifacts: [ product-code ]
-    ownsPhases: []
   bubbles.releases:
     class: execution-owner
     canAskUserDirectly: false

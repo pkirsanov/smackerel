@@ -36,6 +36,7 @@ Replace eager-loading of `agents/bubbles_shared/*.md` with on-demand skill loadi
 | Write a spec.md from scratch with BDD | `bubbles-spec-template-bdd` |
 | Surface product principles from existing repo evidence | `bubbles-product-principle-discovery` |
 | Audit downstream repo readiness | `bubbles-repo-readiness` |
+| Apply a premium / cinematic design language to a UI feature (opt-in per repo) | `bubbles-cinematic-design` |
 
 ## Why skills-first
 Skills are auto-loaded by description match (semantic search) by Copilot, Claude, Cursor, and similar tools. They are lazy: a skill only enters context when the description matches the work. The Bubbles framework keeps the authoritative governance in `agents/bubbles_shared/*.md` modules — skills are discovery shims that route to those modules.
