@@ -5,7 +5,9 @@
 # a release-manifest.json + managed files, then proves: a clean tree is IN-SYNC
 # (exit 0); a tampered file is DRIFTED (exit 1); a removed file is MISSING
 # (exit 1); an extra framework script is an ORPHAN (informational, not a failure);
-# --format json is well-formed; and a malformed manifest exits 2.
+# --format json is well-formed; a malformed manifest exits 2; and an absent
+# optional (opt-in) skill is OPT-OUT (exit 0) when not enabled, MISSING (exit 1)
+# when enabled in designLanguages.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -145,6 +147,59 @@ set -e
 [[ "$c7" -eq 0 ]] \
   && pass "a repo with no manifest exits 0 (nothing to check)" \
   || fail "no manifest should exit 0 (got exit $c7)"
+
+# Fixture: alpha.sh present + in-sync; an optional skill recorded in the manifest
+# but NOT planted on disk; the optional-skills registry lists it.
+build_optional_root() {
+  local root="$1"
+  mkdir -p "$root/bubbles/scripts" "$root/bubbles/registry"
+  printf '#!/usr/bin/env bash\necho a\n' >"$root/bubbles/scripts/alpha.sh"
+  printf 'bubbles-cinematic-design cinematic\n' >"$root/bubbles/registry/optional-skills.txt"
+  local h1
+  h1="$(sha "$root/bubbles/scripts/alpha.sh")"
+  cat >"$root/bubbles/release-manifest.json" <<EOF
+{
+  "schemaVersion": 1,
+  "version": "9.9.9",
+  "managedFileCount": 2,
+  "managedFileChecksums": [
+    { "path": "bubbles/scripts/alpha.sh", "sha256": "$h1" },
+    { "path": "skills/bubbles-cinematic-design/SKILL.md", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" }
+  ]
+}
+EOF
+}
+
+# --- Case 8: absent optional skill, NOT enabled → OPT-OUT, exit 0 -------------
+r8="$work/r8"
+build_optional_root "$r8"
+set +e
+out8="$(bash "$DRIFT" --root "$r8" 2>&1)"
+c8=$?
+set -e
+if [[ "$c8" -eq 0 ]] \
+  && grep -q "OPT-OUT  skills/bubbles-cinematic-design/SKILL.md" <<<"$out8" \
+  && ! grep -q "MISSING  skills/bubbles-cinematic-design" <<<"$out8"; then
+  pass "an absent optional skill not enabled in designLanguages is OPT-OUT (exit 0), not MISSING"
+else
+  fail "absent opted-out optional skill should be OPT-OUT exit 0 (got exit $c8)"
+  echo "$out8"
+fi
+
+# --- Case 9: absent optional skill, ENABLED → MISSING, exit 1 -----------------
+r9="$work/r9"
+build_optional_root "$r9"
+printf 'designLanguages:\n  enabled: [cinematic]\n  default: cinematic\n' >"$r9/bubbles-project.yaml"
+set +e
+out9="$(bash "$DRIFT" --root "$r9" 2>&1)"
+c9=$?
+set -e
+if [[ "$c9" -eq 1 ]] && grep -q "MISSING  skills/bubbles-cinematic-design/SKILL.md" <<<"$out9"; then
+  pass "an absent optional skill that IS enabled is MISSING and exits 1"
+else
+  fail "absent enabled optional skill should be MISSING exit 1 (got exit $c9)"
+  echo "$out9"
+fi
 
 if [[ "$failures" -eq 0 ]]; then
   echo "[bubbles-drift-check-selftest] OK"

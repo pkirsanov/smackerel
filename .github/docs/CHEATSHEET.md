@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **41 Agents · 108 Gates · 58 Workflow Modes · 27 Phases**
+> **40 Agents · 108 Gates · 58 Workflow Modes · 27 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -38,7 +38,6 @@
 | <img src="../icons/ricky-dynamite.svg" width="28"> | `bubbles.chaos` | Ricky | Breaks things in ways nobody could predict. Worst case Ontario, something catches fire. | *"It's not rocket appliances."* |
 | <img src="../icons/donny-ducttape.svg" width="28"> | `bubbles.simplify` | Donny | Reduces needless complexity without weakening the behavior contract. | *"Just tape it up and move on."* |
 | <img src="../icons/tommy-rack.svg" width="28"> | `bubbles.devops` | Tommy Bean | Owns CI/CD, build, deployment, monitoring, and observability execution once operational work is identified. | *"Get the rack humming and keep the park online."* |
-| <img src="../icons/sebastian-guitar.svg" width="28"> | `bubbles.cinematic-designer` | Sebastian Bach | Premium UI implementation when the surface needs flagship treatment, not default sludge. | *"I was in Skid Row!"* |
 | <img src="../icons/sonny-ledger.svg" width="28"> | `bubbles.releases` | Sonny "Iron Lung" Smith | Phase release packets, carry-forward enforcement, cross-product release coordination, Product Direction Surfaces guardian. | *"Plans within plans, boys. Phase one is just the introduction."* |
 | <img src="../icons/dvs-mic.svg" width="28"> | `bubbles.train` | Detroit Velvet Smooth | Release-train lifecycle: cut candidates, promote between slots, rollback pointer-swap, retire trains, feature-flag lifecycle. Distinct from `releases` (packets vs train mechanics). | *"Smoooth as silk, gentlemen. The train rolls on schedule."* |
 | <img src="../icons/treena-broom.svg" width="28"> | `bubbles.upkeep` | Treena Lahey | Recurring operational hygiene: backup verify, restore drills, BCDR drills, patch cycles, secret rotation, flag-cleanup audits, compliance sweeps. Calendar-driven. | *"Trailer don't clean itself, Jim. Never has."* |
@@ -128,7 +127,6 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `sunnyvale water-under-the-fridge` | `bubbles.simplify` | *"Just tape it up and move on."* |
 | `sunnyvale laser-eyes` | `bubbles.spec-review` | *"Gary can see right through it, boys. That spec expired three refactors ago."* |
 | `sunnyvale have-a-good-one` | `bubbles.handoff` | *"Here, take this. I gotta go."* |
-| `sunnyvale skid-row` | `bubbles.cinematic-designer` | *"I was in Skid Row!"* |
 | `sunnyvale plans-within-plans` | `bubbles.releases` | *"Plans within plans, boys. Phase one is just the introduction."* |
 | `sunnyvale iron-lung-says` | `bubbles.releases` | *"Iron Lung's got the ledger, boys."* |
 | `sunnyvale the-super` | `bubbles.super` | *"I'm the trailer park supervisor."* |

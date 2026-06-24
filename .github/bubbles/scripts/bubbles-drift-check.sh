@@ -124,6 +124,71 @@ if not isinstance(entries, list):
     sys.exit(2)
 
 
+def _read_designlanguages_block(root_dir):
+    # Operator-owned project config; the .github/ form is preferred, with
+    # repo-root fallbacks for both the source-repo and downstream layouts.
+    candidates = [
+        os.path.join(root_dir, "bubbles-project.yaml"),
+        os.path.join(root_dir, ".github", "bubbles-project.yaml"),
+        os.path.join(os.path.dirname(root_dir), "bubbles-project.yaml"),
+    ]
+    for cfg in candidates:
+        if not os.path.isfile(cfg):
+            continue
+        try:
+            with open(cfg, encoding="utf-8") as fh:
+                lines = fh.read().splitlines()
+        except OSError:
+            continue
+        block, capturing = [], False
+        for line in lines:
+            if not capturing:
+                if line.startswith("designLanguages:"):
+                    capturing = True
+                continue
+            if line and not line[0].isspace():
+                break  # a new top-level key ends the block
+            block.append(line)
+        return "\n".join(block).lower()
+    return ""
+
+
+def _opted_out_skill_dirs(root_dir):
+    # An optional skill (listed in the vendored optional-skills registry) is
+    # "opted out" when its enablement token is absent from the designLanguages
+    # block — its files are then legitimately absent on disk (not a drift).
+    reg = os.path.join(root_dir, "bubbles", "registry", "optional-skills.txt")
+    out = set()
+    if not os.path.isfile(reg):
+        return out
+    dl_block = _read_designlanguages_block(root_dir)
+    try:
+        with open(reg, encoding="utf-8") as fh:
+            reg_lines = fh.read().splitlines()
+    except OSError:
+        return out
+    for raw in reg_lines:
+        item = raw.split("#", 1)[0].strip()
+        if not item:
+            continue
+        parts = item.split()
+        name = parts[0]
+        token = parts[1] if len(parts) > 1 else name
+        if token.lower() not in dl_block:
+            out.add(name)
+    return out
+
+
+_OPTED_OUT_SKILL_DIRS = _opted_out_skill_dirs(root)
+
+
+def _rel_is_opted_out(rel):
+    return any(rel.startswith(f"skills/{name}/") for name in _OPTED_OUT_SKILL_DIRS)
+
+
+opted_out = []
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -147,12 +212,12 @@ for entry in entries:
     managed_paths.add(rel)
     abspath = os.path.join(root, rel)
     if not os.path.isfile(abspath):
-        missing.append(rel)
+        (opted_out if _rel_is_opted_out(rel) else missing).append(rel)
         continue
     try:
         got = sha256_file(abspath)
     except OSError as exc:
-        missing.append(rel)
+        (opted_out if _rel_is_opted_out(rel) else missing).append(rel)
         continue
     if got == want:
         in_sync += 1
@@ -176,6 +241,7 @@ for sub in ("bubbles/scripts", "bubbles/scripts/guards"):
 
 drifted.sort()
 missing.sort()
+opted_out.sort()
 orphans.sort()
 
 if fmt == "json":
@@ -184,6 +250,7 @@ if fmt == "json":
         "inSync": in_sync,
         "drifted": drifted,
         "missing": missing,
+        "optedOut": opted_out,
         "orphans": orphans,
         "version": manifest.get("version"),
     }, indent=2))
@@ -192,11 +259,14 @@ else:
     print(f"  in-sync : {in_sync}")
     print(f"  drifted : {len(drifted)}")
     print(f"  missing : {len(missing)}")
+    print(f"  opt-out : {len(opted_out)} (optional skills not enabled in designLanguages; absence is expected)")
     print(f"  orphans : {len(orphans)} (framework scripts not in manifest; pruned on next upgrade)")
     for rel in drifted:
         print(f"  DRIFTED  {rel}")
     for rel in missing:
         print(f"  MISSING  {rel}")
+    for rel in opted_out:
+        print(f"  OPT-OUT  {rel}")
     for rel in orphans:
         print(f"  ORPHAN   {rel}")
     if not drifted and not missing:
