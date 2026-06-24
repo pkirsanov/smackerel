@@ -4,7 +4,9 @@
   "title": "ML agent dispatcher logs raw conversational content (user turn + LLM final answer) at INFO",
   "severity": "medium",
   "owaspCategory": "A09-security-logging-and-monitoring-failures",
-  "status": "in_progress",
+  "status": "done",
+  "certifiedAt": "2026-06-24T13:27:32Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "security-to-doc",
   "createdAt": "2026-06-16T02:40:00Z",
   "lastUpdatedAt": "2026-06-24T13:10:00Z",
@@ -22,18 +24,14 @@
   ],
   "discoveredBy": "bubbles.security",
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": ["Scope 1 — Redact agent.invoke.request / agent.invoke.envelope diagnostic logs"],
     "certifiedCompletedPhases": ["security", "implement", "test", "regression", "validate", "audit", "docs"],
     "scopeProgress": {"total": 1, "notStarted": 0, "inProgress": 0, "done": 1, "blocked": 0},
     "lockdownState": "n/a-no-locked-scenarios",
-    "certifiedAt": null,
-    "certifierAgent": null,
-    "doneCertificationBlockers": [
-      "G088 (commit-ordering, ONLY remaining): the security-to-doc content gates all pass at status=in_progress; the orchestrator owns the two-commit done-flip — commit this planning truth, then stamp certifiedAt/certifierAgent and set status=done in a follow-on commit. By design this guard cannot be cleared from inside the artifact edit itself.",
-      "RESOLVED G028: the pre-existing fail-loud `os.environ.get(KEY, \"\")` reads in ml/app/agent.py were the DEFAULT_FALLBACK false positives; cleared at commit 2fd51b44 (implementation-reality-scan now passes).",
-      "RESOLVED content gates (this certification pass): Check 6/6B 11-phase pipeline (security/implement/test/regression/validate/audit/docs genuine; simplify/stabilize/devops/chaos honest phaseStubs), Check 4 DoD, Check 5/G027 completedScopes, Check 8A via Scope-Kind contract-only opt-out, Check 11 report sections, G053/G093 Code Diff Evidence, G094 Single-* justifications, G097 HMAC disclosure, G040 deferral language."
-    ]
+    "certifiedAt": "2026-06-24T13:27:32Z",
+    "certifierAgent": "bubbles.workflow",
+    "doneCertificationBlockers": []
   },
   "completedPhaseClaims": [
     {
