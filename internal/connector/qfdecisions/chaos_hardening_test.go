@@ -405,8 +405,8 @@ func chaosMutateEnvelope(r *seededRand) (QFDecisionEvent, QFDecisionPacketEnvelo
 	// confined to envelope_metadata, never hoisting an action verb.
 	if r.intn(2) == 0 {
 		hostile := map[string]any{
-			"requested_action_type": chaosForbiddenActionTypes[r.intn(len(chaosForbiddenActionTypes))],
-			"action_request":        map[string]any{"action_type": ActionTypeExecution},
+			"requested_action_type":     chaosForbiddenActionTypes[r.intn(len(chaosForbiddenActionTypes))],
+			"action_request":            map[string]any{"action_type": ActionTypeExecution},
 			"extra-" + r.asciiString(4): r.adversarialString(),
 		}
 		env.Metadata = hostile
@@ -482,18 +482,18 @@ func TestChaosHardening_MalformedJSONBytesFailClosedNeverPanic(t *testing.T) {
 		[]byte(`   `),
 		[]byte(`not json at all`),
 		[]byte(`{`),
-		[]byte(`{"packet_id":"x"`),                 // truncated object
-		[]byte(`{"packet_id":"unterminated`),       // truncated string
+		[]byte(`{"packet_id":"x"`),                  // truncated object
+		[]byte(`{"packet_id":"unterminated`),        // truncated string
 		[]byte("{\"packet_id\":\"\x00\x01\x02\"}"),  // embedded NUL/control
 		[]byte("\xff\xfe{\"packet_id\":\"bom\"}"),   // junk prefix
 		[]byte(`{"packet_version":"not-a-number"}`), // wrong type (string for int)
 		[]byte(`{"calibration_badge":"should-be-object"}`),
 		[]byte(`{"calibration_badge":[1,2,3]}`),
 		[]byte(`{"quantified_impact":42}`),
-		[]byte(`[1,2,3]`),    // array at top level
-		[]byte(`12345`),      // number at top level
-		[]byte(`true`),       // bool at top level
-		[]byte(`null`),       // null literal
+		[]byte(`[1,2,3]`), // array at top level
+		[]byte(`12345`),   // number at top level
+		[]byte(`true`),    // bool at top level
+		[]byte(`null`),    // null literal
 		[]byte(`"just-a-string"`),
 		[]byte(`{"packet_id":"x","packet_id":"y","packet_id":"z"}`), // duplicate keys
 		[]byte(`{"deep_link":"javascript:alert(1)","thesis":"'; DROP TABLE--"}`),

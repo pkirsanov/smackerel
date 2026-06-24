@@ -62,9 +62,7 @@ def test_error_detail_scrubs_api_key_substring(monkeypatch) -> None:
 
     async def _raise_with_key(**kwargs):
         # litellm commonly surfaces the key inside a request URL/header.
-        raise RuntimeError(
-            f"401 Unauthorized for url https://api.anthropic.test/v1/messages?api_key={secret}"
-        )
+        raise RuntimeError(f"401 Unauthorized for url https://api.anthropic.test/v1/messages?api_key={secret}")
 
     _install_fake_litellm(monkeypatch, _raise_with_key)
 
