@@ -84,10 +84,23 @@ Scenario: BUG-069-001-SCN-005 Adversarial — the regression test FAILS against 
 
 > All items are unchecked `[ ]` — this is a discovery + documentation packet. The fix owners (`bubbles.implement` → `bubbles.test`) check these with inline ≥10-line raw evidence as they complete each item.
 
-- [ ] Root cause confirmed and documented (SCOPE-2 production-wiring swap never landed; identity pass-through remains live; synthetic `mountScope2Route` test gap)
+- [x] Root cause confirmed and documented (SCOPE-2 production-wiring swap never landed; identity pass-through remains live; synthetic `mountScope2Route` test gap)
    - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** implement · **Owner:** bubbles.implement · **Claim Source:** executed — fix-time re-confirmation: the committed fix installs `PreFacadeChain` exactly where the root cause said the identity pass-through was, and swapping it makes the real-router 413/429/403 assertions GREEN — proving the documented cause (missing production wiring) was the actual defect.
       ```
-      [bubbles.bug captured the grep/awk evidence in report.md → Discovery Evidence; fix owner re-confirms at fix time]
+      $ grep -rn 'PreFacadeChain' cmd/ internal/api/
+      cmd/core/wiring_assistant_facade.go:318:	// late-bound adapter. PreFacadeChain composes, in order:
+      cmd/core/wiring_assistant_facade.go:324:	// io.ReadAll, bounded by BodySizeMaxBytes. PreFacadeChain
+      cmd/core/wiring_assistant_facade.go:329:	svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))
+      internal/api/router.go:84:			// enforced by the PreFacadeChain middleware wired in front of
+      $ grep -rn 'func(next http.Handler) http.Handler { return next }' cmd/   # the documented defect shape
+      (no matches — exit 1; identity pass-through removed from production)
+      $ git --no-pager log --oneline -1 -- cmd/core/wiring_assistant_facade.go
+      eadfada7 chore(wip): prior-session code checkpoint — bug-fix code ...
+      # Root cause = "SCOPE-2 production-wiring swap never landed (identity pass-through live)".
+      # The fix proves it: PreFacadeChain is now wired in production; the real-router regression
+      # (TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute) is GREEN (413/429/403/200), exit 0.
       ```
 - [x] Fix implemented — `cmd/core/wiring_assistant_facade.go` installs `httpadapter.PreFacadeChain(transportCfg)`; identity pass-through removed (bubbles.implement, step 1 of 2)
    - Raw output evidence (inline under this item, no references/summaries):
