@@ -399,6 +399,13 @@ The fix is already on `main` (contract-test pin `eadfada7`; §24-A `(17 committe
 
 `git push` is **left to the orchestrator's review** — this session makes the two commits and stops; never `--no-verify`. The verbatim `state-transition-guard.sh` `TRANSITION PERMITTED` verdict and `artifact-lint.sh` exit-0 captured at `done` are appended below on the done-flip.
 
+**Done-flip verification (2026-06-24, captured at `status: done`):**
+
+- **Planning-truth commit:** `324acb7f` — `bubbles(024/bug-024-006): certify BUG-024-006 content — planning-truth commit` (committed `2026-06-24T14:34:16Z`; `scopes.md` + `bug.md` + `report.md` + `state.json` while still `in_progress`). The done-flip `certifiedAt` `2026-06-24T14:34:28Z` is strictly after it, so Gate G088 (Check 30) passes.
+- **`bash .github/bubbles/scripts/state-transition-guard.sh <bug>`** → `🟡 TRANSITION PERMITTED with 2 warning(s)` (0 failures). Gate G088 PASS; spec-review not required for `bugfix-fastlane` (Check 21). The two warnings are the non-blocking "no completedAt timestamps in state.json" and "no concrete Test-Plan file paths" — expected for a `contract-only` docs scope.
+- **`bash .github/bubbles/scripts/artifact-lint.sh <bug>`** → `Artifact lint PASSED.` (exit 0): the DoD completion gate (every item `[x]`), the `### Validation Evidence` + `### Audit Evidence` mode gates, all 11 `report.md` evidence blocks carrying legitimate terminal-output signals, and the required `implement`/`test`/`validate`/`audit` phase records all check out.
+- **Done-flip commit:** `state.json` → `status: done` / `certification.status: done` (`certifiedBy: bubbles.iterate`) plus this report note.
+
 ### Remaining + disposition
 
 The only remaining item is the **orchestrator's consolidated central commit** (the bug's terminal `done` transition is gated on it); bug `state.json` stays `in_progress` with `nextRequiredOwner: bubbles.devops`. **No commit/push** performed by this session. **Pre-existing, out-of-scope:** the parent state-transition-guard (4 blocks) + artifact-lint (5 issues) flag missing `gaps`+`harden` specialist phases (full-delivery required-phase gate drift post-dating the 2026-06-06 certification) — present identically before and after this backfill, not introduced by BUG-024-006, and not cleanly fixable within its scope (no `bubbles.gaps`/`bubbles.harden` provenance source for Check 6B). Parent spec 024 stays `status: done` throughout.
