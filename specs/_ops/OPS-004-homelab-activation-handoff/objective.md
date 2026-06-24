@@ -3,9 +3,13 @@
 > **Owner:** `bubbles.devops`
 > **Kind:** Deployment handoff (consolidated operator activation packet)
 > **Target:** `home-lab`
-> **Deploy source SHA:** `e0e7bc4f` — the current `origin/main` HEAD (verified
-> `git log -1 origin/main` = `e0e7bc4f4cac0f90b069cb694041656395792dea`, ahead
-> count `0`). This SHA supersedes OPS-003's interior payload SHA `78b293cc`.
+> **Deploy source SHA:** the current pushed `origin/main` HEAD at build time —
+> the operator MUST resolve the live value via `git rev-parse origin/main` and
+> the local build manifest's `<sourceSha>`; do **NOT** hardcode a SHA. It was
+> `e0e7bc4f` when this packet was authored (2026-06-24); HEAD has since advanced
+> with doc / spec-096-closeout-only commits that change **no runtime payload**
+> (current tip `010a5e2f`). The authoring-time SHA `e0e7bc4f` supersedes OPS-003's
+> interior payload SHA `78b293cc`.
 > **Supersedes:** [`OPS-003`](../OPS-003-gap06-bug067-homelab-deploy-handoff/)
 > for the live deploy. OPS-003 handed off GAP-06 + BUG-067-001 at `78b293cc`;
 > OPS-004 is the **current consolidated activation** for `e0e7bc4f` and folds
@@ -47,7 +51,7 @@ procedure and the per-bug live pass signals.
 
 | Fact | Value |
 |------|-------|
-| Deploy source SHA | `e0e7bc4f` (current `origin/main` HEAD) |
+| Deploy source SHA | the current pushed `origin/main` HEAD at build time — resolve via `git rev-parse origin/main` + the local build manifest `<sourceSha>` (do NOT hardcode). `e0e7bc4f` at authoring (2026-06-24); tip has since advanced to `010a5e2f` with doc / spec-096-closeout-only commits (no runtime payload change) |
 | Supersedes OPS-003 payload SHA | `78b293cc` (interior; subsumed here) |
 | GitHub CI workflows (`build.yml` / CI / E2E / client) | **`disabled_manually`** — NOT the artifact producer |
 | Artifact producer | In-repo **local-operator** build path: `./smackerel.sh build --target home-lab` |
