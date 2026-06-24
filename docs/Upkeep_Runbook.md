@@ -35,6 +35,25 @@ scheduling, volume backup, and offsite shipping **out** (see its header comment)
 The knb hook calls `./smackerel.sh backup` for the database dump + retention,
 then performs the volume backup and offsite shipping it owns.
 
+## Gate Implementation Boundary — Restore-Test → Promote (G113)
+
+The restore-test task declares `blocks_on_failure: [ release-train-promote ]` in
+[`config/upkeep-calendar.yaml`](../config/upkeep-calendar.yaml), and Gate **G113**
+(`restore_drill_evidence_gate`, registry `.github/bubbles/registry/gates.yaml`)
+requires `release-train-promote` to verify a recent successful `restore-test`
+ledger entry. Like the backup split above, this gate is implemented across two
+layers — the product owns the drill, the knb engine plus `bubbles.train`'s promote
+operation own the ledger read and the actual block.
+
+| Layer | Owner | Provides |
+|-------|-------|----------|
+| **Product** | this repo | The restore drill itself: `scripts/commands/restore-test.sh` (run via `./smackerel.sh backup-restore-test`, spec 048) restores the latest backup into a disposable postgres, runs the schema/cursor/redaction assertions, and returns the pass/fail result that the `restore-test` ledger entry is built from. |
+| **knb / `bubbles.train`** | knb overlay | The knb upkeep engine (`knb/shared/upkeep/upkeep-engine.sh`) schedules the drill and records its result into the upkeep ledger. During `release-train-promote` (a `bubbles.train` operation), the G113 check reads that ledger and refuses the promote when no recent successful `restore-test` entry exists. |
+
+In short: this repo can prove a backup restores, but it does **not** read the
+ledger or block promotes. The promote-blocking enforcement lives in the knb engine
+and `bubbles.train`'s promote gate.
+
 ## What Gets Backed Up
 
 - PostgreSQL dump (smackerel core state)

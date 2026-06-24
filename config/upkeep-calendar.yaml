@@ -14,6 +14,9 @@ tasks:
 - id: bcdr-drill
   cadence: quarterly
   retention: "5y"
+  # requires_offsite_backend: true => this drill only activates once an offsite backend exists.
+  # Today release-trains.yaml offsite_required: false => offsite/BCDR is WARN-only (G114/G116 warn, not block).
+  # Operator flips offsite_required: true after provisioning T3/T4 hardware; this drill then becomes live.
   requires_offsite_backend: true
 - id: patch-cycle
   cadence: monthly
