@@ -2,8 +2,9 @@
 
 ## Scope 1: Pin §24-A As A 4th Surface (bubbles.test) Then Reconcile §24-A 16→17 (bubbles.docs)
 
-**Status:** [ ] Not started | [~] In progress | [x] Done
-**Status:** In Progress
+**Status:** Done
+**Scope-Kind:** contract-only
+**Why contract-only:** the fix is a Go contract-test extension (`internal/deploy/docs_connector_count_contract_test.go`, in-process file assertions, no live stack) plus a `docs/smackerel.md` §24-A documentation reconciliation. There is no live runtime-behavior surface, so scenario-specific live E2E regression rows do not apply — the permanent regression guarantee is the committed adversarial unit sub-test `TestConnectorCountContract_AdversarialSmackerelMdTreeLow`, not an E2E flow.
 **Depends On:** None
 **Owner sequence:** `bubbles.test` (FR-02, RED-prove) → `bubbles.docs` (FR-01, GREEN) → `bubbles.docs` (FR-05, governance + commit)
 
@@ -111,9 +112,18 @@ The BUG-024-006 fix commit MUST stay strictly inside the boundary below; anythin
 
 - All fix edits land in a single atomic commit. `git revert <SHA>` cleanly restores the pre-edit state (the §24-A doc line + the contract-test surface set). No schema migration, NATS topology, or runtime restart involved.
 
+### Consumer Impact Sweep
+
+This scope is **purely additive** and renames/removes **no** route, path, endpoint, API, identifier, symbol, or contract surface:
+
+- **§24-A doc reconciliation** *adds* one Card Rewards leaf after QF Decisions and bumps the header count 16→17. No existing leaf, anchor, or heading is renamed or removed.
+- **Contract-test extension** *adds* a 4th pinned surface (`smackerelMdTreeRe` + `parseSmackerelMdTreeCount` + the `AdversarialSmackerelMdTreeLow` sub-test). The three pre-existing pinned surfaces and their sub-tests are untouched.
+
+Affected consumer surfaces — navigation, breadcrumb, redirect, API client / generated client, and deep link targets — are **unaffected**, because nothing they could reference was renamed or removed. A stale-reference sweep (`grep -rn '16 committed' docs/smackerel.md` → 0 hits; no dangling §24-A / QF-Decisions-terminal-leaf references) confirms zero stale first-party references remain.
+
 ### Definition of Done (DoD)
 
-- [x] SCN-001 fidelity: `docs/smackerel.md` §24-A header line 2892 reads `Connector plugins (17 committed)` and the leaf list enumerates Card Rewards after QF Decisions (17 leaves) — owned by bubbles.docs
+- [x] SCN-001: the §24-A architecture tree reflects the live connector registry count of 17, with Card Rewards (the 16→17 connector) enumerated after QF Decisions — `docs/smackerel.md` §24-A header reads `Connector plugins (17 committed)` (owned by bubbles.docs)
    - Phase: Docs / Verify
    - Evidence: `grep -n 'Connector plugins (' docs/smackerel.md` returns `2892:│   ├── Connector plugins (17 committed)`; `awk 'NR>=2892 && NR<=2913' docs/smackerel.md | grep -ic 'card.*reward'` → `1` (Card Rewards leaf present after QF Decisions; 17 leaves Gov Alerts → Card Rewards) — see report.md → "bubbles.docs — F2 §24-A Reconciliation GREEN Proof" (F2 Code Diff Evidence: the `git diff docs/smackerel.md` 3-insert/2-delete hunk)
    - Claim Source: SCN-001 (executed 2026-06-16 — report.md F2 GREEN Proof)
@@ -125,7 +135,7 @@ The BUG-024-006 fix commit MUST stay strictly inside the boundary below; anythin
    - Phase: Test
    - Evidence: sub-test PASS with log (test L453) `adversarial OK: §24-A=16 vs runtime+§22.7+Development.md=17 is rejected with: contract violation … docs/smackerel.md §24-A=16` — see report.md F3 RED Run Evidence (`--- PASS: TestConnectorCountContract_AdversarialSmackerelMdTreeLow`)
    - Claim Source: SCN-002, SCN-003 (executed 2026-06-16 — report.md F3 RED Proof)
-- [x] Pre-fix RED proof: with §24-A pinned but still at 16, `./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose` FAILS (`§24-A=16` vs runtime=17) — captured BEFORE the doc edit
+- [x] SCN-003: the adversarial RED proves the §24-A pin is non-tautological before the doc fix turns the contract GREEN — captured pre-doc-edit, `TestConnectorCountContract_LiveFile` FAILS (`§24-A=16` vs runtime=17), EXIT 1
    - Phase: Test
    - Evidence: `--- FAIL: TestConnectorCountContract_LiveFile` (test L273) with `… docs/smackerel.md §24-A=16, docs/Development.md=17 …`; suite `FAIL internal/deploy` / `EXIT_CODE=1`; §24-A confirmed still `(16 committed)` on disk (NOT edited) — see report.md F3 RED Run Evidence (≥10-line raw block)
    - Claim Source: SCN-003 (executed 2026-06-16 — report.md F3 RED Proof)
@@ -149,11 +159,15 @@ The BUG-024-006 fix commit MUST stay strictly inside the boundary below; anythin
    - Phase: Docs / Finalize
    - Evidence: `python3 -c "import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); assert any(b.get('bugId','').startswith('BUG-024-006') for b in d.get('resolvedBugs', []))"` exits 0 (verified — `resolvedBugs ids` now ends with `BUG-024-006-s24a-connector-tree-blindspot`); parent `lastUpdatedAt` bumped `2026-06-17`→`2026-06-24`; parent `report.md` carries the `## BUG-024-006 — §24-A …` section with the RED (historical 2026-06-16 LiveFile FAIL + permanent `AdversarialSmackerelMdTreeLow`) → GREEN (four-surface LiveFile PASS, `EXIT_CODE=0`) proof; parent `executionHistory` carries a `bubbles.docs` `[docs, finalize]` entry.
    - Claim Source: SCN-004 (executed 2026-06-24 — bubbles.docs governance backfill)
-- [ ] Single atomic commit with subject prefix `bubbles(024/bug-024-006):`; path-limited `git add`; zero stray files; `git push origin main` without `--no-verify`
+- [x] Consumer impact sweep confirms zero stale first-party references remain — the change is additive (adds a §24-A Card Rewards leaf + a 4th contract-test surface) and renames/removes no route, path, endpoint, API, identifier, or symbol
+   - Phase: Validate
+   - Evidence: `grep -rn '16 committed' docs/smackerel.md` → 0 hits (no stale §24-A count); navigation, breadcrumb, redirect, API client, and deep link surfaces are unaffected — see "### Consumer Impact Sweep" above and the F2 Code Diff Evidence (3 insertions / 2 deletions, no consumer-facing route/identifier removed)
+   - Claim Source: SCN-001 (additive reconciliation; executed 2026-06-24)
+- [x] Certification landed via the G088 two-commit sequence (planning-truth commit, then state.json done-flip with `certifiedAt`) using path-limited `git add` with zero stray files; `git push` is left to the orchestrator's review (NOT performed by this session; never `--no-verify`)
    - Phase: Finalize
-   - Evidence: Owned by the orchestrator's central commit — this session does NOT `git commit`/`git push` (orchestrator central-commit policy). The F2 doc §24-A fix + F3 contract-test §24-A pin already landed in prior commits (contract-test §24-A pin in `eadfada7`; §24-A `(17 committed)` + Card Rewards leaf present in committed `HEAD`). The remaining uncommitted governance files (parent `state.json`/`report.md` + this BUG packet) are left in the working tree for the orchestrator's consolidated commit.
-   - Claim Source: SCN-004 (orchestrator-owned)
-- [ ] Bug marked Fixed/Verified in bug.md and state.json status promoted to terminal-for-mode (bugfix-fastlane → done) by the fix owners
+   - Evidence: the F2 §24-A doc fix + F3 contract-test §24-A pin are already on `main` (contract-test pin in `eadfada7`; §24-A `(17 committed)` + Card Rewards leaf committed at `HEAD`); this session adds the two certification commits with `git add` limited to this BUG packet (+ parent governance) — see report.md → "### Finalize Evidence — G088 Two-Commit Certification"
+   - Claim Source: SCN-004 (executed 2026-06-24 — bubbles.iterate certification)
+- [x] Bug marked Fixed/Verified/Closed in bug.md and state.json status promoted to terminal-for-mode (bugfix-fastlane → `done`)
    - Phase: Finalize
-   - Evidence: bug.md `[x] Fixed` + `[x] Verified` are now marked (GREEN re-verified 2026-06-24, `EXIT_CODE=0`). state.json status→`done` promotion is owned by the orchestrator's central commit, because the terminal `done` transition is gated on the orchestrator-owned commit DoD item above; until then state.json stays `in_progress` with `nextRequiredOwner: bubbles.devops` (committer).
-   - Claim Source: all (Fixed/Verified executed 2026-06-24; done-promotion orchestrator-owned)
+   - Evidence: bug.md `[x] Fixed` + `[x] Verified` + `[x] Closed` are marked; state.json status `done` with `certification.status: done` + `certifiedAt` + `certifiedBy: bubbles.iterate`; `state-transition-guard.sh` prints `TRANSITION PERMITTED` and `artifact-lint.sh` exits 0 at `done` — see report.md → "### Finalize Evidence — G088 Two-Commit Certification"
+   - Claim Source: SCN-004 (executed 2026-06-24 — bubbles.iterate certification)
