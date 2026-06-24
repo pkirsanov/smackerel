@@ -17,11 +17,23 @@ generated env, and is loaded by a new closed-set fail-loud Go
 loader/validator (`internal/config/model_connections.go`). The seven
 manifest-named SCOPE-01 unit tests pass; `./smackerel.sh config generate`
 (dev + test) and `./smackerel.sh check` exit 0; the Ollama-only dev path is
-unchanged. SCOPE-01 is `in_progress` with two residuals that are
-environmental/foreign (not code gaps): `format --check` is blocked by a
-pre-existing untracked foreign file, and `artifact-lint` is blocked by a
-missing foreign `uservalidation.md` (owned by `bubbles.plan`). Details and
-evidence below.
+unchanged. **SCOPE-01 is `Done`** (2026-06-24 closeout): both prior
+residuals are cleared — `format --check` and `artifact-lint` both re-run
+EXIT 0 (§ Tier-1 Closeout Gates → Closeout Gate Re-Run) — and SCOPE-01 is a
+pure config + Go-loader/unit scope with NO live-stack leg, so nothing
+remains deferred.
+
+**Feature-level status (096): `in_progress`.** SCOPE-01..07 are all
+substantially implemented and unit-GREEN (SCOPE-07's live-wiring activation
+is boot-validated — core boots `Healthy`, the `/model` picker shows the
+combined catalog, `/ask` dispatches to the selected provider, budget
+wired). The four Tier-1 closeout gates (`format --check`, `check`,
+`artifact-lint`, spec-096 `test unit --go`) are all EXIT 0. The spec STAYS
+`in_progress`: the live-stack legs — `tests/integration/...`, `e2e-api`,
+the `e2e-ui` triad walks, the migration-062 live-apply, and live
+hosted-provider reachability — are home-lab-gated (C7) and are the sole
+documented blocker to full-delivery `done`. They are NOT fabricated here.
+Per-scope detail + evidence below.
 
 ---
 
@@ -222,6 +234,11 @@ $ gofmt -l internal/config/model_connections.go internal/config/model_connection
 > gofmt-clean (proven above). Once the foreign untracked file is formatted or
 > removed by its owner, `format --check` will exit 0 and D01-T1-3 can be
 > checked. **Claim Source: executed (scoped to changed files).**
+>
+> **RESOLVED (2026-06-24 closeout):** the foreign file is now tracked +
+> gofmt-clean tree-wide, and `./smackerel.sh format --check` re-runs EXIT 0
+> (`69 files already formatted`) — see § Tier-1 Closeout Gates → Closeout
+> Gate Re-Run. **D01-T1-3 is MET.**
 
 ### Evidence E7 — artifact-lint
 
@@ -248,14 +265,18 @@ Artifact lint FAILED with 1 issue(s).
 > evidence blocks, no template placeholders, no repo-CLI bypass. Routed to
 > `bubbles.plan` to author `uservalidation.md`; D01-T1-1 can be checked once
 > it exists. **Claim Source: executed.**
+>
+> **RESOLVED (2026-06-24 closeout):** `uservalidation.md` now exists and
+> `artifact-lint` re-runs EXIT 0 (`Artifact lint PASSED`) — see § Tier-1
+> Closeout Gates → Closeout Gate Re-Run. **D01-T1-1 is MET.**
 
 ### DoD mapping (SCOPE-01)
 
 | DoD item | Status | Evidence |
 |----------|--------|----------|
-| D01-T1-1 artifact-lint clean | ⚠️ residual | E7 (only the foreign `uservalidation.md`, owned by bubbles.plan, is missing) |
+| D01-T1-1 artifact-lint clean | ✅ | E7 + § Tier-1 Closeout Gates → Closeout Gate Re-Run (`uservalidation.md` landed; artifact-lint EXIT 0) |
 | D01-T1-2 `check` EXIT 0 | ✅ | E2 |
-| D01-T1-3 `format --check` EXIT 0 | ⚠️ residual | E6 (my files clean; global blocked by foreign untracked file) |
+| D01-T1-3 `format --check` EXIT 0 | ✅ | E6 + § Tier-1 Closeout Gates → Closeout Gate Re-Run (foreign file now tracked + gofmt-clean; format --check EXIT 0) |
 | D01-T1-4 evidence is real terminal output | ✅ | E1–E6 (all captured, unedited) |
 | D01-T1-5 088/089 do-not-amend boundary respected | ✅ | Change Manifest (no modelswitch/modelpref/model_command/agent_model edits) |
 | D01-T2-1 `llm.connections[]` SST source-of-truth; generate EXIT 0 w/ registry + master key in dev+test env | ✅ | E1 |
@@ -293,8 +314,8 @@ Artifact lint FAILED with 1 issue(s).
 ## Completion Statement
 
 SCOPE-01 — Provider-connection registry + config SST schema — is
-**implemented and evidenced** (status `in_progress`; 10 of 12 DoD items
-checked). The closed-set, fail-loud operator-global connection registry,
+**Done** (all 14 DoD items met + evidenced; 2026-06-24 closeout). The
+closed-set, fail-loud operator-global connection registry,
 the `llm.discovery` bounds, the `llm.model_costs[]` rate table, and the
 `LLM_PROVIDER_SECRET_MASTER_KEY` managed-secret manifest entry are SST
 source-of-truth, wired through the config-generation pipeline into the
@@ -304,22 +325,23 @@ test) and `check` exit 0; the secret-key 3-mirror parity holds; the
 Ollama-only dev path is unchanged; and the 088/089 selection surfaces are
 untouched.
 
-**Two residuals remain, BOTH environmental/foreign (NOT SCOPE-01 code
-gaps):**
+**Both prior residuals are now CLEARED (2026-06-24 closeout):**
 
-1. **D01-T1-3** (`format --check` EXIT 0) — every changed file is
-   gofmt-clean; the global command is blocked solely by a pre-existing
-   untracked foreign file (`internal/connector/qfdecisions/chaos_hardening_test.go`)
-   that belongs to another session and must not be modified.
-2. **D01-T1-1** (`artifact-lint` clean) — blocked solely by a missing
-   `uservalidation.md`, a planning artifact owned by `bubbles.plan` (not
-   `bubbles.implement`); all report.md required sections and the
-   anti-fabrication evidence checks pass.
+1. **D01-T1-3** (`format --check` EXIT 0) — the previously-blocking foreign
+   untracked file (`internal/connector/qfdecisions/chaos_hardening_test.go`)
+   is now tracked + gofmt-clean tree-wide; `./smackerel.sh format --check`
+   re-runs EXIT 0 (`69 files already formatted`).
+2. **D01-T1-1** (`artifact-lint` clean) — `uservalidation.md` now exists;
+   `bash .github/bubbles/scripts/artifact-lint.sh` re-runs EXIT 0
+   (`Artifact lint PASSED`).
 
-Both residuals are recorded with Uncertainty Declarations and routed to
-their owners (the foreign-file owner / `bubbles.plan`). SCOPE-01 is held at
-`in_progress` rather than fabricating a clean pass on commands that do not
-yet exit 0 in this working tree.
+Both clearances are captured in § Tier-1 Closeout Gates → Closeout Gate
+Re-Run. SCOPE-01 has NO live-stack leg in its DoD, so it carries no
+deferred residual and is marked **Done**. (The feature 096 spec as a whole
+stays `in_progress`: the live-stack legs of the downstream scopes —
+`tests/integration/...`, `e2e-api`, `e2e-ui`, migration-062 live-apply,
+live hosted-provider reachability — remain home-lab-gated and are the sole
+documented blocker to full-delivery `done`.)
 
 ---
 
@@ -2139,14 +2161,117 @@ weakening**.
 
 ## Tier-1 Closeout Gates (orchestrator post-implementation)
 
-Final Tier-1 universal gates, re-run at closeout after the foreign-owned
-`uservalidation.md` landed (previously the sole blocking artifact). **Claim
-Source: executed** — real command results.
+Final Tier-1 universal gates, re-run at closeout. The format gate was the
+last-standing residual (blocked by a foreign untracked file); it is now
+GREEN — the foreign file is tracked + gofmt-clean tree-wide and the gate
+re-runs EXIT 0. **Claim Source: executed** — real command results; the
+fresh 2026-06-24 captures are in § Closeout Gate Re-Run below.
 
 - **artifact-lint** — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` → **PASSED (EXIT 0)**. All six required artifacts present (`uservalidation.md` now exists — previously the only failure); every structure check green; the Anti-Fabrication Evidence Checks all pass (checked DoD items carry evidence blocks, no unfilled placeholders, no repo-CLI bypass). Clears the deferred artifact-lint residual recorded under SCOPE-01..07.
 - **check** — `./smackerel.sh check` → **EXIT 0**. `go vet` + build clean across the whole tree; `scenario-lint: OK` (17 scenarios registered, 0 rejected). Clears the deferred `check` residual under SCOPE-03..07 (SCOPE-01/02 were already green).
-- **format** — `./smackerel.sh format --check` → **EXIT 1**, but ONLY because of a single FOREIGN untracked file from a concurrent session, `internal/connector/qfdecisions/chaos_hardening_test.go`, which is NOT part of spec-096 and is not ours to format. Every spec-096 source is gofmt-clean: the last committed gap, `internal/api/model_connections_admin_test.go` (SCOPE-06), was formatted at closeout (`gofmt -w` on that one file; `gofmt -l <file>` now empty), leaving the foreign file as the sole `gofmt -l` entry. The spec-096 format obligation is met; the global red is foreign concurrent work, so the global `format --check` gate (D0n-T1-3) stays open.
+- **format** — `./smackerel.sh format --check` → **EXIT 0** (re-run 2026-06-24). The previously-blocking FOREIGN untracked file `internal/connector/qfdecisions/chaos_hardening_test.go` is now tracked + gofmt-clean (its concurrent owner landed it), and every spec-096 source remains gofmt-clean, so `format --check` reports `69 files already formatted` and exits 0. This **CLEARS** the previously-deferred `format --check` residual recorded under SCOPE-01..07 (D0n-T1-3). Fresh capture: § Closeout Gate Re-Run below.
 - **traceability-guard** — **PASSED (20/20 scenarios mapped)**, recorded earlier (G068 closure).
+
+### Closeout Gate Re-Run (2026-06-24)
+
+Fresh, real captures of the four Tier-1 closeout gates, re-run in this
+reconciliation pass. Absolute `/home/<user>/...` paths are redacted to
+`~/...` per the repo PII policy. **Claim Source: executed.**
+
+**Gate 1 — format**
+
+```text
+Phase: closeout-gate / format
+Command: $ ./smackerel.sh format --check
+[… one-time ephemeral ML venv editable pip install elided …]
+  Building editable for smackerel-ml (pyproject.toml): finished with status 'done'
+  Created wheel for smackerel-ml: filename=smackerel_ml-0.1.0-py3-none-any.whl
+Successfully built smackerel-ml
+Installing collected packages: websockets, uvloop, typing-extensions, ruff, … smackerel-ml
+Successfully installed … ruff-0.15.19 smackerel-ml-0.1.0 …
+69 files already formatted
+FORMAT_CHECK_EXIT=0
+Exit Code: 0
+```
+
+**Gate 2 — check**
+
+```text
+Phase: closeout-gate / check
+Command: $ ./smackerel.sh check
+config-validate: ~/smackerel/config/generated/dev.env.tmp.12900 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+Exit Code: 0
+```
+
+(`go vet` + build ran clean tree-wide with no diagnostics emitted; the
+config-sync, drift-guard, and scenario-lint lines above are the gate's
+substantive output.)
+
+**Gate 3 — artifact-lint**
+
+```text
+Phase: closeout-gate / artifact-lint
+Command: $ bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: full-delivery
+✅ Top-level status matches certification.status
+✅ Mode-specific report gates skipped (status not in promotion set)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+Exit Code: 0
+```
+
+**Gate 4 — spec-096 Go unit legs**
+
+```text
+Phase: closeout-gate / test unit --go (spec-096 scoped)
+Command: $ ./smackerel.sh test unit --go --go-run 'Spec096'
+[go-unit] applying -run selector: Spec096
+[go-unit] starting go test ./...
+ok  github.com/smackerel/smackerel/internal/config                                 0.023s
+ok  github.com/smackerel/smackerel/internal/api                                    0.189s
+ok  github.com/smackerel/smackerel/internal/telegram                               0.043s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/agent          0.087s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/catalog        0.065s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore      0.025s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/connvault      0.024s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/llm            0.080s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics        0.023s
+ok  github.com/smackerel/smackerel/web/pwa/tests                                   0.012s
+[go-unit] go test ./... finished OK
+UNIT_SPEC096_EXIT=0
+Exit Code: 0
+```
+
+The spec-096 `-run Spec096` selector exercises the per-scope packages —
+`internal/config` (SCOPE-01), `connvault` (SCOPE-02), `llm` (SCOPE-03),
+`catalog` (SCOPE-04), `agent` (SCOPE-05 CostFn + SCOPE-07 dispatch),
+`connstore` + `api` (SCOPE-06), `telegram` + `web/pwa/tests` (SCOPE-06/07
+surfaces), `metrics` (§13 observability) — all `ok`, NO skips, the whole
+`go test ./...` run finishing OK. The deferred live-stack legs
+(`tests/integration/...`, `e2e-api`, `e2e-ui`, migration-062 live-apply,
+live hosted-provider reachability) are NOT exercised by this unit run and
+remain home-lab-gated (C7).
 
 ---
 
