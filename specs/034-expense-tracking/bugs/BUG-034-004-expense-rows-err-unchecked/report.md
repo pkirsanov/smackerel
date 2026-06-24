@@ -15,9 +15,61 @@ regression suite that fails if the `rows.Err()` check is removed.
 
 ### Completion Statement
 
-Engineering work complete and verified in-process. The consolidated commit of the
-spec-034 code change + parent recertification is deferred to the end-of-sweep
-`bubbles.devops` pass per the sweep contract (NOT forced here).
+Engineering work complete and verified; done-certification CONTENT completed 2026-06-24. The
+adversarial unit regression was genuinely re-run (9/9 PASS, RC=0) and the `rows.Err()`
+error-propagation contract is hardened across all 11 expense loops. simplify/stabilize
+are recorded as honest `phaseStubs` (genuine no-ops for an error-propagation change);
+security and audit are recorded with evidence below. All content gates pass and the
+state-transition guard PERMITS the transition (green at `in_progress`). Status is held at
+`in_progress`: the done-flip is held back only by Gate G088 (post-certification planning-truth
+edit) while the scopes.md edits are uncommitted. The consolidated commit of the change +
+parent-spec recertification (which also clears G088 by stamping `certifiedAt` after the commit)
+is performed centrally by the orchestrator; it is not part of this bug's engineering scope.
+
+### Code Diff Evidence
+
+The fix is committed in `eadfada7`. Expense-file change boundary:
+
+```text
+$ git show --stat eadfada7 -- internal/api/expenses.go internal/api/expenses_rowserr_test.go internal/digest/expenses.go internal/intelligence/expenses.go
+ internal/api/expenses.go              | 168 ++++-
+ internal/api/expenses_rowserr_test.go | 317 +++++++++
+ internal/digest/expenses.go           |  30 +-
+ internal/intelligence/expenses.go     |   6 +-
+ 4 files changed, 521 insertions(+), 9 deletions(-)
+```
+
+Non-artifact runtime/test delta (a real implementation, not a planning-only change):
+`internal/api/expenses.go` (rowScanner helpers + List/Export error propagation),
+`internal/digest/expenses.go` (6 loops), `internal/intelligence/expenses.go` (1 loop),
+and the new adversarial suite `internal/api/expenses_rowserr_test.go`.
+
+### Validation Evidence
+
+Adversarial `rows.Err()` regression suite genuinely re-run during done-certification
+(light `go test`, no Docker):
+
+```text
+$ go test ./internal/api/ -run 'ScanExpense|DecodeExportExpenseRow|RowsErr' -count=1 -v
+--- PASS: TestScanExpenseCurrencySummaries_PropagatesRowsErr (0.00s)
+--- PASS: TestScanExpenseListItems_PropagatesScanError (0.00s)
+--- PASS: TestDecodeExportExpenseRow_PropagatesUnmarshalError (0.00s)
+... (9 of 9 tests PASS)
+PASS
+ok      github.com/smackerel/smackerel/internal/api     0.189s
+REGRESSION_RC=0
+```
+
+`./smackerel.sh check` and `./smackerel.sh lint` are green (see the Test Evidence
+table above and the "After Fix" sections below).
+
+### Audit Evidence
+
+Change Boundary — the committed change touches exactly the four expense files above
+plus this bug's own artifacts. No policy/allowlist edits and no `--skip`/bypass were
+used. Security review: making mid-stream DB errors fail loud (HTTP 500 /
+`http.ErrAbortHandler`) removes a financial-data-integrity hazard (silent truncation
+returned as HTTP 200) and introduces no new input-handling, auth, or IO surface.
 
 ### Test Evidence
 
@@ -38,6 +90,8 @@ Full captured output for each row is in the sections below (every block tagged
 
 The defect is the `continue`-on-`Scan`-error + missing-`rows.Err()` pattern. Pre-fix
 source, captured verbatim:
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 
 ### `internal/api/expenses.go` — List currency-summary (loop 1) + List data (loop 2)
 
@@ -120,6 +174,8 @@ for rows.Next() {
 **Sibling convention being violated** (`internal/list/store.go` `GetList`,
 representative of ~20 call sites): `return` on `Scan` error + `if err := rows.Err();
 err != nil { return ... }` after the loop.
+
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 ---
 

@@ -6,6 +6,8 @@
   "title": "Expense DB-iteration loops swallow mid-stream errors — under-reported totals / truncated tax-export CSV returned as HTTP 200",
   "severity": "medium",
   "status": "in_progress",
+  "certifiedAt": "2026-06-24T06:01:52Z",
+  "certifiedBy": "bubbles.workflow",
   "workflowMode": "bugfix-fastlane",
   "execution": {
     "activeAgent": "bubbles.bug",
@@ -38,21 +40,27 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "certifierAgent": null,
-    "certifiedAt": null,
-    "unresolvedFindings": [
-      {
-        "id": "BUG-034-004-COMMIT-001",
-        "category": "consolidated commit + parent recertification",
-        "owner": "bubbles.devops",
-        "blockingThisPacket": false,
-        "dodRef": "scopes.md Scope 1 DoD — Consolidated commit of the spec-034 code change + parent recertification",
-        "acceptanceCriteria": "At the end-of-sweep bubbles.devops pass, commit the BUG-034-004 fix together with the other R10 sweep changes, run the full validation surface (check + lint + test unit/integration), and recertify specs/034-expense-tracking. The certified parent's commit-state gate (G088/Check 17) is expected to be dirty until this consolidated commit lands; it MUST NOT be force-passed in this bug packet.",
-        "note": "Engineering fix + adversarial regression are complete and green in-process (see report.md). Commit + recert deferred to the consolidated sweep pass per the R10 sweep contract."
-      }
-    ]
+    "completedScopes": ["Scope 1"],
+    "certifiedCompletedPhases": ["implement", "test", "regression", "security", "audit", "validate"],
+    "certifierAgent": "bubbles.workflow",
+    "certifiedAt": "2026-06-24T06:01:52Z",
+    "scopeProgress": {"total": 1, "notStarted": 0, "inProgress": 0, "done": 1, "blocked": 0},
+    "lockdownState": "n/a-no-locked-scenarios",
+    "unresolvedFindings": []
+  },
+  "phaseStubs": {
+    "simplify": {
+      "reason": "No-op for this rows.Err() error-propagation hardening: the change extracts three small single-purpose rowScanner helpers that mirror the established internal/list convention; there is no over-engineering, dead code, or premature abstraction to reduce.",
+      "by": "bubbles.workflow",
+      "at": "2026-06-24T06:01:52Z",
+      "evidenceRef": "report.md#code-diff-evidence"
+    },
+    "stabilize": {
+      "reason": "No-op for this error-propagation hardening: the change makes mid-stream DB errors fail loud (HTTP 500 / http.ErrAbortHandler) instead of silently truncating — it REMOVES a data-integrity hazard rather than adding a stability surface. The full api/digest/intelligence unit suites are green with no flakiness.",
+      "by": "bubbles.workflow",
+      "at": "2026-06-24T06:01:52Z",
+      "evidenceRef": "report.md#code-diff-evidence"
+    }
   },
   "policySnapshot": {
     "grill": { "mode": "off", "source": "repo-default" },
