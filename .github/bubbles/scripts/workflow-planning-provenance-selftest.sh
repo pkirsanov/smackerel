@@ -40,8 +40,34 @@ run_capture() {
   shift
   shift
 
+  run_with_timeout() {
+    local seconds="$1"
+    shift
+
+    if command -v timeout >/dev/null 2>&1; then
+      timeout "$seconds" "$@"
+      return $?
+    fi
+
+    if command -v gtimeout >/dev/null 2>&1; then
+      gtimeout "$seconds" "$@"
+      return $?
+    fi
+
+    "$@" &
+    local cmd_pid=$!
+    (sleep "$seconds"; kill -TERM "$cmd_pid" 2>/dev/null) &
+    local watch_pid=$!
+    local rc=0
+    wait "$cmd_pid" 2>/dev/null || rc=$?
+    kill -TERM "$watch_pid" 2>/dev/null || true
+    wait "$watch_pid" 2>/dev/null || true
+    [[ "$rc" -eq 143 ]] && rc=124
+    return "$rc"
+  }
+
   set +e
-  timeout "$timeout_seconds" "$@" >"$log_file" 2>&1
+  run_with_timeout "$timeout_seconds" "$@" >"$log_file" 2>&1
   local status=$?
   set -e
 
