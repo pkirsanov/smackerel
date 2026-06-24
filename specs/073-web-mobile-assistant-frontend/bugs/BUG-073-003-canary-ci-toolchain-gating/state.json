@@ -5,8 +5,8 @@
   "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-003-canary-ci-toolchain-gating",
   "featureName": "BUG-073-003: Cross-language renderer canary CI toolchain gating (skip-on-absence, fail-loud-on-drift, dedicated CI job)",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
-  "certifiedAt": "2026-06-24T06:01:52Z",
+  "status": "done",
+  "certifiedAt": "2026-06-24T07:30:14Z",
   "certifiedBy": "bubbles.workflow",
   "execution": {
     "activeAgent": "bubbles.workflow",
@@ -24,8 +24,8 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "certifiedAt": "2026-06-24T06:01:52Z",
+    "status": "done",
+    "certifiedAt": "2026-06-24T07:30:14Z",
     "certifiedBy": "bubbles.workflow",
     "completedScopes": ["Scope 1"],
     "certifiedCompletedPhases": ["select", "bootstrap", "implement", "test", "regression", "audit", "validate", "docs"],

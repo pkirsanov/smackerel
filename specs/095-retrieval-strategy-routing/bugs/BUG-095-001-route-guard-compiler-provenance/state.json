@@ -1,8 +1,8 @@
 {
   "spec": "BUG-095-001-route-guard-compiler-provenance",
   "parentSpec": "095-retrieval-strategy-routing",
-  "status": "in_progress",
-  "certifiedAt": "2026-06-24T06:01:52Z",
+  "status": "done",
+  "certifiedAt": "2026-06-24T07:30:14Z",
   "certifiedBy": "bubbles.workflow",
   "workflowMode": "bugfix-fastlane",
   "executionModel": "parent-expanded-child-mode",
@@ -66,7 +66,7 @@
     }
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "certifiedCompletedPhases": [
       "implement",
       "test",
