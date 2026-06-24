@@ -4,6 +4,15 @@
 
 **Status:** Done
 
+**Scope-Kind:** docs-only
+
+> Scope-Kind rationale: the only change is a documentation comment on
+> `selectRetrievalStrategy` (zero runtime/control-flow/signature change). A
+> doc-comment provenance reference has no live-runtime behavior and therefore no
+> live E2E surface, so the runtime-behavior E2E regression rows (Check 8A) do not
+> apply. The regression guard is the existing static-analysis integration test
+> (re-run genuinely — see report.md).
+
 ### Gherkin Scenarios
 
 See [spec.md](spec.md) SCN-BUG-095-001-1, SCN-BUG-095-001-2, SCN-BUG-095-001-3.

@@ -36,7 +36,7 @@ Scenario: SCN-077-BUG-002-02 — no cardrewards spec reintroduces a per-test log
 |-----|----------|----------|---------------|-------------------|---------|
 | TP-077-BUG-002-01 | SCN-077-BUG-002-01 | unit | `web/pwa/tests/_support/cardrewards_login_session_reuse.test.ts` | `SCN-077-BUG-002-01 — login POSTs once per worker, then reuses the cached session` | `./smackerel.sh test unit` (driver: `tests/unit/web/bug_077_002_login_session_reuse_test.sh`) |
 | TP-077-BUG-002-02 | SCN-077-BUG-002-02 | unit | `web/pwa/tests/_support/cardrewards_login_session_reuse.test.ts` | `SCN-077-BUG-002-02 — no cardrewards spec reintroduces a per-test /v1/web/login POST` | `./smackerel.sh test unit` |
-| TP-077-BUG-002-03 | SCN-077-BUG-002-01 | e2e-ui | `web/pwa/tests/cardrewards_*.spec.ts` (live lane) | card-rewards suite authenticates without 429 | `./smackerel.sh test e2e-ui` (CI — parent-owned) |
+| TP-077-BUG-002-03 | SCN-077-BUG-002-01 | e2e-ui | `web/pwa/tests/cardrewards_wallet.spec.ts` (representative of the live card-rewards suite) | card-rewards suite authenticates without 429 | `./smackerel.sh test e2e-ui` (CI — parent-owned) |
 
 ### Definition of Done
 

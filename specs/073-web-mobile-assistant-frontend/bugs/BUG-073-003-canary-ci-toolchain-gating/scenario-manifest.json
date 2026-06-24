@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-003-canary-ci-toolchain-gating",
+  "generatedAt": "2026-06-24T06:01:52Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG073003-001",
+      "scope": "Scope 1",
+      "title": "Toolchain absent → canary skips (not fails)",
+      "gherkin": {
+        "given": "node and dart are NOT on PATH (the go-only CI unit container)",
+        "when": "the cross-language renderer canary tests run",
+        "then": "they report '--- SKIP' with a reason naming the missing toolchain and the Go unit lane exits 0"
+      },
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "tests/unit/clients/render_descriptor_canary_test.go",
+          "name": "TestRenderDescriptorV1_CrossLanguageCanary"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#evidence-1",
+        "report.md#evidence-3"
+      ],
+      "testMapping": {
+        "type": "unit",
+        "label": "TestRenderDescriptorV1_CrossLanguageCanary",
+        "file": "tests/unit/clients/render_descriptor_canary_test.go"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG073003-002",
+      "scope": "Scope 1",
+      "title": "Toolchain present but output drifts → canary still fails loud",
+      "gherkin": {
+        "given": "node and dart ARE on PATH and a golden descriptor is deliberately corrupted",
+        "when": "the cross-language renderer canary runs",
+        "then": "the affected fixture subtest FAILS with a deep-equal/drift diagnostic (t.Fatalf) and no skip masks the drift"
+      },
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "tests/unit/clients/render_descriptor_canary_test.go",
+          "name": "TestRenderDescriptorV1_CrossLanguageCanary/text_only"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#evidence-5"
+      ],
+      "testMapping": {
+        "type": "unit",
+        "label": "TestRenderDescriptorV1_CrossLanguageCanary/text_only",
+        "file": "tests/unit/clients/render_descriptor_canary_test.go"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG073003-003",
+      "scope": "Scope 1",
+      "title": "Skip decision is non-tautological",
+      "gherkin": {
+        "given": "a stubbed PATH probe",
+        "when": "node is reported absent then dart is reported absent then both present",
+        "then": "decideRenderToolchain returns false+node-reason, false+dart-reason, and true+empty respectively"
+      },
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "tests/unit/clients/render_descriptor_canary_test.go",
+          "name": "TestDecideRenderToolchain_NodeAbsent_SkipsAndNamesNode"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#evidence-4"
+      ],
+      "testMapping": {
+        "type": "unit",
+        "label": "TestDecideRenderToolchain_NodeAbsent_SkipsAndNamesNode",
+        "file": "tests/unit/clients/render_descriptor_canary_test.go"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG073003-004",
+      "scope": "Scope 1",
+      "title": "Canary still runs in CI with real toolchains",
+      "gherkin": {
+        "given": "the dedicated cross-language-canary CI job provisions node and Flutter/dart",
+        "when": "the job runs the canary",
+        "then": "the 7 cross-language fixtures execute (not skip) and a contract test fails the build if that job is absent or unwired"
+      },
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/deploy/cross_language_canary_ci_contract_test.go",
+          "name": "TestCrossLanguageCanaryCIJob_LiveFile"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#evidence-6",
+        "report.md#evidence-8"
+      ],
+      "testMapping": {
+        "type": "unit",
+        "label": "TestCrossLanguageCanaryCIJob_LiveFile",
+        "file": "internal/deploy/cross_language_canary_ci_contract_test.go"
+      },
+      "status": "verified"
+    }
+  ]
+}

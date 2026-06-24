@@ -2,7 +2,17 @@
 
 ## Scope 1: Toolchain-gate the canary (skip on absence, fail-loud on drift) and keep it running in CI
 
-**Status:** In Progress (implementation complete and CI-verified on origin/main; spec-level done-certification deferred — see report.md Completion Statement)
+**Status:** Done
+
+**Scope-Kind:** ci-config
+
+> Scope-Kind rationale: this is a CI/test-infrastructure fix (a `.github/workflows`
+> CI job plus Go test gating). It changes no product runtime behavior and has no
+> live-runtime E2E surface, so the runtime-behavior E2E regression rows (Check 8A)
+> do not apply. Stress/load coverage is N/A here — the change touches no runtime
+> hot path (the Check 5A `sla` keyword match is the substring inside
+> `CrossLanguageCanary`, not an SLA/latency requirement). Regression is genuinely
+> re-run via the full Go unit lane.
 
 ### Gherkin Scenarios (Regression Tests)
 
@@ -31,7 +41,7 @@ Feature: BUG-073-003 — Cross-language canary is environment-gated, not silentl
     Given the dedicated cross-language-canary CI job provisions node and Flutter/dart
     When the job runs the canary
     Then the 7 cross-language fixtures execute (not skip)
-    And a contract test fails the build if that job is removed or unwired
+    And a contract test fails the build if that job is absent or unwired
 ```
 
 ### Implementation Plan
@@ -86,7 +96,7 @@ Feature: BUG-073-003 — Cross-language canary is environment-gated, not silentl
      --- PASS: TestDecideRenderToolchain_DartAbsent_SkipsAndNamesDart (0.00s)
      --- PASS: TestDecideRenderToolchain_BothAbsent_Skips (0.00s)
      ```
-- [x] R2 — Drift detection preserved: corrupted golden still triggers `t.Fatalf` with toolchains present
+- [x] R2 — Toolchain present but output drifts: the canary still fails loud (corrupted golden still triggers `t.Fatalf` with toolchains present; no skip masks the drift)
    - Evidence (report.md#evidence-5):
      ```
      render_descriptor_canary_test.go:257: js renderer output deviates from golden
@@ -101,7 +111,7 @@ Feature: BUG-073-003 — Cross-language canary is environment-gated, not silentl
      --- PASS: TestRenderDescriptorV1_DartPreCompiled_NoFallbackToDartRun (0.00s)
      ok      github.com/smackerel/smackerel/tests/unit/clients       3.241s
      ```
-- [x] R3 — `cross-language-canary` CI job added; CI-wiring contract test passes; adversarial mutation sub-tests pass
+- [x] R3 — Canary still runs in CI with real toolchains: the dedicated `cross-language-canary` CI job added; CI-wiring contract test passes; adversarial mutation sub-tests pass
    - Evidence (report.md#evidence-6):
      ```
      --- PASS: TestCrossLanguageCanaryCIJob_LiveFile (0.00s)
