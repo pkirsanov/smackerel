@@ -223,10 +223,10 @@ removed.
 
 | Artifact | Identifier | Mutable? | Producer |
 |----------|-----------|----------|----------|
-| Application image (`smackerel-core`) | `ghcr.io/pkirsanov/smackerel-core@sha256:<digest>` | No (immutable) | `.github/workflows/build.yml` |
-| Application image (`smackerel-ml`)   | `ghcr.io/pkirsanov/smackerel-ml@sha256:<digest>`   | No (immutable) | `.github/workflows/build.yml` |
+| Application image (`smackerel-core`) | `ghcr.io/pkirsanov/smackerel-core@sha256:<digest>` | No (immutable) | `.github/workflows/build.yml` (CI, when enabled) — or `./smackerel.sh build --target <target>` (local-operator; see "Local-operator (no cloud CI)" below) |
+| Application image (`smackerel-ml`)   | `ghcr.io/pkirsanov/smackerel-ml@sha256:<digest>`   | No (immutable) | `.github/workflows/build.yml` (CI, when enabled) — or `./smackerel.sh build --target <target>` (local-operator; see "Local-operator (no cloud CI)" below) |
 | Config bundle (per env)              | `ghcr.io/pkirsanov/smackerel-config-bundles:<env>-<sourceSha>` | No (immutable, deterministic) | `./smackerel.sh config generate --env <env> --bundle` |
-| Build manifest                       | `build-manifest-<sourceSha>.yaml`                  | No (immutable) | CI workflow artifact |
+| Build manifest                       | `build-manifest-<sourceSha>.yaml`                  | No (immutable) | `.github/workflows/build.yml` (CI, when enabled) — or `./smackerel.sh build --target <target>` (local-operator; emits `local-build-manifest-<sourceSha>.yaml`) |
 | Deployment manifest (per target)     | `<adapter-root>/<target>/manifest.yaml`            | **Yes** (pointer)              | The per-target deploy adapter (in-tree under `deploy/<target>/` for generic targets, out-of-tree under `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled targets like home-lab adapters). Adapter actions are invoked via `./smackerel.sh deploy-target <target> <action>`; the dispatcher (`scripts/commands/deploy_target.sh`) delegates mutating and verification actions to adapter scripts and delegates `status` to adapter `status.sh` when executable. |
 
 Image tags like `:latest`, `:main`, `:staging-latest` MUST NOT be used in any
@@ -235,6 +235,16 @@ deployment manifest. Adapters consume images by digest only.
 ---
 
 ## CI pipeline (`.github/workflows/build.yml`)
+
+> **Reference producer — operator-toggleable.** The GitHub CI workflow below is
+> the *reference* producer of the immutable artifacts above, not the only one. An
+> operator may disable the GitHub Actions workflows and produce the same
+> immutable, cosign-signed, digest-addressed `smackerel-core` / `smackerel-ml`
+> images and per-env config bundles — plus a `local-build-manifest-<sourceSha>.yaml`
+> — via the in-repo local-operator path documented in "Local-operator (no cloud
+> CI)" below. The binding contract is the **artifact shape** (Build-Once
+> Deploy-Many), not the specific producer; `scripts/deploy/promote.sh` consumes
+> either manifest identically.
 
 ```text
 git push (main / tag) → tests → buildx → trivy CRITICAL/HIGH scan (FAILS workflow on findings)
