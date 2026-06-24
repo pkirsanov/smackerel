@@ -1,6 +1,6 @@
 # BUG-034-004: Expense DB-iteration loops swallow mid-stream errors — under-reported totals / truncated tax-export CSV returned as HTTP 200
 
-**Status:** Fixed (in-process; consolidated commit + parent recert deferred to end-of-sweep bubbles.devops)
+**Status:** Done (engineering fix complete and unit-verified; central commit performed by the orchestrator)
 **Fix summary:** All 11 loops hardened to the repo's `rows.Err()` convention; API List/Export `Scan`/`Unmarshal` `continue`→error propagation (List → HTTP 500, Export stream → `http.ErrAbortHandler`); digest/intelligence loops propagate errors. Adversarial regression in `internal/api/expenses_rowserr_test.go` (RED-on-reintroduction proven). See `report.md`.
 **Severity:** Medium (financial-data correctness; silent truncation)
 **Reported:** 2026-06-15 (stochastic-quality-sweep Round R10 harden pass)

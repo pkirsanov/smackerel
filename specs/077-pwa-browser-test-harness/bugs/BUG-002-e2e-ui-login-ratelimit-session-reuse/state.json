@@ -24,7 +24,17 @@
   "certification": {
     "status": "in_progress",
     "certifiedCompletedPhases": [],
-    "completedScopes": []
+    "completedScopes": [],
+    "scopeProgress": {"total": 1, "notStarted": 0, "inProgress": 1, "done": 0, "blocked": 0},
+    "lockdownState": "n/a-no-locked-scenarios"
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"}
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -38,7 +48,7 @@
     "headSha": "0a4a13aa1a5173538f52dbeead876e7e9dc4580a",
     "confirmedAt": "2026-06-20T17:46:42Z",
     "reason": "Authoritative end-to-end confirmation arrived: CI \"E2E UI\" run 27878481805 (e2e-ui job) conclusion success on HEAD 0a4a13aa cleared the 9 cardrewards 429 failures. Local verification (regression, playwright --list, static grep, adversarial proof) had already passed.",
-    "remainingCertificationBlocker": "The CI E2E-UI gate is GREEN, but the real state-transition guard still BLOCKS a 'done' promotion (29 findings): Gate G022 needs the full pipeline (regression/simplify/stabilize/security/validate/audit) which this test-only fix never executed; Check 8A needs scenario-specific E2E regression DoD+TestPlan rows; Gate G093 requires an implementation/test delta in the certifying change but the code fix is in prior commit 50c71583 (this close-out touches only specs/); plus G055/G057/G068/G053 artifact-shape gaps. Per the no-fabrication / no-bypass policy, status is HELD at in_progress (deferred) — matching the BUG-073-003 light-touch-fix precedent. Full done-certification is reserved for the parent bubbles.goal."
+    "remainingCertificationBlocker": "Done-certification done-pass on 2026-06-24 fixed the safe in-repo artifact defects (G055 policySnapshot, G056 scopeProgress/lockdownState, Check 8 Test-Plan citation corrected from the non-existent cardrewards_*.spec.ts glob to the real cardrewards_wallet.spec.ts). Status is HELD at in_progress (NON-TERMINAL) by design: the AUTHORITATIVE proof for this e2e-ui-only fix is a LIVE `./smackerel.sh test e2e-ui` run, which cannot be executed in this environment (CI is disabled_manually, there is no live stack, and the host is OOM-prone). The CI ledger records run 27878481805 (e2e-ui) success on HEAD 0a4a13aa, but that cannot be re-verified here. The remaining state-transition findings (G022 full pipeline, Check 8A scenario-E2E rows, Change Boundary section/DoD, G053/G093 certifying-change implementation delta, G057 scenario-manifest, G068 DoD-Gherkin fidelity, G040 deferral language) plus G088 (commit-ordering) all hinge on that live run + the central commit, and were intentionally NOT fabricated. Full done-certification is reserved for a run that can execute the live e2e-ui lane and the central commit."
   },
   "execution": {
     "activeAgent": null,
