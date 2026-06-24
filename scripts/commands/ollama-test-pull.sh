@@ -32,6 +32,37 @@
 
 set -euo pipefail
 
+run_with_timeout() {
+  local seconds="$1"
+  shift
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "${seconds}s" "$@"
+    return $?
+  fi
+
+  if command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "${seconds}s" "$@"
+    return $?
+  fi
+
+  "$@" &
+  local cmd_pid=$!
+  (
+    sleep "$seconds"
+    kill -TERM "$cmd_pid" 2>/dev/null
+  ) &
+  local watch_pid=$!
+  local rc=0
+
+  wait "$cmd_pid" 2>/dev/null || rc=$?
+  kill -TERM "$watch_pid" 2>/dev/null || true
+  wait "$watch_pid" 2>/dev/null || true
+
+  [[ "$rc" -eq 143 ]] && rc=124
+  return "$rc"
+}
+
 require_env() {
   local name="$1"
   local val="${!name-}"
@@ -60,7 +91,7 @@ http_status_file="$(mktemp)"
 trap 'rm -f "$http_status_file"' EXIT
 
 set +e
-timeout "${timeout_seconds}s" curl \
+run_with_timeout "$timeout_seconds" curl \
   --silent \
   --show-error \
   --fail-with-body \
