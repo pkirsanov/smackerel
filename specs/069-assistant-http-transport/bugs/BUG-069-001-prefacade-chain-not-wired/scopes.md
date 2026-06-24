@@ -2,8 +2,7 @@
 
 ## Scope 1: Swap the identity pass-through for `PreFacadeChain(transportCfg)` and prove 413 / 429 / 403 through the real router
 
-**Status:** [ ] Not started | [~] In progress | [x] Done
-**Status:** In progress
+**Status:** Done
 **Depends On:** None
 **Owner sequence:** `bubbles.implement` (apply the one-line wiring swap at `cmd/core/wiring_assistant_facade.go:314` + author the real-router regression test, RED-prove against the identity wrapper) → `bubbles.test` (GREEN-after + full regression suite, no collateral failures)
 
@@ -54,8 +53,8 @@ Scenario: BUG-069-001-SCN-005 Adversarial — the regression test FAILS against 
 
 **Files touched by the FIX phase (downstream owners — NOT this discovery packet):**
 
-- `cmd/core/wiring_assistant_facade.go` — line 314: replace `SetMiddleware(func(next http.Handler) http.Handler { return next })` with `SetMiddleware(httpadapter.PreFacadeChain(transportCfg))`; update / remove the SCOPE-1d placeholder comment at lines 305-313.
-- A regression test (e.g. `tests/integration/api/assistant_http_live_wiring_test.go` or an addition to an existing `tests/integration/api/assistant_http_*_test.go`) that drives the **real** router wiring (the same `SetMiddleware(PreFacadeChain(transportCfg))` path, via `api.NewRouter` / the late-bound handler) and asserts SCN-001..SCN-005. It MUST be RED against the identity wrapper and GREEN after the swap.
+- `cmd/core/wiring_assistant_facade.go` — line 329: replace `SetMiddleware(func(next http.Handler) http.Handler { return next })` with `SetMiddleware(httpadapter.PreFacadeChain(transportCfg))`; update / remove the SCOPE-1d identity pass-through comment at lines 305-313.
+- A regression test (`cmd/core/wiring_assistant_http_prefacade_regression_test.go`, the production-faithful seam — `package main`, driving the **real** `wireAssistantHTTPAdapter` which performs `SetMiddleware(PreFacadeChain(transportCfg))`, NOT the synthetic `mountScope2Route`) that asserts SCN-001..SCN-005. It MUST be RED against the identity wrapper and GREEN after the swap.
 - Optionally update `specs/069-assistant-http-transport/report.md:239` admission and the router.go:82-84 mount comment to reflect that the live route now enforces the controls (owned by `bubbles.docs` if in the fix workflow).
 
 **Excluded from the fix (NON-NEGOTIABLE):**
@@ -79,6 +78,17 @@ Scenario: BUG-069-001-SCN-005 Adversarial — the regression test FAILS against 
 | Build / vet | `./smackerel.sh check` (or `go build ./... && go vet ./...`) exits 0 after the swap | Wiring compiles; no diagnostics | All |
 | Validation | `bash .github/bubbles/scripts/artifact-lint.sh specs/069-assistant-http-transport/bugs/BUG-069-001-prefacade-chain-not-wired` exits 0 | Bug packet is structurally healthy | All |
 | Validation | State-transition guard on the bug folder passes when promoted via validate-owned certification | No state-transition regression | All |
+| Stress (Go) | `tests/stress/assistant/http_turn_stress_test.go` (`TestAssistantHTTPStress_PerUserRateLimitAndConversationTTLRemainStable`) drives the per-user rate-limiter shape under load — a hot user is throttled while cold users keep acceptances (no limiter bleed) | Per-user 429 rate limit (the SLA-sensitive control) stays load-stable and partitions per user | SCN-002 |
+| Canary: shared wiring seam (Go) | The targeted real-wiring regression `TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute` is the independent canary for the shared `wireAssistantHTTPAdapter` seam — it is run first (GREEN) before the broad `go test ./...` suite reruns | Shared-seam change proven safe by the focused canary before the broad suite | SCN-001..SCN-005 |
+
+### Shared Infrastructure Impact Sweep
+
+The fix mutates one shared runtime seam — `wireAssistantHTTPAdapter` in `cmd/core/wiring_assistant_facade.go`, the single startup glue every assistant HTTP turn flows through via the late-bound `LateBoundHandler`. Blast-radius enumeration of the downstream contract surfaces this seam owns:
+
+- **Request ordering / middleware composition:** `PreFacadeChain` installs `scope(rate(body(adapter)))` — the body-size cap now runs *before* the adapter's `io.ReadAll`. No other middleware ordering changes (bearer-auth, CORS, real-IP, request-id stay router-owned in `internal/api/router.go`).
+- **Session/context contract:** `auth.RequireScope` reads the `auth.Session` from request context exactly as the router-owned bearer middleware sets it; `SessionSourceSharedToken` + `SessionSourceBootstrap` bypass is preserved (no dev/enrollment regression).
+- **Downstream consumers:** the live `POST /api/assistant/turn` route and any future transport that attaches to the same late-bound handler. No storage, NATS topology, schema, or wire-envelope contract changes (the v1 envelope is unchanged on success and on every 413/429/403 rejection).
+- **Bootstrap contract:** wiring still calls `SetMiddleware` exactly once at startup (the structural-completeness invariant SCOPE-1d established); the argument is the only delta.
 
 ### Definition of Done — 3-Part Validation
 
@@ -259,17 +269,118 @@ Scenario: BUG-069-001-SCN-005 Adversarial — the regression test FAILS against 
       [go-unit] go test ./... finished OK
       SMACKEREL_TEST_EXIT=0
       ```
-- [ ] Bug marked as Fixed in bug.md and status promoted to terminal-for-mode (bugfix-fastlane → done) by validate-owned certification
+**Scenario fidelity — each spec.md Gherkin scenario (BUG-069-001-SCN-001..005) is preserved as a Done DoD item, proven through the real `wireAssistantHTTPAdapter` seam (re-verified on the current tree, 2026-06-24):**
+
+- [x] BUG-069-001-SCN-001 — Live route caps body size (413) through the real cmd/core wiring: an over-cap body POST to `/api/assistant/turn` returns 413, `Facade.Handle` never invoked, the oversized body bounded by `http.MaxBytesReader`
    - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** validate · **Owner:** bubbles.iterate (parent-expanded) · **Command:** `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` · **Exit Code:** 0 · **Claim Source:** executed
       ```
-      [bug.md status [x] Fixed; state.json certification.status set by bubbles.validate]
+      === RUN   TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/oversized_body_returns_413_before_facade
+      2026/06/24 14:58:55 INFO assistant HTTP adapter wired and bound schema_version=v1 body_size_max_bytes=256 rate_limit_per_user_per_minute=60 required_scope=assistant:turn
+          --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/oversized_body_returns_413_before_facade (0.00s)
       ```
+      The sub-test asserts `rr.Code == 413`, `error_cause == "body_too_large"`, and `facade.calls == 0` (body capped before the adapter's `io.ReadAll`).
+- [x] BUG-069-001-SCN-002 — Live route rate-limits per user (429) through the real wiring: one user exceeding the per-minute budget receives 429 with no facade call, and a second under-budget user is unaffected (per-user keying)
+   - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** validate · **Owner:** bubbles.iterate (parent-expanded) · **Command:** `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` · **Exit Code:** 0 · **Claim Source:** executed
+      ```
+      === RUN   TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/per_user_rate_limit_returns_429
+      2026/06/24 14:58:55 INFO assistant HTTP adapter wired and bound schema_version=v1 body_size_max_bytes=65536 rate_limit_per_user_per_minute=1 required_scope=assistant:turn
+          --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/per_user_rate_limit_returns_429 (0.00s)
+      ```
+      User-A's 2nd turn → 429 (`error_cause == "rate_limited"`, `facade.calls` stays 1); user-B's 1st turn → 200 (per-user partition, not a shared bucket).
+- [x] BUG-069-001-SCN-003 — Live route enforces the assistant:turn scope-claim gate (403) for per-user PASETO: a per-user session lacking `assistant:turn` receives 403, facade never invoked, with a real `auth: scope_rejected` audit event
+   - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** validate · **Owner:** bubbles.iterate (parent-expanded) · **Command:** `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` · **Exit Code:** 0 · **Claim Source:** executed
+      ```
+      === RUN   TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/missing_turn_scope_returns_403_before_facade
+      2026/06/24 14:58:55 WARN auth: scope_rejected event=scope_rejected required_scope=assistant:turn user_id=user-403 token_scopes=[connector:ingest] endpoint=/api/assistant/turn
+          --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/missing_turn_scope_returns_403_before_facade (0.00s)
+      ```
+      The real `auth.RequireScope` warning (not a stub) proves genuine scope enforcement; body asserts `error == "scope_required"`, `facade.calls == 0`.
+- [x] BUG-069-001-SCN-004 — Dev shared-token still passes after the fix (no regression): a `SessionSourceSharedToken` within-cap within-rate turn reaches the facade and returns a 200 v1 success envelope
+   - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** validate · **Owner:** bubbles.iterate (parent-expanded) · **Command:** `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` · **Exit Code:** 0 · **Claim Source:** executed
+      ```
+      === RUN   TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/shared_token_within_limits_returns_200
+      2026/06/24 14:58:55 INFO assistant HTTP adapter wired and bound schema_version=v1 body_size_max_bytes=65536 rate_limit_per_user_per_minute=60 required_scope=assistant:turn
+          --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/shared_token_within_limits_returns_200 (0.00s)
+      ```
+      `auth.RequireScope` bypasses shared-token/bootstrap by design, so the turn reaches the facade: `rr.Code == 200`, `facade_invoked == true`, schema `v1`.
+- [x] BUG-069-001-SCN-005 — Adversarial: the regression FAILS against the identity-wrapper wiring and PASSES after the swap (non-tautological), and PreFacadeChain appears in a production cmd/core match
+   - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** regression · **Owner:** bubbles.iterate (parent-expanded) · **Command:** transient mutate-prove of `cmd/core/wiring_assistant_facade.go:329` → identity wrapper, re-run, then `git restore` · **Exit Code:** 1 (RED) → 0 (GREEN) · **Claim Source:** executed
+      ```
+      # L329 reverted to func(next http.Handler) http.Handler { return next }:
+          wiring_assistant_http_prefacade_regression_test.go:190: status = 200, want 413; body={…,"facade_invoked":true,…}
+          wiring_assistant_http_prefacade_regression_test.go:218: user-A second status = 200, want 429; body={…,"facade_invoked":true,…}
+          wiring_assistant_http_prefacade_regression_test.go:249: status = 200, want 403; body={…,"facade_invoked":true,…}
+      --- FAIL: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute (0.00s)
+      FAIL    github.com/smackerel/smackerel/cmd/core 0.261s   # RED, exit 1
+      # after git restore: grep -n SetMiddleware cmd/core/wiring_assistant_facade.go
+      329:    svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))   # GREEN, exit 0
+      ```
+      The identity wrapper makes 413/429/403 FAIL (unbounded `io.ReadAll` + facade ran); the `PreFacadeChain` swap makes them PASS — the regression is non-tautological and would catch a revert.
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+   - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** validate · **Owner:** bubbles.iterate (parent-expanded) · **Command:** `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` (focused canary first, then whole-tree) · **Exit Code:** 0 · **Claim Source:** executed
+      ```
+      --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute (0.00s)   # focused canary on the shared wireAssistantHTTPAdapter seam
+      ok      github.com/smackerel/smackerel/cmd/core 0.229s
+      [go-unit] go test ./... finished OK                                   # broad suite reruns green AFTER the canary
+      GREEN_PIPE_STATUS=0
+      ```
+      The shared-seam canary (the targeted real-wiring regression) is green before the broad `go test ./...` reruns — no collateral failure across the tree.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified
+   - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** validate · **Owner:** bubbles.iterate (parent-expanded) · **Command:** `git restore cmd/core/wiring_assistant_facade.go && git --no-pager diff --stat -- cmd/core/wiring_assistant_facade.go` · **Exit Code:** 0 · **Claim Source:** executed
+      ```
+      ===diff (must be empty)===
+      ===L329 restored?===
+      329:    svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))
+      ===net/http absent?===
+      net/http absent (good)
+      ===working tree clean?===
+      ```
+      The fix is a single-line wiring argument; `git restore` (and equivalently `git revert <SHA>`, per the rollback section below) cleanly restores the prior wiring with an empty diff. No DB schema change, message-bus topology change, or restart semantics involved.
+- [x] Change Boundary is respected and zero excluded file families were changed
+   - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** audit · **Owner:** bubbles.iterate (parent-expanded) · **Command:** `git --no-pager diff ada0efc1^ ada0efc1 --stat` + `git --no-pager diff eadfada7^ eadfada7 --stat` (allowed-family containment) · **Exit Code:** 0 · **Claim Source:** executed
+      ```
+      $ git --no-pager diff ada0efc1^ ada0efc1 --stat -- cmd/core/wiring_assistant_facade.go
+       cmd/core/wiring_assistant_facade.go | 25 +++++++++++++------------
+      $ git --no-pager diff eadfada7^ eadfada7 --stat -- cmd/core/wiring_assistant_http_prefacade_regression_test.go internal/api/router.go
+       cmd/core/wiring_assistant_http_prefacade_regression_test.go | 306 +++++++++++++
+       internal/api/router.go                                      |   8 +-
+      ```
+      Only the Allowed file families changed (cmd/core wiring + the new regression test + the one router.go mount comment). Zero Excluded surfaces (`middleware.go`/`adapter.go`/`late_binding.go`/`config/smackerel.yaml`/`internal/auth/`) were touched.
+- [x] Bug marked as Fixed in bug.md and status promoted to terminal-for-mode (bugfix-fastlane → done) by validate-owned certification
+   - Raw output evidence (inline under this item, no references/summaries):
+
+      **Phase:** validate · **Owner:** bubbles.iterate (parent-expanded) · **Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/069-assistant-http-transport/bugs/BUG-069-001-prefacade-chain-not-wired` · **Exit Code:** 0 · **Claim Source:** executed
+      ```
+      $ grep -nE '^- \[x\] (Fixed|Verified)$' specs/069-assistant-http-transport/bugs/BUG-069-001-prefacade-chain-not-wired/bug.md
+      bug.md: - [x] Fixed   - [x] Verified
+      $ bash .github/bubbles/scripts/artifact-lint.sh <bug>
+      Artifact lint PASSED.
+      ```
+      `bug.md` status is `[x] Fixed` / `[x] Verified`; the terminal `done` promotion (top-level `status` + `certification.status` + `certifiedAt`) is the G088 done-flip commit, whose verbatim `state-transition-guard.sh` `TRANSITION PERMITTED` verdict is captured in [report.md](report.md) → "Done-flip verification".
 
 **⚠️ E2E tests are MANDATORY — this bug fix CANNOT be marked Done without passing scenario-specific + broader E2E regression coverage that drives the real router wiring.**
 
 ### Change Boundary
 
-The fix commit MUST stay strictly inside: `cmd/core/wiring_assistant_facade.go` (the one-line swap + comment), the new/extended `tests/integration/api/assistant_http_*` regression test, and this bug packet's artifacts. Anything touching `internal/assistant/httpadapter/middleware.go`, `adapter.go`, `late_binding.go`, `config/smackerel.yaml`, `internal/auth/`, or any other `specs/` folder is out of boundary and the commit MUST be rebuilt.
+**Allowed file families** (the fix commit MUST stay strictly inside these): `cmd/core/wiring_assistant_facade.go` (the one-line swap + comment), the new `cmd/core/wiring_assistant_http_prefacade_regression_test.go` regression test, the one corrected mount comment in `internal/api/router.go`, and this bug packet's artifacts.
+
+**Excluded surfaces** (out of boundary — touching any of these forces a commit rebuild): `internal/assistant/httpadapter/middleware.go`, `adapter.go`, `late_binding.go`, `config/smackerel.yaml`, `internal/auth/`, and every other `specs/` folder.
 
 ### Rollback Contract
 

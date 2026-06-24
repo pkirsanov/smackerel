@@ -15,12 +15,12 @@ Spec 069 SCOPE-2 landed a self-contained pre-facade middleware chain `httpadapte
 
 - [x] Reported
 - [x] Confirmed (reproduced by stochastic-quality-sweep round R41 `harden-to-doc`; re-verified independently by `bubbles.bug` with real commands at the current working tree — output captured below)
-- [x] In Progress (discovery + documentation + root-cause complete; fix routed, NOT applied)
-- [ ] Fixed
-- [ ] Verified
+- [x] In Progress (discovery + documentation + root-cause complete; fix routed)
+- [x] Fixed
+- [x] Verified
 - [ ] Closed
 
-> **Discovery-only packet.** `bubbles.bug` discovered, documented, and root-caused this defect and routes the one-line wiring fix downstream. NO production code was edited and NO commit was made by this packet. Fix sequence: `bubbles.implement` (swap the identity wrapper for `PreFacadeChain(transportCfg)` + author the real-router regression test) → `bubbles.test` (RED-before / GREEN-after + full regression).
+> **Fix applied + verified.** `cmd/core/wiring_assistant_facade.go:329` installs `svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))` (the identity pass-through swap landed in commit `ada0efc1`); the real-wiring regression `cmd/core/wiring_assistant_http_prefacade_regression_test.go` (commit `eadfada7`) drives the production `wireAssistantHTTPAdapter` seam and is RED against the identity wrapper / GREEN after the swap (413 / 429 / 403 / shared-token-200, re-verified on the current tree 2026-06-24). Discovery + root-cause were by `bubbles.bug`; the implement/test/regression/security/validate/audit phases drove it to terminal-for-mode (`bugfix-fastlane` → `done`) via validate-owned certification. `Closed` is left unchecked pending the orchestrator's review + push.
 
 ## Reproduction Steps
 
