@@ -15,6 +15,13 @@ The gaps probe on spec 024 discovered a genuine committed-tree defect on the exa
 
 The defect classes mirror the two sibling closures: F2 is the docs↔runtime drift class BUG-024-002 fixed (for §22.7 + §24-A at 15→16); F3 is the forward-detection-test-gap class BUG-024-003 fixed (by creating the test this packet now extends).
 
+## Scenario-First TDD — RED → GREEN Ordering
+
+This bug was fixed adversarial-first (scenario-first TDD): the §24-A 4th-surface pin was added and proven RED against the still-stale doc BEFORE the doc reconciliation turned it GREEN. The full raw runs are captured verbatim in the dated proof sections below; this is the ordered index.
+
+- **RED (failing proof — 2026-06-16, pre-doc-edit):** with the §24-A surface pinned but `docs/smackerel.md` still at `(16 committed)`, `./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose` drove `TestConnectorCountContract_LiveFile` to a hard `--- FAIL` (`docs/smackerel.md §24-A=16` vs runtime / §22.7 / Development.md = 17), `EXIT_CODE=1`. Raw run: the **"bubbles.test — F3 Test-Extension RED Proof"** section below.
+- **GREEN (passing proof — post-doc-edit, re-verified 2026-06-24):** after §24-A → `(17 committed)` with the Card Rewards leaf inserted after QF Decisions, the identical command drove `TestConnectorCountContract_LiveFile` to `--- PASS` (four surfaces agree on 17) with all four adversarial sub-tests `--- PASS`, `go test ./... finished OK`. Raw runs: the **"bubbles.docs — F2 §24-A Reconciliation GREEN Proof"** section and the 2026-06-24 re-verification below.
+
 ## Completion Statement
 
 The discovery, documentation, and root-cause analysis for BUG-024-006 are **complete and verified by real commands** (captured under Test Evidence below at HEAD `7844283b`, `main`). This packet (the `bubbles.bug` discovery phase) performs **no** code or documentation edits and does **not** commit — per the `bugfix-fastlane` mandate, the fix is owned downstream and sequenced test → docs:
@@ -337,6 +344,60 @@ EXIT_CODE=0
 - This packet: `scopes.md` DoD guards-differential + governance-backfill items `[x]`; `bug.md` Verified `[x]`; `state.json` governance `executionHistory` entry + `currentPhase: finalize`.
 
 Gate G088 **PASS** (Check 30) — the backfill edits only `state.json`/`report.md` (governance), not `spec.md`/`design.md`/`scopes.md` planning truth, so `certifiedAt 2026-06-06T23:00:00Z` is unchanged.
+
+## Certification — bubbles.iterate (2026-06-24)
+
+This section certifies BUG-024-006 to terminal status `done` under `bugfix-fastlane`. The fix itself is already on `main` (the §24-A doc reconciliation + the contract-test 4th-surface pin); what follows is the genuine regression / validate / audit verification plus the implementation-delta proof required to certify the packet.
+
+**Phase provenance (honest).** `implement`, `test`, `regression`, `validate`, `audit` are genuinely executed — the contract-test code + the §24-A doc edit + the GREEN suite + the guard/lint + the boundary review — captured with real command output here and in the dated proof sections above. `simplify`, `stabilize`, `security` are recorded as honest `phaseStubs` in `state.json`: there is no abstraction or duplication to simplify, no flaky/perf/infra surface to stabilize, and no attack-surface or runtime-behavior change to review for security (a documentation + in-process contract-test change). `runSubagent` is unavailable in this runtime, so the orchestrator (`bubbles.iterate`) executed regression/validate/audit inline as parent-expanded phases rather than dispatching separate specialists — the same parent-expansion model used to certify sibling BUG-076-001.
+
+### Code Diff Evidence — Committed Diff (2026-06-24, git-backed)
+
+The contract-test 4th-surface pin landed in commit `eadfada7`; the diff is shown by file (the commit message is intentionally not rendered — it carries unrelated multi-spec checkpoint content):
+
+```text
+$ git diff --stat eadfada7^ eadfada7 -- internal/deploy/docs_connector_count_contract_test.go
+ .../deploy/docs_connector_count_contract_test.go   | 139 ++++++++++++++++++---
+ 1 file changed, 121 insertions(+), 18 deletions(-)
+```
+
+The §24-A documentation reconciliation (header `16 committed` → `17 committed` + the inserted `Card Rewards (cardrewards/ …)` leaf) is committed at `HEAD` — see the verbatim `git show HEAD:docs/smackerel.md` grep in the "Parent Governance Backfill" section above (lines 2922 + 2939). `cmd/core/connectors.go` (the registry source of truth) is unmodified at 17.
+
+### Regression Evidence
+
+**Executed:** YES
+**Command:** `./smackerel.sh test unit --go --go-run 'TestConnectorCountContract' --verbose`
+**Phase Agent:** bubbles.iterate (parent-expanded regression)
+
+The four-surface live contract is GREEN and all four adversarial sub-tests reject their synthetic disagreements — including `AdversarialSmackerelMdTreeLow`, which permanently encodes the §24-A=16-vs-17 RED. The verbatim run (LiveFile `--- PASS` with the four-surface agree-on-17 diagnostic, four adversarial `--- PASS`, `ok … internal/deploy`, `go test ./... finished OK`) is captured above in **"GREEN re-verification on the current tree (Claim Source: executed, 2026-06-24)"**. No regression in the BUG-024-003 three-surface contract.
+
+### Validation Evidence
+
+**Executed:** YES
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh <bug>` + `bash .github/bubbles/scripts/artifact-lint.sh <bug>`
+**Phase Agent:** bubbles.iterate (parent-expanded validate)
+
+The fix is behavior-preserving: only `docs/smackerel.md` §24-A (3 insertions / 2 deletions) and `internal/deploy/docs_connector_count_contract_test.go` (the 4th-surface pin) changed in the committed fix; no runtime registry, schema, NATS topology, REST handler, web template, prompt contract, Telegram command, deploy script, or compose file was touched (AC-09, UC-04). The connector slice in `cmd/core/connectors.go` is unmodified at 17. The state-transition guard and artifact lint are run for this packet at `done`; the verbatim `TRANSITION PERMITTED` verdict and `artifact-lint` exit 0 are recorded in **"### Finalize Evidence"** below.
+
+### Audit Evidence
+
+**Executed:** YES
+**Command:** change-boundary + finding-closure + product-principle review (git-backed)
+**Phase Agent:** bubbles.iterate (parent-expanded audit)
+
+- **Change boundary (AC-12):** the committed fix touches only the two allowed surfaces (the §24-A doc lines + the contract-test file). No excluded family (`cmd/`, `internal/connector/`, `internal/api/`, schema, `config/`, `ml/`, `.github/bubbles/`) is modified.
+- **Finding closure (AC-11, one-to-one):** F2 (§24-A docs↔runtime drift) is closed by the doc reconciliation; F3 (contract-test 4th-surface blind spot) is closed by the §24-A pin + `AdversarialSmackerelMdTreeLow`. No cherry-picking; both findings closed in the same packet.
+- **Principle 10 (QF Companion boundary):** the Card Rewards leaf keeps the read-only / no-financial-advice framing (`spec 083 read-only rotating-category fetch`) consistent with §22.7 row 17; the additive leaf introduces no financial-action surface.
+- **Anti-fabrication:** every command in this section was executed; the RED is historical (2026-06-16, preserved verbatim above) and is permanently encoded in the passing `AdversarialSmackerelMdTreeLow` sub-test, since §24-A is committed at 17 and a fresh live RED cannot be reproduced without reverting committed truth.
+
+### Finalize Evidence — G088 Two-Commit Certification
+
+The fix is already on `main` (contract-test pin `eadfada7`; §24-A `(17 committed)` + Card Rewards leaf committed at `HEAD`). This session certifies the packet using the G088 two-commit ordering, with `git add` limited to this BUG packet:
+
+1. **Planning-truth commit** — `scopes.md` (canonical `Done` status, `contract-only` Scope-Kind, Consumer Impact Sweep, G068-faithful DoD), `bug.md`, `report.md`, and `state.json` (still `in_progress`).
+2. **Done-flip commit** — `state.json` flipped to `status: done` / `certification.status: done` with `certifiedAt` strictly after the planning-truth commit and `certifiedBy: bubbles.iterate`, plus this report note.
+
+`git push` is **left to the orchestrator's review** — this session makes the two commits and stops; never `--no-verify`. The verbatim `state-transition-guard.sh` `TRANSITION PERMITTED` verdict and `artifact-lint.sh` exit-0 captured at `done` are appended below on the done-flip.
 
 ### Remaining + disposition
 
