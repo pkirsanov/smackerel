@@ -174,11 +174,9 @@ OWASP A09 (Security Logging & Monitoring Failures) closure is sound. No raw user
 
 ## Change boundary
 
-```text
-Production code:  ml/app/agent.py        (2 diagnostic log statements only)
-New test:         ml/tests/test_agent_log_redaction.py
-Bug artifacts:    specs/076-assistant-completion-rescope/bugs/BUG-076-001-*/
-```
+- **Production code:** `ml/app/agent.py` — 2 diagnostic log statements only
+- **New test:** `ml/tests/test_agent_log_redaction.py`
+- **Bug artifacts:** `specs/076-assistant-completion-rescope/bugs/BUG-076-001-*/`
 
 Not modified: `ml/app/main.py` log-level default (the standing policy exception `G067-A05-ml-log-level`), any Go source, transport renderers, config, or any other spec's concurrent work.
 
