@@ -18,7 +18,7 @@ $ grep -n 'SetMiddleware\|PreFacadeChain' cmd/core/wiring_assistant_facade.go
 314:	svc.assistantHTTPHandler.SetMiddleware(func(next http.Handler) http.Handler { return next })
 ```
 
-The surrounding placeholder admission (`cmd/core/wiring_assistant_facade.go:305-313`):
+The surrounding identity pass-through admission (`cmd/core/wiring_assistant_facade.go:305-313`):
 
 ```text
 305:	// SCOPE-2 will replace this pass-through with the real
@@ -506,3 +506,135 @@ SMACKEREL_LINT_EXIT=0
 ```
 
 **Ledger reconciliation applied:** `state.json` → `completedPhaseClaims` now includes `implement`; `currentPhase` → `validate`; `nextRequiredOwner` → `bubbles.validate`; `lastUpdatedAt` → 2026-06-24. `status` left `in_progress` and `certification.*` untouched (validate-owned). The F2 test-phase DoD items in [scopes.md](scopes.md) were already evidenced (bubbles.test) and are re-verified GREEN above, so the sole remaining step is validate-owned terminal-for-mode (`bugfix-fastlane → done`) certification — no separate bubbles.test re-run is warranted.
+
+<!-- bubbles:certifying-window-begin -->
+
+### Re-verification on the current tree (validate + regression phases, 2026-06-24)
+
+**Phase:** validate · **Phase Agent:** bubbles.iterate (parent-expanded — the iterate runtime lacks `runSubagent`, so the bugfix-fastlane child phases were expanded inline) · **Claim Source:** executed
+
+**[V-RE1] GREEN — the real-wiring regression PASSES on the current committed tree (PreFacadeChain wired at L329):**
+**Command:** `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` — **Exit Code:** 0
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose
+=== RUN   TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/missing_turn_scope_returns_403_before_facade
+2026/06/24 14:58:55 WARN auth: scope_rejected event=scope_rejected required_scope=assistant:turn user_id=user-403 token_scopes=[connector:ingest] endpoint=/api/assistant/turn
+--- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/oversized_body_returns_413_before_facade (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/per_user_rate_limit_returns_429 (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/missing_turn_scope_returns_403_before_facade (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/shared_token_within_limits_returns_200 (0.00s)
+ok      github.com/smackerel/smackerel/cmd/core 0.229s
+[go-unit] go test ./... finished OK
+GREEN_PIPE_STATUS=0
+```
+
+**[V-RE2] RED — mutate-prove (non-tautological): reverting L329 to the identity wrapper FAILS 413/429/403; `git restore` then restores byte-for-byte:**
+**Command:** (transient) `cmd/core/wiring_assistant_facade.go:329` → identity wrapper (+ `net/http` import), re-run, then `git restore` — **Exit Code:** 1 (RED) → clean restore
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose   # L329 = func(next) { return next }
+    wiring_assistant_http_prefacade_regression_test.go:190: status = 200, want 413; body={…,"facade_invoked":true,…}
+    wiring_assistant_http_prefacade_regression_test.go:218: user-A second status = 200, want 429; body={…,"facade_invoked":true,…}
+    wiring_assistant_http_prefacade_regression_test.go:249: status = 200, want 403; body={…,"facade_invoked":true,…}
+--- FAIL: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/shared_token_within_limits_returns_200 (0.00s)
+FAIL    github.com/smackerel/smackerel/cmd/core 0.261s
+RED_PIPE_STATUS=1
+$ git restore cmd/core/wiring_assistant_facade.go && git --no-pager diff --stat -- cmd/core/wiring_assistant_facade.go
+(empty diff — byte-for-byte restored; L329 = PreFacadeChain(transportCfg); net/http absent)
+```
+
+### Code Diff Evidence
+
+**Phase:** implement · **Phase Agent:** bubbles.iterate (parent-expanded) · **Claim Source:** executed — git-backed proof of the shipped delta (subject-free `git diff <sha>^ <sha>` form, since `eadfada7`'s commit subject carries an unrelated handoff token).
+
+**[CD1] The wiring swap (identity pass-through → `PreFacadeChain`) landed in `ada0efc1`:**
+**Command:** `git --no-pager diff ada0efc1^ ada0efc1 -- cmd/core/wiring_assistant_facade.go` — **Exit Code:** 0
+
+```
+$ git --no-pager diff ada0efc1^ ada0efc1 -- cmd/core/wiring_assistant_facade.go
+-       "net/http"
+-       svc.assistantHTTPHandler.SetMiddleware(func(next http.Handler) http.Handler { return next })
++       svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))
+```
+
+**[CD2] The real-wiring regression test + the corrected router mount comment landed in `eadfada7`:**
+**Command:** `git --no-pager diff eadfada7^ eadfada7 --stat -- cmd/core/wiring_assistant_http_prefacade_regression_test.go internal/api/router.go` — **Exit Code:** 0
+
+```
+$ git --no-pager diff eadfada7^ eadfada7 --stat -- cmd/core/wiring_assistant_http_prefacade_regression_test.go internal/api/router.go
+ cmd/core/wiring_assistant_http_prefacade_regression_test.go | 306 +++++++++++++
+ internal/api/router.go                                      |   8 +-
+ 2 files changed, 311 insertions(+), 3 deletions(-)
+```
+
+**[CD3] HEAD-state proof — `PreFacadeChain` wired in production, identity pass-through gone:**
+**Command:** `grep -n 'SetMiddleware' cmd/core/wiring_assistant_facade.go` — **Exit Code:** 0
+
+```
+$ grep -n 'SetMiddleware' cmd/core/wiring_assistant_facade.go
+329:    svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))
+$ grep -c 'func(next http.Handler) http.Handler { return next }' cmd/core/wiring_assistant_facade.go
+0
+```
+
+### Security Evidence
+
+**Phase:** security · **Phase Agent:** bubbles.iterate (parent-expanded) · **Claim Source:** executed — REAL security phase (HIGH severity, CWE-400 / CWE-770 uncontrolled resource consumption), NOT a stub.
+
+**Threat closed.** Before the fix the default-enabled `POST /api/assistant/turn` ran an unbounded `io.ReadAll(r.Body)` (`internal/assistant/httpadapter/adapter.go:329`) with no `http.MaxBytesReader` — an authenticated memory-exhaustion DoS (CWE-400 / CWE-770), plus two missing authz controls. `PreFacadeChain` composes `scope(rate(body(adapter)))`, so the body cap (`http.MaxBytesReader`, bounded by `BodySizeMaxBytes`) now runs *before* the `io.ReadAll`. All three controls proven on the live seam in one run:
+
+- **413 (CWE-400/770 closure):** over-cap body rejected before the adapter buffers it (`facade.calls == 0`).
+- **429 (per-user availability):** rate limit keyed per authenticated user; a second user is unaffected (no shared-bucket DoS).
+- **403 (authorization):** the `assistant:turn` scope gate rejects per-user PASETO sessions lacking the claim, emitting a real `auth: scope_rejected` event.
+
+**[SEC1] Live proof of all three rejection paths (real seam, single run):**
+**Command:** `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` — **Exit Code:** 0
+
+```
+$ ./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose
+2026/06/24 14:58:55 WARN auth: scope_rejected event=scope_rejected required_scope=assistant:turn user_id=user-403 token_scopes=[connector:ingest] endpoint=/api/assistant/turn
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/oversized_body_returns_413_before_facade (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/per_user_rate_limit_returns_429 (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/missing_turn_scope_returns_403_before_facade (0.00s)
+    --- PASS: TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute/shared_token_within_limits_returns_200 (0.00s)
+ok      github.com/smackerel/smackerel/cmd/core 0.229s
+```
+
+**Residual risk:** none introduced. Bearer-auth (401) stays router-owned; shared-token/bootstrap bypass (dev ergonomics) is preserved by design. No new attack surface, secret, or egress path; no dependency manifest changed (the swap dropped the `net/http` import — no new third-party source). Change boundary held: only `cmd/core` wiring + the test + one `internal/api/router.go` comment.
+
+### Validation Evidence
+
+**Executed:** YES
+**Command:** `./smackerel.sh check` + `./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose` + `bash .github/bubbles/scripts/artifact-lint.sh <bug>`
+**Phase Agent:** bubbles.validate (parent-expanded by bubbles.iterate)
+
+Validate-owned certification: the fix is GREEN on the current committed tree, the regression is non-tautological (RED→GREEN proven above, [V-RE1]/[V-RE2]), `./smackerel.sh check` is clean, and the bug packet artifact-lints exit 0. The terminal `done` promotion is gated on the `state-transition-guard.sh` `TRANSITION PERMITTED` verdict captured in "Done-flip verification" below.
+
+```
+$ ./smackerel.sh check
+config-validate: ~/smackerel/config/generated/dev.env.tmp.<pid> OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+SMACKEREL_CHECK_EXIT=0
+```
+
+### Audit Evidence
+
+**Executed:** YES
+**Command:** `git --no-pager diff --stat HEAD -- cmd/ internal/` (boundary) + `grep -rn 'PreFacadeChain' cmd/ internal/api/` (finding closure) + bailout/regression-quality scan
+**Phase Agent:** bubbles.audit (parent-expanded by bubbles.iterate)
+
+Audit: finding closure is one-to-one — F1 (the SCOPE-2 production-wiring gap) is closed by the `PreFacadeChain` swap and proven by the real-wiring regression. Change boundary respected (only `cmd/core/wiring_assistant_facade.go` + the new test + one `internal/api/router.go` comment; no excluded family touched). Anti-fabrication: every command in this report was executed; the historical RED (2026-06-16) is permanently re-provable via mutate-prove ([V-RE2], re-run 2026-06-24). Principle 10 (QF Companion boundary): no financial-action surface added; the scope gate strengthens the existing auth boundary.
+
+```
+$ grep -n 'SetMiddleware' cmd/core/wiring_assistant_facade.go
+329:    svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg))
+$ grep -nE 't\.Skip|\.only\(|if .*\{ *return *\}|url\(\)\.includes' cmd/core/wiring_assistant_http_prefacade_regression_test.go
+(no matches — exit 1; no skip/bailout/early-return masking)
+```
