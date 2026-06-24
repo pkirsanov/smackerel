@@ -638,3 +638,21 @@ $ grep -n 'SetMiddleware' cmd/core/wiring_assistant_facade.go
 $ grep -nE 't\.Skip|\.only\(|if .*\{ *return *\}|url\(\)\.includes' cmd/core/wiring_assistant_http_prefacade_regression_test.go
 (no matches — exit 1; no skip/bailout/early-return masking)
 ```
+
+### Done-flip verification
+
+**Phase:** validate · **Phase Agent:** bubbles.iterate (parent-expanded) · **Claim Source:** executed — captured at `status: done`.
+
+- **Planning-truth commit:** `2c30c35a` — `bubbles(069/bug-069-001): certify BUG-069-001 content — planning-truth commit` (committed `2026-06-24T15:26:38Z`; `scopes.md` + `report.md` + `bug.md` + `state.json` while still `in_progress`). The done-flip `certifiedAt` `2026-06-24T15:27:00Z` is strictly after it, so Gate G088 (Check 30) passes.
+- **Done-flip commit:** `state.json` → `status: done` / `certification.status: done` (`certifiedBy: bubbles.iterate`) plus this report note — `report.md` + `state.json` only (no planning-truth file in the done-flip).
+
+```
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/069-assistant-http-transport/bugs/BUG-069-001-prefacade-chain-not-wired
+✅ PASS: Post-certification planning truth is aligned with certification state (Gate G088)
+🟡 TRANSITION PERMITTED with 3 warning(s)
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/069-assistant-http-transport/bugs/BUG-069-001-prefacade-chain-not-wired ; echo "exit=$?"
+Artifact lint PASSED.
+exit=0
+```
+
+The 3 warnings are non-blocking: no `completedAt` timestamps in `state.json`; no concrete Test-Plan file paths recognized by the heuristic (the real paths `cmd/core/wiring_assistant_http_prefacade_regression_test.go` + `tests/stress/assistant/http_turn_stress_test.go` are present); and 8 prior-window evidence blocks exempt under the single certifying-window-begin marker for artifact-lint (the guard's own Check 11 warns but does not block). `git push` is left to the orchestrator's review — this session makes the two commits and stops; never `--no-verify`.
