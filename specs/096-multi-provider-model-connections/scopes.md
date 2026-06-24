@@ -179,8 +179,8 @@ elaborated in this file, SCOPE-05..07 in the continuation.
 
 | # | Scope | Surfaces | Covers SCN | Tests (categories) | DoD items | Status |
 |---|-------|----------|------------|--------------------|-----------|--------|
-| 1 | SCOPE-01 — Provider-connection registry + config SST schema (foundation) | config (yaml + `internal/config`) | A01, A04, G02 | unit (registry/validate) + config-gen | 12 | [~] In Progress (10/12 DoD; T1-1 + T1-3 environmental residuals) |
-| 2 | SCOPE-02 — Encrypted credential vault + master-key lifecycle | new `connvault` pkg + migration 061 + secret-keys path | W05 | unit (AEAD) + integration (ephemeral PG) | 12 | [~] In Progress (10/12 DoD; integration vault-persist leg now GREEN [core Healthy]; T1-1/T1-3 foreign/closeout residuals) |
+| 1 | SCOPE-01 — Provider-connection registry + config SST schema (foundation) | config (yaml + `internal/config`) | A01, A04, G02 | unit (registry/validate) + config-gen | 12 | Done (all DoD met + evidenced; pure config/unit scope — no live-stack leg) |
+| 2 | SCOPE-02 — Encrypted credential vault + master-key lifecycle | new `connvault` pkg + migration 061 + secret-keys path | W05 | unit (AEAD) + integration (ephemeral PG) | 12 | [~] In Progress (all DoD met + evidenced; integration vault-persist leg GREEN [core Healthy]; held pending spec certification) |
 | 3 | SCOPE-03 — Provider-aware `/ask` dispatch (credential seam) | Go `llm` + Python `chat.py`/`schemas.py` + agent attribution | A02, A03, G01, G04, G05 | unit + integration + e2e-api (deferred) | 14 | [~] In progress |
 | 4 | SCOPE-04 — Discovery + unified catalog + identifier canonicalization | new `catalog` pkg + agenttool resolver boundary | D01, D04 | unit + integration + e2e-api (deferred) | 13 | [~] Unit complete; live legs deferred |
 | 5 | SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement | agent budget seam + `llm.model_costs` SST + migration 062 `model_usage_ledger` | G03 | unit + integration | 12 | [~] Unit complete; live legs deferred |
@@ -209,7 +209,7 @@ file.
 
 ## Scope 1: SCOPE-01 — Provider-connection registry + config SST schema
 
-**Status:** [~] In Progress (10 of 12 DoD met + evidenced; T1-1 and T1-3 are environmental/foreign residuals — see report.md → SCOPE-01)
+**Status:** Done (all 14 DoD met + evidenced at 2026-06-24 closeout; the two prior residuals — T1-1 `artifact-lint` and T1-3 `format --check` — are now both EXIT 0 [report.md → Tier-1 Closeout Gates]; SCOPE-01 is a pure config + Go-loader/unit scope with NO live-stack leg in its DoD, so nothing remains deferred)
 **Scope-Kind:** config (yaml + Go loader/validator)
 **Depends on:** —
 **Foundation:** true (design §3 foundation #1 — the SST-declared closed
@@ -297,13 +297,13 @@ Every entry is copied verbatim from
 > Live-stack note: none of SCOPE-01's tests touch a live system; they are
 > pure config-load/validate unit tests with NO request interception.
 
-### Definition of Done — SCOPE-01 (all unchecked — implementation pending)
+### Definition of Done — SCOPE-01 (all 14 DoD met + evidenced — 2026-06-24 closeout)
 
 **Tier-1 (universal):**
 
 - [x] D01-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: [report.md](report.md) → SCOPE-01 + [report.md](report.md) → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0) — structure + anti-fabrication checks all green.
 - [x] D01-T1-2 — `./smackerel.sh check` EXIT 0 (build + vet + config-sync + scenario-lint). → Evidence: report.md → SCOPE-01.
-- [ ] D01-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-01 + report.md → Tier-1 Closeout Gates. **OPEN (not a spec-096 gap):** spec-096 sources are gofmt-clean (the last committed gap, `internal/api/model_connections_admin_test.go`, was formatted at closeout); the global `format --check` remains red ONLY due to a foreign untracked file (`internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work) that must not be modified.
+- [x] D01-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-01 + report.md → Tier-1 Closeout Gates. **MET (2026-06-24 closeout):** `./smackerel.sh format --check` now EXITs 0 ("69 files already formatted"); the previously-foreign `internal/connector/qfdecisions/chaos_hardening_test.go` is now tracked + gofmt-clean, so all tracked Go files are gofmt-clean tree-wide.
 - [x] D01-T1-4 — Every evidence block in report.md → SCOPE-01 is REAL terminal output (anti-fabrication); no synthesized results. → Evidence: report.md → SCOPE-01.
 - [x] D01-T1-5 — 088/089 do-not-amend boundary respected: zero behavioural change to `modelswitch`/`modelpref`, the Telegram `/model` picker, or `/v1/agent/model`; this scope only adds the SST registry. → Evidence: report.md → Change Manifest (isolated diff).
 
@@ -326,7 +326,7 @@ Every entry is copied verbatim from
 
 ## Scope 2: SCOPE-02 — Encrypted credential vault + master-key lifecycle
 
-**Status:** in_progress (10 of 12 DoD items met + evidenced; the integration vault-persist leg is now GREEN — `smackerel-core` boots `Healthy` and `TestVault_PersistRoundTripTestMasterKey_Spec096` PASSes vs a REAL Postgres [see report.md → Post-Implementation Fix]; the 2 residuals are foreign/closeout items [T1-1 `uservalidation.md`, T1-3 a foreign untracked file] — see DoD)
+**Status:** [~] In Progress (all 13 DoD items met + evidenced; the prior closeout residuals — T1-1 `artifact-lint` and T1-3 `format --check` — are now both EXIT 0 [report.md → Tier-1 Closeout Gates]; the integration vault-persist leg ran GREEN on the ephemeral test stack — `smackerel-core` boots `Healthy` and `TestVault_PersistRoundTripTestMasterKey_Spec096` PASSes vs a REAL Postgres [report.md → Post-Implementation Fix]; held at In Progress pending spec-level certification + the live-stack class that gates the whole spec)
 **Scope-Kind:** code (new `connvault` pkg) + DB (migration 061)
 **Depends on:** SCOPE-01
 **Foundation:** false (the design §3 foundation #2 reversible secret store
@@ -410,13 +410,13 @@ test master key. Entries are copied verbatim from
 > env-pollution policy); it MUST NOT touch the persistent dev store or any
 > real credential.
 
-### Definition of Done — SCOPE-02 (all unchecked — implementation pending)
+### Definition of Done — SCOPE-02 (all 13 DoD met + evidenced — 2026-06-24 closeout; held at In Progress pending spec certification)
 
 **Tier-1 (universal):**
 
 - [x] D02-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-02 + report.md → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0).
 - [x] D02-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-02.
-- [ ] D02-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-02 + report.md → Tier-1 Closeout Gates. **OPEN (not a spec-096 gap):** spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file (`internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work) that must not be modified.
+- [x] D02-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-02 + report.md → Tier-1 Closeout Gates. **MET (2026-06-24 closeout):** `./smackerel.sh format --check` now EXITs 0 ("69 files already formatted"); the previously-foreign `internal/connector/qfdecisions/chaos_hardening_test.go` is now tracked + gofmt-clean, so all tracked Go files are gofmt-clean tree-wide.
 - [x] D02-T1-4 — Every evidence block in report.md → SCOPE-02 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-02.
 - [x] D02-T1-5 — 088/089 do-not-amend boundary respected: the vault is additive; no `modelswitch`/`modelpref`/picker behaviour changes. → Evidence: report.md → Change Manifest.
 
@@ -572,7 +572,7 @@ the live hosted answer is an `e2e-api` deferred to the home-lab dispatch
 
 - [x] D03-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-03 + report.md → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0).
 - [x] D03-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-03 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
-- [ ] D03-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-03 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
+- [x] D03-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-03 + report.md → Tier-1 Closeout Gates. **MET (2026-06-24 closeout):** `./smackerel.sh format --check` now EXITs 0 ("69 files already formatted"); the previously-foreign `internal/connector/qfdecisions/chaos_hardening_test.go` is now tracked + gofmt-clean tree-wide.
 - [x] D03-T1-4 — Every evidence block in report.md → SCOPE-03 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-03.
 
 **Tier-2 (role-specific: 088/089 parity + secret-safety + fail-loud):**
@@ -711,7 +711,7 @@ verbatim from [scenario-manifest.json](scenario-manifest.json).
 
 - [x] D04-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-04 + report.md → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0).
 - [x] D04-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-04 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
-- [ ] D04-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-04 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
+- [x] D04-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-04 + report.md → Tier-1 Closeout Gates. **MET (2026-06-24 closeout):** `./smackerel.sh format --check` now EXITs 0 ("69 files already formatted"); the previously-foreign `internal/connector/qfdecisions/chaos_hardening_test.go` is now tracked + gofmt-clean tree-wide.
 - [x] D04-T1-4 — Every evidence block in report.md → SCOPE-04 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-04. _(E1 GREEN `UNIT_EXIT=0`, E2 RED-before `RED_EXIT=1`, E3 import greps — all captured.)_
 
 **Tier-2 (role-specific: graceful degradation + leaf purity + G028 + canonicalization):**
@@ -732,7 +732,7 @@ verbatim from [scenario-manifest.json](scenario-manifest.json).
 
 ## Scope 5: SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement
 
-**Status:** [ ] Not started
+**Status:** [~] In Progress (11 of 13 DoD met + evidenced; the model-aware CostFn `costfn_modelaware.go`, the load-bearing budget pre-flight, migration 062 `model_usage_ledger`, and the unit tests all shipped + GREEN; the 2 residuals are home-lab-gated live legs — D05-T2-4 migration-062 live-apply + D05-T2-7 the live budget-enforcement integration leg — deferred [C7], see report.md → SCOPE-05)
 **Scope-Kind:** code (model-aware CostFn closure + budget pre-flight wiring + migration 062 companion table)
 **Depends on:** SCOPE-04
 **Foundation:** false (the cost/budget seam that makes the EXISTING
@@ -837,13 +837,13 @@ Entries are copied verbatim from
 > cost mapping + refusal WITHOUT network interception — correctly
 > classified `unit`.
 
-### Definition of Done — SCOPE-05 (7 of 12 met — implementation in progress)
+### Definition of Done — SCOPE-05 (11 of 13 met + evidenced; the 2 residuals are home-lab-gated live legs — D05-T2-4 migration-062 live-apply + D05-T2-7 the live budget-enforcement integration leg — deferred [C7])
 
 **Tier-1 (universal):**
 
 - [x] D05-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-05 + report.md → Tier-1 Closeout Gates. **MET:** `uservalidation.md` now exists; artifact-lint PASSES (EXIT 0).
 - [x] D05-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-05 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
-- [ ] D05-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-05 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
+- [x] D05-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-05 + report.md → Tier-1 Closeout Gates. **MET (2026-06-24 closeout):** `./smackerel.sh format --check` now EXITs 0 ("69 files already formatted"); the previously-foreign `internal/connector/qfdecisions/chaos_hardening_test.go` is now tracked + gofmt-clean tree-wide.
 - [x] D05-T1-4 — Every evidence block in report.md → SCOPE-05 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-05 (E1–E4, captured).
 - [x] D05-T1-5 — 088/089 do-not-amend boundary respected: the budget/cost seam is additive; no `modelswitch`/`modelpref`/picker behaviour changes. → Evidence: report.md → SCOPE-05 Change Manifest (no modelswitch/modelpref/picker file edited).
 
@@ -1028,7 +1028,7 @@ from [scenario-manifest.json](scenario-manifest.json).
 
 - [x] D06-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-06 + report.md → Tier-1 Closeout Gates. **MET:** artifact-lint PASSES (EXIT 0) now that `uservalidation.md` exists.
 - [x] D06-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-06 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
-- [ ] D06-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-06 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean — incl. the now-formatted `internal/api/model_connections_admin_test.go`; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
+- [x] D06-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-06 + report.md → Tier-1 Closeout Gates. **MET (2026-06-24 closeout):** `./smackerel.sh format --check` now EXITs 0 ("69 files already formatted"); both the spec-096 `internal/api/model_connections_admin_test.go` and the previously-foreign `internal/connector/qfdecisions/chaos_hardening_test.go` are gofmt-clean tree-wide.
 - [x] D06-T1-4 — Every evidence block in report.md → SCOPE-06 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-06.
 - [x] D06-T1-5 — **No env-specific content in repo:** the admin surface + PWA triad carry only generic placeholders (no real hostnames/IPs/tailnet identifiers/operator usernames/secret values); `infrastructure.operator_user_ids` is an abstract SST allowlist, real values live in the deploy adapter. → Evidence: report.md → SCOPE-06 (pii-scan / grep).
 
@@ -1209,7 +1209,7 @@ hosted models) are **deferred to the home-lab `bubbles.devops` dispatch
 
 - [x] D07-T1-1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/096-multi-provider-model-connections` clean. → Evidence: report.md → SCOPE-07 + report.md → Tier-1 Closeout Gates. **MET:** artifact-lint PASSES (EXIT 0) now that `uservalidation.md` exists.
 - [x] D07-T1-2 — `./smackerel.sh check` EXIT 0. → Evidence: report.md → SCOPE-07 + report.md → Tier-1 Closeout Gates. **MET:** `./smackerel.sh check` EXIT 0 (go vet + build clean tree-wide; scenario-lint OK).
-- [ ] D07-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-07 + report.md → Tier-1 Closeout Gates. _(OPEN, not a spec-096 gap: spec-096 sources are gofmt-clean; the global `format --check` remains red ONLY due to a foreign untracked file — `internal/connector/qfdecisions/chaos_hardening_test.go`, concurrent work.)_
+- [x] D07-T1-3 — `./smackerel.sh format --check` EXIT 0. → Evidence: report.md → SCOPE-07 + report.md → Tier-1 Closeout Gates. **MET (2026-06-24 closeout):** `./smackerel.sh format --check` now EXITs 0 ("69 files already formatted"); the previously-foreign `internal/connector/qfdecisions/chaos_hardening_test.go` is now tracked + gofmt-clean tree-wide.
 - [x] D07-T1-4 — Every evidence block in report.md → SCOPE-07 is REAL terminal output (anti-fabrication). → Evidence: report.md → SCOPE-07.
 - [x] D07-T1-5 — 088/089 do-not-amend boundary respected: selection extends the EXISTING validator/store/picker; NO second validator/store/picker is introduced. → Evidence: report.md → Change Manifest.
 
