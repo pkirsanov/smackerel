@@ -7,9 +7,9 @@
   "status": "in_progress",
   "certifiedAt": null,
   "certifiedBy": null,
-  "lastUpdatedAt": "2026-06-24T00:00:00Z",
+  "lastUpdatedAt": "2026-06-24T15:10:00Z",
   "workflowMode": "bugfix-fastlane",
-  "nextRequiredOwner": "bubbles.validate",
+  "nextRequiredOwner": null,
   "fixSequence": [
     {
       "order": 1,
@@ -26,11 +26,11 @@
   ],
   "execution": {
     "activeAgent": null,
-    "currentPhase": "validate",
+    "currentPhase": "audit",
     "currentScope": "scope-1",
     "runStartedAt": "2026-06-16T00:00:00Z",
     "runCompletedAt": null,
-    "completedPhaseClaims": ["bug", "implement"],
+    "completedPhaseClaims": ["bug", "implement", "test", "regression", "security", "validate", "audit"],
     "completedPhaseClaimDetails": [
       {
         "phase": "bug",
@@ -45,16 +45,70 @@
         "timestamp": "2026-06-24T00:00:00Z",
         "claimSource": "executed",
         "summary": "VERIFY-FIRST RECONCILIATION (no re-implementation). The F1 wiring fix was already committed to the working tree (commit eadfada7) by a prior session: cmd/core/wiring_assistant_facade.go calls svc.assistantHTTPHandler.SetMiddleware(httpadapter.PreFacadeChain(transportCfg)); the identity pass-through `func(next http.Handler) http.Handler { return next }` is gone (grep -rn over cmd/ -> 0 matches), the SCOPE-1d placeholder comment is replaced with the PreFacadeChain description, internal/api/router.go:84 comment corrected, and the now-unused net/http import dropped. PreFacadeChain appears in a production path (cmd/core wiring + router.go comment) — reversing bug.md Discovery Evidence [3] which showed zero. Working tree clean (no uncommitted changes). This bubbles.implement pass independently re-verified the committed state GREEN via the sanctioned CLI: ./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose -> 413/429/403/shared-token-200 all PASS, real auth:scope_rejected warning emitted, whole-tree compile, SMACKEREL_UNIT_EXIT=0; plus ./smackerel.sh check=0, ./smackerel.sh lint=0, and the assistant HTTP unit suite GREEN. No code re-written (would be duplicate work); stale-ledger reconciliation only (state.json was never advanced past discovery)."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.iterate",
+        "timestamp": "2026-06-24T14:58:55Z",
+        "claimSource": "executed",
+        "summary": "Re-ran the real-wiring regression on the current committed tree: ./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' --verbose -> all 4 sub-tests PASS (oversized_body 413, per_user_rate_limit 429, missing_turn_scope 403, shared_token 200), real auth:scope_rejected warning emitted, go test ./... finished OK, exit 0. The test drives the production wireAssistantHTTPAdapter seam via in-process httptest (no mocks/route-interception). Evidence: report.md -> 'Re-verification on the current tree' [V-RE1]."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.iterate",
+        "timestamp": "2026-06-24T15:01:00Z",
+        "claimSource": "executed",
+        "summary": "Non-tautological RED->GREEN mutate-prove on the current tree: transiently reverted cmd/core/wiring_assistant_facade.go:329 to the identity wrapper (+ net/http import) -> 413/429/403 sub-tests FAIL with status=200 facade_invoked:true, shared_token-200 still PASS, exit 1; then git restore -> byte-for-byte clean (empty diff), GREEN exit 0. Proves the regression would catch a revert. Broader go test ./... green, no collateral failure. Evidence: report.md [V-RE2] + scopes.md SCN-005."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.iterate",
+        "timestamp": "2026-06-24T15:03:00Z",
+        "claimSource": "executed",
+        "summary": "REAL security phase (HIGH, CWE-400/770). The PreFacadeChain swap composes scope(rate(body(adapter))) so http.MaxBytesReader bounds the body before the adapter's io.ReadAll, closing the authenticated memory-exhaustion DoS on the default-enabled POST /api/assistant/turn. All three controls proven live: 413 (body cap, facade.calls==0), 429 (per-user rate limit, second user unaffected), 403 (assistant:turn scope gate, real auth:scope_rejected event). No new attack surface/secret/egress; no dependency manifest changed (net/http import dropped). Evidence: report.md -> 'Security Evidence' [SEC1]."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.iterate",
+        "timestamp": "2026-06-24T15:06:00Z",
+        "claimSource": "executed",
+        "summary": "Validate-owned certification: fix GREEN on the committed tree, regression non-tautological (RED->GREEN), ./smackerel.sh check exit 0, artifact-lint exit 0, state-transition-guard TRANSITION PERMITTED at done (verbatim verdict in report.md 'Done-flip verification'). Change boundary held (cmd/core wiring + test + one router.go comment only). Evidence: report.md -> 'Validation Evidence'."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.iterate",
+        "timestamp": "2026-06-24T15:08:00Z",
+        "claimSource": "executed",
+        "summary": "Audit: finding closure one-to-one (F1 SCOPE-2 production-wiring gap closed by the PreFacadeChain swap + proven by the real-wiring regression). Anti-fabrication: every command executed; the historical 2026-06-16 RED is permanently re-provable via mutate-prove (re-run 2026-06-24). Principle 10 (QF Companion boundary) unaffected; the scope gate strengthens the existing auth boundary. simplify/stabilize recorded as honest no-op phaseStubs. Evidence: report.md -> 'Audit Evidence'."
       }
     ],
+    "phaseStubs": {
+      "simplify": {
+        "reason": "No-op: the fix is a one-line SetMiddleware argument swap to an already-built, self-contained chain (PreFacadeChain) plus a focused real-wiring regression test. No added abstraction, duplication, or dead code to simplify; the only structural delta beyond the swap is the removal of the now-unused net/http import (strictly reductive).",
+        "justification": "A single-argument wiring swap has no structural complexity surface for simplify to act on."
+      },
+      "stabilize": {
+        "reason": "No-op: the regression is deterministic (in-process httptest, no live stack, no network, no sleep/timing, fresh per-subtest wiring so the httprate limiter state does not bleed) and GREEN. There is no flaky/intermittent behavior, performance, infrastructure, or reliability surface to stabilize.",
+        "justification": "Deterministic in-process Go test; nothing non-deterministic was introduced."
+      }
+    },
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
     "certifiedBy": null,
     "certifiedAt": null,
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "completedScopes": [
+      "Scope 1 — Swap the identity pass-through for PreFacadeChain(transportCfg) and prove 413 / 429 / 403 through the real router"
+    ],
+    "certifiedCompletedPhases": ["bug", "implement", "test", "regression", "security", "validate", "audit"],
+    "scopeProgress": {
+      "total": 1,
+      "notStarted": 0,
+      "inProgress": 0,
+      "done": 1,
+      "blocked": 0
+    },
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -94,6 +148,22 @@
       "outcome": "route_required",
       "nextRequiredOwner": "bubbles.validate",
       "summary": "VERIFY-FIRST reconciliation: the F1 PreFacadeChain wiring fix AND the F2 real-router regression test (cmd/core/wiring_assistant_http_prefacade_regression_test.go) were ALREADY committed (commit eadfada7) and the scopes.md DoD items were already [x] with bubbles.implement/bubbles.test evidence — but state.json was stale (currentPhase discovery, completedPhaseClaims [bug], nextRequiredOwner bubbles.implement). No re-implementation performed (would be duplicate work). Independently re-verified the committed state healthy: (1) cmd/core/wiring_assistant_facade.go SetMiddleware(httpadapter.PreFacadeChain(transportCfg)) present, identity pass-through gone (grep 0 matches), tree clean; (2) ./smackerel.sh test unit --go --go-run 'TestAssistantHTTPPreFacadeChainWiredIntoLiveRoute' -> 413/429/403/shared-token-200 all PASS, real auth:scope_rejected emitted, SMACKEREL_UNIT_EXIT=0; (3) assistant HTTP unit suite (HTTPAdapter|Chaos069|golden-contract|TransportHint|SST-config) all PASS, exit 0; (4) ./smackerel.sh check exit 0; (5) ./smackerel.sh lint exit 0. Reconciled the ledger (added implement phase claim, currentPhase->validate, nextRequiredOwner->bubbles.validate, lastUpdatedAt->2026-06-24). The F2 test-phase DoD is already evidenced in scopes.md and re-verified GREEN here, so the sole remaining step is validate-owned terminal-for-mode (bugfix-fastlane -> done) certification (the one unchecked DoD item); no separate bubbles.test re-run is warranted. status left in_progress; certification.* untouched (validate-owned)."
+    },
+    {
+      "agent": "bubbles.iterate",
+      "phasesExecuted": ["test", "regression", "security", "validate", "audit"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "The bubbles.iterate top-level runtime lacks runSubagent in this session, so the bugfix-fastlane child workflow's test/regression/security/validate/audit phases were parent-expanded and executed inline rather than dispatched to separate specialist subagents.",
+      "expansionEvidenceRef": "report.md",
+      "executionModel": "parent-expanded-child-mode",
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-06-24T14:55:00Z",
+      "runCompletedAt": "2026-06-24T15:10:00Z",
+      "outcome": "completed_owned",
+      "nextRequiredOwner": null,
+      "summary": "Drove BUG-069-001 to terminal-for-mode (bugfix-fastlane -> done). Re-verified the shipped PreFacadeChain wiring GREEN on the committed tree (413/429/403/200, exit 0); proved the regression non-tautological via RED mutate-prove (identity wrapper -> 413/429/403 FAIL exit 1) then byte-for-byte git restore; closed the CWE-400/770 security threat (body cap before io.ReadAll, plus 429 per-user + 403 scope gate); ./smackerel.sh check exit 0; artifact-lint exit 0; state-transition-guard TRANSITION PERMITTED at done. simplify+stabilize recorded as honest no-op phaseStubs. Two-commit G088: planning-truth content commit (scopes.md/report.md/bug.md/state.json in_progress) then state.json done-flip with certifiedAt strictly after."
     }
   ]
 }
