@@ -61,8 +61,8 @@ def resolve_provider_route(model_preference: str) -> tuple[str, str] | None:
     keys = _PROVIDER_ENV_KEYS.get(model_preference)
     if keys is None:
         return None
-    provider = os.environ.get(keys[0], "")
-    model = os.environ.get(keys[1], "")
+    provider = os.environ.get(keys[0])
+    model = os.environ.get(keys[1])
     if not provider or not model:
         return None
     return provider, model
@@ -105,7 +105,7 @@ def resolve_ollama_determinism_options() -> dict[str, Any]:
         ("OLLAMA_TEST_REQUEST_NUM_PREDICT", "num_predict", int),
     )
     for env_key, kwarg_name, parser in spec:
-        raw = os.environ.get(env_key, "")
+        raw = os.environ.get(env_key)
         if not raw:
             continue
         try:
@@ -278,7 +278,7 @@ async def handle_invoke(
 
     api_key = None
     if provider != "ollama":
-        api_key = os.environ.get("LLM_API_KEY") or os.environ.get(f"{provider.upper()}_API_KEY", "")
+        api_key = os.environ.get("LLM_API_KEY") or os.environ.get(f"{provider.upper()}_API_KEY") or ""
 
     # Spec 043 — overlay Ollama determinism knobs (top_p, top_k, seed,
     # num_predict, temperature) sourced from OLLAMA_TEST_REQUEST_* env
