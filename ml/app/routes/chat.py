@@ -423,7 +423,6 @@ def _build_chat_response(response: Any) -> ChatResponse:
     )
 
 
-
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     mode = request.headers.get(_TEST_MODE_HEADER, "").strip().lower()
