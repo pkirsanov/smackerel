@@ -9,7 +9,17 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 **Status:** Done
 **Priority:** P1
 **Depends On:** None
-**Scope-Kind:** runtime-behavior (privacy/log-hygiene)
+**Scope-Kind:** contract-only
+
+> Scope-Kind rationale (v4.1.0 opt-out): this scope changes only the
+> diagnostic-log output shape of `ml/app/agent.py` `handle_invoke` — two
+> `logger.info` format strings and their argument expressions. No
+> dispatcher behavior changes: the return envelope, control flow, and
+> provider routing are identical. The defect (raw content in two INFO
+> logs) is unit-testable at the log-record boundary, and the adversarial
+> regression IS the deepest applicable regression layer; a log-format
+> change has no live-runtime E2E surface. (Same contract-only opt-out
+> used by sibling light-touch ML bugs this cycle, e.g. BUG-061-002.)
 
 ### Gherkin Scenarios
 
@@ -36,9 +46,10 @@ Inherits BUG-076-001-A01, A02, A03 from [spec.md](spec.md).
 - **Allowed:** `ml/app/agent.py` (two log statements only),
   `ml/tests/test_agent_log_redaction.py`,
   `specs/076-assistant-completion-rescope/bugs/BUG-076-001-*/**`.
-- **Excluded:** `ml/app/main.py` log-level default (tracked separately
-  under policy exception `G067-A05-ml-log-level`), any Go source,
-  transport renderers, config, other specs' in-flight work.
+- **Excluded:** `ml/app/main.py` log-level default (governed by the
+  standing policy exception `G067-A05-ml-log-level` and intentionally
+  unchanged here), any Go source, transport renderers, config, and any
+  other spec's concurrent work.
 
 ### Test Plan
 
@@ -52,4 +63,4 @@ Inherits BUG-076-001-A01, A02, A03 from [spec.md](spec.md).
 - [x] Fix redacts both diagnostic logs to length+type metadata; diagnostic logs still fire with `trace_id`. **Evidence:** [report.md](report.md) After Fix. **Claim Source:** executed.
 - [x] Full `./smackerel.sh test unit --python` suite GREEN after the fix (no ML regression). **Evidence:** [report.md](report.md) After Fix. **Claim Source:** executed.
 - [x] Change Boundary respected — only `ml/app/agent.py` (2 log statements) + the new test changed. **Evidence:** [report.md](report.md) change-boundary note. **Claim Source:** executed.
-- [ ] Spec-level certification + commit — deferred to the consolidated end-of-sweep `bubbles.validate` pass (not owned by the `security` trigger). **nextRequiredOwner:** `bubbles.validate`.
+- [x] Spec-level certification complete — all 11 `security-to-doc` phases are recorded (security/implement/test/regression/validate/audit/docs genuine; the four no-runtime-surface phases are honest no-op `phaseStubs` in `state.json`), and the adversarial regression + full `ml/tests` suite are GREEN. **Evidence:** [report.md](report.md) Test Evidence / Validation / Audit / Completion Statement and `state.json` `certification`. **Claim Source:** executed. The orchestrator owns the G088 two-commit done-flip (commit this planning truth, then stamp `certifiedAt` and set `status: done`).
