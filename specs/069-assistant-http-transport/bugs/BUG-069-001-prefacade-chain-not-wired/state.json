@@ -4,10 +4,10 @@
   "parentFeatureDir": "specs/069-assistant-http-transport",
   "featureName": "BUG-069-001: spec 069 SCOPE-2 pre-facade middleware chain (httpadapter.PreFacadeChain) is built + isolated-tested but never wired into the live POST /api/assistant/turn route — cmd/core/wiring_assistant_facade.go:314 installs an identity pass-through, so the default-enabled endpoint runs an unbounded io.ReadAll (CWE-400/770) with no body-size cap, no per-user rate limit, and no assistant:turn scope-claim gate, while state.json certifies SCOPE-2 done",
   "bugId": "BUG-069-001",
-  "status": "in_progress",
-  "certifiedAt": null,
-  "certifiedBy": null,
-  "lastUpdatedAt": "2026-06-24T15:10:00Z",
+  "status": "done",
+  "certifiedAt": "2026-06-24T15:27:00Z",
+  "certifiedBy": "bubbles.iterate",
+  "lastUpdatedAt": "2026-06-24T15:27:00Z",
   "workflowMode": "bugfix-fastlane",
   "nextRequiredOwner": null,
   "fixSequence": [
@@ -95,9 +95,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "certifiedBy": null,
-    "certifiedAt": null,
+    "status": "done",
+    "certifiedBy": "bubbles.iterate",
+    "certifiedAt": "2026-06-24T15:27:00Z",
     "completedScopes": [
       "Scope 1 — Swap the identity pass-through for PreFacadeChain(transportCfg) and prove 413 / 429 / 403 through the real router"
     ],
