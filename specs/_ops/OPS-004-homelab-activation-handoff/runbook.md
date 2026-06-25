@@ -347,23 +347,31 @@ git push origin v<x.y.z>
 
 ## Appendix — Out-of-knb Follow-up (in-repo cert matter, NOT this handoff)
 
-These 5 bugs are **fix-complete + verified-green in-repo** but still
-`in_progress` because the `state-transition-guard` **G022 done-cert pipeline was
-never run** (light-touch fixes). They are an **in-repo framework-cert matter —
-NOT a knb / home-lab deploy** — and are listed only so nothing falls through:
+These 5 bugs were **fix-complete + verified-green in-repo** but, at authoring,
+still `in_progress` because the `state-transition-guard` **G022 done-cert
+pipeline had not been run** (light-touch fixes). They are an **in-repo
+framework-cert matter — NOT a knb / home-lab deploy** — and are listed only so
+nothing falls through.
 
-| Bug | Nature |
-|-----|--------|
-| **BUG-034-004** | expense-rows err unchecked (light-touch fix) |
-| **BUG-076-001** | ML agent logs raw conversational content (light-touch fix) |
-| **BUG-095-001** | route-guard compiler provenance (light-touch fix) |
-| **BUG-073-003** | canary CI toolchain gating (light-touch fix) |
-| **BUG-077-002** | (spec 077 light-touch fix) |
+> **Reconciliation (2026-06-25):** 4 of the 5 have since reached
+> `status: "done"` in committed state.json (verified per packet); only
+> **BUG-077-002** (spec 077 / `BUG-002`) remains `in_progress`. The home-lab
+> handoff is unaffected — this was always an in-repo cert matter, not a deploy
+> gate.
 
-**Resolution path (in-repo, not here):** run a real
-`bubbles.workflow bugfix-fastlane` certification for each (so the G022 done-cert
-pipeline executes and flips status to terminal), OR explicitly accept them as
-cert-deferred. Either way it is **out of scope for this home-lab handoff**.
+| Bug | Nature | Status (2026-06-25) |
+|-----|--------|---------------------|
+| **BUG-034-004** | expense-rows err unchecked (light-touch fix) | `done` |
+| **BUG-076-001** | ML agent logs raw conversational content (light-touch fix) | `done` |
+| **BUG-095-001** | route-guard compiler provenance (light-touch fix) | `done` |
+| **BUG-073-003** | canary CI toolchain gating (light-touch fix) | `done` |
+| **BUG-077-002** | spec 077 / `BUG-002` (e2e-ui login rate-limit session reuse) | `in_progress` (still open) |
+
+**Resolution path (in-repo, not here):** the one remaining bug
+(**BUG-077-002**) still needs a real `bubbles.workflow bugfix-fastlane`
+certification (so the G022 done-cert pipeline executes and flips status to
+terminal), OR an explicit cert-deferred acceptance. Either way it is **out of
+scope for this home-lab handoff**.
 
 ---
 
