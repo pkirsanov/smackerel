@@ -6,6 +6,8 @@ version: 1
 defaults:
   retention: "7d-daily,4w-weekly,12m-monthly"
   pii: "encrypted-only" # Smackerel ingests personal knowledge; treat as PII-sensitive
+  # Cross-ref: config/upkeep-calendar.yaml bcdr-drill (requires_offsite_backend: true)
+  # stays dormant while this is false; G114/G116 warn, not block. Flip true after provisioning T3/T4.
   offsite_required: false # WARN today (RAID5). Flip when T3/T4 ready.
 
 trains:
