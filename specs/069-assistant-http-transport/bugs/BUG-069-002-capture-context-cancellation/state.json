@@ -5,6 +5,7 @@
   "featureName": "BUG-069-002: assistant HTTP capture-as-fallback is bound to the request context (r.Context()), so a client disconnect during a CaptureRoute=true turn cancels the durable capture write (Postgres INSERT + NATS publish, both ctx-honoring) and silently loses the user's prompt — violating the inviolable capture-as-fallback contract (Hard Constraint 5 / BS-001)",
   "bugId": "BUG-069-002",
   "status": "in_progress",
+  "releaseTrain": "mvp",
   "certifiedAt": null,
   "certifiedBy": null,
   "lastUpdatedAt": "2026-06-17T00:00:00Z",
