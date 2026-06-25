@@ -4,6 +4,7 @@
   "featureNumber": "088",
   "featureName": "Runtime-Switchable Models",
   "status": "blocked",
+  "releaseTrain": "next",
   "certifiedAt": null,
   "certifiedBy": null,
   "lastUpdatedAt": "2026-06-14T03:10:00Z",
