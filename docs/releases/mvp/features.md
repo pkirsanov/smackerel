@@ -89,7 +89,7 @@ All capabilities below were certified `done` (or equivalent terminal-for-mode) b
 | Notification intelligence handler (baseline) | 054 | delivered |
 | Notification source ntfy adapter | 055 | delivered |
 | Twitter API connector | 056 | delivered |
-| Browser login redirect | 057 | delivered (`done_with_concerns` — see [`actions.md`](actions.md)) |
+| Browser login redirect | 057 | delivered (`done`) |
 | Chrome extension bridge | 058 | deferred → release-v1 (now `blocked` on an operator-owned cosign CI release — see MVP item M5b / [`actions.md`](actions.md)) |
 | Google Keep live mode | 059 | delivered |
 | Conversational assistant + open-ended knowledge agent (delivers the knowledge-AI enrichment capability) | 061, 064 | delivered |

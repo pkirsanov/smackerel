@@ -132,12 +132,15 @@ today only DEV-stack SLO evidence exists:
 
 ## Out-of-knb Follow-up (note for completeness — NOT this handoff)
 
-A short appendix in the runbook lists 5 bugs that are **fix-complete +
-verified-green in-repo** but still `in_progress` because the
-`state-transition-guard` G022 done-cert pipeline was never run (light-touch
+A short appendix in the runbook lists 5 bugs that were **fix-complete +
+verified-green in-repo** but, at authoring, still `in_progress` because the
+`state-transition-guard` G022 done-cert pipeline had not been run (light-touch
 fixes): **BUG-034-004, BUG-076-001, BUG-095-001, BUG-073-003, BUG-077-002**.
-These are an **in-repo framework-cert matter (not knb / not home-lab)** and are
-listed only so nothing falls through. See
+**Reconciliation (2026-06-25):** 4 of the 5 have since reached `status: "done"`
+in committed state.json — **BUG-034-004, BUG-073-003, BUG-076-001,
+BUG-095-001**; only **BUG-077-002** (spec 077 / `BUG-002`) remains
+`in_progress`. These are an **in-repo framework-cert matter (not knb / not
+home-lab)** and are listed only so nothing falls through. See
 [`runbook.md` → Out-of-knb Follow-up](runbook.md#appendix--out-of-knb-follow-up-in-repo-cert-matter-not-this-handoff).
 
 ---
