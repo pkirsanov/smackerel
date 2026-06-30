@@ -34,6 +34,7 @@ The repository now exposes a sanctioned CLI-owned runtime test surface for the f
 |-----------|---------|---------------|
 | Go + Python unit | `./smackerel.sh test unit` | Runtime code changes |
 | Integration | `./smackerel.sh test integration` | Runtime lifecycle or health changes |
+| Integration (stores-only, light) | `./smackerel.sh test integration-light` | Integration tests needing ONLY postgres+nats (in-process Go against the stores); LIGHT preflight floor (2000 MB / 8 GB) |
 | End-to-end | `./smackerel.sh test e2e` | Runtime, compose, or config changes |
 | End-to-end UI (PWA browser) | `./smackerel.sh test e2e-ui` | PWA `.spec.ts` under `web/pwa/tests/` changes, login/auth UI, CSP, or served-route shape changes |
 | Stress smoke | `./smackerel.sh test stress` | Runtime health, lifecycle, or stress env handoff changes |
@@ -52,10 +53,31 @@ The current CLI-owned runtime surface exposes these categories today:
 | Go unit | `unit` | `./smackerel.sh test unit --go` |
 | Python unit | `unit` | `./smackerel.sh test unit --python` |
 | Integration | `integration` | `./smackerel.sh test integration` |
+| Integration (stores-only, light) | `integration-light` | `./smackerel.sh test integration-light` |
 | End-to-end API | `e2e-api` | `./smackerel.sh test e2e` |
 | End-to-end UI | `e2e-ui` | `./smackerel.sh test e2e` (web UI paths included) |
 | End-to-end UI (PWA browser) | `e2e-ui` | `./smackerel.sh test e2e-ui` |
 | Stress | `stress` | `./smackerel.sh test stress` |
+
+### Stores-Only Integration-Light Lane (`test integration-light`, OPS-005 F-RUNBOOK)
+
+`./smackerel.sh test integration-light [--go-run <regex>]` is a fast, low-RAM
+sibling of `test integration` for integration tests that need ONLY the two
+durable stores — postgres + nats — exercised in-process by Go (e.g. a
+`pipeline.Processor` writing to Postgres + publishing to NATS). It brings up
+ONLY postgres + nats from the generated test stack: **NO core/ml image build,
+NO `ml_sidecar` health gate**. The two stores are health-gated via their compose
+healthchecks (postgres `pg_isready` + `SELECT 1`; nats `/healthz`), and the
+stack is torn down on ANY exit (success or failure) by the lane's teardown trap.
+
+- **Resource floor (LIGHT profile):** gated FIRST by the LIGHT preflight pair
+  `PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT` / `PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT`
+  = **2000 MB / 8 GB** (vs the heavy lane's 6000 MB / 15 GB). On a host below the
+  floor the lane refuses cleanly and starts NO stack.
+- **When to use the heavy lane instead:** tests that need `smackerel-core` or
+  `smackerel-ml` (HTTP endpoints, the `ml_sidecar`, core-created JetStream
+  streams, or core-applied DB migrations) MUST use the heavy
+  `./smackerel.sh test integration`.
 
 ### PWA Browser e2e-ui Harness (Spec 077)
 

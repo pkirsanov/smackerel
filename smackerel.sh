@@ -51,6 +51,7 @@ Commands:
   package extension           Package browser extension for Chrome and Firefox distribution
   test unit [--go|--python] [--go-run <regex>] [--verbose]   Run unit tests; --go-run / --verbose require --go and apply focused subtest selection
   test integration [--go-run <regex>] Run live-stack integration validation; optionally run only matching Go integration tests
+  test integration-light [--go-run <regex>] Stores-only (postgres+nats) live integration lane; LIGHT preflight floor, no core/ml build or ml_sidecar gate. Optionally run only matching Go integration tests
   test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
   test stress [--go-run <regex>] Run live-stack stress smoke test; optionally run only matching Go stress tests
   test e2e-ui [--help|--print-compose-project] Run PWA browser end-to-end UI tests via Playwright against the disposable
@@ -446,35 +447,44 @@ while True:
 PY
 }
 
-smackerel_assert_host_resources() {
-  # Spec 099 — local resource pre-flight. Before a heavy op (build, up,
-  # test integration|e2e|e2e-ui|stress) verify host MemAvailable + repo-fs
-  # available disk meet the SST minimums (config/smackerel.yaml
-  # runtime.preflight.* -> generated env PREFLIGHT_MIN_AVAILABLE_*). The Go
-  # evaluator (cmd/preflight -> internal/preflight) exits non-zero when below
-  # threshold, printing current-vs-required + remediation; that aborts the
-  # heavy op BEFORE it can OOM-die (exit 137) or fill the disk. Set
-  # SMACKEREL_PREFLIGHT_OVERRIDE=1 to bypass with a loud WARNING.
+smackerel_assert_host_resources_profile() {
+  # Spec 099 — local resource pre-flight, profile-aware core. Before a gated
+  # op verify host MemAvailable + repo-fs available disk meet the SST minimums
+  # for the requested profile (config/smackerel.yaml runtime.preflight.* ->
+  # generated env PREFLIGHT_MIN_AVAILABLE_*[_LIGHT]). The Go evaluator
+  # (cmd/preflight -> internal/preflight) exits non-zero when below threshold,
+  # printing current-vs-required + remediation; that aborts the op BEFORE it
+  # can OOM-die (exit 137) or fill the disk. Set SMACKEREL_PREFLIGHT_OVERRIDE=1
+  # to bypass with a loud WARNING.
   #
   # Primary path: host-native `go run` (fast, no container; real /proc/meminfo
   # + statfs on the real repo path). Fallback (no host Go): the dockerized
   # golang runner — host-correct because run_go_tooling sets NO --memory cgroup
   # limit (so /proc/meminfo reports HOST MemAvailable) and bind-mounts the repo
   # at /workspace (so statfs follows to the HOST repo filesystem).
+  #
+  # Both args are required (NO-DEFAULTS): the caller MUST name the env AND the
+  # threshold profile (heavy|light); preflight.sh / cmd/preflight reject a
+  # missing profile — there is no hidden default.
   local target_env="$1"
+  local profile="$2"
   local status=0
-  # Every current caller of this helper gates a HEAVY op (build, up,
-  # integration|e2e|e2e-ui|stress, pre-flight), so the profile is pinned to
-  # `heavy` here — this preserves the existing thresholds exactly. The light
-  # profile is consumed by the forthcoming stores-only integration-light lane,
-  # which will invoke cmd/preflight with --profile light directly.
   if command -v go >/dev/null 2>&1; then
-    ( cd "$SCRIPT_DIR" && go run ./cmd/preflight --env "$target_env" --repo-root "$SCRIPT_DIR" --profile heavy ) || status=$?
+    ( cd "$SCRIPT_DIR" && go run ./cmd/preflight --env "$target_env" --repo-root "$SCRIPT_DIR" --profile "$profile" ) || status=$?
   else
     require_docker
-    run_go_tooling /workspace/scripts/runtime/preflight.sh "$target_env" heavy || status=$?
+    run_go_tooling /workspace/scripts/runtime/preflight.sh "$target_env" "$profile" || status=$?
   fi
   return "$status"
+}
+
+smackerel_assert_host_resources() {
+  # Heavy back-compat wrapper. Every existing caller (build, up,
+  # integration|e2e|e2e-ui|stress, pre-flight) gates a HEAVY op, so the profile
+  # is pinned to `heavy` here — this preserves the existing thresholds exactly.
+  # The stores-only integration-light lane calls
+  # smackerel_assert_host_resources_profile <env> light directly.
+  smackerel_assert_host_resources_profile "$1" heavy
 }
 
 smackerel_prepare_test_stack_for_up() {
@@ -1100,6 +1110,116 @@ case "$COMMAND" in
           echo "FAIL: go-integration (exit=${go_integration_status})"
         fi
         exit "$go_integration_status"
+        ;;
+      integration-light)
+        # OPS-005 F-RUNBOOK — stores-only ("light") integration lane. Brings up
+        # ONLY postgres + nats (NO core/ml image build, NO ml_sidecar gate) and
+        # runs the selected Go integration test in-process against the two
+        # durable stores. Gated by the LIGHT preflight floor
+        # (PREFLIGHT_MIN_AVAILABLE_*_LIGHT) so it runs on a host too small for
+        # the heavy `test integration` lane. Tests that need core/ml MUST use
+        # `test integration`.
+        GO_INTEGRATION_LIGHT_RUN_SELECTOR=""
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --go-run)
+              if [[ $# -lt 2 ]] || [[ -z "$2" ]]; then
+                echo "ERROR: --go-run requires a non-empty regex" >&2
+                exit 1
+              fi
+              GO_INTEGRATION_LIGHT_RUN_SELECTOR="$2"
+              shift 2
+              ;;
+            --go-run=*)
+              GO_INTEGRATION_LIGHT_RUN_SELECTOR="${1#*=}"
+              if [[ -z "$GO_INTEGRATION_LIGHT_RUN_SELECTOR" ]]; then
+                echo "ERROR: --go-run requires a non-empty regex" >&2
+                exit 1
+              fi
+              shift
+              ;;
+            *)
+              echo "Unknown test integration-light option: $1" >&2
+              exit 1
+              ;;
+          esac
+        done
+        go_integration_light_args=()
+        if [[ -n "$GO_INTEGRATION_LIGHT_RUN_SELECTOR" ]]; then
+          go_integration_light_args+=(--run "$GO_INTEGRATION_LIGHT_RUN_SELECTOR")
+        fi
+        smackerel_acquire_test_suite_lock test "integration-light"
+        require_docker
+        smackerel_generate_config test >/dev/null
+        env_file="$(smackerel_require_env_file test)"
+        # LIGHT preflight FIRST — if the host is short on RAM/disk this REFUSES
+        # cleanly (prints current-vs-required + remediation) and NO stack is
+        # started. A clean refusal here is the lane gating correctly, NOT a
+        # failure.
+        smackerel_assert_host_resources_profile test light
+        pg_container_port="$(smackerel_env_value "$env_file" "POSTGRES_CONTAINER_PORT")"
+        nats_container_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_PORT")"
+        auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
+        pg_user="$(smackerel_env_value "$env_file" "POSTGRES_USER")"
+        pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
+        pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
+        compose_network="$(smackerel_compose_project test)_default"
+
+        # Orchestrator owns the stores-only stack lifecycle so the Go runner
+        # sees a live pg+nats stack. KEEP_STACK_UP=1 is explicit because the
+        # trap below owns final teardown regardless of test outcome (defense in
+        # depth with the trap inside test_runtime_health_light.sh).
+        integration_light_cleanup() {
+          local cleanup_status=0
+
+          echo "Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)..."
+          timeout --kill-after=20s 120 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || cleanup_status=$?
+          if [[ "$cleanup_status" -ne 0 ]]; then
+            echo "ERROR: integration-light stack teardown failed during exit cleanup (exit ${cleanup_status})." >&2
+            return "$cleanup_status"
+          fi
+          return 0
+        }
+        integration_light_cleanup_trap() {
+          local status=$?
+          local cleanup_status=0
+
+          trap - EXIT
+          integration_light_cleanup || cleanup_status=$?
+          if [[ "$status" -eq 0 && "$cleanup_status" -ne 0 ]]; then
+            exit "$cleanup_status"
+          fi
+          exit "$status"
+        }
+        trap integration_light_cleanup_trap EXIT
+
+        # Bring up ONLY postgres + nats + health-gate on the two stores.
+        timeout --kill-after=30s 240 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health_light.sh"
+
+        # Run the selected Go integration test against the live pg+nats stack.
+        # Stores-only env subset: the heavy lane also injects core/ml/searxng +
+        # agent-scenario wiring; a stores-only test needs only the two stores.
+        set +e
+        docker run --rm \
+          --network "$compose_network" \
+          -v "$SCRIPT_DIR:/workspace" \
+          -v smackerel-gomod-cache:/go/pkg/mod \
+          -v smackerel-gobuild-cache:/root/.cache/go-build \
+          -w /workspace \
+          --env-file "$env_file" \
+          -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+          -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+          -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
+          -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+          golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh "${go_integration_light_args[@]}"
+        go_integration_light_status=$?
+        set -e
+        if [[ "$go_integration_light_status" -eq 0 ]]; then
+          echo "PASS: go-integration-light"
+        else
+          echo "FAIL: go-integration-light (exit=${go_integration_light_status})"
+        fi
+        exit "$go_integration_light_status"
         ;;
       e2e)
         GO_E2E_RUN_SELECTOR=""

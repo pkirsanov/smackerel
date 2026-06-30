@@ -160,3 +160,22 @@ packet and is out of scope here (folded into the final go-live validation sweep)
 
 - **BUG-069-003** (`/api/capture` durability) — already FIXED + committed under
   its own bug packet; not re-addressed here.
+
+---
+
+## Related Follow-On — F-RUNBOOK (resolved 2026-06-30)
+
+> Reference note only; OPS-005 status is unchanged (`done`). Recorded here for
+> traceability — NOT reopened as an OPS-005 line item.
+
+**F-RUNBOOK** (the readiness-sweep runbook gap: no fast, low-RAM way to exercise
+an integration test against ONLY the durable stores — every `test integration`
+run forced a full core+ml build+up that OOM-refuses on a small host) is
+**resolved** by the new stores-only `./smackerel.sh test integration-light` lane:
+it brings up ONLY postgres + nats, gates FIRST on the LIGHT preflight floor
+(`PREFLIGHT_MIN_AVAILABLE_*_LIGHT` = 2000 MB / 8 GB), and runs a
+`--go-run`-selected Go integration test in-process against the two stores, with a
+teardown trap that tears the two stores down on ANY exit. See
+[`docs/Development.md`](../../../docs/Development.md) and
+[`docs/Testing.md`](../../../docs/Testing.md). Tests that need core/ml continue to
+use the heavy `test integration` lane.
