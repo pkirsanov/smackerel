@@ -143,6 +143,18 @@ preflight, adding the resource dimension.
   generated env files as `PREFLIGHT_MIN_AVAILABLE_RAM_MB` /
   `PREFLIGHT_MIN_AVAILABLE_DISK_GB`. A missing/empty key fails loud naming it
   (NO-DEFAULTS / Gate G028) — there is no hidden code default.
+- **Profiles (`heavy` | `light`):** `cmd/preflight --profile <heavy|light>`
+  (and `scripts/runtime/preflight.sh <env> <profile>`) selects WHICH SST pair
+  is enforced — there is no implicit default, the caller MUST choose. `heavy`
+  (the only profile wired today) reads `PREFLIGHT_MIN_AVAILABLE_RAM_MB` /
+  `_DISK_GB` and gates `build`, `up`, and `test integration|e2e|e2e-ui|stress`.
+  `light` reads the lower `PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT` /
+  `_DISK_GB_LIGHT` pair (SST keys `min_available_ram_mb_light` /
+  `min_available_disk_gb_light`) and is reserved for the forthcoming
+  stores-only `integration-light` lane (postgres + nats only, no core/ml
+  build). The `*_LIGHT` keys are an independent fail-loud pair — a missing/
+  empty/non-positive `*_LIGHT` key fails loud naming that exact key, never a
+  relaxation default of the heavy keys.
 - **Override:** `SMACKEREL_PREFLIGHT_OVERRIDE=1` bypasses the gate and proceeds
   with a loud `WARNING` (never silently).
 - **Evaluation logic:** Go (`cmd/preflight` + `internal/preflight`), unit-tested,

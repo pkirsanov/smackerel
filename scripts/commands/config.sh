@@ -755,6 +755,11 @@ COMPOSE_WAIT_TIMEOUT_S="$(required_value runtime.compose_wait_timeout_s)"
 # the generated env file (smackerel_assert_host_resources).
 PREFLIGHT_MIN_AVAILABLE_RAM_MB="$(required_value runtime.preflight.min_available_ram_mb)"
 PREFLIGHT_MIN_AVAILABLE_DISK_GB="$(required_value runtime.preflight.min_available_disk_gb)"
+# LIGHT profile thresholds for the stores-only integration-light lane
+# (cmd/preflight --profile light). Second fail-loud pair; never a default of
+# the heavy keys (Gate G028 / NO-DEFAULTS).
+PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT="$(required_value runtime.preflight.min_available_ram_mb_light)"
+PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT="$(required_value runtime.preflight.min_available_disk_gb_light)"
 DIGEST_CRON="$(required_value runtime.digest_cron)"
 EMBEDDING_MODEL="$(required_value runtime.embedding_model)"
 LOG_LEVEL="$(required_value runtime.log_level)"
@@ -1921,6 +1926,8 @@ HOST_BIND_ADDRESS=${HOST_BIND_ADDRESS}
 COMPOSE_WAIT_TIMEOUT_S=${COMPOSE_WAIT_TIMEOUT_S}
 PREFLIGHT_MIN_AVAILABLE_RAM_MB=${PREFLIGHT_MIN_AVAILABLE_RAM_MB}
 PREFLIGHT_MIN_AVAILABLE_DISK_GB=${PREFLIGHT_MIN_AVAILABLE_DISK_GB}
+PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT=${PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT}
+PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT=${PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT}
 OLLAMA_URL=${OLLAMA_URL}
 OLLAMA_MODEL=${OLLAMA_MODEL}
 OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL}

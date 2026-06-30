@@ -15,6 +15,16 @@ func validEnv(ramMB, diskGB string) map[string]string {
 	}
 }
 
+// validLightEnv returns a minimal env map carrying ONLY the two required
+// *_LIGHT threshold keys, used to prove the light profile reads its own keys
+// and never falls through to the heavy keys.
+func validLightEnv(ramMB, diskGB string) map[string]string {
+	return map[string]string{
+		EnvKeyMinRAMMBLight:  ramMB,
+		EnvKeyMinDiskGBLight: diskGB,
+	}
+}
+
 // --- Evaluate (pure comparison) -------------------------------------------
 
 func TestEvaluate_AtOrAboveThreshold(t *testing.T) {
@@ -113,6 +123,103 @@ func TestParseThresholds_NonPositiveFailsLoud(t *testing.T) {
 	}
 }
 
+// --- ParseProfile (fail-loud, NO-DEFAULTS) ---------------------------------
+
+func TestParseProfile_Valid(t *testing.T) {
+	for in, want := range map[string]Profile{"heavy": ProfileHeavy, "light": ProfileLight} {
+		got, err := ParseProfile(in)
+		if err != nil {
+			t.Fatalf("ParseProfile(%q) unexpected error: %v", in, err)
+		}
+		if got != want {
+			t.Fatalf("ParseProfile(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Adversarial: empty and unknown profiles MUST fail loud — there is no implicit
+// default, so the caller's choice is mandatory. A silent default would make
+// this test pass with a bogus value.
+func TestParseProfile_EmptyOrUnknownFailsLoud(t *testing.T) {
+	for _, bad := range []string{"", "HEAVY", "Light", "medium", "default", "stores"} {
+		got, err := ParseProfile(bad)
+		if err == nil {
+			t.Fatalf("ParseProfile(%q) = %q, expected fail-loud error (silent default?)", bad, got)
+		}
+	}
+}
+
+// --- ParseThresholdsForProfile (per-profile key selection, fail-loud) ------
+
+func TestParseThresholdsForProfile_LightReadsLightKeys(t *testing.T) {
+	// The light profile reads ONLY the *_LIGHT keys.
+	th, err := ParseThresholdsForProfile(validLightEnv("2000", "8"), ProfileLight)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if th.MinAvailableRAMMB != 2000 || th.MinAvailableDiskGB != 8 {
+		t.Fatalf("light thresholds not read from the *_LIGHT keys: %+v", th)
+	}
+
+	// Heavy keys alone (no *_LIGHT present) MUST fail the light profile, naming
+	// a LIGHT key — proving light never falls through to the heavy keys.
+	_, err = ParseThresholdsForProfile(validEnv("6000", "15"), ProfileLight)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBLight) {
+		t.Fatalf("light profile must read %q (not the heavy keys); got: %v", EnvKeyMinRAMMBLight, err)
+	}
+}
+
+func TestParseThresholdsForProfile_HeavyReadsHeavyKeys(t *testing.T) {
+	// Symmetry guard: the heavy profile reads the heavy keys; a *_LIGHT-only env
+	// MUST fail the heavy profile naming a heavy key.
+	th, err := ParseThresholdsForProfile(validEnv("6000", "15"), ProfileHeavy)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if th.MinAvailableRAMMB != 6000 || th.MinAvailableDiskGB != 15 {
+		t.Fatalf("heavy thresholds wrong: %+v", th)
+	}
+	_, err = ParseThresholdsForProfile(validLightEnv("2000", "8"), ProfileHeavy)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMB) {
+		t.Fatalf("heavy profile must read %q; got: %v", EnvKeyMinRAMMB, err)
+	}
+}
+
+// Adversarial: a missing *_LIGHT key MUST fail loud naming THAT EXACT key —
+// never a silent default, never a fall-through to the heavy key.
+func TestParseThresholdsForProfile_LightMissingKeyFailsLoud(t *testing.T) {
+	// Missing light RAM key (light disk present).
+	_, err := ParseThresholdsForProfile(map[string]string{EnvKeyMinDiskGBLight: "8"}, ProfileLight)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBLight) {
+		t.Fatalf("expected fail-loud naming %q, got: %v", EnvKeyMinRAMMBLight, err)
+	}
+	// Missing light disk key (light RAM present).
+	_, err = ParseThresholdsForProfile(map[string]string{EnvKeyMinRAMMBLight: "2000"}, ProfileLight)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinDiskGBLight) {
+		t.Fatalf("expected fail-loud naming %q, got: %v", EnvKeyMinDiskGBLight, err)
+	}
+}
+
+func TestParseThresholdsForProfile_LightEmptyOrNonPositiveFailsLoud(t *testing.T) {
+	// Empty light RAM value.
+	_, err := ParseThresholdsForProfile(validLightEnv("", "8"), ProfileLight)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBLight) {
+		t.Fatalf("expected fail-loud naming %q for empty value, got: %v", EnvKeyMinRAMMBLight, err)
+	}
+	// Non-positive light disk value.
+	for _, bad := range []string{"0", "-5"} {
+		_, err = ParseThresholdsForProfile(validLightEnv("2000", bad), ProfileLight)
+		if err == nil || !strings.Contains(err.Error(), EnvKeyMinDiskGBLight) {
+			t.Fatalf("expected fail-loud naming %q for value %q, got: %v", EnvKeyMinDiskGBLight, bad, err)
+		}
+	}
+	// Non-numeric light RAM value.
+	_, err = ParseThresholdsForProfile(validLightEnv("plenty", "8"), ProfileLight)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBLight) {
+		t.Fatalf("expected fail-loud naming %q for non-numeric value, got: %v", EnvKeyMinRAMMBLight, err)
+	}
+}
+
 // --- Run (decision path + exit code + override) ----------------------------
 
 func TestPreflightRun_AtOrAboveThresholdExitsZero(t *testing.T) {
@@ -165,6 +272,89 @@ func TestPreflightRun_MissingKeyReturnsError(t *testing.T) {
 		Resources{AvailableRAMMB: 12000, AvailableDiskMB: 100 * 1024}, false)
 	if err == nil || !strings.Contains(err.Error(), EnvKeyMinDiskGB) {
 		t.Fatalf("expected fail-loud error naming %q, got: %v", EnvKeyMinDiskGB, err)
+	}
+}
+
+// --- RunForProfile (light applies the light thresholds) --------------------
+
+// The decisive profile test: resources that sit BELOW the heavy floor but AT/
+// above the light floor MUST pass under light and FAIL under heavy. This proves
+// the light thresholds — not the heavy ones — were actually applied.
+func TestRunForProfile_LightUsesLightThresholds(t *testing.T) {
+	env := map[string]string{
+		EnvKeyMinRAMMB:       "6000",
+		EnvKeyMinDiskGB:      "15",
+		EnvKeyMinRAMMBLight:  "2000",
+		EnvKeyMinDiskGBLight: "8",
+	}
+	res := Resources{AvailableRAMMB: 2500, AvailableDiskMB: 10 * 1024}
+
+	report, code, err := RunForProfile(env, res, false, ProfileLight)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("light profile must pass above the light floor, got exit %d\n%s", code, report)
+	}
+
+	_, heavyCode, err := RunForProfile(env, res, false, ProfileHeavy)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if heavyCode != 1 {
+		t.Fatalf("heavy profile must fail for the same below-heavy resources, got exit %d", heavyCode)
+	}
+}
+
+func TestRunForProfile_LightBelowLightFloorExitsOne(t *testing.T) {
+	report, code, err := RunForProfile(validLightEnv("2000", "8"),
+		Resources{AvailableRAMMB: 1999, AvailableDiskMB: 8 * 1024}, false, ProfileLight)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != 1 {
+		t.Fatalf("expected exit 1 below the light floor, got %d", code)
+	}
+	for _, want := range []string{"BELOW THRESHOLD", "1999", "2000"} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("report missing %q; got:\n%s", want, report)
+		}
+	}
+}
+
+// Light profile with only the heavy keys present MUST fail loud naming a LIGHT
+// key — the heavy back-compat path must not mask the light requirement.
+func TestRunForProfile_LightMissingKeyReturnsError(t *testing.T) {
+	_, _, err := RunForProfile(validEnv("6000", "15"),
+		Resources{AvailableRAMMB: 12000, AvailableDiskMB: 100 * 1024}, false, ProfileLight)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBLight) {
+		t.Fatalf("expected fail-loud error naming %q, got: %v", EnvKeyMinRAMMBLight, err)
+	}
+}
+
+// Run() (back-compat) MUST behave EXACTLY like RunForProfile(..., ProfileHeavy):
+// same report, same exit code. Guards the delegation that preserves the
+// original public API.
+func TestRun_DelegatesToHeavyProfile(t *testing.T) {
+	env := map[string]string{
+		EnvKeyMinRAMMB:       "6000",
+		EnvKeyMinDiskGB:      "15",
+		EnvKeyMinRAMMBLight:  "2000",
+		EnvKeyMinDiskGBLight: "8",
+	}
+	res := Resources{AvailableRAMMB: 2500, AvailableDiskMB: 10 * 1024}
+
+	rRep, rCode, rErr := Run(env, res, false)
+	hRep, hCode, hErr := RunForProfile(env, res, false, ProfileHeavy)
+	if rErr != nil || hErr != nil {
+		t.Fatalf("unexpected errors: Run=%v RunForProfile=%v", rErr, hErr)
+	}
+	if rCode != hCode || rRep != hRep {
+		t.Fatalf("Run must equal RunForProfile(heavy): codes %d/%d", rCode, hCode)
+	}
+	// With below-heavy resources, the heavy back-compat path must exit 1.
+	if rCode != 1 {
+		t.Fatalf("Run (heavy back-compat) must exit 1 for below-heavy resources, got %d", rCode)
 	}
 }
 

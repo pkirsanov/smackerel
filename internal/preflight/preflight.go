@@ -33,9 +33,47 @@ import (
 const (
 	EnvKeyMinRAMMB  = "PREFLIGHT_MIN_AVAILABLE_RAM_MB"
 	EnvKeyMinDiskGB = "PREFLIGHT_MIN_AVAILABLE_DISK_GB"
+	// The *_LIGHT keys carry the LOWER bar for the stores-only
+	// `./smackerel.sh test integration-light` lane (postgres+nats only, no
+	// core/ml image build → a fraction of the full-lane footprint). They are a
+	// second, independently fail-loud SST pair — never a relaxation default of
+	// the heavy keys (F-RUNBOOK / spec 099).
+	EnvKeyMinRAMMBLight  = "PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT"
+	EnvKeyMinDiskGBLight = "PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT"
 	// OverrideEnvKey, when truthy, bypasses the gate with a loud WARNING.
 	OverrideEnvKey = "SMACKEREL_PREFLIGHT_OVERRIDE"
 )
+
+// Profile selects WHICH SST threshold pair the guard enforces. The heavy
+// profile (build, up, full integration|e2e|e2e-ui|stress) uses the original
+// PREFLIGHT_MIN_AVAILABLE_{RAM_MB,DISK_GB} keys. The light profile (the
+// stores-only integration-light lane) uses the *_LIGHT keys. There is no
+// implicit default — the caller MUST choose explicitly (NO-DEFAULTS).
+type Profile string
+
+const (
+	ProfileHeavy Profile = "heavy"
+	ProfileLight Profile = "light"
+)
+
+// ParseProfile validates a profile name. Empty or unknown values fail loud —
+// there is no implicit default.
+func ParseProfile(s string) (Profile, error) {
+	switch Profile(s) {
+	case ProfileHeavy, ProfileLight:
+		return Profile(s), nil
+	default:
+		return "", fmt.Errorf("invalid pre-flight profile %q (want %q or %q; NO-DEFAULTS)", s, ProfileHeavy, ProfileLight)
+	}
+}
+
+// thresholdKeysForProfile returns the (RAM, disk) env key names for a profile.
+func thresholdKeysForProfile(p Profile) (ramKey, diskKey string) {
+	if p == ProfileLight {
+		return EnvKeyMinRAMMBLight, EnvKeyMinDiskGBLight
+	}
+	return EnvKeyMinRAMMB, EnvKeyMinDiskGB
+}
 
 // Thresholds are the SST-configured minimums. Both are required; the guard
 // never supplies a default for either.
@@ -57,15 +95,23 @@ type Result struct {
 	DiskShort bool
 }
 
-// ParseThresholds reads the two required keys from a key=value env map. A
-// missing, empty, non-numeric, or non-positive value returns an error NAMING
-// the offending key (Gate G028 / NO-DEFAULTS). No fallback is ever supplied.
+// ParseThresholds reads the heavy-profile keys. Retained for back-compat;
+// equivalent to ParseThresholdsForProfile(env, ProfileHeavy).
 func ParseThresholds(env map[string]string) (Thresholds, error) {
-	ram, err := requirePositiveInt(env, EnvKeyMinRAMMB)
+	return ParseThresholdsForProfile(env, ProfileHeavy)
+}
+
+// ParseThresholdsForProfile reads the two required keys for the given profile
+// from a key=value env map. A missing, empty, non-numeric, or non-positive
+// value returns an error NAMING the offending key (Gate G028 / NO-DEFAULTS). No
+// fallback is ever supplied.
+func ParseThresholdsForProfile(env map[string]string, profile Profile) (Thresholds, error) {
+	ramKey, diskKey := thresholdKeysForProfile(profile)
+	ram, err := requirePositiveInt(env, ramKey)
 	if err != nil {
 		return Thresholds{}, err
 	}
-	disk, err := requirePositiveInt(env, EnvKeyMinDiskGB)
+	disk, err := requirePositiveInt(env, diskKey)
 	if err != nil {
 		return Thresholds{}, err
 	}
@@ -147,7 +193,15 @@ func shortMark(short bool) string {
 // the caller supplies the observed Resources — so the whole decision is unit
 // testable with synthetic inputs.
 func Run(env map[string]string, res Resources, overridden bool) (report string, exitCode int, err error) {
-	th, perr := ParseThresholds(env)
+	return RunForProfile(env, res, overridden, ProfileHeavy)
+}
+
+// RunForProfile is Run for an explicit profile: parse that profile's thresholds
+// (fail-loud), evaluate, render the report, and compute the exit code. When
+// overridden is true the exit code is forced to 0 (the report carries the
+// WARNING). It performs NO host I/O.
+func RunForProfile(env map[string]string, res Resources, overridden bool, profile Profile) (report string, exitCode int, err error) {
+	th, perr := ParseThresholdsForProfile(env, profile)
 	if perr != nil {
 		return "", 1, perr
 	}

@@ -85,6 +85,18 @@ runtime:
     # heavy op. Ollama models (several GB each) + Docker image layers make 15 GB
     # a sensible floor.
     min_available_disk_gb: 15
+    # LIGHT profile — the stores-only `integration-light` lane (postgres + nats
+    # + a golang test container; NO core/ml image build, NO Ollama). This is a
+    # SECOND, independently fail-loud threshold pair, NOT a relaxation default
+    # of the heavy keys (a missing/empty *_light key fails loud naming it).
+    # RAM ~2000 MB floor = pgvector ~250 MB + nats ~50 MB + the `go test`
+    # compile/link peak ~1.2 GB + ~500 MB headroom; meaningfully below the
+    # 6000 MB heavy floor because no core/ml build or model load happens.
+    min_available_ram_mb_light: 2000
+    # Disk ~8 GB floor = the postgres + nats + golang test images + the Go build
+    # cache + the PG data dir; well under the 15 GB heavy floor because the
+    # multi-GB Ollama models and core/ml image layers are never pulled here.
+    min_available_disk_gb_light: 8
 
 cors:
   # Allowed origins for cross-origin requests (empty = same-origin only).

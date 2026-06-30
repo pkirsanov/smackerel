@@ -463,11 +463,16 @@ smackerel_assert_host_resources() {
   # at /workspace (so statfs follows to the HOST repo filesystem).
   local target_env="$1"
   local status=0
+  # Every current caller of this helper gates a HEAVY op (build, up,
+  # integration|e2e|e2e-ui|stress, pre-flight), so the profile is pinned to
+  # `heavy` here — this preserves the existing thresholds exactly. The light
+  # profile is consumed by the forthcoming stores-only integration-light lane,
+  # which will invoke cmd/preflight with --profile light directly.
   if command -v go >/dev/null 2>&1; then
-    ( cd "$SCRIPT_DIR" && go run ./cmd/preflight --env "$target_env" --repo-root "$SCRIPT_DIR" ) || status=$?
+    ( cd "$SCRIPT_DIR" && go run ./cmd/preflight --env "$target_env" --repo-root "$SCRIPT_DIR" --profile heavy ) || status=$?
   else
     require_docker
-    run_go_tooling /workspace/scripts/runtime/preflight.sh "$target_env" || status=$?
+    run_go_tooling /workspace/scripts/runtime/preflight.sh "$target_env" heavy || status=$?
   fi
   return "$status"
 }
