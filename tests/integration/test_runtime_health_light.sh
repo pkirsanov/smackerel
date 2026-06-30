@@ -30,6 +30,7 @@ TEST_ENV="test"
 KEEP_STACK_UP="${KEEP_STACK_UP:-0}"
 HEALTH_OK=0
 
+# shellcheck disable=SC2329  # invoked indirectly via 'trap cleanup EXIT'
 cleanup() {
   if [[ "$HEALTH_OK" == "1" && "$KEEP_STACK_UP" == "1" ]]; then
     return
