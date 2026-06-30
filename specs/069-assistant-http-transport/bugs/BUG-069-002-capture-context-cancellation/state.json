@@ -4,11 +4,11 @@
   "parentFeatureDir": "specs/069-assistant-http-transport",
   "featureName": "BUG-069-002: assistant HTTP capture-as-fallback is bound to the request context (r.Context()), so a client disconnect during a CaptureRoute=true turn cancels the durable capture write (Postgres INSERT + NATS publish, both ctx-honoring) and silently loses the user's prompt — violating the inviolable capture-as-fallback contract (Hard Constraint 5 / BS-001)",
   "bugId": "BUG-069-002",
-  "status": "in_progress",
+  "status": "done",
   "releaseTrain": "mvp",
-  "certifiedAt": "2026-06-30T21:05:16Z",
+  "certifiedAt": "2026-06-30T21:17:03Z",
   "certifiedBy": "bubbles.validate",
-  "lastUpdatedAt": "2026-06-30T21:05:16Z",
+  "lastUpdatedAt": "2026-06-30T21:12:11Z",
   "workflowMode": "bugfix-fastlane",
   "statusCeiling": "done",
   "nextRequiredOwner": "bubbles.validate",
@@ -156,9 +156,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "certifiedBy": "bubbles.validate",
-    "certifiedAt": "2026-06-30T21:05:16Z",
+    "certifiedAt": "2026-06-30T21:17:03Z",
     "completedScopes": ["Scope 1: Capture-as-fallback survives client disconnect"],
     "certifiedCompletedPhases": ["chaos", "implement", "test", "regression", "audit", "simplify", "stabilize", "security", "validate"],
     "scopeProgress": {
