@@ -1307,7 +1307,7 @@ assistant:
     # (Gate G028 / smackerel-no-defaults); the container_port/image/secret_key
     # are REQUIRED even when no environment enables the profile.
     searxng:
-      image: "searxng/searxng:2026.5.30-bd863f16b" # REQUIRED: pinned upstream tag (bump deliberately)
+      image: "searxng/searxng:2026.5.30-bd863f16b@sha256:f134249dd0a1c5521d0712df81438ddfb508fe8caa5b8f76a3d413251a62ba82" # REQUIRED: pinned upstream tag@digest (bump deliberately; digest = index/manifest-list digest from `docker buildx imagetools inspect`)
       container_port: 8080 # REQUIRED: SearxNG default listen port inside the container
       secret_key: "smackerel-searxng-dev-test-only-not-a-real-secret" # REQUIRED: non-empty; entrypoint substitutes into settings.yml. Dev/test only — operators MUST override before any real deployment
       base_url: "http://localhost/" # REQUIRED: SearxNG base_url; placeholder fine for in-cluster JSON API use
@@ -1857,9 +1857,10 @@ deploy_resources:
 # invocation.
 monitoring:
   prometheus:
-    # Pinned image tag (no `latest`, no fallback). Bumping requires a
-    # design discussion + adversarial regression test re-run.
-    image: "prom/prometheus:v2.55.1"
+    # Pinned image tag@digest (no `latest`, no fallback). Bumping requires a
+    # design discussion + adversarial regression test re-run. Digest =
+    # index/manifest-list digest from `docker buildx imagetools inspect`.
+    image: "prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3"
     # Internal container port for the Prometheus web UI / API. Matches
     # the upstream default.
     container_port: 9090
