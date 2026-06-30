@@ -11,11 +11,13 @@
 //
 // Usage:
 //
-//	go run ./cmd/preflight --env <dev|test> --repo-root <abs-path>
+//	go run ./cmd/preflight --env <dev|test> --repo-root <abs-path> --profile <heavy|light>
 //
-// Both flags are REQUIRED — there is no default (Gate G028 / NO-DEFAULTS).
+// All three flags are REQUIRED — there is no default (Gate G028 / NO-DEFAULTS).
 // The env file path is derived as <repo-root>/config/generated/<env>.env and
-// the disk check targets <repo-root>.
+// the disk check targets <repo-root>. The profile selects which SST threshold
+// pair is enforced: heavy (build/up/full test lanes) or light (the stores-only
+// integration-light lane).
 package main
 
 import (
@@ -30,6 +32,7 @@ import (
 func main() {
 	envName := flag.String("env", "", "target environment name (dev|test); required")
 	repoRoot := flag.String("repo-root", "", "absolute path to the repo root; required")
+	profileName := flag.String("profile", "", "threshold profile (heavy|light); required")
 	flag.Parse()
 
 	if *envName == "" {
@@ -37,6 +40,13 @@ func main() {
 	}
 	if *repoRoot == "" {
 		fatalf("--repo-root is required (no default; Gate G028 / NO-DEFAULTS)")
+	}
+	if *profileName == "" {
+		fatalf("--profile is required (heavy|light; no default; Gate G028 / NO-DEFAULTS)")
+	}
+	profile, err := preflight.ParseProfile(*profileName)
+	if err != nil {
+		fatalf("%v", err)
 	}
 
 	envFile := filepath.Join(*repoRoot, "config", "generated", *envName+".env")
@@ -57,7 +67,7 @@ func main() {
 	res := preflight.Resources{AvailableRAMMB: ramMB, AvailableDiskMB: diskMB}
 	overridden := preflight.Truthy(os.Getenv(preflight.OverrideEnvKey))
 
-	report, exitCode, err := preflight.Run(env, res, overridden)
+	report, exitCode, err := preflight.RunForProfile(env, res, overridden, profile)
 	if err != nil {
 		// Fail-loud on a missing/invalid SST threshold key.
 		fatalf("%v", err)
