@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/_ops/OPS-005-evo-x2-readiness-sweep-fixes",
   "featureName": "OPS-005: evo-x2 Readiness-Sweep Fixes (smackerel side)",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "ops-findings-fix",
   "scopeKind": "supply-chain-fix",
   "planningOnly": false,
@@ -73,9 +73,9 @@
         "specs/088-*",
         "specs/082-*"
       ],
-      "disposition": "follow-on",
-      "owner": "bubbles.releases",
-      "resolution": "Not fixed here. Doc refresh only; no runtime impact."
+      "disposition": "FIXED",
+      "owner": "bubbles.spec-review (for bubbles.releases)",
+      "resolution": "FIXED 2026-06-30 by bubbles.spec-review (read-only spec-review-to-doc; no spec state.json mutated). Added a new 2026-06-30 readiness-sweep layer at the top of specs/_spec-review-report.md (append-only, newest-on-top): F3 covers the previously-omitted OPS-003 (SUPERSEDED) + OPS-004 (CURRENT) home-lab handoff packets and records the 2026-06-30 sweep remediation (smackerel SF-1/SF-2/SF-3 + docs/Upkeep_Runbook reconcile; knb-side KF-1..KF-5 referenced, not imported) discharging the prior F1 local-operator-path-readiness risk; F4 documents why spec 082 carries releaseTrain=next (next-train hardening batch whose in-repo scopes benefit MVP but are independent of the mvp-train feature set; retag is bubbles.train's call, not required for go-live; 082 state.json NOT edited); F5 dispositions the 087/088 CI-as-producer narrative as SUPERSEDED by OPS-004 + non-gating for MVP, recommending 087/088 reconcile their own ci/deploy narrative on next unblock (owner bubbles.devops/bubbles.docs; 087/088 state.json NOT edited). No runtime impact."
     }
   ],
   "outOfScope": [
@@ -86,12 +86,13 @@
   ],
   "execution": {
     "activeAgent": null,
-    "currentPhase": "implement",
-    "currentScope": "SF-3",
+    "currentPhase": "finalize",
+    "currentScope": null,
     "runStartedAt": "2026-06-30T00:00:00Z",
     "completedPhaseClaims": [
       "discovery",
-      "implement"
+      "implement",
+      "finalize"
     ],
     "validation": [
       {
@@ -145,6 +146,18 @@
         "runStartedAt": "2026-06-30T00:00:00Z",
         "runEndedAt": "2026-06-30T00:00:00Z",
         "summary": "SF-2 + SF-3 hardening/doc follow-ons. SF-2: converted deploy/compose.deploy.yml smackerel-core/smackerel-ml/prometheus image refs from plain ${VAR} to the ${VAR:?...} fail-loud form (matching searxng + smackerel-no-defaults); only the guard changed, not the resolved value. Confirmed no lockstep test byte-matches the compose image strings (external_images_contract_test.go Check 3 skips ${...} images; its digest-pin lock reads deploy/contract.yaml; compose_contract_test.go checks only ports/network_mode; dev_compose_default_fallback_test.go scans docker-compose.yml and only matches the :- form) so SF-2 is KEPT, no revert. SF-3: added an operator breadcrumb to docs/Deployment.md Go-Live Readiness Checklist section 4 (--profile ollama) noting the validateModelEnvelopes co-residence OOM guard is enforced only while OLLAMA_KEEP_ALIVE keeps interactive models resident; keep keep-alive resident (-1 or >=10m) on home-lab. Validated: config generate exit 0; focused Compose|ConfigSync|ExternalImages suite green (internal/deploy ok 0.153s, internal/config ok 0.038s; go test ./... finished OK). Packet stays in_progress (SF-4 doc refresh still open, owned by bubbles.releases). No git commit/push, no build/deploy/docker/promote run. Left UNCOMMITTED for the orchestrator."
+      },
+      {
+        "agent": "bubbles.spec-review",
+        "phasesExecuted": [
+          "finalize"
+        ],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "runStartedAt": "2026-06-30T00:00:00Z",
+        "runEndedAt": "2026-06-30T00:00:00Z",
+        "summary": "SF-4 (stale spec/review docs) doc refresh + OPS-005 close-out. Read-only spec-review-to-doc; no spec state.json mutated. Added a new 2026-06-30 readiness-sweep layer at the top of specs/_spec-review-report.md (append-only, newest-on-top): F3 covers the previously-omitted OPS-003 (SUPERSEDED) + OPS-004 (CURRENT) home-lab handoff packets and records the 2026-06-30 sweep remediation (smackerel SF-1/SF-2/SF-3 + docs/Upkeep_Runbook reconcile; the sibling knb-side OPS-003 sweep KF-1..KF-5 referenced, not imported) discharging the prior F1 local-operator-path-readiness risk; F4 documents spec 082's releaseTrain=next rationale (next-train hardening batch whose in-repo scopes benefit MVP but are independent of the mvp-train feature set; retag is bubbles.train's call, not required for go-live; 082 state.json NOT edited); F5 dispositions the 087/088 CI-as-producer narrative as SUPERSEDED by OPS-004 + non-gating for MVP with a next-unblock reconcile recommendation (owner bubbles.devops/bubbles.docs; 087/088 state.json NOT edited). With SF-1..SF-4 all FIXED the packet transitions to done. BUG-069-003's shared live-stack E2E (with BUG-069-002) is out of scope here and remains in_progress under its own bug packet (folded into the final go-live validation sweep). No git commit/push run; report + this packet left UNCOMMITTED for the orchestrator."
       }
     ]
   },
@@ -178,11 +191,12 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "SF-1",
       "SF-2",
-      "SF-3"
+      "SF-3",
+      "SF-4"
     ],
     "scopeProgress": [
       {
@@ -206,7 +220,7 @@
       {
         "scope": "SF-4",
         "name": "Refresh stale spec/review docs (_spec-review-report, 087/088, 082)",
-        "status": "Open",
+        "status": "Done",
         "dependsOn": []
       }
     ]
@@ -216,5 +230,5 @@
   "failures": [],
   "lastUpdatedAt": "2026-06-30T00:00:00Z",
   "scopeLayout": "single-file",
-  "notes": "Readiness-sweep findings packet (smackerel side). SF-1 (prometheus+searxng digest pin) FIXED + drift-locked. SF-2 (compose app+prometheus image refs -> ${VAR:?...} fail-loud, matching searxng) FIXED + KEPT (no lockstep test byte-matches compose image strings; external_images Check 3 skips ${...} images). SF-3 (operator breadcrumb for the conditional ollama co-residence OOM guard) FIXED in docs/Deployment.md Go-Live Readiness Checklist section 4. Validated this round: config generate exit 0; focused Compose|ConfigSync|ExternalImages suite green (internal/deploy ok, internal/config ok; go test ./... finished OK). SF-4 (stale spec/review docs) remains a follow-on doc refresh owned by bubbles.releases. BUG-069-003 /api/capture durability already fixed+committed under its own bug packet. No releaseTrain field (no smackerel _ops packet declares one). Packet stays in_progress (SF-4 open). Left UNCOMMITTED for the orchestrator; no git commit/push run."
+  "notes": "Readiness-sweep findings packet (smackerel side). SF-1 (prometheus+searxng digest pin) FIXED + drift-locked. SF-2 (compose app+prometheus image refs -> ${VAR:?...} fail-loud, matching searxng) FIXED + KEPT (no lockstep test byte-matches compose image strings; external_images Check 3 skips ${...} images). SF-3 (operator breadcrumb for the conditional ollama co-residence OOM guard) FIXED in docs/Deployment.md Go-Live Readiness Checklist section 4. Validated this round: config generate exit 0; focused Compose|ConfigSync|ExternalImages suite green (internal/deploy ok, internal/config ok; go test ./... finished OK). SF-4 (stale spec/review docs) FIXED 2026-06-30 by bubbles.spec-review: new 2026-06-30 layer atop specs/_spec-review-report.md covering OPS-003 (SUPERSEDED) + OPS-004 (CURRENT), documenting spec 082 releaseTrain=next, and dispositioning the 087/088 CI-as-producer narrative as SUPERSEDED-by-OPS-004 + non-gating (no spec state.json mutated; 082/087/088 untouched). With SF-1..SF-4 all FIXED the packet is done. BUG-069-003 /api/capture durability already fixed+committed under its own bug packet and is the one open smackerel readiness item (its shared live-stack E2E with BUG-069-002 is folded into the final go-live validation sweep) -- out of scope here, remains in_progress under its own packet. No releaseTrain field (no smackerel _ops packet declares one). Left UNCOMMITTED for the orchestrator; no git commit/push run."
 }
