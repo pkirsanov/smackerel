@@ -10,7 +10,7 @@ ARTIFACT_ID="test-persist-001"
 
 cleanup() {
     echo "Cleaning up test stack..."
-    timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+    smackerel_run_with_timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -44,11 +44,11 @@ echo "Insert verified (count=$COUNT_BEFORE)"
 
 # Stop all services (but keep volumes)
 echo "Stopping services (preserving volumes)..."
-timeout --kill-after=15s 90 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down
+smackerel_run_with_timeout --kill-after=15s 90 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down
 
 # Restart services
 echo "Restarting services..."
-timeout --kill-after=30s 180 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
+smackerel_run_with_timeout --kill-after=30s 180 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
 e2e_setup
 e2e_wait_healthy 120
 

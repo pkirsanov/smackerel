@@ -12,7 +12,7 @@ cleanup() {
   if [ "$STACK_MANAGED" = "1" ]; then
     return 0
   fi
-  timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+  smackerel_run_with_timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
