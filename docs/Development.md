@@ -73,6 +73,7 @@ Use `./smackerel.sh` for runtime work and keep the committed Bubbles validation 
 | Package extension | `./smackerel.sh package extension` | Package browser extension for Chrome and Firefox distribution |
 | Unit tests | `./smackerel.sh test unit [--go\|--python]` | Run Go and Python unit tests (or one language only) |
 | Integration tests | `./smackerel.sh test integration` | Run live-stack foundation integration validation |
+| Integration tests (stores-only, light) | `./smackerel.sh test integration-light` | Run live-stack integration tests needing ONLY postgres+nats (no core/ml build, no ml_sidecar gate); LIGHT preflight floor (2000 MB / 8 GB) |
 | E2E tests | `./smackerel.sh test e2e` | Run compose start, persistence, and config-failure E2E checks |
 | Stress smoke | `./smackerel.sh test stress` | Run disposable test-stack shell and Go stress validation |
 | Resource pre-flight | `./smackerel.sh pre-flight` | Check host RAM/disk vs the SST minimums (`runtime.preflight.*`) before heavy ops; exit 0 ok, 1 below threshold (auto-run before build/up/test integration\|e2e\|e2e-ui\|stress) |
@@ -111,6 +112,7 @@ Required command families:
 | Format | `./smackerel.sh format` |
 | Unit tests | `./smackerel.sh test unit [--go\|--python]` |
 | Integration tests | `./smackerel.sh test integration` |
+| Integration tests (stores-only, light) | `./smackerel.sh test integration-light` |
 | End-to-end tests | `./smackerel.sh test e2e` |
 | Stress tests | `./smackerel.sh test stress` |
 | Full dev stack | `./smackerel.sh up` |
@@ -150,11 +152,11 @@ preflight, adding the resource dimension.
   `_DISK_GB` and gates `build`, `up`, and `test integration|e2e|e2e-ui|stress`.
   `light` reads the lower `PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT` /
   `_DISK_GB_LIGHT` pair (SST keys `min_available_ram_mb_light` /
-  `min_available_disk_gb_light`) and is reserved for the forthcoming
-  stores-only `integration-light` lane (postgres + nats only, no core/ml
-  build). The `*_LIGHT` keys are an independent fail-loud pair — a missing/
-  empty/non-positive `*_LIGHT` key fails loud naming that exact key, never a
-  relaxation default of the heavy keys.
+  `min_available_disk_gb_light`) and gates the stores-only
+  `./smackerel.sh test integration-light` lane (postgres + nats only, no
+  core/ml build, no ml_sidecar gate). The `*_LIGHT` keys are an independent
+  fail-loud pair — a missing/empty/non-positive `*_LIGHT` key fails loud naming
+  that exact key, never a relaxation default of the heavy keys.
 - **Override:** `SMACKEREL_PREFLIGHT_OVERRIDE=1` bypasses the gate and proceeds
   with a loud `WARNING` (never silently).
 - **Evaluation logic:** Go (`cmd/preflight` + `internal/preflight`), unit-tested,
