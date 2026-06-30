@@ -1,0 +1,53 @@
+{
+  "version": 3,
+  "featureDir": "specs/099-preflight-resource-guard/bugs/BUG-099-002-macos-timeout-not-found",
+  "parentFeatureDir": "specs/099-preflight-resource-guard",
+  "featureName": "BUG-099-002: the test-lane orchestrators (smackerel.sh integration / integration-light / e2e) and runtime-health scripts call the GNU `timeout` binary (and its GNU-only --kill-after flag) directly with no gtimeout/watchdog fallback, so on macOS (no bare `timeout` on PATH) the lane fails with `timeout: command not found` (exit 127) AFTER the pre-flight passes — blocking the stores-up + Go-test run on every macOS host (wsl-macos-compatibility violation)",
+  "bugId": "BUG-099-002",
+  "status": "in_progress",
+  "releaseTrain": "mvp",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "lastUpdatedAt": "2026-06-30T00:00:00Z",
+  "workflowMode": "bugfix-fastlane",
+  "statusCeiling": "done",
+  "nextRequiredOwner": "bubbles.devops",
+  "severity": "high",
+  "finding": "F-099-MACOS-TIMEOUT-NOT-FOUND",
+  "discoveredBy": "bubbles.devops — during the BUG-099-001 integration-light re-run on a macOS host (surfaced AFTER the pre-flight passed)",
+  "discoveredAt": "2026-06-30T00:00:00Z",
+  "rootCause": "Test-lane orchestrators + runtime-health scripts invoke the GNU `timeout` binary (with GNU-only `timeout --kill-after`) directly. macOS ships no bare `timeout` on PATH (GNU coreutils installs it as `gtimeout`), and the scripts have NO timeout->gtimeout->watchdog fallback. scripts/lib/runtime.sh has no portable timeout helper. Result on macOS: `timeout: command not found` (exit 127) at the first bare-timeout call, blocking the stores-up + Go-test run AFTER BUG-099-001's pre-flight fix lets the lane proceed. NOTE: docker-compose's own `down --timeout` / `up --wait --wait-timeout` flags are unaffected — only the bare `timeout` binary call sites are broken.",
+  "recommendedFix": "Add a portable resolver smackerel_run_with_timeout (timeout -> gtimeout -> watchdog, exit-124 preserved) to scripts/lib/runtime.sh per .github/instructions/wsl-macos-compatibility.instructions.md, then replace every bare `timeout [--kill-after=Xs] N CMD` call site with it. Validate shellcheck -x + bash -n; re-run test integration-light (to land BUG-069-002/003 order-2 durability evidence) + test integration + test e2e (to prove heavy + e2e lanes complete on macOS).",
+  "evidence": "Real re-run capture (macOS, 2026-06-30): pre-flight 'OK / RAM available: 8024 MB (required >= 2000 MB)' THEN './smackerel.sh: line 1207: timeout: command not found' + teardown 'line 1186: timeout: command not found' + 'integration-light stack teardown failed during exit cleanup (exit 127)' + '=== integration-light exit=127 ==='. `command -v timeout` = ABSENT; `command -v gtimeout` = present. `docker ps --filter name=smackerel` = empty (no stack started; nothing leaked).",
+  "blockedOps": [
+    "./smackerel.sh --env test test integration-light (stores-up + durability Go test) on macOS",
+    "./smackerel.sh test integration (heavy) — same bare-timeout teardown/health-gate calls (lines 1063, 1084)",
+    "./smackerel.sh test e2e — bare-timeout calls (lines 1536, 1615, 1636, 1687, 1696)"
+  ],
+  "affectedSurface": [
+    "smackerel.sh :: integration lane (lines 1063, 1084)",
+    "smackerel.sh :: integration-light lane (lines 1186, 1207)",
+    "smackerel.sh :: e2e lane (lines 1536, 1615, 1636, 1687, 1696)",
+    "tests/integration/test_runtime_health.sh (bare timeout teardown calls)",
+    "tests/integration/test_runtime_health_light.sh (bare timeout teardown calls, ~lines 32, 39)",
+    "scripts/lib/runtime.sh (no portable timeout helper exists today — fix lands here)"
+  ],
+  "fixSequence": [
+    {
+      "order": 1,
+      "owner": "bubbles.devops",
+      "finding": "F-099-MACOS-TIMEOUT-NOT-FOUND",
+      "status": "pending",
+      "task": "Add smackerel_run_with_timeout (timeout -> gtimeout -> watchdog, exit-124 preserved) to scripts/lib/runtime.sh; replace every bare `timeout [--kill-after=Xs] N CMD` call site in smackerel.sh (integration / integration-light / e2e lanes) and the two runtime-health scripts. Validate shellcheck -x + bash -n. Re-run test integration-light (land BUG-069-002/003 order-2 durability evidence), test integration, and test e2e to prove all three lanes complete on macOS. NOT done in the BUG-099-001 task (cross-lane change beyond that task's targeted scope)."
+    }
+  ],
+  "relatesTo": [
+    "specs/099-preflight-resource-guard/bugs/BUG-099-001-macos-preflight-procmeminfo",
+    "specs/069-assistant-http-transport/bugs/BUG-069-002-capture-context-cancellation",
+    "specs/069-assistant-http-transport/bugs/BUG-069-003-capture-endpoint-context-cancellation"
+  ],
+  "completedPhases": [
+    "discovery"
+  ],
+  "completedScopes": []
+}
