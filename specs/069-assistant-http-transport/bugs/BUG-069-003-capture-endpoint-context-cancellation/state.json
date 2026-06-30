@@ -1,0 +1,144 @@
+{
+  "version": 3,
+  "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-003-capture-endpoint-context-cancellation",
+  "parentFeatureDir": "specs/069-assistant-http-transport",
+  "featureName": "BUG-069-003: the direct POST /api/capture handler (internal/api/capture.go::CaptureHandler) binds the durable pipeline.Process write to the request context (r.Context()), so a client disconnect after the body is received but before the durable Postgres INSERT + NATS publish complete cancels the write and silently loses the capture — the SAME root cause as the already-fixed BUG-069-002 but at the direct /api/capture endpoint, which was never in BUG-069-002's scope. Violates the inviolable capture-as-fallback contract (Hard Constraint 5 / BS-001)",
+  "bugId": "BUG-069-003",
+  "status": "in_progress",
+  "releaseTrain": "mvp",
+  "certifiedAt": null,
+  "certifiedBy": null,
+  "lastUpdatedAt": "2026-06-30T00:00:00Z",
+  "workflowMode": "bugfix-fastlane",
+  "statusCeiling": "done",
+  "nextRequiredOwner": "bubbles.test",
+  "finding": "F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL",
+  "discoveredBy": "bubbles.code-review MVP/evo-x2 readiness sweep (F-01)",
+  "fixSequence": [
+    {
+      "order": 1,
+      "owner": "bubbles.implement",
+      "finding": "F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL",
+      "status": "done",
+      "task": "Author internal/api/capture_disconnect_test.go (TestCaptureHandler_CaptureSurvivesClientDisconnect) — RED against d.Pipeline.Process(r.Context(), ...). Then apply the one-line fix in internal/api/capture.go::CaptureHandler: d.Pipeline.Process(context.WithoutCancel(r.Context()), ...) and ADD the \"context\" import (capture.go did not import context). GREEN. Boundary: only capture.go (import + the durable Process call line + explanatory comment) + the new test file; response-path d.DB.Healthy(r.Context()) / writeJSON / writeError stay request-scoped. COMPLETE: RED+GREEN captured in report.md [R1][R3]; fix diff [R2]; handler-family regression [R4]."
+    },
+    {
+      "order": 2,
+      "owner": "bubbles.test",
+      "finding": "F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL",
+      "status": "pending",
+      "task": "Author ONE SHARED live-stack E2E / integration regression that covers BOTH disconnect-durability surfaces in a single test: drive a real HTTP request whose client connection is aborted mid-write against (a) POST /api/assistant/turn (BUG-069-002) AND (b) POST /api/capture (this bug, BUG-069-003), each backed by a real pipeline.Processor (Postgres + NATS), asserting the captured artifact is persisted despite the disconnect on BOTH endpoints. This consolidates BUG-069-002 fixSequence order-2 and BUG-069-003 fixSequence order-2 into one regression (no duplicate live-stack harness). Requires `./smackerel.sh up` + `./smackerel.sh test integration|e2e`. Then route to bubbles.validate for done-ceiling certification (scenario-specific + broader E2E regression + stress) for BOTH bugs. NOT runnable in the discovery/fix session (no live stack)."
+    }
+  ],
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "test",
+    "currentScope": "scope-1",
+    "runStartedAt": "2026-06-30T00:00:00Z",
+    "runCompletedAt": null,
+    "completedPhaseClaims": ["code-review", "implement", "test", "regression"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "code-review",
+        "agent": "bubbles.code-review",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.bug",
+        "timestamp": "2026-06-30T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "MVP/evo-x2 readiness sweep finding F-01. Read the direct capture path: internal/api/capture.go::CaptureHandler dispatches d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{...}); pipeline.Processor.Process -> submitForProcessing runs a ctx-honoring Postgres INSERT (storeInitialArtifact) + NATS publish (NATS.Publish(ctx, ...)) (internal/pipeline/processor.go ~L471). net/http cancels r.Context() the instant the client connection drops, so a capture client (chrome extension / PWA / API caller) that disconnects after the body is received but before the durable write completes aborts Process with context.Canceled and the capture is SILENTLY LOST. Finding F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL (MEDIUM): same inviolable capture-as-fallback violation (Hard Constraint 5 / BS-001) as BUG-069-002, but at the DIRECT /api/capture endpoint which was never in BUG-069-002's scope (BUG-069-002 only fixed internal/assistant/httpadapter/adapter.go::ServeHTTP). Telegram unaffected (long-poll background ctx)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.bug",
+        "timestamp": "2026-06-30T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Scenario-first: authored internal/api/capture_disconnect_test.go (TestCaptureHandler_CaptureSurvivesClientDisconnect) reusing the established internal/api harness (mockDB/mockNATS from health_test.go, the Dependencies + deps.CaptureHandler wiring from capture_test.go) plus a recordingPipeline Pipeliner stub that records the ctx handed to Process. The test cancels the request context before CaptureHandler runs and asserts Process received a non-cancelled ctx + the prompt text preserved. RED captured (durable capture write ran with a cancelled context (err=context canceled), FAIL internal/api, exit 1). Applied the fix in internal/api/capture.go: added the \"context\" import (capture.go did not import context) and swapped d.Pipeline.Process(r.Context(), ...) -> d.Pipeline.Process(context.WithoutCancel(r.Context()), ...) with an explanatory comment. GREEN captured (PASS, ok internal/api 0.230s, exit 0). Change confined to capture.go (import + the durable Process call + comment) + the new test file; response-path d.DB.Healthy(r.Context()) / writeJSON / writeError left request-scoped. Go 1.25.10 supports context.WithoutCancel."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.bug",
+        "timestamp": "2026-06-30T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Focused unit RED->GREEN complete via the repo CLI (./smackerel.sh test unit --go --go-run ... --verbose, Dockerized go test -run ... ./...): RED exit 1 (context canceled) -> GREEN exit 0 (PASS). Handler-family regression (./smackerel.sh test unit --go --go-run 'TestCaptureHandler' --verbose): every TestCaptureHandler_* in internal/api PASSES (ok internal/api 0.086s, exit 0) — no collateral regression in the touched handler. PENDING: the shared live-stack E2E disconnect-race regression covering BOTH /api/assistant/turn (BUG-069-002) and /api/capture (this bug) against a real pipeline.Processor (Postgres + NATS) requires `./smackerel.sh up` — not runnable in this session; routed to bubbles.test -> bubbles.validate for done-ceiling certification. Full integration/e2e/chaos/stress sweep is out of scope for this focused fix."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.bug",
+        "timestamp": "2026-06-30T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Delta = capture.go (+\"context\" import, 1 durable Process call line swapped to context.WithoutCancel, + explanatory comment) + new test file. internal/api package green under the TestCaptureHandler selector (ok internal/api 0.086s, exit 0); the GREEN focused run also compiled the entire module (go test ./...) with exit 0 (no build break anywhere). No behavioral change to the response path (DB health re-check / writeJSON / writeError stay request-scoped), to non-capture handlers, or to the Telegram path. No tests deleted/skipped/weakened. REGRESSION_FREE for the touched surface (unit scope)."
+      }
+    ],
+    "completedScopes": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": ["code-review", "implement", "test", "regression"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.bug",
+        "expansionReason": "bugfix-fastlane executed in a runtime without runSubagent; nested workflow delegation / specialist subagents were unavailable (capability missing), so bubbles.bug parent-expanded the finding-owned bugfix-fastlane phases (code-review discovery context, implement, test, regression) directly inline.",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-30T00:00:00Z",
+        "runCompletedAt": "2026-06-30T00:00:00Z",
+        "outcome": "route_required",
+        "nextRequiredOwner": "bubbles.test",
+        "summary": "bubbles.code-review MVP/evo-x2 readiness sweep (F-01) discovered F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL: the direct POST /api/capture handler binds the durable pipeline.Process write to r.Context(), silently dropping the capture on client disconnect — the same root cause as the already-fixed BUG-069-002, at the endpoint BUG-069-002 never covered. LANDED the fix: internal/api/capture.go now calls d.Pipeline.Process(context.WithoutCancel(r.Context()), ...) (+ added the missing context import), proven by TestCaptureHandler_CaptureSurvivesClientDisconnect adversarial unit regression (RED->GREEN) + handler-family regression green (ok internal/api). ROUTED the remaining done-ceiling certification to bubbles.test -> bubbles.validate as ONE SHARED live-stack E2E disconnect-race regression covering BOTH /api/assistant/turn (BUG-069-002) and /api/capture (this bug); not runnable in this session (no live stack). One finding, one root cause, one Scope 1 — no cherry-picking. The already-done parent spec 069 artifacts and the BUG-069-002 packet are left untouched; this finding and fix are recorded entirely in this bug packet."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": ["code-review", "implement", "test", "regression"],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [
+      "Shared live-stack E2E regression for the client-disconnect race covering BOTH /api/assistant/turn (BUG-069-002) and /api/capture (this bug) — real HTTP client abort against the bound handlers + a real pipeline.Processor with Postgres + NATS — is not runnable in the discovery/fix session; requires `./smackerel.sh up` + `./smackerel.sh test integration|e2e`. Routed to bubbles.test (fixSequence order-2, shared with BUG-069-002).",
+      "Done-ceiling certification (scenario-specific + broader E2E regression coverage, stress coverage) pending the live-stack run. Routed to bubbles.validate."
+    ],
+    "concerns": [],
+    "notes": "Code fix is LANDED and UNIT-VERIFIED (adversarial RED->GREEN + handler-family regression green; the GREEN focused run also compiled the whole module with exit 0). The single-line cancellation decoupling (context.WithoutCancel) + the added context import closes F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL at the direct /api/capture endpoint. Full done-ceiling certification requires the shared live-stack E2E disconnect-race regression, which this session cannot run; status held at in_progress and routed honestly rather than fabricating E2E/stress evidence. NOT done."
+  },
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "code-review-readiness constraint"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["code-review", "implement", "test", "regression"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.bug",
+      "expansionReason": "bugfix-fastlane executed in a runtime without runSubagent; nested workflow delegation was unavailable (capability missing), so bubbles.bug parent-expanded the finding-owned bugfix-fastlane phases directly.",
+      "expansionEvidenceRef": "report.md",
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-30T00:00:00Z",
+      "runCompletedAt": "2026-06-30T00:00:00Z",
+      "outcome": "route_required",
+      "nextRequiredOwner": "bubbles.test",
+      "summary": "code-review readiness sweep (F-01): discovered F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL (direct /api/capture capture lost on client disconnect) and LANDED the single-line context.WithoutCancel fix + the missing context import + an adversarial RED->GREEN unit regression; internal/api package green. Remaining shared live-stack E2E (covering /api/assistant/turn + /api/capture) + stress certification routed to bubbles.test -> bubbles.validate (no live stack this session)."
+    }
+  ]
+}

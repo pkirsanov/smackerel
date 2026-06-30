@@ -1,0 +1,60 @@
+{
+  "bugId": "BUG-069-003-capture-endpoint-context-cancellation",
+  "version": 1,
+  "generatedAt": "2026-06-30T00:00:00Z",
+  "parentSpec": "specs/069-assistant-http-transport",
+  "finding": "F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-069-003-SCN-001",
+      "scope": "scope-1",
+      "title": "The direct /api/capture durable write persists the capture when the client disconnects mid-request",
+      "requiredTestType": "unit",
+      "owner": "bubbles.implement",
+      "linkedTests": [
+        {
+          "file": "internal/api/capture_disconnect_test.go",
+          "function": "TestCaptureHandler_CaptureSurvivesClientDisconnect",
+          "type": "unit-go"
+        }
+      ],
+      "evidenceRefs": [
+        "internal/api/capture.go (CaptureHandler durable Process call — the fix site)",
+        "internal/pipeline/processor.go::submitForProcessing (storeInitialArtifact INSERT + NATS.Publish, both ctx-honoring)"
+      ],
+      "linkedDoD": "Scope 1 DoD: durable Process invoked exactly once with a non-cancelled context under client disconnect; prompt text preserved — Scenario 'BUG-069-003-SCN-001 The direct /api/capture durable write persists the capture when the client disconnects mid-request'."
+    },
+    {
+      "scenarioId": "BUG-069-003-SCN-002",
+      "scope": "scope-1",
+      "title": "Adversarial — the regression FAILS against r.Context() and PASSES after context.WithoutCancel",
+      "requiredTestType": "unit",
+      "owner": "bubbles.test",
+      "linkedTests": [
+        {
+          "file": "internal/api/capture_disconnect_test.go",
+          "function": "TestCaptureHandler_CaptureSurvivesClientDisconnect (RED against d.Pipeline.Process(r.Context(), ...) -> GREEN against d.Pipeline.Process(context.WithoutCancel(r.Context()), ...))",
+          "type": "unit-go-red-green"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md (RED run captured against r.Context())",
+        "report.md (GREEN run captured after context.WithoutCancel restore)"
+      ],
+      "linkedDoD": "Scope 1 DoD: pre-fix RED proof + post-fix GREEN proof — Scenario 'BUG-069-003-SCN-002 Adversarial — the regression FAILS against r.Context() and PASSES after context.WithoutCancel'."
+    },
+    {
+      "scenarioId": "BUG-069-003-SCN-003",
+      "scope": "scope-1",
+      "title": "Shared live-stack E2E disconnect-race regression covers BOTH /api/assistant/turn (BUG-069-002) and /api/capture (this bug) against a real pipeline.Processor",
+      "requiredTestType": "e2e",
+      "owner": "bubbles.test",
+      "linkedTests": [],
+      "evidenceRefs": [
+        "state.json fixSequence order-2 (shared with BUG-069-002 fixSequence order-2)",
+        "state.json certification.blockers (live-stack E2E routed to bubbles.test -> bubbles.validate)"
+      ],
+      "linkedDoD": "Scope 1 DoD: Live-stack E2E disconnect-race regression (scenario-specific) + Broader E2E regression suite — PENDING, routed to bubbles.test -> bubbles.validate; requires `./smackerel.sh up`."
+    }
+  ]
+}
