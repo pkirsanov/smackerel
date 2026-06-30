@@ -44,9 +44,9 @@
         "deploy/compose.deploy.yml:184",
         "deploy/compose.deploy.yml:353"
       ],
-      "disposition": "follow-on",
+      "disposition": "FIXED",
       "owner": "bubbles.devops",
-      "resolution": "Not fixed here. Convert :124/:184/:353 to ${VAR:?...}; keep internal/deploy/compose_contract_test.go in lockstep."
+      "resolution": "Converted the three image refs to the ${VAR:?...} fail-loud form (matches searxng): smackerel-core -> ${SMACKEREL_CORE_IMAGE:?SMACKEREL_CORE_IMAGE must be set by the deploy adapter at apply}, smackerel-ml -> ${SMACKEREL_ML_IMAGE:?...}, prometheus -> ${PROMETHEUS_IMAGE:?PROMETHEUS_IMAGE must be set when the monitoring profile is enabled}. Only the guard changed, not the resolved value. KEPT (no revert): no contract test byte-matches these compose image strings -- external_images_contract_test.go Check 3 skips ${...} images and its digest-pin lock reads deploy/contract.yaml; compose_contract_test.go only checks ports/network_mode; dev_compose_default_fallback_test.go scans docker-compose.yml and only matches the forbidden :- form. Validated: config generate exit 0; focused Compose|ConfigSync|ExternalImages suite green (internal/deploy ok, internal/config ok; go test ./... finished OK)."
     },
     {
       "id": "SF-3",
@@ -58,9 +58,9 @@
         "internal/assistant/openknowledge/modelswitch/allowlist.go:144",
         "internal/assistant/openknowledge/modelswitch/allowlist.go:264"
       ],
-      "disposition": "follow-on",
-      "owner": "bubbles.implement",
-      "resolution": "Not a bug. Add a doc breadcrumb: when envelopeMiB is unset, co-residence is the operator's responsibility."
+      "disposition": "FIXED",
+      "owner": "bubbles.devops",
+      "resolution": "Not a bug (conditional by design). Added an operator breadcrumb to docs/Deployment.md Go-Live Readiness Checklist section 4 (--profile ollama): the validateModelEnvelopes co-residence OOM guard is enforced only while OLLAMA_KEEP_ALIVE keeps the interactive hot-path models resident (-1 or >=10m); keep keep-alive resident on home-lab. Minimal, sits next to the existing validateModelEnvelopes + ollama ps/OOM checklist items."
     },
     {
       "id": "SF-4",
@@ -87,7 +87,7 @@
   "execution": {
     "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": "SF-1",
+    "currentScope": "SF-3",
     "runStartedAt": "2026-06-30T00:00:00Z",
     "completedPhaseClaims": [
       "discovery",
@@ -105,9 +105,19 @@
         "result": "PASS — ok github.com/smackerel/smackerel/internal/deploy 0.120s (overall exit 0); the new prometheus+searxng digest-pin lock passes"
       },
       {
+        "check": "SF-2/SF-3 round — config generate (regenerate env from SST after compose fail-loud edit)",
+        "command": "SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh config generate",
+        "result": "PASS (exit 0); generated config/generated/dev.env, nats.conf, prometheus.yml; config-validate dev.env.tmp OK. The SF-2 ${VAR:?...} guard change does not affect config generation."
+      },
+      {
+        "check": "SF-2 lockstep — focused compose/config-sync/external-images Go suite",
+        "command": "SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run 'Compose|ConfigSync|ExternalImages'",
+        "result": "PASS — internal/deploy ok 0.153s, internal/config ok 0.038s; '[go-unit] go test ./... finished OK' (exit 0). No lockstep test compares compose image strings byte-for-byte (external_images Check 3 skips ${...} images; digest-pin lock reads deploy/contract.yaml). SF-2 KEPT, no revert."
+      },
+      {
         "check": "full ./smackerel.sh check (build+vet+config-sync)",
         "command": "SKIPPED",
-        "result": "Deferred to the final sweep — the full check is heavy; SF-1's focused contract test + config generate already prove the change."
+        "result": "Deferred to the final sweep — the full check is heavy; the focused Compose|ConfigSync|ExternalImages suite + config generate already prove SF-1/SF-2/SF-3. SF-3 is docs-only (no code impact)."
       }
     ],
     "executionHistory": [
@@ -123,6 +133,18 @@
         "runStartedAt": "2026-06-30T00:00:00Z",
         "runEndedAt": "2026-06-30T00:00:00Z",
         "summary": "Resolved the LIVE index/manifest-list digests for the two profile-gated third-party images via `docker buildx imagetools inspect` (method confirmed by nats:2.10-alpine reproducing its committed b83efabe... pin exactly). Digest-pinned prometheus (sha256:2659f4c2...) and searxng (sha256:f134249d...) as tag@sha256 in the SST (config/smackerel.yaml::monitoring.prometheus.image, ::assistant.open_knowledge.searxng.image) and deploy/contract.yaml::externalImages, matching the postgres/nats/ollama format. Extended internal/deploy/external_images_contract_test.go: upgraded the prometheus smoke check to a digest-pin lock and added a matching searxng lock so both ${VAR}-substituted entries are byte-matched against their digest-pinned value (Check-3 byte-match intentionally skips ${...} images; this closes that gap = TASK 2). Validated: config generate exit 0 (digests flow into generated dev.env), focused ExternalImages Go test green (internal/deploy ok). SF-2..SF-4 recorded as follow-on dispositions with file:line/severity/owner; no code change beyond SF-1. No git commit/push, no build/deploy/docker/promote run. Left UNCOMMITTED for the orchestrator."
+      },
+      {
+        "agent": "bubbles.devops",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "provenanceMode": "parent-expanded",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-30T00:00:00Z",
+        "runEndedAt": "2026-06-30T00:00:00Z",
+        "summary": "SF-2 + SF-3 hardening/doc follow-ons. SF-2: converted deploy/compose.deploy.yml smackerel-core/smackerel-ml/prometheus image refs from plain ${VAR} to the ${VAR:?...} fail-loud form (matching searxng + smackerel-no-defaults); only the guard changed, not the resolved value. Confirmed no lockstep test byte-matches the compose image strings (external_images_contract_test.go Check 3 skips ${...} images; its digest-pin lock reads deploy/contract.yaml; compose_contract_test.go checks only ports/network_mode; dev_compose_default_fallback_test.go scans docker-compose.yml and only matches the :- form) so SF-2 is KEPT, no revert. SF-3: added an operator breadcrumb to docs/Deployment.md Go-Live Readiness Checklist section 4 (--profile ollama) noting the validateModelEnvelopes co-residence OOM guard is enforced only while OLLAMA_KEEP_ALIVE keeps interactive models resident; keep keep-alive resident (-1 or >=10m) on home-lab. Validated: config generate exit 0; focused Compose|ConfigSync|ExternalImages suite green (internal/deploy ok 0.153s, internal/config ok 0.038s; go test ./... finished OK). Packet stays in_progress (SF-4 doc refresh still open, owned by bubbles.releases). No git commit/push, no build/deploy/docker/promote run. Left UNCOMMITTED for the orchestrator."
       }
     ]
   },
@@ -158,7 +180,9 @@
   "certification": {
     "status": "in_progress",
     "completedScopes": [
-      "SF-1"
+      "SF-1",
+      "SF-2",
+      "SF-3"
     ],
     "scopeProgress": [
       {
@@ -170,13 +194,13 @@
       {
         "scope": "SF-2",
         "name": "Compose ${VAR} -> ${VAR:?} fail-loud (app + prometheus)",
-        "status": "Open",
+        "status": "Done",
         "dependsOn": []
       },
       {
         "scope": "SF-3",
         "name": "Ollama concurrent-envelope guard operator-guidance breadcrumb",
-        "status": "Open",
+        "status": "Done",
         "dependsOn": []
       },
       {
@@ -192,5 +216,5 @@
   "failures": [],
   "lastUpdatedAt": "2026-06-30T00:00:00Z",
   "scopeLayout": "single-file",
-  "notes": "Readiness-sweep findings packet (smackerel side). SF-1 (prometheus+searxng digest pin) FIXED + drift-locked here and validated (config generate exit 0; focused ExternalImages Go test green). Resolved index digests: prometheus sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3, searxng sha256:f134249dd0a1c5521d0712df81438ddfb508fe8caa5b8f76a3d413251a62ba82 (via docker buildx imagetools inspect; method confirmed by nats exact-match). SF-2..SF-4 are recorded follow-on dispositions (no code change beyond SF-1). BUG-069-003 /api/capture durability already fixed+committed under its own bug packet. No releaseTrain field (no smackerel _ops packet declares one). Left UNCOMMITTED for the orchestrator; no git commit/push run."
+  "notes": "Readiness-sweep findings packet (smackerel side). SF-1 (prometheus+searxng digest pin) FIXED + drift-locked. SF-2 (compose app+prometheus image refs -> ${VAR:?...} fail-loud, matching searxng) FIXED + KEPT (no lockstep test byte-matches compose image strings; external_images Check 3 skips ${...} images). SF-3 (operator breadcrumb for the conditional ollama co-residence OOM guard) FIXED in docs/Deployment.md Go-Live Readiness Checklist section 4. Validated this round: config generate exit 0; focused Compose|ConfigSync|ExternalImages suite green (internal/deploy ok, internal/config ok; go test ./... finished OK). SF-4 (stale spec/review docs) remains a follow-on doc refresh owned by bubbles.releases. BUG-069-003 /api/capture durability already fixed+committed under its own bug packet. No releaseTrain field (no smackerel _ops packet declares one). Packet stays in_progress (SF-4 open). Left UNCOMMITTED for the orchestrator; no git commit/push run."
 }
