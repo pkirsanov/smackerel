@@ -34,14 +34,20 @@ break).
 ### Code-Review Probe Evidence (read-only source inspection)
 
 ```text
-# the direct capture endpoint dispatched the durable write on the request context (pre-fix):
-internal/api/capture.go::CaptureHandler
-  result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{ ... SourceID: pipeline.SourceCapture ... })
+# Direct capture endpoint: CaptureHandler dispatches the durable pipeline write.
+# Pre-fix it passed r.Context() (cancelled on client disconnect); the committed
+# fix now dispatches on context.WithoutCancel(r.Context()) at line 110:
+$ grep -n 'CaptureHandler\|d.Pipeline.Process' internal/api/capture.go
+57:// CaptureHandler handles POST /api/capture.
+58:func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
+110:	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
 
-# the pipeline write is context-honoring (a cancelled ctx aborts it):
-internal/pipeline/processor.go::submitForProcessing
-  if err := p.storeInitialArtifact(ctx, artifactID, extracted, req, string(tier)); err != nil { ... }   # Postgres INSERT
-  if err := p.NATS.Publish(ctx, smacknats.SubjectArtifactsProcess, data); err != nil { ... }             # NATS publish
+# The downstream pipeline write is context-honoring — a cancelled ctx aborts the
+# Postgres INSERT (storeInitialArtifact, line 431/499) and the NATS publish (line 471):
+$ grep -n 'storeInitialArtifact\|p.NATS.Publish' internal/pipeline/processor.go
+431:	if err := p.storeInitialArtifact(ctx, artifactID, extracted, req, string(tier)); err != nil {
+471:	if err := p.NATS.Publish(ctx, smacknats.SubjectArtifactsProcess, data); err != nil {
+499:func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result *extract.Result, req *ProcessRequest, tier string) error {
 ```
 
 `net/http` cancels `r.Context()` the instant the client connection drops, so the
@@ -97,9 +103,19 @@ FAIL
 
 ### [R2] Fix diff
 
-**Command:** `git --no-pager diff -- internal/api/capture.go` · **Claim Source:** executed
+**Command:** `git --no-pager show --stat d395d00c -- internal/api/capture.go` · **Exit Code:** 0 · **Claim Source:** executed
 
 ```text
+$ git --no-pager show --stat d395d00c -- internal/api/capture.go
+commit d395d00c1b8e021291b57c91655f5fdee03583cd
+Author: Philippe Kirsanov <pkirsanov@gmail.com>
+Date:   Tue Jun 30 02:14:05 2026 -0700
+
+    fix(api): decouple /api/capture durable write from request cancellation (BUG-069-003)
+
+ internal/api/capture.go | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
 diff --git a/internal/api/capture.go b/internal/api/capture.go
 index cad8fe85..42647c4c 100644
 --- a/internal/api/capture.go
@@ -171,6 +187,79 @@ Dockerized runtime, which compiles the **entire** module before running the
 proves the `internal/api` package (including the new
 `capture_disconnect_test.go` regression) compiles and passes with no build break
 anywhere in the module. **Claim Source:** executed (same run as R3).
+
+### Validation Evidence
+
+Done-ceiling validation: the shared live-stack durable regression
+`TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel` PASSED on a real
+`pipeline.Processor` + Postgres + NATS stack. The committing run is recorded in
+git — the stores-only integration helper landed and the durability lane went
+green in commit `f00a2132` (shared order-2 deliverable with BUG-069-002):
+
+```text
+$ git --no-pager show --stat f00a2132 -- tests/integration/capture_disconnect_durability_test.go
+commit f00a2132caca179b397185a139d3fb6370c21c70
+Author: Philippe Kirsanov <pkirsanov@gmail.com>
+Date:   Tue Jun 30 11:36:51 2026 -0700
+
+    test(integration): stores-only schema+stream provisioning helper; durability green (BUG-099-002 done)
+
+    Proven (independent re-run): the capture-durability integration test PASSES on the live pg+nats
+    stack — both sub-tests green (durable persist despite client disconnect, ARTIFACTS LastSeq 0->1;
+    adversarial raw-cancelled-ctx persists 0 rows, fix is load-bearing).
+
+ tests/integration/capture_disconnect_durability_test.go | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+```
+
+Captured live-stack PASS (real Postgres+NATS; same shared order-2 run as BUG-069-002):
+
+```text
+$ ./smackerel.sh --env test test integration-light --go-run TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel
+Smackerel pre-flight resource check: OK
+  RAM  available: 13711 MB (required >= 2000 MB)
+integration-light health OK: postgres + nats up (stores-only; no core/ml, no ml_sidecar gate)
+=== RUN   TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel
+2026/06/30 18:35:07 INFO ensured NATS stream name=ARTIFACTS subjects=[artifacts.>]
+    capture_disconnect_durability_test.go:138: durable capture persisted despite client disconnect: artifact=01KWCX0HNVZK3E8MM4ZB0ZFYXS status=pending ARTIFACTS LastSeq 0->1
+    capture_disconnect_durability_test.go:187: raw cancelled request context aborted the durable write as expected; 0 rows persisted — fix is load-bearing
+--- PASS: TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel (0.67s)
+ok      github.com/smackerel/smackerel/tests/integration        0.090s
+```
+
+### Audit Evidence
+
+Audit of the changed surface in committed code: the durable `/api/capture` write
+is dispatched on `context.WithoutCancel(r.Context())` at exactly ONE call site
+(capture-once invariant BS-001 preserved), proven by the committed diff at
+`d395d00c` and the on-disk grep:
+
+```text
+$ git --no-pager show d395d00c -- internal/api/capture.go
+commit d395d00c1b8e021291b57c91655f5fdee03583cd
+Author: Philippe Kirsanov <pkirsanov@gmail.com>
+Date:   Tue Jun 30 02:14:05 2026 -0700
+
+    fix(api): decouple /api/capture durable write from request cancellation (BUG-069-003)
+
+diff --git a/internal/api/capture.go b/internal/api/capture.go
+index cad8fe85..42647c4c 100644
+--- a/internal/api/capture.go
++++ b/internal/api/capture.go
+@@ -1,6 +1,7 @@
+ package api
+
+ import (
++	"context"
+ 	"encoding/json"
+@@ -92,8 +93,21 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
+-	// Process the capture
+-	result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
++	// […14-line "capture-as-fallback is inviolable" comment; full verbatim text in the Code Diff Evidence section below…]
++	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
+$ grep -n 'WithoutCancel' internal/api/capture.go
+110:	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
+```
 
 ### Completion Statement
 
