@@ -184,23 +184,49 @@ func TestExternalImagesContract_LiveFiles(t *testing.T) {
 		t.Fatalf("live-file contract violation: %v", err)
 	}
 
-	// Smoke check: the contract should advertise prometheus (the entry
-	// BUG-049-001 added). If a future edit drops it, Check 1 above fires
-	// first, but log the presence here for diagnostic clarity.
-	foundProm := false
+	// Digest-pin lock: the two profile-gated third-party images
+	// (prometheus, searxng) are SST-substituted in compose (${PROMETHEUS_IMAGE}
+	// / ${SEARXNG_IMAGE:?...}), so Check 3's byte-match above intentionally
+	// skips them. Without this section their digest pin in
+	// deploy/contract.yaml::externalImages would be free to drift silently
+	// back to a bare tag (the supply-chain F-02 / devops F3 finding tracked
+	// by specs/_ops/OPS-005). These two entries MUST stay pinned as
+	// `tag@sha256:<digest>` — the same form as postgres/nats/ollama — and
+	// MUST match the SST source (config/smackerel.yaml::monitoring.prometheus.image
+	// and ::assistant.open_knowledge.searxng.image). The digests are the
+	// index/manifest-list digests resolved via `docker buildx imagetools
+	// inspect`. Bumping either requires resolving the new live digest and
+	// updating BOTH the SST and the contract together.
+	const (
+		wantPrometheusImage = "prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3"
+		wantSearxngImage    = "searxng/searxng:2026.5.30-bd863f16b@sha256:f134249dd0a1c5521d0712df81438ddfb508fe8caa5b8f76a3d413251a62ba82"
+	)
+	foundProm, foundSearxng := false, false
 	for _, e := range contract.ExternalImages {
-		if e.Name == "prometheus" {
+		switch e.Name {
+		case "prometheus":
 			foundProm = true
-			if e.Image != "prom/prometheus:v2.55.1" {
-				t.Fatalf("smoke check: externalImages[name=prometheus].image=%q, expected %q (BUG-049-001 added this pin; any change requires a design discussion + adversarial regression test re-run per the pattern set by config/smackerel.yaml::monitoring.prometheus.image)", e.Image, "prom/prometheus:v2.55.1")
+			if e.Image != wantPrometheusImage {
+				t.Fatalf("digest-pin lock: externalImages[name=prometheus].image=%q, expected %q (profile-gated images MUST be digest-pinned tag@sha256 like postgres/nats/ollama — OPS-005 / supply-chain F-02; any bump requires resolving the new live index digest via `docker buildx imagetools inspect` and updating config/smackerel.yaml::monitoring.prometheus.image in lockstep)", e.Image, wantPrometheusImage)
 			}
 			if e.Profile != "monitoring" {
-				t.Fatalf("smoke check: externalImages[name=prometheus].profile=%q, expected \"monitoring\" (BUG-049-001 set this gating)", e.Profile)
+				t.Fatalf("digest-pin lock: externalImages[name=prometheus].profile=%q, expected \"monitoring\" (BUG-049-001 set this gating)", e.Profile)
+			}
+		case "searxng":
+			foundSearxng = true
+			if e.Image != wantSearxngImage {
+				t.Fatalf("digest-pin lock: externalImages[name=searxng].image=%q, expected %q (profile-gated images MUST be digest-pinned tag@sha256 like postgres/nats/ollama — OPS-005 / supply-chain F-02; any bump requires resolving the new live index digest via `docker buildx imagetools inspect` and updating config/smackerel.yaml::assistant.open_knowledge.searxng.image in lockstep)", e.Image, wantSearxngImage)
+			}
+			if e.Profile != "searxng" {
+				t.Fatalf("digest-pin lock: externalImages[name=searxng].profile=%q, expected \"searxng\" (spec 064 SCOPE-17 set this gating)", e.Profile)
 			}
 		}
 	}
 	if !foundProm {
-		t.Fatal("smoke check: externalImages does not contain a `prometheus` entry — BUG-049-001 required it")
+		t.Fatal("digest-pin lock: externalImages does not contain a `prometheus` entry — BUG-049-001 required it")
+	}
+	if !foundSearxng {
+		t.Fatal("digest-pin lock: externalImages does not contain a `searxng` entry — spec 064 SCOPE-17 required it")
 	}
 }
 
