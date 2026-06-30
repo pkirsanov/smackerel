@@ -4,10 +4,10 @@
   "parentFeatureDir": "specs/069-assistant-http-transport",
   "featureName": "BUG-069-003: the direct POST /api/capture handler (internal/api/capture.go::CaptureHandler) binds the durable pipeline.Process write to the request context (r.Context()), so a client disconnect after the body is received but before the durable Postgres INSERT + NATS publish complete cancels the write and silently loses the capture — the SAME root cause as the already-fixed BUG-069-002 but at the direct /api/capture endpoint, which was never in BUG-069-002's scope. Violates the inviolable capture-as-fallback contract (Hard Constraint 5 / BS-001)",
   "bugId": "BUG-069-003",
-  "status": "in_progress",
+  "status": "done",
   "releaseTrain": "mvp",
-  "certifiedAt": null,
-  "certifiedBy": null,
+  "certifiedAt": "2026-06-30T21:52:45Z",
+  "certifiedBy": "bubbles.validate",
   "lastUpdatedAt": "2026-06-30T00:00:00Z",
   "workflowMode": "bugfix-fastlane",
   "statusCeiling": "done",
@@ -156,9 +156,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "certifiedBy": null,
-    "certifiedAt": null,
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-06-30T21:52:45Z",
     "completedScopes": ["Scope 1: Direct /api/capture survives client disconnect"],
     "certifiedCompletedPhases": ["code-review", "implement", "test", "regression", "audit", "simplify", "stabilize", "security", "validate"],
     "scopeProgress": {
