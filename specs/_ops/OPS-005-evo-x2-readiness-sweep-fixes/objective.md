@@ -3,8 +3,11 @@
 > **Owner:** `bubbles.devops`
 > **Kind:** Ops findings + supply-chain fix (readiness sweep — smackerel side)
 > **Target:** repo-wide (supply-chain hardening; no live host change)
-> **Status:** `in_progress` — SF-1 + SF-2 + SF-3 FIXED here; SF-4 remains a
-> recorded follow-on disposition (doc refresh, owned by `bubbles.releases`).
+> **Status:** `done` — SF-1 + SF-2 + SF-3 + SF-4 all FIXED. SF-4 (stale
+> spec/review docs) was discharged 2026-06-30 by `bubbles.spec-review`: the
+> `specs/_spec-review-report.md` 2026-06-30 layer now covers OPS-003/004 and
+> dispositions the 082 `releaseTrain` and 087/088 CI-as-producer narrative
+> findings (no spec `state.json` edited — ownership-respecting).
 > **Sibling packets:** [`OPS-004`](../OPS-004-homelab-activation-handoff/) (shape
 > reference). No `releaseTrain` field — no smackerel `_ops` packet declares one.
 
@@ -33,7 +36,7 @@ follow-on doc refresh owned by `bubbles.releases`.
 | **SF-1** | minor | supply-chain | `config/smackerel.yaml::monitoring.prometheus.image`, `::assistant.open_knowledge.searxng.image`; `deploy/contract.yaml::externalImages[prometheus,searxng]`; `deploy/compose.deploy.yml:353,414` | **FIXED** here — digest-pinned + drift-locked | `bubbles.devops` |
 | **SF-2** | nit | fail-loud config | `deploy/compose.deploy.yml` smackerel-core / smackerel-ml / prometheus image refs | **FIXED** here — converted to `${VAR:?…}` fail-loud (matches searxng); compose/config-sync/external-images contract tests stay green | `bubbles.devops` |
 | **SF-3** | doc-only | ollama envelope guard | `docs/Deployment.md` Go-Live Readiness Checklist §4 (`--profile ollama`) | **FIXED** here — operator breadcrumb: co-residence OOM guard is enforced only while `OLLAMA_KEEP_ALIVE` keeps interactive models resident | `bubbles.devops` (docs) |
-| **SF-4** | doc | stale spec/review docs | `specs/_spec-review-report.md` (omits OPS-003/004); `specs/087-*`, `specs/088-*` (stale CI-as-producer narrative); `specs/082-*` (`releaseTrain=next` vs MVP framing) | follow-on — doc refresh | `bubbles.releases` / `bubbles.analyst` |
+| **SF-4** | doc | stale spec/review docs | `specs/_spec-review-report.md` (omitted OPS-003/004); `specs/087-*`, `specs/088-*` (stale CI-as-producer narrative); `specs/082-*` (`releaseTrain=next` vs MVP framing) | **FIXED** 2026-06-30 — `_spec-review-report.md` 2026-06-30 layer added (OPS-003/004 covered; 082 + 087/088 dispositioned); no spec `state.json` edited | `bubbles.spec-review` (for `bubbles.releases`) |
 
 ---
 
@@ -125,12 +128,31 @@ enablement" (the `--profile ollama` item, where operators provision ollama):
 Minimal, accurate, no duplication (sits next to the existing
 `validateModelEnvelopes` + `ollama ps`/OOM checklist items).
 
-## SF-4 — stale spec/review docs (spec-review F3/F4/F5)
+## SF-4 — stale spec/review docs (spec-review F3/F4/F5) — FIXED
 
-`specs/_spec-review-report.md` omits OPS-003/004; specs 087/088 carry a stale
-"CI-as-producer" narrative (the live producer is the local-operator build path,
-CI is `disabled_manually`); spec 082 frames `releaseTrain=next` vs MVP.
-**Disposition:** follow-on doc refresh; no runtime impact.
+**Resolved 2026-06-30** by `bubbles.spec-review` (read-only `spec-review-to-doc`;
+no spec `state.json` mutated). A new **2026-06-30 readiness-sweep layer** was added
+to the top of `specs/_spec-review-report.md` (append-only, newest-on-top) that:
+
+- **F3** — covers the two previously-omitted home-lab handoff packets:
+  `_ops/OPS-003-…` classified **SUPERSEDED**, `_ops/OPS-004-…` classified
+  **CURRENT** (OPS-004 supersedes OPS-003 and is the authoritative local-operator
+  go-live mechanism), and records the 2026-06-30 readiness-sweep remediation
+  (smackerel SF-1/SF-2/SF-3 + docs reconcile; the sibling knb-side KF-1..KF-5
+  fixes referenced, not imported) discharging the prior layer's F1
+  local-operator-path-readiness risk.
+- **F4** — documents why spec 082 carries `releaseTrain: next` (a next-train
+  hardening batch whose in-repo scopes benefit MVP but are independent of the
+  mvp-train feature set; retag is `bubbles.train`'s call and not required for
+  go-live). 082 `state.json` NOT edited.
+- **F5** — dispositions the specs 087/088 "CI-as-producer" narrative as
+  **SUPERSEDED by OPS-004** and **non-gating for MVP**, recommending 087/088
+  reconcile their own `ci`/`deploy` narrative on next unblock (owner
+  `bubbles.devops` / `bubbles.docs`). 087/088 `state.json` NOT edited.
+
+No runtime impact. The one open smackerel readiness item — **BUG-069-003**'s
+shared live-stack E2E (with BUG-069-002) — remains `in_progress` under its own bug
+packet and is out of scope here (folded into the final go-live validation sweep).
 
 ---
 
