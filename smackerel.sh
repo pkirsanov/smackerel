@@ -449,19 +449,29 @@ PY
 
 smackerel_assert_host_resources_profile() {
   # Spec 099 — local resource pre-flight, profile-aware core. Before a gated
-  # op verify host MemAvailable + repo-fs available disk meet the SST minimums
-  # for the requested profile (config/smackerel.yaml runtime.preflight.* ->
+  # op verify available RAM + repo-fs available disk meet the SST minimums for
+  # the requested profile (config/smackerel.yaml runtime.preflight.* ->
   # generated env PREFLIGHT_MIN_AVAILABLE_*[_LIGHT]). The Go evaluator
   # (cmd/preflight -> internal/preflight) exits non-zero when below threshold,
   # printing current-vs-required + remediation; that aborts the op BEFORE it
   # can OOM-die (exit 137) or fill the disk. Set SMACKEREL_PREFLIGHT_OVERRIDE=1
   # to bypass with a loud WARNING.
   #
-  # Primary path: host-native `go run` (fast, no container; real /proc/meminfo
-  # + statfs on the real repo path). Fallback (no host Go): the dockerized
-  # golang runner — host-correct because run_go_tooling sets NO --memory cgroup
-  # limit (so /proc/meminfo reports HOST MemAvailable) and bind-mounts the repo
-  # at /workspace (so statfs follows to the HOST repo filesystem).
+  # Path selection is OS-aware because internal/preflight reads RAM from Linux
+  # /proc/meminfo, which does NOT exist on macOS/darwin (a host-native `go run`
+  # there crashes: "read host RAM: open /proc/meminfo: no such file or
+  # directory", blocking every gated op — BUG-099-001):
+  #   - Linux host WITH host Go: host-native `go run` (fast, no container). The
+  #     Linux host IS where the containers run, so host /proc/meminfo + statfs
+  #     on the real repo path are the correct "can I bring the stack up" signal.
+  #   - Otherwise (macOS, OR Linux without host Go): the dockerized golang
+  #     runner via run_go_tooling (require_docker first). On macOS+Docker-Desktop
+  #     the stack runs inside the Docker VM, and the runner (NO --memory cgroup
+  #     limit) reads THAT VM's /proc/meminfo — the SEMANTICALLY CORRECT signal,
+  #     because every container shares the VM's memory, NOT the macOS host's
+  #     free RAM. The repo bind-mount at /workspace makes statfs follow to the
+  #     host repo fs. This keeps the guard working on macOS instead of crashing
+  #     on the missing /proc/meminfo (wsl-macos-compatibility).
   #
   # Both args are required (NO-DEFAULTS): the caller MUST name the env AND the
   # threshold profile (heavy|light); preflight.sh / cmd/preflight reject a
@@ -469,7 +479,7 @@ smackerel_assert_host_resources_profile() {
   local target_env="$1"
   local profile="$2"
   local status=0
-  if command -v go >/dev/null 2>&1; then
+  if [[ "$(uname -s)" == "Linux" ]] && command -v go >/dev/null 2>&1; then
     ( cd "$SCRIPT_DIR" && go run ./cmd/preflight --env "$target_env" --repo-root "$SCRIPT_DIR" --profile "$profile" ) || status=$?
   else
     require_docker

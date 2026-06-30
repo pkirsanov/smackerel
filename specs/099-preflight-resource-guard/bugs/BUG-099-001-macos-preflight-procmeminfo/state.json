@@ -1,0 +1,54 @@
+{
+  "version": 3,
+  "featureDir": "specs/099-preflight-resource-guard/bugs/BUG-099-001-macos-preflight-procmeminfo",
+  "parentFeatureDir": "specs/099-preflight-resource-guard",
+  "featureName": "BUG-099-001: smackerel_assert_host_resources_profile takes the host-native `go run ./cmd/preflight` path whenever host Go exists, but internal/preflight reads Linux /proc/meminfo (absent on macOS), so the spec-099 pre-flight crashes (\"read host RAM: open /proc/meminfo: no such file or directory\") on every macOS dev host, blocking BOTH the heavy `test integration` lane and the stores-only `test integration-light` lane (wsl-macos-compatibility violation)",
+  "bugId": "BUG-099-001",
+  "status": "done",
+  "releaseTrain": "mvp",
+  "certifiedAt": "2026-06-30T00:00:00Z",
+  "certifiedBy": "bubbles.devops (in-session real re-run evidence on a macOS host)",
+  "resolvedAt": "2026-06-30T00:00:00Z",
+  "lastUpdatedAt": "2026-06-30T00:00:00Z",
+  "workflowMode": "bugfix-fastlane",
+  "statusCeiling": "done",
+  "nextRequiredOwner": null,
+  "severity": "high",
+  "finding": "F-099-MACOS-PROCMEMINFO",
+  "discoveredBy": "bubbles.devops — running `./smackerel.sh --env test test integration-light` on a macOS host (OPS-005 F-RUNBOOK follow-on)",
+  "discoveredAt": "2026-06-30T00:00:00Z",
+  "rootCause": "smackerel_assert_host_resources_profile (smackerel.sh) selected the host-native `go run ./cmd/preflight` branch whenever `command -v go` succeeded. cmd/preflight -> internal/preflight.ReadMemAvailableMB() reads Linux /proc/meminfo, which does not exist on macOS/darwin, so the gate fails-loud (\"read host RAM: open /proc/meminfo: no such file or directory\") before producing a verdict. Because both lanes share this helper (heavy via smackerel_assert_host_resources -> _profile <env> heavy; light via _profile test light), the crash blocks ALL gated ops on macOS.",
+  "fix": "Gate the host-native branch on Linux: `if [[ \"$(uname -s)\" == \"Linux\" ]] && command -v go >/dev/null 2>&1; then <host-native> else require_docker; run_go_tooling .../preflight.sh <env> <profile> fi`. On macOS (or Linux without host Go) the existing dockerized runner reads the Docker VM's /proc/meminfo (NO --memory cgroup limit) — the correct 'can I bring up containers' signal, since all containers share that VM's RAM. internal/preflight is intentionally NOT taught to read macOS sysctl/vm_stat (that would gate on the wrong macOS-host number). NO-DEFAULTS preserved: both args still required; cmd/preflight / preflight.sh still reject a missing --profile.",
+  "provenBy": "Real in-session re-run on a macOS host (2026-06-30): './smackerel.sh --env test test integration-light --go-run TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel' now reaches a REAL pre-flight verdict via the dockerized runner — 'Smackerel pre-flight resource check: OK / RAM available: 8024 MB (required >= 2000 MB) / Disk available: 3155880 MB / 3081.9 GB (required >= 8 GB)' — instead of the previous 'read host RAM: open /proc/meminfo: no such file or directory' crash. The /proc/meminfo crash is gone; the gate produces a real number. Evidence captured in this packet's bug.md.",
+  "downstreamFinding": "The same re-run surfaced a SEPARATE macOS-compat bug (NOT the preflight): bare 'timeout' / 'timeout --kill-after' in the test-lane orchestrators (smackerel.sh integration / integration-light / e2e) and the runtime-health scripts has no gtimeout/watchdog fallback, so 'timeout: command not found' (exit 127) on macOS blocks the stores-up + durability run AFTER the preflight passes. Filed as BUG-099-002-macos-timeout-not-found (distinct root cause; tracked separately). The durability test TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel therefore did NOT execute this session; BUG-069-002/003 fixSequence order-2 stays pending.",
+  "blockedOps": [
+    "./smackerel.sh --env test test integration-light (stores-only light lane)",
+    "./smackerel.sh test integration (heavy lane)",
+    "./smackerel.sh build | up | test e2e | test e2e-ui | test stress | pre-flight (every heavy-gated op routes through the same helper)"
+  ],
+  "affectedSurface": [
+    "smackerel.sh :: smackerel_assert_host_resources_profile (host-native vs dockerized path selection)",
+    "tests/integration/test_runtime_health_light.sh (cosmetic SC2329 disable on cleanup())"
+  ],
+  "fixSequence": [
+    {
+      "order": 1,
+      "owner": "bubbles.devops",
+      "finding": "F-099-MACOS-PROCMEMINFO",
+      "status": "done",
+      "task": "Make smackerel_assert_host_resources_profile OS-aware: take the host-native `go run ./cmd/preflight` branch ONLY on Linux; on macOS route through the dockerized run_go_tooling preflight.sh path (reads the Docker VM /proc/meminfo). Update the function comment with the macOS=dockerized=Docker-VM-memory rationale. Keep NO-DEFAULTS. Validate shellcheck -x + bash -n on the touched shell. Confirm the heavy `test integration` lane shares the same helper so one fix repairs both lanes. PROVEN once `./smackerel.sh --env test test integration-light` reaches a real pre-flight verdict (real current-vs-required number, not a /proc/meminfo crash). Flip BUG-099-001 to done when proven."
+    }
+  ],
+  "relatesTo": [
+    "specs/099-preflight-resource-guard",
+    "specs/_ops/OPS-005-evo-x2-readiness-sweep-fixes",
+    "specs/069-assistant-http-transport/bugs/BUG-069-002-capture-context-cancellation",
+    "specs/069-assistant-http-transport/bugs/BUG-069-003-capture-endpoint-context-cancellation"
+  ],
+  "completedPhases": [
+    "discovery",
+    "implement",
+    "verify"
+  ],
+  "completedScopes": []
+}
