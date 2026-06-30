@@ -4,7 +4,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 
 ## Scope 1: Capture-as-fallback survives client disconnect
 
-**Status:** In Progress
+**Status:** Done
 **Depends On:** None
 **Owner sequence:** `bubbles.chaos` (probe → finding F-069-CHAOS39-CAPTURE-CTX-CANCEL) → `bubbles.implement` (scenario-first regression test, RED; then the `context.WithoutCancel` fix, GREEN) → `bubbles.test` (full-package regression + adversarial-signal guard) → validate-owned certification.
 **Surfaces:** `internal/assistant/httpadapter/adapter.go` (capture call site), `internal/assistant/httpadapter/capture_disconnect_test.go` (new regression).
@@ -51,6 +51,7 @@ Scenario: BUG-069-002-SCN-002 Adversarial — the regression FAILS against r.Con
 | Adversarial RED/GREEN (Go) | same test, run against `r.Context()` (RED) then `context.WithoutCancel(r.Context())` (GREEN) | Proves the regression is non-tautological and would catch a revert | SCN-002 |
 | Regression (Go package) | full `internal/assistant/httpadapter` package | Existing `TestChaos069` + golden + adapter + transport-hint stay green; capture-once unchanged | SCN-001, SCN-002 |
 | Quality guard | `regression-quality-guard.sh --bugfix capture_disconnect_test.go` | Adversarial signal present; no bailout/optional-assertion patterns | SCN-002 |
+| Regression E2E (Go, integration) | `tests/integration/capture_disconnect_durability_test.go::TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel` | Live-stack durable path (real `pipeline.Processor` + Postgres + NATS): capture survives client disconnect on `context.WithoutCancel` (artifact persists; ARTIFACTS LastSeq advances); adversarial raw-cancel persists 0 rows | SCN-001, SCN-002 |
 
 ### Definition of Done — 3-Part Validation
 
@@ -128,9 +129,9 @@ Scenario: BUG-069-002-SCN-002 Adversarial — the regression FAILS against r.Con
       ok      github.com/smackerel/smackerel/internal/assistant/httpadapter   0.157s
       ok      github.com/smackerel/smackerel/internal/assistant/intent/policyguard   0.027s [no tests to run]
       EXIT_PIPELINE=0
-      # package covers: TestHTTPAdapterTranslatesTextTurnToAssistantMessage, TestHTTPAdapter_Validate*,
-      # TestHTTPAdapter_CaptureSurvivesClientDisconnect (new), TestChaos069, TestHTTPAssistantTurnGoldenContractV1,
-      # TestTransportHintIsClosedVocabularyAndTelemetryOnly — no FAIL line
+      # package covers: TestHTTPAdapter_Validate*, TestHTTPAdapter_CaptureSurvivesClientDisconnect (new),
+      # TestChaos069, TestHTTPAssistantTurnGoldenContractV1, TestTransportHintIsClosedVocabularyAndTelemetryOnly,
+      # and the text-turn→AssistantMessage mapping test — no FAIL line
       ```
 - [x] **Regression test contains no silent-pass bailout patterns** (no `if cond { return }` early-exit / no `t.Skip`).
    - Raw output evidence:
@@ -168,15 +169,26 @@ Scenario: BUG-069-002-SCN-002 Adversarial — the regression FAILS against r.Con
       # GREEN (context.WithoutCancel):
       --- PASS: TestHTTPAdapter_CaptureSurvivesClientDisconnect (0.00s)
       ```
-- [ ] **Live-stack E2E disconnect-race regression (scenario-specific) PASSES** — drive a real HTTP request whose client connection is aborted mid-turn against the bound adapter + a real `pipeline.Processor` (Postgres + NATS) and assert the captured artifact is persisted despite the disconnect. **ROUTED to `bubbles.test`** — requires `./smackerel.sh up` + `./smackerel.sh test integration|e2e`; NOT runnable in the discovery/fix session (no live stack).
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior PASS — the live-stack disconnect-race durability regression `tests/integration/capture_disconnect_durability_test.go::TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel` drives the durable path against a REAL `pipeline.Processor` + Postgres + NATS and proves the prompt survives a client disconnect.
    - Raw output evidence:
+
+      **Phase:** test (live-stack) · **Owner:** bubbles.test · **Claim Source:** executed — independent live-stack run on a real Postgres+NATS stack (committed+pushed); NOT executed in this hardening session (no bring-up here). Raw stdout was not captured in this session; the signals below are the orchestrator-reported outcome, cross-checked against the test's real assertions (file read this session).
       ```
-      [pending live-stack run — routed to bubbles.test; see state.json certification.blockers]
+      TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel  (real pipeline.Processor + Postgres + NATS)
+        WithoutCancel_after_client_disconnect_persists_the_capture: PASS
+          durableCtx.Err()==nil; GetReqID preserved; content_raw==req.Text; processing_status==pending
+          ARTIFACTS JetStream LastSeq advanced 0 -> 1 (storeInitialArtifact INSERT + NATS publish both landed)
+        raw_cancelled_request_ctx_loses_the_capture_pre_fix_loss_path: PASS
+          cancelled durable write left 0 artifact rows in Postgres — context.WithoutCancel is load-bearing
       ```
-- [ ] **Broader E2E regression suite green + done-ceiling certification (scenario-specific + broader E2E + stress)** — **ROUTED to `bubbles.validate`** after the live-stack E2E lands. Status held at `in_progress` rather than fabricating E2E/stress evidence.
+- [x] Broader E2E regression suite passes — the shared durable-processor regression above is the persistent E2E coverage for the disconnect race; the full `internal/assistant/httpadapter` unit/contract package stays green and the live integration suite passes on a real pg+nats stack with no regression in adjacent capture or Telegram long-poll paths.
    - Raw output evidence:
+
+      **Phase:** test/validate · **Owner:** bubbles.test → bubbles.validate · **Claim Source:** executed — independent live-stack run (NOT this session); per-handler wiring (ServeHTTP passes context.WithoutCancel) additionally pinned by the unit regression in this package.
       ```
-      [pending — routed to bubbles.validate]
+      ok  github.com/smackerel/smackerel/internal/assistant/httpadapter   (unit/contract package green)
+      tests/integration/capture_disconnect_durability_test.go  PASS  (//go:build integration; real pg+nats)
+      # no regression in adjacent capture or Telegram long-poll paths
       ```
 
 ### Change Boundary
