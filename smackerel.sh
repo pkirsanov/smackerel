@@ -1060,7 +1060,7 @@ case "$COMMAND" in
           local cleanup_status=0
 
           echo "Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)..."
-          timeout --kill-after=20s 180 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || cleanup_status=$?
+          smackerel_run_with_timeout --kill-after=20s 180 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || cleanup_status=$?
           if [[ "$cleanup_status" -ne 0 ]]; then
             echo "ERROR: integration test stack teardown failed during exit cleanup (exit ${cleanup_status})." >&2
             return "$cleanup_status"
@@ -1081,7 +1081,7 @@ case "$COMMAND" in
         trap integration_cleanup_trap EXIT
 
         # Run shell-based health probe (brings stack up + asserts health)
-        timeout --kill-after=30s 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
+        smackerel_run_with_timeout --kill-after=30s 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
 
         # Run Go integration tests against the live test stack
         searxng_url=""
@@ -1183,7 +1183,7 @@ case "$COMMAND" in
           local cleanup_status=0
 
           echo "Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)..."
-          timeout --kill-after=20s 120 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || cleanup_status=$?
+          smackerel_run_with_timeout --kill-after=20s 120 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || cleanup_status=$?
           if [[ "$cleanup_status" -ne 0 ]]; then
             echo "ERROR: integration-light stack teardown failed during exit cleanup (exit ${cleanup_status})." >&2
             return "$cleanup_status"
@@ -1204,7 +1204,7 @@ case "$COMMAND" in
         trap integration_light_cleanup_trap EXIT
 
         # Bring up ONLY postgres + nats + health-gate on the two stores.
-        timeout --kill-after=30s 240 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health_light.sh"
+        smackerel_run_with_timeout --kill-after=30s 240 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health_light.sh"
 
         # Run the selected Go integration test against the live pg+nats stack.
         # Stores-only env subset: the heavy lane also injects core/ml/searxng +
@@ -1533,7 +1533,7 @@ case "$COMMAND" in
           started_at="$(date +%s)"
           echo "Running project-scoped test stack teardown (${phase}, timeout ${E2E_STACK_DOWN_TIMEOUT_S}s)..."
           set +e
-          e2e_run_child timeout --kill-after=30s "$E2E_STACK_DOWN_TIMEOUT_S" "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
+          e2e_run_child "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=30s "$E2E_STACK_DOWN_TIMEOUT_S" "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
           status=$?
           set -e
           finished_at="$(date +%s)"
@@ -1612,7 +1612,7 @@ case "$COMMAND" in
           shell_e2e_timeout_s="$(e2e_shell_timeout_for "$SHELL_E2E_RUN_TARGET")"
           e2e_validate_shell_test_target "$SHELL_E2E_RUN_TARGET"
           echo "Running targeted shell E2E: $SHELL_E2E_RUN_TARGET"
-          e2e_run_shell_test "$SHELL_E2E_RUN_TARGET" timeout --kill-after=15s "$shell_e2e_timeout_s" env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$SHELL_E2E_RUN_TARGET"
+          e2e_run_shell_test "$SHELL_E2E_RUN_TARGET" "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=15s "$shell_e2e_timeout_s" env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$SHELL_E2E_RUN_TARGET"
           e2e_print_shell_summary
           if [[ "$e2e_overall_status" -ne 0 ]]; then
             exit "$e2e_overall_status"
@@ -1633,7 +1633,7 @@ case "$COMMAND" in
           )
           for e2e_script in "${e2e_lifecycle_scripts[@]}"; do
             echo "Running isolated lifecycle shell E2E: $e2e_script"
-            e2e_run_shell_test "$e2e_script" timeout --kill-after=15s "$E2E_LIFECYCLE_SHELL_TIMEOUT_S" bash "$SCRIPT_DIR/tests/e2e/$e2e_script"
+            e2e_run_shell_test "$e2e_script" "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=15s "$E2E_LIFECYCLE_SHELL_TIMEOUT_S" bash "$SCRIPT_DIR/tests/e2e/$e2e_script"
           done
 
           # Shared shell E2E scripts use one parent-owned disposable test
@@ -1684,7 +1684,7 @@ case "$COMMAND" in
           echo "Booting shared shell E2E test stack for ${#e2e_shared_scripts[@]} scripts..."
           e2e_down_test_stack "before shared shell E2E block"
           set +e
-          e2e_run_child timeout --kill-after=30s 360 "$SCRIPT_DIR/smackerel.sh" --env test up
+          e2e_run_child "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=30s 360 "$SCRIPT_DIR/smackerel.sh" --env test up
           e2e_shared_stack_status=$?
           set -e
 
@@ -1693,7 +1693,7 @@ case "$COMMAND" in
           else
             for e2e_script in "${e2e_shared_scripts[@]}"; do
               echo "Running shared-stack shell E2E: $e2e_script"
-              e2e_run_shell_test "$e2e_script" timeout --kill-after=15s "$E2E_SHARED_SHELL_TIMEOUT_S" env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$e2e_script"
+              e2e_run_shell_test "$e2e_script" "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=15s "$E2E_SHARED_SHELL_TIMEOUT_S" env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$e2e_script"
             done
           fi
 
@@ -1729,7 +1729,7 @@ case "$COMMAND" in
         # Bring up a fresh stack for the Go E2E block; the e2e trap owns
         # final teardown regardless of Go test outcome.
         set +e
-        e2e_run_child timeout --kill-after=30s 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
+        e2e_run_child "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=30s 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
         e2e_go_stack_status=$?
         set -e
         if [[ "$e2e_go_stack_status" -ne 0 ]]; then
@@ -1909,7 +1909,7 @@ case "$COMMAND" in
           local phase="$1"
 
           echo "Running project-scoped stress test stack teardown (${phase}, timeout 180s)..."
-          timeout --kill-after=30s 180 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
+          smackerel_run_with_timeout --kill-after=30s 180 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
         }
         stress_cleanup_trap() {
           local status=$?
@@ -1925,10 +1925,10 @@ case "$COMMAND" in
         trap stress_cleanup_trap EXIT
 
         stress_down_test_stack "pre-clean"
-        timeout 360 "$SCRIPT_DIR/smackerel.sh" --env test up
-        timeout 300 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"
-        timeout 600 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_search_stress.sh"
-        timeout 900 docker run --rm \
+        smackerel_run_with_timeout 360 "$SCRIPT_DIR/smackerel.sh" --env test up
+        smackerel_run_with_timeout 300 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"
+        smackerel_run_with_timeout 600 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_search_stress.sh"
+        smackerel_run_with_timeout 900 docker run --rm \
           --network "$compose_network" \
           -v "$SCRIPT_DIR:/workspace" \
           -v smackerel-gomod-cache:/go/pkg/mod \

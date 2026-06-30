@@ -22,7 +22,7 @@ cd "$REPO_ROOT"
 LOG="$(mktemp)"
 trap 'rm -f "$LOG"' EXIT
 
-if ! timeout 120 go run ./cmd/scenario-lint/ config/prompt_contracts >"$LOG" 2>&1; then
+if ! "$REPO_ROOT/scripts/lib/run-with-timeout.sh" 120 go run ./cmd/scenario-lint/ config/prompt_contracts >"$LOG" 2>&1; then
     sed 's|'"$HOME"'|~|g' "$LOG" >&2
     echo "FAIL scenario-lint exited non-zero" >&2
     exit 1
@@ -54,7 +54,7 @@ fi
 # the SCOPE-03 ValidateScenariosPresent hook is wired into the
 # scenario-lint binary.
 LOG_OK="$(mktemp)"
-if ! timeout 120 go run ./cmd/scenario-lint/ \
+if ! "$REPO_ROOT/scripts/lib/run-with-timeout.sh" 120 go run ./cmd/scenario-lint/ \
         -assistant-manifest config/assistant/scenarios.yaml \
         config/prompt_contracts >"$LOG_OK" 2>&1; then
     sed 's|'"$HOME"'|~|g' "$LOG_OK" >&2
@@ -80,7 +80,7 @@ rm "$TMPDIR_T/weather-query-v1.yaml"
 
 LOG_FAIL="$(mktemp)"
 set +e
-timeout 120 go run ./cmd/scenario-lint/ \
+"$REPO_ROOT/scripts/lib/run-with-timeout.sh" 120 go run ./cmd/scenario-lint/ \
     -assistant-manifest config/assistant/scenarios.yaml \
     "$TMPDIR_T" >"$LOG_FAIL" 2>&1
 EXIT_CODE=$?
