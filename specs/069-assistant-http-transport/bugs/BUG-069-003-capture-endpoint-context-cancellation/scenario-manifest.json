@@ -49,12 +49,21 @@
       "title": "Shared live-stack E2E disconnect-race regression covers BOTH /api/assistant/turn (BUG-069-002) and /api/capture (this bug) against a real pipeline.Processor",
       "requiredTestType": "e2e",
       "owner": "bubbles.test",
-      "linkedTests": [],
-      "evidenceRefs": [
-        "state.json fixSequence order-2 (shared with BUG-069-002 fixSequence order-2)",
-        "state.json certification.blockers (live-stack E2E routed to bubbles.test -> bubbles.validate)"
+      "linkedTests": [
+        {
+          "file": "tests/integration/capture_disconnect_durability_test.go",
+          "function": "TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel",
+          "type": "integration-go",
+          "status": "authored-run-deferred"
+        }
       ],
-      "linkedDoD": "Scope 1 DoD: Live-stack E2E disconnect-race regression (scenario-specific) + Broader E2E regression suite — PENDING, routed to bubbles.test -> bubbles.validate; requires `./smackerel.sh up`."
+      "evidenceRefs": [
+        "tests/integration/capture_disconnect_durability_test.go (AUTHORED shared order-2 regression vs a real pipeline.Processor + Postgres + NATS; sub-test 1 proves an artifact survives in Postgres after Process on context.WithoutCancel(cancelled-request-ctx) — and since submitForProcessing deletes the row on NATS-publish failure, survival proves INSERT + publish both succeeded; ARTIFACTS JetStream LastSeq advance corroborates; sub-test 2 is the adversarial pre-fix loss path proving a raw cancelled ctx persists 0 rows)",
+        "report.md (### fixSequence order-2 — shared durability regression AUTHORED; live RUN deferred: environment-constrained)",
+        "state.json fixSequence order-2 (shared with BUG-069-002 fixSequence order-2; remains pending — live run not yet executed)",
+        "state.json certification.blockers (live-stack regression routed to bubbles.test -> bubbles.validate)"
+      ],
+      "linkedDoD": "Scope 1 DoD: Live-stack disconnect-durability regression (scenario-specific) + Broader E2E regression suite — regression AUTHORED (tests/integration/capture_disconnect_durability_test.go; processor-level durability both endpoints rely on); live RUN PENDING (environment-constrained), routed to bubbles.test -> bubbles.validate; run via `./smackerel.sh --env test test integration --go-run TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel`."
     }
   ]
 }

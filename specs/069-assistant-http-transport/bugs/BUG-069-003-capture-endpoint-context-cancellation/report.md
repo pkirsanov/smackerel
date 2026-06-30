@@ -213,3 +213,70 @@ BUG-069-002) and is not runnable in this session (no live stack). Status is held
 at `in_progress` rather than fabricating E2E/stress evidence. The already-`done`
 parent spec 069 artifacts and the BUG-069-002 packet are left untouched; this
 finding and fix are recorded entirely in this bug packet.
+
+### fixSequence order-2 (bubbles.test) — shared live-stack durability regression AUTHORED; live RUN deferred
+
+**Owner:** bubbles.test · **fixSequence order-2** (shared with BUG-069-002 order-2) · **Claim Source:** authoring = executed (file on disk; symbols verified against the resolved module versions — chi v5.2.2 `RequestIDKey`/`GetReqID`, nats.go v1.37.0 `StreamState.LastSeq`); live run = not-run (deferred)
+
+The shared order-2 deliverable — the live-stack disconnect-durability regression
+backed by a real `pipeline.Processor` + Postgres + NATS — is **authored and on
+disk**:
+
+- **Test file:** `tests/integration/capture_disconnect_durability_test.go`
+  (`//go:build integration`, package `integration` — picked up by the integration
+  runner `scripts/runtime/go-integration.sh`, which globs `./tests/integration/...`)
+- **Test:** `TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel`
+
+**What it proves (both endpoints' shared durable path).** Both fixed endpoints now
+dispatch the SAME durable write wrapped in `context.WithoutCancel`: `/api/capture`
+(`internal/api/capture.go::CaptureHandler`, this bug) and `/api/assistant/turn`
+(`internal/assistant/httpadapter/adapter.go::ServeHTTP`, BUG-069-002), both flowing
+through `pipeline.Processor.Process → submitForProcessing → storeInitialArtifact
+INSERT + NATS.Publish(SubjectArtifactsProcess)`. The integration test exercises that
+shared processor path directly against the live test stack:
+
+- **Sub-test 1 — `WithoutCancel_after_client_disconnect_persists_the_capture`:**
+  builds a request context that is ALREADY cancelled (client disconnect), wraps it
+  in `context.WithoutCancel` (the exact context both fixed endpoints pass), and
+  drives `Process`. Asserts the artifact **survives in Postgres**. KEY INSIGHT:
+  `submitForProcessing` DELETES the artifact row if the NATS publish fails, so a
+  surviving row proves BOTH the INSERT and the NATS publish succeeded — one Postgres
+  read certifies the whole durable write. Also asserts the ARTIFACTS JetStream
+  **LastSeq advanced** (the publish physically landed) and that `middleware.GetReqID`
+  survives `context.WithoutCancel` (request-scoped TraceID preserved — why WithoutCancel
+  was chosen over a fresh context).
+- **Sub-test 2 — `raw_cancelled_request_ctx_loses_the_capture_pre_fix_loss_path`
+  (adversarial / anti-tautology):** drives `Process` on the RAW cancelled request
+  context (the pre-fix call shape). Asserts the durable write **aborts** and **0 rows**
+  persist — if either endpoint were reverted to `r.Context()`, this is the exact loss
+  it reintroduces. This guarantees sub-test 1 is not a tautology: the
+  `context.WithoutCancel` fix is load-bearing.
+
+Per-handler HTTP wiring (that each endpoint passes `context.WithoutCancel`) is already
+proven by the unit regressions `TestCaptureHandler_CaptureSurvivesClientDisconnect`
+(this bug) and `TestHTTPAdapter_CaptureSurvivesClientDisconnect` (BUG-069-002); this
+integration test proves the processor-level durability invariant those wirings depend
+on.
+
+**STEP 2 — live RUN deferred (environment-constrained), NOT fabricated.** Run path:
+`./smackerel.sh --env test test integration --go-run TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel`
+(disposable test stack, isolated test ports/volumes; the CLI owns bring-up +
+`down --volumes` teardown via its trap). A read-only host assessment this session
+found **27 containers already running** and **no prebuilt smackerel images** — so the
+integration path would first have to build the Go `core` + Python `ml` images from
+scratch under heavy contention. That is the "clearly too heavy/slow to come up"
+condition; per the anti-thrash constraint **no bring-up was initiated** (nothing was
+started, so nothing was left running). Consistent with this packet's original "no live
+stack in this session" disposition, the live run is **deferred to a capable stack /
+the operator's home-lab stack**.
+
+**Status:** fixSequence order-2 remains **pending**; certification stays `in_progress`
+(NOT done). The regression asset is committed-ready; the live execution + the broader
+E2E/stress certification remain routed to `bubbles.test` → `bubbles.validate`. No
+E2E/stress evidence is fabricated.
+
+| Sub-deliverable | State | Evidence |
+|-----------------|-------|----------|
+| Shared durability regression authored | ✅ done | `tests/integration/capture_disconnect_durability_test.go` |
+| Live integration RUN (real Postgres + NATS) | ⏸ deferred (environment-constrained) | `./smackerel.sh --env test test integration --go-run TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel` |
+| Broader E2E regression suite + stress | ⏸ pending | routed to bubbles.test → bubbles.validate |
