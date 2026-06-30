@@ -280,3 +280,39 @@ E2E/stress evidence is fabricated.
 | Shared durability regression authored | ✅ done | `tests/integration/capture_disconnect_durability_test.go` |
 | Live integration RUN (real Postgres + NATS) | ⏸ deferred (environment-constrained) | `./smackerel.sh --env test test integration --go-run TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel` |
 | Broader E2E regression suite + stress | ⏸ pending | routed to bubbles.test → bubbles.validate |
+
+### [Live-stack re-attempt 2026-06-30] RUN-DEFERRED — forced heavy build (confirmed)
+
+**Owner:** bubbles.test · **fixSequence order-2** (shared with BUG-069-002) · **Claim
+Source:** host diagnostics = **executed** (raw terminal output below); live test run =
+**not-run (deferred)** — the test never executed, so NO pass/fail is claimed.
+
+A second live-run attempt of
+`./smackerel.sh --env test test integration --go-run TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel`
+was assessed read-only. The orchestrator's `test integration` path does **not** bring up
+a Postgres+NATS-only stack: it runs `tests/integration/test_runtime_health.sh` with
+`KEEP_STACK_UP=1`, which executes `./smackerel.sh --env test build` + `up` and then
+**health-gates on `services.ml_sidecar.status == "up"`** (in addition to postgres + nats).
+`docker-compose.yml` builds `smackerel-core` (root `Dockerfile`, context `.`) and
+`smackerel-ml` (`./ml/Dockerfile`) **from source**. With zero cached images that is a
+full from-scratch core + Python-ML build — the heaviest bring-up — which the durable
+regression itself does **not** need (it drives `pipeline.NewProcessor` in-process and
+touches only Postgres + NATS).
+
+```text
+# host assessment (read-only), 2026-06-30 ~08:43 local
+load averages: 5.35 5.11 4.77          # moderate, not trending down at probe time
+Pages free: 4236  (~16 MB)              # very tight; ~1.3 GB inactive-reclaimable
+running containers: 27
+docker images | grep smackerel  ->  (no smackerel images)   # nothing cached -> from-scratch build
+# orchestrator path: smackerel.sh `integration)` -> test_runtime_health.sh ->
+#   `smackerel.sh --env test build` (smackerel-core + smackerel-ml from source) + `up`
+#   + health gate asserts postgres+nats+ml_sidecar all "up"
+```
+
+Per the anti-thrash constraint **no bring-up was initiated** — `build`/`up` were never
+run. Verified clean afterward: `docker ps --filter name=smackerel-test` → none;
+`docker volume ls | grep smackerel.*test` → none. Nothing started, nothing left running,
+no leaked test volumes. `state.json` is **unchanged** (status `in_progress`, order-2
+`pending`, nextRequiredOwner `bubbles.test`). Live execution + done-ceiling certification
+remain routed to `bubbles.test` → `bubbles.validate` on a capable/home-lab stack.
