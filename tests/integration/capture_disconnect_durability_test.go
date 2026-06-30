@@ -59,6 +59,14 @@ import (
 func TestCaptureDisconnectDurability_ProcessorSurvivesClientCancel(t *testing.T) {
 	pool := testPool(t)
 	natsClient := captureDurabilityNATSClient(t)
+
+	// The stores-only `integration-light` lane brings up RAW postgres + NATS with
+	// no core, so the schema migrations + JetStream streams core applies at startup
+	// are absent. Provision them via the SAME production functions core calls
+	// (db.Migrate + EnsureStreams) — idempotent, so this is a harmless no-op in the
+	// heavy lane where core already provisioned both. See storesetup_test.go.
+	provisionStoresForCaptureDurability(t, pool, natsClient)
+
 	proc := pipeline.NewProcessor(pool, natsClient)
 
 	t.Run("WithoutCancel_after_client_disconnect_persists_the_capture", func(t *testing.T) {
