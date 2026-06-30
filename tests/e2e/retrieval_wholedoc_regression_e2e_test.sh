@@ -18,7 +18,7 @@ source "$REPO_DIR/scripts/lib/runtime.sh"
 
 TEST_ENV="test"
 SENTINEL="DECISION-SHIP-ON-THE-12TH"
-cleanup() { timeout --kill-after=15s 120 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true; }
+cleanup() { smackerel_run_with_timeout --kill-after=15s 120 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 echo "=== SCN-095-A02: whole_document fetches the full transcript (live) ==="

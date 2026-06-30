@@ -14,7 +14,7 @@ MAX_SEARCH_TIME_MS=3000
 
 cleanup() {
   if [ "${STACK_MANAGED:-0}" = "0" ]; then
-    timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+    smackerel_run_with_timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
     # Force-remove explicitly-named test volumes
     local env_file
     env_file="$(smackerel_env_file "$TEST_ENV" 2>/dev/null || true)"

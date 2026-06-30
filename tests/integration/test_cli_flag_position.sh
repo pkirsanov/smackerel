@@ -22,7 +22,7 @@ TEST_VOLUME="smackerel-test-postgres-data"
 
 # Pre-clean: ensure no stale volume from a prior run influences the assertion.
 docker volume rm -f "$TEST_VOLUME" >/dev/null 2>&1 || true
-timeout 60 "$REPO_DIR/smackerel.sh" --env test down --volumes >/dev/null 2>&1 || true
+"$REPO_DIR/scripts/lib/run-with-timeout.sh" 60 "$REPO_DIR/smackerel.sh" --env test down --volumes >/dev/null 2>&1 || true
 
 # Bring the test stack up. This creates the named test postgres volume.
 "$REPO_DIR/smackerel.sh" --env test up

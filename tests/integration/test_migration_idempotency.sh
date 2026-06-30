@@ -41,14 +41,14 @@ TEST_ENV="test"
 TEST_VOLUME="smackerel-test-postgres-data"
 
 cleanup() {
-  timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+  smackerel_run_with_timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
   docker volume rm -f "$TEST_VOLUME" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
 # Hard-clean baseline so the bug is provably reached via the mid-test
 # ledger reset, not via any leftover state from a previous session.
-timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+smackerel_run_with_timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 docker volume rm -f "$TEST_VOLUME" >/dev/null 2>&1 || true
 
 ENV_FILE="$(smackerel_require_env_file "$TEST_ENV")"

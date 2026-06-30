@@ -21,7 +21,7 @@ COMPOSE_PROJECT=""
 CORE_IMAGE=""
 
 cleanup() {
-    timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+    smackerel_run_with_timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -42,7 +42,7 @@ BROKEN_ENV=$(mktemp)
 cp "$SOURCE_ENV" "$BROKEN_ENV"
 sed -i '/^RETRIEVAL_ROUTING_INTENT_CONFIDENCE_THRESHOLD=/d' "$BROKEN_ENV"
 set +e
-OUT=$(timeout --kill-after=15s 60 docker run --rm --env-file "$BROKEN_ENV" "$CORE_IMAGE" 2>&1)
+OUT=$(smackerel_run_with_timeout --kill-after=15s 60 docker run --rm --env-file "$BROKEN_ENV" "$CORE_IMAGE" 2>&1)
 CODE=$?
 set -e
 rm -f "$BROKEN_ENV"
@@ -56,6 +56,6 @@ echo "PASS: missing RETRIEVAL_* key aborted startup with [F095-SST-MISSING] (exi
 
 # Positive case: complete env starts cleanly (smoke).
 set +e
-timeout --kill-after=15s 30 docker run --rm --env-file "$SOURCE_ENV" "$CORE_IMAGE" --help >/dev/null 2>&1
+smackerel_run_with_timeout --kill-after=15s 30 docker run --rm --env-file "$SOURCE_ENV" "$CORE_IMAGE" --help >/dev/null 2>&1
 set -e
 echo "PASS: SCN-095-S01 config-validation regression complete"

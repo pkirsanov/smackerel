@@ -18,7 +18,7 @@ REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$REPO_DIR/scripts/lib/runtime.sh"
 
 TEST_ENV="test"
-cleanup() { timeout --kill-after=15s 120 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true; }
+cleanup() { smackerel_run_with_timeout --kill-after=15s 120 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 echo "=== SCN-095-B02/B03/B04: pool exclusion + still searchable (live) ==="

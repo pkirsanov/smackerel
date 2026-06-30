@@ -97,3 +97,66 @@ smackerel_compose() {
     "${args[@]}" "$@"
   fi
 }
+
+# BUG-099-002 — portable drop-in for GNU `timeout [--kill-after=<grace>] <seconds> <cmd...>`.
+#
+# macOS ships no bare `timeout` on PATH (GNU coreutils installs it as `gtimeout`),
+# so test-lane call sites that invoke `timeout` directly die with
+# `timeout: command not found` (exit 127) before the stack even starts. Per
+# .github/instructions/wsl-macos-compatibility.instructions.md this resolves
+# `timeout` -> `gtimeout` -> a watchdog fallback and preserves GNU timeout's
+# exit-124-on-timeout semantics.
+#
+# Accepts the SAME argv as GNU `timeout`: an optional leading
+# `--kill-after=<grace>` (both `timeout` and `gtimeout` support it; the watchdog
+# approximates it as SIGTERM at <seconds> then SIGKILL <grace> later) followed by
+# <seconds> and the command. Drop-in: swap `timeout` -> `smackerel_run_with_timeout`.
+# For call sites that exec a binary (e.g. wrapped by env/setsid) or that do not
+# source this lib, use the sibling executable scripts/lib/run-with-timeout.sh.
+smackerel_run_with_timeout() {
+  local rc=0
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$@" || rc=$?
+    return "$rc"
+  fi
+  if command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$@" || rc=$?
+    return "$rc"
+  fi
+
+  # Watchdog fallback: neither `timeout` nor `gtimeout` is on PATH.
+  local kill_after=""
+  if [[ "${1:-}" == --kill-after=* ]]; then
+    kill_after="${1#--kill-after=}"
+    shift
+  fi
+  if [[ $# -lt 2 ]]; then
+    echo "smackerel_run_with_timeout: usage: [--kill-after=<grace>] <seconds> <cmd...>" >&2
+    return 2
+  fi
+  local seconds="${1%[smh]}"
+  shift
+  local grace="${kill_after%[smh]}"
+
+  "$@" &
+  local cmd_pid=$!
+  (
+    sleep "$seconds"
+    kill -TERM "$cmd_pid" 2>/dev/null || exit 0
+    if [[ -n "$grace" ]]; then
+      sleep "$grace"
+      kill -KILL "$cmd_pid" 2>/dev/null || true
+    fi
+  ) &
+  local watch_pid=$!
+
+  wait "$cmd_pid" 2>/dev/null || rc=$?
+  kill -TERM "$watch_pid" 2>/dev/null || true
+  wait "$watch_pid" 2>/dev/null || true
+  # Map a watchdog SIGTERM (143) / SIGKILL (137) to GNU timeout's 124.
+  if [[ "$rc" -eq 143 || "$rc" -eq 137 ]]; then
+    rc=124
+  fi
+  return "$rc"
+}
