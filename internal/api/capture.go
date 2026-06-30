@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -92,8 +93,21 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Process the capture
-	result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
+	// Process the capture.
+	//
+	// Capture-as-fallback is inviolable (Hard Constraint 5 / BS-001 /
+	// policySnapshot.captureAsFallback="inviolable"): the user's capture MUST
+	// persist even if the client has already disconnected. net/http cancels
+	// r.Context() the instant the connection drops, which would abort the
+	// downstream pipeline.Process Postgres INSERT (storeInitialArtifact) and
+	// NATS publish (submitForProcessing) — both context-honoring — and
+	// silently lose the capture. Decouple the durable write from request
+	// cancellation while preserving request-scoped values (request id / trace
+	// correlation via middleware.GetReqID, consumed by submitForProcessing for
+	// the artifact TraceID). Same root cause as BUG-069-002 (assistant
+	// /api/assistant/turn), here at the direct /api/capture endpoint —
+	// F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL.
+	result, err := d.Pipeline.Process(context.WithoutCancel(r.Context()), &pipeline.ProcessRequest{
 		URL:          req.URL,
 		Text:         req.Text,
 		VoiceURL:     req.VoiceURL,
