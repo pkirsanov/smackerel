@@ -926,6 +926,11 @@ fails loud at startup if any is missing, empty, or a dev default:
 - [ ] `--profile ollama` — REQUIRED on evo-x2 or the ML sidecar has no LLM
       backend. Confirm `/dev/kfd` + `/dev/dri` ROCm device passthrough and the
       correct render/video GIDs (`getent group render` / `getent group video`).
+  - [ ] Keep `OLLAMA_KEEP_ALIVE` resident on home-lab (`-1` or a duration
+        ≥ 10m): the `validateModelEnvelopes` co-residence OOM guard is enforced
+        only while keep-alive keeps the interactive hot-path models resident.
+        With a short/zero keep-alive the sum guard relaxes and avoiding
+        co-residence OOM becomes the operator's responsibility.
 - [ ] `--profile monitoring` — enable Prometheus (Grafana + Alertmanager are
       knb-side stand-up).
 - [ ] `--profile searxng` — enable only if the open-knowledge agent is on.
