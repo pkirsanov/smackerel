@@ -121,7 +121,7 @@ services:
         max-file: "3"
 
   smackerel-core:
-    image: ${SMACKEREL_CORE_IMAGE}
+    image: ${SMACKEREL_CORE_IMAGE:?SMACKEREL_CORE_IMAGE must be set by the deploy adapter at apply}
     restart: unless-stopped
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
     # The Go binary writes nothing under `/`; only `/tmp` (log buffering)
@@ -181,7 +181,7 @@ services:
         max-file: "5"
 
   smackerel-ml:
-    image: ${SMACKEREL_ML_IMAGE}
+    image: ${SMACKEREL_ML_IMAGE:?SMACKEREL_ML_IMAGE must be set by the deploy adapter at apply}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
     restart: unless-stopped
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
@@ -350,7 +350,7 @@ services:
   #   - cap_drop: [ALL], no-new-privileges:true
   #   - profile: [monitoring] so it does not start unless requested
   prometheus:
-    image: ${PROMETHEUS_IMAGE}
+    image: ${PROMETHEUS_IMAGE:?PROMETHEUS_IMAGE must be set when the monitoring profile is enabled}
     restart: unless-stopped
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
     # The TSDB lives on the named volume prometheus-data mounted at
