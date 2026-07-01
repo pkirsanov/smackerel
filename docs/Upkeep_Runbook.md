@@ -32,13 +32,19 @@ scheduling, volume backup, and offsite shipping **out** (see its header comment)
 | Layer | Owner | Entrypoint | Responsibilities |
 |-------|-------|------------|------------------|
 | **Product** | this repo | `./smackerel.sh backup` (`scripts/commands/backup.sh`), on a host where the product CLI is present (dev / operator host) | `pg_dump \| gzip` of smackerel core state, gzip-integrity validation, retention (7 daily + 4 weekly), status JSON for the `SmackerelBackupStale` alert, secret redaction |
-| **knb / target adapter** | knb overlay | `<knb-repo>/smackerel/home-lab/backup.sh` | Scheduling (systemd/cron timer); on the artifact-only home-lab target, its OWN inline `pg_dump \| gzip` + `gzip -t` integrity gate + restic retention prune (the product CLI is not deployed there); Compose volume backup (NATS); off-host shipping (restic / `BACKUP_DESTINATION_URL`) |
+| **knb / target adapter** | knb overlay | `<knb-repo>/smackerel/home-lab/backup.sh` | Scheduling (systemd/cron timer); on the artifact-only home-lab target, its OWN inline `pg_dump \| gzip` + `gzip -t` integrity gate + restic retention prune (the product CLI is not deployed there); NATS JetStream volume backup — resolves the real volume via `${NATS_VOLUME_NAME}` / `docker volume inspect` and archives the volume **contents** (`cp -a`, not a fixed `/var/lib/docker/volumes/...` path); off-host shipping (restic / `BACKUP_DESTINATION_URL`) |
 
 On the artifact-only home-lab **target**, the knb hook does NOT call
 `./smackerel.sh backup` — the product source/CLI is not deployed there (images +
 config bundle only). Instead it performs its own inline `pg_dump | gzip` with a
-`gzip -t` integrity gate and a restic retention prune, then the Compose volume
-backup (NATS) and offsite shipping it owns. The dump lands under `/srv/backups`
+`gzip -t` integrity gate and a restic retention prune, then the NATS JetStream
+volume backup and the offsite shipping it owns. The NATS step resolves the real
+JetStream volume from the smackerel config SST (`${NATS_VOLUME_NAME}`, via
+`docker volume inspect --format '{{ .Mountpoint }}'`) and copies the volume
+**contents** (`cp -a "$MOUNT/."`) so restic archives the actual JetStream files —
+not the earlier fixed `/var/lib/docker/volumes/smackerel_nats_data/...` path,
+whose wrong (underscore) name made the capture a silent skip; a missing volume is
+now a loud `nats_captured=false` ledger WARN, never a silent skip. The dump lands under `/srv/backups`
 (`0700`) and ships restic-encrypted, so it is encrypted at rest; the inline path
 never writes a status JSON and never echoes dump contents, so the product layer's
 status-file secret redaction has no leak surface to cover there. The product-layer
@@ -68,7 +74,9 @@ and `bubbles.train`'s promote gate.
 ## What Gets Backed Up
 
 - PostgreSQL dump (smackerel core state)
-- NATS JetStream durable streams
+- NATS JetStream durable streams — the real `${NATS_VOLUME_NAME}` volume
+  contents, resolved via `docker volume inspect` (not a fixed
+  `/var/lib/docker/volumes/...` path)
 - Per-train config bundles (already in registry; redundant copy)
 - Connector state (bookmarks, browser history, twitter archive — already read-only, no backup needed)
 
