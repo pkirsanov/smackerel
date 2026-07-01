@@ -275,5 +275,8 @@ echo "  manifest sig:  ${MANIFEST}.sig"
 echo
 echo "Next: cd ~/knb && OPERATOR_COSIGN_PUBKEY=$OPERATOR_COSIGN_PUBKEY \\"
 echo "        bash scripts/deploy/promote.sh --target home-lab --product smackerel \\"
+echo "          --operator <id> \\"
 echo "          --local-build-manifest $MANIFEST"
+echo "  (--operator <id> is REQUIRED for a live local-operator apply; a verbatim"
+echo "   run without it fails F017-PROMOTE-01. Replace <id> with your operator id.)"
 echo "=================================================================="
