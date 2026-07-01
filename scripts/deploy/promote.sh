@@ -8,7 +8,14 @@
 # Usage:
 #   bash scripts/deploy/promote.sh \
 #       --target home-lab \
-#       --build-manifest path/to/build-manifest.yaml
+#       --build-manifest path/to/build-manifest.yaml \
+#       [--operator <name>]
+#
+# --operator <name> is forwarded to the adapter apply.sh (recorded in the
+# on-target audit log + manifest.appliedBy). Forwarded only when provided
+# (no silent default per smackerel-no-defaults); a live local-operator apply
+# that omits it fails loud in the adapter. Mirrors knb-side
+# scripts/deploy/promote.sh.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,6 +29,7 @@ source "$SCRIPT_DIR/promote_manifest_parse.sh"
 
 TARGET=""
 MANIFEST=""
+OPERATOR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,6 +37,8 @@ while [[ $# -gt 0 ]]; do
     --target=*)       TARGET="${1#*=}"; shift ;;
     --build-manifest) MANIFEST="$2"; shift 2 ;;
     --build-manifest=*) MANIFEST="${1#*=}"; shift ;;
+    --operator)       OPERATOR="$2"; shift 2 ;;
+    --operator=*)     OPERATOR="${1#*=}"; shift ;;
     *) echo "ERROR: unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -115,10 +125,19 @@ echo "  configBundle:     $BUNDLE_TAG"
 echo "  configBundleSha:  $BUNDLE_SHA"
 echo "  trustModel:       $TRUST_MODEL"
 
-exec "$REPO_ROOT/smackerel.sh" deploy-target "$TARGET" apply \
-  --image-core="$CORE_DIGEST" \
-  --image-ml="$ML_DIGEST" \
-  --config-bundle="$BUNDLE_TAG" \
-  --config-bundle-sha="$BUNDLE_SHA" \
-  --source-sha="$SOURCE_SHA" \
+# DEVOPS-RDY-04 — thread --operator through so the adapter records the real
+# operator identity (knb apply.sh audit log + manifest.appliedBy) instead of
+# builtBy=unset. Forwarded only when provided (no silent default per
+# smackerel-no-defaults); a live local-operator apply that omits it fails loud
+# in the adapter, matching knb-side scripts/deploy/promote.sh.
+APPLY_ARGS=(
+  --image-core="$CORE_DIGEST"
+  --image-ml="$ML_DIGEST"
+  --config-bundle="$BUNDLE_TAG"
+  --config-bundle-sha="$BUNDLE_SHA"
+  --source-sha="$SOURCE_SHA"
   --trust-model="$TRUST_MODEL"
+)
+[[ -n "$OPERATOR" ]] && APPLY_ARGS+=(--operator="$OPERATOR")
+
+exec "$REPO_ROOT/smackerel.sh" deploy-target "$TARGET" apply "${APPLY_ARGS[@]}"
