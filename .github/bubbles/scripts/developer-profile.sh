@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+# Portable awk: the 3-arg match($0, /re/, arr) form used below is a GNU awk
+# extension that BSD/macOS awk rejects. Prefer gawk when present.
+if command -v gawk >/dev/null 2>&1; then awk() { command gawk "$@"; }; fi
+
 # Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
 _BTMPS=()
 trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
@@ -455,7 +459,7 @@ show_stale() {
     return 0
   fi
 
-  awk -v cutoff="$(date -u -d "${stale_cutoff_days} days ago" +"%Y-%m-%dT%H:%M:%SZ")" '
+  awk -v cutoff="$(date -u -d "${stale_cutoff_days} days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v-"${stale_cutoff_days}"d +"%Y-%m-%dT%H:%M:%SZ")" '
     match($0, /"timestamp":"([^"]+)"/, ts) && ts[1] < cutoff { print $0; found = 1 }
     END { if (!found) print "No stale developer observations." }
   ' "$OBSERVATIONS_FILE"
@@ -469,7 +473,7 @@ clear_stale() {
     return 0
   fi
 
-  cutoff="$(date -u -d "${stale_cutoff_days} days ago" +"%Y-%m-%dT%H:%M:%SZ")"
+  cutoff="$(date -u -d "${stale_cutoff_days} days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v-"${stale_cutoff_days}"d +"%Y-%m-%dT%H:%M:%SZ")"
   temp_file="$(_btmp)"
   awk -v cutoff="$cutoff" '
     match($0, /"timestamp":"([^"]+)"/, ts) {

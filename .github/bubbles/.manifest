@@ -282,7 +282,6 @@ bubbles/workflows/aliases.yaml
 bubbles/workflows/modes.yaml
 bubbles/installer/installer.yaml
 bubbles/scripts/hooks/pre-push.sh
-templates/AGENTS.md.tmpl
 templates/agents.md.tmpl
 templates/constitution.md.tmpl
 templates/copilot-instructions.md.tmpl
@@ -556,6 +555,7 @@ skills/bubbles-cinematic-design/references/patterns.md
 skills/bubbles-cinematic-design/references/presets.md
 skills/bubbles-config-bundle-per-train/SKILL.md
 skills/bubbles-config-sst/SKILL.md
+skills/bubbles-cross-platform-shell/SKILL.md
 skills/bubbles-deployment-target-adapter/SKILL.md
 skills/bubbles-docker-lifecycle-governance/SKILL.md
 skills/bubbles-docker-port-standards/SKILL.md

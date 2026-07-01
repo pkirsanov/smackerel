@@ -309,7 +309,10 @@ _normalize_tags() {
     echo ""
     return
   fi
-  echo "$input" | tr ' ' '\n' | sort -u | paste -sd ' '
+  # `paste -sd ' '` (no file operand) reads stdin on GNU paste but fails on
+  # BSD/macOS paste ("usage: paste ..."). The explicit `-` operand reads stdin
+  # on both.
+  echo "$input" | tr ' ' '\n' | sort -u | paste -sd ' ' -
 }
 
 # List every v5 alias as TSV: v5<TAB>primitive<TAB>sorted-tag-set

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Portable awk: the 3-arg match($0, /re/, arr) form used below is a GNU awk
+# extension that BSD/macOS awk rejects. Prefer gawk when present.
+if command -v gawk >/dev/null 2>&1; then awk() { command gawk "$@"; }; fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ "$SCRIPT_DIR" == *"/.github/bubbles/scripts" ]]; then

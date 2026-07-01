@@ -160,7 +160,11 @@ fi
 # yq runs under snap on some platforms and cannot read /tmp; use $HOME.
 _alias_fixture_base="${HOME}/.cache/bubbles-mode-alias-selftest"
 mkdir -p "$_alias_fixture_base"
-tmp_alias="$(mktemp -p "$_alias_fixture_base" --suffix=.yaml)"
+# BSD/macOS mktemp lacks GNU `--suffix`; create the temp file then rename to add
+# the .yaml extension (portable across GNU + BSD).
+tmp_alias="$(mktemp -p "$_alias_fixture_base")"
+mv "$tmp_alias" "${tmp_alias}.yaml"
+tmp_alias="${tmp_alias}.yaml"
 trap 'rm -f "$tmp_alias"' EXIT
 cat > "$tmp_alias" <<EOF
 version: 1

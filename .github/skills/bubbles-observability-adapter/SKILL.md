@@ -1,5 +1,5 @@
 ---
-description: How to author and wire telemetry adapters under bubbles/adapters/observability/ — uniform 4-verb contract, none default, prometheus reference, swappable per downstream repo.
+description: How to author and wire telemetry adapters under bubbles/adapters/observability/ — uniform 4-verb contract, none default, prometheus reference, swappable per downstream repo. Also how to use the validate plane during live-category tests (integration/e2e/stress/load) to discover defects — error spans, latency outliers, fan-out/N+1 — and route findings to bug artifacts.
 ---
 
 # bubbles-observability-adapter
@@ -112,6 +112,41 @@ For a wired, instrumented scope (a Test Plan row declaring `observabilityWorkflo
 > *Could an on-call engineer, paged at 3 AM with nothing but this trace, reconstruct the full story of what the workflow did and where it broke — without reading the source?*
 
 If the answer is no — spans are missing, attributes that name the actor / resource / outcome are absent, or the failure point is ambiguous — the instrumentation is insufficient and the DoD item stays `[ ]`, regardless of whether the SLO numbers happen to pass. This is the human acceptance bar behind G080; the `trace-contract-guard.sh` check is the mechanical floor beneath it, and the G100 SLO guard asserts the numeric target on top. See [`scope-workflow.md`](../../agents/bubbles_shared/scope-workflow.md) → "Observability DoD Injection (MUST-when-wired)".
+
+## Trace-driven defect discovery (during live-category tests)
+
+Capturing SLO numbers (G100) proves a workflow met its target; it does NOT surface the defects hiding inside a passing run. During every live-category test (`integration` / `e2e-api` / `e2e-ui` / `stress` / `load`) against a `wired` stack, actively MINE the validate-plane telemetry for defects, then file what you find. **A green test over a sick trace is an undiscovered bug, not a pass.**
+
+### When to run
+
+- Any `integration` / `e2e-api` / `e2e-ui` / `stress` / `load` run against a `posture: wired` stack (validate plane, `profile: test`, `env=test*`).
+- NOT for `unit` / `ui-unit` (no real stack to trace), and NEVER against the operate/prod plane (read-only; off-limits to feature tests — G115).
+
+### The four defect classes to scan for
+
+Pull the exercised workflow's traces/metrics from the validate-plane stack and look for:
+
+1. **Error / exception spans** — any span with `error=true`, a non-OK status, or a logged exception — *even when the top-level request returned success*. A swallowed or silently-retried error is a defect.
+2. **Latency outliers** — spans that breach the workflow's `traceContracts.observability.slos` target, or that dominate the critical path when they should not (the slowest span is not the expected one).
+3. **Fan-out / N+1** — the same downstream span (DB query, RPC, cache call) repeated per-item instead of batched; a span count that scales with input size.
+4. **Retries / timeouts / missing spans** — silent retries, near-timeout spans, or a step that emits NO span (a blind spot that also fails the 3 AM bar above).
+
+### What to do with a finding
+
+- Treat it as a **defect, not noise**: file it through `bubbles.bug` (see `bubbles-bug-template`) with the captured trace as before-fix evidence. Do NOT defer it to "follow-up".
+- Completion gating applies: under `bubbles-dod-validation` + `bubbles-anti-fabrication`, a scope cannot be marked done while a discovered error-span, SLO-breaching latency, or N+1 remains unfixed.
+- Record the capture as evidence (`bubbles-evidence-capture`); it lands under `.specify/runtime/observability/<workflow>.<signal>.{txt,json}` (gitignored).
+
+### Repo wiring this needs
+
+The validate-plane stack must be reachable from the test (`prometheus` / `jaeger` / `tempo` on the ephemeral `profile: test` stack), plus a capture command the test or agent runs to deposit evidence — the repo's own observability-capture surface. Defect-mining reuses the same validate-plane access as SLO capture; it just queries the trace/span signals, not only the SLO aggregate.
+
+### Works well with
+
+- `bubbles-test-integrity` — the test-quality gates this method runs alongside (Step 8, live categories).
+- `bubbles-evidence-capture` — the evidence shape for the captured trace/metric.
+- `bubbles-bug-template` / `bubbles.bug` — where a discovered defect is filed.
+- `bubbles-dod-validation` / `bubbles-anti-fabrication` — why an unfixed finding blocks done.
 
 ## Verification
 

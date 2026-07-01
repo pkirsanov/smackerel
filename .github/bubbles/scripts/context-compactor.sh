@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Portable awk: the 3-arg match($0, /re/, arr) form used below is a GNU awk
+# extension that BSD/macOS awk rejects. Prefer gawk when present (the framework's
+# macOS toolchain provides it alongside gsed/ggrep/gtimeout).
+if command -v gawk >/dev/null 2>&1; then awk() { command gawk "$@"; }; fi
+
 # context-compactor.sh
 # Compact a subagent RESULT-ENVELOPE into a single-line JSON ledger record
 # suitable for inclusion in .specify/memory/bubbles.session.json under the
@@ -60,11 +65,14 @@ if [[ ! -f "$raw_file" ]]; then
   exit 1
 fi
 
-# Resolve to absolute path for deterministic rawPointer.
-if command -v readlink >/dev/null 2>&1; then
-  raw_abs="$(readlink -f "$raw_file" 2>/dev/null || printf '%s' "$raw_file")"
-else
+# Resolve to absolute path for deterministic rawPointer. Preserve an already-
+# absolute path verbatim — do NOT canonicalize symlinks: on macOS `readlink -f`
+# rewrites /var/... -> /private/var/..., diverging from the path the caller (and
+# its provenance records) actually hold.
+if [[ "$raw_file" = /* ]]; then
   raw_abs="$raw_file"
+else
+  raw_abs="$PWD/$raw_file"
 fi
 
 # JSON-escape stdin: handles backslash, double-quote, tab, CR; joins

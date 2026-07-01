@@ -226,7 +226,7 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
 fi
 
 # --- 8. Freshness: revisitAfter is authoritative -------------------------
-REVISIT_EPOCH="$(date -d "$REVISIT_AFTER" +%s 2>/dev/null || printf '')"
+REVISIT_EPOCH="$(date -d "$REVISIT_AFTER" +%s 2>/dev/null || date -u -j -f "%Y-%m-%d %H:%M:%S" "${REVISIT_AFTER} 00:00:00" +%s 2>/dev/null || printf '')"
 if [[ -z "$REVISIT_EPOCH" ]]; then
   err "G099 (observability_opt_out_freshness_gate): optOut.revisitAfter '$REVISIT_AFTER' is not a parseable date (expected YYYY-MM-DD)."
   exit 1

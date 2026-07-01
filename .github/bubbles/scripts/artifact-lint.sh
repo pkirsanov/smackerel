@@ -6,6 +6,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source fun mode support
 source "$SCRIPT_DIR/fun-mode.sh"
 
+# Portable ISO/date -> epoch, kept self-contained (NO cross-file source) for
+# isolation robustness (a fixture may copy this script without its sibling libs).
+# GNU date uses -d; BSD/macOS date uses -j -f (also handles a bare YYYY-MM-DD).
+bubbles_iso_to_epoch() {
+  local ts="$1" epoch
+  if epoch="$(date -d "$ts" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then printf '%s' "$epoch"; return 0; fi
+  if epoch="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$ts" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then printf '%s' "$epoch"; return 0; fi
+  if epoch="$(date -u -j -f "%Y-%m-%d %H:%M:%S" "${ts} 00:00:00" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then printf '%s' "$epoch"; return 0; fi
+  return 1
+}
+
 feature_dir="${1:-}"
 default_scenario_pattern='SCN-[0-9]{3}-[A-Z][0-9]{2}'
 scenario_pattern="$default_scenario_pattern"
@@ -789,7 +800,7 @@ if [[ -f "$state_file" ]]; then
         intervals=()
         all_parseable="true"
         for ts in "${phase_timestamps[@]}"; do
-          epoch="$(date -d "$ts" +%s 2>/dev/null || true)"
+          epoch="$(bubbles_iso_to_epoch "$ts" || true)"
           if [[ -z "$epoch" ]]; then
             all_parseable="false"
             break
@@ -817,10 +828,10 @@ if [[ -f "$state_file" ]]; then
           fi
 
           # Check if all timestamps span less than 5 seconds (impossible for multi-phase work)
-          min_epoch="$(date -d "${phase_timestamps[0]}" +%s 2>/dev/null || true)"
+          min_epoch="$(bubbles_iso_to_epoch "${phase_timestamps[0]}" || true)"
           max_epoch="$min_epoch"
           for ts in "${phase_timestamps[@]}"; do
-            epoch="$(date -d "$ts" +%s 2>/dev/null || true)"
+            epoch="$(bubbles_iso_to_epoch "$ts" || true)"
             [[ -n "$epoch" ]] || continue
             [[ "$epoch" -lt "$min_epoch" ]] && min_epoch="$epoch"
             [[ "$epoch" -gt "$max_epoch" ]] && max_epoch="$epoch"

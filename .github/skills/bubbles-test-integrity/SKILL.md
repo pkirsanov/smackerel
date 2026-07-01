@@ -212,6 +212,8 @@ Count Test Plan rows. Count DoD test items. Confirm parity.
 ### Step 8: Execute and Record Evidence
 Run all tests. Capture raw terminal output (≥10 lines per test category). Record in `report.md`.
 
+For live categories (`integration` / `e2e-api` / `e2e-ui` / `stress` / `load`) against a `wired` stack, ALSO run **trace-driven defect discovery** (see `bubbles-observability-adapter`): mine the validate-plane traces for error spans, latency outliers, and fan-out/N+1, and file any finding as a bug. A green run over a sick trace is an undiscovered bug, not a pass.
+
 ---
 
 ## Decision Tree: Is This Test Real?

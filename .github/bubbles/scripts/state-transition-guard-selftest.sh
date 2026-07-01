@@ -1055,6 +1055,80 @@ fi
 assert_log_contains "$positive_log" "Framework ownership lint passed" "Positive fixture exercises guard Check 3G"
 assert_log_contains "$positive_log" "TRANSITION PERMITTED" "Positive fixture reaches a permitted transition verdict"
 
+# --- G053 Check 13B: shell (.sh) runtime-path recognition ---
+# Regression guard for the G053<->G093 alignment fix. The G093 delivery-delta
+# guard's path_family already classifies *.sh as `runtime`; G053 Check 13B's
+# Code Diff Evidence runtime-path regex must agree, otherwise a shell-only
+# delivery (e.g. a git-hook or operator script fix) passes G093 but is wrongly
+# rejected by G053. bugfix-fastlane requires impl-delta (so Check 13B runs) but
+# does NOT trigger Check 17's full-delivery git-log probe over the /tmp fixture.
+echo "Running G053 Check 13B shell-runtime-path recognition selftest..."
+g053_sh_dir="$tmp_root/specs/940-g053-shell-runtime-path"
+cp -R "$positive_feature_dir" "$g053_sh_dir"
+g053_sh_state_tmp="$(mktemp)"
+sed 's/"workflowMode": "docs-only"/"workflowMode": "bugfix-fastlane"/g' "$g053_sh_dir/state.json" > "$g053_sh_state_tmp"
+mv "$g053_sh_state_tmp" "$g053_sh_dir/state.json"
+# Overwrite report.md so the ONLY runtime-extension token is the shell path —
+# otherwise the base fixture's `.ts` test filenames would make the case pass
+# regardless of the fix (tautological).
+cat <<'EOF' > "$g053_sh_dir/report.md"
+# Report
+
+### Summary
+
+G053 Check 13B shell-runtime-path recognition fixture.
+
+### Code Diff Evidence
+
+**Command:** git show HEAD --stat
+**Exit Code:** 0
+**Claim Source:** executed
+
+```
+$ git show HEAD --stat -- scripts/tooling/example-runtime.sh
+ scripts/tooling/example-runtime.sh | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+```
+EOF
+g053_sh_log="$tmp_root/g053-shell-runtime.log"
+run_capture "$g053_sh_log" bash "$GUARD_SCRIPT" "$g053_sh_dir" >/dev/null
+assert_log_contains "$g053_sh_log" \
+  "Implementation delta evidence recorded with git-backed proof and non-artifact file paths (Gate G053)" \
+  "G053 Check 13B accepts a shell (.sh) runtime path in Code Diff Evidence (parity with G093 path_family)"
+
+# Negative twin: an artifact-only Code Diff Evidence (no runtime-extension path)
+# must STILL be rejected — proving the positive case passes specifically because
+# the shell path is now recognized, not because the check went vacuous.
+g053_artifact_dir="$tmp_root/specs/941-g053-artifact-only"
+cp -R "$positive_feature_dir" "$g053_artifact_dir"
+g053_artifact_state_tmp="$(mktemp)"
+sed 's/"workflowMode": "docs-only"/"workflowMode": "bugfix-fastlane"/g' "$g053_artifact_dir/state.json" > "$g053_artifact_state_tmp"
+mv "$g053_artifact_state_tmp" "$g053_artifact_dir/state.json"
+cat <<'EOF' > "$g053_artifact_dir/report.md"
+# Report
+
+### Summary
+
+G053 Check 13B artifact-only negative fixture.
+
+### Code Diff Evidence
+
+**Command:** git show HEAD --stat
+**Exit Code:** 0
+**Claim Source:** executed
+
+```
+$ git show HEAD --stat -- specs/941-g053-artifact-only/design.md
+ specs/941-g053-artifact-only/design.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+```
+EOF
+g053_artifact_log="$tmp_root/g053-artifact-only.log"
+run_capture "$g053_artifact_log" bash "$GUARD_SCRIPT" "$g053_artifact_dir" >/dev/null
+assert_log_contains "$g053_artifact_log" \
+  "Code Diff Evidence does not show any non-artifact runtime/source/config file paths" \
+  "G053 Check 13B still rejects an artifact-only Code Diff Evidence (non-vacuous)"
+
 echo "Running positive shared-infrastructure selftest..."
 shared_positive_log="$tmp_root/shared-positive-guard.log"
 shared_positive_status="$(run_capture "$shared_positive_log" bash "$GUARD_SCRIPT" "$shared_positive_feature_dir")"

@@ -57,6 +57,73 @@ bubbles_pruned_find() {
 }
 
 # =============================================================================
+# Cross-platform (Linux + macOS) portability helpers
+# =============================================================================
+# GNU coreutils (Linux) and BSD userland (macOS) diverge on several flags the
+# guards rely on. These helpers pick the working form at runtime so a single
+# code path runs on both. Prefer them over raw `sed -i`, `date -d`, `stat -c`.
+
+# Portable in-place sed. GNU `sed -i <prog>` and BSD `sed -i '' <prog>` are
+# mutually incompatible, so neither raw form is cross-platform. This rewrites via
+# a temp file, preserving the EXACT sed program (no Perl-regex dialect shift).
+# The FILE MUST be the LAST argument; all preceding args are sed flags/program.
+# Usage: bubbles_sed_inplace [sed-flags] <program> <file>
+bubbles_sed_inplace() {
+  local argc=$#
+  local file="${!argc}"
+  local tmp
+  tmp="$(mktemp)" || return 1
+  if sed "${@:1:argc-1}" "$file" >"$tmp" 2>/dev/null; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
+# Portable ISO-8601-UTC ("YYYY-MM-DDThh:mm:ssZ") -> epoch seconds. GNU date uses
+# `-d`; BSD/macOS date uses `-j -f`. Prints the epoch on success; prints nothing
+# and returns 1 on failure (caller decides how to treat an unparseable stamp).
+# Usage: epoch="$(bubbles_iso_to_epoch "2026-06-30T14:00:00Z")" || epoch=""
+bubbles_iso_to_epoch() {
+  local ts="$1" epoch
+  if epoch="$(date -d "$ts" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then
+    printf '%s' "$epoch"
+    return 0
+  fi
+  if epoch="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$ts" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then
+    printf '%s' "$epoch"
+    return 0
+  fi
+  # BSD/macOS bare date ("YYYY-MM-DD") -> midnight UTC.
+  if epoch="$(date -u -j -f "%Y-%m-%d %H:%M:%S" "${ts} 00:00:00" +%s 2>/dev/null)" && [[ -n "$epoch" ]]; then
+    printf '%s' "$epoch"
+    return 0
+  fi
+  return 1
+}
+
+# Portable "now, in milliseconds since epoch". GNU date supports %N (nanoseconds);
+# BSD/macOS date may not (it echoes a literal 'N'), so detect a non-numeric result
+# and fall back to second resolution (x1000). Usage: ms="$(bubbles_now_ms)"
+bubbles_now_ms() {
+  local ns
+  ns="$(date +%s%N 2>/dev/null)"
+  if [[ "$ns" =~ ^[0-9]+$ ]]; then
+    printf '%s' "$(( ns / 1000000 ))"
+  else
+    printf '%s' "$(( $(date +%s) * 1000 ))"
+  fi
+}
+
+# Portable file mtime (epoch seconds). GNU: `stat -c %Y`; BSD/macOS: `stat -f %m`.
+# Prints the mtime, or nothing (rc 1) if the file is unstattable.
+# Usage: mtime="$(bubbles_file_mtime_epoch "$file")"
+bubbles_file_mtime_epoch() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null
+}
+
+# =============================================================================
 # Control-plane policy activation (control-plane policy-activation fix)
 # =============================================================================
 # resolve_effective_policy / resolve_effective_policy_source ACTIVATE the

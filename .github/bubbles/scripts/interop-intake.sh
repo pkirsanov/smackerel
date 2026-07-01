@@ -254,7 +254,7 @@ print_detect() {
     for matched_file in "${matched_files[@]}"; do
       echo "    - $matched_file"
     done
-    echo "  Normalized classes: $(paste -sd ', ' < <(bubbles_interop_list "$REGISTRY_FILE" "$source_id" normalizedClasses))"
+    echo "  Normalized classes: $(paste -sd ', ' - < <(bubbles_interop_list "$REGISTRY_FILE" "$source_id" normalizedClasses))"
   done < <(bubbles_interop_source_ids "$REGISTRY_FILE")
 
   [[ "$detected_any" == 'true' ]] || die "No supported interop sources detected under $scan_root"

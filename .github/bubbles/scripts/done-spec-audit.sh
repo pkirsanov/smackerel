@@ -6,6 +6,23 @@ source "$(dirname "${BASH_SOURCE[0]}")/fun-mode.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Portable in-place sed, kept self-contained (NO cross-file source) because the
+# done-spec-audit selftest copies THIS script alone into an isolated fixture repo
+# without its sibling libs. GNU `sed -i <prog>` and BSD `sed -i ''` are mutually
+# incompatible, so rewrite via a temp file. FILE is the LAST argument; preceding
+# args are sed flags/program.
+bubbles_sed_inplace() {
+  local argc=$# file tmp
+  file="${!argc}"
+  tmp="$(mktemp)" || return 1
+  if sed "${@:1:argc-1}" "$file" >"$tmp" 2>/dev/null; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
 resolve_repo_root() {
   local candidate
   candidate="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -389,19 +406,19 @@ reopen_spec() {
   now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
   if grep -Eq '"status"[[:space:]]*:[[:space:]]*"done"' "$state_file"; then
-    sed -i -E 's/"status"[[:space:]]*:[[:space:]]*"done"/"status": "in_progress"/' "$state_file"
+    bubbles_sed_inplace -E 's/"status"[[:space:]]*:[[:space:]]*"done"/"status": "in_progress"/' "$state_file"
   fi
 
   if grep -Eq '"currentPhase"[[:space:]]*:' "$state_file"; then
-    sed -i -E 's/"currentPhase"[[:space:]]*:[[:space:]]*"[^"]+"/"currentPhase": "validate"/' "$state_file"
+    bubbles_sed_inplace -E 's/"currentPhase"[[:space:]]*:[[:space:]]*"[^"]+"/"currentPhase": "validate"/' "$state_file"
   fi
 
   if grep -Eq '"notes"[[:space:]]*:' "$state_file"; then
-    sed -i -E 's|"notes"[[:space:]]*:[[:space:]]*"[^"]*"|"notes": "Reopened by explicit done-spec recertification: current completion gates failed. Restore done only after current guard, lint, and traceability checks pass."|' "$state_file"
+    bubbles_sed_inplace -E 's|"notes"[[:space:]]*:[[:space:]]*"[^"]*"|"notes": "Reopened by explicit done-spec recertification: current completion gates failed. Restore done only after current guard, lint, and traceability checks pass."|' "$state_file"
   fi
 
   if grep -Eq '"lastUpdatedAt"[[:space:]]*:' "$state_file"; then
-    sed -i -E 's/"lastUpdatedAt"[[:space:]]*:[[:space:]]*"[^"]+"/"lastUpdatedAt": "'"$now_utc"'"/' "$state_file"
+    bubbles_sed_inplace -E 's/"lastUpdatedAt"[[:space:]]*:[[:space:]]*"[^"]+"/"lastUpdatedAt": "'"$now_utc"'"/' "$state_file"
   fi
 }
 

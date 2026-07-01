@@ -79,6 +79,8 @@ cleanup_caps() {
 trap cleanup_caps EXIT INT TERM
 
 START_NS="$(date +%s%N 2>/dev/null || echo 0)"
+# BSD/macOS date may lack %N (echoes a literal 'N'); fall back to second-res ns.
+[[ "$START_NS" =~ ^[0-9]+$ ]] || START_NS="$(( $(date +%s) * 1000000000 ))"
 
 # Run the command, teeing stdout to caller stdout + STDOUT_CAP, stderr to
 # caller stderr + STDERR_CAP, preserving exit code.
@@ -91,6 +93,8 @@ set -e
 wait 2>/dev/null || true
 
 END_NS="$(date +%s%N 2>/dev/null || echo 0)"
+# BSD/macOS date may lack %N (echoes a literal 'N'); fall back to second-res ns.
+[[ "$END_NS" =~ ^[0-9]+$ ]] || END_NS="$(( $(date +%s) * 1000000000 ))"
 DURATION_MS=0
 if [[ "$START_NS" != "0" && "$END_NS" != "0" ]]; then
   DURATION_MS=$(( (END_NS - START_NS) / 1000000 ))

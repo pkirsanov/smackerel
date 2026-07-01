@@ -151,8 +151,13 @@ sys.exit(0 if ok else 1)
 PY
 then
   pass "F7: model-tier-advisory writes model-tier-warning record with schemaVersion=2 + modelTier block"
-else
+elif python3 -c 'import yaml' >/dev/null 2>&1; then
   fail "F7: model-tier-advisory did not write structured warning to tool-call log"
+else
+  # model-tier-advisory.sh requires PyYAML; when absent it degrades to SKIP and
+  # writes nothing. Skip (not fail) to match the framework's graceful-degradation
+  # convention (model-tier-advisory-selftest.sh SKIPs identically).
+  echo "SKIP: F7 (PyYAML not installed; model-tier-advisory degrades to SKIP)"
 fi
 # F7 OK path: no warning when active >= floor.
 WARN_LOG_OK="$tmp_root/warn-ok.jsonl"
