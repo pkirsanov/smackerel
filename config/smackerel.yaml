@@ -2080,6 +2080,13 @@ infrastructure:
     # `tests/integration/ollama_image_availability_test.go` HEADs the Docker
     # Hub tags API on every integration run so a future yanked tag fails
     # loudly before the test stack tries to start.
+    #
+    # DEVOPS-RDY-06 — DEV-ONLY: this mutable tag is consumed ONLY by the dev
+    # docker-compose.yml (`image: ${OLLAMA_IMAGE}`); it is NOT in the deploy
+    # provenance chain. deploy/compose.deploy.yml pins ollama by sha256 digest
+    # (ollama/ollama:rocm@sha256:…) and on evo-x2 that container is profile-
+    # gated off (ENABLE_OLLAMA=false) + shared (the ML sidecar reaches the host
+    # ollama daemon via OLLAMA_BASE_URL). No digest pin required here.
     image: ollama/ollama:0.23.2
     # Spec 061 SCOPE-06a Round 65 (D4 hybrid fix) — Ollama OLLAMA_KEEP_ALIVE
     # controls how long the daemon retains a loaded model in memory after a
