@@ -5,17 +5,20 @@
 // resource guard is actually wired in, mirroring the style of
 // internal/deploy/compose_contract_test.go:
 //
-//  1. The helper smackerel_assert_host_resources() is defined AND invokes the
-//     Go evaluator (cmd/preflight) — proving the guard runs real logic.
+//  1. The evaluator-carrying helper smackerel_assert_host_resources_profile()
+//     is defined AND invokes the Go evaluator (cmd/preflight) — proving the
+//     guard runs real logic — and the thin back-compat wrapper
+//     smackerel_assert_host_resources() delegates to it (BUG-099-001 made the
+//     path selection OS-aware, moving the evaluator into the _profile helper).
 //  2. Every heavy-op command path (build, up, test integration|e2e|e2e-ui|
-//     stress) and the standalone pre-flight command invoke the helper.
+//     stress) and the standalone pre-flight command invoke the wrapper.
 //  3. The SST thresholds (runtime.preflight.*) are present in
 //     config/smackerel.yaml, emitted by config.sh via required_value, and carried
 //     by the generated env files with positive integer values.
 //
 // Two adversarial sub-tests prove the contract is non-tautological: removing the
 // guard from the build block, or removing the cmd/preflight invocation from the
-// helper, makes assertGuardWired REJECT.
+// evaluator-carrying helper, makes assertGuardWired REJECT.
 //
 // References:
 //   - specs/099-preflight-resource-guard/spec.md
@@ -87,18 +90,29 @@ func caseBlockStr(script, label string) (string, error) {
 	return b.String(), nil
 }
 
-// helperBodyStr returns the body of the smackerel_assert_host_resources()
-// function (decl to the next top-level `}`), or an error if absent/unclosed.
-func helperBodyStr(script string) (string, error) {
-	const decl = "smackerel_assert_host_resources() {"
+// After BUG-099-001's OS-aware refactor the Go evaluator moved into
+// smackerel_assert_host_resources_profile(); smackerel_assert_host_resources()
+// became a thin back-compat wrapper that delegates to it with the `heavy`
+// profile (the heavy-op case blocks still call the wrapper).
+const (
+	evaluatorHelper = "smackerel_assert_host_resources_profile"
+	guardWrapper    = "smackerel_assert_host_resources"
+)
+
+// funcBodyStr returns the body of the shell function `<name>() {` (decl to the
+// next top-level `}` on its own line), or an error if absent/unclosed. Because
+// the search literal ends in `() {`, requesting guardWrapper matches the
+// wrapper decl and NOT the longer `..._profile() {` decl.
+func funcBodyStr(script, name string) (string, error) {
+	decl := name + "() {"
 	i := strings.Index(script, decl)
 	if i < 0 {
-		return "", fmt.Errorf("helper smackerel_assert_host_resources is not defined")
+		return "", fmt.Errorf("helper %s is not defined", name)
 	}
 	rest := script[i:]
 	end := strings.Index(rest, "\n}\n")
 	if end < 0 {
-		return "", fmt.Errorf("helper smackerel_assert_host_resources is not closed")
+		return "", fmt.Errorf("helper %s is not closed", name)
 	}
 	return rest[:end], nil
 }
@@ -107,25 +121,38 @@ func helperBodyStr(script string) (string, error) {
 // script. On any violation it returns a non-nil error naming the specific gap,
 // so the adversarial sub-tests can pattern-match the failure mode.
 func assertGuardWired(script string) error {
-	body, err := helperBodyStr(script)
+	// (1) The evaluator-carrying helper (post-BUG-099-001) MUST INVOKE the
+	// evaluator via one of the two real command forms — not merely mention
+	// "cmd/preflight" in a comment. The Linux host path runs
+	// `go run ./cmd/preflight`; the macOS/dockerized path runs
+	// scripts/runtime/preflight.sh (which itself runs cmd/preflight, asserted
+	// separately by TestGuardWiring_LiveFile).
+	body, err := funcBodyStr(script, evaluatorHelper)
 	if err != nil {
 		return err
 	}
-	// Assert the helper actually INVOKES the evaluator via one of the two real
-	// command forms — not merely mentions "cmd/preflight" in a comment. The
-	// host path runs `go run ./cmd/preflight`; the dockerized fallback runs
-	// scripts/runtime/preflight.sh (which itself runs cmd/preflight, asserted
-	// separately by TestGuardWiring_LiveFile).
 	if !strings.Contains(body, "go run ./cmd/preflight") && !strings.Contains(body, "scripts/runtime/preflight.sh") {
-		return fmt.Errorf("helper smackerel_assert_host_resources does not invoke the Go evaluator (no `go run ./cmd/preflight` and no scripts/runtime/preflight.sh call) — the guard would not run real logic")
+		return fmt.Errorf("helper %s does not invoke the Go evaluator (no `go run ./cmd/preflight` and no scripts/runtime/preflight.sh call) — the guard would not run real logic", evaluatorHelper)
 	}
+	// (2) The thin back-compat wrapper MUST delegate to the evaluator-carrying
+	// helper, otherwise the heavy-op case blocks (which call the wrapper, not
+	// _profile directly) would never reach the evaluator.
+	wrapperBody, werr := funcBodyStr(script, guardWrapper)
+	if werr != nil {
+		return werr
+	}
+	if !strings.Contains(wrapperBody, evaluatorHelper) {
+		return fmt.Errorf("wrapper %s does not delegate to %s — the heavy-op paths would not reach the Go evaluator", guardWrapper, evaluatorHelper)
+	}
+	// (3) Every heavy-op case block MUST invoke the guard. guardWrapper is a
+	// prefix of evaluatorHelper, so a direct _profile call also satisfies this.
 	for _, op := range heavyGuardedOps {
 		block, berr := caseBlockStr(script, op)
 		if berr != nil {
 			return fmt.Errorf("command %q): %w", op, berr)
 		}
-		if !strings.Contains(block, "smackerel_assert_host_resources") {
-			return fmt.Errorf("command %q) block does not invoke smackerel_assert_host_resources — resource guard not wired into this heavy-op path", op)
+		if !strings.Contains(block, guardWrapper) {
+			return fmt.Errorf("command %q) block does not invoke %s — resource guard not wired into this heavy-op path", op, guardWrapper)
 		}
 	}
 	return nil
@@ -140,15 +167,26 @@ func TestGuardWiring_LiveFile(t *testing.T) {
 		t.Fatalf("resource guard wiring contract violated in smackerel.sh: %v", err)
 	}
 
-	// The helper prefers host go run and falls back to the dockerized wrapper.
-	body, err := helperBodyStr(script)
+	// The evaluator-carrying helper selects host `go run` on Linux and falls
+	// back to the dockerized runner on macOS; assert BOTH real command forms.
+	body, err := funcBodyStr(script, evaluatorHelper)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"go run ./cmd/preflight", "scripts/runtime/preflight.sh"} {
 		if !strings.Contains(body, want) {
-			t.Fatalf("helper body missing %q; got:\n%s", want, body)
+			t.Fatalf("helper %s body missing %q; got:\n%s", evaluatorHelper, want, body)
 		}
+	}
+
+	// The thin back-compat wrapper delegates to the evaluator-carrying helper,
+	// so the heavy-op paths that call the wrapper actually reach the evaluator.
+	wrapperBody, werr := funcBodyStr(script, guardWrapper)
+	if werr != nil {
+		t.Fatal(werr)
+	}
+	if !strings.Contains(wrapperBody, evaluatorHelper) {
+		t.Fatalf("wrapper %s does not delegate to %s; got:\n%s", guardWrapper, evaluatorHelper, wrapperBody)
 	}
 
 	// The dockerized fallback wrapper exists and runs the evaluator.
