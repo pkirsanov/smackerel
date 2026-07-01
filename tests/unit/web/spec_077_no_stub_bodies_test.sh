@@ -27,8 +27,14 @@ fi
 # Adversarial: write a temp file containing the forbidden body and
 # verify the same grep would flag it. Ensures the regex is not a
 # tautology against an empty corpus.
-TMP="$(mktemp --suffix=.spec.ts)"
-trap 'rm -f "$TMP"' EXIT
+#
+# Portability: `mktemp --suffix=` is a GNU-only long flag (absent on the
+# BSD mktemp shipped with macOS). Create a temp DIR (portable on GNU +
+# BSD/macOS + WSL) and place a real `.spec.ts`-named canary inside it, so
+# the fixture keeps the extension without depending on a GNU-only flag.
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+TMP="$TMP_DIR/adversarial_canary.spec.ts"
 cat >"$TMP" <<'EOS'
 import { expect, test } from '@playwright/test';
 test('adversarial canary', () => {

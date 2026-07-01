@@ -2,10 +2,10 @@
  * Spec 077 e2e-ui lane — BUG-002 regression: card-rewards login session reuse.
  *
  * Node-level unit test (node:test runner, --experimental-strip-types) that
- * locks in the BUG-002 fix: the shared `login()` helper in
- * `web/pwa/tests/_support/cardrewards.ts` performs the real /v1/web/login POST
- * at most ONCE per worker and replays the cached auth_token cookie on every
- * subsequent call. The bug was a per-test login that, at ~40 card-rewards tests
+ * locks in the BUG-002 fix: the shared session-reuse core in
+ * `web/pwa/tests/_support/cardrewards_session.ts` (which `cardrewards.ts`'s
+ * `login()` delegates to) performs the real /v1/web/login POST at most ONCE per
+ * worker and replays the cached auth_token cookie on every subsequent call. The bug was a per-test login that, at ~40 card-rewards tests
  * sharing one CI runner IP, blew past the production web-login rate limit
  * `httprate.LimitByIP(20, 1*time.Minute)` (internal/api/router.go, spec 070) so
  * the later card-rewards e2e-ui tests got HTTP 429. That limiter is a real
@@ -15,10 +15,13 @@
  *
  * Driver: tests/unit/web/bug_077_002_login_session_reuse_test.sh (auto-discovered
  * by `./smackerel.sh test unit` via the spec 077 SCOPE-2 tests/unit/web/*.sh
- * convention). No `@playwright/test` test-runner context is required — the
- * helper's runtime `expect` import loads standalone under Node 22 and the Page
- * is a hand-rolled stub (mirrors csp.test.ts). The driver exports
- * SMACKEREL_AUTH_TOKEN so the helper's module-load `requireAuthToken()` resolves.
+ * convention). This UNIT lane does NOT install `@playwright/test` (it is an
+ * e2e-ui-only devDependency), so this test imports the session-reuse core from
+ * the Playwright-free `cardrewards_session.ts` (TYPE-ONLY @playwright/test
+ * imports, erased by --experimental-strip-types — the same lane-isolation
+ * pattern csp.test.ts uses) and drives it with a hand-rolled stub Page. The
+ * driver exports SMACKEREL_AUTH_TOKEN so the core's module-load
+ * `requireAuthToken()` resolves.
  *
  * Anchors SCN-077-BUG-002-01 (worker session reuse) and SCN-077-BUG-002-02
  * (no per-test login POST reintroduced in any cardrewards_*.spec.ts).
@@ -28,7 +31,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { login } from "./cardrewards.ts";
+import { __resetLoginSessionCache, login } from "./cardrewards_session.ts";
 
 // A representative auth_token cookie shaped exactly as BrowserContext.cookies()
 // returns it (the shape the fix captures and later replays via addCookies).
@@ -77,6 +80,8 @@ function makeStubPage(onPost: (url: string) => { status: () => number }) {
 // worker-scoped cache were removed (the bug reintroduced), login() would POST on
 // the second call and this test would fail with the tripwire error.
 test("SCN-077-BUG-002-01 — login POSTs once per worker, then reuses the cached session", async () => {
+  // Start from a known-empty worker cache so this test is order-independent.
+  __resetLoginSessionCache();
   let postCount = 0;
   const first = makeStubPage(() => {
     postCount += 1;
