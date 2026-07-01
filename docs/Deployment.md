@@ -923,14 +923,26 @@ fails loud at startup if any is missing, empty, or a dev default:
 
 ### 4. Compose profile enablement (the "it deployed but X is dead" footguns)
 
-- [ ] `--profile ollama` — REQUIRED on evo-x2 or the ML sidecar has no LLM
-      backend. Confirm `/dev/kfd` + `/dev/dri` ROCm device passthrough and the
-      correct render/video GIDs (`getent group render` / `getent group video`).
-  - [ ] Keep `OLLAMA_KEEP_ALIVE` resident on home-lab (`-1` or a duration
-        ≥ 10m): the `validateModelEnvelopes` co-residence OOM guard is enforced
-        only while keep-alive keeps the interactive hot-path models resident.
-        With a short/zero keep-alive the sum guard relaxes and avoiding
-        co-residence OOM becomes the operator's responsibility.
+- [ ] Ollama on evo-x2 is a **shared host daemon**, NOT an in-stack container,
+      so **`--profile ollama` is NOT used on evo-x2**. The knb overlay sets
+      `sharedServices.ollama: shared` with
+      `base_url_host_path: http://<host>:11434`; the adapter wires
+      `OLLAMA_BASE_URL` to that host daemon, the generated `home-lab.env` sets
+      `ENABLE_OLLAMA=false`, and the ollama profile is absent from
+      `COMPOSE_PROFILES` — no in-stack ollama container starts. The
+      smackerel-ml sidecar + assistant reach the host daemon directly. (Only a
+      target that BUNDLES ollama — `sharedServices.ollama: bundled` — enables
+      `--profile ollama` to run an in-stack container.)
+  - [ ] Confirm the **host** ollama daemon has ROCm device access (`/dev/kfd` +
+        `/dev/dri`) and the correct render/video GIDs
+        (`getent group render` / `getent group video`), and that the
+        `params.yaml ollama.models` are present (`ollama list`). This is host
+        daemon setup, not in-stack container config.
+  - [ ] Keep `OLLAMA_KEEP_ALIVE` resident on the host daemon (`-1` or a
+        duration ≥ 10m): the `validateModelEnvelopes` co-residence OOM guard is
+        enforced only while keep-alive keeps the interactive hot-path models
+        resident. With a short/zero keep-alive the sum guard relaxes and
+        avoiding co-residence OOM becomes the operator's responsibility.
 - [ ] `--profile monitoring` — enable Prometheus (Grafana + Alertmanager are
       knb-side stand-up).
 - [ ] `--profile searxng` — enable only if the open-knowledge agent is on.
