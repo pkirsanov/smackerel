@@ -38,6 +38,8 @@ The repository now exposes a sanctioned CLI-owned runtime test surface for the f
 | End-to-end | `./smackerel.sh test e2e` | Runtime, compose, or config changes |
 | End-to-end UI (PWA browser) | `./smackerel.sh test e2e-ui` | PWA `.spec.ts` under `web/pwa/tests/` changes, login/auth UI, CSP, or served-route shape changes |
 | Stress smoke | `./smackerel.sh test stress` | Runtime health, lifecycle, or stress env handoff changes |
+| Chrome extension e2e (MV3) | `./smackerel.sh test e2e-ext` | `extensions/chrome-bridge/` MV3 background/content/transport code or its Playwright e2e harness changes (self-contained; real headless Chromium, no live stack) |
+| Chrome extension supply-chain | `./smackerel.sh test extension-supplychain` | Chrome-bridge sideload-zip packaging or its LOCAL cosign sign / `verify-blob` proof changes (offline ephemeral key; no public-Rekor upload) |
 | Framework doctor | `bash .github/bubbles/scripts/cli.sh doctor` | Project-owned bootstrap docs change |
 | Framework validate | `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate` | Before claiming bootstrap health |
 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>` | Spec or bug artifacts change |
@@ -58,6 +60,8 @@ The current CLI-owned runtime surface exposes these categories today:
 | End-to-end UI | `e2e-ui` | `./smackerel.sh test e2e` (web UI paths included) |
 | End-to-end UI (PWA browser) | `e2e-ui` | `./smackerel.sh test e2e-ui` |
 | Stress | `stress` | `./smackerel.sh test stress` |
+| Chrome extension e2e (MV3) | `e2e-ext` | `./smackerel.sh test e2e-ext` |
+| Chrome extension supply-chain | `extension-supplychain` | `./smackerel.sh test extension-supplychain` |
 
 ### Stores-Only Integration-Light Lane (`test integration-light`, OPS-005 F-RUNBOOK)
 
