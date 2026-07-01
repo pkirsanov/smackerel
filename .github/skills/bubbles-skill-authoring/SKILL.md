@@ -14,6 +14,17 @@ This is a portable governance skill. Keep it free of project-specific commands, 
 ## Scope: project vs personal
 Project-scoped procedures live in `.github/skills/` and travel with the repository. Personal or cross-repo procedural preferences do NOT belong in a project skill — they live in the observation-driven developer profile (`.specify/memory/developer-profile.md`) and the agent's user-memory layer. Do not stand up a parallel personal-skills surface; route personal preferences to those existing layers instead.
 
+## Placement & Naming
+Skill placement is classified by CONTENT, not by a name prefix. The authority is [`project-config-contract.md`](../../agents/bubbles_shared/project-config-contract.md) § **Skills Classification**:
+
+- **Portable** — hardcodes no project-specific path/tool/CLI (uses `agents.md` indirection); usable in any repo. The framework's own portable skills use the `bubbles-` name prefix by convention, but portability is about content, not the prefix (`bug-fix-testing/` is unprefixed yet classified portable).
+- **Project-specific** — references a project CLI, project services, or a domain-specific pattern. Named with a domain term (`chaos-execution`, `protobuf-only`) or a repo-descriptive term (`wanderaide-*`, `smackerel-*`); lives only in that repo and MUST NOT be assumed to exist elsewhere.
+
+Naming guidance (a convention, NOT a mechanical rename mandate):
+- Reserve the `bubbles-` prefix for framework-portable skills — do not put it on a skill that hardcodes one repo's specifics.
+- Both unprefixed domain names and `<repo>-*` are established, acceptable forms for a project-specific skill; there is no requirement to prefix every project skill with the repo name.
+- Some framework agents PIN a project-skill by a fixed path (e.g. `bubbles.chaos.agent.md` loads `.github/skills/chaos-execution/SKILL.md`). NEVER rename a skill a framework agent pins — its name is a contract.
+
 ## Non-negotiables
 - Do not hardcode environment-specific hosts, URLs, or ports.
 - Do not invent defaults or fallbacks that hide missing configuration.

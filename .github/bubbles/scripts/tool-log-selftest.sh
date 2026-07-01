@@ -105,7 +105,7 @@ print('SESSION_OK')
 BUBBLES_TOOL_LOG_FILE="$LOG_FILE" \
 BUBBLES_SESSION_ID="sess-B" \
 BUBBLES_TOOL_LOG_QUIET=1 \
-  bash "$TOOL_LOG" /bin/true > /dev/null 2>&1
+  bash "$TOOL_LOG" true > /dev/null 2>&1
 
 python3 -c "
 import json

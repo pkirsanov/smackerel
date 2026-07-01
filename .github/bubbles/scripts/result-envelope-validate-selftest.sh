@@ -25,8 +25,12 @@ SCHEMA="$REPO_ROOT/bubbles/schemas/result-envelope.schema.json"
 
 [[ -x "$VALIDATOR" ]] || { echo "selftest: missing $VALIDATOR" >&2; exit 2; }
 [[ -f "$SCHEMA" ]] || { echo "selftest: missing $SCHEMA" >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "selftest: python3 required" >&2; exit 2; }
-python3 -c "import jsonschema" 2>/dev/null || { echo "selftest: jsonschema required" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "result-envelope-validate-selftest: SKIP (python3 not installed)"; exit 0; }
+# The validator itself SKIPs gracefully when jsonschema is absent (exit 0). The
+# selftest exercises the validator's schema behavior, which cannot run without
+# jsonschema — SKIP to match the framework's graceful-degradation convention
+# (see model-tier-advisory-selftest.sh).
+python3 -c "import jsonschema" 2>/dev/null || { echo "result-envelope-validate-selftest: SKIP (python jsonschema not installed)"; exit 0; }
 
 failures=0
 pass() { echo "PASS: $1"; }

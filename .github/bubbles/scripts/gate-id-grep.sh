@@ -106,7 +106,20 @@ fi
 # exit, a missing -P would make the scans return ZERO matches and the gate
 # would SILENTLY PASS — a false negative. Fail loud instead.
 # Override with BUBBLES_GREP (e.g. BUBBLES_GREP=ggrep on macOS).
-GREP_BIN="${BUBBLES_GREP:-grep}"
+# Auto-select a PCRE-capable grep so this gate runs on macOS (BSD grep lacks -P)
+# without the operator pre-setting BUBBLES_GREP. Precedence: explicit BUBBLES_GREP
+# -> system grep (GNU on Linux) -> ggrep (GNU grep from brew/macports on macOS).
+# If none supports -P, the PCRE guard below still fails loud (never silent-pass).
+GREP_BIN="${BUBBLES_GREP:-}"
+if [[ -z "$GREP_BIN" ]]; then
+  if printf 'x\n' | grep -P 'x' >/dev/null 2>&1; then
+    GREP_BIN="grep"
+  elif command -v ggrep >/dev/null 2>&1 && printf 'x\n' | ggrep -P 'x' >/dev/null 2>&1; then
+    GREP_BIN="ggrep"
+  else
+    GREP_BIN="grep"
+  fi
+fi
 if ! printf 'x\n' | "$GREP_BIN" -P 'x' >/dev/null 2>&1; then
   echo "gate-id-grep: requires GNU grep with PCRE (-P) support; '$GREP_BIN' lacks -P." >&2
   echo "  This gate cannot scan reliably without -P and refuses to pass silently." >&2

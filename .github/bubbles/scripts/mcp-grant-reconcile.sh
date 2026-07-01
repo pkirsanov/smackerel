@@ -213,9 +213,13 @@ bubbles_mcp_reconcile_to_stdout() {
     return 0
   fi
 
-  awk -v strip="$strip" -v server_token="$server_token" -v placeholder="$BUBBLES_MCP_SERVER_PLACEHOLDER" '
+  # BSD/macOS awk rejects a `-v` value containing a literal newline ("newline in
+  # string"). `$strip` is a newline-separated token list, so collapse it to a
+  # comma-separated list (grant tokens are validated `[A-Za-z0-9_.-]+`, never
+  # contain commas) and split on "," inside awk.
+  awk -v strip="$(printf '%s' "$strip" | tr '\n' ',')" -v server_token="$server_token" -v placeholder="$BUBBLES_MCP_SERVER_PLACEHOLDER" '
     BEGIN {
-      n = split(strip, arr, "\n")
+      n = split(strip, arr, ",")
       for (i = 1; i <= n; i++) if (arr[i] != "") drop[arr[i]] = 1
     }
     /^tools: \[.*\]$/ {
