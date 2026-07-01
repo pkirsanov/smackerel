@@ -51,10 +51,14 @@ if [[ "$RC" -ne 0 ]]; then
 fi
 
 # Sanity: ensure the runner actually executed our tests (not a zero-test silent
-# pass). Node's TAP summary prints '# tests N' / '# pass N'.
-grep -Eq '^# tests [1-9]' "$TMP/node.out" \
+# pass). The node:test summary line is node-version-dependent: older node prints
+# the TAP form '# tests N' / '# pass N', while node >= v24/v26 prints the
+# spec-reporter form 'ℹ tests N' / 'ℹ pass N'. Accept either so the count parse
+# is node-version-agnostic (a genuine failure still flips node's exit code and
+# the pass-count assertion below).
+grep -Eq '^(# |ℹ )tests [1-9]' "$TMP/node.out" \
   || fail "node:test reported zero tests for $NODE_TEST"
-grep -Eq '^# pass 2' "$TMP/node.out" \
+grep -Eq '^(# |ℹ )pass 2' "$TMP/node.out" \
   || fail "expected exactly 2 passing BUG-002 regression tests in $NODE_TEST"
 
 echo "PASS: bug_077_002_login_session_reuse_test (SCN-077-BUG-002-01 / SCN-077-BUG-002-02)"
