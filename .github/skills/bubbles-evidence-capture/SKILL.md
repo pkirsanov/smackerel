@@ -44,6 +44,7 @@ Rules:
 | API endpoint works | HTTP request against the running stack (with a per-request timeout) | Reading the router |
 | Database state correct | Run a SQL query against the live test DB | Reading the migration |
 | UI displays correctly | Open browser / capture DOM / browser-automation snapshot | Reading the UI component source |
+| Performance / traces healthy | Capture validate-plane traces/metrics from the running test stack and inspect spans | Reading the instrumentation source |
 | Build succeeds | Run the project build command | Reading build config |
 | Lint passes | Run the lint command | Reading the lint config |
 | Coverage threshold met | Run coverage report | Computing it mentally |

@@ -8,6 +8,28 @@ else
   REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 
+# macOS portability shim. BSD userland diverges from GNU coreutils on `sed -i`
+# (BSD needs `sed -i ''`) and lacks `timeout` (coreutils ships `gsed`/`gtimeout`).
+# Several selftests below invoke `sed -i` / `timeout` in GNU form. When the GNU
+# binaries are present under their `g`-prefixed names, expose them as plain `sed`
+# / `timeout` on PATH for THIS process and every selftest subprocess it spawns,
+# so the whole validation runs unchanged on Linux + macOS. On Linux (unprefixed
+# GNU tools already present) every probe short-circuits and this is a no-op.
+_bubbles_compat_dir=""
+if ! sed --version >/dev/null 2>&1 && command -v gsed >/dev/null 2>&1; then
+  _bubbles_compat_dir="$(mktemp -d)"
+  ln -sf "$(command -v gsed)" "$_bubbles_compat_dir/sed"
+fi
+if ! command -v timeout >/dev/null 2>&1 && command -v gtimeout >/dev/null 2>&1; then
+  [[ -n "$_bubbles_compat_dir" ]] || _bubbles_compat_dir="$(mktemp -d)"
+  ln -sf "$(command -v gtimeout)" "$_bubbles_compat_dir/timeout"
+fi
+if [[ -n "$_bubbles_compat_dir" ]]; then
+  PATH="$_bubbles_compat_dir:$PATH"
+  export PATH
+  trap 'rm -rf "$_bubbles_compat_dir"' EXIT
+fi
+
 # v5.3 / G1: install-mode detection. Many selftests below were authored
 # inside the framework source repo and assume `install.sh`, `VERSION`, or
 # the framework's own `README.md`/`docs/` layout are present. From a

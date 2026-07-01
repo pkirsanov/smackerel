@@ -31,6 +31,7 @@ Replace eager-loading of `agents/bubbles_shared/*.md` with on-demand skill loadi
 | Design a reusable capability (adapter/provider/strategy) | `bubbles-capability-foundation-design` |
 | Write tests of any kind | `bubbles-test-integrity` |
 | Touch test compose files, test DB setup, or test data | `bubbles-test-environment-isolation` |
+| Write a shell script, guard, selftest, or hook that must run on macOS + Linux | `bubbles-cross-platform-shell` |
 | Add or change config values, ports, or services | `bubbles-config-sst`, `bubbles-docker-port-standards`, `bubbles-docker-lifecycle-governance` |
 | Author a deploy target adapter | `bubbles-deployment-target-adapter` |
 | Write a spec.md from scratch with BDD | `bubbles-spec-template-bdd` |

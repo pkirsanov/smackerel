@@ -1519,7 +1519,7 @@ if [[ ${#timestamps[@]} -ge 3 ]]; then
   intervals=()
   all_parseable="true"
   for ts in "${timestamps[@]}"; do
-    epoch="$(date -d "$ts" +%s 2>/dev/null || true)"
+    epoch="$(bubbles_iso_to_epoch "$ts" || true)"
     if [[ -z "$epoch" ]]; then
       all_parseable="false"
       break
@@ -1550,10 +1550,10 @@ if [[ ${#timestamps[@]} -ge 3 ]]; then
     fi
 
     # Check if all timestamps are within 1 second of each other
-    min_epoch="$(date -d "${timestamps[0]}" +%s 2>/dev/null || true)"
+    min_epoch="$(bubbles_iso_to_epoch "${timestamps[0]}" || true)"
     max_epoch="$min_epoch"
     for ts in "${timestamps[@]}"; do
-      epoch="$(date -d "$ts" +%s 2>/dev/null || true)"
+      epoch="$(bubbles_iso_to_epoch "$ts" || true)"
       [[ -n "$epoch" ]] || continue
       [[ "$epoch" -lt "$min_epoch" ]] && min_epoch="$epoch"
       [[ "$epoch" -gt "$max_epoch" ]] && max_epoch="$epoch"
@@ -2294,7 +2294,7 @@ if [[ "$requires_impl_delta" == "true" ]]; then
     fi
 
     runtime_path_hits="$({
-      grep -oE '[^[:space:]]+\.(rs|go|py|ts|tsx|js|jsx|dart|java|scala|yaml|yml|proto)' "$rpt_path" \
+      grep -oE '[^[:space:]]+\.(rs|go|py|ts|tsx|js|jsx|dart|java|scala|sh|bash|yaml|yml|proto)' "$rpt_path" \
         | grep -viE '(^|/)(specs|docs|\.github)/|(^|/)(README|CHANGELOG)\.md$' \
         | wc -l || true
     } || true)"
@@ -2948,7 +2948,7 @@ if [[ "$failures" -gt 0 ]]; then
         return 0
       fi
 
-      sed -i -E 's/"'"$array_key"'"[[:space:]]*:[[:space:]]*\[[^]]*\]/"'"$array_key"'": []/' "$state_file"
+      bubbles_sed_inplace -E 's/"'"$array_key"'"[[:space:]]*:[[:space:]]*\[[^]]*\]/"'"$array_key"'": []/' "$state_file"
 
       awk -v key="$array_key" '
         $0 ~ "\"" key "\"[[:space:]]*:[[:space:]]*\\[" {
@@ -2971,7 +2971,7 @@ if [[ "$failures" -gt 0 ]]; then
     }
 
     # Revert status to in_progress
-    sed -i -E 's/"status"[[:space:]]*:[[:space:]]*"done"/"status": "in_progress"/' "$state_file"
+    bubbles_sed_inplace -E 's/"status"[[:space:]]*:[[:space:]]*"done"/"status": "in_progress"/' "$state_file"
 
     # Revert certification.status to in_progress if present
     awk '
@@ -2999,15 +2999,15 @@ if [[ "$failures" -gt 0 ]]; then
     clear_array_key "completedPhases"
 
     # Update lastUpdatedAt
-    sed -i -E 's/"lastUpdatedAt"[[:space:]]*:[[:space:]]*"[^"]+"/"lastUpdatedAt": "'"$now_utc"'"/' "$state_file"
+    bubbles_sed_inplace -E 's/"lastUpdatedAt"[[:space:]]*:[[:space:]]*"[^"]+"/"lastUpdatedAt": "'"$now_utc"'"/' "$state_file"
 
     # Add failure record if failures array exists
     if grep -qE '"failures"[[:space:]]*:[[:space:]]*\[' "$state_file"; then
       failure_record="{\"phase\": \"transition-guard\", \"summary\": \"$failures blocking failures detected by state-transition-guard.sh\", \"detectedAt\": \"$now_utc\"}"
       # Append to failures array (simple single-line case)
-      sed -i -E "s|\"failures\"[[:space:]]*:[[:space:]]*\[|\"failures\": [$failure_record, |" "$state_file"
+      bubbles_sed_inplace -E "s|\"failures\"[[:space:]]*:[[:space:]]*\[|\"failures\": [$failure_record, |" "$state_file"
       # Clean up empty trailing comma if array was empty
-      sed -i -E 's/\[({[^}]+}), \]/[\1]/' "$state_file"
+      bubbles_sed_inplace -E 's/\[({[^}]+}), \]/[\1]/' "$state_file"
     fi
 
     echo "REVERTED: state.json status → 'in_progress'"

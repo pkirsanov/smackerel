@@ -286,7 +286,7 @@ refine_optout_for_display() {
     printf '%s' 'OPTED-OUT-INCOMPLETE'
     return 0
   fi
-  revisit_epoch="$(date -d "$revisit" +%s 2>/dev/null || printf '')"
+  revisit_epoch="$(date -d "$revisit" +%s 2>/dev/null || date -u -j -f "%Y-%m-%d %H:%M:%S" "${revisit} 00:00:00" +%s 2>/dev/null || printf '')"
   if [[ -z "$revisit_epoch" ]]; then
     printf '%s' 'OPTED-OUT-INCOMPLETE'
     return 0
