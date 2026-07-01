@@ -1066,10 +1066,22 @@ SEARXNG_CONTAINER_PORT="$(required_value assistant.open_knowledge.searxng.contai
 SEARXNG_SECRET="$(required_value assistant.open_knowledge.searxng.secret_key)"
 SEARXNG_BASE_URL="$(required_value assistant.open_knowledge.searxng.base_url)"
 # Spec 049 — per-environment Prometheus host port. Used only when the
-# `monitoring` Compose profile is enabled; the service is off by
-# default. Fail-loud SST: every supported environment in
-# config/smackerel.yaml MUST declare prometheus_host_port.
+# `monitoring` Compose profile is enabled; the service is off unless
+# observability_bundled=true (resolved below). Fail-loud SST: every
+# supported environment in config/smackerel.yaml MUST declare
+# prometheus_host_port.
 PROMETHEUS_HOST_PORT="$(required_value environments.$TARGET_ENV.prometheus_host_port)"
+# DEVOPS-RDY-01 / Spec 032 — Observability posture (bundled vs shared).
+# `bundled` means this product runs its OWN spec-049 Prometheus via the
+# `monitoring` Compose profile, aggregated into COMPOSE_PROFILES below so
+# metrics + in-Prometheus alert-rule evaluation start Day-1 on the
+# zero-manual apply path (NO manual `--profile monitoring` step). `shared`
+# means the shared host observability stack (spec 014) scrapes this product
+# and the profile stays off. Mirrors the knb adapter selector
+# `params.yaml sharedServices.observability`. Fail-loud SST (Gate G028 /
+# smackerel-no-defaults): every environment MUST declare
+# environments.<env>.observability_bundled — no silent default.
+OBSERVABILITY_BUNDLED="$(required_value environments.$TARGET_ENV.observability_bundled)"
 POSTGRES_VOLUME_NAME="$(required_value environments.$TARGET_ENV.postgres_volume_name)"
 NATS_VOLUME_NAME="$(required_value environments.$TARGET_ENV.nats_volume_name)"
 OLLAMA_VOLUME_NAME="$(required_value environments.$TARGET_ENV.ollama_volume_name)"
@@ -1842,6 +1854,12 @@ OUTPUT_FILE_TMP="${OUTPUT_FILE}.tmp.$$"
 _compose_profiles=()
 if [[ "${OLLAMA_ENABLED:-false}" == "true" ]]; then _compose_profiles+=(ollama); fi
 if [[ "${SEARXNG_ENABLED:-false}" == "true" ]]; then _compose_profiles+=(searxng); fi
+# DEVOPS-RDY-01 — bundled observability drives the `monitoring` profile so the
+# spec-049 Prometheus in deploy/compose.deploy.yml starts on the zero-manual
+# apply path when environments.<env>.observability_bundled=true. Compose reads
+# COMPOSE_PROFILES from --env-file (the knb adapter's `docker compose
+# --env-file app.env up`), so NO manual `--profile monitoring` step is needed.
+if [[ "${OBSERVABILITY_BUNDLED:-false}" == "true" ]]; then _compose_profiles+=(monitoring); fi
 COMPOSE_PROFILES="$(IFS=,; echo "${_compose_profiles[*]:-}")"
 
 cat > "$OUTPUT_FILE_TMP" <<EOF
@@ -1903,6 +1921,10 @@ ENABLE_OLLAMA=${OLLAMA_ENABLED}
 # Spec 064 SCOPE-07 — SearxNG SST emission. runtime.sh adds
 # --profile searxng to docker compose iff ENABLE_SEARXNG is truthy.
 ENABLE_SEARXNG=${SEARXNG_ENABLED}
+# DEVOPS-RDY-01 — Observability posture flag, mirrored into the env for
+# self-documentation. When true, \`monitoring\` is added to COMPOSE_PROFILES
+# above so the spec-049 Prometheus starts Day-1 on the zero-manual apply path.
+ENABLE_MONITORING=${OBSERVABILITY_BUNDLED}
 # Spec 064 SCOPE-17 — Docker Compose native profile activation.
 # Computed above from ENABLE_<PROFILE> flags. Compose reads this
 # automatically from --env-file, so adapters need NO --profile flag.
