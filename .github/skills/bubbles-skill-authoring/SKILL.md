@@ -18,7 +18,7 @@ Project-scoped procedures live in `.github/skills/` and travel with the reposito
 Skill placement is classified by CONTENT, not by a name prefix. The authority is [`project-config-contract.md`](../../agents/bubbles_shared/project-config-contract.md) § **Skills Classification**:
 
 - **Portable** — hardcodes no project-specific path/tool/CLI (uses `agents.md` indirection); usable in any repo. The framework's own portable skills use the `bubbles-` name prefix by convention, but portability is about content, not the prefix (`bug-fix-testing/` is unprefixed yet classified portable).
-- **Project-specific** — references a project CLI, project services, or a domain-specific pattern. Named with a domain term (`chaos-execution`, `protobuf-only`) or a repo-descriptive term (`wanderaide-*`, `smackerel-*`); lives only in that repo and MUST NOT be assumed to exist elsewhere.
+- **Project-specific** — references a project CLI, project services, or a domain-specific pattern. Named with a domain term (`chaos-execution`, `protobuf-only`) or a repo-descriptive `<repo>-` prefix; lives only in that repo and MUST NOT be assumed to exist elsewhere.
 
 Naming guidance (a convention, NOT a mechanical rename mandate):
 - Reserve the `bubbles-` prefix for framework-portable skills — do not put it on a skill that hardcodes one repo's specifics.
