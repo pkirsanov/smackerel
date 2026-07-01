@@ -2146,6 +2146,11 @@ environments:
     # (42001-42099). Used only when the `monitoring` Compose profile is
     # enabled; the service is off by default.
     prometheus_host_port: 42005
+    # DEVOPS-RDY-01 / Spec 032 — observability posture for dev. false keeps
+    # the in-stack `monitoring` Prometheus profile opt-in (enable manually
+    # with `docker compose --profile monitoring`); config.sh only adds
+    # `monitoring` to COMPOSE_PROFILES when this is true. No silent default.
+    observability_bundled: false
     postgres_volume_name: smackerel-postgres-data
     nats_volume_name: smackerel-nats-data
     ollama_volume_name: smackerel-ollama-data
@@ -2184,6 +2189,11 @@ environments:
     # (47001-47099). Disposable test stack runs the monitoring profile
     # opt-in via the integration test fixture.
     prometheus_host_port: 47005
+    # DEVOPS-RDY-01 / Spec 032 — observability posture for the disposable
+    # test stack. false: the `monitoring` Prometheus profile is enabled
+    # opt-in by the integration fixture, not automatically via
+    # COMPOSE_PROFILES. No silent default.
+    observability_bundled: false
     postgres_volume_name: smackerel-test-postgres-data
     nats_volume_name: smackerel-test-nats-data
     ollama_volume_name: smackerel-test-ollama-data
@@ -2237,6 +2247,17 @@ environments:
     # actual host exposure (reverse proxy, Tailscale ACLs) stays in
     # the overlay too.
     prometheus_host_port: 43005
+    # DEVOPS-RDY-01 / Spec 032 — observability posture for home-lab. true =
+    # smackerel runs its OWN spec-049 Prometheus via the `monitoring`
+    # Compose profile (config.sh appends `monitoring` to COMPOSE_PROFILES),
+    # so metric scrape + in-Prometheus alert-rule evaluation (alerts.yml)
+    # start Day-1 on the zero-manual apply path — NO manual `--profile`
+    # step. Matches the knb adapter selector
+    # smackerel/home-lab/params.yaml `sharedServices.observability: bundled`.
+    # Grafana dashboards + Alertmanager routing are NOT bundled here; they
+    # come from the shared host observability stack (spec 014) when live, or
+    # knb-side standup (spec 082 R-082-C). See docs/Deployment.md.
+    observability_bundled: true
     postgres_volume_name: smackerel-home-lab-postgres-data
     nats_volume_name: smackerel-home-lab-nats-data
     ollama_volume_name: smackerel-home-lab-ollama-data
