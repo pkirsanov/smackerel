@@ -943,8 +943,19 @@ fails loud at startup if any is missing, empty, or a dev default:
         enforced only while keep-alive keeps the interactive hot-path models
         resident. With a short/zero keep-alive the sum guard relaxes and
         avoiding co-residence OOM becomes the operator's responsibility.
-- [ ] `--profile monitoring` — enable Prometheus (Grafana + Alertmanager are
-      knb-side stand-up).
+- [ ] `monitoring` profile — **auto-enabled on home-lab; NO manual `--profile`
+      step** (DEVOPS-RDY-01). `config/smackerel.yaml`
+      `environments.home-lab.observability_bundled: true` makes `config.sh`
+      append `monitoring` to `COMPOSE_PROFILES` in the generated bundle env,
+      and the knb adapter's `docker compose --env-file app.env up` inherits
+      it — so the spec-049 Prometheus (metric scrape + in-Prometheus
+      `alerts.yml` alert-rule evaluation) starts Day-1 on the zero-manual
+      apply path. Matches the knb selector
+      `smackerel/home-lab/params.yaml sharedServices.observability: bundled`.
+      **Grafana dashboards + Alertmanager routing are NOT bundled here** —
+      they come from the shared host observability stack (spec 014) when live,
+      or a knb-side stand-up (spec 082 R-082-C). See *Monitoring Profile*
+      below.
 - [ ] `--profile searxng` — enable only if the open-knowledge agent is on.
 
 ### 5. Backup, restore-drill & promote sequencing
@@ -1088,12 +1099,35 @@ and Compose fail-loud if it is missing.
 | 42004 | Ollama | **No** — internal only |
 | 42005 | Prometheus (monitoring profile, dev) | **No** — operator-only on dev; deploy adapter chooses overlay exposure |
 
-## Monitoring Profile (Spec 049 — Optional)
+## Monitoring Profile (Spec 049 + DEVOPS-RDY-01)
 
-Smackerel ships a self-contained Prometheus monitoring stack as an
-OPT-IN Docker Compose profile. The default deploy compose file
-exists but `prometheus` does NOT start unless the operator passes
-`--profile monitoring` to `docker compose up`.
+Smackerel ships a self-contained Prometheus monitoring stack as a Docker
+Compose profile. Its activation is driven by the fail-loud SST key
+`environments.<env>.observability_bundled` in `config/smackerel.yaml`
+(no silent default — every environment MUST declare it, per
+smackerel-no-defaults / Gate G028):
+
+| Env | `observability_bundled` | Prometheus start | Mechanism |
+|-----|-------------------------|------------------|-----------|
+| `dev` | `false` | opt-in | operator passes `--profile monitoring` (below) |
+| `test` | `false` | opt-in | the integration fixture enables the profile |
+| `home-lab` | `true` | **Day-1, automatic** | `config.sh` appends `monitoring` to `COMPOSE_PROFILES` in the bundle env; the knb adapter's `docker compose --env-file app.env up` inherits it — **no manual `--profile` step** |
+
+On `home-lab` the spec-049 Prometheus (metric scrape + in-Prometheus
+`alerts.yml` alert-rule evaluation) therefore starts on the zero-manual
+apply path, matching the knb selector
+`smackerel/home-lab/params.yaml sharedServices.observability: bundled`.
+
+**Honest scope — what is NOT bundled here.** `deploy/compose.deploy.yml`
+defines ONLY the `prometheus` service; there is no `grafana` or
+`alertmanager` service. So "bundled observability" today means
+**Prometheus metric scrape + in-Prometheus alert-rule evaluation** — NOT
+Grafana dashboards and NOT Alertmanager notification routing. Those come
+from the shared host observability stack (spec 014) when live, or a
+knb-side stand-up (spec 082 R-082-C).
+
+For `dev`/`test` (or any environment with `observability_bundled: false`),
+start Prometheus opt-in:
 
 ```bash
 # On the deploy host (after the deploy adapter has extracted the
