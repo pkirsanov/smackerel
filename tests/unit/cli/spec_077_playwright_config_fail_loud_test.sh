@@ -107,8 +107,12 @@ if [[ "$RC" -ne 0 ]]; then
   fail "node:test run failed (exit=$RC) on $NODE_TEST"
 fi
 # Sanity: ensure the runner actually executed our tests (not zero-test
-# silent pass). Node test reporter prints '# tests N' summary.
-if ! grep -Eq '^# tests [1-9]' "$TMP/node.out"; then
+# silent pass). The node:test summary line is node-version-dependent:
+# older node prints the TAP form '# tests N', while node >= v24/v26
+# prints the spec-reporter form 'ℹ tests N'. Accept either so this
+# zero-test guard is node-version-agnostic. (The node exit code checked
+# above already catches genuine assertion regressions.)
+if ! grep -Eq '^(# |ℹ )tests [1-9]' "$TMP/node.out"; then
   echo "----- node stdout -----" >&2
   cat "$TMP/node.out" >&2
   fail "node:test reported zero tests for $NODE_TEST"
