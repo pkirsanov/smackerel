@@ -128,3 +128,85 @@ this session; `BUG-069-002` / `BUG-069-003` fixSequence order-2 stay **pending**
 (no durability verdict was produced — nothing fabricated). `docker ps` confirmed
 no containers were left running (the failed `timeout` lookup never started the
 stack).
+
+## Corrective note — sibling static-contract reconciliation (2026-06-30)
+
+**Why this note exists (anti-fabrication / append-only):** this bug was flipped
+to `done` on 2026-06-30, but its OS-aware refactor of the pre-flight helper left
+a **sibling** static-contract test red. A later cross-repo evo-x2 readiness
+validation surfaced it as findings **F-CODE-01** (MAJOR — `./smackerel.sh test
+unit` RED) and **F-CODE-02** (reconcile this cert). Rather than rewrite history,
+this dated note records the reconciliation honestly.
+
+**What drifted.** The fix moved the Go-evaluator invocations
+(`go run ./cmd/preflight` on Linux; `run_go_tooling …/preflight.sh` on
+macOS/Docker) out of `smackerel_assert_host_resources()` and into the new
+`smackerel_assert_host_resources_profile()`; the old name became a thin
+back-compat wrapper (`… _profile "$1" heavy`). But the drift-detector contract
+test `internal/preflight/wiring_contract_test.go` still pinned its extractor to
+the OLD decl `smackerel_assert_host_resources() {`, so it inspected the wrapper —
+which no longer carries the evaluator — and failed:
+
+- `--- FAIL: TestGuardWiring_LiveFile` ("helper … does not invoke the Go
+  evaluator …")
+- `--- FAIL: TestGuardWiring_AdversarialMissingBuildGuard` (the evaluator-check
+  error fired before the build-path assertion could be reached)
+- `FAIL github.com/smackerel/smackerel/internal/preflight`
+
+**What was reconciled (no weakening).** The runtime guard was verified intact
+FIRST — the evaluator invocations still live in
+`smackerel_assert_host_resources_profile` (`smackerel.sh` L483 Linux / L486
+macOS), the wrapper still delegates to it (L497), and every heavy-op case block
+(`build` L733, `up`, `integration`, `e2e`, `e2e-ui`, `stress`, `pre-flight`)
+still calls the wrapper. Only the STATIC contract was realigned to the
+refactored structure: it now inspects `_profile` for the evaluator AND asserts
+the back-compat wrapper delegates to `_profile`. The two adversarial siblings
+still REJECT — `TestGuardWiring_AdversarialHelperNotRunningEvaluator` (neuter the
+evaluator ⇒ reject, citing `cmd/preflight`) and
+`TestGuardWiring_AdversarialMissingBuildGuard` (strip the build-block guard ⇒
+reject, naming `"build"`) — so the contract is not tautological and would still
+fail if a future edit genuinely unwired the evaluator.
+
+**Evidence (this session, macOS host, dockerized Go runner):**
+
+```
+# RED (before realignment)
+./smackerel.sh test unit --go --go-run 'TestGuardWiring'
+  --- FAIL: TestGuardWiring_LiveFile (0.00s)
+  --- FAIL: TestGuardWiring_AdversarialMissingBuildGuard (0.00s)
+  FAIL github.com/smackerel/smackerel/internal/preflight
+
+# GREEN (after realignment)
+./smackerel.sh test unit --go --go-run 'TestGuardWiring' --verbose
+  --- PASS: TestGuardWiring_LiveFile (0.01s)
+  --- PASS: TestGuardWiring_AdversarialMissingBuildGuard (0.01s)
+  --- PASS: TestGuardWiring_AdversarialHelperNotRunningEvaluator (0.00s)
+  ok  github.com/smackerel/smackerel/internal/preflight  0.022s
+```
+
+**Scope.** Test-contract realignment only — `internal/preflight/*.go` production
+code and `smackerel.sh` are unchanged; NO-DEFAULTS / fail-loud SST untouched.
+`BUG-099-001` remains legitimately `done`; this note closes the sibling-test
+drift it left behind.
+
+**artifact-lint transparency (F-CODE-02 completeness, no cherry-pick).** The
+required `bash .github/bubbles/scripts/artifact-lint.sh <this-packet>` was run
+this session and reports the packet holds only `bug.md` + `state.json` — the
+shape it was created in on 2026-06-30 — so the feature-style 6-artifact check
+(`spec.md`/`design.md`/`scopes.md`/`report.md`/`uservalidation.md` + the
+test/validate/audit phase records) is NOT satisfied and the lint exits non-zero.
+This is a pre-existing structural property of the packet, NOT introduced by this
+note: an untouched sibling done bug packet carrying the full 6-artifact set
+(e.g. `specs/002-phase1-foundation/bugs/BUG-002-002-postgres-startup-health-gate`)
+passes the identical lint with 0 failures, confirming the generic feature
+artifact-lint — not a bug-shape validator — is what flags the 2-file packet.
+The bug's REAL root-cause, fix, and in-session repro/verify evidence live in
+`state.json` (`rootCause` / `fix` / `provenBy`) and in this `bug.md`; the
+regression protection (the adversarial wiring contract
+`TestGuardWiring_Adversarial*`) exists and passes. Decision per the remediation
+brief: the corrective note is the accepted closure for F-CODE-02 (cert
+reconciliation) — no retroactive 6-artifact back-fill is fabricated here, since
+honest same-session `report.md` Before/After captures cannot be produced weeks
+after the original fix. Full bug-template compliance for `BUG-099-001`, if later
+desired, is a separate bug-scoped task (`bubbles.bug` / `bubbles.devops`) and
+does not gate this reconciliation.
