@@ -691,7 +691,15 @@ activity_tracking_enabled() {
 }
 
 current_epoch_ms() {
-  date +%s%3N
+  # GNU date gives ms via %3N; BSD/macOS date lacks %N and emits a literal "N",
+  # which breaks downstream integer arithmetic — fall back to second resolution.
+  local ms
+  ms="$(date +%s%3N 2>/dev/null)"
+  if [[ "$ms" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$ms"
+  else
+    printf '%s\n' "$(( $(date +%s) * 1000 ))"
+  fi
 }
 
 record_metric_event() {
