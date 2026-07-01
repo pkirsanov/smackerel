@@ -5,12 +5,21 @@
 **Scope:** All `specs/NNN-*/` (98 numbered specs, 001–098) + `specs/_ops/*` (8 packets)
 **Depth:** quick (state.json + git history + targeted file-existence/drift checks; not full per-spec behavioural cross-check)
 
-> **Layered newest-on-top.** The **2026-06-30 readiness-sweep refresh**
-> (immediately below) is the newest layer: it adds the OPS-003 / OPS-004 home-lab
-> handoff packets the prior layers omitted (the F3 stale-report finding), records
-> the evo-x2 readiness-sweep remediation shipped 2026-06-30, and dispositions the
-> 082 `releaseTrain` (F4) and 087/088 CI-as-producer (F5) narrative findings.
-> Beneath it, the **2026-06-23 reconciliation refresh** supersedes the
+> **Layered newest-on-top.** The **2026-06-30 evo-x2 readiness remediation
+> refresh** (immediately below) is the newest layer: it records the two closures
+> the earlier 2026-06-30 readiness-sweep layer understated (BUG-069-002 +
+> BUG-069-003 capture-disconnect durability both certified `done`; BUG-099-001 +
+> BUG-099-002 macOS pre-flight compat both `done`/mvp), the evo-x2 readiness
+> remediation this session shipped as the current SST (the smackerel unit gate
+> now GREEN, the knb OPS-005 upkeep hardening, and the DEVOPS-RDY observability
+> wiring), the per-finding dispositions of the residual findings SR-02..SR-08,
+> and a factual reconcile of the `docs/Upkeep_Runbook.md` NATS-backup claim to
+> the shipped knb OPS-02 fix. Beneath it, the earlier **2026-06-30
+> readiness-sweep refresh** adds the OPS-003 / OPS-004 home-lab handoff packets
+> the 2026-06-20 / 06-23 layers omitted (the F3 stale-report finding), records
+> the readiness-sweep remediation, and dispositions the 082 `releaseTrain` (F4)
+> and 087/088 CI-as-producer (F5) narrative findings. Beneath that, the
+> **2026-06-23 reconciliation refresh** supersedes the
 > **2026-06-20 portfolio audit** for the model-target headline and the
 > `097`/`098`/`099` status lines. The 2026-06-20 audit — which itself superseded
 > the stale **2026-06-02 baseline** (flagged by spec 082) and the **2026-06-10
@@ -19,6 +28,138 @@
 > 2026-06-23 section for audit trail. Where any two layers disagree, the newest
 > wins. (The 2026-06-20 header describes that audit's 98-spec scope; the portfolio
 > is now 99 numbered specs, 001–099 — see the 2026-06-23 refresh.)
+
+---
+
+## Summary (2026-06-30 evo-x2 readiness remediation refresh)
+
+This refresh is the **newest layer**. It records (1) two closures the earlier
+2026-06-30 readiness-sweep layer understated, (2) the cross-repo evo-x2 readiness
+remediation this session shipped as the **current single source of truth**, and
+(3) the per-finding dispositions of the residual spec-review findings
+SR-02..SR-08. It is a read-only `spec-review-to-doc` layer: it documents
+classifications and dispositions and **mutates no spec `state.json`**. The only
+writes this pass are this report layer + a factual NATS-backup reconcile in
+`docs/Upkeep_Runbook.md`.
+
+> **Supersedes** the earlier 2026-06-30 readiness-sweep layer's "one open
+> smackerel readiness item — BUG-069-003's live-stack E2E (shared with
+> BUG-069-002), `in_progress`" line and its OPS-005 SF-4 residual note:
+> BUG-069-002 **and** BUG-069-003 are now both certified `done` (below). Where
+> the two 2026-06-30 layers disagree, this (newer) one wins.
+
+### 1. Closures the prior 2026-06-30 layer understated (SR-01 / SR-04)
+
+| Bug | Status | certifiedAt | Prior-layer gap |
+|-----|--------|-------------|-----------------|
+| `BUG-069-002-capture-context-cancellation` | **`done`** / mvp | 2026-06-30T21:17:03Z (bubbles.validate) | the prior layer's "one open item … `in_progress`" line is stale |
+| `BUG-069-003-capture-endpoint-context-cancellation` | **`done`** / mvp | 2026-06-30T21:52:45Z (bubbles.validate) | the `/api/capture` sibling closed too |
+| `BUG-099-001-macos-preflight-procmeminfo` | **`done`** / mvp | 2026-06-30 (bubbles.devops, live macOS re-run) | omitted entirely by prior layers |
+| `BUG-099-002-macos-timeout-not-found` | **`done`** / mvp | 2026-06-30 (bubbles.devops, live macOS re-run) | omitted entirely by prior layers |
+
+Both capture-disconnect durability bugs — the `/api/assistant/turn` fix
+(BUG-069-002) and its `/api/capture` sibling (BUG-069-003), the same
+`context.WithoutCancel(r.Context())` root-cause fix applied at two endpoints —
+are certified `done`. The two macOS-compat pre-flight bugs (BUG-099-001 OS-gates
+the host-native `/proc/meminfo` branch to Linux; BUG-099-002 adds a portable
+`timeout`→`gtimeout`→watchdog resolver) are `done`/mvp; they were the wsl-macos
+blockers that had kept the shared live-stack durability lane from running on a
+macOS host. **Classification: all four CURRENT (certified, terminal-for-mode).**
+
+### 2. evo-x2 readiness remediation shipped this session — current SST
+
+Recorded as the authoritative current state; verified live this pass (see Method).
+
+**Code — smackerel unit gate GREEN.** `./smackerel.sh test unit` re-run live this
+pass → **EXIT 0** (Go `go test ./...` OK; Python `517 passed, 2 skipped`;
+shell / web / docs unit lanes PASS under `node v26.4.0`):
+
+| Finding | Fix | Commit |
+|---------|-----|--------|
+| F-CODE-01 | realign `internal/preflight/wiring_contract_test.go` to the `_profile` evaluator helper | `fd7fc34c` |
+| F-CODE-02 | reconcile the BUG-099-001 cert note | `fd7fc34c` |
+| F-CODE-04 | make the node:test summary parsing robust to the node v26 spec-reporter | `30c6c4fb` |
+| F-CODE-05 | extract a Playwright-free `cardrewards_session.ts` so the unit lane no longer imports `@playwright/test` | `23a1bfd8` |
+
+**knb ops (deploy overlay — referenced, not imported; packet knb
+`_ops/OPS-005-smackerel-upkeep-hardening`):** OPS-01 upkeep-calendar populated
+(backup / restore-test / bcdr-drill / patch-cycle / flag-cleanup / compliance) +
+honest `BCDR_Plan` wording; **OPS-02** `backup.sh` now archives the REAL
+`${NATS_VOLUME_NAME}` NATS volume CONTENTS (the prior hardcoded
+`smackerel_nats_data` underscore path silently skipped) — the fix this pass
+reconciles into `docs/Upkeep_Runbook.md`; OPS-03 `bcdr-drill.sh` downgraded to
+the data-recovery leg it actually proves; OPS-04 patch-cycle threads the required
+config-bundle args; OPS-05 `shellcheck -x smackerel/home-lab/*.sh` EXIT 0; OPS-06
+value-safe key-material-version rotation id. knb commits `9501baf` / `1a3105a` /
+`c41d2c1` / `8fb61c6`.
+
+**Observability (DEVOPS-RDY):**
+
+| Finding | Change | Commit |
+|---------|--------|--------|
+| RDY-01 | bundled Prometheus starts Day-1 on the zero-manual apply via a fail-loud `observability_bundled` SST key → `COMPOSE_PROFILES=searxng,monitoring` | `bc7062df` |
+| RDY-02 | Grafana / Alertmanager honestly documented as deferred to the shared host stack (spec 014) / knb standup, not bundled | `4f3695a5` (+ knb `24f44ee`) |
+| RDY-03 | corrected the stale `--profile ollama` go-live text to shared-host-ollama | `5f63fc27` |
+| RDY-04 | product `promote.sh` now forwards `--operator` | `e3cd2f23` |
+| RDY-05 | `build-home-lab.sh` Next hint gains `--operator` | `8d6a49fb` |
+| RDY-06 | dev-only ollama tag dispositioned out of deploy provenance | `431ce990` |
+
+### 3. Residual spec-review dispositions (SR-02 … SR-08 — no `state.json` mutation)
+
+| ID | Finding | Disposition |
+|----|---------|-------------|
+| **SR-02** | `BUG-069-003` cosmetic sub-field lag: top-level `status: done` + `certifiedAt` set, but `fixSequence` order-2 still `pending` and `execution.currentPhase: test` | **CLOSED-by-disposition (cosmetic).** Guard-legitimate — the state-transition guard PERMITTED the `done` transition; this is an annotation / sub-field lag, not a defect. No edit. |
+| **SR-03** | `BUG-099-001` `downstreamFinding` stale cross-ref: "…BUG-069-002/003 fixSequence order-2 stays pending" | **CLOSED — stale / benign.** The durability regression PASSED on Linux/WSL and both 069 bugs are `done`; the note narrates the discovery-session state, now superseded. No edit. |
+| **SR-04** | BUG-099-001 / BUG-099-002 omitted by the prior layers | **CLOSED — recorded** (§1 above). |
+| **SR-05** | `087` / `088` stale "CI-as-producer" narrative in `state.json` `devopsExecution.ci` ("build-images ✓ … cosign keyless+Rekor … ghcr digest push") | **SUPERSEDED — non-gating.** Contradicted by OPS-004's authoritative **local-operator** path (GitHub CI `disabled_manually`). Both specs `blocked` / `releaseTrain: next` / **non-MVP**, blocked solely on the operator-owned home-lab apply + live GPU A/B. **Recommendation:** reconcile 087/088's own `ci` / `deploy` narrative to the local-operator producer on next unblock (owner `bubbles.devops` / `bubbles.docs`). No `087` / `088` `state.json` edited (ownership-respecting). |
+| **SR-06** | OPS-004 `objective.md` (l.104) lists BUG-069-002 durability under "Post-Deploy Live Verifications That Close Gated Work" though the in-repo contract is certified | **CLOSED — freshness note.** A live Day-1 re-verify on the real home-lab stack remains reasonable even though the in-repo contract is `done`; documented, not a contradiction. |
+| **SR-07** | `artifact-lint.sh` reports "missing spec.md / design.md / …" on the lean `_ops` packets (OPS-004: objective / runbook / state; OPS-005: objective / state) | **CLOSED — tool-scope mismatch, not a defect.** The lint applies the feature-contract artifact shape to an ops-packet shape; the lean deploy-pointer / ops packets are by-design. |
+| **SR-08** | `082` `releaseTrain: next` vs its "MVP / evo-x2 Readiness Hardening" title | **CONFIRMED honest / CLOSED.** `done`, `flagsIntroduced: []`, no `mvp`-bundle flag gated by 082 — a next-train hardening batch that benefits MVP; the retag `next`→`mvp` is `bubbles.train`'s call, not required for go-live. No edit. |
+
+### Cross-repo doc reconcile (authorized targeted edit)
+
+`docs/Upkeep_Runbook.md` — the "NATS backup" claim reconciled to the shipped knb
+OPS-02 behavior (`9501baf`): `backup.sh` resolves the real volume via
+`${NATS_VOLUME_NAME}` / `docker volume inspect --format '{{ .Mountpoint }}'` and
+archives the volume **CONTENTS** (`cp -a "$MOUNT/."`), replacing the generic
+"Compose volume backup (NATS)" wording that masked the prior wrong-`smackerel_nats_data`-symlink
+silent skip (a missing volume is now a loud `nats_captured=false` ledger WARN).
+Managed-doc factual correction; in scope per the explicit authorization.
+
+### Trust deltas / dispatch (2026-06-30 remediation refresh)
+
+- **No new MAJOR_DRIFT or OBSOLETE on any certified spec** → **no
+  `bubbles.workflow mode=improve-existing` dispatch owed.** The 087/088
+  CI-as-producer drift is a stale annotation SUPERSEDED by an authoritative
+  sibling packet (OPS-004) and **non-gating** — per the spec-review skill,
+  MAJOR_DRIFT / OBSOLETE on a certified spec is the only auto-dispatch trigger;
+  this is documented + recommended for next-unblock reconcile, not auto-dispatched.
+- **SR-01 / SR-04** = closures recorded; **SR-02 / SR-03 / SR-06 / SR-07** =
+  cosmetic / stale / tool-scope dispositions; **SR-05** = SUPERSEDED-non-gating;
+  **SR-08** = confirmed honest.
+- Read-only `spec-review-to-doc`; outcome = `docs_updated`. **No spec
+  `state.json` mutated** (069-bugs / 099-bugs / 082 / 087 / 088 / OPS-004 /
+  OPS-005 all read-only). The only writes this pass are this report layer + the
+  `docs/Upkeep_Runbook.md` NATS reconcile.
+
+### Validation Checklist (2026-06-30 remediation refresh)
+
+Verified live against smackerel **HEAD `4f3695a5`** (= `origin/main`; clean tree
+apart from untracked Flutter/Dart build artifacts under
+`clients/mobile/assistant/`, which are **not** staged). The F-CODE unit-gate
+commits (`fd7fc34c` / `30c6c4fb` / `23a1bfd8`) and the BUG-069-002/003 +
+BUG-099-001/002 certifications carry **2026-06-30** timestamps; the DEVOPS-RDY
+observability tail (`bc7062df` / `4f3695a5`, + knb `24f44ee`) landed
+**2026-07-01** — the same readiness remediation's observability close-out.
+
+- [x] All four closure bugs read from disk: BUG-069-002 (`done`, certifiedAt 2026-06-30T21:17:03Z), BUG-069-003 (`done`, 2026-06-30T21:52:45Z), BUG-099-001 (`done`/mvp), BUG-099-002 (`done`/mvp).
+- [x] All 9 smackerel remediation SHAs verified (`git show -s`): `fd7fc34c` / `30c6c4fb` / `23a1bfd8` / `bc7062df` / `4f3695a5` / `5f63fc27` / `e3cd2f23` / `8d6a49fb` / `431ce990`.
+- [x] All 5 referenced knb SHAs verified in the knb repo (referenced, not imported): `9501baf` / `1a3105a` / `c41d2c1` / `8fb61c6` / `24f44ee`; packet `_ops/OPS-005-smackerel-upkeep-hardening` present.
+- [x] Unit gate re-run live → `./smackerel.sh test unit` EXIT 0 (Go OK; Python 517 passed / 2 skipped; node v26.4.0 web / shell / docs PASS).
+- [x] SR-02 (069-003 order-2 `pending` sub-field), SR-03 (099-001 `downstreamFinding`), SR-05 (087/088 `devopsExecution.ci`), SR-06 (OPS-004 `objective.md` l.104), SR-07 (OPS-004/OPS-005 lean packet contents), SR-08 (082 `releaseTrain: next` / `flagsIntroduced: []`) each verified against the actual file.
+- [x] No spec `state.json` mutated; no MAJOR_DRIFT / OBSOLETE → no mandatory dispatch. `docs/Upkeep_Runbook.md` NATS claim reconciled to knb OPS-02 (`9501baf`).
+- [x] Older layers (2026-06-30 readiness-sweep, 2026-06-23, 2026-06-20, Historical Record) preserved verbatim (append-only, newest-on-top).
+- [x] No knb / operator PII (generic home-lab / operator framing; knb items referenced by packet id + SHA only).
 
 ---
 
