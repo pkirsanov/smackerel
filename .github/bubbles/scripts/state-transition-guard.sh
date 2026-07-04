@@ -1215,8 +1215,36 @@ for phase_name, stub_entry in phase_stubs.items():
     elif isinstance(stub_entry, str) and stub_entry.strip():
         stubbed_phases.append(phase_name)
 
+# Normalize selected_phases to phase-name STRINGS before the dict.fromkeys
+# dedup. Entries may be bare strings (certifiedCompletedPhases / legacy
+# completedPhases) OR dict records from execution.completedPhaseClaims such as
+# {"phase": "implement", "agent": "bubbles.implement"}. A dict cannot be hashed
+# as a dict.fromkeys key (TypeError: unhashable type: 'dict'), which previously
+# crashed Check 6 whenever certifiedCompletedPhases was empty and the fallback
+# selected the dict-shaped claim list — reading ALL required phases as missing
+# and emitting a false G022 failure. Map each entry to its phase-name string:
+# a str stays itself; a dict yields its `phase` (else `name`) value when that
+# value is itself a str; anything else is skipped.
+def _phase_name(entry):
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, dict):
+        candidate = entry.get("phase")
+        if isinstance(candidate, str):
+            return candidate
+        candidate = entry.get("name")
+        if isinstance(candidate, str):
+            return candidate
+    return None
+
+normalized_selected = []
+for entry in selected_phases:
+    resolved = _phase_name(entry)
+    if resolved is not None:
+        normalized_selected.append(resolved)
+
 # Merge: a phase satisfies G022 if it appears in either set.
-merged_phases = list(dict.fromkeys(list(selected_phases) + stubbed_phases))
+merged_phases = list(dict.fromkeys(normalized_selected + stubbed_phases))
 for phase in merged_phases:
     if isinstance(phase, str):
         print(f'"{phase}"')
@@ -1407,7 +1435,23 @@ with open('$state_file') as f:
     data = json.load(f)
 claims = data.get('execution', {}).get('completedPhaseClaims', [])
 certified = data.get('certification', {}).get('certifiedCompletedPhases', [])
-for p in set(claims + certified):
+def _phase_name(entry):
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, dict):
+        candidate = entry.get('phase')
+        if isinstance(candidate, str):
+            return candidate
+        candidate = entry.get('name')
+        if isinstance(candidate, str):
+            return candidate
+    return None
+names = []
+for entry in list(claims) + list(certified):
+    resolved = _phase_name(entry)
+    if resolved is not None:
+        names.append(resolved)
+for p in set(names):
     print(p)
 " 2>/dev/null
     } || true)"
@@ -2891,9 +2935,11 @@ fi
 echo ""
 
 # =============================================================================
-# CHECKS 23-25: convergence cap (G082), compaction discipline (G083),
-# pre-existing deferral block (G084). Extracted to a guards/ fragment (M4 split)
-# and sourced in this shell scope so behavior is byte-identical.
+# CHECKS 23-25 + 40: convergence cap (G082), compaction discipline (G083),
+# pre-existing deferral block (G084), and session cap (G128, the aggregate
+# sibling of G082). Extracted to a guards/ fragment (M4 split) and sourced in
+# this shell scope so behavior is byte-identical; Check 40 (G128) is additive
+# and a NO-OP unless a sessionBudget is recorded.
 # =============================================================================
 source "$SCRIPT_DIR/guards/tail-convergence-gates.sh"
 

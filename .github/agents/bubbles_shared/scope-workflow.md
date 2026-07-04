@@ -178,6 +178,19 @@ In `state.json`, each scope declares its dependencies:
 }
 ```
 
+### Parallel-Scope Shared-State Contract (`parallelScopes=dag`)
+
+Under `parallelScopes=dag`, DAG-independent scopes execute concurrently in separate git worktrees (one branch per scope). Ownership of shared vs per-scope artifacts is fixed:
+
+- **Orchestrator-owned (parent only):** `state.json`, `spec.md`, `design.md`, and `scenario-manifest.json` are written ONLY by the parent, and only between scope merges — never inside a worktree scope.
+- **Worktree-scope-owned:** a scope's worktree writes ONLY its own `scope.md` / `report.md` (or `scopes/NN-*/`) plus product/test code on its branch.
+
+**Merge / conflict resolution:** after each worktree scope completes, the parent merges that branch, then reconciles the shared state in a single parent-owned write (append the scope's entry to `certification.scopeProgress` / `completedScopes`, refresh `scenario-manifest.json`) before starting or merging the next scope. Because no worktree scope writes shared state, shared-artifact merge conflicts cannot arise; code-level conflicts are resolved by the parent at merge time.
+
+**Cleanup on abandon:** if a worktree scope fails or is abandoned, the parent drops that worktree and its branch — no partial shared-state mutation survives (mirroring `gitIsolation` whole-run rollback).
+
+This is a documented contract; a mechanical gate is a possible future step, not added here.
+
 ### Legacy Format Migration (MANDATORY Before Starting Work)
 
 **When an agent encounters a spec with `scopes.md` (single-file) that has 6+ scopes, it MUST refactor to the per-scope directory layout before starting implementation.**

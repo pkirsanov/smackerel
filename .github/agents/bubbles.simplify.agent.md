@@ -18,6 +18,13 @@ handoffs:
     prompt: Before simplifying, check whether the spec is still current — stale specs lead to wrong simplification decisions.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — simplify recently-changed owned code; route the rest
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — prove behavior preserved with real test evidence
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with simplifications + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — a behavior-preserving claim rests on proof
+
 ## Agent Identity
 
 **Name:** bubbles.simplify  

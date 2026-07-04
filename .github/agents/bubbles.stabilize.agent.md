@@ -21,6 +21,13 @@ handoffs:
     prompt: Before stabilization, check whether the spec describes current infrastructure/deployment architecture — stale specs lead to wrong stability assumptions.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — diagnose, then route operational execution to the owner
+- [`bubbles-docker-lifecycle-governance`](../skills/bubbles-docker-lifecycle-governance/SKILL.md) — build/deploy/config/resource diagnosis surfaces
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — record diagnostic evidence
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — a root cause rests on real observation
+
 ## Agent Identity
 
 **Name:** bubbles.stabilize  

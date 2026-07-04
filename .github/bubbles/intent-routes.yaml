@@ -115,3 +115,32 @@ routes:
   targetAgent: bubbles.sprint
   targetMode: autonomous-sprint
   summary: "Compile a multi-outcome ordered cross-repo goal scenario and execute its nodes in dependency order"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Guided live-product journey & scenario refinement (bubbles.journey)
+# Walk the finished product WITH the user toward a concrete goal, capture
+# friction via real UI/API/telemetry, refine scenarios, and route concerns.
+# ─────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "walk me through"
+  - "help me use"
+  - "let's try the product"
+  - "refine the journey"
+  - "how do i achieve"
+  targetAgent: bubbles.journey
+  targetMode: journey-refinement
+  summary: "Guided walkthrough of the live product toward a user goal; capture friction, refine scenarios, route concerns"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Release-readiness synthesis (Orangie's home — bubbles.validate synthesizes)
+# Read-only cross-system rollup of the review family + verification lenses into
+# one advisory certification.readinessVerdict. Advisory-to-release; never `done`.
+# ─────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "are we ready to release"
+  - "readiness review"
+  - "system readiness"
+  - "can we ship"
+  targetAgent: bubbles.validate
+  targetMode: readiness-review
+  summary: "Read-only system release-readiness synthesizer; runs the review family + verification lenses and persists one advisory readiness verdict"

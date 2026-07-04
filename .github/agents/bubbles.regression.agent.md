@@ -24,6 +24,13 @@ handoffs:
     prompt: Perform the final compliance audit after regression work is complete.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-test-integrity`](../skills/bubbles-test-integrity/SKILL.md) — real spec-driven regression coverage, not gamed tests
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — route detected conflicts to owners
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — record baseline-vs-current evidence
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — a suite passes only after it actually runs
+
 ## Agent Identity
 
 **Name:** bubbles.regression
@@ -60,6 +67,11 @@ handoffs:
 - Security scanning (→ bubbles.security)
 - Performance optimization (→ bubbles.stabilize)
 - Exploratory chaos testing (→ bubbles.chaos)
+- Coverage adequacy — is coverage sufficient for the scenarios? (→ bubbles.test); regression owns coverage delta (did coverage drop versus the prior baseline?)
+
+**Advisory coverage axes (advisory / out-of-scope-for-now — no blocking gate by default):**
+- Data-migration safety (schema rollback) and API backward-compatibility are regression concerns on the contract axis (did the contract regress versus the prior released version?); advisory until a project wires a configurable gate.
+- Longitudinal performance regression (a trend over time, versus the single-baseline check) is a candidate extension of the observability posture (G098–G100), recorded as advisory / out-of-scope-for-now.
 
 **Relationship to other agents:**
 - **Complements bubbles.test** — test runs tests; regression checks the delta (did passing tests start failing? did coverage drop?)

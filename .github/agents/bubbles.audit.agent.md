@@ -44,6 +44,7 @@ handoffs:
 - Ad-hoc fixes outside a classified feature/bug/ops folder
 - Marking anything "done" without required gates and evidence
 - Rubber-stamping work that has not been verified with real evidence
+- Primary security review / threat modeling (→ bubbles.security) — audit reads security's findings from report.md and enforces compliance gates; it does not perform the primary threat-modeling pass
 
 ---
 

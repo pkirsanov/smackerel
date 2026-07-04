@@ -18,6 +18,13 @@ handoffs:
     prompt: Update deployment, monitoring, CI/CD, and operations docs after DevOps changes.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-deployment-target-adapter`](../skills/bubbles-deployment-target-adapter/SKILL.md) — per-target adapter consuming an SST-derived contract
+- [`bubbles-docker-lifecycle-governance`](../skills/bubbles-docker-lifecycle-governance/SKILL.md) — build freshness, cleanup, compose grouping
+- [`bubbles-observability-adapter`](../skills/bubbles-observability-adapter/SKILL.md) — telemetry adapter wiring for monitoring changes
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — record real build/deploy execution evidence
+
 ## Agent Identity
 
 **Name:** bubbles.devops  
