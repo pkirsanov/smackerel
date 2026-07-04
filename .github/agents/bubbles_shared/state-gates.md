@@ -27,6 +27,10 @@ Purpose: compact state/completion rules that must remain authoritative for all a
 - Only orchestrators may invoke child workflows, and nesting depth must remain bounded (Gate G064).
 - Phase claims in `completedPhaseClaims` must have matching agent provenance in `executionHistory` (Gate G066). An agent may only record its own phase name; cross-phase impersonation is fabrication.
 
+## Optional Readiness Verdict (validate-owned, advisory)
+- `certification.readinessVerdict` is an OPTIONAL field written ONLY by `bubbles.validate` (respecting Gate G056), typically when running the `readiness-review` mode. Shape: `{ verdict: ship | ship-with-notes | not-ready, byLens: { spec, code, system, security, regression, redteam }, capturedAt, evidenceRefs }`.
+- It is a cross-system synthesis of the per-lens review/verification signals (audit's ship verdict feeds it as one input). It is **advisory-to-release only** and does NOT drive a `done` transition — per-spec certification and status remain governed by the Completion Chain above. No new gate enforces it.
+
 ## Mechanical Gates
 - `state-transition-guard.sh` — DoD, scope status, certification/execution coherence, policy provenance (G055), certification state (G056), scenario manifest (G057), lockdown/regression (G058/G059), TDD evidence (G060), transition/rework closure (G061), packet/result integrity and framework contract enforcement (G042/G063/G064), phase-claim provenance (G066), source code edit lockout (G073)
 - `artifact-lint.sh` — schema validation (v2 + v3), phase coherence, scope parity, specialist completion

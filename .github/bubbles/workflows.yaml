@@ -472,6 +472,18 @@ gates:
     description: >-
       BLOCKING gate (framework-source self-validation). Closes the IMP-001 R2-B "orphan foundation" failure mode: the framework held its downstream consumers to G029 (integration-completeness — every shipped artifact has a real consumer) while exempting its OWN `bubbles/capability-ledger.yaml`. This gate applies the same standard to the ledger: every capability with `state: shipped` MUST declare a non-empty `consumers:` list, AND every listed consumer path MUST exist on disk. `partial`/`proposed`/`deprecated` capabilities are exempt (no-op). This is an EXISTENCE check (the G029 standard): it proves each declared consumer file is present, not that it textually references the owner surface — authoring discipline (choose consumers that genuinely invoke the owner) is the human contract, and a future semantic-grep enhancement (the G097-style "named token → grep the code" check) can layer on without changing this gate's contract. A repo with no `bubbles/capability-ledger.yaml` (every downstream product checkout — the ledger is a framework-source-only artifact) no-ops (exit 0) via a parser-free pre-check that runs BEFORE the fail-closed parser gate. Parser dependency is `yq` (mikefarah v4); because this is a BLOCKING gate, a MISSING parser FAILS CLOSED (exit 1) with an actionable "install yq" message rather than silently passing — but ONLY for a repo that actually HAS the ledger. There is NO `--skip`/`--force`/`--ignore` bypass; an orphan shipped capability is a real finding — wire a consumer or downgrade the `state`. Enforced mechanically by `bubbles/scripts/capability-consumer-freshness.sh` (exit 0 = no ledger / all shipped capabilities have existing consumers; exit 1 = missing parser when a ledger is present / orphan shipped capability / dangling consumer path; exit 2 = usage). Hermetic selftest: `bubbles/scripts/capability-consumer-freshness-selftest.sh`. Wired into `bubbles/scripts/framework-validate.sh` (selftest + live guard). Reference: improvements/IMP-004-capability-consumer-freshness.md.
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # SESSION-CAP ENFORCEMENT GATE (G128)
+  # Introduced with IMP-003 SCOPE-2. Promotes the advisory `sessionBudget` caps
+  # to mechanical enforcement — the AGGREGATE (whole-session) sibling of G082's
+  # per-(specDir, agent) convergence cap. Enforced by
+  # bubbles/scripts/session-cap-guard.sh.
+  # ──────────────────────────────────────────────────────────────────────────
+  G128:
+    name: session_cap_enforcement_gate
+    description: >-
+      BLOCKING gate. Mechanically enforces the IMP-003 `sessionBudget` aggregate safety caps for a whole goal/sprint session — the AGGREGATE sibling of Gate G082. Where G082 caps convergence iterations PER (specDir, agent) using `maxConvergenceIterations` from `bubbles/workflows.yaml`, G128 caps the AGGREGATE usage across the WHOLE session (every spec, every agent) using a `sessionBudget` object recorded in `.specify/memory/bubbles.session.json` with three dimensions: `maxTotalConvergenceIterations` (aggregate sum of `convergenceLoops[].iterationCount`), `maxWallClockMinutes` (earliest → latest `turnSnapshots[].timestamp`, in minutes), and `maxToolCalls` (aggregate `toolCallCount` counter). DEFAULT-OFF for every existing repo: if the session file has no `sessionBudget`, or ALL THREE caps are null/absent, the guard exits 0 and nothing is enforced. A dimension whose cap is null is not enforced; a dimension whose cap is set but whose usage data is absent (no `turnSnapshots[]`, no `toolCallCount`) is skipped — you cannot breach what you cannot measure. Only when a non-null cap is present AND its aggregate is measurable does the guard compare them. RFC3339 timestamps are parsed with jq's `fromdateiso8601` (not the system `date`), so wall-clock math is identical on GNU (WSL/Linux) and BSD (macOS) userland. Enforced mechanically by `bubbles/scripts/session-cap-guard.sh` (exit 0 = no active budget / no cap exceeded; exit 1 = an active aggregate cap exceeded — stderr names the breached dimension(s) and observed-vs-cap; exit 2 = unparseable session.json / non-integer cap or counter / bad usage). State-transition-guard.sh invokes this guard as Check 40 (a NO-OP when no budget is recorded). Exceeding a cap MUST emit a `blocked` RESULT-ENVELOPE with finding `G128` and STOP the session (no further specs/scopes). There is NO `--skip`/`--force`/`--ignore` bypass (matches G082). Hermetic selftest: `bubbles/scripts/session-cap-guard-selftest.sh`. Persistent regression: `tests/regression/test_22_session_cap_enforcement.sh`. Wired into `bubbles/scripts/framework-validate.sh` (selftest + live guard). Cross-reference: G082 (per-spec convergence cap) — G082 keeps a single spec's loop honest; G128 keeps the whole session's aggregate honest. Reference: improvements/IMP-003-autonomy-dial-and-safety-caps.md (SCOPE-2).
+
 # Outcome contract (applies to all workflow modes that allow `done` as a
 # terminal status — i.e., every mode whose `statusCeiling` is `done`).
 # anchor: outcome-states
@@ -858,8 +870,9 @@ priorityScoring:
     min: 0
     max: 100
   weights:
-    userImpact: 30
-    deliveryBlocker: 25
+    userImpact: 25
+    deliveryBlocker: 20
+    experientialFriction: 10
     complianceRisk: 15
     regressionRisk: 10
     readiness: 10
@@ -877,6 +890,12 @@ priorityScoring:
         5: blocks required gate or release progression
         3: blocks one scope while alternatives exist
         1: non-blocking issue
+    experientialFriction:
+      scale: 0-5
+      guidance:
+        5: user-reported core-journey friction blocking goal completion
+        3: repeated confusion on a high-value flow
+        1: minor polish
     complianceRisk:
       scale: 0-5
       guidance:
@@ -904,6 +923,7 @@ priorityScoring:
   tieBreakers:
   - highest_deliveryBlocker
   - highest_userImpact
+  - highest_experientialFriction
   - highest_readiness
   - lowest_effort
   - stable_sort_by_spec_id
@@ -951,6 +971,9 @@ phases:
   redteam:
     owner: bubbles.redteam
     requiredGates: [ G009 ]
+  journey:
+    owner: bubbles.journey
+    requiredGates: [ G010 ]
   regression:
     owner: bubbles.regression
     requiredGates: [ G044 ]
@@ -975,6 +998,9 @@ phases:
   code-review:
     owner: bubbles.code-review
     requiredGates: []
+  system-review:
+    owner: bubbles.system-review
+    requiredGates: []
   releases:
     owner: bubbles.releases
     requiredGates: []
@@ -986,6 +1012,9 @@ phases:
     requiredGates: [ G023, G024, G056 ]
   interrogate:
     owner: bubbles.grill
+    requiredGates: []
+  clarify:
+    owner: bubbles.clarify
     requiredGates: []
   finalize:
     owner: bubbles.workflow
@@ -1100,6 +1129,14 @@ executionOptions:
     requiredStateField: policySnapshot
     provenanceValues: [ user-request, repo-default, workflow-forced, spec-lockdown ]
   optionalWorkflowTags:
+    autonomy:
+      type: string
+      default: full
+      values:
+        full: 100% autonomous — grillMode off, socratic false, decisionPolicy auto-resolves (today's default)
+        guarded: grillMode required-on-ambiguity plus a conditional clarify consistency gate — stop only on genuine ambiguity
+        interactive: grillMode on-demand plus socratic true — human-in-the-loop; taste decisions surfaced
+      meaning: Convenience alias that sets grillMode/socratic/clarify together. Explicit flags override this alias. Default `full` preserves current behavior.
     socratic:
       type: boolean
       default: false
@@ -1217,6 +1254,31 @@ executionOptions:
       min: 2
       max: 4
       meaning: Maximum concurrent scope executions when parallelScopes=dag. Each parallel scope runs in its own worktree.
+    dryRun:
+      type: string
+      default: false
+      values:
+        false: Normal execution
+        plan: Resolve the full plan (specs/scopes/intended changes) and REPORT without mutating code or state
+      meaning: Propose-only preview for goal/sprint/iterate. Extends parallelScopes=dag-dry to the whole convergence loop.
+    guidedJourney:
+      type: boolean
+      default: false
+      meaning: Append an optional bubbles.journey walkthrough for human-in-the-loop scenario refinement against the live product.
+
+  sessionBudget:
+    maxTotalConvergenceIterations:
+      type: integer
+      default: null
+      meaning: Aggregate cap on convergence iterations across ALL specs in one goal/sprint session. null = unbounded (today). Advisory — orchestrators self-enforce and stop with a blocked RESULT-ENVELOPE when exceeded.
+    maxWallClockMinutes:
+      type: integer
+      default: null
+      meaning: Aggregate wall-clock budget for the whole session. null = unbounded. Advisory.
+    maxToolCalls:
+      type: integer
+      default: null
+      meaning: Aggregate tool-call budget for the whole session. null = unbounded. Advisory.
 
   defaultPolicyBehavior:
     scenarioTddDefault: scenario-first
@@ -1234,6 +1296,9 @@ executionOptions:
 # are batched and surfaced at phase boundaries.
 #
 # COMPATIBILITY:
+# - autonomy alias: The `autonomy` executionOption (full|guarded|interactive) is a
+#   convenience alias that sets grillMode/socratic/clarify together. EXPLICIT
+#   grillMode/socratic flags ALWAYS WIN over the autonomy alias.
 # - grillMode: When grillMode is `required-on-ambiguity` or `required-for-lockdown`,
 #   taste decisions are routed through bubbles.grill before surfacing to user.
 #   Grill may approve, challenge, or split the decision.

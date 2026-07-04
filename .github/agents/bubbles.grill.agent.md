@@ -12,6 +12,12 @@ handoffs:
     prompt: Convert the grill findings into concrete scopes, tests, DoD items, and backlog export sections.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — route exposed gaps to the owning agent
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — end with concrete next moves + owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — expose real assumptions, not a fabricated verdict
+
 ## Agent Identity
 
 **Name:** bubbles.grill

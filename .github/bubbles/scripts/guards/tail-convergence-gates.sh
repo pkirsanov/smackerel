@@ -4,11 +4,14 @@
 # guards/tail-convergence-gates.sh  (M4 guard split)
 # =============================================================================
 # Checks 23-25: convergence cap (G082), compaction discipline (G083), and
-# pre-existing deferral block (G084). Sourced by state-transition-guard.sh in
-# the same shell scope, so pass/fail/warn/info, the failures/warnings counters,
-# and computed vars ($SCRIPT_DIR, $feature_dir, fixture_gate_skip,
-# run_guard_in_feature_repo) are all in scope exactly as before extraction.
-# Behavior is byte-identical to the previous inline blocks.
+# pre-existing deferral block (G084), plus Check 40: session cap (G128) — the
+# AGGREGATE sibling of G082 added with IMP-003. Sourced by
+# state-transition-guard.sh in the same shell scope, so pass/fail/warn/info, the
+# failures/warnings counters, and computed vars ($SCRIPT_DIR, $feature_dir,
+# fixture_gate_skip, run_guard_in_feature_repo) are all in scope exactly as
+# before extraction. Checks 23-25 remain byte-identical to the previous inline
+# blocks; Check 40 is additive and is a NO-OP unless a `sessionBudget` is
+# recorded in `.specify/memory/bubbles.session.json`.
 # =============================================================================
 
 # =============================================================================
@@ -102,5 +105,37 @@ if [[ -x "$pre_guard" ]]; then
   fi
 else
   info "pre-existing-deferral-guard.sh not present at $pre_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 40: Session Cap Enforcement (Gate G128)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/session-cap-guard.sh — the
+# AGGREGATE (whole-session) sibling of the per-(specDir, agent) convergence
+# cap (Check 23 / G082). The guard reads `.specify/memory/bubbles.session.json`
+# and, IF a `sessionBudget` object records a non-null cap, compares the
+# aggregate usage across ALL specs (sum of `convergenceLoops[].iterationCount`,
+# earliest→latest `turnSnapshots[].timestamp` minutes, and the `toolCallCount`
+# counter) against `maxTotalConvergenceIterations` / `maxWallClockMinutes` /
+# `maxToolCalls`. It is a NO-OP (pass) when no session.json exists, no
+# `sessionBudget` is recorded, or all three caps are null — the default for
+# every existing repo — so this check never fires unless a session opted in.
+# It takes NO specDir (it is aggregate, not per-spec).
+echo "--- Check 40: Session Cap Enforcement (Gate G128) ---"
+sess_guard="$SCRIPT_DIR/session-cap-guard.sh"
+if fixture_gate_skip "session cap enforcement (Gate G128)"; then
+  :
+elif [[ -x "$sess_guard" ]]; then
+  if run_guard_in_feature_repo bash "$sess_guard" --quiet > /dev/null 2>&1; then
+    pass "Aggregate session budget not exceeded (Gate G128)"
+  else
+    fail "Aggregate session budget exceeded — Gate G128 violation. Run 'bash $sess_guard' for full diagnostic"
+    info "sessionBudget (maxTotalConvergenceIterations / maxWallClockMinutes / maxToolCalls) lives in .specify/memory/bubbles.session.json; null = unbounded"
+    info "G082 caps iterations PER (specDir, agent); G128 caps the AGGREGATE across the whole goal/sprint session"
+    info "Orchestrator agents (workflow, goal, iterate, sprint) MUST emit a 'blocked' RESULT-ENVELOPE with finding G128 and STOP the session when the aggregate cap is reached"
+  fi
+else
+  info "session-cap-guard.sh not present at $sess_guard; skipping (advisory)"
 fi
 echo ""

@@ -21,6 +21,13 @@ handoffs:
     prompt: Update Release_Trains.md propagation table if propagation policy changed.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-propagation-policy`](../skills/bubbles-propagation-policy/SKILL.md) — authoring propagation-policy.yaml + ledger contract
+- [`bubbles-release-train-model`](../skills/bubbles-release-train-model/SKILL.md) — trunk + train + flag-bundle model
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — route cherry-pick execution to devops, not inline
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with ledger entry + next owner
+
 ## Agent Identity
 
 **Name:** bubbles.propagate

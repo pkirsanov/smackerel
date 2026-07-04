@@ -15,6 +15,13 @@ handoffs:
     prompt: Convert the finalized design into sequential scopes.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-feature-template`](../skills/bubbles-feature-template/SKILL.md) — design.md control-plane fields + artifact shape
+- [`bubbles-capability-foundation-design`](../skills/bubbles-capability-foundation-design/SKILL.md) — capability-first design when a second provider/variant appears
+- [`bubbles-scope-workflow-runtime`](../skills/bubbles-scope-workflow-runtime/SKILL.md) — design feeds the scope Test Plan + DoD downstream
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — design reflects real constraints, not aspiration
+
 ## Agent Identity
 
 **Name:** bubbles.design

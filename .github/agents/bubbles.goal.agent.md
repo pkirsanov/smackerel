@@ -64,6 +64,13 @@ handoffs:
     prompt: Execute a standard workflow mode for a specific spec when needed as a sub-execution.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-scope-workflow-runtime`](../skills/bubbles-scope-workflow-runtime/SKILL.md) — scope shape, Test Plan, DoD during autonomous execution
+- [`bubbles-workflow-mode-resolution`](../skills/bubbles-workflow-mode-resolution/SKILL.md) — resolve the right mode for the goal
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close each loop with finding accounting + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — convergence claims rest on real passing evidence
+
 ## TOOL ALLOWLIST (ENFORCED)
 
 ```yaml
@@ -313,6 +320,14 @@ time_budget:
   expired_between_scopes: EXIT immediately
   no_budget_provided: only maxConvergenceIterations applies
 ```
+
+## Autonomy, Session Budget & Dry-Run (IMP-003)
+
+Three additive `executionOptions` knobs are resolved at session start; all default to today's fully-autonomous behavior:
+
+- **`autonomy` (default `full`)** — a convenience alias that sets `grillMode`/`socratic` together: `full` = `grillMode off` + `socratic false` (100% autonomous, today's default); `guarded` = `grillMode required-on-ambiguity` + a conditional `clarify` consistency gate; `interactive` = `grillMode on-demand` + `socratic true`. Explicit `grillMode`/`socratic` flags ALWAYS override the alias.
+- **`sessionBudget` (all fields default `null` = unbounded)** — aggregate caps across the whole session: `maxTotalConvergenceIterations`, `maxWallClockMinutes`, `maxToolCalls`. Advisory: this orchestrator self-enforces them and, when a cap is exceeded, STOPS with a `blocked` RESULT-ENVELOPE. A budget stop is a TERMINAL condition of the same class as `max iterations reached` — the run ends; it never pauses for a fresh prompt.
+- **`dryRun` (default `false`)** — `dryRun: plan` resolves the full plan (specs/scopes/intended changes) and REPORTS it WITHOUT mutating code or state, then terminates the run. Extends `parallelScopes=dag-dry` to the whole convergence loop.
 
 ## Invocation
 

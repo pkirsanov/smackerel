@@ -2,6 +2,11 @@
 description: Session recap — summarize what was done, what's in progress, and what's next
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — recap mirrors envelope done/in-progress/next accounting
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — summarize only what actually happened
+
 ## Agent Identity
 
 **Name:** bubbles.recap

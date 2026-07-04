@@ -164,6 +164,16 @@ v5Aliases:
     tags: { target: specs, action: freshness-audit, finalize: docs }
     description: Audit specs for freshness, classify trust levels, produce maintenance report.
 
+  journey-refinement:
+    primitive: review
+    tags: { target: live-product, action: journey-refinement, finalize: docs }
+    description: Guided walkthrough of the live product toward a user goal; capture friction, refine scenarios, route concerns. Read-only on code.
+
+  readiness-review:
+    primitive: review
+    tags: { target: system, action: readiness-synthesis }
+    description: Read-only cross-system release-readiness synthesizer; runs the review family + verification lenses and produces one consolidated readiness verdict.
+
   # -------------------- Hardening/gaps/security/regression/stabilize family --------------------
   harden-to-doc:
     primitive: validate

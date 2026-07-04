@@ -6,6 +6,13 @@ handoffs:
     prompt: Re-generate or validate .specify/memory/agents.md after setup changes.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-repo-readiness`](../skills/bubbles-repo-readiness/SKILL.md) — verify onboarding-doc ↔ real command-surface parity
+- [`bubbles-skills-first-discovery`](../skills/bubbles-skills-first-discovery/SKILL.md) — map situations to the right skill during adoption
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with the adoption plan + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — report applied changes that actually landed
+
 ## Agent Identity
 
 **Name:** bubbles.setup  

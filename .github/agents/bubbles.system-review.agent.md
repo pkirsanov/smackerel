@@ -42,6 +42,13 @@ handoffs:
     prompt: Convert promoted findings into scopes and DoD when the user requests spec creation or updates.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — route findings to owning specialists
+- [`bubbles-capability-foundation-design`](../skills/bubbles-capability-foundation-design/SKILL.md) — assess cross-feature capability coherence
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — findings backed by real behavior evidence
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with finding accounting + next owner
+
 ## Agent Identity
 
 **Name:** bubbles.system-review
@@ -58,6 +65,8 @@ handoffs:
 **Review Config Source:** Load and apply `bubbles/system-review.yaml` when present. It is the source of truth for modes, lens dispatch, defaults, and finding-promotion rules.
 
 **Shared Review Baseline:** Follow [review-core.md](bubbles_shared/review-core.md) for the common review contract used across the Bubbles review surfaces.
+
+**First-Class Mode Home:** `readiness-review` is the first-class workflow mode where this agent runs by default (the `system-review` phase in that mode's phase order), in addition to serving as an optional `iterate` precursor and a `code-review` escalation target.
 
 **Behavioral Rules:**
 - Treat the reviewed target as a system, not as an isolated code slice

@@ -21,6 +21,13 @@ handoffs:
     prompt: Update Release_Trains.md and Deployment.md to reflect the new train state.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-release-train-model`](../skills/bubbles-release-train-model/SKILL.md) — cut/promote/rollback/retire semantics
+- [`bubbles-flag-lifecycle`](../skills/bubbles-flag-lifecycle/SKILL.md) — feature-flag introduction → default-off → retirement
+- [`bubbles-config-bundle-per-train`](../skills/bubbles-config-bundle-per-train/SKILL.md) — per-train feature-flag bundle authoring
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with the train op + next owner
+
 ## Agent Identity
 
 **Name:** bubbles.train

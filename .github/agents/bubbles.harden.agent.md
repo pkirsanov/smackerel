@@ -51,6 +51,8 @@ handoffs:
 - Ad-hoc refactors/changes outside classified feature/bug/ops work
 - Skipping required workflows, gates, or evidence requirements
 
+**Ordering vs bubbles.gaps:** when both run, `bubbles.gaps` runs before `bubbles.harden` — gaps audits spec/design ↔ implementation fidelity; harden then verifies DoD/tests/policy compliance.
+
 ## User Input
 
 ```text

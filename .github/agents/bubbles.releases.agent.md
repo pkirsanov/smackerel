@@ -12,6 +12,13 @@ handoffs:
     prompt: Reconcile spec.md against the new release packet's vision and features.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-release-packet-template`](../skills/bubbles-release-packet-template/SKILL.md) — canonical release-packet shape + owner
+- [`bubbles-product-principle-discovery`](../skills/bubbles-product-principle-discovery/SKILL.md) — surface principles from real repo evidence
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with packet + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — capability status matches delivered truth
+
 ## Agent Identity
 
 **Name:** bubbles.releases

@@ -2,6 +2,13 @@
 description: Create and scaffold repo-local skills under .github/skills via a short interview, then generate a policy-compliant SKILL.md.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-skill-authoring`](../skills/bubbles-skill-authoring/SKILL.md) — authoring quality bar + promote-to-skill decision rule
+- [`bubbles-skills-first-discovery`](../skills/bubbles-skills-first-discovery/SKILL.md) — dedup against existing skills before scaffolding a new one
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with the created/updated skill + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — claim a skill exists only once it is actually written
+
 ## Agent Identity
 
 **Name:** bubbles.create-skill

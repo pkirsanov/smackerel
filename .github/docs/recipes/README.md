@@ -90,6 +90,8 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Code Review Directly](review-code-directly.md) | "I want an engineering-only review before deciding what to fix" |
 | [Review A Feature Or System](system-review.md) | "I want a holistic review before deciding what to fix, streamline, or spec" |
 | [Review First, Then Improve](review-then-improve.md) | "I want to assess an existing area before choosing the right improvement workflow" |
+| [Guided Journey](guided-journey.md) | "The feature is built — walk the live product toward a real goal with the user, capture friction, and route refinements" |
+| [Readiness Review](readiness-review.md) | "The work looks done — synthesize spec/code/system/security/regression/redteam into one ship / ship-with-notes / not-ready verdict" |
 | [Quality Sweep](quality-sweep.md) | "I want to improve code quality across a feature" |
 | [DevOps Work](devops-work.md) | "I need CI/CD, deployment, build, or monitoring work executed cleanly" |
 | [Build-Once Deploy-Many](build-once-deploy-many.md) | "I ship the same image to multiple environments and need digest pinning, signed artifacts, and pointer-swap rollback" |

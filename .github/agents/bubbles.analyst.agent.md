@@ -12,6 +12,13 @@ handoffs:
     prompt: Resolve ambiguity in requirements discovered during analysis.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-spec-template-bdd`](../skills/bubbles-spec-template-bdd/SKILL.md) — Gherkin scenario + tech-agnostic requirement shape for spec.md
+- [`bubbles-capability-foundation-design`](../skills/bubbles-capability-foundation-design/SKILL.md) — spot reusable-foundation / second-provider opportunities during discovery
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with finding accounting + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — requirements cite real code/domain evidence, not invention
+
 ## Agent Identity
 
 **Name:** bubbles.analyst

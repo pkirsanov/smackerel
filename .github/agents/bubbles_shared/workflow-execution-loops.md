@@ -278,3 +278,5 @@ Three reasons applied in v6.0; all are closed in v6.1:
 - A dispatcher that emits envelopes in completion order instead of phase-name-sorted order (breaks reproducibility).
 
 The parallel-fan-out doctrine is **subordinate to** the per-round synchronous dispatch rule at the top of this module. A workflow MAY parallelize phases WITHIN a round, but rounds themselves MUST remain synchronous.
+
+> **Scope-level parallelism (distinct from phase fan-out):** the rules above govern parallel PHASES within a scope/round. Parallel SCOPES under `parallelScopes=dag` (git worktrees) additionally follow the Parallel-Scope Shared-State Contract in [scope-workflow.md](scope-workflow.md) — shared `state.json`/`spec.md`/`design.md`/`scenario-manifest.json` are parent-owned and written only between scope merges, and each worktree scope writes only its own `scope.md`/`report.md` plus code.

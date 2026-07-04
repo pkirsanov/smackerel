@@ -228,6 +228,12 @@ agents:
     delegatesRequired: true
     ownsArtifacts: []
     ownsPhases: [ redteam ]
+  bubbles.journey:
+    class: diagnostic
+    canAskUserDirectly: true
+    delegatesRequired: true
+    ownsArtifacts: []
+    ownsPhases: [ journey ]
   bubbles.status:
     class: utility
     canAskUserDirectly: false

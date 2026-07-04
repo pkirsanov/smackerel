@@ -37,8 +37,10 @@ Scenario: [Short scenario]
 ```
 
 ## Acceptance Criteria
+
 - Each criterion must map to a scenario and a test.
 - Include negative/error cases.
+
 ```
 
 ## design.md Template
@@ -221,13 +223,32 @@ Claims of completion/success must be evidence-linked; if any required evidence i
 - [x] [Another validated flow]
 
 Unchecked items indicate a user-reported regression.
+
+## Goal
+
+- Goal: [the concrete user goal this feature serves]
+- Success signal: [how the user knows the goal was achieved]
+
+## Journey Steps
+
+Structured by `bubbles.journey` during a guided live-product walkthrough (observational — not acceptance items).
+
+| Step | User Intent | Observed | Evidence | Friction |
+|------|-------------|----------|----------|----------|
+| 1 | [what the user wanted] | [what happened] | [UI/API/telemetry link] | works\|unclear\|inconvenient\|missing\|broken |
+
+## Open Refinements
+
+- [Refinement surfaced during the guided journey, with the owner it was routed to]
 ```
 
 Rules:
+
 - Checklist items MUST use markdown checkbox syntax.
 - Entries created by agents after validation/audit MUST default to checked `[x]`.
 - Empty checklist or non-checkbox bullets are template violations.
 - The canonical checklist section heading is `## Checklist`. Legacy files that omit it should be upgraded before completion claims.
+- `bubbles.journey` structures the `## Goal`, `## Journey Steps`, and `## Open Refinements` sections against the live product, but NEVER auto-checks the human acceptance items under `## Checklist` (G057) — it records observations; the human accepts.
 
 ## scenario-manifest.json Template
 
@@ -383,4 +404,5 @@ Artifact-only modes set their ceiling status (e.g., `specs_hardened` for `spec-s
 **`policySnapshot`:** records the effective grill/TDD/auto-commit/lockdown/regression/validation settings together with provenance.
 **`scopeLayout`:** `single-file` uses `scopes.md` + `report.md`; `per-scope-directory` uses `scopes/_index.md` plus `scopes/NN-name/scope.md` and `scopes/NN-name/report.md`.  
 **`certification.scopeProgress`:** Machine-readable scope registry for dependency pickup, status sync, and evidence location.
+
 ```

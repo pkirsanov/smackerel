@@ -55,6 +55,9 @@ modes:
     - phase: interrogate # grill
       skipWhen: scope_has_no_ambiguity_markers
       reason: "Grill pass skipped — scope has clear requirements with no ambiguity markers"
+    - phase: interrogate # grill (default-off dial)
+      skipWhen: grill_mode_off
+      reason: "Grill pass skipped — grillMode is off (default autonomy=full); interrogate runs only under autonomy guarded/interactive (grillMode required-on-ambiguity / on-demand)"
     - phase: security
       skipWhen: scope_has_no_auth_input_crypto_or_trust_boundary_changes
       reason: "Security pass skipped — scope does not touch authentication, input handling, crypto, or trust boundaries"
@@ -140,7 +143,7 @@ modes:
   full-delivery:
     description: Default maximum-assurance delivery loop. Runs the full improvement and certification chain repeatedly until validate certifies done or returns a documented blocked verdict. Optional improvement preludes can front-load analyst/UX/design/plan passes for a bounded number of rounds.
     inherits: [ base-delivery, delivery-gate-baseline, delivery-quality-constraints ]
-    phaseOrder: [ select, bootstrap, implement, test, regression, simplify, gaps, harden, stabilize, devops, security, validate, audit, chaos, redteam, docs, finalize ]
+    phaseOrder: [ select, bootstrap, interrogate, implement, test, regression, simplify, gaps, harden, stabilize, devops, security, validate, audit, chaos, redteam, docs, finalize ]
     requiredGates: [ G002 ]
     maxChaosRounds: 5
     constraints:
@@ -283,6 +286,16 @@ modes:
       specReviewOptOutReason: docs-only has statusCeiling docs_updated and cannot run pre-implementation hooks
       planningTruthMutation: false
 
+  journey-refinement:
+    description: Guided walkthrough of the live product toward a user goal; captures friction via real UI/API/telemetry, refines scenarios, routes concerns. Read-only on code.
+    statusCeiling: docs_updated
+    phaseOrder: [ select, journey, docs, finalize ]
+    requiredGates: [ G001, G010, G011, G012 ]
+    constraints:
+      focus: user_journey_refinement
+      allowImplementationForFindings: false
+      requiresLiveStack: true
+
   validate-only:
     description: Validation-only run with evidence output.
     statusCeiling: validated
@@ -305,6 +318,19 @@ modes:
       modeClass: validate-only
       specReviewDefault: off
       specReviewOptOutReason: audit-only has statusCeiling validated and cannot run pre-implementation hooks
+
+  readiness-review:
+    description: Read-only system release-readiness synthesizer. Runs the review family + verification lenses and produces one consolidated readiness verdict. Never mutates code; routes required changes via packets.
+    statusCeiling: validated
+    terminalAliases: [ validated ]
+    phaseOrder: [ select, spec-review, code-review, system-review, security, regression, redteam, validate, finalize ]
+    requiredGates: [ G001, G007, G008, G011, G012, G073 ]
+    constraints:
+      focus: system_release_readiness
+      allowImplementationForFindings: false
+      readOnlyReview: true
+      specReviewDefault: off
+      specReviewOptOutReason: readiness-review is a read-only cross-system synthesizer with statusCeiling validated and cannot run pre-implementation hooks
 
   chaos-hardening:
     description: Start with chaos probes, then run the remediation, verification, docs, and finalize chain until clean or retry limit.

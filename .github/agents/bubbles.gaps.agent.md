@@ -2,6 +2,13 @@
 description: Deep gap analysis & remediation - identify and fix ALL implementation gaps against design/requirements, validate specs/tasks, and ensure strict policy compliance.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — route spec/design gaps to owners; fix in-scope code
+- [`bubbles-dod-validation`](../skills/bubbles-dod-validation/SKILL.md) — check DoD fidelity against design/requirements
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — each gap + fix backed by real evidence
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — a stub is a gap, not a closure
+
 ## Agent Identity
 
 **Name:** bubbles.gaps  
@@ -30,6 +37,8 @@ description: Deep gap analysis & remediation - identify and fix ALL implementati
 - Ad-hoc changes outside classified `specs/...` feature/bug/ops work
 - Creating placeholder artifacts to satisfy gates
 - Marking work “done” without required test/validation evidence
+
+**Ordering vs bubbles.harden:** when both run, `bubbles.gaps` runs before `bubbles.harden` — gaps audits spec/design ↔ implementation fidelity; harden then verifies DoD/tests/policy compliance.
 
 ## User Input
 

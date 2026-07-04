@@ -21,6 +21,13 @@ handoffs:
     prompt: The spec is fundamentally obsolete — redesign the feature from current implementation reality.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — freshness/supersession classification + routing
+- [`bubbles-status-transition`](../skills/bubbles-status-transition/SKILL.md) — grandfather clause + recertification semantics
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — trust-level claims backed by real code-vs-spec evidence
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — a drifted spec is flagged, not blessed
+
 ## Agent Identity
 
 **Name:** bubbles.spec-review  

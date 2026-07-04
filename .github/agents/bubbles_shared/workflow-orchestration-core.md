@@ -14,6 +14,12 @@ When execution discovers undocumented or improperly documented work, repair the 
 
 This protocol is mandatory for feature work, bug work, hardening, gaps, stabilize, improve-existing, redesign-existing, and iterate-triggered execution. Orchestrators must repair the planning deficit instead of stopping with advice to the user.
 
+## Conditional Clarify Consistency Gate
+
+`bubbles.clarify` is a CONDITIONAL planning-chain consistency gate — it is NOT a mandatory phase in every planning run and stays default-off. It is triggered only by ambiguity or taste-decision overflow: `decisionPolicy.tasteDecisionHandling` `overflowAction: route_to_clarify` fires when a phase accumulates more than `maxPerPhase` (5) taste decisions, and the `autonomy: guarded`/`interactive` dial arms it on genuine ambiguity. When triggered, `clarify` performs structured consistency routing across the planning chain (`spec.md` → `design.md` → `scopes.md`) so the planning layer stays internally coherent before implementation.
+
+Dedupe from grill (they are distinct and MUST NOT be conflated): `clarify` = structured consistency routing (reconcile the planning artifacts); `grill` (the `interrogate` phase) = adversarial pressure-test (challenge the plan). Under `autonomy: full` (the default) neither runs — the run stays 100% autonomous. Do NOT force `clarify` into every planning run; it remains conditional and default-off.
+
 ## Baseline Workflow Law
 
 These are baseline workflow laws, not optional tags:
@@ -63,3 +69,5 @@ Default routing map:
 - Defect packets: `bubbles.bug` + `bubbles.implement`
 - State drift: inline reconciliation of `state.json`, stale execution claims, and stale certification claims
 - Post-implementation test failures: `bubbles.implement` + `bubbles.test`
+
+When both `bubbles.gaps` and `bubbles.harden` are dispatched for the same spec, order them gaps → harden: gaps audits spec/design ↔ implementation fidelity first, then harden verifies DoD/tests/policy compliance.
