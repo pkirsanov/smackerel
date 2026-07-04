@@ -12,12 +12,10 @@
   }
 
   function authHeaders() {
-    const token = window.localStorage.getItem("smackerel_auth_token") || "";
-    const headers = { Accept: "application/json", "Content-Type": "application/json" };
-    if (token) {
-      headers.Authorization = "Bearer " + token;
-    }
-    return headers;
+    // Spec 100 SCOPE-03 — auth is the same-origin HttpOnly auth_token cookie,
+    // attached automatically by the same-origin fetch; no bearer token is read
+    // from JS-visible storage.
+    return { Accept: "application/json", "Content-Type": "application/json" };
   }
 
   function payload() {

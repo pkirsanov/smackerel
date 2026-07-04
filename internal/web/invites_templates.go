@@ -27,7 +27,7 @@ const cardRewardsInviteTemplates = `
         {{if .CanRevoke}}
         <details data-revoke-confirm>
           <summary class="btn btn-secondary btn-sm" data-action="revoke-open">Revoke</summary>
-          <form method="POST" action="/cards/admin/invites/{{.ID}}/revoke" data-action="revoke">
+          <form method="POST" action="/admin/invites/{{.ID}}/revoke" data-action="revoke">
             <p class="meta">This invite can no longer be used to register.</p>
             <button class="btn btn-danger btn-sm" type="submit" data-action="revoke-confirm">Confirm revoke</button>
           </form>
@@ -46,7 +46,6 @@ const cardRewardsInviteTemplates = `
 
 {{define "cardrewards-invites.html"}}
 {{template "head" .}}
-{{template "cardrewards-nav" .}}
 <div class="page-header">
   <h1 class="page-title">Account Invites</h1>
   <p class="page-subtitle">Generate single-use registration invites for new operators.</p>
@@ -59,7 +58,7 @@ const cardRewardsInviteTemplates = `
 {{end}}
 <div class="card">
   <h2 class="card-title">Generate an invite</h2>
-  <form method="POST" action="/cards/admin/invites" data-action="generate">
+  <form method="POST" action="/admin/invites" data-action="generate">
     <div class="form-row">
       <label for="invite-label">Label (optional)</label>
       <input class="form-control" type="text" id="invite-label" name="label" maxlength="120" placeholder="e.g. for the new analyst" data-field="label" autocomplete="off">
@@ -76,7 +75,6 @@ const cardRewardsInviteTemplates = `
 
 {{define "cardrewards-invite-reveal.html"}}
 {{template "head" .}}
-{{template "cardrewards-nav" .}}
 <div class="page-header">
   <h1 class="page-title">Account Invites</h1>
   <p class="page-subtitle">Generate single-use registration invites for new operators.</p>
@@ -90,7 +88,7 @@ const cardRewardsInviteTemplates = `
   </div>
   <p class="meta">Select the field and press Ctrl/Cmd-A then Ctrl/Cmd-C to copy.{{if .Label}} Label: {{.Label}}.{{end}}</p>
   <div class="btn-row">
-    <a class="btn btn-secondary" href="/cards/admin/invites" data-action="done">Done &mdash; back to invites</a>
+    <a class="btn btn-secondary" href="/admin/invites" data-action="done">Done &mdash; back to invites</a>
   </div>
 </div>
 <h2 class="card-title">Invites</h2>

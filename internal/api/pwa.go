@@ -92,7 +92,9 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
   </div>
 
   <div class="card hidden" id="result-success">
-    <div class="status success">✅ Saved!</div>
+    <div class="status success">✅ Saved — durable and searchable</div>
+    <p id="saved-title" style="margin-top:0.5rem;color:var(--text-muted)"></p>
+    <p style="margin-top:0.5rem"><a href="/assistant">Ask the assistant about it &rarr;</a></p>
   </div>
 
   <div class="card hidden" id="result-duplicate">
@@ -151,21 +153,20 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
         return;
       }
 
-      // Read auth token from localStorage (set in PWA settings)
-      var authToken = localStorage.getItem('smackerel_auth_token') || '';
-
+      // Spec 100 SCOPE-03 — auth is the same-origin HttpOnly auth_token cookie
+      // (set by /login); the same-origin fetch carries it via credentials.
       fetch(captureURL, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken ? 'Bearer ' + authToken : '',
           'X-Capture-Source': 'pwa'
         },
         body: JSON.stringify(body)
       })
       .then(function(resp) {
         if (resp.ok) {
-          showSuccess();
+          return resp.json().then(function(data) { showSuccess(data); }, function() { showSuccess(null); });
         } else if (resp.status === 409) {
           showDuplicate();
         } else {
@@ -185,11 +186,18 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
       });
     }
 
-    function showSuccess() {
+    function showSuccess(data) {
       document.getElementById('saving').classList.add('hidden');
+      // Spec 100 SCOPE-03/SR-08 — a stronger durable-capture ACK: name what was
+      // saved and state it is durable and searchable (Product Principle P8).
+      var titleEl = document.getElementById('saved-title');
+      if (titleEl) {
+        var t = (data && data.title) ? data.title : (shareData.title || shareData.url || shareData.text || '');
+        titleEl.textContent = t ? ('Saved: ' + t) : '';
+      }
       document.getElementById('result-success').classList.remove('hidden');
-      // Auto-close after 1.5s to return to source app
-      setTimeout(function() { window.close(); }, 1500);
+      // Auto-close after 3s (longer than before so the durable-capture ACK is readable)
+      setTimeout(function() { window.close(); }, 3000);
     }
 
     function showDuplicate() {

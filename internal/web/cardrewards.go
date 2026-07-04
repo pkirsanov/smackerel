@@ -141,6 +141,11 @@ func NewCardRewardsWebHandler(svc *cardrewards.Service) *CardRewardsWebHandler {
 	t := template.Must(template.New("cardrewards").Funcs(fm).Parse(cardRewardsTemplates))
 	template.Must(t.Parse(cardRewardsInsightsTemplates))
 	template.Must(t.Parse(cardRewardsInviteTemplates))
+	// Spec 100 SCOPE-01 — parse the single-source cross-surface app-shell nav
+	// partial into the card-rewards set so /cards (and the relocated
+	// /admin/invites pages) render the same cross-surface bar as the rest of
+	// the product.
+	template.Must(t.Parse(appShellNav))
 	return &CardRewardsWebHandler{Service: svc, Templates: t}
 }
 
@@ -200,13 +205,16 @@ func (h *CardRewardsWebHandler) RegisterRoutes(r chi.Router) {
 		r.Get("/", h.AdminPage)
 		r.Post("/scrape", h.AdminScrapeNow)
 		r.Post("/sync-calendar", h.AdminSyncCalendarNow)
-		// Spec 093 — admin invites UI. Inherits webAuthMiddleware from the
-		// existing /cards/admin mount (no internal/api/router.go change).
-		r.Route("/invites", func(r chi.Router) {
-			r.Get("/", h.AdminInvitesPage)              // GET  /cards/admin/invites
-			r.Post("/", h.AdminInviteGenerate)          // POST /cards/admin/invites (200 render-once)
-			r.Post("/{id}/revoke", h.AdminInviteRevoke) // POST /cards/admin/invites/{id}/revoke (303 PRG)
-		})
+	})
+	// Spec 100 SCOPE-04 (SR-06) — the registration-invite admin is a
+	// product-level concern, not a card-rewards concern. It moves from
+	// /cards/admin/invites to the product-level /admin/invites. It stays inside
+	// the same webAuthMiddleware group because RegisterRoutes is mounted at the
+	// root of that group in internal/api/router.go (logged-in operator gate).
+	r.Route("/admin/invites", func(r chi.Router) {
+		r.Get("/", h.AdminInvitesPage)              // GET  /admin/invites
+		r.Post("/", h.AdminInviteGenerate)          // POST /admin/invites (200 render-once)
+		r.Post("/{id}/revoke", h.AdminInviteRevoke) // POST /admin/invites/{id}/revoke (303 PRG)
 	})
 }
 

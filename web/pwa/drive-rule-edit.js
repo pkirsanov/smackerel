@@ -4,10 +4,9 @@
   'use strict';
 
   function authHeader() {
-    var token = window.localStorage.getItem('smackerel-auth-token') || '';
-    var headers = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = 'Bearer ' + token;
-    return headers;
+    // Spec 100 SCOPE-03 — auth is the same-origin HttpOnly auth_token cookie
+    // (sent automatically by the same-origin fetch); no bearer token in storage.
+    return { 'Content-Type': 'application/json' };
   }
 
   function getQueryParam(name) {

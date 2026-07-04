@@ -243,7 +243,7 @@ const cardRewardsInsightsTemplates = `
 
 <h2 class="card-title">Account access</h2>
 <div class="btn-row">
-  <a class="btn btn-secondary" href="/cards/admin/invites" data-action="account-invites">Account Invites &rarr;</a>
+  <a class="btn btn-secondary" href="/admin/invites" data-action="account-invites">Account Invites &rarr;</a>
 </div>
 
 <h2 class="card-title">Run history</h2>

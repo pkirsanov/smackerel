@@ -594,10 +594,21 @@ func TestStatusPage_KnowledgeSection(t *testing.T) {
 	}
 }
 
-// Scope 6: Nav bar regression — Knowledge link present in nav
+// Scope 6: Nav bar regression — Knowledge link present in nav.
+// Spec 100 SCOPE-01 moved the cross-surface links (Knowledge included) from
+// inline allTemplates anchors into the single-source app-shell nav partial,
+// which the head renders on every page. Assert the link at its new home AND in
+// the rendered knowledge-base head so the regression intent is preserved.
 func TestNavBar_KnowledgeLink(t *testing.T) {
-	if !containsString(allTemplates, `<a href="/knowledge">Knowledge</a>`) {
-		t.Error("nav bar should contain Knowledge link")
+	if !containsString(appShellNav, `href="/knowledge"`) {
+		t.Error("shared app-shell nav should contain the Knowledge link")
+	}
+	h := NewHandler(nil, nil, time.Now())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	h.SearchPage(rec, req)
+	if !containsString(rec.Body.String(), `href="/knowledge"`) {
+		t.Error("rendered nav should contain the Knowledge link")
 	}
 }
 

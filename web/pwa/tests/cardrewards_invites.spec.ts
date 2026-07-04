@@ -4,7 +4,7 @@
  * Live-stack e2e-ui against the disposable `smackerel-test-e2e-ui` Compose
  * project. NO request interception: the test authenticates through the real
  * /v1/web/login, generates a REAL DB-backed invite through the real
- * /cards/admin/invites surface, and asserts the real server-rendered pages.
+ * /admin/invites surface, and asserts the real server-rendered pages.
  *
  * A single end-to-end journey (one login — the /v1/web/login surface is
  * rate-limited per IP, so the suite keeps logins minimal) covers:
@@ -35,7 +35,7 @@ test.describe("Spec 093 — Admin Account Invites", () => {
     const link = page.locator('[data-action="account-invites"]');
     await expect(link).toBeVisible();
     await link.click();
-    await expect(page).toHaveURL(/\/cards\/admin\/invites$/);
+    await expect(page).toHaveURL(/\/admin\/invites$/);
     await expect(page.locator('[data-action="generate"]')).toBeVisible();
 
     // SCN-093-13 — generate (optional label).
@@ -54,7 +54,7 @@ test.describe("Spec 093 — Admin Account Invites", () => {
 
     // Done → GET list.
     await page.locator('[data-action="done"]').click();
-    await page.waitForURL("**/cards/admin/invites");
+    await page.waitForURL("**/admin/invites");
 
     // SCN-093-14 — the new invite appears OUTSTANDING; SCN-093-17 adversarial:
     // the one-time token is ABSENT from the list DOM.
@@ -66,7 +66,7 @@ test.describe("Spec 093 — Admin Account Invites", () => {
     // SCN-093-15 — revoke via the CSS-only <details> confirm (no JS).
     await row.locator('[data-action="revoke-open"]').click();
     await row.locator('[data-action="revoke-confirm"]').click();
-    await page.waitForURL("**/cards/admin/invites**");
+    await page.waitForURL("**/admin/invites**");
     const revokedRow = page.locator("tr[data-invite-row]", { hasText: label });
     await expect(revokedRow).toHaveAttribute("data-invite-status", "revoked");
 
@@ -77,10 +77,10 @@ test.describe("Spec 093 — Admin Account Invites", () => {
     // SCN-093-16 — drop the session cookie; the REAL webAuthMiddleware must
     // reject an anonymous request to the invites page (never serve it).
     await page.context().clearCookies();
-    const resp = await page.request.get("/cards/admin/invites", { maxRedirects: 0 });
+    const resp = await page.request.get("/admin/invites", { maxRedirects: 0 });
     expect(
       [401, 302, 303],
-      `anonymous /cards/admin/invites must be rejected; got ${resp.status()}`,
+      `anonymous /admin/invites must be rejected; got ${resp.status()}`,
     ).toContain(resp.status());
   });
 });

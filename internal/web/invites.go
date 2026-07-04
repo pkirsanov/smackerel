@@ -98,7 +98,7 @@ func inviteRowViews(rows []webinvite.InviteRow) []inviteRowView {
 // the invite sub-pages return 503. Set in cmd/core/wiring.go after construction.
 func (h *CardRewardsWebHandler) SetInvites(r webinvite.Repo) { h.Invites = r }
 
-// AdminInvitesPage handles GET /cards/admin/invites — the metadata-only list +
+// AdminInvitesPage handles GET /admin/invites — the metadata-only list +
 // the generate form. Title "Admin" lights the Admin nav pill.
 func (h *CardRewardsWebHandler) AdminInvitesPage(w http.ResponseWriter, r *http.Request) {
 	if h.Invites == nil {
@@ -121,7 +121,7 @@ func (h *CardRewardsWebHandler) AdminInvitesPage(w http.ResponseWriter, r *http.
 	})
 }
 
-// AdminInviteGenerate handles POST /cards/admin/invites — mints an invite and
+// AdminInviteGenerate handles POST /admin/invites — mints an invite and
 // renders the one-time reveal at HTTP 200 (NOT a redirect: the plaintext must
 // never travel via a Location/query/log).
 func (h *CardRewardsWebHandler) AdminInviteGenerate(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +172,7 @@ func (h *CardRewardsWebHandler) AdminInviteGenerate(w http.ResponseWriter, r *ht
 	})
 }
 
-// AdminInviteRevoke handles POST /cards/admin/invites/{id}/revoke — revokes then
+// AdminInviteRevoke handles POST /admin/invites/{id}/revoke — revokes then
 // 303-redirects back to the list (PRG). A no-op (stale-page race) adds
 // ?notice=race so the list shows the non-enumerating banner.
 func (h *CardRewardsWebHandler) AdminInviteRevoke(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +186,7 @@ func (h *CardRewardsWebHandler) AdminInviteRevoke(w http.ResponseWriter, r *http
 		h.fail(w, "revoke invite", err)
 		return
 	}
-	dest := "/cards/admin/invites"
+	dest := "/admin/invites"
 	if outcome == webinvite.RevokeNoop {
 		dest += "?notice=race"
 	}

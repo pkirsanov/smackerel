@@ -342,6 +342,12 @@ func NewRouter(deps *Dependencies) http.Handler {
 	// bearerAuthMiddleware). Renders the identical form regardless of the
 	// invite-gate configuration (Reconciled AC-5).
 	r.Get("/register", deps.HandleRegisterPage)
+	// Spec 100 SCOPE-02 — /assistant is the memorable front-door alias for the
+	// assistant PWA page and the default post-login/registration landing. PUBLIC
+	// 302 to the served PWA assistant (auth is the same-origin cookie the
+	// assistant uses for /api/assistant/turn); registered alongside /login so it
+	// resolves immediately after the post-login redirect.
+	r.Get("/assistant", deps.HandleAssistantFrontDoor)
 	r.Handle("/admin_ui_static/*", http.StripPrefix("/", http.FileServer(http.FS(loginUIFS))))
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes

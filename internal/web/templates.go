@@ -34,10 +34,15 @@ const allTemplates = `
         nav { display: flex; gap: 1.5rem; padding: 1rem 0; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
         nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
         nav a:hover { color: var(--fg); }
+        .app-shell-nav { flex-wrap: wrap; align-items: center; gap: 1rem; }
+        .app-shell-link[aria-current="page"], .app-shell-link.active { color: var(--fg); font-weight: 600; }
         h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem; }
         .search-box { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: 1rem; background: var(--card-bg); color: var(--fg); }
         .search-box:focus { outline: 2px solid var(--accent); border-color: transparent; }
         .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin: 0.75rem 0; box-shadow: var(--shadow); }
+        .intent-hero { border-left: 3px solid var(--accent); }
+        .intent-hero-cta { display: inline-block; margin-top: 0.5rem; font-weight: 600; color: var(--fg); text-decoration: none; }
+        .intent-hero-cta:hover { text-decoration: underline; }
         .card h3 { font-size: 1rem; margin-bottom: 0.25rem; }
         .card h3 a { color: var(--fg); text-decoration: none; }
         .card h3 a:hover { text-decoration: underline; }
@@ -71,14 +76,11 @@ const allTemplates = `
     </style>
 </head>
 <body>
-    <nav>
-        <a href="/">Search</a>
-        <a href="/digest">Digest</a>
-        <a href="/topics">Topics</a>
-        <a href="/knowledge">Knowledge</a>
-        <a href="/notifications">Notifications</a>
-        <a href="/settings">Settings</a>
-        <a href="/status">Status</a>
+    <nav class="app-shell-nav" aria-label="Primary">
+        {{template "app-shell-nav" .}}
+        <a class="app-shell-link" href="/digest" data-nav="digest">Digest</a>
+        <a class="app-shell-link" href="/topics" data-nav="topics">Topics</a>
+        <a class="app-shell-link" href="/status" data-nav="status">Status</a>
         <button class="theme-toggle" id="themeBtn" aria-label="Toggle dark mode">Light / Dark</button>
     </nav>
     <script>
@@ -233,7 +235,12 @@ const allTemplates = `
 
 {{define "search.html"}}
 {{template "head" .}}
-<h1>Search</h1>
+<section class="intent-hero card" aria-label="Assistant front door">
+    <h1>Ask Smackerel</h1>
+    <p class="summary">Describe what you're after in plain words — the assistant is the front door to everything you've captured, and capture-as-fallback always works.</p>
+    <p><a class="intent-hero-cta" href="/assistant">Open the assistant &rarr;</a></p>
+</section>
+<h2>Or search by keyword</h2>
 <input class="search-box" type="search" name="query" placeholder="Search your knowledge..."
        hx-post="/search" hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
        hx-target="#results" hx-indicator="#search-spinner">

@@ -56,6 +56,12 @@ body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,
 .main-content { width:100%; max-width:1200px; margin:0 auto; padding:16px; }
 @media (min-width:768px) { .main-content { padding:24px 32px; } }
 a { color:var(--accent); }
+/* Spec 100 SCOPE-01 — shared cross-surface app-shell nav (renders above the card sub-nav) */
+.app-shell-nav { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid var(--nav-border); background:var(--nav-bg); }
+@media (min-width:768px) { .app-shell-nav { padding:10px 32px; } }
+.app-shell-link { color:var(--text-secondary); text-decoration:none; font-size:0.9rem; padding:6px 10px; border-radius:var(--radius-md); min-height:44px; display:inline-flex; align-items:center; }
+.app-shell-link:hover { background:var(--bg-tertiary); color:var(--text-primary); }
+.app-shell-link[aria-current="page"], .app-shell-link.active { background:var(--accent); color:var(--on-accent); }
 /* §4.2 responsive glass nav (breaks out to the main-content edges, sticky top) */
 .cr-nav { position:sticky; top:0; z-index:10; margin:-16px -16px 16px; background:var(--nav-bg); backdrop-filter:blur(18px) saturate(1.4); -webkit-backdrop-filter:blur(18px) saturate(1.4); border-bottom:1px solid var(--nav-border); }
 @media (min-width:768px) { .cr-nav { margin:-24px -32px 24px; } }
@@ -161,6 +167,7 @@ a:focus-visible, button:focus-visible, .btn:focus-visible, .nav-pill:focus-visib
 </head>
 <body>
 <div class="app-container">
+<nav class="app-shell-nav" aria-label="Primary">{{template "app-shell-nav" .}}</nav>
 <main class="main-content">
 {{end}}
 

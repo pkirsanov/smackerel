@@ -7,7 +7,8 @@ var STATIC_ASSETS = [
   '/pwa/app.js',
   '/pwa/icon.svg',
   '/pwa/manifest.json',
-  '/pwa/lib/queue.js'
+  '/pwa/lib/queue.js',
+  '/pwa/lib/appnav.js'
 ];
 
 // Install: cache static assets
@@ -67,28 +68,11 @@ self.addEventListener('sync', function(event) {
   }
 });
 
-// Periodic sync fallback — also try flushing on any fetch success
+// Spec 100 SCOPE-03 — the PWA is same-origin with the server and authenticates
+// via the HttpOnly auth_token cookie. The offline queue therefore flushes to
+// the same-origin /api/capture with credentials:'include' (the cookie rides
+// along); there is no server URL and no bearer token to read from the client.
 function flushOfflineQueue() {
-  // Read config from the client's localStorage via message
-  return self.clients.matchAll().then(function(clients) {
-    if (clients.length === 0) return;
-    // Ask first client for config
-    return new Promise(function(resolve) {
-      var mc = new MessageChannel();
-      mc.port1.onmessage = function(event) {
-        var config = event.data;
-        if (config && config.serverUrl && config.authToken) {
-          flushWithConfig(config.serverUrl, config.authToken).then(resolve);
-        } else {
-          resolve();
-        }
-      };
-      clients[0].postMessage({ type: 'getConfig' }, [mc.port2]);
-    });
-  });
-}
-
-function flushWithConfig(serverUrl, authToken) {
   var DB_NAME = 'smackerel-queue';
   var STORE_NAME = 'pending';
 
@@ -104,7 +88,6 @@ function flushWithConfig(serverUrl, authToken) {
         var items = getAll.result;
         if (items.length === 0) { resolve(); return; }
 
-        var apiUrl = serverUrl.replace(/\/+$/, '') + '/api/capture';
         var deleteIds = [];
         var authFailed = false;
         var chain = Promise.resolve();
@@ -118,11 +101,11 @@ function flushWithConfig(serverUrl, authToken) {
             if (item.text) body.text = item.text;
             if (item.title) body.context = 'Captured (offline): ' + item.title;
 
-            return fetch(apiUrl, {
+            return fetch('/api/capture', {
               method: 'POST',
+              credentials: 'include',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + authToken,
                 'X-Capture-Source': 'pwa'
               },
               body: JSON.stringify(body)

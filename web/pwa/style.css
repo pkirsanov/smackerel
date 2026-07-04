@@ -83,6 +83,31 @@ h1 {
 
 .hidden { display: none; }
 
+/* Spec 100 SCOPE-01 — shared cross-surface app-shell nav (PWA surfaces) */
+.app-shell-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto 1.5rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.app-shell-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+.app-shell-link:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); text-decoration: none; }
+.app-shell-link.active { color: #fff; background: var(--primary); }
+
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 

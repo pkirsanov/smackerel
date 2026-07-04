@@ -73,7 +73,7 @@ func TestAdminInvitesPage(t *testing.T) {
 	t.Run("503-when-nil", func(t *testing.T) {
 		h := NewCardRewardsWebHandler(nil) // Invites left nil
 		rec := httptest.NewRecorder()
-		h.AdminInvitesPage(rec, httptest.NewRequest(http.MethodGet, "/cards/admin/invites", nil))
+		h.AdminInvitesPage(rec, httptest.NewRequest(http.MethodGet, "/admin/invites", nil))
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("nil invites status=%d want 503", rec.Code)
 		}
@@ -83,7 +83,7 @@ func TestAdminInvitesPage(t *testing.T) {
 		h := NewCardRewardsWebHandler(nil)
 		h.SetInvites(&fakeInviteRepo{rows: rows})
 		rec := httptest.NewRecorder()
-		h.AdminInvitesPage(rec, httptest.NewRequest(http.MethodGet, "/cards/admin/invites", nil))
+		h.AdminInvitesPage(rec, httptest.NewRequest(http.MethodGet, "/admin/invites", nil))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d want 200; body=%s", rec.Code, rec.Body.String())
 		}
@@ -93,9 +93,9 @@ func TestAdminInvitesPage(t *testing.T) {
 			`data-invite-id="id-out"`, `data-invite-status="outstanding"`, "for the analyst", "Outstanding",
 			`data-invite-status="used"`, "Used", "by newcomer-x",
 			`data-invite-status="revoked"`, "Revoked",
-			`href="/cards/admin"`,           // back-to-admin link
-			`action="/cards/admin/invites"`, // generate form
-			`data-action="generate"`,        // generate hook
+			`href="/cards/admin"`,     // back-to-admin cross-link (card admin still links here)
+			`action="/admin/invites"`, // generate form (product-level, spec 100 SR-06)
+			`data-action="generate"`,  // generate hook
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("list render missing %q", want)
@@ -116,7 +116,7 @@ func TestAdminInvitesPage(t *testing.T) {
 		h := NewCardRewardsWebHandler(nil)
 		h.SetInvites(&fakeInviteRepo{rows: nil})
 		rec := httptest.NewRecorder()
-		h.AdminInvitesPage(rec, httptest.NewRequest(http.MethodGet, "/cards/admin/invites", nil))
+		h.AdminInvitesPage(rec, httptest.NewRequest(http.MethodGet, "/admin/invites", nil))
 		if !strings.Contains(rec.Body.String(), `data-empty="invites"`) {
 			t.Errorf("empty list missing empty-state; body=%s", rec.Body.String())
 		}
@@ -126,7 +126,7 @@ func TestAdminInvitesPage(t *testing.T) {
 		h := NewCardRewardsWebHandler(nil)
 		h.SetInvites(&fakeInviteRepo{rows: nil})
 		rec := httptest.NewRecorder()
-		h.AdminInvitesPage(rec, httptest.NewRequest(http.MethodGet, "/cards/admin/invites?notice=race", nil))
+		h.AdminInvitesPage(rec, httptest.NewRequest(http.MethodGet, "/admin/invites?notice=race", nil))
 		if !strings.Contains(rec.Body.String(), `data-notice="race"`) {
 			t.Errorf("?notice=race did not render the warning banner; body=%s", rec.Body.String())
 		}
@@ -139,7 +139,7 @@ func TestAdminInviteGenerate(t *testing.T) {
 		h := NewCardRewardsWebHandler(nil)
 		h.SetInvites(&fakeInviteRepo{genPlain: token})
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/cards/admin/invites",
+		req := httptest.NewRequest(http.MethodPost, "/admin/invites",
 			strings.NewReader(url.Values{"label": {"for the analyst"}}.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		h.AdminInviteGenerate(rec, req)
@@ -174,7 +174,7 @@ func TestAdminInviteGenerate(t *testing.T) {
 		// error path returns ("", err) so the handler has nothing to echo.
 		h.SetInvites(&fakeInviteRepo{genPlain: "", genErr: errors.New("boom")})
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/cards/admin/invites",
+		req := httptest.NewRequest(http.MethodPost, "/admin/invites",
 			strings.NewReader(url.Values{"label": {"x"}}.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		h.AdminInviteGenerate(rec, req)
@@ -195,7 +195,7 @@ func TestAdminInviteGenerate(t *testing.T) {
 	t.Run("503-when-nil", func(t *testing.T) {
 		h := NewCardRewardsWebHandler(nil)
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/cards/admin/invites", strings.NewReader(""))
+		req := httptest.NewRequest(http.MethodPost, "/admin/invites", strings.NewReader(""))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		h.AdminInviteGenerate(rec, req)
 		if rec.Code != http.StatusServiceUnavailable {
@@ -209,7 +209,7 @@ func TestAdminInviteRevoke(t *testing.T) {
 		h := NewCardRewardsWebHandler(nil)
 		h.SetInvites(fake)
 		r := chi.NewRouter()
-		r.Post("/cards/admin/invites/{id}/revoke", h.AdminInviteRevoke)
+		r.Post("/admin/invites/{id}/revoke", h.AdminInviteRevoke)
 		return r
 	}
 
@@ -217,12 +217,12 @@ func TestAdminInviteRevoke(t *testing.T) {
 		fake := &fakeInviteRepo{revokeOut: webinvite.RevokeDone}
 		r := newRouter(fake)
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/cards/admin/invites/abc-123/revoke", nil))
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/admin/invites/abc-123/revoke", nil))
 		if rec.Code != http.StatusSeeOther {
 			t.Fatalf("revoke status=%d want 303; body=%s", rec.Code, rec.Body.String())
 		}
-		if loc := rec.Header().Get("Location"); loc != "/cards/admin/invites" {
-			t.Errorf("revoke Location=%q want /cards/admin/invites", loc)
+		if loc := rec.Header().Get("Location"); loc != "/admin/invites" {
+			t.Errorf("revoke Location=%q want /admin/invites", loc)
 		}
 		if fake.lastRevoke != "abc-123" {
 			t.Errorf("revoke id=%q want abc-123 (chi URL param)", fake.lastRevoke)
@@ -233,21 +233,21 @@ func TestAdminInviteRevoke(t *testing.T) {
 		fake := &fakeInviteRepo{revokeOut: webinvite.RevokeNoop}
 		r := newRouter(fake)
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/cards/admin/invites/stale-id/revoke", nil))
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/admin/invites/stale-id/revoke", nil))
 		if rec.Code != http.StatusSeeOther {
 			t.Fatalf("revoke-noop status=%d want 303", rec.Code)
 		}
-		if loc := rec.Header().Get("Location"); loc != "/cards/admin/invites?notice=race" {
-			t.Errorf("revoke-noop Location=%q want /cards/admin/invites?notice=race", loc)
+		if loc := rec.Header().Get("Location"); loc != "/admin/invites?notice=race" {
+			t.Errorf("revoke-noop Location=%q want /admin/invites?notice=race", loc)
 		}
 	})
 
 	t.Run("503-when-nil", func(t *testing.T) {
 		h := NewCardRewardsWebHandler(nil)
 		r := chi.NewRouter()
-		r.Post("/cards/admin/invites/{id}/revoke", h.AdminInviteRevoke)
+		r.Post("/admin/invites/{id}/revoke", h.AdminInviteRevoke)
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/cards/admin/invites/x/revoke", nil))
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/admin/invites/x/revoke", nil))
 		if rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("nil invites revoke status=%d want 503", rec.Code)
 		}
@@ -292,9 +292,9 @@ func TestAdminInvites_AnonymousBlocked(t *testing.T) {
 	})
 
 	cases := []struct{ name, method, path string }{
-		{"get-list", http.MethodGet, "/cards/admin/invites"},
-		{"post-generate", http.MethodPost, "/cards/admin/invites"},
-		{"post-revoke", http.MethodPost, "/cards/admin/invites/some-id/revoke"},
+		{"get-list", http.MethodGet, "/admin/invites"},
+		{"post-generate", http.MethodPost, "/admin/invites"},
+		{"post-revoke", http.MethodPost, "/admin/invites/some-id/revoke"},
 	}
 	for _, tc := range cases {
 		t.Run("anonymous-"+tc.name, func(t *testing.T) {
@@ -308,7 +308,7 @@ func TestAdminInvites_AnonymousBlocked(t *testing.T) {
 
 	t.Run("authenticated-reaches-handler", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/cards/admin/invites", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/invites", nil)
 		req.AddCookie(&http.Cookie{Name: "auth_token", Value: token})
 		r.ServeHTTP(rec, req)
 		if rec.Code == http.StatusUnauthorized {
