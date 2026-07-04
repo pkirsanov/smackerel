@@ -1,0 +1,90 @@
+# docker-compose.e2e-ui.override.yml
+#
+# Spec 100 F-100-OPT-01 — TEST-ONLY override for the disposable
+# `smackerel-test-e2e-ui` browser lane (scripts/runtime/web-e2e-ui.sh).
+#
+# WHY THIS EXISTS
+# ---------------
+# The shared SST test env (config/generated/test.env) sets
+# environments.test.ollama_enabled=true, which the generator aggregates into
+# COMPOSE_PROFILES=ollama,searxng (scripts/commands/config.sh). Docker Compose
+# reads COMPOSE_PROFILES natively from --env-file, so the `profiles: [ollama]`-
+# gated `ollama` service is activated for the e2e-ui lane even though
+# e2e_ui_compose passes NO --profile flag. `up --wait` then pulls the ~3 GB
+# heavyweight ollama image (infrastructure.ollama.test.image) and blocks on its
+# `ollama list` healthcheck — which stalls stack bring-up on a macOS Docker
+# host and is pure waste (the browser UI journeys never run GPU inference; the
+# assistant answer-quality leg is ENV-CONSTRAINED — chaos_saga J5).
+#
+# Neither core nor ml needs the ollama container up to boot or pass its
+# healthcheck: core's depends_on is only postgres+nats and its /api/health
+# EXCLUDES ollama from the overall gate + always returns HTTP 200
+# (internal/api/health.go); ml's depends_on is only nats and its startup config
+# check only requires OLLAMA_URL be a NON-EMPTY STRING — no reachability probe
+# (ml/app/main.py::_check_required_config).
+#
+# WHAT THIS DOES
+# --------------
+# Swaps ONLY the `ollama` service to a tiny nginx:alpine stub that answers the
+# boot-probe surface (/api/tags, /api/version, /api/ps, /healthz) with HTTP 200
+# on the SAME compose DNS name + port (ollama:${OLLAMA_CONTAINER_PORT}). The
+# base `profiles: [ollama]` gate is preserved, so COMPOSE_PROFILES=ollama still
+# activates the service — now a ~1s-boot stub instead of a 3 GB pull. No
+# env-file / SST surgery, no fragile profile subtraction.
+#
+# FAIL-LOUD / NO-DEFAULTS (smackerel-no-defaults / Gate G028)
+# -----------------------------------------------------------
+# OLLAMA_URL stays the EXPLICIT SST value (config/smackerel.yaml llm.ollama_url =
+# http://ollama:11434), emitted verbatim into test.env. This override introduces
+# NO new endpoint variable and NO `${VAR:-default}` fallback. The port literals
+# are the fixed Ollama API port (11434), identical to the base service and the
+# stub-providers precedent — not runtime config subject to G028.
+#
+# SCOPE (prod + other lanes UNTOUCHED)
+# ------------------------------------
+# Consumed ONLY by e2e_ui_compose via `-f docker-compose.e2e-ui.override.yml`.
+# The PRODUCTION stack (deploy/compose.deploy.yml — real digest-pinned
+# ollama/ollama:rocm, shared host daemon, ENABLE_OLLAMA=false) and the
+# dev/integration/e2e lanes (smackerel_compose in scripts/lib/runtime.sh) never
+# load this file. nginx:alpine is already an accepted test-only image
+# (tests/e2e/stub-providers). No image is added to deploy/compose.deploy.yml, so
+# the deploy/contract.yaml externalImages contract (TestExternalImagesContract)
+# is unaffected; docker-compose.yml itself is unchanged, so the spec-043 ollama
+# compose contract (compose_ollama_contract_test.go) stays green.
+
+services:
+  ollama:
+    # Swap the heavyweight ollama image for a tiny static responder. Compose
+    # merge: `image` is a scalar (override wins); base `profiles: [ollama]`,
+    # `ports`, `security_opt`, `read_only`, and the OLLAMA_KEEP_ALIVE env are
+    # inherited so the service still activates + binds on 11434.
+    image: nginx:alpine
+    # nginx needs writable cache + run dirs under the inherited `read_only: true`
+    # root. tmpfs is a Compose-concatenated sequence, so these ADD to the base
+    # /tmp + /.ollama_tmp entries (mirrors tests/e2e/stub-providers).
+    tmpfs:
+      - /var/cache/nginx:size=8m,mode=1777,nosuid,noexec,nodev
+      - /var/run:size=8m,mode=1777,nosuid,nodev
+    # volumes merge by mount path — this ADDS the stub config next to the
+    # inherited (harmless, empty) ollama-data mount.
+    volumes:
+      - ./tests/e2e/stub-ollama/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # healthcheck is a merged mapping; every key below REPLACES the base
+    # `ollama list` probe (nginx:alpine has no `ollama` binary). busybox wget
+    # is present in alpine.
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:11434/healthz" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    # Deep-merged: shrink the 8G ollama envelope to a tiny nginx one.
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    # Merged by label key — mark this as the ephemeral test stub, not the
+    # persistent ollama service.
+    labels:
+      com.smackerel.component: ollama-stub
+      com.smackerel.lifecycle: ephemeral

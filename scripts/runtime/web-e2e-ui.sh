@@ -97,12 +97,44 @@ resolve_playwright_browser_cache() {
 # injects `SMACKEREL_E2E_UI_NPX` (no real Node tooling on the path).
 #
 # The PWA suite launches BOTH the full `chromium` build and the
-# `chromium-headless-shell` build (the tests run headless), so a warm
-# cache requires BOTH revision dirs to be present; either one missing
-# triggers a single COMBINED install of both browsers so Playwright's
-# cache GC cannot evict one while fetching the other. Defined above the
+# `chromium-headless-shell` build (the tests run headless), AND
+# playwright.config.ts sets `video: "retain-on-failure"`, so Playwright
+# starts its bundled `ffmpeg` binary when a browser context is created —
+# a missing ffmpeg makes EVERY `newPage`/`newContext` throw "Executable
+# doesn't exist at .../ffmpeg-<rev>/ffmpeg-<os>" (spec 100 F-100-OPT-01,
+# discovered once the ollama de-weighting let the stack come up). The
+# warm-cache probe is REVISION-EXACT: Playwright launches the precise
+# revision it pins in playwright-core/browsers.json, so a stale
+# different-revision dir (e.g. a leftover `ffmpeg-1011` when Playwright
+# pins `ffmpeg-1010`) must NOT count as present — a revision-blind
+# `ffmpeg-*` glob is fooled by it, skips the install, and leaves the lane
+# red. Any of the three pinned-revision dirs missing triggers a single
+# COMBINED install (already-correct components are a fast no-op, so only
+# the missing revision is fetched). `npx playwright install chromium
+# chromium-headless-shell` does NOT pull ffmpeg on recent Playwright — it
+# is a separately-named component — which is why it is listed explicitly
+# below. Defined (with resolve_pinned_playwright_revision) above the
 # sourced-guard so the spec-077 shell unit can source this file and lock
-# the OS-path logic without bringing up a stack.
+# the probe logic without bringing up a stack.
+
+# resolve_pinned_playwright_revision — echo the EXACT revision Playwright
+# pins for a component (chromium / chromium-headless-shell / ffmpeg), read
+# from node_modules/playwright-core/browsers.json. Empty when browsers.json
+# is absent (fresh clone before `npm ci`) or the component is unlisted;
+# callers treat empty as "install needed". Pure awk (no node / python) so
+# the spec-077 shell unit can source + drive it hermetically on any host
+# (wsl-macos-compatibility). browsers.json is machine-generated and stable:
+# each component object lists "name" immediately before "revision".
+resolve_pinned_playwright_revision() {
+  local component="$1"
+  local browsers_json="$SMACKEREL_E2E_UI_PWA_DIR/node_modules/playwright-core/browsers.json"
+  [[ -r "$browsers_json" ]] || return 0
+  awk -v want="$component" '
+    $0 ~ ("\"name\"[[:space:]]*:[[:space:]]*\"" want "\"") { found = 1 }
+    found && /"revision"[[:space:]]*:/ { gsub(/[^0-9]/, ""); print; exit }
+  ' "$browsers_json"
+}
+
 bootstrap_pwa_tooling() {
   if [[ -n "${SMACKEREL_E2E_UI_NPX:-}" ]]; then
     return 0
@@ -115,10 +147,25 @@ bootstrap_pwa_tooling() {
   if [[ ! -d "$SMACKEREL_E2E_UI_PWA_DIR/node_modules" ]]; then
     need_npm_ci=1
   fi
-  local browser_cache
+  local browser_cache chromium_rev headless_rev ffmpeg_rev
   browser_cache="$(resolve_playwright_browser_cache)"
-  if ! compgen -G "$browser_cache/chromium-*" >/dev/null \
-    || ! compgen -G "$browser_cache/chromium_headless_shell-*" >/dev/null; then
+  chromium_rev="$(resolve_pinned_playwright_revision chromium)"
+  headless_rev="$(resolve_pinned_playwright_revision chromium-headless-shell)"
+  ffmpeg_rev="$(resolve_pinned_playwright_revision ffmpeg)"
+  # Warm cache requires all three components at their EXACT pinned revision:
+  # the full chromium build, the chromium-headless-shell build (headless
+  # tests), AND the ffmpeg binary (playwright.config.ts
+  # `video: retain-on-failure` needs it at newPage). Revision-EXACT, NOT a
+  # `<component>-*` glob: a stale different-revision dir (e.g. a leftover
+  # ffmpeg-1011 when Playwright pins ffmpeg-1010) must NOT count as present,
+  # or every browser newPage throws "Executable doesn't exist at
+  # .../<component>-<pinned>/..." (F-100-OPT-01). An unresolved revision (no
+  # node_modules yet) also forces the install; it runs after `npm ci`. The
+  # cache dir names the headless-shell component with underscores.
+  if [[ -z "$chromium_rev" || -z "$headless_rev" || -z "$ffmpeg_rev" ]] \
+    || [[ ! -d "$browser_cache/chromium-$chromium_rev" ]] \
+    || [[ ! -d "$browser_cache/chromium_headless_shell-$headless_rev" ]] \
+    || [[ ! -d "$browser_cache/ffmpeg-$ffmpeg_rev" ]]; then
     need_browser_install=1
   fi
   if (( need_npm_ci == 0 && need_browser_install == 0 )); then
@@ -131,10 +178,14 @@ bootstrap_pwa_tooling() {
       npm ci
     fi
     if (( need_browser_install == 1 )); then
-      echo "[web-e2e-ui] Installing Playwright chromium + chromium-headless-shell browsers..." >&2
-      # Single combined install so both builds are fetched together and
-      # Playwright's cache GC cannot evict one while installing the other.
-      npx playwright install chromium chromium-headless-shell
+      echo "[web-e2e-ui] Installing Playwright chromium + chromium-headless-shell + ffmpeg..." >&2
+      # Single combined install so all three components are fetched together
+      # and Playwright's cache GC cannot evict one while installing another.
+      # ffmpeg is listed explicitly: recent Playwright does NOT pull it as a
+      # side effect of a browser install, and playwright.config.ts's
+      # `video: retain-on-failure` needs it at browser-context creation
+      # (F-100-OPT-01). Already-present components are a fast no-op.
+      npx playwright install chromium chromium-headless-shell ffmpeg
     fi
   )
 }
@@ -178,10 +229,22 @@ e2e_ui_compose() {
   # All compose invocations for this lane go through this helper so the
   # project-name + env-file + repo compose file are applied uniformly
   # and the integration test can grep for the contract.
+  #
+  # Spec 100 F-100-OPT-01 — the base docker-compose.yml is layered with a
+  # TEST-ONLY override (docker-compose.e2e-ui.override.yml) that swaps the
+  # `ollama` service for a tiny nginx:alpine stub. The shared SST test env
+  # emits COMPOSE_PROFILES=ollama (environments.test.ollama_enabled=true),
+  # which --env-file activates natively, so without the override this lane
+  # would pull the ~3 GB heavyweight ollama image and stall `up --wait` on a
+  # macOS Docker host. The browser UI journeys never run GPU inference (J5 is
+  # ENV-CONSTRAINED); core/ml only need the ollama endpoint REACHABLE at boot.
+  # The override is loaded ONLY here — the prod stack (deploy/compose.deploy.yml)
+  # and the dev/integration/e2e lanes (smackerel_compose) are untouched.
   docker compose \
     --project-name "$SMACKEREL_E2E_UI_COMPOSE_PROJECT" \
     --env-file "$SMACKEREL_E2E_UI_ENV_FILE" \
     -f "$SMACKEREL_E2E_UI_REPO_ROOT/docker-compose.yml" \
+    -f "$SMACKEREL_E2E_UI_REPO_ROOT/docker-compose.e2e-ui.override.yml" \
     "$@"
 }
 
