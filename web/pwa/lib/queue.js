@@ -48,7 +48,8 @@ var CaptureQueue = (function() {
     });
   }
 
-  function flush(apiUrl, authToken, captureSource) {
+  // Spec 100 SCOPE-03 — same-origin cookie auth; no bearer token parameter.
+  function flush(apiUrl, captureSource) {
     return open().then(function(db) {
       return new Promise(function(resolve) {
         var tx = db.transaction(STORE_NAME, 'readonly');
@@ -78,13 +79,13 @@ var CaptureQueue = (function() {
               if (item.title) body.context = 'Captured (offline): ' + item.title;
 
               var headers = {
-                  'Content-Type': 'application/json',
-                  'Authorization': 'Bearer ' + authToken
+                  'Content-Type': 'application/json'
                 };
               if (captureSource) headers['X-Capture-Source'] = captureSource;
 
               return fetch(apiUrl, {
                 method: 'POST',
+                credentials: 'include',
                 headers: headers,
                 body: JSON.stringify(body)
               })

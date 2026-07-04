@@ -63,6 +63,82 @@ run_node_tooling() {
   )
 }
 
+# resolve_playwright_browser_cache — echo the directory Playwright uses to
+# cache downloaded browser builds, per OS. Honors an explicit
+# PLAYWRIGHT_BROWSERS_PATH override first (Playwright's own precedence),
+# then falls back to the correct per-OS default:
+#   * macOS (Darwin): $HOME/Library/Caches/ms-playwright
+#   * Linux / other:  $HOME/.cache/ms-playwright
+# Using the Linux default on macOS makes the warm-cache probe in
+# bootstrap_pwa_tooling never match, which forces a needless — and on some
+# Docker-Desktop hosts, deadlock-prone — `npx playwright install` on EVERY
+# invocation. Detection uses `uname -s`; an optional first argument
+# overrides the detected OS so the spec-077 shell unit can lock the path
+# logic deterministically (WSL/macOS portability per the repo convention).
+resolve_playwright_browser_cache() {
+  if [[ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ]]; then
+    printf '%s\n' "$PLAYWRIGHT_BROWSERS_PATH"
+    return 0
+  fi
+  local os_name="${1:-$(uname -s 2>/dev/null || printf 'Linux')}"
+  case "$os_name" in
+    Darwin) printf '%s\n' "$HOME/Library/Caches/ms-playwright" ;;
+    *) printf '%s\n' "$HOME/.cache/ms-playwright" ;;
+  esac
+}
+
+# bootstrap_pwa_tooling — ensures the PWA workspace has its npm
+# dependencies and the Playwright browsers installed before
+# `run_node_tooling` invokes `npx playwright test`. A fresh clone (or a
+# freshly-cleaned `node_modules`) would otherwise fail with "Cannot find
+# module '@playwright/test'" or "Executable doesn't exist at
+# .../chromium-*/chrome-*/...". Idempotent — a warm cache is a fast no-op
+# that never invokes `npx` at all. Skipped when the dispatcher canary
+# injects `SMACKEREL_E2E_UI_NPX` (no real Node tooling on the path).
+#
+# The PWA suite launches BOTH the full `chromium` build and the
+# `chromium-headless-shell` build (the tests run headless), so a warm
+# cache requires BOTH revision dirs to be present; either one missing
+# triggers a single COMBINED install of both browsers so Playwright's
+# cache GC cannot evict one while fetching the other. Defined above the
+# sourced-guard so the spec-077 shell unit can source this file and lock
+# the OS-path logic without bringing up a stack.
+bootstrap_pwa_tooling() {
+  if [[ -n "${SMACKEREL_E2E_UI_NPX:-}" ]]; then
+    return 0
+  fi
+  if [[ ! -d "$SMACKEREL_E2E_UI_PWA_DIR" ]]; then
+    return 0
+  fi
+  local need_npm_ci=0
+  local need_browser_install=0
+  if [[ ! -d "$SMACKEREL_E2E_UI_PWA_DIR/node_modules" ]]; then
+    need_npm_ci=1
+  fi
+  local browser_cache
+  browser_cache="$(resolve_playwright_browser_cache)"
+  if ! compgen -G "$browser_cache/chromium-*" >/dev/null \
+    || ! compgen -G "$browser_cache/chromium_headless_shell-*" >/dev/null; then
+    need_browser_install=1
+  fi
+  if (( need_npm_ci == 0 && need_browser_install == 0 )); then
+    return 0
+  fi
+  (
+    cd "$SMACKEREL_E2E_UI_PWA_DIR"
+    if (( need_npm_ci == 1 )); then
+      echo "[web-e2e-ui] Bootstrapping web/pwa npm dependencies (npm ci)..." >&2
+      npm ci
+    fi
+    if (( need_browser_install == 1 )); then
+      echo "[web-e2e-ui] Installing Playwright chromium + chromium-headless-shell browsers..." >&2
+      # Single combined install so both builds are fetched together and
+      # Playwright's cache GC cannot evict one while installing the other.
+      npx playwright install chromium chromium-headless-shell
+    fi
+  )
+}
+
 # Allow callers (e.g. the dispatcher canary) to introspect the project name
 # without bringing up any stack or invoking the Node runner.
 if [[ "${1:-}" == "--print-compose-project" ]]; then
@@ -180,46 +256,11 @@ bring_up_test_stack() {
 # without bringing up the real stack. The lifecycle is exercised
 # end-to-end by the SCOPE-1c proof-of-life suite (TP-077-01-01 +
 # TP-077-01-01R) under `./smackerel.sh test e2e-ui` in CI.
-# bootstrap_pwa_tooling — ensures the PWA workspace has its npm
-# dependencies and the Playwright Chromium browser installed before
-# `run_node_tooling` invokes `npx playwright test`. A fresh clone (or
-# a freshly-cleaned `node_modules`) would otherwise fail with "Cannot
-# find module '@playwright/test'" or "Executable doesn't exist at
-# .../chromium-*/chrome-linux/chrome". Idempotent — fast no-op on a
-# warm workspace. Skipped when the dispatcher canary injects
-# `SMACKEREL_E2E_UI_NPX` (no real Node tooling on the path).
-bootstrap_pwa_tooling() {
-  if [[ -n "${SMACKEREL_E2E_UI_NPX:-}" ]]; then
-    return 0
-  fi
-  if [[ ! -d "$SMACKEREL_E2E_UI_PWA_DIR" ]]; then
-    return 0
-  fi
-  local need_npm_ci=0
-  local need_browser_install=0
-  if [[ ! -d "$SMACKEREL_E2E_UI_PWA_DIR/node_modules" ]]; then
-    need_npm_ci=1
-  fi
-  local browser_cache="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
-  if ! compgen -G "$browser_cache/chromium-*" >/dev/null; then
-    need_browser_install=1
-  fi
-  if (( need_npm_ci == 0 && need_browser_install == 0 )); then
-    return 0
-  fi
-  (
-    cd "$SMACKEREL_E2E_UI_PWA_DIR"
-    if (( need_npm_ci == 1 )); then
-      echo "[web-e2e-ui] Bootstrapping web/pwa npm dependencies (npm ci)..." >&2
-      npm ci
-    fi
-    if (( need_browser_install == 1 )); then
-      echo "[web-e2e-ui] Installing Playwright chromium browser..." >&2
-      npx playwright install chromium
-    fi
-  )
-}
-
+# `bootstrap_pwa_tooling` and `resolve_playwright_browser_cache` are
+# defined ABOVE the sourced-guard (near `run_node_tooling`) so the
+# spec-077 shell unit can source this file and lock the OS-correct
+# browser-cache path logic without bringing up a stack. On the happy path
+# (npx not stubbed) they run here before the live stack comes up.
 if [[ -z "${SMACKEREL_E2E_UI_NPX:-}" ]]; then
   bootstrap_pwa_tooling
   bring_up_test_stack

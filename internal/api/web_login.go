@@ -60,6 +60,14 @@ const authCookieName = "auth_token"
 // login-loop detection in next-sanitisation).
 const loginPath = "/login"
 
+// assistantLandingPath is the assistant front door (spec 100 SCOPE-02) — the
+// default post-login / post-registration destination (Product Principle P2:
+// the assistant is the intelligent front door; P9: design for restart). It is
+// the memorable, public alias that GET /assistant 302-redirects to the served
+// PWA assistant page. Only the EMPTY-next case defaults here; sanitizeNext's
+// reject fallback stays "/" so the spec-057 open-redirect matrix is unchanged.
+const assistantLandingPath = "/assistant"
+
 // isFormContentType reports whether the request body is
 // application/x-www-form-urlencoded (ignoring parameters / case).
 func isFormContentType(r *http.Request) bool {

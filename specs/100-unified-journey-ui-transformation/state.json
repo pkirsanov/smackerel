@@ -1,0 +1,236 @@
+{
+  "version": 3,
+  "specId": "100-unified-journey-ui-transformation",
+  "specName": "Unified Journey UI Transformation (One App-Shell Across Every Surface)",
+  "featureDir": "specs/100-unified-journey-ui-transformation",
+  "status": "done",
+  "currentPhase": "done",
+  "currentScope": null,
+  "workflowMode": "full-delivery",
+  "executionRuntime": "direct-implement",
+  "planMaturityOnly": false,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "createdAt": "2026-07-02T00:00:00Z",
+  "completedAt": "2026-07-04T00:20:00Z",
+  "certifiedAt": "2026-07-04T00:25:00Z",
+  "lastUpdatedAt": "2026-07-04T00:25:00Z",
+  "releaseTrain": "mvp",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "requiresRevalidation": false,
+  "scopeLayout": "single-file",
+  "flagsIntroduced": [],
+  "specDependsOn": [
+    "specs/092-card-rewards-ui-elevation",
+    "specs/073-web-mobile-assistant-frontend",
+    "specs/070-web-username-password-login",
+    "specs/077-pwa-browser-test-harness"
+  ],
+  "relatesTo": [
+    "specs/066-legacy-keyword-surface-retirement",
+    "specs/093-admin-generated-registration-invites",
+    "specs/074-capture-as-fallback-policy"
+  ],
+  "crossRepoProvenance": null,
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-07-04T00:25:00Z",
+    "verdict": "certified",
+    "evidenceRef": "report.md#verification-phases-full-delivery-finalization",
+    "lockdownState": {
+      "round": 1,
+      "lastCleanRound": 1,
+      "status": "clean"
+    },
+    "completedScopes": [
+      "SCOPE-01",
+      "SCOPE-02",
+      "SCOPE-03",
+      "SCOPE-04",
+      "SCOPE-05"
+    ],
+    "certifiedCompletedPhases": [
+      "implement", "test", "regression", "simplify", "gaps", "harden",
+      "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"
+    ],
+    "scopeProgress": [
+      { "scope": 1, "name": "Shared app-shell navigation (single source)", "status": "done", "dependsOn": [], "scopeDir": null },
+      { "scope": 2, "name": "Assistant front door + intent-first landing", "status": "done", "dependsOn": [1], "scopeDir": null },
+      { "scope": 3, "name": "One PWA auth model + strengthened capture ACK", "status": "done", "dependsOn": [1], "scopeDir": null },
+      { "scope": 4, "name": "Product-level admin invites", "status": "done", "dependsOn": [1], "scopeDir": null },
+      { "scope": 5, "name": "Consolidated verification", "status": "done", "dependsOn": [1, 2, 3, 4], "scopeDir": null }
+    ],
+    "knownEnvironmentalFailures": [
+      {
+        "id": "F-100-ENV-01",
+        "lane": "e2e-ui (Playwright browser)",
+        "reason": "On this macOS-Docker host the smackerel-test-e2e-ui stack bring-up stalls on the 3 GB ollama/ollama image pull (docker compose up -d --wait) and never reaches a browser assertion. This is a stack-bring-up environmental constraint, NOT a browser-green failure, and is not claimed as one.",
+        "acceptedEquivalent": "internal/web + internal/api + web/pwa/tests Go render/handler suites cover the browser-level assertions for SCN-100-01/02/03/06/08 (all green).",
+        "precedent": ["specs/057 F-057-V-001 ACCEPTED-EQUIVALENT", "specs/082 certification.knownEnvironmentalFailures"],
+        "routedFinding": "F-100-OPT-01 (e2e-ui ollama-weight optimization) routed to bubbles.devops"
+      }
+    ]
+  },
+  "executionHistory": [],
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "full-delivery",
+      "statusCeiling": "done",
+      "source": "user-request"
+    },
+    "improvementPrelude": {
+      "enabled": true,
+      "mode": "analyze-design-plan",
+      "source": "user-request"
+    },
+    "tdd": {
+      "enabled": false,
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "enabled": false,
+      "perScope": false,
+      "perDoD": false,
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "enabled": true,
+      "artifactFreezeOnDone": true,
+      "source": "repo-default"
+    },
+    "regression": {
+      "enabled": true,
+      "persistentE2E": true,
+      "source": "repo-default"
+    },
+    "validation": {
+      "enabled": true,
+      "evidenceMinLines": 10,
+      "source": "repo-default"
+    },
+    "grill": {
+      "enabled": true,
+      "adversarialRegression": true,
+      "tautologicalGuard": true,
+      "source": "repo-default"
+    },
+    "captureAsFallback": "inviolable"
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "completedScopes": [
+    "SCOPE-01",
+    "SCOPE-02",
+    "SCOPE-03",
+    "SCOPE-04",
+    "SCOPE-05"
+  ],
+  "completedPhases": [
+    "analyze",
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "gaps",
+    "harden",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "chaos",
+    "docs",
+    "spec-review"
+  ],
+  "execution": {
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "done",
+    "currentScope": null,
+    "executionModel": "parent-expanded-child-mode",
+    "runStartedAt": "2026-07-02T00:00:00Z",
+    "completedPhaseClaims": [
+      "analyze", "design", "plan", "implement", "test", "regression",
+      "simplify", "gaps", "harden", "stabilize", "security", "validate",
+      "audit", "chaos", "docs", "spec-review"
+    ],
+    "pendingTransitionRequests": [],
+    "phaseStubs": {},
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionEvidenceRef": "spec.md",
+        "expansionReason": "Parent-expanded full-delivery run (nested runSubagent unavailable); the analyst phase authored the BDD spec.md and, this finalization, the Domain Capability Model + Requirement-Mechanism Justifications (G097 CSRF honest disclosure).",
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "at": "2026-07-02T00:30:00Z",
+        "note": "spec.md grounded against real source; 9 findings + 10 SCN-100 scenarios. This finalization added the CSRF Requirement-Mechanism Justification (mechanism = pre-existing SameSite=Lax cookie) to clear G097."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionEvidenceRef": "design.md",
+        "expansionReason": "Parent-expanded full-delivery run (nested runSubagent unavailable); the design phase authored the convergence architecture and, this finalization, the Capability Foundation / Concrete Implementations / Variation Axes sections (G094).",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-07-02T01:15:00Z",
+        "note": "One canonical IA (foundation) rendered by three concrete renderers (KB templates, card templates, appnav.js) varying along runtime/injection/active-state/asset-delivery axes."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionEvidenceRef": "scopes.md",
+        "expansionReason": "Parent-expanded full-delivery run (nested runSubagent unavailable); the plan phase authored the 5-scope DAG and, this finalization, the regression-E2E rows (Check 8A), the Consumer Impact Sweep (Check 8B), and the foundation:true / Depends-On-foundation ordering tags.",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-07-02T02:00:00Z",
+        "note": "5 scopes: 01 foundation (shared nav) -> {02 assistant front door, 03 PWA auth, 04 invites relocation} -> 05 consolidated verification. Regression-E2E + Consumer-Impact-Sweep planning rows added this finalization to close Check 8A/8B."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionEvidenceRef": "report.md",
+        "expansionReason": "Parent-expanded full-delivery run (nested runSubagent unavailable); the implement phase delivered all 5 scopes in code and, this finalization, performed the SCOPE-04 Consumer Impact Sweep remediation (removed 11 stale /cards/admin/invites references).",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "at": "2026-07-03T22:00:00Z",
+        "note": "5 scopes implemented; 9 findings closed with file:line. This finalization swept 3 doc comments (invites.go) + 7 request labels + 1 error string (invites_test.go) to /admin/invites; kept 2 intentional refs (cardrewards.go comment + SCN-100-07 adversarial old-path assertion)."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionEvidenceRef": "report.md",
+        "expansionReason": "Parent-expanded full-delivery FINALIZATION (nested runSubagent unavailable, so bubbles.workflow ran every remaining phase owner inline in dependency order). Real executed evidence per phase is recorded in report.md -> Verification Phases.",
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "at": "2026-07-04T00:20:00Z",
+        "note": "test: full test unit exit 0 (Go finished OK; Python 517 passed; 9 shell locks incl. spec_077_bootstrap_pwa_tooling_test). regression: full go test ./... green incl. fresh internal/web after the sweep. security: SR-04 grep-clean; safeHref preserved; OWNER_KEY = non-secret spec-038 UUID. validate: artifact-lint PASSED; traceability-guard advisory/non-wired (093 also exit 1). audit: 9 findings closed 1:1. chaos: TestAppShellNav_NoInlineHandlers + sanitize_next hostile matrix + SCN-100-07 old-path 404. e2e-ui browser lane ENV-CONSTRAINED (knownEnvironmentalFailures F-100-ENV-01), ACCEPTED-EQUIVALENT by the Go suites."
+      }
+    ]
+  },
+  "findings": [
+    {"id": "SR-01", "severity": "high", "status": "resolved", "scope": "SCOPE-01/02"},
+    {"id": "SR-03", "severity": "high", "status": "resolved", "scope": "SCOPE-01"},
+    {"id": "SR-04", "severity": "high", "status": "resolved", "scope": "SCOPE-03"},
+    {"id": "SR-05", "severity": "medium", "status": "resolved", "scope": "SCOPE-02"},
+    {"id": "SR-06", "severity": "medium", "status": "resolved", "scope": "SCOPE-04"},
+    {"id": "SR-07", "severity": "medium", "status": "resolved", "scope": "SCOPE-01"},
+    {"id": "SR-08", "severity": "medium", "status": "resolved", "scope": "SCOPE-03"},
+    {"id": "SR-11", "severity": "low", "status": "resolved", "scope": "SCOPE-02"},
+    {"id": "SR-13", "severity": "low", "status": "resolved", "scope": "SCOPE-01"}
+  ]
+}

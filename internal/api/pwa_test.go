@@ -188,8 +188,13 @@ func TestPWAShareHandler_RendersStructuralElements(t *testing.T) {
 	if !strings.Contains(body, `id="queued"`) {
 		t.Error("template must contain offline queue indicator element")
 	}
-	if !strings.Contains(body, "Saved!") {
+	if !strings.Contains(body, "Saved") {
 		t.Error("template must contain success message text")
+	}
+	// Spec 100 SR-08 — the strengthened durable-capture ACK states the saved
+	// item is durable and searchable (Product Principle P8).
+	if !strings.Contains(body, "searchable") {
+		t.Error("template must contain the strengthened durable-capture ACK (spec 100 SR-08)")
 	}
 	if !strings.Contains(body, "Already captured") {
 		t.Error("template must contain duplicate message text")

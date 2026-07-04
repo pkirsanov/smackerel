@@ -1,0 +1,105 @@
+{
+  "specId": "100-unified-journey-ui-transformation",
+  "generatedAt": "2026-07-02T00:00:00Z",
+  "changeTypeNote": "changeType=new for every scenario: this feature is additive UI/IA convergence — a new shared app-shell nav partial, a new /assistant alias route, a new PWA nav injector, one PWA auth model (retiring a pasted-token landing), a strengthened capture ACK, and a relocation of the invites admin route. No auth trust model change, no SST config change.",
+  "scenarios": [
+    {
+      "id": "SCN-100-01",
+      "title": "Assistant is discoverable from the knowledge surface",
+      "changeType": "new",
+      "priority": "high",
+      "tests": [
+        {"file": "internal/web/appshell_test.go", "function": "TestAppShellNav_Present"},
+        {"file": "web/pwa/tests/unified_journey.spec.ts", "function": "assistant link present on server root nav"}
+      ]
+    },
+    {
+      "id": "SCN-100-02",
+      "title": "Assistant is discoverable from the card-rewards surface",
+      "changeType": "new",
+      "priority": "high",
+      "tests": [
+        {"file": "internal/web/appshell_test.go", "function": "TestAppShellNav_Present"},
+        {"file": "web/pwa/tests/unified_journey.spec.ts", "function": "assistant link present on /cards"}
+      ]
+    },
+    {
+      "id": "SCN-100-03",
+      "title": "Assistant is the default post-login landing",
+      "changeType": "new",
+      "priority": "high",
+      "tests": [
+        {"file": "internal/api/web_login_page_test.go", "function": "TestLoginPage_DefaultLandingIsAssistant"},
+        {"file": "web/pwa/tests/unified_journey.spec.ts", "function": "login with empty next lands on assistant"}
+      ]
+    },
+    {
+      "id": "SCN-100-04",
+      "title": "Explicit next is still honoured; hostile next still sanitises to /",
+      "changeType": "new",
+      "priority": "high",
+      "tests": [
+        {"file": "internal/api/web_login_page_test.go", "function": "TestLoginPage_DefaultLandingIsAssistant"},
+        {"file": "internal/api/sanitize_next_test.go", "function": "TestSanitizeNext"}
+      ]
+    },
+    {
+      "id": "SCN-100-05",
+      "title": "The whole PWA uses the cookie, not a pasted token",
+      "changeType": "new",
+      "priority": "high",
+      "tests": [
+        {"file": "web/pwa/tests/assistant_storage_guard_test.go", "function": "TestAssistantStorageGuard"},
+        {"file": "web/pwa/tests/unified_journey.spec.ts", "function": "no localStorage token key in PWA scripts"}
+      ]
+    },
+    {
+      "id": "SCN-100-06",
+      "title": "Strengthened durable-capture acknowledgement",
+      "changeType": "new",
+      "priority": "medium",
+      "tests": [
+        {"file": "web/pwa/tests/unified_journey.spec.ts", "function": "share ACK names item and offers next action"}
+      ]
+    },
+    {
+      "id": "SCN-100-07",
+      "title": "Registration-invite admin is product-level",
+      "changeType": "new",
+      "priority": "medium",
+      "tests": [
+        {"file": "internal/web/invites_test.go", "function": "TestAdminInvitesPage"},
+        {"file": "web/pwa/tests/cardrewards_invites.spec.ts", "function": "admin invites at /admin/invites"}
+      ]
+    },
+    {
+      "id": "SCN-100-08",
+      "title": "PWA feature pages are no longer islands",
+      "changeType": "new",
+      "priority": "medium",
+      "tests": [
+        {"file": "web/pwa/tests/unified_journey.spec.ts", "function": "shared PWA nav + manifest shortcuts"}
+      ]
+    },
+    {
+      "id": "SCN-100-09",
+      "title": "Adversarial: no CSP regression, no inline handlers",
+      "changeType": "new",
+      "priority": "high",
+      "tests": [
+        {"file": "internal/web/appshell_test.go", "function": "TestAppShellNav_NoInlineHandlers"},
+        {"file": "web/pwa/tests/unified_journey.spec.ts", "function": "CSP guard records zero violations"}
+      ]
+    },
+    {
+      "id": "SCN-100-10",
+      "title": "Adversarial: existing suites stay green",
+      "changeType": "new",
+      "priority": "high",
+      "tests": [
+        {"file": "web/pwa/tests/cardrewards_chrome.spec.ts", "function": "existing card chrome unchanged"},
+        {"file": "web/pwa/tests/auth_login.spec.ts", "function": "existing login flow unchanged"}
+      ]
+    }
+  ]
+}
