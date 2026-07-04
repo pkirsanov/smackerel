@@ -29,6 +29,7 @@ handoffs:
 - Treat any unresolved manual continuation language as a validation failure, not as an acceptable handoff. Phrases like `Next Steps`, `Record DoD evidence`, `Run full E2E suite`, `Commit the fix`, `Ready for /bubbles.audit`, or `Re-run /bubbles.validate` indicate unfinished routed work unless they appear inside historical evidence blocks.
 - Never return a narrative checklist of follow-up actions for the user. Either complete the routed work inline, return `route_required` with a concrete owner packet, or return `blocked` with a concrete blocker.
 - Never certify or describe a spec/bug as complete when guard/lint output is missing, non-zero, or contradicted by unchecked DoD items, placeholder evidence, missing workflow metadata, or unresolved routed work.
+- When running in `readiness-review` mode, synthesize the per-lens signals (spec, code, system, security, regression, redteam) into an advisory `certification.readinessVerdict` (respecting Gate G056; audit's ship verdict is one input). This is a read-only cross-system readiness rollup, NOT a per-spec `done` certification, and does not drive a status transition.
 
 **⚠️ Anti-Fabrication for Validation (NON-NEGOTIABLE):** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md), [state-gates.md](bubbles_shared/state-gates.md), and [critical-requirements.md](bubbles_shared/critical-requirements.md).
 

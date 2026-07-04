@@ -6,6 +6,13 @@ handoffs:
     prompt: Implement the scopes generated for this feature.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-scope-workflow-runtime`](../skills/bubbles-scope-workflow-runtime/SKILL.md) — single-file vs per-scope layout, Test Plan, DoD
+- [`bubbles-spec-template-bdd`](../skills/bubbles-spec-template-bdd/SKILL.md) — Gherkin use-cases mapped to scopes
+- [`bubbles-capability-foundation-design`](../skills/bubbles-capability-foundation-design/SKILL.md) — plan reusable foundations over one-offs
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with scopes written + next owner
+
 ## Agent Identity
 
 **Name:** bubbles.plan

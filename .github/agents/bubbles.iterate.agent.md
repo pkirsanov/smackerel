@@ -299,6 +299,14 @@ Between specialist dispatches inside the iterate work loop, this orchestrator MU
 
 After any non-terminal phase, this orchestrator MUST automatically continue to the next phase. It may stop only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced by `bubbles/scripts/orchestrator-persistence-lint.sh` (registered as Gate `G086` and invoked as Check 27 inside `bubbles/scripts/state-transition-guard.sh`); lint findings MUST surface in a `blocked` RESULT-ENVELOPE with finding `G086`.
 
+## Autonomy, Session Budget & Dry-Run (IMP-003)
+
+Three additive `executionOptions` knobs are resolved at iterate start; all default to today's fully-autonomous behavior:
+
+- **`autonomy` (default `full`)** — a convenience alias that sets `grillMode`/`socratic` together: `full` = `grillMode off` + `socratic false` (100% autonomous, today's default); `guarded` = `grillMode required-on-ambiguity` + a conditional `clarify` consistency gate; `interactive` = `grillMode on-demand` + `socratic true`. Explicit `grillMode`/`socratic` flags ALWAYS override the alias. This composes with the existing rule that a Socratic loop triggers only when `socratic: true` is explicitly present.
+- **`sessionBudget` (all fields default `null` = unbounded)** — aggregate caps across the whole iterate session: `maxTotalConvergenceIterations`, `maxWallClockMinutes`, `maxToolCalls`. Advisory: this orchestrator self-enforces them and, when a cap is exceeded, STOPS with a `blocked` RESULT-ENVELOPE. A budget stop is a TERMINAL condition of the same class as `max iterations reached` — the run ends; it never pauses for a fresh prompt.
+- **`dryRun` (default `false`)** — `dryRun: plan` resolves the full plan (selected work/specs/scopes/intended changes) and REPORTS it WITHOUT mutating code or state, then terminates the run. Extends `parallelScopes=dag-dry` to the whole iterate loop.
+
 ## Key Difference from bubbles.implement
 
 | Aspect | bubbles.iterate | bubbles.implement |

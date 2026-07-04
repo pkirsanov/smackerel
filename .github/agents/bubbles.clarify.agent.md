@@ -12,6 +12,12 @@ handoffs:
     prompt: Apply clarified scope, scenario, and DoD changes to scopes.md.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — classify which artifact changes and route to its owner
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — emit route_required with the owning agent
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — surface real ambiguities, not invented resolutions
+
 ## Agent Identity
 
 **Name:** bubbles.clarify  

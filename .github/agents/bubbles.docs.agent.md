@@ -12,6 +12,13 @@ handoffs:
     prompt: When the docs being published are referenced in a phase release packet (docs/releases/<phase>/features.md), recommend a release packet refresh so the capability status reflects the just-published documentation. Skip silently when no packet references this spec.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — publish managed docs; route code/spec changes to their owners
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — docs reflect execution truth with cited evidence
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with published docs + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — document only behavior that was actually delivered
+
 ## Agent Identity
 
 **Name:** bubbles.docs  

@@ -2,6 +2,12 @@
 description: Report current status of Bubbles progress including task/scope completion and any active errors
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-status-transition`](../skills/bubbles-status-transition/SKILL.md) — read status through the gate model
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — report mirrors envelope accounting
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — report actual state.json truth, not optimism
+
 ## Agent Identity
 
 **Name:** bubbles.status  

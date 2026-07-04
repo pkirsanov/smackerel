@@ -97,6 +97,8 @@ bubbles/scripts/interop-apply.sh
 bubbles/scripts/interop-import-selftest.sh
 bubbles/scripts/interop-intake.sh
 bubbles/scripts/interop-registry.sh
+bubbles/scripts/inventory-parity-check-selftest.sh
+bubbles/scripts/inventory-parity-check.sh
 bubbles/scripts/is-terminal-for-mode.sh
 bubbles/scripts/mcp-grant-reconcile.sh
 bubbles/scripts/mcp-grant-selftest.sh
@@ -187,6 +189,8 @@ bubbles/scripts/scan-lib-selftest.sh
 bubbles/scripts/scan-lib.sh
 bubbles/scripts/scenario-compile-lint-selftest.sh
 bubbles/scripts/scenario-compile-lint.sh
+bubbles/scripts/session-cap-guard-selftest.sh
+bubbles/scripts/session-cap-guard.sh
 bubbles/scripts/shellcheck-lint-selftest.sh
 bubbles/scripts/shellcheck-lint.sh
 bubbles/scripts/skill-evolution-selftest.sh
@@ -354,6 +358,7 @@ docs/recipes/framework-dogfood.md
 docs/recipes/framework-health.md
 docs/recipes/framework-ops.md
 docs/recipes/grill-an-idea.md
+docs/recipes/guided-journey.md
 docs/recipes/idea-to-release.md
 docs/recipes/impact-aware-validation.md
 docs/recipes/incident-response.md
@@ -368,6 +373,7 @@ docs/recipes/plan-only.md
 docs/recipes/post-impl-hardening.md
 docs/recipes/propagate-changes.md
 docs/recipes/quality-sweep.md
+docs/recipes/readiness-review.md
 docs/recipes/reconcile-redesign-existing-feature.md
 docs/recipes/regression-check.md
 docs/recipes/release-planning.md
@@ -429,6 +435,7 @@ agents/bubbles.handoff.agent.md
 agents/bubbles.harden.agent.md
 agents/bubbles.implement.agent.md
 agents/bubbles.iterate.agent.md
+agents/bubbles.journey.agent.md
 agents/bubbles.plan.agent.md
 agents/bubbles.propagate.agent.md
 agents/bubbles.recap.agent.md
@@ -515,7 +522,9 @@ prompts/bubbles.handoff.prompt.md
 prompts/bubbles.harden.prompt.md
 prompts/bubbles.implement.prompt.md
 prompts/bubbles.iterate.prompt.md
+prompts/bubbles.journey.prompt.md
 prompts/bubbles.plan.prompt.md
+prompts/bubbles.propagate.prompt.md
 prompts/bubbles.recap.prompt.md
 prompts/bubbles.redteam.prompt.md
 prompts/bubbles.regression.prompt.md
@@ -531,6 +540,8 @@ prompts/bubbles.status.prompt.md
 prompts/bubbles.super.prompt.md
 prompts/bubbles.system-review.prompt.md
 prompts/bubbles.test.prompt.md
+prompts/bubbles.train.prompt.md
+prompts/bubbles.upkeep.prompt.md
 prompts/bubbles.ux.prompt.md
 prompts/bubbles.validate.prompt.md
 prompts/bubbles.workflow.prompt.md
@@ -556,6 +567,7 @@ skills/bubbles-cinematic-design/references/presets.md
 skills/bubbles-config-bundle-per-train/SKILL.md
 skills/bubbles-config-sst/SKILL.md
 skills/bubbles-cross-platform-shell/SKILL.md
+skills/bubbles-datastore-isolation/SKILL.md
 skills/bubbles-deployment-target-adapter/SKILL.md
 skills/bubbles-docker-lifecycle-governance/SKILL.md
 skills/bubbles-docker-port-standards/SKILL.md
@@ -565,6 +577,7 @@ skills/bubbles-evidence-capture/SKILL.md
 skills/bubbles-feature-template/SKILL.md
 skills/bubbles-fix-cycle-protocol/SKILL.md
 skills/bubbles-flag-lifecycle/SKILL.md
+skills/bubbles-isolated-ml-sidecar/SKILL.md
 skills/bubbles-long-running-commands/SKILL.md
 skills/bubbles-observability-adapter/SKILL.md
 skills/bubbles-product-principle-discovery/SKILL.md

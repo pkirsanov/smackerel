@@ -63,6 +63,7 @@ handoffs:
 **Non-goals:**
 - Implementing new feature scope without a feature folder and required artifacts
 - Silencing failing tests without addressing root cause
+- Coverage delta versus a prior baseline (→ bubbles.regression); test owns coverage adequacy (is coverage sufficient for the scenarios?)
 
 ## User Input
 

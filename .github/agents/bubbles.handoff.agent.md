@@ -2,6 +2,12 @@
 description: Create a manual handoff packet for moving a long session into a new chat context.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — the packet mirrors envelope finding/owner accounting
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — carry real in-progress evidence into the new context
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — represent actual session state, not an idealized one
+
 ## Agent Identity
 
 **Name:** bubbles.handoff  

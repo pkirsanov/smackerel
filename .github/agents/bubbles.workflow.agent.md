@@ -210,7 +210,7 @@ $ADDITIONAL_CONTEXT
 ```
 
 Supported options:
-- `mode: adapter-readiness-to-packet|audit-only|autonomous-goal|autonomous-sprint|bugfix-fastlane|chaos-hardening|chaos-to-doc|dark-launch-shipped|delivery-lockdown|devops-to-doc|docs-only|framework-health|full-delivery|gaps-to-doc|harden-gaps-to-doc|harden-to-doc|idea-to-release-completion|improve-existing|incident-fastlane|iterate|migration-shipped-pending-cutover|product-to-delivery|product-to-planning|production-adversarial-probe|propagate-audit|propagate-backport|propagate-forward|reconcile-to-doc|redteam-to-doc|regression-to-doc|release-planning-to-doc|release-train-cut|release-train-promote|release-train-retire|release-train-rollback|release-train-status-all|resume-only|retro-quality-sweep|retro-to-harden|retro-to-review|retro-to-simplify|security-to-doc|simplify-to-doc|spec-review-to-doc|spec-scope-hardening|stabilize-to-doc|stochastic-quality-sweep|test-to-doc|upkeep-backup-verify|upkeep-bcdr-drill|upkeep-compliance-sweep|upkeep-flag-cleanup|upkeep-patch-cycle|upkeep-restore-drill|upkeep-secret-rotation|validate-only|validate-to-doc|value-first-e2e-batch`
+- `mode: adapter-readiness-to-packet|audit-only|autonomous-goal|autonomous-sprint|bugfix-fastlane|chaos-hardening|chaos-to-doc|dark-launch-shipped|delivery-lockdown|devops-to-doc|docs-only|framework-health|full-delivery|gaps-to-doc|harden-gaps-to-doc|harden-to-doc|idea-to-release-completion|improve-existing|incident-fastlane|iterate|journey-refinement|migration-shipped-pending-cutover|product-to-delivery|product-to-planning|production-adversarial-probe|propagate-audit|propagate-backport|propagate-forward|readiness-review|reconcile-to-doc|redteam-to-doc|regression-to-doc|release-planning-to-doc|release-train-cut|release-train-promote|release-train-retire|release-train-rollback|release-train-status-all|resume-only|retro-quality-sweep|retro-to-harden|retro-to-review|retro-to-simplify|security-to-doc|simplify-to-doc|spec-review-to-doc|spec-scope-hardening|stabilize-to-doc|stochastic-quality-sweep|test-to-doc|upkeep-backup-verify|upkeep-bcdr-drill|upkeep-compliance-sweep|upkeep-flag-cleanup|upkeep-patch-cycle|upkeep-restore-drill|upkeep-secret-rotation|validate-only|validate-to-doc|value-first-e2e-batch`
   - This enumeration is the canonical mode list and is mechanically validated by `bubbles/scripts/workflow-registry-consistency.sh` against the `modes:` section of `bubbles/workflows/modes.yaml` (downstream: `.github/bubbles/workflows/modes.yaml`). When a new mode is added to the registry the consistency check fails until this line is regenerated. Read the registry for each mode's `description`, `phaseOrder`, `requiredGates`, and `statusCeiling`.
 - `continue_on_blocked: true|false` (default: true)
 - `final_global_pass: true|false` (default: true)
@@ -636,6 +636,14 @@ Follow [workflow-phase-engine.md](bubbles_shared/workflow-phase-engine.md) for t
 ## Stop Conditions (TRULY TERMINAL ONLY)
 
 Follow [workflow-phase-engine.md](bubbles_shared/workflow-phase-engine.md) for the full stop-condition contract.
+
+## Autonomy, Session Budget & Dry-Run (IMP-003)
+
+Three additive `executionOptions` knobs are resolved at Phase 0; all default to today's fully-autonomous behavior:
+
+- **`autonomy` (default `full`)** — a convenience alias that sets `grillMode`/`socratic` together: `full` = `grillMode off` + `socratic false` (100% autonomous, today's default); `guarded` = `grillMode required-on-ambiguity` + a conditional `clarify` consistency gate; `interactive` = `grillMode on-demand` + `socratic true`. Explicit `grillMode`/`socratic` flags ALWAYS override the alias.
+- **`sessionBudget` (all fields default `null` = unbounded)** — aggregate caps across the whole session (`maxTotalConvergenceIterations`, `maxWallClockMinutes`, `maxToolCalls`). Advisory: this workflow agent self-enforces them and, when a cap is exceeded, STOPS with a `blocked` RESULT-ENVELOPE. A budget stop is a TERMINAL stop condition of the same class as `max iterations reached` — it joins `autoEscalation.terminalStopConditions`; the run ends without pausing for a fresh prompt.
+- **`dryRun` (default `false`)** — `dryRun: plan` resolves the full plan (target specs/scopes/intended changes) and REPORTS it WITHOUT mutating code or state, then terminates the run. Extends `parallelScopes=dag-dry` to the whole workflow loop.
 
 ---
 

@@ -33,6 +33,13 @@ handoffs:
     prompt: The request is broader than code-only review. Run a holistic system review instead.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — route fixes to the owning agent; leave foreign artifacts to their owner
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — record findings with real file:line + command evidence
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — finding accounting + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — every finding backed by actual code, not assertion
+
 ## Agent Identity
 
 **Name:** bubbles.code-review

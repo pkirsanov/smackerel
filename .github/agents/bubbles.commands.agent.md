@@ -6,6 +6,13 @@ handoffs:
     prompt: Generate sequential scopes for the target feature.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-repo-readiness`](../skills/bubbles-repo-readiness/SKILL.md) — verify documented commands map to real repo command surfaces
+- [`bubbles-config-sst`](../skills/bubbles-config-sst/SKILL.md) — command/config values trace to a single source of truth
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with what changed + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — registry entries reflect real, verified commands
+
 ## Agent Identity
 
 **Name:** bubbles.commands  

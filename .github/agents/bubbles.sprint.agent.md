@@ -25,6 +25,13 @@ handoffs:
     prompt: Generate sprint summary at wrap-up.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-workflow-mode-resolution`](../skills/bubbles-workflow-mode-resolution/SKILL.md) — resolve modes per queued goal
+- [`bubbles-long-running-commands`](../skills/bubbles-long-running-commands/SKILL.md) — background long runs; conserve session budget
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close each goal with finding accounting + next owner
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — per-goal completion rests on real evidence
+
 ## TOOL ALLOWLIST (ENFORCED)
 
 ```yaml
@@ -117,6 +124,14 @@ Every goal that this sprint dispatches also inherits the in-loop compaction cont
 ## Orchestrator Persistence Default (Gate G086 — MANDATORY)
 
 After any non-terminal phase, this orchestrator MUST automatically continue to the next phase. It may stop only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced by `bubbles/scripts/orchestrator-persistence-lint.sh` (registered as Gate `G086` and invoked as Check 27 inside `bubbles/scripts/state-transition-guard.sh`); lint findings MUST surface in a `blocked` RESULT-ENVELOPE with finding `G086` to the sprint ledger.
+
+## Autonomy, Session Budget & Dry-Run (IMP-003)
+
+Three additive `executionOptions` knobs are resolved at sprint start; all default to today's fully-autonomous behavior:
+
+- **`autonomy` (default `full`)** — a convenience alias that sets `grillMode`/`socratic` together: `full` = `grillMode off` + `socratic false` (100% autonomous, today's default); `guarded` = `grillMode required-on-ambiguity` + a conditional `clarify` consistency gate; `interactive` = `grillMode on-demand` + `socratic true`. Explicit `grillMode`/`socratic` flags ALWAYS override the alias.
+- **`sessionBudget` (all fields default `null` = unbounded)** — aggregate caps across the ENTIRE sprint session (spanning every dispatched goal): `maxTotalConvergenceIterations`, `maxWallClockMinutes`, `maxToolCalls`. Advisory: this sprint controller self-enforces them and, when a cap is exceeded, STOPS with a `blocked` RESULT-ENVELOPE to the sprint ledger. A budget stop is a TERMINAL condition of the same class as `max iterations reached` — the sprint ends; it never pauses for a fresh prompt. (This makes the previously advisory sprint time budget mechanically self-enforced under `maxWallClockMinutes`.)
+- **`dryRun` (default `false`)** — `dryRun: plan` resolves the full sprint plan (queued goals/specs/scopes/intended changes) and REPORTS it WITHOUT mutating code or state, then terminates the sprint. Extends `parallelScopes=dag-dry` to the whole multi-goal loop.
 
 ## Planning Workflow Chain (Gate G091 — MANDATORY)
 

@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **40 Agents · 108 Gates · 58 Workflow Modes · 27 Phases**
+> **41 Agents · 109 Gates · 60 Workflow Modes · 30 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -59,6 +59,7 @@
 | <img src="../icons/green-bastard-mask.svg" width="28"> | `bubbles.redteam` | Green Bastard (Masked) | Post-result adversary — attacks a FINISHED result to falsify "done" with evidence-first counterexamples; off by default; never certifies. | *"Nothing's bulletproof, boys. Let me prove it."* |
 | <img src="../icons/orangie-fishbowl.svg" width="28"> | `bubbles.system-review` | Orangie | Holistic product/runtime/trust reviewer. Finds what needs attention, then routes it. | *"Orangie sees everything. He's not dead, he's just... reviewing."* |
 | <img src="../icons/gary-laser-eyes.svg" width="28"> | `bubbles.spec-review` | Gary Laser Eyes | Audits artifact trust and freshness before maintenance work relies on stale truth. | *"Gary can see right through it, boys."* |
+| <img src="../icons/cathy-trail.svg" width="28"> | `bubbles.journey` | Cathy Curtis | Walks you through the live product toward a goal, captures friction, and routes refinements — cooperative-guided, with the user. | *"Come on, I'll walk you through it — and tell you straight what's broken."* |
 
 ### Ownership Quick Reference
 
@@ -334,12 +335,19 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `release train portfolio` | The set of all declared trains under `config/release-trains.yaml`. Surfaced by `release-train-status-all` (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness. |
 | `adversarial verification` | Green Bastard (`bubbles.redteam`) attacks a FINISHED result to falsify the "done" claim — evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, and bounded chaos-monkey probing of live systems. It emits findings and NEVER certifies (completion stays with `bubbles.validate`). OFF BY DEFAULT. The missing post-result adversary alongside `bubbles.grill`, which pressure-tests ideas pre-build. |
 | `adversarial posture` | The effective on/off/passes/teeth resolved by `adversarial-resolve.sh` via one precedence chain: per-run directive (`adversarial: on passes: 3`) -> `BUBBLES_ADVERSARIAL*` env -> `.github/bubbles-project.yaml` `adversarial:` block -> framework default `off`. Seamless opt-in; zero behavior change on upgrade. |
+| `guided journey` | `bubbles.journey` (Cathy Curtis) walks you through the LIVE product toward a concrete goal, drives the real UI/API, captures friction at each step, and routes refinements into planning. Cooperative-guided — the third stance alongside chaos (stochastic) and redteam (adversarial). |
+| `friction verdict` | The per-step outcome bubbles.journey records while walking the live product: works, unclear, inconvenient, missing, or broken. Each is backed by captured UI/API/telemetry evidence. |
+| `experiential friction` | A proactive priorityScoring dimension sourced from journey findings — scores user-discovered usability friction so refinement work can out-rank pure-correctness work. |
+| `readiness verdict` | Advisory validate-owned `certification.readinessVerdict` from the `readiness-review` mode: one ship / ship-with-notes / not-ready synthesis across spec, code, system, security, regression, and redteam lenses. Advisory-to-release; never a `done` transition (G056 unchanged). |
+| `autonomy dial` | The `autonomy` execution tag with three levels — full, guarded, interactive. full = 100% autonomous (default); guarded = grill on ambiguity plus a conditional clarify gate; interactive = socratic plus on-demand grill. A convenience alias that sets grillMode, socratic, and clarify together; explicit flags override. |
+| `session budget` | Advisory aggregate caps for a goal/sprint session: sessionBudget.maxTotalConvergenceIterations, maxWallClockMinutes, and maxToolCalls. null = unbounded (today). Orchestrators self-enforce and stop with a blocked envelope when a cap is hit. |
+| `dry-run plan` | `dryRun: plan` resolves the full convergence plan and reports intended changes WITHOUT mutating code or state — a propose-only preview that extends parallelScopes=dag-dry to the whole loop. |
 <!-- GENERATED:CHEATSHEET_VOCABULARY_END -->
 
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 108 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 109 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**

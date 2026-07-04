@@ -87,6 +87,10 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 - **Honesty over completion:** When evidence is ambiguous, prefer leaving a DoD item `[ ]` with an Uncertainty Declaration over marking `[x]` with uncertain evidence. A wrong answer is 3x worse than an honest gap. See `critical-requirements.md` → Honesty Incentive.
 - **Evidence provenance:** Every evidence block must include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). See `evidence-rules.md` → Evidence Provenance Taxonomy.
 
+## Run-Level Rollback (gitIsolation)
+
+When `gitIsolation=true`, the whole run lives on an isolated branch/worktree, so a failed or abandoned run is cleanly rolled back by dropping that branch/worktree — no partial mutations survive on the working branch. When `gitIsolation=false` (the default), rollback granularity is per-scope instead: `autoCommit=scope|dod` commits land on the working branch and are undone individually. Choose `gitIsolation=true` when a run needs atomic whole-run undo.
+
 ## Discovered-Issue Disposition (NON-NEGOTIABLE — Gate G095)
 
 **Every issue an agent observes during work MUST have an explicit disposition. Saying "pre-existing", "unrelated", "out of scope", or "not my session" without filing is forbidden and counts as fabrication.**

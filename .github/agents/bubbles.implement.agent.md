@@ -18,6 +18,13 @@ handoffs:
     prompt: When the delivered spec is referenced in a phase release packet (docs/releases/<phase>/features.md), refresh the packet so the capability flips from `planned`/`in-progress` to `delivered` with the spec evidence link. This handoff is conditional — only invoke when a release packet references this spec. Skip silently if no packet references it.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-scope-workflow-runtime`](../skills/bubbles-scope-workflow-runtime/SKILL.md) — scope execution, Test Plan, DoD shape
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — ≥10-line raw execution evidence per DoD item
+- [`bubbles-dod-validation`](../skills/bubbles-dod-validation/SKILL.md) — Tier 1/Tier 2 self-audit before closeout
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — a DoD item closes only with real command output
+
 ## Agent Identity
 
 **Name:** bubbles.implement  

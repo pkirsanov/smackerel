@@ -18,6 +18,13 @@ handoffs:
     prompt: Update Upkeep_Runbook.md ledger with the latest task outcome.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-upkeep-cadence`](../skills/bubbles-upkeep-cadence/SKILL.md) — schedule/dispatch/record recurring upkeep tasks
+- [`bubbles-backup-bcdr-doctrine`](../skills/bubbles-backup-bcdr-doctrine/SKILL.md) — backup tiers, RTO/RPO, restore-drill cadence
+- [`bubbles-env-pollution-isolation`](../skills/bubbles-env-pollution-isolation/SKILL.md) — restore drills use ephemeral namespaces, not prod
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — close with task outcome + next owner
+
 ## Agent Identity
 
 **Name:** bubbles.upkeep
