@@ -1,6 +1,6 @@
 # Spec 092 — Card-Rewards Web UI Elevation (match-or-exceed CCManager)
 
-**Status:** in_progress
+**Status:** done
 **Workflow mode:** full-delivery · **Status ceiling:** done
 **Release train:** mvp
 **Depends on:** [083-card-rewards-companion](../083-card-rewards-companion/spec.md) (the `/cards` web surface this redesigns — its Scope 10/11 templates, routes, handlers, and view models are the substrate), [077-pwa-browser-test-harness](../077-pwa-browser-test-harness/spec.md) (the automated CSP-violation guard that binds the CSP-clean constraint)
