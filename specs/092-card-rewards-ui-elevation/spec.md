@@ -66,7 +66,7 @@ workspace at `CCManager/web/templates/`):
 **The gap is 100 % presentation.** smackerel already surfaces the same underlying
 data CCManager does (recommendations with best-card + reason + starred; rotating
 with confidence + citations + needs-verification; bonuses with spend-progress %
-+ deadline + met; offers with rate + activation + shared-limit; selections
+- deadline + met; offers with rate + activation + shared-limit; selections
 tiered; wallet with type + active + nickname + note; categories canonical +
 equivalents + starred + priority; admin run-history). It just renders that data
 as flat monochrome text instead of polished stat cards, progress bars,
@@ -141,6 +141,7 @@ suite (`web/pwa/tests/cardrewards_*.spec.ts`) — including its `attachCSPGuard`
 locator it uses is still present and no CSP violation is emitted.
 
 **Hard Constraints:**
+
 - **CSP-clean:** zero inline `<script>`, zero inline event handlers
   (`onclick` / `onsubmit` / …). All interactivity stays `<form>` PRG submits.
   The governing CSP (see Referenced Surfaces) permits inline `<style>` and
@@ -201,6 +202,7 @@ design phase finalizes):
 | **Alert / priority section** | A visually-distinct call-to-action block | info, warning, danger |
 
 **Binding policies every primitive must obey:**
+
 - Colors come **only** from design tokens (no inline hex literals in markup).
 - Every primitive renders correctly in **both** light and dark.
 - No primitive introduces JavaScript or an inline event handler.
@@ -362,7 +364,7 @@ Scenario: UC-9 CSP-clean — no inline script, no inline handler, no blocked res
   `data-card-id` + `data-active` + `data-card-name` + `data-card-type` +
   `data-card-status` + `data-card-note` + `data-action`; `data-candidate-id` +
   `data-candidate-name`; `data-offer-id` + `data-activated` + `data-offer-title`
-  + `data-offer-card` + `data-offer-status` + `data-shared-limit-group`;
+  - `data-offer-card` + `data-offer-status` + `data-shared-limit-group`;
   `data-selection-id` + `data-tier` + `data-selection-category` +
   `data-selection-card` + `data-selection-tier`; `data-bonus-id` + `data-met` +
   `data-bonus-description` + `data-bonus-card` + `data-bonus-progress` +
@@ -429,6 +431,7 @@ Scenario: UC-9 CSP-clean — no inline script, no inline handler, no blocked res
 ## Referenced Existing Surfaces (for later phases — DO NOT re-discover)
 
 **Templates to redesign (the entire scope boundary):**
+
 - [internal/web/cardrewards_templates.go](../../internal/web/cardrewards_templates.go)
   — `head` / `foot` / `cardrewards-nav` chrome + the minimal monochrome CSS +
   Scope-10 pages (`cardrewards-wallet.html`, `-wallet-add.html`,
@@ -441,6 +444,7 @@ Scenario: UC-9 CSP-clean — no inline script, no inline handler, no blocked res
   `-rotating.html`, `-report.html`, `-admin.html`).
 
 **Handler + view models (read-only for this redesign unless Open Decision (d) is taken):**
+
 - [internal/web/cardrewards.go](../../internal/web/cardrewards.go) — view models
   `walletCardRow`, `offerRow`, `selectionRow`, `bonusRow`, `recommendationRow`,
   `rotatingRow`; `DashboardPage` renders `Period` / `Recommendations` /
@@ -463,10 +467,11 @@ surface that includes `/cards`:
 https://unpkg.com/htmx.org@1.9.12/ 'sha256-C7I7zL0TtdR86YSsw1T7pxobSVoQGAOH9Ua4apor8TI=';
 img-src 'self' data:; connect-src 'self'`. Implications: inline `<style>` and
 `style=""` are allowed; `script-src` permits **only** `'self'` + the pinned htmx
-+ the one hashed inline theme script; there is **no `font-src`** (fonts inherit
+- the one hashed inline theme script; there is **no `font-src`** (fonts inherit
 `default-src 'self'`) and `img-src` allows `data:` but `font-src` does not.
 
 **Regression contract (the binding `data-*` + CSP-clean test surface):**
+
 - Playwright e2e-ui specs:
   `web/pwa/tests/cardrewards_dashboard.spec.ts`,
   `cardrewards_wallet.spec.ts`, `cardrewards_offers_selections.spec.ts`,
