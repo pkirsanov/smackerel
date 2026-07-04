@@ -1,15 +1,16 @@
 // drive-rules.js — Spec 038 Scope 5 Screen 7
 //
 // Loads the Save Rules list, recent save requests, and audit feed for the
-// drive write-back UI. All requests use the same Bearer token cookie/header
-// pattern as the rest of the PWA.
+// drive write-back UI. All requests use the same-origin HttpOnly auth_token
+// cookie (spec 100 SCOPE-03), sent automatically by the same-origin fetch.
 
 (function () {
   'use strict';
 
   function authHeader() {
-    var token = window.localStorage.getItem('smackerel-auth-token') || '';
-    return token ? { Authorization: 'Bearer ' + token } : {};
+    // Spec 100 SCOPE-03 — same-origin HttpOnly auth_token cookie; no bearer
+    // token in JS-visible storage.
+    return {};
   }
 
   function escapeHTML(s) {

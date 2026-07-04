@@ -24,5 +24,25 @@
       "text": "text",
       "url": "url"
     }
-  }
+  },
+  "shortcuts": [
+    {
+      "name": "Assistant",
+      "short_name": "Assistant",
+      "description": "Ask the assistant — the intelligent front door",
+      "url": "/assistant"
+    },
+    {
+      "name": "Capture",
+      "short_name": "Capture",
+      "description": "Capture anything to Smackerel",
+      "url": "/pwa/"
+    },
+    {
+      "name": "Search",
+      "short_name": "Search",
+      "description": "Search your knowledge",
+      "url": "/"
+    }
+  ]
 }

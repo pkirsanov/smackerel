@@ -44,7 +44,16 @@ func (d *Dependencies) HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 	// SCN-9: never honour `?token=` from the query string. We simply
 	// do not read it — the form is the only intake path.
-	next := sanitizeNext(r.URL.Query().Get("next"))
+	raw := r.URL.Query().Get("next")
+	next := sanitizeNext(raw)
+	// Spec 100 SCOPE-02 — when the browser lands on /login with no explicit
+	// destination, default the post-login landing to the assistant front door
+	// (SR-05). Explicit and hostile `next` values still flow through
+	// sanitizeNext unchanged, so the spec-057 sanitize matrix (hostile -> "/")
+	// is preserved byte-for-byte.
+	if raw == "" {
+		next = assistantLandingPath
+	}
 
 	data := loginPageData{
 		AuthEnabled: d.loginAuthEnabled(),
@@ -64,4 +73,19 @@ func (d *Dependencies) HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
 	}
+}
+
+// HandleAssistantFrontDoor serves GET /assistant — the memorable, public alias
+// for the assistant PWA page and the default post-login/registration landing
+// (spec 100 SCOPE-02). It 302-redirects to the served PWA assistant so the
+// assistant can be the coherent front door without duplicating its DOM. Auth
+// is the same-origin HttpOnly cookie the assistant already uses for
+// /api/assistant/turn; this alias itself is public (registered outside
+// bearerAuthMiddleware) so the immediate post-login redirect resolves cleanly.
+func (d *Dependencies) HandleAssistantFrontDoor(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	http.Redirect(w, r, "/pwa/assistant.html", http.StatusFound)
 }

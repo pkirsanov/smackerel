@@ -1,20 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#e94560">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self' https: http:; object-src 'none'; base-uri 'self'">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self' https: http:; object-src 'none'; base-uri 'self'">
   <title>Smackerel</title>
   <link rel="manifest" href="/pwa/manifest.json">
   <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/pwa/icon.svg">
   <link rel="stylesheet" href="/pwa/style.css">
 </head>
+
 <body>
+  <div id="app-shell-nav-mount"></div>
   <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
   <h1>Smackerel</h1>
   <p class="subtitle">Capture anything, find everything</p>
+
+  <div class="card" id="assistant-card">
+    <h2>Ask the assistant</h2>
+    <p style="color:var(--text-muted);margin-bottom:0.75rem">Describe what you need in plain words — the assistant is
+      the front door to everything you've captured.</p>
+    <a href="/assistant"
+      style="display:block;text-align:center;width:100%;background:var(--primary);color:#fff;border-radius:8px;padding:0.75rem 1.5rem;text-decoration:none">Open
+      the assistant</a>
+  </div>
 
   <div class="card">
     <h2>Share Target Ready</h2>
@@ -34,30 +47,30 @@
     ">Install Smackerel</button>
   </div>
 
-  <div class="card" id="settings-card">
-    <h2>Settings</h2>
-    <label class="field-label" for="pwa-server-url">Server URL</label>
-    <input type="url" id="pwa-server-url" placeholder="https://your-server.example.com" autocomplete="url">
-    <label class="field-label" for="pwa-auth-token">Auth Token</label>
-    <input type="password" id="pwa-auth-token" placeholder="Paste your auth token" autocomplete="off">
-    <div id="pwa-settings-status" class="hidden" style="margin-top:0.75rem"></div>
-    <button id="pwa-test-btn" class="btn btn-primary" style="margin-top:0.75rem;width:100%">Test Connection</button>
-    <button id="pwa-save-btn" class="btn btn-primary hidden" style="margin-top:0.5rem;width:100%">Save Settings</button>
+  <div class="card" id="session-card">
+    <h2>Your session</h2>
+    <p style="color:var(--text-muted)">Capture and share use your signed-in session — a secure cookie. There's no token
+      to paste.</p>
+    <a href="/login?next=/pwa/"
+      style="display:block;text-align:center;width:100%;margin-top:0.75rem;background:var(--primary);color:#fff;border-radius:8px;padding:0.75rem 1.5rem;text-decoration:none">Sign
+      in</a>
   </div>
 
   <div class="card">
     <h2>How it works</h2>
     <ol style="padding-left: 1.25rem; line-height: 1.8; color: var(--text-muted);">
-      <li>Configure your server URL and auth token above</li>
+      <li>Sign in once — your session is a secure cookie (no token to paste)</li>
       <li>Install this PWA to your home screen</li>
       <li>Find something interesting in any app</li>
       <li>Tap Share → Smackerel</li>
-      <li>Done — it's captured and searchable</li>
+      <li>Done — it's captured, durable, and searchable</li>
     </ol>
   </div>
 
   <p class="footer">Smackerel PWA</p>
 
+  <script src="/pwa/lib/appnav.js"></script>
   <script src="/pwa/app.js"></script>
 </body>
+
 </html>

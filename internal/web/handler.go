@@ -115,6 +115,11 @@ func NewHandler(pool *pgxpool.Pool, nc *smacknats.Client, startTime time.Time) *
 			return ""
 		},
 	}).Parse(allTemplates))
+	// Spec 100 SCOPE-01 — parse the single-source cross-surface app-shell nav
+	// partial into the knowledge-base set so every page that uses the shared
+	// "head" cross-links the assistant, cards, knowledge, notifications, and
+	// settings surfaces.
+	template.Must(tmpl.Parse(appShellNav))
 
 	return &Handler{
 		Pool:         pool,

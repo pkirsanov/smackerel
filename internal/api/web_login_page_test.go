@@ -143,6 +143,32 @@ func TestLoginPage_SanitisesNext(t *testing.T) {
 	}
 }
 
+// Spec 100 SCOPE-02 — the assistant is the default post-login landing (SR-05).
+// GET /login with no ?next defaults the hidden next field to /assistant; an
+// explicit safe next is preserved; a hostile next still sanitises to "/" so the
+// spec-057 open-redirect matrix is unchanged.
+func TestLoginPage_DefaultLandingIsAssistant(t *testing.T) {
+	deps := newLoginPageDeps_DevShared()
+
+	// No ?next -> default to the assistant front door.
+	rec := getLogin(t, deps, "/login")
+	if body := rec.Body.String(); !strings.Contains(body, `name="next" value="/assistant"`) {
+		t.Errorf("empty next must default to /assistant; got: %s", body)
+	}
+
+	// Explicit safe next -> preserved (deep-link flow unaffected).
+	rec = getLogin(t, deps, "/login?next=/cards")
+	if body := rec.Body.String(); !strings.Contains(body, `name="next" value="/cards"`) {
+		t.Errorf("explicit next=/cards must be preserved; got: %s", body)
+	}
+
+	// Hostile next -> still "/" (spec-057 sanitize matrix preserved).
+	rec = getLogin(t, deps, "/login?next=//evil.example.com/")
+	if body := rec.Body.String(); !strings.Contains(body, `name="next" value="/"`) {
+		t.Errorf("hostile next must sanitise to /; got: %s", body)
+	}
+}
+
 // Spec 091 SCOPE-04 — GET /login?registered=1 renders the post-registration
 // success flash ("Account created — sign in.") in a banner-success element
 // with role="status". UC-1 landing / AC-8.

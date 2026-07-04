@@ -1,5 +1,10 @@
 // Smackerel PWA — App Shell Script
-// Handles service worker registration, install prompt, and settings.
+// Handles service worker registration, background sync, and the install prompt.
+//
+// Spec 100 SCOPE-03: the PWA authenticates via the same-origin HttpOnly
+// auth_token cookie (set by /login). There is NO pasted bearer token and NO
+// server-URL / auth-token localStorage configuration — every capture/share
+// fetch is same-origin with credentials, so the browser attaches the cookie.
 'use strict';
 
 // Register service worker and background sync
@@ -15,15 +20,6 @@ if ('serviceWorker' in navigator) {
       }
     })
     .catch(function(err) { console.error('SW registration failed:', err); });
-
-  // Respond to service worker config requests for offline queue flush
-  navigator.serviceWorker.addEventListener('message', function(event) {
-    if (event.data && event.data.type === 'getConfig') {
-      var serverUrl = localStorage.getItem('smackerel_server_url') || '';
-      var authToken = localStorage.getItem('smackerel_auth_token') || '';
-      event.ports[0].postMessage({ serverUrl: serverUrl, authToken: authToken });
-    }
-  });
 }
 
 // Handle install prompt
@@ -50,72 +46,10 @@ if (installBtn) {
 }
 
 // ---------------------------------------------------------------------------
-// PWA Settings — Server URL and Auth Token (GAP-1 fix)
+// PWA Settings retired (spec 100 SCOPE-03)
 // ---------------------------------------------------------------------------
-
-(function() {
-  var serverUrlInput = document.getElementById('pwa-server-url');
-  var authTokenInput = document.getElementById('pwa-auth-token');
-  var testBtn = document.getElementById('pwa-test-btn');
-  var saveBtn = document.getElementById('pwa-save-btn');
-  var statusEl = document.getElementById('pwa-settings-status');
-
-  if (!serverUrlInput || !testBtn) return; // not on the settings page
-
-  // Load saved values
-  var savedUrl = localStorage.getItem('smackerel_server_url') || '';
-  var savedToken = localStorage.getItem('smackerel_auth_token') || '';
-  if (savedUrl) serverUrlInput.value = savedUrl;
-  if (savedToken) authTokenInput.value = savedToken;
-
-  function showStatus(type, msg) {
-    statusEl.className = 'status ' + type;
-    statusEl.textContent = msg;
-    statusEl.classList.remove('hidden');
-  }
-
-  testBtn.addEventListener('click', function() {
-    var url = serverUrlInput.value.trim().replace(/\/+$/, '');
-    var token = authTokenInput.value.trim();
-    if (!url) { showStatus('error', '❌ Server URL is required'); return; }
-    if (!token) { showStatus('error', '❌ Auth token is required'); return; }
-
-    testBtn.disabled = true;
-    testBtn.textContent = 'Testing...';
-    statusEl.classList.add('hidden');
-
-    fetch(url + '/api/health', {
-      method: 'GET',
-      headers: { 'Authorization': 'Bearer ' + token }
-    })
-    .then(function(resp) {
-      if (resp.ok) {
-        showStatus('success', '✅ Connected');
-        saveBtn.classList.remove('hidden');
-      } else if (resp.status === 401) {
-        showStatus('error', '❌ Authentication failed — check your token');
-        saveBtn.classList.add('hidden');
-      } else {
-        showStatus('error', '❌ Server returned ' + resp.status);
-        saveBtn.classList.add('hidden');
-      }
-    })
-    .catch(function() {
-      showStatus('error', '❌ Connection failed — check server URL');
-      saveBtn.classList.add('hidden');
-    })
-    .finally(function() {
-      testBtn.disabled = false;
-      testBtn.textContent = 'Test Connection';
-    });
-  });
-
-  saveBtn.addEventListener('click', function() {
-    var url = serverUrlInput.value.trim().replace(/\/+$/, '');
-    var token = authTokenInput.value.trim();
-    localStorage.setItem('smackerel_server_url', url);
-    localStorage.setItem('smackerel_auth_token', token);
-    showStatus('success', '✅ Settings saved');
-    saveBtn.classList.add('hidden');
-  });
-})();
+// The legacy "Server URL + Auth Token" settings surface was removed. The PWA is
+// same-origin with the server and authenticates via the HttpOnly auth_token
+// cookie set by /login; there is no token to paste and no localStorage
+// credential state. Capture, share, and offline sync all rely on the cookie
+// (same-origin fetches with credentials).
