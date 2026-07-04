@@ -536,7 +536,18 @@ Final state-transition guard verdict — `bash
 .github/bubbles/scripts/state-transition-guard.sh
 specs/100-unified-journey-ui-transformation` (Claim Source: executed):
 
-<!-- final verdict block inserted post-certifying-commit -->
+```
+🟡 TRANSITION PERMITTED with 2 warning(s)
+state.json status may be set to 'done'.
+$ echo $?
+0
+```
+
+The 2 warnings are non-blocking: (1) a basename-only Test-Plan path for
+`unified_journey.spec.ts` (the guard uniquely resolved it to
+`web/pwa/tests/unified_journey.spec.ts`); (2) 6 of 13 report.md evidence blocks
+are prior-window (pre-`certifying-window-begin`) shorthand — the current-window
+finalization blocks all carry terminal signals. Neither warning blocks `done`.
 
 ---
 
