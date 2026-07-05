@@ -84,10 +84,15 @@ func requireDisposableStack(t *testing.T) {
 	devMarkers := []string{
 		"smackerel-dev",
 		"smackerel-prod",
-		":8080", // dev core host port
-		":8081", // dev ML host port
-		":5432", // dev postgres host port
-		":4222", // dev NATS host port
+		// Host-port prefixes that appear ONLY in dev/prod CORE_EXTERNAL_URL
+		// (dev http://127.0.0.1:40001-40004, home-lab/prod :41001-41004). The
+		// internal container ports (:8080/:8081/:5432/:4222) are shared by EVERY
+		// stack — including the disposable test stack — so they cannot separate
+		// dev/prod and previously false-positived the test stack's own internal
+		// core URL (http://smackerel-core:8080). The test stack's core host port
+		// is :45001, which these dev/prod prefixes never match.
+		":4000", // dev core host-port prefix (CORE_EXTERNAL_URL 40001-40004)
+		":4100", // home-lab/prod core host-port prefix (CORE_EXTERNAL_URL 41001-41004)
 	}
 	for _, key := range []string{
 		"CORE_EXTERNAL_URL",

@@ -110,6 +110,9 @@ func TestOpenKnowledge_P95SLAUnderToolLoad(t *testing.T) {
 		// Spec 096 SCOPE-05 — CostFn is now the model-aware seam.
 		CostFn:          func(string, int) (float64, error) { return 0, nil },
 		EnforcementMode: string(citeback.EnforcementEnforce),
+		// SourcesMax REQUIRED > 0 (G028 — no silent default); SST
+		// assistant.sources_max=5 (ASSISTANT_SOURCES_MAX=5).
+		SourcesMax: 5,
 	}
 
 	latencies := make([]time.Duration, turns)
