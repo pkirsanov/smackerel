@@ -1,8 +1,8 @@
 {
   "installedVersion": "7.18.0",
-  "installMode": "remote-ref",
+  "installMode": "local-source",
   "sourceRef": "main",
-  "sourceGitSha": "c999029420fff55f2b2c8507ee9c5bced23a6342",
+  "sourceGitSha": "e6487a4b6810d64016a03d1b58b1a6d56e3494f5",
   "sourceDirty": false,
-  "installedAt": "2026-07-04T06:05:04Z"
+  "installedAt": "2026-07-05T23:00:27Z"
 }
