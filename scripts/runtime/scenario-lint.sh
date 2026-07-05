@@ -54,9 +54,16 @@ echo "scenario-lint: scanning $scenario_dir (glob: $scenario_glob)"
 extract_env() {
   grep -E "^$1=" "$env_file_arg" | tail -n 1 | cut -d= -f2-
 }
-export RETRIEVAL_QA_TIMEOUT_MS="$(extract_env RETRIEVAL_QA_TIMEOUT_MS)"
-export RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$(extract_env RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS)"
+# SC2155 — declare/assign separately from export so a non-zero extract_env exit
+# is not masked by export's always-zero status (value/behavior unchanged: these
+# four vars are always emitted by config.sh's fail-loud required_value path).
+RETRIEVAL_QA_TIMEOUT_MS="$(extract_env RETRIEVAL_QA_TIMEOUT_MS)"
+export RETRIEVAL_QA_TIMEOUT_MS
+RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$(extract_env RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS)"
+export RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS
 # BUG-061-003 — recipe-search-v1 references RECIPE_SEARCH_* env vars.
-export RECIPE_SEARCH_TIMEOUT_MS="$(extract_env RECIPE_SEARCH_TIMEOUT_MS)"
-export RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS="$(extract_env RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS)"
+RECIPE_SEARCH_TIMEOUT_MS="$(extract_env RECIPE_SEARCH_TIMEOUT_MS)"
+export RECIPE_SEARCH_TIMEOUT_MS
+RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS="$(extract_env RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS)"
+export RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS
 go run ./cmd/scenario-lint -glob "$scenario_glob" "$scenario_dir"
