@@ -14,10 +14,11 @@ set -euo pipefail
 # Arg 1 = target env name (dev|test). Required.
 
 TARGET_ENV="${1:?preflight.sh requires a target env name (dev|test)}"
-# Arg 2 = threshold profile (heavy|light). Required — selects which SST
+# Arg 2 = threshold profile (heavy|light|ui). Required — selects which SST
 # threshold pair the guard enforces (heavy = build/up/full test lanes;
-# light = the stores-only integration-light lane). NO-DEFAULTS.
-PROFILE="${2:?preflight.sh requires a threshold profile (heavy|light)}"
+# light = the stores-only integration-light lane; ui = the no-ML PWA browser
+# e2e-ui lane, spec 100 F-100-OPT-02). NO-DEFAULTS.
+PROFILE="${2:?preflight.sh requires a threshold profile (heavy|light|ui)}"
 
 cd /workspace
 exec go run ./cmd/preflight --env "$TARGET_ENV" --repo-root /workspace --profile "$PROFILE"

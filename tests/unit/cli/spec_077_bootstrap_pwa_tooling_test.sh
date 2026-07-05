@@ -237,4 +237,48 @@ grep -qF 'playwright-core/browsers.json' "$WRAPPER" \
 grep -qF 'Library/Caches/ms-playwright' "$WRAPPER" \
   || fail "web-e2e-ui.sh missing the macOS Library/Caches cache-path branch"
 
+#############################################
+# I. Spec 100 F-100-OPT-02/03 — no-ML e2e-ui lane + lowered `ui` preflight
+#    floor. Static locks (no docker, no stack): the override profile-gates the
+#    2 GB ml sidecar OFF, and the dispatcher gates the lane on the `ui` floor.
+#############################################
+OVERRIDE="$REPO_ROOT/docker-compose.e2e-ui.override.yml"
+DISPATCH="$REPO_ROOT/smackerel.sh"
+[[ -f "$OVERRIDE" ]] || fail "e2e-ui override $OVERRIDE missing"
+[[ -f "$DISPATCH" ]] || fail "dispatcher $DISPATCH missing"
+
+# Capture the smackerel-ml override block (decl to the next top-level 2-space
+# service key, or EOF). smackerel-ml is currently the last service; the reset
+# guard keeps this correct if another service is appended later.
+ML_BLOCK="$(awk '
+  $1 == "smackerel-ml:" { in_ml = 1; next }
+  in_ml && /^  [^[:space:]#]/ { in_ml = 0 }
+  in_ml { print }
+' "$OVERRIDE")"
+
+[[ -n "$ML_BLOCK" ]] \
+  || fail "docker-compose.e2e-ui.override.yml has no smackerel-ml override block (F-100-OPT-03 no-ML lane missing)"
+
+# F-100-OPT-03 — ml is DROPPED by profile-gating it behind the inert `ml`
+# profile (COMPOSE_PROFILES for the test env is only ever ollama,searxng
+# [,monitoring] — never `ml`), so the 2 GB sidecar never boots in this lane.
+printf '%s\n' "$ML_BLOCK" | grep -qE '^[[:space:]]*-[[:space:]]+ml[[:space:]]*$' \
+  || fail "override no longer profile-gates smackerel-ml behind the inert 'ml' profile (F-100-OPT-03 regression):
+$ML_BLOCK"
+
+# The drop MUST NOT be silently converted back into a running/stub service: no
+# re-declared image or memory limit under smackerel-ml (prose mentions in the
+# comments are excluded — this matches only leading-whitespace YAML keys).
+if printf '%s\n' "$ML_BLOCK" | grep -qE '^[[:space:]]+(memory|image):'; then
+  fail "override re-declares an image/memory limit under smackerel-ml — the lane must DROP ml, not resize or stub it:
+$ML_BLOCK"
+fi
+
+# F-100-OPT-02 — the e2e-ui dispatch gates on the LOWER `ui` preflight profile,
+# not the 6000 MB heavy wrapper (smackerel_assert_host_resources test).
+grep -qF 'smackerel_assert_host_resources_profile test ui' "$DISPATCH" \
+  || fail "smackerel.sh e2e-ui lane no longer selects the 'ui' preflight profile (F-100-OPT-02 lowered-floor regression)"
+
+echo "PASS: spec_077_e2e_ui_no_ml_and_ui_preflight_floor (F-100-OPT-02/03 lock)"
+
 echo "PASS: spec_077_bootstrap_pwa_tooling_test (macOS browser-cache OS-path lock)"

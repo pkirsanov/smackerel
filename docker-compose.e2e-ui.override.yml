@@ -1,7 +1,15 @@
 # docker-compose.e2e-ui.override.yml
 #
-# Spec 100 F-100-OPT-01 — TEST-ONLY override for the disposable
+# Spec 100 F-100-OPT-01 + F-100-OPT-03 — TEST-ONLY override for the disposable
 # `smackerel-test-e2e-ui` browser lane (scripts/runtime/web-e2e-ui.sh).
+#
+# F-100-OPT-01 swaps the 8 GB `ollama` service for a tiny nginx stub (below).
+# F-100-OPT-03 DROPS the 2 GB `smackerel-ml` sidecar from this lane entirely by
+# profile-gating it OFF (see the `smackerel-ml` block at the END of this file).
+# Together they let the lane gate on the LOWER `ui` preflight floor
+# (config/smackerel.yaml runtime.preflight.min_available_ram_mb_ui, ~2500 MB)
+# instead of the 6000 MB `heavy` floor — the browser UI journeys never run GPU
+# inference or ML embedding.
 #
 # WHY THIS EXISTS
 # ---------------
@@ -88,3 +96,56 @@ services:
     labels:
       com.smackerel.component: ollama-stub
       com.smackerel.lifecycle: ephemeral
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # F-100-OPT-03 — DROP the 2 GB `smackerel-ml` sidecar from the e2e-ui lane.
+  #
+  # WHY THIS EXISTS
+  # ---------------
+  # The base docker-compose.yml `smackerel-ml` service declares a 2 GB memory
+  # limit (deploy.resources.limits.memory: 2G) and, on a build-from-source dev
+  # image, a heavyweight Python + sentence-transformers build. It is the single
+  # largest driver of the old 6000 MB `heavy` preflight floor for this lane. But
+  # the spec-100 browser UI journeys (web/pwa/tests/*.spec.ts — nav, app-shell,
+  # cookie-auth, assistant routing) NEVER exercise ML embedding/inference: a
+  # grep of every e2e-ui spec for embedding|semantic|inference|sidecar|
+  # similarity|vector|/v1/search is EMPTY, and unified_journey.spec.ts
+  # (SCN-100-01..09) asserts only nav hrefs, login redirects, and served HTML
+  # copy.
+  #
+  # NOTHING BOOT-DEPENDS ON ml (verified in cmd/core/services.go):
+  #   - `smackerel-core` depends_on is postgres + nats ONLY (NOT ml).
+  #   - core /api/health (the compose `up --wait` gate) EXCLUDES ml and always
+  #     returns HTTP 200 (internal/api/health.go).
+  #   - the ML-readiness gate runs in a BACKGROUND goroutine
+  #     (`go svc.searchEngine.WaitForMLReady(...)`); when ml is absent it times
+  #     out and search falls back to TEXT mode — the SAME documented behavior as
+  #     a readiness timeout, which the UI journeys already tolerate.
+  #
+  # WHY DROP (profile-gate) RATHER THAN STUB
+  # ----------------------------------------
+  # `ollama` is STUBBED (nginx 200) because core/ml only need its endpoint
+  # REACHABLE at boot. `ml` is DROPPED instead: a `/health`-200 ml stub would
+  # FALSELY signal ML-ready (probeMLHealth checks only StatusCode == 200 —
+  # internal/api/search.go), making core attempt REAL embedding calls against a
+  # stub that cannot embed. Dropping ml cleanly yields core's text-fallback
+  # mode, which is exactly what the journeys expect. Docker Compose cannot
+  # delete a base service via an override, so ml is gated behind an inert `ml`
+  # profile: COMPOSE_PROFILES for the test env is only ever `ollama,searxng`
+  # (+ optional `monitoring`) and NEVER `ml` (scripts/commands/config.sh), so
+  # the service is not created, not built, and not waited on by `up --wait`.
+  # This mirrors the base `ollama` `profiles: [ollama]` idiom.
+  #
+  # SCOPE (prod + other lanes UNTOUCHED)
+  # ------------------------------------
+  # This override is loaded ONLY by e2e_ui_compose (web-e2e-ui.sh). The PROD
+  # stack (deploy/compose.deploy.yml) and the dev/integration/e2e lanes
+  # (smackerel_compose in scripts/lib/runtime.sh) never load it, so ml has NO
+  # profile there and runs normally. docker-compose.yml itself is unchanged, so
+  # the spec-043 compose contract tests stay green.
+  smackerel-ml:
+    # The ONLY override key: gate ml behind the inert `ml` profile so it is
+    # excluded from this lane. Every inherited key (image, build, depends_on,
+    # healthcheck, the 2 GB limit) is moot because the service is never created.
+    profiles:
+      - ml
