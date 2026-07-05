@@ -1,0 +1,16 @@
+{
+    // config/smackerel.yaml carries single-line compact-JSON / flow-scalar SST
+    // values (retrieval.routing.contracts, services.ml.model_memory_profiles ->
+    // ML_MODEL_MEMORY_PROFILES_JSON, DRIVE_PROVIDER_GOOGLE_SCOPE_DEFAULTS, ...)
+    // that scripts/commands/config.sh's LINE-BASED flattener requires on ONE line.
+    // The Red Hat redhat.vscode-yaml formatter (format-on-save) ignores
+    // .prettierignore and reflows those values into multi-line block form, which
+    // makes their keys un-findable and breaks EVERY ./smackerel.sh command with
+    // "Missing config key: ...". See the FORMATTER GUARD banner at the top of
+    // config/smackerel.yaml. Disable the YAML formatter for this repo at the
+    // source so it can never touch those values.
+    "yaml.format.enable": false,
+    "[yaml]": {
+        "editor.formatOnSave": false
+    }
+}
