@@ -31,9 +31,13 @@ CORE_IMAGE="${COMPOSE_PROJECT}-smackerel-core:latest"
 # Create a deliberately incomplete env file (missing LLM_PROVIDER, LLM_MODEL, LLM_API_KEY)
 TEMP_ENV=$(mktemp)
 cp "$SOURCE_ENV" "$TEMP_ENV"
-sed -i '/^LLM_PROVIDER=/d' "$TEMP_ENV"
-sed -i '/^LLM_MODEL=/d' "$TEMP_ENV"
-sed -i '/^LLM_API_KEY=/d' "$TEMP_ENV"
+# Portable in-place delete (GNU + BSD/macOS). Bare `sed -i` diverges: GNU treats
+# the next token as the script, BSD treats it as a mandatory backup suffix
+# (-> "invalid command code f"). `-i.bak` (suffix glued to the flag) is the
+# both-ways form; drop the backup afterward. See
+# .github/instructions/wsl-macos-compatibility.instructions.md.
+sed -i.bak -e '/^LLM_PROVIDER=/d' -e '/^LLM_MODEL=/d' -e '/^LLM_API_KEY=/d' "$TEMP_ENV"
+rm -f "$TEMP_ENV.bak"
 
 # Start only infrastructure so core can attempt to start
 docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" --env-file "$SOURCE_ENV" up -d postgres nats

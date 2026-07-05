@@ -1381,52 +1381,142 @@ case "$COMMAND" in
           fi
         }
 
-        e2e_child_marker_pids() {
-          local run_id="$1"
-          local process_dir
-          local process_id
-          local process_env
-
-          if [[ -z "$run_id" ]]; then
+        e2e_descendant_pids() {
+          # Portable transitive descendant closure of a root PID, computed from a
+          # single `ps` snapshot. `ps -Ao pid=,ppid=` is accepted by both GNU
+          # coreutils and BSD/macOS `ps`, so this walk needs neither `/proc` nor
+          # any GNU-only flag. Emits each descendant PID once, one per line.
+          local root="$1"
+          if [[ -z "$root" ]]; then
             return 0
           fi
 
-          for process_dir in /proc/[0-9]*; do
-            process_id="${process_dir##*/}"
-            if [[ "$process_id" == "$$" || "$process_id" == "$BASHPID" ]]; then
+          local snapshot_pid snapshot_ppid
+          local -A parent_of=()
+          local -a all_pids=()
+          while read -r snapshot_pid snapshot_ppid; do
+            if [[ -z "$snapshot_pid" || -z "$snapshot_ppid" ]]; then
               continue
             fi
-            process_env="$({ tr '\0' '\n' <"$process_dir/environ"; } 2>/dev/null || true)"
-            if [[ "$process_env" == *"SMACKEREL_E2E_CHILD_RUN_ID=$run_id"* ]]; then
-              printf '%s\n' "$process_id"
-            fi
+            parent_of["$snapshot_pid"]="$snapshot_ppid"
+            all_pids+=("$snapshot_pid")
+          done < <(ps -Ao pid=,ppid= 2>/dev/null || true)
+
+          local candidate cursor next guard
+          for candidate in "${all_pids[@]}"; do
+            cursor="$candidate"
+            guard=0
+            while [[ "$guard" -lt 100000 ]]; do
+              next="${parent_of[$cursor]:-}"
+              if [[ -z "$next" ]]; then
+                break
+              fi
+              if [[ "$next" == "$root" ]]; then
+                printf '%s\n' "$candidate"
+                break
+              fi
+              if [[ "$next" == "0" || "$next" == "1" ]]; then
+                break
+              fi
+              cursor="$next"
+              guard=$((guard + 1))
+            done
+          done
+        }
+
+        e2e_child_marker_pids() {
+          # Discover the live descendants of the current E2E child so a stubborn
+          # grandchild -- one that ignores TERM and/or reparents to PID 1 once its
+          # parent dies -- can still be terminated. Two complementary, portable
+          # signals are unioned:
+          #
+          #   (1) The descendant closure of the tracked child PID, sourced from
+          #       `ps`. This is the ONLY signal available on macOS, where `/proc`
+          #       does not exist and a process environment is not readable via
+          #       `ps` (SIP-restricted). It MUST be evaluated while the process
+          #       tree is still intact -- before the tracked child is torn down --
+          #       which is why e2e_stop_child now reaps first.
+          #   (2) On Linux, the run-id carried in each process ENVIRONMENT via
+          #       `/proc/<pid>/environ`. This preserves the original, proven,
+          #       reparent-tolerant Linux match unchanged; it is skipped where
+          #       `/proc` is absent so it never runs (and never no-ops the reaper)
+          #       on macOS.
+          local run_id="$1"
+          local self_pid="$$"
+          local current_pid="$BASHPID"
+          local -A discovered=()
+          local descendant process_dir process_id process_env emit_pid
+
+          if [[ -n "${e2e_child_pid:-}" ]] && kill -0 "$e2e_child_pid" 2>/dev/null; then
+            while read -r descendant; do
+              if [[ -z "$descendant" || "$descendant" == "$self_pid" || "$descendant" == "$current_pid" ]]; then
+                continue
+              fi
+              discovered["$descendant"]=1
+            done < <(e2e_descendant_pids "$e2e_child_pid")
+          fi
+
+          if [[ -n "$run_id" && -d /proc ]]; then
+            for process_dir in /proc/[0-9]*; do
+              process_id="${process_dir##*/}"
+              if [[ "$process_id" == "$self_pid" || "$process_id" == "$current_pid" ]]; then
+                continue
+              fi
+              process_env="$({ tr '\0' '\n' <"$process_dir/environ"; } 2>/dev/null || true)"
+              if [[ "$process_env" == *"SMACKEREL_E2E_CHILD_RUN_ID=$run_id"* ]]; then
+                discovered["$process_id"]=1
+              fi
+            done
+          fi
+
+          for emit_pid in "${!discovered[@]}"; do
+            printf '%s\n' "$emit_pid"
           done
         }
 
         e2e_terminate_marked_children() {
           local run_id="$1"
-          local marked_pids=()
-          local attempt
+          local -A tracked=()
+          local -a batch=()
+          local attempt scan_pid check_pid any_alive
 
-          if [[ -z "$run_id" ]]; then
+          mapfile -t batch < <(e2e_child_marker_pids "$run_id")
+          for scan_pid in "${batch[@]}"; do
+            if [[ -n "$scan_pid" ]]; then
+              tracked["$scan_pid"]=1
+            fi
+          done
+          if [[ ${#tracked[@]} -eq 0 ]]; then
             return 0
           fi
 
-          mapfile -t marked_pids < <(e2e_child_marker_pids "$run_id")
-          if [[ ${#marked_pids[@]} -eq 0 ]]; then
-            return 0
-          fi
-
-          kill -TERM "${marked_pids[@]}" 2>/dev/null || true
-          for attempt in {1..20}; do
-            mapfile -t marked_pids < <(e2e_child_marker_pids "$run_id")
-            if [[ ${#marked_pids[@]} -eq 0 ]]; then
+          # Escalate TERM -> (grace) -> KILL. The tracked set ACCUMULATES across
+          # rescans and is killed by stable PID: a grandchild reparented to PID 1
+          # mid-escalation keeps its PID, so it is still killed even after it drops
+          # out of the (now-shrunken) descendant closure. On Linux each rescan also
+          # re-matches via `/proc`, so any late-appearing run-id process is covered.
+          kill -TERM "${!tracked[@]}" 2>/dev/null || true
+          for ((attempt = 0; attempt < 20; attempt++)); do
+            mapfile -t batch < <(e2e_child_marker_pids "$run_id")
+            for scan_pid in "${batch[@]}"; do
+              if [[ -n "$scan_pid" ]]; then
+                tracked["$scan_pid"]=1
+              fi
+            done
+            any_alive=0
+            for check_pid in "${!tracked[@]}"; do
+              if kill -0 "$check_pid" 2>/dev/null; then
+                any_alive=1
+                break
+              fi
+            done
+            if [[ "$any_alive" -eq 0 ]]; then
               return 0
             fi
             sleep 0.1
           done
 
-          kill -KILL "${marked_pids[@]}" 2>/dev/null || true
+          kill -KILL "${!tracked[@]}" 2>/dev/null || true
         }
 
         e2e_stop_child() {
@@ -1434,8 +1524,13 @@ case "$COMMAND" in
           local process_group_id="${e2e_child_pgid:-}"
           local run_id="${e2e_child_run_id:-}"
 
-          e2e_terminate_child_process_group "$process_group_id" "$child_pid"
+          # Reap leaked descendants FIRST, while the process tree is still intact.
+          # e2e_child_marker_pids derives the descendant closure from the live
+          # tree; terminating the tracked child/group before reaping would orphan
+          # a regrouped grandchild (for example one inside a `gtimeout` process
+          # group) and break that closure on platforms without `/proc`.
           e2e_terminate_marked_children "$run_id"
+          e2e_terminate_child_process_group "$process_group_id" "$child_pid"
           if [[ -n "$child_pid" ]]; then
             wait "$child_pid" 2>/dev/null || true
           fi
