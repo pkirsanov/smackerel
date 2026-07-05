@@ -1017,3 +1017,18 @@ Current runtime entrypoints:
 - `./smackerel.sh status`
 - `./smackerel.sh logs`
 - `./smackerel.sh clean smart|full|status|measure`
+
+## Shared Observability (evo-x2)
+
+Smackerel runs its **own bundled** monitoring today (see the [Observability](#observability)
+section above) — the knb shared-services selector resolves `observability: bundled`.
+
+It is instrumented and selector-gated to migrate to the **shared evo-x2
+observability stack** (Prometheus + Loki + Tempo + Grafana — one stack for all
+Bubbles products, governed by knb spec 014). When the operator activates that
+stack and flips the selector to `shared`, smackerel's metrics, logs, and traces
+surface in the shared Grafana under the `smackerel` folder, reachable over the
+tailnet at `grafana.<tailnet>.ts.net`.
+
+See the knb operator runbook `docs/Observability.md` for architecture, the
+per-product instrumentation contract, and the go-live sequence.
