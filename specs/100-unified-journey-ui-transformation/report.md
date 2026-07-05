@@ -452,6 +452,7 @@ dropped or cherry-picked; the ledger closes one-to-one.
 **Result:** PASSED
 
 Adversarial surface, all green (covered by the passing suites above):
+
 - **CSP-clean nav:** `TestAppShellNav_NoInlineHandlers` locks anchors-only — no
   `<script>` / `onclick` / `onload` / `onsubmit` in `appShellNav`.
 - **Hostile `next`:** the spec-057 open-redirect matrix (`sanitize_next_test.go`)
@@ -769,7 +770,83 @@ window is feasible with two important caveats about *where* memory is measured:
   is a fail-fast gate against clearly-doomed runs, not a guarantee.
 
 Net: the 6000→2500 reduction removes the structural blocker (the 2 GB ml sidecar
-+ the ollama-driven weight) so the no-ML lane can clear preflight in a realistic
+- the ollama-driven weight) so the no-ML lane can clear preflight in a realistic
 constrained window, while remaining honestly fail-loud on genuinely
 insufficient hosts.
 
+## Live e2e-ui Browser-Green Remediation — F1–F7 (SCN-100 latent-gap closure)
+
+**Context.** After the no-ML preflight optimization (F-100-OPT-02/03, commit
+`8126ef9e`) lowered the e2e-ui floor to the `ui` 2500 MB profile, the Playwright
+browser-green (`./smackerel.sh test e2e-ui`) executed against the disposable
+`smackerel-test-e2e-ui` stack **for the first time**. The prior certification
+accepted a markdown/handler-suite equivalent (`F-100-ENV-01`) because the
+browser lane was RAM/stack-blocked and had never run. The first real run
+surfaced **7 genuine, pre-existing latent failures** (36 passed / 7 failed /
+9 skipped). None were caused by the ML drop — they are nav-navigation / CSP /
+test-staleness gaps that only a live browser exercises. All 7 are now fixed with
+full finding-closure (no cherry-picking, one-to-one accounting).
+
+### Root causes + fixes (one-to-one, all 7)
+
+| # | Test | Confirmed root cause (diagnostic evidence) | Fix |
+|---|------|--------------------------------------------|-----|
+| F1 | `unified_journey.spec.ts:27` SCN-100-01/02/09 | Trace showed the page at `about:blank` only + a 4331-byte blank screenshot. `login()` (`_support/cardrewards_session.ts`) seeds the cookie via `page.request.post` and **does not navigate** ("per-test navigation is still driven by each test's own page.goto"). The test asserted the `/` nav with no `page.goto("/")`. | Added `await page.goto("/")` after `login(page,"/")`. App renders the nav server-side (`internal/web/templates.go` L79-80 wraps `<nav class="app-shell-nav">`). Assertions untouched. |
+| F2 | `unified_journey.spec.ts:124` SCN-100-08 | Same missing-navigation: trace showed `/pwa/manifest.json` (request fixture) + `/v1/web/login` only; the **page** stayed at `about:blank`. No `page.goto("/pwa/assistant.html")`. | Added `await page.goto("/pwa/assistant.html")`. `appnav.js` is served (`web/pwa/embed.go` embeds `lib`) and builds `#app-shell-nav`. |
+| F3 | `unified_journey.spec.ts:107` SCN-100-07 | Same missing-navigation (no `page.goto("/cards/admin")`). The routed premise that `data-action="account-invites"` was unimplemented was **incorrect** — it already exists unconditionally at `cardrewards_dashboard_templates.go` L246 (`<a href="/admin/invites" data-action="account-invites">`), and `/cards/admin/invites` is genuinely unrouted (→404, per `cardrewards.go` L204-219). | Added `await page.goto("/cards/admin")`. No template change needed. |
+| F4 | `chaos_saga_20260702.spec.ts:78` J1/SR-01 | CSP `script-src` allow-listed `https://unpkg.com/htmx.org@1.9.12/` (trailing slash) while the KB `head` (`templates.go` L12) requests it **without** the slash — CSP-blocked. Confirmed at `internal/api/router.go` L702 (`securityHeadersMiddleware`) + the acknowledging "pre-existing inconsistency" comment in `internal/web/cardrewards.go`. | Dropped the trailing slash so the CSP source exactly matches the requested URL (SRI hash kept). Stale comment updated. |
+| F5 | `chaos_saga_20260702.spec.ts:281` J4 | Same CSP trailing-slash bug (multiple htmx loads on the delivery surfaces). | Same one-line CSP fix. |
+| F6 | `auth_login.spec.ts:204` TP-077-03-04 | Machine-login submit waited for pathname `/` but navigated to `/pwa/assistant.html`. **SR-05 confirmed intended:** `web_login_page.go` L55 defaults `next=/assistant` when absent; `login.html` L42 machine-login hidden field is `value="{{.Next}}"`; `/assistant` 302s to `/pwa/assistant.html` (SCN-100-03/04, passing, lock this). The test encoded pre-SR-05 behavior. | **Test reconciliation** (not weakening): `waitForURL` updated to expect `/pwa/assistant.html`. App behavior unchanged. |
+| F7 | `cardrewards_dashboard.spec.ts:36` SCN-083-K01 | Failure screenshot showed a fully-rendered dashboard ("0 NEEDS VERIFY", DashFlag absent). Static analysis proves the code path is correct: `Service.Reconcile` (`service_insights.go` L172) uses the **request** threshold 0.7 over **all** observation refs; `mergeObservations` (`reconcile.go` L158) sets `needsVerify = 0.4 < 0.7 = true`; `card_rewards.enabled:false` ⇒ no background scheduler; every `reconcileAPI` call uses 0.7 (no lower-threshold re-reconcile). No deterministic code bug exists. **Determination: transient/flake** in the first cold run — not an impl bug, not a test defect. | No code/test change. Verified by re-run: SCN-083-K01 passes green in **2/2** consecutive re-runs (unchanged). |
+
+### Final browser-green re-run (mandatory evidence)
+
+Raw per-test lines + summary from `PLAYWRIGHT_BROWSERS_PATH=… ./smackerel.sh test
+e2e-ui` after the fixes (core image rebuilt so the Go CSP change is compiled in):
+
+```
+  ✓  11 …oard shows recommendations, active rotating, and pending actions (9.3s)   ← F7
+  ✓  22 …03-04 — logout clears the session cookie and redirects to /login (1.3s)   ← F6
+  ✓  44 … nav cross-links the assistant on the knowledge + card surfaces (825ms)   ← F1
+  ✓  47 …he registration-invite admin is product-level at /admin/invites (365ms)   ← F3
+  ✓  48 …ant/capture/search shortcuts and the PWA carries the shared nav (312ms)   ← F2
+  ✓  51 …1:1 › J4 delivery surfaces render (notifications + card-rewards) (3.1s)    ← F5
+  (chaos J1/SR-01 telemetry executed with 0 failures)                              ← F4
+
+  9 skipped
+  43 passed (33.1s)
+```
+
+`grep -cE '✘|CSP guard captured|[0-9]+ failed'` over the full run output = **0**.
+The 9 skips are the legitimate `test.fixme` provider/connector/photo/lifecycle
+stubs (unchanged, ENV-CONSTRAINED). Previously-failing 7 → all green; 36→43
+passed, 7→0 failed.
+
+### No-regression evidence
+
+- `./smackerel.sh test unit` → `internal/api` ran **fresh** (`ok …/internal/api 5.756s`, not cached — the CSP change recompiled), `[go-unit] go test ./... finished OK`, `[py-unit] pytest ml/tests finished OK`, all shell unit tests `finished OK`, **0 FAIL**. `TestSecurityHeaders_CSP_PinnedCDNPath` (SEC-R68-001) + the header-presence test still pass (they assert the pinned `https://unpkg.com/htmx.org@` path + a `default-src 'self'` substring, not the slash).
+- `./smackerel.sh lint` (Go vet + Python ruff + web asset validation) → `All checks passed!` + `Web validation passed`, 0 errors.
+
+### Files changed
+
+- `web/pwa/tests/unified_journey.spec.ts` — F1/F2/F3 explicit `page.goto` navigations (assertions untouched).
+- `web/pwa/tests/auth_login.spec.ts` — F6 SR-05 landing reconciliation.
+- `internal/api/router.go` — F4/F5 CSP htmx source exact-match (drop trailing slash; SRI hash retained).
+- `internal/web/cardrewards.go` — comment updated to reflect the now-fixed CSP (script-free card head retained by design; no behavior change).
+
+### Environment conditions handled (out-of-scope; flagged for orchestrator)
+
+1. **Stale disposable test image.** `test e2e-ui` brings the stack up without `--build`, so the first re-run reused the 24 h-old `smackerel-test-e2e-ui-smackerel-core` image and did **not** compile the Go CSP fix (F1/F4/F5 still red). Removing that one disposable image forced `up` to rebuild from source; the green run above is the rebuilt run. No `./smackerel.sh` surface rebuilds that project-scoped image.
+2. **Foreign config WIP drift (unrelated to spec 100).** The working tree carried a pre-existing, non-mine 571-line reformat of `config/smackerel.yaml` that converts `retrieval.routing.contracts` from an inline flow-mapping to a block-mapping — which `scripts/commands/config.sh`'s flattener cannot read (`Missing config key: retrieval.routing.contracts`), breaking config generation for **every** `./smackerel.sh` command. It was temporarily `git stash`ed (reversible) to verify against a valid config baseline, then restored. **This drift independently breaks the CLI and must be resolved by its owner.**
+
+### Honest spec-100 `done` status
+
+Spec 100's live e2e-ui acceptance (SCN-100-01/02/09, -07, -08 + the SR-01/-04/
+-05/-08 chaos journeys) is now **genuinely browser-green** — the assertions run
+against the real served surfaces, not a markdown equivalent. The
+`certification.knownEnvironmentalFailures: F-100-ENV-01` "accepted-equivalent"
+rationale is **superseded by real evidence**: the browser lane now runs and
+passes. Recommended follow-up (validate/owner-owned, NOT done here — foreign
+artifact): clear or annotate `F-100-ENV-01` in `state.json` to reflect that the
+browser-green executes, and land the four spec-100/077 test files + the two Go
+source fixes. **No spec-100 findings remain open.**

@@ -699,7 +699,11 @@ func structuredLogger(next http.Handler) http.Handler {
 // Covers OWASP recommended headers: CSP, clickjacking, MIME sniffing, referrer leakage, cache control.
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://unpkg.com/htmx.org@1.9.12/ 'sha256-C7I7zL0TtdR86YSsw1T7pxobSVoQGAOH9Ua4apor8TI='; img-src 'self' data:; connect-src 'self'")
+		// script-src lists the htmx bundle by its EXACT requested URL
+		// (https://unpkg.com/htmx.org@1.9.12, no trailing slash) so the CSP
+		// source-expression matches the <script src> in the shared head verbatim;
+		// a trailing slash would only match longer paths and block the bundle.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://unpkg.com/htmx.org@1.9.12 'sha256-C7I7zL0TtdR86YSsw1T7pxobSVoQGAOH9Ua4apor8TI='; img-src 'self' data:; connect-src 'self'")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")

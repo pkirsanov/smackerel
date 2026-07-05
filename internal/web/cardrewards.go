@@ -76,13 +76,13 @@ func (h *CardRewardsWebHandler) SetTriggers(t CardRewardsTriggers) { h.Triggers 
 // NewCardRewardsWebHandler builds the handler with a self-contained template
 // set (cardRewardsTemplates) that defines its own script-free "head"/"foot"
 // chrome using the shared design-token palette (var(--…)). It deliberately does
-// NOT reuse the shared allTemplates "head", because that head loads the htmx
-// bundle from a URL the global CSP does not allow-list (script-src lists
-// ".../htmx.org@1.9.12/" with a trailing slash; the bundle URL has none), which
-// the e2e-ui CSP guard flags as a violation. The card-rewards pages use plain
-// Post/Redirect/Get forms and need no client JS, so a script-free head keeps
-// them strictly CSP-clean. (The shared-head/CSP mismatch is a pre-existing,
-// out-of-scope inconsistency noted in the spec 083 Scope 10 report.)
+// NOT reuse the shared allTemplates "head" because the card-rewards pages use
+// plain Post/Redirect/Get forms and need no client JS at all, so a script-free
+// head keeps them strictly CSP-clean without pulling in the htmx bundle. (The
+// former shared-head CSP trailing-slash mismatch on the htmx source — script-src
+// listed ".../htmx.org@1.9.12/" while the bundle URL has no trailing slash — has
+// since been corrected in securityHeadersMiddleware; the script-free head is
+// retained here purely because these pages need no JS.)
 func NewCardRewardsWebHandler(svc *cardrewards.Service) *CardRewardsWebHandler {
 	fm := template.FuncMap{
 		// Card-rewards display helpers.

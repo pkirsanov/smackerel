@@ -30,7 +30,10 @@ test.describe("Spec 100 — Unified Journey UI Transformation", () => {
     attachCSPGuard(page);
 
     // Knowledge surface (web root) carries the cross-surface app-shell nav.
+    // login() only establishes the session cookie (per its documented
+    // contract); the surface under test is driven by an explicit navigation.
     await login(page, "/");
+    await page.goto("/");
     await expect(
       page.locator('nav.app-shell-nav a[data-nav="assistant"]').first(),
     ).toHaveAttribute("href", "/assistant");
@@ -108,7 +111,10 @@ test.describe("Spec 100 — Unified Journey UI Transformation", () => {
     page,
   }) => {
     attachCSPGuard(page);
+    // login() only establishes the session cookie; navigate to the surface
+    // under test so the server-rendered card-admin page is the DOM under assertion.
     await login(page, "/cards/admin");
+    await page.goto("/cards/admin");
     // The card admin page cross-links the RELOCATED product-level invites path.
     await expect(
       page.locator('[data-action="account-invites"]'),
@@ -135,7 +141,10 @@ test.describe("Spec 100 — Unified Journey UI Transformation", () => {
 
     // The PWA assistant page injects the shared cross-surface nav (SR-13).
     attachCSPGuard(page);
+    // login() only establishes the session cookie; navigate to the surface
+    // under test so appnav.js (served from /pwa/lib/appnav.js) mounts the nav.
     await login(page, "/pwa/assistant.html");
+    await page.goto("/pwa/assistant.html");
     await expect(
       page.locator('#app-shell-nav a[data-nav="assistant"]'),
     ).toHaveCount(1);
