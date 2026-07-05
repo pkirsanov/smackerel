@@ -155,7 +155,24 @@ func mergeObservations(existing *RotatingCategory, obs []RotatingCategoryObserva
 	)
 	if !disagreement {
 		confidence = chosen.maxConf
-		needsVerify = confidence < threshold // (UC-002 A2) low confidence still flags
+		// Confidence-based flagging requires a threshold in the valid (0,1] range
+		// — the same contract Service.Reconcile enforces. When the threshold is
+		// out of range (e.g. the card_rewards feature is DISABLED and the SST
+		// placeholder is a degenerate 0.0, as in the disposable e2e-ui stack),
+		// the reconciler cannot classify confidence and MUST NOT downgrade a
+		// needs_verification flag a valid-threshold pass already set — it
+		// preserves the existing flag rather than silently clearing it. Without
+		// this guard a parallel pipeline RunDailyRefresh reconciling every row at
+		// 0.0 clears each single-source low-confidence flag (`confidence < 0.0`
+		// is always false), the SCN-083-K01 cross-reconcile pollution. A
+		// brand-new record with no prior flag stays unflagged. Disagreement-based
+		// flags are threshold-independent (handled in the else branch below).
+		switch {
+		case threshold > 0 && threshold <= 1:
+			needsVerify = confidence < threshold // (UC-002 A2) low confidence still flags
+		case existing != nil:
+			needsVerify = existing.NeedsVerification // threshold unusable — preserve prior verdict
+		}
 		sourceCount = len(obs)
 	} else {
 		confidence = obs[0].Confidence

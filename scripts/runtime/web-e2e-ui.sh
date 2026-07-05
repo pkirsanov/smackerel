@@ -309,7 +309,19 @@ bring_up_test_stack() {
   # Pre-clean any leftover lane state from a prior aborted run so a
   # restart cannot inherit a stale container/volume set.
   e2e_ui_compose down --remove-orphans --volumes --timeout 60 >&2 || true
-  e2e_ui_compose up -d --wait --wait-timeout "$wait_timeout_s"
+  # Build-fresh before starting so a run ALWAYS reflects current source. `--build`
+  # rebuilds any service image whose build context changed (here: smackerel-core
+  # from ./Dockerfile) and reuses the layer cache when nothing changed. Without it
+  # `up` silently reuses a stale prebuilt smackerel-core image, so a green run can
+  # mask an unbuilt change (and a red run can reflect stale code) — the correctness
+  # hazard this lane previously hit. This mirrors the explicit build->up freshness
+  # convention the Go live-stack lanes use in
+  # tests/integration/test_runtime_health.sh (`smackerel.sh --env test build` then
+  # `up`); `up --build` is the profile-faithful equivalent for this lane because it
+  # builds exactly the services it starts — the 2 GB smackerel-ml sidecar stays
+  # profile-gated OFF (docker-compose.e2e-ui.override.yml F-100-OPT-03) and is
+  # never built, and the nginx/postgres/nats images are pulls, not builds.
+  e2e_ui_compose up -d --wait --wait-timeout "$wait_timeout_s" --build
 }
 
 # Default action: bring up the disposable test stack under the
