@@ -108,6 +108,23 @@ write_p0_recap_handoff_session() {
 EOF
 }
 
+write_ambient_cross_spec_session() {
+  local repo="$1"
+  cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
+{
+  "sessionId": "retro-health-ambient-cross-spec-session",
+  "turnSnapshots": [
+    {"specDir": "specs/070-other-fixture", "turnNumber": 1, "startedAt": "2026-05-24T09:00:00Z", "completedAt": "2026-05-24T09:05:00Z", "content": "recap requested"},
+    {"specDir": "specs/070-other-fixture", "turnNumber": 2, "startedAt": "2026-05-24T09:06:00Z", "completedAt": "2026-05-24T09:07:00Z", "content": "handoff requested"},
+    {"specDir": "specs/070-other-fixture", "turnNumber": 3, "startedAt": "2026-05-24T09:08:00Z", "completedAt": "2026-05-24T09:09:00Z", "content": "another handoff requested"}
+  ],
+  "messages": [
+    {"specDir": "specs/070-other-fixture", "role": "assistant", "content": "handoff requested for other spec"}
+  ]
+}
+EOF
+}
+
 run_health() {
   local repo="$1"
   shift
@@ -232,6 +249,16 @@ run_health "$repo"
 assert_exit "S2b recap/handoff P0" 1
 assert_stderr_contains "S2b" "P0 convergence regression"
 assert_stderr_contains "S2b" "recapHandoffInvocationCount=3"
+
+echo ""
+echo "--- S2c: ambient cross-spec telemetry is skipped (spec-attribution guard) ---"
+repo="$(stage_repo s2c-ambient-cross-spec)"
+write_ambient_cross_spec_session "$repo"
+run_health "$repo"
+assert_exit "S2c ambient cross-spec" 0
+assert_json "S2c ambient cross-spec"
+assert_jq "S2c SLO skipped" '.convergenceHealth.slo == "skipped"'
+assert_jq "S2c skipReason cites attribution" '.convergenceHealth.skipReason | test("attributed")'
 
 echo ""
 echo "--- S3: all thresholds healthy emits markdown section ---"
