@@ -40,39 +40,58 @@ const (
 	// the heavy keys (F-RUNBOOK / spec 099).
 	EnvKeyMinRAMMBLight  = "PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT"
 	EnvKeyMinDiskGBLight = "PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT"
+	// The *_UI keys carry the floor for the no-ML PWA browser e2e-ui lane
+	// (spec 100 F-100-OPT-02/03). That lane runs postgres + nats + core + the
+	// ollama nginx-stub and DROPS the 2 GB ml sidecar (the UI journeys never
+	// run embedding/inference, so core falls back to text mode), which puts its
+	// honest floor between the light and heavy floors. A THIRD, independently
+	// fail-loud SST pair — never a relaxation default of the heavy or light keys.
+	EnvKeyMinRAMMBUI  = "PREFLIGHT_MIN_AVAILABLE_RAM_MB_UI"
+	EnvKeyMinDiskGBUI = "PREFLIGHT_MIN_AVAILABLE_DISK_GB_UI"
 	// OverrideEnvKey, when truthy, bypasses the gate with a loud WARNING.
 	OverrideEnvKey = "SMACKEREL_PREFLIGHT_OVERRIDE"
 )
 
 // Profile selects WHICH SST threshold pair the guard enforces. The heavy
-// profile (build, up, full integration|e2e|e2e-ui|stress) uses the original
+// profile (build, up, full integration|e2e|stress) uses the original
 // PREFLIGHT_MIN_AVAILABLE_{RAM_MB,DISK_GB} keys. The light profile (the
-// stores-only integration-light lane) uses the *_LIGHT keys. There is no
-// implicit default — the caller MUST choose explicitly (NO-DEFAULTS).
+// stores-only integration-light lane) uses the *_LIGHT keys. The ui profile
+// (spec 100 F-100-OPT-02 — the no-ML PWA browser e2e-ui lane: postgres + nats
+// + core + the ollama-stub, with the ml sidecar dropped by F-100-OPT-03) uses
+// the *_UI keys. There is no implicit default — the caller MUST choose
+// explicitly (NO-DEFAULTS).
 type Profile string
 
 const (
 	ProfileHeavy Profile = "heavy"
 	ProfileLight Profile = "light"
+	// ProfileUI is the no-ML PWA browser e2e-ui lane (spec 100 F-100-OPT-03
+	// drops the 2 GB ml sidecar from that lane), so its honest floor sits well
+	// below the heavy floor. See EnvKeyMinRAMMBUI.
+	ProfileUI Profile = "ui"
 )
 
 // ParseProfile validates a profile name. Empty or unknown values fail loud —
 // there is no implicit default.
 func ParseProfile(s string) (Profile, error) {
 	switch Profile(s) {
-	case ProfileHeavy, ProfileLight:
+	case ProfileHeavy, ProfileLight, ProfileUI:
 		return Profile(s), nil
 	default:
-		return "", fmt.Errorf("invalid pre-flight profile %q (want %q or %q; NO-DEFAULTS)", s, ProfileHeavy, ProfileLight)
+		return "", fmt.Errorf("invalid pre-flight profile %q (want %q, %q, or %q; NO-DEFAULTS)", s, ProfileHeavy, ProfileLight, ProfileUI)
 	}
 }
 
 // thresholdKeysForProfile returns the (RAM, disk) env key names for a profile.
 func thresholdKeysForProfile(p Profile) (ramKey, diskKey string) {
-	if p == ProfileLight {
+	switch p {
+	case ProfileLight:
 		return EnvKeyMinRAMMBLight, EnvKeyMinDiskGBLight
+	case ProfileUI:
+		return EnvKeyMinRAMMBUI, EnvKeyMinDiskGBUI
+	default:
+		return EnvKeyMinRAMMB, EnvKeyMinDiskGB
 	}
-	return EnvKeyMinRAMMB, EnvKeyMinDiskGB
 }
 
 // Thresholds are the SST-configured minimums. Both are required; the guard

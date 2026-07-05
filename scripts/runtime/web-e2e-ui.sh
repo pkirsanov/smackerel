@@ -230,14 +230,18 @@ e2e_ui_compose() {
   # project-name + env-file + repo compose file are applied uniformly
   # and the integration test can grep for the contract.
   #
-  # Spec 100 F-100-OPT-01 — the base docker-compose.yml is layered with a
-  # TEST-ONLY override (docker-compose.e2e-ui.override.yml) that swaps the
-  # `ollama` service for a tiny nginx:alpine stub. The shared SST test env
-  # emits COMPOSE_PROFILES=ollama (environments.test.ollama_enabled=true),
-  # which --env-file activates natively, so without the override this lane
-  # would pull the ~3 GB heavyweight ollama image and stall `up --wait` on a
-  # macOS Docker host. The browser UI journeys never run GPU inference (J5 is
-  # ENV-CONSTRAINED); core/ml only need the ollama endpoint REACHABLE at boot.
+    # Spec 100 F-100-OPT-01 + F-100-OPT-03 — the base docker-compose.yml is
+    # layered with a TEST-ONLY override (docker-compose.e2e-ui.override.yml)
+    # that (a) swaps the `ollama` service for a tiny nginx:alpine stub
+    # (F-100-OPT-01) and (b) profile-gates the 2 GB `smackerel-ml` sidecar OFF
+    # (F-100-OPT-03). The shared SST test env emits COMPOSE_PROFILES=ollama
+    # (environments.test.ollama_enabled=true), which --env-file activates
+    # natively, so without the override this lane would pull the ~3 GB
+    # heavyweight ollama image and stall `up --wait` on a macOS Docker host. The
+    # browser UI journeys never run GPU inference or ML embedding (J5 is
+    # ENV-CONSTRAINED); core only needs the ollama endpoint REACHABLE at boot
+    # and does NOT boot-depend on ml (depends_on = postgres+nats; /api/health
+    # excludes ml; ML-readiness is a background goroutine with text fallback).
   # The override is loaded ONLY here — the prod stack (deploy/compose.deploy.yml)
   # and the dev/integration/e2e lanes (smackerel_compose) are untouched.
   docker compose \

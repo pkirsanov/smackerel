@@ -571,3 +571,205 @@ by the Go render/handler suites and recorded as a known environmental failure
 (F-100-ENV-01) — it is NOT claimed as browser-green. The ollama-weight
 optimization (F-100-OPT-01) is routed to `bubbles.devops`. No `git push` and no
 deploy were performed.
+
+---
+
+## F-100-OPT-02 / F-100-OPT-03 — No-ML e2e-ui lane + measured lower preflight floor (follow-up)
+
+**Context.** This is a post-`done` scoped optimization of the ENV-CONSTRAINED
+e2e-ui lane recorded above (F-100-ENV-01). The lane could not run on the
+developer's macOS host because the `heavy` preflight floor requires **6000 MB**
+free RAM (`config/smackerel.yaml runtime.preflight.min_available_ram_mb`) and,
+over ~15 h of monitoring, the saturated host never exceeded ~1.5 GB free.
+Root-cause: after F-100-OPT-01 stubbed the 8 GB `ollama` service, the largest
+remaining driver of the floor is the **`smackerel-ml` sidecar's 2 GB mem limit**
+(`docker-compose.yml` `smackerel-ml.deploy.resources.limits.memory: 2G` — note
+the base compose declares **2G**, not the 3G quoted in the task brief), yet the
+spec-100 UI journeys never run ML inference. F-100-OPT-03 removes ml from the
+lane; F-100-OPT-02 lowers the lane's preflight floor to a measured, fail-loud
+`ui` profile. No `git commit` / `git push` / deploy performed. Left staged for
+the orchestrator.
+
+### Test-integrity finding (checked BEFORE any change — Claim Source: executed)
+
+A case-insensitive grep of **every** e2e-ui journey spec
+(`web/pwa/tests/**/*.spec.ts`, the Playwright `testMatch`) for
+`embedding|semantic|inference|sidecar|similarity|smackerel-ml|model_loaded|embed|/v1/search|vector`
+returned **empty** — no journey asserts ML/embedding-backed behavior. Specs read
+in full to confirm:
+
+| Spec | What it asserts | Needs ML? |
+|------|-----------------|-----------|
+| `web/pwa/tests/unified_journey.spec.ts` (SCN-100-01..09 — the canonical spec-100 journeys) | app-shell nav `href`s, login-landing 302, `/pwa/share` ACK **HTML copy** ("searchable"), `/admin/invites` path, manifest shortcuts | No |
+| `web/pwa/tests/assistant_chat.spec.ts` | served-route probe (`/pwa/assistant.html` ∈ {200,401,303}) | No |
+| `web/pwa/tests/chaos_saga_20260702.spec.ts` | J1–J4 nav/capture/discoverability via `ev()` evidence (no `expect()` on ML); J5 assistant-answer leg is explicitly `ENV-CONSTRAINED` | No (temporary chaos artifact; J2 `/api/search` is evidence-only and text-mode fallback satisfies it) |
+| `web/pwa/tests/photos_duplicates.spec.ts`, `photos_docscan.spec.ts` | `test.fixme(...)` — skipped traceability anchors (real assertions live in Go tests) | No (dup-detect = perceptual hash; OCR = ollama, already stubbed — neither is the sentence-transformers `smackerel-ml`) |
+
+**Finding: no journey needs ML.** The lane is clean to drop ml.
+
+### What changed (files + 1-line why)
+
+| File | Why |
+|------|-----|
+| `docker-compose.e2e-ui.override.yml` | F-100-OPT-03: profile-gate `smackerel-ml` behind an inert `ml` profile (`COMPOSE_PROFILES` for the test env is only ever `ollama,searxng[,monitoring]` — never `ml`), dropping the 2 GB sidecar from the lane only. |
+| `config/smackerel.yaml` | F-100-OPT-02: add the fail-loud SST `runtime.preflight.min_available_ram_mb_ui: 2500` / `min_available_disk_gb_ui: 8` (third profile pair). |
+| `internal/preflight/preflight.go` | Add `ProfileUI`, `EnvKeyMinRAMMBUI`/`EnvKeyMinDiskGBUI`; extend `ParseProfile` + `thresholdKeysForProfile` (fail-loud, no default). |
+| `scripts/commands/config.sh` | Read the `_ui` keys via `required_value` (fail-loud) and emit them into the generated env file. |
+| `cmd/preflight/main.go`, `scripts/runtime/preflight.sh` | Extend the `--profile` contract help to `heavy|light|ui`. |
+| `smackerel.sh` | e2e-ui dispatch now calls `smackerel_assert_host_resources_profile test ui` (was the 6000 MB heavy wrapper); wrapper comment updated. |
+| `scripts/runtime/web-e2e-ui.sh` | Document the ml drop alongside the ollama stub in the `e2e_ui_compose` comment. |
+| `internal/preflight/preflight_test.go`, `internal/preflight/wiring_contract_test.go`, `tests/unit/cli/spec_077_bootstrap_pwa_tooling_test.sh` | Lock the ui profile logic, the config wiring (incl. real-generated-env read), the e2e-ui→ui-profile selection, and the no-ML override gate. |
+
+### The floor value and how it was derived (declared-limits sum + documented headroom)
+
+Measuring a live RSS was **not** done — it would require bringing the stack up,
+and the host has ~1 GB free while running the user's other live projects (the
+hard RAM-safety constraint). Per the brief's preferred method, the floor is the
+sum of the retained services' **declared compose mem limits** plus documented
+browser + runtime headroom:
+
+```
+retained e2e-ui containers (ml DROPPED):
+  postgres        512M   (docker-compose.yml postgres.deploy.resources.limits.memory)
+  nats            256M   (nats …)
+  smackerel-core  512M   (smackerel-core …)
+  ollama-stub      64M   (docker-compose.e2e-ui.override.yml — F-100-OPT-01 nginx stub)
+  smackerel-ml      0M   (DROPPED — F-100-OPT-03 profile-gate)
+                 ------
+  subtotal       1344M
++ Playwright browser (chromium + chromium-headless-shell + ffmpeg, headless) ~640M
++ OS / container-runtime / page-cache headroom                               ~500M
+                 ------
+  ≈ 2484M  ->  min_available_ram_mb_ui = 2500 (clean SST value, with margin)
+  disk: min_available_disk_gb_ui = 8 (== light; no multi-GB ollama models, no ml image layers)
+```
+
+2500 MB is meaningfully below the 6000 MB heavy floor (the 8 GB ollama envelope
+and the 2 GB ml sidecar are gone) and deliberately above the 2000 MB `light`
+floor (this lane still runs `smackerel-core` + a headless browser; the
+stores-only light lane runs neither), so a NEW profile — not a reuse of `light`
+— is the honest choice.
+
+### ML dropped, not stubbed — and why
+
+`ollama` is stubbed (nginx→200) because core/ml only need its endpoint
+*reachable* at boot. `ml` is **dropped** instead because a `/health`-200 ml stub
+would FALSELY signal ML-ready — `SearchEngine.probeMLHealth` checks only
+`resp.StatusCode == http.StatusOK` (`internal/api/search.go:497`) — making core
+attempt REAL embedding calls against a stub that cannot embed. Dropping ml
+cleanly yields core's documented **text-fallback** mode. Nothing boot-depends on
+ml (verified `cmd/core/services.go`): `smackerel-core` `depends_on` is
+postgres+nats only; `/api/health` (the `up --wait` gate) excludes ml and always
+200s; the ML-readiness gate is a background goroutine
+(`go svc.searchEngine.WaitForMLReady(...)`, `cmd/core/services.go:281`) whose
+timeout falls back to text mode — the same behavior the UI journeys already
+tolerate. Docker Compose cannot delete a base service via an override, so the
+drop is expressed as a profile-gate (idiomatic — mirrors the base `ollama`
+`profiles: [ollama]`), scoped to the e2e-ui lane because only `e2e_ui_compose`
+loads the override.
+
+### Validation evidence (all WITHOUT a heavy stack bring-up)
+
+**1. `./smackerel.sh config generate` (dev + test) emits the new fail-loud SST keys — Claim Source: executed:**
+
+```
+$ ./smackerel.sh config generate            # dev
+config-validate: …/config/generated/dev.env.tmp.940 OK
+Generated …/config/generated/dev.env
+$ ./smackerel.sh --env test config generate # test (the e2e-ui lane env)
+config-validate: …/config/generated/test.env.tmp.6518 OK
+Generated …/config/generated/test.env
+$ grep PREFLIGHT_MIN_AVAILABLE config/generated/test.env
+PREFLIGHT_MIN_AVAILABLE_RAM_MB=6000
+PREFLIGHT_MIN_AVAILABLE_DISK_GB=15
+PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT=2000
+PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT=8
+PREFLIGHT_MIN_AVAILABLE_RAM_MB_UI=2500
+PREFLIGHT_MIN_AVAILABLE_DISK_GB_UI=8
+```
+
+**2. Focused preflight Go unit tests (`./smackerel.sh test unit --go --go-run '…' --verbose`) — Claim Source: executed:**
+
+```
+=== RUN   TestParseProfile_Valid
+--- PASS: TestParseProfile_Valid (0.00s)
+=== RUN   TestParseThresholdsForProfile_UIReadsUIKeys
+--- PASS: TestParseThresholdsForProfile_UIReadsUIKeys (0.00s)
+=== RUN   TestParseThresholdsForProfile_UIMissingOrInvalidFailsLoud
+--- PASS: TestParseThresholdsForProfile_UIMissingOrInvalidFailsLoud (0.00s)
+=== RUN   TestRunForProfile_UIUsesUIThresholds
+--- PASS: TestRunForProfile_UIUsesUIThresholds (0.00s)
+=== RUN   TestRunForProfile_UIBelowUIFloorExitsOne
+--- PASS: TestRunForProfile_UIBelowUIFloorExitsOne (0.00s)
+=== RUN   TestGuardWiring_E2EUILaneUsesUIProfile
+--- PASS: TestGuardWiring_E2EUILaneUsesUIProfile (0.01s)
+=== RUN   TestConfigWiring_YamlAndConfigScript
+--- PASS: TestConfigWiring_YamlAndConfigScript (0.05s)
+=== RUN   TestConfigWiring_GeneratedEnvCarriesThresholds
+--- PASS: TestConfigWiring_GeneratedEnvCarriesThresholds (0.03s)
+ok      github.com/smackerel/smackerel/internal/preflight       0.240s
+```
+
+`TestConfigWiring_GeneratedEnvCarriesThresholds` is the no-stack "dry
+`cmd/preflight --profile ui`" proof: it runs the exact production read path
+(`LoadEnvFile(config/generated/{dev,test}.env)` + `ParseThresholdsForProfile(m,
+ProfileUI)`) and asserts the ui floor is read from the REAL generated env;
+`TestParseThresholdsForProfile_UIMissingOrInvalidFailsLoud` proves a
+missing/empty `_UI` key fails loud naming the key (no default). A live
+standalone `cmd/preflight --profile ui` was NOT run: on macOS the host `go run`
+crashes on the absent `/proc/meminfo` (BUG-099-001, so the lane uses the
+dockerized runner), and invoking the full e2e-ui lane risks proceeding to a
+stack bring-up — both barred by the RAM-safety + terminal-discipline
+constraints. The unit test exercises the identical decision path.
+
+**3. spec-077 shell CLI lock (no-ML override + ui-profile selection) — Claim Source: executed:**
+
+```
+$ bash tests/unit/cli/spec_077_bootstrap_pwa_tooling_test.sh
+…
+PASS: spec_077_e2e_ui_no_ml_and_ui_preflight_floor (F-100-OPT-02/03 lock)
+PASS: spec_077_bootstrap_pwa_tooling_test (macOS browser-cache OS-path lock)
+```
+
+**4. Full Go unit regression (`./smackerel.sh test unit --go`) — Claim Source: executed:**
+
+```
+$ grep -c '^ok ' <suite output>   ->  137 ok packages
+$ grep -E 'FAIL|panic:|--- FAIL' <suite output>  ->  (none)
+[go-unit] go test ./... finished OK
+```
+
+**5. Lint / format — Claim Source: executed.** `./smackerel.sh lint` (go vet +
+Python ruff + web asset validation) passed ("All checks passed!" / "Web
+validation passed"). `./smackerel.sh --check format` completed through both
+stages under `set -euo pipefail` ("69 files already formatted"), proving
+`go-format.sh --check` (`gofmt -l` over `cmd internal tests`) exited 0. Direct
+`shellcheck -x scripts/runtime/preflight.sh scripts/runtime/web-e2e-ui.sh
+tests/unit/cli/spec_077_bootstrap_pwa_tooling_test.sh` was clean (exit 0). shfmt
+is not an enforced repo surface (no `.editorconfig`, no shfmt invocation
+anywhere); its default-tab diff is the repo's pre-existing 2-space +
+backslash-continuation style, and the new section I matches it identically.
+
+### Feasibility at the new floor + residual risk
+
+At `min_available_ram_mb_ui = 2500`, a browser-green run in a ~1.5 GB **host**
+window is feasible with two important caveats about *where* memory is measured:
+
+- On macOS the preflight reads the **Docker VM's** `MemAvailable` (not the host's
+  ~1.5 GB), and the Playwright browser runs on the **host**. So the ~640 MB
+  browser fits the ~1.5 GB host window, and the 1344 MB of containers must fit
+  the Docker VM's free RAM, which the VM-side preflight gates at ≥2500 MB.
+- **Residual risk 1 — cold core build.** The e2e-ui lane does not pre-build; if
+  `SMACKEREL_CORE_IMAGE` is empty and no core image exists, `up --wait` triggers
+  a Go compile (~1.2–1.5 GB peak) that exceeds the 2500 runtime floor's headroom.
+  Mitigation: pre-build core (build-offload / when RAM is available) before
+  running the lane — the same posture the heavy build floor already implies.
+- **Residual risk 2 — VM starvation.** If the Docker VM itself is allocated too
+  little RAM, the VM-side preflight legitimately refuses even at 2500. The floor
+  is a fail-fast gate against clearly-doomed runs, not a guarantee.
+
+Net: the 6000→2500 reduction removes the structural blocker (the 2 GB ml sidecar
++ the ollama-driven weight) so the no-ML lane can clear preflight in a realistic
+constrained window, while remaining honestly fail-loud on genuinely
+insufficient hosts.
+

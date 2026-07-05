@@ -760,6 +760,11 @@ PREFLIGHT_MIN_AVAILABLE_DISK_GB="$(required_value runtime.preflight.min_availabl
 # the heavy keys (Gate G028 / NO-DEFAULTS).
 PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT="$(required_value runtime.preflight.min_available_ram_mb_light)"
 PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT="$(required_value runtime.preflight.min_available_disk_gb_light)"
+# UI profile thresholds for the no-ML PWA browser e2e-ui lane (spec 100
+# F-100-OPT-02/03; cmd/preflight --profile ui). Third fail-loud pair; never a
+# default of the heavy or light keys (Gate G028 / NO-DEFAULTS).
+PREFLIGHT_MIN_AVAILABLE_RAM_MB_UI="$(required_value runtime.preflight.min_available_ram_mb_ui)"
+PREFLIGHT_MIN_AVAILABLE_DISK_GB_UI="$(required_value runtime.preflight.min_available_disk_gb_ui)"
 DIGEST_CRON="$(required_value runtime.digest_cron)"
 EMBEDDING_MODEL="$(required_value runtime.embedding_model)"
 LOG_LEVEL="$(required_value runtime.log_level)"
@@ -1950,6 +1955,8 @@ PREFLIGHT_MIN_AVAILABLE_RAM_MB=${PREFLIGHT_MIN_AVAILABLE_RAM_MB}
 PREFLIGHT_MIN_AVAILABLE_DISK_GB=${PREFLIGHT_MIN_AVAILABLE_DISK_GB}
 PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT=${PREFLIGHT_MIN_AVAILABLE_RAM_MB_LIGHT}
 PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT=${PREFLIGHT_MIN_AVAILABLE_DISK_GB_LIGHT}
+PREFLIGHT_MIN_AVAILABLE_RAM_MB_UI=${PREFLIGHT_MIN_AVAILABLE_RAM_MB_UI}
+PREFLIGHT_MIN_AVAILABLE_DISK_GB_UI=${PREFLIGHT_MIN_AVAILABLE_DISK_GB_UI}
 OLLAMA_URL=${OLLAMA_URL}
 OLLAMA_MODEL=${OLLAMA_MODEL}
 OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL}

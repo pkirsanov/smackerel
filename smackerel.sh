@@ -489,11 +489,13 @@ smackerel_assert_host_resources_profile() {
 }
 
 smackerel_assert_host_resources() {
-  # Heavy back-compat wrapper. Every existing caller (build, up,
-  # integration|e2e|e2e-ui|stress, pre-flight) gates a HEAVY op, so the profile
-  # is pinned to `heavy` here — this preserves the existing thresholds exactly.
+  # Heavy back-compat wrapper. Every caller of THIS wrapper (build, up,
+  # integration|e2e|stress, pre-flight) gates a HEAVY op, so the profile is
+  # pinned to `heavy` here — this preserves the existing thresholds exactly.
   # The stores-only integration-light lane calls
-  # smackerel_assert_host_resources_profile <env> light directly.
+  # smackerel_assert_host_resources_profile <env> light directly; the no-ML
+  # PWA browser e2e-ui lane calls it with the `ui` profile (spec 100
+  # F-100-OPT-02).
   smackerel_assert_host_resources_profile "$1" heavy
 }
 
@@ -1964,12 +1966,17 @@ Options:
 E2EUI_HELP
           exit 0
         fi
-        # Spec 099 — resource pre-flight before the heavy Playwright UI lane
-        # (full disposable test stack). Skip for the read-only
-        # --print-compose-project informational flag.
+        # Spec 099 + spec 100 F-100-OPT-02/03 — resource pre-flight before the
+        # Playwright UI lane. The e2e-ui lane runs the NO-ML disposable stack
+        # (F-100-OPT-03 profile-gates the 2 GB ml sidecar OFF; the ollama
+        # service is already the F-100-OPT-01 nginx-stub), so it gates on the
+        # LOWER `ui` profile floor (PREFLIGHT_MIN_AVAILABLE_*_UI, ~2500 MB)
+        # instead of the 6000 MB heavy floor — the browser UI journeys never
+        # run embedding/inference (core falls back to text mode). Skip for the
+        # read-only --print-compose-project informational flag.
         if [[ "${1:-}" != "--print-compose-project" ]]; then
           smackerel_generate_config test >/dev/null
-          smackerel_assert_host_resources test
+          smackerel_assert_host_resources_profile test ui
         fi
         exec bash "$SCRIPT_DIR/scripts/runtime/web-e2e-ui.sh" "$@"
         ;;

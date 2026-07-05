@@ -25,6 +25,17 @@ func validLightEnv(ramMB, diskGB string) map[string]string {
 	}
 }
 
+// validUIEnv returns a minimal env map carrying ONLY the two required *_UI
+// threshold keys, used to prove the ui profile (spec 100 F-100-OPT-02: the
+// no-ML e2e-ui lane) reads its own keys and never falls through to the heavy
+// or light keys.
+func validUIEnv(ramMB, diskGB string) map[string]string {
+	return map[string]string{
+		EnvKeyMinRAMMBUI:  ramMB,
+		EnvKeyMinDiskGBUI: diskGB,
+	}
+}
+
 // --- Evaluate (pure comparison) -------------------------------------------
 
 func TestEvaluate_AtOrAboveThreshold(t *testing.T) {
@@ -126,7 +137,7 @@ func TestParseThresholds_NonPositiveFailsLoud(t *testing.T) {
 // --- ParseProfile (fail-loud, NO-DEFAULTS) ---------------------------------
 
 func TestParseProfile_Valid(t *testing.T) {
-	for in, want := range map[string]Profile{"heavy": ProfileHeavy, "light": ProfileLight} {
+	for in, want := range map[string]Profile{"heavy": ProfileHeavy, "light": ProfileLight, "ui": ProfileUI} {
 		got, err := ParseProfile(in)
 		if err != nil {
 			t.Fatalf("ParseProfile(%q) unexpected error: %v", in, err)
@@ -217,6 +228,104 @@ func TestParseThresholdsForProfile_LightEmptyOrNonPositiveFailsLoud(t *testing.T
 	_, err = ParseThresholdsForProfile(validLightEnv("plenty", "8"), ProfileLight)
 	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBLight) {
 		t.Fatalf("expected fail-loud naming %q for non-numeric value, got: %v", EnvKeyMinRAMMBLight, err)
+	}
+}
+
+// --- ui profile (spec 100 F-100-OPT-02: the no-ML e2e-ui lane) -------------
+
+// The ui profile reads ONLY the *_UI keys — never the heavy or light keys.
+func TestParseThresholdsForProfile_UIReadsUIKeys(t *testing.T) {
+	th, err := ParseThresholdsForProfile(validUIEnv("2500", "8"), ProfileUI)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if th.MinAvailableRAMMB != 2500 || th.MinAvailableDiskGB != 8 {
+		t.Fatalf("ui thresholds not read from the *_UI keys: %+v", th)
+	}
+
+	// Heavy+light keys alone (no *_UI present) MUST fail the ui profile, naming
+	// a UI key — proving ui never falls through to the heavy or light keys.
+	env := map[string]string{
+		EnvKeyMinRAMMB:       "6000",
+		EnvKeyMinDiskGB:      "15",
+		EnvKeyMinRAMMBLight:  "2000",
+		EnvKeyMinDiskGBLight: "8",
+	}
+	_, err = ParseThresholdsForProfile(env, ProfileUI)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBUI) {
+		t.Fatalf("ui profile must read %q (not the heavy/light keys); got: %v", EnvKeyMinRAMMBUI, err)
+	}
+}
+
+// Adversarial: a missing/empty/non-positive *_UI key MUST fail loud naming THAT
+// EXACT key — never a silent default, never a fall-through to heavy/light.
+func TestParseThresholdsForProfile_UIMissingOrInvalidFailsLoud(t *testing.T) {
+	// Missing ui RAM key (ui disk present).
+	_, err := ParseThresholdsForProfile(map[string]string{EnvKeyMinDiskGBUI: "8"}, ProfileUI)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBUI) {
+		t.Fatalf("expected fail-loud naming %q, got: %v", EnvKeyMinRAMMBUI, err)
+	}
+	// Missing ui disk key (ui RAM present).
+	_, err = ParseThresholdsForProfile(map[string]string{EnvKeyMinRAMMBUI: "2500"}, ProfileUI)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinDiskGBUI) {
+		t.Fatalf("expected fail-loud naming %q, got: %v", EnvKeyMinDiskGBUI, err)
+	}
+	// Empty ui RAM value.
+	_, err = ParseThresholdsForProfile(validUIEnv("", "8"), ProfileUI)
+	if err == nil || !strings.Contains(err.Error(), EnvKeyMinRAMMBUI) {
+		t.Fatalf("expected fail-loud naming %q for empty value, got: %v", EnvKeyMinRAMMBUI, err)
+	}
+	// Non-positive ui disk value.
+	for _, bad := range []string{"0", "-5"} {
+		_, err = ParseThresholdsForProfile(validUIEnv("2500", bad), ProfileUI)
+		if err == nil || !strings.Contains(err.Error(), EnvKeyMinDiskGBUI) {
+			t.Fatalf("expected fail-loud naming %q for value %q, got: %v", EnvKeyMinDiskGBUI, bad, err)
+		}
+	}
+}
+
+// The decisive ui-profile test: resources BELOW the heavy floor but AT/above
+// the ui floor MUST pass under ui and FAIL under heavy — proving the ui
+// thresholds (not the heavy ones) were actually applied to the e2e-ui lane.
+func TestRunForProfile_UIUsesUIThresholds(t *testing.T) {
+	env := map[string]string{
+		EnvKeyMinRAMMB:    "6000",
+		EnvKeyMinDiskGB:   "15",
+		EnvKeyMinRAMMBUI:  "2500",
+		EnvKeyMinDiskGBUI: "8",
+	}
+	res := Resources{AvailableRAMMB: 3000, AvailableDiskMB: 10 * 1024}
+
+	_, code, err := RunForProfile(env, res, false, ProfileUI)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("ui profile must pass above the ui floor, got exit %d", code)
+	}
+
+	_, heavyCode, err := RunForProfile(env, res, false, ProfileHeavy)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if heavyCode != 1 {
+		t.Fatalf("heavy profile must fail for the same below-heavy resources, got exit %d", heavyCode)
+	}
+}
+
+func TestRunForProfile_UIBelowUIFloorExitsOne(t *testing.T) {
+	report, code, err := RunForProfile(validUIEnv("2500", "8"),
+		Resources{AvailableRAMMB: 2499, AvailableDiskMB: 8 * 1024}, false, ProfileUI)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if code != 1 {
+		t.Fatalf("expected exit 1 below the ui floor, got %d", code)
+	}
+	for _, want := range []string{"BELOW THRESHOLD", "2499", "2500"} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("report missing %q; got:\n%s", want, report)
+		}
 	}
 }
 

@@ -11,13 +11,14 @@
 //
 // Usage:
 //
-//	go run ./cmd/preflight --env <dev|test> --repo-root <abs-path> --profile <heavy|light>
+//	go run ./cmd/preflight --env <dev|test> --repo-root <abs-path> --profile <heavy|light|ui>
 //
 // All three flags are REQUIRED — there is no default (Gate G028 / NO-DEFAULTS).
 // The env file path is derived as <repo-root>/config/generated/<env>.env and
 // the disk check targets <repo-root>. The profile selects which SST threshold
-// pair is enforced: heavy (build/up/full test lanes) or light (the stores-only
-// integration-light lane).
+// pair is enforced: heavy (build/up/full test lanes), light (the stores-only
+// integration-light lane), or ui (the no-ML PWA browser e2e-ui lane, spec 100
+// F-100-OPT-02).
 package main
 
 import (
@@ -32,7 +33,7 @@ import (
 func main() {
 	envName := flag.String("env", "", "target environment name (dev|test); required")
 	repoRoot := flag.String("repo-root", "", "absolute path to the repo root; required")
-	profileName := flag.String("profile", "", "threshold profile (heavy|light); required")
+	profileName := flag.String("profile", "", "threshold profile (heavy|light|ui); required")
 	flag.Parse()
 
 	if *envName == "" {
@@ -42,7 +43,7 @@ func main() {
 		fatalf("--repo-root is required (no default; Gate G028 / NO-DEFAULTS)")
 	}
 	if *profileName == "" {
-		fatalf("--profile is required (heavy|light; no default; Gate G028 / NO-DEFAULTS)")
+		fatalf("--profile is required (heavy|light|ui; no default; Gate G028 / NO-DEFAULTS)")
 	}
 	profile, err := preflight.ParseProfile(*profileName)
 	if err != nil {

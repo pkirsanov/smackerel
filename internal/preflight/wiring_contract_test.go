@@ -56,10 +56,13 @@ func readFile(t *testing.T, root, rel string) string {
 	return string(b)
 }
 
-// heavyGuardedOps are the command paths that MUST invoke the resource guard.
-// pre-flight is the standalone check; the rest are the heavy ops.
+// heavyGuardedOps are the command paths that MUST invoke the HEAVY resource
+// guard (the 6000 MB floor). pre-flight is the standalone check; the rest are
+// the heavy ops. NOTE: e2e-ui is deliberately ABSENT — spec 100 F-100-OPT-02
+// moved it to the LOWER `ui` profile (the no-ML PWA browser lane), which is
+// locked separately by TestGuardWiring_E2EUILaneUsesUIProfile.
 var heavyGuardedOps = []string{
-	"build", "up", "integration", "e2e", "stress", "e2e-ui", "pre-flight",
+	"build", "up", "integration", "e2e", "stress", "pre-flight",
 }
 
 // caseBlockStr returns the body of a shell `case` arm (from `<label>)` to its
@@ -196,6 +199,33 @@ func TestGuardWiring_LiveFile(t *testing.T) {
 	}
 }
 
+// TestGuardWiring_E2EUILaneUsesUIProfile locks spec 100 F-100-OPT-02: the
+// e2e-ui case block gates on the LOWER `ui` preflight profile (not the 6000 MB
+// heavy floor), via a DIRECT `smackerel_assert_host_resources_profile test ui`
+// call — mirroring how the integration-light lane calls the _profile helper
+// with `light` directly. This is the mechanical lock that keeps the no-ML
+// browser lane on its honest, lowered floor.
+func TestGuardWiring_E2EUILaneUsesUIProfile(t *testing.T) {
+	root := repoRoot(t)
+	script := readFile(t, root, "smackerel.sh")
+
+	block, err := caseBlockStr(script, "e2e-ui")
+	if err != nil {
+		t.Fatalf("e2e-ui case block: %v", err)
+	}
+	if !strings.Contains(block, "smackerel_assert_host_resources_profile test ui") {
+		t.Fatalf("e2e-ui lane must gate on the ui preflight profile via `smackerel_assert_host_resources_profile test ui` (spec 100 F-100-OPT-02); block was:\n%s", block)
+	}
+	// It MUST NOT still call the heavy back-compat wrapper form
+	// `smackerel_assert_host_resources test` (which re-imposes the 6000 MB heavy
+	// floor). The wrapper name is a PREFIX of the _profile helper, so this exact
+	// literal only matches the heavy-wrapper invocation, never the _profile one
+	// (which reads `..._profile test ui`).
+	if strings.Contains(block, "smackerel_assert_host_resources test") {
+		t.Fatalf("e2e-ui lane still calls the heavy wrapper `smackerel_assert_host_resources test` — the ui floor is not applied; block was:\n%s", block)
+	}
+}
+
 // --- Adversarial: prove the contract is non-tautological -------------------
 
 func TestGuardWiring_AdversarialMissingBuildGuard(t *testing.T) {
@@ -268,6 +298,31 @@ func TestConfigWiring_YamlAndConfigScript(t *testing.T) {
 			t.Fatalf("config.sh does not emit %q into the generated env file", want)
 		}
 	}
+
+	// Spec 100 F-100-OPT-02 — the ui profile keys are a THIRD independently
+	// fail-loud SST pair (the no-ML e2e-ui lane). Present in the yaml, read via
+	// required_value, and emitted into the generated env file.
+	for _, want := range []string{"min_available_ram_mb_ui:", "min_available_disk_gb_ui:"} {
+		if !strings.Contains(yaml, want) {
+			t.Fatalf("config/smackerel.yaml missing %q (SST source for the ui preflight floor)", want)
+		}
+	}
+	for _, want := range []string{
+		"required_value runtime.preflight.min_available_ram_mb_ui",
+		"required_value runtime.preflight.min_available_disk_gb_ui",
+	} {
+		if !strings.Contains(configSh, want) {
+			t.Fatalf("config.sh does not read %q via required_value (fail-loud SST)", want)
+		}
+	}
+	for _, want := range []string{
+		"PREFLIGHT_MIN_AVAILABLE_RAM_MB_UI=${PREFLIGHT_MIN_AVAILABLE_RAM_MB_UI}",
+		"PREFLIGHT_MIN_AVAILABLE_DISK_GB_UI=${PREFLIGHT_MIN_AVAILABLE_DISK_GB_UI}",
+	} {
+		if !strings.Contains(configSh, want) {
+			t.Fatalf("config.sh does not emit %q into the generated env file", want)
+		}
+	}
 }
 
 // TestConfigWiring_GeneratedEnvCarriesThresholds proves the thresholds reach the
@@ -293,6 +348,19 @@ func TestConfigWiring_GeneratedEnvCarriesThresholds(t *testing.T) {
 		}
 		if th.MinAvailableRAMMB <= 0 || th.MinAvailableDiskGB <= 0 {
 			t.Fatalf("%s thresholds must be positive, got %+v", rel, th)
+		}
+
+		// Spec 100 F-100-OPT-02 — the ui profile keys are carried too, and are
+		// read by the SAME production path cmd/preflight uses for --profile ui
+		// (LoadEnvFile + ParseThresholdsForProfile(ProfileUI)). This is the
+		// no-stack proof that a dry `cmd/preflight --profile ui` reads the real
+		// generated floor rather than a default.
+		uiTh, err := ParseThresholdsForProfile(m, ProfileUI)
+		if err != nil {
+			t.Fatalf("%s does not carry valid ui preflight thresholds (cmd/preflight --profile ui would fail loud): %v", rel, err)
+		}
+		if uiTh.MinAvailableRAMMB <= 0 || uiTh.MinAvailableDiskGB <= 0 {
+			t.Fatalf("%s ui thresholds must be positive, got %+v", rel, uiTh)
 		}
 	}
 }
