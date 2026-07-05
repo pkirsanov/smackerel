@@ -97,6 +97,24 @@ runtime:
     # cache + the PG data dir; well under the 15 GB heavy floor because the
     # multi-GB Ollama models and core/ml image layers are never pulled here.
     min_available_disk_gb_light: 8
+    # UI profile — the no-ML PWA browser e2e-ui lane (spec 100 F-100-OPT-02/03;
+    # cmd/preflight --profile ui). That lane runs postgres + nats + core + the
+    # ollama nginx-stub and DROPS the 2 GB ml sidecar (the browser journeys
+    # never run embedding/inference — core falls back to text mode via the
+    # background ML-readiness gate). A THIRD independently fail-loud SST pair;
+    # a missing/empty *_ui key fails loud naming it (never a default of heavy
+    # or light). RAM ~2500 MB floor = the retained container mem limits
+    # (postgres 512 + nats 256 + core 512 + ollama-stub 64 = 1344 MB) + ~640 MB
+    # headroom for the Playwright chromium + chromium-headless-shell + ffmpeg
+    # browser + ~500 MB OS/runtime headroom. Meaningfully below the 6000 MB
+    # heavy floor because the 2 GB ml sidecar and the 8 GB ollama envelope are
+    # gone; above the 2000 MB light floor because this lane still runs core +
+    # the headless browser (the light lane runs neither).
+    min_available_ram_mb_ui: 2500
+    # Disk ~8 GB floor = postgres + nats + nginx-stub + core image + the Go
+    # build cache + the PG data dir; well under the 15 GB heavy floor because
+    # the multi-GB Ollama models and the ml image layers are never pulled here.
+    min_available_disk_gb_ui: 8
 
 cors:
   # Allowed origins for cross-origin requests (empty = same-origin only).
