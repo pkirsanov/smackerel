@@ -163,6 +163,66 @@ func TestReconcile_ManualOverrideNeverOverwritten_F03(t *testing.T) {
 	}
 }
 
+// SCN-083-K01 regression (cross-reconcile robustness) — a reconcile pass whose
+// threshold is OUTSIDE the valid (0,1] range cannot classify confidence-based
+// needs_verification and MUST NOT downgrade a flag a valid-threshold pass
+// already set. This is the exact cross-test-pollution failure the e2e-ui
+// dashboard test (SCN-083-K01) hit: in the disposable e2e-ui stack the
+// card_rewards feature is DISABLED, so the pipeline reconciler's SST threshold
+// is a degenerate 0.0; a parallel admin "scrape now" (RunDailyRefresh) globally
+// re-reconciled every row at 0.0, and `confidence < 0.0` is always false, which
+// silently cleared the single-source low-confidence needs_verification flag
+// another test had seeded via the web reconcile at 0.7. Disagreement-based
+// flags are threshold-independent and unaffected (which is why SCN-083-K04
+// survived and only K01 flaked). ADVERSARIAL: it fails on the pre-fix code
+// (`needsVerify = confidence < threshold`), so it is not tautological.
+func TestReconcile_InvalidThresholdPreservesNeedsVerification_K01(t *testing.T) {
+	period := "2026-Q3"
+	now := dateUTC(2026, 8, 15)
+
+	// A record a valid-threshold (0.7) reconcile already flagged: one
+	// low-confidence (0.4) source → needs_verification=true, active lifecycle.
+	existing := &RotatingCategory{
+		ID:                "rc-flag",
+		CardCatalogID:     "manual-flagcard",
+		PeriodLabel:       period,
+		Categories:        []string{"Gas"},
+		LifecycleState:    LifecycleActive,
+		Confidence:        0.4,
+		NeedsVerification: true,
+		SourceCount:       1,
+	}
+	obs := []RotatingCategoryObservation{
+		obsFixture("manual-flagcard", period, []string{"Gas"}, 0.4, nil, nil, "SourceWeak"),
+	}
+
+	// Degenerate disabled-feature thresholds a pipeline RunDailyRefresh can run
+	// with (0.0 zero-value; a >1 value is likewise unusable). Neither may clear
+	// the flag.
+	for _, badThreshold := range []float64{0.0, -0.1, 1.5} {
+		out := mergeObservations(existing, obs, badThreshold, now)
+		if out.Record == nil {
+			t.Fatalf("threshold %v: expected a reconciled record, got nil", badThreshold)
+		}
+		if !out.Record.NeedsVerification {
+			t.Errorf("threshold %v: an out-of-range threshold must NOT clear an existing "+
+				"needs_verification flag (SCN-083-K01 cross-reconcile pollution)", badThreshold)
+		}
+	}
+
+	// Control: a VALID threshold still classifies by confidence — a fresh
+	// agreeing high-confidence source clears the flag (no over-preservation).
+	cleared := mergeObservations(existing, []RotatingCategoryObservation{
+		obsFixture("manual-flagcard", period, []string{"Gas"}, 0.95, nil, nil, "SourceStrong"),
+	}, 0.70, now)
+	if cleared.Record == nil {
+		t.Fatal("valid threshold: expected a reconciled record, got nil")
+	}
+	if cleared.Record.NeedsVerification {
+		t.Error("valid threshold 0.70: a 0.95-confidence agreeing source must clear needs_verification")
+	}
+}
+
 // SCN-083-F04 + F05 — lifecycle_state is derived from the period window vs now:
 // upcoming → active → expired. Uses the date-driven path of the shared
 // deriveLifecycle (empty status forces date derivation).
