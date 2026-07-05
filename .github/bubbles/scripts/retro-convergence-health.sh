@@ -206,6 +206,49 @@ case "$exec_runtime" in
     ;;
 esac
 
+# ── Gate G090 refinement: spec-attribution guard ─────────────────────────
+# When a spec is certified inside a long-running or multi-spec orchestrator
+# session, the session JSON holds convergence telemetry (recap/handoff/summarize
+# strings, turn snapshots) produced for OTHER specs. If NO record is attributed
+# to the spec under certification, the metrics_program below falls back to the
+# whole file ([.]) and mis-attributes that cross-spec telemetry to this spec —
+# the same class of false positive the executionRuntime skip above guards
+# against ("signals not produced for THIS spec"). When there is nothing
+# attributable to measure, skip instead of counting ambient cross-spec strings.
+# ($spec_dir empty = repo/session-level invocation → keep whole-file behavior.)
+spec_attributed_count="$(jq -r --arg spec "$spec_dir" '
+  def norm: tostring | sub("^\\./"; "") | sub("/+$"; "");
+  ($spec | norm) as $t |
+  if $t == "" then 1
+  else [ .. | objects
+         | select(((.specDir // .featureDir // .spec // .feature // "") | norm) == $t) ]
+       | length
+  end
+' "$session_file" 2>/dev/null || echo 0)"
+if [[ "${spec_attributed_count:-0}" -eq 0 ]]; then
+  skip_reason="no convergence records attributed to ${spec_dir} — session telemetry is ambient/cross-spec and not attributable to this spec"
+  skip_payload="$(jq -nc --arg reason "$skip_reason" '{
+    avgLoopIterations: 0,
+    maxConvergenceIterations: 0,
+    compactionFrequency: 0,
+    preExistingDeferralCount: 0,
+    snapshotCompleteness: 1,
+    convergenceHealth: {
+      recapCount: 0, handoffCount: 0, summarizeHistoryCount: 0, turnCount: 0,
+      slo: "skipped", skipReason: $reason
+    },
+    thresholds: { recapHandoffFailedWhenGreaterThan: 2, summarizeHistoryFailedWhenGreaterThan: 2, snapshotCompletenessRequired: 1 }
+  }')"
+  if [[ -n "$out_file" ]]; then
+    printf '## Convergence Health\n\nSpec: `%s`\nSLO: `skipped` (%s)\n' "$spec_dir" "$skip_reason" > "$out_file"
+  fi
+  case "$format" in
+    json|both) printf '%s\n' "$skip_payload" ;;
+    markdown)  printf '## Convergence Health\n\nSpec: `%s`\nSLO: `skipped` (%s)\n' "$spec_dir" "$skip_reason" ;;
+  esac
+  exit 0
+fi
+
 metrics_program='
   def norm: tostring | sub("^\\./"; "") | sub("/+$"; "");
   def spec_match($target):

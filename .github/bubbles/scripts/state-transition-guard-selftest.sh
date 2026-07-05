@@ -1454,6 +1454,78 @@ g040_pos_mixed_log="$tmp_root/g040-pos-mixed.log"
 run_capture "$g040_pos_mixed_log" bash "$GUARD_SCRIPT" "$g040_pos_strict_done_mixed_dir" >/dev/null
 assert_log_contains "$g040_pos_mixed_log" "deferral language hit" "G040 Check 18 BLOCKs under status=done when real deferral prose ('punted to Phase 3') accompanies schema followUp* tokens"
 
+# ----------------------------------------------------------------------------
+# Check 14 — Implementation Completeness: word-boundary TODO/FIXME/HACK/STUB scan
+# ----------------------------------------------------------------------------
+# Regression guard for the raw-substring defect where bare-word markers embedded
+# inside legitimate identifiers/strings/comments false-triggered Check 14 and
+# mis-blocked completely legitimate code — e.g. `STUB` inside `BILLING_STUB_STRIPE`,
+# `HACK` inside `HACKATHON`, `TODO` inside `TODO_LIST`. Real-world proof: the
+# QuantitativeFinance gateway file services/gateway/src/domain/billing/provider.rs
+# reported 24 bogus "TODO/STUB markers" where all 24 hits were the tested env-var
+# name `BILLING_STUB_STRIPE` and its doc comments — zero real markers.
+#
+# Check 14 only reaches a marker scan for backtick-wrapped impl paths inside a
+# fully-scaffolded passing feature, so we assert the operative core directly: the
+# EXACT regex extracted from the guard source (no test/source drift) run through
+# Check 14's own `grep -cnE '<regex>' <file> || true` line-count contract against
+# two fixtures — one that MUST report zero (identifier-embedded false positives
+# eliminated) and one that MUST still flag every genuine marker (true positives
+# preserved). The two distinctive markers `unimplemented!` / `NotImplementedError`
+# stay plain substrings, byte-identical to the original, so they cannot regress.
+echo "Running Check 14 — word-boundary marker scan (false-positive regression)..."
+
+check14_regex="$(grep -E 'file_todos=.*grep -cnE' "$GUARD_SCRIPT" | sed -E "s/^.*grep -cnE '([^']*)'.*\$/\1/" || true)"
+if [[ -z "$check14_regex" ]]; then
+  fail "Check 14 regex could not be extracted from $GUARD_SCRIPT (guard shape changed)"
+else
+  pass "Check 14 regex extracted from guard source (no test/source drift)"
+
+  check14_must_not="$tmp_root/check14-must-not-flag.txt"
+  cat <<'EOF' > "$check14_must_not"
+BILLING_STUB_STRIPE
+std::env::var("BILLING_STUB_STRIPE")
+HACKATHON_MODE
+TODO_LIST
+STUBBORN
+/// (`BILLING_STUB_STRIPE` truthy, i.e. `1` / `true`).
+        std::env::set_var("BILLING_STUB_STRIPE", "1");
+EOF
+
+  check14_must_flag="$tmp_root/check14-must-flag.txt"
+  cat <<'EOF' > "$check14_must_flag"
+// TODO: fix
+# FIXME later
+// HACK workaround
+// STUB: implement
+STUB
+    unimplemented!()
+        raise NotImplementedError
+EOF
+
+  # Replicate Check 14's exact line-count contract (grep -cnE '<regex>' file || true).
+  check14_neg_count="$({ grep -cnE "$check14_regex" "$check14_must_not"; } || true)"
+  check14_pos_count="$({ grep -cnE "$check14_regex" "$check14_must_flag"; } || true)"
+
+  if [[ "$check14_neg_count" -eq 0 ]]; then
+    pass "Check 14 does NOT flag identifier-embedded markers (BILLING_STUB_STRIPE, HACKATHON_MODE, TODO_LIST, STUBBORN) — 0 hits"
+  else
+    fail "Check 14 false-positives on identifier-embedded markers ($check14_neg_count hits, expected 0)"
+    echo "--- offending must-not-flag lines ---"
+    grep -nE "$check14_regex" "$check14_must_not" || true
+    echo "--- end ---"
+  fi
+
+  if [[ "$check14_pos_count" -eq 7 ]]; then
+    pass "Check 14 still flags all 7 genuine markers (// TODO, # FIXME, // HACK, // STUB, bare STUB, unimplemented!(), NotImplementedError)"
+  else
+    fail "Check 14 regressed on genuine markers ($check14_pos_count hits, expected 7)"
+    echo "--- genuine-marker lines matched ---"
+    grep -nE "$check14_regex" "$check14_must_flag" || true
+    echo "--- end ---"
+  fi
+fi
+
 echo "----------------------------------------"
 if [[ "$failures" -gt 0 ]]; then
   echo "state-transition-guard selftest failed with $failures issue(s)."

@@ -574,6 +574,7 @@ skills/bubbles-docker-port-standards/SKILL.md
 skills/bubbles-dod-validation/SKILL.md
 skills/bubbles-env-pollution-isolation/SKILL.md
 skills/bubbles-evidence-capture/SKILL.md
+skills/bubbles-external-browser-auth-capture/SKILL.md
 skills/bubbles-feature-template/SKILL.md
 skills/bubbles-fix-cycle-protocol/SKILL.md
 skills/bubbles-flag-lifecycle/SKILL.md

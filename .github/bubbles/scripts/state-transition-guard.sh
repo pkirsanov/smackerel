@@ -2377,7 +2377,7 @@ done
 if [[ ${#impl_files[@]} -gt 0 ]]; then
   todo_hits=0
   for impl_file in "${impl_files[@]}"; do
-    file_todos="$({ grep -cnE 'TODO|FIXME|HACK|STUB|unimplemented!|NotImplementedError' "$impl_file"; } || true)"
+    file_todos="$({ grep -cnE '(^|[^A-Za-z0-9_])(TODO|FIXME|HACK|STUB)([^A-Za-z0-9_]|$)|unimplemented!|NotImplementedError' "$impl_file"; } || true)"
     if [[ "$file_todos" -gt 0 ]]; then
       fail "Implementation file has $file_todos TODO/STUB markers: $impl_file"
       todo_hits=$((todo_hits + file_todos))
