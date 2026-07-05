@@ -601,6 +601,24 @@ smackerel_run_up() {
 
   if [[ "$target_env" == "test" ]]; then
     smackerel_prepare_test_stack_for_up "$env_file"
+    # Build-fresh before the disposable test stack comes up so EVERY
+    # `./smackerel.sh --env test up` reflects current source. Every CLI-driven
+    # live-stack lane (integration, e2e isolated-lifecycle + shared-shell,
+    # stress, and the standalone regression scripts) funnels through this one
+    # code path, so this is the single choke point for the repo-wide freshness
+    # convention. Without it a bare `up` silently reuses a stale prebuilt
+    # smackerel-core image, so a green run can mask an unbuilt change and a red
+    # run can reflect stale code — the SCN-083-K01 reconcile hazard the e2e-ui
+    # lane hit. This mirrors the explicit `build` -> `up` that
+    # tests/integration/test_runtime_health.sh already does and the `up --build`
+    # the e2e-ui lane uses, applied once for all lanes. `--build-arg
+    # GO_BUILD_TAGS=e2e` matches the `build` subcommand's test-image contract.
+    # The stores-only integration-light lane bypasses this path entirely (it
+    # brings up ONLY postgres+nats via `smackerel_compose ... up ... postgres
+    # nats` in tests/integration/test_runtime_health_light.sh), so it is never
+    # force-built. A cached build reuses layers when nothing changed.
+    echo "Building disposable test stack images before up (freshness convention)..."
+    smackerel_compose "$target_env" build --build-arg GO_BUILD_TAGS=e2e
     set +e
     smackerel_compose "$target_env" up -d --wait --wait-timeout "$compose_wait_timeout_s"
     up_status=$?
@@ -1927,7 +1945,12 @@ case "$COMMAND" in
         trap stress_cleanup_trap EXIT
 
         stress_down_test_stack "pre-clean"
-        smackerel_run_with_timeout 360 "$SCRIPT_DIR/smackerel.sh" --env test up
+        # `--env test up` now build-freshes the disposable stack via
+        # smackerel_run_up (repo-wide freshness convention), so this wrapper must
+        # cover a COLD multi-stage smackerel-core build + start, not just start.
+        # Widened 360 -> 900 to match the go-stress step bound and absorb a cold
+        # build under concurrent host load; a warm build is a fast cache hit.
+        smackerel_run_with_timeout 900 "$SCRIPT_DIR/smackerel.sh" --env test up
         smackerel_run_with_timeout 300 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"
         smackerel_run_with_timeout 600 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_search_stress.sh"
         smackerel_run_with_timeout 900 docker run --rm \
