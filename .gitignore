@@ -57,6 +57,12 @@ secrets.yaml
 *.swo
 *~
 .vscode/settings.json
+# Tracked exception: .vscode/settings.json is intentionally committed so the
+# Red Hat YAML formatter stays disabled repo-wide (its format-on-save reflow of
+# config/smackerel.yaml's single-line SST values breaks config.sh's line-based
+# flattener). This negation overrides the ignore on the line above; every other
+# .vscode/* file (e.g. .vscode/tasks.json below) stays ignored.
+!.vscode/settings.json
 
 # OS
 .DS_Store
