@@ -2054,10 +2054,12 @@ case "$COMMAND" in
           -v smackerel-gomod-cache:/go/pkg/mod \
           -v smackerel-gobuild-cache:/root/.cache/go-build \
           -w /workspace \
+          --env-file "$env_file" \
           -e "CORE_EXTERNAL_URL=${go_stress_core_url}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           -e "DATABASE_URL=${database_url}" \
           -e "NATS_URL=${nats_url}" \
+          -e "SMACKEREL_ML_READINESS_TIMEOUT_OVERRIDE=2s" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-stress.sh "${go_stress_args[@]}"
         ;;
       e2e-ui)
