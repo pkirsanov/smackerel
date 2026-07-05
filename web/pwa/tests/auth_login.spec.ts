@@ -215,9 +215,13 @@ test.describe("Spec 077 SCOPE-3 — Login flow + CSP smoke", () => {
     });
     await page.locator('details.machine-login input[name="token"]').fill(token);
     await Promise.all([
-      page.waitForURL((url) => new URL(url).pathname === "/", {
-        waitUntil: "load",
-      }),
+      // Spec 100 SR-05 — machine-login carries no explicit `next`, so the login
+      // page defaults it to /assistant, which 302s to the served PWA assistant
+      // page. SCN-100-03/04 lock this default post-login landing.
+      page.waitForURL(
+        (url) => new URL(url).pathname === "/pwa/assistant.html",
+        { waitUntil: "load" },
+      ),
       page.locator('details.machine-login button[type="submit"]').click(),
     ]);
 
