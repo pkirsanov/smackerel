@@ -164,14 +164,35 @@ yaml_get() {
   ' <<<"$FLATTENED_CONFIG"
 }
 
+# Emit an actionable missing-key error and exit non-zero. Distinguishes a
+# genuinely-absent key from the recurring formatter landmine: a YAML/JSON
+# formatter that pretty-prints a single-line compact-JSON SST value (e.g.
+# retrieval.routing.contracts, services.ml.model_memory_profiles) into
+# multi-line block form. In the broken case the leaf key IS still present in the
+# raw file, but as a bare map-opening line (`<leaf>:` with nothing after the
+# colon), which the line-based flattener skips (is_map -> next), so yaml_get
+# can no longer find it. Runs only on the missing-key failure path; the happy
+# path is unchanged.
+config_key_missing() {
+  local key="$1"
+  local leaf="${key##*.}"
+  echo "Missing config key: $key" >&2
+  if grep -qE "^[[:space:]]*${leaf}:[[:space:]]*(#.*)?$" "$CONFIG_FILE" 2>/dev/null; then
+    {
+      echo "  -> '$leaf' IS present in $CONFIG_FILE but opened as a multi-line block, not a single-line value."
+      echo "     A YAML/JSON formatter likely pretty-printed a single-line compact-JSON SST value;"
+      echo "     scripts/commands/config.sh's line-based flattener requires these to stay on ONE line."
+      echo "     Fix: git restore $CONFIG_FILE   (see the FORMATTER GUARD comment at the top of that file)"
+    } >&2
+  fi
+  exit 1
+}
+
 required_value() {
   local key="$1"
   local value
 
-  value="$(yaml_get "$key")" || {
-    echo "Missing config key: $key" >&2
-    exit 1
-  }
+  value="$(yaml_get "$key")" || config_key_missing "$key"
 
   printf '%s' "$value"
 }
@@ -182,8 +203,7 @@ required_json_value() {
 
   value="$(yaml_get_json "$key")"
   if [[ -z "$value" ]]; then
-    echo "Missing config key: $key" >&2
-    exit 1
+    config_key_missing "$key"
   fi
 
   printf '%s' "$value"

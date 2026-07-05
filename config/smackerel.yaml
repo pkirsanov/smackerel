@@ -1,3 +1,16 @@
+# =============================================================================
+# FORMATTER GUARD — do not let a YAML/JSON formatter reflow this file.
+# Several SST values below are single-line compact-JSON / flow-style strings that
+# MUST stay on ONE line, e.g.:
+#   - retrieval.routing.contracts
+#   - services.ml.model_memory_profiles   (-> ML_MODEL_MEMORY_PROFILES_JSON)
+# scripts/commands/config.sh flattens this file with a LINE-BASED awk pass. If a
+# formatter (Prettier, Red Hat YAML, yamlfmt, format-on-save, ...) pretty-prints
+# one of those values into multi-line block form its key becomes un-findable and
+# EVERY ./smackerel.sh command fails with "Missing config key: ...". This file is
+# listed in .prettierignore; if it gets reflowed anyway, run:
+#   git restore config/smackerel.yaml
+# =============================================================================
 project:
   name: smackerel
 

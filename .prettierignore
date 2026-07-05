@@ -1,0 +1,8 @@
+# scripts/commands/config.sh flattens config/smackerel.yaml with a LINE-BASED
+# awk pass that requires the documented single-line compact-JSON SST values
+# (e.g. retrieval.routing.contracts, services.ml.model_memory_profiles) to stay
+# on ONE line. Prettier — or any formatter driven through Prettier's ignore file
+# (including the VS Code Prettier extension) — that reflows them into multi-line
+# block form makes the key un-findable and breaks EVERY ./smackerel.sh command
+# ("Missing config key: ..."). Keep this file out of all formatter passes.
+config/smackerel.yaml
