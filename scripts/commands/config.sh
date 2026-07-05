@@ -77,10 +77,117 @@ fi
   exit 1
 }
 
+# ─────────────────────────────────────────────────────────────────────
+# FORMATTER-TOLERANCE PRE-PASS (the robust belt to the .prettierignore +
+# FORMATTER GUARD suspenders). Several SST values in config/smackerel.yaml are
+# single-line compact-JSON / flow-style strings that MUST resolve as ONE logical
+# value (e.g. retrieval.routing.contracts -> RETRIEVAL_ROUTING_CONTRACTS via the
+# line-based flatten below). A YAML/JSON formatter (Red Hat YAML format-on-save,
+# yamlfmt, a stray Prettier run, a concurrent editor session) can reflow such a
+# value across several physical lines. That reflow makes its leaf key un-findable
+# to the line-based flatten and breaks EVERY ./smackerel.sh command with
+# "Missing config key: ...". Prevention (.prettierignore) cannot be guaranteed,
+# so this pass makes the flattener TOLERANT: it collapses a multi-line flow
+# collection ({...} / [...]) back onto its key's single logical line BEFORE the
+# flatten runs, reproducing the single-line form's result exactly.
+#
+# SAFETY: only an UNBALANCED (spanning) flow collection is joined. Balanced
+# single-line values, normal block maps (key: / child: v) and block sequences
+# (key: / - item) pass through byte-for-byte — so on the committed single-line
+# file this pass is a strict no-op (every line is bracket-balanced). Brace and
+# bracket depth is counted quote-aware so separators inside quoted scalars are
+# ignored. Values are NEVER altered, only re-joined.
+collapse_flow_multiline() {
+  awk '
+    # Quote-aware net bracket/brace depth of a line: +1 per { or [ and -1 per
+    # } or ], ignoring any that live inside a double- or single-quoted scalar.
+    function netdepth(s,   i, c, d, inq, q, prev, n) {
+      d = 0; inq = 0; q = ""; prev = ""; n = length(s)
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (inq) {
+          if (c == q && prev != "\\") { inq = 0; q = "" }
+        } else if (c == "\"" || c == "'\''") {
+          inq = 1; q = c
+        } else if (c == "{" || c == "[") {
+          d++
+        } else if (c == "}" || c == "]") {
+          d--
+        }
+        prev = c
+      }
+      return d
+    }
+    function strip_comment(s) { sub(/[[:space:]]+#.*$/, "", s); return s }
+    function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    function indent_of(s,   m) { m = s; sub(/[^ ].*$/, "", m); return m }
+    function flush_pending() {
+      if (havePending) { print pendingRaw; havePending = 0; pendingRaw = "" }
+    }
+    BEGIN { flowactive = 0; havePending = 0; buf = ""; bufindent = ""; depth = 0 }
+    {
+      raw = $0
+      sline = strip_comment(raw)
+
+      # Inside a spanning flow: keep appending trimmed content until the
+      # bracket/brace depth returns to zero, then emit the single joined line.
+      if (flowactive) {
+        buf = buf " " trim(sline)
+        depth += netdepth(sline)
+        if (depth <= 0) {
+          print bufindent buf
+          flowactive = 0; buf = ""; bufindent = ""; depth = 0
+        }
+        next
+      }
+
+      if (sline ~ /^[[:space:]]*$/) { flush_pending(); print raw; next }
+
+      nd = netdepth(sline)
+      body = trim(sline)
+
+      if (nd > 0) {
+        if (substr(body, 1, 1) == "{" || substr(body, 1, 1) == "[") {
+          # Bare flow opener on its own line -> attach it to the held key line
+          # (the formatter put the opening brace on the line after "key:").
+          if (havePending) {
+            bufindent = indent_of(pendingRaw)
+            buf = trim(strip_comment(pendingRaw)) " " body
+            havePending = 0; pendingRaw = ""
+          } else {
+            bufindent = indent_of(sline)
+            buf = body
+          }
+        } else {
+          # "key: {" / "key: [" -> the flow opens after the key on the same line.
+          flush_pending()
+          bufindent = indent_of(sline)
+          buf = body
+        }
+        depth = nd
+        flowactive = 1
+        next
+      }
+
+      # Balanced line (nd == 0). A bare "key:" map/sequence opener is held for
+      # one line in case a flow opens on the next line; anything else is emitted
+      # verbatim so the downstream flatten sees the file exactly as before.
+      if (sline ~ /:[[:space:]]*$/) { flush_pending(); havePending = 1; pendingRaw = raw; next }
+
+      flush_pending()
+      print raw
+    }
+    END {
+      flush_pending()
+      if (flowactive) { print bufindent buf }
+    }
+  ' "$1"
+}
+
 flatten_yaml() {
   local yaml_file="$1"
 
-  awk '
+  collapse_flow_multiline "$yaml_file" | awk '
     function trim(value) {
       sub(/^[[:space:]]+/, "", value)
       sub(/[[:space:]]+$/, "", value)
@@ -142,7 +249,7 @@ flatten_yaml() {
 
       print path "=" value
     }
-  ' "$yaml_file"
+  '
 }
 
 FLATTENED_CONFIG="$(flatten_yaml "$CONFIG_FILE")"
