@@ -115,9 +115,18 @@ type Config struct {
 	// Prompt contracts directory (SST-compliant — from smackerel.yaml via config generate)
 	PromptContractsDir string
 
-	// Observability config (SST-compliant — from smackerel.yaml via config generate)
-	OTELEnabled          bool
-	OTELExporterEndpoint string
+	// Observability config (SST-compliant — from smackerel.yaml via config generate).
+	// Spec 101 — shared-observability instrumentation contract (knb spec 014
+	// scope 03): the three fields below adopt the knb canonical naming and
+	// REPLACE the prior declared-but-not-consumed single OTELExporterEndpoint
+	// (operator decision option (a)). When OTELEnabled=true they MUST all be
+	// non-empty — validated fail-loud at boot via internal/observability
+	// (see cmd/core/services.go → initSharedObservability). When OTELEnabled=false
+	// (bundled/dev/test posture) they may be empty and the contract is inert.
+	OTELEnabled               bool
+	OTLPTracesEndpoint        string
+	OTLPLogsEndpoint          string
+	MetricsScrapeLabelProduct string
 
 	// Expense tracking config (SST-compliant — from smackerel.yaml via config generate)
 	ExpensesEnabled                       bool
@@ -1298,9 +1307,16 @@ func Load() (*Config, error) {
 	// Parse prompt contracts dir (SST-compliant — from smackerel.yaml via config generate)
 	cfg.PromptContractsDir = os.Getenv("PROMPT_CONTRACTS_DIR")
 
-	// Parse observability config (SST-compliant — opt-in, disabled by default)
+	// Parse observability config (SST-compliant — opt-in, disabled by default).
+	// Spec 101 — shared-observability instrumentation contract (knb spec 014
+	// scope 03). The three OTLP/metrics-label vars adopt the knb canonical
+	// naming; they are validated fail-loud at boot (cmd/core/services.go →
+	// initSharedObservability) ONLY when OTELEnabled=true, so the empty-string
+	// dev/test/bundled placeholders never abort a non-shared startup.
 	cfg.OTELEnabled = os.Getenv("OTEL_ENABLED") == "true"
-	cfg.OTELExporterEndpoint = os.Getenv("OTEL_EXPORTER_ENDPOINT")
+	cfg.OTLPTracesEndpoint = os.Getenv("OTLP_TRACES_ENDPOINT")
+	cfg.OTLPLogsEndpoint = os.Getenv("OTLP_LOGS_ENDPOINT")
+	cfg.MetricsScrapeLabelProduct = os.Getenv("METRICS_SCRAPE_LABEL_PRODUCT")
 
 	// Parse expense tracking config (SST-compliant — from smackerel.yaml via config generate)
 	expensesEnabledStr := os.Getenv("EXPENSES_ENABLED")

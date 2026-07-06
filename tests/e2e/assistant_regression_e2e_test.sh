@@ -210,7 +210,8 @@ echo
 echo "BLOCKED (route_required to bubbles.plan + future ops work):"
 echo "  R09-7  OTel sidecar wiring. Spec 061 design §8.2 calls for OTel"
 echo "         span emission. No OTel SDK is integrated in the codebase yet"
-echo "         (only OTEL_ENABLED/OTEL_EXPORTER_ENDPOINT config keys exist)."
+echo "         (config keys OTEL_ENABLED + the spec-101 knb spec-014 scope-03"
+echo "          3-var contract OTLP_TRACES_ENDPOINT/OTLP_LOGS_ENDPOINT/METRICS_SCRAPE_LABEL_PRODUCT exist)."
 echo "         Finding ID: SCOPE-09-OTEL-SIDECAR-MISSING"
 echo "         When unblocked: tests/e2e/assistant_telemetry_otel_test.sh authoring lands."
 echo

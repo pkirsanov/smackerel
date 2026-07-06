@@ -68,6 +68,11 @@ services:
     labels:
       com.smackerel.component: postgres
       com.smackerel.lifecycle: persistent
+      # knb spec 014 scope 03 — shared-observability discovery labels. product
+      # is SST-sourced (METRICS_SCRAPE_LABEL_PRODUCT); service is the per-
+      # container identity the shared Prometheus docker_sd scopes smackerel by.
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: postgres
     logging:
       driver: json-file
       options:
@@ -114,6 +119,8 @@ services:
       # wiping queued captures). The clean tooling preserves volumes whose
       # component is labelled persistent.
       com.smackerel.lifecycle: persistent
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: nats
     logging:
       driver: json-file
       options:
@@ -174,6 +181,8 @@ services:
     labels:
       com.smackerel.component: core
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: core
     logging:
       driver: json-file
       options:
@@ -246,6 +255,8 @@ services:
     labels:
       com.smackerel.component: ml
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: ml
     logging:
       driver: json-file
       options:
@@ -329,6 +340,8 @@ services:
     labels:
       com.smackerel.component: ollama
       com.smackerel.lifecycle: persistent
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: ollama
     logging:
       driver: json-file
       options:
@@ -399,6 +412,8 @@ services:
     labels:
       com.smackerel.component: prometheus
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: prometheus
     logging:
       driver: json-file
       options:
@@ -452,6 +467,8 @@ services:
     labels:
       com.smackerel.component: searxng
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: searxng
     logging:
       driver: json-file
       options:

@@ -1809,7 +1809,14 @@ The Go core scheduler (`internal/scheduler/scheduler.go::scheduleEngineJobs`) re
 Distributed trace context propagation through NATS messages is available but disabled by default. To enable:
 
 1. Set `observability.otel_enabled: true` in `config/smackerel.yaml`
-2. Optionally set `observability.otel_exporter_endpoint` to an OTLP gRPC collector (e.g., `http://localhost:4317`)
+2. Set the shared-observability OTLP endpoints in the `observability:` block —
+   `otlp_traces_endpoint` and `otlp_logs_endpoint` — to your OTLP/gRPC collector
+   (e.g. `http://localhost:4317`); `metrics_scrape_label_product` is the
+   Prometheus `product=` scrape label (default `smackerel`). Under the home-lab
+   shared posture the knb adapter (`smackerel/home-lab/apply.sh`) injects these
+   into `app.env` automatically. When `otel_enabled=true` all three are
+   validated fail-loud at boot — a missing/empty value aborts startup (knb
+   spec 014 scope 03 / smackerel spec 101; no default, no fallback).
 3. Regenerate config: `./smackerel.sh config generate`
 4. Restart: `./smackerel.sh down && ./smackerel.sh up`
 

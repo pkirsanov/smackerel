@@ -23,6 +23,7 @@ import (
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/notification"
 	ntfysource "github.com/smackerel/smackerel/internal/notification/source/ntfy"
+	"github.com/smackerel/smackerel/internal/observability"
 	"github.com/smackerel/smackerel/internal/pipeline"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
@@ -177,6 +178,31 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 		"otel_endpoint", cfg.Assistant.Observability.OtelEndpoint,
 		"otel_service_name", cfg.Assistant.Observability.OtelServiceName,
 	)
+
+	// Spec 101 — shared-observability instrumentation contract (knb spec 014
+	// scope 03). When OTEL_ENABLED=true (the shared posture the operator + knb
+	// adapter turn on together), the three canonical OTLP/metrics-label vars
+	// MUST resolve non-empty; a missing/empty value aborts startup fail-loud
+	// (no default, no fallback — smackerel NO-DEFAULTS SST). When disabled
+	// (bundled/dev/test) the contract is inert. This validates the contract
+	// WITHOUT forking a second exporter: span export continues through the
+	// assistant tracing pipeline above and Prometheus /metrics via
+	// internal/api/router.go's metrics.Handler() (knb FINDING-014-03-1).
+	if cfg.OTELEnabled {
+		sharedObs := observability.Config{
+			OTLPTracesEndpoint:        cfg.OTLPTracesEndpoint,
+			OTLPLogsEndpoint:          cfg.OTLPLogsEndpoint,
+			MetricsScrapeLabelProduct: cfg.MetricsScrapeLabelProduct,
+		}
+		if err := sharedObs.Validate(); err != nil {
+			return nil, fmt.Errorf("shared-observability contract (knb spec 014 scope 03): %w", err)
+		}
+		slog.Info("shared-observability contract validated",
+			"product", sharedObs.MetricsScrapeLabelProduct,
+			"otlp_traces_endpoint", sharedObs.OTLPTracesEndpoint,
+			"otlp_logs_endpoint", sharedObs.OTLPLogsEndpoint,
+		)
+	}
 
 	// Connect to NATS
 	svc.nc, err = smacknats.Connect(ctx, cfg.NATSURL, cfg.AuthToken)
