@@ -28,6 +28,11 @@ services:
     labels:
       com.smackerel.component: postgres
       com.smackerel.lifecycle: persistent
+      # knb spec 014 scope 03 — shared-observability discovery labels. product
+      # is SST-sourced (METRICS_SCRAPE_LABEL_PRODUCT); service is the per-
+      # container identity the shared Prometheus docker_sd scopes smackerel by.
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: postgres
 
   nats:
     image: nats:2.10-alpine
@@ -58,6 +63,8 @@ services:
     labels:
       com.smackerel.component: nats
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: nats
 
   smackerel-core:
     # HL-RESCAN-012 / Gate G028 — fail-loud SST form. Empty value is
@@ -156,6 +163,8 @@ services:
     labels:
       com.smackerel.component: core
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: core
 
   smackerel-ml:
     # HL-RESCAN-012 / Gate G028 — fail-loud SST form. Empty value is
@@ -216,6 +225,8 @@ services:
     labels:
       com.smackerel.component: ml
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: ml
 
   ollama:
     # Spec 043 — image hoisted to SST. Resolves to infrastructure.ollama.image
@@ -264,6 +275,8 @@ services:
     labels:
       com.smackerel.component: ollama
       com.smackerel.lifecycle: persistent
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: ollama
 
   # Spec 049 — Monitoring stack. Off by default; enable with
   # `docker compose --profile monitoring up -d`. Prometheus scrapes
@@ -318,6 +331,8 @@ services:
     labels:
       com.smackerel.component: prometheus
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: prometheus
 
   # Spec 061 design §18.4 — In-tree stub HTTP container for external
   # provider URLs (open-meteo and any future provider-backed skill).
@@ -361,6 +376,8 @@ services:
     labels:
       com.smackerel.component: test-stub
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: test-stub
 
   # Spec 061 SCOPE-09a design §8.3.2 Step 1 — Jaeger all-in-one sidecar
   # for OTel span emission. Lifecycle: ENABLED ONLY when the `test` or
@@ -399,6 +416,8 @@ services:
     labels:
       com.smackerel.component: jaeger-sidecar
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: jaeger-sidecar
 
   # Spec 064 SCOPE-07 — Self-hosted SearxNG container for the open-ended
   # knowledge agent's web search provider. Lifecycle: ENABLED ONLY when the
@@ -454,6 +473,8 @@ services:
     labels:
       com.smackerel.component: searxng
       com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: searxng
 
 volumes:
   postgres-data:

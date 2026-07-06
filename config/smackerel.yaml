@@ -944,7 +944,19 @@ recommendations:
 
 observability:
   otel_enabled: false # Opt-in OpenTelemetry trace propagation (zero overhead when disabled)
-  otel_exporter_endpoint: "" # OTLP gRPC endpoint (e.g. http://localhost:4317)
+  # Spec 101 — shared-observability instrumentation contract (knb spec 014
+  # scope 03). Canonical 3-var contract that REPLACES the prior single
+  # otel_exporter_endpoint (operator decision option (a)). The two endpoints
+  # are empty-string placeholders for dev/test/bundled; the knb adapter
+  # (smackerel/home-lab/apply.sh) overrides them in app.env under the shared
+  # posture. They are validated fail-loud at boot ONLY when otel_enabled=true
+  # (no default, no fallback — smackerel NO-DEFAULTS SST). No real hostnames
+  # are committed here — only env-var NAMES + empty placeholders (spec 014
+  # FR-013 / AC-009). metrics_scrape_label_product is the fixed product scrape
+  # identity, also sourced into the com.bubbles.product container label.
+  otlp_traces_endpoint: "" # OTLP/gRPC traces endpoint (knb injects under shared posture)
+  otlp_logs_endpoint: "" # OTLP/gRPC logs endpoint (knb injects under shared posture)
+  metrics_scrape_label_product: "smackerel" # product= scrape label + com.bubbles.product
 
 # Spec 067 — Intent-Driven Policy Enforcement (CI guards). SST zero-defaults:
 # every key is REQUIRED at the generator boundary. Missing values fail loud at
