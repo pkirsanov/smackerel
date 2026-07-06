@@ -1491,9 +1491,17 @@ KNOWLEDGE_PROMPT_CONTRACT_QUERY_AUGMENT="$(required_value knowledge.prompt_contr
 KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY="$(required_value knowledge.prompt_contracts.digest_assembly)"
 PROMPT_CONTRACTS_DIR="$(required_value knowledge.prompt_contracts_dir)"
 
-# Observability
-OTEL_ENABLED="$(yaml_get observability.otel_enabled 2>/dev/null)" || OTEL_ENABLED="false"
-OTEL_EXPORTER_ENDPOINT="$(yaml_get observability.otel_exporter_endpoint 2>/dev/null)" || OTEL_EXPORTER_ENDPOINT=""
+# Observability — Spec 101 shared-observability instrumentation contract
+# (knb spec 014 scope 03). The 3 OTLP/metrics-label vars adopt the knb
+# canonical naming and REPLACE the prior declared-not-consumed
+# OTEL_EXPORTER_ENDPOINT. required_value fails loud if the SST key is ABSENT
+# (Gate G028 / NO-DEFAULTS); an empty-string VALUE is the intended
+# dev/test/bundled placeholder (the Go core enforces non-empty at runtime
+# boot only when OTEL_ENABLED=true).
+OTEL_ENABLED="$(required_value observability.otel_enabled)"
+OTLP_TRACES_ENDPOINT="$(required_value observability.otlp_traces_endpoint)"
+OTLP_LOGS_ENDPOINT="$(required_value observability.otlp_logs_endpoint)"
+METRICS_SCRAPE_LABEL_PRODUCT="$(required_value observability.metrics_scrape_label_product)"
 
 # Spec 044 — Per-User Bearer Auth Foundation. SST zero-defaults: every key is
 # REQUIRED at the generator boundary. Empty-string secret-bearing fields are
@@ -2397,7 +2405,9 @@ KNOWLEDGE_PROMPT_CONTRACT_QUERY_AUGMENT=${KNOWLEDGE_PROMPT_CONTRACT_QUERY_AUGMEN
 KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY=${KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY}
 PROMPT_CONTRACTS_DIR=${PROMPT_CONTRACTS_DIR}
 OTEL_ENABLED=${OTEL_ENABLED}
-OTEL_EXPORTER_ENDPOINT=${OTEL_EXPORTER_ENDPOINT}
+OTLP_TRACES_ENDPOINT=${OTLP_TRACES_ENDPOINT}
+OTLP_LOGS_ENDPOINT=${OTLP_LOGS_ENDPOINT}
+METRICS_SCRAPE_LABEL_PRODUCT=${METRICS_SCRAPE_LABEL_PRODUCT}
 AUTH_ENABLED=${AUTH_ENABLED}
 AUTH_TOKEN_FORMAT=${AUTH_TOKEN_FORMAT}
 AUTH_SIGNING_ACTIVE_PRIVATE_KEY=${AUTH_SIGNING_ACTIVE_PRIVATE_KEY}
