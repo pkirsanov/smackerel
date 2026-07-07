@@ -78,7 +78,10 @@ bash "$BUILD_SCRIPT"
 # Resolve the artifact the build JUST produced. After the pre-build clean the
 # glob must match exactly one zip; refuse to guess if zero or more-than-one
 # are present (a >1 result would mean the stale-zip ambiguity has regressed).
-mapfile -t BRIDGE_ZIPS < <(ls -1 "$DIST_DIR"/smackerel-chrome-bridge-*.zip 2>/dev/null || true)
+BRIDGE_ZIPS=()
+while IFS= read -r _bridge_zip; do
+  BRIDGE_ZIPS+=("$_bridge_zip")
+done < <(ls -1 "$DIST_DIR"/smackerel-chrome-bridge-*.zip 2>/dev/null || true)
 if [[ "${#BRIDGE_ZIPS[@]}" -eq 0 ]]; then
   echo "ERROR: build did not produce a chrome-bridge zip under $DIST_DIR" >&2
   exit 1

@@ -215,8 +215,18 @@ echo "[3/5] cosign sign-blob (operator key)"
 lcb_sign_blob "$AAB_OUT"
 lcb_sign_blob "$APK_OUT"
 
-AAB_REF="file://$(readlink -f "$AAB_OUT")"
-APK_REF="file://$(readlink -f "$APK_OUT")"
+# Portable absolute path: BSD `readlink -f` canonicalizes symlinks (e.g.
+# /var -> /private/var on macOS) and is absent on older macOS. The artifacts
+# exist here (just signed above), so resolve each directory via cd+pwd and
+# rejoin the basename -- an absolute file:// path without symlink canonicalization.
+lcb_abspath() {
+  case "$1" in
+    /*) printf '%s' "$1" ;;
+    *) printf '%s/%s' "$(cd "$(dirname "$1")" && pwd)" "$(basename "$1")" ;;
+  esac
+}
+AAB_REF="file://$(lcb_abspath "$AAB_OUT")"
+APK_REF="file://$(lcb_abspath "$APK_OUT")"
 
 # ---- Step 4: emit the local-operator clients block -------------------------
 echo "[4/5] emit clients block (provenance: local-operator)"

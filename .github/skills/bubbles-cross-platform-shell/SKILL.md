@@ -87,8 +87,46 @@ rm -rf "$shim"
 - Keep committed/checksummed generator output deterministic across platforms (`LC_ALL=C sort`, no symlink canonicalization, no locale-dependent formatting).
 - Verify a new/edited script on BSD userland (or the PATH shim above) before claiming it runs; `shellcheck -x` clean is necessary but not sufficient — shellcheck does not catch GNU/BSD runtime divergence.
 
+## Mechanical Enforcement (`macos-portability-guard.sh`)
+
+The pitfall table above is enforced mechanically by
+[`bubbles/scripts/macos-portability-guard.sh`](../../bubbles/scripts/macos-portability-guard.sh)
+— a **reusable, portable-by-design** lint that fails (exit 1) if a GNU-coreutils
+/ bash-4.x-only construct appears in a **caller-supplied** script surface.
+
+```bash
+# scan explicit files and/or directories (dirs are searched for *.sh)
+bash bubbles/scripts/macos-portability-guard.sh path/to/scripts/ one-file.sh
+# or pass the surface via env
+PORTABILITY_SCAN_PATHS="path/to/scripts" bash bubbles/scripts/macos-portability-guard.sh
+```
+
+It detects 13 construct classes: raw `timeout`, `sed -i`, `date -d`, `stat -c`,
+`readlink -f`, `grep -P`, `[[ -v ]]`, `mapfile`/`readarray`, `mktemp --suffix`,
+`df --output`, `/bin/true`·`/bin/false`, `paste -sd` without an explicit `-`
+stdin operand, and `date +%s%N`. A line already routed through a portable helper
+(`bubbles_run_with_timeout`, `bubbles_sed_inplace`, …) or carrying a BSD fallback
+is **not** a violation.
+
+- **No default surface.** The guard MUST be given a surface (args or
+  `PORTABILITY_SCAN_PATHS`); with none it prints usage and exits 2. It is
+  deliberately NOT pointed at the framework's own `bubbles/scripts/` (those
+  intentionally use raw `timeout`/`sed -i` mediated by `guard-lib.sh` + the
+  `framework-validate` PATH shim). `framework-validate` runs the guard's
+  **selftest**, never a scan of the framework's own scripts.
+- **`# portable-ok:<reason>` pragma.** For a genuinely intentional raw usage
+  (a Docker-internal entrypoint, curl `--connect-timeout`, …) annotate the line
+  — or the line immediately above it — with `# portable-ok:<reason>`. Full-line
+  comments are stripped before scanning, so explanatory prose never trips the
+  guard. There is no other bypass.
+- **Downstream wiring.** Product repos wire the guard into their existing
+  pre-push / lint gate against their **own** operator script surface (e.g.
+  `wanderaide-scripts/*.sh`), so a GNU-only regression is blocked before push.
+  It is advisory-until-wired per repo.
+
 ## See Also
 
 - Instruction: [`wsl-macos-compatibility.instructions.md`](../../instructions/wsl-macos-compatibility.instructions.md) — the binding policy (loaded `applyTo: "**"` in every repo).
 - Source: [`bubbles/scripts/guard-lib.sh`](../../bubbles/scripts/guard-lib.sh) — the portable helpers.
+- Source: [`bubbles/scripts/macos-portability-guard.sh`](../../bubbles/scripts/macos-portability-guard.sh) — the mechanical portability lint (+ its `-selftest.sh`, wired into `framework-validate`).
 - Skill: [`bubbles-long-running-commands`](../bubbles-long-running-commands/SKILL.md) — the timeout/background discipline these helpers support.

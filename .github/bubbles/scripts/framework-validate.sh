@@ -187,6 +187,17 @@ run_check "Inventory parity check selftest (IMP-005)" bash "$SCRIPT_DIR/inventor
 # Live parity check is framework-source-only: skills/INVENTORY.md is a source-repo
 # artifact and is not vendored into downstream install trees.
 run_check_self_only "Inventory parity check (live, IMP-005)" bash "$SCRIPT_DIR/inventory-parity-check.sh" "$REPO_ROOT"
+# Case-collision guard (IMP-017): the hermetic selftest PLUS a live scan of the
+# repo's tracked files. The live check is deliberately NOT source-only — a
+# case-only duplicate path is a defect in ANY git repo (downstream installs
+# included), and the guard no-ops gracefully outside a git work tree.
+run_check "Case-collision guard selftest (IMP-017)" bash "$SCRIPT_DIR/case-collision-guard-selftest.sh"
+run_check "Case-collision guard (live, IMP-017)" bash "$SCRIPT_DIR/case-collision-guard.sh" --repo-root "$REPO_ROOT"
+# macOS/WSL portability guard: run its HERMETIC selftest (green + one red fixture
+# per class + self-portability), NOT a scan of the framework's own scripts (which
+# intentionally use raw timeout/sed -i mediated by guard-lib + the PATH shim).
+macos_portability_guard_timeout_seconds="${BUBBLES_MACOS_PORTABILITY_GUARD_SELFTEST_TIMEOUT_SECONDS:-120}"
+run_check "macOS portability guard selftest (bubbles-cross-platform-shell)" timeout "$macos_portability_guard_timeout_seconds" bash "$SCRIPT_DIR/macos-portability-guard-selftest.sh"
 run_check_self_only "Installer manifest check (v6.0 / B9)" bash "$SCRIPT_DIR/generate-installer.sh"
 run_check_self_only "Installer manifest selftest (v6.0 / B9)" bash "$SCRIPT_DIR/generate-installer-selftest.sh"
 if [[ -x "$SCRIPT_DIR/migrate-modes-v5-to-v6.sh" ]]; then

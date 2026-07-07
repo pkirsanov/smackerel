@@ -117,7 +117,7 @@ smackerel_run_with_timeout() {
   local rc=0
 
   if command -v timeout >/dev/null 2>&1; then
-    timeout "$@" || rc=$?
+    timeout "$@" || rc=$?  # portable-ok: raw timeout guarded by 'command -v timeout' above; gtimeout + watchdog fallbacks follow
     return "$rc"
   fi
   if command -v gtimeout >/dev/null 2>&1; then

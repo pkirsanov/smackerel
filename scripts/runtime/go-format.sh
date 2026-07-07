@@ -8,7 +8,7 @@ if [[ "${1:-}" == "--check" ]]; then
   mode="check"
 fi
 
-mapfile -t files < <(find cmd internal tests -name '*.go' -type f | sort)
+mapfile -t files < <(find cmd internal tests -name '*.go' -type f | sort)  # portable-ok: runs only inside the Linux go-tooling container (cd /workspace above); mapfile is bash-4-safe there
 if [[ ${#files[@]} -eq 0 ]]; then
   exit 0
 fi

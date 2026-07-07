@@ -119,7 +119,7 @@ prewarm_warm_chat_model() {
 
   echo "stack.sh prewarm: priming $model via $url/api/generate (call=$call_label num_predict=$num_predict)" >&2
 
-  start_ns=$(date +%s%N)
+  start_ns=$(date +%s%N); [[ "$start_ns" == *[!0-9]* ]] && start_ns=$(( ${start_ns%%[!0-9]*} * 1000000000 ))  # portable-ok: BSD/macOS date lacks %N (emits a literal N); fall back to whole seconds so the ms math stays numeric
   set +e
   curl \
     --silent \
@@ -134,7 +134,7 @@ prewarm_warm_chat_model() {
     > "$status_file" 2>&1
   curl_rc=$?
   set -e
-  end_ns=$(date +%s%N)
+  end_ns=$(date +%s%N); [[ "$end_ns" == *[!0-9]* ]] && end_ns=$(( ${end_ns%%[!0-9]*} * 1000000000 ))  # portable-ok: BSD/macOS date lacks %N (emits a literal N); fall back to whole seconds so the ms math stays numeric
   elapsed_ms=$(( (end_ns - start_ns) / 1000000 ))
 
   http_status="$(cat "$status_file" 2>/dev/null || true)"
