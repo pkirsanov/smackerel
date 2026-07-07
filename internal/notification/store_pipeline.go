@@ -3,11 +3,13 @@ package notification
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (s *Store) CreateRawEvent(ctx context.Context, envelope SourceEventEnvelope, now time.Time) (RawEventRecord, error) {
@@ -123,7 +125,23 @@ ORDER BY last_event_at DESC`, notification.Subject, notification.Service)
 
 func (s *Store) UpsertIncident(ctx context.Context, incident Incident, link IncidentEventLink) (Incident, error) {
 	redactionJSON, _ := json.Marshal(incident.RedactionState)
-	_, err := s.pool.Exec(ctx, `
+	// notification_incidents carries TWO unique constraints: the id primary key
+	// and the incident_key unique index. The live ingest path derives id as a
+	// deterministic function of incident_key (see correlation.go), so a concurrent
+	// same-key burst issues inserts that collide on BOTH indexes at once. ON
+	// CONFLICT (incident_key) can arbitrate only that one index; when a racing
+	// speculative insert trips the non-arbiter id primary key first, Postgres
+	// raises a raw unique_violation (23505) instead of folding into DO UPDATE.
+	// Postgres only raises that 23505 once the conflicting id row has COMMITTED,
+	// and — because id is a bijection of incident_key — that committed row shares
+	// this incident_key. A bounded retry therefore converges: the next attempt's
+	// ON CONFLICT (incident_key) pre-check finds the committed winner and folds
+	// into DO UPDATE. Each request still contributes exactly one logical upsert,
+	// so persistence_count advances by one per request.
+	const maxUpsertAttempts = 5
+	var err error
+	for attempt := 0; attempt < maxUpsertAttempts; attempt++ {
+		_, err = s.pool.Exec(ctx, `
 INSERT INTO notification_incidents (
     id, incident_key, status, title, subject, service, severity, domain, intent, risk_level,
     first_event_at, last_event_at, persistence_count, source_instance_ids, state_reason, redaction_state, created_at, updated_at, resolved_at
@@ -136,8 +154,14 @@ ON CONFLICT (incident_key) DO UPDATE SET
     source_instance_ids = EXCLUDED.source_instance_ids,
     state_reason = EXCLUDED.state_reason,
     updated_at = EXCLUDED.updated_at`,
-		incident.ID, incident.IncidentKey, incident.State, incident.Title, incident.Subject, nullableString(incident.Service), incident.Severity, incident.Domain, incident.Intent, incident.RiskLevel,
-		incident.FirstEventAt, incident.LastEventAt, incident.PersistenceCount, incident.SourceInstanceIDs, incident.StateReason, redactionJSON, incident.CreatedAt, incident.UpdatedAt, incident.ResolvedAt)
+			incident.ID, incident.IncidentKey, incident.State, incident.Title, incident.Subject, nullableString(incident.Service), incident.Severity, incident.Domain, incident.Intent, incident.RiskLevel,
+			incident.FirstEventAt, incident.LastEventAt, incident.PersistenceCount, incident.SourceInstanceIDs, incident.StateReason, redactionJSON, incident.CreatedAt, incident.UpdatedAt, incident.ResolvedAt)
+		if err == nil || !isUniqueViolation(err) {
+			break
+		}
+		// Speculative-insert race on the non-arbiter id primary key: the winning
+		// row is now committed, so retry to fold this request into DO UPDATE.
+	}
 	if err != nil {
 		return Incident{}, fmt.Errorf("upsert notification incident: %w", err)
 	}
@@ -147,6 +171,16 @@ ON CONFLICT (incident_key) DO UPDATE SET
 		return Incident{}, err
 	}
 	return stored, nil
+}
+
+// isUniqueViolation reports whether err is a Postgres unique-constraint
+// violation (SQLSTATE 23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	return false
 }
 
 func (s *Store) GetIncidentByKey(ctx context.Context, key string) (Incident, error) {
