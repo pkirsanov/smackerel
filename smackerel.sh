@@ -60,6 +60,10 @@ Commands:
                               Chromium; self-contained (per-test recording server, no live stack) (spec 058)
   test extension-supplychain [--help] Run the LOCAL cosign sign + verify-blob proof for the chrome-bridge sideload
                               zip (sha256 binding + offline sign/verify + tamper detection) (spec 058 Scope 4)
+  test pre-push               Fast host-side static gate (no Docker): the macOS/WSL
+                              portability guard over the host-run operator surface
+                              (smackerel.sh + scripts/). Fails on any GNU/BSD-only
+                              shell construct. No bypass flag.
   up                          Start the stack for the current environment
   pre-flight                  Spec 099 — check host RAM/disk vs the SST minimums
                               (config/smackerel.yaml runtime.preflight.*) before
@@ -441,7 +445,7 @@ while True:
         sys.exit(1)
 
     if not reported_wait:
-        print(f"Waiting for configured test host ports to be released after project-scoped cleanup (timeout {wait_timeout_s}s)...")
+        print(f"Waiting for configured test host ports to be released after project-scoped cleanup (timeout {wait_timeout_s}s)...")  # portable-ok: word "timeout" in a log message, not the timeout(1) command
         reported_wait = True
     time.sleep(wait_interval_s)
 PY
@@ -1079,7 +1083,7 @@ case "$COMMAND" in
         integration_cleanup() {
           local cleanup_status=0
 
-          echo "Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)..."
+          echo "Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)..."  # portable-ok: word "timeout" in a log message, not the timeout(1) command
           smackerel_run_with_timeout --kill-after=20s 180 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || cleanup_status=$?
           if [[ "$cleanup_status" -ne 0 ]]; then
             echo "ERROR: integration test stack teardown failed during exit cleanup (exit ${cleanup_status})." >&2
@@ -1202,7 +1206,7 @@ case "$COMMAND" in
         integration_light_cleanup() {
           local cleanup_status=0
 
-          echo "Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)..."
+          echo "Running project-scoped integration-light stack teardown (exit cleanup, timeout 120s)..."  # portable-ok: word "timeout" in a log message, not the timeout(1) command
           smackerel_run_with_timeout --kill-after=20s 120 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || cleanup_status=$?
           if [[ "$cleanup_status" -ne 0 ]]; then
             echo "ERROR: integration-light stack teardown failed during exit cleanup (exit ${cleanup_status})." >&2
@@ -1478,9 +1482,12 @@ case "$COMMAND" in
           local run_id="$1"
           local -A tracked=()
           local -a batch=()
-          local attempt scan_pid check_pid any_alive
+          local attempt scan_pid check_pid any_alive _marker_pid
 
-          mapfile -t batch < <(e2e_child_marker_pids "$run_id")
+          batch=()
+          while IFS= read -r _marker_pid; do
+            batch+=("$_marker_pid")
+          done < <(e2e_child_marker_pids "$run_id")
           for scan_pid in "${batch[@]}"; do
             if [[ -n "$scan_pid" ]]; then
               tracked["$scan_pid"]=1
@@ -1497,7 +1504,10 @@ case "$COMMAND" in
           # re-matches via `/proc`, so any late-appearing run-id process is covered.
           kill -TERM "${!tracked[@]}" 2>/dev/null || true
           for ((attempt = 0; attempt < 20; attempt++)); do
-            mapfile -t batch < <(e2e_child_marker_pids "$run_id")
+            batch=()
+            while IFS= read -r _marker_pid; do
+              batch+=("$_marker_pid")
+            done < <(e2e_child_marker_pids "$run_id")
             for scan_pid in "${batch[@]}"; do
               if [[ -n "$scan_pid" ]]; then
                 tracked["$scan_pid"]=1
@@ -1619,7 +1629,7 @@ case "$COMMAND" in
         trap 'e2e_signal_trap 129' HUP
 
         e2e_run_child() {
-          e2e_child_run_id="smackerel-e2e-child-$$-$BASHPID-$(date +%s%N)"
+          e2e_child_run_id="smackerel-e2e-child-$$-$BASHPID-$(date +%s)-$RANDOM"
           if command -v setsid >/dev/null 2>&1; then
             setsid --wait env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "$@" &
             e2e_child_pgid="$!"
@@ -1646,7 +1656,7 @@ case "$COMMAND" in
           local started_at finished_at duration status
 
           started_at="$(date +%s)"
-          echo "Running project-scoped test stack teardown (${phase}, timeout ${E2E_STACK_DOWN_TIMEOUT_S}s)..."
+          echo "Running project-scoped test stack teardown (${phase}, timeout ${E2E_STACK_DOWN_TIMEOUT_S}s)..."  # portable-ok: word "timeout" in a log message, not the timeout(1) command
           set +e
           e2e_run_child "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=30s "$E2E_STACK_DOWN_TIMEOUT_S" "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
           status=$?
@@ -1661,7 +1671,7 @@ case "$COMMAND" in
             return 0
           fi
 
-          echo "ERROR: project-scoped test stack teardown failed during ${phase} after ${duration}s (exit ${status}, timeout ${E2E_STACK_DOWN_TIMEOUT_S}s)." >&2
+          echo "ERROR: project-scoped test stack teardown failed during ${phase} after ${duration}s (exit ${status}, timeout ${E2E_STACK_DOWN_TIMEOUT_S}s)." >&2  # portable-ok: word "timeout" in a log message, not the timeout(1) command
           e2e_print_test_stack_state
           return "$status"
         }
@@ -2023,7 +2033,7 @@ case "$COMMAND" in
         stress_down_test_stack() {
           local phase="$1"
 
-          echo "Running project-scoped stress test stack teardown (${phase}, timeout 180s)..."
+          echo "Running project-scoped stress test stack teardown (${phase}, timeout 180s)..."  # portable-ok: word "timeout" in a log message, not the timeout(1) command
           smackerel_run_with_timeout --kill-after=30s 180 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
         }
         stress_cleanup_trap() {
@@ -2115,6 +2125,20 @@ E2EUI_HELP
         # OFFLINE (no public-Rekor upload). The keyless-OIDC identity binding
         # against a real Rekor entry remains a CI-only concern.
         exec bash "$SCRIPT_DIR/scripts/runtime/extension-verify-blob.sh" "$@"
+        ;;
+      pre-push)
+        # macOS/WSL portability guard (bubbles-cross-platform-shell): the host-run
+        # operator surface (smackerel.sh + scripts/**/*.sh) MUST stay GNU/BSD-portable
+        # so every command runs identically on Linux/WSL and macOS. Pure bash/awk/
+        # grep/find -- no Docker, so it is a fast pre-push static gate. Fail-closed
+        # with NO bypass flag; a genuinely intentional raw usage is annotated inline
+        # with a portable-ok pragma, never skipped. The git pre-push hook is
+        # byte-locked by the knb spec-019 canonical template, so the guard anchors
+        # here (mirrors guesthost.sh test pre-push).
+        echo "Running macOS/WSL portability guard (host-run operator surface: smackerel.sh + scripts/)..."
+        bash "$SCRIPT_DIR/.github/bubbles/scripts/macos-portability-guard.sh" \
+          "$SCRIPT_DIR/smackerel.sh" "$SCRIPT_DIR/scripts" || exit 1
+        echo "macOS/WSL portability guard: OK"
         ;;
       *)
         usage

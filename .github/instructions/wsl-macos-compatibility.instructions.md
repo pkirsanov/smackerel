@@ -89,3 +89,25 @@ underlying scripts already degrade (`model-tier-advisory.sh`,
 1. Every new/edited command checked for WSL + macOS compatibility.
 2. Raw `timeout` / `sed -i` / `date -d` / `paste` / `awk` forms replaced with the portable helper or both-ways form.
 3. Verified on BSD userland (or the `framework-validate` PATH shim: `gsed`→`sed`, `gtimeout`→`timeout`). `shellcheck -x` clean is necessary but does NOT catch GNU/BSD runtime divergence.
+
+## Mechanical Enforcement
+
+The forbidden-forms table above is enforced mechanically by the reusable lint
+[`bubbles/scripts/macos-portability-guard.sh`](../bubbles/scripts/macos-portability-guard.sh)
+(see the [`bubbles-cross-platform-shell`](../skills/bubbles-cross-platform-shell/SKILL.md)
+skill § *Mechanical Enforcement* for the full class list + usage). It scans a
+**caller-supplied** surface — it has NO default and is never pointed at the
+framework's own `bubbles/scripts/`. A genuinely intentional raw usage is exempted
+inline with `# portable-ok:<reason>`; there is no other bypass.
+
+- **Framework:** `framework-validate` runs the guard's hermetic **selftest**
+  (`macos-portability-guard-selftest.sh`) alongside every other selftest — it
+  does NOT scan the framework's own scripts (those use raw forms mediated by
+  `guard-lib.sh` + the PATH shim).
+- **Downstream repos:** this guard is **advisory-until-wired**. Each repo wires it
+  into its existing pre-push / lint gate against its OWN operator script surface,
+  e.g.:
+
+  ```bash
+  bash "$BUBBLES/bubbles/scripts/macos-portability-guard.sh" scripts/ *.sh || exit 1
+  ```
