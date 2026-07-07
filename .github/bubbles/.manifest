@@ -26,6 +26,8 @@ bubbles/scripts/capability-foundation-guard-selftest.sh
 bubbles/scripts/capability-foundation-guard.sh
 bubbles/scripts/capability-freshness-selftest.sh
 bubbles/scripts/capability-ledger-selftest.sh
+bubbles/scripts/case-collision-guard-selftest.sh
+bubbles/scripts/case-collision-guard.sh
 bubbles/scripts/cli.sh
 bubbles/scripts/code-search.sh
 bubbles/scripts/compaction-discipline-guard-selftest.sh
@@ -100,6 +102,8 @@ bubbles/scripts/interop-registry.sh
 bubbles/scripts/inventory-parity-check-selftest.sh
 bubbles/scripts/inventory-parity-check.sh
 bubbles/scripts/is-terminal-for-mode.sh
+bubbles/scripts/macos-portability-guard-selftest.sh
+bubbles/scripts/macos-portability-guard.sh
 bubbles/scripts/mcp-grant-reconcile.sh
 bubbles/scripts/mcp-grant-selftest.sh
 bubbles/scripts/mcp-grant-sync.sh

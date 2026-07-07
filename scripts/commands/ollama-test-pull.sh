@@ -37,7 +37,7 @@ run_with_timeout() {
   shift
 
   if command -v timeout >/dev/null 2>&1; then
-    timeout "${seconds}s" "$@"
+    timeout "${seconds}s" "$@"  # portable-ok: raw timeout guarded by 'command -v timeout' above; gtimeout + watchdog fallbacks follow
     return $?
   fi
 
@@ -109,7 +109,7 @@ set -e
 http_status="$(cat "$http_status_file" 2>/dev/null || true)"
 
 if [[ "$curl_rc" -eq 124 ]]; then
-  echo "ollama-test-pull: timeout after ${timeout_seconds}s pulling $test_model from $ollama_url" >&2
+  echo "ollama-test-pull: timeout after ${timeout_seconds}s pulling $test_model from $ollama_url" >&2  # portable-ok: word "timeout" in a log message, not the timeout(1) command
   exit 3
 fi
 
