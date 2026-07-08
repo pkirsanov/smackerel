@@ -3,6 +3,7 @@
 Always load:
 - `critical-requirements.md`
 - `artifact-ownership.md`
+- `analytical-rigor.md`
 - `managed-docs.md`
 - The effective managed-doc registry (framework defaults in `bubbles/docs-registry.yaml` plus any project-owned overrides)
 - Feature `spec.md`

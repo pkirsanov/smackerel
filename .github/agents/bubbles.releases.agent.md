@@ -75,6 +75,8 @@ handoffs:
 
 **MANDATORY:** Start from [agent-common.md](bubbles_shared/agent-common.md) and the [Product Direction Surfaces convention](../docs/guides/PRODUCT_DIRECTION_SURFACES.md). Use targeted sections of [scope-workflow.md](bubbles_shared/scope-workflow.md) only when a release packet's plan structure requires DoD or evidence references.
 
+**MANDATORY:** Honor [analytical-rigor.md](bubbles_shared/analytical-rigor.md) — release packets must be grounded in real product/spec evidence, deep, and honest; no canned, reusable-anywhere boilerplate.
+
 ---
 
 ## User Input

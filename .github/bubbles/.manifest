@@ -464,6 +464,7 @@ agents/bubbles.validate.agent.md
 agents/bubbles.workflow.agent.md
 agents/bubbles_shared/agent-common.md
 agents/bubbles_shared/analysis-bootstrap.md
+agents/bubbles_shared/analytical-rigor.md
 agents/bubbles_shared/artifact-freshness.md
 agents/bubbles_shared/artifact-lifecycle.md
 agents/bubbles_shared/artifact-ownership.md

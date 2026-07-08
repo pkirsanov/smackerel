@@ -3,6 +3,7 @@
 Always load:
 - `critical-requirements.md`
 - `artifact-ownership.md`
+- `analytical-rigor.md`
 - Feature `spec.md`
 - Feature `design.md` when updating an existing design
 - Feature `state.json`

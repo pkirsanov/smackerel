@@ -11,6 +11,8 @@ Use these sections as the single source of truth for agent-specific Tier 2 compl
 | AN3 | State updated when owned | `state.json` reflects analysis execution when applicable |
 | AN4 | Active requirements reconciled | Invalidated requirement/scenario content is removed from active sections or explicitly marked superseded |
 | AN5 | Domain capability model present when proportionality applies | `spec.md` contains `## Domain Capability Model` or a non-empty `### Single-Capability Justification` when capability-first triggers apply |
+| AN6 | Claims grounded, not generic | Every actor/capability/gap/proposal cites concrete evidence (a real file/route/model/symbol, observed competitor behavior, or named domain constraint); output is not reusable as-is for a different feature/project. See `analytical-rigor.md` → Rule 2 |
+| AN7 | Honest findings surfaced | Real weaknesses (contradictions, unproven assumptions, missing scenarios, weak/untestable requirements) appear as primary content rather than being omitted for a clean bill of health; empty sections read `None found — <reason>`, not boilerplate. See `analytical-rigor.md` → Rules 3-4 |
 
 ## Design
 

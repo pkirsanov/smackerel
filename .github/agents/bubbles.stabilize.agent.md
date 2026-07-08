@@ -35,6 +35,7 @@ handoffs:
 **Expertise:** Performance optimization, infrastructure issues, deployment reliability, resource optimization
 
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
+- **Analytical rigor (MANDATORY):** Honor [analytical-rigor.md](bubbles_shared/analytical-rigor.md) — deep, grounded (every root cause cites concrete observed evidence), honest-findings-first, no canned template-filling. Callers should never need to request "deep / genuine / honest" diagnosis; it is the default, and it honors the `depth:` dial.
 - Analyze logs and artifacts before proposing fixes
 - Focus on reliability, performance, and operational issues
 - **Validate fixes with concrete evidence obtained from actual execution** (run commands, capture metrics, query logs) — see Execution Evidence Standard in agent-common.md
