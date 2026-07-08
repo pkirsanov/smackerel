@@ -135,7 +135,9 @@ Owner/executor rule:
 | `bubbles.security` | run security-oriented findings and route secure follow-up work | `quality-gates.md`, `artifact-lifecycle.md` |
 | `bubbles.regression` | detect cross-spec conflicts, test baseline regressions, coverage decreases, and design contradictions | `e2e-regression.md`, `quality-gates.md` |
 | `bubbles.code-review` | run an engineering-only code review before deciding what to fix | `bubbles/code-review.yaml`, `artifact-ownership.md`, `quality-gates.md` |
+| `bubbles.redteam` | attack a finished result to falsify "done" with evidence-first counterexamples; off by default, never certifies | `quality-gates.md`, `artifact-ownership.md` |
 | `bubbles.system-review` | run a holistic feature/component/system review before deciding what to spec, fix, or streamline | `bubbles/system-review.yaml`, `artifact-ownership.md`, `quality-gates.md` |
+| `bubbles.journey` | walk the LIVE product step by step toward a goal, verify UI + API + telemetry + data at each step, capture friction, and route refinements to owners | `artifact-ownership.md`, `evidence-rules.md`, the repo trace-capture skill |
 | `bubbles.spec-review` | audit specs for freshness and trust level without changing foreign-owned artifacts | read-only audit, trust classification |
 
 Diagnostic/certification rule:
