@@ -72,7 +72,7 @@ Why this is the correct side and not a tautological weakening:
 
 **Pre-fix (reporter, finding J3):** `SCN-083-J08` FAILED — 30s timeout on
 `page.check('input[name="starred"]')`; `CVDisplayLinkCreateWithCGDisplay failed`
-+ EGL warnings; lane 42 passed / 1 failed / 9 skipped.
+- EGL warnings; lane 42 passed / 1 failed / 9 skipped.
 
 **Post-fix (executed — `./smackerel.sh test e2e-ui tests/cardrewards_categories.spec.ts`, macOS headless):**
 
