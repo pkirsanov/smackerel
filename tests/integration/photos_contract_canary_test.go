@@ -17,6 +17,7 @@ func TestPhotosContractCanary_ConfigNATSDBAndMLAgree(t *testing.T) {
 }
 
 func canaryMLPhotosContract(t *testing.T) {
+	requirePhotosLiveStack(t)
 	nc := testNATSConn(t)
 	sub, err := nc.SubscribeSync("photos.classified")
 	if err != nil {

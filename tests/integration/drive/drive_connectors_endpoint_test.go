@@ -168,6 +168,17 @@ func TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList(t *testing.
 // CORE_EXTERNAL_URL is only a fallback for host-run diagnostics.
 func liveStackHTTPBase(t *testing.T) string {
 	t.Helper()
+	// Stores-only integration-light lane: no smackerel-core runs, and the lane
+	// blanks the core service URLs in the container env. Honor that empty-env
+	// signal as "no live stack" and skip — consistent with the CORE_API_URL /
+	// CORE_EXTERNAL_URL presence gate the graphapi/api/assistant/mobile live
+	// tests use — rather than reading the URL from the env FILE (which always
+	// carries it) and hard-failing on an unreachable smackerel-core. The heavy
+	// `./smackerel.sh test integration` lane sets these, so the endpoint
+	// assertion still runs there.
+	if strings.TrimSpace(os.Getenv("CORE_API_URL")) == "" && strings.TrimSpace(os.Getenv("CORE_EXTERNAL_URL")) == "" {
+		t.Skip("integration: CORE_API_URL/CORE_EXTERNAL_URL not set — live stack not available (stores-only lane; run via ./smackerel.sh test integration)")
+	}
 	envPath := envFilePath(t)
 	keys := loadEnvFileKeys(t, envPath)
 	if internalURL := strings.TrimSpace(keys["CORE_API_URL"]); internalURL != "" {

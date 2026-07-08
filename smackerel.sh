@@ -1230,9 +1230,49 @@ case "$COMMAND" in
         # Bring up ONLY postgres + nats + health-gate on the two stores.
         smackerel_run_with_timeout --kill-after=30s 240 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health_light.sh"
 
+        # Apply the DB schema BEFORE the Go tests run. The stores-only lane
+        # starts NO core, and it is cmd/core that runs the schema migrations at
+        # startup in the heavy lane — so without this step the ephemeral test
+        # postgres has an empty schema and every schema-dependent integration
+        # test (e.g. TestMigrations_AllTablesExist, and the store CRUD tests)
+        # fails. cmd/dbmigrate is the production migration entry point — the
+        # SAME idempotent internal/db.Migrate runner cmd/core invokes at startup
+        # (spec 047 R12) — so the light lane asserts against the REAL migrated
+        # schema, not a hand-built one, keeping the lane meaningful. It reads
+        # only DATABASE_URL and is idempotent (re-running is a no-op guarded by
+        # schema_migrations), so this is harmless if ever run twice.
+        echo "Applying DB migrations to the stores-only test postgres (cmd/dbmigrate)..."
+        set +e
+        docker run --rm \
+          --network "$compose_network" \
+          -v "$SCRIPT_DIR:/workspace" \
+          -v smackerel-gomod-cache:/go/pkg/mod \
+          -v smackerel-gobuild-cache:/root/.cache/go-build \
+          -w /workspace \
+          --env-file "$env_file" \
+          -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+          golang:1.25.10-bookworm go run ./cmd/dbmigrate
+        integration_light_migrate_status=$?
+        set -e
+        if [[ "$integration_light_migrate_status" -ne 0 ]]; then
+          echo "FAIL: integration-light db migration (cmd/dbmigrate exit=${integration_light_migrate_status})" >&2
+          exit "$integration_light_migrate_status"
+        fi
+        echo "PASS: integration-light db migration (schema applied via cmd/dbmigrate)"
+
         # Run the selected Go integration test against the live pg+nats stack.
         # Stores-only env subset: the heavy lane also injects core/ml/searxng +
         # agent-scenario wiring; a stores-only test needs only the two stores.
+        # The generated test.env (passed via --env-file for the DB/NATS config)
+        # ALSO carries the core/ml/searxng service URLs (CORE_API_URL,
+        # CORE_EXTERNAL_URL, ML_SIDECAR_URL, OPEN_KNOWLEDGE_SEARXNG_URL). NONE of
+        # those services run in this lane, so blank them out: the live-stack
+        # integration tests gate on those URLs being SET (== "the full stack is
+        # up") and skip HONESTLY when they are empty. Without this, every
+        # core/ml/searxng test (drive/graphapi/api/assistant/mobile/photos/agent
+        # /openknowledge/searxng …) would hard-fail dialing an unreachable
+        # smackerel-core / sidecar instead of skipping. This realizes the
+        # stores-only wiring the "stores-only env subset" note always intended.
         set +e
         docker run --rm \
           --network "$compose_network" \
@@ -1245,6 +1285,10 @@ case "$COMMAND" in
           -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
           -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+          -e "CORE_API_URL=" \
+          -e "CORE_EXTERNAL_URL=" \
+          -e "ML_SIDECAR_URL=" \
+          -e "OPEN_KNOWLEDGE_SEARXNG_URL=" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh "${go_integration_light_args[@]}"
         go_integration_light_status=$?
         set -e
