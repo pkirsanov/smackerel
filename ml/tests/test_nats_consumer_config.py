@@ -77,8 +77,17 @@ def test_subscribe_all_threads_consumer_config(monkeypatch):
     client._js = mock_js
 
     # Prevent background consume tasks from being scheduled during the
-    # test (they would reference a non-existent running event loop).
-    monkeypatch.setattr(nc_mod.asyncio, "create_task", lambda _coro: MagicMock())
+    # test (they would reference a non-existent running event loop). Close the
+    # intercepted _consume_loop coroutine instead of dropping it on the floor —
+    # a never-awaited coroutine raises "RuntimeWarning: coroutine '_consume_loop'
+    # was never awaited". Closing it is a clean no-op for a not-yet-started
+    # coroutine and does not weaken any assertion below (pull_subscribe is still
+    # asserted to have been awaited once per subject with the right config).
+    def _fake_create_task(coro):
+        coro.close()
+        return MagicMock()
+
+    monkeypatch.setattr(nc_mod.asyncio, "create_task", _fake_create_task)
 
     asyncio.run(client.subscribe_all())
 
