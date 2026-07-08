@@ -40,6 +40,7 @@ The repository now exposes a sanctioned CLI-owned runtime test surface for the f
 | Stress smoke | `./smackerel.sh test stress` | Runtime health, lifecycle, or stress env handoff changes |
 | Chrome extension e2e (MV3) | `./smackerel.sh test e2e-ext` | `extensions/chrome-bridge/` MV3 background/content/transport code or its Playwright e2e harness changes (self-contained; real headless Chromium, no live stack) |
 | Chrome extension supply-chain | `./smackerel.sh test extension-supplychain` | Chrome-bridge sideload-zip packaging or its LOCAL cosign sign / `verify-blob` proof changes (offline ephemeral key; no public-Rekor upload) |
+| Portability guard (host static, pre-push) | `./smackerel.sh test pre-push` | `smackerel.sh` or `scripts/**/*.sh` changes — macOS/WSL cross-platform shell portability. Fast host-side static gate (no Docker); the same guard the git pre-push hook runs; fail-closed with no bypass flag |
 | Framework doctor | `bash .github/bubbles/scripts/cli.sh doctor` | Project-owned bootstrap docs change |
 | Framework validate | `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate` | Before claiming bootstrap health |
 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>` | Spec or bug artifacts change |
@@ -62,6 +63,7 @@ The current CLI-owned runtime surface exposes these categories today:
 | Stress | `stress` | `./smackerel.sh test stress` |
 | Chrome extension e2e (MV3) | `e2e-ext` | `./smackerel.sh test e2e-ext` |
 | Chrome extension supply-chain | `extension-supplychain` | `./smackerel.sh test extension-supplychain` |
+| Portability guard (host static) | `pre-push` | `./smackerel.sh test pre-push` |
 
 ### Stores-Only Integration-Light Lane (`test integration-light`, OPS-005 F-RUNBOOK)
 
