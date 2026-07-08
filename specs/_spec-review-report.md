@@ -153,7 +153,7 @@ drift gate) — `chore(bubbles)`, not readiness work.
 **knb (cross-repo — referenced by packet/finding id, NOT imported; deploy-overlay
 owned + tracked in knb):** the superseding evo-x2 activation handoff **OPS-007**
 was authored (supersedes the 332-commit-stale `docs/SMACKEREL-082-EVO-X2-HANDOFF.md`
-+ spec 011); ops-hygiene **F1** (warning→ntfy page), **SM-F5** (adapter suite
+- spec 011); ops-hygiene **F1** (warning→ntfy page), **SM-F5** (adapter suite
 21/21 green on macOS), **SM-F6** (shellcheck/shfmt clean) + the alert-count mirror
 reconciled to 21; **KNB-SR-1** secret-rotation key-id regression fixed (conformed
 smackerel's hook back to the ratified spec-023 uniform `sha256(name)` contract —
@@ -607,7 +607,7 @@ document their own state in `state.json`.
 4. **`096`'s own `state.json` `notes` are internally stale** — they still narrate
    the 2026-06-18 analyst-bootstrap claim that `design.md`/`scopes.md`/`report.md`
    are "intentionally absent," but all seven artifacts now exist and SCOPE-01..07
-   + §13 observability have landed. The spec is correctly `in_progress` (not
+   - §13 observability have landed. The spec is correctly `in_progress` (not
    promotable); the stale notes are a within-spec annotation lag, not a trust
    contradiction.
 5. **The four blocked specs are honest, not drifted.** `058` is gated solely on a
@@ -629,7 +629,7 @@ document their own state in `state.json`.
 4. Verified the CVE remediation chain (commits `4debc4f0`, `d684f7bc`, HEAD
    `ad372f13`) and that the build workflow is green / publishes a manifest.
 5. Inspected the uncommitted model-config reconciliation diffs (state.json `notes`
-   + `report.md` supersession blocks for `087`/`088`/`089`; `config/smackerel.yaml`
+   - `report.md` supersession blocks for `087`/`088`/`089`; `config/smackerel.yaml`
    home-lab block) to confirm they are record-only and status-preserving.
 6. Re-tested the 2026-06-02 MINOR_DRIFT signals: confirmed
    `internal/api/domain_intent.go` is still deleted and `039`/`067` still carry the
@@ -646,11 +646,11 @@ every spec — only where signals indicated drift.
 
 ### MAJOR_DRIFT — Do NOT rely on spec until fixed
 
-_None._
+*None.*
 
 ### OBSOLETE — Ignore entirely
 
-_None._
+*None.*
 
 ### MINOR_DRIFT — Usable but verify
 
@@ -693,12 +693,14 @@ CURRENT = `001`–`098` minus `{039, 058, 067, 084, 087, 088, 096, 097, 098}`. B
 ```
 
 Freshly-reconciled CURRENT:
+
 - **`089-runtime-model-hotswap-persistent-selection`** (done) — its `report.md` +
   `state.json` `notes` now carry the record-only home-lab model supersession note
   (`deepseek-r1:32b` standing default → `gpt-oss:20b` + `gemma4:26b`). Status =
   `done`, certification unchanged. Annotation is uncommitted working-tree state.
 
 Verify-before-trust caveats inside CURRENT (unchanged from prior audits):
+
 - **Phase roadmap specs (`001`–`006`)** are intentionally high-level — historical
   roadmap, not implementation contract.
 - **Recent interconnected assistant/model specs (`061`, `063`, `064`, `068`–`074`,
@@ -777,7 +779,7 @@ Depth caveat: full behavioural cross-check (Gherkin-vs-code) was not performed f
 
 ### MAJOR_DRIFT — Do NOT rely on spec until fixed
 
-_None as of 2026-06-03._
+*None as of 2026-06-03.*
 
 #### specs/026-domain-extraction — RECLASSIFIED CURRENT 2026-06-03 (false positive)
 
@@ -812,6 +814,7 @@ No manifest changes were required. Spec 026 is CURRENT.
 ### CURRENT — Safe to use as source of truth
 
 All other 66 specs classify as CURRENT based on:
+
 - `status` terminal-for-mode (`done`, `specs_hardened`, `delivered_pending_activation`),
 - `certification.status` matching `status`,
 - no recent (post-cert) commits to their primary code paths that would contradict the spec, and
@@ -848,6 +851,7 @@ Listed alphabetically:
 ```
 
 Verify-before-trust caveats inside CURRENT:
+
 - **Recent assistant-stack specs (061, 063, 064, 068, 069, 070, 071, 072, 073, 074)** were certified in the last 14 days during heavy interconnected churn. Their internal coverage is fresh, but cross-spec references (e.g. a spec citing another spec's scenario IDs) should be spot-checked before reuse.
 - **Phase roadmap specs (001-006)** are intentionally high-level — they describe what each phase delivered, not current code. Treat as historical roadmap, not implementation contract.
 
