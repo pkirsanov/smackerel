@@ -69,6 +69,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 53 | [Framework Health](recipes/framework-health.md) | `framework-health` | Analyze Bubbles itself and emit proposal-first improvement packets |
 | 54 | [Cross-Repo Goal Scenario](recipes/cross-repo-scenario.md) | `bubbles.goal` / `bubbles.sprint` | Compile an outcome (review → plan → deliver → deploy → operate, possibly cross-repo) into one approval-gated scenario DAG |
 | 55 | [Adversarial Verification](recipes/adversarial-verification.md) | `bubbles.redteam` / `redteam-to-doc` / `production-adversarial-probe` | Attack a finished result to falsify "done" — counterexamples, risk-gated voting validators, bounded prod chaos-monkey (Green Bastard "The Masked Attacker"). Off by default |
+| 56 | [Guided Journey](recipes/guided-journey.md) | `journey-refinement` / `bubbles.journey` | Walk the live product with the user toward a goal — verify UI/API/telemetry/data each step, capture friction, route refinements (Cathy Curtis) |
 
 ---
 
@@ -84,7 +85,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 43 → 44 → 3 → 4 → 5 → 12
 
 ### 🔍 Review & Assessment
-13 → 14 → 15 → 16 → 28
+13 → 14 → 15 → 16 → 28 → 56
 
 ### 📊 Data-Driven Workflows
 20 → 21 → 22 → 23 → 24 → 25

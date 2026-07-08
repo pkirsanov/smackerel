@@ -6,6 +6,8 @@ bubbles/scripts/adversarial-resolve-selftest.sh
 bubbles/scripts/adversarial-resolve.sh
 bubbles/scripts/agent-ownership-lint-selftest.sh
 bubbles/scripts/agent-ownership-lint.sh
+bubbles/scripts/agent-roster-coverage-selftest.sh
+bubbles/scripts/agent-roster-coverage.sh
 bubbles/scripts/agnosticity-lint-selftest.sh
 bubbles/scripts/agnosticity-lint.sh
 bubbles/scripts/aliases.sh
