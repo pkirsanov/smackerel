@@ -13,13 +13,35 @@
  * proving "adds an equivalent" updates the persisted record rather than
  * duplicating it.
  */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { attachCSPGuard, assertNoCSPViolations } from "./_support/csp";
 import { login } from "./_support/cardrewards";
 
 function uniqueSuffix(): string {
   return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+// starCategory ticks the "starred" checkbox on the add/update-category form.
+//
+// page.check('input[name="starred"]') intermittently 30s-timeouts on macOS
+// headless Chromium: the compositor logs `CVDisplayLinkCreateWithCGDisplay
+// failed` + EGL warnings and the small native checkbox never satisfies
+// check()'s stability/hit-test actionability wait — even though the control is
+// correct and starring persists (proven by the server round-trip reloaded
+// below, and by the CategoryUpsert handler reading `starred == "on"`).
+// fill()/click() on the same page succeed because they don't hit-test a tiny
+// target. Keep it a REAL assertion: require the checkbox to be a visible,
+// enabled control FIRST, then force past only the flaky actionability wait,
+// then assert it actually toggled on. On Linux/evo-x2 the control is click-
+// stable, so `check({ force: true })` is equivalent to a plain check() there.
+async function starCategory(page: Page): Promise<void> {
+  const starred = page.locator('input[name="starred"]');
+  await expect(starred).toBeVisible();
+  await expect(starred).toBeEnabled();
+  await starred.scrollIntoViewIfNeeded();
+  await starred.check({ force: true });
+  await expect(starred).toBeChecked();
 }
 
 test.describe("Spec 083 Scope 10 — Categories", () => {
@@ -42,7 +64,7 @@ test.describe("Spec 083 Scope 10 — Categories", () => {
     // Add a starred category with one equivalent.
     await page.fill('input[name="canonical_category"]', canonical);
     await page.fill('input[name="equivalents"]', equiv1);
-    await page.check('input[name="starred"]');
+    await starCategory(page);
     await page.click('button[data-action="save-category"]');
     await page.waitForURL("**/cards/categories");
 
@@ -60,7 +82,7 @@ test.describe("Spec 083 Scope 10 — Categories", () => {
     // new equivalent must be reflected (J08 "adds an equivalent").
     await page.fill('input[name="canonical_category"]', canonical);
     await page.fill('input[name="equivalents"]', `${equiv1}, ${equiv2}`);
-    await page.check('input[name="starred"]');
+    await starCategory(page);
     await page.click('button[data-action="save-category"]');
     await page.waitForURL("**/cards/categories");
 
