@@ -1198,6 +1198,25 @@ case "$COMMAND" in
         pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
         pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
         compose_network="$(smackerel_compose_project test)_default"
+        # AGENT_SCENARIO_DIR is NOT a live-service URL (unlike the core/ml/searxng
+        # URLs blanked in the go-test container below) — it is a repo-resident
+        # config directory (config/prompt_contracts) mounted read-through at
+        # /workspace, so the stores-only lane CAN supply it. Resolve the
+        # repo-relative value to an absolute /workspace path EXACTLY as the heavy
+        # `integration` lane does (the Go runner sets CWD per-package, so a
+        # relative scenario dir does not resolve from a test package's working
+        # directory). This lets the config-only
+        # TestOpenKnowledgeRouting_ScenarioHealthProbe RUN and PASS here, while
+        # TestOpenKnowledgeRouting_FallbackToOpenKnowledge still SKIPS on the
+        # blanked ML_SIDECAR_URL (it needs the live embedder) and RUNS in the
+        # heavy lane. Without this the container inherits the RELATIVE
+        # AGENT_SCENARIO_DIR from --env-file and both tests hard-fail on an
+        # unreachable path (`stat .../tests/integration/agent/config/prompt_contracts:
+        # no such file or directory`) instead of skipping/running honestly.
+        agent_scenario_dir="$(smackerel_env_value "$env_file" "AGENT_SCENARIO_DIR")"
+        if [[ -n "$agent_scenario_dir" && "$agent_scenario_dir" != /* ]]; then
+          agent_scenario_dir="/workspace/${agent_scenario_dir}"
+        fi
 
         # Orchestrator owns the stores-only stack lifecycle so the Go runner
         # sees a live pg+nats stack. KEEP_STACK_UP=1 is explicit because the
@@ -1261,17 +1280,23 @@ case "$COMMAND" in
         echo "PASS: integration-light db migration (schema applied via cmd/dbmigrate)"
 
         # Run the selected Go integration test against the live pg+nats stack.
-        # Stores-only env subset: the heavy lane also injects core/ml/searxng +
-        # agent-scenario wiring; a stores-only test needs only the two stores.
-        # The generated test.env (passed via --env-file for the DB/NATS config)
-        # ALSO carries the core/ml/searxng service URLs (CORE_API_URL,
-        # CORE_EXTERNAL_URL, ML_SIDECAR_URL, OPEN_KNOWLEDGE_SEARXNG_URL). NONE of
-        # those services run in this lane, so blank them out: the live-stack
-        # integration tests gate on those URLs being SET (== "the full stack is
-        # up") and skip HONESTLY when they are empty. Without this, every
-        # core/ml/searxng test (drive/graphapi/api/assistant/mobile/photos/agent
-        # /openknowledge/searxng …) would hard-fail dialing an unreachable
-        # smackerel-core / sidecar instead of skipping. This realizes the
+        # Stores-only env subset: the heavy lane injects core/ml/searxng service
+        # URLs; a stores-only test reaches only the two stores plus repo-resident
+        # config. The generated test.env (passed via --env-file for the DB/NATS
+        # config) ALSO carries live-service URLs that point at containers the
+        # stores-only lane does NOT start: the core/ml/searxng service URLs
+        # (CORE_API_URL, CORE_EXTERNAL_URL, ML_SIDECAR_URL,
+        # OPEN_KNOWLEDGE_SEARXNG_URL) AND the spec-061 stub-providers geocoder
+        # (ASSISTANT_SKILLS_WEATHER_GEOCODE_URL=http://stub-providers:8080/...).
+        # NONE of those services run in this lane, so blank them out: the
+        # live-stack integration tests gate on those URLs being SET (== "the
+        # full stack is up") and skip HONESTLY when they are empty. Without this,
+        # every core/ml/searxng test would hard-fail dialing an unreachable
+        # smackerel-core / sidecar, and the OpenMeteo location-normalize test
+        # (TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations) would
+        # hard-fail on the unreachable stub-providers geocoder (status "failed")
+        # instead of skipping -- the heavy lane keeps the stub-providers geocoder
+        # up, so that test skips-on-stub (Reykjavik) there. This realizes the
         # stores-only wiring the "stores-only env subset" note always intended.
         set +e
         docker run --rm \
@@ -1289,6 +1314,8 @@ case "$COMMAND" in
           -e "CORE_EXTERNAL_URL=" \
           -e "ML_SIDECAR_URL=" \
           -e "OPEN_KNOWLEDGE_SEARXNG_URL=" \
+          -e "ASSISTANT_SKILLS_WEATHER_GEOCODE_URL=" \
+          -e "AGENT_SCENARIO_DIR=${agent_scenario_dir}" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh "${go_integration_light_args[@]}"
         go_integration_light_status=$?
         set -e
