@@ -108,6 +108,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `sunnyvale the-whole-operation` | `bubbles.sprint` | *"We're runnin' the whole operation now — review, deliver, deploy, the works."* |
 | `sunnyvale under-the-light` | `bubbles.grill` | *"Let's get it under the light and see if it survives."* |
 | `sunnyvale private-dancer` | `bubbles.grill` | *"You want answers? Put it under the light."* |
+| `sunnyvale tell-me-straight` | `bubbles.journey` | *"Come on, I'll walk you through it — and tell you straight what's broken."* |
 | `sunnyvale worst-case-ontario` | `bubbles.chaos` | *"Worst case Ontario, something breaks"* |
 | `sunnyvale by-the-book` | `bubbles.audit --strict` | *"This is by the book now."* |
 | `sunnyvale get-two-birds-stoned` | `bubbles.implement + bubbles.test` | *"Get two birds stoned at once"* |
@@ -216,6 +217,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `propagate-audit` | check-every-park | Read-only drift detection between declared trains. Reports unpropagated changes; never mutates. |
 | `incident-fastlane` | call-the-trailer | Production incident chain: triage → fix → validate → propagate → audit. Highest-priority operational lane. |
 | `framework-health` | bubbles-check-yo-self | `bubbles.retro target: framework` — proposal-first self-observation of the framework itself. Writes only into `improvements/`, never auto-mutates framework files. |
+| `journey-refinement` | walk-me-through-it | Guided live-product walkthrough toward a goal — bubbles.journey verifies UI/API/telemetry/data at each step, captures friction, and routes refinements to owners |
 | `upkeep-backup-verify` | check-the-backup | Run scheduled backup verification (T1/T2/T3/T4). Calendar-driven via `config/upkeep-calendar.yaml`. |
 | `upkeep-restore-drill` | rehearse-the-rescue | Weekly restore drill — proves a backup can be recovered. Failed drill blocks next promote. |
 | `upkeep-bcdr-drill` | full-park-rebuild | Quarterly BCDR drill — full disaster-recovery exercise into isolated namespace. |

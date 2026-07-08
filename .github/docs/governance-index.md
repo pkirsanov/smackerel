@@ -171,6 +171,7 @@ end-to-end flows.
 - [framework-health.md](recipes/framework-health.md)
 - [framework-ops.md](recipes/framework-ops.md)
 - [grill-an-idea.md](recipes/grill-an-idea.md)
+- [guided-journey.md](recipes/guided-journey.md)
 - [idea-to-release.md](recipes/idea-to-release.md)
 - [just-tell-bubbles.md](recipes/just-tell-bubbles.md)
 - [new-feature.md](recipes/new-feature.md)

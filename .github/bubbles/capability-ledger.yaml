@@ -156,6 +156,29 @@ capabilities:
     freshnessTargets:
     - docs/recipes/framework-health.md
 
+  guided-journey:
+    label: Guided post-implementation journey
+    state: shipped
+    summary: "bubbles.journey (Cathy Curtis) walks the operator through the LIVE product toward a concrete goal, verifies UI + API + telemetry + data at each step, captures per-step friction verdicts, and routes refinements to the owning specialists. The cooperative-guided third stance alongside chaos (stochastic) and redteam (adversarial)."
+    ownerSurface: agents/bubbles.journey.agent.md
+    releaseIntroduced: v7.18.0
+    docsRefs:
+    - docs/recipes/guided-journey.md
+    evidenceRefs:
+    - agents/bubbles.journey.agent.md
+    - prompts/bubbles.journey.prompt.md
+    - bubbles/workflows/modes.yaml
+    - bubbles/intent-routes.yaml
+    consumers:
+    - bubbles/workflows/modes.yaml # journey-refinement mode (select -> journey -> docs -> finalize)
+    - bubbles/intent-routes.yaml # NL routing to bubbles.journey
+    - bubbles/agent-capabilities.yaml # ownsPhases: [ journey ]
+    competitorTags:
+    - claude-code
+    - cursor
+    freshnessTargets:
+    - docs/recipes/guided-journey.md
+
   artifact-ownership:
     label: Hard artifact ownership
     state: shipped
