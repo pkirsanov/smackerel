@@ -20,12 +20,14 @@ and offline-proven; the live evo-x2 verification (SCOPE-02) is DEFERRED-to-flip
 ## Files changed
 
 **New:**
+
 - `internal/observability/shared.go` — service-tier fail-loud contract reader (`Config`, `Validate`, `FromEnv`).
 - `internal/observability/shared_test.go` — 9 fail-loud unit tests.
 - `internal/deploy/shared_observability_labels_contract_test.go` — compose label contract (4 tests).
 - `specs/101-shared-observability-instrumentation/` — spec/design/scopes/scenario-manifest/report/uservalidation/state.
 
 **Modified:**
+
 - `internal/config/config.go` — struct + loader: `OTELExporterEndpoint` → `OTLPTracesEndpoint` / `OTLPLogsEndpoint` / `MetricsScrapeLabelProduct`.
 - `cmd/core/services.go` — `OTEL_ENABLED`-gated `observability.Config.Validate()` boot gate + import.
 - `config/smackerel.yaml` — `observability:` block: 3-var contract replacing `otel_exporter_endpoint`.
@@ -88,6 +90,7 @@ The test earned its keep: the first run FAILED
 smackerel service in `deploy/compose.deploy.yml` I had missed. Fixed, re-run GREEN.
 
 Label counts (grep):
+
 ```
 docker-compose.yml:        com.bubbles.product=9  com.bubbles.service=9
 deploy/compose.deploy.yml: com.bubbles.product=7  com.bubbles.service=7
@@ -204,7 +207,7 @@ SCOPE-01 (in-repo instrumentation contract) is complete and offline-proven: the
 3-var contract is adopted across the SST, the fail-loud reader + `OTEL_ENABLED`-
 gated boot gate are wired and unit-proven, the `com.bubbles.*` labels are on all
 16 service blocks (9 dev + 7 deploy) and contract-locked, the existing `/metrics`
-+ OTLP exporter are reused (not forked), and gofmt / go vet / config-generate /
+- OTLP exporter are reused (not forked), and gofmt / go vet / config-generate /
 PII are clean. SCOPE-02 (live evo-x2 verification) is Blocked/DEFERRED-to-flip
 with a documented unblock condition. No DoD item is marked done without real
 captured evidence.

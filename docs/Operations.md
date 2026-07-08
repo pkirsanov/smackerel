@@ -98,39 +98,48 @@ ports as home-lab activation values.
 > production flow.
 
 1. **Clone the repository:**
+
    ```bash
    git clone <repo-url> && cd smackerel
    ```
 
 2. **Edit configuration:**
+
    ```bash
    nano config/smackerel.yaml
    ```
+
    At minimum, set:
    - `runtime.auth_token` — a secure Bearer token (min 16 chars: `openssl rand -hex 24`)
    - `llm.provider`, `llm.model`, `llm.api_key` — your LLM provider credentials
    - `telegram.bot_token`, `telegram.chat_ids` — if using the Telegram bot
 
 3. **Generate runtime config:**
+
    ```bash
    ./smackerel.sh config generate
    ```
+
    This renders `config/generated/dev.env` and `config/generated/test.env` from `config/smackerel.yaml`.
 
 4. **Build Docker images:**
+
    ```bash
    ./smackerel.sh build
    ```
 
 5. **Start the stack:**
+
    ```bash
    ./smackerel.sh up
    ```
 
 6. **Verify:**
+
    ```bash
    ./smackerel.sh status
    ```
+
    All 4 services (postgres, nats, smackerel-core, smackerel-ml) should show as healthy.
 
 ### Configuration Changes
@@ -159,19 +168,23 @@ Database migrations run automatically on startup. The migration runner uses Post
 Tagged releases publish images to GitHub Container Registry (GHCR). To deploy from pre-built images instead of building from source:
 
 1. **Set image override variables** in your environment or `config/smackerel.yaml`:
+
    ```bash
    export SMACKEREL_CORE_IMAGE=ghcr.io/<owner>/smackerel-core:v1.0.0
    export SMACKEREL_ML_IMAGE=ghcr.io/<owner>/smackerel-ml:v1.0.0
    ```
 
 2. **Pull and start:**
+
    ```bash
    ./smackerel.sh config generate
    ./smackerel.sh up
    ```
+
    Compose pulls the pre-built images instead of building from source.
 
 3. **Rollback** to a previous version:
+
    ```bash
    export SMACKEREL_CORE_IMAGE=ghcr.io/<owner>/smackerel-core:v0.9.0
    export SMACKEREL_ML_IMAGE=ghcr.io/<owner>/smackerel-ml:v0.9.0
@@ -835,10 +848,12 @@ The health endpoint reports per-connector status: `healthy`, `syncing`, `error`,
 ### Trigger Immediate Sync
 
 Via the web UI:
+
 1. Open `http://127.0.0.1:40001/settings`
 2. Click "Sync Now" next to the connector
 
 Via API:
+
 ```bash
 curl -X POST -H "Authorization: Bearer <token>" \
   http://127.0.0.1:40001/settings/connectors/<connector-name>/sync
@@ -1775,8 +1790,6 @@ The cross-surface surfacing controller (`internal/intelligence/surfacing/`) is t
 
 Cardinality is bounded by the closed `Producer` and `Channel` enums in `internal/intelligence/surfacing/types.go`; adding a new value is a deliberate code change. `ContentKey` is never exposed as a label (PII-safe).
 
-
-
 **Log/trace redaction:** All serialized recommendation logs and traces are scanned for forbidden substrings (provider API keys, raw provider payloads, sensitive graph prompt text, raw GPS coordinates) at the persistence boundary via `internal/recommendation/store.AssertRedactSafe`. The unit test `internal/recommendation/store/redact_test.go::TestRecommendationRedaction_NoSecretsOrRawLocationInLogsOrTraces` is the regression guard.
 
 #### ML Sidecar (`http://127.0.0.1:40002/metrics`)
@@ -1825,6 +1838,7 @@ When enabled, trace context is propagated via W3C `traceparent` headers in NATS 
 ### NATS Monitoring
 
 The NATS monitoring endpoint at `http://127.0.0.1:42003` provides:
+
 - `/varz` — general server info
 - `/connz` — connection details
 - `/jsz` — JetStream stream and consumer status
@@ -2053,12 +2067,14 @@ smackerel.example.com {
 }
 ```
 
-3. Start Caddy:
+1. Start Caddy:
+
 ```bash
 sudo caddy start
 ```
 
 Caddy automatically:
+
 - Obtains a Let's Encrypt certificate for your domain
 - Redirects HTTP → HTTPS
 - Renews certificates before expiry (30 days before)
@@ -2066,11 +2082,12 @@ Caddy automatically:
 ### nginx (Alternative)
 
 1. Install nginx and certbot:
+
 ```bash
 sudo apt install nginx certbot python3-certbot-nginx
 ```
 
-2. Create `/etc/nginx/sites-available/smackerel`:
+1. Create `/etc/nginx/sites-available/smackerel`:
 
 ```nginx
 server {
@@ -2092,7 +2109,8 @@ server {
 }
 ```
 
-3. Enable the site and obtain a certificate:
+1. Enable the site and obtain a certificate:
+
 ```bash
 sudo ln -s /etc/nginx/sites-available/smackerel /etc/nginx/sites-enabled/
 sudo certbot --nginx -d smackerel.example.com
@@ -2122,6 +2140,7 @@ Only the core API (port 40001) should be exposed through the reverse proxy. All 
 
 - **Caddy**: Automatic. No action needed.
 - **certbot/nginx**: Certbot installs a systemd timer or cron job that runs `certbot renew` twice daily. Verify with:
+
   ```bash
   sudo certbot renew --dry-run
   ```
@@ -2131,11 +2150,13 @@ Only the core API (port 40001) should be exposed through the reverse proxy. All 
 If switching from `http://127.0.0.1:40001` to `https://smackerel.example.com`, update:
 
 1. `config/smackerel.yaml` → `oauth.google.redirect_url`:
+
    ```yaml
    oauth:
      google:
        redirect_url: "https://smackerel.example.com/auth/google/callback"
    ```
+
 2. Google Cloud Console → Authorized redirect URIs
 3. Regenerate config: `./smackerel.sh config generate`
 4. Restart: `./smackerel.sh down && ./smackerel.sh up`
@@ -2947,6 +2968,7 @@ features:
 ```
 
 Regenerate config and restart after changes:
+
 ```bash
 ./smackerel.sh config generate
 ./smackerel.sh down && ./smackerel.sh up
@@ -3076,6 +3098,7 @@ To create distributable packages for Chrome and Firefox:
 ```
 
 This produces:
+
 - `dist/extension/smackerel-chrome-{version}.zip` — Chrome extension package
 - `dist/extension/smackerel-firefox-{version}.zip` — Firefox extension package (with Firefox-specific manifest)
 
@@ -3246,12 +3269,14 @@ The cloud-drives surface (Google Drive provider in scope today) is operated thro
 2. Regenerate config: `./smackerel.sh config generate`.
 3. Restart: `./smackerel.sh down && ./smackerel.sh up`.
 4. Connect a user account by issuing the OAuth web flow:
+
    ```bash
    curl -X POST -H "Authorization: Bearer <token>" \
      -H "Content-Type: application/json" \
      http://127.0.0.1:40001/v1/connectors/drive/connect \
      -d '{"provider":"google","owner_user_id":"<uuid>","access_mode":"read_only","scope":{"folder_ids":["<id>"]}}'
    ```
+
    The handler returns an authorization URL; the user authorizes, and the provider redirects back to `/v1/connectors/drive/oauth/callback?state=…&code=…` which calls `FinalizeConnect`. A row lands in `drive_connections` with `status='healthy'`, the provider-supplied `expires_at`, and the bearer token in `credentials_ref`.
 
 ### Drive Connection Health
@@ -3345,13 +3370,16 @@ The cloud-photos surface (Immich and PhotoPrism providers in scope today) is ope
 2. Regenerate config: `./smackerel.sh config generate`.
 3. Restart: `./smackerel.sh down && ./smackerel.sh up`.
 4. Test the connection without persisting it:
+
    ```bash
    curl -X POST -H "Authorization: Bearer <token>" \
      -H "Content-Type: application/json" \
      http://127.0.0.1:40001/v1/photos/connectors/test \
      -d '{"provider":"immich","base_url":"https://immich.example.com","access_token":"<key>"}'
    ```
+
 5. Connect:
+
    ```bash
    curl -X POST -H "Authorization: Bearer <token>" \
      -H "Content-Type: application/json" \
@@ -4162,7 +4190,7 @@ AND `smackerel_qf_callback_attempts_total{action,status=rejected_local}`.
 
 | Status | Meaning |
 |--------|---------|
-| `ok` | QF returned 2xx. **Crucial**: a 2xx response is _not_ a local action acceptance — Smackerel still does nothing with the user-affecting side of the callback (PP10). |
+| `ok` | QF returned 2xx. **Crucial**: a 2xx response is *not* a local action acceptance — Smackerel still does nothing with the user-affecting side of the callback (PP10). |
 | `rejected_v1_deferred` | QF returned a structured rejection with `code=CALLBACK_DEFERRED_TO_V1`. This is the **expected** pre-MVP status; the connector returns a Go-nil error and surfaces the parsed `RejectionCode` to the caller for observability. |
 | `rejected_local` | The signer aborted before any network send. See the failure vocabulary above. |
 | `error` | Transport error (network failure, non-2xx unparseable response, etc.). The caller receives a non-nil Go error; **no retry** is attempted — callback is a diagnostic, not a delivery contract. |
@@ -5218,5 +5246,3 @@ startup, and migration 060 is additive-only (manual rollback drops the two
 columns; see the migration's rollback footer). Disabling routing or the
 evergreen signal entirely follows the same flip-regenerate-restart flow on
 `retrieval.routing.enabled` / `retrieval.evergreen.enabled`.
-
-
