@@ -16,7 +16,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "PGPASSWORD=\"$${POSTGRES_PASSWORD}\" pg_isready -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT} -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" && PGPASSWORD=\"$${POSTGRES_PASSWORD}\" psql -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT} -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -Atqc 'SELECT 1'"]
+      test: [ "CMD-SHELL", "PGPASSWORD=\"$${POSTGRES_PASSWORD}\" pg_isready -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT} -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" && PGPASSWORD=\"$${POSTGRES_PASSWORD}\" psql -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT} -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -Atqc 'SELECT 1'" ]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -43,7 +43,7 @@ services:
       - ALL
     cap_add:
       - DAC_READ_SEARCH
-    command: ["--config", "/etc/nats/nats.conf"]
+    command: [ "--config", "/etc/nats/nats.conf" ]
     ports:
       - "127.0.0.1:${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
       - "127.0.0.1:${NATS_MONITOR_HOST_PORT}:${NATS_MONITOR_PORT}"
@@ -51,7 +51,7 @@ services:
       - nats-data:/data
       - ./config/generated/nats.conf:/etc/nats/nats.conf:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${NATS_MONITOR_PORT}/healthz"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${NATS_MONITOR_PORT}/healthz" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -146,7 +146,7 @@ services:
       # so the mount target MUST be a sibling of /app/prompt_contracts.
       - ./config/assistant:/app/assistant:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/api/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/api/health" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -179,7 +179,7 @@ services:
         VERSION: ${SMACKEREL_VERSION:?must be set in env file (run ./smackerel.sh config generate)}
         COMMIT_HASH: ${SMACKEREL_COMMIT:?must be set in env file (run ./smackerel.sh config generate)}
         BUILD_TIME: ${SMACKEREL_BUILD_TIME:?must be set in env file (run ./smackerel.sh config generate)}
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
+    command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}" ]
     restart: unless-stopped
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
     # HF cache + sentence-transformers cache + uvicorn temp files all live
@@ -213,7 +213,7 @@ services:
       nats:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${ML_CONTAINER_PORT}/health')"]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${ML_CONTAINER_PORT}/health')" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -263,7 +263,7 @@ services:
     # OLLAMA_CONTAINER_PORT). Adversarial guard:
     # tests/integration/ollama_healthcheck_test.go.
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test: [ "CMD", "ollama", "list" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -319,7 +319,7 @@ services:
     profiles:
       - monitoring
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PROMETHEUS_CONTAINER_PORT}/-/healthy"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PROMETHEUS_CONTAINER_PORT}/-/healthy" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -364,7 +364,7 @@ services:
       # busybox wget resolves `localhost` to ::1 first and nginx listens only
       # on IPv4 0.0.0.0:8080, so localhost-based probes always fail Connection
       # refused. Inter-container traffic via the compose DNS name works fine.
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/healthz"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/healthz" ]
       interval: 5s
       timeout: 2s
       retries: 5
@@ -404,7 +404,7 @@ services:
       # OTLP/gRPC receiver — what cmd/core's exporter dials.
       - "127.0.0.1:4317:4317"
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:14269/ || exit 1"]
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:14269/ || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -461,7 +461,7 @@ services:
     volumes:
       - ./config/searxng/settings.yml:/etc/searxng/settings.yml:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${SEARXNG_CONTAINER_PORT}/healthz"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${SEARXNG_CONTAINER_PORT}/healthz" ]
       interval: 5s
       timeout: 5s
       retries: 12

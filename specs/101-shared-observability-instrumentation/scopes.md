@@ -55,6 +55,7 @@ Scenario: SCN-101-A03 — smackerel containers carry product + service labels
 ```
 
 ### Implementation plan
+
 1. `config/smackerel.yaml` (`observability:`): replace `otel_exporter_endpoint`
    with `otlp_traces_endpoint` / `otlp_logs_endpoint` (empty placeholders) +
    `metrics_scrape_label_product: "smackerel"`.
@@ -73,6 +74,7 @@ Scenario: SCN-101-A03 — smackerel containers carry product + service labels
    obsoleted `OTEL_EXPORTER_ENDPOINT` references.
 
 ### Test Plan
+
 | Test Type | Category | File | Description | Command |
 |-----------|----------|------|-------------|---------|
 | unit | unit | `internal/observability/shared_test.go` | SCN-101-A01 — fail-loud 3-var read: unset/empty/whitespace/partial → named error, all-present → success (9 cases) | `./smackerel.sh test unit --go --go-run 'Validate_Accepts\|Validate_Rejects\|FromLookup_\|Constants_MatchKnbCanonicalNames'` |
@@ -137,6 +139,7 @@ Scenario: SCN-101-A04 — live /metrics 200 in the shared Prometheus (deferred-t
 ```
 
 ### Test Plan
+
 | Test Type | Category | File | Description | Command |
 |-----------|----------|------|-------------|---------|
 | integration | integration | `internal/api/health_test.go` | SCN-101-A04 — live /metrics 200 scraped by the shared Prometheus + OTLP spans in the shared Tempo; DEFERRED-to-flip (the in-repo /metrics-serving proof is health_test.go; the live scrape is operator-gated) | `[DEFERRED-to-flip] operator runs apply-shared-obs on evo-x2, then verifies the shared Prometheus target set + curl --max-time 5 /metrics` |

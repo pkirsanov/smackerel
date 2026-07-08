@@ -34,7 +34,7 @@ function requireAuthToken(): string {
   if (!AUTH_TOKEN) {
     throw new Error(
       "SMACKEREL_AUTH_TOKEN is required for the spec 077 SCOPE-3 login tests but is unset. " +
-        "The e2e-ui lane must export it from config/generated/test.env.",
+      "The e2e-ui lane must export it from config/generated/test.env.",
     );
   }
   return AUTH_TOKEN;
@@ -262,7 +262,7 @@ test.describe("Spec 077 SCOPE-3 — Login flow + CSP smoke", () => {
       // eslint-disable-next-line no-console
       console.error(
         "Refused to load the script 'https://evil.example.com/x.js' " +
-          "because it violates the following Content Security Policy directive: \"default-src 'self'\".",
+        "because it violates the following Content Security Policy directive: \"default-src 'self'\".",
       );
     });
 
