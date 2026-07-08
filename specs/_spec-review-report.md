@@ -5,8 +5,17 @@
 **Scope:** All `specs/NNN-*/` (98 numbered specs, 001–098) + `specs/_ops/*` (8 packets)
 **Depth:** quick (state.json + git history + targeted file-existence/drift checks; not full per-spec behavioural cross-check)
 
-> **Layered newest-on-top.** The **2026-06-30 evo-x2 readiness remediation
-> refresh** (immediately below) is the newest layer: it records the two closures
+> **Layered newest-on-top.** The **2026-07-08 MVP-readiness journey +
+> portfolio-completeness refresh** (immediately below) is the newest layer: it
+> adds **spec 100** (unified-journey-UI, `mvp`, certified 2026-07-04) and **spec
+> 101** (shared-observability, `mvp`, `in_progress`) — both omitted by the
+> 2026-06-30 layer's self-declared "99 numbered specs (001–099)" scope — records
+> this session's readiness-remediation closures (the smackerel unit gate now
+> EXIT 0; the spec-100/083 e2e-ui journey pass; the spec-101 reconcile), the
+> **F-100-ENV-01** e2e-ui journey-pass reconcile candidate, and the
+> live-21-vs-historical-8 alert-count clarification, and routes the residual
+> open items. Beneath it, the **2026-06-30 evo-x2 readiness remediation
+> refresh** records the two closures
 > the earlier 2026-06-30 readiness-sweep layer understated (BUG-069-002 +
 > BUG-069-003 capture-disconnect durability both certified `done`; BUG-099-001 +
 > BUG-099-002 macOS pre-flight compat both `done`/mvp), the evo-x2 readiness
@@ -28,6 +37,194 @@
 > 2026-06-23 section for audit trail. Where any two layers disagree, the newest
 > wins. (The 2026-06-20 header describes that audit's 98-spec scope; the portfolio
 > is now 99 numbered specs, 001–099 — see the 2026-06-23 refresh.)
+
+---
+
+## Summary (2026-07-08 MVP-readiness journey + portfolio-completeness refresh)
+
+This refresh is the **newest layer**. It closes finding **SM-F3**: the two
+2026-06-30 layers self-scope to "99 numbered specs (001–099)" and therefore
+**omit spec 100** (unified-journey-UI, `mvp`, certified 2026-07-04) and **spec
+101** (shared-observability-instrumentation, `mvp`, `in_progress`) plus the
+OTLP→3-var rename — a reader of the prior newest layer would wrongly conclude the
+portfolio was fully captured. This layer adds the two missing specs, records the
+readiness-remediation closures this session shipped as the **current single
+source of truth** (9 local commits, **not pushed**), reconciles the
+**F-100-ENV-01** e2e-ui environmental note against a live journey pass, corrects
+the "8 alert rules" narrative to the live **21**, and routes the residual open
+items. It is a read-only `spec-review-to-doc` layer: it documents classifications
+and dispositions and **mutates no spec `state.json`** (spec 100 is `done` +
+lockdown-frozen — its F-100-ENV-01 reconcile is recorded as an owner **candidate**
+for next unlock, never applied here). The only write this pass is this report
+layer.
+
+> **Supersedes** the 2026-06-30 layers' "99 numbered specs (001–099)" portfolio
+> scope: the portfolio is now **101 numbered specs (001–101)**. Where this layer
+> and any older layer disagree, this (newest) one wins. All prior layers are
+> preserved verbatim beneath.
+
+### 1. Spec 100 — Unified Journey UI (`mvp`) — CURRENT / certified; F-100-ENV-01 effectively resolved
+
+`specs/100-unified-journey-ui-transformation/state.json`: `status: done`,
+`releaseTrain: mvp`, `certifiedBy: bubbles.validate`, `certifiedAt
+2026-07-04T01:00:00Z`, `verdict: certified`, all 5 scopes `done`,
+`lockdown.enabled: true` + `artifactFreezeOnDone: true`. **Classification:
+CURRENT (certified, terminal-for-mode, frozen).**
+
+**F-100-ENV-01 is now EFFECTIVELY RESOLVED on the macOS dev host — a
+documentation reconcile CANDIDATE, NOT a `state.json` mutation.** The frozen
+state.json records `knownEnvironmentalFailures[0] = F-100-ENV-01` (e2e-ui stack
+bring-up stalls on the 3 GB `ollama/ollama` pull, so a browser assertion was
+never reached; accepted as ENV-CONSTRAINED with Go render/handler equivalents).
+This session's MVP-readiness journey pass **retired that constraint on this
+host**: the optimized e2e-ui stack came up healthy via the ollama **nginx stub**
+(F-100-OPT-01), the **ML sidecar profile-gated off** (F-100-OPT-03 — no 3 GB
+pull), and a **2500 MB fail-loud preflight floor** (F-100-OPT-02), then Playwright
+ran to full assertions: **42 passed / 1 failed / 9 skipped**, with **every
+spec-100 saga green** (shared app-shell nav, assistant-front-door landing, capture
+ACK, one PWA-auth cookie, product-admin invites, card-rewards shell) **plus chaos
+J1–J5**. Evidence:
+`specs/083-card-rewards-companion/bugs/BUG-083-001-macos-headless-starred-checkbox-flake/bug.md`
+(Symptom + Root-cause) and `specs/100-.../report.md` L578–L648 (the F-100-OPT
+optimizations) + L813 (the post-fix re-run **43 passed / 9 skipped / 0 failed
+×2**, zero flakes).
+
+The lone failure was **out-of-dimension** — the spec-083 card-rewards `starred`
+checkbox (`SCN-083-J08`), a macOS-headless-Chromium
+`CVDisplayLinkCreateWithCGDisplay` actionability flake on a ~13 px native control
+(not a product defect; `fill()`/`click()` on the same page succeed and the star
+round-trips) — and is **since fixed** (finding J3; see §3). **Disposition:**
+because spec 100 is `done` + lockdown-frozen, F-100-ENV-01 is flagged as a
+**`state.json` reconcile CANDIDATE for the owner on next unlock** (same
+operator/host-gated class as spec 082's R-082 risks and spec 101 SCOPE-02); it is
+**not mutated here** (respecting artifact-freeze) and is **not an MVP functional
+blocker**.
+
+### 2. Spec 101 — Shared-Observability Instrumentation (`mvp`) — IN-FLIGHT / ADDITIVE, honestly `in_progress`
+
+`specs/101-shared-observability-instrumentation/state.json`: `status:
+in_progress`, `releaseTrain: mvp`, `completedScopes: [SCOPE-01]`, `SCOPE-02:
+blocked` (`DEFERRED-to-flip`). **Classification: CURRENT-in-flight (honest
+`in_progress`; additive, NOT drift).**
+
+- **SCOPE-01 (in-repo) complete + offline-proven.** The knb spec-014 scope-03
+  3-var OTLP contract rename landed: `OTLP_TRACES_ENDPOINT` /
+  `OTLP_LOGS_ENDPOINT` / `METRICS_SCRAPE_LABEL_PRODUCT` replace the
+  declared-but-NOT-consumed `OTEL_EXPORTER_ENDPOINT`; a **fail-loud
+  `internal/observability` reader** (`shared.go` + 9 unit tests in
+  `shared_test.go`, verified present) validates the 3 vars; `OTEL_ENABLED`-gated
+  boot validation in `cmd/core/services.go`; `com.bubbles.product` /
+  `com.bubbles.service` discovery labels on all 9 compose + 7 deploy services.
+  The pre-existing `/metrics` + OTLP/gRPC exporter were **REUSED, not forked**
+  (knb FINDING-014-03-1). Inert under `observability: bundled` +
+  `OTEL_ENABLED=false`.
+- **SCOPE-02 (live evo-x2 verification) operator-flip-gated deferral** — same
+  class as spec 082 R-082-D (actual evo-x2 deploy) and spec 100 F-100-ENV-01.
+  Unblocks when the operator flips `sharedServices.observability: shared` + runs
+  `apply-shared-obs` on the host.
+- Reconciled + committed this session (local `d0905522`, finding **SM-F2**). The
+  **state-transition guard correctly REFUSED a fabricated `done`** — SCOPE-02 is
+  genuinely blocked — so status honestly stays `in_progress`. **NOT an MVP
+  functional blocker** (additive instrumentation; the runtime is unchanged while
+  `OTEL_ENABLED=false`).
+
+### 3. This session's readiness-remediation closures — current SST (local commits, NOT pushed)
+
+Verified against smackerel **HEAD `1a877461`** (branch `main`), **9 commits ahead
+of `origin/main` `febb5155`** (`git rev-list --left-right --count
+origin/main...HEAD` → `0  9`) — **none pushed**. All 9 SHAs verified in
+`git log --oneline`:
+
+| # | Finding | Change | Commit |
+|---|---------|--------|--------|
+| H1 | `internal/observability/` undocumented | doc row in `docs/Development.md` Go-Packages table | `2d5dc0c9` |
+| ADJ-1 | `pre-push` category doc-vs-CLI parity (spec-077) | document `pre-push` test category in `docs/Testing.md` | `747cf95c` |
+| L1 | 2 Python unit-suite warnings | cleaned without weakening assertions | `45d28ffe` |
+| J1 | spec-100 unguarded cross-surface nav invariant | web cross-surface app-shell nav-parity guard | `ad0336b5` |
+| H2 | integration-light live-stack lane | provision schema + present stores-only env so live-stack tests skip (**PARTIAL** — bare-lane green routed, §6) | `980d5b78` |
+| J3 | spec-083 macOS-headless `starred` checkbox flake | `starCategory()` force-check hardening + `BUG-083-001` artifact | `1a877461` |
+| SM-F2 | spec 101 in-flight coherence | reconcile shared-observability spec to committed state (§2) | `d0905522` |
+
+`./smackerel.sh test unit` is now **EXIT 0** after H1 + ADJ-1 (the doc-parity
+lane was the last red). Two incidental framework syncs are also on the branch:
+`3f169b2c` (bubbles v7.18.0) + `464aa752` (journey roster coverage / agent-roster
+drift gate) — `chore(bubbles)`, not readiness work.
+
+**knb (cross-repo — referenced by packet/finding id, NOT imported; deploy-overlay
+owned + tracked in knb):** the superseding evo-x2 activation handoff **OPS-007**
+was authored (supersedes the 332-commit-stale `docs/SMACKEREL-082-EVO-X2-HANDOFF.md`
++ spec 011); ops-hygiene **F1** (warning→ntfy page), **SM-F5** (adapter suite
+21/21 green on macOS), **SM-F6** (shellcheck/shfmt clean) + the alert-count mirror
+reconciled to 21; **KNB-SR-1** secret-rotation key-id regression fixed (conformed
+smackerel's hook back to the ratified spec-023 uniform `sha256(name)` contract —
+4/4 products green). Recorded for provenance only; no knb file is edited from this
+repo.
+
+### 4. "8 alert rules" drift — corrected narratively to the live 21
+
+The live count in `config/prometheus/alerts.yml` is **21** (`grep -c -- '- alert:'
+config/prometheus/alerts.yml` → `21`; 21 distinct `- alert:` blocks). Managed docs
+**already read 21** — `docs/Operations.md` L388: "Smackerel ships **21 Prometheus
+alert rules**". The residual **"8 alert rules"** strings are **spec-049 historical
+delivery records** only — `specs/049-monitoring-stack/report.md` L50 and
+`specs/049-.../scenario-manifest.json` L56 — which capture the count **as
+delivered by spec 049** and are **correctly NOT rewritten** (anti-fabrication: a
+historical delivery record states what that spec shipped, not the current total).
+**No drift in live config or managed docs; the "8" is honest history, not stale
+active truth.**
+
+### 5. Residual spec-review dispositions (no `state.json` mutation)
+
+| ID | Item | Disposition |
+|----|------|-------------|
+| **SM-F3** | prior newest layer omits specs 100 + 101 + OTLP rename | **CLOSED — recorded** (§1 / §2 / §4; portfolio scope corrected to 001–101). |
+| **F-100-ENV-01** | e2e-ui ollama-pull stall on the frozen spec-100 state.json | **RECONCILE CANDIDATE (owner, next unlock).** Effectively resolved on this host by the journey pass (§1); documented, NOT mutated (lockdown-frozen). |
+| **SM-F2** | spec 101 in-flight coherence | **CLOSED — reconciled + committed** (`d0905522`); guard-legitimate `in_progress`. |
+
+### 6. Residual open items — routed, not fixed here
+
+| Item | Owner | Routing note |
+|------|-------|--------------|
+| **H2** bare-`integration-light`-lane green (schema/env wiring is PARTIAL; live-stack tests currently skip) | `bubbles.plan` | Lane-contract decision: define whether the bare lane should run live or remain skip-by-design. A contract decision, not a code fix. |
+| **OPS-005 / OPS-06** `name:epoch` rotation-id description | `bubbles.upkeep` | Append-only supersession note pointing at the **KNB-SR-1** fix (hook conformed back to the spec-023 uniform `sha256(name)` contract). Doc-reconcile only; no ledger rewrite. |
+| Operator/host-gated go-live set: **R-082-A/B/C/D/E**, **F2** (upkeep-timer + `NTFY_URL`), **spec-101 SCOPE-02** flip | operator / `bubbles.devops` / `bubbles.train` | All require live host mutation (evo-x2 apply / flip) out of scope for a read-only in-repo pass. Tracked in the knb **OPS-007** activation handoff. |
+
+### Trust deltas / dispatch (2026-07-08 refresh)
+
+- **No new MAJOR_DRIFT or OBSOLETE on any certified spec → no `bubbles.workflow
+  mode=improve-existing` dispatch owed.** Spec 100 is CURRENT/certified with a
+  documentation reconcile candidate (F-100-ENV-01), not drift; spec 101 is honest
+  `in_progress`/additive, not drift. Per the spec-review skill, `improve-existing`
+  auto-dispatch triggers only on MAJOR_DRIFT / OBSOLETE of a certified spec —
+  neither applies.
+- Residual routing (§6) is advisory (`bubbles.plan` lane-contract; `bubbles.upkeep`
+  OPS-06 supersession note) — not a certified-spec drift dispatch.
+- Read-only `spec-review-to-doc`; outcome = `docs_updated`. **No spec `state.json`
+  mutated** (spec 100 `done`+frozen; spec 101 `in_progress`; all others read-only).
+  The only write this pass is this report layer.
+
+### Spec-layer MVP-readiness verdict (as of 2026-07-08, post-remediation)
+
+**MVP-ready at the spec/code layer.** The unit gate is EXIT 0; spec 100 is
+certified with every journey saga browser-green on this host (F-100-ENV-01
+effectively resolved); spec 101 is additive + inert under the bundled posture (no
+functional blocker); the alert config + managed docs are consistent at 21. The
+**only** remaining go-live gates are **operator/host-owned** (the R-082 set, the
+F2 upkeep timer + `NTFY_URL`, and the spec-101 SCOPE-02 / observability flip),
+all tracked in the knb **OPS-007** activation handoff — none is a spec-layer or
+in-repo code blocker.
+
+### Validation Checklist (2026-07-08 refresh)
+
+- [x] Spec 100 read from disk: `status: done`, `releaseTrain: mvp`, `certifiedAt 2026-07-04T01:00:00Z`, 5/5 scopes `done`, `lockdown.artifactFreezeOnDone: true`, `F-100-ENV-01` present.
+- [x] Spec 101 read from disk: `status: in_progress`, `releaseTrain: mvp`, `SCOPE-01 done` / `SCOPE-02 blocked (DEFERRED-to-flip)`; `internal/observability/shared.go` + `shared_test.go` (9 fail-loud tests) present.
+- [x] Journey-pass evidence read: `BUG-083-001/bug.md` (42 passed / 1 failed / 9 skipped; every spec-100 saga green; the 1 failure = spec-083 checkbox flake, `Status: Fixed`) + `specs/100-.../report.md` L813 (post-fix 43 / 9 / 0 ×2).
+- [x] All 9 local SHAs verified (`git log --oneline`): `1a877461` / `d0905522` / `464aa752` / `980d5b78` / `ad0336b5` / `45d28ffe` / `3f169b2c` / `747cf95c` / `2d5dc0c9`; **9 ahead of `origin/main` `febb5155`, none pushed** (`git rev-list --left-right --count` → `0  9`).
+- [x] Alert count verified: `grep -c -- '- alert:' config/prometheus/alerts.yml` → **21** (21 distinct blocks); `docs/Operations.md` L388 reads 21; residual "8" only in `specs/049-.../report.md` L50 + `scenario-manifest.json` L56 (historical, not rewritten).
+- [x] No spec `state.json` mutated; no MAJOR_DRIFT / OBSOLETE → no mandatory `improve-existing` dispatch. F-100-ENV-01 recorded as owner reconcile candidate (lockdown-respecting).
+- [x] Residual items routed (H2 → `bubbles.plan`; OPS-06 → `bubbles.upkeep`; operator/host-gated set → knb OPS-007).
+- [x] Older layers (2026-06-30 ×2, 2026-06-23, 2026-06-20, Historical Record) preserved verbatim (append-only, newest-on-top).
+- [x] No knb / operator PII (knb items referenced by packet/finding id only; generic home-lab / operator framing).
 
 ---
 
