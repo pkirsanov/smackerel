@@ -3,6 +3,7 @@
 Always load:
 - `critical-requirements.md`
 - `artifact-ownership.md`
+- `analytical-rigor.md`
 - Feature `spec.md`
 - Feature `state.json`
 - Project UI design instructions when they exist
