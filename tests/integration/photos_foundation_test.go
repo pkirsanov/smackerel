@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -150,7 +151,44 @@ func loadIntegrationEnvFileKeys(t *testing.T, path string) map[string]string {
 	return out
 }
 
+// requirePhotosLiveStack skips a photos canary/foundation subtest when the FULL
+// live stack is not up. The stores-only `./smackerel.sh test integration-light`
+// lane brings up ONLY postgres + nats (NO cmd/core, NO ml sidecar), so the
+// PHOTOS JetStream stream (provisioned by cmd/core's EnsureStreams at startup)
+// and the ml-sidecar photos.classify → photos.classified contract are BOTH
+// absent there — a stores-only stack genuinely cannot prove either. Gate on
+// ml-sidecar reachability, the repo's established honest-skip signal (see
+// cardrewards_extract_test.go): when the sidecar is reachable we are in the full
+// `./smackerel.sh test integration` lane where cmd/core also runs and the PHOTOS
+// stream exists, so these subtests run and assert for real; when it is
+// unreachable we are in the stores-only lane and skip HONESTLY instead of
+// hard-failing on infrastructure the lane does not provide. (These are the
+// peers of TestMigrations that need the full stack, gated per the
+// integration-light stores-only contract; the sibling config_* and
+// migration_025_* subtests still run and pass in the light lane.)
+func requirePhotosLiveStack(t *testing.T) {
+	t.Helper()
+	sidecarURL := strings.TrimSpace(os.Getenv("ML_SIDECAR_URL"))
+	if sidecarURL == "" {
+		t.Skip("photos live-stack canary: ML_SIDECAR_URL not set — full live stack (core-provisioned NATS streams + ML sidecar) not available (run via ./smackerel.sh test integration)")
+	}
+	healthClient := &http.Client{Timeout: 3 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(sidecarURL, "/")+"/health", nil)
+	if err != nil {
+		t.Fatalf("build ML sidecar health request: %v", err)
+	}
+	resp, err := healthClient.Do(req)
+	if err != nil {
+		t.Skipf("photos live-stack canary: ML sidecar not reachable at %s (%v) — stores-only lane; run via ./smackerel.sh test integration", sidecarURL, err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Skipf("photos live-stack canary: ML sidecar health = HTTP %d — full live stack not provisioned; run via ./smackerel.sh test integration", resp.StatusCode)
+	}
+}
+
 func canaryNATSPhotosStream(t *testing.T) {
+	requirePhotosLiveStack(t)
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {
 		t.Skip("integration: NATS_URL not set — live test stack not available")
