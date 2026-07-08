@@ -1,67 +1,127 @@
 {
-  "schemaVersion": 3,
-  "version": 3,
-  "specId": "101-shared-observability-instrumentation",
-  "feature": "101-shared-observability-instrumentation",
-  "featureDir": "specs/101-shared-observability-instrumentation",
-  "featureName": "Shared-Observability Instrumentation Contract (knb spec 014 scope 03)",
-  "status": "in_progress",
-  "mode": "full-delivery",
-  "workflowMode": "full-delivery",
-  "statusCeiling": "done",
-  "planningOnly": false,
-  "executionRuntime": "direct-implement",
-  "executionModelDetail": "Parent-expanded by bubbles.workflow because the workflow runtime lacked the runSubagent tool — the analyst/design/plan/implement/test/validate roles were executed directly in-session (the documented smackerel precedent, e.g. spec 097). SCOPE-01 (in-repo instrumentation contract) is complete + offline-proven; SCOPE-02 (live evo-x2 verification) is Blocked/DEFERRED-to-flip because live host mutation is out of scope this session.",
-  "createdAt": "2026-07-06T00:00:00Z",
-  "updatedAt": "2026-07-06T00:00:00Z",
-  "requiresRevalidation": false,
-  "releaseTrain": "mvp",
-  "reconciliation": "Reconciliation, not greenfield. Current-truth audit found /metrics (internal/api/router.go), the OTLP/gRPC exporter (internal/assistant/tracing), and the otel-go SDK already shipped. Genuine gaps closed: knb 3-var contract naming (replacing declared-not-consumed OTEL_EXPORTER_ENDPOINT), a fail-loud internal/observability reader, OTEL_ENABLED-gated boot validation, and com.bubbles.* discovery labels. Existing exporter + /metrics REUSED, not forked (knb FINDING-014-03-1). Operator decision option (a); knb adapter side needs zero rework.",
-  "policySnapshot": {
-    "grill": {"mode": "off", "source": "repo-default"},
-    "tdd": {"mode": "off", "source": "repo-default"},
-    "autoCommit": {"mode": "off", "source": "repo-default"},
-    "lockdown": {"mode": "off", "source": "repo-default"},
-    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
-    "validation": {"mode": "certification-required", "source": "repo-default"}
-  },
-  "transitionRequests": [],
-  "reworkQueue": [],
-  "relatesTo": [
-    "specs/030-observability",
-    "specs/061-conversational-assistant",
-    "knb:specs/014-shared-host-observability/scopes/03-smackerel-instrumentation"
-  ],
-  "scopes": [
-    "SCOPE-01",
-    "SCOPE-02"
-  ],
-  "completedScopes": [
-    "SCOPE-01"
-  ],
-  "certification": {
+    "schemaVersion": 3,
+    "version": 3,
+    "specId": "101-shared-observability-instrumentation",
+    "feature": "101-shared-observability-instrumentation",
+    "featureDir": "specs/101-shared-observability-instrumentation",
+    "featureName": "Shared-Observability Instrumentation Contract (knb spec 014 scope 03)",
     "status": "in_progress",
-    "certifiedBy": null,
-    "certifiedAt": null,
-    "lockdownState": "unlocked",
-    "completedScopes": ["SCOPE-01"],
-    "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "test", "docs"],
-    "scopeProgress": [
-      {"scope": 1, "name": "In-repo instrumentation contract (naming + fail-loud reader + labels)", "status": "done", "dependsOn": [], "evidenceFile": "report.md"},
-      {"scope": 2, "name": "Live shared-stack verification (evo-x2)", "status": "blocked", "dependsOn": ["SCOPE-01"], "evidenceFile": "report.md", "blockedReason": "DEFERRED-to-flip: live /metrics 200 scraped by the shared Prometheus + OTLP spans in the shared Tempo require an operator flip (sharedServices.observability: shared + apply-shared-obs on evo-x2). No live host mutation this session."}
-    ]
-  },
-  "completedPhases": ["analyze", "design", "plan", "implement", "test", "docs"],
-  "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "validate",
-    "currentScope": "SCOPE-02",
-    "executionModel": "parent-expanded-child-mode",
-    "runStartedAt": "2026-07-06T00:00:00Z",
-    "completedPhaseClaims": ["analyze", "design", "plan", "implement", "test", "docs"],
-    "pendingTransitionRequests": [],
-    "deferredScopes": [
-      {"scope": "SCOPE-02", "reason": "live evo-x2 verification apply-gated; no live host mutation this session", "unblock": "operator flips sharedServices.observability: shared + runs apply-shared-obs on evo-x2"}
-    ]
-  }
+    "mode": "full-delivery",
+    "workflowMode": "full-delivery",
+    "statusCeiling": "done",
+    "planningOnly": false,
+    "executionRuntime": "direct-implement",
+    "executionModelDetail": "Parent-expanded by bubbles.workflow because the workflow runtime lacked the runSubagent tool — the analyst/design/plan/implement/test/validate roles were executed directly in-session (the documented smackerel precedent, e.g. spec 097). SCOPE-01 (in-repo instrumentation contract) is complete + offline-proven; SCOPE-02 (live evo-x2 verification) is Blocked/DEFERRED-to-flip because live host mutation is out of scope this session.",
+    "createdAt": "2026-07-06T00:00:00Z",
+    "updatedAt": "2026-07-06T00:00:00Z",
+    "requiresRevalidation": false,
+    "releaseTrain": "mvp",
+    "reconciliation": "Reconciliation, not greenfield. Current-truth audit found /metrics (internal/api/router.go), the OTLP/gRPC exporter (internal/assistant/tracing), and the otel-go SDK already shipped. Genuine gaps closed: knb 3-var contract naming (replacing declared-not-consumed OTEL_EXPORTER_ENDPOINT), a fail-loud internal/observability reader, OTEL_ENABLED-gated boot validation, and com.bubbles.* discovery labels. Existing exporter + /metrics REUSED, not forked (knb FINDING-014-03-1). Operator decision option (a); knb adapter side needs zero rework.",
+    "policySnapshot": {
+        "grill": {
+            "mode": "off",
+            "source": "repo-default"
+        },
+        "tdd": {
+            "mode": "off",
+            "source": "repo-default"
+        },
+        "autoCommit": {
+            "mode": "off",
+            "source": "repo-default"
+        },
+        "lockdown": {
+            "mode": "off",
+            "source": "repo-default"
+        },
+        "regression": {
+            "mode": "protected-scenarios",
+            "source": "repo-default"
+        },
+        "validation": {
+            "mode": "certification-required",
+            "source": "repo-default"
+        }
+    },
+    "transitionRequests": [],
+    "reworkQueue": [],
+    "relatesTo": [
+        "specs/030-observability",
+        "specs/061-conversational-assistant",
+        "knb:specs/014-shared-host-observability/scopes/03-smackerel-instrumentation"
+    ],
+    "scopes": [
+        "SCOPE-01",
+        "SCOPE-02"
+    ],
+    "completedScopes": [
+        "SCOPE-01"
+    ],
+    "certification": {
+        "status": "in_progress",
+        "certifiedBy": null,
+        "certifiedAt": null,
+        "lockdownState": "unlocked",
+        "completedScopes": [
+            "SCOPE-01"
+        ],
+        "certifiedCompletedPhases": [
+            "analyze",
+            "design",
+            "plan",
+            "implement",
+            "test",
+            "docs"
+        ],
+        "scopeProgress": [
+            {
+                "scope": 1,
+                "name": "In-repo instrumentation contract (naming + fail-loud reader + labels)",
+                "status": "done",
+                "dependsOn": [],
+                "evidenceFile": "report.md"
+            },
+            {
+                "scope": 2,
+                "name": "Live shared-stack verification (evo-x2)",
+                "status": "blocked",
+                "dependsOn": [
+                    "SCOPE-01"
+                ],
+                "evidenceFile": "report.md",
+                "blockedReason": "DEFERRED-to-flip: live /metrics 200 scraped by the shared Prometheus + OTLP spans in the shared Tempo require an operator flip (sharedServices.observability: shared + apply-shared-obs on evo-x2). No live host mutation this session."
+            }
+        ]
+    },
+    "completedPhases": [
+        "analyze",
+        "design",
+        "plan",
+        "implement",
+        "test",
+        "docs"
+    ],
+    "execution": {
+        "activeAgent": "bubbles.workflow",
+        "currentPhase": "validate",
+        "currentScope": "SCOPE-02",
+        "executionModel": "parent-expanded-child-mode",
+        "runStartedAt": "2026-07-06T00:00:00Z",
+        "completedPhaseClaims": [
+            "analyze",
+            "design",
+            "plan",
+            "implement",
+            "test",
+            "docs"
+        ],
+        "pendingTransitionRequests": [],
+        "deferredScopes": [
+            {
+                "scope": "SCOPE-02",
+                "reason": "live evo-x2 verification apply-gated; no live host mutation this session",
+                "unblock": "operator flips sharedServices.observability: shared + runs apply-shared-obs on evo-x2"
+            }
+        ]
+    }
 }
