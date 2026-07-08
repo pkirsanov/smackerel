@@ -57,3 +57,16 @@ markers = [
     "live_ollama: opt-in smoke test that hits a real Ollama instance via OLLAMA_URL",
     "integration: live-stack integration test (requires ./smackerel.sh test integration env)",
 ]
+filterwarnings = [
+    # Starlette 1.3.x raises this at IMPORT time of fastapi.testclient /
+    # starlette.testclient (fastapi/testclient.py:1) whenever httpx (v1) is the
+    # installed client, nudging toward the not-yet-adopted `httpx2`. It is a
+    # third-party, import-time transition notice with NO call-site remedy — no
+    # way of constructing or using TestClient avoids it, and every test module
+    # that imports TestClient re-triggers it. Adopting httpx2 (or pinning
+    # fastapi/starlette down) would be a broad, risky runtime-dependency change
+    # far outside this test-harness cleanup. Scope the ignore to this EXACT
+    # message (the `.` match the literal backticks) so a genuine future
+    # Starlette deprecation still surfaces loudly.
+    "ignore:Using .httpx. with .starlette.testclient. is deprecated",
+]
