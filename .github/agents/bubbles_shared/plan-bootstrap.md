@@ -3,6 +3,7 @@
 Always load:
 - `critical-requirements.md`
 - `artifact-ownership.md`
+- `analytical-rigor.md`
 - `planning-core.md`
 - `scope-templates.md`
 - Feature artifacts: `spec.md`, `design.md`, scope entrypoint if updating

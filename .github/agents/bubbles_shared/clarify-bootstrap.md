@@ -3,6 +3,7 @@
 Always load:
 - `critical-requirements.md`
 - `artifact-ownership.md`
+- `analytical-rigor.md`
 - Feature `spec.md`
 - Feature `design.md` and `scopes.md` when they exist
 - User-provided requirement or design context from `$ADDITIONAL_CONTEXT`

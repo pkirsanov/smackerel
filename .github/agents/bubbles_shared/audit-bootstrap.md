@@ -2,6 +2,7 @@
 
 Always load:
 - `critical-requirements.md`
+- `analytical-rigor.md`
 - `audit-core.md`
 - `state-gates.md`
 - `evidence-rules.md`

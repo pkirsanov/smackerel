@@ -43,6 +43,7 @@ agent reads.
 
 - [agent-common.md](../agents/bubbles_shared/agent-common.md)
 - [analysis-bootstrap.md](../agents/bubbles_shared/analysis-bootstrap.md)
+- [analytical-rigor.md](../agents/bubbles_shared/analytical-rigor.md)
 - [artifact-freshness.md](../agents/bubbles_shared/artifact-freshness.md)
 - [artifact-lifecycle.md](../agents/bubbles_shared/artifact-lifecycle.md)
 - [artifact-ownership.md](../agents/bubbles_shared/artifact-ownership.md)

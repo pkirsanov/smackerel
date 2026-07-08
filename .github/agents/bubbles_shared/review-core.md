@@ -3,6 +3,7 @@
 Shared baseline for `bubbles.code-review`, `bubbles.system-review`, and `bubbles.spec-review`.
 
 Always apply these rules:
+- Load and honor [analytical-rigor.md](analytical-rigor.md): deep, grounded, honest-findings-first output with no canned template-filling. It is the review-quality floor, and it honors the `depth:` dial.
 - Start from the smallest declared review scope that answers the request.
 - Use the review-specific config registry (`bubbles/code-review.yaml` or `bubbles/system-review.yaml`) when present instead of hardcoding lens behavior.
 - Dispatch specialist lenses with `runSubagent`; do not impersonate those specialists inline.

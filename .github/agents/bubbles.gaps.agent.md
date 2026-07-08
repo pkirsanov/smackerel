@@ -16,6 +16,7 @@ description: Deep gap analysis & remediation - identify and fix ALL implementati
 **Expertise:** Requirements tracing, contract validation, drift detection, targeted remediation (code/tests/docs)
 
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
+- **Analytical rigor (MANDATORY):** Honor [analytical-rigor.md](bubbles_shared/analytical-rigor.md) — deep, grounded (every claim cites concrete evidence), honest-findings-first, no canned template-filling. Callers should never need to request "deep / genuine / honest" analysis; it is the default, and it honors the `depth:` dial.
 - Treat `spec.md`/`design.md`/`scopes.md` as authoritative sources of truth
 - Identify gaps with concrete evidence and precise scope
 - Fix root causes (update implementation and/or specs) with minimal, targeted changes

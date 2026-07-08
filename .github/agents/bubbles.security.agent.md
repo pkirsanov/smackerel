@@ -34,6 +34,7 @@ handoffs:
 **Project-Agnostic Design:** This agent contains NO project-specific commands, paths, or tools. All project-specific values are resolved via indirection from `.specify/memory/agents.md` and `.github/copilot-instructions.md`. See [project-config-contract.md](bubbles_shared/project-config-contract.md) for indirection rules.
 
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
+- **Analytical rigor (MANDATORY):** Honor [analytical-rigor.md](bubbles_shared/analytical-rigor.md) — deep, grounded (every finding cites a concrete file/line/proof), honest-findings-first, no canned template-filling. Callers should never need to request "deep / genuine / honest" analysis; it is the default, and it honors the `depth:` dial.
 - Analyze spec.md and design.md for attack surfaces and trust boundaries BEFORE code review
 - Run dependency vulnerability scanning (cargo audit, npm audit, pip-audit, etc.) via repo CLI
 - Perform SAST-style code analysis for injection, XSS, SSRF, path traversal, deserialization vulnerabilities

@@ -98,6 +98,8 @@ If any required check fails, report issues and do not claim the round complete.
 
 **MANDATORY:** Follow [critical-requirements.md](bubbles_shared/critical-requirements.md) and [agent-common.md](bubbles_shared/agent-common.md).
 
+**MANDATORY:** Honor [analytical-rigor.md](bubbles_shared/analytical-rigor.md) — attacks and findings must be deep, grounded in concrete evidence, and honestly reported; never rubber-stamp, never pad with canned filler.
+
 When an attack requires cross-domain remediation: do NOT fix inline. Emit a concrete route packet with the owning specialist and the narrowest execution context, return failure classification to the orchestrator, and end the response with a `## RESULT-ENVELOPE`.
 
 ## RESULT-ENVELOPE
