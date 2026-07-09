@@ -396,15 +396,21 @@ echo ""
 # the guard's parser-free opt-in pre-check, so this NEVER blocks a repo that
 # has not adopted observability. Posture != wired, no instrumented workflow, or
 # no slo: link are all clean no-ops; the Bubbles source repo auto-EXEMPTs.
+# The transitioning spec dir is passed as --spec-dir (Gate G100 refinement, the
+# same feature_dir Check 33 hands G090): attribution is scoped to THIS spec's
+# own scope artifacts, so an UNRELATED spec's absent live-captured SLO evidence
+# never false-blocks this promotion. A spec declaring no observabilityWorkflow
+# no-ops; a spec declaring an instrumented-with-slo workflow keeps full teeth
+# for its own evidence.
 echo "--- Check 39: Observability SLO Evidence (Gate G100) ---"
 obs_slo_guard="$SCRIPT_DIR/observability-slo-guard.sh"
 if fixture_gate_skip "observability SLO evidence (Gate G100)"; then
   :
 elif [[ -x "$obs_slo_guard" ]]; then
-  if run_guard_in_feature_repo bash "$obs_slo_guard" --repo-root "$guard_repo_root" --quiet > /dev/null 2>&1; then
-    pass "Observability SLO evidence meets the contract, or the gate no-ops (not wired / no instrumented slo workflow / non-adopter / EXEMPT) (Gate G100)"
+  if run_guard_in_feature_repo bash "$obs_slo_guard" --repo-root "$guard_repo_root" --spec-dir "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "Observability SLO evidence meets the contract, or the gate no-ops (not wired / no instrumented slo workflow / non-adopter / not-attributed-to-this-spec / EXEMPT) (Gate G100)"
   else
-    fail "Observability SLO evidence guard failed — Gate G100. Run 'bash $obs_slo_guard --repo-root $guard_repo_root' for the per-workflow breach detail"
+    fail "Observability SLO evidence guard failed — Gate G100. Run 'bash $obs_slo_guard --repo-root $guard_repo_root --spec-dir $feature_dir' for the per-workflow breach detail"
     info "BLOCKING when posture: wired AND an instrumented workflow (observabilityWorkflow) with an slo: link has captured evidence that breaches the traceContracts.observability.slos target, is missing, malformed, or for the wrong workflow"
     info "A metric the contract declares but the captured observed block omits is a BREACH (instrumentation regression cannot prove the SLO met)"
     info "Capture SLO evidence under load (integration/e2e/stress) to .specify/runtime/observability/<workflow>.slo.json; an adopter repo MUST have jq + yq (mikefarah v4) installed"
