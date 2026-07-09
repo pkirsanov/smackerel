@@ -1820,9 +1820,21 @@ services:
     # host ollama daemon in prod (where smackerel's own ollama container is
     # profile-gated off and the 24h container default therefore does not apply).
     ollama_keep_alive: "30m"
-    # Spec 045 FR-045-002 — model memory envelope. Each entry maps an Ollama
-    # model name to its RUN-TIME memory requirement in MiB (matching what
-    # `ollama ps` reports as resident size when the model is loaded). The Go
+    # BUG-026-007 (redteam F2, latency half) — disable qwen3's hidden thinking
+    # block on the structured-JSON EXTRACTION path (domain / synthesis /
+    # processor / search-rerank / card-categories / drive-classify). Emitted as
+    # ML_STRUCTURED_EXTRACTION_THINKING and read fail-loud by the ml sidecar (no
+    # literal default; Gate G028). qwen3:30b-a3b runs thinking-ON by default,
+    # adding a ~113s hidden <think> block (measured live on evo-x2, both models
+    # warm) that blows the 30s domain-extraction budget and silently degrades
+    # extraction. false = inject the qwen /no_think control token so extraction
+    # returns JSON in ~10s at IDENTICAL accuracy; true = keep thinking (the qwen
+    # default; ~4x slower on extraction). The agent reasoning path (agent.py) is
+    # deliberately NOT gated by this — thinking is valuable there. A no-op on
+    # non-qwen Ollama models (e.g. gemma3:4b), so it is safe in dev.
+    #   false = disable thinking on structured extraction (recommended posture).
+    #   true  = keep thinking.
+    structured_extraction_thinking: false
     # core Validate() chain rejects any configured model whose profile
     # exceeds ML_MEMORY_LIMIT (deploy_resources.smackerel_ml.memory).
     #

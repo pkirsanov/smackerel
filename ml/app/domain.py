@@ -21,6 +21,7 @@ from litellm.exceptions import (
 )
 
 from .ollama_keepalive import resolve_ollama_keep_alive
+from .ollama_thinking import apply_structured_extraction_thinking
 
 logger = logging.getLogger("smackerel-ml.domain")
 
@@ -143,6 +144,15 @@ async def _do_domain_extract(
         # api_base + the SST-owned keep_alive window explicitly.
         completion_kwargs["api_base"] = ollama_url
         completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
+
+    # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on this
+    # structured-JSON extraction call when SST says so, so qwen3 skips its hidden
+    # <think> block (~113s -> ~10s live on evo-x2) and this stays inside the 30s
+    # DOMAIN_EXTRACTION_TIMEOUT. No-op for non-ollama providers and when SST
+    # keeps thinking on; a no-op on non-qwen Ollama models.
+    completion_kwargs["messages"] = apply_structured_extraction_thinking(
+        completion_kwargs["messages"], provider
+    )
 
     for attempt in range(MAX_RETRIES + 1):
         try:

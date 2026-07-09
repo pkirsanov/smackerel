@@ -6,6 +6,8 @@ import json
 
 import litellm
 
+from .ollama_thinking import apply_structured_extraction_thinking
+
 DRIVE_CLASSIFICATION_PROMPT = """Classify this cloud-drive file for Smackerel.
 
 Return only JSON with these fields:
@@ -45,9 +47,15 @@ async def classify_drive_file(data: dict, provider: str, model: str, api_key: st
         extracted_text=str(data.get("extracted_text", ""))[:12000],
     )
     model_name = f"{provider}/{model}" if provider not in ("", "openai") else model
+    # BUG-026-007 (redteam F2, latency half) — drive-classify runs on LLM_MODEL
+    # (qwen3:30b-a3b in prod, dispatched from nats_client); disable qwen3 thinking
+    # on this structured-JSON classification when SST says so. This call routes
+    # via the legacy ollama/ (/api/generate) transform, so /no_think in the
+    # messages is the mechanism that reaches the model. No-op otherwise.
+    messages = apply_structured_extraction_thinking([{"role": "user", "content": prompt}], provider)
     response = await litellm.acompletion(
         model=model_name,
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
         api_key=api_key,
         temperature=0.1,
         max_tokens=1000,

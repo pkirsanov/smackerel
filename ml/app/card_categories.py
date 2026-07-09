@@ -29,6 +29,8 @@ import jsonschema
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from .ollama_thinking import apply_structured_extraction_thinking
+
 logger = logging.getLogger("smackerel-ml.card_categories")
 
 router = APIRouter(tags=["card_rewards"])
@@ -153,6 +155,12 @@ async def extract_card_categories(req: ExtractCardCategoriesRequest) -> dict[str
         )
 
     messages = build_extraction_messages(req)
+
+    # BUG-026-007 (redteam F2, latency half) — card-categories runs on LLM_MODEL
+    # (qwen3:30b-a3b in prod) via ollama_chat/; disable qwen3 thinking on this
+    # strict-JSON extraction when SST says so so it returns JSON promptly. No-op
+    # when thinking stays on and on non-qwen Ollama models.
+    messages = apply_structured_extraction_thinking(messages, "ollama")
 
     # Lazy import: litellm is a runtime-only dependency, so importing it here
     # keeps the dev/test unit lane (which exercises the pure helpers) free of it.
