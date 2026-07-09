@@ -1,21 +1,24 @@
 """BUG-026-007 (redteam F2, latency half) — qwen3 thinking-disable wiring tests.
 
 Root cause: qwen3:30b-a3b runs with thinking mode ON by default, adding a hidden
-``<think>…</think>`` reasoning block (~113s live on evo-x2) before its JSON on the
+``<think>…</think>`` reasoning block (>150s live on evo-x2) before its JSON on the
 structured-JSON extraction path — blowing the 30s DOMAIN_EXTRACTION_TIMEOUT and
-silently degrading domain extraction in prod. The fix injects the qwen
-``/no_think`` control token into the extraction request messages when the SST
-switch ``ML_STRUCTURED_EXTRACTION_THINKING=false``, while leaving the agent
-reasoning path unchanged.
+prefixing callers with a ``<think>`` block that trips ``LLM returned invalid
+JSON``. The fix sets the NATIVE Ollama ``think=False`` request field on the
+extraction ``litellm.acompletion`` call when the SST switch
+``ML_STRUCTURED_EXTRACTION_THINKING=false``, while leaving the agent reasoning
+path unchanged.
 
 These are UNIT tests. They prove the smackerel-side contract — that each in-scope
-structured-JSON extraction call carries the thinking-disable directive when SST
-disables thinking (and does NOT when SST enables it) — not the live prod latency
-(which only the orchestrator's redeploy can confirm). The mechanism is ``/no_think``
-(route-agnostic, version-agnostic, a no-op on non-qwen models) rather than a
-top-level ``think=False`` param, because the search-rerank and drive-classify
-calls route through litellm's legacy ``ollama/`` (/api/generate) transform, which
-buries unknown top-level params under ``options`` where Ollama never sees them.
+structured-JSON extraction call sends the native ``think=False`` kwarg to litellm
+when SST disables thinking (and does NOT when SST enables it) — not the live prod
+latency (which only the orchestrator's redeploy can confirm). The mechanism is
+the native ``think`` field, NOT the ``/no_think`` prompt token the FIRST fix used
+(qwen3's Ollama chat template ignores that string; measured live on evo-x2). A
+top-level ``think=`` kwarg is forwarded to the Ollama request top level by
+litellm 1.84.0 for BOTH the ``ollama_chat/`` and legacy ``ollama/`` transforms,
+and the two formerly-legacy routes (search-rerank, drive-classify) are migrated
+to the ``ollama_chat/`` prefix here for role fidelity + keep_alive parity.
 """
 
 import asyncio
@@ -60,15 +63,15 @@ for _name in (
         setattr(_exc_mod, _name, type(_name, (Exception,), {}))
 
 from app.ollama_thinking import (  # noqa: E402  isort: skip
-    NO_THINK_DIRECTIVE,
     apply_structured_extraction_thinking,
     resolve_structured_extraction_thinking,
 )
 
 
-def _has_no_think(messages: list[dict]) -> bool:
-    """True iff any message content carries the /no_think control token."""
-    return any(NO_THINK_DIRECTIVE in (m.get("content") or "") for m in messages)
+def _think_disabled(kwargs: dict) -> bool:
+    """True iff the completion kwargs carry the native ``think=False`` field
+    (the mechanism qwen3's Ollama template actually honors)."""
+    return kwargs.get("think") is False
 
 
 # ==========================================================================
@@ -119,67 +122,57 @@ def test_resolve_fail_loud_when_invalid(monkeypatch):
 # ==========================================================================
 
 
-def test_apply_injects_no_think_into_system_message(monkeypatch):
+def test_apply_sets_native_think_false_when_disabled(monkeypatch):
+    # ADVERSARIAL — the mechanism qwen3 actually honors is the native top-level
+    # think=False kwarg (NOT a /no_think message token, which qwen3's Ollama
+    # template ignores). Fails if the mutator stops setting think=False.
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
-    messages = [
-        {"role": "system", "content": "Extract JSON."},
-        {"role": "user", "content": "Some content"},
-    ]
-    out = apply_structured_extraction_thinking(messages, "ollama")
-    assert out[0]["role"] == "system"
-    assert out[0]["content"].startswith(NO_THINK_DIRECTIVE)
-    assert "Extract JSON." in out[0]["content"]
-    # The user message is untouched.
-    assert out[1]["content"] == "Some content"
-
-
-def test_apply_injects_no_think_into_user_only_shape(monkeypatch):
-    # The user-only calls (processor / crosssource / search-rerank /
-    # drive-classify) have no system message; the token must still land where
-    # the model sees it first — the first user message.
-    monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
-    messages = [{"role": "user", "content": "Rank these"}]
-    out = apply_structured_extraction_thinking(messages, "ollama")
-    assert _has_no_think(out)
-    assert out[0]["content"].startswith(NO_THINK_DIRECTIVE)
+    kwargs = {"model": "ollama_chat/qwen3:30b-a3b", "messages": [{"role": "user", "content": "x"}]}
+    out = apply_structured_extraction_thinking(kwargs, "ollama")
+    assert out is kwargs  # mutates in place and returns the same dict
+    assert kwargs["think"] is False
+    # It does NOT smuggle a /no_think token into the messages (the failed first fix).
+    assert all("/no_think" not in (m.get("content") or "") for m in kwargs["messages"])
 
 
 def test_apply_is_noop_when_thinking_enabled(monkeypatch):
-    # ADVERSARIAL — with thinking ENABLED the request must be unchanged; fails
-    # if the injection is hard-wired on regardless of the SST value.
+    # ADVERSARIAL — with thinking ENABLED no think key is added; fails if the
+    # disable is hard-wired on regardless of the SST value.
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "true")
-    messages = [{"role": "system", "content": "Extract JSON."}]
-    out = apply_structured_extraction_thinking(messages, "ollama")
-    assert not _has_no_think(out)
+    kwargs = {"model": "ollama_chat/qwen3:30b-a3b", "messages": [{"role": "user", "content": "x"}]}
+    apply_structured_extraction_thinking(kwargs, "ollama")
+    assert "think" not in kwargs
 
 
 def test_apply_is_noop_for_non_ollama_provider(monkeypatch):
     # Hosted providers have no qwen thinking concept; the resolver must not even
-    # be consulted (so a hosted deployment never needs the ollama-only switch).
+    # be consulted (so a hosted deployment never needs the ollama-only switch),
+    # and no think key is added.
     monkeypatch.delenv("ML_STRUCTURED_EXTRACTION_THINKING", raising=False)
-    messages = [{"role": "system", "content": "Extract JSON."}]
-    out = apply_structured_extraction_thinking(messages, "openai")
-    assert not _has_no_think(out)
+    kwargs = {"model": "gpt-4", "messages": [{"role": "user", "content": "x"}]}
+    apply_structured_extraction_thinking(kwargs, "openai")
+    assert "think" not in kwargs
 
 
-def test_apply_is_idempotent(monkeypatch):
+def test_apply_does_not_disturb_other_kwargs(monkeypatch):
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
-    messages = [{"role": "system", "content": "Extract JSON."}]
-    once = apply_structured_extraction_thinking(messages, "ollama")
-    twice = apply_structured_extraction_thinking(once, "ollama")
-    assert twice[0]["content"].count(NO_THINK_DIRECTIVE) == 1
-
-
-def test_apply_does_not_mutate_caller_messages(monkeypatch):
-    monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
-    messages = [{"role": "system", "content": "Extract JSON."}]
-    apply_structured_extraction_thinking(messages, "ollama")
-    # The original list/objects are unchanged (helper returns a copy).
-    assert messages[0]["content"] == "Extract JSON."
+    kwargs = {
+        "model": "ollama_chat/qwen3:30b-a3b",
+        "messages": [{"role": "system", "content": "Extract JSON."}],
+        "temperature": 0.1,
+        "keep_alive": "30m",
+    }
+    apply_structured_extraction_thinking(kwargs, "ollama")
+    # Only the think key is added; existing kwargs are untouched.
+    assert kwargs["think"] is False
+    assert kwargs["temperature"] == 0.1
+    assert kwargs["keep_alive"] == "30m"
+    assert kwargs["messages"][0]["content"] == "Extract JSON."
 
 
 # ==========================================================================
-# in-scope call sites — each MUST carry /no_think when SST disables thinking
+# in-scope call sites — each MUST send native think=False when SST disables
+# thinking (and NOT when SST enables it)
 # ==========================================================================
 
 
@@ -192,7 +185,7 @@ def _domain_data() -> dict:
     }
 
 
-def test_domain_extract_injects_no_think_when_disabled(monkeypatch):
+def test_domain_extract_disables_thinking_when_sst_false(monkeypatch):
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     from app.domain import handle_domain_extract
@@ -213,14 +206,14 @@ def test_domain_extract_injects_no_think_when_disabled(monkeypatch):
         result = asyncio.run(handle_domain_extract(_domain_data(), "ollama", "qwen3:30b-a3b", "", "http://ollama:11434"))
 
     assert result["success"] is True
-    # ADVERSARIAL: the proven 30s-budget path must disable thinking. Fails if
-    # the injection is reverted from domain.py.
-    assert _has_no_think(captured["messages"]), captured["messages"]
+    # ADVERSARIAL: the proven 30s-budget path must disable thinking via the
+    # native think=False kwarg. Fails if the mutator is reverted from domain.py.
+    assert _think_disabled(captured), captured
 
 
 def test_domain_extract_keeps_thinking_when_enabled(monkeypatch):
-    # ADVERSARIAL — with SST=true the domain request must NOT carry /no_think;
-    # fails if the token is hard-wired on.
+    # ADVERSARIAL — with SST=true the domain request must NOT carry think=False;
+    # fails if the disable is hard-wired on.
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "true")
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     from app.domain import handle_domain_extract
@@ -241,10 +234,10 @@ def test_domain_extract_keeps_thinking_when_enabled(monkeypatch):
         result = asyncio.run(handle_domain_extract(_domain_data(), "ollama", "qwen3:30b-a3b", "", "http://ollama:11434"))
 
     assert result["success"] is True
-    assert not _has_no_think(captured["messages"]), captured["messages"]
+    assert "think" not in captured, captured
 
 
-def test_process_content_injects_no_think_when_disabled(monkeypatch):
+def test_process_content_disables_thinking_when_sst_false(monkeypatch):
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
@@ -275,7 +268,7 @@ def test_process_content_injects_no_think_when_disabled(monkeypatch):
         )
 
     assert result["success"] is True
-    assert _has_no_think(captured["messages"]), captured["messages"]
+    assert _think_disabled(captured), captured
 
 
 def _write_contract(tmp_path, monkeypatch) -> None:
@@ -292,7 +285,7 @@ def _write_contract(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PROMPT_CONTRACTS_DIR", str(tmp_path))
 
 
-def test_synthesis_extract_injects_no_think_when_disabled(monkeypatch, tmp_path):
+def test_synthesis_extract_disables_thinking_when_sst_false(monkeypatch, tmp_path):
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     _write_contract(tmp_path, monkeypatch)
@@ -322,10 +315,10 @@ def test_synthesis_extract_injects_no_think_when_disabled(monkeypatch, tmp_path)
         )
 
     assert result["success"] is True
-    assert _has_no_think(captured["messages"]), captured["messages"]
+    assert _think_disabled(captured), captured
 
 
-def test_synthesis_crosssource_injects_no_think_when_disabled(monkeypatch, tmp_path):
+def test_synthesis_crosssource_disables_thinking_when_sst_false(monkeypatch, tmp_path):
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     _write_contract(tmp_path, monkeypatch)
@@ -365,10 +358,10 @@ def test_synthesis_crosssource_injects_no_think_when_disabled(monkeypatch, tmp_p
             )
         )
 
-    assert _has_no_think(captured["messages"]), captured["messages"]
+    assert _think_disabled(captured), captured
 
 
-def test_search_rerank_injects_no_think_when_disabled(monkeypatch):
+def test_search_rerank_disables_thinking_and_uses_ollama_chat(monkeypatch):
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     from app.nats_client import NATSClient
@@ -401,14 +394,17 @@ def test_search_rerank_injects_no_think_when_disabled(monkeypatch):
         result = asyncio.run(client._handle_search_rerank(data, "ollama", "qwen3:30b-a3b", ""))
 
     assert "ranked" in result
-    # ADVERSARIAL: this call routes via the legacy ollama/ transform, where a
-    # top-level think=False would be a silent no-op — /no_think in the messages
-    # is the only mechanism that reaches the model. Fails if the injection is
-    # reverted from _handle_search_rerank.
-    assert _has_no_think(captured["messages"]), captured["messages"]
+    # ADVERSARIAL (route migration): this call was on the legacy ollama/
+    # (/api/generate) transform, which buries keep_alive under `options`; it now
+    # routes via ollama_chat/ so top-level params (keep_alive, think) reach
+    # Ollama. Fails if the migration is reverted from _handle_search_rerank.
+    assert captured["model"] == "ollama_chat/qwen3:30b-a3b", captured["model"]
+    # ADVERSARIAL: and it disables qwen3 thinking via the native think=False
+    # kwarg. Fails if the mutator is reverted.
+    assert _think_disabled(captured), captured
 
 
-def test_card_categories_injects_no_think_when_disabled(monkeypatch):
+def test_card_categories_disables_thinking_when_sst_false(monkeypatch):
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("LLM_MODEL", "qwen3:30b-a3b")
@@ -449,10 +445,11 @@ def test_card_categories_injects_no_think_when_disabled(monkeypatch):
         result = asyncio.run(extract_card_categories(req))
 
     assert result["card_id"] == "chase-freedom"
-    assert _has_no_think(captured["messages"]), captured["messages"]
+    assert captured["model"] == "ollama_chat/qwen3:30b-a3b", captured["model"]
+    assert _think_disabled(captured), captured
 
 
-def test_drive_classify_injects_no_think_when_disabled(monkeypatch):
+def test_drive_classify_disables_thinking_and_uses_ollama_chat(monkeypatch):
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
     from app.drive_classify import classify_drive_file
 
@@ -494,9 +491,13 @@ def test_drive_classify_injects_no_think_when_disabled(monkeypatch):
         )
 
     assert result["success"] is True
-    # ADVERSARIAL: legacy ollama/ route — /no_think in the messages is the only
-    # mechanism that reaches the model. Fails if the injection is reverted.
-    assert _has_no_think(captured["messages"]), captured["messages"]
+    # ADVERSARIAL (route migration): drive-classify was on the legacy ollama/
+    # (/api/generate) transform; it now routes via ollama_chat/. Fails if the
+    # migration is reverted.
+    assert captured["model"] == "ollama_chat/qwen3:30b-a3b", captured["model"]
+    # ADVERSARIAL: and it disables qwen3 thinking via the native think=False
+    # kwarg. Fails if the mutator is reverted.
+    assert _think_disabled(captured), captured
 
 
 # ==========================================================================
@@ -506,7 +507,7 @@ def test_drive_classify_injects_no_think_when_disabled(monkeypatch):
 
 def test_agent_path_keeps_thinking_even_when_disabled(monkeypatch):
     # ADVERSARIAL scope boundary — even with SST=false, agent.handle_invoke must
-    # NOT inject /no_think (the agent reasoning path keeps qwen3 thinking:
+    # NOT disable thinking (the agent reasoning path keeps qwen3 thinking:
     # quality > latency). Fails if a future change wires the extraction
     # thinking-disable into the agent path.
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
@@ -533,4 +534,4 @@ def test_agent_path_keeps_thinking_even_when_disabled(monkeypatch):
     env = asyncio.run(handle_invoke(request, completion_fn=_capture))
 
     assert "error" not in env, env
-    assert not _has_no_think(captured["messages"]), captured["messages"]
+    assert captured.get("think") is not False, captured

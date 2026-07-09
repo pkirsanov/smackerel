@@ -8,11 +8,11 @@
     "status": "fixed_in_repo",
     "certification": {
         "status": "in_repo_verified",
-        "note": "Code + unit tests authored and PASSING locally via ./smackerel.sh test unit --python. The live 'domain extraction now < 30s' claim is only provable after the orchestrator rebuilds + signs + redeploys smackerel-ml on evo-x2 — live verification PENDING redeploy."
+        "note": "MECHANISM CORRECTED. The first fix (the /no_think prompt-injection token) was INEFFECTIVE — qwen3's Ollama chat template ignores the /no_think text directive and honors ONLY the native `think` request field (measured live on evo-x2: /no_think -> thinking STILL on, >150s, invalid-JSON; native think=False -> thinking OFF, ~1s compute). Reworked ollama_thinking.py to set the native litellm `think=False` kwarg (verified forwarded to Ollama /api/chat top-level by the sidecar-pinned litellm 1.84.0 via a request-capture probe) and migrated the two legacy ollama/ routes (search-rerank, drive-classify) to ollama_chat/. Reworked unit tests are adversarial: RED 9-fail with the mutator neutralized -> GREEN 556-pass restored (./smackerel.sh test unit --python). Live 'domain+synthesis fast + valid JSON' is only provable after the orchestrator rebuilds + signs + redeploys smackerel-ml on evo-x2 — live verification PENDING redeploy."
     },
     "execution": {
         "activeAgent": "bubbles.bug",
-        "currentPhase": "finalize"
+        "currentPhase": "implement"
     },
     "completedPhases": [
         "discovery",
@@ -29,5 +29,5 @@
     "transitionRequests": [],
     "reworkQueue": [],
     "routed": [],
-    "notes": "Remaining half of the redteam F2 (LLM-enrichment latency) finding. The keep_alive fix (BUG-026-006 sibling + ml/app/ollama_keepalive.py) removed the ~22-45s Ollama cold-load; this fixes the ~113s qwen3 hidden-reasoning latency on the structured-JSON extraction path by adding an SST-gated, fail-loud thinking-disable (ML_STRUCTURED_EXTRACTION_THINKING / services.ml.structured_extraction_thinking). The agent reasoning path (agent.py) is deliberately left thinking-ON (quality > latency). Requires a smackerel-ml image rebuild + signed redeploy to take effect."
+    "notes": "Remaining half of the redteam F2 (LLM-enrichment latency) finding. The keep_alive fix (BUG-026-006 sibling + ml/app/ollama_keepalive.py) removed the ~22-45s Ollama cold-load; this fixes the qwen3 hidden-reasoning latency on the structured-JSON extraction path by setting the native Ollama think=False request field (SST-gated by ML_STRUCTURED_EXTRACTION_THINKING / services.ml.structured_extraction_thinking) on every in-scope structured call, and migrating the two legacy ollama/ routes (search-rerank, drive-classify) to ollama_chat/. CORRECTION: the first fix used the /no_think prompt token, which qwen3 ignores; the SST switch + wiring are unchanged. The agent reasoning path (agent.py) is deliberately left thinking-ON (quality > latency). Adjacent finding (out of scope): _handle_generate_digest still carries its own inline /no_think, likely also ineffective on qwen3 — flagged for a follow-up bug. Requires a smackerel-ml image rebuild + signed redeploy to take effect."
 }

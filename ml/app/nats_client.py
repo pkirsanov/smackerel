@@ -909,25 +909,30 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
             # falls back to its own default which is wrong inside the ml-sidecar
             # container (see processor.py for the same fix).
             api_base = os.environ.get("OLLAMA_URL") if provider == "ollama" else None
-            # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on
-            # this LLM_MODEL structured-JSON re-rank call when SST says so. This
-            # call routes via the legacy ollama/ (/api/generate) transform, where
-            # a top-level think=False would be buried under `options` and ignored
-            # — so /no_think in the messages is the only mechanism that reaches
-            # the model. No-op for non-ollama / when thinking stays on.
+            # BUG-026-007 (redteam F2, latency half) — route Ollama through the
+            # ollama_chat/ (/api/chat) prefix (mirrors domain.py::_resolve_model)
+            # so system roles round-trip and top-level params (keep_alive, think)
+            # reach Ollama — the legacy ollama/ generate transform buries
+            # keep_alive under `options`. This LLM_MODEL (qwen3) re-rank then
+            # disables qwen3 thinking when SST says so via the native top-level
+            # think=False (litellm 1.84.0 forwards `think` top-level). No-op for
+            # non-ollama / when thinking stays on / on non-qwen models.
+            if provider == "ollama":
+                model_name = f"ollama_chat/{model}"
             from .ollama_thinking import apply_structured_extraction_thinking
 
-            messages = apply_structured_extraction_thinking([{"role": "user", "content": prompt}], provider)
-            response = await litellm.acompletion(
-                model=model_name,
-                messages=messages,
-                api_key=api_key,
-                api_base=api_base,
-                temperature=0.1,
-                max_tokens=1000,
-                response_format={"type": "json_object"},
-                timeout=600,
-            )
+            rerank_kwargs: dict = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "api_key": api_key,
+                "api_base": api_base,
+                "temperature": 0.1,
+                "max_tokens": 1000,
+                "response_format": {"type": "json_object"},
+                "timeout": 600,
+            }
+            apply_structured_extraction_thinking(rerank_kwargs, provider)
+            response = await litellm.acompletion(**rerank_kwargs)
 
             result = json.loads(response.choices[0].message.content)
             ranked = []

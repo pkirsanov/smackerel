@@ -207,11 +207,12 @@ async def handle_extract(
             completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
 
         # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on the
-        # synthesis structured-JSON extraction call when SST says so (no-op for
-        # non-ollama / when thinking stays on / on non-qwen models).
-        completion_kwargs["messages"] = apply_structured_extraction_thinking(
-            completion_kwargs["messages"], provider
-        )
+        # synthesis structured-JSON extraction call when SST says so via the
+        # native top-level think=False (litellm forwards it to /api/chat on the
+        # ollama_chat/ route above; the /no_think prompt token is ignored by
+        # qwen3's template). No-op for non-ollama / when thinking stays on / on
+        # non-qwen models.
+        apply_structured_extraction_thinking(completion_kwargs, provider)
 
         response = await litellm.acompletion(**completion_kwargs)
 
@@ -346,11 +347,10 @@ async def handle_crosssource(
             crosssource_kwargs["keep_alive"] = resolve_ollama_keep_alive()
 
         # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on the
-        # cross-source structured-JSON extraction call too (no-op for non-ollama
-        # / when thinking stays on / on non-qwen models).
-        crosssource_kwargs["messages"] = apply_structured_extraction_thinking(
-            crosssource_kwargs["messages"], provider
-        )
+        # cross-source structured-JSON extraction call too via native
+        # think=False (litellm forwards it top-level on the ollama_chat/ route).
+        # No-op for non-ollama / when thinking stays on / on non-qwen models.
+        apply_structured_extraction_thinking(crosssource_kwargs, provider)
 
         response = await litellm.acompletion(**crosssource_kwargs)
 

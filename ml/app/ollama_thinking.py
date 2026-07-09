@@ -5,30 +5,36 @@ extraction path (BUG-026-007 — the latency half of redteam F2).
 emits a hidden ``<think>…</think>`` reasoning block BEFORE its answer. On the
 structured-JSON *extraction* calls — where the output is a machine-parsed JSON
 object and the prose reasoning is irrelevant — that block is pure latency. Live
-on evo-x2 (both models warm, identical recipe task) it cost ~113s vs ~10s with
-thinking disabled, at IDENTICAL 9/9-ingredient accuracy. 113s ≫ the 30s
-``DOMAIN_EXTRACTION_TIMEOUT`` in ``domain.py``, so prod domain extraction was
-silently timing out into the degraded fallback.
+on evo-x2 (shared daemon, warm qwen3) it cost >150s with thinking on vs ~1s of
+compute with thinking disabled, at IDENTICAL accuracy. That is ≫ the 30s
+``DOMAIN_EXTRACTION_TIMEOUT`` in ``domain.py`` (so domain extraction silently
+timed out into the degraded fallback) and it prefixes the JSON callers with a
+``<think>`` block that trips ``LLM returned invalid JSON`` — the F2 failure.
 
-Mechanism — the qwen ``/no_think`` control token in the request messages, NOT a
-top-level ``think=False`` param. Several in-scope calls (``nats_client``
-search-rerank, ``drive_classify``) route through litellm's LEGACY ``ollama/``
-(``/api/generate``) transform, which buries unknown top-level params under
-``options`` where Ollama never sees them — the SAME trap ``ollama_keepalive.py``
-documents for ``keep_alive``. A top-level ``think=False`` would therefore be a
-silent no-op on those routes. ``/no_think`` is route-agnostic (it is prompt text
-the model always sees), version-agnostic, a documented no-op on non-qwen models
-(e.g. ``gemma3:4b`` in dev), and is ALREADY used in this repo by
-``nats_client.py::_handle_generate_digest`` to suppress reasoning on the digest
-path.
+Mechanism — the NATIVE Ollama ``think`` request field, NOT the ``/no_think``
+prompt-injection token the FIRST fix used. qwen3's Ollama chat template IGNORES
+a ``/no_think`` string in the messages (measured live on evo-x2: ``/no_think``
+-> thinking STILL on, >150s, invalid-JSON output); it honors ONLY the native
+``think`` field on the ``/api/chat`` request body (native ``think=False`` ->
+thinking OFF, ~1s compute, valid JSON).
+
+litellm forwarding — verified against the sidecar-pinned ``litellm==1.84.0``
+(``ml/requirements.txt``) with an empirical request-capture probe recorded in the
+BUG-026-007 report: a TOP-LEVEL ``think=`` kwarg on ``litellm.acompletion`` is
+placed at the Ollama request TOP LEVEL (``data["think"]``) by BOTH the
+``ollama_chat/`` (``/api/chat``) and the legacy ``ollama/`` (``/api/generate``)
+transforms — ``litellm/llms/ollama/{chat,completion}/transformation.py`` do
+``think = optional_params.pop("think", None); if think is not None: data["think"]
+= think``. (Unlike ``keep_alive``, which the legacy generate transform buries
+under ``options``; and unlike ``reasoning_effort``, which litellm maps to
+``think=True`` for ``"low"|"medium"|"high"`` — the wrong direction here.) The
+in-scope callers therefore set the top-level ``think`` kwarg AND route Ollama
+through the ``ollama_chat/`` prefix (for role fidelity, ``keep_alive`` parity,
+and consistency with the other structured sites).
 """
 
 import os
 from typing import Any
-
-# The qwen control token that suppresses the hidden reasoning block. A no-op on
-# non-qwen Ollama models, so it is safe to inject on any ``LLM_MODEL``.
-NO_THINK_DIRECTIVE = "/no_think"
 
 
 def resolve_structured_extraction_thinking() -> bool:
@@ -45,7 +51,8 @@ def resolve_structured_extraction_thinking() -> bool:
     true|false contract):
 
     - ``"true"``  -> thinking ENABLED (leave the request unchanged).
-    - ``"false"`` -> thinking DISABLED (inject ``/no_think``) — the fix's posture.
+    - ``"false"`` -> thinking DISABLED (send native ``think=False``) — the fix's
+      posture.
     - anything else / empty / unset -> ``RuntimeError`` (no guessing).
     """
     raw = os.environ.get("ML_STRUCTURED_EXTRACTION_THINKING", "").strip().lower()
@@ -60,51 +67,36 @@ def resolve_structured_extraction_thinking() -> bool:
     )
 
 
-def _inject_no_think(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return a COPY of ``messages`` with ``/no_think`` placed at the front of
-    the message the model sees first.
-
-    Placement: prefer the system message (applies to the whole turn); if there
-    is none (the user-only calls — processor / crosssource / search-rerank /
-    drive-classify), fall back to the first user message, matching the existing
-    ``_handle_generate_digest`` ``/no_think``-as-first-line precedent. Idempotent:
-    it never double-injects. The caller's message objects are not mutated.
-    """
-    adjusted = [dict(m) for m in messages]
-    target = next((m for m in adjusted if m.get("role") == "system"), None)
-    if target is None:
-        target = next((m for m in adjusted if m.get("role") == "user"), None)
-    if target is None:
-        # Degenerate shape (no system, no user) — inject a system directive so
-        # the token is never silently lost.
-        adjusted.insert(0, {"role": "system", "content": NO_THINK_DIRECTIVE})
-        return adjusted
-    content = target.get("content") or ""
-    if NO_THINK_DIRECTIVE not in content:
-        target["content"] = f"{NO_THINK_DIRECTIVE}\n{content}" if content else NO_THINK_DIRECTIVE
-    return adjusted
-
-
 def apply_structured_extraction_thinking(
-    messages: list[dict[str, Any]],
+    completion_kwargs: dict[str, Any],
     provider: str,
-) -> list[dict[str, Any]]:
-    """Return ``messages`` adjusted for the SST structured-extraction thinking
-    posture.
+) -> dict[str, Any]:
+    """Mutate ``completion_kwargs`` in place for the SST structured-extraction
+    thinking posture and return it (for call-site chaining).
 
-    - Non-ollama provider -> returned UNCHANGED (thinking-mode is an
-      Ollama/qwen concept; hosted providers are untouched).
-    - SST thinking ENABLED (``true``) -> returned UNCHANGED.
-    - SST thinking DISABLED (``false``) + ollama -> ``/no_think`` injected so
-      qwen3 skips its hidden reasoning block (~113s -> ~10s, inside the 30s
-      domain budget). A no-op on non-qwen Ollama models.
+    - Non-ollama provider -> UNCHANGED (thinking-mode is an Ollama/qwen concept;
+      hosted providers are untouched and the SST resolver is never consulted).
+    - SST thinking ENABLED (``true``) -> UNCHANGED (qwen keeps its default
+      thinking-on behavior; no ``think`` key is added).
+    - SST thinking DISABLED (``false``) + ollama -> set the native
+      ``completion_kwargs["think"] = False`` so qwen3 skips its hidden reasoning
+      block (>150s -> ~1s compute, inside the 30s domain budget). A no-op on
+      non-qwen Ollama models (they ignore the field).
+
+    ``think=False`` is a TOP-LEVEL litellm kwarg: ``litellm==1.84.0`` forwards it
+    to the Ollama request top level (``data["think"]``) for both the
+    ``ollama_chat/`` and legacy ``ollama/`` transforms (verified — see the module
+    docstring / the BUG-026-007 report probe). Callers route Ollama through
+    ``ollama_chat/`` so system/user roles round-trip natively and ``keep_alive``
+    also lands top-level.
 
     The SST resolver is consulted ONLY on the ollama path, so a hosted-provider
     deployment never reads ``ML_STRUCTURED_EXTRACTION_THINKING`` here (matching
     the ollama-conditional requirement in ``_check_required_config``).
     """
     if provider != "ollama":
-        return messages
+        return completion_kwargs
     if resolve_structured_extraction_thinking():
-        return messages
-    return _inject_no_think(messages)
+        return completion_kwargs
+    completion_kwargs["think"] = False
+    return completion_kwargs
