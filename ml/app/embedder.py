@@ -147,6 +147,22 @@ def _load_model():
     return _model
 
 
+def is_model_loaded() -> bool:
+    """Report whether the embedding model is CURRENTLY loaded.
+
+    Reads the module-global ``_model`` at CALL time, so callers always see
+    the live state after the lazy load in ``_load_model()`` (invoked on the
+    first ``generate_embedding()``). This exists specifically so ``main.py``'s
+    ``/health`` does not do ``from .embedder import _model`` — that import
+    binds the importing module to the import-time value (``None``) forever,
+    which made ``/health`` report ``model_loaded: false`` PERMANENTLY even
+    after the model was loaded and ``POST /embed`` was returning 200 (redteam
+    F8 stale-binding bug). A plain module-attribute read here is always
+    current.
+    """
+    return _model is not None
+
+
 async def generate_embedding(text: str) -> list[float]:
     """Generate a 384-dimension embedding vector from text.
 
