@@ -25,3 +25,12 @@ variable AFTER this seed has been applied.
 import os
 
 os.environ.setdefault("SMACKEREL_AUTH_TOKEN", "")
+
+# F2 (redteam LLM-enrichment cold-load) — the ML sidecar's ollama completions
+# read ML_OLLAMA_KEEP_ALIVE fail-loud at CALL time (ml/app/ollama_keepalive.py).
+# Several unit tests drive the ollama code path (test_processor / test_domain /
+# test_synthesis), so seed a value here IFF unset — the same developer-ergonomic
+# setdefault pattern used for SMACKEREL_AUTH_TOKEN above, and NOT a default in
+# the production module. The fail-loud contract itself is proven adversarially
+# in test_ollama_keepalive.py via monkeypatch.delenv.
+os.environ.setdefault("ML_OLLAMA_KEEP_ALIVE", "30m")

@@ -577,6 +577,12 @@ ML_HEALTH_LATENCY_SLA_MS="$(required_value services.ml.health_latency_sla_ms)"
 # SST value, read fail-loud by ml/app/main.py; no literal default. Emitted into
 # every generated env (dev/test) and the deploy bundle app.env below.
 ML_LOG_LEVEL="$(required_value services.ml.log_level)"
+# F2 (redteam LLM-enrichment cold-load) — ML_OLLAMA_KEEP_ALIVE
+# (services.ml.ollama_keep_alive). Required SST value, read fail-loud by the ml
+# sidecar; no literal default. Passed top-level on the sidecar's ollama_chat/
+# completions so the domain/synthesis model stays resident across a capture
+# session and sparse captures skip the Ollama cold-load.
+ML_OLLAMA_KEEP_ALIVE="$(required_value services.ml.ollama_keep_alive)"
 
 # Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope + ML model
 # memory profile extraction. Every key is required (fail-loud SST). The
@@ -2409,6 +2415,7 @@ ML_EMBEDDING_WORKERS=${ML_EMBEDDING_WORKERS}
 ML_EMBEDDING_QUEUE_MAX=${ML_EMBEDDING_QUEUE_MAX}
 ML_HEALTH_LATENCY_SLA_MS=${ML_HEALTH_LATENCY_SLA_MS}
 ML_LOG_LEVEL=${ML_LOG_LEVEL}
+ML_OLLAMA_KEEP_ALIVE=${ML_OLLAMA_KEEP_ALIVE}
 KNOWLEDGE_ENABLED=${KNOWLEDGE_ENABLED}
 KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS=${KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS}
 KNOWLEDGE_LINT_CRON=${KNOWLEDGE_LINT_CRON}
