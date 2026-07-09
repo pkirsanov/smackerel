@@ -584,6 +584,14 @@ ML_LOG_LEVEL="$(required_value services.ml.log_level)"
 # session and sparse captures skip the Ollama cold-load.
 ML_OLLAMA_KEEP_ALIVE="$(required_value services.ml.ollama_keep_alive)"
 
+# BUG-026-007 (redteam F2, latency half) — ML_STRUCTURED_EXTRACTION_THINKING
+# (services.ml.structured_extraction_thinking). Required SST value, read
+# fail-loud by the ml sidecar; no literal default. false = inject the qwen
+# /no_think control token on the structured-JSON extraction path so qwen3 skips
+# its ~113s hidden reasoning block and stays inside the 30s domain budget; true
+# = keep thinking. A no-op on non-qwen Ollama models.
+ML_STRUCTURED_EXTRACTION_THINKING="$(required_value services.ml.structured_extraction_thinking)"
+
 # Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope + ML model
 # memory profile extraction. Every key is required (fail-loud SST). The
 # memory limit values are emitted both with their `compose-style` string
@@ -2416,6 +2424,7 @@ ML_EMBEDDING_QUEUE_MAX=${ML_EMBEDDING_QUEUE_MAX}
 ML_HEALTH_LATENCY_SLA_MS=${ML_HEALTH_LATENCY_SLA_MS}
 ML_LOG_LEVEL=${ML_LOG_LEVEL}
 ML_OLLAMA_KEEP_ALIVE=${ML_OLLAMA_KEEP_ALIVE}
+ML_STRUCTURED_EXTRACTION_THINKING=${ML_STRUCTURED_EXTRACTION_THINKING}
 KNOWLEDGE_ENABLED=${KNOWLEDGE_ENABLED}
 KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS=${KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS}
 KNOWLEDGE_LINT_CRON=${KNOWLEDGE_LINT_CRON}

@@ -14,6 +14,7 @@ from litellm.exceptions import (
 )
 
 from .ollama_keepalive import resolve_ollama_keep_alive
+from .ollama_thinking import apply_structured_extraction_thinking
 
 logger = logging.getLogger("smackerel-ml.processor")
 
@@ -153,6 +154,13 @@ async def process_content(
             # ollama_chat/ route set above (keep_alive is top-level there; the
             # legacy ollama/ generate transform buries it under `options`).
             completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
+
+        # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on this
+        # universal-processing structured-JSON extraction call when SST says so
+        # (no-op for non-ollama / when thinking stays on / on non-qwen models).
+        completion_kwargs["messages"] = apply_structured_extraction_thinking(
+            completion_kwargs["messages"], provider
+        )
 
         # Retry with exponential backoff for transient LLM errors
         max_attempts = 3

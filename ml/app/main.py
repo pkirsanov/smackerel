@@ -86,6 +86,18 @@ def _check_required_config() -> dict[str, str]:
         else:
             required["ML_OLLAMA_KEEP_ALIVE"] = keep_alive
 
+        # BUG-026-007 (redteam F2, latency half) — ML_STRUCTURED_EXTRACTION_THINKING
+        # (services.ml.structured_extraction_thinking) gates whether qwen3 keeps
+        # its hidden reasoning block on the structured-JSON extraction path.
+        # Required (fail-loud, no default) ONLY when the provider is ollama — it
+        # is meaningless for hosted providers. Mirrors the ML_OLLAMA_KEEP_ALIVE
+        # conditional above.
+        thinking = os.environ.get("ML_STRUCTURED_EXTRACTION_THINKING", "").strip()
+        if not thinking:
+            missing.append("ML_STRUCTURED_EXTRACTION_THINKING")
+        else:
+            required["ML_STRUCTURED_EXTRACTION_THINKING"] = thinking
+
     if missing:
         logger.error("Missing required configuration: %s", ", ".join(missing))
         sys.exit(1)
@@ -101,6 +113,18 @@ def _check_required_config() -> dict[str, str]:
                 "ML_OLLAMA_KEEP_ALIVE must be an integer number of seconds, a "
                 "duration like 30m/1h/90s, 0, or -1; got %r",
                 keep_alive,
+            )
+            sys.exit(1)
+
+        # BUG-026-007 — the structured-extraction thinking switch must be exactly
+        # true/false (mirrors the ML_PROCESSING_DEGRADED_FALLBACK_ENABLED
+        # true/false contract). A bad value fails loud rather than silently
+        # coercing qwen's thinking mode and re-opening the latency bug.
+        thinking = required["ML_STRUCTURED_EXTRACTION_THINKING"].lower()
+        if thinking not in ("true", "false"):
+            logger.error(
+                "ML_STRUCTURED_EXTRACTION_THINKING must be true or false, got %r",
+                required["ML_STRUCTURED_EXTRACTION_THINKING"],
             )
             sys.exit(1)
 
