@@ -499,7 +499,27 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		if name == "telegram_bot" || name == "ollama" {
 			continue // optional services don't affect overall status
 		}
-		// Connector-specific statuses that indicate degraded health
+		// An UNCONFIGURED optional connector reports "disconnected" — that is a
+		// connector's INITIAL state from connector.New()/HealthDisconnected before
+		// Connect() is ever called (and the state Close() returns it to). It is NOT
+		// a fault: a connector that IS configured and then breaks reports
+		// "error"/"failing"/"degraded" instead (the fault paths never set
+		// "disconnected"; see e.g. youtube/discord/markets/guesthost), so real
+		// connector faults still degrade the aggregate below. On this single-user
+		// home-lab most source connectors are registered but never provisioned (no
+		// OAuth/API credentials), so they legitimately sit at "disconnected". A
+		// deliberately-unprovisioned optional source must NOT drag the whole product
+		// to "degraded" (redteam degraded-driver finding: the live prod aggregate
+		// was "degraded" SOLELY because 14 unconfigured connectors reported
+		// "disconnected" while every core service — postgres, nats, intelligence,
+		// alert_delivery, ml_sidecar — was healthy). This refines DEV-003-002, which
+		// over-broadly lumped connector "disconnected" in with the fault statuses.
+		// (Alertmanager / alert-routing standup is a separate deferral, R-082-C, and
+		// is NOT the driver here — alert_delivery reports "up".)
+		if strings.HasPrefix(name, "connector:") && svc.Status == "disconnected" {
+			continue
+		}
+		// Statuses that indicate degraded health.
 		switch svc.Status {
 		case "down", "stale", "error", "failing", "disconnected", "degraded":
 			overall = "degraded"

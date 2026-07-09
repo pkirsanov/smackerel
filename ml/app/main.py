@@ -11,7 +11,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 from .auth import _AUTH_TOKEN, verify_auth
-from .embedder import _model, _model_name, generate_embedding
+from .embedder import _model_name, generate_embedding, is_model_loaded
 from .nats_client import NATSClient
 from .nats_contract import validate_runtime_streams_on_startup
 
@@ -237,7 +237,10 @@ async def health():
     return {
         "status": "up" if nats_connected else "degraded",
         "nats": "connected" if nats_connected else "disconnected",
-        "model_loaded": _model is not None,
+        # Read the embedder's CURRENT state at call time (redteam F8): the model
+        # is lazily loaded on the first generate_embedding(), long after this
+        # module was imported.
+        "model_loaded": is_model_loaded(),
     }
 
 
