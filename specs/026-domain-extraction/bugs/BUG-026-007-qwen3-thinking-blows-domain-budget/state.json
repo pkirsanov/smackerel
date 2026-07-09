@@ -1,0 +1,33 @@
+{
+    "id": "BUG-026-007-qwen3-thinking-blows-domain-budget",
+    "title": "qwen3 default thinking-mode adds a ~113s hidden reasoning block to structured-JSON extraction, blowing the 30s domain-extraction budget into the degraded fallback",
+    "severity": "high",
+    "source": "redteam-adversarial-interrogation (live evo-x2 prod, both models WARM)",
+    "owningSpec": "026-domain-extraction",
+    "workflowMode": "bugfix-fastlane",
+    "status": "fixed_in_repo",
+    "certification": {
+        "status": "in_repo_verified",
+        "note": "Code + unit tests authored and PASSING locally via ./smackerel.sh test unit --python. The live 'domain extraction now < 30s' claim is only provable after the orchestrator rebuilds + signs + redeploys smackerel-ml on evo-x2 — live verification PENDING redeploy."
+    },
+    "execution": {
+        "activeAgent": "bubbles.bug",
+        "currentPhase": "finalize"
+    },
+    "completedPhases": [
+        "discovery",
+        "documentation",
+        "analysis",
+        "implement",
+        "test"
+    ],
+    "completedScopes": [],
+    "createdAt": "2026-07-09",
+    "fixedAt": "2026-07-09",
+    "lastUpdatedAt": "2026-07-09T00:00:00Z",
+    "redeployRequired": true,
+    "transitionRequests": [],
+    "reworkQueue": [],
+    "routed": [],
+    "notes": "Remaining half of the redteam F2 (LLM-enrichment latency) finding. The keep_alive fix (BUG-026-006 sibling + ml/app/ollama_keepalive.py) removed the ~22-45s Ollama cold-load; this fixes the ~113s qwen3 hidden-reasoning latency on the structured-JSON extraction path by adding an SST-gated, fail-loud thinking-disable (ML_STRUCTURED_EXTRACTION_THINKING / services.ml.structured_extraction_thinking). The agent reasoning path (agent.py) is deliberately left thinking-ON (quality > latency). Requires a smackerel-ml image rebuild + signed redeploy to take effect."
+}

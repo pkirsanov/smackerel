@@ -34,3 +34,14 @@ os.environ.setdefault("SMACKEREL_AUTH_TOKEN", "")
 # the production module. The fail-loud contract itself is proven adversarially
 # in test_ollama_keepalive.py via monkeypatch.delenv.
 os.environ.setdefault("ML_OLLAMA_KEEP_ALIVE", "30m")
+
+# BUG-026-007 (redteam F2, latency half) — the ML sidecar's structured-JSON
+# extraction completions read ML_STRUCTURED_EXTRACTION_THINKING fail-loud at CALL
+# time (ml/app/ollama_thinking.py) on the ollama path. The same unit tests that
+# drive the ollama code path (test_processor / test_domain / test_synthesis /
+# test_card_categories / test_drive_classify) would otherwise raise, so seed the
+# fix's default posture (thinking DISABLED) here IFF unset — the same
+# developer-ergonomic setdefault pattern as above, and NOT a default in the
+# production module. The fail-loud contract itself is proven adversarially in
+# test_ollama_thinking.py via monkeypatch.delenv.
+os.environ.setdefault("ML_STRUCTURED_EXTRACTION_THINKING", "false")

@@ -13,6 +13,7 @@ import time
 import yaml
 
 from .ollama_keepalive import resolve_ollama_keep_alive
+from .ollama_thinking import apply_structured_extraction_thinking
 from .receipt_detection import detect_receipt_content
 
 logger = logging.getLogger("smackerel-ml.synthesis")
@@ -205,6 +206,13 @@ async def handle_extract(
             completion_kwargs["api_base"] = ollama_url
             completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
 
+        # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on the
+        # synthesis structured-JSON extraction call when SST says so (no-op for
+        # non-ollama / when thinking stays on / on non-qwen models).
+        completion_kwargs["messages"] = apply_structured_extraction_thinking(
+            completion_kwargs["messages"], provider
+        )
+
         response = await litellm.acompletion(**completion_kwargs)
 
         llm_output_text = response.choices[0].message.content
@@ -336,6 +344,13 @@ async def handle_crosssource(
             # generate transform. Keep the cross-source model resident too.
             crosssource_kwargs["api_base"] = ollama_url
             crosssource_kwargs["keep_alive"] = resolve_ollama_keep_alive()
+
+        # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on the
+        # cross-source structured-JSON extraction call too (no-op for non-ollama
+        # / when thinking stays on / on non-qwen models).
+        crosssource_kwargs["messages"] = apply_structured_extraction_thinking(
+            crosssource_kwargs["messages"], provider
+        )
 
         response = await litellm.acompletion(**crosssource_kwargs)
 

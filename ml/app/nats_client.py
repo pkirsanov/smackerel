@@ -909,9 +909,18 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
             # falls back to its own default which is wrong inside the ml-sidecar
             # container (see processor.py for the same fix).
             api_base = os.environ.get("OLLAMA_URL") if provider == "ollama" else None
+            # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on
+            # this LLM_MODEL structured-JSON re-rank call when SST says so. This
+            # call routes via the legacy ollama/ (/api/generate) transform, where
+            # a top-level think=False would be buried under `options` and ignored
+            # — so /no_think in the messages is the only mechanism that reaches
+            # the model. No-op for non-ollama / when thinking stays on.
+            from .ollama_thinking import apply_structured_extraction_thinking
+
+            messages = apply_structured_extraction_thinking([{"role": "user", "content": prompt}], provider)
             response = await litellm.acompletion(
                 model=model_name,
-                messages=[{"role": "user", "content": prompt}],
+                messages=messages,
                 api_key=api_key,
                 api_base=api_base,
                 temperature=0.1,

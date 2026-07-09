@@ -68,6 +68,8 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
     # F2 — Ollama keep_alive window (required when provider=ollama).
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+    # BUG-026-007 — structured-extraction thinking switch (required when provider=ollama).
+    monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
 
     config = _check_required_config()
 
@@ -82,6 +84,8 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     assert config["ML_HEALTH_LATENCY_SLA_MS"] == "500"
     # F2 — keep_alive window is echoed back for the ml sidecar to consume.
     assert config["ML_OLLAMA_KEEP_ALIVE"] == "30m"
+    # BUG-026-007 — thinking switch is echoed back for the ml sidecar to consume.
+    assert config["ML_STRUCTURED_EXTRACTION_THINKING"] == "false"
 
 
 def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatch):
@@ -171,6 +175,54 @@ def test_check_required_config_accepts_valid_ollama_keep_alive(monkeypatch):
     assert config["ML_OLLAMA_KEEP_ALIVE"] == "30m"
 
 
+def test_check_required_config_requires_structured_extraction_thinking(monkeypatch):
+    # BUG-026-007 — with provider=ollama, ML_STRUCTURED_EXTRACTION_THINKING is
+    # REQUIRED (fail-loud, no default). ADVERSARIAL: fails if the requirement is
+    # dropped from _check_required_config. Everything else is present, so a
+    # SystemExit here can ONLY be attributed to the missing thinking switch.
+    monkeypatch.setenv("NATS_URL", "nats://nats:4222")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.2")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setenv("SMACKEREL_ENV", "test")
+    monkeypatch.setenv("ML_LOG_LEVEL", "info")
+    monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
+    monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
+    monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+    # The thinking switch is deliberately absent (the conftest seed is cleared).
+    monkeypatch.delenv("ML_STRUCTURED_EXTRACTION_THINKING", raising=False)
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
+def test_check_required_config_rejects_invalid_structured_extraction_thinking(monkeypatch):
+    # BUG-026-007 — a thinking switch that is neither true nor false is a config
+    # error, rejected fail-loud rather than silently coerced. ADVERSARIAL: fails
+    # if the true/false validation is removed.
+    monkeypatch.setenv("NATS_URL", "nats://nats:4222")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.2")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setenv("SMACKEREL_ENV", "test")
+    monkeypatch.setenv("ML_LOG_LEVEL", "info")
+    monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
+    monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
+    monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+    monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "maybe")
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
 # MIT-040-S-004 (spec 040 SST hardening) — Adversarial regression tests.
 #
 # Behavior contract: SMACKEREL_AUTH_TOKEN is required only when
@@ -199,6 +251,8 @@ def _set_required_env_minus(monkeypatch, environment: str, *, auth_token: str | 
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
     # F2 — Ollama keep_alive window (required when provider=ollama).
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+    # BUG-026-007 — structured-extraction thinking switch (required when provider=ollama).
+    monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
     if auth_token is None:
         monkeypatch.delenv("SMACKEREL_AUTH_TOKEN", raising=False)
         monkeypatch.setattr("app.main._AUTH_TOKEN", "")
