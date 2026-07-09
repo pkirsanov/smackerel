@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import litellm
 
@@ -48,20 +49,28 @@ async def classify_drive_file(data: dict, provider: str, model: str, api_key: st
     )
     model_name = f"{provider}/{model}" if provider not in ("", "openai") else model
     # BUG-026-007 (redteam F2, latency half) — drive-classify runs on LLM_MODEL
-    # (qwen3:30b-a3b in prod, dispatched from nats_client); disable qwen3 thinking
-    # on this structured-JSON classification when SST says so. This call routes
-    # via the legacy ollama/ (/api/generate) transform, so /no_think in the
-    # messages is the mechanism that reaches the model. No-op otherwise.
-    messages = apply_structured_extraction_thinking([{"role": "user", "content": prompt}], provider)
-    response = await litellm.acompletion(
-        model=model_name,
-        messages=messages,
-        api_key=api_key,
-        temperature=0.1,
-        max_tokens=1000,
-        response_format={"type": "json_object"},
-        timeout=30,
-    )
+    # (qwen3:30b-a3b in prod, dispatched from nats_client). Route Ollama through
+    # the ollama_chat/ (/api/chat) prefix (mirrors domain.py::_resolve_model) so
+    # top-level params reach Ollama, and disable qwen3 thinking when SST says so
+    # via the native top-level think=False (litellm 1.84.0 forwards `think`
+    # top-level; the /no_think prompt token the first fix used is ignored by
+    # qwen3's template). No-op for non-ollama / when thinking stays on / on
+    # non-qwen models.
+    api_base = os.environ.get("OLLAMA_URL") if provider == "ollama" else None
+    if provider == "ollama":
+        model_name = f"ollama_chat/{model}"
+    completion_kwargs = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": prompt}],
+        "api_key": api_key,
+        "api_base": api_base,
+        "temperature": 0.1,
+        "max_tokens": 1000,
+        "response_format": {"type": "json_object"},
+        "timeout": 30,
+    }
+    apply_structured_extraction_thinking(completion_kwargs, provider)
+    response = await litellm.acompletion(**completion_kwargs)
     raw = response.choices[0].message.content
     payload = json.loads(raw)
     validated = validate_drive_classification_result(payload)

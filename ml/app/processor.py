@@ -157,10 +157,10 @@ async def process_content(
 
         # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on this
         # universal-processing structured-JSON extraction call when SST says so
-        # (no-op for non-ollama / when thinking stays on / on non-qwen models).
-        completion_kwargs["messages"] = apply_structured_extraction_thinking(
-            completion_kwargs["messages"], provider
-        )
+        # via native think=False (litellm forwards it top-level on the
+        # ollama_chat/ route). No-op for non-ollama / when thinking stays on / on
+        # non-qwen models.
+        apply_structured_extraction_thinking(completion_kwargs, provider)
 
         # Retry with exponential backoff for transient LLM errors
         max_attempts = 3
