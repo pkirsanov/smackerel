@@ -1791,6 +1791,35 @@ services:
     embedding_workers: 2
     embedding_queue_max: 3
     health_latency_sla_ms: 500
+    # F2 (redteam LLM-enrichment cold-load) — Ollama keep_alive window for the
+    # domain/synthesis model. Emitted as ML_OLLAMA_KEEP_ALIVE and read fail-loud
+    # by the ml sidecar (no literal default; Gate G028). Passed TOP-LEVEL on the
+    # sidecar's ollama_chat/ (/api/chat) completions so each capture resets
+    # Ollama's unload timer and the multi-GB domain model stays resident across
+    # an active capture session — sparse captures then skip the ~22-45s
+    # cold-load that otherwise blows the 30s extraction budget and truncates the
+    # JSON. (The legacy ollama/ generate path buries keep_alive under `options`,
+    # where Ollama ignores it, so the sidecar routes domain/synthesis/processor
+    # through ollama_chat/.)
+    #
+    # Accepted forms: an integer number of seconds, a duration (30m / 1h / 90s),
+    # 0 (unload immediately), or -1 (keep forever).
+    #
+    # VRAM-ENVELOPE TRADEOFF: "30m" keeps the model hot during a session but
+    # lets it unload after 30m idle. Do NOT set -1 (forever) in a shared
+    # envelope: under the knb 48G model budget (gemma4:26b ~16 GB +
+    # qwen3:30b-a3b ~20 GB <= 48 G) a permanent pin would starve the qwen3
+    # assistant. Operators with a dedicated envelope MAY raise this.
+    #
+    # DISTINCT from infrastructure.ollama.keep_alive (env OLLAMA_KEEP_ALIVE,
+    # "24h"): that is the ollama DAEMON's default keep-alive for smackerel's OWN
+    # dev ollama container AND the Go core's VRAM-envelope sum-guard input. This
+    # services.ml.ollama_keep_alive is the PER-REQUEST window the ml sidecar
+    # sends on each completion; a per-request keep_alive overrides the daemon
+    # default for that model, so it is what governs residency against the SHARED
+    # host ollama daemon in prod (where smackerel's own ollama container is
+    # profile-gated off and the 24h container default therefore does not apply).
+    ollama_keep_alive: "30m"
     # Spec 045 FR-045-002 — model memory envelope. Each entry maps an Ollama
     # model name to its RUN-TIME memory requirement in MiB (matching what
     # `ollama ps` reports as resident size when the model is loaded). The Go

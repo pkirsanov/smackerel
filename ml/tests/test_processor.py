@@ -126,7 +126,7 @@ class TestProcessContentSuccess:
         assert result["result"]["title"] == "Test Article"
         assert result["result"]["artifact_type"] == "article"
         assert result["tokens_used"] == 250
-        assert result["model_used"] == "ollama/llama3"
+        assert result["model_used"] == "ollama_chat/llama3"
 
     def test_defaults_populated_for_optional_fields(self):
         """When LLM returns only required fields, defaults are populated."""
@@ -209,7 +209,7 @@ class TestProcessContentSuccess:
         assert result["model_used"] == "gpt-4"
 
     def test_non_openai_provider_gets_prefix(self):
-        """Non-openai providers get provider/ prefix on model name."""
+        """Ollama routes via the ollama_chat/ (/api/chat) prefix (F2 keep_alive)."""
         llm_result = {"artifact_type": "article", "title": "T"}
         mock_response = _make_llm_response(llm_result)
 
@@ -229,7 +229,7 @@ class TestProcessContentSuccess:
                 )
             )
 
-        assert result["model_used"] == "ollama/llama3"
+        assert result["model_used"] == "ollama_chat/llama3"
 
 
 # ---------------------------------------------------------------------------

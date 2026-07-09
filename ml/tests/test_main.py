@@ -37,6 +37,8 @@ def clear_required_env(monkeypatch):
         "ML_EMBEDDING_WORKERS",
         "ML_EMBEDDING_QUEUE_MAX",
         "ML_HEALTH_LATENCY_SLA_MS",
+        # F2 — Ollama keep_alive window SST contract.
+        "ML_OLLAMA_KEEP_ALIVE",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -64,6 +66,8 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
+    # F2 — Ollama keep_alive window (required when provider=ollama).
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
 
     config = _check_required_config()
 
@@ -76,6 +80,8 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     assert config["ML_EMBEDDING_WORKERS"] == "2"
     assert config["ML_EMBEDDING_QUEUE_MAX"] == "3"
     assert config["ML_HEALTH_LATENCY_SLA_MS"] == "500"
+    # F2 — keep_alive window is echoed back for the ml sidecar to consume.
+    assert config["ML_OLLAMA_KEEP_ALIVE"] == "30m"
 
 
 def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatch):
@@ -91,9 +97,78 @@ def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatc
     monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
+    # F2 — set so the ONLY failure under test is the invalid fallback flag.
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
 
     with pytest.raises(SystemExit):
         _check_required_config()
+
+
+def test_check_required_config_requires_ollama_keep_alive(monkeypatch):
+    # F2 — with provider=ollama, ML_OLLAMA_KEEP_ALIVE is REQUIRED (fail-loud,
+    # no default). ADVERSARIAL: fails if the requirement is dropped from
+    # _check_required_config. Everything else is present, so a SystemExit here
+    # can ONLY be attributed to the missing keep_alive window.
+    monkeypatch.setenv("NATS_URL", "nats://nats:4222")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.2")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setenv("SMACKEREL_ENV", "test")
+    monkeypatch.setenv("ML_LOG_LEVEL", "info")
+    monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
+    monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
+    monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
+    # keep_alive deliberately absent (autouse fixture already cleared it).
+    monkeypatch.delenv("ML_OLLAMA_KEEP_ALIVE", raising=False)
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
+def test_check_required_config_rejects_invalid_ollama_keep_alive(monkeypatch):
+    # F2 — a keep_alive Ollama can't parse ("forever") is rejected fail-loud so
+    # it can't silently fall back to Ollama's 5m default and re-open the
+    # cold-load bug. ADVERSARIAL: fails if the format check is removed.
+    monkeypatch.setenv("NATS_URL", "nats://nats:4222")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.2")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setenv("SMACKEREL_ENV", "test")
+    monkeypatch.setenv("ML_LOG_LEVEL", "info")
+    monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
+    monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
+    monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "forever")
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
+def test_check_required_config_accepts_valid_ollama_keep_alive(monkeypatch):
+    # F2 — the recommended "30m" window passes the format check and is echoed back.
+    monkeypatch.setenv("NATS_URL", "nats://nats:4222")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.2")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setenv("SMACKEREL_ENV", "test")
+    monkeypatch.setenv("ML_LOG_LEVEL", "info")
+    monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
+    monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
+    monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+
+    config = _check_required_config()
+
+    assert config["ML_OLLAMA_KEEP_ALIVE"] == "30m"
 
 
 # MIT-040-S-004 (spec 040 SST hardening) — Adversarial regression tests.
@@ -122,6 +197,8 @@ def _set_required_env_minus(monkeypatch, environment: str, *, auth_token: str | 
     monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
+    # F2 — Ollama keep_alive window (required when provider=ollama).
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     if auth_token is None:
         monkeypatch.delenv("SMACKEREL_AUTH_TOKEN", raising=False)
         monkeypatch.setattr("app.main._AUTH_TOKEN", "")

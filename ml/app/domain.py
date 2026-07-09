@@ -20,6 +20,8 @@ from litellm.exceptions import (
     ServiceUnavailableError,
 )
 
+from .ollama_keepalive import resolve_ollama_keep_alive
+
 logger = logging.getLogger("smackerel-ml.domain")
 
 MAX_RETRIES = 2
@@ -119,19 +121,32 @@ async def _do_domain_extract(
     tokens_used = 0
     model_id = _resolve_model(model, provider, ollama_url)
 
+    completion_kwargs: dict[str, Any] = {
+        "model": model_id,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "api_key": api_key if api_key else None,
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},
+        "timeout": 30,
+    }
+    if provider == "ollama":
+        # F2 (redteam LLM-enrichment cold-load) — keep the domain model resident
+        # across a capture session so sparse captures skip the 22-45s cold-load
+        # that blows DOMAIN_EXTRACTION_TIMEOUT and truncates the JSON. keep_alive
+        # reaches Ollama ONLY at the request TOP LEVEL; litellm forwards it there
+        # for the ollama_chat/ (/api/chat) prefix but buries it under `options`
+        # for the legacy ollama/ (/api/generate) transform (verified vs litellm
+        # 1.59.8 + 1.84.0). _resolve_model returns ollama_chat/… and we pass
+        # api_base + the SST-owned keep_alive window explicitly.
+        completion_kwargs["api_base"] = ollama_url
+        completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
+
     for attempt in range(MAX_RETRIES + 1):
         try:
-            response = await litellm.acompletion(
-                model=model_id,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                api_key=api_key if api_key else None,
-                temperature=0.1,
-                response_format={"type": "json_object"},
-                timeout=30,
-            )
+            response = await litellm.acompletion(**completion_kwargs)
 
             raw_text = response.choices[0].message.content
             tokens_used = getattr(response.usage, "total_tokens", 0) if response.usage else 0
@@ -193,9 +208,16 @@ async def _do_domain_extract(
 
 
 def _resolve_model(model: str, provider: str, ollama_url: str) -> str:
-    """Resolve model identifier for litellm."""
+    """Resolve model identifier for litellm.
+
+    F2: Ollama routes through the ollama_chat/ (/api/chat) prefix so litellm
+    forwards keep_alive to the request top level (the legacy ollama/ generate
+    transform buries it under `options`, where Ollama ignores it). This also
+    matches the spec-064 migration already applied to agent.py / card_categories
+    / routes/chat.py.
+    """
     if provider == "ollama":
-        return f"ollama/{model}"
+        return f"ollama_chat/{model}"
     if provider == "openai":
         return model
     return f"{provider}/{model}"
