@@ -166,6 +166,17 @@ services:
       # resolves the manifest at `filepath.Dir(AGENT_SCENARIO_DIR)/assistant/scenarios.yaml`
       # so the mount target MUST be a sibling of /app/prompt_contracts.
       - ./assistant:/app/assistant:ro
+      # Spec 048 (F-3) — bind-mount the absolute host backup dir so the
+      # backup-status watcher (cmd/core -> internal/backup.Watcher) can read the
+      # status JSON the deploy-adapter's backup hook writes after each run,
+      # advancing smackerel_backup_last_success_unixtime for SmackerelBackupStale.
+      # Per docs/Deployment.md Spec-048 "Bind mounts": the deploy adapter MUST
+      # pin BACKUP_LOCAL_DIR to an absolute host path (fail-loud ${VAR:?} form)
+      # and bind it at the SAME path so the container's BACKUP_STATUS_FILE
+      # resolves identically inside and out. Read-only: core only READS the
+      # status file. Target-agnostic — the absolute value is adapter-owned
+      # (No env-specific content in this repo).
+      - "${BACKUP_LOCAL_DIR:?BACKUP_LOCAL_DIR must be set by deploy adapter}:${BACKUP_LOCAL_DIR}:ro"
     healthcheck:
       test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/api/health" ]
       interval: 10s
