@@ -1268,10 +1268,14 @@ func TestHealthHandler_IntelligenceFreshInstallNotStale(t *testing.T) {
 	}
 }
 
-// DEV-003-002: Connector error/failing/disconnected states MUST degrade overall health.
-// Before the fix, the aggregation only checked "down" and "stale" — connector-specific
-// statuses like "error", "failing", "disconnected" were silently ignored, leaving overall
-// health reported as "healthy" even when connectors were broken.
+// DEV-003-002 (refined by the redteam degraded-driver finding): a connector in
+// a genuine FAULT state ("error"/"failing"/"degraded") MUST degrade overall
+// health, but a connector in "disconnected" (its unconfigured / never-Connect()ed
+// initial state — NOT a fault) MUST NOT. Before DEV-003-002 the aggregation only
+// checked "down"/"stale" so real connector faults were invisible; DEV-003-002
+// then over-corrected by treating "disconnected" as a fault too, which made a
+// single-user home-lab with unprovisioned optional connectors report the whole
+// product "degraded". This test pins both halves of the refined contract.
 func TestHealthHandler_ConnectorErrorDegrades(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -1280,7 +1284,7 @@ func TestHealthHandler_ConnectorErrorDegrades(t *testing.T) {
 	}{
 		{"error_degrades", "error", true},
 		{"failing_degrades", "failing", true},
-		{"disconnected_degrades", "disconnected", true},
+		{"disconnected_unconfigured_optional_stays_healthy", "disconnected", false},
 		{"degraded_degrades", "degraded", true},
 		{"healthy_stays_healthy", "healthy", false},
 		{"syncing_stays_healthy", "syncing", false},
@@ -1316,6 +1320,98 @@ func TestHealthHandler_ConnectorErrorDegrades(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestHealthHandler_UnconfiguredConnectorsDoNotDegrade is the redteam
+// degraded-driver regression. It replicates the EXACT live-prod
+// /api/health services shape observed on 2026-07-08 (sourceSha 0f2fb517):
+// every core service healthy, three provisioned connectors healthy, and
+// fourteen UNCONFIGURED optional connectors reporting "disconnected". The
+// pre-fix aggregate returned "degraded" (and ?strict=true → 503) SOLELY
+// because of those unconfigured connectors, even though nothing was
+// actually wrong. The fix exempts connector "disconnected" (the unconfigured
+// / never-Connect()ed state) from the aggregate.
+//
+// The subtest "one_configured_connector_error_still_degrades" is the
+// ADVERSARIAL guard: it flips a single connector to "error" (a real fault)
+// and asserts the aggregate STILL degrades. A naive over-fix that exempted
+// ALL connector statuses (or the whole connector namespace) would pass the
+// healthy case but FAIL this one — proving the exemption is scoped to
+// "disconnected" only and never masks a genuine connector fault.
+func TestHealthHandler_UnconfiguredConnectorsDoNotDegrade(t *testing.T) {
+	// Fourteen registered-but-unprovisioned optional connectors (verbatim from
+	// the live-prod services map) plus three provisioned/healthy ones.
+	prodConnectors := func() map[string]string {
+		return map[string]string{
+			"bookmarks":            "disconnected",
+			"browser-history":      "disconnected",
+			"discord":              "disconnected",
+			"financial-markets":    "disconnected",
+			"gmail":                "disconnected",
+			"google-calendar":      "disconnected",
+			"google-keep":          "disconnected",
+			"google-maps-timeline": "disconnected",
+			"guesthost":            "disconnected",
+			"hospitable":           "disconnected",
+			"qf-decisions":         "disconnected",
+			"rss":                  "disconnected",
+			"twitter":              "disconnected",
+			"youtube":              "disconnected",
+			"card-rewards":         "healthy",
+			"gov-alerts":           "healthy",
+			"weather":              "healthy",
+		}
+	}
+
+	t.Run("all_unconfigured_disconnected_stays_healthy", func(t *testing.T) {
+		deps := &Dependencies{
+			DB:                &mockDB{healthy: true, artifactCount: 18722},
+			NATS:              &mockNATS{healthy: true},
+			StartTime:         time.Now(),
+			ConnectorRegistry: &mockConnectorHealth{health: prodConnectors()},
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/health?strict=true", nil)
+		rec := httptest.NewRecorder()
+		deps.HealthHandler(rec, req)
+
+		var resp HealthResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if resp.Status != "healthy" {
+			t.Errorf("14 unconfigured (disconnected) connectors + all core services up must aggregate to healthy, got %q", resp.Status)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected 200 under ?strict=true when only unconfigured connectors are disconnected, got %d", rec.Code)
+		}
+	})
+
+	t.Run("one_configured_connector_error_still_degrades", func(t *testing.T) {
+		connectors := prodConnectors()
+		connectors["gmail"] = "error" // a provisioned connector that actually broke
+		deps := &Dependencies{
+			DB:                &mockDB{healthy: true, artifactCount: 18722},
+			NATS:              &mockNATS{healthy: true},
+			StartTime:         time.Now(),
+			ConnectorRegistry: &mockConnectorHealth{health: connectors},
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/health?strict=true", nil)
+		rec := httptest.NewRecorder()
+		deps.HealthHandler(rec, req)
+
+		var resp HealthResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if resp.Status != "degraded" {
+			t.Errorf("a connector in a real fault state (error) MUST still degrade the aggregate, got %q", resp.Status)
+		}
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("expected 503 under ?strict=true when a connector is in error, got %d", rec.Code)
+		}
+	})
 }
 
 // IMP-023-R19-001: Health probes run in parallel — total latency stays under
