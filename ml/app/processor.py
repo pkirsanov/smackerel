@@ -13,6 +13,8 @@ from litellm.exceptions import (
     ServiceUnavailableError,
 )
 
+from .ollama_keepalive import resolve_ollama_keep_alive
+
 logger = logging.getLogger("smackerel-ml.processor")
 
 UNIVERSAL_PROCESSING_PROMPT = """\
@@ -120,6 +122,12 @@ async def process_content(
 
     try:
         model_name = f"{provider}/{model}" if provider not in ("openai", "") else model
+        if provider == "ollama":
+            # F2 — route Ollama through ollama_chat/ (/api/chat) so litellm
+            # forwards keep_alive to the request TOP LEVEL; the legacy ollama/
+            # (/api/generate) transform buries it under `options`, where Ollama
+            # ignores it. model_used reflects the actual route taken.
+            model_name = f"ollama_chat/{model}"
 
         # For Ollama (and any local provider exposed via OLLAMA_URL in SST),
         # pass api_base explicitly. litellm only reads OLLAMA_API_BASE /
@@ -129,6 +137,23 @@ async def process_content(
         # to *.env by scripts/commands/config.sh) keeps a single source of truth.
         api_base = os.environ.get("OLLAMA_URL") if provider == "ollama" else None
 
+        completion_kwargs: dict[str, Any] = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "api_key": api_key,
+            "api_base": api_base,
+            "temperature": 0.1,
+            "max_tokens": 2000,
+            "response_format": {"type": "json_object"},
+            "timeout": 600,
+        }
+        if provider == "ollama":
+            # F2 — keep the domain model resident across a capture session so
+            # sparse captures skip the 22-45s cold-load. Effective only via the
+            # ollama_chat/ route set above (keep_alive is top-level there; the
+            # legacy ollama/ generate transform buries it under `options`).
+            completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
+
         # Retry with exponential backoff for transient LLM errors
         max_attempts = 3
         backoff_delays = [1, 2, 4]  # seconds
@@ -137,16 +162,7 @@ async def process_content(
 
         for attempt in range(max_attempts):
             try:
-                response = await litellm.acompletion(
-                    model=model_name,
-                    messages=[{"role": "user", "content": prompt}],
-                    api_key=api_key,
-                    api_base=api_base,
-                    temperature=0.1,
-                    max_tokens=2000,
-                    response_format={"type": "json_object"},
-                    timeout=600,
-                )
+                response = await litellm.acompletion(**completion_kwargs)
                 break
             except (RateLimitError, ServiceUnavailableError, InternalServerError) as exc:
                 last_exc = exc

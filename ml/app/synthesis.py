@@ -12,6 +12,7 @@ import time
 
 import yaml
 
+from .ollama_keepalive import resolve_ollama_keep_alive
 from .receipt_detection import detect_receipt_content
 
 logger = logging.getLogger("smackerel-ml.synthesis")
@@ -181,20 +182,30 @@ async def handle_extract(
 
         llm_model = model
         if provider == "ollama":
-            llm_model = f"ollama/{model}"
+            llm_model = f"ollama_chat/{model}"
             litellm.api_base = ollama_url
 
-        response = await litellm.acompletion(
-            model=llm_model,
-            messages=[
+        completion_kwargs = {
+            "model": llm_model,
+            "messages": [
                 {"role": "system", "content": contract.get("system_prompt", "")},
                 {"role": "user", "content": prompt},
             ],
-            temperature=temperature,
-            max_tokens=token_budget,
-            api_key=api_key if provider != "ollama" else None,
-            response_format={"type": "json_object"},
-        )
+            "temperature": temperature,
+            "max_tokens": token_budget,
+            "api_key": api_key if provider != "ollama" else None,
+            "response_format": {"type": "json_object"},
+        }
+        if provider == "ollama":
+            # F2 — ollama_chat/ (/api/chat) is the only litellm Ollama path that
+            # forwards keep_alive to the request TOP LEVEL; the legacy ollama/
+            # (/api/generate) transform buries it under `options` (Ollama ignores
+            # it there). Pass api_base + the SST-owned keep_alive window so the
+            # synthesis model stays resident across a capture session.
+            completion_kwargs["api_base"] = ollama_url
+            completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
+
+        response = await litellm.acompletion(**completion_kwargs)
 
         llm_output_text = response.choices[0].message.content
         tokens_used = response.usage.total_tokens if response.usage else 0
@@ -308,17 +319,25 @@ async def handle_crosssource(
 
         llm_model = model
         if provider == "ollama":
-            llm_model = f"ollama/{model}"
+            llm_model = f"ollama_chat/{model}"
             litellm.api_base = ollama_url
 
-        response = await litellm.acompletion(
-            model=llm_model,
-            messages=[{"role": "user", "content": "\n".join(prompt_parts)}],
-            temperature=contract.get("temperature", 0.3),
-            max_tokens=contract.get("token_budget", 500),
-            api_key=api_key if provider != "ollama" else None,
-            response_format={"type": "json_object"},
-        )
+        crosssource_kwargs = {
+            "model": llm_model,
+            "messages": [{"role": "user", "content": "\n".join(prompt_parts)}],
+            "temperature": contract.get("temperature", 0.3),
+            "max_tokens": contract.get("token_budget", 500),
+            "api_key": api_key if provider != "ollama" else None,
+            "response_format": {"type": "json_object"},
+        }
+        if provider == "ollama":
+            # F2 — keep_alive is honored only at the request top level, which
+            # litellm forwards for ollama_chat/ but not the legacy ollama/
+            # generate transform. Keep the cross-source model resident too.
+            crosssource_kwargs["api_base"] = ollama_url
+            crosssource_kwargs["keep_alive"] = resolve_ollama_keep_alive()
+
+        response = await litellm.acompletion(**crosssource_kwargs)
 
         output = json.loads(response.choices[0].message.content)
         model_used = response.model or llm_model

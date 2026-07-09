@@ -1,7 +1,9 @@
 """Smackerel ML Sidecar — FastAPI application."""
 
+import asyncio
 import logging
 import os
+import re
 import sys
 from contextlib import asynccontextmanager
 
@@ -72,9 +74,35 @@ def _check_required_config() -> dict[str, str]:
         else:
             required["LLM_API_KEY"] = val
 
+    # F2 (redteam LLM-enrichment cold-load) — ML_OLLAMA_KEEP_ALIVE
+    # (services.ml.ollama_keep_alive) keeps the domain/synthesis model resident
+    # across a capture session so sparse captures skip the cold-load. Required
+    # (fail-loud, no default) ONLY when the provider is ollama — it is
+    # meaningless for hosted providers. Mirrors the LLM_API_KEY conditional.
+    if llm_provider == "ollama":
+        keep_alive = os.environ.get("ML_OLLAMA_KEEP_ALIVE", "").strip()
+        if not keep_alive:
+            missing.append("ML_OLLAMA_KEEP_ALIVE")
+        else:
+            required["ML_OLLAMA_KEEP_ALIVE"] = keep_alive
+
     if missing:
         logger.error("Missing required configuration: %s", ", ".join(missing))
         sys.exit(1)
+
+    # F2 — light sanity check on the keep_alive window. Ollama accepts an
+    # integer number of seconds, a duration suffix (s/m/h), 0, or -1. Reject an
+    # obviously-wrong value (e.g. "forever") fail-loud rather than let Ollama
+    # silently fall back to its 5-minute default and re-open the cold-load bug.
+    if llm_provider == "ollama":
+        keep_alive = required["ML_OLLAMA_KEEP_ALIVE"]
+        if not re.fullmatch(r"-?\d+[smh]?", keep_alive):
+            logger.error(
+                "ML_OLLAMA_KEEP_ALIVE must be an integer number of seconds, a "
+                "duration like 30m/1h/90s, 0, or -1; got %r",
+                keep_alive,
+            )
+            sys.exit(1)
 
     # Spec 067 BUG-067-001 — apply the SST-owned log level fail-loud. ML_LOG_LEVEL
     # is in the required keys above, so a missing/empty value already exited.
@@ -187,13 +215,60 @@ def _check_required_config() -> dict[str, str]:
     return required
 
 
+# F2 — best-effort startup warmup timeout. A cold gemma-class load is ~22-45s;
+# the warmup runs in the BACKGROUND (never blocks boot) and absorbs that
+# cold-load so the FIRST post-deploy capture is already warm. Bounded so a
+# never-arriving model can't leak a forever-pending task.
+_WARMUP_TIMEOUT_SECONDS = 180
+
+
+async def _warmup_domain_model(config: dict[str, str]) -> None:
+    """Fire ONE keep_alive'd completion at the domain model so the first capture
+    after boot skips the Ollama cold-load. Best-effort: any failure (model not
+    pulled yet, Ollama unreachable at boot) is logged and swallowed — this MUST
+    NEVER block or fail sidecar startup (F2)."""
+    if config["LLM_PROVIDER"].lower() != "ollama":
+        return
+    try:
+        from .ollama_keepalive import resolve_ollama_keep_alive
+
+        keep_alive = resolve_ollama_keep_alive()
+        model = config["LLM_MODEL"]
+        ollama_url = config["OLLAMA_URL"]
+
+        import litellm
+
+        await litellm.acompletion(
+            # ollama_chat/ (/api/chat) forwards keep_alive to the request top
+            # level; the legacy ollama/ (/api/generate) transform buries it.
+            model=f"ollama_chat/{model}",
+            api_base=ollama_url,
+            messages=[{"role": "user", "content": "warmup"}],
+            max_tokens=1,
+            keep_alive=keep_alive,
+            timeout=_WARMUP_TIMEOUT_SECONDS,
+        )
+        logger.info(
+            "ollama domain-model warmup complete (model=%s keep_alive=%s)",
+            model,
+            keep_alive,
+        )
+    except Exception as exc:  # noqa: BLE001 — warmup is best-effort, never fatal
+        logger.warning(
+            "ollama domain-model warmup skipped (non-fatal): %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+
+
 nats_client: NATSClient | None = None
+_warmup_task: "asyncio.Task | None" = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: connect to NATS on startup, disconnect on shutdown."""
-    global nats_client
+    global nats_client, _warmup_task
 
     config = _check_required_config()
 
@@ -208,6 +283,11 @@ async def lifespan(app: FastAPI):
     await nats_client.subscribe_all()
     logger.info("NATS subscriptions active")
 
+    # F2 — kick off a non-blocking best-effort warmup so the FIRST post-deploy
+    # capture doesn't pay the Ollama cold-load. Fire-and-forget: boot proceeds
+    # immediately while the domain model loads in the background.
+    _warmup_task = asyncio.create_task(_warmup_domain_model(config))
+
     # Spec 059 Scope 3 — Google Keep request/reply bridge (handshake + sync).
     # Uses core-NATS subscribe (not JetStream pull) for synchronous reply
     # semantics matching internal/connector/keep/keep.go's Request() calls.
@@ -218,6 +298,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    if _warmup_task is not None and not _warmup_task.done():
+        _warmup_task.cancel()
     if nats_client:
         await nats_client.close()
         logger.info("NATS connection closed")

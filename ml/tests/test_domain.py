@@ -275,7 +275,10 @@ class TestHandleDomainExtract:
 
 class TestResolveModel:
     def test_ollama_provider(self):
-        assert _resolve_model("llama3", "ollama", "http://ollama:11434") == "ollama/llama3"
+        # F2 — ollama routes via ollama_chat/ (/api/chat) so litellm forwards
+        # keep_alive to the request top level (the legacy ollama/ generate
+        # transform buries it under `options`, where Ollama ignores it).
+        assert _resolve_model("llama3", "ollama", "http://ollama:11434") == "ollama_chat/llama3"
 
     def test_openai_provider(self):
         assert _resolve_model("gpt-4o", "openai", "") == "gpt-4o"
