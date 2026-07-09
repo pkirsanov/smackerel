@@ -1816,7 +1816,12 @@ test_files_in_plan=()
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
   while IFS= read -r line; do
-    path="$(echo "$line" | grep -oE '`[^`]+\.(spec|test|rs|ts|tsx|js|jsx)\b[^`]*`' | sed 's/`//g' | head -1 || true)"
+    # Extract the file-path TOKEN from within a backtick block, not the whole
+    # block. Test Plans routinely reference tests as COMMANDS
+    # (`bash tests/x.sh`, `bash -n a.sh && shellcheck a.sh`, `./run.sh test`),
+    # so capturing the entire backtick block would treat the command string as
+    # a bogus non-existent "path" and false-BLOCK. Isolate the path token.
+    path="$(echo "$line" | grep -oE '`[^`]*`' | grep -oE '[A-Za-z0-9._/-]+\.(spec|test|rs|ts|tsx|js|jsx|sh|bash|bats|py|go|java|scala|dart)\b' | head -1 || true)"
     if [[ -n "$path" ]] && [[ "$path" != "[path]" ]] && [[ ! "$path" =~ ^\[ ]]; then
       test_files_in_plan+=("$path")
     fi

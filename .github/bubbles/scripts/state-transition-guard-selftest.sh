@@ -1199,6 +1199,148 @@ assert_log_contains "$g053_artifact_log" \
   "Code Diff Evidence does not show any non-artifact runtime/source/config file paths" \
   "G053 Check 13B still rejects an artifact-only Code Diff Evidence (non-vacuous)"
 
+# --- Check 8: shell (.sh) test-path recognition (Test File Existence) ---
+# Regression guard for the Check 8 extension-alternation parity fix. Check 8's
+# test-path extraction regex historically recognized only
+# (spec|test|rs|ts|tsx|js|jsx); a Test Plan citing a REAL shell test (e.g. a
+# reconcile-regression.sh) was wrongly warned "No concrete test file paths found
+# in Test Plan". This mirrors the G053<->G093 shell-path alignment (commit
+# 4e41c1d) and line 2341's runtime-path family (sh|bash|dart|java|scala).
+echo "Running Check 8 shell-test-path recognition selftest..."
+check8_sh_dir="$tmp_root/specs/942-check8-shell-test-path"
+cp -R "$per_scope_positive_feature_dir" "$check8_sh_dir"
+check8_sh_test="$check8_sh_dir/tests/scripts/reconcile-regression.sh"
+mkdir -p "$check8_sh_dir/tests/scripts"
+cat <<'EOF' > "$check8_sh_test"
+#!/usr/bin/env bash
+# Selftest fixture: a real shell test whose absolute path Check 8 must recognize.
+echo "reconcile regression ok"
+EOF
+chmod +x "$check8_sh_test"
+# Overwrite the scope Test Plan so the ONLY File/Location cell is the real .sh
+# absolute path -- otherwise the base fixture's `.e2e.spec.ts` row would make
+# Check 8 pass regardless of the fix (tautological). Keep Status:Done + the DoD
+# rows intact so the fixture stays otherwise valid.
+cat <<'EOF' > "$check8_sh_dir/scopes/01-index-parity-proof/scope.md"
+# Scope 01: Index Parity Proof
+
+**Status:** Done
+
+### Goal
+
+Exercise Check 8 test-path extraction against a real shell (.sh) test file.
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Regression E2E | `e2e-ui` | `__SH_TEST__` | Shell regression test whose real .sh path Check 8 must recognize. | `selftest:reconcile-regression` | Yes |
+
+### Definition of Done
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior -> Evidence: report.md#test-evidence
+- [x] Broader E2E regression suite passes -> Evidence: report.md#test-evidence
+- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: report.md#summary
+EOF
+bubbles_sed_inplace "s|__SH_TEST__|$check8_sh_test|g" "$check8_sh_dir/scopes/01-index-parity-proof/scope.md"
+check8_sh_log="$tmp_root/check8-shell-test-path.log"
+run_capture "$check8_sh_log" bash "$GUARD_SCRIPT" "$check8_sh_dir" >/dev/null
+assert_log_contains "$check8_sh_log" \
+  "Test file exists: $check8_sh_test" \
+  "Check 8 recognizes a shell (.sh) test path in the Test Plan"
+assert_log_not_contains "$check8_sh_log" \
+  "No concrete test file paths found in Test Plan" \
+  "Check 8 does not fall through to the placeholder warning when a real .sh test path is present"
+
+# Negative twin: a placeholder-only File/Location (`[path]`, which Check 8
+# explicitly ignores) must STILL warn "No concrete test file paths found" --
+# proving the positive above passes specifically because `.sh` is now recognized,
+# not because Check 8 went vacuous.
+echo "Running Check 8 placeholder-only non-vacuity selftest..."
+check8_ph_dir="$tmp_root/specs/943-check8-placeholder-only"
+cp -R "$per_scope_positive_feature_dir" "$check8_ph_dir"
+cat <<'EOF' > "$check8_ph_dir/scopes/01-index-parity-proof/scope.md"
+# Scope 01: Index Parity Proof
+
+**Status:** Done
+
+### Goal
+
+Prove Check 8 falls through to the placeholder warning when no concrete test path is present.
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Regression E2E | `e2e-ui` | `[path]` | Placeholder-only File/Location that Check 8 explicitly ignores. | `[command]` | Yes |
+
+### Definition of Done
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior -> Evidence: report.md#test-evidence
+- [x] Broader E2E regression suite passes -> Evidence: report.md#test-evidence
+- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: report.md#summary
+EOF
+check8_ph_log="$tmp_root/check8-placeholder-only.log"
+run_capture "$check8_ph_log" bash "$GUARD_SCRIPT" "$check8_ph_dir" >/dev/null
+assert_log_contains "$check8_ph_log" \
+  "No concrete test file paths found in Test Plan" \
+  "Check 8 non-vacuity: placeholder-only Test Plan still warns (positive passes because .sh is recognized, not because Check 8 is vacuous)"
+
+# --- Check 8: command-wrapped shell (.sh) test-path extraction ---
+# Regression guard for the Check 8 whole-backtick-block extraction bug. Test
+# Plans routinely cite a shell test as a COMMAND, not a bare path -- e.g.
+# `bash tests/x.sh` or `bash -n a.sh && shellcheck -x a.sh`. The original
+# extraction captured the ENTIRE backtick block, so the command string
+# ("bash tests/x.sh") was treated as a bogus non-existent file path and Check 8
+# false-BLOCKed ("references non-existent file" / "DO NOT EXIST") even though the
+# real .sh file exists. The fix isolates the path TOKEN within the block. The
+# 942 case above used a BARE .sh path, so it passed regardless of this bug; this
+# case exercises the command-wrapped pattern that actually regressed downstream.
+echo "Running Check 8 command-wrapped shell-test extraction selftest..."
+check8_cmd_dir="$tmp_root/specs/944-check8-command-wrapped-sh-test"
+cp -R "$per_scope_positive_feature_dir" "$check8_cmd_dir"
+check8_cmd_test="$check8_cmd_dir/tests/scripts/reconcile-regression.sh"
+mkdir -p "$check8_cmd_dir/tests/scripts"
+cat <<'EOF' > "$check8_cmd_test"
+#!/usr/bin/env bash
+# Selftest fixture: a real shell test cited via a COMMAND in the Test Plan.
+echo "reconcile regression ok"
+EOF
+chmod +x "$check8_cmd_test"
+# The File/Location + Command cells wrap the real .sh path inside shell COMMANDS
+# (`bash <path>`, `bash -n <path> && shellcheck -x <path>`). Check 8 must extract
+# the path token and confirm existence, NOT treat the command string as missing.
+cat <<'EOF' > "$check8_cmd_dir/scopes/01-index-parity-proof/scope.md"
+# Scope 01: Index Parity Proof
+
+**Status:** Done
+
+### Goal
+
+Exercise Check 8 test-path extraction against a shell (.sh) test cited as a command.
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Regression E2E | `e2e-ui` | `bash __SH_TEST__` | Shell regression test cited via a command wrapper. | `bash -n __SH_TEST__ && shellcheck -x __SH_TEST__` | Yes |
+
+### Definition of Done
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior -> Evidence: report.md#test-evidence
+- [x] Broader E2E regression suite passes -> Evidence: report.md#test-evidence
+- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: report.md#summary
+EOF
+bubbles_sed_inplace "s|__SH_TEST__|$check8_cmd_test|g" "$check8_cmd_dir/scopes/01-index-parity-proof/scope.md"
+check8_cmd_log="$tmp_root/check8-command-wrapped-sh-test.log"
+run_capture "$check8_cmd_log" bash "$GUARD_SCRIPT" "$check8_cmd_dir" >/dev/null
+assert_log_contains "$check8_cmd_log" \
+  "Test file exists: $check8_cmd_test" \
+  "Check 8 extracts the .sh path token from a command-wrapped Test Plan cell"
+assert_log_not_contains "$check8_cmd_log" \
+  "references non-existent file" \
+  "Check 8 does not false-BLOCK a command-wrapped .sh test whose file exists"
+
 echo "Running positive shared-infrastructure selftest..."
 shared_positive_log="$tmp_root/shared-positive-guard.log"
 shared_positive_status="$(run_capture "$shared_positive_log" bash "$GUARD_SCRIPT" "$shared_positive_feature_dir")"

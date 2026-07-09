@@ -31,6 +31,16 @@ set -uo pipefail
 #   missing-parser           → exit 1, FAIL CLOSED (PATH stripped of jq/yq)
 #   framework-repo-exempt    → exit 0, EXEMPT (no-runtime), no enforcement
 #
+# SPEC-ATTRIBUTION SCOPING (Gate G100 refinement — mirrors G090) — --spec-dir
+# scopes instrumentation attribution to ONE transitioning spec's own artifacts:
+#   spec-scoped-teeth        → exit 1, an instrumented-with-slo spec with absent
+#                              evidence STILL BLOCKS under its own --spec-dir
+#   spec-scoped-false-block  → exit 0, a spec declaring NO observabilityWorkflow
+#                              no-ops under --spec-dir EVEN WHEN an unrelated spec
+#                              instruments a workflow whose evidence is absent
+#   spec-scoped-backcompat   → exit 1, the SAME fixture with NO --spec-dir
+#                              (repo-wide) still BLOCKS (standalone/CI teeth kept)
+#
 # ADVERSARIAL-OBSERVABILITY (R2-G) — a trace/SLO check is only trusted if it
 # would FAIL when instrumentation regresses. Two adversarial proofs:
 #   adversarial-breach        → the SAME evidence that PASSES within target, once
@@ -90,6 +100,19 @@ stage_instrumented() {
     > "$root/specs/001-demo/scopes.md"
 }
 
+# Mark a workflow instrumented under a SPECIFIC spec dir (spec-attribution cases).
+stage_instrumented_in() {
+  local root="$1" spec="$2" wf="$3"
+  mkdir -p "$root/$spec"
+  printf '%s\n' \
+    '# Demo scope' \
+    '' \
+    '| Test | Category | Workflow | Proof |' \
+    '|------|----------|----------|-------|' \
+    "| SLO under load | stress | ${wf} | observabilityWorkflow: ${wf} |" \
+    > "$root/$spec/scopes.md"
+}
+
 # Write captured SLO evidence for <workflow> by transforming the canonical clean
 # fixture through a jq filter (so adversarial cases derive from the SAME bytes
 # that pass the within-target case). Empty filter == verbatim copy.
@@ -113,6 +136,15 @@ run_guard() {
   local root="$1"
   local of="$WORKSPACE/out.last"
   "$BASH_BIN" "$GUARD" --repo-root "$root" >"$of" 2>&1
+  RC=$?
+  OUT="$(cat "$of")"
+}
+# Run the guard scoped to a specific transitioning spec dir (--spec-dir), the
+# shape state-transition-guard's Check 39 uses.
+run_guard_spec_scoped() {
+  local root="$1" spec="$2"
+  local of="$WORKSPACE/out.last"
+  "$BASH_BIN" "$GUARD" --repo-root "$root" --spec-dir "$spec" >"$of" 2>&1
   RC=$?
   OUT="$(cat "$of")"
 }
@@ -261,6 +293,37 @@ stage_config "$R" posture-wired.yaml
 stage_instrumented "$R" "$WF"
 write_evidence "$R" "$WF" 'del(.observed.latencyP99Ms)'   # drop a contract-declared metric
 run_guard "$R"; assert_exit 1 "adversarial: removed required metric FAILS"; assert_contains "MISSING" "adversarial missing-metric message"
+
+# --- G100 REFINEMENT (spec-attribution scoping, mirrors G090) -------------
+# (a) TEETH PRESERVED: an instrumented-with-slo spec with ABSENT evidence still
+#     BLOCKS under its OWN --spec-dir (the SLO gate keeps teeth for the spec).
+R="$WORKSPACE/spec-scoped-teeth"
+stage_config "$R" posture-wired.yaml
+stage_instrumented_in "$R" "specs/010-instrumented" "$WF"
+# deliberately do NOT write the evidence file
+run_guard_spec_scoped "$R" "specs/010-instrumented"
+assert_exit 1 "spec-scoped: instrumented spec with missing evidence still BLOCKS"
+assert_contains "NO captured SLO evidence" "spec-scoped teeth message"
+
+# (b) FALSE-BLOCK FIXED: a spec declaring NO observabilityWorkflow no-ops under
+#     --spec-dir EVEN WHEN an UNRELATED spec in the same fixture instruments a
+#     workflow whose evidence is absent (the BUG-005 scenario). The same fixture
+#     is reused by (c) to prove the repo-wide path is unchanged.
+R="$WORKSPACE/spec-scoped-attribution"
+stage_config "$R" posture-wired.yaml
+stage_instrumented_in "$R" "specs/021-other" "$WF"   # unrelated instrumented sibling, NO evidence
+mkdir -p "$R/specs/020-no-obs"
+printf '# tooling fix — zero observability instrumentation\n' > "$R/specs/020-no-obs/scopes.md"
+run_guard_spec_scoped "$R" "specs/020-no-obs"
+assert_exit 0 "spec-scoped: no-observabilityWorkflow spec no-ops despite unrelated instrumented sibling with absent evidence"
+assert_contains "not applicable to this spec" "spec-scoped false-block-fixed message"
+
+# (c) BACKWARD-COMPAT: the SAME fixture with NO --spec-dir (repo-wide) still
+#     BLOCKS — the unrelated instrumented sibling's absent evidence is enforced,
+#     proving standalone/CI teeth are preserved.
+run_guard "$R"
+assert_exit 1 "repo-wide (no --spec-dir): instrumented sibling with absent evidence still BLOCKS"
+assert_contains "NO captured SLO evidence" "backward-compat teeth message"
 
 echo ""
 echo "observability-slo-guard-selftest: $PASS_COUNT passed, $FAIL_COUNT failed"
