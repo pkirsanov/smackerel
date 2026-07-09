@@ -156,11 +156,23 @@ async def extract_card_categories(req: ExtractCardCategoriesRequest) -> dict[str
 
     messages = build_extraction_messages(req)
 
+    completion_kwargs: dict[str, Any] = {
+        # ollama_chat/ uses the /api/chat path so system/user roles round-trip
+        # natively (the legacy ollama/ prefix flattens them into one prompt).
+        "model": f"ollama_chat/{model}",
+        "api_base": ollama_url,
+        "messages": messages,
+        "temperature": 0.0,
+        "response_format": {"type": "json_object"},
+        "timeout": _EXTRACTION_TIMEOUT_SECONDS,
+    }
     # BUG-026-007 (redteam F2, latency half) — card-categories runs on LLM_MODEL
     # (qwen3:30b-a3b in prod) via ollama_chat/; disable qwen3 thinking on this
-    # strict-JSON extraction when SST says so so it returns JSON promptly. No-op
-    # when thinking stays on and on non-qwen Ollama models.
-    messages = apply_structured_extraction_thinking(messages, "ollama")
+    # strict-JSON extraction when SST says so via the native top-level
+    # think=False (litellm forwards it to /api/chat) so it returns JSON promptly.
+    # The /no_think prompt token the first fix used is ignored by qwen3's
+    # template. No-op when thinking stays on and on non-qwen Ollama models.
+    apply_structured_extraction_thinking(completion_kwargs, "ollama")
 
     # Lazy import: litellm is a runtime-only dependency, so importing it here
     # keeps the dev/test unit lane (which exercises the pure helpers) free of it.
@@ -173,16 +185,7 @@ async def extract_card_categories(req: ExtractCardCategoriesRequest) -> dict[str
     )
 
     try:
-        response = await litellm.acompletion(
-            # ollama_chat/ uses the /api/chat path so system/user roles round-trip
-            # natively (the legacy ollama/ prefix flattens them into one prompt).
-            model=f"ollama_chat/{model}",
-            api_base=ollama_url,
-            messages=messages,
-            temperature=0.0,
-            response_format={"type": "json_object"},
-            timeout=_EXTRACTION_TIMEOUT_SECONDS,
-        )
+        response = await litellm.acompletion(**completion_kwargs)
     except (APIConnectionError, ServiceUnavailableError, Timeout) as exc:
         logger.warning("card-categories model gateway unreachable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=502, detail=f"model gateway unreachable: {type(exc).__name__}") from exc

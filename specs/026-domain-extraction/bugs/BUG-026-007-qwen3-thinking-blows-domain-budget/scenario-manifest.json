@@ -1,106 +1,159 @@
 {
-  "version": 1,
-  "featureDir": "specs/026-domain-extraction/bugs/BUG-026-007-qwen3-thinking-blows-domain-budget",
-  "generatedAt": "2026-07-09T00:00:00Z",
-  "scenarios": [
-    {
-      "scenarioId": "BUG-026-007-SCN-001",
-      "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
-      "title": "Structured-JSON extraction disables qwen3 thinking when SST says so",
-      "gherkin": {
-        "given": "ML_STRUCTURED_EXTRACTION_THINKING is 'false' and the provider is 'ollama'",
-        "when": "each in-scope structured-extraction handler builds its litellm.acompletion request",
-        "then": "the request messages carry the '/no_think' directive so qwen3 skips its hidden reasoning block"
-      },
-      "gherkinHash": null,
-      "behaviorClass": "unit",
-      "changeType": "bugfix",
-      "requiredTestType": "unit",
-      "regressionRequired": true,
-      "lockdown": false,
-      "linkedTests": [
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_domain_extract_injects_no_think_when_disabled"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_synthesis_extract_injects_no_think_when_disabled"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_synthesis_crosssource_injects_no_think_when_disabled"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_process_content_injects_no_think_when_disabled"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_search_rerank_injects_no_think_when_disabled"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_card_categories_injects_no_think_when_disabled"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_drive_classify_injects_no_think_when_disabled"}
-      ],
-      "evidenceRefs": ["report.md#post-fix-regression-test-must-pass--green"],
-      "replacedBy": null,
-      "invalidatedBy": null
-    },
-    {
-      "scenarioId": "BUG-026-007-SCN-002",
-      "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
-      "title": "The switch actually gates and is not hard-wired on",
-      "gherkin": {
-        "given": "ML_STRUCTURED_EXTRACTION_THINKING is 'true' and the provider is 'ollama'",
-        "when": "an in-scope structured-extraction handler builds its litellm.acompletion request",
-        "then": "the request messages do NOT carry '/no_think' (adversarial: fails if the token is hard-wired on)"
-      },
-      "gherkinHash": null,
-      "behaviorClass": "unit",
-      "changeType": "bugfix",
-      "requiredTestType": "unit",
-      "regressionRequired": true,
-      "lockdown": false,
-      "linkedTests": [
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_domain_extract_keeps_thinking_when_enabled"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_apply_is_noop_when_thinking_enabled"}
-      ],
-      "evidenceRefs": ["report.md#post-fix-regression-test-must-pass--green"],
-      "replacedBy": null,
-      "invalidatedBy": null
-    },
-    {
-      "scenarioId": "BUG-026-007-SCN-003",
-      "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
-      "title": "The thinking switch is fail-loud with no default (NO-DEFAULTS)",
-      "gherkin": {
-        "given": "ML_STRUCTURED_EXTRACTION_THINKING is unset, empty, or not true/false",
-        "when": "resolve_structured_extraction_thinking() is called or the sidecar validates config",
-        "then": "it fails loud (RuntimeError / sys.exit) and never substitutes a silent default"
-      },
-      "gherkinHash": null,
-      "behaviorClass": "unit",
-      "changeType": "bugfix",
-      "requiredTestType": "unit",
-      "regressionRequired": true,
-      "lockdown": false,
-      "linkedTests": [
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_resolve_fail_loud_when_unset"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_resolve_fail_loud_when_blank"},
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_resolve_fail_loud_when_invalid"},
-        {"file": "ml/tests/test_main.py", "testId": "test_check_required_config_requires_structured_extraction_thinking"},
-        {"file": "ml/tests/test_main.py", "testId": "test_check_required_config_rejects_invalid_structured_extraction_thinking"}
-      ],
-      "evidenceRefs": ["report.md#post-fix-regression-test-must-pass--green"],
-      "replacedBy": null,
-      "invalidatedBy": null
-    },
-    {
-      "scenarioId": "BUG-026-007-SCN-004",
-      "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
-      "title": "The agent reasoning path is left thinking-ON (scope boundary)",
-      "gherkin": {
-        "given": "ML_STRUCTURED_EXTRACTION_THINKING is 'false'",
-        "when": "the agent invoke handler builds its litellm request",
-        "then": "the request messages do NOT carry '/no_think' (agent keeps qwen3 thinking)"
-      },
-      "gherkinHash": null,
-      "behaviorClass": "unit",
-      "changeType": "bugfix",
-      "requiredTestType": "unit",
-      "regressionRequired": true,
-      "lockdown": false,
-      "linkedTests": [
-        {"file": "ml/tests/test_ollama_thinking.py", "testId": "test_agent_path_keeps_thinking_even_when_disabled"}
-      ],
-      "evidenceRefs": ["report.md#post-fix-regression-test-must-pass--green"],
-      "replacedBy": null,
-      "invalidatedBy": null
-    }
-  ]
+    "version": 1,
+    "featureDir": "specs/026-domain-extraction/bugs/BUG-026-007-qwen3-thinking-blows-domain-budget",
+    "generatedAt": "2026-07-09T00:00:00Z",
+    "scenarios": [
+        {
+            "scenarioId": "BUG-026-007-SCN-001",
+            "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
+            "title": "Structured-JSON extraction disables qwen3 thinking when SST says so",
+            "gherkin": {
+                "given": "ML_STRUCTURED_EXTRACTION_THINKING is 'false' and the provider is 'ollama'",
+                "when": "each in-scope structured-extraction handler builds its litellm.acompletion request",
+                "then": "the request kwargs carry the native 'think=false' field so qwen3 skips its hidden reasoning block"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_domain_extract_disables_thinking_when_sst_false"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_synthesis_extract_disables_thinking_when_sst_false"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_synthesis_crosssource_disables_thinking_when_sst_false"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_process_content_disables_thinking_when_sst_false"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_search_rerank_disables_thinking_and_uses_ollama_chat"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_card_categories_disables_thinking_when_sst_false"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_drive_classify_disables_thinking_and_uses_ollama_chat"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-007-SCN-002",
+            "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
+            "title": "The switch actually gates and is not hard-wired on",
+            "gherkin": {
+                "given": "ML_STRUCTURED_EXTRACTION_THINKING is 'true' and the provider is 'ollama'",
+                "when": "an in-scope structured-extraction handler builds its litellm.acompletion request",
+                "then": "the request kwargs do NOT carry 'think=false' (adversarial: fails if it is hard-wired on)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_domain_extract_keeps_thinking_when_enabled"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_apply_is_noop_when_thinking_enabled"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-007-SCN-003",
+            "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
+            "title": "The thinking switch is fail-loud with no default (NO-DEFAULTS)",
+            "gherkin": {
+                "given": "ML_STRUCTURED_EXTRACTION_THINKING is unset, empty, or not true/false",
+                "when": "resolve_structured_extraction_thinking() is called or the sidecar validates config",
+                "then": "it fails loud (RuntimeError / sys.exit) and never substitutes a silent default"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_resolve_fail_loud_when_unset"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_resolve_fail_loud_when_blank"
+                },
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_resolve_fail_loud_when_invalid"
+                },
+                {
+                    "file": "ml/tests/test_main.py",
+                    "testId": "test_check_required_config_requires_structured_extraction_thinking"
+                },
+                {
+                    "file": "ml/tests/test_main.py",
+                    "testId": "test_check_required_config_rejects_invalid_structured_extraction_thinking"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-007-SCN-004",
+            "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
+            "title": "The agent reasoning path is left thinking-ON (scope boundary)",
+            "gherkin": {
+                "given": "ML_STRUCTURED_EXTRACTION_THINKING is 'false'",
+                "when": "the agent invoke handler builds its litellm request",
+                "then": "the request kwargs do NOT carry 'think=false' (agent keeps qwen3 thinking)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_agent_path_keeps_thinking_even_when_disabled"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        }
+    ]
 }
