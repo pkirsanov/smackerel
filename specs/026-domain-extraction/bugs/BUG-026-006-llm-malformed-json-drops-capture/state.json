@@ -1,0 +1,22 @@
+{
+    "id": "BUG-026-006-llm-malformed-json-drops-capture",
+    "title": "Malformed/truncated LLM JSON hard-drops the capture (no salvage, no SST-gated degraded fallback)",
+    "severity": "high",
+    "source": "redteam-adversarial-interrogation (live evo-x2 prod)",
+    "owningSpec": "026-domain-extraction",
+    "workflowMode": "bugfix-fastlane",
+    "status": "partially_fixed_in_repo",
+    "certification": {
+        "status": "in_repo_verified"
+    },
+    "createdAt": "2026-07-08",
+    "fixedAt": "2026-07-08",
+    "redeployRequired": true,
+    "routed": [
+        {
+            "to": "bubbles.devops / model-selection ops",
+            "what": "gemma4:26b emits truncated JSON ('Unterminated string') and 71-95s synthesis / >30s domain-extraction latency under LIGHT host load. Root cause of the TRUNCATION is model quality + output-token budget (max_tokens=2000 hardcoded in processor.py) + model routing — an ops/model-selection call, not code resilience. Recommend: raise/SST-own the output-token budget, and/or route domain-extraction+synthesis to a model with adequate output budget/latency."
+        }
+    ],
+    "notes": "In-repo code-resilience part fixed: tolerant JSON extraction + SST-gated graceful degradation so a malformed/truncated response preserves the capture instead of hard-dropping it. The model-quality/latency root cause is routed to ops with evidence. Requires ml redeploy to take effect."
+}

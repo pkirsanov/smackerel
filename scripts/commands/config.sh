@@ -1954,7 +1954,26 @@ if [[ -z "${SMACKEREL_VERSION+set}" ]]; then
   SMACKEREL_VERSION="dev"
 fi
 if [[ -z "${SMACKEREL_COMMIT+set}" ]]; then
-  SMACKEREL_COMMIT="unknown"
+  # redteam F6 / BUG-029-008 — build provenance. When CI has NOT exported the
+  # commit (the local-operator / evo-x2 build path builds ON the host with no
+  # CI env), derive the source SHA from the git working tree so the built image
+  # is self-identifying — OCI org.opencontainers.image.revision + the core
+  # `commitHash` ldflag + the app's reported commit_hash — instead of the
+  # opaque "unknown" the redteam observed on the live images. A dirty tree is
+  # marked so a locally-modified build never claims a clean SHA. Falls back to
+  # "unknown" ONLY outside a git checkout (e.g. a source tarball). Shell-env /
+  # CI precedence is preserved: this arm runs only when SMACKEREL_COMMIT is
+  # unset, so a CI export (SMACKEREL_COMMIT=<sha>) still wins.
+  if _sm_git_sha="$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD 2>/dev/null)"; then
+    if [[ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]]; then
+      SMACKEREL_COMMIT="${_sm_git_sha}-dirty"
+    else
+      SMACKEREL_COMMIT="$_sm_git_sha"
+    fi
+    unset _sm_git_sha
+  else
+    SMACKEREL_COMMIT="unknown"
+  fi
 fi
 if [[ -z "${SMACKEREL_BUILD_TIME+set}" ]]; then
   SMACKEREL_BUILD_TIME="unknown"

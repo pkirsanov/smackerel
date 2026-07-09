@@ -1,0 +1,16 @@
+{
+    "id": "BUG-050-001-ml-model-loaded-fabricated",
+    "title": "Core /api/health fabricates ML sidecar model_loaded:true (never parses the ml /health body)",
+    "severity": "medium",
+    "source": "redteam-adversarial-interrogation (live evo-x2 prod)",
+    "owningSpec": "050-ml-sidecar-health-isolation",
+    "workflowMode": "bugfix-fastlane",
+    "status": "fixed_in_repo",
+    "certification": {
+        "status": "in_repo_verified"
+    },
+    "createdAt": "2026-07-08",
+    "fixedAt": "2026-07-08",
+    "redeployRequired": true,
+    "notes": "Fix landed in-repo (internal/api/health.go checkMLSidecar) with Go tests; RED->GREEN proven via ./smackerel.sh test unit --go. Running prod image is UNCHANGED until an operator-gated redeploy. Not pushed."
+}

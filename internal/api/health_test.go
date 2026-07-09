@@ -124,6 +124,77 @@ func TestHealthHandler_NATSDown(t *testing.T) {
 	}
 }
 
+// TestHealthHandler_StrictDegradedReturns503 is the redteam F1 / BUG-050-002
+// regression: with ?strict=true the operator / monitoring / knb verify.sh path
+// gets a 503 when the aggregate is degraded. FAILS against the pre-fix code,
+// which returned 200 unconditionally so degraded was invisible to every
+// status-code consumer.
+func TestHealthHandler_StrictDegradedReturns503(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: false},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/health?strict=true", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for ?strict=true when degraded, got %d", rec.Code)
+	}
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Status != "degraded" {
+		t.Errorf("expected degraded status, got %s", resp.Status)
+	}
+}
+
+// TestHealthHandler_StrictHealthyReturns200 proves ?strict stays 200 when
+// everything is healthy (no false alarms on the operator path).
+func TestHealthHandler_StrictHealthyReturns200(t *testing.T) {
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true, artifactCount: 1},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		MLSidecarURL: "", // not_configured — does not degrade the aggregate
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/health?strict=1", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for ?strict=1 when healthy, got %d", rec.Code)
+	}
+}
+
+// TestHealthHandler_DefaultDegradedStays200 is the F1 NON-DESTABILIZATION
+// guarantee: the DEFAULT /api/health (no ?strict — what the Docker liveness
+// HEALTHCHECK sends) stays 200 even when degraded, so a degraded-but-alive
+// container is NOT marked unhealthy / restart-flapped.
+func TestHealthHandler_DefaultDegradedStays200(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: false},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected default /api/health to stay 200 when degraded (liveness), got %d", rec.Code)
+	}
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Status != "degraded" {
+		t.Errorf("expected body to still report degraded, got %s", resp.Status)
+	}
+}
+
 // SCN-002-066: Health endpoint accessible without auth even when AuthToken set
 func TestSCN002066_HealthNoAuth(t *testing.T) {
 	deps := &Dependencies{
@@ -432,7 +503,9 @@ func TestCheckMLSidecar_HealthyResponse(t *testing.T) {
 		if r.URL.Path != "/health" {
 			t.Errorf("expected /health path, got %s", r.URL.Path)
 		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"up","model_loaded":true}`))
 	}))
 	defer ts.Close()
 
@@ -442,6 +515,65 @@ func TestCheckMLSidecar_HealthyResponse(t *testing.T) {
 	}
 	if status.ModelLoaded == nil || !*status.ModelLoaded {
 		t.Error("expected ModelLoaded to be true")
+	}
+}
+
+// TestCheckMLSidecar_ModelNotLoaded is the redteam F7 / BUG-050-001 adversarial
+// regression: the live ML sidecar reports {"status":"up","model_loaded":false}.
+// Core MUST reflect model_loaded:false, not fabricate true. FAILS against the
+// pre-fix code, which hardcoded ModelLoaded:true on any 200.
+func TestCheckMLSidecar_ModelNotLoaded(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"up","model_loaded":false}`))
+	}))
+	defer ts.Close()
+
+	status := checkMLSidecar(context.Background(), ts.URL, ts.Client())
+	if status.Status != "up" {
+		t.Errorf("expected up, got %s", status.Status)
+	}
+	if status.ModelLoaded == nil {
+		t.Fatal("expected ModelLoaded to be reported (non-nil), got nil")
+	}
+	if *status.ModelLoaded {
+		t.Error("expected ModelLoaded=false to be reflected, got true (fabricated)")
+	}
+}
+
+// TestCheckMLSidecar_DegradedBody proves the sidecar's own status field is
+// reflected (not overridden to "up") so a self-declared degraded sidecar
+// surfaces into the aggregate (redteam F7 / BUG-050-001).
+func TestCheckMLSidecar_DegradedBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"degraded","model_loaded":false}`))
+	}))
+	defer ts.Close()
+
+	status := checkMLSidecar(context.Background(), ts.URL, ts.Client())
+	if status.Status != "degraded" {
+		t.Errorf("expected degraded reflected from sidecar body, got %s", status.Status)
+	}
+}
+
+// TestCheckMLSidecar_ReachableUnparseableBody proves a 200 with an empty /
+// unparseable body reports reachable ("up") WITHOUT fabricating a model_loaded
+// claim — the anti-fabrication half of the F7 fix.
+func TestCheckMLSidecar_ReachableUnparseableBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK) // empty body
+	}))
+	defer ts.Close()
+
+	status := checkMLSidecar(context.Background(), ts.URL, ts.Client())
+	if status.Status != "up" {
+		t.Errorf("expected up for reachable sidecar, got %s", status.Status)
+	}
+	if status.ModelLoaded != nil {
+		t.Errorf("expected no fabricated model_loaded claim on unparseable body, got %v", *status.ModelLoaded)
 	}
 }
 

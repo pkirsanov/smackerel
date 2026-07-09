@@ -77,6 +77,28 @@ def _is_llm_unavailable_error(exc: Exception) -> bool:
     return any(indicator in error_msg for indicator in ["connection", "connect", "refused", "timeout"])
 
 
+def _parse_llm_json(text: str) -> Any:
+    """Parse an LLM JSON payload, tolerating a prose preamble/trailing wrapper.
+
+    litellm's response_format={"type":"json_object"} is not honored by every
+    Ollama-served model, so a model may emit prose around the JSON object (the
+    <think> and ```json cases are stripped by the caller; this catches the
+    rest). First try a strict parse; on failure salvage the widest {...} span
+    and retry. A TRUNCATED payload (the observed "Unterminated string" from an
+    overrun output budget) has no closing brace to salvage, so it re-raises the
+    JSONDecodeError — the caller then degrades gracefully rather than dropping
+    the capture (redteam F2 / BUG-026-006).
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end > start:
+            return json.loads(text[start : end + 1])
+        raise
+
+
 async def process_content(
     content: str,
     content_type: str,
@@ -169,7 +191,7 @@ async def process_content(
                     stripped = stripped[:-3].rstrip()
                 result_text = stripped
 
-        result = json.loads(result_text)
+        result = _parse_llm_json(result_text)
 
         # BUG-061-002: short / low-signal inputs (single tokens, emoji,
         # URL-only captures) and the prompt's own "light" / "metadata"
@@ -219,7 +241,46 @@ async def process_content(
         }
 
     except json.JSONDecodeError as e:
+        # redteam F2 / BUG-026-006 — a malformed / TRUNCATED LLM payload (the
+        # observed "Unterminated string" from an overrun output budget) is not
+        # recoverable JSON, but it MUST NOT hard-drop the capture. Mirror the
+        # unavailable-LLM branch below: when the SST gate enables it, degrade
+        # gracefully (capture preserved with low-signal metadata) instead of
+        # returning a hard failure. When the gate is disabled/misconfigured the
+        # pre-existing hard error is preserved (no silent success).
         logger.error("LLM returned invalid JSON: %s", e)
+
+        try:
+            fallback_enabled = _processing_degraded_fallback_enabled()
+        except (KeyError, RuntimeError) as config_error:
+            logger.error("ML degraded fallback config invalid: %s", config_error)
+            fallback_enabled = False
+
+        if fallback_enabled:
+            logger.warning(
+                "LLM returned unparseable JSON - providing SST-gated degraded fallback result "
+                "(capture preserved, source_id=%s)",
+                source_id,
+            )
+            fallback_artifact_type = content_type if content_type and content_type != "generic" else "note"
+            return {
+                "success": True,
+                "result": {
+                    "artifact_type": fallback_artifact_type,
+                    "title": content[:100].strip() or "Untitled",
+                    "summary": "Processing completed with SST-gated degraded fallback - LLM returned malformed JSON",
+                    "key_ideas": [],
+                    "entities": {"people": [], "orgs": [], "places": [], "products": [], "dates": []},
+                    "action_items": [],
+                    "topics": ["degraded-fallback-malformed-json"],
+                    "sentiment": "neutral",
+                    "temporal_relevance": {"relevant_from": None, "relevant_until": None},
+                    "source_quality": "low",
+                },
+                "model_used": "fallback",
+                "tokens_used": 0,
+            }
+
         return {"success": False, "error": f"Invalid JSON from LLM: {e}"}
     except Exception as e:
         logger.error("LLM processing failed", exc_info=True)

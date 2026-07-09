@@ -435,6 +435,118 @@ class TestProcessContentErrors:
         assert result["success"] is False
         assert "Invalid JSON" in result["error"]
 
+    def test_malformed_json_uses_sst_gated_degraded_fallback(self, monkeypatch):
+        """redteam F2 / BUG-026-006 adversarial regression: a TRUNCATED LLM
+        payload ("Unterminated string") preserves the capture via the SST-gated
+        degraded fallback instead of hard-dropping it.
+
+        FAILS against the pre-fix code, whose except-JSONDecodeError branch
+        returned {"success": False} regardless of the SST gate, silently
+        dropping the capture.
+        """
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "true")
+        message = MagicMock()
+        # Truncated mid-string: no closing brace to salvage -> JSONDecodeError.
+        message.content = '{"artifact_type": "article", "title": "Unterminated stri'
+        choice = MagicMock()
+        choice.message = message
+        mock_response = MagicMock()
+        mock_response.choices = [choice]
+        mock_response.usage = None
+
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+
+            result = asyncio.run(
+                process_content(
+                    content="A meaningful capture the model truncated.",
+                    content_type="article",
+                    source_id="s",
+                    processing_tier="standard",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is True
+        assert result["model_used"] == "fallback"
+        assert result["result"]["topics"] == ["degraded-fallback-malformed-json"]
+        assert result["result"]["artifact_type"] == "article"
+
+    def test_malformed_json_hard_fails_when_fallback_disabled(self, monkeypatch):
+        """SST-gate integrity: when the degraded fallback is DISABLED, a
+        malformed LLM payload still returns a hard error (no silent success)."""
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+        message = MagicMock()
+        message.content = '{"artifact_type": "article", "title": "Unterminated stri'
+        choice = MagicMock()
+        choice.message = message
+        mock_response = MagicMock()
+        mock_response.choices = [choice]
+        mock_response.usage = None
+
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+
+            result = asyncio.run(
+                process_content(
+                    content="x",
+                    content_type="article",
+                    source_id="s",
+                    processing_tier="standard",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is False
+        assert "Invalid JSON" in result["error"]
+
+    def test_json_with_prose_wrapper_is_salvaged(self):
+        """redteam F2 / BUG-026-006: a valid JSON object wrapped in a prose
+        preamble/suffix (which litellm's json_object mode does not suppress for
+        every Ollama model) is salvaged and parsed with its real fields.
+
+        FAILS against the pre-fix code, which fed the whole prose string to
+        json.loads and hard-failed with JSONDecodeError.
+        """
+        message = MagicMock()
+        message.content = (
+            "Sure, here is the JSON you requested:\n"
+            '{"artifact_type": "recipe", "title": "Pizza Dough", '
+            '"summary": "A simple dough recipe."}\n'
+            "Hope that helps!"
+        )
+        choice = MagicMock()
+        choice.message = message
+        mock_response = MagicMock()
+        mock_response.choices = [choice]
+        mock_response.usage = None
+
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+
+            result = asyncio.run(
+                process_content(
+                    content="Ingredients: flour, water.",
+                    content_type="recipe",
+                    source_id="s",
+                    processing_tier="standard",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is True
+        assert result["result"]["artifact_type"] == "recipe"
+        assert result["result"]["title"] == "Pizza Dough"
+
     def test_total_llm_failure_returns_error(self, monkeypatch):
         """LLM connection failures fail when degraded fallback is disabled."""
         monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")

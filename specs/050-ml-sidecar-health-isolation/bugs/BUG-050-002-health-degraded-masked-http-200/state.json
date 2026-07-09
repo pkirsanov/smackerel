@@ -1,0 +1,26 @@
+{
+    "id": "BUG-050-002-health-degraded-masked-http-200",
+    "title": "/api/health returns degraded with HTTP 200; all status-code consumers blind to degraded",
+    "severity": "high",
+    "source": "redteam-adversarial-interrogation (live evo-x2 prod)",
+    "owningSpec": "050-ml-sidecar-health-isolation",
+    "workflowMode": "bugfix-fastlane",
+    "status": "partially_fixed_in_repo",
+    "certification": {
+        "status": "in_repo_verified"
+    },
+    "createdAt": "2026-07-08",
+    "fixedAt": "2026-07-08",
+    "redeployRequired": true,
+    "routed": [
+        {
+            "to": "bubbles.devops / knb",
+            "what": "knb/smackerel/home-lab/verify.sh + shared observability alerting should adopt GET /api/health?strict=true (503-on-degraded) or parse the JSON status field; out-of-repo (knb)."
+        },
+        {
+            "to": "bubbles.devops",
+            "what": "Align dev docker-compose.yml core healthcheck (still /api/health) with docker-compose.prod.yml + deploy/compose.deploy.yml decision; liveness-target consistency."
+        }
+    ],
+    "notes": "In-repo, non-destabilizing part done: opt-in ?strict readiness signal on /api/health (default 200 liveness contract unchanged). Consumer adoption (verify.sh in knb) + healthcheck-target alignment routed. Requires redeploy to expose the new query param on prod."
+}

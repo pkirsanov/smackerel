@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -523,7 +525,32 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	// Liveness vs readiness (redteam F1 / BUG-050-002): /api/health is ALWAYS
+	// 200 by default because it is the container liveness probe — a "degraded"
+	// process is still ALIVE, and returning 503 here would make the Docker
+	// HEALTHCHECK mark the container unhealthy and flap/restart it. Callers on
+	// the operator / monitoring / knb verify.sh path OPT IN to a status-aware
+	// signal via ?strict=true, which returns 503 when the aggregate status is
+	// not "healthy". The default (no param — what the Docker healthcheck sends)
+	// is byte-for-byte unchanged.
+	statusCode := http.StatusOK
+	if overall != "healthy" && healthStrictRequested(r) {
+		statusCode = http.StatusServiceUnavailable
+	}
+	writeJSON(w, statusCode, resp)
+}
+
+// healthStrictRequested reports whether the caller opted into a status-aware
+// /api/health via ?strict=true|1|yes. Only the operator / monitoring path sets
+// it; the Docker liveness HEALTHCHECK never does, so container liveness is
+// unaffected (redteam F1 / BUG-050-002).
+func healthStrictRequested(r *http.Request) bool {
+	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("strict"))) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
 }
 
 // ReadyzHandler handles GET /readyz — a lightweight readiness probe.
@@ -702,16 +729,57 @@ func probeHTTPGet(ctx context.Context, url string, client *http.Client) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// checkMLSidecar probes the ML sidecar health endpoint.
+// mlHealthBody mirrors the ML sidecar's GET /health JSON contract
+// ({"status": "...", "model_loaded": bool}). Only the fields the aggregate
+// health surface reflects are decoded.
+type mlHealthBody struct {
+	Status      string `json:"status"`
+	ModelLoaded bool   `json:"model_loaded"`
+}
+
+// checkMLSidecar probes the ML sidecar health endpoint and REFLECTS the
+// sidecar's self-reported status + model_loaded instead of fabricating them
+// (redteam F7 / BUG-050-001). The previous implementation hardcoded
+// Status:"up" + ModelLoaded:true on any 200, so the aggregate health surface
+// actively misreported an ML sidecar whose model had not loaded
+// ({"status":"up","model_loaded":false}).
 func checkMLSidecar(ctx context.Context, baseURL string, client *http.Client) ServiceStatus {
 	if baseURL == "" {
 		return ServiceStatus{Status: "not_configured"}
 	}
-	if !probeHTTPGet(ctx, baseURL+"/health", client) {
+
+	probeCtx, cancel := context.WithTimeout(ctx, healthAuxiliaryProbeTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, baseURL+"/health", nil)
+	if err != nil {
 		return ServiceStatus{Status: "down"}
 	}
-	loaded := true
-	return ServiceStatus{Status: "up", ModelLoaded: &loaded}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ServiceStatus{Status: "down"}
+	}
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusOK {
+		return ServiceStatus{Status: "down"}
+	}
+
+	// 200 OK — the sidecar is reachable. Decode its self-report. A 200 with an
+	// empty/unparseable body means reachable-but-unknown: report "up" WITHOUT a
+	// fabricated model_loaded claim rather than inventing one.
+	var body mlHealthBody
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return ServiceStatus{Status: "up"}
+	}
+	status := body.Status
+	if status == "" {
+		status = "up"
+	}
+	loaded := body.ModelLoaded
+	return ServiceStatus{Status: status, ModelLoaded: &loaded}
 }
 
 // checkOllama probes the Ollama health endpoint.
