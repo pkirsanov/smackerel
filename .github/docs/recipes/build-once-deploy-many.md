@@ -124,7 +124,7 @@ bash scripts/deploy/rollback.sh --target <target>
 | Wire up CI build pipeline + cosign/SBOM/SLSA | `/bubbles.devops focus: ci-cd` |
 | Add `scripts/deploy/promote.sh` / `rollback.sh` | `/bubbles.devops focus: release-automation` |
 | Add config bundle generation to SST | `/bubbles.devops focus: config-sst` |
-| Update the deployment.md doc inside a phase release packet | `/bubbles.workflow mode: release-planning-to-doc <phase> mode: refresh` (Sonny edits the deployment.md packet doc) |
+| Update the deployment.md doc inside a phase release packet | `/bubbles.releases <phase> mode: refresh docs: deployment` (Sonny runs the granted release-planning workflow) |
 | Audit a deployment surface for G081 violations | `/bubbles.security` (supply-chain section) and `/bubbles.regression` (deployment regression scan) |
 | Detect deployment regressions | `/bubbles.regression` (looks for digest drift, bundle drift, mutable-tag reintroduction, removed cosign calls) |
 

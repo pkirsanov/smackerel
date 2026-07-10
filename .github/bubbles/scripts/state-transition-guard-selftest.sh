@@ -55,7 +55,7 @@ clone_framework_surface() {
   cp -R "$SCRIPT_DIR/../../agents" "$destination_root/agents"
 }
 
-inject_illegal_child_workflow_caller() {
+inject_unauthorized_workflow_runner() {
   local capabilities_file="$1"
   local tmp_file
   tmp_file="$(mktemp)"
@@ -69,7 +69,7 @@ inject_illegal_child_workflow_caller() {
     }
     in_block && /^    class: execution-owner$/ {
       print
-      print "    canInvokeChildWorkflows: true"
+      print "    canExecuteWorkflowModes: true"
       inserted=1
       in_block=0
       next
@@ -967,7 +967,7 @@ g040_pos_skip_marker_outside_dir="$tmp_root/specs/925-g040-positive-skip-marker-
 g040_neg_spec_063_excerpt_dir="$tmp_root/specs/926-g040-negative-spec-063-excerpt"
 g040_pos_strict_done_mixed_dir="$tmp_root/specs/927-g040-positive-strict-done-mixed"
 g064_framework_root="$tmp_root/framework-g064"
-g064_feature_dir="$g064_framework_root/specs/902-transition-guard-selftest-illegal-child-workflow"
+g064_feature_dir="$g064_framework_root/specs/902-transition-guard-selftest-unauthorized-workflow-runner"
 mkdir -p "$tmp_root/specs"
 clone_framework_surface "$tmp_root"
 git -C "$tmp_root" init -q
@@ -1042,7 +1042,7 @@ emit_g040_fixture "$g040_pos_strict_done_mixed_dir" "done" \
 clone_framework_surface "$g064_framework_root"
 mkdir -p "$g064_framework_root/specs"
 emit_base_fixture "$g064_feature_dir"
-inject_illegal_child_workflow_caller "$g064_framework_root/bubbles/agent-capabilities.yaml"
+inject_unauthorized_workflow_runner "$g064_framework_root/bubbles/agent-capabilities.yaml"
 
 cat <<'EOF' > "$negative_feature_dir/rework-queue.json"
 [
@@ -1525,18 +1525,18 @@ else
 fi
 assert_log_contains "$lockdown_round_log" "lockdownState.round=3" "Negative fixture triggers Check 7B"
 
-echo "Running negative child-workflow-policy selftest..."
+echo "Running negative workflow-runner-authorization selftest..."
 g064_log="$tmp_root/g064-guard.log"
 g064_timeout_seconds="${BUBBLES_G064_SELFTEST_TIMEOUT_SECONDS:-120}"
 g064_status="$(run_capture "$g064_log" bubbles_run_with_timeout "$g064_timeout_seconds" env BUBBLES_REPO_ROOT="$g064_framework_root" bash "$g064_framework_root/bubbles/scripts/state-transition-guard.sh" "$g064_feature_dir")"
 if [[ "$g064_status" -ne 0 ]]; then
-  pass "Illegal child-workflow caller fixture fails the transition guard as expected"
+  pass "Unauthorized workflow runner fixture fails the transition guard as expected"
 else
-  fail "Illegal child-workflow caller fixture should fail the transition guard"
+  fail "Unauthorized workflow runner fixture should fail the transition guard"
   sed -n '1,220p' "$g064_log"
 fi
-assert_log_contains "$g064_log" "only orchestrators may enable child workflows" "Negative fixture triggers the G064 orchestrator-only child-workflow check"
-assert_log_contains "$g064_log" "G042/G063/G064 cannot be certified" "Negative fixture surfaces the framework contract failure through guard Check 3G"
+assert_log_contains "$g064_log" "enables workflow execution without a grant" "Negative fixture triggers the G064 unauthorized workflow-runner check"
+assert_log_contains "$g064_log" "G064 cannot be certified" "Negative fixture surfaces the workflow grant failure through guard Check 3H"
 
 # ----------------------------------------------------------------------------
 # G040 / Check 18 — deferral regex refinement (spec 001)
@@ -1602,8 +1602,8 @@ assert_log_contains "$g040_pos_mixed_log" "deferral language hit" "G040 Check 18
 # Regression guard for the raw-substring defect where bare-word markers embedded
 # inside legitimate identifiers/strings/comments false-triggered Check 14 and
 # mis-blocked completely legitimate code — e.g. `STUB` inside `BILLING_STUB_STRIPE`,
-# `HACK` inside `HACKATHON`, `TODO` inside `TODO_LIST`. Real-world proof: the
-# QuantitativeFinance gateway file services/gateway/src/domain/billing/provider.rs
+# `HACK` inside `HACKATHON`, `TODO` inside `TODO_LIST`. Real-world proof: a
+# gateway file at services/gateway/src/domain/billing/provider.rs
 # reported 24 bogus "TODO/STUB markers" where all 24 hits were the tested env-var
 # name `BILLING_STUB_STRIPE` and its doc comments — zero real markers.
 #

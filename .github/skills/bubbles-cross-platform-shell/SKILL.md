@@ -121,7 +121,7 @@ is **not** a violation.
   guard. There is no other bypass.
 - **Downstream wiring.** Product repos wire the guard into their existing
   pre-push / lint gate against their **own** operator script surface (e.g.
-  `wanderaide-scripts/*.sh`), so a GNU-only regression is blocked before push.
+  `scripts/*.sh`), so a GNU-only regression is blocked before push.
   It is advisory-until-wired per repo.
 
 ## See Also

@@ -1,6 +1,6 @@
 ---
 name: bubbles-workflow-execution-loops
-description: Run per-round synchronous workflow execution loops correctly. Use when orchestrating a multi-round workflow, dispatching specialist sub-agents, handling round-based remediation, or interpreting a workflow mode's execution policy. Covers dispatch-and-wait, batch-then-summarize prohibition, mapped-mode execution, and the parent-expanded child workflow fallback.
+description: Run per-round synchronous workflow execution loops correctly. Use when orchestrating a multi-round workflow, dispatching specialist sub-agents, handling round-based remediation, or interpreting a workflow mode's execution policy. Covers authorized direct execution, dispatch-and-wait, batch-then-summarize prohibition, and mapped-mode execution.
 ---
 
 # Bubbles Workflow Execution Loops
@@ -11,15 +11,15 @@ Execute workflow modes round-by-round with synchronous dispatch-and-wait, no rep
 ## When to use
 - Orchestrating any workflow mode that runs rounds (full-delivery, stochastic sweeps, fix-cycle, finding-driven loops)
 - Dispatching specialist sub-agents and waiting for their RESULT-ENVELOPE
-- Deciding whether to spawn a child workflow or run a parent-expanded fallback
+- Executing a mapped mode directly from the active authorized runner
 - Reading a workflow mode definition to understand its loop policy
 
 ## Non-negotiables
 1. **Synchronous dispatch-and-wait per round.** The orchestrator dispatches one (or a small batch of) specialist agents, waits for each terminal envelope, processes findings, and then decides the next round. Batch-then-summarize is forbidden.
-2. **Mapped-mode execution.** When a trigger has a mapped child workflow mode, run that mode. Do not run a stochastic parent that fires only trigger-rounds when a mapped child workflow exists.
-3. **Wait for mapped-mode terminal envelope.** Before the parent workflow returns, the mapped child workflow's terminal result must be in the parent's run state.
+2. **Mapped-mode execution.** When a trigger has a mapped workflow mode, the active runner resolves and executes that contract directly. Do not run only the trigger phase.
+3. **Wait for mapped-mode terminal envelope.** Before the runner advances, every mapped mode phase owner's terminal result must be in run state.
 4. **No report-only sweep completion.** A sweep that emits only a summary without round-level mapped-mode execution is incomplete; the workflow agent rejects this shape.
-5. **Parent-expanded child workflow fallback.** If the runtime cannot nest sub-agent calls, the parent must expand the child workflow's planning chain inline and execute the same sequence.
+5. **No runner nesting.** Workflow execution occurs only in the authorized top-level runner. It invokes specialist phase owners directly and records `executionModel: direct-authorized-runner`.
 
 ## Authoritative modules
 - `agents/bubbles_shared/workflow-execution-loops.md` — full per-round protocol
