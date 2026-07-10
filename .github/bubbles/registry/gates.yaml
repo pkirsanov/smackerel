@@ -179,11 +179,11 @@ gates:
   G063:
     name: concrete_result_gate
     description: >-
-      BLOCKING gate. Every agent or child-workflow invocation MUST end with a concrete result shape: completed_owned, completed_diagnostic, route_required, or blocked. Narrative-only findings or generic advice are invalid. Route-required and blocked outcomes MUST include owner, reason, and scope/scenario/DoD references.
+      BLOCKING gate. Every agent or mapped-mode phase invocation MUST end with a concrete result shape: completed_owned, completed_diagnostic, route_required, or blocked. Narrative-only findings or generic advice are invalid. Route-required and blocked outcomes MUST include owner, reason, and scope/scenario/DoD references.
   G064:
-    name: child_workflow_depth_gate
+    name: workflow_runner_authorization_gate
     description: >-
-      BLOCKING gate. Only orchestrators may invoke child workflow modes, and workflow nesting depth MUST NOT exceed 1. Non-orchestrator agents may emit packets but may not recursively spawn workflow execution. In runtimes that do not expose nested agent delegation, the active orchestrator MUST parent-expand the resolved child workflow mode instead of spawning a recursive child runtime or blocking solely on the child's missing agent tool.
+      BLOCKING gate. Workflow modes execute only in the active top-level runtime and only when `bubbles/agent-capabilities.yaml::workflowModeGrants` authorizes that agent for the resolved mode. Nested dispatch to another workflow-running orchestrator is forbidden because VS Code subagents cannot invoke subagents. The active authorized runner resolves mapped modes itself, invokes each phase owner directly, and records `executionModel: direct-authorized-runner`. Unknown agents, unknown modes, missing grants, excluded modes, nested runner dispatch, and a `bubbles.workflow` run containing more than one resolved mode are blocking failures. Enforced by `bubbles/scripts/workflow-runner-grants-lint.sh` and its hermetic selftest.
   G066:
     name: phase_claim_provenance_gate
     description: >-

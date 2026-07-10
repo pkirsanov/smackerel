@@ -167,7 +167,7 @@ Replace delegation-by-prose with delegation-by-registry.
   - every workflow phase has an owning agent
   - every specialist declares exactly one primary class: orchestrator, planning-owner, execution-owner, diagnostic, certification, or utility
   - every foreign-owned artifact route has a target owner
-  - only orchestrators may invoke child workflow modes, with parent-expanded execution for one-level runtimes
+  - only granted top-level orchestrators may execute workflow modes, using direct phase-owner dispatch
   - diagnostic agents are not allowed to advertise inline remediation rights
 
 ### Files Likely Touched
@@ -291,7 +291,7 @@ Make every agent invocation return a concrete machine-readable outcome and remov
 
 ### Build
 
-- add a specialist result envelope schema shared by agents and child workflows
+- add a specialist result envelope schema shared by agents and mapped-mode phase invocations
 - normalize allowed outcomes:
   - `completed_owned`
   - `completed_diagnostic`
@@ -300,14 +300,14 @@ Make every agent invocation return a concrete machine-readable outcome and remov
 - upgrade existing `ROUTE-REQUIRED` output into the canonical packet contract
 - teach orchestrators to consume envelopes and continue automatically
 - implement orchestrator-owned micro-fix dispatch: diagnostics emit narrow packets, orchestrators immediately invoke the correct owner
-- add `G042 artifact_ownership_enforcement_gate` (absorbs former G042), `G063 concrete_result_gate`, and `G064 child_workflow_depth_gate`
+- add `G042 artifact_ownership_enforcement_gate` (absorbs former G042), `G063 concrete_result_gate`, and `G064 workflow_runner_authorization_gate`
 
 ### Exit Criteria
 
-- every specialist and child workflow returns a concrete result envelope
+- every specialist and mapped-mode phase returns a concrete result envelope
 - diagnostics never fix foreign-owned work inline
 - orchestrators can preserve tiny-fix speed by dispatching narrow packets immediately
-- child workflow invocation is limited to orchestrators and bounded depth
+- workflow mode execution is limited to granted top-level orchestrators
 
 ## Phase 5: Scenario Contract Manifest And BDD Enforcement
 

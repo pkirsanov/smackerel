@@ -30,7 +30,7 @@ Gates G073, G090, G022, G041, G040, G008A, G009, G056 received non-breaking refi
 | G029 | Integration completeness (every artifact has a consumer) | `state-transition-guard.sh` |
 | G035 | Vertical slice completeness (cross-layer scopes) | `state-transition-guard.sh` |
 | G040 | Deferral language detection | `state-transition-guard.sh` Check 18 |
-| G042–G068 | Capability delegation, policy provenance, validate certification, scenario manifest, lockdown, regression contract, scenario TDD, rework packets, owner-only remediation, concrete results, child-workflow depth | `workflows.yaml` + targeted guards |
+| G042–G068 | Capability delegation, policy provenance, validate certification, scenario manifest, lockdown, regression contract, scenario TDD, rework packets, owner-only remediation, concrete results, workflow-runner authorization | `workflows.yaml` + targeted guards |
 | G073 | Mode ceiling pre-flight (statusCeiling enforcement) | `state-transition-guard.sh` Check 3B |
 | G079 | Impact-aware validation (testImpact config) | `test-impact-plan.sh` |
 | G080 | Trace contracts (traceContracts config) | `trace-contract-guard.sh` |

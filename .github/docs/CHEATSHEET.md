@@ -8,19 +8,19 @@
 
 ---
 
-## <img src="../icons/bubbles-glasses.svg" width="32"> Start Here — Universal Entry Point
+## <img src="../icons/bubbles-glasses.svg" width="32"> Start Here — Universal Goal Endpoint
 
 | Icon | Agent | Alias | Role | Quote |
 |:----:|-------|-------|------|-------|
-| <img src="../icons/bubbles-glasses.svg" width="28"> | `bubbles.workflow` | Bubbles | **Universal entry point.** Just describe what you want. Accepts plain English, structured commands, or "continue" — resolves intent via `super`, picks work via `iterate`, and drives all phases to completion. | *"Decent. I can see how all this fits together. Just tell me what you need."* |
-| <img src="../icons/lahey-badge.svg" width="28"> | `bubbles.super` | Mr. Lahey | Framework ops & advice. NLP resolver, command generator, health checks, framework validation, release hygiene, hooks, gates, upgrades, and repo-readiness guidance. Workflow delegates to him automatically for vague input. | *"I'm the trailer park supervisor. I'll tell you the next move."* |
+| <img src="../icons/tyrone-chain.svg" width="28"> | `bubbles.goal` | Tyrone | **Universal goal endpoint.** Give him one outcome; he composes any required workflows and specialist agents until it converges or hits a real blocker. | *"I handle things, that's what I do."* |
+| <img src="../icons/bubbles-glasses.svg" width="28"> | `bubbles.workflow` | Bubbles | **Single-mode workflow runner.** Executes exactly one explicit `mode:` or one mode resolved by `super`. | *"Decent. One plan, start to finish."* |
+| <img src="../icons/lahey-badge.svg" width="28"> | `bubbles.super` | Mr. Lahey | Resolver and framework concierge. Selects the authorized runner, mode, command, or framework action without executing product workflows. | *"I'm the trailer park supervisor. I'll tell you the next move."* |
 
 ## <img src="../icons/jacob-hardhat.svg" width="32"> Orchestrators
 
 | Icon | Agent | Alias | Role | Quote |
 |:----:|-------|-------|------|-------|
 | <img src="../icons/jacob-hardhat.svg" width="28"> | `bubbles.iterate` | Jacob | Single-iteration work picker. Chooses the next executable slice and runs the right specialist chain. Also accepts plain English via `super` delegation. | *"I'll do whatever you need, Julian."* |
-| <img src="../icons/tyrone-chain.svg" width="28"> | `bubbles.goal` | Tyrone | Autonomous single-goal executor. Give him a goal and he handles everything — spec, design, implement, test, E2E, chaos, validate, audit — looping until convergence. Never stops on fixable obstacles. | *"I handle things, that's what I do."* |
 | <img src="../icons/erica-doublestack.svg" width="28"> | `bubbles.sprint` | Erica | Multi-goal sprint controller. Trevor's mom — runs Liquor Inside / Liquor Outside, two flows at once. Give her goals and a time budget; she keeps everything moving and reorders on the fly. | *"Inside and outside, both at once. Don't fall behind."* |
 | <img src="../icons/cory-cap.svg" width="28"> | `bubbles.bug` | Cory | Bug orchestrator. Reproduces the issue, packets the work, dispatches the right owners, and keeps going until the bug is actually closed. | *"I didn't wanna find it, but... there it is."* |
 
@@ -103,7 +103,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | Alias | Maps To | Quote |
 |-------|---------|-------|
 <!-- GENERATED:CHEATSHEET_ALIASES_START - run `bash bubbles/scripts/generate-cheatsheet.sh` -->
-| `sunnyvale pull-the-strings` | `bubbles.workflow` | *"Bubbles is pulling the strings, boys."* |
+| `sunnyvale pull-the-strings` | `bubbles.workflow` | *"One plan at a time, boys. Bubbles is pulling the strings."* |
 | `sunnyvale i-got-a-plan-boys` | `bubbles.goal` | *"I got a plan, boys, and it's a good one — the whole thing, start to finish."* |
 | `sunnyvale the-whole-operation` | `bubbles.sprint` | *"We're runnin' the whole operation now — review, deliver, deploy, the works."* |
 | `sunnyvale under-the-light` | `bubbles.grill` | *"Let's get it under the light and see if it survives."* |
@@ -139,7 +139,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `sunnyvale lets-get-organized` | `bubbles.design` | *"Let's get this organized."* |
 | `sunnyvale whats-going-on-here` | `bubbles.clarify` | *"What in the f— is going on here?"* |
 | `sunnyvale nice-kitty` | `bubbles.bug` | *"That's a nice f\*\*\*ing kitty right there."* |
-| `sunnyvale i-handle-things` | `bubbles.goal` | *"I handle things, that's what I do."* |
+| `sunnyvale i-handle-things` | `bubbles.goal` | *"Tell Tyrone the outcome. He handles things, that's what he does."* |
 | `sunnyvale tyrone-got-this` | `bubbles.goal` | *"Peace. Tyrone got this."* |
 | `sunnyvale on-the-clock` | `bubbles.sprint` | *"Inside and outside, both at once. Don't fall behind."* |
 | `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done — keep both flows moving."* |
@@ -240,9 +240,9 @@ Some TPB characters carry different agent roles when their narrative context leg
 |------|-------------|---------------|
 | Explore an idea before code | `/bubbles.workflow  mode: brainstorm for <idea>` | Planning artifacts only, no code |
 | Design a multi-implementation capability | `/bubbles.workflow  design capability <name>` | Domain model, capability foundation, concrete implementations, variation axes, UI primitives when needed, and foundation-first scopes |
-| Improve an existing feature | `/bubbles.workflow  improve <feature>` | Objective research pass, then Design Brief + Execution Outline |
-| Fix a bug in existing code | `/bubbles.workflow  fix the <bug>` | Bugfix-fastlane with objective research and reproduce/fix/verify flow |
-| Keep moving the current work forward | `/bubbles.workflow  continue` | Resume active workflow or fall back to `iterate` |
+| Improve an existing feature outcome | `/bubbles.goal  improve <feature>` | Goal composes research, planning, delivery, and certification as needed |
+| Fix a focused bug workflow | `/bubbles.bug  mode: fix <bug>` | Domain-owned bugfix-fastlane with reproduce/fix/verify flow |
+| Keep moving the current outcome forward | `/bubbles.goal  continue` | Resume active goal and preserve its workflow transitions |
 | Keep going until the feature is truly green | `/bubbles.workflow  <feature> mode: full-delivery` | Repeated quality/certification rounds until done or concretely blocked |
 | Inspect rework and bug-magnet patterns | `/bubbles.retro  week` | Slop Tax, retries, reversions, hotspots |
 | Audit framework prompt size | `bash bubbles/scripts/cli.sh lint-budget` | Instruction budget report for framework maintainers |
@@ -256,7 +256,11 @@ Some TPB characters carry different agent roles when their narrative context leg
 | Term | Meaning |
 |------|---------|
 <!-- GENERATED:CHEATSHEET_VOCABULARY_START - run `bash bubbles/scripts/generate-cheatsheet.sh` -->
-| `workflow-only continuation` | Recap, status, and handoff point you back to `/bubbles.workflow ...` by default instead of raw `/bubbles.implement` or `/bubbles.test` commands. |
+| `workflow-only continuation` | When one root mode is already active, recap, status, and handoff preserve that mode and route back to its authorized runner instead of dropping into raw specialists. |
+| `universal goal endpoint` | `bubbles.goal` owns one requested outcome and may execute zero, one, or several authorized workflows plus direct specialist phases until convergence. |
+| `single-mode workflow runner` | `bubbles.workflow` executes exactly one explicit `mode:` or one mode resolved by `bubbles.super`; it does not decompose broad goals or run timed goal queues. |
+| `direct authorized runner` | The top-level agent granted a workflow mode interprets its phase order and invokes specialist owners directly. Workflow-running orchestrators never invoke one another as subagents. |
+| `workflow mode grant` | A default-deny entry in `bubbles/agent-capabilities.yaml::workflowModeGrants` declaring exactly which modes an orchestrator may execute. Gate G064 enforces it. |
 | `continuation envelope` | Machine-readable packet from a read-only agent carrying the target, intent, preferred workflow mode, and reason for the next workflow step. |
 | `scenario replay` | Validate reruns the linked live-system `SCN-*` user journeys from `scenario-manifest.json` before certification. |
 | `human acceptance` | `uservalidation.md` is human-owned acceptance input. Automation findings do not toggle it. |
@@ -421,7 +425,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | G061 | Rework packet | Route-required findings must produce structured transition or rework packets tied to scenarios, DoD items, and owning specialists |
 | G042 | Owner-only remediation | Only owning planning or execution specialists may remediate owned surfaces; diagnostics and certification must route |
 | G063 | Concrete result | Every agent or child-workflow invocation must end with `completed_owned`, `completed_diagnostic`, `route_required`, or `blocked` |
-| G064 | Child workflow depth | Only orchestrators may invoke child workflow modes; nesting stays bounded, with parent-expanded execution when nested delegation is unavailable |
+| G064 | Workflow runner authorization | Modes are default-deny; only a granted top-level runner may execute them, and nested workflow-runner dispatch is forbidden |
 | G040 | Pseudo-completion language | Scope and report artifacts must not contain unresolved pseudo-completion language when transitioning to done |
 | G066 | Phase-claim provenance | Phase claims in completedPhaseClaims must have matching agent provenance in executionHistory; cross-phase impersonation is fabrication |
 | G067 | Shared infrastructure blast radius | High-fan-out shared infrastructure changes require blast-radius planning, canary coverage, rollback, and explicit change boundaries |
@@ -627,31 +631,31 @@ Skills are portable procedural checklists auto-installed to every repo. They act
 | Situation | Command |
 |-----------|---------|
 | **Don't know what to do? Just describe it.** | **`/bubbles.workflow  <describe what you want in plain English>`** |
-| Continue from last session | `/bubbles.workflow  continue` |
-| New feature from scratch | `/bubbles.workflow  <describe feature> mode: product-to-delivery` |
-| Full delivery pipeline | `/bubbles.workflow  full-delivery for <feature>` |
+| Continue toward the active outcome | `/bubbles.goal  continue` |
+| New feature from scratch | `/bubbles.goal  <describe outcome>` |
+| Full delivery pipeline as one known mode | `/bubbles.workflow  <feature> mode: full-delivery` |
 | Improve legacy feature with one stale-spec pass first | `/bubbles.workflow  improve-existing for <feature> specReview: once-before-implement` |
-| Fix a bug | `/bubbles.workflow  fix the <describe bug>` |
+| Fix a focused bug workflow | `/bubbles.bug  mode: fix <describe bug>` |
 | Plan and scope a feature | `/bubbles.plan  <feature>` |
 | Need framework help or advice? | `/bubbles.super  help me <describe goal>` |
 | Refresh framework setup | `/bubbles.setup  mode: refresh` |
 
-### Natural Language — Just Say What You Want
+### Natural Language — Choose By Unit Of Work
 
-All agents accept natural language. `/bubbles.workflow` is the **universal entry point** — it resolves intent via `super`, picks work via `iterate`, and drives phases to completion. Just describe what you want:
+Use `/bubbles.goal` for one outcome, `/bubbles.workflow` for exactly one mode, `/bubbles.sprint` for a timed goal set, and a granted domain runner for its own workflow family:
 
-| You Type | Workflow Understands |
-|----------|-------------------|
-| `/bubbles.workflow  improve the booking feature to be competitive` | mode: improve-existing, spec: booking |
-| `/bubbles.workflow  continue` | Resume active workflow if continuation context exists; otherwise pick next work via iterate |
+| You Type | Runner Behavior |
+|----------|-----------------|
+| `/bubbles.goal  improve the booking feature to be competitive` | Compose the workflows and agents needed for that outcome |
+| `/bubbles.goal  continue` | Resume the active goal and preserve its mode transitions |
 | `/bubbles.workflow  fix all found` | Resume the active workflow's remaining routed work instead of dropping into raw specialists |
-| `/bubbles.workflow  fix the calendar bug in page builder` | mode: bugfix-fastlane, spec: page-builder |
-| `/bubbles.workflow  do 10 rounds of stabilize on booking` | mode: stochastic-quality-sweep, triggerAgents: stabilize, maxRounds: 10 |
-| `/bubbles.workflow  spend 2 hours working on whatever needs attention` | mode: iterate, minutes: 120 |
-| `/bubbles.workflow  doctor` | Framework health check (delegates to super) |
+| `/bubbles.workflow  specs/page-builder mode: bugfix-fastlane` | Execute one deterministic bugfix mode |
+| `/bubbles.workflow  specs/booking mode: stochastic-quality-sweep maxRounds: 10` | Execute one stochastic mode with ten rounds |
+| `/bubbles.sprint  minutes: 120 goals: fix tests; improve booking` | Prioritize and execute several goals under one clock |
+| `/bubbles.bug  mode: fix calendar sync` | Run the domain-owned `bugfix-fastlane` workflow |
+| `/bubbles.releases  v2.0` | Run the domain-owned release-planning workflow |
 | `/bubbles.code-review  do an engineering sweep on the gateway` | profile: engineering-sweep, scope: service:gateway |
 | `/bubbles.system-review  review the booking feature as a user` | mode: full, scope: feature:booking |
-| `/bubbles.workflow  spend 2 hours working on whatever needs attention` | mode: iterate, minutes: 120 |
 | `/bubbles.iterate  fix tests for the page builder` | type: tests, feature: page-builder |
 | `/bubbles.workflow  do the next thing from recap` | mode: full-delivery, target resolved from continuation envelope |
 | `/bubbles.test  why are integration tests failing?` | action: triage, types: integration |
@@ -663,7 +667,7 @@ All agents accept natural language. `/bubbles.workflow` is the **universal entry
 
 ### Using The Super as Your Assistant
 
-The super resolves intent and generates commands. Workflow delegates to it automatically for vague input, but you can also call `super` directly for advice or framework ops:
+The super resolves intent and generates commands. A workflow runner may call it for one-mode resolution, but `super` never executes product workflows:
 
 | You Ask | The Super Responds With |
 |---------|-------------------|
@@ -808,8 +812,9 @@ The super resolves intent and generates commands. Workflow delegates to it autom
 | "Liquor then sweep" | Retro-guided quality sweep — retro picks the hotspot mess, then the full cleanup crew sweeps it | `retro-quality-sweep` workflow mode |
 | "Liquor then look" | Data-driven review — retro targets the riskiest files for code review | `retro-to-review` workflow mode |
 | \"That spec's got freezer burn\" | Expired/stale content | Spec freshness audit finding |
-| \"Just tell Bubbles\" | Start with `/bubbles.workflow` and describe what you want in plain English | Universal entry point — workflow resolves intent, picks work, drives phases |
-| \"Bubbles figures it out\" | Workflow delegates to super for NLP resolution and iterate for work-picking | Intent delegation — no need to know which agent or mode to use |
+| \"Just tell Tyrone\" | Start with `/bubbles.goal` and describe one outcome | Universal goal endpoint — may use any authorized workflows and specialists |
+| \"Bubbles runs one plan\" | Give `/bubbles.workflow` one explicit or super-resolved mode | Deterministic single-mode execution |
+| \"Lahey points at the right trailer\" | `bubbles.super` selects the authorized runner and mode | Resolution without product-workflow execution |
 ---
 
 <p align="center">

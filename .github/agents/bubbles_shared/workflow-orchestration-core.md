@@ -35,7 +35,7 @@ These requirements are enforced by planning readiness, G033 design readiness, Gh
 
 When a review agent (`bubbles.system-review`, `bubbles.code-review`, `bubbles.spec-review`) produces findings that require code changes, the transition from diagnostic findings to delivery work MUST follow this chain:
 
-**Spec-review severe-drift exception:** When `bubbles.spec-review` classifies a spec whose `state.json` status is `done` or legacy read-only `done_with_concerns` as `MAJOR_DRIFT` or `OBSOLETE`, the finding is a certified-spec freshness failure rather than an ordinary code-review defect. The orchestrator MUST invoke or parent-expand `bubbles.workflow mode=improve-existing` for that reviewed spec. This mirrors G033 design_readiness auto-escalation: invoke the owning workflow inline, resume only after the route is consumed, and stop only when that inline route itself reaches a terminal `blocked` or `route_required` result. Read-only docs-only/spec-review-only modes MUST emit the same `agent: bubbles.workflow`, `mode=improve-existing`, `spec: <reviewed-spec-dir>` packet without making code changes.
+**Spec-review severe-drift exception:** When `bubbles.spec-review` classifies a spec whose `state.json` status is `done` or legacy read-only `done_with_concerns` as `MAJOR_DRIFT` or `OBSOLETE`, the finding is a certified-spec freshness failure rather than an ordinary code-review defect. The active authorized runner MUST execute `mode=improve-existing` directly for that reviewed spec, resume only after the mapped mode reaches a terminal result, and preserve any `blocked` or `route_required` outcome. Read-only docs-only/spec-review-only modes MUST emit a `mode=improve-existing`, `spec: <reviewed-spec-dir>` packet without making code changes.
 
 1. **Every finding that requires a code change MUST be tracked as a bug.** Invoke `bubbles.bug` to create the full 6-artifact bug packet (`bug.md`, `spec.md`, `design.md`, `scopes.md`, `report.md`, `state.json`) before any implementation begins.
 2. **The `directFix` follow-up tag does NOT exempt findings from bug artifact creation.** It only indicates that the fix design is straightforward and does not require new feature-level spec work. Bug-level artifacts are still mandatory.
@@ -64,7 +64,7 @@ Default routing map:
 
 - Weak planning: `bubbles.analyst` + `bubbles.ux` + `bubbles.design` + `bubbles.plan`
 - Weak scenarios or DoD: `bubbles.harden`
-- Severe spec-review drift on `done` / legacy read-only `done_with_concerns`: invoke or parent-expand `bubbles.workflow mode=improve-existing` for the reviewed spec
+- Severe spec-review drift on `done` / legacy read-only `done_with_concerns`: execute `improve-existing` directly in the active authorized runner
 - Implementation gaps: `bubbles.gaps` + `bubbles.implement`
 - Defect packets: `bubbles.bug` + `bubbles.implement`
 - State drift: inline reconciliation of `state.json`, stale execution claims, and stale certification claims

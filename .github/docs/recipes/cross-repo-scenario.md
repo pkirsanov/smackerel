@@ -20,7 +20,7 @@ User → /bubbles.goal (or /bubbles.sprint)
          ▼
    compile scenario DAG  →  validate (scenario-compile-lint.sh)  →  preview + approval
          ▼
-   execute nodes in dependency order (each = existing mode/agent, depth-1, parent-expanded)
+  execute nodes in dependency order (each = existing mode/agent, directly executed by the active runner)
          ▼
    verify rootOutcome (successSignal proven, hardConstraints held)
 ```
@@ -133,6 +133,6 @@ bash bubbles/scripts/scenario-compile-lint.sh .specify/runtime/scenario-plan-<id
 
 ## Related Gates
 
-- **G064** — child-workflow depth ≤ 1 (no fan-out node nesting)
+- **G064** — authorized top-level workflow runner; no nested runner or fan-out node nesting
 - **G070** — Outcome Contract (the `rootOutcome` shape verified at the end)
 - **G056** — validate-owned certification (per repo)

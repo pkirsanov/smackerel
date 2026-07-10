@@ -35,7 +35,7 @@ spec: <reviewed-spec-dir>
 reason: spec-review:<MAJOR_DRIFT|OBSOLETE>
 ```
 
-Done-ceiling workflow modes MUST invoke or parent-expand that packet inline before implementation-capable phases continue. Read-only `spec-review-to-doc`, docs-only, validate-only, and audit-only modes preserve their lower status ceiling by returning `route_required` with the packet instead of making code changes.
+Done-ceiling modes MUST have the active authorized runner execute that mapped contract directly before implementation-capable phases continue. Read-only `spec-review-to-doc`, docs-only, validate-only, and audit-only modes preserve their lower status ceiling by returning `route_required` with the packet instead of making code changes.
 
 ### Phase 0.65: Validation Reconciliation Loop
 

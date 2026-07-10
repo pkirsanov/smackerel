@@ -2,7 +2,7 @@
 
 > *"I'm the trailer park supervisor. Start here and I'll tell you the next move."*
 
-**Note:** Since v3.2, `/bubbles.workflow` is the **universal entry point** — it delegates to `super` automatically for vague input. You can now type `/bubbles.workflow improve the booking feature` directly and workflow will resolve the intent via super internally. Use `/bubbles.super` directly when you want framework ops (doctor, hooks, upgrade) or when you want command *recommendations* without execution.
+**Current routing model:** `/bubbles.goal` is the universal outcome endpoint. `/bubbles.workflow` runs exactly one mode. `/bubbles.sprint` runs a timed goal set. `bubbles.super` resolves which authorized runner and mode fit, or handles framework operations directly.
 
 Use `bubbles.super` as the help and assistant agent for Bubbles. This is the recipe for turning vague goals, messy problems, or framework confusion into the exact next prompt or command.
 
@@ -20,7 +20,7 @@ Use this recipe when any of these are true:
 
 ```
 /bubbles.super  I want to improve the booking feature
-→ /bubbles.workflow  <booking-spec> mode: improve-existing
+→ /bubbles.goal  improve the booking feature
 
 /bubbles.super  what's the right command to harden specs 11 through 37?
 → /bubbles.workflow  011-037 mode: harden-to-doc
@@ -44,7 +44,7 @@ Use this recipe when any of these are true:
 → /bubbles.system-review  scope: full-system output: summary-doc
 
 /bubbles.super  give me the safest tdd-first workflow for this bug
-→ /bubbles.workflow  <bug-or-feature> mode: bugfix-fastlane tdd: true
+→ /bubbles.bug  mode: fix <bug> tdd: true
 ```
 
 ## Ask For A Prompt Sequence

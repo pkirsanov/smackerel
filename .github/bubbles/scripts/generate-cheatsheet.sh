@@ -134,12 +134,19 @@ validate_registry() {
 # Block renderers
 # ---------------------------------------------------------------------------
 
-# Translate `foo` backticks to <code>foo</code> for HTML rendering.
+# HTML-escape text and translate `foo` backticks to safe <code>foo</code>.
 md_backticks_to_html() {
   python3 -c '
-import re, sys
+import html, re, sys
 text = sys.stdin.read()
-print(re.sub(r"`([^`]+)`", r"<code>\1</code>", text), end="")
+parts = re.split(r"(`[^`]+`)", text)
+rendered = []
+for part in parts:
+    if len(part) >= 2 and part.startswith("`") and part.endswith("`"):
+        rendered.append("<code>" + html.escape(part[1:-1]) + "</code>")
+    else:
+        rendered.append(html.escape(part))
+print("".join(rendered), end="")
 '
 }
 
@@ -167,19 +174,21 @@ render_md_vocab() {
 
 render_html_modes() {
   jq -c '.[]' "$MODES_JSON" | while IFS= read -r entry; do
-    local name alias desc quote
+    local name alias desc quote name_html alias_html desc_html quote_html
     name="$(jq -r '.name' <<<"$entry")"
     alias="$(jq -r '.alias' <<<"$entry")"
     desc="$(jq -r '.description_html // .description' <<<"$entry")"
     quote="$(jq -r '.html_quote // empty' <<<"$entry")"
-    local desc_html
+    name_html="$(printf '%s' "$name" | md_backticks_to_html)"
+    alias_html="$(printf '%s' "$alias" | md_backticks_to_html)"
     desc_html="$(printf '%s' "$desc" | md_backticks_to_html)"
+    quote_html="$(printf '%s' "$quote" | md_backticks_to_html)"
     printf '  <div class="workflow-card">\n'
-    printf '    <div class="wf-name">%s</div>\n' "$name"
-    printf '    <div class="wf-alias">→ sunnyvale %s</div>\n' "$alias"
+    printf '    <div class="wf-name">%s</div>\n' "$name_html"
+    printf '    <div class="wf-alias">→ sunnyvale %s</div>\n' "$alias_html"
     printf '    <div class="wf-desc">%s</div>\n' "$desc_html"
     if [[ -n "$quote" ]]; then
-      printf '    <div class="wf-quote">"%s"</div>\n' "$quote"
+      printf '    <div class="wf-quote">"%s"</div>\n' "$quote_html"
     fi
     printf '  </div>\n'
   done
@@ -187,26 +196,30 @@ render_html_modes() {
 
 render_html_aliases() {
   jq -c '.[]' "$ALIASES_JSON" | while IFS= read -r entry; do
-    local alias maps_to quote
+    local alias maps_to quote alias_html maps_to_html quote_html
     alias="$(jq -r '.alias' <<<"$entry")"
     maps_to="$(jq -r '.maps_to' <<<"$entry")"
     quote="$(jq -r '.quote' <<<"$entry")"
+    alias_html="$(printf '%s' "$alias" | md_backticks_to_html)"
+    maps_to_html="$(printf '%s' "$maps_to" | md_backticks_to_html)"
+    quote_html="$(printf '%s' "$quote" | md_backticks_to_html)"
     printf '    <tr>\n'
-    printf '      <td class="cmd">sunnyvale %s</td>\n' "$alias"
-    printf '      <td class="maps-to">%s</td>\n' "$maps_to"
-    printf '      <td class="quote-col">"%s"</td>\n' "$quote"
+    printf '      <td class="cmd">sunnyvale %s</td>\n' "$alias_html"
+    printf '      <td class="maps-to">%s</td>\n' "$maps_to_html"
+    printf '      <td class="quote-col">"%s"</td>\n' "$quote_html"
     printf '    </tr>\n'
   done
 }
 
 render_html_vocab() {
   jq -c '.[]' "$VOCAB_JSON" | while IFS= read -r entry; do
-    local term meaning meaning_html
+    local term meaning term_html meaning_html
     term="$(jq -r '.term' <<<"$entry")"
     meaning="$(jq -r '.meaning' <<<"$entry")"
+    term_html="$(printf '%s' "$term" | md_backticks_to_html)"
     meaning_html="$(printf '%s' "$meaning" | md_backticks_to_html)"
     printf '  <div class="workflow-card">\n'
-    printf '    <div class="wf-name">%s</div>\n' "$term"
+    printf '    <div class="wf-name">%s</div>\n' "$term_html"
     printf '    <div class="wf-desc">%s</div>\n' "$meaning_html"
     printf '  </div>\n'
   done

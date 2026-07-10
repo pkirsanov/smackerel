@@ -217,6 +217,59 @@ else
   sed -n '1,80p' "$log5"
 fi
 
+# --- Case 6: downstream project-owned bubbles-* extension → ignored ---
+# An installed repo may define its own domain-specific instruction under the
+# same discovery naming convention. If it is absent from .manifest, it is not a
+# portable framework surface and must not be linted as upstream drift.
+mkdir -p "$clone/instructions"
+project_extension_rel="instructions/bubbles-project-domain.instructions.md"
+project_token="guest""host"
+cat > "$clone/$project_extension_rel" <<EOF
+# Project-Owned Domain Instruction
+
+This project-owned extension intentionally names ${project_token}.
+EOF
+
+# Presence of .manifest switches the lint into downstream-managed filtering.
+cat > "$clone/bubbles/.manifest" <<'EOF'
+bubbles/scripts/agnosticity-lint.sh
+agents/bubbles_shared/_selftest-managed-violating.md
+EOF
+
+echo "[selftest agnosticity-lint] Case 6: unmanifested project extension → exit 0"
+log6="$TMPDIR/log6.txt"
+set +e
+bash "$CLONED_LINT" --quiet "$project_extension_rel" >"$log6" 2>&1
+status6=$?
+set -e
+if [[ "$status6" -eq 0 ]]; then
+  pass "unmanifested project-owned bubbles-* extension is excluded (exit 0)"
+else
+  fail "unmanifested project-owned extension should be excluded (got $status6)"
+  sed -n '1,80p' "$log6"
+fi
+
+# --- Case 7: manifested portable surface still enforced ---
+managed_fixture_rel="agents/bubbles_shared/_selftest-managed-violating.md"
+cat > "$clone/$managed_fixture_rel" <<EOF
+# Managed Violating Fixture
+
+This installed framework file improperly names ${project_token}.
+EOF
+
+echo "[selftest agnosticity-lint] Case 7: manifested violation → exit non-zero"
+log7="$TMPDIR/log7.txt"
+set +e
+bash "$CLONED_LINT" "$managed_fixture_rel" >"$log7" 2>&1
+status7=$?
+set -e
+if [[ "$status7" -ne 0 ]] && grep -Fq 'PROJECT_NAME' "$log7"; then
+  pass "manifested portable surface remains enforced (exit $status7)"
+else
+  fail "manifested violating surface should fail with PROJECT_NAME (got $status7)"
+  sed -n '1,100p' "$log7"
+fi
+
 if [[ "$failures" -eq 0 ]]; then
   echo "[selftest agnosticity-lint] PASS"
   exit 0
