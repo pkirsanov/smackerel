@@ -4,25 +4,31 @@
 
 Workflow modes define **which phases run** and **in what order** for a given piece of work.
 
-## Workflow Is The Universal Entry Point
+## Goal Is The Universal Endpoint
 
-**`/bubbles.workflow` is the recommended entry point for all Bubbles work.** You don't need to know the mode, the spec target, or the exact parameters — just describe what you want:
+Use `/bubbles.goal` when you have one outcome and do not want to choose the process. Goal may execute zero, one, or several workflows plus direct specialist phases:
 
 ```
-/bubbles.workflow  improve the booking feature to be competitive
-/bubbles.workflow  continue
-/bubbles.workflow  fix the calendar bug
-/bubbles.workflow  spend 2 hours on whatever needs attention
-/bubbles.workflow  doctor
+/bubbles.goal  improve the booking feature to be competitive
+/bubbles.goal  continue
+/bubbles.goal  fix the calendar bug
 ```
 
-**How it works:**
-- **Structured input** (has `mode:` + spec target) → executes phases directly (existing behavior)
-- **Plain English** → delegates to `super` for intent resolution. `super` owns that translation, returns mode + spec + tags, then workflow executes.
-- **"Continue" / continuation-shaped input** → resumes the active workflow when continuation context is available; otherwise delegates to `iterate` for work-picking. `iterate` owns highest-priority work selection, returns the next priority item, then workflow executes.
-- **Framework ops** ("doctor", "hooks", "upgrade") → delegates to `super` for framework operations
+Use `/bubbles.workflow` when you want **exactly one root mode**:
 
-Direct agent calls (`/bubbles.super`, `/bubbles.iterate`, `/bubbles.implement`, etc.) still work for users who know exactly what they want, but recap/status/handoff continuations should normally route back through `/bubbles.workflow` so orchestration and certification stay intact.
+```
+/bubbles.workflow  specs/042 mode: full-delivery
+/bubbles.workflow  resolve the best single mode for specs/042 and run it
+```
+
+**Runner boundaries:**
+- **Goal** → one outcome, any required workflows/agents
+- **Workflow** → one explicit or `super`-resolved mode
+- **Sprint** → several goals under one time budget
+- **Super** → resolution and framework operations, no product-workflow execution
+- **Domain runner** → only the mode family granted in `workflowModeGrants`
+
+Workflow execution is default-deny. Gate G064 requires an authorized top-level runner to interpret the mode and invoke specialist phase owners directly. Workflow-running orchestrators never invoke one another as subagents.
 
 Continuation-shaped input includes plain `continue`/`next`, but also phrases like `fix all found`, `fix the rest`, and `address the rest` after a workflow run. Those should preserve the active workflow mode whenever workflow packets, run-state, or active spec state make that mode recoverable.
 
@@ -47,7 +53,7 @@ A **goal scenario** is a runtime execution plan, not a workflow mode. When an ou
 - `bubbles.super` resolves natural language to intent only (scenario-aware RESOLUTION-ENVELOPE fields); it never compiles or runs the DAG.
 - Node types (`diagnostic`, `planning`, `delivery`, `verification`, `action`, `ongoing-ops`) are routing metadata, not a new completion model — `action`/`ongoing-ops` nodes are OPS packets certified per repo by `bubbles.validate`.
 - Host-mutating `action` nodes are gated by a pre-mutation approval token (the propagate pattern).
-- No node may resolve to a `requiresTopLevelRuntime` fan-out mode (`iterate` / `autonomous-*` / `*-quality-sweep` / `idea-to-release-completion`) — that would nest orchestrators and break Gate G064. `bubbles/scripts/scenario-compile-lint.sh` enforces this by deriving the forbidden set from `modes.yaml`.
+- No node may resolve to a `requiresTopLevelRuntime` fan-out mode (`iterate` / `autonomous-*` / `*-quality-sweep` / `idea-to-release-completion`) because the scenario's active top-level runner must retain phase-owner dispatch authority. `bubbles/scripts/scenario-compile-lint.sh` enforces this.
 
 See [Cross-Repo Goal Scenario](../recipes/cross-repo-scenario.md) and the contract in [`agents/bubbles_shared/scenario-compile.md`](../../agents/bubbles_shared/scenario-compile.md).
 - `backlogExport: tasks|issues` forwards backlog-ready task or issue output preferences to `bubbles.plan`.
@@ -63,7 +69,7 @@ See [Cross-Repo Goal Scenario](../recipes/cross-repo-scenario.md) and the contra
 
 ### Smart Phase Routing
 
-Workflow modes now support **phase relevance evaluation** — before invoking each phase, `bubbles.workflow` checks whether the phase is relevant to the current scope's changed surface. Irrelevant phases are skipped with a recorded justification.
+Workflow modes support **phase relevance evaluation** — before invoking each phase, the active authorized runner checks whether the phase is relevant to the current scope's changed surface. Irrelevant phases are skipped with a recorded justification.
 
 **Safety guarantees:** Skipped phases are never silent. They're recorded in `executionHistory`. If artifacts change after a skip (e.g., a prior phase adds security-relevant code), the skip decision is re-evaluated and the phase is included if now relevant. Core phases (`implement`, `test`, `validate`, `docs`, `audit`, `finalize`) never skip.
 
@@ -117,11 +123,11 @@ If you don't specify a mode, `full-delivery` is the default.
 ```
 /bubbles.workflow  improve the booking feature to be competitive
 /bubbles.workflow  fix the calendar bug
-/bubbles.workflow  spend 2 hours working on whatever needs attention
 /bubbles.workflow  harden specs 11 through 37
+/bubbles.sprint  minutes: 120 goals: improve booking; fix calendar; validate release
 ```
 
-The workflow entry point does not keep its own second routing brain. `bubbles.super` owns natural-language translation into workflow parameters, and `bubbles.iterate` owns generic work-picking when no active continuation is recoverable.
+The workflow runner does not keep its own second routing brain. `bubbles.super` owns natural-language translation and runner selection. If a request resolves to `iterate`, `autonomous-goal`, or `autonomous-sprint`, workflow returns the registered top-level owner instead of executing that excluded meta mode.
 
 **Not sure which mode?** Ask the super: `/bubbles.super  which mode should I use for <your situation>`
 

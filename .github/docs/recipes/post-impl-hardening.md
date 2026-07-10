@@ -58,7 +58,7 @@ If the requirement is not just "run the hardening agents" but "keep going until 
 /bubbles.workflow implement action:full-delivery target:spec for <feature>
 ```
 
-That parent workflow runs reusable child workflow modes for test verification, deterministic quality sweep, and final certification. In runtimes without nested agent delegation, the active workflow parent-expands those modes while still invoking the same owner agents. New supported scenarios must update planning artifacts plus tests; true defects must be recorded as tracked bugs with regression tests and fixed inline before the run can finish.
+The active authorized runner executes reusable mapped modes for test verification, deterministic quality sweep, and final certification, invoking their phase owners directly. New supported scenarios must update planning artifacts plus tests; true defects must be tracked with regression tests and fixed before the run can finish.
 
 ## Pre-Ship Checklist
 
@@ -68,6 +68,6 @@ Before shipping a major feature, run all hardening agents in sequence:
 /bubbles.workflow validate action:harden-and-gaps finalize:docs for <feature>
 ```
 
-This runs the deterministic quality sweep child workflow mode: `harden → gaps → implement → test → regression → simplify → stabilize → security → chaos → validate → audit → docs`
+This runs the deterministic quality sweep mapped mode: `harden → gaps → implement → test → regression → simplify → stabilize → security → chaos → validate → audit → docs`
 
 The most thorough pre-release verification available. Like Lahey inspecting every trailer before park open.

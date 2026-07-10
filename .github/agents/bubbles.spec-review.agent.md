@@ -285,29 +285,30 @@ When compact mode is enabled, condense spec artifacts for completed specs (statu
 
 ### Phase 5: Auto-Dispatch Drift Handoffs (MANDATORY)
 
-When ANY spec is classified as **MAJOR_DRIFT** or **OBSOLETE**, the spec-review agent MUST automatically dispatch the owning follow-up. For specs whose `state.json` top-level status is `done` or legacy read-only `done_with_concerns`, severe drift means the certified implementation contract has changed and MUST route through `bubbles.workflow mode=improve-existing` for that exact spec before more implementation-capable work relies on the stale artifacts.
+When ANY spec is classified as **MAJOR_DRIFT** or **OBSOLETE**, the spec-review agent MUST emit the owning follow-up packet. For specs whose `state.json` top-level status is `done` or legacy read-only `done_with_concerns`, severe drift means the certified implementation contract has changed and the active authorized runner MUST execute `mode=improve-existing` for that exact spec before more implementation-capable work relies on the stale artifacts.
 
-**Invocation is MANDATORY, not a handoff suggestion.** The spec-review agent does not complete until the required dispatch is invoked or, in a read-only `spec-review-to-doc` / `noCodeChanges` mode, a concrete `route_required` RESULT-ENVELOPE is emitted with the same dispatch packet.
+**Routing is MANDATORY, not a handoff suggestion.** `bubbles.spec-review` is not a workflow runner and MUST NOT invoke one as a subagent. It returns a concrete `route_required` RESULT-ENVELOPE; an active parent runner consumes that packet directly, while a top-level review routes it to the user session.
 
 #### Machine-Readable Handoff Map
 
 | Source status | Trust level | Required dispatch |
 |---------------|-------------|-------------------|
-| `done` / legacy read-only `done_with_concerns` | **MAJOR_DRIFT** | **MUST invoke `bubbles.workflow` with `mode=improve-existing` and `spec=<reviewed-spec-dir>`** |
-| `done` / legacy read-only `done_with_concerns` | **OBSOLETE** | **MUST invoke `bubbles.workflow` with `mode=improve-existing` and `spec=<reviewed-spec-dir>`** |
+| `done` / legacy read-only `done_with_concerns` | **MAJOR_DRIFT** | **Route `mode=improve-existing`, `spec=<reviewed-spec-dir>` to the active authorized runner** |
+| `done` / legacy read-only `done_with_concerns` | **OBSOLETE** | **Route `mode=improve-existing`, `spec=<reviewed-spec-dir>` to the active authorized runner** |
 | not done | **MAJOR_DRIFT** | Invoke the owning planning path (`bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`) and `bubbles.docs` when managed docs are affected |
 | not done | **OBSOLETE** | Invoke the owning planning path for rewrite/delete decision and `bubbles.docs` when managed docs are affected |
 
 Dispatch packet shape for certified severe drift:
 
 ```text
-agent: bubbles.workflow
+preferredAgent: bubbles.workflow
+nextRequiredOwner: activeWorkflowRunner|user-session
 mode: improve-existing
 spec: <reviewed-spec-dir>
 reason: spec-review:<MAJOR_DRIFT|OBSOLETE>
 ```
 
-In read-only modes (`modeClass: spec-review-only`, `readOnlyAudit: true`, or `noCodeChanges: true`), do not perform code changes inside spec-review. Emit `route_required` with the packet above so the parent done-ceiling workflow can honor it automatically.
+Do not perform code changes inside spec-review. Emit `route_required` with the packet above so an active done-ceiling runner can execute it directly.
 
 #### Trigger Conditions
 
@@ -315,8 +316,8 @@ In read-only modes (`modeClass: spec-review-only`, `readOnlyAudit: true`, or `no
 |-------------|-------------------|
 | **CURRENT** | No docs invocation needed |
 | **MINOR_DRIFT** | No automatic invocation — add to handoff suggestions |
-| **MAJOR_DRIFT** | **MUST invoke `bubbles.workflow mode=improve-existing`** when source status is `done` / legacy read-only `done_with_concerns`; otherwise invoke `bubbles.docs` with drift details |
-| **OBSOLETE** | **MUST invoke `bubbles.workflow mode=improve-existing`** when source status is `done` / legacy read-only `done_with_concerns`; otherwise invoke `bubbles.docs` with obsolescence details |
+| **MAJOR_DRIFT** | **MUST route `mode=improve-existing` to the active authorized runner** when source status is `done` / legacy read-only `done_with_concerns`; otherwise invoke `bubbles.docs` with drift details |
+| **OBSOLETE** | **MUST route `mode=improve-existing` to the active authorized runner** when source status is `done` / legacy read-only `done_with_concerns`; otherwise invoke `bubbles.docs` with obsolescence details |
 | **PARTIAL** | **MUST invoke `bubbles.docs`** if any scope is MAJOR_DRIFT or OBSOLETE |
 
 #### Invocation Pattern

@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ALLOWLIST_FILE="$REPO_ROOT/bubbles/agnosticity-allowlist.txt"
+MANIFEST_FILE="$REPO_ROOT/bubbles/.manifest"
 
 source "$SCRIPT_DIR/fun-mode.sh"
 
@@ -90,6 +91,20 @@ is_portable_surface() {
       return 1
       ;;
   esac
+}
+
+is_framework_managed_surface() {
+  local file="$1"
+
+  # Source checkouts have no install manifest, so every canonical portable
+  # surface is scanned. Downstream repos may add project-owned `bubbles-*`
+  # agents/instructions/skills; only installer-managed paths are portable
+  # framework surfaces and therefore subject to this lint.
+  if [[ ! -f "$MANIFEST_FILE" ]]; then
+    return 0
+  fi
+
+  grep -qxF "$file" "$MANIFEST_FILE"
 }
 
 load_allowlist() {
@@ -289,7 +304,7 @@ fi
 
 for raw_file in "${candidate_files[@]}"; do
   file="$(normalize_file "$raw_file")"
-  if is_portable_surface "$file" && [[ -f "$REPO_ROOT/$file" ]]; then
+  if is_portable_surface "$file" && is_framework_managed_surface "$file" && [[ -f "$REPO_ROOT/$file" ]]; then
     target_files+=("$file")
   fi
 done
@@ -309,7 +324,6 @@ done
 # ── Framework manifest integrity check ──────────────────────────────
 # If a manifest exists (.github/bubbles/.manifest), check for non-framework
 # files in framework-managed directories (scripts, agents, prompts, etc.)
-MANIFEST_FILE="$REPO_ROOT/bubbles/.manifest"
 if [[ -f "$MANIFEST_FILE" ]] && [[ "$mode" != "staged" ]]; then
   # Check scripts directory for non-manifested files
   for script_file in "$REPO_ROOT"/bubbles/scripts/*.sh; do

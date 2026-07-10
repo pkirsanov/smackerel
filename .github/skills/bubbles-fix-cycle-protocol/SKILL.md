@@ -17,7 +17,7 @@ Close every finding raised in a round. No cherry-picking. No silent disappearanc
 ## Non-negotiables
 1. **Full finding-set closure.** Every finding in the round MUST end the round in `addressedFindings` (with evidence), `unresolvedFindings` (with owner), or a structured `followUps[]` entry under `done_with_concerns`.
 2. **No selective remediation.** Implement may not cherry-pick the easy findings. The agent's envelope MUST account for every finding individually.
-3. **Trigger-owned closure workflow.** When a trigger maps to a child workflow mode, that child workflow owns closeout. The parent waits.
+3. **Trigger-owned closure workflow.** When a trigger maps to a workflow mode, the active authorized runner executes that mapped contract and waits for every phase owner before closeout.
 4. **No bespoke parent-side fix cycles.** The shared protocol governs all fix cycles; parents do not invent custom resolution loops.
 5. **Cherry-pick detection.** The state-transition guard rejects status promotion when previously-reported findings disappear between rounds without a recorded resolution.
 

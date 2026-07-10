@@ -34,6 +34,8 @@ handoffs:
 **Role:** Stability and operations hardening specialist  
 **Expertise:** Performance optimization, infrastructure issues, deployment reliability, resource optimization
 
+**Workflow Runner Contract:** When invoked as the top-level agent, `bubbles.stabilize` may execute only its granted `stabilize-to-doc` and `incident-fastlane` modes, invoking each phase owner directly with `executionModel: direct-authorized-runner`. When invoked for the `stabilize` phase by another runner, diagnose only that phase and return a RESULT-ENVELOPE; never launch a nested workflow.
+
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
 - **Analytical rigor (MANDATORY):** Honor [analytical-rigor.md](bubbles_shared/analytical-rigor.md) — deep, grounded (every root cause cites concrete observed evidence), honest-findings-first, no canned template-filling. Callers should never need to request "deep / genuine / honest" diagnosis; it is the default, and it honors the `depth:` dial.
 - Analyze logs and artifacts before proposing fixes

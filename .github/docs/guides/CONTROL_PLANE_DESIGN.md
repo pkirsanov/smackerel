@@ -430,15 +430,15 @@ Required pattern:
 
 This keeps the loop fast while preserving strict ownership.
 
-### Child Workflow Law
+### Workflow Runner Authorization Law
 
-Only orchestrators may invoke child workflow modes, and child workflow depth must be bounded.
+Workflow mode execution is default-deny and belongs only to the authorized top-level runner.
 
-- allowed callers: `bubbles.workflow`, `bubbles.iterate`, `bubbles.goal`, `bubbles.sprint`, `bubbles.bug`
-- non-orchestrator agents may emit packets but may not spawn workflows directly
-- child workflow depth should be limited to 1
-- child workflow modes inherit policy snapshot, target context, and packet references from the parent orchestrator
-- when a runtime does not expose nested `runSubagent`, the active orchestrator parent-expands the resolved child workflow mode and invokes the same owner agents directly
+- grants live in `bubbles/agent-capabilities.yaml::workflowModeGrants`
+- the active runner interprets the mode and invokes specialist phase owners directly
+- workflow-running orchestrators never invoke one another as subagents
+- `bubbles.workflow` executes one root mode; `bubbles.goal` may compose modes for one outcome; `bubbles.sprint` manages a timed goal queue
+- domain orchestrators may execute only their granted mode families
 
 ## Mapping The Requested Changes To The Design
 
@@ -456,7 +456,7 @@ Only orchestrators may invoke child workflow modes, and child workflow depth mus
 | 10. Regression tests cannot drift without spec change | Scenario-linked regression contract protection |
 | 11. All behavior changes need Gherkin and BDD E2E | Scenario law plus certification guard |
 | 12. No hybrid agents | Owner-only remediation plus orchestrator-driven micro-fix dispatch |
-| 13. Child workflows only where safe | Orchestrator-only child workflow invocation with bounded depth |
+| 13. Workflow execution only where authorized | Default-deny per-agent mode grants plus top-level direct execution |
 | 14. Existing active specs adopt safely | Existing-spec adoption model with selective scenario lift, repo-default policy registry, and freshness triage |
 
 ## Proposed New Gates
@@ -473,7 +473,7 @@ The current gate registry ends at G061. This design would add the following fram
 - `G061 rework_packet_gate` — route-required findings must produce structured packets, not narrative-only handoffs
 - `G042 artifact_ownership_enforcement_gate` (absorbs former G042) — only owning planning/execution specialists may modify their surfaces; diagnostics must route
 - `G063 concrete_result_gate` — every agent invocation must end with `completed_owned`, `completed_diagnostic`, `route_required`, or `blocked` plus the required concrete payload
-- `G064 child_workflow_depth_gate` — only orchestrators may invoke child workflow modes, nesting depth may not exceed 1, and one-level runtimes use parent-expanded mode execution instead of recursive delegation
+- `G064 workflow_runner_authorization_gate` — only a granted top-level orchestrator may execute a mode; nested workflow-runner dispatch is forbidden
 
 ## Tradeoffs And Guardrails
 

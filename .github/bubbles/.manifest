@@ -243,6 +243,8 @@ bubbles/scripts/value-selection-lint.sh
 bubbles/scripts/workflow-delegation-selftest.sh
 bubbles/scripts/workflow-planning-provenance-selftest.sh
 bubbles/scripts/workflow-registry-consistency.sh
+bubbles/scripts/workflow-runner-grants-lint-selftest.sh
+bubbles/scripts/workflow-runner-grants-lint.sh
 bubbles/scripts/workflow-surface-selftest.sh
 bubbles/scripts/yaml-schema-validate.sh
 bubbles/scripts/guards/control-plane-checks.sh

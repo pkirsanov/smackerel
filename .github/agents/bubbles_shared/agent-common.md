@@ -67,7 +67,7 @@ Observability and execution evidence are not only anti-fabrication controls for 
 | How does regression test auto-generation work (bug fixes)? | `implement-bootstrap.md` |
 | How do I run a retrospective? | `bubbles.retro.agent.md` |
 | How does the v3 control plane work (execution vs certification, policy defaults, scenario contracts)? | `feature-templates.md`, [CONTROL_PLANE_DESIGN.md](../../docs/guides/CONTROL_PLANE_DESIGN.md), [CONTROL_PLANE_SCHEMAS.md](../../docs/guides/CONTROL_PLANE_SCHEMAS.md) |
-| What are gates G042–G068 (capability delegation, policy provenance, validate certification, scenario manifest, lockdown, regression contract, scenario TDD, rework packets, owner-only remediation, concrete results, child-workflow depth, etc.)? | `workflows.yaml` gate definitions, [CONTROL_PLANE_DESIGN.md](../../docs/guides/CONTROL_PLANE_DESIGN.md) |
+| What are gates G042–G068 (capability delegation, policy provenance, validate certification, scenario manifest, lockdown, regression contract, scenario TDD, rework packets, owner-only remediation, concrete results, workflow-runner authorization, etc.)? | `workflows.yaml` gate definitions, [CONTROL_PLANE_DESIGN.md](../../docs/guides/CONTROL_PLANE_DESIGN.md) |
 | Who owns state.json certification vs execution claims? | `agent-ownership.yaml`, `agent-capabilities.yaml`, `scope-workflow.md` |
 
 ## Command Prefix Convention (NON-NEGOTIABLE)

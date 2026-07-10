@@ -39,7 +39,7 @@ If retro already identified the hotspot and you want the same protections:
 ## Use It For
 
 - Refactoring shared auth or login fixtures
-- Cleaning up global Playwright or bootstrap helpers
+- Cleaning up global browser-automation or bootstrap helpers
 - Reworking tenant/session/bootstrap state injection code used by many tests
 - Tightening shared test harness behavior without dragging unrelated handlers or mocks into the same pass
 

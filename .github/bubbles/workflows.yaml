@@ -1,6 +1,19 @@
 # governance-version: 2.2.0\nversion: 1
 defaultMode: full-delivery
 
+workflowExecutionPolicy:
+  grantsSource: bubbles/agent-capabilities.yaml#workflowModeGrants
+  defaultExecutionModel: direct-authorized-runner
+  defaultAllowed: false
+  topLevelRuntimeRequired: true
+  nestedWorkflowRunnerDispatch: forbidden
+  controlPhaseOwner: activeWorkflowRunner
+  naturalLanguageResolver: bubbles.super
+  metaModeOwners:
+    autonomous-goal: bubbles.goal
+    autonomous-sprint: bubbles.sprint
+    iterate: bubbles.iterate
+
 # ──────────────────────────────────────────────────────────────────────────
 # GENERATED BLOCK — the `gates:` map below is generated verbatim from the
 # canonical gate registry at bubbles/registry/gates.yaml by
@@ -195,11 +208,11 @@ gates:
   G063:
     name: concrete_result_gate
     description: >-
-      BLOCKING gate. Every agent or child-workflow invocation MUST end with a concrete result shape: completed_owned, completed_diagnostic, route_required, or blocked. Narrative-only findings or generic advice are invalid. Route-required and blocked outcomes MUST include owner, reason, and scope/scenario/DoD references.
+      BLOCKING gate. Every agent or mapped-mode phase invocation MUST end with a concrete result shape: completed_owned, completed_diagnostic, route_required, or blocked. Narrative-only findings or generic advice are invalid. Route-required and blocked outcomes MUST include owner, reason, and scope/scenario/DoD references.
   G064:
-    name: child_workflow_depth_gate
+    name: workflow_runner_authorization_gate
     description: >-
-      BLOCKING gate. Only orchestrators may invoke child workflow modes, and workflow nesting depth MUST NOT exceed 1. Non-orchestrator agents may emit packets but may not recursively spawn workflow execution. In runtimes that do not expose nested agent delegation, the active orchestrator MUST parent-expand the resolved child workflow mode instead of spawning a recursive child runtime or blocking solely on the child's missing agent tool.
+      BLOCKING gate. Workflow modes execute only in the active top-level runtime and only when `bubbles/agent-capabilities.yaml::workflowModeGrants` authorizes that agent for the resolved mode. Nested dispatch to another workflow-running orchestrator is forbidden because VS Code subagents cannot invoke subagents. The active authorized runner resolves mapped modes itself, invokes each phase owner directly, and records `executionModel: direct-authorized-runner`. Unknown agents, unknown modes, missing grants, excluded modes, nested runner dispatch, and a `bubbles.workflow` run containing more than one resolved mode are blocking failures. Enforced by `bubbles/scripts/workflow-runner-grants-lint.sh` and its hermetic selftest.
   G066:
     name: phase_claim_provenance_gate
     description: >-
@@ -639,13 +652,13 @@ autoEscalation:
       action: invoke bubbles.analyst → bubbles.ux → bubbles.design → bubbles.plan inline to reconcile active artifacts before continuing
     specReviewDoneSpecMajorOrObsolete:
       description: bubbles.spec-review returned MAJOR_DRIFT or OBSOLETE for a spec whose state is done or legacy read-only done_with_concerns
-      action: invoke bubbles.workflow with mode=improve-existing for the reviewed spec inline; parent-expand the child workflow if nested delegation is unavailable; in read-only docs-only/spec-review-only modes emit route_required with agent=bubbles.workflow and mode=improve-existing instead of making code changes
+      action: the active authorized runner executes improve-existing directly for the reviewed spec; read-only docs-only/spec-review-only modes emit route_required with mode=improve-existing instead of making code changes
     modeOrAgentFit:
       description: The active mode or agent is not the best vehicle for the user's requested outcome, but another Bubbles mode or owner can perform the work
-      action: invoke the better-fit Bubbles mode, child workflow, or owning specialist inline via runSubagent, then resume the original workflow context
+      action: if the current runner is granted the better-fit mode, execute it directly; otherwise return route_required to its registered top-level owner; specialist phases still use runSubagent
     missingAgentTool:
       description: The active custom-agent runtime lacks the agent/subagent tool required for mandated delegation
-      action: if the active top-level orchestrator lacks the agent tool, return a blocked RESULT-ENVELOPE naming the missing tool and intended owner invocation; if only a nested child workflow runtime lacks the agent tool, parent-expand the resolved child workflow mode from the current orchestrator and continue with explicit executionModel evidence
+      action: return a blocked RESULT-ENVELOPE naming the missing tool and intended phase owner; never dispatch or emulate another workflow runner
   # Self-healing loop configuration (consolidated into G038)
   selfHealingLoop:
     maxDepth: 1 # NEVER nest — a fix attempt cannot trigger another fix attempt
@@ -930,16 +943,16 @@ priorityScoring:
 
 phases:
   analyze:
-    owner: bubbles.workflow
+    owner: activeWorkflowRunner
     requiredGates: [ G032 ]
   discover:
-    owner: bubbles.workflow
+    owner: activeWorkflowRunner
     requiredGates: [ G011, G013 ]
   select:
     owner: bubbles.iterate
     requiredGates: [ G001, G011 ]
   bootstrap:
-    owner: bubbles.workflow
+    owner: activeWorkflowRunner
     requiredGates: [ G014 ]
   harden:
     owner: bubbles.harden
@@ -1017,7 +1030,7 @@ phases:
     owner: bubbles.clarify
     requiredGates: []
   finalize:
-    owner: bubbles.workflow
+    owner: activeWorkflowRunner
     requiredGates: [ G010, G011, G012 ]
 
 # Status Ceiling Policy (NON-NEGOTIABLE)

@@ -8,6 +8,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/guard-lib.sh"
 RESOLVER="$SCRIPT_DIR/mode-resolver.sh"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 REAL_WORKFLOWS="$ROOT_DIR/bubbles/workflows.yaml"
@@ -46,7 +47,7 @@ run_resolver() {
   # Grandfather the bare-mode-name path so v7's input rejection does not mask
   # the resolution behavior under test. The v6-form validation rejections
   # (unknown primitive/tag/duplicate tuple) are unaffected by grandfather.
-  timeout "$selftest_timeout_seconds" env BUBBLES_MODE_GRANDFATHER=1 BUBBLES_WORKFLOWS_FILE="$fixture" "$RESOLVER" "$@" > "$out_file" 2> "$err_file"
+  bubbles_run_with_timeout "$selftest_timeout_seconds" env BUBBLES_MODE_GRANDFATHER=1 BUBBLES_WORKFLOWS_FILE="$fixture" "$RESOLVER" "$@" > "$out_file" 2> "$err_file"
   RC=$?
   set -e
   OUT="$(cat "$out_file")"

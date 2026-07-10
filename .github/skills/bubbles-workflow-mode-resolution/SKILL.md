@@ -15,16 +15,17 @@ Pick the right workflow mode for a request, understand the mode's inherited and 
 - Confirming the `statusCeiling`, `executionOptions`, or `gates` for a mode
 
 ## How resolution works
-1. Read the requested mode by name from `bubbles/workflows.yaml`.
-2. Resolve template inheritance via `bubbles/scripts/mode-resolver.sh`:
+1. Resolve the top-level runner from `bubbles/agent-capabilities.yaml::workflowModeGrants`: goal for one outcome, workflow for one ordinary root mode, sprint for a timed goal set, or a granted domain orchestrator for its own family.
+2. Read the requested mode by name from `bubbles/workflows.yaml`.
+3. Resolve template inheritance via `bubbles/scripts/mode-resolver.sh`:
    - scalar fields flow through from a single template
    - arrays concatenate, dedupe, and sort across templates
    - explicit mode fields override inherited values
    - cycles are rejected (cycle detection)
    - unknown template references are rejected
-3. Inspect the resolved mode's:
+4. Inspect the resolved mode's:
    - `statusCeiling` — highest status the spec may reach in this mode
-   - `executionOptions` — declarative knobs (e.g., spec review default, parent-expanded fallback)
+   - `executionOptions` — declarative knobs (e.g., spec review default, direct mapped-mode execution)
    - `gates` — the gate IDs activated for this mode
    - `decisionPolicy` — mechanical vs taste decision routing
    - `phaseRelevance` — which phases are required, optional, or skipped
@@ -43,7 +44,7 @@ Pick the right workflow mode for a request, understand the mode's inherited and 
 | "validate the certification" | `validate-only` |
 | "audit findings only" | `audit-only` |
 
-For ambiguous requests, `bubbles.super` owns natural-language translation and emits a `route_required` packet with the preferred mode.
+For ambiguous requests, `bubbles.super` owns natural-language translation and emits a `RESOLUTION-ENVELOPE` with both `targetAgent` and the preferred mode.
 
 ## Authoritative modules
 - `agents/bubbles_shared/workflow-mode-resolution.md` — template inheritance semantics

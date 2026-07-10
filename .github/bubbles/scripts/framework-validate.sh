@@ -52,6 +52,7 @@ fi
 
 failures=0
 skipped=0
+declare -a failed_check_labels=()
 
 # IMP-012 tiering (opt-in, non-breaking). Default tier=full runs EVERY check
 # exactly as before. `--tier=core` runs only the fast, high-signal structural
@@ -126,23 +127,10 @@ run_check() {
   else
     echo "FAIL: $label"
     failures=$((failures + 1))
+    failed_check_labels+=("$label")
   fi
   echo
 }
-
-declare -a agnosticity_targets=(
-  "CHANGELOG.md"
-  "README.md"
-  "docs/CHEATSHEET.md"
-  "docs/guides/INSTALLATION.md"
-  "docs/recipes/framework-ops.md"
-  "agents/bubbles.super.agent.md"
-  "bubbles/action-risk-registry.yaml"
-  "bubbles/scripts/cli.sh"
-  "bubbles/scripts/repo-readiness.sh"
-  "bubbles/scripts/framework-validate.sh"
-  "bubbles/scripts/release-check.sh"
-)
 
 # Wrapper for selftests that only make sense when run inside the framework
 # source tree (those that invoke install.sh, walk VERSION, or assert the
@@ -171,7 +159,7 @@ echo
 
 run_check "Repository drift report (informational)" bash "$SCRIPT_DIR/repo-drift-report.sh" --repo-root "$REPO_ROOT"
 run_check "Gate-catalog freshness advisory (informational, IMP-005)" bash "$SCRIPT_DIR/gate-catalog-freshness.sh" --repo-root "$REPO_ROOT"
-run_check_self_only "Portable surface agnosticity" bash "$SCRIPT_DIR/agnosticity-lint.sh" --quiet "${agnosticity_targets[@]}"
+run_check_self_only "Portable surface agnosticity" bash "$SCRIPT_DIR/agnosticity-lint.sh" --quiet
 run_check_self_only "Shellcheck lint (v7.0.2, -S warning, zero findings)" bash "$SCRIPT_DIR/shellcheck-lint.sh" --quiet
 run_check_self_only "Shellcheck lint selftest (v7.0.2)" bash "$SCRIPT_DIR/shellcheck-lint-selftest.sh"
 run_check "Registry consistency selftest" bash "$SCRIPT_DIR/registry-consistency-selftest.sh"
@@ -264,6 +252,8 @@ fi
 run_check "Instruction budget lint" bash "$SCRIPT_DIR/instruction-budget-lint.sh" "$agents_dir"
 run_check "Agent ownership lint" bash "$SCRIPT_DIR/agent-ownership-lint.sh"
 run_check "Orchestrator tool frontmatter lint (v7.0.3)" bash "$SCRIPT_DIR/orchestrator-tool-frontmatter-lint.sh"
+run_check "Workflow runner grants lint (G064)" bash "$SCRIPT_DIR/workflow-runner-grants-lint.sh"
+run_check "Workflow runner grants lint selftest (G064)" bash "$SCRIPT_DIR/workflow-runner-grants-lint-selftest.sh"
 if [[ -x "$SCRIPT_DIR/mcp-grant-selftest.sh" ]]; then
   # Source-only: asserts the canonical 'bubbles' MCP token; downstream installs
   # carry a per-repo 'bubbles-<slug>' token, so this can only hold in source.
@@ -506,6 +496,10 @@ fi
 
 if [[ "$failures" -gt 0 ]]; then
   echo "Framework validation failed with $failures failing check(s)$([[ "$skipped" -gt 0 ]] && echo " ($skipped self-only check(s) skipped under install-mode=$INSTALL_MODE)")."
+  echo "Failed checks:"
+  for failed_label in "${failed_check_labels[@]}"; do
+    echo "  - $failed_label"
+  done
   exit 1
 fi
 
