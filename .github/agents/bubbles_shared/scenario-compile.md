@@ -131,7 +131,7 @@ mode and certified by `bubbles.validate` in that repo.
    `stochastic-quality-sweep`, `retro-quality-sweep`, `idea-to-release-completion`). The
    scenario executor is ALREADY the top-level orchestrator; nesting a fan-out mode as a
    node would force orchestrator-inside-orchestrator and break Gate **G064**
-   (child-workflow depth ≤ 1). The lint derives the forbidden set from `modes.yaml` so it
+  (workflow-runner authorization and fan-out depth). The lint derives the forbidden set from `modes.yaml` so it
    never drifts.
 2. **Every node references a real mode or agent.** `mode` must exist in `modes.yaml`;
    `agent` must exist in `agent-capabilities.yaml`. Exactly one of `mode`/`agent` per node.
@@ -191,7 +191,7 @@ it is not itself a subagent). Inside the loop:
 
 - `super` is a depth-1 resolver subagent (envelope-only; no nested dispatch) — safe.
 - each scenario node is a single specialist OR a single-spec mode (`devops-to-doc`,
-  `product-to-planning`, `validate-only`, …) — depth-1, parent-expandable per
+  `product-to-planning`, `validate-only`, …) executed directly by the active runner per
   [workflow-delegation-core.md](workflow-delegation-core.md).
 - nodes NEVER resolve to a fan-out `requiresTopLevelRuntime` mode (Hard Rule 1).
 

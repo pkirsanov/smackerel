@@ -82,7 +82,22 @@ for entry in "${required_markers[@]}"; do
   fi
 done
 
-# 4. Adversarial: broken fixture must fail validation.
+# 4. Generated HTML must parse cleanly. This catches unescaped ampersands and
+# angle-bracket placeholders in registry prose. xmllint is optional.
+if command -v xmllint >/dev/null 2>&1; then
+  html_log="$(mktemp)"
+  if xmllint --html --noout "$REPO_ROOT/docs/its-not-rocket-appliances.html" >"$html_log" 2>&1; then
+    pass "generated HTML parses cleanly"
+  else
+    fail "generated HTML contains malformed markup"
+    cat "$html_log" >&2
+  fi
+  rm -f "$html_log"
+else
+  echo "SKIP: generated HTML parse check (xmllint not installed)"
+fi
+
+# 5. Adversarial: broken fixture must fail validation.
 fixture_root="$(mktemp -d)"
 trap 'rm -rf "$fixture_root"' EXIT
 

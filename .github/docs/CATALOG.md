@@ -14,7 +14,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 
 | # | Recipe | Mode/Agent | One-Liner |
 |---|--------|-----------|-----------|
-| 1 | [Just Tell Bubbles](recipes/just-tell-bubbles.md) | `bubbles.workflow` | Describe what you want in plain English |
+| 1 | [Just Tell Bubbles](recipes/just-tell-bubbles.md) | `bubbles.goal` | Describe one outcome in plain English |
 | 2 | [Ask the Super First](recipes/ask-the-super-first.md) | `bubbles.super` | Get command recommendations before acting |
 | 3 | [New Feature](recipes/new-feature.md) | `product-to-delivery` | Idea → shipped code |
 | 4 | [Fix a Bug](recipes/fix-a-bug.md) | `bugfix-fastlane` | Reproduce → fix → verify → ship |

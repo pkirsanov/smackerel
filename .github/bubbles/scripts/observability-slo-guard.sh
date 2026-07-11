@@ -58,6 +58,24 @@ set -euo pipefail
 # never will; if the captured SLO evidence breaches the contract, fix the
 # instrumentation or the system — not the gate.
 #
+# ── Gate G100 refinement: spec-attribution scoping ───────────────────────
+# `--spec-dir <dir>` scopes instrumentation ATTRIBUTION to one transitioning
+# spec's OWN scope artifacts (its scopes.md / scopes/*/scope.md Test-Plan rows)
+# instead of the repo-wide specs/ scan. This mirrors the Gate G090
+# spec-attribution guard in retro-convergence-health.sh: when a SPECIFIC spec is
+# being promoted, instrumentation declared by OTHER specs must not be attributed
+# to it. state-transition-guard.sh passes the transitioning spec dir (its
+# feature_dir — the same value it hands G090) so a spec that declares NO
+# observabilityWorkflow is not an instrumented scope and the SLO-evidence gate is
+# NOT APPLICABLE to it → no-op (exit 0), even when an UNRELATED spec declares an
+# instrumented workflow whose gitignored/live-captured evidence is absent in a
+# fresh checkout. A spec that DOES declare an instrumented-with-slo workflow
+# keeps FULL teeth: its own missing/malformed/wrong-workflow/breaching evidence
+# still blocks (exit 1). `--spec-dir` is SCOPING, not a bypass — the NO-bypass
+# rule is intact. When --spec-dir is ABSENT/empty the repo-wide behavior is
+# preserved unchanged, so standalone/CI still enforces every instrumented
+# workflow across specs/.
+#
 # Exit codes:
 #   0  no-op (EXEMPT / no config / posture!=wired / no instrumented-with-slo
 #      workflow), OR every instrumented SLO is within target.
@@ -68,7 +86,7 @@ set -euo pipefail
 #   2  usage error (unknown flag / too many positionals).
 #
 # Usage:
-#   bash bubbles/scripts/observability-slo-guard.sh [--repo-root <dir>] [--quiet]
+#   bash bubbles/scripts/observability-slo-guard.sh [--repo-root <dir>] [--spec-dir <dir>] [--quiet]
 #   bash bubbles/scripts/observability-slo-guard.sh <dir>            # positional repo root
 #
 # Reference: improvements/IMP-001-observability-first-class.md (SCOPE-4, T4.1)
@@ -82,6 +100,7 @@ SCRIPT_DIR="$(cd "${SCRIPT_SOURCE%/*}" 2>/dev/null && pwd)"
 
 QUIET="false"
 REPO_ROOT_ARG=""
+SPEC_DIR_ARG=""
 
 usage() {
   cat <<'EOF'
@@ -97,6 +116,11 @@ in `traceContracts.observability.slos.<sloKey>`.
 Options:
   --repo-root <dir>  Repo root to scan (default: the repo this guard lives in).
   <repo-root>        Same as --repo-root, positional.
+  --spec-dir <dir>   Scope instrumentation attribution to THIS spec's own scope
+                     artifacts (Gate G100 refinement, mirrors G090). A spec that
+                     declares no observabilityWorkflow no-ops; a spec declaring
+                     an instrumented-with-slo workflow keeps full teeth. Absent
+                     = repo-wide behavior (backward-compatible).
   --quiet            Suppress informational PASS/no-op stdout (warnings and
                      errors are still emitted).
   -h, --help         Print this usage and exit 0.
@@ -133,6 +157,16 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       REPO_ROOT_ARG="$1"
+      shift
+      ;;
+    --spec-dir)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "observability-slo-guard: --spec-dir requires a directory argument" >&2
+        usage >&2
+        exit 2
+      fi
+      SPEC_DIR_ARG="$1"
       shift
       ;;
     --*)
@@ -202,24 +236,75 @@ locate_config() {
 }
 
 # --- Instrumented-workflow detection -------------------------------------
-# An instrumented workflow is one named by `observabilityWorkflow: <key>` in any
-# scope artifact under <repo>/specs/ (Markdown Test Plan rows OR test-plan.json).
-# The source repo has no specs/ (G085) so this is empty there. The match is
-# whole-key anchored so `booking.create` never matches `booking.created`.
+# An instrumented workflow is one named by `observabilityWorkflow: <key>` in a
+# scope artifact under the SCAN DIR (Markdown Test Plan rows OR test-plan.json).
+# The scan dir is repo-wide (<repo>/specs) by default, OR — under the Gate G100
+# spec-attribution refinement — one transitioning spec's own subtree (see
+# --spec-dir / INSTRUMENTATION_SCAN_DIR). The source repo has no specs/ (G085) so
+# this is empty there. The match is whole-key anchored so `booking.create` never
+# matches `booking.created`.
 workflow_is_instrumented() {
-  local root="$1" wf="$2"
-  local specs_dir="$root/specs"
-  [[ -d "$specs_dir" ]] || return 1
+  local scan_dir="$1" wf="$2"
+  [[ -d "$scan_dir" ]] || return 1
   local wf_re
   wf_re="$(printf '%s' "$wf" | sed -E 's/[][(){}.^$*+?|\\]/\\&/g')"
   grep -rhE "observabilityWorkflow[\"\`[:space:]:=]+${wf_re}([^A-Za-z0-9._-]|$)" \
-    "$specs_dir" >/dev/null 2>&1
+    "$scan_dir" >/dev/null 2>&1
+}
+
+# --- Spec-attribution scoping helpers (Gate G100 refinement) -------------
+# resolve_spec_scan_dir: resolve the transitioning spec's OWN artifact subtree.
+# --spec-dir may be absolute, relative to the resolved repo root, or (fallback)
+# relative to CWD — mirroring how state-transition-guard.sh hands its feature_dir
+# to G090's retro-convergence-health.sh.
+resolve_spec_scan_dir() {
+  local sd="$1"
+  sd="${sd#./}"
+  sd="${sd%/}"
+  if [[ "$sd" == /* ]]; then
+    printf '%s' "$sd"
+  elif [[ -d "$REPO_ROOT_RESOLVED/$sd" ]]; then
+    printf '%s' "$REPO_ROOT_RESOLVED/$sd"
+  elif [[ -d "$sd" ]]; then
+    ( cd "$sd" 2>/dev/null && pwd ) || printf '%s' "$REPO_ROOT_RESOLVED/$sd"
+  else
+    printf '%s' "$REPO_ROOT_RESOLVED/$sd"
+  fi
+}
+
+# spec_declares_any_observability_workflow: true when the spec's own scope
+# artifacts declare ANY observabilityWorkflow (the spec IS an instrumented
+# scope). A spec that declares none is not instrumented → G100 not applicable.
+spec_declares_any_observability_workflow() {
+  local scan_dir="$1"
+  [[ -d "$scan_dir" ]] || return 1
+  grep -rhE "observabilityWorkflow[\"\`[:space:]:=]+" "$scan_dir" >/dev/null 2>&1
 }
 
 # --- EXEMPT short-circuit (before parser check) --------------------------
 if repo_is_framework_source "$REPO_ROOT_RESOLVED"; then
   info "Observability SLO gate: EXEMPT (no-runtime) — Bubbles framework source repo; nothing to monitor. (G100 OK)"
   exit 0
+fi
+
+# --- Spec-attribution scoping (Gate G100 refinement) ---------------------
+# Default: repo-wide instrumentation scan (backward-compatible; --spec-dir
+# absent). When state-transition-guard promotes a SPECIFIC spec it passes
+# --spec-dir, scoping attribution to THAT spec's own scope artifacts (mirrors the
+# G090 spec-attribution guard). A spec that declares NO observabilityWorkflow is
+# not an instrumented scope, so the SLO-evidence gate is not applicable to it —
+# no-op here (exit 0), BEFORE the adopter/parser gates, so an UNRELATED spec's
+# absent live-captured evidence can never false-block this promotion. A spec that
+# DOES declare instrumentation continues into the full flow with attribution
+# scoped to its own subtree, keeping full teeth for its own workflows.
+INSTRUMENTATION_SCAN_DIR="$REPO_ROOT_RESOLVED/specs"
+if [[ -n "$SPEC_DIR_ARG" ]]; then
+  SPEC_SCAN_DIR="$(resolve_spec_scan_dir "$SPEC_DIR_ARG")"
+  if ! spec_declares_any_observability_workflow "$SPEC_SCAN_DIR"; then
+    info "Observability SLO gate: no instrumented observabilityWorkflow attributed to ${SPEC_DIR_ARG} — SLO evidence gate not applicable to this spec; G100 no-op. (G100 OK)"
+    exit 0
+  fi
+  INSTRUMENTATION_SCAN_DIR="$SPEC_SCAN_DIR"
 fi
 
 # --- Non-adopter opt-in pre-check (NO external tools needed) -------------
@@ -327,7 +412,9 @@ for WF in "${SLO_LINKED_WORKFLOWS[@]}"; do
   # Only enforce workflows that are ACTUALLY instrumented by a scope. A wired
   # repo with an slo: link but no observabilityWorkflow declaration is NOT
   # blocked (the gate never infers workflow applicability from changed paths).
-  if ! workflow_is_instrumented "$REPO_ROOT_RESOLVED" "$WF"; then
+  # Attribution is scoped to INSTRUMENTATION_SCAN_DIR (repo-wide specs/ by
+  # default; one spec's own subtree under --spec-dir per the G100 refinement).
+  if ! workflow_is_instrumented "$INSTRUMENTATION_SCAN_DIR" "$WF"; then
     continue
   fi
   ENFORCED=$((ENFORCED + 1))

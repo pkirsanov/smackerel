@@ -21,12 +21,12 @@ Or just use natural language:
 
 **Parent workflow:** full-delivery
 
-**Built-in child workflows:**
+**Built-in mapped workflows:**
 - `test-to-doc` for full required test execution and initial verification
 - `harden-gaps-to-doc` for the deterministic quality sweep, including chaos
 - `validate-to-doc` for final validation, audit, and docs sync
 
-If those child workflows discover a legitimate new supported scenario, planning artifacts and tests must be updated before the run continues. If they discover a defect, the workflow creates or updates a tracked bug and adds the regression test before running `bugfix-fastlane` inline.
+If those mapped workflows discover a legitimate new supported scenario, planning artifacts and tests must be updated before the run continues. If they discover a defect, the active runner creates or updates a tracked bug and executes `bugfix-fastlane` directly through its phase owners.
 
 ## What Each Phase Does
 
@@ -65,11 +65,11 @@ Don't know what to check? Let the system randomly pick:
 
 The stochastic parent now does exactly two things per round before execution: pick a spec and pick a trigger. After that it executes the mapped trigger-owned end-to-end workflow mode and **waits for it to complete** before starting the next round.
 
-When the host supports recursive agent delegation, the parent can invoke `bubbles.workflow` as a child with the mapped mode. When the child runtime lacks nested `runSubagent`, the parent expands that same mapped mode inside the current workflow runtime and invokes the phase owners directly. The mode mapping is still mandatory; the fallback only removes the recursive tool dependency.
+The active authorized runner resolves the mapped mode in its own top-level runtime and invokes each phase owner directly. The mode mapping is mandatory; no second workflow runner is spawned.
 
-**Rounds are synchronous.** The sweep MUST NOT batch-select all rounds first and then produce a findings table — that is a scoreboard, not a sweep. Each round executes a mapped child workflow mode, waits for its terminal `RESULT-ENVELOPE`, records the outcome and `executionModel`, and only then proceeds to the next round.
+**Rounds are synchronous.** The sweep MUST NOT batch-select all rounds first and then produce a findings table — that is a scoreboard, not a sweep. Each round executes a mapped workflow mode through its phase owners, waits for terminal envelopes, records `executionModel: direct-authorized-runner`, and only then proceeds.
 
-That child workflow is not allowed to stop at a diagnosis. If the trigger finds a legitimate bug, regression, gap, or improvement, it must run the full finding-owned closure workflow before returning a terminal result upward:
+That mapped mode is not allowed to stop at a diagnosis. If the trigger finds a legitimate bug, regression, gap, or improvement, it must run the full finding-owned closure workflow before returning a terminal result:
 
 - Planning workflow: `bubbles.analyst` → `bubbles.ux` when UI or a user-visible journey is implicated → `bubbles.design` → `bubbles.plan`
 - Delivery workflow: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` → finalize/certification
@@ -98,7 +98,7 @@ Those follow-ups now preserve the active sweep context when continuation state i
 
 The sweep is not allowed to stop at a scoreboard. Each round must either finish through the mapped trigger-owned workflow mode or emit a workflow-owned continuation packet that preserves the non-terminal mapped-mode outcome. A summary-only finish is invalid while routed or blocked work remains.
 
-The same rule applies outside stochastic sweeps: if `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, or `gaps` is invoked inside another workflow and finds real work, that child workflow must launch the same planning-to-delivery closure substream and finish it before reporting upward.
+The same rule applies outside stochastic sweeps: when a finding-capable phase discovers real work, the active runner must execute the same planning-to-delivery closure substream before reporting a terminal result.
 
 For repeated passes from one specialist angle, constrain the trigger pool instead of using a deterministic batch mode:
 

@@ -31,11 +31,12 @@ Control-plane law also requires owner-only remediation and concrete result envel
 
 | Recipe | Problem → Solution |
 |--------|-------------------|
+| [Just Tell Bubbles](just-tell-bubbles.md) | "I have an outcome and want Bubbles to handle whatever workflows and agents it needs" |
 | [Ask the Super First](ask-the-super-first.md) | "I don't know the right command, agent, workflow mode, or recovery step" |
 
 > **💡 Tip:** The super is the help desk for Bubbles itself: prompts, workflow choices, troubleshooting, and framework guidance in plain English.
 
-> **💡 Tip:** `bubbles.super` should be your natural-language front door, not a mandatory middleman. Use it when you need translation or guidance. If you already know the exact agent or mode, call it directly.
+> **💡 Tip:** `bubbles.goal` is the universal execution endpoint. `bubbles.super` resolves and advises; `bubbles.workflow` runs one mode; `bubbles.sprint` runs several goals under a clock.
 
 > **💡 Tip:** Install and bootstrap recipes target downstream project repos. If you are inside the Bubbles source repository, maintain the framework directly and validate with `bash bubbles/scripts/cli.sh ...` instead of rerunning `install.sh` in that checkout.
 
@@ -73,9 +74,9 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | Handle a single goal autonomously | `/bubbles.goal  <describe the goal>` |
 | Multiple goals with a time budget | `/bubbles.sprint  minutes: N` + goal list |
 | Explore an idea before any code | `/bubbles.workflow  mode: brainstorm for <idea>` |
-| Improve a legacy feature with objective research first | `/bubbles.workflow  improve <feature>` |
-| Fix a bug in brownfield code | `/bubbles.workflow  fix the <bug>` or `/bubbles.goal  Fix <bug>` |
-| Keep shipping the next most important slice | `/bubbles.workflow  continue` |
+| Improve a legacy feature as an outcome | `/bubbles.goal  improve <feature>` |
+| Fix a focused bug workflow | `/bubbles.bug  mode: fix <bug>` |
+| Keep shipping the next most important slice | `/bubbles.iterate` |
 | Keep going until the whole thing is truly green | `/bubbles.workflow  <feature> mode: full-delivery` |
 | Review rework and churn after a run | `/bubbles.retro  week` |
 | Audit framework prompt size | `bash bubbles/scripts/cli.sh lint-budget` |

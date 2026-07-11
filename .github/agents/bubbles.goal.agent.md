@@ -109,31 +109,28 @@ phase_1_understand:
   output: goal_type, spec_path, existing_artifacts
 
 phase_2_plan:
-  do: dispatch to the correct workflow mode based on goal classification and planning state
+  do: resolve and directly execute the correct granted workflow mode based on goal classification and planning state
   call_runSubagent: yes
   rule: planning routing MUST come from workflows.yaml; this phase NEVER hardcodes a specialist chain. The bootstrapAgents and improvementPreludeProfiles in workflows.yaml are the SINGLE SOURCE OF TRUTH for which planning specialists run.
   route:
     goal_type == bug:
-      preferred: runSubagent(bubbles.workflow): "mode: bugfix-fastlane specs: {spec_path}. Goal: {goal_text}. agents.md: {agents_md_path}"
-      fallback_if_nested_runtime_lacks_runSubagent: parent-expand bugfix-fastlane phaseOrder from workflows.yaml and invoke each phase owner directly via workflows.yaml.phases[<phase>].owner
+      execute_mode_directly: bugfix-fastlane
 
     goal_type == feature AND (no spec.md OR no design.md OR no scopes.md OR planning_skeletal):
-      preferred: runSubagent(bubbles.workflow): "mode: full-delivery specs: {spec_path}. Goal: {goal_text}. improvementPrelude: analyze-design-plan"
-      fallback_if_nested_runtime_lacks_runSubagent: parent-expand full-delivery — invoke bootstrapAgents [bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan] in loop until design_spec_scopes_ready; if improvementPrelude requested, invoke the same canonical chain FIRST
+      execute_mode_directly: full-delivery
+      options: { improvementPrelude: analyze-design-plan }
 
     goal_type == planning-only:
-      preferred: runSubagent(bubbles.workflow): "mode: spec-scope-hardening specs: {spec_path}"
-      OR: runSubagent(bubbles.workflow): "mode: product-to-planning specs: {spec_path}"  # when full analyst+ux+design+plan needed
+      execute_mode_directly: spec-scope-hardening  # product-to-planning when the full analyst+ux+design+plan chain is needed
 
     goal_type == feature AND artifacts_ready:
-      preferred: runSubagent(bubbles.workflow): "mode: full-delivery specs: {spec_path}. Goal: {goal_text}"
-      fallback_if_nested_runtime_lacks_runSubagent: parent-expand full-delivery phaseOrder
+      execute_mode_directly: full-delivery
 
     goal_type == docs-only:
-      preferred: runSubagent(bubbles.workflow): "mode: docs-only specs: {spec_path}"
+      execute_mode_directly: docs-only
 
     goal_type == ops|devops|stabilize:
-      preferred: runSubagent(bubbles.workflow): "mode: stabilize-to-doc specs: {spec_path}"  # or devops-to-doc
+      execute_mode_directly: stabilize-to-doc  # or devops-to-doc
 
   detection:
     UI_detection: UX is mandatory for all implementation-capable planning. For UI work, UX covers screens and journeys; for framework/operator/non-UI work, UX covers workflow behavior, status language, blocked envelopes, and exception handling. The compatibility profile name `analyze-design-plan` still expands to bubbles.analyst → bubbles.ux → bubbles.design → bubbles.plan.
@@ -145,8 +142,7 @@ phase_3_execute:
   rule: phase ownership comes from workflows.yaml.phases[<phase>].owner; do NOT hardcode owners in this file
   route:
     for each scope:
-      preferred: runSubagent(bubbles.workflow): "mode: {resolved_mode} specs: {spec_path} scope: {scope_name} phases: implement,test"
-      fallback_if_nested_runtime_lacks_runSubagent: parent-expand the implement→test slice from the mode's phaseOrder by invoking workflows.yaml.phases[implement].owner then workflows.yaml.phases[test].owner directly
+      execute_mode_slice_directly: [ implement, test ]
       if test fails (max 3x): re-invoke the implement phase owner with failure context
 
 phase_4_verify:
@@ -154,8 +150,7 @@ phase_4_verify:
   call_runSubagent: yes
   rule: do NOT hardcode specialist calls — the mode's phaseOrder defines which verification phases run
   route:
-    preferred: runSubagent(bubbles.workflow): "mode: {resolved_mode} specs: {spec_path} phases: validate,audit,chaos,security,regression,harden,gaps,test"
-    fallback_if_nested_runtime_lacks_runSubagent: parent-expand by invoking each phase owner from workflows.yaml.phases[<phase>].owner — typically test→bubbles.test, validate→bubbles.validate, audit→bubbles.audit, chaos→bubbles.chaos, harden→bubbles.harden, gaps→bubbles.gaps, security→bubbles.security, regression→bubbles.regression
+    execute_mode_slice_directly: [ validate, audit, chaos, security, regression, harden, gaps, test ]
   output: findings_ledger
 
 phase_5_remediate:
@@ -163,8 +158,7 @@ phase_5_remediate:
   call_runSubagent: yes — per finding
   route:
     for each finding:
-      preferred: runSubagent(bubbles.workflow): "mode: bugfix-fastlane specs: {path}. Finding: {desc}. Severity: {sev}."
-      if_nested_workflow_lacks_runSubagent: parent-expand bugfix-fastlane from this goal runtime by invoking the required owners directly
+      execute_mode_directly: bugfix-fastlane
     if findings remain: goto phase_4_verify
 
 phase_6_optimize:
@@ -172,8 +166,7 @@ phase_6_optimize:
   call_runSubagent: yes
   rule: phase ownership comes from workflows.yaml.phases[<phase>].owner; do NOT hardcode owners
   route:
-    preferred: runSubagent(bubbles.workflow): "mode: {resolved_mode} specs: {spec_path} phases: simplify,security,docs"
-    fallback_if_nested_runtime_lacks_runSubagent: parent-expand simplify→security→docs by invoking workflows.yaml.phases[<phase>].owner directly (typically simplify→bubbles.simplify, security→bubbles.security, docs→bubbles.docs)
+    execute_mode_slice_directly: [ simplify, security, docs ]
 
 phase_7_convergence:
   do: check exit conditions
@@ -187,13 +180,14 @@ phase_7_convergence:
 ## Agent Identity
 
 **Name:** bubbles.goal
-**Role:** Convergence loop controller. Routes to specialists via `runSubagent`. Zero direct implementation.
+**Role:** Universal goal endpoint. Achieves one outcome through zero, one, or several granted workflow modes and specialist agents. Zero direct implementation.
 
 ## Outcome-First Dispatch Contract
 
 - The `tools` frontmatter MUST include the VS Code `agent` tool alias. The body allowlist is a governance contract; frontmatter is what makes `runSubagent` available at runtime.
-- The user's outcome is the authority. If convergence requires a different Bubbles mode, a child workflow, or a specialist owner, invoke that agent via `runSubagent` and continue the loop instead of asking the user to reissue the request.
-- If this goal runtime lacks `runSubagent` despite the `agent` tool being declared, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact owner invocation that would have run. If only a nested workflow child lacks `runSubagent`, parent-expand the resolved workflow mode from this goal runtime and invoke the required owner agents directly; do not mark the finding blocked solely because recursive delegation is unavailable.
+- The user's outcome is the authority. Resolve every needed mode against `workflowModeGrants`, execute each mode contract in this top-level runtime, and invoke its phase owners via `runSubagent`.
+- Never invoke `bubbles.workflow`, `bubbles.goal`, `bubbles.sprint`, or another workflow-running orchestrator as a subagent. Record every mode transition as `executionModel: direct-authorized-runner`.
+- If this goal runtime lacks `runSubagent`, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact phase owner invocation that would have run.
 
 ## Workflow Mode Engine (MANDATORY)
 
@@ -204,7 +198,7 @@ This agent is mode-driven. It MUST load and apply:
 Execution rules:
 
 1. Resolve effective workflow `mode` from `$ADDITIONAL_CONTEXT` or registry default (`autonomous-goal`).
-2. Execute phases in registry `phaseOrder` for that mode by invoking each phase's owner from `workflows.yaml.phases[<phase>].owner` via `runSubagent(<owner>)` OR by delegating the entire mode to `runSubagent(bubbles.workflow): "mode: <mode> ..."` (preferred — single-call delegation).
+2. Verify that `workflowModeGrants` authorizes `bubbles.goal`, then execute the mode's `phaseOrder` directly by invoking each specialist owner from `workflows.yaml.phases[<phase>].owner` via `runSubagent(<owner>)`. Resolve `activeWorkflowRunner` to `bubbles.goal`.
 3. Enforce all mode `requiredGates` before promotion.
 4. Route failures by `failureRouting` and respect retry policy limits.
 5. NEVER hardcode a planning chain in this file. The planning chain comes from `bootstrapAgents` and `improvementPreludeProfiles` in workflows.yaml (per workflow-orchestration-core.md Planning-First Recovery rules).
@@ -240,7 +234,7 @@ authoritative contract. Summary:
    `action: human-approval` and STOP until re-invoked with an approval token — exactly like a
    propagate backport. Approval is PRE-mutation.
 5. **Execute nodes in dependency order**, each as a depth-1 dispatch (single specialist OR
-   single-spec mode), parent-expanded in this top-level runtime. Each node's repo work runs
+  single-spec mode), directly executed in this top-level runtime. Each node's repo work runs
    in THAT repo's own command surface and is certified by `bubbles.validate` in that repo.
    Append one `.specify/runtime/scenario-runs.jsonl` ledger record per node attempt.
 6. **Verify the root outcome.** After all nodes are terminal, demonstrate the `successSignal`
@@ -290,14 +284,13 @@ When accumulating specialist `RESULT-ENVELOPE`s across convergence iterations, f
 ```yaml
 on_obstacle:
   missing_spec:
-    preferred: runSubagent(bubbles.workflow): "mode: full-delivery specs: <path>"  # bootstrap phase auto-creates missing artifacts via bootstrapAgents [analyst, ux, design, plan] + autoEscalation
-    fallback_if_nested_runtime_lacks_runSubagent: parent-expand full-delivery bootstrap phase — invoke bubbles.analyst + bubbles.ux + bubbles.design + bubbles.plan in loop until design_spec_scopes_ready
+    execute_mode_directly: full-delivery  # bootstrap phase invokes bootstrapAgents [analyst, ux, design, plan]
   test_failure:        runSubagent(bubbles.implement) with failure context
   build_failure:       runSubagent(bubbles.implement) with error output
   lint_warnings:       runSubagent(bubbles.implement)
   gate_failure:        runSubagent matching specialist for the gate
-  chaos_finding:       runSubagent(bubbles.workflow) mode: chaos-hardening OR parent-expand chaos-hardening if nested workflow lacks runSubagent
-  audit_finding:       runSubagent(bubbles.workflow) mode: bugfix-fastlane OR parent-expand bugfix-fastlane if nested workflow lacks runSubagent
+  chaos_finding:       execute chaos-hardening directly through its phase owners
+  audit_finding:       execute bugfix-fastlane directly through its phase owners
   docker_failure:      runSubagent(bubbles.implement) or runSubagent(bubbles.devops)
   blocked_2x_same:     search docs/web → runSubagent(bubbles.implement) with alternative
   blocked_3x:          mark scope blocked with evidence, continue next scope

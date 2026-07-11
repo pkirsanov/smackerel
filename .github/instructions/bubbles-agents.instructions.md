@@ -102,7 +102,7 @@ phase_1_understand:
   do: classify input and load minimal context
   call_runSubagent: no
 phase_2_dispatch:
-  do: route to the owning specialist or child workflow
+  do: route to the owning specialist or execute the mapped mode in the active authorized runner
   call_runSubagent: yes
 ```
 ````

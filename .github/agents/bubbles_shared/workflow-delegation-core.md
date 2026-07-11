@@ -6,7 +6,9 @@ Use this module to keep routing responsibilities separated across the Bubbles fr
 
 - `bubbles.super` is the ONLY natural-language dispatcher. It owns plain-English translation into workflow parameters, exact slash-command guidance, and framework-operation routing. `bubbles.workflow` and `bubbles.iterate` MUST NOT maintain duplicate intent-to-mode mapping tables.
 - `bubbles.iterate` is the ONLY highest-priority work picker. It owns backlog/work discovery, next-action selection, and `WORK-ENVELOPE` output. `bubbles.workflow` MUST NOT maintain its own work-priority heuristic when iterate is available.
-- `bubbles.workflow` owns execution only. It may parse structured `mode:` and spec targets, recover continuation packets, consume `RESOLUTION-ENVELOPE` or `WORK-ENVELOPE` outputs, and then run the selected workflow phases. It must delegate vague routing to `bubbles.super` and generic work discovery to `bubbles.iterate`.
+- `bubbles.goal` is the universal goal endpoint. It may achieve one outcome through zero, one, or several authorized workflow modes plus direct specialist dispatch.
+- `bubbles.workflow` is a narrow single-mode runner. It accepts one explicit `mode:` or one mode resolved by `bubbles.super`, then executes exactly one resolved workflow mode. It does not decompose broad goals, prioritize unrelated work, or compose multiple root modes.
+- `bubbles.sprint` is the time-bounded multi-goal runner. It prioritizes a goal queue and applies the goal execution contract directly within the active sprint runtime.
 
 ### Input Classification Contract
 
@@ -15,7 +17,7 @@ Classify incoming workflow requests into exactly one of these buckets before Pha
 1. `STRUCTURED` — explicit `mode:` keyword is present WITH concrete spec targets. `bubbles.workflow` may continue directly. **NOTE:** If spec targets are present but NO explicit `mode:` keyword exists, this is NOT structured — classify as `VAGUE` and delegate to `bubbles.super` for intent resolution. The presence of spec targets alone does not make a request structured.
 2. `CONTINUATION` — continuation envelopes, run-state, recap/status/handoff packets, or explicit continuation language tied to active workflow state are present. Preserve the active workflow mode when possible.
 3. `VAGUE` — plain-English goal with no explicit `mode:` keyword, OR spec targets present without `mode:`. Delegate to `bubbles.super` and consume a `RESOLUTION-ENVELOPE`. This includes requests with planning-intent language ("plan", "design", "scope", "create specs", "create bugs", "planning cycle") even when the user names specific specs or features — the intent still needs NL-to-mode translation.
-4. `CONTINUE` — generic keep-going language with no recoverable active workflow target. Delegate to `bubbles.iterate` and consume a `WORK-ENVELOPE`.
+4. `CONTINUE` — generic keep-going language with no recoverable active workflow target. Resolve through `bubbles.super` and route to `bubbles.goal` or `bubbles.iterate`; the workflow runner does not pick unrelated work.
 5. `FRAMEWORK` — framework operations such as doctor, hooks, upgrade, status, metrics, lessons, gates, or install. Delegate to `bubbles.super` and consume a `FRAMEWORK-ENVELOPE`.
 
 ### ⛔ Literal `mode:` Gate (MANDATORY — NON-NEGOTIABLE)
@@ -40,14 +42,15 @@ Before applying the classification contract, perform this literal substring chec
 ### Runtime Depth Compatibility Contract
 
 - Do not assume a subagent can invoke another subagent. Some host runtimes expose `agent`/`runSubagent` only to the active top-level agent.
-- Orchestrator-to-orchestrator delegation is allowed only when the child can complete without further delegation (for example, envelope-only `bubbles.super` or `bubbles.iterate` picker mode) or when nested delegation support has been confirmed.
-- If a child orchestrator would need to call other agents, the active orchestrator MUST parent-expand that workflow/goal/bug mode by invoking the required owner agents itself and recording `executionModel: parent-expanded-child-mode` (or `parent-expanded-goal`) in its ledger.
+- Workflow-running orchestrators MUST NOT invoke another workflow-running orchestrator as a subagent. The active top-level runner resolves the mode itself, verifies its grant in `workflowModeGrants`, invokes the required phase owners directly, and records `executionModel: direct-authorized-runner`.
+- Envelope-only utility dispatch remains allowed: `bubbles.super` may return a resolution envelope and `bubbles.iterate` may return a picker-only work envelope because neither path launches a nested workflow.
+- A domain orchestrator invoked as a phase owner performs only that phase and returns its result envelope. It may execute its granted workflow modes only when it owns the top-level runtime.
 - If the active orchestrator itself lacks `agent`/`runSubagent`, return `blocked`; do not emulate owner work inline and do not claim a delegation happened.
 
 - When the request is `VAGUE`, invoke `bubbles.super` as a subagent and require a `## RESOLUTION-ENVELOPE` only.
-- When the request is `CONTINUE` and no concrete workflow continuation can be recovered, invoke `bubbles.iterate` as a subagent and require a `## WORK-ENVELOPE` only.
+- When the request is `CONTINUE` and no concrete workflow continuation can be recovered, invoke `bubbles.super` for a `RESOLUTION-ENVELOPE` and route to its `targetAgent`.
 - When the request is `FRAMEWORK`, invoke `bubbles.super` as a subagent and require a `## FRAMEWORK-ENVELOPE` only.
-- `bubbles.workflow` MUST NOT re-run a second natural-language inference pass after `bubbles.super` or `bubbles.iterate` has already resolved the request.
+- `bubbles.workflow` MUST NOT re-run a second natural-language inference pass after `bubbles.super` has resolved the request.
 - `bubbles.workflow` MUST NOT recreate a local intent-to-mode keyword table or a local backlog-priority picker once these delegation paths are available.
 
 ### Envelope Consumption Rules
@@ -68,7 +71,7 @@ Use this summary before Phase 0 when no explicit `mode:` is present:
 
 1. `STRUCTURED` input (explicit `mode:` + spec targets) stays inside `bubbles.workflow`.
 2. `VAGUE` input (no `mode:` keyword, OR natural-language intent even with spec targets) delegates to `bubbles.super` and consumes only a `RESOLUTION-ENVELOPE`.
-3. `CONTINUE` input with no recoverable active workflow delegates to `bubbles.iterate` and consumes only a `WORK-ENVELOPE`.
+3. `CONTINUE` input with no recoverable active workflow delegates resolution to `bubbles.super` and routes to the returned top-level runner.
 4. `FRAMEWORK` input delegates to `bubbles.super` and consumes only a `FRAMEWORK-ENVELOPE`.
-5. After `bubbles.super` or `bubbles.iterate` resolves the request, `bubbles.workflow` MUST NOT run a second natural-language inference pass.
+5. After `bubbles.super` resolves the request, `bubbles.workflow` MUST NOT run a second natural-language inference pass.
 6. **The `STRUCTURED` classification requires the literal keyword `mode:` in the input.** Spec targets, feature names, or natural-language descriptions — even when they reference specific specs — are NOT sufficient for `STRUCTURED` classification without `mode:`.

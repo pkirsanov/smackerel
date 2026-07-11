@@ -27,9 +27,9 @@ Something's broken. You need to fix it with proper reproduction, root cause anal
 ## Full Pipeline (For Complex Bugs)
 
 ```
-/bubbles.workflow fix target:bug action:fastlane for BUG-015
+/bubbles.bug  mode: fix BUG-015
 
-/bubbles.workflow fix target:bug action:fastlane for BUG-015 tdd: true
+/bubbles.bug  mode: fix BUG-015 tdd: true
 ```
 
 **Phases:** bug-reproduce → implement-fix → test → validate

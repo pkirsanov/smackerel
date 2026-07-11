@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v7.18.0</div>
+  <div class="subtitle">Agent Orchestration System v7.19.2</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -342,15 +342,24 @@
 <div class="section-title"><img src="../icons/bubbles-glasses.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The Sunnyvale Roster — All 41 Agents</div>
 <!-- GENERATED:FRAMEWORK_STATS_ROSTER_END -->
 
-<h3 style="color: var(--accent); margin: 1rem 0 0.5rem;"><img src="../icons/bubbles-glasses.svg" width="20" style="vertical-align: middle;"> Start Here — Universal Entry Point</h3>
+<h3 style="color: var(--accent); margin: 1rem 0 0.5rem;"><img src="../icons/tyrone-chain.svg" width="20" style="vertical-align: middle;"> Start Here — Universal Goal Endpoint</h3>
 <div class="grid">
   <div class="card" style="border-color: var(--green); border-width: 2px;">
+    <div class="icon"><img src="../icons/tyrone-chain.svg" alt="Tyrone's Chain"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.goal</div>
+      <div class="character">Tyrone</div>
+      <div class="role"><strong>Universal goal endpoint.</strong> Give him one outcome; he composes any required workflows and specialist agents until it converges or hits a real blocker.</div>
+      <div class="quote">"Tell Tyrone the outcome. He handles things, that's what he does."</div>
+    </div>
+  </div>
+  <div class="card">
     <div class="icon"><img src="../icons/bubbles-glasses.svg" alt="Bubbles' Glasses"></div>
     <div class="info">
       <div class="agent-name">bubbles.workflow</div>
       <div class="character">Bubbles</div>
-      <div class="role"><strong>Universal entry point.</strong> Just describe what you want. Accepts plain English, structured commands, or "continue" — resolves intent via super, picks work via iterate, and drives all phases to completion.</div>
-      <div class="quote">"Decent. I can see how all this fits together. Just tell me what you need."</div>
+      <div class="role"><strong>Single-mode workflow runner.</strong> Executes exactly one explicit mode or one mode resolved by super.</div>
+      <div class="quote">"Decent. One plan, start to finish."</div>
     </div>
   </div>
   <div class="card">
@@ -358,7 +367,7 @@
     <div class="info">
       <div class="agent-name">bubbles.super</div>
       <div class="character">Mr. Lahey</div>
-      <div class="role">Framework ops &amp; advice. NLP resolver, command generator, health checks, framework validation, release hygiene, hooks, gates, upgrades, and repo-readiness guidance. Workflow delegates to him automatically for vague input.</div>
+      <div class="role">Resolver and framework concierge. Selects the authorized runner, mode, command, or framework action without executing product workflows.</div>
       <div class="quote">"I'm the trailer park supervisor. I'll tell you the next move."</div>
     </div>
   </div>
@@ -382,15 +391,6 @@
       <div class="character">Cory</div>
       <div class="role">Bug orchestrator. Reproduces the issue, packets the work, dispatches the right owners, and keeps going until the defect is actually closed.</div>
       <div class="quote">"I didn't wanna find it, but... there it is."</div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="icon"><img src="../icons/tyrone-chain.svg" alt="Tyrone's Chain"></div>
-    <div class="info">
-      <div class="agent-name">bubbles.goal</div>
-      <div class="character">Tyrone</div>
-      <div class="role">Autonomous single-goal executor. Give him a goal and he handles everything — spec, design, implement, test, E2E, chaos, validate, audit — looping until convergence. Never stops on fixable obstacles.</div>
-      <div class="quote">"I handle things, that's what I do."</div>
     </div>
   </div>
   <div class="card">
@@ -697,7 +697,7 @@
     <div class="icon"><img src="../icons/cory-trevor-smokes.svg" alt="Smokes"></div>
     <div class="info">
       <div class="agent-name">bubbles.handoff / bubbles.setup</div>
-      <div class="character">Cory & Trevor</div>
+      <div class="character">Cory &amp; Trevor</div>
       <div class="role">The errand duo. Refresh the framework setup, prep the assets, and carry the handoff package when the shift changes.</div>
       <div class="quote">"Smokes, let's go."</div>
     </div>
@@ -738,22 +738,22 @@
     <tr>
       <td class="cmd">sunnyvale pull-the-strings</td>
       <td class="maps-to">bubbles.workflow</td>
-      <td class="quote-col">"Bubbles is pulling the strings, boys."</td>
+      <td class="quote-col">"One plan at a time, boys. Bubbles is pulling the strings."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale i-got-a-plan-boys</td>
       <td class="maps-to">bubbles.goal</td>
-      <td class="quote-col">"I got a plan, boys, and it's a good one — the whole thing, start to finish."</td>
+      <td class="quote-col">"I got a plan, boys, and it&#x27;s a good one — the whole thing, start to finish."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale the-whole-operation</td>
       <td class="maps-to">bubbles.sprint</td>
-      <td class="quote-col">"We're runnin' the whole operation now — review, deliver, deploy, the works."</td>
+      <td class="quote-col">"We&#x27;re runnin&#x27; the whole operation now — review, deliver, deploy, the works."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale under-the-light</td>
       <td class="maps-to">bubbles.grill</td>
-      <td class="quote-col">"Let's get it under the light and see if it survives."</td>
+      <td class="quote-col">"Let&#x27;s get it under the light and see if it survives."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale private-dancer</td>
@@ -763,7 +763,7 @@
     <tr>
       <td class="cmd">sunnyvale tell-me-straight</td>
       <td class="maps-to">bubbles.journey</td>
-      <td class="quote-col">"Come on, I'll walk you through it — and tell you straight what's broken."</td>
+      <td class="quote-col">"Come on, I&#x27;ll walk you through it — and tell you straight what&#x27;s broken."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale worst-case-ontario</td>
@@ -788,22 +788,22 @@
     <tr>
       <td class="cmd">sunnyvale smokes-lets-go</td>
       <td class="maps-to">bubbles.setup</td>
-      <td class="quote-col">"Smokes, let's go."</td>
+      <td class="quote-col">"Smokes, let&#x27;s go."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale know-what-im-sayin</td>
       <td class="maps-to">bubbles.docs</td>
-      <td class="quote-col">"Know what I'm sayin'? Publish the truth."</td>
+      <td class="quote-col">"Know what I&#x27;m sayin&#x27;? Publish the truth."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale somethings-fucky</td>
       <td class="maps-to">bubbles.validate</td>
-      <td class="quote-col">"Something's fucky"</td>
+      <td class="quote-col">"Something&#x27;s fucky"</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale mans-gotta-eat</td>
       <td class="maps-to">bubbles.validate</td>
-      <td class="quote-col">"A man's gotta eat, Julian"</td>
+      <td class="quote-col">"A man&#x27;s gotta eat, Julian"</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale way-she-goes</td>
@@ -823,7 +823,7 @@
     <tr>
       <td class="cmd">sunnyvale somethings-prowlin</td>
       <td class="maps-to">bubbles.regression</td>
-      <td class="quote-col">"Something's prowlin' around in the code, boys."</td>
+      <td class="quote-col">"Something&#x27;s prowlin&#x27; around in the code, boys."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale roll-camera</td>
@@ -833,17 +833,17 @@
     <tr>
       <td class="cmd">sunnyvale greasy</td>
       <td class="maps-to">bubbles.harden</td>
-      <td class="quote-col">"That's greasy, boys."</td>
+      <td class="quote-col">"That&#x27;s greasy, boys."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale pave-your-cave</td>
       <td class="maps-to">bubbles.harden</td>
-      <td class="quote-col">"Why don't you go pave your cave?"</td>
+      <td class="quote-col">"Why don&#x27;t you go pave your cave?"</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale supply-and-command</td>
       <td class="maps-to">bubbles.plan</td>
-      <td class="quote-col">"It's supply and command, Julian"</td>
+      <td class="quote-col">"It&#x27;s supply and command, Julian"</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale jim-needs-a-plan</td>
@@ -873,12 +873,12 @@
     <tr>
       <td class="cmd">sunnyvale iron-lung-says</td>
       <td class="maps-to">bubbles.releases</td>
-      <td class="quote-col">"Iron Lung's got the ledger, boys."</td>
+      <td class="quote-col">"Iron Lung&#x27;s got the ledger, boys."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale the-super</td>
       <td class="maps-to">bubbles.super</td>
-      <td class="quote-col">"I'm the trailer park supervisor."</td>
+      <td class="quote-col">"I&#x27;m the trailer park supervisor."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale parts-unknown</td>
@@ -893,17 +893,17 @@
     <tr>
       <td class="cmd">sunnyvale whole-show</td>
       <td class="maps-to">bubbles.system-review</td>
-      <td class="quote-col">"Orangie sees everything. He's not dead, he's just... reviewing."</td>
+      <td class="quote-col">"Orangie sees everything. He&#x27;s not dead, he&#x27;s just... reviewing."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale not-how-that-works</td>
       <td class="maps-to">bubbles.test</td>
-      <td class="quote-col">"Dad, that's not how that works."</td>
+      <td class="quote-col">"Dad, that&#x27;s not how that works."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale lets-get-organized</td>
       <td class="maps-to">bubbles.design</td>
-      <td class="quote-col">"Let's get this organized."</td>
+      <td class="quote-col">"Let&#x27;s get this organized."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale whats-going-on-here</td>
@@ -913,12 +913,12 @@
     <tr>
       <td class="cmd">sunnyvale nice-kitty</td>
       <td class="maps-to">bubbles.bug</td>
-      <td class="quote-col">"That's a nice f***ing kitty right there."</td>
+      <td class="quote-col">"That&#x27;s a nice f***ing kitty right there."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale i-handle-things</td>
       <td class="maps-to">bubbles.goal</td>
-      <td class="quote-col">"I handle things, that's what I do."</td>
+      <td class="quote-col">"Tell Tyrone the outcome. He handles things, that&#x27;s what he does."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale tyrone-got-this</td>
@@ -928,12 +928,12 @@
     <tr>
       <td class="cmd">sunnyvale on-the-clock</td>
       <td class="maps-to">bubbles.sprint</td>
-      <td class="quote-col">"Inside and outside, both at once. Don't fall behind."</td>
+      <td class="quote-col">"Inside and outside, both at once. Don&#x27;t fall behind."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale next-on-the-board</td>
       <td class="maps-to">bubbles.sprint</td>
-      <td class="quote-col">"That one's done — keep both flows moving."</td>
+      <td class="quote-col">"That one&#x27;s done — keep both flows moving."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale just-fixes</td>
@@ -953,7 +953,7 @@
     <tr>
       <td class="cmd">sunnyvale ill-do-whatever</td>
       <td class="maps-to">bubbles.iterate</td>
-      <td class="quote-col">"I'll do whatever you need, Julian."</td>
+      <td class="quote-col">"I&#x27;ll do whatever you need, Julian."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale catch-me-up</td>
@@ -978,12 +978,12 @@
     <tr>
       <td class="cmd">sunnyvale whos-driving</td>
       <td class="maps-to">bubbles.retro busfactor</td>
-      <td class="quote-col">"Somebody's gotta know how to drive this thing."</td>
+      <td class="quote-col">"Somebody&#x27;s gotta know how to drive this thing."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale tangled-up</td>
       <td class="maps-to">bubbles.retro coupling</td>
-      <td class="quote-col">"It's all tangled up like Christmas lights, Randy."</td>
+      <td class="quote-col">"It&#x27;s all tangled up like Christmas lights, Randy."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale liquor-then-tape</td>
@@ -1003,12 +1003,12 @@
     <tr>
       <td class="cmd">sunnyvale liquor-then-look</td>
       <td class="maps-to">retro-to-review</td>
-      <td class="quote-col">"The liquor shows me where to look. Green Bastard tells me what's broken."</td>
+      <td class="quote-col">"The liquor shows me where to look. Green Bastard tells me what&#x27;s broken."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale cant-just-slap</td>
       <td class="maps-to">bubbles.ux</td>
-      <td class="quote-col">"You can't just slap things together."</td>
+      <td class="quote-col">"You can&#x27;t just slap things together."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale same-lot-new-trailer</td>
@@ -1018,17 +1018,17 @@
     <tr>
       <td class="cmd">sunnyvale nothing-is-bulletproof</td>
       <td class="maps-to">bubbles.redteam</td>
-      <td class="quote-col">"Nothing's bulletproof, boys. Let me prove it."</td>
+      <td class="quote-col">"Nothing&#x27;s bulletproof, boys. Let me prove it."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale prove-it</td>
       <td class="maps-to">bubbles.redteam</td>
-      <td class="quote-col">"You say it's done? Prove it."</td>
+      <td class="quote-col">"You say it&#x27;s done? Prove it."</td>
     </tr>
     <tr>
       <td class="cmd">sunnyvale this-is-my-park-now</td>
       <td class="maps-to">bubbles.redteam</td>
-      <td class="quote-col">"This is my park now. Let's see what holds."</td>
+      <td class="quote-col">"This is my park now. Let&#x27;s see what holds."</td>
     </tr>
 <!-- GENERATED:HTML_ALIASES_TABLE_END -->
   </tbody>
@@ -1047,13 +1047,13 @@
     <div class="wf-name">value-first-e2e-batch</div>
     <div class="wf-alias">→ sunnyvale boys-plan</div>
     <div class="wf-desc">Auto-discover highest-value work, full delivery pipeline. The master plan.</div>
-    <div class="wf-quote">"Boys, I got a plan. And this time it's a good one."</div>
+    <div class="wf-quote">"Boys, I got a plan. And this time it&#x27;s a good one."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">full-delivery</div>
     <div class="wf-alias">→ sunnyvale full-send</div>
     <div class="wf-desc">Default maximum-assurance delivery. Loops through implementation, tests, quality sweep, validation, and bug closure until truly green or blocked.</div>
-    <div class="wf-quote">"Just get 'er done, Julian. And keep goin' until it's actually done."</div>
+    <div class="wf-quote">"Just get &#x27;er done, Julian. And keep goin&#x27; until it&#x27;s actually done."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">full-delivery</div>
@@ -1083,13 +1083,13 @@
     <div class="wf-name">chaos-hardening</div>
     <div class="wf-alias">→ sunnyvale shit-storm</div>
     <div class="wf-desc">Iterative chaos + bugfix cycles until clean or limit reached.</div>
-    <div class="wf-quote">"We're in the eye of a shiticane, Randy."</div>
+    <div class="wf-quote">"We&#x27;re in the eye of a shiticane, Randy."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">bugfix-fastlane</div>
     <div class="wf-alias">→ sunnyvale smash-and-grab</div>
     <div class="wf-desc">Fast bug closure. In. Fix. Out. Mandatory reproduce-before/verify-after.</div>
-    <div class="wf-quote">"Get in, get out. That's a good plan."</div>
+    <div class="wf-quote">"Get in, get out. That&#x27;s a good plan."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">validate-only</div>
@@ -1100,7 +1100,7 @@
   <div class="workflow-card">
     <div class="wf-name">stochastic-quality-sweep</div>
     <div class="wf-alias">→ sunnyvale bottle-kids</div>
-    <div class="wf-desc">Randomized adversarial probing. You never know where they'll hit, and follow-up commands like <code>fix all found</code> should resume the sweep instead of dropping into raw specialist work.</div>
+    <div class="wf-desc">Randomized adversarial probing. You never know where they&#x27;ll hit, and follow-up commands like <code>fix all found</code> should resume the sweep instead of dropping into raw specialist work.</div>
     <div class="wf-quote">"BOTTLE KIDS! (runs for cover)"</div>
   </div>
   <div class="workflow-card">
@@ -1119,13 +1119,13 @@
     <div class="wf-name">docs-only</div>
     <div class="wf-alias">→ sunnyvale gnome-sayin</div>
     <div class="wf-desc">Managed-doc maintenance only. J-Roc publishes the truth.</div>
-    <div class="wf-quote">"You're sayin' 'gnome sayin'' too many times — 80, 90 times? That's too many times."</div>
+    <div class="wf-quote">"You&#x27;re sayin&#x27; &#x27;gnome sayin&#x27;&#x27; too many times — 80, 90 times? That&#x27;s too many times."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">iterate</div>
     <div class="wf-alias">→ sunnyvale keep-going</div>
     <div class="wf-desc">Priority-driven scope-by-scope execution. Picks the next thing and does it.</div>
-    <div class="wf-quote">"Keep going, boys. Don't stop."</div>
+    <div class="wf-quote">"Keep going, boys. Don&#x27;t stop."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">resume-only</div>
@@ -1137,7 +1137,7 @@
     <div class="wf-name">spec-scope-hardening (with analyze)</div>
     <div class="wf-alias">→ sunnyvale whats-the-big-idea</div>
     <div class="wf-desc">Business analysis + UX exploration. No implementation — just discovery.</div>
-    <div class="wf-quote">"What's the big idea here, Julian?"</div>
+    <div class="wf-quote">"What&#x27;s the big idea here, Julian?"</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">test-to-doc</div>
@@ -1184,8 +1184,8 @@
   <div class="workflow-card">
     <div class="wf-name">gaps-to-doc</div>
     <div class="wf-alias">→ sunnyvale gut-feeling</div>
-    <div class="wf-desc">Gap analysis → implement fixes → test → docs. Find what's missing.</div>
-    <div class="wf-quote">"What are ya lookin' at my gut fer?"</div>
+    <div class="wf-desc">Gap analysis → implement fixes → test → docs. Find what&#x27;s missing.</div>
+    <div class="wf-quote">"What are ya lookin&#x27; at my gut fer?"</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">chaos-to-doc</div>
@@ -1233,7 +1233,7 @@
     <div class="wf-name">retro-to-review</div>
     <div class="wf-alias">→ sunnyvale liquor-then-look</div>
     <div class="wf-desc">Data-driven code review. Retro identifies highest-risk files, then Green Bastard reviews them. Read-only diagnostic.</div>
-    <div class="wf-quote">"The liquor shows me where to look. Green Bastard tells me what's broken."</div>
+    <div class="wf-quote">"The liquor shows me where to look. Green Bastard tells me what&#x27;s broken."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">release-planning-to-doc</div>
@@ -1245,7 +1245,7 @@
     <div class="wf-name">idea-to-release-completion</div>
     <div class="wf-alias">→ sunnyvale rocket-appliance</div>
     <div class="wf-desc">Full lifecycle: idea → release-packet bootstrap → spec/design/scopes → implement/test/validate/audit/chaos → final packet refresh that flips capability to <code>delivered</code>.</div>
-    <div class="wf-quote">"It ain't rocket appliances, but it works."</div>
+    <div class="wf-quote">"It ain&#x27;t rocket appliances, but it works."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">release-train-cut</div>
@@ -1257,24 +1257,24 @@
     <div class="wf-name">release-train-promote</div>
     <div class="wf-alias">→ sunnyvale promote-the-pointer</div>
     <div class="wf-desc">Pointer-swap a candidate between slots on a train. Requires backup-freshness + restore-drill currency.</div>
-    <div class="wf-quote">"Pointer swap. Don't rebuild."</div>
+    <div class="wf-quote">"Pointer swap. Don&#x27;t rebuild."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">release-train-rollback</div>
     <div class="wf-alias">→ sunnyvale back-it-up</div>
     <div class="wf-desc">Revert the train pointer to the previous candidate. Pure pointer swap. No rebuild.</div>
-    <div class="wf-quote">"Back her up. We've been here before."</div>
+    <div class="wf-quote">"Back her up. We&#x27;ve been here before."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">release-train-retire</div>
     <div class="wf-alias">→ sunnyvale park-the-train</div>
     <div class="wf-desc">End-of-life a train: requires flag-retirement completion and clean upkeep ledger.</div>
-    <div class="wf-quote">"This train's done. Flags off the books first."</div>
+    <div class="wf-quote">"This train&#x27;s done. Flags off the books first."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">release-train-status-all</div>
     <div class="wf-alias">→ sunnyvale every-park-at-once</div>
-    <div class="wf-desc">J-Roc's portfolio rollup across every declared train. Read-only multi-train snapshot.</div>
+    <div class="wf-desc">J-Roc&#x27;s portfolio rollup across every declared train. Read-only multi-train snapshot.</div>
     <div class="wf-quote">"Every park, one view. Knawmsayin?"</div>
   </div>
   <div class="workflow-card">
@@ -1293,31 +1293,31 @@
     <div class="wf-name">propagate-audit</div>
     <div class="wf-alias">→ sunnyvale check-every-park</div>
     <div class="wf-desc">Read-only drift detection between declared trains. Reports unpropagated changes; never mutates.</div>
-    <div class="wf-quote">"Just lookin'. Not movin' nothin'."</div>
+    <div class="wf-quote">"Just lookin&#x27;. Not movin&#x27; nothin&#x27;."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">incident-fastlane</div>
     <div class="wf-alias">→ sunnyvale call-the-trailer</div>
     <div class="wf-desc">Production incident chain: triage → fix → validate → propagate → audit. Highest-priority operational lane.</div>
-    <div class="wf-quote">"Trailer's on fire, boys. Cory, grab the hose."</div>
+    <div class="wf-quote">"Trailer&#x27;s on fire, boys. Cory, grab the hose."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">framework-health</div>
     <div class="wf-alias">→ sunnyvale bubbles-check-yo-self</div>
     <div class="wf-desc"><code>bubbles.retro target: framework</code> — proposal-first self-observation of the framework. Writes only into <code>improvements/</code>.</div>
-    <div class="wf-quote">"Check yo'self before you wreck yo'self."</div>
+    <div class="wf-quote">"Check yo&#x27;self before you wreck yo&#x27;self."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">journey-refinement</div>
     <div class="wf-alias">→ sunnyvale walk-me-through-it</div>
     <div class="wf-desc">Guided live-product walkthrough. Cathy Curtis walks you through the live product toward a goal, verifies each step across UI/API/telemetry/data, and routes refinements to their owners.</div>
-    <div class="wf-quote">"Come on, I'll walk you through it — and tell you straight what's broken."</div>
+    <div class="wf-quote">"Come on, I&#x27;ll walk you through it — and tell you straight what&#x27;s broken."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">upkeep-backup-verify</div>
     <div class="wf-alias">→ sunnyvale check-the-backup</div>
     <div class="wf-desc">Scheduled backup verification (T1/T2/T3/T4). Calendar-driven via <code>config/upkeep-calendar.yaml</code>.</div>
-    <div class="wf-quote">"Backup or it didn't happen."</div>
+    <div class="wf-quote">"Backup or it didn&#x27;t happen."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">upkeep-restore-drill</div>
@@ -1347,7 +1347,7 @@
     <div class="wf-name">upkeep-flag-cleanup</div>
     <div class="wf-alias">→ sunnyvale retire-the-flags</div>
     <div class="wf-desc">Remove feature flags and their dead branches before <code>release-train-retire</code>.</div>
-    <div class="wf-quote">"Flag's done. Branch is dead. Out it goes."</div>
+    <div class="wf-quote">"Flag&#x27;s done. Branch is dead. Out it goes."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">upkeep-compliance-sweep</div>
@@ -1359,31 +1359,31 @@
     <div class="wf-name">adapter-readiness-to-packet</div>
     <div class="wf-alias">→ sunnyvale adapter-ready-to-go</div>
     <div class="wf-desc">Deliver an adapter to readiness state; packet certifies readiness for downstream consumption. Terminal: <code>delivered_pending_activation</code>.</div>
-    <div class="wf-quote">"Adapter's done. Operator's call when to flip it."</div>
+    <div class="wf-quote">"Adapter&#x27;s done. Operator&#x27;s call when to flip it."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">dark-launch-shipped</div>
     <div class="wf-alias">→ sunnyvale dark-and-quiet</div>
     <div class="wf-desc">Code shipped behind a default-off flag; terminal <code>delivered_pending_activation</code> until flag flip.</div>
-    <div class="wf-quote">"Shipped. Quiet. Flag's still off."</div>
+    <div class="wf-quote">"Shipped. Quiet. Flag&#x27;s still off."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">migration-shipped-pending-cutover</div>
     <div class="wf-alias">→ sunnyvale migration-shipped-not-cutover</div>
     <div class="wf-desc">Migration code shipped but cutover not executed; terminal <code>delivered_pending_activation</code> until operator cutover.</div>
-    <div class="wf-quote">"Code's there. Operator's gotta pull the lever."</div>
+    <div class="wf-quote">"Code&#x27;s there. Operator&#x27;s gotta pull the lever."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">redteam-to-doc</div>
     <div class="wf-alias">→ sunnyvale prove-it</div>
     <div class="wf-desc">Adversarial red-team attack on a finished result (Green Bastard). Finding-owned remediation chain, then validate/audit/docs. Off by default.</div>
-    <div class="wf-quote">"You say it's done? Prove it."</div>
+    <div class="wf-quote">"You say it&#x27;s done? Prove it."</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">production-adversarial-probe</div>
     <div class="wf-alias">→ sunnyvale this-is-my-park-now</div>
     <div class="wf-desc">Bounded, armed, read-only chaos-monkey probing of a LIVE system (Green Bastard on a leash). Requires arming + target allowlist; restore-or-fix; never certifies.</div>
-    <div class="wf-quote">"This is my park now. Let's see what holds."</div>
+    <div class="wf-quote">"This is my park now. Let&#x27;s see what holds."</div>
   </div>
 <!-- GENERATED:HTML_MODES_CARDS_END -->
 </div>
@@ -1394,7 +1394,23 @@
 <!-- GENERATED:HTML_VOCABULARY_CARDS_START - run `bash bubbles/scripts/generate-cheatsheet.sh` -->
   <div class="workflow-card">
     <div class="wf-name">workflow-only continuation</div>
-    <div class="wf-desc">Recap, status, and handoff point you back to <code>/bubbles.workflow ...</code> by default instead of raw <code>/bubbles.implement</code> or <code>/bubbles.test</code> commands.</div>
+    <div class="wf-desc">When one root mode is already active, recap, status, and handoff preserve that mode and route back to its authorized runner instead of dropping into raw specialists.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">universal goal endpoint</div>
+    <div class="wf-desc"><code>bubbles.goal</code> owns one requested outcome and may execute zero, one, or several authorized workflows plus direct specialist phases until convergence.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">single-mode workflow runner</div>
+    <div class="wf-desc"><code>bubbles.workflow</code> executes exactly one explicit <code>mode:</code> or one mode resolved by <code>bubbles.super</code>; it does not decompose broad goals or run timed goal queues.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">direct authorized runner</div>
+    <div class="wf-desc">The top-level agent granted a workflow mode interprets its phase order and invokes specialist owners directly. Workflow-running orchestrators never invoke one another as subagents.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">workflow mode grant</div>
+    <div class="wf-desc">A default-deny entry in <code>bubbles/agent-capabilities.yaml::workflowModeGrants</code> declaring exactly which modes an orchestrator may execute. Gate G064 enforces it.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">continuation envelope</div>
@@ -1410,7 +1426,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">framework validation</div>
-    <div class="wf-desc">The framework's own self-check surface. Runs portable-surface, ownership, registry, and selftest checks before you trust a release or upgrade.</div>
+    <div class="wf-desc">The framework&#x27;s own self-check surface. Runs portable-surface, ownership, registry, and selftest checks before you trust a release or upgrade.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">release hygiene</div>
@@ -1422,7 +1438,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">runtime capacity</div>
-    <div class="wf-desc">Weighted runtime-lease admission: heavy builds and tests acquire leases by weight (<code>--weight light|medium|heavy</code>, or <code>--weight-units N</code>), and the lease registry refuses (or <code>--wait</code>s) when the host weight budget (<code>runtime.capacityWeight</code> in <code>bubbles.config.json</code>) would be exceeded — so concurrent sessions can't OOM the box or stomp each other's build. Disabled by default (<code>capacityWeight: 0</code>); stale or released leases free their slot automatically. The park only has so many parking spots, boys.</div>
+    <div class="wf-desc">Weighted runtime-lease admission: heavy builds and tests acquire leases by weight (<code>--weight light|medium|heavy</code>, or <code>--weight-units N</code>), and the lease registry refuses (or <code>--wait</code>s) when the host weight budget (<code>runtime.capacityWeight</code> in <code>bubbles.config.json</code>) would be exceeded — so concurrent sessions can&#x27;t OOM the box or stomp each other&#x27;s build. Disabled by default (<code>capacityWeight: 0</code>); stale or released leases free their slot automatically. The park only has so many parking spots, boys.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">typed framework event</div>
@@ -1510,7 +1526,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">Liquor Inside / Liquor Outside</div>
-    <div class="wf-desc">Erica's two-location hustle. In Bubbles, this is <code>bubbles.sprint</code>: keep multiple goal streams moving under one time budget without dropping either side.</div>
+    <div class="wf-desc">Erica&#x27;s two-location hustle. In Bubbles, this is <code>bubbles.sprint</code>: keep multiple goal streams moving under one time budget without dropping either side.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">contextual persona variant</div>
@@ -1522,19 +1538,19 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">release packet</div>
-    <div class="wf-desc">The 8-doc bundle Sonny "Iron Lung" Smith produces per phase: <code>vision.md</code>, <code>features.md</code>, <code>actions.md</code>, <code>business-plan.md</code>, <code>deployment.md</code>, <code>marketing.md</code>, <code>monetization.md</code>, <code>ops-scalability.md</code>.</div>
+    <div class="wf-desc">The 8-doc bundle Sonny &quot;Iron Lung&quot; Smith produces per phase: <code>vision.md</code>, <code>features.md</code>, <code>actions.md</code>, <code>business-plan.md</code>, <code>deployment.md</code>, <code>marketing.md</code>, <code>monetization.md</code>, <code>ops-scalability.md</code>.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">release-delivery reconciliation</div>
-    <div class="wf-desc">Gate G101: every <code>delivery=required</code> feature declared in a phase's <code>features.md</code> (via <code>bubbles:feature</code> machine annotations) MUST map to a terminal + validate-certified spec. Blocks a <code>bubbles.goal</code>/<code>bubbles.sprint</code> release-phase scenario from self-certifying 'delivered' while required features are unspecced, non-terminal, blocked, or implement-self-certified. WARN-grandfathered until a packet opts in with a <code>bubbles:reconciled-packet</code> header. Enforced by <code>release-delivery-reconciliation-guard.sh</code>; the compile-time twin in <code>scenario-compile-lint.sh</code> rejects an under-scoped scenario DAG.</div>
+    <div class="wf-desc">Gate G101: every <code>delivery=required</code> feature declared in a phase&#x27;s <code>features.md</code> (via <code>bubbles:feature</code> machine annotations) MUST map to a terminal + validate-certified spec. Blocks a <code>bubbles.goal</code>/<code>bubbles.sprint</code> release-phase scenario from self-certifying &#x27;delivered&#x27; while required features are unspecced, non-terminal, blocked, or implement-self-certified. WARN-grandfathered until a packet opts in with a <code>bubbles:reconciled-packet</code> header. Enforced by <code>release-delivery-reconciliation-guard.sh</code>; the compile-time twin in <code>scenario-compile-lint.sh</code> rejects an under-scoped scenario DAG.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">carry-forward table</div>
-    <div class="wf-desc">Mandatory section in every multi-phase repo's <code>features.md</code> — captures capabilities inherited from prior phases so nothing gets quietly dropped.</div>
+    <div class="wf-desc">Mandatory section in every multi-phase repo&#x27;s <code>features.md</code> — captures capabilities inherited from prior phases so nothing gets quietly dropped.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">vision restatement</div>
-    <div class="wf-desc">Every phase's <code>vision.md</code> MUST be self-contained — no cross-references like "see vision.md in v1.0". Restate inline.</div>
+    <div class="wf-desc">Every phase&#x27;s <code>vision.md</code> MUST be self-contained — no cross-references like &quot;see vision.md in v1.0&quot;. Restate inline.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">cross-product coordination</div>
@@ -1542,7 +1558,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">surfaced principle</div>
-    <div class="wf-desc">A product principle drafted from existing repo evidence by the <code>bubbles-product-principle-discovery</code> skill, flagged "Surfaced for owner approval — not yet ratified". Owner ratifies; agents do not.</div>
+    <div class="wf-desc">A product principle drafted from existing repo evidence by the <code>bubbles-product-principle-discovery</code> skill, flagged &quot;Surfaced for owner approval — not yet ratified&quot;. Owner ratifies; agents do not.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">release train</div>
@@ -1566,7 +1582,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">dark code</div>
-    <div class="wf-desc">Code on trunk that is default-off behind a flag for trains where it isn't shipping. Lives until its train graduates + 1 cycle (then retire).</div>
+    <div class="wf-desc">Code on trunk that is default-off behind a flag for trains where it isn&#x27;t shipping. Lives until its train graduates + 1 cycle (then retire).</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">flag retirement</div>
@@ -1602,7 +1618,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">OFFSITE_BACKEND</div>
-    <div class="wf-desc">Single env var in <code><product>/<target>/params.yaml</code> that selects backup backend (<code>local-only</code> / <code>restic_usb:*</code> / <code>restic_b2:*</code> / etc). Swap requires zero product changes.</div>
+    <div class="wf-desc">Single env var in <code>&lt;product&gt;/&lt;target&gt;/params.yaml</code> that selects backup backend (<code>local-only</code> / <code>restic_usb:*</code> / <code>restic_b2:*</code> / etc). Swap requires zero product changes.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">upkeep ledger</div>
@@ -1662,15 +1678,15 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">grandfather clause</div>
-    <div class="wf-desc">Historical <code>done</code> specs remain green under new framework policy unless their <code>state.json</code> is touched in the same commit. Enforced by <code>done-spec-audit.sh --profile advisory</code> (default) and the pre-push hook's changed-spec profile. Skills-first refactor preserves this contract.</div>
+    <div class="wf-desc">Historical <code>done</code> specs remain green under new framework policy unless their <code>state.json</code> is touched in the same commit. Enforced by <code>done-spec-audit.sh --profile advisory</code> (default) and the pre-push hook&#x27;s changed-spec profile. Skills-first refactor preserves this contract.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">production cycle</div>
-    <div class="wf-desc">v5 production-operations doctrine: a release-train portfolio (DVS) operates under continuous cross-train propagation (J-Roc), production-incident fastlane (Cory + Trevor), live observability (Phil-Collins adapters), and framework self-observation (Bubbles retro target: framework). All five surfaces are mandatory for "in-production" maturity.</div>
+    <div class="wf-desc">v5 production-operations doctrine: a release-train portfolio (DVS) operates under continuous cross-train propagation (J-Roc), production-incident fastlane (Cory + Trevor), live observability (Phil-Collins adapters), and framework self-observation (Bubbles retro target: framework). All five surfaces are mandatory for &quot;in-production&quot; maturity.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">cross-train propagation</div>
-    <div class="wf-desc">J-Roc's role: moving the same fix/feature across declared release-train chains per <code>propagation-policy.yaml</code>. DVS owns the lifecycle of one train; J-Roc owns movement between trains.</div>
+    <div class="wf-desc">J-Roc&#x27;s role: moving the same fix/feature across declared release-train chains per <code>propagation-policy.yaml</code>. DVS owns the lifecycle of one train; J-Roc owns movement between trains.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">forward-merge</div>
@@ -1678,7 +1694,7 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">backport</div>
-    <div class="wf-desc">Reverse-edge propagation (e.g. prod → mvp → experimental). MUST carry an explicit <code>approvalToken</code> from the receiving train's owner. Logged in <code>propagation-ledger.yaml</code>.</div>
+    <div class="wf-desc">Reverse-edge propagation (e.g. prod → mvp → experimental). MUST carry an explicit <code>approvalToken</code> from the receiving train&#x27;s owner. Logged in <code>propagation-ledger.yaml</code>.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">propagation policy</div>
@@ -1690,11 +1706,11 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">incident fastlane</div>
-    <div class="wf-desc">Cory + Trevor's production-incident chain: triage → fix → validate → propagate → audit. Highest-priority lane; bypasses normal planning queue. Uses <code>bugfix-fastlane</code> mechanics plus mandatory cross-train propagation step.</div>
+    <div class="wf-desc">Cory + Trevor&#x27;s production-incident chain: triage → fix → validate → propagate → audit. Highest-priority lane; bypasses normal planning queue. Uses <code>bugfix-fastlane</code> mechanics plus mandatory cross-train propagation step.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">observability adapter</div>
-    <div class="wf-desc"><code>bubbles/adapters/observability/<name>.sh</code> — pluggable live-telemetry contract selected per signal+plane via <code>traceContracts.observability.endpoints</code>. Reference adapters: <code>none.sh</code> (default; returns <code>[]</code> for <code>fetch-alerts</code>, <code>{}</code> for the other three verbs), <code>prometheus.sh</code> (requires <code>PROMETHEUS_BASE_URL</code> + per-query env vars). Four verbs: <code>fetch-alerts</code>, <code>fetch-slo-burn</code>, <code>fetch-error-rate</code>, <code>fetch-deploy-impact</code>. Two planes: validate (ephemeral test stack, <code>env=test*</code>) and operate (prod, read-only).</div>
+    <div class="wf-desc"><code>bubbles/adapters/observability/&lt;name&gt;.sh</code> — pluggable live-telemetry contract selected per signal+plane via <code>traceContracts.observability.endpoints</code>. Reference adapters: <code>none.sh</code> (default; returns <code>[]</code> for <code>fetch-alerts</code>, <code>{}</code> for the other three verbs), <code>prometheus.sh</code> (requires <code>PROMETHEUS_BASE_URL</code> + per-query env vars). Four verbs: <code>fetch-alerts</code>, <code>fetch-slo-burn</code>, <code>fetch-error-rate</code>, <code>fetch-deploy-impact</code>. Two planes: validate (ephemeral test stack, <code>env=test*</code>) and operate (prod, read-only).</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">observability posture</div>
@@ -1710,11 +1726,11 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">adversarial verification</div>
-    <div class="wf-desc">Green Bastard (<code>bubbles.redteam</code>) attacks a FINISHED result to falsify the "done" claim — evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, and bounded chaos-monkey probing of live systems. It emits findings and NEVER certifies (completion stays with <code>bubbles.validate</code>). OFF BY DEFAULT. The missing post-result adversary alongside <code>bubbles.grill</code>, which pressure-tests ideas pre-build.</div>
+    <div class="wf-desc">Green Bastard (<code>bubbles.redteam</code>) attacks a FINISHED result to falsify the &quot;done&quot; claim — evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, and bounded chaos-monkey probing of live systems. It emits findings and NEVER certifies (completion stays with <code>bubbles.validate</code>). OFF BY DEFAULT. The missing post-result adversary alongside <code>bubbles.grill</code>, which pressure-tests ideas pre-build.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">adversarial posture</div>
-    <div class="wf-desc">The effective on/off/passes/teeth resolved by <code>adversarial-resolve.sh</code> via one precedence chain: per-run directive (<code>adversarial: on passes: 3</code>) -> <code>BUBBLES_ADVERSARIAL*</code> env -> <code>.github/bubbles-project.yaml</code> <code>adversarial:</code> block -> framework default <code>off</code>. Seamless opt-in; zero behavior change on upgrade.</div>
+    <div class="wf-desc">The effective on/off/passes/teeth resolved by <code>adversarial-resolve.sh</code> via one precedence chain: per-run directive (<code>adversarial: on passes: 3</code>) -&gt; <code>BUBBLES_ADVERSARIAL*</code> env -&gt; <code>.github/bubbles-project.yaml</code> <code>adversarial:</code> block -&gt; framework default <code>off</code>. Seamless opt-in; zero behavior change on upgrade.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">guided journey</div>
@@ -1818,8 +1834,8 @@
     <span class="quote-text">Owners execute. Diagnostics and certification packetize.</span>
   </div>
   <div class="line">
-    <span class="situation">Who can spawn child workflows</span>
-    <span class="quote-text"><code>bubbles.workflow</code>, <code>bubbles.iterate</code>, <code>bubbles.bug</code></span>
+    <span class="situation">Who can run workflow modes</span>
+    <span class="quote-text"><code>workflowModeGrants</code> — default deny, top-level only</span>
   </div>
   <div class="line">
     <span class="situation">Framework self-check</span>
@@ -2004,8 +2020,8 @@
     <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Success signal"</span><span class="context">— observable user/system proof that the outcome was achieved, not 'tests pass'</span></div>
     <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Hard constraint"</span><span class="context">— business invariant that survives model upgrades: 'never double-charge', 'PII encrypted'</span></div>
     <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Model compensation"</span><span class="context">— gate that exists because current models fabricate/shortcut; review when models improve</span></div>
-    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Just tell Bubbles"</span><span class="context">— start with /bubbles.workflow and describe what you want in plain English</span></div>
-    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Bubbles figures it out"</span><span class="context">— workflow delegates to super for NLP + iterate for work-picking. Zero knowledge required.</span></div>
+    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Just tell Tyrone"</span><span class="context">— start with /bubbles.goal and describe one outcome</span></div>
+    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Bubbles runs one plan"</span><span class="context">— workflow executes exactly one explicit or super-resolved mode</span></div>
   </div>
 </div>
 
@@ -2167,7 +2183,7 @@
 </div>
 
 <div class="quick-ref">
-  <h3>🧪 Testing & Validation</h3>
+  <h3>🧪 Testing &amp; Validation</h3>
   <div class="line">
     <span class="situation">test runner starts</span>
     <span class="quote-text">"Dad, that's not how that works."</span>
@@ -2289,7 +2305,7 @@
     <tr><td class="cmd">"Worst case Ontario"</td><td class="maps-to">Worst case scenario</td><td class="quote-col">Chaos testing fallback</td></tr>
     <tr><td class="cmd">"Get two birds stoned at once"</td><td class="maps-to">Kill two birds with one stone</td><td class="quote-col">Implement + test combo</td></tr>
     <tr><td class="cmd">"It's not rocket appliances"</td><td class="maps-to">It's not rocket science</td><td class="quote-col">When someone overcomplicates things</td></tr>
-    <tr><td class="cmd">"Supply and command"</td><td class="maps-to">Supply and demand</td><td class="quote-col">Planning & resource allocation</td></tr>
+    <tr><td class="cmd">"Supply and command"</td><td class="maps-to">Supply and demand</td><td class="quote-col">Planning &amp; resource allocation</td></tr>
     <tr><td class="cmd">"Water under the fridge"</td><td class="maps-to">Water under the bridge</td><td class="quote-col">Simplification complete, move on</td></tr>
     <tr><td class="cmd">"I toad a so"</td><td class="maps-to">I told you so</td><td class="quote-col">When Conky (harden) was right</td></tr>
     <tr><td class="cmd">"Same lot, new trailer"</td><td class="maps-to">Major redesign on top of the existing feature footprint</td><td class="quote-col">Reconcile stale artifacts, then rebuild the active plan</td></tr>
@@ -2324,8 +2340,9 @@
     <tr><td class="cmd">"The park knows what you like"</td><td class="maps-to">Personalized from observed behavior</td><td class="quote-col">Developer profile auto-resolving taste decisions from 3+ observations</td></tr>
     <tr><td class="cmd">"Same greasy mistake three times"</td><td class="maps-to">Repeated pattern detected</td><td class="quote-col">Skill evolution loop — lessons→pattern→skill proposal after 3+ occurrences, carrying the quality bar (Reusable · Non-trivial · Specific · Verified) + the promote decision rule</td></tr>
     <tr><td class="cmd">"Count the empties, Randy"</td><td class="maps-to">Count what actually happened</td><td class="quote-col">Activity tracking — only measurable metrics (invocations, durations, retries), no fabricated costs</td></tr>
-    <tr><td class="cmd">"Just tell Bubbles"</td><td class="maps-to">Start with /bubbles.workflow and describe what you want</td><td class="quote-col">Universal entry point — workflow resolves intent, picks work, drives phases</td></tr>
-    <tr><td class="cmd">"Bubbles figures it out"</td><td class="maps-to">Workflow delegates to super + iterate automatically</td><td class="quote-col">Intent delegation — no need to know which agent or mode to use</td></tr>
+    <tr><td class="cmd">"Just tell Tyrone"</td><td class="maps-to">Start with /bubbles.goal and describe one outcome</td><td class="quote-col">Universal goal endpoint — may compose workflows and specialists</td></tr>
+    <tr><td class="cmd">"Bubbles runs one plan"</td><td class="maps-to">Use /bubbles.workflow for one explicit or super-resolved mode</td><td class="quote-col">Deterministic single-mode workflow execution</td></tr>
+    <tr><td class="cmd">"Lahey points at the right trailer"</td><td class="maps-to">Use /bubbles.super for runner and mode resolution</td><td class="quote-col">Resolution and framework operations without product-workflow execution</td></tr>
     <tr><td class="cmd">"What's it supposed to DO?"</td><td class="maps-to">Define the outcome before the process</td><td class="quote-col">Outcome Contract — Intent, Success Signal, Hard Constraints must exist before work starts</td></tr>
     <tr><td class="cmd">"Tests passed but it don't WORK"</td><td class="maps-to">Process completion ≠ outcome achieved</td><td class="quote-col">G070 — a feature can pass every gate and still fail its own Success Signal</td></tr>
     <tr><td class="cmd">"That rule ain't going anywhere"</td><td class="maps-to">Business invariant that transcends model generations</td><td class="quote-col">Hard Constraints survive model upgrades; model compensations get reviewed</td></tr>
@@ -2383,7 +2400,7 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v7.18.0 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v7.19.2 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
   <p>109 Gates • 41 Agents • 60 Workflow Modes • 30 Phases • 0 Shit Hawks</p>

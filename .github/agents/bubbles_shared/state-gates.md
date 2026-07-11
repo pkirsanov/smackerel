@@ -23,8 +23,8 @@ Purpose: compact state/completion rules that must remain authoritative for all a
 - `policySnapshot` must record effective mode settings with provenance (Gate G055).
 - `transitionRequests` and `reworkQueue` must be empty before certification (Gate G061).
 - Diagnostic and certification agents must route foreign-owned remediation instead of fixing inline (Gate G042).
-- Agent and child-workflow invocations must end with a concrete result outcome, not narrative-only findings (Gate G063).
-- Only orchestrators may invoke child workflows, and nesting depth must remain bounded (Gate G064).
+- Agent and mapped-mode phase invocations must end with a concrete result outcome, not narrative-only findings (Gate G063).
+- Workflow modes execute only in an authorized top-level runner; nested workflow-runner dispatch is forbidden (Gate G064).
 - Phase claims in `completedPhaseClaims` must have matching agent provenance in `executionHistory` (Gate G066). An agent may only record its own phase name; cross-phase impersonation is fabrication.
 
 ## Optional Readiness Verdict (validate-owned, advisory)
@@ -39,7 +39,7 @@ Purpose: compact state/completion rules that must remain authoritative for all a
 - `artifact-freshness-guard.sh` — superseded content isolation (G052)
 - `traceability-guard.sh` — Gherkin-to-test-to-evidence linkage, scenario manifest cross-check (G057/G059)
 - `done-spec-audit.sh` — post-completion audit running state-transition-guard + artifact-lint + traceability-guard for all `done` specs
-- `agent-ownership-lint.sh` — ownership/capability registry validation plus owner-only remediation, result-envelope, and child-workflow policy checks (G042/G042/G063/G064)
+- `agent-ownership-lint.sh` + `workflow-runner-grants-lint.sh` — ownership/result contracts plus authorized direct workflow execution (G042/G063/G064)
 
 ## Pseudo-Completion Language Gate (G040)
 
