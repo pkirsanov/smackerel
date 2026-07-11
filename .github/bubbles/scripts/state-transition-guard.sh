@@ -366,6 +366,7 @@ transition_requests_file="$feature_dir/transition-requests.json"
 # shellcheck disable=SC2034
 rework_queue_file="$feature_dir/rework-queue.json"
 framework_ownership_lint_script="$SCRIPT_DIR/agent-ownership-lint.sh"
+workflow_grants_lint_script="$SCRIPT_DIR/workflow-runner-grants-lint.sh"
 
 if [[ "$scope_layout" == "per-scope-directory" ]]; then
   while IFS= read -r scope_path; do
@@ -769,20 +770,20 @@ echo ""
 source "$SCRIPT_DIR/guards/control-plane-checks.sh"
 
 # =============================================================================
-# CHECK 3G: Framework ownership/result contract integrity (G042/G063/G064)
+# CHECK 3G: Framework ownership/result contract integrity (G042/G063)
 # =============================================================================
-echo "--- Check 3G: Framework Ownership And Result Contract (G042/G063/G064) ---"
+echo "--- Check 3G: Framework Ownership And Result Contract (G042/G063) ---"
 if [[ -x "$framework_ownership_lint_script" || -f "$framework_ownership_lint_script" ]]; then
   _c3g_start=$(date +%s)
   _c3g_rc=0
   bubbles_run_with_timeout 30 bash "$framework_ownership_lint_script" >/tmp/bubbles-agent-ownership-lint.$$ 2>&1 || _c3g_rc=$?
   _c3g_elapsed=$(( $(date +%s) - _c3g_start ))
   if [[ "$_c3g_rc" -eq 124 ]]; then
-    fail "Framework ownership lint TIMED OUT after 30s (BUG-001 guard) — G042/G063/G064 not certified. Inspect $framework_ownership_lint_script for an unbounded walk."
+    fail "Framework ownership lint TIMED OUT after 30s (BUG-001 guard) — G042/G063 not certified. Inspect $framework_ownership_lint_script for an unbounded walk."
   elif [[ "$_c3g_rc" -eq 0 ]]; then
-    pass "Framework ownership lint passed — artifact ownership enforcement, concrete result contract, and child workflow policy are internally consistent (${_c3g_elapsed}s)"
+    pass "Framework ownership lint passed — artifact ownership enforcement and concrete result contract are internally consistent (${_c3g_elapsed}s)"
   else
-    fail "Framework ownership lint failed — G042/G063/G064 cannot be certified during state transition"
+    fail "Framework ownership lint failed — G042/G063 cannot be certified during state transition"
     while IFS= read -r lint_line; do
       [[ -n "$lint_line" ]] || continue
       echo "   → $lint_line"
@@ -793,7 +794,31 @@ if [[ -x "$framework_ownership_lint_script" || -f "$framework_ownership_lint_scr
   fi
   rm -f /tmp/bubbles-agent-ownership-lint.$$
 else
-  fail "Framework ownership lint script not found at $framework_ownership_lint_script — cannot enforce G042/G063/G064"
+  fail "Framework ownership lint script not found at $framework_ownership_lint_script — cannot enforce G042/G063"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 3H: Workflow runner authorization (G064)
+# =============================================================================
+echo "--- Check 3H: Workflow Runner Authorization (G064) ---"
+if [[ -x "$workflow_grants_lint_script" || -f "$workflow_grants_lint_script" ]]; then
+  _c3h_rc=0
+  bubbles_run_with_timeout 30 bash "$workflow_grants_lint_script" >/tmp/bubbles-workflow-grants-lint.$$ 2>&1 || _c3h_rc=$?
+  if [[ "$_c3h_rc" -eq 124 ]]; then
+    fail "Workflow runner grants lint TIMED OUT after 30s — G064 not certified"
+  elif [[ "$_c3h_rc" -eq 0 ]]; then
+    pass "Workflow runner grants lint passed — mode execution is top-level, direct, and authorized"
+  else
+    fail "Workflow runner grants lint failed — G064 cannot be certified during state transition"
+    while IFS= read -r lint_line; do
+      [[ -n "$lint_line" ]] || continue
+      echo "   → $lint_line"
+    done < /tmp/bubbles-workflow-grants-lint.$$
+  fi
+  rm -f /tmp/bubbles-workflow-grants-lint.$$
+else
+  fail "Workflow runner grants lint script not found at $workflow_grants_lint_script — cannot enforce G064"
 fi
 echo ""
 
@@ -1459,6 +1484,8 @@ for p in set(names):
     # Orchestrator allowlist for parent-expansion (sourced from workflows.yaml is future work;
     # for now hardcode the three registered orchestrators).
     orchestrator_allowlist="bubbles.workflow bubbles.goal bubbles.sprint bubbles.iterate"
+    # Legacy read compatibility: historical v6/v7 state may contain parent-expanded
+    # phase provenance. New executions use direct-authorized-runner (Gate G064).
     expansion_reason_regex='runSubagent|tool unavailable|nested runtime|capability missing|parent-expand|nested workflow'
     spec_dir_for_evidence="$(dirname "$state_file")"
 
@@ -1479,7 +1506,7 @@ for p in set(names):
           matched="true"
         fi
 
-        # Pass 2: parent-expanded provenance (new — per upstream fix proposal)
+        # Pass 2: legacy parent-expanded provenance (read-only compatibility)
         if [[ "$matched" == "false" ]]; then
           # Find a parent-expanded entry for this phase
           pe_line="$(echo "$execution_history_block" | awk -F'\t' -v p="$claimed_phase" '$2==p && $3=="parent-expanded" {print; exit}')"
@@ -1816,7 +1843,12 @@ test_files_in_plan=()
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
   while IFS= read -r line; do
-    path="$(echo "$line" | grep -oE '`[^`]+\.(spec|test|rs|ts|tsx|js|jsx)\b[^`]*`' | sed 's/`//g' | head -1 || true)"
+    # Extract the file-path TOKEN from within a backtick block, not the whole
+    # block. Test Plans routinely reference tests as COMMANDS
+    # (`bash tests/x.sh`, `bash -n a.sh && shellcheck a.sh`, `./run.sh test`),
+    # so capturing the entire backtick block would treat the command string as
+    # a bogus non-existent "path" and false-BLOCK. Isolate the path token.
+    path="$(echo "$line" | grep -oE '`[^`]*`' | grep -oE '[A-Za-z0-9._/-]+\.(spec|test|rs|ts|tsx|js|jsx|sh|bash|bats|py|go|java|scala|dart)\b' | head -1 || true)"
     if [[ -n "$path" ]] && [[ "$path" != "[path]" ]] && [[ ! "$path" =~ ^\[ ]]; then
       test_files_in_plan+=("$path")
     fi

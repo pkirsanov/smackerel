@@ -242,11 +242,27 @@ generatedFrom:
   - agents/bubbles.*.agent.md
   - bubbles/agent-ownership.yaml
   - bubbles/workflows.yaml
+workflowModeGrants:
+  defaultAllowed: false
+  executionModel: direct-authorized-runner
+  topLevelRuntimeRequired: true
+  nestedWorkflowRunnerDispatch: forbidden
+  agents:
+    bubbles.workflow:
+      modes: ["*"]
+      excludedModes: [autonomous-goal, autonomous-sprint, iterate]
+      maxRootModesPerRun: 1
+    bubbles.goal:
+      modes: ["*"]
+      excludedModes: [autonomous-sprint, iterate]
+    bubbles.bug:
+      modes: [bugfix-fastlane]
+    bubbles.releases:
+      modes: [release-planning-to-doc]
 agents:
   bubbles.workflow:
     class: orchestrator
-    canInvokeChildWorkflows: true
-    maxChildWorkflowDepth: 1
+    canExecuteWorkflowModes: true
     ownsPhases:
       - finalize
     delegatesPhases:
@@ -272,7 +288,6 @@ agents:
       certification: []
   bubbles.validate:
     class: certification
-    canInvokeChildWorkflows: false
     ownsPhases:
       - validate
       - certify-state
@@ -295,7 +310,6 @@ agents:
       testCoverage: bubbles.test
   bubbles.grill:
     class: interactive-gate
-    canInvokeChildWorkflows: false
     ownsPhases:
       - interrogate
     canAskUserDirectly: true
@@ -308,12 +322,12 @@ agents:
 ### Invariants
 
 - generated file only; do not hand-edit
-- every workflow phase must resolve to exactly one owning agent or explicit owner chain
+- every specialist phase must resolve to exactly one owning agent or explicit owner chain; `analyze`, `discover`, `bootstrap`, and `finalize` resolve through `activeWorkflowRunner`
 - agents must resolve into one primary class; hybrids are not allowed
 - certification fields may only be owned by `bubbles.validate`
 - `canAskUserDirectly` must be explicit for every agent
-- only orchestrators may invoke child workflow modes
-- child workflow depth must be bounded by registry policy, with parent-expanded execution when nested delegation is unavailable
+- workflow mode execution is default-deny and allowed only by `workflowModeGrants`
+- workflow-running orchestrators execute modes only from the top-level runtime and never invoke another workflow runner as a subagent
 
 ## 2. Execution Policy Registry
 
@@ -735,7 +749,7 @@ Migration rule:
 
 ## 5. Specialist Result Envelope
 
-Proposed payload: returned by every agent or child workflow invocation.
+Proposed payload: returned by every agent or mapped-mode phase invocation.
 
 ```json
 {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bubbles/scripts/top-level-runtime-routing-selftest.sh
 #
-# Selftest for the requiresTopLevelRuntime routing rule.
+# Selftest for requiresTopLevelRuntime plus direct authorized runner routing.
 #
 # Asserts:
 #   T1. Every mode in the canonical FAN_OUT_MODES list has
@@ -14,6 +14,8 @@
 #       Top-level-runtime modes section.
 #   T5. Every mode in FAN_OUT_MODES is mentioned by name in the
 #       Top-level-runtime modes section of workflow-execution-loops.md.
+#   T6. The execution doctrine names direct-authorized-runner and contains no
+#       active parent-expanded-child-mode fallback.
 #
 # Exit 0 = all assertions pass. Exit 1 = at least one assertion failed.
 
@@ -120,6 +122,18 @@ if grep -q "routingReason: \"top-level-runtime-required\"" "$EXEC_LOOPS"; then
   pass "T4c: workflow-execution-loops.md specifies the route_required routingReason"
 else
   fail "T4c: workflow-execution-loops.md missing route_required routingReason spec"
+fi
+
+if grep -q "executionModel: direct-authorized-runner\|executionModel=direct-authorized-runner" "$EXEC_LOOPS"; then
+  pass "T6a: workflow-execution-loops.md specifies direct authorized execution"
+else
+  fail "T6a: workflow-execution-loops.md missing direct authorized execution model"
+fi
+
+if grep -q "parent-expanded-child-mode" "$EXEC_LOOPS"; then
+  fail "T6b: workflow-execution-loops.md still contains the retired parent-expanded fallback"
+else
+  pass "T6b: workflow-execution-loops.md contains no retired parent-expanded fallback"
 fi
 
 # --- T5: each fan-out mode is named in the Top-level-runtime modes section ---

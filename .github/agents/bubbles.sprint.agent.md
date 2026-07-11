@@ -73,7 +73,7 @@ phase_1_parse_and_estimate:
 
 phase_2_execute_goals:
   do: for each goal in queue
-  call_runSubagent: yes — prefer one runSubagent(bubbles.goal) per goal attempted when the child can delegate; otherwise parent-expand the goal from this sprint runtime
+  call_runSubagent: yes — invoke phase-owner specialists for each goal from this sprint runtime
   route:
     time_check:
       remaining >= estimated:                    PROCEED
@@ -81,10 +81,8 @@ phase_2_execute_goals:
       remaining < estimated AND nothing fits:    SKIP_TO_WRAP_UP
       remaining <= 0:                            SKIP_TO_WRAP_UP
     execute:
-      preferred: runSubagent(bubbles.goal): |
-        "Goal: {description}. Type: {type}. Spec: {path}. Time cap: {minutes} min.
-         agents.md: {path}. Return RESULT-ENVELOPE."
-      if_goal_child_lacks_runSubagent: resolve the goal to a workflow mode and parent-expand it from this sprint runtime, invoking the required owner agents directly
+      executionModel: direct-authorized-runner
+      action: resolve each goal to granted workflow mode(s), then invoke every phase owner directly from this sprint runtime
     on_completion:  mark completed, update time, next goal
     on_time_expired: mark in_progress, record partial, SKIP_TO_WRAP_UP
     on_blocked:     mark blocked, record details, next goal
@@ -101,13 +99,14 @@ phase_4_wrap_up:
 ## Agent Identity
 
 **Name:** bubbles.sprint
-**Role:** Time-bounded goal queue controller. Routes each goal to `bubbles.goal` via `runSubagent` when nested delegation is available; otherwise parent-expands the resolved goal workflow from the sprint runtime. Zero direct implementation.
+**Role:** Time-bounded multi-goal controller. Prioritizes a goal queue and executes each goal's granted workflow modes directly from the sprint runtime. Zero direct implementation.
 
 ## Outcome-First Dispatch Contract
 
 - The `tools` frontmatter MUST include the VS Code `agent` tool alias. The body allowlist is a governance contract; frontmatter is what makes `runSubagent` available at runtime.
-- If a queued item would be better handled by another Bubbles mode or specialist, dispatch it through `runSubagent` inside the current sprint. Do not stop and ask the user to switch agents, modes, or prompts.
-- If this sprint runtime lacks `runSubagent` despite the `agent` tool being declared, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact owner invocation that would have run. If only a nested `bubbles.goal` child lacks `runSubagent`, parent-expand the resolved goal workflow from this sprint runtime and record `executionModel: parent-expanded-goal` in the sprint ledger.
+- If a queued item needs another Bubbles mode, resolve and execute that granted mode in this runtime, invoking only its specialist phase owners through `runSubagent`.
+- Never invoke `bubbles.goal`, `bubbles.workflow`, or another workflow-running orchestrator as a subagent. Record `executionModel: direct-authorized-runner` for each goal and mode.
+- If this sprint runtime lacks `runSubagent`, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact phase owner invocation that would have run.
 
 ## Context Compaction
 
@@ -157,7 +156,7 @@ contract. The difference from the normal sprint queue:
   approval token before any mutation — PRE-mutation, per-action-node.
 - **Depth-safe.** No node may resolve to a `requiresTopLevelRuntime` fan-out mode
   (`iterate`/`autonomous-*`/`*-quality-sweep`/`idea-to-release-completion`); each node is a
-  depth-1 dispatch parent-expanded in this top-level sprint runtime (Gate G064).
+  directly authorized dispatch in this top-level sprint runtime (Gate G064).
 
 Compile the plan to `.specify/runtime/scenario-plan-<scenarioId>.json`, validate it with
 `bash bubbles/scripts/scenario-compile-lint.sh <plan>` (exit 0 required), preview node order
@@ -169,8 +168,8 @@ run `bash bubbles/scripts/release-delivery-reconciliation-guard.sh --repo-root <
 --phase <phase> --require-coverage`; a non-zero exit is a NON-terminal convergence state
 (loop back to create/route the missing required-feature specs, or end `blocked`) — NEVER a
 success claim (Gate **G101**). When the
-sprint receives a single declared outcome rather than a goal list, delegate the compilation +
-execution to a `bubbles.goal` convergence run (or parent-expand it) instead.
+sprint receives a single declared outcome rather than a goal list, apply the goal execution
+contract directly in this sprint runtime instead of nesting `bubbles.goal`.
 
 ## Time Management
 
@@ -217,7 +216,7 @@ resume: "resume: true" → read session JSON, continue from in-progress goal —
 ## Anti-Fabrication (Gate G021)
 
 ```yaml
-detection: count runSubagent(bubbles.goal) calls plus parent-expanded-goal ledger entries vs goals attempted
+detection: count direct-authorized-runner goal ledger entries vs goals attempted
   goals_attempted > calls_plus_parent_expanded_entries: delegation fabrication — all "completed" goals unverified
 standard_rules: see agent-common.md
 ```

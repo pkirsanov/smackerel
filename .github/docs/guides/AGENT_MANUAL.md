@@ -6,19 +6,26 @@ Authoritative operating policy lives under `agents/bubbles_shared/`. This manual
 
 ## Start Here First
 
-### bubbles.workflow (Universal Entry Point)
+### bubbles.goal (Universal Goal Endpoint)
 
-**Start here.** `/bubbles.workflow` accepts plain English, structured commands, or "continue" and drives the right workflow to completion. It delegates to `super` for intent resolution and `iterate` for work-picking — you don't need to know which agent, mode, or parameters to use.
+**Start here for an outcome.** `/bubbles.goal` may use zero, one, or several workflows and specialists until the requested result converges.
 
 ```
-/bubbles.workflow  improve the booking feature
-/bubbles.workflow  continue
+/bubbles.goal  improve the booking feature
+/bubbles.goal  continue
+```
+
+### bubbles.workflow (Single-Mode Runner)
+
+Use when you want exactly one explicit or `bubbles.super`-resolved workflow mode:
+
+```
 /bubbles.workflow  specs/042 mode: full-delivery
 ```
 
 ### bubbles.super
 
-Use for framework operations (doctor, framework validation, release checks, framework events, run-state inspection, hooks, upgrade, metrics, repo-readiness guidance) or when you want command recommendations without execution. Workflow delegates to super automatically for vague input. Super should dynamically discover the live agent, mode, command, recipe, skill, instruction, risk, and runtime surfaces before recommending commands.
+Use for framework operations or command recommendations without product-workflow execution. Super resolves the authorized top-level runner as well as the mode and dynamically discovers the live agent, mode, recipe, skill, instruction, risk, and runtime surfaces before recommending anything.
 
 Primary references:
 - `bubbles/workflows.yaml`
@@ -64,16 +71,34 @@ Common source modules:
 
 | Agent | Use When | Primary References |
 |------|----------|--------------------|
-| `bubbles.workflow` | **universal entry point** — run any Bubbles work by describing it in plain English, structured commands, or "continue" | `bubbles/workflows.yaml`, `scope-workflow.md`, `state-gates.md` |
+| `bubbles.goal` | **universal goal endpoint** — achieve one outcome through any necessary modes and specialists | `AUTONOMOUS_EXECUTION.md`, `bubbles/workflows.yaml` |
+| `bubbles.workflow` | deterministic runner for exactly one explicit or super-resolved root mode | `bubbles/workflows.yaml`, `scope-workflow.md`, `state-gates.md` |
 | `bubbles.iterate` | pick the highest-priority next work slice inside an existing spec and drive one iteration through the right specialists | `scope-workflow.md`, `completion-governance.md`, `quality-gates.md` |
-| `bubbles.goal` | **autonomous single-goal execution** — give a goal in plain English and the agent handles everything (plan, implement, test, E2E, chaos, validate, audit, remediate) looping until full convergence | `AUTONOMOUS_EXECUTION.md`, `bubbles/workflows.yaml` |
 | `bubbles.sprint` | **autonomous multi-goal sprint** — give multiple goals and a time budget; the agent prioritizes, executes each via convergence loop, manages the clock, and stops gracefully | `AUTONOMOUS_EXECUTION.md`, `bubbles/workflows.yaml` |
 | `bubbles.bug` | investigate a bug, create bug artifacts, and dispatch the required fix workflow | `artifact-lifecycle.md`, `completion-governance.md`, `quality-gates.md` |
 
+### Domain Workflow Runners
+
+These agents may execute only the mode families granted in `bubbles/agent-capabilities.yaml::workflowModeGrants` when they own the top-level turn:
+
+| Agent | Granted workflow family |
+|------|--------------------------|
+| `bubbles.bug` | `bugfix-fastlane` |
+| `bubbles.releases` | `release-planning-to-doc` |
+| `bubbles.train` | `release-train-*` |
+| `bubbles.upkeep` | `upkeep-*` |
+| `bubbles.propagate` | `propagate-*` |
+| `bubbles.stabilize` | `stabilize-to-doc`, `incident-fastlane` |
+| `bubbles.retro` | retro action modes and `framework-health` |
+| `bubbles.journey` | `journey-refinement` |
+
+When one of these agents is invoked as a phase owner by another runner, it performs only that phase and returns a result envelope. It does not start its workflow recursively.
+
 Orchestrator rule:
-- orchestrators pick work and dispatch specialists or child workflow modes
+- authorized orchestrators resolve workflow modes and dispatch specialist phase owners
 - orchestrators do not implement fixes directly
-- only orchestrators may invoke child workflow modes; if nested delegation is unavailable, the active orchestrator parent-expands the mapped mode and still delegates owner work to specialists
+- workflow execution is top-level and default-deny via `workflowModeGrants`; workflow-running orchestrators never invoke one another as subagents
+- domain runners such as bug, releases, train, upkeep, propagation, stabilize, retro, and journey may execute only their granted mode families
 - orchestration-heavy agents may use structural YAML body sections such as `TOOL ALLOWLIST` and `PHASE ROUTER`, but frontmatter still controls actual VS Code tool availability
 
 ### `tools:` frontmatter convention

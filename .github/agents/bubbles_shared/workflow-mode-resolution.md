@@ -1,6 +1,6 @@
 ## Workflow Mode Resolution
 
-Use this module as the canonical mode-selection reference for `bubbles.workflow`.
+Use this module as the canonical mode-selection reference for every authorized workflow runner.
 
 ### Mode Selection Decision Tree
 
@@ -38,10 +38,18 @@ Use this table to select the correct mode based on the execution goal.
 
 ### Invocation Syntax
 
-`bubbles.workflow` remains the execution orchestrator. Use:
+For one ordinary explicit mode, use the single-mode runner:
 
 ```text
 /bubbles.workflow <spec-targets> mode: <mode-name>
+```
+
+Meta modes use their registered owners:
+
+```text
+/bubbles.goal <outcome>
+/bubbles.sprint minutes: <N> <goal-list>
+/bubbles.iterate iterations: <N>
 ```
 
 Minimal syntax anchors retained in the workflow shell:
@@ -50,7 +58,7 @@ Minimal syntax anchors retained in the workflow shell:
 /bubbles.workflow <spec-targets> mode: <mode-name>
 /bubbles.workflow <spec-targets> mode: full-delivery
 /bubbles.workflow <spec-targets> mode: stochastic-quality-sweep maxRounds: 10
-/bubbles.workflow <spec-targets> mode: iterate iterations: 3
+/bubbles.iterate iterations: 3
 ```
 
 ### Invocation Examples
@@ -83,20 +91,19 @@ Minimal syntax anchors retained in the workflow shell:
 /bubbles.workflow 011-037 mode: stochastic-quality-sweep
 /bubbles.workflow mode: stochastic-quality-sweep minutes: 60 triggerAgents: chaos,validate
 /bubbles.workflow 011,027,037 mode: stochastic-quality-sweep maxRounds: 5 triggerAgents: harden,gaps,simplify
-/bubbles.workflow mode: iterate
-/bubbles.workflow mode: iterate iterations: 5
-/bubbles.workflow mode: iterate minutes: 120
-/bubbles.workflow mode: iterate type: improve
-/bubbles.workflow mode: iterate type: chaos
+/bubbles.iterate iterations: 5
+/bubbles.iterate minutes: 120
+/bubbles.iterate type: improve
+/bubbles.iterate type: chaos
 ```
 
 ### Status Ceiling Warning
 
-When a selected mode has `statusCeiling` below `done`, `bubbles.workflow` must warn the user if the request language implies full completion. Delivery-capable modes should be recommended instead of silently proceeding with a lower ceiling.
+When a selected mode has `statusCeiling` below `done`, the active authorized runner must warn the user if the request language implies full completion. Delivery-capable modes should be recommended instead of silently proceeding with a lower ceiling.
 
 ### Reciprocal Status Ceiling Warning (Planning-Only Intent)
 
-When the user's request implies planning-only intent (contains "plan", "planning", "design", "scope", "analyze", "create specs", "create bugs" WITHOUT "implement", "build", "fix", "deliver"), `bubbles.workflow` MUST:
+When the user's request implies planning-only intent (contains "plan", "planning", "design", "scope", "analyze", "create specs", "create bugs" WITHOUT "implement", "build", "fix", "deliver"), the active authorized runner MUST:
 
 1. If the selected mode has `statusCeiling: done` → warn and suggest planning-capped alternative
 2. Example warning: "Your request 'plan scope 027' implies planning-only work. Selected mode 'full-delivery' includes implementation. Switching to spec-scope-hardening mode."
@@ -110,7 +117,7 @@ When the user's request implies planning-only intent (contains "plan", "planning
 
 ### Status Ceiling Warning Details
 
-When resolving mode in Phase 0, `bubbles.workflow` MUST check whether the user's requested outcome conflicts with the selected mode's `statusCeiling`.
+When resolving mode in Phase 0, the active authorized runner MUST check whether the user's requested outcome conflicts with the selected mode's `statusCeiling`.
 
 - If the user's prompt contains words like `complete`, `implement`, `fix`, `test`, or `done` and the selected mode has `statusCeiling` below `done`, warn before starting and suggest a delivery-capable mode instead of silently proceeding.
 - Modes that cannot reach `done`: `spec-scope-hardening` (`specs_hardened`), `product-to-planning` (`specs_hardened`), `docs-only` (`docs_updated`), `validate-only` (`validated`), `audit-only` (`validated`), `validate-to-doc` (`validated`), `resume-only` (`in_progress`).

@@ -4,7 +4,7 @@ capabilities:
   workflow-orchestration:
     label: Workflow orchestration
     state: shipped
-    summary: Universal natural-language workflow entry point backed by explicit specialist orchestration and mode routing.
+    summary: Goal-centered orchestration with a universal one-outcome endpoint, a deterministic single-mode workflow runner, timed multi-goal sprints, and explicit specialist phase ownership.
     ownerSurface: bubbles/workflows.yaml
     releaseIntroduced: pre-1.0
     docsRefs:
@@ -25,6 +25,33 @@ capabilities:
     freshnessTargets:
     - README.md
     - docs/generated/competitive-capabilities.md
+
+  workflow-runner-authorization:
+    label: Workflow runner authorization
+    state: shipped
+    summary: Default-deny per-agent workflow mode grants with top-level direct execution; runner-to-runner subagent nesting is mechanically rejected.
+    ownerSurface: bubbles/agent-capabilities.yaml
+    releaseIntroduced: v7.19.0
+    docsRefs:
+    - docs/guides/AGENT_MANUAL.md
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/guides/WORKFLOW_MODES.md
+    evidenceRefs:
+    - bubbles/scripts/workflow-runner-grants-lint.sh
+    - bubbles/scripts/workflow-runner-grants-lint-selftest.sh
+    - agents/bubbles_shared/workflow-delegation-core.md
+    consumers:
+    - bubbles/scripts/state-transition-guard.sh
+    - bubbles/scripts/framework-validate.sh
+    - agents/bubbles.super.agent.md
+    competitorTags:
+    - claude-code
+    - roo-code
+    - cursor
+    - cline
+    freshnessTargets:
+    - docs/generated/competitive-capabilities.md
+    - docs/CHEATSHEET.md
 
   cross-train-propagation:
     label: Cross-train propagation
