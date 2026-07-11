@@ -57,11 +57,12 @@ want and the framework resolves the right workflow mode, picks the agents, and
 drives them to a verified finish. For the autonomous entry points, a crisp
 **outcome** beats a step list almost every time:
 
-- `/bubbles.workflow  <what you want>` — the universal entry point. Describe the
-  result in plain English; it resolves intent to a mode and runs it.
-- `/bubbles.goal  "<intent>"` — single-goal autonomous execution: it plans,
+- `/bubbles.goal  "<intent>"` — the universal goal endpoint: it plans,
   implements, tests, validates, and remediates in a loop until it converges on
   your stated outcome.
+- `/bubbles.workflow  <target> mode: <mode>` — deterministic execution of one
+  explicit or super-resolved workflow mode.
+- `/bubbles.sprint minutes: <N>` — several named goals under one time budget.
 
 Because these modes do the planning for you, a long hand-written runbook
 actively gets in the way: it constrains the planner to *your* sequence, which
@@ -72,7 +73,8 @@ guardrails**; let it choose the route.
 Two reliable patterns:
 
 - **You know the outcome, not the steps** → state the outcome + constraints +
-  how to verify, and hand it to `/bubbles.workflow` or `/bubbles.goal`.
+  how to verify, and hand it to `/bubbles.goal`.
+- **You know the exact process** → give one `mode:` to `/bubbles.workflow`.
 - **You're not sure what to even ask for** → start a level up and let the
   front-door assistant translate your situation into the right command.
 

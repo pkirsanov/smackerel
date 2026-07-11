@@ -141,6 +141,6 @@ routes:
   - "readiness review"
   - "system readiness"
   - "can we ship"
-  targetAgent: bubbles.validate
+  targetAgent: bubbles.workflow
   targetMode: readiness-review
   summary: "Read-only system release-readiness synthesizer; runs the review family + verification lenses and persists one advisory readiness verdict"

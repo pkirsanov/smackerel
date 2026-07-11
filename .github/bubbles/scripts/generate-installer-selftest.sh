@@ -26,6 +26,15 @@ declare -i fail_count=0
 pass() { echo "PASS: $*"; pass_count=$((pass_count + 1)); }
 bad()  { echo "FAIL: $*"; fail_count=$((fail_count + 1)); }
 
+portable_sed_inplace() {
+  local expression="$1"
+  local file_path="$2"
+  local temp_file
+  temp_file="$(mktemp)"
+  sed "$expression" "$file_path" > "$temp_file"
+  mv "$temp_file" "$file_path"
+}
+
 # ── Assertion 1: real install.sh + manifest passes ───────────────
 if bash "$SCRIPT" >"$FIXTURE_ROOT/real.log" 2>&1; then
   pass "real install.sh + manifest checker exits 0"
@@ -48,7 +57,7 @@ fixture_run() {
 
 # ── Assertion 2: removing a step marker => FAIL ──────────────────
 fix2="$(fixture_run mutation-remove-marker)"
-sed -i 's/Installing governance scripts/REPLACED_MARKER/g' "$fix2/install.sh"
+portable_sed_inplace 's/Installing governance scripts/REPLACED_MARKER/g' "$fix2/install.sh"
 if BUBBLES_REPO_ROOT="$fix2" bash "$fix2/bubbles/scripts/generate-installer.sh" >"$fix2/check.log" 2>&1; then
   bad "mutated install.sh (removed install_scripts marker) was NOT rejected"
 else
@@ -62,7 +71,8 @@ fi
 # ── Assertion 3: wrong gitignore root (regression for ce01576) => FAIL ─
 fix3="$(fixture_run mutation-wrong-gitignore-root)"
 # Inject a fake write into ${TARGET}/.gitignore alongside the real one
-sed -i '/printf.*Bubbles framework-health proposals/a printf "improvements/" >> "${TARGET}/.gitignore"' "$fix3/install.sh"
+portable_sed_inplace '/printf.*Bubbles framework-health proposals/a\
+printf "improvements/" >> "${TARGET}/.gitignore"' "$fix3/install.sh"
 if BUBBLES_REPO_ROOT="$fix3" bash "$fix3/bubbles/scripts/generate-installer.sh" >"$fix3/check.log" 2>&1; then
   bad "mutated install.sh (gitignore written to wrong root) was NOT rejected"
 else
@@ -75,7 +85,7 @@ fi
 
 # ── Assertion 4: removing chmod +x on scripts => FAIL ────────────
 fix4="$(fixture_run mutation-no-chmod-scripts)"
-sed -i 's|chmod +x "${TARGET}"/bubbles/scripts/\*\.sh|# chmod removed by mutation|' "$fix4/install.sh"
+portable_sed_inplace 's|chmod +x "${TARGET}"/bubbles/scripts/\*\.sh|# chmod removed by mutation|' "$fix4/install.sh"
 if BUBBLES_REPO_ROOT="$fix4" bash "$fix4/bubbles/scripts/generate-installer.sh" >"$fix4/check.log" 2>&1; then
   bad "mutated install.sh (no scripts chmod) was NOT rejected"
 else
@@ -88,7 +98,7 @@ fi
 
 # ── Assertion 5: removing chmod +x on adapters => FAIL ───────────
 fix5="$(fixture_run mutation-no-chmod-adapters)"
-sed -i 's|find "${TARGET}/bubbles/adapters" -type f -name|# find removed by mutation|' "$fix5/install.sh"
+portable_sed_inplace 's|find "${TARGET}/bubbles/adapters" -type f -name|# find removed by mutation|' "$fix5/install.sh"
 if BUBBLES_REPO_ROOT="$fix5" bash "$fix5/bubbles/scripts/generate-installer.sh" >"$fix5/check.log" 2>&1; then
   bad "mutated install.sh (no adapters chmod) was NOT rejected"
 else
@@ -101,7 +111,7 @@ fi
 
 # ── Assertion 6: removing a provenance field => FAIL ─────────────
 fix6="$(fixture_run mutation-no-source-dirty-field)"
-sed -i '/"sourceDirty":/d' "$fix6/install.sh"
+portable_sed_inplace '/"sourceDirty":/d' "$fix6/install.sh"
 if BUBBLES_REPO_ROOT="$fix6" bash "$fix6/bubbles/scripts/generate-installer.sh" >"$fix6/check.log" 2>&1; then
   bad "mutated install.sh (missing sourceDirty field) was NOT rejected"
 else

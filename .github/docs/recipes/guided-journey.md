@@ -16,9 +16,9 @@ Start the cooperative-guided walkthrough with an explicit goal and a success sig
 /bubbles.journey  Goal: rebalance my portfolio  (specs/NNN-portfolio-rebalance)
 ```
 
-`bubbles.journey` (Cathy Curtis) drives the live **dev/validate** stack via the project browser-automation (Playwright MCP) tools + direct API. A journey is *almost a tutorial* — at each step she tells you plainly what the step does and why, and answers your questions before moving on. And at each step she checks **four layers**, because a green screen is not proof the thing worked:
+`bubbles.journey` (Cathy Curtis) drives the live **dev/validate** stack via the project's configured browser-automation tools + direct API. A journey is *almost a tutorial* — at each step she tells you plainly what the step does and why, and answers your questions before moving on. And at each step she checks **four layers**, because a green screen is not proof the thing worked:
 
-1. **UI** — the visible outcome (Playwright snapshot).
+1. **UI** — the visible outcome (browser accessibility snapshot).
 2. **API** — the request that step actually fired (`browser_network_requests`) — right status, right payload.
 3. **Telemetry** — the step's spans/metrics on the validate-plane Jaeger/Prometheus (resolved via `observability-endpoint-resolve.sh`) — expected spans present, **no error spans**, within SLO.
 4. **Data** — a **read-only** check that the state actually landed (DB row / cache key / queue message).
@@ -37,7 +37,7 @@ The mode structures `uservalidation.md` (acceptance stays human-owned — G057; 
 
 ## Examples
 
-- **QuantitativeFinance** — `Goal: rebalance my portfolio`. Cathy drives the dashboard from the holdings view through the rebalance proposal to the confirmation, and flags that the "apply rebalance" affordance is unclear (friction: `unclear`) → routes a scenario refinement to `bubbles.analyst`.
+- **Portfolio analytics product** — `Goal: rebalance my portfolio`. Cathy drives the dashboard from the holdings view through the rebalance proposal to the confirmation, and flags that the "apply rebalance" affordance is unclear (friction: `unclear`) → routes a scenario refinement to `bubbles.analyst`.
 - **Smackerel** — `Goal: see this month's expenses in QuickBooks`. Cathy walks the connector-linked expense view, notices the month selector defaults to last month (friction: `inconvenient`) and the export-to-QuickBooks button is missing (friction: `missing`) → files the missing-feature refinement to `bubbles.plan` and the defect to `bubbles.bug`.
 - **Hidden defect (UI works, backend didn't)** — `Goal: save my rebalance as a draft`. Cathy clicks **Save draft** and the UI flashes "Saved" (friction: `works`). But `browser_network_requests` shows the `POST /drafts` came back `200` with an empty `id`, the validate-plane trace has an **error span** on `draft.persist`, and the read-back query finds **no row**. UI-`works` but internally `data-not-persisted` — a **hidden defect** → routed to `bubbles.bug` with the captured request/response, the trace, and the empty data read as the reproduction.
 

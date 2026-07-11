@@ -42,17 +42,40 @@ stateModel:
   - bubbles.propagate
   certificationWriter: bubbles.validate
 
-childWorkflowPolicy:
+workflowModeGrants:
   defaultAllowed: false
-  maxDepth: 1
-  nestedRuntimeFallback: parent-expanded-child-mode
-  allowParentExpandedExecution: true
-  callers:
-  - bubbles.workflow
-  - bubbles.iterate
-  - bubbles.goal
-  - bubbles.sprint
-  - bubbles.bug
+  executionModel: direct-authorized-runner
+  topLevelRuntimeRequired: true
+  nestedWorkflowRunnerDispatch: forbidden
+  agents:
+    bubbles.workflow:
+      modes: [ "*" ]
+      excludedModes: [ autonomous-goal, autonomous-sprint, iterate ]
+      maxRootModesPerRun: 1
+    bubbles.goal:
+      modes: [ "*" ]
+      excludedModes: [ autonomous-sprint, iterate ]
+    bubbles.sprint:
+      modes: [ "*" ]
+      excludedModes: [ iterate ]
+    bubbles.iterate:
+      modes: [ iterate, full-delivery, bugfix-fastlane, harden-to-doc, gaps-to-doc, harden-gaps-to-doc, stabilize-to-doc, chaos-hardening, improve-existing, test-to-doc, docs-only, retro-to-simplify, retro-to-harden, retro-quality-sweep, retro-to-review, release-planning-to-doc, product-to-delivery, idea-to-release-completion ]
+    bubbles.bug:
+      modes: [ bugfix-fastlane ]
+    bubbles.releases:
+      modes: [ release-planning-to-doc ]
+    bubbles.train:
+      modes: [ release-train-cut, release-train-promote, release-train-rollback, release-train-retire, release-train-status-all ]
+    bubbles.upkeep:
+      modes: [ upkeep-backup-verify, upkeep-restore-drill, upkeep-bcdr-drill, upkeep-patch-cycle, upkeep-secret-rotation, upkeep-flag-cleanup, upkeep-compliance-sweep ]
+    bubbles.propagate:
+      modes: [ propagate-forward, propagate-backport, propagate-audit ]
+    bubbles.stabilize:
+      modes: [ stabilize-to-doc, incident-fastlane ]
+    bubbles.retro:
+      modes: [ retro-to-simplify, retro-to-harden, retro-to-review, retro-quality-sweep, framework-health ]
+    bubbles.journey:
+      modes: [ journey-refinement ]
 
 resultPolicy:
   allowedOutcomes:
@@ -70,28 +93,28 @@ agents:
     ownsPhases: []
   bubbles.workflow:
     class: orchestrator
-    canInvokeChildWorkflows: true
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: []
     ownsPhases: [ finalize ]
   bubbles.iterate:
     class: orchestrator
-    canInvokeChildWorkflows: true
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: []
     ownsPhases: [ select ]
   bubbles.goal:
     class: orchestrator
-    canInvokeChildWorkflows: true
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: []
     ownsPhases: [ autonomous-goal ]
   bubbles.sprint:
     class: orchestrator
-    canInvokeChildWorkflows: true
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: []
@@ -187,7 +210,8 @@ agents:
     ownsArtifacts: []
     ownsPhases: [ gaps ]
   bubbles.stabilize:
-    class: diagnostic
+    class: orchestrator
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: []
@@ -229,7 +253,8 @@ agents:
     ownsArtifacts: []
     ownsPhases: [ redteam ]
   bubbles.journey:
-    class: diagnostic
+    class: orchestrator
+    canExecuteWorkflowModes: true
     canAskUserDirectly: true
     delegatesRequired: true
     ownsArtifacts: []
@@ -266,7 +291,7 @@ agents:
     ownsPhases: []
   bubbles.bug:
     class: orchestrator
-    canInvokeChildWorkflows: true
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: [ bug-artifacts ]
@@ -278,13 +303,15 @@ agents:
     ownsArtifacts: [ product-code ]
     ownsPhases: [ simplify ]
   bubbles.releases:
-    class: execution-owner
+    class: orchestrator
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: false
     ownsArtifacts: [ release-packets, plan-packets, investor-overview-phase-table ]
     ownsPhases: [ releases ]
   bubbles.train:
-    class: execution-owner
+    class: orchestrator
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: [ release-trains-config, feature-flag-bundles, release-train-state, release-trains-doc ]
@@ -293,7 +320,8 @@ agents:
     - upkeep-ledger
     - knb-manifest
   bubbles.upkeep:
-    class: execution-owner
+    class: orchestrator
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: [ upkeep-calendar, upkeep-ledger, upkeep-runbook, compliance-report ]
@@ -302,7 +330,8 @@ agents:
     - release-trains-config
     - knb-manifest
   bubbles.propagate:
-    class: execution-owner
+    class: orchestrator
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
     delegatesRequired: true
     ownsArtifacts: [ propagation-policy, propagation-ledger ]
@@ -318,8 +347,9 @@ agents:
     ownsArtifacts: []
     ownsPhases: []
   bubbles.retro:
-    class: utility
+    class: orchestrator
+    canExecuteWorkflowModes: true
     canAskUserDirectly: false
-    delegatesRequired: false
+    delegatesRequired: true
     ownsArtifacts: [ retro-reports ]
     ownsPhases: []

@@ -104,7 +104,7 @@ Give Erica a list of goals and a time budget. She runs the show:
 /bubbles.sprint  minutes: 240
 1. Fix the calendar sync bug
 2. Add the deposit hold/release feature
-3. Improve Playwright test coverage for page builder
+3. Improve browser E2E test coverage for page builder
 
 /bubbles.sprint  minutes: 120
 1. Fix the flaky chaos probe
@@ -205,16 +205,17 @@ sprint_report:
 └──────────────────────────────────────────────────────┘
 ```
 
-- `bubbles.sprint` **wraps** `bubbles.goal` — adds time management and multi-goal sequencing
-- `bubbles.goal` **wraps** `bubbles.workflow` — adds the outer convergence loop
-- `bubbles.workflow` **orchestrates** specialist agents — existing phase/gate system unchanged
+- `bubbles.sprint` applies the goal execution contract repeatedly with time management and multi-goal sequencing
+- `bubbles.goal` is the universal one-outcome controller and may execute several granted modes
+- `bubbles.workflow` executes exactly one root mode
+- every active top-level runner invokes specialist phase owners directly
 - All existing gates, policies, and anti-fabrication rules apply at every level
 
 ### Outcome-First Dispatch
 
-Autonomous agents optimize for the user's requested outcome, not for staying inside the initially selected mode. If `bubbles.sprint`, `bubbles.goal`, `bubbles.workflow`, `bubbles.iterate`, or `bubbles.bug` discovers that another Bubbles mode or owner is the right vehicle, it invokes that agent with `runSubagent` and continues. It should not ask the user to switch modes or reissue the prompt.
+Autonomous agents optimize for the user's requested outcome. If an authorized runner needs another granted mode, it resolves and executes that mode directly in the same top-level runtime; specialist phases still use `runSubagent`.
 
-If the active top-level runtime does not expose the subagent tool, the correct result is a blocked envelope that names the missing `agent` tool and the owner invocation that would have run. If only a nested child runtime lacks the subagent tool, the parent orchestrator should parent-expand the resolved workflow mode and invoke the same phase owners from the current runtime, recording `executionModel: parent-expanded-child-mode`. It must not emulate specialist work inline or claim work was attempted without real owner delegation.
+If the active top-level runtime lacks the subagent tool, return a blocked envelope naming the missing `agent` tool and intended phase owner. Never dispatch another workflow-running orchestrator as a subagent and never emulate specialist work inline.
 
 ---
 
