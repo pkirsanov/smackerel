@@ -178,11 +178,11 @@ companion packet (Principle 10 — not applicable).
 
 ## Release Train
 
-**Target train:** `mvp` (the active home-lab train; see
+**Target train:** `mvp` (the active self-hosted train; see
 [config/release-trains.yaml](../../config/release-trains.yaml)).
 
 This is an **enhancement of an already-shipped, always-on skill** consumed by
-the home-lab deployment. It introduces **no new feature flag** — the weather
+the self-hosted deployment. It introduces **no new feature flag** — the weather
 skill is gated by the existing SST key `assistant.skills.weather.enabled`, which
 is already part of the `mvp` runtime. `state.json.flagsIntroduced` is therefore
 empty. Behavior on other trains is unchanged: the skill reads the same SST

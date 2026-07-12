@@ -4,7 +4,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [scopes.
 
 ### Summary
 
-A **bubbles.code-review MVP/evo-x2 readiness sweep** (finding **F-01**) surfaced
+A **bubbles.code-review MVP/<deploy-host> readiness sweep** (finding **F-01**) surfaced
 **F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL**: the direct capture endpoint
 `POST /api/capture` is served by `internal/api/capture.go::CaptureHandler`, which
 dispatched the durable pipeline write with the HTTP request context
@@ -263,7 +263,7 @@ $ grep -n 'WithoutCancel' internal/api/capture.go
 
 ### Completion Statement
 
-The **bubbles.code-review MVP/evo-x2 readiness sweep** (F-01, parent-expanded —
+The **bubbles.code-review MVP/<deploy-host> readiness sweep** (F-01, parent-expanded —
 no nested `runSubagent` in this runtime) discovered and **fixed**
 F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL: the direct `/api/capture` durable write was
 bound to `r.Context()` and silently dropped the user's capture on client

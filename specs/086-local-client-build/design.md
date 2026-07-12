@@ -7,11 +7,11 @@ Links: [spec.md](spec.md) | [scopes.md](scopes.md) | [report.md](report.md)
 Solution-blind facts gathered before designing:
 
 - **Operator-sign precedent (the model to mirror):**
-  [`scripts/commands/build-home-lab.sh`](../../scripts/commands/build-home-lab.sh)
+  [`scripts/commands/build-self-hosted.sh`](../../scripts/commands/build-self-hosted.sh)
   already does LOCAL operator-key signing of the two server images under
   `trustModel: local-operator`. It establishes the EXACT conventions this spec
   reuses:
-  - Env: `OPERATOR_COSIGN_KEY` (`:= $HOME/.config/knb/operator-keys/cosign-operator.key`),
+  - Env: `OPERATOR_COSIGN_KEY` (`:= <operator-key-path>`),
     `OPERATOR_COSIGN_PUBKEY` (`:= …/cosign-operator.pub`), `COSIGN_PASSWORD`
     (required, presence-checked, never echoed).
   - Sign primitive for a FILE artifact: `cosign sign-blob --yes --key
@@ -60,7 +60,7 @@ Two new scripts + one CLI arm + two native Go tests. NO knb/framework file is
 modified; the contract is unchanged.
 
 ```
-./smackerel.sh local-client-build --target home-lab
+./smackerel.sh local-client-build --target self-hosted
         │  (new dispatch arm in smackerel.sh)
         ▼
 scripts/commands/local-client-build.sh   (orchestrator)
@@ -81,23 +81,23 @@ scripts/commands/local-client-build.sh   (orchestrator)
  10. cosign sign-blob the manifest → <manifest>.sig
  11. print knb-adapter handoff (Next: cd ~/knb …)
         │
-        ▼  (consumed on evo-x2 by, NOT called from here)
+        ▼  (consumed on <deploy-host> by, NOT called from here)
 knb/scripts/deploy/client-delivery-step.sh  knb_client_acquire_local + cosign verify-blob --key
 ```
 
 ### `scripts/commands/local-client-build.sh` (orchestrator)
 
-- **Public flags:** `--target home-lab` (REQUIRED, fail-loud `[F086-LCB-01]`;
-  only `home-lab` supported), `--allow-dirty`, `--out-dir <dir>` (optional;
+- **Public flags:** `--target self-hosted` (REQUIRED, fail-loud `[F086-LCB-01]`;
+  only `self-hosted` supported), `--allow-dirty`, `--out-dir <dir>` (optional;
   default `$REPO_ROOT/dist/local-clients/<SHORT_SHA>`).
 - **Test seams (env, `:=` default to the real value — tool/path plumbing, NOT
-  SST runtime config; mirrors `build-home-lab.sh`'s `${OPERATOR_COSIGN_KEY:=…}`):**
+  SST runtime config; mirrors `build-self-hosted.sh`'s `${OPERATOR_COSIGN_KEY:=…}`):**
   - `SMACKEREL_FLUTTER_BUILD_CMD` (`:= flutter`) — the build command.
   - `SMACKEREL_COSIGN_CMD` (`:= cosign`) — the sign command.
   - `SMACKEREL_LCB_PROJECT_DIR` (`:= $REPO_ROOT/clients/mobile/assistant`) — the
     Flutter project dir (test points it at a temp project so the real tree is
     untouched).
-- **Operator key env (mirrors `build-home-lab.sh` EXACTLY):**
+- **Operator key env (mirrors `build-self-hosted.sh` EXACTLY):**
   `OPERATOR_COSIGN_KEY` / `OPERATOR_COSIGN_PUBKEY` (`:=` canonical knb paths),
   `COSIGN_PASSWORD` (required; presence-check via `lcb_require_env`, never
   echoed). Key files must exist (`[[ -f ]]`) → `[F086-LCB-01]`.
@@ -204,7 +204,7 @@ is the ONLY edit to an existing file; `smackerel.sh` is clean (not the dirty
 - **Direct bash + real-cosign evidence (terminal, this session):** run the
   emitter directly (happy + fail-closed); run a REAL `cosign sign-blob`→
   `cosign verify-blob --key` round-trip over a FIXTURE blob with a throwaway
-  temp keypair (proves the on-evo-x2 sign/verify contract is correct without
+  temp keypair (proves the on-<deploy-host> sign/verify contract is correct without
   fabricating an AAB); `shellcheck`/`shfmt`/`yamllint`.
 
 ## Conformance Self-Check (vs the knb gate, locally provable)
@@ -220,7 +220,7 @@ is the ONLY edit to an existing file; `smackerel.sh` is clean (not the dirty
 | Lane-B not auto-submitted (check f) | `laneB: false`; no submit step added |
 
 The real green `client-binary-conformance.sh` run against a REAL manifest is an
-**evo-x2 / n11** step (the gate also evaluates the knb mirror + real artifacts);
+**<deploy-host> / n11** step (the gate also evaluates the knb mirror + real artifacts);
 this node proves field-level conformance via the emitter test + the schema map
 above.
 

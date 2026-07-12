@@ -595,7 +595,7 @@ removed/renamed count: 0
 
 #### scope-04-deploy
 
-Live rebuild + render proof. The core image (templates are compiled into the Go binary) was rebuilt from current source and the e2e-ui suite ran against the freshly-built stack rendering the new design in BOTH light and dark (the chrome dark-mode adversarial test passed). **Docker bundle freshness was empirically proven**: the e2e stack consumes the project-prefixed image `smackerel-test-e2e-ui-smackerel-core`, which `docker compose up` (no `--build`) does NOT rebuild on source change — against the stale image the bonuses `.progress` bar was absent (failure screenshot showed title+meta+label but no bar); after removing the stale image and forcing a genuine rebuild (`COPY . .` 24.4s + `go build` 38.4s), the bar rendered and the bonuses spec passed. This UI shipped in the **same combined core image as spec 091** (`sourceSha 9fc830f7…`, image `sha256:44b0c047…`); the **live home-lab proof** below confirms the elevated design renders on the deployed core.
+Live rebuild + render proof. The core image (templates are compiled into the Go binary) was rebuilt from current source and the e2e-ui suite ran against the freshly-built stack rendering the new design in BOTH light and dark (the chrome dark-mode adversarial test passed). **Docker bundle freshness was empirically proven**: the e2e stack consumes the project-prefixed image `smackerel-test-e2e-ui-smackerel-core`, which `docker compose up` (no `--build`) does NOT rebuild on source change — against the stale image the bonuses `.progress` bar was absent (failure screenshot showed title+meta+label but no bar); after removing the stale image and forcing a genuine rebuild (`COPY . .` 24.4s + `go build` 38.4s), the bar rendered and the bonuses spec passed. This UI shipped in the **same combined core image as spec 091** (`sourceSha 9fc830f7…`, image `sha256:44b0c047…`); the **live self-hosted proof** below confirms the elevated design renders on the deployed core.
 
 ```text
 $ docker images | grep smackerel-core   (before fix)
@@ -610,14 +610,14 @@ Untagged: smackerel-test-e2e-ui-smackerel-core:latest
   19 passed (12.3s)   ← bonuses progress bar now renders against the fresh binary
 ```
 
-**Live home-lab deploy proof (combined image with spec 091, this session).** The same `sourceSha 9fc830f7a8af6bc751d432d73a510f412ee94ee4` core image `sha256:44b0c047bd55fddffce9edecfa5dc356f7b3b6d6f6ee8f70fc447171057d7028` was applied to the home-lab `<deploy-host>` via the operator-gated `apply.sh` (apply OK, `smackerel-core` healthy, image digest matched, audit log `outcome=success`). A value-safe authenticated `GET /cards` against the deployed core returns `http=200` and the rendered markup carries the elevated design — `stats-grid`/`stat-card` present, the new design tokens present, the `data-dashboard` regression hook intact **live**, and the responsive pill nav present. Registration → login → `/cards` is proven end-to-end (the spec-091 registered user reached the new `/cards` UI):
+**Live self-hosted deploy proof (combined image with spec 091, this session).** The same `sourceSha 9fc830f7a8af6bc751d432d73a510f412ee94ee4` core image `sha256:44b0c047bd55fddffce9edecfa5dc356f7b3b6d6f6ee8f70fc447171057d7028` was applied to the self-hosted `<deploy-host>` via the operator-gated `apply.sh` (apply OK, `smackerel-core` healthy, image digest matched, audit log `outcome=success`). A value-safe authenticated `GET /cards` against the deployed core returns `http=200` and the rendered markup carries the elevated design — `stats-grid`/`stat-card` present, the new design tokens present, the `data-dashboard` regression hook intact **live**, and the responsive pill nav present. Registration → login → `/cards` is proven end-to-end (the spec-091 registered user reached the new `/cards` UI):
 
 ```text
 # combined deploy (spec 091 + 092 in one core image) — sourceSha 9fc830f7a8af6bc751d432d73a510f412ee94ee4
 [apply] cosign verify image digest sha256:44b0c047bd55fddffce9edecfa5dc356f7b3b6d6f6ee8f70fc447171057d7028 ... OK
 [apply] smackerel-core: Healthy
 [apply] audit: outcome=success
-# value-safe authenticated GET /cards on the deployed home-lab core (<tailnet>)
+# value-safe authenticated GET /cards on the deployed self-hosted core (<tailnet>)
 $ curl -s -o /tmp/cards.html -w 'http=%{http_code}\n' --max-time 10 -b "$SESS" https://<deploy-host>/cards
 http=200
 $ grep -o 'stats-grid'    /tmp/cards.html | wc -l   # elevated stat-overview marker
@@ -721,7 +721,7 @@ $ git diff --stat -- internal/web/cardrewards.go internal/web/templates.go
 
 Validation = the integrated green bar. The full Go unit suite renders every page under the new chrome (exit 0),
 the consolidated 19/19 `e2e-ui cardrewards` suite drives all ten pages live with every CSP guard empty + the
-dark-mode adversarial assertion green, the `data-*` set is byte-identical (AC-9), and the **live home-lab
+dark-mode adversarial assertion green, the `data-*` set is byte-identical (AC-9), and the **live self-hosted
 `GET /cards` returns 200 with the elevated design rendering** ([scope-04-deploy](#scope-04-deploy)). Together
 these certify AC-1..AC-11 on the integrated surface.
 
@@ -729,7 +729,7 @@ these certify AC-1..AC-11 on the integrated surface.
 ok      github.com/smackerel/smackerel/internal/web     0.209s
   19 passed (12.3s)
 removed/renamed count: 0
-http=200   (live /cards on the deployed home-lab core — elevated design renders)
+http=200   (live /cards on the deployed self-hosted core — elevated design renders)
 ```
 
 ### Audit Evidence
@@ -866,7 +866,7 @@ card-rewards specs, and `artifact-lint.sh` all exit 0.
 All full-delivery verification phases are recorded in
 [Verification Phases](#verification-phases-full-delivery-finalization): test/regression green,
 security/chaos no-new-surface (CSP-clean, zero Go/route change), validate = the integrated 19/19 e2e + the live
-home-lab `GET /cards` 200 proof, audit = artifact-lint exit 0 + `data-*` byte-identical, docs aligned,
+self-hosted `GET /cards` 200 proof, audit = artifact-lint exit 0 + `data-*` byte-identical, docs aligned,
 spec-review CURRENT, and the simplify/gaps/harden/stabilize sweep honestly no-op for a CSS-only re-skin
 (recorded as `phaseStubs`). `state.json` is finalized to `status: done` / `certification.status: done` with all
 4 scopes in `certification.completedScopes` and all 13 certified phases recorded with parent-expanded

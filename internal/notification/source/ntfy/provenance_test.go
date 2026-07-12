@@ -12,11 +12,11 @@ func TestNtfyProvenanceAndLoopMetadataArePreservedInEnvelope(t *testing.T) {
 	base := testConfig()
 	other := base
 	other.SourceInstanceID = "ntfy-overlap-secondary"
-	other.Topics = []string{"home-lab-alerts", "shared-alerts"}
+	other.Topics = []string{"self-hosted-alerts", "shared-alerts"}
 	other.SourceForm = notification.SourceFormWebhook
 	other.TransportMode = TransportModeWebhook
 	other.Auth = AuthConfig{Mode: AuthModeNone}
-	eventA, err := ParseEvent([]byte(`{"id":"duplicate-id","event":"message","topic":"home-lab-alerts","message":"primary","smackerel_loop_guard_key":"loop-a","smackerel_decision_id":"decision-a"}`), base.DeadLetter.MaxPayloadBytes)
+	eventA, err := ParseEvent([]byte(`{"id":"duplicate-id","event":"message","topic":"self-hosted-alerts","message":"primary","smackerel_loop_guard_key":"loop-a","smackerel_decision_id":"decision-a"}`), base.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse primary event: %v", err)
 	}

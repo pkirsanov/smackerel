@@ -2,7 +2,7 @@
 
 - **Severity:** HIGH (redteam **F2**)
 - **Owning spec:** `026-domain-extraction` (owns the "Invalid JSON from LLM" ML-processing contract)
-- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on evo-x2
+- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host>
 - **Status:** CODE-RESILIENCE PART FIXED IN-REPO + MODEL/OPS PART ROUTED — not pushed
 
 ## Summary

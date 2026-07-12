@@ -2,7 +2,7 @@
 
 ## Summary
 
-Closes home-lab readiness re-scan finding **HL-RESCAN-010** (P3): the spec 042 / spec 049 / Gate G028 compose contract test in `internal/deploy/compose_contract_test.go` previously had no adversarial sub-case proving that `assertComposeContract` rejects the **literal `127.0.0.1:` spec 020 form on `prometheus`** OR the **default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}:` form on `prometheus`** (Gate G028 NO-DEFAULTS violation). The runtime behavior of `assertComposeContract` was correct — it rejects both forms today via the strict `strings.HasPrefix(p, requiredPrometheusPrefix)` check — but no synthetic adversarial fixture proved the rejection lands on the prometheus contract surface, leaving a coverage gap that would let a future maintainer accidentally relax the strict prefix check (e.g., to a too-loose `strings.Contains` substring match) without any test failing RED.
+Closes self-hosted readiness re-scan finding **HL-RESCAN-010** (P3): the spec 042 / spec 049 / Gate G028 compose contract test in `internal/deploy/compose_contract_test.go` previously had no adversarial sub-case proving that `assertComposeContract` rejects the **literal `127.0.0.1:` spec 020 form on `prometheus`** OR the **default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}:` form on `prometheus`** (Gate G028 NO-DEFAULTS violation). The runtime behavior of `assertComposeContract` was correct — it rejects both forms today via the strict `strings.HasPrefix(p, requiredPrometheusPrefix)` check — but no synthetic adversarial fixture proved the rejection lands on the prometheus contract surface, leaving a coverage gap that would let a future maintainer accidentally relax the strict prefix check (e.g., to a too-loose `strings.Contains` substring match) without any test failing RED.
 
 The fix is **purely additive at the test layer**: a single new persistent in-tree test function `TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms` with two table-driven sub-cases. The function pins two guarantees:
 
@@ -13,7 +13,7 @@ Each sub-case asserts the rejection error mentions `prometheus` AND at least one
 
 **Workflow Mode:** test-to-doc — the fix is the test addition itself plus one bug-packet that documents it. No production runtime code changes; no `assertComposeContract` change; no `requiredPrometheusPrefix` constant change; no `deploy/compose.deploy.yml` change.
 
-**Parent re-scan:** home-lab readiness re-scan 2026-05-14, finding HL-RESCAN-010. Sequential per-finding bug-packet workflow; mechanically identical pattern to HL-RESCAN-009 (BUG-042-004) but targeting the `prometheus` service.
+**Parent re-scan:** self-hosted readiness re-scan 2026-05-14, finding HL-RESCAN-010. Sequential per-finding bug-packet workflow; mechanically identical pattern to HL-RESCAN-009 (BUG-042-004) but targeting the `prometheus` service.
 
 ## Completion Statement
 
@@ -37,7 +37,7 @@ $ git diff --stat HEAD -- internal/deploy/compose_contract_test.go
 $ grep -n 'TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms\|HL-RESCAN-010' internal/deploy/compose_contract_test.go | head -20
 692:// TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms proves
 697:// Before HL-RESCAN-010, no synthetic adversarial test existed for
-725:// Discovered: home-lab readiness re-scan finding HL-RESCAN-010 (P3),
+725:// Discovered: self-hosted readiness re-scan finding HL-RESCAN-010 (P3),
 730:func TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms(t *testing.T) {
 762:                            t.Fatalf("adversarial contract test failed: prometheus port %q was accepted (the contract is tautological — it would NOT catch a regression to the spec 020 literal form or to the default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1} form for prometheus; HL-RESCAN-010 prometheus literal-bind / default-fallback coverage gap is reintroduced)", tc.port)
 782:                            t.Fatalf("adversarial contract test failed: error did not mention any of [spec 049, spec 042, fail-loud, ${HOST_BIND_ADDRESS:?, ${HOST_BIND_ADDRESS:-127.0.0.1}, literal 127.0.0.1:] (the regression target this HL-RESCAN-010 guard locks): %v", err)
@@ -293,7 +293,7 @@ The compose contract surface is a **static-file invariant**: there is no daemon,
 - **No defaults regression:** Gate G028 NO-DEFAULTS / fail-loud SST policy is strengthened by this fix — the test now explicitly proves rejection of the forbidden `${HOST_BIND_ADDRESS:-127.0.0.1}:` default-fallback form on `prometheus` (closing the last operator-facing service coverage gap; smackerel-core/ml were closed by BUG-042-004, ollama by BUG-042-003).
 - **PII scan:** no real hostnames, no real IPs, no real Tailscale identifiers, no real Linux usernames in any of the seven packet artifacts. The only address strings are the generic `127.0.0.1` loopback and the `${HOST_BIND_ADDRESS:?...}` SST substitution form — both explicitly allow-listed by the repo policy.
 - **Bubbles.devops mode discipline:** all bug-local artifacts (this packet) authored; foreign-owned parent-spec files (`specs/042-tailnet-edge-bind-pattern/spec.md`, `design.md`, `scopes.md`, `state.json`, `uservalidation.md`, `report.md`, plus `specs/049-*/`) NOT edited.
-- **Single-bug-scope discipline:** the change addresses HL-RESCAN-010 (P3) only. The remaining home-lab readiness re-scan findings (HL-RESCAN-011..014) are tracked under their own per-finding bug-packets in the parent home-lab-readiness-rescan-2026-05-14 sweep.
+- **Single-bug-scope discipline:** the change addresses HL-RESCAN-010 (P3) only. The remaining self-hosted readiness re-scan findings (HL-RESCAN-011..014) are tracked under their own per-finding bug-packets in the parent self-hosted-readiness-rescan-2026-05-14 sweep.
 
 ## Verdict (DevOps)
 

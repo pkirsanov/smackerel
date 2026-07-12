@@ -147,7 +147,7 @@ async def _do_domain_extract(
 
     # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on this
     # structured-JSON extraction call when SST says so, so qwen3 skips its hidden
-    # <think> block (>150s -> ~1s compute live on evo-x2) and this stays inside
+    # <think> block (>150s -> ~1s compute live on <deploy-host>) and this stays inside
     # the 30s DOMAIN_EXTRACTION_TIMEOUT. Sets the native top-level think=False,
     # which litellm forwards to /api/chat via the ollama_chat/ route above; the
     # /no_think prompt token the first fix used is ignored by qwen3's template.

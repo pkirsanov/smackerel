@@ -4368,7 +4368,7 @@ No behavior change for honest production traffic; six attacker-shaped or misconf
 |---|---|---|
 | Intent | ✅ Met | Clear 19 + 22 reachable Go-stdlib vulnerabilities by upgrading the Go runtime to ≥1.25.9 across `go.mod`, `Dockerfile`, CI workflow, and `smackerel.sh` Go-tooling docker invocations. |
 | Success Signal | ✅ Met | `govulncheck ./internal/connector/photos/...` reports `Your code is affected by 0 vulnerabilities` (was 19); `govulncheck ./internal/api/...` reports `Your code is affected by 0 vulnerabilities` (was 22). |
-| Hard Constraints | ✅ Met | No source code modified. No spec status / certification fields touched. No third-party dependencies bumped. User WIP in `.github/workflows/build.yml` + `deploy/contract.yaml` + `deploy/home-lab/manifest.yaml` + `deploy/home-lab/params.yaml` left intact. |
+| Hard Constraints | ✅ Met | No source code modified. No spec status / certification fields touched. No third-party dependencies bumped. User WIP in `.github/workflows/build.yml` + `deploy/contract.yaml` + `deploy/self-hosted/manifest.yaml` + `deploy/self-hosted/params.yaml` left intact. |
 | Failure Condition | ✅ Avoided | All gates green on the new runtime: `go mod tidy` (EXIT=0), `./smackerel.sh build` (EXIT=0, fresh `golang:1.25.10-alpine` builder + `golang:1.25.10-bookworm` tooling), `./smackerel.sh check` (EXIT=0), `./smackerel.sh test unit` (EXIT=0), `./smackerel.sh test integration` (EXIT=0). |
 
 ### Versions Before / After
@@ -4486,7 +4486,7 @@ INTEG_EXIT=0
 | `specs/038-cloud-drives-integration/report.md` | rollup closure section appended |
 | `specs/038-cloud-drives-integration/state.json` | bubbles.harden closure entry appended; `MIT-038-S-002` flagged CLOSED in `backlogItemsRouted`; `lastUpdatedAt` bumped |
 
-Files NOT touched (per task constraints): `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/home-lab/manifest.yaml`, `deploy/home-lab/params.yaml` (uncommitted user WIP); `ml/Dockerfile` (Python sidecar — no Go reference).
+Files NOT touched (per task constraints): `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/self-hosted/manifest.yaml`, `deploy/self-hosted/params.yaml` (uncommitted user WIP); `ml/Dockerfile` (Python sidecar — no Go reference).
 
 ### Phase Completion Recording
 
@@ -4950,8 +4950,8 @@ EXIT=0
 ### Files NOT Touched (per task constraints)
 
 - `.github/workflows/build.yml` — USER WIP
-- `deploy/contract.yaml`, `deploy/home-lab/manifest.yaml`, `deploy/home-lab/params.yaml` — USER WIP
-- `docs/Maturity_Plan.md`, `docs/Home_Lab_*.md`, `docs/Home_Lab_*.md` — USER WIP
+- `deploy/contract.yaml`, `deploy/self-hosted/manifest.yaml`, `deploy/self-hosted/params.yaml` — USER WIP
+- `docs/Maturity_Plan.md`, `docs/Self_Hosted_*.md`, `docs/Self_Hosted_*.md` — USER WIP
 - `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/`, `.github/docs/` — FRAMEWORK
 - `specs/041-qf-companion-connector/` — separate spec WIP
 - `certification.*`, `scopeProgress`, top-level `status` in state.json — POST-FEATURE-DONE (spec 040 stays at `done`)
@@ -5063,7 +5063,7 @@ EXIT=0
 |---------|----------|
 | Intent | Tighten the `MintReveal` actor-identity surface defensively without requiring per-user authentication (foundation work). |
 | Success Signal | Body-source for `actor_id` removed; production-mode requires `X-Actor-Id` header; 4 adversarial regressions PASS; integration suite stays green; spec stays at `done`. |
-| Hard Constraints | NO change to `certification.*`/`scopeProgress`/`status`; NO touch of USER WIP files (`.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/home-lab/*.yaml`, `docs/Maturity_Plan.md`, etc.); NO `git push --no-verify`. |
+| Hard Constraints | NO change to `certification.*`/`scopeProgress`/`status`; NO touch of USER WIP files (`.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/self-hosted/*.yaml`, `docs/Maturity_Plan.md`, etc.); NO `git push --no-verify`. |
 | Failure Condition | Any of: body-source path resurrected, header-source path broken, production-mode strictness gate bypassed, dev/test ergonomic broken, integration regression, governance-gate regression. |
 
 ### Closure Type — PARTIAL
@@ -5234,7 +5234,7 @@ Exit Code: 0
 
 ### Files NOT Touched
 
-- USER WIP — `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/home-lab/manifest.yaml`, `deploy/home-lab/params.yaml`, `docs/Maturity_Plan.md`, `docs/Home_Lab_Deployment_Plan.md`, `docs/Home_Lab_Master_Deployment_Plan.md`, `docs/Home_Lab_Deployment_Plan.md`, `docs/Home_Lab_Master_Deployment_Plan.md`, `.github/agents/bubbles.{devops,regression,releases,security,super}.agent.md`, `.github/agents/bubbles_shared/{quality-gates,state-gates}.md`, `.github/bubbles/{.checksums,.install-source.json,.manifest,release-manifest.json}`, `.github/docs/SCOPE_POLICY.md`, `.github/docs/recipes/*.md`, `.github/skills/bubbles-deployment-target-adapter/SKILL.md`, `specs/041-qf-companion-connector/report.md`
+- USER WIP — `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/self-hosted/manifest.yaml`, `deploy/self-hosted/params.yaml`, `docs/Maturity_Plan.md`, `docs/Self_Hosted_Deployment_Plan.md`, `docs/Self_Hosted_Master_Deployment_Plan.md`, `docs/Self_Hosted_Deployment_Plan.md`, `docs/Self_Hosted_Master_Deployment_Plan.md`, `.github/agents/bubbles.{devops,regression,releases,security,super}.agent.md`, `.github/agents/bubbles_shared/{quality-gates,state-gates}.md`, `.github/bubbles/{.checksums,.install-source.json,.manifest,release-manifest.json}`, `.github/docs/SCOPE_POLICY.md`, `.github/docs/recipes/*.md`, `.github/skills/bubbles-deployment-target-adapter/SKILL.md`, `specs/041-qf-companion-connector/report.md`
 - FRAMEWORK — `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/` (beyond what is already in user WIP)
 - POST-FEATURE-DONE INVARIANTS — `top_level.status`, `certification.status`, `certification.completedScopes`, `certification.scopeProgress`, `certification.certifiedCompletedPhases` (spec 040 stays at `done`)
 

@@ -119,7 +119,7 @@
       "regressionRequired": false,
       "given": "an operator reads docs/Development.md",
       "when": "they look up resource pre-flight",
-      "then": "the docs state which heavy ops are gated and which are not, the SST thresholds (runtime.preflight.*) and the override env var, and that the guard protects local CLI ops only, not the home-lab apply",
+      "then": "the docs state which heavy ops are gated and which are not, the SST thresholds (runtime.preflight.*) and the override env var, and that the guard protects local CLI ops only, not the self-hosted apply",
       "linkedTests": ["docs/Development.md::resource-pre-flight-guard"],
       "evidenceRefs": ["report.md#docs"]
     }

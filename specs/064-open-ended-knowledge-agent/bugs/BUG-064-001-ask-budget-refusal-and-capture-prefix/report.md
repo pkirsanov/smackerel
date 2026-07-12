@@ -13,7 +13,7 @@ Two defects on the `/ask` open-knowledge surface:
 - **B (capture pollution):** the Telegram adapter passed the verbatim
   `/ask`-prefixed text into the capture hook.
 
-Both root causes were proven (code + live home-lab read-only inspection), fixed
+Both root causes were proven (code + live self-hosted read-only inspection), fixed
 in-repo, and covered by adversarial regression tests that are GREEN.
 
 ## Completion Statement
@@ -31,8 +31,8 @@ The in-repo fix is COMPLETE and validated:
 
 This bug remains `blocked` (not `done`) because it is a LIVE S1 production
 defect: the deployed image (`sourceSha 0bc04cfb`) ships the `0` budget, so the
-live home-lab symptom is cleared ONLY after `bubbles.devops` redeploys the fixed
-SHA + regenerated home-lab config bundle via the knb adapter. Code alone does not
+live self-hosted symptom is cleared ONLY after `bubbles.devops` redeploys the fixed
+SHA + regenerated self-hosted config bundle via the knb adapter. Code alone does not
 clear the live symptom — a redeploy is required.
 
 ## Test Evidence
@@ -88,7 +88,7 @@ imported package). `docs/Operations.md` budget rows corrected from the stale
 
 ---
 
-## Root cause evidence (read-only, live home-lab deployment) {#root-cause}
+## Root cause evidence (read-only, live self-hosted deployment) {#root-cause}
 
 ### Deployed source SHA contains the routing fix (rules out deployment lag for routing)
 
@@ -108,10 +108,10 @@ ebdbf85219e62cf64ffcec2d4587f4b657cd83a5 2026-06-01 04:30:37 +0000 spec 064: rou
 ### On-host deployed manifest (sourceSha + applied time)
 
 ```
-# ~/knb/smackerel/home-lab/manifest.yaml (on evo-x2)
+# ~/<deployment-owner>/<product>/<target>/manifest.yaml (on <deploy-host>)
 current:
   appliedAt: "2026-06-11T06:03:09Z"
-  appliedBy: "<operator>@evo-x2"
+  appliedBy: "<operator>@<deploy-host>"
   sourceSha: "0bc04cfb304382c89b6e264c3b37eabd80ba3397"
   images:
     core: "ghcr.io/pkirsanov/smackerel-core@sha256:9a3ce7f316f12cadb4d2e9dfe8e61ae8f455a3e16782e9447e7778eefac5d101"
@@ -194,7 +194,7 @@ FAIL    github.com/smackerel/smackerel/internal/config  0.093s
 FAIL    github.com/smackerel/smackerel/internal/telegram/assistant_adapter  0.175s
 ```
 
-The unit-level `ZeroPerUserBudget` agent test reproduces the EXACT live home-lab
+The unit-level `ZeroPerUserBudget` agent test reproduces the EXACT live self-hosted
 `openknowledge.turn` failure (`termination_reason=cap_usd, iterations=1,
 tokens_used=0, tool_calls=[]`). The config-contract + adapter tests are RED.
 
@@ -205,7 +205,7 @@ tokens_used=0, tool_calls=[]`). The config-contract + adapter tests are RED.
 `config/smackerel.yaml` `assistant.open_knowledge`: `monthly_budget_usd: 0 → 100`,
 `per_user_monthly_budget_usd: 0 → 25` (with comments explaining local zero-cost
 `CostFn` inertness + paid-provider ceiling intent; `enabled: false` is the
-disable switch, not a 0 budget). `home-lab` env block has NO budget override → it
+disable switch, not a 0 budget). `self-hosted` env block has NO budget override → it
 inherits the fixed base 100/25.
 
 `./smackerel.sh config generate` then verifies propagation:
@@ -353,13 +353,13 @@ See {#build-gate}.
   `TestRenderDescriptorV1_*` canaries `t.Fatalf` on missing node/dart instead of
   `t.Skip`, so they hard-fail the unit suite in minimal containers. Owner:
   `bubbles.test`.
-- **HANDOFF-3 (deployment — owner `bubbles.devops`):** the live home-lab symptom
+- **HANDOFF-3 (deployment — owner `bubbles.devops`):** the live self-hosted symptom
   is NOT cleared by code alone. It requires a rebuild of `smackerel-core` from the
-  fixed SHA + per-env config-bundle regen (so `home-lab.env` carries 100/25) +
+  fixed SHA + per-env config-bundle regen (so `self-hosted.env` carries 100/25) +
   redeploy via the knb adapter. The deployed `sourceSha 0bc04cfb` ships the `0`
   budget, so a redeploy of the FIXED sha is mandatory to clear it.
 - **HANDOFF-4 (full live certification — owners `bubbles.validate` / `bubbles.audit`):**
   the bugfix-fastlane `done`-grade gates (scenario-manifest, validate certification,
   live openknowledge E2E on the real Telegram+searxng+GPU stack, audit pass) cannot
-  run in this sandbox (no home-lab GPU stack; pypi/node/dart toolchains absent).
+  run in this sandbox (no self-hosted GPU stack; pypi/node/dart toolchains absent).
   They are appropriate to run on the real stack alongside the redeploy.

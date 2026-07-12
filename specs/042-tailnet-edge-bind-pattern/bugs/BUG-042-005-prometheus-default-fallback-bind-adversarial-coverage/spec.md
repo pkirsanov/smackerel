@@ -7,7 +7,7 @@
 - **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (compose contract owner; spec 049 inherits the bind contract for the prometheus service)
 - **Workflow Mode:** test-to-doc
 - **Status:** Fixed
-- **Discovered By:** 2026-05-14 home-lab readiness re-scan (finding HL-RESCAN-010)
+- **Discovered By:** 2026-05-14 self-hosted readiness re-scan (finding HL-RESCAN-010)
 
 ## Problem Statement
 
@@ -31,7 +31,7 @@ The defect was a coverage gap in the contract test, not a bug in the assertion c
 
 | Aspect | Detail |
 |---|---|
-| Trigger | Home-lab readiness re-scan (system review session 2026-05-14) |
+| Trigger | self-hosted readiness re-scan (system review session 2026-05-14) |
 | Finding | HL-RESCAN-010 |
 | Severity | P3 (live file is correct today; assertion is correct today; the gap is a defense-in-depth weakness against a future relaxation of the assertion) |
 | Audit method | Inspected `internal/deploy/compose_contract_test.go` adversarial test surface. Confirmed: `TestComposeContract_AdversarialLiteralBind` covers only smackerel-core literal-bind; `TestComposeContract_AdversarialOllamaLiteralBind` covers both forms for ollama; BUG-042-004's `TestComposeContract_AdversarialDefaultFallbackBind` covers smackerel-core/ml default-fallback + smackerel-ml literal-bind; nothing covers prometheus at all. Cross-referenced the BUG-042-003 close-out (ollama analog) and BUG-042-004 close-out (core/ml analog) which established the exact pattern this fix replicates. Confirmed RED→GREEN by temporarily relaxing the prometheus prefix check in `assertComposeContract` to `strings.Contains(p, "${HOST_BIND_ADDRESS:")` and re-running the new adversarial test. |

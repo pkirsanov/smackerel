@@ -1,6 +1,6 @@
 # Build-Once Deploy-Many: build smackerel-core and smackerel-ml images, sign with cosign
 # keyless, attach SBOM (syft) and SLSA provenance, generate one config bundle per
-# environment (dev, test, home-lab), and publish a build manifest naming all artifacts.
+# environment (dev, test, self-hosted), and publish a build manifest naming all artifacts.
 #
 # This workflow ENDS at registry push. It MUST NOT SSH to any deploy target, MUST NOT
 # run ./smackerel.sh deploy-target, MUST NOT mutate any host state outside the runner.
@@ -219,7 +219,7 @@ jobs:
     # knb adapter's source-SHA cross-check (preconditions.sh
     # `verify_slsa_provenance`) passes.
     #
-    # Drift detector: knb/smackerel/home-lab/preconditions.sh requires
+    # Drift detector: <deployment-owner>/<product>/<target>/preconditions.sh requires
     # this predicate. Removing these steps re-orphans every downstream
     # apply.
     # ─────────────────────────────────────────────────────────────────
@@ -300,7 +300,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        env: [ dev, test, home-lab ]
+        env: [ dev, test, self-hosted ]
     steps:
     - name: Checkout
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -308,18 +308,18 @@ jobs:
     - name: Generate config bundle for ${{ matrix.env }}
       env:
         # Spec 061 SCOPE-06c — hardware-tier selector. CI uses 'cpu' for dev/test
-        # (commodity GHA runners) and 'accel' for home-lab (the operator's
+        # (commodity GHA runners) and 'accel' for self-hosted (the operator's
         # accel-tier deploy target). The runtime tier on the actual deploy host
         # is independent; this only selects which tier's interactive-model
         # parameters get baked into the per-env bundle.
-        SMACKEREL_HARDWARE_TIER: ${{ matrix.env == 'home-lab' && 'accel' || 'cpu' }}
+        SMACKEREL_HARDWARE_TIER: ${{ matrix.env == 'self-hosted' && 'accel' || 'cpu' }}
       run: |
         ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
 
     - name: Verify bundle determinism
       id: bundle-sha
       env:
-        SMACKEREL_HARDWARE_TIER: ${{ matrix.env == 'home-lab' && 'accel' || 'cpu' }}
+        SMACKEREL_HARDWARE_TIER: ${{ matrix.env == 'self-hosted' && 'accel' || 'cpu' }}
       run: |
         first_sha=$(sha256sum "dist/config-bundles/config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz" | awk '{print $1}')
         rm -rf dist/config-bundles/
@@ -692,7 +692,7 @@ jobs:
         # The artifact-name pattern is bundle-sha-<env>-<sourceSha>; the inner
         # file is named <env>.sha. We prefer reading by env name to be robust
         # to any layout drift in the upload step.
-        for env in dev test home-lab; do
+        for env in dev test self-hosted; do
           sha_file="$(find bundle-shas -type f -name "${env}.sha" | head -1)"
           if [[ -z "${sha_file}" ]] || [[ ! -s "${sha_file}" ]]; then
             echo "ERROR: missing or empty bundle-sha file for env=${env}" >&2
@@ -703,7 +703,7 @@ jobs:
             echo "ERROR: bundle-sha for env=${env} is not a valid sha256 hex digest: ${sha_value}" >&2
             exit 1
           fi
-          # Normalize env name to a shell-var-friendly form (home-lab -> HOME_LAB)
+          # Normalize env name to a shell-var-friendly form (self-hosted -> SELF_HOSTED)
           var_name="BUNDLE_SHA_$(echo "${env}" | tr 'a-z-' 'A-Z_')"
           echo "${var_name}=${sha_value}" >> "$GITHUB_OUTPUT"
           echo "Resolved ${var_name}=${sha_value}"
@@ -740,7 +740,7 @@ jobs:
       env:
         BUNDLE_SHA_DEV: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_DEV }}
         BUNDLE_SHA_TEST: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_TEST }}
-        BUNDLE_SHA_HOME_LAB: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_HOME_LAB }}
+        BUNDLE_SHA_SELF_HOSTED: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_SELF_HOSTED }}
         CHROME_BRIDGE_ZIP_SHA: ${{ steps.resolve-chrome-bridge.outputs.zipSha }}
         CHROME_BRIDGE_ZIP_NAME: ${{ steps.resolve-chrome-bridge.outputs.zipName }}
       run: |
@@ -762,9 +762,9 @@ jobs:
           - env: test
             ref: ${{ env.BUNDLE_REGISTRY }}:test-${{ needs.build-images.outputs.sourceSha }}
             sha256: ${BUNDLE_SHA_TEST}
-          - env: home-lab
-            ref: ${{ env.BUNDLE_REGISTRY }}:home-lab-${{ needs.build-images.outputs.sourceSha }}
-            sha256: ${BUNDLE_SHA_HOME_LAB}
+          - env: self-hosted
+            ref: ${{ env.BUNDLE_REGISTRY }}:self-hosted-${{ needs.build-images.outputs.sourceSha }}
+            sha256: ${BUNDLE_SHA_SELF_HOSTED}
         chromeBridge:
           artifact: ${CHROME_BRIDGE_ZIP_NAME}
           zipSha256: ${CHROME_BRIDGE_ZIP_SHA}
@@ -813,5 +813,5 @@ jobs:
         if-no-files-found: error
   # NOTE: this workflow stops here. Deploy is downstream of CI on a different trust boundary.
   # An operator (or a separate, manually triggered workflow) runs:
-  #   ./smackerel.sh deploy-target home-lab apply --image-core=<digest> --image-ml=<digest> --config-bundle=<bundle>
+  #   ./smackerel.sh deploy-target self-hosted apply --image-core=<digest> --image-ml=<digest> --config-bundle=<bundle>
   # CI MUST NOT SSH to any host. CI MUST NOT call deploy-target. (bubbles G074)

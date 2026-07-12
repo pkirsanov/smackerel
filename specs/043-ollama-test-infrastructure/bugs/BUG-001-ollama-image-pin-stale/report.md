@@ -17,7 +17,7 @@ Spec 043 Scope 01 pinned `ollama/ollama:0.6` for both `infrastructure.ollama.ima
 | `tests/integration/ollama_image_availability_test.go` | new | Adversarial registry-existence guard (build tag `integration`). Two tests: `TestOllamaImagePinIsPublished_LiveTag` (reads `OLLAMA_IMAGE` from `config/generated/test.env`, HEADs Docker Hub tags API, asserts HTTP 200; no `t.Skip()` bailout) and `TestOllamaImagePinIsPublished_AdversarialYankedTag` (proves non-tautology by asserting HTTP 404 for the known-yanked synthetic input `ollama/ollama:0.6`). |
 | `config/generated/dev.env` | regenerated | Derived artifact; reflects new pin. |
 | `config/generated/test.env` | regenerated | Derived artifact; reflects new pin. |
-| `config/generated/home-lab.env` | regenerated | Derived artifact; reflects new pin. |
+| `config/generated/self-hosted.env` | regenerated | Derived artifact; reflects new pin. |
 | `specs/043-ollama-test-infrastructure/bugs/BUG-001-ollama-image-pin-stale/{spec,design,scopes,uservalidation,report,scenario-manifest,state}.{md,json}` | new | Bug packet. |
 
 No files outside the change boundary were modified.
@@ -293,4 +293,4 @@ $ grep -c '"status"' specs/043-ollama-test-infrastructure/bugs/BUG-001-ollama-im
 
 ### Completion Statement
 
-BUG-001 is fixed. The yanked `ollama/ollama:0.6` pin has been replaced with the currently-published `ollama/ollama:0.23.2` across all 4 source-of-truth surfaces. A new adversarial integration regression test (`tests/integration/ollama_image_availability_test.go`) HEADs the Docker Hub tags API on every integration run and asserts HTTP 200 for the live pin and HTTP 404 for the known-yanked input — proving the test is real and would have caught this exact bug at the time it was introduced. Generated env files for `dev`, `test`, `home-lab` regenerated and verified to contain the new pin. All static gates (artifact-lint, `./smackerel.sh check`, `./smackerel.sh test unit` Go + Python) pass on the bumped tree. The integration test stack startup failure mode documented in the bug spec is unblocked.
+BUG-001 is fixed. The yanked `ollama/ollama:0.6` pin has been replaced with the currently-published `ollama/ollama:0.23.2` across all 4 source-of-truth surfaces. A new adversarial integration regression test (`tests/integration/ollama_image_availability_test.go`) HEADs the Docker Hub tags API on every integration run and asserts HTTP 200 for the live pin and HTTP 404 for the known-yanked input — proving the test is real and would have caught this exact bug at the time it was introduced. Generated env files for `dev`, `test`, `self-hosted` regenerated and verified to contain the new pin. All static gates (artifact-lint, `./smackerel.sh check`, `./smackerel.sh test unit` Go + Python) pass on the bumped tree. The integration test stack startup failure mode documented in the bug spec is unblocked.

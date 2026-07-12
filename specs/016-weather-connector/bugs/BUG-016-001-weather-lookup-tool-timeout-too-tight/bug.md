@@ -53,10 +53,10 @@ open-meteo:
 1. Geocoding (`https://geocoding-api.open-meteo.com/v1/search?name=...`) — ~1-2s
 2. Forecast (`https://api.open-meteo.com/v1/forecast?latitude=...&longitude=...`) — ~1-2s
 
-Measured worst case from inside the home-lab container:
+Measured worst case from inside the self-hosted container:
 
 ```bash
-$ ssh <deploy-host> 'docker exec smackerel-home-lab-smackerel-core-1 sh -c \
+$ ssh <deploy-host> 'docker exec smackerel-self-hosted-smackerel-core-1 sh -c \
    "for i in 1 2 3; do time wget -qO- ... open-meteo geocode ...; done"'
 geocode 1: 1s
 geocode 2: 1s
@@ -87,7 +87,7 @@ func init() {
         ...
         // A single lookup is geocode + forecast, two sequential HTTPS
         // round trips to open-meteo. Measured worst case from the
-        // home-lab container is ~2s per call (so ~4s end-to-end on a
+        // self-hosted container is ~2s per call (so ~4s end-to-end on a
         // cold cache). The previous 2000 ms cap was tighter than a
         // single HTTP call and made /weather fail with
         // `provider_unavailable` on most cold-cache invocations. 8s

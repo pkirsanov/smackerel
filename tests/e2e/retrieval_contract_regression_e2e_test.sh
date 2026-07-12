@@ -8,7 +8,7 @@
 #
 # ENV-BLOCKED on cpu-tier: full-stack bring-up is accel-tier-gated AND the
 # query-time assertion depends on the facade router wiring (PKT-095-A). Run on
-# accel-tier home-lab / CI once the packet lands, per the spec 095
+# accel-tier self-hosted / CI once the packet lands, per the spec 095
 # environment-blocked DoD allowance (finding F-095-E2E-LIVE). Statically valid
 # (bash -n).
 set -euo pipefail

@@ -4,14 +4,14 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [scopes.md](scopes.md)
 
 ## Summary
 
-Delivered `./smackerel.sh local-client-build --target home-lab` — the PRODUCER
+Delivered `./smackerel.sh local-client-build --target self-hosted` — the PRODUCER
 side (node n13) of the trust-model-aware client delivery defined by knb spec 028.
 On <deploy-host> (`local-operator` trust model) it builds the Flutter Android client
 LOCALLY (AAB + APK), operator-signs each artifact with the operator cosign key
 (`cosign sign-blob`, fully offline `--tlog-upload=false`), computes the real
 content sha256, and emits a local build manifest with `trustModel: local-operator`
 + `provenance: local-operator` + a LOCAL `file://` `ref` — conforming to the knb
-spec 025/028 `clients:` schema so the knb home-lab adapter's
+spec 025/028 `clients:` schema so the knb self-hosted adapter's
 `knb_client_acquire_local` → `cosign verify-blob --key --insecure-ignore-tlog` →
 sha256 byte-match path accepts it.
 
@@ -113,9 +113,9 @@ $ ./smackerel.sh --help
                               it (cosign sign-blob, trustModel local-operator),
                               and emit a local build manifest clients: block
                               (provenance local-operator) consumable by the knb
-                              home-lab adapter. The knb adapter consumes +
+                              self-hosted adapter. The knb adapter consumes +
                               verifies; this command BUILDS + SIGNS. Target:
-                              home-lab. The REAL flutter build + operator-sign
+                              self-hosted. The REAL flutter build + operator-sign
                               run on <deploy-host>.
 Exit Code: 0
 ```
@@ -127,10 +127,10 @@ in #c-gotest).
 
 `TestLocalClientBuild_TargetRequired` asserts both a missing and an unsupported
 `--target` are rejected with `[F086-LCB-01]` (see #c-gotest). Bonus fail-loud — an
-empty `COSIGN_PASSWORD` is rejected (matches `build-home-lab.sh`; FC-5):
+empty `COSIGN_PASSWORD` is rejected (matches `build-self-hosted.sh`; FC-5):
 
 ```text
-$ COSIGN_PASSWORD="" bash scripts/commands/local-client-build.sh --target home-lab --allow-dirty --out-dir /tmp/out
+$ COSIGN_PASSWORD="" bash scripts/commands/local-client-build.sh --target self-hosted --allow-dirty --out-dir /tmp/out
 ERROR: [F086-LCB-01] COSIGN_PASSWORD env var required for local-client-build
 Exit Code: 1
 ```
@@ -363,7 +363,7 @@ real operator key was not used and no real AAB was fabricated.
   file), explicitly NOT a real AAB, using a throwaway disposable keypair.
 - The full-delivery quality phases were executed in parent-expanded form
   (`runSubagent` unavailable) with raw evidence above — disclosed, not fabricated.
-  Simplify: the two scripts are minimal and mirror the committed `build-home-lab.sh`
+  Simplify: the two scripts are minimal and mirror the committed `build-self-hosted.sh`
   precedent. Gaps: every FR has a test; the only open gap is the <deploy-host> runtime
   (node <deploy-node>), documented as the Runtime Execution Boundary.
 - All evidence above is raw terminal / `go test` output captured in this session.

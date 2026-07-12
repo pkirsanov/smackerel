@@ -1,7 +1,7 @@
 // BUG-047-001 / DEVOPS-HL-002 — Build-Manifest Bundle-Hash Contract.
 //
 // Static-file contract for `.github/workflows/build.yml` that closes the
-// DEVOPS-HL-002 finding from the 2026-05-13 home-lab readiness review:
+// DEVOPS-HL-002 finding from the 2026-05-13 self-hosted readiness review:
 // the published `build-manifest-<sourceSha>.yaml` MUST carry a per-env
 // `sha256:` field next to each `configBundles[*].ref:` so the deploy-target
 // adapter `apply.sh` can verify the pulled bundle's hash byte-for-byte
@@ -17,7 +17,7 @@
 // The contract:
 //
 //  1. The `build-bundles` job MUST upload one `bundle-sha-<env>-<sourceSha>`
-//     artifact per environment (dev, test, home-lab).
+//     artifact per environment (dev, test, self-hosted).
 //  2. The `publish-build-manifest` job MUST download those artifacts before
 //     emitting the build manifest.
 //  3. The build-manifest heredoc MUST emit a `sha256:` field for each
@@ -42,7 +42,7 @@ import (
 // bundleEnvs is the authoritative list of bundle environments the contract
 // requires. If the workflow's matrix grows, this list MUST grow too — the
 // matrix-coverage assertion below catches drift.
-var bundleEnvs = []string{"dev", "test", "home-lab"}
+var bundleEnvs = []string{"dev", "test", "self-hosted"}
 
 // assertBundleHashContract verifies the workflow contract for BUG-047-001.
 // It returns nil if the contract holds, or an error describing the first
@@ -135,7 +135,7 @@ func assertBundleHashContract(doc *workflowDoc, raw []byte) error {
 		}
 		// Build the expected env-var name shape the publish-build-manifest
 		// step uses: dev → BUNDLE_SHA_DEV, test → BUNDLE_SHA_TEST,
-		// home-lab → BUNDLE_SHA_HOME_LAB.
+		// self-hosted → BUNDLE_SHA_SELF_HOSTED.
 		varName := "BUNDLE_SHA_" + strings.ToUpper(strings.ReplaceAll(env, "-", "_"))
 		if !strings.Contains(window, "${"+varName+"}") {
 			return fmt.Errorf("contract violation: build-manifest heredoc `- env: %s` entry's sha256: value is not sourced from ${%s} (BUG-047-001 / DEVOPS-HL-002 — the per-env BUNDLE_SHA_* env var is the only source of truth provided by the resolve-bundle-shas step)",
@@ -178,27 +178,27 @@ func TestBundleHashContract_LiveFile(t *testing.T) {
 func TestBundleHashContract_AdversarialMissingShaField(t *testing.T) {
 	// Re-use the live doc shape for the matrix-coverage assertions, but
 	// replace the raw heredoc with a tampered version that drops the
-	// home-lab sha256 line.
+	// self-hosted sha256 line.
 	doc, raw := loadBuildWorkflow(t)
 	tamperedRaw := strings.Replace(string(raw),
-		"          - env: home-lab\n            ref: ${{ env.BUNDLE_REGISTRY }}:home-lab-${{ needs.build-images.outputs.sourceSha }}\n            sha256: ${BUNDLE_SHA_HOME_LAB}",
-		"          - env: home-lab\n            ref: ${{ env.BUNDLE_REGISTRY }}:home-lab-${{ needs.build-images.outputs.sourceSha }}",
+		"          - env: self-hosted\n            ref: ${{ env.BUNDLE_REGISTRY }}:self-hosted-${{ needs.build-images.outputs.sourceSha }}\n            sha256: ${BUNDLE_SHA_SELF_HOSTED}",
+		"          - env: self-hosted\n            ref: ${{ env.BUNDLE_REGISTRY }}:self-hosted-${{ needs.build-images.outputs.sourceSha }}",
 		1,
 	)
 	if tamperedRaw == string(raw) {
-		t.Fatal("adversarial setup failure: could not strip the home-lab sha256 line from the live workflow — the live form may have changed; refresh this test")
+		t.Fatal("adversarial setup failure: could not strip the self-hosted sha256 line from the live workflow — the live form may have changed; refresh this test")
 	}
 	err := assertBundleHashContract(doc, []byte(tamperedRaw))
 	if err == nil {
-		t.Fatal("adversarial regression: contract should have rejected a heredoc missing the home-lab sha256 line, but it accepted it (BUG-047-001 / DEVOPS-HL-002 contract is not enforced)")
+		t.Fatal("adversarial regression: contract should have rejected a heredoc missing the self-hosted sha256 line, but it accepted it (BUG-047-001 / DEVOPS-HL-002 contract is not enforced)")
 	}
-	if !strings.Contains(err.Error(), "home-lab") {
-		t.Fatalf("adversarial regression: rejection message does not name the home-lab env: %v", err)
+	if !strings.Contains(err.Error(), "self-hosted") {
+		t.Fatalf("adversarial regression: rejection message does not name the self-hosted env: %v", err)
 	}
 	if !strings.Contains(err.Error(), "BUG-047-001") {
 		t.Fatalf("adversarial regression: rejection message does not carry BUG-047-001 attribution: %v", err)
 	}
-	t.Logf("adversarial OK: contract rejects heredoc missing home-lab sha256 with: %v", err)
+	t.Logf("adversarial OK: contract rejects heredoc missing self-hosted sha256 with: %v", err)
 }
 
 // TestBundleHashContract_AdversarialMissingArtifactUpload proves the contract
@@ -287,19 +287,19 @@ func TestBundleHashContract_AdversarialMissingEnvExposure(t *testing.T) {
 	doc, raw := loadBuildWorkflow(t)
 
 	tamperedRaw := strings.Replace(string(raw),
-		"        BUNDLE_SHA_HOME_LAB: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_HOME_LAB }}",
-		"        # BUNDLE_SHA_HOME_LAB env exposure removed by adversarial mutation",
+		"        BUNDLE_SHA_SELF_HOSTED: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_SELF_HOSTED }}",
+		"        # BUNDLE_SHA_SELF_HOSTED env exposure removed by adversarial mutation",
 		1,
 	)
 	if tamperedRaw == string(raw) {
-		t.Fatal("adversarial setup failure: could not strip the BUNDLE_SHA_HOME_LAB env exposure from the live workflow — the live form may have changed; refresh this test")
+		t.Fatal("adversarial setup failure: could not strip the BUNDLE_SHA_SELF_HOSTED env exposure from the live workflow — the live form may have changed; refresh this test")
 	}
 	err := assertBundleHashContract(doc, []byte(tamperedRaw))
 	if err == nil {
-		t.Fatal("adversarial regression: contract should have rejected a heredoc env block missing BUNDLE_SHA_HOME_LAB")
+		t.Fatal("adversarial regression: contract should have rejected a heredoc env block missing BUNDLE_SHA_SELF_HOSTED")
 	}
-	if !strings.Contains(err.Error(), "BUNDLE_SHA_HOME_LAB") {
-		t.Fatalf("adversarial regression: rejection message does not name BUNDLE_SHA_HOME_LAB: %v", err)
+	if !strings.Contains(err.Error(), "BUNDLE_SHA_SELF_HOSTED") {
+		t.Fatalf("adversarial regression: rejection message does not name BUNDLE_SHA_SELF_HOSTED: %v", err)
 	}
 	t.Logf("adversarial OK: contract rejects missing env exposure with: %v", err)
 }

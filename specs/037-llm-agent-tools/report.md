@@ -812,7 +812,7 @@ Implementation reality at HEAD ab6fc4f (unchanged by this closure):
 - All source code (no implementation change — this is documentation coherence).
 - All test files (test reality unchanged).
 - Spec status / certification (`status`, `certification.status`, `certification.completedScopes`, `certification.scopeProgress`, `certification.certifiedCompletedPhases` preserved per Option B reconciliation).
-- USER WIP: `.github/instructions/bubbles-deployment-target.instructions.md`, `.github/skills/bubbles-deployment-target-adapter/SKILL.md`, `docs/Home_Lab_Deployment_Plan.md`, `docs/Home_Lab_Master_Deployment_Plan.md`, `.github/bubbles/scripts/pii-scan.sh`, `.gitleaks.toml`.
+- USER WIP: `.github/instructions/bubbles-deployment-target.instructions.md`, `.github/skills/bubbles-deployment-target-adapter/SKILL.md`, `docs/Self_Hosted_Deployment_Plan.md`, `docs/Self_Hosted_Master_Deployment_Plan.md`, `.github/bubbles/scripts/pii-scan.sh`, `.gitleaks.toml`.
 - All other framework files in `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/`.
 
 ---

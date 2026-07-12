@@ -14,20 +14,20 @@
 #          - name: smackerel-ml
 #            ref: ghcr.io/.../smackerel-ml@sha256:<d>
 #        configBundles:
-#          - env: home-lab
-#            ref: ghcr.io/.../smackerel-config-bundles:home-lab-<sha>
+#          - env: self-hosted
+#            ref: ghcr.io/.../smackerel-config-bundles:self-hosted-<sha>
 #            sha256: <hex>
 #
-#   2. local-operator map/object shape (scripts/commands/build-home-lab.sh →
+#   2. local-operator map/object shape (scripts/commands/build-self-hosted.sh →
 #      dist/local-build-manifests/local-build-manifest-<sha>.yaml):
 #        sourceSha: "<sha>"
 #        images:
 #          smackerel-core: "ghcr.io/.../smackerel-core@sha256:<d>"
 #          smackerel-ml: "ghcr.io/.../smackerel-ml@sha256:<d>"
 #        configBundle:
-#          ref: "ghcr.io/.../smackerel-config-bundles:home-lab-<sha>"
-#          tag: "home-lab-<sha>"
-#          env: "home-lab"
+#          ref: "ghcr.io/.../smackerel-config-bundles:self-hosted-<sha>"
+#          tag: "self-hosted-<sha>"
+#          env: "self-hosted"
 #          sha256: "<hex>"
 #
 # Before SCOPE-082-07, the in-tree promote.sh parsed ONLY shape 1 and silently

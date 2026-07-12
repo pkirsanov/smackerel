@@ -110,7 +110,7 @@
         "runStartedAt": "2026-06-02T04:38:00Z",
         "runCompletedAt": "2026-06-02T04:40:00Z",
         "evidenceRef": "report.md#test-evidence--bubblestest-2026-06-02",
-        "summary": "Spec-069 unit tests executed at HEAD 3864e385: go test -count=1 ./internal/assistant/httpadapter/... ./internal/assistant/intent/policyguard/... RC=0 (HTTP adapter contract, transport-hint, golden contract, policyguard transport-branch all pass). Note: internal/config also exercised; one unrelated pre-existing failure observed (TestSSTLoader_HomeLabEmitsProductionRuntimeEnv_BUG051001) owned by BUG-051-001 — foreign to spec 069. Live-stack e2e (tests/e2e/assistant/http_*_test.go) + integration (tests/integration/api/assistant_*_test.go) remain foreign-blocked by F074-04B-CORE-SCENARIO-STARTUP. Claim Source: executed (units RC=0) / not-run (live-stack). No source/test files modified in this pass; HEAD unchanged."      },
+        "summary": "Spec-069 unit tests executed at HEAD 3864e385: go test -count=1 ./internal/assistant/httpadapter/... ./internal/assistant/intent/policyguard/... RC=0 (HTTP adapter contract, transport-hint, golden contract, policyguard transport-branch all pass). Note: internal/config also exercised; one unrelated pre-existing failure observed (TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001) owned by BUG-051-001 — foreign to spec 069. Live-stack e2e (tests/e2e/assistant/http_*_test.go) + integration (tests/integration/api/assistant_*_test.go) remain foreign-blocked by F074-04B-CORE-SCENARIO-STARTUP. Claim Source: executed (units RC=0) / not-run (live-stack). No source/test files modified in this pass; HEAD unchanged."      },
       {
         "agent": "bubbles.simplify",
         "phase": "simplify",

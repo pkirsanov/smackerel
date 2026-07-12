@@ -285,7 +285,7 @@ func TestAgentInvoke_RejectionEnvelopeByteIdenticalToValidator_Spec088(t *testin
 	}
 }
 
-// spec089WireAPIAgent installs a home-lab-shaped open-knowledge agent + the
+// spec089WireAPIAgent installs a self-hosted-shaped open-knowledge agent + the
 // spec-089 allowlist (default=deepseek-r1:32b, gather=gemma4:26b, switchable +=
 // 32b, tool-capable=[gemma4:26b, llama3.1:8b]) into the agenttool singletons.
 // ModelPref is left UNSET (nil) so the sticky read is the default path for

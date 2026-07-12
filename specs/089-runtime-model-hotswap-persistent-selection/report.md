@@ -1,7 +1,7 @@
 # Report 089 — Runtime Model Hot-Swap & Persistent Selection
 
 > **Post-certification supersession note (2026-06-23 reconciliation).** This
-> report records `deepseek-r1:32b` as the standing home-lab synthesis default
+> report records `deepseek-r1:32b` as the standing self-hosted synthesis default
 > (the value certified live on 2026-06-15). That standing default was
 > **superseded 2026-06-21 by `qwen3:30b-a3b`** (committed `config/smackerel.yaml`
 > ~L1230 / commit `05b9f677`; selection delegated to the deploy-adapter
@@ -30,7 +30,7 @@
 > (same precedent as specs 084 / 087 / 088).
 >
 > **Terminal posture (C9):** validated-in-repo only. The live 32b
-> standing-default quality was already proven by the home-lab A/B
+> standing-default quality was already proven by the self-hosted A/B
 > (`docs/experiments/open-knowledge-synthesis-model-ab.md`). The live
 > deploy (persist 48G + the deepseek-r1:32b default + pull-on-deploy +
 > ensure-32b-resident + the live re-verify) is a SEPARATE downstream
@@ -41,7 +41,7 @@
 **DONE — all four scopes validated-in-repo (implement phase).** Spec 089 EXTENDS spec 088 from a
 per-request-synthesis-only override to a four-axis selection capability:
 **(persistent default) × (per-user sticky) × (per-request) × (gather +
-synthesis turn)**. It promotes the home-lab persistent default synthesis
+synthesis turn)**. It promotes the self-hosted persistent default synthesis
 model to `deepseek-r1:32b` (committed SST; envelope raised 28G→48G; the
 standing default newly co-residence-checked, closing the CT-6 gap), adds
 a claim-bound per-user sticky `/model <id>` selector (the NEW
@@ -73,7 +73,7 @@ tests + the hot-swap runbook (SCOPE-04); `config generate` / `check` /
 
 | # | File | Change | Scope |
 |---|------|--------|-------|
-| 1 | `config/smackerel.yaml` | home-lab `ollama_memory_limit` 28G→48G; `synthesis_model_id` 7b→32b; `switchable_models` += 32b; NEW `tool_capable_gather_models`. Base `assistant.open_knowledge`: NEW `tool_capable_gather_models` (dev = baseline). | SCOPE-01 |
+| 1 | `config/smackerel.yaml` | self-hosted `ollama_memory_limit` 28G→48G; `synthesis_model_id` 7b→32b; `switchable_models` += 32b; NEW `tool_capable_gather_models`. Base `assistant.open_knowledge`: NEW `tool_capable_gather_models` (dev = baseline). | SCOPE-01 |
 | 2 | `internal/config/openknowledge.go` | `ToolCapableGatherModels []string`; load via `lookupJSONStringList`; `Validate` non-empty + `llm_model_id ∈ set`. | SCOPE-01 |
 | 3 | `internal/config/config.go::validateModelEnvelopes` | NEW standing-default co-residence guard (CT-6 fix) + tool-capable-entry profiled sanity; fail-loud. | SCOPE-01 |
 | 4 | `scripts/commands/config.sh` | resolve + emit `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS` (per-env override). | SCOPE-01 |
@@ -113,7 +113,7 @@ test PostgreSQL (`gettext-base` bootstrap succeeded; the sandbox reached
 needed). `./smackerel.sh check`, `format --check`, and `config generate`
 ran through the repo CLI; their real exit codes are captured verbatim. No
 live GPU/Ollama was used — agent tests use fake LLMs and the live 32b
-standing-default quality is the home-lab A/B (cited, not re-claimed).
+standing-default quality is the self-hosted A/B (cited, not re-claimed).
 
 **Honest note on the SCOPE-02 final re-confirm.** The definitive `modelpref`
 store GREEN is the SCOPE-02 run-1 capture (shipped code, all 5 tests PASS) plus
@@ -137,7 +137,7 @@ GREEN + run-2 RED, which used the exact shipped store code.
 
 ### Config generation (CHANGE 1,2,3,4,21) — `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS` SST + standing-default envelope guard
 
-`./smackerel.sh config generate` (dev) + `--env test` + `--env home-lab`, all EXIT 0. The home-lab generation passing EXIT 0 is itself the standing-default co-residence guard proof: the every-query default `deepseek-r1:32b` (22528 MiB) co-resident with the `gemma4:26b` gather (18432) = 40960 MiB ≤ 49152 MiB (48G) passes. config-validate runs as part of generation (`config-validate: …/dev.env.tmp OK`).
+`./smackerel.sh config generate` (dev) + `--env test` + `--env self-hosted`, all EXIT 0. The self-hosted generation passing EXIT 0 is itself the standing-default co-residence guard proof: the every-query default `deepseek-r1:32b` (22528 MiB) co-resident with the `gemma4:26b` gather (18432) = 40960 MiB ≤ 49152 MiB (48G) passes. config-validate runs as part of generation (`config-validate: …/dev.env.tmp OK`).
 
 ```text
 $ ./smackerel.sh config generate
@@ -151,15 +151,15 @@ $ ./smackerel.sh config generate --env test
 Generated ~/smackerel/config/generated/test.env
 === test EXIT: 0 ===
 
-$ ./smackerel.sh config generate --env home-lab
-Generated ~/smackerel/config/generated/home-lab.env
-=== home-lab EXIT: 0 ===
+$ ./smackerel.sh config generate --env self-hosted
+Generated ~/smackerel/config/generated/self-hosted.env
+=== self-hosted EXIT: 0 ===
 ```
 
 The generated env vars (gitignored artifacts), confirming the new SST key + the promoted default + the raised envelope are emitted per env:
 
 ```text
-=== config/generated/home-lab.env ===
+=== config/generated/self-hosted.env ===
 ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID=gemma4:26b
 ASSISTANT_OPEN_KNOWLEDGE_SYNTHESIS_MODEL_ID=deepseek-r1:32b
 ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["deepseek-r1:32b","deepseek-r1:7b","gemma4:26b"]
@@ -209,7 +209,7 @@ FAIL    github.com/smackerel/smackerel/internal/config  0.051s
 $ ./smackerel.sh test unit --go --go-run 'Spec089|TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088' --verbose
 --- PASS: TestOpenKnowledgeConfig_ToolCapableGatherModels_BaselineMemberRequired_Spec089 (0.00s)
 --- PASS: TestOpenKnowledgeConfig_ToolCapableGatherModels_RequiredWhenEnabled_Spec089 (0.00s)
---- PASS: TestOpenKnowledgeConfig_HomeLabSynthesisDefaultIs32b_Spec089 (0.00s)
+--- PASS: TestOpenKnowledgeConfig_SelfHostedSynthesisDefaultIs32b_Spec089 (0.00s)
 --- PASS: TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088 (0.00s)
 --- PASS: TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089 (0.00s)
 --- PASS: TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089 (0.00s)
@@ -266,7 +266,7 @@ Artifact lint PASSED.
 
 All Tier-1 (D01-T1-1..7) and Tier-2 (D01-T2-1..6) items checked `[x]` in
 [scopes.md](scopes.md) → SCOPE-01, each backed by the evidence above:
-config generate dev/test/home-lab EXIT 0 with the new keys; the
+config generate dev/test/self-hosted EXIT 0 with the new keys; the
 standing-default co-residence guard (28G refused / 48G accepted, the CT-6
 gap close) RED-before→GREEN-after; the tool-capable set fail-loud +
 baseline-member rule RED-before→GREEN-after; `deploy/contract.yaml` path
@@ -409,7 +409,7 @@ cardrewards integration test, `internal/cardrewards 0.028s [no tests to run]`).
 inside the `golang:1.25.11-alpine` container (single container, no live stack).
 All agent/facade/api tests use fake LLMs (recordingLLM/fakeOKChat/spec088APIChat)
 and pure-validator tables; no live Ollama/GPU. The live deepseek-r1:32b
-standing-default quality is the home-lab A/B
+standing-default quality is the self-hosted A/B
 ([`docs/experiments/open-knowledge-synthesis-model-ab.md`](../../docs/experiments/open-knowledge-synthesis-model-ab.md)),
 NOT re-claimed here (C9).
 
@@ -734,7 +734,7 @@ cache-served) inside the `golang:1.25.11-alpine` container
 integration via `./smackerel.sh test integration --go-run TestModelPrefStore`
 inside the `go-integration` container joined to the disposable `smackerel-test`
 compose stack (postgres/nats/ml/core) against live test PostgreSQL. No live
-GPU/Ollama (agent tests use fake LLMs; the live 32b quality remains the home-lab
+GPU/Ollama (agent tests use fake LLMs; the live 32b quality remains the self-hosted
 A/B, NOT re-claimed — C9). Home-path PII redacted to `~/`.
 
 ### 1) Full Go unit suite (authoritative regression) — EXIT 0
@@ -790,7 +790,7 @@ ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttoo
 ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/modelswitch     0.007s
 --- PASS: TestOpenKnowledgeConfig_ToolCapableGatherModels_BaselineMemberRequired_Spec089 (0.01s)  # config (A07)
 --- PASS: TestOpenKnowledgeConfig_ToolCapableGatherModels_RequiredWhenEnabled_Spec089 (0.00s)  # config (A07)
---- PASS: TestOpenKnowledgeConfig_HomeLabSynthesisDefaultIs32b_Spec089 (0.00s)                # config (A01)
+--- PASS: TestOpenKnowledgeConfig_SelfHostedSynthesisDefaultIs32b_Spec089 (0.00s)                # config (A01)
 --- PASS: TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089 (0.00s)      # config (A06): 28G refused + unprofiled refused
 --- PASS: TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089 (0.00s)           # config (A06): 48G accepted
 --- PASS: TestValidateModelEnvelopes_ToolCapableGatherEntryUnprofiledRejected_Spec089 (0.00s) # config (A06/A07)
@@ -887,7 +887,7 @@ Every scenario has ≥1 real passing test that asserts the scenario behaviour
 
 | SCN | Behaviour | Passing test(s) — verified this phase |
 |-----|-----------|----------------------------------------|
-| A01 | SST 32b default, source `default`, no footer | `TestAgent_NoSelection…ByteForByteBaseline`, `TestFacade_BareDefault_NoFooter…`, `TestAgentInvoke_BareDefault…`, `TestOpenKnowledgeConfig_HomeLabSynthesisDefaultIs32b` |
+| A01 | SST 32b default, source `default`, no footer | `TestAgent_NoSelection…ByteForByteBaseline`, `TestFacade_BareDefault_NoFooter…`, `TestAgentInvoke_BareDefault…`, `TestOpenKnowledgeConfig_SelfHostedSynthesisDefaultIs32b` |
 | A02 | sticky persists across reads | `TestModelPrefStore_GetAfterSet_PersistsAcrossReads` (§3), `…_Set_UpsertOnConflict` (§3), `TestAllowlist_ResolveEffective_Precedence…/sticky_wins` |
 | A03 | `/model` show + reset (Telegram + HTTP) | `TestModelCommand_Show…`/`…Reset…`, `TestAgentModel_GetShowsEffective_DeleteResets`, `TestModelPrefStore_Clear_IdempotentDelete` (§3) |
 | A04 | claim-bound, no cross-user leak | **`TestModelPrefStore_ClaimBound_UserBNeverReadsUserA` (§3, store arm)** + **`TestAgentModel_Put_BodyUserIdIgnored_ClaimBoundToSubject` (handler arm, OWASP A01)** |
@@ -989,7 +989,7 @@ invariant (cite-back, provenance, capture-as-fallback, `<think>`-strip +
 retry-before-salvage) holds under any selection; `WriteTimeout` stays `4200s`.
 
 Terminal posture (C9): validated-in-repo, NO commit/push. The live
-deepseek-r1:32b standing-default quality is the home-lab A/B
+deepseek-r1:32b standing-default quality is the self-hosted A/B
 (`docs/experiments/open-knowledge-synthesis-model-ab.md`), NOT re-claimed here.
 `nextRequiredOwner = bubbles.test`; the ultimate downstream owner after in-repo
 implement+test+validate is `bubbles.devops` for the live deploy (persist 48G +
@@ -1085,7 +1085,7 @@ output (not template/fabricated). The governance gates were run by this phase
 holds for all four scopes. Terminal posture mirrors the spec-087/088 precedent
 EXACTLY: the persistent-selection + sticky + gather-override + hot-swap primitive
 is shipped and validated **in-repo**; the remaining `done`-ceiling gates (the
-owner-forbidden commit/push + the live home-lab deploy/re-verify) are a SEPARATE
+owner-forbidden commit/push + the live self-hosted deploy/re-verify) are a SEPARATE
 downstream `bubbles.devops` dispatch. `status: blocked`, `certifiedAt: null`.
 
 ### Gate Results (executed this phase — real exit codes)
@@ -1136,7 +1136,7 @@ $ ./smackerel.sh test unit --go --go-run 'Spec089' --verbose
 
 | Scope | Claim | Reality (verified) | Verdict |
 |-------|-------|--------------------|---------|
-| SCOPE-01 | SST 32b standing default + 48G envelope + `tool_capable_gather_models` + standing-default co-residence guard (CT-6) | `config/smackerel.yaml` home-lab `assistant_open_knowledge_synthesis_model_id: "deepseek-r1:32b"`, `ollama_memory_limit: "48G"`, `tool_capable_gather_models` present; `internal/config/config.go` Spec-089 standing-default co-residence guard reads `SynthesisModelID` + sums against `OllamaMemoryLimitMiB`; envelope tests GREEN (28G refused / 48G accepted) | ✅ TRUE |
+| SCOPE-01 | SST 32b standing default + 48G envelope + `tool_capable_gather_models` + standing-default co-residence guard (CT-6) | `config/smackerel.yaml` self-hosted `assistant_open_knowledge_synthesis_model_id: "deepseek-r1:32b"`, `ollama_memory_limit: "48G"`, `tool_capable_gather_models` present; `internal/config/config.go` Spec-089 standing-default co-residence guard reads `SynthesisModelID` + sums against `OllamaMemoryLimitMiB`; envelope tests GREEN (28G refused / 48G accepted) | ✅ TRUE |
 | SCOPE-02 | Migration 059 + claim-bound `modelpref` store | `internal/db/migrations/059_user_model_preferences.sql` real (actor-keyed PK, `synthesis_model NOT NULL`, reserved `gather_model`, no DB default, ROLLBACK comment); `store_test.go` claim-binding test is **non-tautological** (nanosecond-unique userA/userB; asserts `Get(B)=ok:false`; RED-before `OR TRUE` → `CLAIM-BINDING BREACH` in report §3); integration EXIT 0 | ✅ TRUE |
 | SCOPE-03 | Precedence resolver + gather override + attribution; trust perimeter preserved | `ResolveEffective` (per-request > sticky > SST default; per-request reject is fail-loud **no fall-through**; orphaned sticky → default + WARN); `ResolveGather` tool-capability gate; `WithModelOverride` gather clone (singleton untouched, C6); `stripContractScaffolding` (FR-13); `TestAgent_TrustContractsHoldUnderAnySelection_Spec089` + `TestFacade_BareDefault_NoFooter…` GREEN | ✅ TRUE |
 | SCOPE-04 | Telegram `/model` + `--gather-model=` + HTTP `/v1/agent/model` parity + hot-swap docs | `internal/api/agent_model.go` (claim-bound `auth.UserIDFromContext`, 403 if absent, body carries only `{model}`); `internal/telegram/model_command.go` (`resolveActorUserID`); `TestParity_…IdenticalAcrossSurfaces` + `TestWiring_BootLogNames…` GREEN | ✅ TRUE |
@@ -1178,9 +1178,9 @@ None indicate a broken/fabricated changeset; the in-repo substance gates PASSED
 ### Completion Disposition
 
 In-repo validation is CLEAN; the spec is NOT certifiable `done` from this session
-(the `done`-ceiling requires the owner-forbidden commit/push + the live home-lab
+(the `done`-ceiling requires the owner-forbidden commit/push + the live self-hosted
 deploy/re-verify). No live-stack result fabricated; the live 32b standing-default
-quality remains the home-lab A/B (`docs/experiments/open-knowledge-synthesis-model-ab.md`),
+quality remains the self-hosted A/B (`docs/experiments/open-knowledge-synthesis-model-ab.md`),
 cited not re-claimed. Terminal status set to `blocked` (validated-in-repo),
 `certifiedAt: null`. The next parent-expanded diagnostic phase is `bubbles.audit`;
 the ultimate downstream owner for the `done`-ceiling is `bubbles.devops`.
@@ -1199,7 +1199,7 @@ Every claim audited here was **independently re-verified by this phase** against
 committed code + live tooling (not trusted from the prior sections). The in-repo
 substance is clean and ship-ready; the terminal status correctly remains
 `blocked` (validated-in-repo) with the `done`-ceiling (commit/push + live
-home-lab deploy + the 087→088→089 chain) routed to `bubbles.devops`. **No
+self-hosted deploy + the 087→088→089 chain) routed to `bubbles.devops`. **No
 ship-blocking finding beyond the known/planned devops handoff.** No commit/push;
 no agents dispatched; no live-stack result fabricated.
 
@@ -1210,7 +1210,7 @@ no agents dispatched; no live-stack result fabricated.
 | 1 | NO-DEFAULTS / SST (G028) | ✅ PASS | `git diff` of `scripts/commands/config.sh` + `config/smackerel.yaml` + all `*.go`: **zero** `${VAR:-default}` / `getEnv(k,default)` / `unwrap_or` added. `internal/config/openknowledge.go` `Validate()` early-returns at `if !c.Enabled` (L192) → `tool_capable_gather_models` REQUIRED non-empty + non-empty-entries + **baseline `llm_model_id` ∈ set** when enabled (L272-291), fail-loud. `config.sh` emits the resolved value or an empty `[]` sentinel (the Go validator rejects empty-when-enabled — the established fail-loud pattern, NOT a hidden working default). `internal/config/config.go::validateModelEnvelopes` (L2323-2372) standing-default co-residence guard is gated `Enabled && OllamaMemoryLimitMiB!=0`, resolves `SynthesisModelID`, fails loud on missing profile OR over-envelope co-resident sum naming the model + envelope; each `tool_capable_gather_models` entry profiled. Arithmetic confirmed: 32b(22528)+gemma4:26b(18432)=40960 → `> 28672` (28G refused) / `≤ 49152` (48G accepted). 48G envelope consistent with profiles. |
 | 2 | Trust perimeter (core promise) | ✅ PASS | `agent.go::WithModelOverride` (L274-292): `o.IsZero()→return a` (no-selection = byte-for-byte baseline); else `clone := *a` and re-points ONLY `clone.cfg.SynthesisModel` / `clone.cfg.Model` when supplied — the SST singleton is never written (C6). `facade.go` open_knowledge fast-path (L1064-1103): claim-bound sticky read → `ResolveEffective` → on `rej != nil` build a rejection response and `break` **before** the agent + capture (Rejection ≠ capture-skip); else `runOpenKnowledgeDirect(...)`. The selection swaps WHICH model id is sent to Ollama; cite-back, provenance/no-zero-source, capture-as-fallback, `<think>`-strip, and retry-before-salvage all run on the turn OUTPUT, model-/selection-agnostic. `stripContractScaffolding` applied on the three salvage arms (L492/518/580, FR-13). Behavioural proof GREEN (test+validate): `TestAgent_TrustContractsHoldUnderAnySelection_Spec089`, `TestAgent_ForcedFinalEmpty_EscalatedRetryThenHonestSalvage_Spec089`, `TestAgent_NoSelection_…ByteForByteBaseline_Spec089`. |
 | 3 | Claim-binding / multi-user authz (security-critical) | ✅ PASS | `internal/api/agent_model.go`: `resolve()` derives `subject = auth.UserIDFromContext` and returns **403** (`authenticated_subject_required`) if absent; the PUT body struct carries ONLY `{model}` (no user-id field — a spoofed body id is structurally ignored by the decode); `Get/Set/Clear(ctx, subject)`; off-allowlist `Resolve`→`writeOpenKnowledgeRejection` with **no** store write; body bounded `io.LimitReader(…, 8*1024)`. `router.go` L607-614: the `GET/PUT/DELETE /v1/agent/model` group is `r.Use(deps.bearerAuthMiddleware)`. `internal/telegram/model_command.go`: `resolveActorUserID(chatID)` (refuses if empty); `store.{Get,Set,Clear}(ctx, userID)`; off-allowlist → verbatim `rej.Message`, no `Set`. `modelpref/store.go`: parameterized + actor-scoped throughout (`WHERE actor_user_id = $1`, `VALUES ($1,$2,$3)`, `ON CONFLICT (actor_user_id) DO UPDATE`, `DELETE … WHERE actor_user_id = $1`). Migration 059 PK `actor_user_id`, claim-binding documented. **The new attack surface is genuinely closed**; the security SECURE verdict is real (controls re-read by this phase, not asserted). |
-| 4 | Deployment-ownership boundary (NON-NEGOTIABLE) | ✅ PASS | `bash .github/bubbles/scripts/pii-scan.sh` → **clean, no leaks** (EXIT 0). The `config/smackerel.yaml` home-lab overrides are generic model tags (`deepseek-r1:32b`/`:7b`, `gemma4:26b`) + abstract per-env config (`ollama_memory_limit: "48G"`, `tool_capable_gather_models`) under the established `environments.home-lab.*` pattern — **no** real hostnames/IPs/tailnet IDs/secrets/operator topology. `deploy/contract.yaml` diff = ONE abstract `sstKeyCatalog` entry (path + `type: string[]` + `secret: false` + abstract per-env note). |
+| 4 | Deployment-ownership boundary (NON-NEGOTIABLE) | ✅ PASS | `bash .github/bubbles/scripts/pii-scan.sh` → **clean, no leaks** (EXIT 0). The `config/smackerel.yaml` self-hosted overrides are generic model tags (`deepseek-r1:32b`/`:7b`, `gemma4:26b`) + abstract per-env config (`ollama_memory_limit: "48G"`, `tool_capable_gather_models`) under the established `environments.self-hosted.*` pattern — **no** real hostnames/IPs/tailnet IDs/secrets/operator topology. `deploy/contract.yaml` diff = ONE abstract `sstKeyCatalog` entry (path + `type: string[]` + `secret: false` + abstract per-env note). |
 | 5 | Product Principle Alignment | ✅ PASS | `spec.md` §11 present. **Principle 8 (Trust Through Transparency, PRIMARY)** genuinely implemented: model+source attribution wired into the envelope (`substrate_tool.go` `model_source`/`gather_model`/`gather_model_source` + `MapTurnResult` + `WithSelection`; `ModelAttribution` extended), explicit selection, fail-loud rejection (verified in `agent_model.go`/`modelswitch`/`facade`). **Principle 2 (Vague In, Precise Out, PRIMARY)** genuinely served: the quality-first 32b standing default is the whole point — fixes the false-balance + multi-hop hallucination the A/B proved. Principle 6 honored (footer only on non-default), Principle 4 preserved (cite-back under any model). No deviation; Principle 10 / QF financial surface not engaged. |
 | 6 | Do-not-touch boundary | ✅ PASS | `git status --porcelain` for `internal/cardrewards/`, `ml/app/`, `ml/tests/`, `specs/083-card-rewards-companion/`, `tests/integration/cardrewards_extract_test.go`, `clients/`, `web/` is **EMPTY**. Out-of-changeset guard failures attributable by file path, NOT spec-089: G028 `ml/app/main.py:257` `os.getenv("EMBEDDING_MODEL", "")` → last commit `124b995d feat(083): Scope 05` (spec-083 WIP, working-tree clean); spec-073 node/dart canary → `clients/`+`web/` unmodified; G089 → dep spec-088 is itself `blocked` (verified `state.json`). |
 | 7 | Terminal status correctness | ✅ PASS | `state.json` `status: "blocked"`, `certifiedAt: null` — the RIGHT terminal-for-mode status (not a forced `done`, not a fabricated live result). `state-transition-guard.sh` EXIT 1 (35 fail / 8 warn) **correctly refuses** done-promotion — EXPECTED for validated-in-repo/blocked, NOT a fabrication signal. Every block is done-ceiling (live deploy/E2E/stress + downstream audit-recording/chaos/docs) / dependency-on-blocked-088 (G089, Check 31) / minor precedent hygiene. `artifact-lint.sh` EXIT 0 (anti-fabrication checks clean; top-level status matches certification.status). The validate-flagged minor deviations (Check 4B `[x] Done` vs canonical `Done`; deferred F-FOOTPRINT/F-RETRYBUDGET named forward-compat levers; guard-heuristic disagreements vs the canonical traceability-guard **G068 PASS 12/12**) are **NOT ship-blocking** for the validated-in-repo posture — identical class to the spec-088 precedent. |
@@ -1273,7 +1273,7 @@ was re-reviewed against source this phase:
 
 1. **Live claim-binding (the new attack surface).** The cross-user isolation +
    body-spoof rejection are proven by in-repo tests + source review (`interpreted`
-   for the live data-flow). On the home-lab deploy, spot-verify with a real
+   for the live data-flow). On the self-hosted deploy, spot-verify with a real
    two-user `/ask` (user B must NOT inherit user A's sticky) and a `PUT
    /v1/agent/model {"model":"…","user_id":"victim"}` (must set only the bearer
    subject; `Get("victim")` stays `ok=false`).
@@ -1297,10 +1297,10 @@ The in-repo primitive is shipped + validated + audited. To reach `done`,
 1. Commit + push the **087 → 088 → 089** chain (resolves the G089 Check-31 block:
    089 dep 088, 088 dep 087, all currently `blocked`/validated-in-repo).
 2. Build + sign images (cosign keyless + Rekor) per Build-Once Deploy-Many.
-3. `./smackerel.sh config generate --env home-lab --bundle` and apply the bundle
+3. `./smackerel.sh config generate --env self-hosted --bundle` and apply the bundle
    carrying the **48G envelope + the `deepseek-r1:32b` standing default + the
    `tool_capable_gather_models` set**.
-4. Ensure `deepseek-r1:32b` is resident on the home-lab Ollama (pull-on-deploy).
+4. Ensure `deepseek-r1:32b` is resident on the self-hosted Ollama (pull-on-deploy).
 5. Live re-verify a `/ask` (boot log `synthesis_model=deepseek-r1:32b`; envelope
    `model_source: default`) + the spot-checks above.
 
@@ -1492,7 +1492,7 @@ pref unchanged (RED-before) · D05-T2-5 no regression, one store + one validator
 command output, home paths redacted to `~/`) + **interpreted** (the source
 control-flow descriptions). `nextRequiredOwner = bubbles.validate` (the spec
 remains validated-in-repo at status `blocked`; the ultimate done-ceiling owner
-stays `bubbles.devops` for the live home-lab deploy).
+stays `bubbles.devops` for the live self-hosted deploy).
 
 ### Validate Re-Verification (bubbles.validate — 2026-06-15, deep mode, execution-only G071)
 
@@ -1567,7 +1567,7 @@ do-not-touch boundary is git-clean. SCOPE-05's own changes are confined to
 **Terminal status: UNCHANGED** — `blocked` (validated-in-repo), `certifiedAt`
 null. SCOPE-05 is an additive UX overlay on the already-validated `/model`
 surface and does not change the terminal posture. The only remaining
-done-ceiling work is the live home-lab deploy of the 087→088→089 chain
+done-ceiling work is the live self-hosted deploy of the 087→088→089 chain
 (persist the 48G envelope + the deepseek-r1:32b standing default + pull-on-deploy
 + live re-verify); SCOPE-05 ships with it. `nextRequiredOwner = bubbles.devops`.
 
@@ -1581,8 +1581,8 @@ no commit/push; no agents dispatched.
 
 ## DevOps Deploy Execution (bubbles.devops — 2026-06-15)
 
-Operator authorized the live home-lab deploy of the 087→088→089 chain ("1 = deploy").
-This section records the REAL devops outcome (commit → push → CI build/sign → home-lab
+Operator authorized the live self-hosted deploy of the 087→088→089 chain ("1 = deploy").
+This section records the REAL devops outcome (commit → push → CI build/sign → self-hosted
 apply → live-verify), executed as far as genuinely possible. No fabricated results; no
 agents dispatched. Host/path identifiers genericized per the no-env-specific-content policy.
 
@@ -1607,16 +1607,16 @@ agents dispatched. Host/path identifiers genericized per the no-env-specific-con
     attested, Trivy-scanned, pushed to ghcr **by digest**:
     - core: `ghcr.io/pkirsanov/smackerel-core@sha256:0a042187b74732cf874614e585de8a61065f633346cdf6f26ce7411cf4838fe2`
     - ml:   `ghcr.io/pkirsanov/smackerel-ml@sha256:51c4e944f80bc1166bcb68efdfaa048e54e9f0e89b8c803d2d1eb3071e6c0f0f`
-  - **`build-bundles (home-lab)`: SUCCESS** — deterministic 089 config bundle (48G envelope
+  - **`build-bundles (self-hosted)`: SUCCESS** — deterministic 089 config bundle (48G envelope
     + `deepseek-r1:32b` synthesis default + `tool_capable_gather_models`) published:
-    - `ghcr.io/pkirsanov/smackerel-config-bundles:home-lab-9d934005595c2d4f1db17d3d43372ec83c7d2880`
+    - `ghcr.io/pkirsanov/smackerel-config-bundles:self-hosted-9d934005595c2d4f1db17d3d43372ec83c7d2880`
       sha256 `46b5922d4f64f435fb01c029b659fac67cb96b66963cc67da85061a83d38eb5d`
   - **`build-clients`: FAILURE** — "Materialize Android upload keystore (operator-private
     secret)" — the documented operator-only gap. Gates `publish-build-manifest` (SKIPPED) →
     NO `build-manifest-9d934005….yaml`. The server images + bundle are unaffected + fully signed.
 
-### 4. Home-lab apply — ATTEMPTED; cosign+bundle verified; FAILED CLOSED on stale on-target-knb secret gap · Claim Source: executed
-- Sanctioned orchestrator (`./smackerel.sh deploy home-lab`) is correctly fail-closed: its
+### 4. self-hosted apply — ATTEMPTED; cosign+bundle verified; FAILED CLOSED on stale on-target-knb secret gap · Claim Source: executed
+- Sanctioned orchestrator (`./smackerel.sh deploy self-hosted`) is correctly fail-closed: its
   CI-gate requires the (absent) build-manifest; no bypass exists (by design).
 - Followed the precedent for the IDENTICAL build-clients-blocked condition (spec 093 /
   commit 117ac27e): the knb adapter `apply.sh --trust-model=ci-keyless` lane with the
@@ -1637,7 +1637,7 @@ agents dispatched. Host/path identifiers genericized per the no-env-specific-con
     (declared=8, substituted=**7**/8). `apply.sh` **failed closed BEFORE any container
     recreate**; audit `outcome=failure`.
 - **Root cause:** the on-target knb checkout (`<operator-home>/knb`, rev `d1ee19b`, dirty)
-  is STALE — its `smackerel/secrets/home-lab.enc.env` lacks `WEB_REGISTRATION_INVITE_TOKEN`
+  is STALE — its `smackerel/secrets/self-hosted.enc.env` lacks `WEB_REGISTRATION_INVITE_TOKEN`
   (count 0), whereas the up-to-date local knb (`eaf118e`) HAS it (count 1). The orchestrator's
   `knb-rev-pin` step normally syncs the on-target knb before applying; the direct adapter call
   bypassed it. This is NOT an unprovisioned secret — it is on-target knb staleness that only
@@ -1658,16 +1658,16 @@ agents dispatched. Host/path identifiers genericized per the no-env-specific-con
 **Option A (recommended — sanctioned orchestrator):**
 1. Make `build-clients` green (provide the Android upload-keystore CI secret) so
    `build.yml` → `publish-build-manifest` produces `build-manifest-9d934005….yaml`.
-2. `./smackerel.sh deploy home-lab` — the orchestrator syncs the on-target knb (knb-rev-pin),
+2. `./smackerel.sh deploy self-hosted` — the orchestrator syncs the on-target knb (knb-rev-pin),
    retrieves the manifest, and applies end-to-end (cosign verify → 089 images → 089 SST →
    migration 059 → rollout verify). This self-heals the mid-update compose dir.
 
 **Option B (direct adapter apply, foregoing the orchestrator):**
 1. On `<deploy-host>`, reconcile the on-target knb `<operator-home>/knb` to a rev that includes
-   `WEB_REGISTRATION_INVITE_TOKEN` in `smackerel/secrets/home-lab.enc.env` (local knb `eaf118e`
+   `WEB_REGISTRATION_INVITE_TOKEN` in `smackerel/secrets/self-hosted.enc.env` (local knb `eaf118e`
    has it). **Stash/commit the on-target dirty WIP first — do NOT discard it.**
 2. Re-run the adapter apply (root, operator age key):
-   `env SOPS_AGE_KEY_FILE=<operator-home>/.config/sops/age/keys.txt <operator-home>/knb/smackerel/home-lab/apply.sh --trust-model=ci-keyless --image-core=sha256:0a042187…(0a042187b74732cf874614e585de8a61065f633346cdf6f26ce7411cf4838fe2) --image-ml=sha256:51c4e944…(51c4e944f80bc1166bcb68efdfaa048e54e9f0e89b8c803d2d1eb3071e6c0f0f) --config-bundle=home-lab-9d934005595c2d4f1db17d3d43372ec83c7d2880 --config-bundle-sha=46b5922d4f64f435fb01c029b659fac67cb96b66963cc67da85061a83d38eb5d --source-sha=9d934005595c2d4f1db17d3d43372ec83c7d2880`
+   `env SOPS_AGE_KEY_FILE=<operator-home>/.config/sops/age/keys.txt <operator-home>/<deployment-owner>/<product>/<target>/apply.sh --trust-model=ci-keyless --image-core=sha256:0a042187…(0a042187b74732cf874614e585de8a61065f633346cdf6f26ce7411cf4838fe2) --image-ml=sha256:51c4e944…(51c4e944f80bc1166bcb68efdfaa048e54e9f0e89b8c803d2d1eb3071e6c0f0f) --config-bundle=self-hosted-9d934005595c2d4f1db17d3d43372ec83c7d2880 --config-bundle-sha=46b5922d4f64f435fb01c029b659fac67cb96b66963cc67da85061a83d38eb5d --source-sha=9d934005595c2d4f1db17d3d43372ec83c7d2880`
    → rm-rf + extract 089 + render (now succeeds) + recreate core+ML + migration 059 on core boot + rollout verify.
 3. Live-verify on the deployed core (value-safe; ephemeral throwaway PASETO minted in-container,
    never printed, revoked after):
@@ -1682,7 +1682,7 @@ compose dir manually — the running stack is healthy and reboot-safe; the next 
 on-disk bundle.
 
 **Terminal status:** `blocked` (delivered-pending-activation). Code is committed (`9d934005`)
-+ pushed to origin/main + CI-built + cosign-signed + bundle-published; live home-lab activation
++ pushed to origin/main + CI-built + cosign-signed + bundle-published; live self-hosted activation
 is blocked on operator on-target-knb reconciliation (Option A or B). `certifiedAt` stays null.
 `nextRequiredOwner = operator` (reconcile on-target knb / provide Android keystore secret) →
 then `bubbles.devops` re-runs the apply + live-verify.
@@ -1693,17 +1693,17 @@ then `bubbles.devops` re-runs the apply + live-verify.
 
 ---
 
-## SUPERSESSION NOTE — home-lab model optimization (2026-06-20)
+## SUPERSESSION NOTE — self-hosted model optimization (2026-06-20)
 
 Record-only; this spec's status, certification, and history are unchanged. The
-standing home-lab synthesis default this spec promoted
+standing self-hosted synthesis default this spec promoted
 (`deepseek-r1:7b → deepseek-r1:32b`, with `deepseek-r1:32b` added to
 `switchable_models` and `ollama_memory_limit` raised to `48G`) has been
-superseded by the operator's optimized home-lab model set: the standing
+superseded by the operator's optimized self-hosted model set: the standing
 synthesis default is now **`gpt-oss:20b`** (14336 MiB) and the switchable set is
-**`[gpt-oss:20b, gemma4:26b]`** — the only two models the operator's home-lab
+**`[gpt-oss:20b, gemma4:26b]`** — the only two models the operator's self-hosted
 Ollama host pulls. The `deepseek-r1:32b` / `deepseek-r1:7b` synthesis arms are
-retired from the home-lab active selection; `ollama_memory_limit` stays `48G`
+retired from the self-hosted active selection; `ollama_memory_limit` stays `48G`
 (now carrying headroom: `gpt-oss:20b` 14336 + `gemma4:26b` gather 18432 = 32768 ≤
 49152). The spec-089 selection-precedence resolver, per-user sticky `/model`,
 gather override, and the standing-default co-residence guard

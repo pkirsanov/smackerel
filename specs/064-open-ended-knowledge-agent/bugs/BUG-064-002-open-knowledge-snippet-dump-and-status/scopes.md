@@ -48,7 +48,7 @@
 > registry); these are real-code-path Go tests asserting the assembled,
 > un-redacted `TurnResult.FinalText` / `AssistantResponse.Body`, satisfying the
 > "get the real final body" investigation requirement without the redacted prod
-> log. A live home-lab E2E (real Telegram + searxng + GPU) is the redeploy
+> log. A live self-hosted E2E (real Telegram + searxng + GPU) is the redeploy
 > verification step, owned by `bubbles.devops` (see report.md).
 
 ### Definition of Done

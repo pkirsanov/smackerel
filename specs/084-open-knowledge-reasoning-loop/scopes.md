@@ -128,8 +128,8 @@ Scenario: SCN-084-A02 — The loop drills in before answering
 | `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_ReflectBeforeFinal_NudgeOnSecondToLastIteration_Spec084` | unit | reflect nudge present on the second-to-last request, absent before it, forced-final message on the last, tools stripped on the last (adversarial: RED today) (SCN-084-A02) |
 | `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_MultiHop_AllowsDistinctToolCallsBeforeForcedFinal_Spec084` | unit | at max_iterations=6 the loop processes 5 distinct tool calls to a cited synthesis without premature stop (SCN-084-A02) |
 | `internal/config/openknowledge_test.go` | unit | `max_iterations` / `per_query_token_budget` remain `> 0` fail-loud (existing coverage; re-run) |
-| `tests/e2e/agent/openknowledge_e2e_test.go` | e2e-api | scenario-specific regression: the open-knowledge /ask path still produces a grounded, cited answer end-to-end with the raised iteration budget (broader open-knowledge E2E suite; the live behavioral re-verify of multi-hop reasoning runs in the home-lab devops dispatch) (SCN-084-A02) |
-| `./smackerel.sh test e2e` | e2e-api | broader E2E regression suite: the assistant agent suite still passes on the live stack (executed in the home-lab devops re-verify dispatch) |
+| `tests/e2e/agent/openknowledge_e2e_test.go` | e2e-api | scenario-specific regression: the open-knowledge /ask path still produces a grounded, cited answer end-to-end with the raised iteration budget (broader open-knowledge E2E suite; the live behavioral re-verify of multi-hop reasoning runs in the self-hosted devops dispatch) (SCN-084-A02) |
+| `./smackerel.sh test e2e` | e2e-api | broader E2E regression suite: the assistant agent suite still passes on the live stack (executed in the self-hosted devops re-verify dispatch) |
 
 ### Definition of Done
 
@@ -140,7 +140,7 @@ Scenario: SCN-084-A02 — The loop drills in before answering
 - [x] D02-5 — `./smackerel.sh config generate` regenerates dev/test env deterministically with `MAX_ITERATIONS=6` and `PER_QUERY_TOKEN_BUDGET=128000`.
 - [x] D02-6 — Build-quality gate passes (unit/check/format/SST/artifact-lint/traceability/no-touch/no-commit).
 - [x] D02-7 — SCN-084-A02 The loop drills in before answering — Evidence: RED→GREEN ≥10 lines captured in `report.md`.
-- [x] D02-8 — Scenario-specific + broader E2E regression coverage is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`, `./smackerel.sh test e2e`); the deterministic reflect/budget behavior is unit-proven (fakeLLM adversarial traces) and the live behavioral re-verify is the home-lab devops dispatch. → Evidence: report.md → Test Evidence (Scope-02).
+- [x] D02-8 — Scenario-specific + broader E2E regression coverage is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`, `./smackerel.sh test e2e`); the deterministic reflect/budget behavior is unit-proven (fakeLLM adversarial traces) and the live behavioral re-verify is the self-hosted devops dispatch. → Evidence: report.md → Test Evidence (Scope-02).
 - [x] D02-9 — No enforced performance target (p95/throughput) is introduced by this scope (the `WriteTimeout` change is a request-deadline backstop, not an enforced service-level target); stress coverage is therefore not applicable. The request-deadline analysis is recorded in design.md → D5 / Finding C1. → Evidence: design.md → D5 / Finding C1.
 
 ---
@@ -197,8 +197,8 @@ Scenario: SCN-084-A05 — Genuine synthesis and the trust contract are not regre
 | `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_GenuineSynthesis_ReturnedVerbatim_NoSalvageFrame_Spec084` | unit | genuine cited synthesis returned verbatim, no frame (guard) (SCN-084-A05) |
 | `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go::TestAgent_FabricatedCitation_StillRejected_Spec084` | unit | fabricated citation still rejected by the cite-back verifier (guard) (SCN-084-A05) |
 | `internal/assistant/openknowledge/agent/snippet_dedup_bug064002_test.go` | unit | BUG-064-002 snippet-dedup + source-cap regressions still pass (no regression) |
-| `tests/e2e/agent/openknowledge_e2e_test.go` | e2e-api | scenario-specific regression: the open-knowledge /ask path still returns a grounded answer or an honest refusal end-to-end after the salvage-honesty change (broader open-knowledge E2E suite; live behavioral re-verify is the home-lab devops dispatch) (SCN-084-A03) |
-| `./smackerel.sh test e2e` | e2e-api | broader E2E regression suite: the assistant agent suite still passes on the live stack (executed in the home-lab devops re-verify dispatch) |
+| `tests/e2e/agent/openknowledge_e2e_test.go` | e2e-api | scenario-specific regression: the open-knowledge /ask path still returns a grounded answer or an honest refusal end-to-end after the salvage-honesty change (broader open-knowledge E2E suite; live behavioral re-verify is the self-hosted devops dispatch) (SCN-084-A03) |
+| `./smackerel.sh test e2e` | e2e-api | broader E2E regression suite: the assistant agent suite still passes on the live stack (executed in the self-hosted devops re-verify dispatch) |
 
 ### Definition of Done
 
@@ -209,4 +209,4 @@ Scenario: SCN-084-A05 — Genuine synthesis and the trust contract are not regre
 - [x] D03-5 — `docs/Operations.md` open-knowledge section amended (reasoning loop, max_iterations, token budget, WriteTimeout/F-LAT, honest salvage).
 - [x] D03-6 — Build-quality gate passes (full `./smackerel.sh test unit --go` green, `check` clean, `format --check` clean, SST/G028, artifact-lint + traceability pass, no model / spec-083 file touched, no commit).
 - [x] D03-7 — SCN-084-A03 comparison salvage framed honestly; SCN-084-A04 salvage never a confident snippet wall; SCN-084-A05 genuine synthesis + trust contract not regressed — Evidence: RED→GREEN + guards ≥10 lines captured in `report.md`.
-- [x] D03-8 — Scenario-specific + broader E2E regression coverage is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`, `./smackerel.sh test e2e`); the deterministic salvage-honesty behavior is unit-proven (fakeLLM adversarial traces incl. empty/ungrounded forced-final) and the live behavioral re-verify is the home-lab devops dispatch. → Evidence: report.md → Test Evidence (Scope-03).
+- [x] D03-8 — Scenario-specific + broader E2E regression coverage is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`, `./smackerel.sh test e2e`); the deterministic salvage-honesty behavior is unit-proven (fakeLLM adversarial traces incl. empty/ungrounded forced-final) and the live behavioral re-verify is the self-hosted devops dispatch. → Evidence: report.md → Test Evidence (Scope-03).

@@ -35,7 +35,7 @@
         "phase": "implement",
         "agent": "bubbles.implement",
         "recordedAt": "2026-05-28T00:00:00Z",
-        "summary": "Scope 1 (Secret Manifest Wiring) implemented: KEEP_GOOGLE_APP_PASSWORD added to all three Bucket-2 mirrors (config/smackerel.yaml, internal/config/secret_keys.go, scripts/commands/config.sh); KEEP_GOOGLE_EMAIL + KEEP_GOOGLE_APP_PASSWORD wired into the standard env template; spec-052 placeholder emission verified for home-lab; sidecar boundary enforced at the application layer via TestKeepAppPasswordReadOnlyFromSidecarNotCore; env_file shared-shape pinned via TestComposeEnvFileSharedAcrossCoreAndMlServices; A2 adversarial bundle-secret literal updated to match the new 6-key array.",
+        "summary": "Scope 1 (Secret Manifest Wiring) implemented: KEEP_GOOGLE_APP_PASSWORD added to all three Bucket-2 mirrors (config/smackerel.yaml, internal/config/secret_keys.go, scripts/commands/config.sh); KEEP_GOOGLE_EMAIL + KEEP_GOOGLE_APP_PASSWORD wired into the standard env template; spec-052 placeholder emission verified for self-hosted; sidecar boundary enforced at the application layer via TestKeepAppPasswordReadOnlyFromSidecarNotCore; env_file shared-shape pinned via TestComposeEnvFileSharedAcrossCoreAndMlServices; A2 adversarial bundle-secret literal updated to match the new 6-key array.",
         "evidenceRefs": [
           "specs/059-google-keep-live-mode/report.md#scope-1"
         ]

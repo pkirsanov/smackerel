@@ -2,7 +2,7 @@
 
 - **Severity:** MEDIUM (redteam **F7**)
 - **Owning spec:** `050-ml-sidecar-health-isolation`
-- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on evo-x2
+- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host>
 - **Status:** FIXED IN-REPO (requires prod redeploy to take effect) — not pushed
 - **Coordinates with:** [BUG-050-002](../BUG-050-002-health-degraded-masked-http-200/bug.md) (F1) — the ML sub-status feeds the aggregate health.
 
@@ -16,7 +16,7 @@ the runtime health surface itself.
 
 ## Reproduction
 
-**Redteam (live prod, evo-x2):**
+**Redteam (live prod, <deploy-host>):**
 
 - Core authenticated `/api/health` → `services.ml_sidecar = {"status":"up","model_loaded":true}`.
 - Direct ML `/health` → `{"status":"up","model_loaded":false}`.

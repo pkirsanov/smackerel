@@ -718,7 +718,7 @@ Command: `grep -n NTFY_SOURCES_JSON ~/smackerel/config/generated/test.env`
 Exit Code: 0
 
 ~~~text
-180:NTFY_SOURCES_JSON=[{"source_instance_id":"ntfy-local-webhook","enabled":true,"source_form":"webhook","transport_mode":"webhook","endpoint_url":"http://smackerel-core:8080/api/notifications/sources/ntfy-local-webhook/ntfy/webhook","endpoint_ref_name":"NTFY_LOCAL_WEBHOOK_ENDPOINT_URL","topics":["home-lab-alerts"],"auth_mode":"none","secret_ref_names":[],"default_domain":"ops","retry_budget":3,"initial_delay_seconds":1,"max_delay_seconds":5,"keepalive_timeout_seconds":30,"lag_degraded_after_seconds":60,"lag_disconnected_after_seconds":300,"dead_letter_retry_budget":2,"max_payload_bytes":4096,"pressure_threshold_count":2,"display_name":"ntfy local webhook","endpoint_label":"SST-managed ntfy webhook endpoint","config_hash":"sha256:ntfy-local-webhook-v1"}]
+180:NTFY_SOURCES_JSON=[{"source_instance_id":"ntfy-local-webhook","enabled":true,"source_form":"webhook","transport_mode":"webhook","endpoint_url":"http://smackerel-core:8080/api/notifications/sources/ntfy-local-webhook/ntfy/webhook","endpoint_ref_name":"NTFY_LOCAL_WEBHOOK_ENDPOINT_URL","topics":["self-hosted-alerts"],"auth_mode":"none","secret_ref_names":[],"default_domain":"ops","retry_budget":3,"initial_delay_seconds":1,"max_delay_seconds":5,"keepalive_timeout_seconds":30,"lag_degraded_after_seconds":60,"lag_disconnected_after_seconds":300,"dead_letter_retry_budget":2,"max_payload_bytes":4096,"pressure_threshold_count":2,"display_name":"ntfy local webhook","endpoint_label":"SST-managed ntfy webhook endpoint","config_hash":"sha256:ntfy-local-webhook-v1"}]
 ~~~
 
 #### Focused Unit Evidence
@@ -2327,7 +2327,7 @@ Command: `TERM=dumb NO_COLOR=1 grep -n NTFY_SOURCES_JSON config/generated/test.e
 Exit Code: 0
 
 ~~~text
-180:NTFY_SOURCES_JSON=[{"source_instance_id":"ntfy-local-webhook","enabled":true,"source_form":"webhook","transport_mode":"webhook","endpoint_url":"http://smackerel-core:8080/api/notifications/sources/ntfy-local-webhook/ntfy/webhook","endpoint_ref_name":"NTFY_LOCAL_WEBHOOK_ENDPOINT_URL","topics":["home-lab-alerts"],"auth_mode":"none","secret_ref_names":[],"default_domain":"ops","retry_budget":3,"initial_delay_seconds":1,"max_delay_seconds":5,"keepalive_timeout_seconds":30,"lag_degraded_after_seconds":60,"lag_disconnected_after_seconds":300,"dead_letter_retry_budget":2,"max_payload_bytes":4096,"pressure_threshold_count":2,"display_name":"ntfy local webhook","endpoint_label":"SST-managed ntfy webhook endpoint","config_hash":"sha256:ntfy-local-webhook-v1"}]
+180:NTFY_SOURCES_JSON=[{"source_instance_id":"ntfy-local-webhook","enabled":true,"source_form":"webhook","transport_mode":"webhook","endpoint_url":"http://smackerel-core:8080/api/notifications/sources/ntfy-local-webhook/ntfy/webhook","endpoint_ref_name":"NTFY_LOCAL_WEBHOOK_ENDPOINT_URL","topics":["self-hosted-alerts"],"auth_mode":"none","secret_ref_names":[],"default_domain":"ops","retry_budget":3,"initial_delay_seconds":1,"max_delay_seconds":5,"keepalive_timeout_seconds":30,"lag_degraded_after_seconds":60,"lag_disconnected_after_seconds":300,"dead_letter_retry_budget":2,"max_payload_bytes":4096,"pressure_threshold_count":2,"display_name":"ntfy local webhook","endpoint_label":"SST-managed ntfy webhook endpoint","config_hash":"sha256:ntfy-local-webhook-v1"}]
 ~~~
 
 ### Current Focused Unit And Static Evidence
@@ -4483,7 +4483,7 @@ ok      github.com/smackerel/smackerel/tests/integration        0.041s [no tests
 		chaos_resilience_integration_test.go:91: CHAOS action=01 name=malformed-secret-payload-c
 		chaos_resilience_integration_test.go:91: CHAOS action=02 name=malformed-secret-payload-b
 		chaos_resilience_integration_test.go:91: CHAOS action=03 name=keepalive-lifecycle
-		chaos_resilience_integration_test.go:91: CHAOS action=04 name=valid-home-lab-message
+		chaos_resilience_integration_test.go:91: CHAOS action=04 name=valid-self-hosted-message
 		chaos_resilience_integration_test.go:91: CHAOS action=05 name=duplicate-replayable-source-id-again
 		chaos_resilience_integration_test.go:91: CHAOS action=06 name=transport-error
 		chaos_resilience_integration_test.go:91: CHAOS action=07 name=open-lifecycle

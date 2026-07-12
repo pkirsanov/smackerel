@@ -97,7 +97,7 @@ Therefore the new behavior must:
 | **Intent Router** (new, capability layer, transport-agnostic) | First-pass classifier that decides: is this a question, an action, or a capture? Identical behavior across transports. | Route to the right skill with high precision; defer to capture on uncertainty. | Reads canonical `AssistantMessage` text + recent conversational context; writes to skill registry; never writes to the knowledge graph directly. |
 | **Skill Registry** (new, capability foundation, transport-agnostic) | Pluggable surface for assistant skills. v1 skills register handlers; new skills can be added without modifying the router or any adapter. | Provide a uniform contract: `intent → handler → canonical response + provenance`. | Read-only on the request side; each handler holds its own scoped credentials. |
 | **LLM Bridge** (reused from `ml/` sidecar) | Existing FastAPI sidecar that fronts Ollama/external LLM providers. | Provide intent classification + answer synthesis with source attribution. | Already wired; no new infrastructure access. |
-| **Operator** (deployer / SRE) | Owns the home-lab deploy and rotates credentials. | Enable/disable the capability and individual skills via SST config; enable/disable individual transports via SST config; rotate API keys via secret store; observe per-skill AND per-transport metrics. | Edits `config/smackerel.yaml` `assistant.*` and `assistant.transports.*` blocks; injects per-skill and per-transport secrets at apply time. |
+| **Operator** (deployer / SRE) | Owns the self-hosted deploy and rotates credentials. | Enable/disable the capability and individual skills via SST config; enable/disable individual transports via SST config; rotate API keys via secret store; observe per-skill AND per-transport metrics. | Edits `config/smackerel.yaml` `assistant.*` and `assistant.transports.*` blocks; injects per-skill and per-transport secrets at apply time. |
 
 **Known / planned transport adapters.**
 
@@ -1382,7 +1382,7 @@ body: |
 sources:
   - kind: artifact
     id: a1b2c3d4-...
-    title: "tailscale ACL tags for home-lab"
+    title: "tailscale ACL tags for self-hosted"
     ref: { capturedAt: 2026-04-12T... }
   - kind: artifact
     id: f7e8d9c0-...
@@ -1407,7 +1407,7 @@ BOT (edit): you saved 3 notes on tailscale auth keys, ACL
             to scope service-to-service traffic.
 
             sources:
-              1. a1b2c3d4 — "tailscale ACL tags for home-lab" (2026-04-12)
+              1. a1b2c3d4 — "tailscale ACL tags for self-hosted" (2026-04-12)
               2. f7e8d9c0 — "auth key rotation playbook" (2026-04-22)
               3. 5a4b3c2d — "CGNAT and SSH cert workflow" (2026-04-28)
 ─────────────────────────────────────────────

@@ -11,7 +11,7 @@ A short, reviewable map of the plan. Read this before the per-scope detail.
 
 <!-- bubbles:g040-skip-begin -->
 <!-- This section describes the implemented SST secret-substitution sentinel
-     mechanism (the `__SECRET_PLACEHOLDER__…__` marker emitted into home-lab
+     mechanism (the `__SECRET_PLACEHOLDER__…__` marker emitted into self-hosted
      bundles) and the `config.IsPlaceholder` leak-guard. Both are real, shipped
      surfaces of spec 091, not deferred work; the G040 keyword here is a
      domain term, so this region is excluded from the deferral-language scan. -->
@@ -22,7 +22,7 @@ A short, reviewable map of the plan. Read this before the per-scope detail.
 2. **SCOPE-02 — `GET /register` page + template + assets.** The CSP-safe `register.html`/`register.js` + `HandleRegisterPage` + `registerPageData` + `registerTemplate` (parsed from the reused spec-057 `loginUIFS` embed). Renders the identical form regardless of gate config. The template the POST handler re-renders on error.
 3. **SCOPE-03 — `POST /v1/web/register` handler (`HandleWebRegister`).** The security-critical control flow: constant-time invite gate FIRST → field/password/username validation → `UpsertPassword(create=true)` → 303 `/login?registered=1` (no cookie). Reuses SCOPE-01's config field + SCOPE-02's template.
 4. **SCOPE-04 — Router wiring + `/login` success-flash + rate-limit.** Registers both new routes (GET public, POST inside `LimitByIP(20,1min)`, both outside `bearerAuthMiddleware`) and adds the additive `?registered=1` flash to the spec-057/070 `/login` page. Includes the spec-070 regression sweep.
-5. **SCOPE-05 — Live home-lab deploy proof.** End-to-end success signal on the deployed core: `GET /register` renders → register with the real token → log in → `/cards`; wrong token rejected. Operator types the secret value into sops (value-safe); the agent runs the deploy + live e2e.
+5. **SCOPE-05 — Live self-hosted deploy proof.** End-to-end success signal on the deployed core: `GET /register` renders → register with the real token → log in → `/cards`; wrong token rejected. Operator types the secret value into sops (value-safe); the agent runs the deploy + live e2e.
 
 > **Refinement note (plan authority).** The task's suggested numbering listed the POST handler before the GET page, but the heading directed me to *"refine from design.md §Next Owner; keep dependency order."* design.md §Next Owner orders **GET page (2) before POST handler (3)** — the correct dependency order, because `web_register.go::renderRegisterError` re-renders `registerTemplate`/`registerPageData`, which live in `web_register_page.go` (design.md → Architecture file table). The POST handler cannot compile or have passing error-render tests until that template exists. I therefore set **SCOPE-02 = GET page, SCOPE-03 = POST handler**. The content of each scope is unchanged from the task's intent; only the two ordinals are swapped to honor the true DAG.
 >
@@ -84,7 +84,7 @@ New files: `internal/api/web_register_page.go`, `internal/api/web_register.go`, 
 
 | After | Gate command(s) | Catches |
 |-------|-----------------|---------|
-| SCOPE-01 | `./smackerel.sh config generate` + `./smackerel.sh test unit --go` (secret-mirror + bundle-contract + loadAuthConfig + placeholder-guard) | Broken SST 3-mirror parity, missing home-lab placeholder, accidental production-required boot failure, `${VAR:-default}` introduction — before any handler code is written. |
+| SCOPE-01 | `./smackerel.sh config generate` + `./smackerel.sh test unit --go` (secret-mirror + bundle-contract + loadAuthConfig + placeholder-guard) | Broken SST 3-mirror parity, missing self-hosted placeholder, accidental production-required boot failure, `${VAR:-default}` introduction — before any handler code is written. |
 | SCOPE-02 | `./smackerel.sh test unit --go --go-run 'TestRegisterPage'` | A non-CSP-safe or gate-state-leaking GET page — before the POST handler re-renders that template on error. |
 | SCOPE-03 | `./smackerel.sh test unit --go --go-run 'TestWebRegister'` | Any break in the non-enumeration / constant-time / no-overwrite / no-cookie invariants — before the route is publicly reachable. |
 | SCOPE-04 | `./smackerel.sh test unit --go --go-run 'TestWebRegister_RateLimit|TestLoginPage'` + spec-070 `/login` regression | Rate-limit-group drift, a `/login` regression, or an always-on success flash — before live deploy. |
@@ -101,7 +101,7 @@ New files: `internal/api/web_register_page.go`, `internal/api/web_register.go`, 
 | 02 | `GET /register` page + template + assets | — | Backend, UI (server-rendered) | Done |
 | 03 | `POST /v1/web/register` handler (`HandleWebRegister`) | 01, 02 | Backend, Security | Done |
 | 04 | Router wiring + `/login` success-flash + rate-limit | 02, 03 | Backend, UI (server-rendered) | Done |
-| 05 | Live home-lab deploy proof (register → login → `/cards`) | 01, 04 | Deploy, UI (live e2e) | Done |
+| 05 | Live self-hosted deploy proof (register → login → `/cards`) | 01, 04 | Deploy, UI (live e2e) | Done |
 
 **Roots:** 01 and 02 are independent foundations (the GET page reuses the pre-existing spec-057 `loginUIFS` asset/serving foundation and, per Reconciled AC-5, never reads the gate config, so it does not depend on SCOPE-01). They are executed sequentially `01 → 02`. SCOPE-03 needs both (config field + template); SCOPE-04 needs both handlers; SCOPE-05 needs the secret (01) and the wired routes (04).
 
@@ -155,9 +155,9 @@ Introduce the dedicated, **OPTIONAL** managed secret `WEB_REGISTRATION_INVITE_TO
 Scenario: SST manifest carries the new optional secret and config generation succeeds
   Given WEB_REGISTRATION_INVITE_TOKEN is registered in all three SST mirrors
     (config/smackerel.yaml secret_keys, internal/config/secret_keys.go, scripts/commands/config.sh)
-  When ./smackerel.sh config generate runs for the home-lab target
+  When ./smackerel.sh config generate runs for the self-hosted target
   Then config generation succeeds
-  And the home-lab bundle's app.env emits WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__
+  And the self-hosted bundle's app.env emits WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__
 
 Scenario: The token loads from the environment as OPTIONAL (empty default, boot never fails)
   Given WEB_REGISTRATION_INVITE_TOKEN is unset
@@ -191,17 +191,17 @@ Edit the **11 exact sites enumerated in design.md → Configuration & SST Secret
 
 > `TestSecretKeys_MirrorsYAMLManifest` and `bundle_secret_contract_test.go` read `config.SecretKeys()` dynamically — they need no edit and will pass once #1/#3/#4 land and #5/#6 emit the placeholder.
 
-**Shared-infrastructure note:** the SST 3-mirror is a shared single-source-of-truth. This is an **append-only additive** edit — it adds exactly one secret key and alters nothing that already exists — and the `bundle_secret_contract_test.go` byte-parity assertion is the canary that proves the three mirrors still agree and that home-lab emits the substitution sentinel. No consumer-impact sweep is required because the change is purely additive.
+**Shared-infrastructure note:** the SST 3-mirror is a shared single-source-of-truth. This is an **append-only additive** edit — it adds exactly one secret key and alters nothing that already exists — and the `bundle_secret_contract_test.go` byte-parity assertion is the canary that proves the three mirrors still agree and that self-hosted emits the substitution sentinel. No consumer-impact sweep is required because the change is purely additive.
 
 ### Test Plan
 
 | # | Test Type | Category | File/Location | Description | Command | Live System |
 |---|-----------|----------|---------------|-------------|---------|-------------|
 | 1 | unit | unit | `internal/config/secret_keys_test.go` | `TestSecretKeysMirror` + `TestSecretKeys_MirrorsYAMLManifest` pass with the new key appended to all mirrors | `./smackerel.sh test unit --go --go-run 'TestSecretKeys'` | No |
-| 2 | unit | unit | `internal/deploy/bundle_secret_contract_test.go` | 3-mirror byte-parity holds AND the home-lab bundle emits the `__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__` line | `./smackerel.sh test unit --go --go-run 'Bundle.*Secret|BundleSecret'` | No |
+| 2 | unit | unit | `internal/deploy/bundle_secret_contract_test.go` | 3-mirror byte-parity holds AND the self-hosted bundle emits the `__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__` line | `./smackerel.sh test unit --go --go-run 'Bundle.*Secret|BundleSecret'` | No |
 | 3 | unit | unit | `internal/config/config_test.go` | `loadAuthConfig` sets `WebRegistrationInviteToken` from env; empty when unset; production+auth.enabled with empty token does NOT add an `authErrors` entry (boot succeeds) | `./smackerel.sh test unit --go --go-run 'LoadAuthConfig|AuthConfig'` | No |
 | 4 | unit | unit | `internal/config/secret_keys_test.go` (placeholder-guard case) | a placeholder-valued invite token resolves to `""` (disabled) via `config.IsPlaceholder` — the open-signup-via-leaked-constant trap is closed | `./smackerel.sh test unit --go --go-run 'IsPlaceholder|Placeholder'` | No |
-| 5 | functional | functional | `scripts/commands/config.sh` (home-lab generate) | `./smackerel.sh config generate` succeeds; generated home-lab `app.env` contains the placeholder line | `./smackerel.sh config generate` | Optional |
+| 5 | functional | functional | `scripts/commands/config.sh` (self-hosted generate) | `./smackerel.sh config generate` succeeds; generated self-hosted `app.env` contains the placeholder line | `./smackerel.sh config generate` | Optional |
 
 ### Definition of Done — Tiered Validation
 
@@ -209,10 +209,10 @@ Edit the **11 exact sites enumerated in design.md → Configuration & SST Secret
 
 - [x] All 11 SST/loader/wiring edit sites land exactly per design.md (the dedicated OPTIONAL secret is registered in the 3 mirrors, loaded in `loadAuthConfig`, NOT in the production `authErrors` block, wired into `Dependencies`, and guarded by `config.IsPlaceholder` at the wiring boundary). — Evidence: [report.md#scope-01-impl]. **Claim Source:** executed.
 - [x] **(test 1)** `TestSecretKeysMirror` + `TestSecretKeys_MirrorsYAMLManifest` pass with the new key (≥10 lines raw). — Evidence: [report.md#scope-01-secret-mirror].
-- [x] **(test 2)** `bundle_secret_contract_test.go` passes — 3-mirror parity + home-lab placeholder emission (≥10 lines raw). — Evidence: [report.md#scope-01-bundle-contract].
+- [x] **(test 2)** `bundle_secret_contract_test.go` passes — 3-mirror parity + self-hosted placeholder emission (≥10 lines raw). — Evidence: [report.md#scope-01-bundle-contract].
 - [x] **(test 3)** `loadAuthConfig` optional-load test passes — env→field, empty default, production boot does NOT fail on empty token (≥10 lines raw). — Evidence: [report.md#scope-01-loadauthconfig].
 - [x] **(test 4)** placeholder-leak guard test passes — `IsPlaceholder` maps the bundle placeholder to `""` (≥10 lines raw). — Evidence: [report.md#scope-01-placeholder-guard].
-- [x] **(test 5)** `./smackerel.sh config generate` succeeds and the home-lab `app.env` emits the `WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__…__` line (≥10 lines raw). — Evidence: [report.md#scope-01-config-generate].
+- [x] **(test 5)** `./smackerel.sh config generate` succeeds and the self-hosted `app.env` emits the `WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__…__` line (≥10 lines raw). — Evidence: [report.md#scope-01-config-generate].
 
 **Build Quality Gate (grouped)**
 
@@ -455,19 +455,19 @@ Scenario: UC-7 REGRESSION The existing /login paths are byte-identical without ?
 
 ---
 
-## SCOPE-05 — Live home-lab deploy proof (register → login → `/cards`)
+## SCOPE-05 — Live self-hosted deploy proof (register → login → `/cards`)
 
 **Status:** Done
 **Depends On:** 01, 04
 **Surfaces:** Deploy (knb adapter — separate repo), UI (live browser e2e)
 
-Prove the full feature end-to-end on the deployed home-lab core. **Executed autonomously this session** (the operator-only nature is satisfied without any manual step): the agent generated the `WEB_REGISTRATION_INVITE_TOKEN` value, injected it into the knb sops store non-interactively (value-safe — the value never appears in any evidence, log, redirect, or session transcript), deployed via `apply.sh --trust-model=ci-keyless` on the host, and ran the live register → login → `/cards` e2e plus the wrong-token rejection. The DoD is the captured live success signal in `report.md`.
+Prove the full feature end-to-end on the deployed self-hosted core. **Executed autonomously this session** (the operator-only nature is satisfied without any manual step): the agent generated the `WEB_REGISTRATION_INVITE_TOKEN` value, injected it into the knb sops store non-interactively (value-safe — the value never appears in any evidence, log, redirect, or session transcript), deployed via `apply.sh --trust-model=ci-keyless` on the host, and ran the live register → login → `/cards` e2e plus the wrong-token rejection. The DoD is the captured live success signal in `report.md`.
 
 ### Gherkin Scenarios
 
 ```gherkin
 Scenario: The deployed /register page renders on the live core
-  Given the new image is deployed to home-lab with a non-empty WEB_REGISTRATION_INVITE_TOKEN
+  Given the new image is deployed to self-hosted with a non-empty WEB_REGISTRATION_INVITE_TOKEN
   When a browser opens https://<deploy-host>.<tailnet-fqdn>/register
   Then the register form renders (200) with the four fields
 
@@ -497,9 +497,9 @@ Scenario: UC-2 A wrong token is rejected on the live core with no row
 <!-- The knb-side bullet names the `__SECRET_PLACEHOLDER__…__` substitution
      sentinel (a shipped SST mechanism), not deferred work. -->
 
-- **knb-side (separate `<knb-repo>` commit — named, NOT executed here):** sops-encrypt `WEB_REGISTRATION_INVITE_TOKEN` into `<knb-repo>/smackerel/secrets/home-lab.enc.env` (operator types the value — value-safe); add it to the adapter's `apply.sh` drift-check + the `__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__` substitution mapping (mirror `CARD_REWARDS_GCAL_CREDENTIALS`).
-- **Build/CI:** the SCOPE-01..04 commit produces a green build → signed core+ml images + the home-lab config bundle.
-- **Deploy (agent-executable):** apply via `sudo bash <knb-repo>/smackerel/home-lab/apply.sh --trust-model=ci-keyless …` (mirroring spec 089), then `./smackerel.sh deploy-target home-lab verify`.
+- **knb-side (separate `<knb-repo>` commit — named, NOT executed here):** sops-encrypt `WEB_REGISTRATION_INVITE_TOKEN` into `<knb-repo>/smackerel/secrets/self-hosted.enc.env` (operator types the value — value-safe); add it to the adapter's `apply.sh` drift-check + the `__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__` substitution mapping (mirror `CARD_REWARDS_GCAL_CREDENTIALS`).
+- **Build/CI:** the SCOPE-01..04 commit produces a green build → signed core+ml images + the self-hosted config bundle.
+- **Deploy (agent-executable):** apply via `sudo bash <deployment-owner>/<product>/<target>/apply.sh --trust-model=ci-keyless …` (mirroring spec 089), then `./smackerel.sh deploy-target self-hosted verify`.
 - **Live e2e (agent-executable, no interception):** `GET /register` renders → register with the real token → land on `/login?registered=1` → log in → reach `/cards`; a wrong-token run → shared 401 + no row. Use `./smackerel.sh test e2e` against the deployed core; MUST NOT use `page.route`/`context.route`/`intercept`/`msw`/`nock` (live-stack authenticity).
 <!-- bubbles:g040-skip-end -->
 
@@ -511,19 +511,19 @@ Scenario: UC-2 A wrong token is rejected on the live core with no row
 | 2 | e2e | e2e-ui | `tests/e2e/web_register_*` | Live happy path: register (real token) → `/login?registered=1` → sign in → `/cards` loads | `./smackerel.sh test e2e` | Yes |
 | 3 | e2e | e2e-ui | `tests/e2e/web_register_*` | Live wrong-token: POST a wrong token → shared 401 banner, no `web_user_credentials` row created | `./smackerel.sh test e2e` | Yes |
 | 4 | regression | e2e-ui | live deployed core + committed Go scenario suite | Regression E2E (scenario-specific): the SCN-1..5 register→login→`/cards` + wrong-token scenarios re-run on the deployed core, and the committed Go scenario suite (`web_register_*` + the adversarial `/login` guards) stays green — every spec-091 behavior keeps persistent scenario-specific regression coverage | live curl + `./smackerel.sh test unit --go` | Yes |
-| 5 | regression | regression | full Go module + `deploy-target verify` | Regression E2E (broader suite): the full `./smackerel.sh test unit --go` module is green and `deploy-target home-lab verify` is OK | `./smackerel.sh test unit --go` | Yes |
+| 5 | regression | regression | full Go module + `deploy-target verify` | Regression E2E (broader suite): the full `./smackerel.sh test unit --go` module is green and `deploy-target self-hosted verify` is OK | `./smackerel.sh test unit --go` | Yes |
 
 ### Definition of Done — Tiered Validation
 
 **Core Items**
 
 - [x] **Autonomous deploy (acceptance):** the `WEB_REGISTRATION_INVITE_TOKEN` value was agent-generated, injected into the knb sops store non-interactively, and applied on the host — value-safe (the value appears in no evidence, log, redirect, or transcript). The audit-log line records `outcome=success` with the `WEB_REGISTRATION_INVITE_TOKEN` key present in `effective_env_secret_keys` (substituted_count=8, zero unsubstituted markers remaining). — Evidence: [report.md#scope-05-operator-secret]. **Claim Source:** executed.
-- [x] Build is green for the SCOPE-01..04 commit and the signed images + home-lab bundle publish; `apply.sh --trust-model=ci-keyless` applies (core+ml healthy, image digest drift-check matched, caddy edge verify OK) and `deploy-target home-lab verify` is OK. — Evidence: [report.md#scope-05-deploy].
+- [x] Build is green for the SCOPE-01..04 commit and the signed images + self-hosted bundle publish; `apply.sh --trust-model=ci-keyless` applies (core+ml healthy, image digest drift-check matched, caddy edge verify OK) and `deploy-target self-hosted verify` is OK. — Evidence: [report.md#scope-05-deploy].
 - [x] **(test 1)** Live `GET /register` renders on the deployed core (≥10 lines raw, no interception). — Evidence: [report.md#scope-05-e2e-page].
 - [x] **(test 2)** Live happy path: register → `/login?registered=1` → sign in → `/cards` (≥10 lines raw, no interception). — Evidence: [report.md#scope-05-e2e-happy].
 - [x] **(test 3)** Live wrong-token → shared 401 banner, no row (≥10 lines raw, no interception). — Evidence: [report.md#scope-05-e2e-wrong].
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior persist and pass — the deployed-core SCN-1..5 scenarios (register, login, `/cards`, wrong-token) plus the committed Go scenario suite (`web_register_*` + the adversarial `/login` guards `TestLoginPage_NoFlashWithoutQuery` / `TestWebLogin_TokenOnly_RegressionUnchanged`) form the persistent scenario-specific regression layer. — Evidence: [report.md#scope-05-e2e-happy].
-- [x] Broader E2E regression suite passes — the full `./smackerel.sh test unit --go` module is green and `deploy-target home-lab verify` is OK on the deployed core. — Evidence: [report.md#validate-full-suite].
+- [x] Broader E2E regression suite passes — the full `./smackerel.sh test unit --go` module is green and `deploy-target self-hosted verify` is OK on the deployed core. — Evidence: [report.md#validate-full-suite].
 
 **Build Quality Gate (grouped)**
 

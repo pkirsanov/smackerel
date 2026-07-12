@@ -33,7 +33,7 @@ function uniqueSuffix(): string {
 // fill()/click() on the same page succeed because they don't hit-test a tiny
 // target. Keep it a REAL assertion: require the checkbox to be a visible,
 // enabled control FIRST, then force past only the flaky actionability wait,
-// then assert it actually toggled on. On Linux/evo-x2 the control is click-
+// then assert it actually toggled on. On Linux/<deploy-host> the control is click-
 // stable, so `check({ force: true })` is equivalent to a plain check() there.
 async function starCategory(page: Page): Promise<void> {
   const starred = page.locator('input[name="starred"]');

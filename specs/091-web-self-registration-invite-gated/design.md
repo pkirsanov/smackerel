@@ -110,7 +110,7 @@ be opt-in. The two secrets have orthogonal lifecycles; they must be distinct.
 
 **Key distinction from `AUTH_BOOTSTRAP_TOKEN`: the invite token is OPTIONAL, so it is NOT added to
 the production-required `authErrors` block.** It is a managed secret in the SST manifest (so it can
-be shipped securely via the knb sops file and placeholder-emitted for home-lab), but its empty value
+be shipped securely via the knb sops file and placeholder-emitted for self-hosted), but its empty value
 is **valid in every environment** and means "registration off." Enforcement is **fail-loud-at-POST**
 (the handler refuses every submission when the configured token is empty) — **not**
 fail-loud-at-boot. This honors the repo NO-DEFAULTS SST policy ("empty = disabled is the documented,
@@ -123,7 +123,7 @@ do not enable registration.
 
 **Rationale.** The **secret-presence gate is itself the rollout control**: registration is live
 only where the operator has shipped a non-empty `WEB_REGISTRATION_INVITE_TOKEN` (i.e., the `mvp`
-home-lab target via the knb sops file); every other environment leaves it empty and registration is
+self-hosted target via the knb sops file); every other environment leaves it empty and registration is
 off. Per the bubbles-release-train model, a feature flag must be declared default-OFF in **every**
 train’s `feature-flags.<train>.yaml` bundle and read from an env var with no fallback — that is real
 ceremony (a new flag name, a per-train bundle entry in each train, a fail-fast env read, and the
@@ -300,13 +300,13 @@ ordered list, after `CARD_REWARDS_GCAL_CREDENTIALS`, to keep the byte-for-byte o
 > `TestSecretKeys_MirrorsYAMLManifest` ([secret_keys_test.go](../../internal/config/secret_keys_test.go))
 > compares the yaml list to `config.SecretKeys()` dynamically — no edit needed there; it will simply
 > pass once edits #1 and #3 land. `bundle_secret_contract_test.go` reads `config.SecretKeys()`
-> dynamically — no edit needed; it enforces that #1/#3/#4 agree and that home-lab emits the
+> dynamically — no edit needed; it enforces that #1/#3/#4 agree and that self-hosted emits the
 > placeholder. Edits #5 + #6 are what make the shell loader actually emit the placeholder + the
-> `app.env` line; without them the bundle contract test’s home-lab placeholder assertion fails.
+> `app.env` line; without them the bundle contract test’s self-hosted placeholder assertion fails.
 
-### Why placeholder emission (home-lab) is required
+### Why placeholder emission (self-hosted) is required
 
-`home-lab` is a `production_class_target`, so for **every** secret in the manifest the SST loader
+`self-hosted` is a `production_class_target`, so for **every** secret in the manifest the SST loader
 emits `__SECRET_PLACEHOLDER__<KEY>__` in the bundle’s `app.env`, and the knb deploy adapter
 substitutes the real value at apply time. Adding `WEB_REGISTRATION_INVITE_TOKEN` to the manifest
 without the emission block (#5) + `app.env` line (#6) would make the bundle contract test fail (the
@@ -322,7 +322,7 @@ key would be declared but not emitted). This mirrors `CARD_REWARDS_GCAL_CREDENTI
 > deploy phase can resume without re-discovery. Model: the `CARD_REWARDS_GCAL_CREDENTIALS` wiring in
 > `<knb-repo>` (commit `1856ca3`).
 
-1. **sops-encrypt** `WEB_REGISTRATION_INVITE_TOKEN` into `<knb-repo>/smackerel/secrets/home-lab.enc.env`
+1. **sops-encrypt** `WEB_REGISTRATION_INVITE_TOKEN` into `<knb-repo>/smackerel/secrets/self-hosted.enc.env`
    with a strong random value (to enable registration) **or an empty value** (to keep it disabled).
 2. **apply.sh drift-check block:** add `WEB_REGISTRATION_INVITE_TOKEN` to the adapter’s expected-secret
    drift check (mirror the `CARD_REWARDS_GCAL_CREDENTIALS` / `AUTH_BOOTSTRAP_TOKEN` entries) so a
@@ -332,7 +332,7 @@ key would be declared but not emitted). This mirrors `CARD_REWARDS_GCAL_CREDENTI
    `CARD_REWARDS_GCAL_CREDENTIALS` substitution). The adapter MUST substitute **every** manifest
    placeholder; an un-substituted placeholder is a deploy-time error (see the Go-side guard in
    §Security as belt-and-suspenders).
-4. **Redeploy** with `--trust-model=ci-keyless` (the standard smackerel home-lab trust model).
+4. **Redeploy** with `--trust-model=ci-keyless` (the standard smackerel self-hosted trust model).
 
 Value-safe handling throughout (no echoing the secret value; sops at rest; presence-only
 diagnostics) per the repo terminal-discipline + secret-hygiene policies.
@@ -517,7 +517,7 @@ registration; a non-empty value enables it. The register handler reuses the **al
 
 ### Recommended hardening — un-substituted-placeholder guard (defense-in-depth, non-blocking)
 
-`home-lab` placeholder-emits the secret; the knb adapter substitutes the real value. If the adapter
+`self-hosted` placeholder-emits the secret; the knb adapter substitutes the real value. If the adapter
 **failed** to substitute (a deploy bug), the Go process would receive the literal
 `__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__` as the configured value — a **publicly-known
 constant** that would otherwise enable open admin signup (exactly the spec "Failure Condition"). To

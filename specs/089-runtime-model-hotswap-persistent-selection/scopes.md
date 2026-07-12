@@ -19,7 +19,7 @@
 > tests) — exactly the spec-087/088 precedent. The decisive **live 32b
 > standing-default** behaviour (the persist-48G + 32b default +
 > pull-on-deploy + ensure-32b-resident deploy) was already quality-proven
-> by the home-lab A/B
+> by the self-hosted A/B
 > ([`docs/experiments/open-knowledge-synthesis-model-ab.md`](../../docs/experiments/open-knowledge-synthesis-model-ab.md));
 > the live re-verify is a SEPARATE downstream `bubbles.devops` dispatch.
 > **No commit/push here.** `nextRequiredOwner` after plan = `bubbles.implement`;
@@ -36,7 +36,7 @@ or a missing validation checkpoint BEFORE the full plan is implemented.
 ### Phase Order
 
 1. **SCOPE-01 — SST: persistent 32b default + envelope guard + gather-capability set (foundation).**
-   The committed-SST edits (home-lab `synthesis_model_id` 7b→32b,
+   The committed-SST edits (self-hosted `synthesis_model_id` 7b→32b,
    `ollama_memory_limit` 28G→48G, `switchable_models` += 32b, the NEW
    `tool_capable_gather_models` set), the config load/validate, the
    fail-loud **standing-default** co-residence guard (the CT-6 gap close),
@@ -79,11 +79,11 @@ or a missing validation checkpoint BEFORE the full plan is implemented.
 - **`contracts.AssistantMessage.GatherModelOverride string`** (NEW typed, untrusted); **`ModelAttribution`** += `SynthesisSource`/`GatherModel`/`GatherSource`/`GatherOverridden`
 - **`api.AgentInvokeRequest.GatherModel string`** (NEW field); rejection envelope += `rejected_turn`; success envelope += `model_source`/`gather_model`/`gather_model_source`; NEW `GET/PUT/DELETE /v1/agent/model` claim-bound handlers
 - **SQL** `internal/db/migrations/059_user_model_preferences.sql` — `actor_user_id TEXT PRIMARY KEY, synthesis_model TEXT NOT NULL, gather_model TEXT (reserved), updated_at TIMESTAMPTZ NOT NULL`
-- **SST** `assistant.open_knowledge.tool_capable_gather_models: []string` (REQUIRED non-empty when enabled, `llm_model_id` MUST be a member) → env `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS`; home-lab `assistant_open_knowledge_synthesis_model_id: deepseek-r1:32b`, `ollama_memory_limit: "48G"`, `switchable_models += deepseek-r1:32b`, `tool_capable_gather_models: [gemma4:26b, llama3.1:8b]`
+- **SST** `assistant.open_knowledge.tool_capable_gather_models: []string` (REQUIRED non-empty when enabled, `llm_model_id` MUST be a member) → env `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS`; self-hosted `assistant_open_knowledge_synthesis_model_id: deepseek-r1:32b`, `ollama_memory_limit: "48G"`, `switchable_models += deepseek-r1:32b`, `tool_capable_gather_models: [gemma4:26b, llama3.1:8b]`
 
 ### Validation Checkpoints (where breakage is caught before the next scope)
 
-- **After SCOPE-01** — `validateModelEnvelopes` standing-default over-envelope test + tool-capable-set load/validate tests GREEN; `./smackerel.sh config generate` (all envs) + `./smackerel.sh check` EXIT 0; the generated env carries `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS` and the home-lab `…SYNTHESIS_MODEL_ID=deepseek-r1:32b` + `OLLAMA_MEMORY_LIMIT=48G`. Catches a wrong co-residence arithmetic or an un-fail-loud SST key BEFORE any store/resolver code.
+- **After SCOPE-01** — `validateModelEnvelopes` standing-default over-envelope test + tool-capable-set load/validate tests GREEN; `./smackerel.sh config generate` (all envs) + `./smackerel.sh check` EXIT 0; the generated env carries `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS` and the self-hosted `…SYNTHESIS_MODEL_ID=deepseek-r1:32b` + `OLLAMA_MEMORY_LIMIT=48G`. Catches a wrong co-residence arithmetic or an un-fail-loud SST key BEFORE any store/resolver code.
 - **After SCOPE-02** — `modelpref` store tests (persist / claim-bound two-user isolation / idempotent clear) GREEN; `./smackerel.sh check` EXIT 0. Catches a leaky key or a non-idempotent reset BEFORE the resolver reads it on the hot path.
 - **After SCOPE-03** — `modelswitch` resolver tables (precedence/source/gather/orphaned-sticky) + fake-LLM agent traces (gather clone / scaffolding strip / forced-final retry / trust-under-any-selection / latency-envelope) + substrate_tool + facade + agent_invoke tests GREEN; `./smackerel.sh check` + `./smackerel.sh format --check` EXIT 0. Catches a singleton mutation, precedence drift, attribution gap, or trust regression BEFORE surface wiring.
 - **After SCOPE-04** — telegram `/model` + `--gather-model=` + footer + api `/v1/agent/model` + cross-surface parity tests GREEN; `./smackerel.sh check` + `format --check` EXIT 0; full `./smackerel.sh test unit --go` regression GREEN except the out-of-changeset spec-083/073 reds (attributed by file path). Catches a cross-surface divergence BEFORE the downstream live deploy.
@@ -125,7 +125,7 @@ carriers consume, never re-derive)
 
 **Intent:** Land the committed-SST persistent-default promotion
 (`deepseek-r1:32b`) with the raised envelope (48G), add `deepseek-r1:32b`
-to the home-lab switchable set, introduce the NEW operator-curated
+to the self-hosted switchable set, introduce the NEW operator-curated
 `tool_capable_gather_models` SST set, and close the CT-6 gap with an
 explicit **standing-default** co-residence guard in
 `validateModelEnvelopes` — all fail-loud (G028), so an over-envelope
@@ -134,7 +134,7 @@ config-generation BEFORE any selection code exists to consume it.
 
 ### Surface (design CHANGE 1,2,3,4,21)
 
-- `config/smackerel.yaml` — home-lab `environments.home-lab`:
+- `config/smackerel.yaml` — self-hosted `environments.self-hosted`:
   `ollama_memory_limit` `28G → 48G` (FR-2; gather 18432 + 32b 22528 =
   40960 ≤ 49152; A/B-verified 82/26 GiB no pressure);
   `assistant_open_knowledge_synthesis_model_id` `deepseek-r1:7b →
@@ -199,10 +199,10 @@ Scenario: SCN-089-A06 — An over-envelope standing default is refused at config
 | SCN-089-A06 | `internal/config/validate_ml_envelope_test.go::TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089` (ADVERSARIAL) | unit | A `synthesis_model_id` whose co-resident profile (default + gather) busts `OllamaMemoryLimitMiB` (e.g. `deepseek-r1:32b` 22528 + `gemma4:26b` 18432 = 40960 against a 28672 envelope) fails loud at config-generation, naming the offending model + the envelope. Fails if the standing default is silently accepted (the exact CT-6 gap). |
 | SCN-089-A06 | `internal/config/validate_ml_envelope_test.go::TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089` | unit | At `ollama_memory_limit: 48G` (49152) the same `deepseek-r1:32b` + `gemma4:26b` sum (40960 ≤ 49152) passes; the guard is not over-tight. |
 | SCN-089-A07 (suppl.) | `internal/config/validate_ml_envelope_test.go::TestValidateModelEnvelopes_ToolCapableGatherEntryUnprofiledRejected_Spec089` (ADVERSARIAL) | unit | A `tool_capable_gather_models` entry with no `model_memory_profiles` entry fails loud. |
-| SCN-089-A07 (suppl.) | `internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_ToolCapableGatherModels_BaselineMemberRequired_Spec089` (ADVERSARIAL) | unit | An enabled config whose `llm_model_id` is NOT a member of `tool_capable_gather_models` fails loud (the no-override gather path must always pass); the home-lab `[gemma4:26b, llama3.1:8b]` with gather `gemma4:26b` passes. |
+| SCN-089-A07 (suppl.) | `internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_ToolCapableGatherModels_BaselineMemberRequired_Spec089` (ADVERSARIAL) | unit | An enabled config whose `llm_model_id` is NOT a member of `tool_capable_gather_models` fails loud (the no-override gather path must always pass); the self-hosted `[gemma4:26b, llama3.1:8b]` with gather `gemma4:26b` passes. |
 | SCN-089-A07 (suppl.) | `internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_ToolCapableGatherModels_RequiredWhenEnabled_Spec089` | unit | Empty `tool_capable_gather_models` + enabled ⇒ fail-loud; missing `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS` env ⇒ fail-loud (mirrors the spec-088 `switchable_models` cases). |
-| SCN-089-A01 (suppl.) | `internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_HomeLabSynthesisDefaultIs32b_Spec089` | unit | The home-lab resolved `synthesis_model_id` is `deepseek-r1:32b` and `switchable_models` contains it; dev/test resolve the base values unchanged (NFR-4). |
-| Regression E2E (A06) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `config generate --env home-lab` + boot path accepts the 48G/32b standing default and refuses an over-envelope edit; executed in the home-lab `bubbles.devops` re-verify dispatch (model+GPU-dependent, C9). |
+| SCN-089-A01 (suppl.) | `internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_SelfHostedSynthesisDefaultIs32b_Spec089` | unit | The self-hosted resolved `synthesis_model_id` is `deepseek-r1:32b` and `switchable_models` contains it; dev/test resolve the base values unchanged (NFR-4). |
+| Regression E2E (A06) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `config generate --env self-hosted` + boot path accepts the 48G/32b standing default and refuses an over-envelope edit; executed in the self-hosted `bubbles.devops` re-verify dispatch (model+GPU-dependent, C9). |
 
 ### Definition of Done — SCOPE-01 (all unchecked — implementation pending)
 
@@ -218,7 +218,7 @@ Scenario: SCN-089-A06 — An over-envelope standing default is refused at config
 
 **Tier-2 (role-specific: config + envelope guard):**
 
-- [x] D01-T2-1 — The home-lab SST edits are correct + fail-loud: `synthesis_model_id = deepseek-r1:32b`, `ollama_memory_limit = 48G`, `switchable_models` contains `deepseek-r1:32b`, `tool_capable_gather_models = [gemma4:26b, llama3.1:8b]`; `./smackerel.sh config generate` (dev/test/home-lab) EXIT 0 with `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS` present in every generated env and the home-lab env carrying `…SYNTHESIS_MODEL_ID=deepseek-r1:32b` + `OLLAMA_MEMORY_LIMIT=48G`. → Evidence: report.md → SCOPE-01.
+- [x] D01-T2-1 — The self-hosted SST edits are correct + fail-loud: `synthesis_model_id = deepseek-r1:32b`, `ollama_memory_limit = 48G`, `switchable_models` contains `deepseek-r1:32b`, `tool_capable_gather_models = [gemma4:26b, llama3.1:8b]`; `./smackerel.sh config generate` (dev/test/self-hosted) EXIT 0 with `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS` present in every generated env and the self-hosted env carrying `…SYNTHESIS_MODEL_ID=deepseek-r1:32b` + `OLLAMA_MEMORY_LIMIT=48G`. → Evidence: report.md → SCOPE-01.
 - [x] D01-T2-2 — The NEW standing-default co-residence guard in `validateModelEnvelopes` fails loud when the resolved `synthesis_model_id` + the gather `llm_model_id` profile sum busts `OllamaMemoryLimitMiB`, naming the model + the envelope; it passes at 48G for `deepseek-r1:32b` + `gemma4:26b` (40960 ≤ 49152) — closing the CT-6 gap (the every-query default is now envelope-checked, not only the switchable entries). → Evidence: report.md → SCOPE-01 (arithmetic + adversarial test).
 - [x] D01-T2-3 — `tool_capable_gather_models` is SST + fail-loud: REQUIRED non-empty when enabled, each entry profiled, and the baseline gather `llm_model_id` MUST be a member (so the no-override gather path always passes); resolved via the `config.sh` per-env override pattern. → Evidence: report.md → SCOPE-01.
 - [x] D01-T2-4 — `deploy/contract.yaml` carries the `assistant.open_knowledge.tool_capable_gather_models` path (type `string[]`, per-env override note); the contract stays generic (no real hostnames/IPs/secrets, C5). → Evidence: `deploy/contract.yaml` + report.md → SCOPE-01.
@@ -297,7 +297,7 @@ Scenario: SCN-089-A04 — A sticky preference is claim-bound and never leaks acr
 | SCN-089-A04 | `internal/assistant/openknowledge/modelpref/store_test.go::TestModelPrefStore_ClaimBound_UserBNeverReadsUserA_Spec089` (ADVERSARIAL) | unit | After `Set(userA, deepseek-r1:7b)`, `Get(userB)` returns `ok=false` (inherits default); `Set(userB, …)` never mutates userA's row. Fails if the store ever returns A's preference for B (a leaked key). |
 | SCN-089-A03 (suppl.) | `internal/assistant/openknowledge/modelpref/store_test.go::TestModelPrefStore_Clear_IdempotentDelete_Spec089` | unit | `Clear(userA)` deletes the row; a subsequent `Get(userA)` ⇒ `ok=false` (default); a second `Clear(userA)` on an absent row is a no-op (no error) — the `/model default` reset primitive. |
 | SCN-089-A04 | `internal/assistant/openknowledge/modelpref/store_test.go::TestModelPrefStore_GatherModelColumnReservedUnread_Spec089` | unit | The `gather_model` column exists (migration shape) but `Get` does not surface it (reserved for F-STICKY-GATHER; the resolver does not read it). Fails if a sticky gather is silently activated. |
-| Regression E2E (A02/A04) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` sticky persists per user across turns and never leaks across users; executed in the home-lab `bubbles.devops` re-verify dispatch (C9). |
+| Regression E2E (A02/A04) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` sticky persists per user across turns and never leaks across users; executed in the self-hosted `bubbles.devops` re-verify dispatch (C9). |
 
 ### Definition of Done — SCOPE-02 (all unchecked — implementation pending)
 
@@ -475,7 +475,7 @@ Scenario: SCN-089-A10 — A blank forced-final synthesis is rescued by retry-bef
 | — (contracts) | `internal/assistant/contracts/response_test.go::TestModelAttribution_FieldInventory_GatherSource_Spec089` | unit | The `ModelAttribution` inventory includes `SynthesisSource`/`GatherModel`/`GatherSource`/`GatherOverridden`; a zero value ⇒ baseline (no attribution surfaced). |
 | — (latency) | `internal/assistant/openknowledge/agent/modelswitch_agent_spec089_test.go::TestAgent_AnySelection_PreservesIterationEnvelope_Spec089` | unit | `WithModelOverride` changes only `Model`/`SynthesisModel`; `MaxIterations` and `SynthesisRetryBudget` (the `WriteTimeout` inputs) are unchanged ⇒ the documented `(6+1)×600s = 4200s` is preserved (SCN-089 NFR-2). |
 | — (regression) | `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go` + `synthesis_spec087_test.go` + the spec-088 suite | unit | The 9 spec-084 + 7 spec-087 agent tests + the spec-088 suite stay GREEN unchanged: a zero selection is byte-for-byte the spec-088 path (C8). |
-| Regression E2E (A01/A05/A07/A09/A10) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` precedence + gather override + scaffolding-clean + retry-rescued answer holds the trust perimeter under any selection; executed in the home-lab `bubbles.devops` re-verify dispatch (C9). |
+| Regression E2E (A01/A05/A07/A09/A10) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` precedence + gather override + scaffolding-clean + retry-rescued answer holds the trust perimeter under any selection; executed in the self-hosted `bubbles.devops` re-verify dispatch (C9). |
 
 ### Definition of Done — SCOPE-03 (all unchecked — implementation pending)
 
@@ -552,7 +552,7 @@ and render the SAME `Effective`/`Rejection`.
 - `cmd/core/wiring_*` (CHANGE 20b) — wire the telegram `/model` command +
   the api `AgentModelHandler` to the SAME store installed in SCOPE-03.
 - `docs/Operations.md` — the hot-swap runbook (Fork D ~15s core-recreate:
-  edit SST → `config generate --env home-lab` → operator overlay recreates
+  edit SST → `config generate --env self-hosted` → operator overlay recreates
   core `--no-deps` → verify via the boot log `synthesis_model=<new>` + a
   live `/ask` envelope `model_source: default`), the `/model` sticky
   affordance, the `--gather-model=` override, the precedence+source table,
@@ -602,7 +602,7 @@ Scenario: SCN-089-A13 — Hot-swap the standing model in prod via config
 | SCN-089-A12 | `internal/telegram/assistant_adapter/render_outbound_test.go::TestRenderOutbound_FooterSourceTagsAndDualGatherForm_Spec089` (ADVERSARIAL) | functional | Non-default synthesis ⇒ `— model: <id> (<source>)`; an active gather override ⇒ the dual `— gather: … · synth: …` form; a pure system-default answer ⇒ NO footer. Fails if a baseline answer grows a footer (NFR-4) or an override answer loses it. |
 | SCN-089-A08 | `internal/api/agent_model_test.go::TestAgentModel_Put_OffAllowlist_400_PreferenceUnchanged_Spec089` (ADVERSARIAL) | functional | A `PUT` with an off-allowlist model ⇒ HTTP 400 with the rejection envelope (same `Rejection.Message` as Telegram), and the caller's existing sticky preference is UNCHANGED (the failed set is a no-op). |
 | SCN-089-A13 | `cmd/core/wiring_assistant_openknowledge_test.go::TestWiring_BootLogNamesSynthesisModelAndToolCapableSet_Spec089` | unit | The open-knowledge wiring boot log names the resolved `synthesis_model=<id>` + the `tool_capable_gather_models` + the store-wired line — the operator's hot-swap verification hook (the runbook reads this log). |
-| Regression E2E (A03/A11/A13) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/model` CRUD + `--gather-model=` + the hot-swap recreate behave identically on Telegram + HTTP and the boot log names the new default; executed in the home-lab `bubbles.devops` re-verify dispatch (C9). |
+| Regression E2E (A03/A11/A13) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/model` CRUD + `--gather-model=` + the hot-swap recreate behave identically on Telegram + HTTP and the boot log names the new default; executed in the self-hosted `bubbles.devops` re-verify dispatch (C9). |
 
 ### Definition of Done — SCOPE-04 (all unchecked — implementation pending)
 
@@ -743,7 +743,7 @@ gather-override + hot-swap **primitive** in-repo only (mechanism-level
 proof: pure-validator tables, claim-bound store tests, fake-LLM agent
 traces, handler/adapter parity tests). Dev has no GPU/Ollama daemon. The
 decisive live 32b standing-default quality was already proven by the
-home-lab A/B
+self-hosted A/B
 (`docs/experiments/open-knowledge-synthesis-model-ab.md`); the live deploy
 (persist 48G + the 32b default + pull-on-deploy + ensure-32b-resident +
 the live re-verify) is a SEPARATE downstream `bubbles.devops` dispatch.

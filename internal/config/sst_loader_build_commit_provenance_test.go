@@ -45,12 +45,12 @@ func TestSSTLoader_BuildCommitProvenance_BUG029008(t *testing.T) {
 		"REPO_ROOT="+repoRoot,
 		// config.sh requires the hardware tier and is normally fed it by the
 		// smackerel.sh wrapper, which this direct exec bypasses. Mirrors the
-		// sibling sst_loader_home_lab_runtime_env_test.go cmd.Env.
+		// sibling sst_loader_self_hosted_runtime_env_test.go cmd.Env.
 		"SMACKEREL_HARDWARE_TIER=cpu",
 		// Make config.sh's `git -C "$REPO_ROOT" rev-parse` work under the Docker
 		// test surface (golang container runs as root; the host-owned /workspace
 		// mount otherwise trips git's "dubious ownership" guard). Test-harness
-		// only — the real evo-x2 run is by the repo owner, so config.sh itself
+		// only — the real <deploy-host> run is by the repo owner, so config.sh itself
 		// never needs this. Mirrors internal/deploy/local_client_build_test.go.
 		"GIT_CONFIG_COUNT=1",
 		"GIT_CONFIG_KEY_0=safe.directory",

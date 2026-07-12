@@ -32,7 +32,7 @@ It violates the **same** inviolable capture-as-fallback contract
 (`policySnapshot.captureAsFallback: "inviolable"`, Hard Constraint 5 / BS-001 —
 "the user's prompt is never lost").
 
-Discovered by an independent **bubbles.code-review MVP/evo-x2 readiness sweep**,
+Discovered by an independent **bubbles.code-review MVP/<deploy-host> readiness sweep**,
 finding **F-01**. Finding id: **F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL**.
 
 ## Severity
@@ -92,7 +92,7 @@ and the capture is gone. No retry, no background re-dispatch.
 ## Environment
 
 - Repo: smackerel (Go core runtime), Go 1.25.10, current working tree.
-- Sweep: **bubbles.code-review MVP/evo-x2 readiness sweep**, finding **F-01**, parent spec `specs/069-assistant-http-transport` (`status: done`, `workflowMode: full-delivery`), release train `mvp`.
+- Sweep: **bubbles.code-review MVP/<deploy-host> readiness sweep**, finding **F-01**, parent spec `specs/069-assistant-http-transport` (`status: done`, `workflowMode: full-delivery`), release train `mvp`.
 - Defect site: `internal/api/capture.go` — `(*Dependencies).CaptureHandler`, the `d.Pipeline.Process(r.Context(), …)` durable dispatch.
 - Production durable path: `internal/pipeline/processor.go::Process` → `submitForProcessing` → `storeInitialArtifact` (Postgres `INSERT`, ctx-honoring) + `p.NATS.Publish(ctx, …)` (ctx-honoring).
 - Contract violated: spec 069 Hard Constraint 5 (capture-as-fallback preserved); BS-001; parent `state.json policySnapshot.captureAsFallback: "inviolable"`.

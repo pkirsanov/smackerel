@@ -12,7 +12,7 @@ cold-cache calls deadline-exceeded.
 
 ### Single-line bump from 2000 to 8000 ms
 
-- Observed worst case per HTTP round trip on home-lab: 2s
+- Observed worst case per HTTP round trip on self-hosted: 2s
 - End-to-end worst case: 4s
 - New cap: 8s (2x headroom)
 - Doc comment in the source records the measurement so future

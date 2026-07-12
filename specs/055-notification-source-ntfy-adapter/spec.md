@@ -10,7 +10,7 @@ Blocked for final artifact certification only. The concrete ntfy notification so
 
 Spec 054 gives Smackerel a source-neutral notification intelligence handler: adapters submit source events, the core preserves raw input, normalizes events, classifies severity/domain/intent, correlates incidents, applies safe reaction policy, and routes redacted output through channel abstractions.
 
-Smackerel still needs a concrete ntfy source implementation so self-hosted operators can subscribe to ntfy topics such as `home-lab-alerts` and bring those notifications into the same intelligent handling pipeline. Without a dedicated adapter spec, ntfy risks becoming a one-off forwarding path: ntfy JSON parsing, topic auth, reconnect logic, severity mapping, dead-letter handling, and output behavior could drift into the core service or become hardwired to Telegram. That would violate the source-neutral contract established by spec 054.
+Smackerel still needs a concrete ntfy source implementation so self-hosted operators can subscribe to ntfy topics such as `self-hosted-alerts` and bring those notifications into the same intelligent handling pipeline. Without a dedicated adapter spec, ntfy risks becoming a one-off forwarding path: ntfy JSON parsing, topic auth, reconnect logic, severity mapping, dead-letter handling, and output behavior could drift into the core service or become hardwired to Telegram. That would violate the source-neutral contract established by spec 054.
 
 This feature turns ntfy into a thin, source-qualified adapter. It owns ntfy transport and payload translation only. All classification, correlation, suppressions, approvals, output routing, and smart reactions remain in the spec 054 core.
 
@@ -83,7 +83,7 @@ Spec 054 remains the owner of the normalized notification model, incident model,
 
 - ntfy source instance configuration requirements and validation rules.
 - ntfy subscription transport for streaming and/or webhook mode as selected by design.
-- Explicit topic subscription handling, including topics such as `home-lab-alerts` when configured by the operator.
+- Explicit topic subscription handling, including topics such as `self-hosted-alerts` when configured by the operator.
 - ntfy JSON event parsing and validation.
 - Preservation of ntfy fields, unknown safe fields, delivery metadata, and raw payload references.
 - Mapping from ntfy event shape into `SourceEventEnvelope`, including mapping hints for title, body, severity, tags, subject, service, domain, and intent when the source provides enough signal.
@@ -103,7 +103,7 @@ Spec 054 remains the owner of the normalized notification model, incident model,
 - No ntfy-specific imports, field checks, incident states, decision branches, approval behavior, or output behavior in core notification packages.
 - No direct Telegram forwarding from the ntfy adapter.
 - No adapter-owned incident store writes, classification writes, action execution, approval creation, suppression creation, or output delivery attempts.
-- No hardcoded ntfy server URL, topic, auth token, home-lab hostname, Tailscale identity, port, or operator-specific path.
+- No hardcoded ntfy server URL, topic, auth token, self-hosted hostname, Tailscale identity, port, or operator-specific path.
 - No runtime fallback credentials, fallback topics, fallback endpoint, or fallback output channel.
 
 ## ntfy Event Preservation Contract
@@ -267,7 +267,7 @@ Scenario: SCN-055-001 Enabled ntfy source requires explicit configuration
 
 ```gherkin
 Scenario: SCN-055-002 ntfy message enters the spec 054 raw and normalized pipeline
-  Given an enabled ntfy source instance subscribes to the configured topic `home-lab-alerts`
+  Given an enabled ntfy source instance subscribes to the configured topic `self-hosted-alerts`
   When ntfy emits a valid JSON message event with id, time, topic, title, message, priority, and tags
   Then the adapter submits one `SourceEventEnvelope` with `source_type` set to `ntfy`
   And the core stores the raw ntfy JSON before normalization
@@ -455,7 +455,7 @@ Operator controls in this section are source-adapter controls only: refresh heal
 │ ┌──────────────────────────────────────────────────────────────────────┐   │
 │ │ State        Source       Instance        Last event   Lag    Error  │   │
 │ ├──────────────────────────────────────────────────────────────────────┤   │
-│ │ connected    ntfy         home-lab-alerts  2m ago       0s     -     │   │
+│ │ connected    ntfy         self-hosted-alerts  2m ago       0s     -     │   │
 │ │ degraded     ntfy         infra-alerts     41m ago      14m    auth  │   │
 │ │ connected    manual       operator-note    3h ago       -      -     │   │
 │ └──────────────────────────────────────────────────────────────────────┘   │

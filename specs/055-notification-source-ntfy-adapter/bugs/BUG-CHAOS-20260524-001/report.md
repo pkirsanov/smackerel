@@ -22,7 +22,7 @@ Exit Code: 0
     chaos_resilience_integration_test.go:91: CHAOS action=01 name=malformed-secret-payload-c
     chaos_resilience_integration_test.go:91: CHAOS action=02 name=malformed-secret-payload-b
     chaos_resilience_integration_test.go:91: CHAOS action=03 name=keepalive-lifecycle
-    chaos_resilience_integration_test.go:91: CHAOS action=04 name=valid-home-lab-message
+    chaos_resilience_integration_test.go:91: CHAOS action=04 name=valid-self-hosted-message
     chaos_resilience_integration_test.go:91: CHAOS action=05 name=duplicate-replayable-source-id-again
     chaos_resilience_integration_test.go:91: CHAOS action=06 name=transport-error
     chaos_resilience_integration_test.go:91: CHAOS action=07 name=open-lifecycle
@@ -278,7 +278,7 @@ ok      github.com/smackerel/smackerel/internal/notification    0.021s [no tests
         chaos_resilience_integration_test.go:41: CHAOS action=01 name=malformed-secret-payload-c
         chaos_resilience_integration_test.go:41: CHAOS action=02 name=malformed-secret-payload-b
         chaos_resilience_integration_test.go:41: CHAOS action=03 name=keepalive-lifecycle
-        chaos_resilience_integration_test.go:41: CHAOS action=04 name=valid-home-lab-message
+        chaos_resilience_integration_test.go:41: CHAOS action=04 name=valid-self-hosted-message
         chaos_resilience_integration_test.go:41: CHAOS action=05 name=duplicate-replayable-source-id-again
         chaos_resilience_integration_test.go:41: CHAOS action=06 name=transport-error
         chaos_resilience_integration_test.go:41: CHAOS action=07 name=open-lifecycle
@@ -418,9 +418,9 @@ Exit Code: 1 (expected before scanner fix)
 [go-unit] starting go test ./...
 ok      github.com/smackerel/smackerel/internal/notification    0.062s [no tests to run]
 --- FAIL: TestNtfyScanSubscriptionStatesRejectsMalformedRedactionState (0.00s)
-        store_scan_test.go:17: expected malformed subscription redaction_state decode error, got states=[{SourceInstanceID:ntfy-source Topic:home-lab-alerts SourceForm:webhook TransportMode:webhook SubscriptionState:connected LastNtfyEventID:evt-redaction-state LastEventAt:2026-05-24 23:59:00 +0000 UTC LastOpenAt:<nil> LastKeepaliveAt:<nil> LastSuccessfulCheckAt:2026-05-24 23:59:00 +0000 UTC LagSeconds:0 PossibleGap:false RetryCount:0 RetryBudget:3 LastErrorKind: LastErrorRedacted: RedactionState:map[] CreatedAt:2026-05-24 23:59:00 +0000 UTC UpdatedAt:2026-05-24 23:59:00 +0000 UTC}]
+        store_scan_test.go:17: expected malformed subscription redaction_state decode error, got states=[{SourceInstanceID:ntfy-source Topic:self-hosted-alerts SourceForm:webhook TransportMode:webhook SubscriptionState:connected LastNtfyEventID:evt-redaction-state LastEventAt:2026-05-24 23:59:00 +0000 UTC LastOpenAt:<nil> LastKeepaliveAt:<nil> LastSuccessfulCheckAt:2026-05-24 23:59:00 +0000 UTC LagSeconds:0 PossibleGap:false RetryCount:0 RetryBudget:3 LastErrorKind: LastErrorRedacted: RedactionState:map[] CreatedAt:2026-05-24 23:59:00 +0000 UTC UpdatedAt:2026-05-24 23:59:00 +0000 UTC}]
 --- FAIL: TestNtfyScanDeadLettersRejectsMalformedRedactionState (0.00s)
-        store_scan_test.go:30: expected malformed dead-letter redaction_state decode error, got records=[{ID:ntfy-dlq-1 SourceInstanceID:ntfy-source Topic:home-lab-alerts SourceEventID:evt-redaction-state EventType:message ObservedAt:2026-05-24 23:59:00 +0000 UTC PayloadHash:sha256:redaction-state PayloadSizeBytes:128 PayloadRefKind:hash_only RawPayload:[] SourceRawEventID: SafePayloadPreview:safe preview CauseKind:sink_unavailable CauseRedacted:source sink unavailable ReplayEligible:true ReplayStatus:pending AttemptCount:0 LastAttemptAt:<nil> RedactionState:map[] CreatedAt:2026-05-24 23:59:00 +0000 UTC UpdatedAt:2026-05-24 23:59:00 +0000 UTC}]
+        store_scan_test.go:30: expected malformed dead-letter redaction_state decode error, got records=[{ID:ntfy-dlq-1 SourceInstanceID:ntfy-source Topic:self-hosted-alerts SourceEventID:evt-redaction-state EventType:message ObservedAt:2026-05-24 23:59:00 +0000 UTC PayloadHash:sha256:redaction-state PayloadSizeBytes:128 PayloadRefKind:hash_only RawPayload:[] SourceRawEventID: SafePayloadPreview:safe preview CauseKind:sink_unavailable CauseRedacted:source sink unavailable ReplayEligible:true ReplayStatus:pending AttemptCount:0 LastAttemptAt:<nil> RedactionState:map[] CreatedAt:2026-05-24 23:59:00 +0000 UTC UpdatedAt:2026-05-24 23:59:00 +0000 UTC}]
 FAIL
 FAIL    github.com/smackerel/smackerel/internal/notification/source/ntfy       0.018s
 ok      github.com/smackerel/smackerel/tests/e2e/agent  0.010s [no tests to run]

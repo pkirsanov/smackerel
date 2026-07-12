@@ -24,8 +24,8 @@
 // rejected.
 //
 // Cross-reference:
-//   - specs/082-mvp-evo-x2-readiness-hardening/spec.md FR-082-009
-//   - specs/082-mvp-evo-x2-readiness-hardening/scenario-manifest.json SCN-082-I01
+//   - specs/082-mvp-target-readiness-hardening/spec.md FR-082-009
+//   - specs/082-mvp-target-readiness-hardening/scenario-manifest.json SCN-082-I01
 //   - deploy/compose.deploy.yml (services.ollama.group_add / environment)
 package deploy
 

@@ -10,7 +10,7 @@ and a disposable restore drill that verifies the artifact actually
 restores cleanly into a throwaway PostgreSQL. The spec 049
 `SmackerelBackupStale` alert is now backed by a real metric
 (`smackerel_backup_last_success_unixtime`) instead of the proxy
-expression. The home-lab deploy adapter (in the separate `knb` overlay
+expression. The self-hosted deploy adapter (in the separate `knb` overlay
 repo) is responsible for installing the daily timer and shipping the
 artifacts off-host; the product surface stays generic.
 

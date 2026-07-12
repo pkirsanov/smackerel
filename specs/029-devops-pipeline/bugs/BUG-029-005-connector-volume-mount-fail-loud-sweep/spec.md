@@ -3,12 +3,12 @@
 ## Classification
 
 - **Type:** DevOps defect — completion of the dev-compose Gate G028 sweep (operational hardening; follow-up to BUG-029-003)
-- **Severity:** P3 — LOW (same severity floor as BUG-029-003: the dev compose file `docker-compose.yml` is used only by `./smackerel.sh up` / `./smackerel.sh test` workflows; the production / home-lab compose file `deploy/compose.deploy.yml` is unaffected). The remaining risk surface is the same silent-fallback failure mode that BUG-029-003 closed for the other 10 occurrences: a developer who manually invokes `docker compose -f docker-compose.yml up` without first running `./smackerel.sh config generate` would silently mount the repo's `./data/<connector>` fixture dirs as the connector input source, masking real misconfiguration (e.g., they meant to point the connector at their actual host-side import directory but forgot to set the env var).
+- **Severity:** P3 — LOW (same severity floor as BUG-029-003: the dev compose file `docker-compose.yml` is used only by `./smackerel.sh up` / `./smackerel.sh test` workflows; the production / self-hosted compose file `deploy/compose.deploy.yml` is unaffected). The remaining risk surface is the same silent-fallback failure mode that BUG-029-003 closed for the other 10 occurrences: a developer who manually invokes `docker compose -f docker-compose.yml up` without first running `./smackerel.sh config generate` would silently mount the repo's `./data/<connector>` fixture dirs as the connector input source, masking real misconfiguration (e.g., they meant to point the connector at their actual host-side import directory but forgot to set the env var).
 - **Parent Spec:** 029 — DevOps Pipeline & Image Governance (owns `./smackerel.sh up` workflow + dev `docker-compose.yml` + `./smackerel.sh config generate` SST chain)
 - **Predecessor:** BUG-029-003 — Dev `docker-compose.yml` violates Gate G028 NO-DEFAULTS via 14 `${VAR:-default}` substitutions (this bug closes the 4 occurrences BUG-029-003 explicitly deferred)
 - **Workflow Mode:** bugfix-fastlane
 - **Status:** Open
-- **Discovered By:** 2026-05-14 home-lab readiness re-scan (finding HL-RESCAN-012; follow-up scope explicitly named in BUG-029-003 spec.md "Out of Scope" and tracked by allowlist entries in `internal/deploy/dev_compose_default_fallback_test.go`)
+- **Discovered By:** 2026-05-14 self-hosted readiness re-scan (finding HL-RESCAN-012; follow-up scope explicitly named in BUG-029-003 spec.md "Out of Scope" and tracked by allowlist entries in `internal/deploy/dev_compose_default_fallback_test.go`)
 
 ## Problem Statement
 
@@ -62,7 +62,7 @@ After this fix, the dev compose file has ZERO Gate G028 violations and the allow
 
 ## Out of Scope
 
-- Editing `deploy/compose.deploy.yml` (the prod / home-lab compose file). Already locked by spec 042 + BUG-042-001..005 with `internal/deploy/compose_contract_test.go`. The 4 connectors covered by this bug are dev-only fixture imports and are not part of the home-lab deployment surface.
+- Editing `deploy/compose.deploy.yml` (the prod / self-hosted compose file). Already locked by spec 042 + BUG-042-001..005 with `internal/deploy/compose_contract_test.go`. The 4 connectors covered by this bug are dev-only fixture imports and are not part of the self-hosted deployment surface.
 - Editing `specs/029-devops-pipeline/spec.md`, `specs/029-devops-pipeline/design.md`, `specs/029-devops-pipeline/scopes.md`, `specs/029-devops-pipeline/state.json`, `specs/029-devops-pipeline/uservalidation.md`, or `specs/029-devops-pipeline/report.md` — foreign-owned parent-spec content; outside `bugfix-fastlane` edit scope.
 - Refactoring the per-connector source-config map building (e.g., the `"import_dir": cfg.BookmarksImportDir` keys in `cmd/core/connectors.go`) — that surface is consumed by each connector's `Connect()` method and the existing tests pass through the host path unchanged; changing it would expand the change boundary beyond the Gate G028 sweep.
 - Adding new connectors or per-connector defaults to `config/smackerel.yaml` — the four connectors covered here already have `enabled: false` defaults and empty `import_dir` placeholders.

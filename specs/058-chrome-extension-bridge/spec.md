@@ -35,7 +35,7 @@ Notes:
 
 ## Problem Statement
 
-The bookmarks and browser-history connectors target Chrome data that lives ON THE OPERATOR'S DESKTOP, not on the smackerel-core host. The current code assumes co-located files (`import_dir` / `chrome.history_path`). When smackerel-core runs in a Docker container on a remote home-lab host, neither file is reachable. Operators today must:
+The bookmarks and browser-history connectors target Chrome data that lives ON THE OPERATOR'S DESKTOP, not on the smackerel-core host. The current code assumes co-located files (`import_dir` / `chrome.history_path`). When smackerel-core runs in a Docker container on a remote self-hosted host, neither file is reachable. Operators today must:
 
 1. Manually export bookmarks as HTML, scp to the deploy host, and run smackerel only after each export — bookmarks immediately go stale.
 2. Manually rsync Chrome's `History` SQLite from desktop → deploy host — fragile, requires Chrome closed, leaks every other column in the profile.

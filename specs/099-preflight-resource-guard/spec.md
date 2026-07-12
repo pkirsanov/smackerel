@@ -167,7 +167,7 @@ second implementation of this guard and is explicitly not introduced here.
 
 This guard protects **local / developer `./smackerel.sh` operations only**
 (`build`, `up`, `test …` on the dev or disposable test stack). It is **NOT** a
-home-lab / production apply gate. The home-lab live apply is owned by the
+self-hosted / production apply gate. The self-hosted live apply is owned by the
 operator-private **knb deploy-adapter overlay** (out of this repo). That adapter
 MAY add its own host pre-flight on the real deploy host, but that is **explicitly
 out of scope here** and is not implemented, referenced by real values, or
@@ -177,7 +177,7 @@ coupled to this guard. This repo stays generic and target-agnostic
 
 ## Out of Scope
 
-- Any home-lab / production / deploy-adapter host pre-flight (knb-owned,
+- Any self-hosted / production / deploy-adapter host pre-flight (knb-owned,
   operator-private, out of repo).
 - Gating light / read-only CLI operations (`status`, `logs`, `config`, `check`,
   `down`, `clean`, `test unit`).
@@ -191,7 +191,7 @@ coupled to this guard. This repo stays generic and target-agnostic
 ## Release Train
 
 Targets the **`mvp`** train (the active default train; this aids the current
-home-lab readiness loop by making heavy local runs fail fast instead of
+self-hosted readiness loop by making heavy local runs fail fast instead of
 OOM-dying). This spec introduces **no feature flag** (`flagsIntroduced: []`) —
 it is an always-on CLI safety check, not a runtime-flagged product feature.
 Behavior is identical on every train (the guard is train-agnostic).

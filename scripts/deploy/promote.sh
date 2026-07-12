@@ -7,7 +7,7 @@
 #
 # Usage:
 #   bash scripts/deploy/promote.sh \
-#       --target home-lab \
+#       --target self-hosted \
 #       --build-manifest path/to/build-manifest.yaml \
 #       [--operator <name>]
 #
@@ -23,7 +23,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Spec 082 SCOPE-082-07 — dual-shape build-manifest extraction helpers.
 # promote.sh now parses BOTH the CI list-shape manifest and the
-# local-operator (build-home-lab.sh) map/object-shape manifest.
+# local-operator (build-self-hosted.sh) map/object-shape manifest.
 # shellcheck source=scripts/deploy/promote_manifest_parse.sh
 source "$SCRIPT_DIR/promote_manifest_parse.sh"
 
@@ -82,7 +82,7 @@ TARGET_ENV="$(awk '/^environment:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/[[:spa
 
 # Extract image refs + bundle ref from build manifest. Spec 082 SCOPE-082-07 —
 # these helpers parse BOTH the CI list shape AND the local-operator map/object
-# shape, so a locally-built (build-home-lab.sh) manifest promotes through the
+# shape, so a locally-built (build-self-hosted.sh) manifest promotes through the
 # same in-tree path as a CI manifest.
 SOURCE_SHA="$(manifest_source_sha "$MANIFEST")"
 CORE_REF="$(manifest_image_ref "$MANIFEST" smackerel-core)"

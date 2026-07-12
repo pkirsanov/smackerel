@@ -69,7 +69,7 @@ working-directory independent.
 |------------------|-------------------|
 | `internal/docfreshness/doc_freshness_test.go` (new test-only file) | Any runtime `.go` (non-test), `.py`, `.sql`, `.proto` |
 | `docs/Development.md` (Go Packages table: +2 rows, no removals) | `config/`, `docker-compose*.yml`, `Dockerfile`, `ml/Dockerfile` |
-| Bug-packet artifacts under this folder | `.github/bubbles/**`, `.github/workflows/**`, `scripts/commands/build-home-lab.sh` (in-progress external work) |
+| Bug-packet artifacts under this folder | `.github/bubbles/**`, `.github/workflows/**`, `scripts/commands/build-self-hosted.sh` (in-progress external work) |
 | Parent `report.md` (DevOps-sweep evidence breadcrumb only) | Parent `spec.md` / `design.md` / `scopes.md` (no planning-truth edit → no recert needed) |
 
 ## Consumer Impact Sweep

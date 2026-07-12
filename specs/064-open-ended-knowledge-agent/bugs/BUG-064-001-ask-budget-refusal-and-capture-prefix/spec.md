@@ -9,7 +9,7 @@ current broken behavior.
 (Spec 064 SCOPE-17, `internal/assistant/shortcuts.go`). The open-knowledge agent
 plans over a tool allowlist (`internal_retrieval`, `web_search` via local
 searxng, `unit_convert`, `calculator`) and returns a sourced answer or a typed
-refusal. The home-lab default uses local Ollama + local searxng, wired with a
+refusal. The self-hosted default uses local Ollama + local searxng, wired with a
 **zero-cost `CostFn`** (`cmd/core/wiring_assistant_openknowledge.go`), so no real
 USD is ever spent.
 

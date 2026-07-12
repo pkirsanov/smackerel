@@ -10,18 +10,18 @@ Pending implementation. Bug status: in_progress.
 
 ## Test Evidence
 
-### Bug Reproduction — Before Fix (live home-lab, 2026-05-28)
+### Bug Reproduction — Before Fix (live self-hosted, 2026-05-28)
 
 **Claim Source:** executed
 
-Live home-lab telegram-core slog WARN line captured immediately after the user-reported failure at 11:44 AM local (18:44 UTC):
+Live self-hosted telegram-core slog WARN line captured immediately after the user-reported failure at 11:44 AM local (18:44 UTC):
 
 ```
 {"time":"2026-05-28T18:44:24.26713234Z","level":"INFO","msg":"request","method":"GET","path":"/api/expenses","status":404,"duration_ms":0,"request_id":"9623ad891b1f/pbBNO1CDyv-003054"}
 {"time":"2026-05-28T18:44:24.267231364Z","level":"WARN","msg":"expense query non-200","status":404}
 ```
 
-Path-status probe inside the live container (`docker exec smackerel-home-lab-smackerel-core-1 wget -S ...`):
+Path-status probe inside the live container (`docker exec smackerel-self-hosted-smackerel-core-1 wget -S ...`):
 
 ```
 /api/health             ->   HTTP/1.1 200 OK
@@ -91,7 +91,7 @@ Pre-fix RED proof (captured by `git stash`-ing the fix, running the new regressi
 FAIL    github.com/smackerel/smackerel/internal/api     0.028s
 ```
 
-Note: the pre-fix run revealed `/api/api/expenses` returns **401** in-process (not 404 as the live home-lab probe suggested). Chi nests the inner `r.Route("/api/expenses", ...)` under the outer `/api` mount AND under the bearer-auth group, so the double-prefix path is reachable for auth-checking purposes but the handler tree is structurally broken. The adversarial sub-test (`/api/api/expenses → 404`) thus serves as a bidirectional gate: it fails on pre-fix code (got 401) and passes only when the relative-prefix fix is in place.
+Note: the pre-fix run revealed `/api/api/expenses` returns **401** in-process (not 404 as the live self-hosted probe suggested). Chi nests the inner `r.Route("/api/expenses", ...)` under the outer `/api` mount AND under the bearer-auth group, so the double-prefix path is reachable for auth-checking purposes but the handler tree is structurally broken. The adversarial sub-test (`/api/api/expenses → 404`) thus serves as a bidirectional gate: it fails on pre-fix code (got 401) and passes only when the relative-prefix fix is in place.
 
 Post-fix GREEN proof (after `git stash pop` restoring the fix):
 
@@ -226,30 +226,30 @@ Test stack containers + volumes + network removed cleanly on exit (test-environm
 | `internal/api/mealplan.go` | `r.Route("/api/meal-plans", ...)` → `r.Route("/meal-plans", ...)`; same comment block |
 | `internal/api/mealplan_test.go` | Added `mountMealPlanAPI(r, handler)` helper that wraps `RegisterRoutes` inside `r.Route("/api", ...)` to mirror production; replaced 6 bare `handler.RegisterRoutes(r)` call sites |
 | `internal/api/router_mount_bug_034_003_test.go` | NEW — regression test with 2 positive (401 mounted) + 2 adversarial (404 double-prefix) sub-tests against full `NewRouter(deps)` composition |
-| `specs/034-expense-tracking/bugs/BUG-034-003-.../scopes.md` | DoD checkboxes flipped for in-process items (live home-lab items remain unchecked pending deploy) |
+| `specs/034-expense-tracking/bugs/BUG-034-003-.../scopes.md` | DoD checkboxes flipped for in-process items (live self-hosted items remain unchecked pending deploy) |
 | `specs/034-expense-tracking/bugs/BUG-034-003-.../report.md` | This evidence section |
-| `specs/034-expense-tracking/bugs/BUG-034-003-.../state.json` | Implementation execution claim recorded; status remains `in_progress` until home-lab redeploy lands |
+| `specs/034-expense-tracking/bugs/BUG-034-003-.../state.json` | Implementation execution claim recorded; status remains `in_progress` until self-hosted redeploy lands |
 
 ### Live deployment — REQUIRED, NOT YET PERFORMED
 
 **Phase:** implement  
 **Claim Source:** not-run (deploy NOT executed in this session; owner's call)
 
-The live home-lab image (`smackerel-home-lab-smackerel-core-1`) still runs the pre-fix binary. The user-visible `/expense` Telegram failure WILL persist until the redeploy lands. To deploy:
+The live self-hosted image (`smackerel-self-hosted-smackerel-core-1`) still runs the pre-fix binary. The user-visible `/expense` Telegram failure WILL persist until the redeploy lands. To deploy:
 
 ```bash
 # 1. Build new images (CI-equivalent locally)
 ./smackerel.sh build
 
-# 2. Promote to home-lab via build manifest
-bash scripts/deploy/promote.sh --target home-lab --build-manifest <path-to-build-manifest>
+# 2. Promote to self-hosted via build manifest
+bash scripts/deploy/promote.sh --target self-hosted --build-manifest <path-to-build-manifest>
 #    OR direct adapter invocation (knb deploy overlay):
-bash <knb-repo>/smackerel/home-lab/apply.sh \
+bash <deployment-owner>/<product>/<target>/apply.sh \
     --image-core=sha256:<new-digest> --image-ml=sha256:<unchanged-digest> \
     --bundle=<env>-<sha> --source-sha=<sha>
 
 # 3. Verify
-bash <knb-repo>/smackerel/home-lab/verify.sh
+bash <deployment-owner>/<product>/<target>/verify.sh
 ```
 
 After deploy, the post-fix live verification steps (live `/api/expenses` returns 401 without bearer, Telegram `/expense` returns empty-state, `/api/meal-plans` returns 401) MUST be captured to flip the remaining live-host DoD items and the `uservalidation.md` checkboxes. Those will be filled by `bubbles.validate` against the live tailnet endpoint AFTER the operator runs the apply step. Recommendation: bubbles.implement signals `route_required → bubbles.validate` with the deploy as a prerequisite owner action.
@@ -294,4 +294,4 @@ RESULT: PASSED (0 warnings)
 EXIT=0
 ```
 
-**Verdict:** ⚠️ SHIP_WITH_NOTES — both governance gates clean (exit 0). The 3 live-host DoD items remain blocked on operator-run home-lab redeploy; routing to `bubbles.validate` for final certification.
+**Verdict:** ⚠️ SHIP_WITH_NOTES — both governance gates clean (exit 0). The 3 live-host DoD items remain blocked on operator-run self-hosted redeploy; routing to `bubbles.validate` for final certification.

@@ -32,7 +32,7 @@ from SST, installed via `agenttool.SetAgent`, and read by BOTH surfaces
 through `agenttool.CurrentAgent().Run(ctx, prompt)`. There is no
 per-request override and no answer-level model attribution on the
 fast-path. Spec 087 split the synthesis turn onto a reasoning model
-(`deepseek-r1:7b` home-lab) but could not prove the swap live (dev has no
+(`deepseek-r1:7b` self-hosted) but could not prove the swap live (dev has no
 GPU/Ollama).
 
 **Target State.** An OPTIONAL, allowlist-validated, per-invocation model
@@ -48,7 +48,7 @@ byte-for-byte today's baseline.
   by both structurally-separate surfaces).
 - The spec-087 SST split (`synthesis_model_id`) load+validate+resolve
   chain ([openknowledge.go](../../internal/config/openknowledge.go),
-  [config.sh](../../scripts/commands/config.sh#L1472), the home-lab
+  [config.sh](../../scripts/commands/config.sh#L1472), the self-hosted
   `environments.<env>` override) — the new `switchable_models` SST list
   mirrors it exactly.
 - The fail-loud envelope guard ([config.go::validateModelEnvelopes](../../internal/config/config.go#L2125))
@@ -170,7 +170,7 @@ confirmed it).
 - [config/smackerel.yaml](../../config/smackerel.yaml#L1025)
   `assistant.open_knowledge.{llm_model_id, synthesis_model_id,
   max_iterations, synthesis_retry_budget, llm_timeout_ms, …}` — every
-  field REQUIRED + fail-loud. Home-lab `environments.<env>` overrides
+  field REQUIRED + fail-loud. self-hosted `environments.<env>` overrides
   `assistant_open_knowledge_llm_model_id: "gemma4:26b"` (line 2046) and
   `assistant_open_knowledge_synthesis_model_id: "deepseek-r1:7b"` (line
   2057).
@@ -178,7 +178,7 @@ confirmed it).
   `gemma3:4b` 4096, `deepseek-r1:7b` 4864, `deepseek-r1:32b` 22528, … —
   reachable in Go as
   [Config.MLModelMemoryProfiles](../../internal/config/config.go#L363)
-  (`map[string]int`). Home-lab `ollama_memory_limit: "28G"`
+  (`map[string]int`). self-hosted `ollama_memory_limit: "28G"`
   (smackerel.yaml:2006) → `Config.OllamaMemoryLimitMiB = 28672`
   (config.go:357).
 - [validateModelEnvelopes](../../internal/config/config.go#L2125) already
@@ -391,12 +391,12 @@ HTTP:      POST /v1/agent/invoke {scenario_id:open_knowledge, raw_input:<q>, mod
 ### CHANGE 1 — new SST list (`config/smackerel.yaml`)
 Add under `assistant.open_knowledge` (after `synthesis_model_id`):
 ```yaml
-    switchable_models: [ "gemma3:4b" ] # REQUIRED non-empty when enabled. Spec 088 — the allowlist of models /ask may be runtime-switched TO on the SYNTHESIS turn (per-request --model= / API model). Dev = [gemma3:4b] (== baseline synthesis; switching to it is a no-op but keeps the path testable; dev has no Ollama daemon). Each entry MUST have a model_memory_profiles entry AND fit the env ollama envelope when co-resident with llm_model_id (gather) — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-10). Home-lab override below adds the real A/B set. NEVER a silent default.
+    switchable_models: [ "gemma3:4b" ] # REQUIRED non-empty when enabled. Spec 088 — the allowlist of models /ask may be runtime-switched TO on the SYNTHESIS turn (per-request --model= / API model). Dev = [gemma3:4b] (== baseline synthesis; switching to it is a no-op but keeps the path testable; dev has no Ollama daemon). Each entry MUST have a model_memory_profiles entry AND fit the env ollama envelope when co-resident with llm_model_id (gather) — validated fail-loud in internal/config/config.go::validateModelEnvelopes (G028 / FR-10). self-hosted override below adds the real A/B set. NEVER a silent default.
 ```
-Add to the home-lab `environments.<env>` block (after
+Add to the self-hosted `environments.<env>` block (after
 `assistant_open_knowledge_synthesis_model_id`):
 ```yaml
-    # Spec 088 — home-lab switchable set: the gemma4:26b-vs-deepseek-r1:7b
+    # Spec 088 — self-hosted switchable set: the gemma4:26b-vs-deepseek-r1:7b
     # synthesis A/B. Both envelope-consistent: gather gemma4:26b (18432) +
     # synthesis candidate ≤ 28672 ollama_memory_limit (gemma4:26b loads
     # once when candidate==gather; +deepseek-r1:7b 4864 = 23296). deepseek-r1:32b
@@ -867,7 +867,7 @@ Then 18432+22528=40960 > 28672 ⇒ Rejection{ReasonCode:"model_over_memory_envel
 | A06 parity | unit | `modelswitch`, cross-surface | same `Rejection` both surfaces |
 | A07 untrusted / over-envelope | unit | `modelswitch`, `config` | two reason-codes; config-load fail-loud |
 | A08 latency honesty | doc + unit | `main.go` comment, budget | turn count unchanged; 4200s bound |
-| **live A/B (decisive)** | **home-lab (downstream)** | `bubbles.devops` (C7) | the gemma-vs-deepseek synthesis verdict |
+| **live A/B (decisive)** | **self-hosted (downstream)** | `bubbles.devops` (C7) | the gemma-vs-deepseek synthesis verdict |
 
 Dev has no GPU/Ollama (C4/C7); in-repo proof is mechanism-level via
 fake-LLM traces (mirrors spec 087). The decisive live A/B is the separate
@@ -890,7 +890,7 @@ downstream devops dispatch — no live result is fabricated here.
   switched-model fabricated citation still refused. A singleton-mutation
   attempt detected by the post-clone singleton-cfg assertion.
 - **Out of scope in-repo (C7):** the live latency + the decisive synthesis
-  verdict — home-lab only.
+  verdict — self-hosted only.
 
 ---
 
@@ -931,7 +931,7 @@ style verbatim).
   was not reached). Honest by design; documented so it is not read as a
   bug. The comparison-class A/B questions reach the forced-final turn.
 - **F-PROOF (carried, spec 087/088)** — the decisive
-  `gemma4:26b`-vs-`deepseek-r1:7b` synthesis verdict is GPU/home-lab
+  `gemma4:26b`-vs-`deepseek-r1:7b` synthesis verdict is GPU/self-hosted
   dependent and runs via a separate `bubbles.devops` dispatch (C7). This
   spec ships + validates the switchable primitive in-repo only; no live
   result is fabricated.

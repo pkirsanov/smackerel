@@ -3,8 +3,8 @@
 // This file is the long-lived adversarial contract harness for spec 052
 // (placeholder mode + 3-mirror SST). It enforces five invariants:
 //
-//   Happy path (TestBundleSecretContract_NoLiteralSecretsInHomeLab):
-//     A live `./smackerel.sh config generate --env home-lab --bundle` produces
+//   Happy path (TestBundleSecretContract_NoLiteralSecretsInSelfHosted):
+//     A live `./smackerel.sh config generate --env self-hosted --bundle` produces
 //     a deterministic tarball whose `app.env` (a) emits every key declared by
 //     `config.SecretKeys()` as `__SECRET_PLACEHOLDER__<KEY>__`, (b) contains
 //     no literal value from `internal/config/secrets.go::DevDBPasswords`,
@@ -29,15 +29,15 @@
 //   A3 determinism detector (TestBundleSecretContract_AdversarialA3_DeterminismDetector):
 //     Two consecutive invocations of the live loader (with identical
 //     --source-sha) into separate output dirs produce byte-identical
-//     `config-bundle-home-lab-<sha>.tar.gz` files (sha256 match). Any future
+//     `config-bundle-self-hosted-<sha>.tar.gz` files (sha256 match). Any future
 //     regression that reintroduces a timestamp/nonce into the bundle is
 //     caught.
 //
 //   A4 opt-out detector (TestBundleSecretContract_AdversarialA4_OptOutDetector):
 //     A TEMP COPY of `config/smackerel.yaml` whose `infrastructure.production_class_targets`
-//     no longer lists `home-lab` AND whose `infrastructure.postgres.password`
+//     no longer lists `self-hosted` AND whose `infrastructure.postgres.password`
 //     is changed to a non-DevDBPassword sentinel ("test-optout-sentinel-…"),
-//     when consumed by the live loader with --env home-lab, produces a bundle
+//     when consumed by the live loader with --env self-hosted, produces a bundle
 //     whose `app.env` contains the sentinel literal (NOT a placeholder marker).
 //     This proves placeholder mode is a real opt-in keyed on production-class
 //     targets — flipping the opt-in off reverts to literal-emission behavior.
@@ -311,11 +311,11 @@ func sha256Hex(t *testing.T, path string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// bundlePath returns the canonical bundle filename for env home-lab + the
+// bundlePath returns the canonical bundle filename for env self-hosted + the
 // fixed source sha used in this file.
 func bundlePath(outputDir string) string {
 	return filepath.Join(outputDir,
-		fmt.Sprintf("config-bundle-home-lab-%s.tar.gz", bundleSecretSourceSha))
+		fmt.Sprintf("config-bundle-self-hosted-%s.tar.gz", bundleSecretSourceSha))
 }
 
 // shellSecretKeysRegex captures the body of the `SHELL_SECRET_KEYS=( ... )`
@@ -328,13 +328,13 @@ var shellSecretKeysRegex = regexp.MustCompile(
 // Happy path — main contract assertions on the live bundle.
 // =============================================================================
 
-// TestBundleSecretContract_NoLiteralSecretsInHomeLab — SCN-052-S05 main path.
+// TestBundleSecretContract_NoLiteralSecretsInSelfHosted — SCN-052-S05 main path.
 //
 // Cite design.md §8 happy path + §10 Test Plan row 3 + spec.md FR-052-001..005.
-func TestBundleSecretContract_NoLiteralSecretsInHomeLab(t *testing.T) {
+func TestBundleSecretContract_NoLiteralSecretsInSelfHosted(t *testing.T) {
 	tmpRoot := setupTestRepoRoot(t, nil, nil)
 	outputDir := filepath.Join(t.TempDir(), "bundle-out")
-	out, exit := runConfigGenerate(t, tmpRoot, "home-lab", outputDir)
+	out, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outputDir)
 	if exit != 0 {
 		t.Fatalf("loader exited %d (expected 0)\n--- output ---\n%s\n--- end ---", exit, out)
 	}
@@ -439,7 +439,7 @@ func TestBundleSecretContract_AdversarialA1_DriftDetector(t *testing.T) {
 
 	tmpRoot := setupTestRepoRoot(t, tamperedConfigSh, nil)
 	outputDir := filepath.Join(t.TempDir(), "bundle-out")
-	out, exit := runConfigGenerate(t, tmpRoot, "home-lab", outputDir)
+	out, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outputDir)
 	if exit != 0 {
 		t.Fatalf("tampered loader exited %d (expected 0; tamper drops a key but does not break loader)\n--- output ---\n%s\n--- end ---", exit, out)
 	}
@@ -542,7 +542,7 @@ func TestBundleSecretContract_AdversarialA2_LeakageDetector(t *testing.T) {
 
 	tmpRoot := setupTestRepoRoot(t, configShA2, yamlA2)
 	outputDir := filepath.Join(t.TempDir(), "bundle-out")
-	out, exit := runConfigGenerate(t, tmpRoot, "home-lab", outputDir)
+	out, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outputDir)
 	if exit != 0 {
 		t.Fatalf("tampered loader exited %d (expected 0; sentinel is not a dev-default and key is no longer in shell manifest)\n--- output ---\n%s\n--- end ---", exit, out)
 	}
@@ -587,10 +587,10 @@ func TestBundleSecretContract_AdversarialA3_DeterminismDetector(t *testing.T) {
 	outA := filepath.Join(t.TempDir(), "bundle-out-a")
 	outB := filepath.Join(t.TempDir(), "bundle-out-b")
 
-	if outOut, exit := runConfigGenerate(t, tmpRoot, "home-lab", outA); exit != 0 {
+	if outOut, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outA); exit != 0 {
 		t.Fatalf("first run exited %d\n--- output ---\n%s\n--- end ---", exit, outOut)
 	}
-	if outOut, exit := runConfigGenerate(t, tmpRoot, "home-lab", outB); exit != 0 {
+	if outOut, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outB); exit != 0 {
 		t.Fatalf("second run exited %d\n--- output ---\n%s\n--- end ---", exit, outOut)
 	}
 
@@ -610,14 +610,14 @@ func TestBundleSecretContract_AdversarialA3_DeterminismDetector(t *testing.T) {
 }
 
 // =============================================================================
-// A4 opt-out detector — TEMP COPY of yaml removes home-lab from
+// A4 opt-out detector — TEMP COPY of yaml removes self-hosted from
 // production_class_targets AND swaps the dev-default password for a sentinel.
 // =============================================================================
 
 // TestBundleSecretContract_AdversarialA4_OptOutDetector — SCN-052-S05 A4.
 //
 // Cite design.md §8 A4 opt-out detector + spec.md FR-052-011. Patches yaml
-// so home-lab is no longer in production_class_targets AND the postgres
+// so self-hosted is no longer in production_class_targets AND the postgres
 // password is a non-DevDBPassword sentinel (so FR-051-005 does not block
 // emission). The contract is that the sentinel literal MUST then appear in
 // app.env (NOT a placeholder marker) — proving the placeholder mode is a
@@ -653,7 +653,7 @@ func TestBundleSecretContract_AdversarialA4_OptOutDetector(t *testing.T) {
 	// yaml mutation 1b (BUG-045-001 Scope 2 collateral): provide a literal
 	// runtime.auth_token sentinel so the new pre-emit Validate() gate does
 	// not trip on "SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production".
-	// In opt-out mode home-lab behaves like dev/test (literal values required);
+	// In opt-out mode self-hosted behaves like dev/test (literal values required);
 	// the operator who opts out also accepts responsibility for providing all
 	// required literals. The sentinel choice is non-DevDBPassword and
 	// non-placeholder so the opt-out assertion logic below is unaffected.
@@ -665,7 +665,7 @@ func TestBundleSecretContract_AdversarialA4_OptOutDetector(t *testing.T) {
 		authTokenAnchor,
 		[]byte(`auth_token: "test-optout-auth-token-sentinel-49382716"`),
 		1)
-	// yaml mutation 1c (BUG-045-001 Scope 2 collateral): flip the home-lab
+	// yaml mutation 1c (BUG-045-001 Scope 2 collateral): flip the self-hosted
 	// per-env `auth_enabled` override from true to false so the pre-emit
 	// Validate() gate does not require AUTH_SIGNING_ACTIVE_PRIVATE_KEY /
 	// AUTH_SIGNING_ACTIVE_KEY_ID / AUTH_AT_REST_HASHING_KEY / AUTH_BOOTSTRAP_TOKEN
@@ -675,27 +675,27 @@ func TestBundleSecretContract_AdversarialA4_OptOutDetector(t *testing.T) {
 	// hypothesis (sentinel literal flows through when opt-out is active).
 	authEnabledAnchor := []byte("    auth_enabled: true")
 	if !bytes.Contains(yamlA4, authEnabledAnchor) {
-		t.Fatalf("A4 yaml mutation 1c precondition failed: live yaml does not contain %q (home-lab auth_enabled shape changed?)", authEnabledAnchor)
+		t.Fatalf("A4 yaml mutation 1c precondition failed: live yaml does not contain %q (self-hosted auth_enabled shape changed?)", authEnabledAnchor)
 	}
 	yamlA4 = bytes.Replace(yamlA4,
 		authEnabledAnchor,
 		[]byte("    auth_enabled: false"),
 		1)
-	// yaml mutation 2 (mirror-side documentation): drop home-lab from
+	// yaml mutation 2 (mirror-side documentation): drop self-hosted from
 	// production_class_targets in yaml so the yaml mirror reflects the opt-out.
-	dropYamlTarget := []byte("\n  - home-lab")
+	dropYamlTarget := []byte("\n  - self-hosted")
 	if !bytes.Contains(yamlA4, dropYamlTarget) {
 		t.Fatalf("A4 yaml mutation 2 precondition failed: live yaml does not contain %q (yaml indent shape changed?)", dropYamlTarget)
 	}
 	yamlA4 = bytes.Replace(yamlA4, dropYamlTarget, []byte(""), 1)
-	if bytes.Contains(yamlA4, []byte("production_class_targets:\n  - home-lab")) {
+	if bytes.Contains(yamlA4, []byte("production_class_targets:\n  - self-hosted")) {
 		t.Fatalf("A4 yaml mutation 2 failed — entry still present\n--- yamlA4 ---\n%s\n--- end ---", yamlA4)
 	}
 
-	// config.sh mutation: empty SHELL_PRODUCTION_CLASS_TARGETS so home-lab is
+	// config.sh mutation: empty SHELL_PRODUCTION_CLASS_TARGETS so self-hosted is
 	// no longer a production-class target. The placeholder branch is then
 	// skipped and the yaml literal flows through.
-	shellTarget := []byte("SHELL_PRODUCTION_CLASS_TARGETS=(\n  home-lab\n)")
+	shellTarget := []byte("SHELL_PRODUCTION_CLASS_TARGETS=(\n  self-hosted\n)")
 	shellReplacement := []byte("SHELL_PRODUCTION_CLASS_TARGETS=(\n)")
 	if !bytes.Contains(liveConfigSh, shellTarget) {
 		t.Fatalf("A4 config.sh mutation precondition failed: live config.sh does not contain expected SHELL_PRODUCTION_CLASS_TARGETS array shape")
@@ -707,9 +707,9 @@ func TestBundleSecretContract_AdversarialA4_OptOutDetector(t *testing.T) {
 
 	tmpRoot := setupTestRepoRoot(t, configShA4, yamlA4)
 	outputDir := filepath.Join(t.TempDir(), "bundle-out")
-	out, exit := runConfigGenerate(t, tmpRoot, "home-lab", outputDir)
+	out, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outputDir)
 	if exit != 0 {
-		t.Fatalf("tampered loader exited %d (expected 0; sentinel is not a dev-default and home-lab is no longer production-class)\n--- output ---\n%s\n--- end ---", exit, out)
+		t.Fatalf("tampered loader exited %d (expected 0; sentinel is not a dev-default and self-hosted is no longer production-class)\n--- output ---\n%s\n--- end ---", exit, out)
 	}
 
 	files := extractTarGz(t, bundlePath(outputDir))
@@ -727,7 +727,7 @@ func TestBundleSecretContract_AdversarialA4_OptOutDetector(t *testing.T) {
 	// And placeholder MUST be absent for POSTGRES_PASSWORD.
 	placeholderLine := []byte("POSTGRES_PASSWORD=" + config.Placeholder("POSTGRES_PASSWORD"))
 	if bytes.Contains(appEnv, placeholderLine) {
-		t.Fatalf("A4 opt-out detector regression: tampered app.env STILL contains placeholder line %q (home-lab was supposed to be opted out)", placeholderLine)
+		t.Fatalf("A4 opt-out detector regression: tampered app.env STILL contains placeholder line %q (self-hosted was supposed to be opted out)", placeholderLine)
 	}
 }
 

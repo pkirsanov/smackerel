@@ -12,7 +12,7 @@ Allowed:
 - `deploy/compose.deploy.yml` (line 187 — literal mirror until SST-aligned in a future spec)
 - `tests/integration/ollama_config_contract_test.go` (strip target on line 119 — must track the live YAML)
 - `tests/integration/ollama_image_availability_test.go` (NEW — adversarial registry-existence guard)
-- `config/generated/{dev,test,home-lab}.env` (regenerated — derived artifact)
+- `config/generated/{dev,test,self-hosted}.env` (regenerated — derived artifact)
 - `specs/043-ollama-test-infrastructure/bugs/BUG-001-ollama-image-pin-stale/{spec,design,scopes,uservalidation,report,scenario-manifest,state}.{md,json}` (new — bug packet)
 
 Forbidden:
@@ -44,7 +44,7 @@ Feature: BUG-001 — Pinned ollama tag must be currently published on Docker Hub
 1. Update both `infrastructure.ollama.image` and `infrastructure.ollama.test.image` in `config/smackerel.yaml` from `ollama/ollama:0.6` to `ollama/ollama:0.23.2`. Add inline comment documenting the audit trail.
 2. Mirror the bump in `deploy/contract.yaml` (`externalImages.ollama.image`) and `deploy/compose.deploy.yml` (`services.ollama.image`).
 3. Update the strip target in `tests/integration/ollama_config_contract_test.go::AdversarialMissingTestImage` from `0.6` to `0.23.2`.
-4. Regenerate env files: `for env in dev test home-lab; do ./smackerel.sh --env "$env" config generate; done`.
+4. Regenerate env files: `for env in dev test self-hosted; do ./smackerel.sh --env "$env" config generate; done`.
 5. Create `tests/integration/ollama_image_availability_test.go` (build tag `integration`) implementing `TestOllamaImagePinIsPublished_LiveTag` (reads `OLLAMA_IMAGE` from `config/generated/test.env`, asserts HTTP 200 from Docker Hub Tags API) and `TestOllamaImagePinIsPublished_AdversarialYankedTag` (asserts HTTP 404 against synthetic `0.6` input). NO `t.Skip()` calls.
 
 ### Test Plan

@@ -5,7 +5,7 @@ extraction path (BUG-026-007 — the latency half of redteam F2).
 emits a hidden ``<think>…</think>`` reasoning block BEFORE its answer. On the
 structured-JSON *extraction* calls — where the output is a machine-parsed JSON
 object and the prose reasoning is irrelevant — that block is pure latency. Live
-on evo-x2 (shared daemon, warm qwen3) it cost >150s with thinking on vs ~1s of
+on <deploy-host> (shared daemon, warm qwen3) it cost >150s with thinking on vs ~1s of
 compute with thinking disabled, at IDENTICAL accuracy. That is ≫ the 30s
 ``DOMAIN_EXTRACTION_TIMEOUT`` in ``domain.py`` (so domain extraction silently
 timed out into the degraded fallback) and it prefixes the JSON callers with a
@@ -13,7 +13,7 @@ timed out into the degraded fallback) and it prefixes the JSON callers with a
 
 Mechanism — the NATIVE Ollama ``think`` request field, NOT the ``/no_think``
 prompt-injection token the FIRST fix used. qwen3's Ollama chat template IGNORES
-a ``/no_think`` string in the messages (measured live on evo-x2: ``/no_think``
+a ``/no_think`` string in the messages (measured live on <deploy-host>: ``/no_think``
 -> thinking STILL on, >150s, invalid-JSON output); it honors ONLY the native
 ``think`` field on the ``/api/chat`` request body (native ``think=False`` ->
 thinking OFF, ~1s compute, valid JSON).

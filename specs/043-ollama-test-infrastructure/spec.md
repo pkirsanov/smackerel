@@ -46,7 +46,7 @@ spec. It also closes the same dependency that blocks
 Scope 9 cross-spec impact noted in MIT-037-OLLAMA-001).
 
 This spec deliberately limits itself to the **test** boundary. It does not
-choose, change, or deploy the production / home-lab Ollama model. It does not
+choose, change, or deploy the production / self-hosted Ollama model. It does not
 enable the `ollama` profile in `docker-compose.yml` for the dev stack. It
 adds a deterministic, small, isolated Ollama runtime for the test stack and
 exactly one canonical happy-path live-stack agent test on top of it.
@@ -76,7 +76,7 @@ bailout `t.Skip` on missing infra.
 **Hard Constraints:**
 - The test Ollama container, its model cache volume, and any host port it
   publishes MUST belong to the `smackerel-test` Compose project and MUST
-  NOT share state with the `smackerel` (dev) or `smackerel-home-lab`
+  NOT share state with the `smackerel` (dev) or `smackerel-self-hosted`
   Compose projects.
 - The model used by the happy-path test MUST be deterministic in the sense
   required by [`docs/Testing.md`](../../docs/Testing.md): the same input
@@ -123,14 +123,14 @@ the same live path, the spec has failed.
 - G3: Close MIT-037-OLLAMA-001 and unblock spec 037 Scope 9
   `tests/e2e/agent/telegram_replies_test.go` from full live verification.
 - G4: Preserve test environment isolation: no leakage between dev, test,
-  and home-lab Ollama state.
+  and self-hosted Ollama state.
 - G5: Preserve SST: every Ollama-related runtime value flows through
   `config/smackerel.yaml` and `./smackerel.sh config generate`.
 
 ## Non-Goals
 
-- **Production / home-lab Ollama**. This spec does NOT pick a production
-  model, change the home-lab Ollama deployment, or modify
+- **Production / self-hosted Ollama**. This spec does NOT pick a production
+  model, change the self-hosted Ollama deployment, or modify
   `deploy/compose.deploy.yml`'s Ollama profile gate.
 - **Dev model selection**. The dev `gemma4:26b` (and supporting models in
   `config/smackerel.yaml` lines 50–58) stay as-is. This spec does not
@@ -161,7 +161,7 @@ When a developer runs `./smackerel.sh test e2e`
 Then the test runner brings up an Ollama service inside the
    `smackerel-test` Compose project
 And that Ollama service uses a test-only volume distinct from any dev
-   or home-lab Ollama volume
+   or self-hosted Ollama volume
 And the test Ollama service becomes healthy before the agent happy-path
    test starts
 ```
@@ -287,7 +287,7 @@ And `tests/e2e/agent/telegram_replies_test.go` (spec 037 Scope 9) can be
 - **FR-OLLAMA-008** — Tearing down the test stack (`./smackerel.sh down`
   scoped to the test project, or the runner's automatic teardown after
   `./smackerel.sh test e2e`) MUST tear down the test Ollama service and
-  test-only volumes without touching the dev or home-lab Ollama volumes.
+  test-only volumes without touching the dev or self-hosted Ollama volumes.
 - **FR-OLLAMA-009** — Closing this spec MUST mark MIT-037-OLLAMA-001
   resolved in [`specs/037-llm-agent-tools/state.json`](../037-llm-agent-tools/state.json)
   with a cross-reference back to this spec, AND remove (or update) the
@@ -315,7 +315,7 @@ And `tests/e2e/agent/telegram_replies_test.go` (spec 037 Scope 9) can be
   named under the `smackerel-test-` prefix (mirroring
   `smackerel-test-postgres-data`, `smackerel-test-nats-data` in
   `config/smackerel.yaml` lines 660–665) and MUST be safe to delete
-  between runs without affecting dev or home-lab.
+  between runs without affecting dev or self-hosted.
 
 ## Acceptance Criteria
 

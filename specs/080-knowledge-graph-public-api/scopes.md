@@ -155,7 +155,7 @@ Greenfield foundation — no renames, no removals. New surfaces added:
   surface automatically through `auth.RequireScope(...)`.
 - `config/smackerel.yaml` gains `knowledge_graph_api:` block. Sole
   consumer: `internal/config/knowledge_graph_api.go` loader, exercised
-  on every boot. Generated env files (`config/generated/{dev,test,home-lab}.env`)
+  on every boot. Generated env files (`config/generated/{dev,test,self-hosted}.env`)
   emit 6 `KNOWLEDGE_GRAPH_API_*` vars verified by
   `grep -c KNOWLEDGE_GRAPH_API config/generated/dev.env` returning `6`.
 - `ScopeNameRegex` widening from `[a-z][a-z0-9]*` to `[a-z][a-z0-9-]*`
@@ -231,7 +231,7 @@ Greenfield foundation — no renames, no removals. New surfaces added:
   `grep -nE 'os\.Getenv.*KNOWLEDGE_GRAPH_API.*"[^"]+"' internal/` → 0 hits.
   Evidence: [report.md → Implement — SCOPE-080-01](report.md#implement--scope-080-01-bubblesimplement--2026-06-03).
 - [x] **D01-4 — `./smackerel.sh config generate` succeeds end-to-end:**
-  exit 0 for dev/test/home-lab; `grep -c KNOWLEDGE_GRAPH_API config/generated/{dev,test,home-lab}.env`
+  exit 0 for dev/test/self-hosted; `grep -c KNOWLEDGE_GRAPH_API config/generated/{dev,test,self-hosted}.env`
   = `6` per file.
   Evidence: [report.md → Implement — SCOPE-080-01](report.md#implement--scope-080-01-bubblesimplement--2026-06-03) test-verdict block.
 - [x] **D01-5 — Cursor codec round-trip + tamper rejection:**

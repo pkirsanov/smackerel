@@ -537,12 +537,12 @@ grep -nE 'HOST_BIND_ADDRESS:-' deploy/compose.deploy.yml
 
 ```yaml
 # Spec 045 BUG-045-001 (resolved 2026-05-16) — Default model choices fit
-# the default deploy_resources.ollama.memory = "8G" envelope. Home-lab and
+# the default deploy_resources.ollama.memory = "8G" envelope. self-hosted and
 # production operators with >= 16 GiB free for ollama may opt UP to
 # gemma4:26b / deepseek-r1:32b / gpt-oss:20b by RAISING the envelope FIRST
 # in deploy_resources.ollama.memory, THEN swapping the model fields here.
 # See docs/Operations.md "Model Envelope Sizing" for the per-service
-# envelope contract and the dev / home-lab / production trade-off matrix.
+# envelope contract and the dev / self-hosted / production trade-off matrix.
 ```
 
 ### Use Cases (Gherkin)
@@ -633,7 +633,7 @@ grep -nE '^\s*(model|ollama_model|ollama_vision_model|ollama_reasoning_model|oll
 # Expected: zero matches.
 
 grep -nE 'gemma4:26b' config/smackerel.yaml
-# Expected: matches only in (a) services.ml.model_memory_profiles entry (operators may opt UP); (b) the operator-facing comment block listing the home-lab alternative. No default-field hits.
+# Expected: matches only in (a) services.ml.model_memory_profiles entry (operators may opt UP); (b) the operator-facing comment block listing the self-hosted alternative. No default-field hits.
 
 # (2) Confirm deepseek-r1:32b and gpt-oss:20b are GONE from default fields
 grep -nE '^\s*(model|reasoning_model|fast_model):\s*"?(deepseek-r1:32b|gpt-oss:20b)' config/smackerel.yaml
@@ -723,7 +723,7 @@ grep -nE 'HOST_BIND_ADDRESS:-' deploy/compose.deploy.yml
 
 ### Files
 
-- [docs/Operations.md](../../../../docs/Operations.md) — Add new "Model Envelope Sizing" section per AC-9 covering: (a) per-service envelope contract (ollama envelope vs ml-sidecar envelope); (b) dev / home-lab / production model-selection trade-off matrix; (c) fix-path order (raise envelope FIRST in `deploy_resources.<service>.memory`, THEN change model fields); (d) cross-reference to `services.ml.model_memory_profiles` catalog for the list of measured model sizes.
+- [docs/Operations.md](../../../../docs/Operations.md) — Add new "Model Envelope Sizing" section per AC-9 covering: (a) per-service envelope contract (ollama envelope vs ml-sidecar envelope); (b) dev / self-hosted / production model-selection trade-off matrix; (c) fix-path order (raise envelope FIRST in `deploy_resources.<service>.memory`, THEN change model fields); (d) cross-reference to `services.ml.model_memory_profiles` catalog for the list of measured model sizes.
 - [specs/052-bundle-secret-injection-contract/state.json](../../../052-bundle-secret-injection-contract/state.json) — Mark concerns `C-A12`, `C-B5`, `C-B6` as RESOLVED per DD-4 (lightweight metadata-only update). For each: ADD `resolvedAt` ISO-8601 timestamp, `resolvedBy: "bubbles.implement"`, `resolutionRef: "specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-001-ml-envelope-cross-service-routing"`, `resolutionEvidence: "<commit-sha>"`. Move to `resolvedConcerns` array if `concerns` shape requires (TBD by `bubbles.implement` based on live state.json shape at implement-time HEAD).
 - [specs/052-bundle-secret-injection-contract/scopes.md](../../../052-bundle-secret-injection-contract/scopes.md) — Flip Scope-4 DoD checkboxes naming `C-A12`/`C-B5`/`C-B6` from `[ ]` to `[x]` with inline raw evidence (the AC-6 PASS output + the AC-7 healthy-stack output from THIS packet's `report.md`).
 - [specs/052-bundle-secret-injection-contract/report.md](../../../052-bundle-secret-injection-contract/report.md) — Append a Scope-4 resolution evidence section naming this packet's HEAD SHA (the post-Scope-3 commit), the AC-6 PASS evidence, and the AC-7 healthy-stack evidence.
@@ -742,7 +742,7 @@ Scope 4 has no new behavioral scenarios — it is metadata-only (docs + cross-sp
 1. **`docs/Operations.md` "Model Envelope Sizing" section.** Author the new section per AC-9. Outline:
    - **Heading:** `## Model Envelope Sizing`
    - **Subsection 1 — Per-service envelope contract:** Explain that `deploy_resources.ollama.memory` (`OLLAMA_MEMORY_LIMIT`) sizes the ollama container which loads every model referenced by `llm.*` / `agent.provider_routing.*.model` / `photos.intelligence.*_model` (except `*embed_model` and `*embedding_model`). Explain that `deploy_resources.smackerel_ml.memory` (`ML_MEMORY_LIMIT`) sizes the Python sidecar which loads `EMBEDDING_MODEL` and `PHOTOS_INTELLIGENCE_EMBED_MODEL` in-process via sentence-transformers / fastembed.
-   - **Subsection 2 — Trade-off matrix (dev / home-lab / production):** Three-column table — `dev` (`OLLAMA_MEMORY_LIMIT=8G`, default models per Scope 3); `home-lab` (operator may raise to 16-32G and opt UP to `gemma4:26b` etc.); `production` (tuned per workload).
+   - **Subsection 2 — Trade-off matrix (dev / self-hosted / production):** Three-column table — `dev` (`OLLAMA_MEMORY_LIMIT=8G`, default models per Scope 3); `self-hosted` (operator may raise to 16-32G and opt UP to `gemma4:26b` etc.); `production` (tuned per workload).
    - **Subsection 3 — Fix-path order:** Numbered list — (1) decide the model you want; (2) check its profile in `services.ml.model_memory_profiles` (or add a measured entry if missing); (3) raise `deploy_resources.<service>.memory` in the deploy overlay if the model's profile exceeds the current envelope; (4) THEN change the model field in `config/smackerel.yaml` (or overlay); (5) run `./smackerel.sh config generate --env <env>` to confirm the pre-emit check passes.
    - **Subsection 4 — Cross-references:** Link to `services.ml.model_memory_profiles` catalog (file:line), `spec 045 FR-045-002` (the contract), `BUG-045-001` (this bug packet, for historical context), and `smackerel-no-defaults` skill.
 2. **Spec 052 close-out — state.json.** Read the live `specs/052-bundle-secret-injection-contract/state.json` at implement-time HEAD. Find `C-A12`, `C-B5`, `C-B6` entries. Apply the lightweight metadata-only update per DD-4. Use `multi_replace_string_in_file` per concern entry (one replacement each); do NOT rewrite the whole file via shell.
@@ -857,7 +857,7 @@ The sweep DoD item (§4.L below) commits to the zero-stale-reference outcome ver
   - **Phase:** implement
   - **Claim Source:** executed
   - **Evidence:** `specs/052-bundle-secret-injection-contract/state.json` lines 339-450 — each of C-A12 / C-B5 / C-B6 now has `status: "resolved"`, `resolvedAt: "2026-05-16T23:30:00Z"`, `resolvedBy: "BUG-045-001 Scope 3 (DD-5 default-model rebalance) at HEAD post-Scope-3"`, `resolutionRationale: "..."` populated; validated valid JSON via `python3 -c 'import json; json.load(open(...))'` (PASS). `specs/052-bundle-secret-injection-contract/scopes.md` lines 641 / 661 / 664 each have a `**RESOLVED 2026-05-16 by BUG-045-001 Scope 3 (METADATA-ONLY per DD-4):**` annotation appended after the existing `**CERTIFIED done_with_concerns 2026-05-15:**` annotation — confirmed by `grep -n 'RESOLVED 2026-05-16 by BUG-045-001 Scope 3' specs/052-bundle-secret-injection-contract/scopes.md` returning 3 matches. `specs/052-bundle-secret-injection-contract/report.md` has a new `#### Scope 4 Close-Out Addendum — 2026-05-16 — BUG-045-001 Cross-Spec Resolution` evidence block appended to its existing Scope 4 section (before the `---` divider, BEFORE the `## Code Diff Evidence` header) — no other section of report.md was touched (per Change Boundary).
-- [x] **§4.B — `docs/Operations.md` "Model Envelope Sizing" section exists.** Covers per-service envelope contract, dev/home-lab/production trade-off matrix, fix-path order, and cross-references. (Closes AC-9.)
+- [x] **§4.B — `docs/Operations.md` "Model Envelope Sizing" section exists.** Covers per-service envelope contract, dev/self-hosted/production trade-off matrix, fix-path order, and cross-references. (Closes AC-9.)
   - **Phase:** implement
   - **Claim Source:** executed
   - **Evidence:** `grep -n 'Model Envelope Sizing' docs/Operations.md` returns `2165:## Model Envelope Sizing (Spec 045 / BUG-045-001)` (exit 0). The new section appended at line 2165 covers: (a) per-service envelope table (ollama 8 GiB @ 15 slots vs ml-sidecar 3 GiB @ 2 slots); (b) "Why two envelopes" rationale citing `validateModelEnvelopes` two-bucket refactor; (c) DD-5 default-model rebalance table (12 swaps with resident sizes); (d) `model_memory_profiles` catalog table for `gemma3:4b` + `deepseek-r1:7b` with `https://ollama.com/library/*` URLs; (e) operator opt-up path via overlay; (f) pre-emit gate (`cmd/config-validate` + atomic-promote 5-step sequence) as structural safety net.
@@ -937,7 +937,7 @@ bash .github/bubbles/scripts/artifact-lint.sh specs/045-deploy-resource-filesyst
 timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/045-deploy-resource-filesystem-hardening
 ```
 
-**Expected outcome.** Every command exits 0. The chronic CI integration failure (10 consecutive FAILURE runs on `main` at HEAD `de49b2f9`) is resolved at root. The spec 052 home-lab canary path is unblocked. Out-of-the-box `./smackerel.sh up` succeeds on default config. The bug is ready for `bubbles.test` adversarial regression coverage check → `bubbles.validate` certification → `bubbles.audit` independent re-check.
+**Expected outcome.** Every command exits 0. The chronic CI integration failure (10 consecutive FAILURE runs on `main` at HEAD `de49b2f9`) is resolved at root. The spec 052 self-hosted canary path is unblocked. Out-of-the-box `./smackerel.sh up` succeeds on default config. The bug is ready for `bubbles.test` adversarial regression coverage check → `bubbles.validate` certification → `bubbles.audit` independent re-check.
 
 ---
 

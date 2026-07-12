@@ -236,9 +236,9 @@ environments:
   test:
     prometheus_host_port: 47005
     prometheus_volume_name: smackerel-test-prometheus-data
-  home-lab:
+  self-hosted:
     prometheus_host_port: 43005
-    prometheus_volume_name: smackerel-home-lab-prometheus-data
+    prometheus_volume_name: smackerel-self-hosted-prometheus-data
 ```
 
 `scripts/commands/config.sh` will:

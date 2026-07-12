@@ -62,7 +62,7 @@ owner's diagnosis — confirmed it).
 - `config/smackerel.yaml` `assistant.open_knowledge.*`: `llm_model_id`
   (`gemma3:4b` dev), `max_iterations: 6`, `per_query_token_budget:
   128000`, `llm_timeout_ms: 600000`, … each REQUIRED + fail-loud.
-- Home-lab override: `environments.<env>.assistant_open_knowledge_llm_model_id:
+- self-hosted override: `environments.<env>.assistant_open_knowledge_llm_model_id:
   "gemma4:26b"` (config.sh resolves the env override, else the base key).
 - `internal/config/openknowledge.go`: `OpenKnowledgeConfig` struct +
   `LoadOpenKnowledge` (every `ASSISTANT_OPEN_KNOWLEDGE_*` env REQUIRED
@@ -78,13 +78,13 @@ owner's diagnosis — confirmed it).
     `model_memory_profiles` MiB must fit `OLLAMA_MEMORY_LIMIT`. The ref
     list does NOT include the open-knowledge model; deepseek-r1:7b IS
     referenced via `OLLAMA_REASONING_MODEL` (4864 MiB, already
-    validated against the 28672 MiB home-lab envelope).
+    validated against the 28672 MiB self-hosted envelope).
   - **Concurrent interactive working-set check** — sums ONLY
     `LLM_MODEL/OLLAMA_MODEL/OLLAMA_VISION_MODEL/AGENT_PROVIDER_DEFAULT/FAST/VISION`
     when keep-alive is resident. The open-knowledge model and the
     synthesis model are on-demand specialists, explicitly NOT summed.
 - **Consequence:** adding `synthesis_model_id = deepseek-r1:7b` on
-  home-lab does NOT trip either check. No `ollama_memory_limit` change
+  self-hosted does NOT trip either check. No `ollama_memory_limit` change
   is required. `model_memory_profiles` already has `deepseek-r1:7b`
   (4864), `deepseek-r1:32b` (22528), `gemma3:4b` (4096), `gemma4:26b`
   (18432). Co-residence of gemma4:26b + deepseek-r1:7b = 23296 MiB ≤
@@ -105,7 +105,7 @@ scaffolding, not prompt liberalization.
 ### D1 (RECOMMENDED DEFAULT) — Axis A (split reasoning model on synthesis) + Axis C (structured forced-final + bounded retry)
 
 **What:** Keep the strong tool-caller (gemma) for the GATHER turns.
-Swap to a reasoning model (deepseek-r1:7b home-lab) ONLY on the
+Swap to a reasoning model (deepseek-r1:7b self-hosted) ONLY on the
 tools-stripped forced-final synthesis turn (and its retry). Give that
 turn a structured "here is the gathered evidence — write the verdict
 now" prompt, and retry once with an even stronger prompt if the first
@@ -150,7 +150,7 @@ modes, new budget accounting, and new tests). The owner asked for the
 SMALLEST combination first. D1 delivers the structured-evidence benefit
 on the synthesis turn and the capability benefit via the reasoning
 model, which is the cheaper bet. If D1 empirically still fails on
-home-lab (the `bubbles.devops` live re-verify is the judge), Axis B is
+self-hosted (the `bubbles.devops` live re-verify is the judge), Axis B is
 the documented next lever — recorded as finding **F-AXISB** so it is
 not lost.
 
@@ -167,7 +167,7 @@ synthesis turn), not as the standalone lever. On dev (where
 degenerates to Axis C alone — acceptable because dev is not the proof
 environment and has no Ollama daemon.
 
-### D4 — Axis A variant rejected: deepseek-r1:32b as the home-lab default
+### D4 — Axis A variant rejected: deepseek-r1:32b as the self-hosted default
 
 **Why not the default:** deepseek-r1:32b (22528 MiB) co-resident with
 gemma4:26b (18432) = 40960 MiB ≫ 28672 envelope; it would require
@@ -190,7 +190,7 @@ Add under `assistant.open_knowledge`:
 - `synthesis_retry_budget: 1` — REQUIRED `>= 0` when enabled. Number of
   stronger-prompt synthesis retries before honest salvage. `0` =
   spec-084 timing.
-Add to the home-lab `environments.<env>` override block (right after
+Add to the self-hosted `environments.<env>` override block (right after
 `assistant_open_knowledge_llm_model_id: "gemma4:26b"`):
 - `assistant_open_knowledge_synthesis_model_id: "deepseek-r1:7b"`.
 
@@ -284,7 +284,7 @@ WriteTimeout = (max_iterations + synthesis_retry_budget) × llm_timeout_ms
 
 The synthesis model runs on ONLY the final turn (+ retries) and is
 bounded by the same `llm_timeout_ms` (600s), so the envelope stays
-honest. Realistic home-lab (gemma4:26b gather + deepseek-r1:7b
+honest. Realistic self-hosted (gemma4:26b gather + deepseek-r1:7b
 synthesis, GPU-resident) turns complete in ~40–90s; the 4200s ceiling
 is the pathological-slow-CPU backstop. If an operator later raises
 `max_iterations` or `synthesis_retry_budget`, `WriteTimeout` MUST be
@@ -312,14 +312,14 @@ recomputed (documented in `main.go` + `docs/Operations.md`).
   llm_timeout_ms`. Documented in `main.go` + `docs/Operations.md`.
 - **F-AXISB** — Axis B (deterministic decompose/gather/reconcile/
   synthesize orchestration) is the documented next lever if D1
-  empirically fails on the home-lab live re-verify. Not implemented in
+  empirically fails on the self-hosted live re-verify. Not implemented in
   this spec (smallest-combination directive).
 - **F-OPTUP** — deepseek-r1:32b is the operator opt-up for maximum
-  synthesis quality on home-lab; requires raising `ollama_memory_limit`
+  synthesis quality on self-hosted; requires raising `ollama_memory_limit`
   first (gemma4:26b 18432 + deepseek-r1:32b 22528 = 40960 > 28672).
   deepseek-r1:7b is the envelope-safe default.
 - **F-PROOF** — The decisive "does it synthesize the pomegranate
-  verdict?" proof is model+GPU-dependent and runs on home-lab via a
+  verdict?" proof is model+GPU-dependent and runs on self-hosted via a
   separate `bubbles.devops` dispatch. In-repo tests prove only that the
   synthesis/`<think>`/retry/trust mechanisms fire correctly.
 - **F-ENV-083** — Whole-working-tree guards

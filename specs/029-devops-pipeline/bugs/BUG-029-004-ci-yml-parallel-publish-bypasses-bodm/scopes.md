@@ -50,7 +50,7 @@
 
 **Owner:** `bubbles.implement` for source edit + new test authoring; `bubbles.test` for adversarial RED→GREEN evidence; `bubbles.validate` for certification; `bubbles.audit` only if `bubbles.validate` flags reroute / lockdown / DoD evidence drift.
 
-**Depends on:** None (independent packet under parent workflow `home-lab-readiness-rescan-external-2026-05-15`; sister packets BUG-020-004 / BUG-042-006 / BUG-029-003 already shipped).
+**Depends on:** None (independent packet under parent workflow `self-hosted-readiness-rescan-external-2026-05-15`; sister packets BUG-020-004 / BUG-042-006 / BUG-029-003 already shipped).
 
 ### Gherkin Scenarios (Regression Tests — FROZEN by `scenario-manifest.json`)
 

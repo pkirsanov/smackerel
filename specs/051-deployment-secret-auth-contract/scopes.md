@@ -176,7 +176,7 @@ Excluded surfaces (untouched by Scope 1 — enforced by review):
 
 ```gherkin
 Scenario: SCN-051-S02 Default database password is rejected for deployment
-  Given TARGET_ENV=home-lab
+  Given TARGET_ENV=self-hosted
   And infrastructure.postgres.password is the local-dev default "smackerel"
   When the SST loader (scripts/commands/config.sh) runs
   Then config generation fails before any env file is written
@@ -186,19 +186,19 @@ Scenario: SCN-051-S02 Default database password is rejected for deployment
 
 ### Implementation Plan
 
-1. Add the SST-layer dev-default-rejection check to [scripts/commands/config.sh](../../scripts/commands/config.sh) immediately after `POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"`. When `TARGET_ENV` is `home-lab` (or any other non-dev/test target), reject the value if it matches a known dev default. Echo the KEY name in stderr; never echo the VALUE.
+1. Add the SST-layer dev-default-rejection check to [scripts/commands/config.sh](../../scripts/commands/config.sh) immediately after `POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"`. When `TARGET_ENV` is `self-hosted` (or any other non-dev/test target), reject the value if it matches a known dev default. Echo the KEY name in stderr; never echo the VALUE.
 2. Create [internal/config/secrets.go](../../internal/config/secrets.go) (NEW) with the canonical `DevDBPasswords` slice. Export `IsDevDBPassword(pw string) bool`.
 3. Add the runtime-layer dev-default-rejection check to `Validate()` in [internal/config/config.go](../../internal/config/config.go). When `c.Environment == "production"`, parse the `DATABASE_URL` password component; if it matches a known dev default, fail loud with a clear error that names `DATABASE_URL`/`POSTGRES_PASSWORD` without echoing the value.
 
 ### Shared Infrastructure Impact Sweep
 
-This scope modifies the shared SST loader (`scripts/commands/config.sh`) which is the bootstrap entry for every environment build (dev, test, home-lab). Downstream contract surfaces enumerated:
+This scope modifies the shared SST loader (`scripts/commands/config.sh`) which is the bootstrap entry for every environment build (dev, test, self-hosted). Downstream contract surfaces enumerated:
 
 - `scripts/commands/config.sh` (the SST loader itself — central bootstrap helper).
 - `config/smackerel.yaml` (`infrastructure.postgres.password` is the SST source of truth).
 - `internal/config/config.go::Validate` (runtime-side rejection mirrors the SST-side rejection).
 - `internal/config/secrets.go` (NEW — single Go-side source of truth for `DevDBPasswords`).
-- All `./smackerel.sh up` / `./smackerel.sh build` flows: dev and test paths must continue to accept the dev default; only `home-lab` and runtime production must reject it.
+- All `./smackerel.sh up` / `./smackerel.sh build` flows: dev and test paths must continue to accept the dev default; only `self-hosted` and runtime production must reject it.
 
 Rollback: revert the `scripts/commands/config.sh` rejection block AND the `Validate()` rejection block; delete `internal/config/secrets.go`. Postgres data is not touched. Re-run `./smackerel.sh config generate --env dev` to confirm dev path still works.
 
@@ -224,8 +224,8 @@ Excluded surfaces (untouched by Scope 2):
 | ID | Test Type | Location | Scenario | Assertion |
 |----|-----------|----------|----------|-----------|
 | T-051-003 | unit/config | [internal/config/validate_test.go](../../internal/config/validate_test.go) → NEW `TestValidate_RejectsDevDBPassword_Production` | SCN-051-S02 | A `DATABASE_URL` whose password component matches a known dev default produces an error that names `POSTGRES_PASSWORD` and does NOT echo the value when `SMACKEREL_ENV=production`. The same input passes in dev/test. |
-| T-051-006 | shell | [scripts/commands/config_secret_rejection_test.sh](../../scripts/commands/config_secret_rejection_test.sh) (NEW) executed from [internal/config/sst_loader_test.go](../../internal/config/sst_loader_test.go) | SCN-051-S02 | SST loader exits non-zero for `TARGET_ENV=home-lab` with the dev-default Postgres value; stderr names the offending key without echoing the value. |
-| T-051-006-canary | Regression E2E (shell canary) | [scripts/commands/config_secret_rejection_test.sh](../../scripts/commands/config_secret_rejection_test.sh) executed from [internal/config/sst_loader_test.go](../../internal/config/sst_loader_test.go) | SCN-051-S02 | Independent canary: SST loader still produces a clean dev env file with the same dev-default value when `TARGET_ENV=dev` (no regression of the dev path before the home-lab assertion fires). |
+| T-051-006 | shell | [scripts/commands/config_secret_rejection_test.sh](../../scripts/commands/config_secret_rejection_test.sh) (NEW) executed from [internal/config/sst_loader_test.go](../../internal/config/sst_loader_test.go) | SCN-051-S02 | SST loader exits non-zero for `TARGET_ENV=self-hosted` with the dev-default Postgres value; stderr names the offending key without echoing the value. |
+| T-051-006-canary | Regression E2E (shell canary) | [scripts/commands/config_secret_rejection_test.sh](../../scripts/commands/config_secret_rejection_test.sh) executed from [internal/config/sst_loader_test.go](../../internal/config/sst_loader_test.go) | SCN-051-S02 | Independent canary: SST loader still produces a clean dev env file with the same dev-default value when `TARGET_ENV=dev` (no regression of the dev path before the self-hosted assertion fires). |
 
 ### Definition of Done
 
@@ -245,12 +245,12 @@ Excluded surfaces (untouched by Scope 2):
     --- PASS: TestValidate_AcceptsDevDBPasswordInDev (0.00s)
     PASS
     ```
-- [x] SCN-051-S02: T-051-006 passes and proves SST loader rejection for `TARGET_ENV=home-lab`.
+- [x] SCN-051-S02: T-051-006 passes and proves SST loader rejection for `TARGET_ENV=self-hosted`.
   - Evidence:
     ```text
     $ bash scripts/commands/config_secret_rejection_test.sh
-    --- Sub-test 1: SST loader refuses dev-default password for home-lab ---
-    PASS: SST loader refused TARGET_ENV=home-lab with exit code 1
+    --- Sub-test 1: SST loader refuses dev-default password for self-hosted ---
+    PASS: SST loader refused TARGET_ENV=self-hosted with exit code 1
     PASS: SST loader stderr names infrastructure.postgres.password
     PASS: SST loader stderr references spec 051
     ```
@@ -266,11 +266,11 @@ Excluded surfaces (untouched by Scope 2):
     internal/config/secrets.go:18:var DevDBPasswords = []string{
     scripts/commands/config.sh:367:# DevDBPasswords slice. Keep the two lists in sync.
     ```
-- [x] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior in this scope is added/maintained — Scope 2 is exercised by the shell-level canary T-051-006-canary which proves the dev path remains functional plus the home-lab rejection assertion in T-051-006; the unit-tier T-051-003 acts as the runtime-side regression. Together they cover the SST-loader and runtime-validate boundaries that SCN-051-S02 spans (no UI surface).
+- [x] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior in this scope is added/maintained — Scope 2 is exercised by the shell-level canary T-051-006-canary which proves the dev path remains functional plus the self-hosted rejection assertion in T-051-006; the unit-tier T-051-003 acts as the runtime-side regression. Together they cover the SST-loader and runtime-validate boundaries that SCN-051-S02 spans (no UI surface).
   - Evidence:
     ```text
-    $ go test ./internal/config/ -run 'TestSSTLoader_RejectsDevPostgresPassword_HomeLab|TestValidate_RejectsDevDBPassword_Production|TestValidate_AcceptsDevDBPasswordInDev' -v 2>&1 | grep -E '^(--- PASS|PASS$)'
-    --- PASS: TestSSTLoader_RejectsDevPostgresPassword_HomeLab (2.66s)
+    $ go test ./internal/config/ -run 'TestSSTLoader_RejectsDevPostgresPassword_SelfHosted|TestValidate_RejectsDevDBPassword_Production|TestValidate_AcceptsDevDBPasswordInDev' -v 2>&1 | grep -E '^(--- PASS|PASS$)'
+    --- PASS: TestSSTLoader_RejectsDevPostgresPassword_SelfHosted (2.66s)
     --- PASS: TestValidate_AcceptsDevDBPasswordInDev (0.00s)
     --- PASS: TestValidate_RejectsDevDBPassword_Production (0.00s)
     PASS
@@ -282,7 +282,7 @@ Excluded surfaces (untouched by Scope 2):
     PASS
     ok      github.com/smackerel/smackerel/internal/config  3.082s
     ```
-- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns — T-051-006-canary asserts the dev SST path is still green before the home-lab rejection assertion runs.
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns — T-051-006-canary asserts the dev SST path is still green before the self-hosted rejection assertion runs.
   - Evidence:
     ```text
     --- Sub-test 2 (canary): SST loader still works for TARGET_ENV=dev ---
@@ -290,7 +290,7 @@ Excluded surfaces (untouched by Scope 2):
     PASS: canary produced config/generated/dev.env
     ```
 - [x] Rollback or restore path for shared infrastructure changes is documented and verified — Shared Infrastructure Impact Sweep above enumerates the revert recipe; T-051-006-canary acts as the rollback-readiness probe (any breakage in the dev SST path is detected immediately).
-  - Evidence: the dev-path canary from T-051-006 passed (above). Reverting Scope 2 by deleting the SST-loader case block + the `Validate()` runtime check + the `internal/config/secrets.go` file would leave the dev SST path completely unchanged because the case block only fires for `TARGET_ENV=home-lab` and the runtime check only fires for `c.Environment == "production"`.
+  - Evidence: the dev-path canary from T-051-006 passed (above). Reverting Scope 2 by deleting the SST-loader case block + the `Validate()` runtime check + the `internal/config/secrets.go` file would leave the dev SST path completely unchanged because the case block only fires for `TARGET_ENV=self-hosted` and the runtime check only fires for `c.Environment == "production"`.
 - [x] Change Boundary is respected and zero excluded file families were changed — verified by `git diff --name-only HEAD~N HEAD` showing only the allowed file families enumerated in the Change Boundary (Scope 2) section above; no `loadAuthConfig` co-edits, no `internal/auth/**` changes, no docs changes, no Compose / Postgres image changes.
   - Evidence:
     ```text

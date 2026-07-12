@@ -31,7 +31,7 @@ wired). The four Tier-1 closeout gates (`format --check`, `check`,
 `artifact-lint`, spec-096 `test unit --go`) are all EXIT 0. The spec STAYS
 `in_progress`: the live-stack legs — `tests/integration/...`, `e2e-api`,
 the `e2e-ui` triad walks, the migration-062 live-apply, and live
-hosted-provider reachability — are home-lab-gated (C7) and are the sole
+hosted-provider reachability — are self-hosted-gated (C7) and are the sole
 documented blocker to full-delivery `done`. They are NOT fabricated here.
 Per-scope detail + evidence below.
 
@@ -306,7 +306,7 @@ Artifact lint FAILED with 1 issue(s).
   pre-existing unrelated modifications from concurrent sessions, and one
   untracked foreign unformatted file. Before any push, the full unit suite +
   `internal/deploy/bundle_secret_contract_test.go` (Go↔shell↔bundle
-  secret-keys parity, a long home-lab bundle build NOT run this turn) should
+  secret-keys parity, a long self-hosted bundle build NOT run this turn) should
   be run to confirm the 3-mirror addition holds end-to-end.
 
 ---
@@ -340,7 +340,7 @@ Re-Run. SCOPE-01 has NO live-stack leg in its DoD, so it carries no
 deferred residual and is marked **Done**. (The feature 096 spec as a whole
 stays `in_progress`: the live-stack legs of the downstream scopes —
 `tests/integration/...`, `e2e-api`, `e2e-ui`, migration-062 live-apply,
-live hosted-provider reachability — remain home-lab-gated and are the sole
+live hosted-provider reachability — remain self-hosted-gated and are the sole
 documented blocker to full-delivery `done`.)
 
 ---
@@ -794,7 +794,7 @@ Starlette/httpx deprecation, unrelated to this scope.)
 | D03-T2-4 fail-loud, never-fallback-to-Ollama adversarial | ✅ | E3 (`test_hosted_missing_api_key_typed_error_no_ollama_substitution`) + E1 (`TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096`) |
 | D03-T2-5 provider-qualified attribution | ✅ | E2 (`TestAttribution_ProviderQualified_Spec096`) |
 | D03-T2-6 each adversarial test non-tautological with captured RED-before; no bailout early-returns | ✅ | E4 (captured RED-before: 3 fail with mutations, GREEN after revert) |
-| D03-T2-7 all unit + integration tests pass, no skips; live `e2e-api` handed to home-lab dispatch | ◐ partial | unit leg done (E1–E3, no skips); the `integration` (`TestAsk_HostedConnection_ProviderAware_Spec096`) + `e2e-api` (`TestAsk_HostedAnswer_AttributedToProviderModel_Spec096`) legs are live-stack — DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev |
+| D03-T2-7 all unit + integration tests pass, no skips; live `e2e-api` handed to self-hosted dispatch | ◐ partial | unit leg done (E1–E3, no skips); the `integration` (`TestAsk_HostedConnection_ProviderAware_Spec096`) + `e2e-api` (`TestAsk_HostedAnswer_AttributedToProviderModel_Spec096`) legs are live-stack — DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev |
 
 ### Live-stack legs deferred to clean-stack run
 
@@ -808,10 +808,10 @@ run this turn:
   here).
 - `e2e-api`:
   `tests/e2e/agent/openknowledge_e2e_test.go::TestAsk_HostedAnswer_AttributedToProviderModel_Spec096`
-  (needs real hosted-provider credentials + reachability; home-lab dispatch).
+  (needs real hosted-provider credentials + reachability; self-hosted dispatch).
 
 These depend on real services / credentials and the shared test stack (under
-concurrent load on this host). They are routed to the home-lab `bubbles.devops`
+concurrent load on this host). They are routed to the self-hosted `bubbles.devops`
 dispatch, not fabricated as passing here.
 
 ### Findings for downstream scopes
@@ -1037,7 +1037,7 @@ picker introduced — D04-T2-3).
 | D04-T2-4 fail-loud discovery SST (G028) | ✅ | E1 (`…FailLoudOnNonPositiveSSTBounds_Spec096`: zero/negative ttl + timeout all fail loud); no hardcoded TTL/timeout default in `aggregator.go` |
 | D04-T2-5 canonicalization round-trip + off-catalog rejection | ✅ | E1 (`…SplitOnFirstSlash_RoundTrip`, `…BareOllamaIdNormalized`, `…OffCatalogRefused_TypedRejection`) — bare-Ollama `gemma3:4b` control validates (089 selections keep working) |
 | D04-T2-6 each adversarial test non-tautological with captured RED-before; no bailout early-returns | ✅ | E2 (captured RED-before: both adversarial tests fail with mutations, GREEN after revert) |
-| D04-T2-7 all unit + integration pass, no skips; live `e2e-api` handed to home-lab dispatch | ◐ partial | unit leg done (E1, no skips); the `integration` (`TestDiscovery_OneProviderDown_CatalogStillServes_Spec096`) + SCN-096-D04 `e2e-api` legs are live-stack — DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev |
+| D04-T2-7 all unit + integration pass, no skips; live `e2e-api` handed to self-hosted dispatch | ◐ partial | unit leg done (E1, no skips); the `integration` (`TestDiscovery_OneProviderDown_CatalogStillServes_Spec096`) + SCN-096-D04 `e2e-api` legs are live-stack — DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev |
 
 ### Live-stack legs deferred to clean-stack run
 
@@ -1051,7 +1051,7 @@ turn:
   graceful-degradation test already proves the down-provider contract in
   isolation.
 - `e2e-api` (SCN-096-D04): the live off-catalog `/ask` selection-path rejection
-  runs in the home-lab dispatch via the SCOPE-07 selection-surface e2e
+  runs in the self-hosted dispatch via the SCOPE-07 selection-surface e2e
   (`tests/e2e/agent/openknowledge_e2e_test.go`), model/Ollama-dependent — NOT
   marked passing from dev.
 
@@ -1394,7 +1394,7 @@ closeout gates are routed to the orchestrator/owner — SCOPE-05 is held at
 PWA triad — `model-connections.html` / `model-connection-add.html` /
 `model-connection-detail.html` — is a SEPARATE follow-up frontend dispatch, and
 the live `integration` + `e2e-api` legs are deferred to the clean-stack /
-home-lab `bubbles.devops` dispatch (C7)).
+self-hosted `bubbles.devops` dispatch (C7)).
 **Executed by:** `bubbles.implement` (parent-expanded full-delivery).
 **Scenarios covered (backend, unit):** SCN-096-W01/W02/W03/W04 (the unit halves
 — write-only redaction, truthful typed test, 409 enable-guard, 404 closed-set,
@@ -1555,7 +1555,7 @@ the cleartext never appears in the response body.)
 ?? internal/api/model_connections_operator_gate_test.go                 (SCN-096-W04 unit: OperatorGate 403/401 ADVERSARIAL + fail-loud guard)
 ?? internal/api/model_connections_probe.go                              (production HTTPConnectionProbe; truthful typed reachability/auth-class)
 ?? tests/integration/model_connections_enable_disable_test.go           (//go:build integration; SCN-096-W03 live leg — env-gated t.Skip, DEFERRED clean-stack; t.Fatal guard prevents green-painting)
-?? tests/e2e/admin/model_connections_e2e_test.go                        (//go:build e2e; SCN-096-W01/W02/W04 live legs — env-gated t.Skip, DEFERRED home-lab; t.Fatal guards prevent green-painting)
+?? tests/e2e/admin/model_connections_e2e_test.go                        (//go:build e2e; SCN-096-W01/W02/W04 live legs — env-gated t.Skip, DEFERRED self-hosted; t.Fatal guards prevent green-painting)
 === SCOPE-06 EDITED ===
  M config/smackerel.yaml                                                (infrastructure.operator_user_ids: [] — empty default, No Env-Specific Content)
  M scripts/commands/config.sh                                           (OPERATOR_USER_IDS read [YAML list→CSV] + emit, mirrors trusted_proxies)
@@ -1581,7 +1581,7 @@ the cleartext never appears in the response body.)
 | D06-T2-3 truthful test, never false success | [x] | E1 FailedTest_TypedError + E2 RED-before |
 | D06-T2-4 enable 409-guard + effective-enabled single gate | [ ] | UNIT proven (EnableUntested_Blocked409 + EffectiveEnabled_SingleGate); the live `TestEnableDisable_CatalogMembershipFollows` integration leg is DEFERRED (clean stack, C7) |
 | D06-T2-5 closed-set 404 + per-kind secret fields | [x] | E1 UnknownSlotRejected404 + PerKindSecretFields |
-| D06-T2-6 live-stack authenticity + C7 deferral | [ ] | the `integration` + 3 `e2e-api` legs are DEFERRED to the home-lab `bubbles.devops` dispatch — NOT marked passing from dev; the manifest-named stubs EXIST (`tests/integration/model_connections_enable_disable_test.go`, `tests/e2e/admin/model_connections_e2e_test.go`) as honest env-gated `t.Skip` + `t.Fatal`-guarded scaffolds (compile-checked under their build tags), never green-painted |
+| D06-T2-6 live-stack authenticity + C7 deferral | [ ] | the `integration` + 3 `e2e-api` legs are DEFERRED to the self-hosted `bubbles.devops` dispatch — NOT marked passing from dev; the manifest-named stubs EXIST (`tests/integration/model_connections_enable_disable_test.go`, `tests/e2e/admin/model_connections_e2e_test.go`) as honest env-gated `t.Skip` + `t.Fatal`-guarded scaffolds (compile-checked under their build tags), never green-painted |
 | D06-T2-7 adversarial non-tautological + RED-before | [x] | E2 (3 adversarial tests bite, then reverted) |
 | D06-T2-8 all unit + integration pass, no skips | [ ] | all UNIT pass (E1); `integration` + `e2e-api` legs DEFERRED (honest env-gated stubs, compile-checked, `t.Skip` until the live fixture seeds) |
 
@@ -1777,7 +1777,7 @@ live `integration`/`e2e-api`/`e2e-ui` legs still pending).
 **Status:** in_progress (the unified selection surfaces + 088/089 parity are
 implemented and unit-GREEN; the `check`/`format`/`artifact-lint` closeout gates
 and the live cross-surface `e2e-api` parity legs are DEFERRED — the former to the
-orchestrator closeout, the latter to the home-lab `bubbles.devops` dispatch C7).
+orchestrator closeout, the latter to the self-hosted `bubbles.devops` dispatch C7).
 **Executed by:** `bubbles.implement` (parent-expanded full-delivery).
 **Scenarios:** SCN-096-D02, SCN-096-D03, SCN-096-D05, SCN-096-G06.
 **Decisions resolved here:** R2 (additive `GET /v1/agent/model` enrichment
@@ -1919,7 +1919,7 @@ The SCOPE-07 `e2e-api` rows
 `TestWebTelegramModelParity_Spec096`,
 `TestAsk_StickyHostedSelectionPersistsAcrossTurns_Spec096`,
 `TestForkPrecedenceParity_MultiProvider_Spec096`) need a running stack with REAL
-hosted models and are handed to the home-lab `bubbles.devops` dispatch (C7),
+hosted models and are handed to the self-hosted `bubbles.devops` dispatch (C7),
 NOT marked passing from dev. The live discovery-aggregator wiring (cmd/core
 installing `agenttool.SetModelCatalogProvider`) is the deferred ACTIVATION:
 the SCOPE-07 unit tests inject a fake catalog/aggregator; the surfaces fall back
@@ -1940,7 +1940,7 @@ not-run** (deferred; honest).
 | D07-T2-3 R3 non-tool-capable gather (adversarial) | [x] | `TestParity_NonToolCapableGatherShownDisabled_RejectedFailLoud_Spec096` GREEN (with tool-capable CONTROL); RED-before E1 |
 | D07-T2-4 combined provider-grouped catalog | [x] | `TestModelPicker_TelegramCombinedProviderGroupedList_Spec096` + `…UnreachableShownDisabledOnlyReachableNumbered_Spec096` GREEN; RED-before E1 |
 | D07-T2-5 selection persistence + precedence (089 contract) | [x] | `TestAgentModel_StickyHostedPersistsPrecedence_Spec096` GREEN (sticky persists, per-request beats sticky one-shot, store byte-for-byte) |
-| D07-T2-6 live-stack parity + C7 deferral | [ ] | the 4 `e2e-api` rows are handed to the home-lab dispatch (C7), NOT marked passing from dev — E3 |
+| D07-T2-6 live-stack parity + C7 deferral | [ ] | the 4 `e2e-api` rows are handed to the self-hosted dispatch (C7), NOT marked passing from dev — E3 |
 | D07-T2-7 adversarial non-tautological + RED-before | [x] | E1 — all 4 adversarial tests captured RED-before; no bailout early-returns |
 | D07-T2-8 all unit pass, no skips; e2e-api deferred | [x] | E2 — 7/7 SCOPE-07 unit GREEN, no skips; `e2e-api` deferred (E3) |
 
@@ -1949,7 +1949,7 @@ ACTIVATION wiring in cmd/core (`agenttool.SetModelCatalogProvider` /
 `SetBudgetProvider` over the SCOPE-06 `connstore.DiscoveryConnections` feed +
 SCOPE-05 ledger) — until then both surfaces serve the byte-for-byte 089 flat
 list; (2) the SCOPE-03/04/06/07 live hosted-provider `e2e-api` legs (real
-Anthropic/OpenAI reachability, live Ollama, GPU answers) — the home-lab
+Anthropic/OpenAI reachability, live Ollama, GPU answers) — the self-hosted
 `bubbles.devops` dispatch (C7); (3) the per-scope `check`/`format`/`artifact-lint`
 closeout gates + the `bubbles.validate` certification. SCOPE-07 stays
 `in_progress` (the code + unit parity GREEN; the closeout gates + live legs +
@@ -2074,7 +2074,7 @@ vault-persist GREEN vs real Postgres).
 ### Evidence F5 — two live legs remain HONESTLY DEFERRED (skipped here)
 
 Two integration tests are live legs that need a live env + a running core /
-operator token (the home-lab live dispatch); they SKIP here and are NOT marked
+operator token (the self-hosted live dispatch); they SKIP here and are NOT marked
 passing:
 
 ```text
@@ -2092,7 +2092,7 @@ The SCOPE-02 vault-persist integration leg
 (`TestVault_PersistRoundTripTestMasterKey_Spec096`) is now GREEN against a real
 Postgres, and the full Spec096 integration suite is `PASS: go-integration` with
 core `Healthy`. The two live legs (SCOPE-06 enable/disable, SCOPE-05 paid-budget)
-stay DEFERRED to the home-lab `bubbles.devops` dispatch. No 088/089 surface was
+stay DEFERRED to the self-hosted `bubbles.devops` dispatch. No 088/089 surface was
 touched; the fix is confined to the `connvault` predicate + message + doc
 comments + design §11.2 + the new regression-guard sub-test. The spec stays
 `in_progress` (certification is a separate downstream step).
@@ -2271,7 +2271,7 @@ surfaces), `metrics` (§13 observability) — all `ok`, NO skips, the whole
 `go test ./...` run finishing OK. The deferred live-stack legs
 (`tests/integration/...`, `e2e-api`, `e2e-ui`, migration-062 live-apply,
 live hosted-provider reachability) are NOT exercised by this unit run and
-remain home-lab-gated (C7).
+remain self-hosted-gated (C7).
 
 ---
 
@@ -2284,7 +2284,7 @@ budget / dispatch-resolver wiring). The runtime is now functional: the `/model`
 picker shows the live combined catalog, the budget is wired, and `/ask` dispatches
 the selected hosted model to its provider. Only the live hosted-provider `e2e-api`
 leg (a real Anthropic `/ask` actually served by the provider) remains
-home-lab-gated (C7). `state.json` stays `in_progress` / `certification.status:
+self-hosted-gated (C7). `state.json` stays `in_progress` / `certification.status:
 in_progress`.
 **Executed by:** `bubbles.implement` (parent-expanded full-delivery).
 **Scenarios:** SCN-096-D02, SCN-096-D03, SCN-096-D05, SCN-096-G06 (runtime
@@ -2387,10 +2387,10 @@ slots are correctly filtered from the catalog) while all 6 declared connections 
 handed to the resolver. **Claim Source: executed** (real boot log; container
 Healthy).
 
-### Still deferred (home-lab, real key)
+### Still deferred (self-hosted, real key)
 
 The live HOSTED-provider `e2e-api` leg — a real Anthropic `/ask` actually SERVED by
-the provider — remains the `SPEC096_ADMIN_LIVE_*` / `e2e-api` home-lab leg (C7),
+the provider — remains the `SPEC096_ADMIN_LIVE_*` / `e2e-api` self-hosted leg (C7),
 needing a real provider key. The wiring + the 089 fallback + the refusal path are
 unit + boot validated; only the real-provider round-trip needs the key. This is NOT
 claimed passing. **Claim Source: not-run** (deferred; honest).

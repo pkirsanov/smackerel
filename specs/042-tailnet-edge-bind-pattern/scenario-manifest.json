@@ -132,7 +132,7 @@
       "scope": "02-copilot-guardrail-and-operations-doc",
       "title": "Operations doc explains infra access without host ports",
       "gherkin": {
-        "given": "the home-lab deploy compose has no host port for postgres or nats",
+        "given": "the self-hosted deploy compose has no host port for postgres or nats",
         "when": "a devops user reads docs/Operations.md",
         "then": "the document shows docker exec command shapes for psql and NATS CLI access through a generic <deploy-host> placeholder plus the host-Caddy HTTPS access flow"
       },
@@ -144,7 +144,7 @@
       "linkedTests": [
         {
           "file": "docs/Operations.md",
-          "testId": "doc-lint:devops-access-on-home-lab"
+          "testId": "doc-lint:devops-access-on-self-hosted"
         }
       ],
       "evidenceRefs": [

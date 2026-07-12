@@ -10,4 +10,4 @@
 - [x] Re-running the sync updates existing events rather than duplicating them.
 - [x] When calendar_sync is disabled, recommendations stay in the Web UI and nothing is written to the calendar.
 - [x] The Google credential is a managed secret (sops-encrypted via the deploy adapter), never committed or logged.
-- [ ] A real card-rewards event is visible on the operator's "Credit cards" Google Calendar (live home-lab proof — SCOPE-02).
+- [ ] A real card-rewards event is visible on the operator's "Credit cards" Google Calendar (live self-hosted proof — SCOPE-02).

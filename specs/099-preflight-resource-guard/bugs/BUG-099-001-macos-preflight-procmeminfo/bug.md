@@ -133,7 +133,7 @@ stack).
 
 **Why this note exists (anti-fabrication / append-only):** this bug was flipped
 to `done` on 2026-06-30, but its OS-aware refactor of the pre-flight helper left
-a **sibling** static-contract test red. A later cross-repo evo-x2 readiness
+a **sibling** static-contract test red. A later cross-repo <deploy-host> readiness
 validation surfaced it as findings **F-CODE-01** (MAJOR — `./smackerel.sh test
 unit` RED) and **F-CODE-02** (reconcile this cert). Rather than rewrite history,
 this dated note records the reconciliation honestly.

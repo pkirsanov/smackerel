@@ -53,7 +53,7 @@ This spec defines the *enrichment* capability that sits between the heuristic su
 7. **Refusal contract.** When graph evidence is insufficient to support a claim (concept has < N artifacts, alert has zero source artifacts in graph, reactive query has zero retrieved artifacts), the producer MUST emit a structured refusal with reason, NOT a low-confidence guess.
 8. **QF boundary (Principle 10).** Enrichment MUST NOT produce financial advice. Financial-markets-connector artifacts (spec 018) may participate as evidence in concept pages, but enrichment outputs that touch financial topics MUST carry an explicit non-advice disclosure and MUST NOT recommend trades, mandate changes, or executions.
 
-**Failure Condition:** Concept pages or "why" explanations contain claims that cannot be traced to an artifact ID in the user's graph (hallucination), OR the re-synthesis producer overwrites richer existing content with thinner re-synthesized content (regression), OR enrichment fires user-visible notifications (violates Principle 6 and spec 062 boundary), OR the producer cost cliff (LLM tokens / latency) makes the home-lab deploy unusable.
+**Failure Condition:** Concept pages or "why" explanations contain claims that cannot be traced to an artifact ID in the user's graph (hallucination), OR the re-synthesis producer overwrites richer existing content with thinner re-synthesized content (regression), OR enrichment fires user-visible notifications (violates Principle 6 and spec 062 boundary), OR the producer cost cliff (LLM tokens / latency) makes the self-hosted deploy unusable.
 
 ---
 

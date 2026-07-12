@@ -13,7 +13,7 @@
  *   J2  Capture-as-fallback ACK durability                (static finding SR-08)
  *   J3  Nav discoverability + auth-carrier split          (SR-04 / SR-05)
  *   J4  Delivery surfaces render (notifications + cards)
- *   J5  Assistant turn up to the model boundary           (ENV-CONSTRAINED: no GPU/evo-x2)
+ *   J5  Assistant turn up to the model boundary           (ENV-CONSTRAINED: no GPU/<deploy-host>)
  *
  * Evidence lines are prefixed `CHAOS-EV` so they are greppable in the
  * Playwright `list` reporter stdout. No request interception anywhere —
@@ -367,7 +367,7 @@ test("J5 assistant turn up to the model boundary (ENV-CONSTRAINED)", async ({
 
   let verdict: string;
   if (turnStatus >= 200 && turnStatus < 300) {
-    verdict = "TRANSPORT-OK; answer-quality ENV-CONSTRAINED (no GPU/evo-x2 model on this macOS host)";
+    verdict = "TRANSPORT-OK; answer-quality ENV-CONSTRAINED (no GPU/<deploy-host> model on this macOS host)";
   } else if (turnStatus >= 500) {
     verdict = "TRANSPORT-REACHED-MODEL-BOUNDARY; server-side model degraded/absent → ENV-CONSTRAINED";
   } else if (turnStatus === 401 || turnStatus === 403) {
@@ -380,5 +380,5 @@ test("J5 assistant turn up to the model boundary (ENV-CONSTRAINED)", async ({
     verdict = "TRANSPORT-STATUS " + turnStatus;
   }
   ev("J5.VERDICT", verdict);
-  ev("J5.ENV", "assistant answer synthesis = ENV-CONSTRAINED (GPU/evo-x2 only; unavailable on macOS host)");
+  ev("J5.ENV", "assistant answer synthesis = ENV-CONSTRAINED (GPU/<deploy-host> only; unavailable on macOS host)");
 });

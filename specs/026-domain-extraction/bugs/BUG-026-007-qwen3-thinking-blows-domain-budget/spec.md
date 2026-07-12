@@ -51,7 +51,7 @@ satisfy. It is a NO-DEFAULTS / fail-loud SST change (smackerel `smackerel-no-def
 
 ## Out of Scope
 
-- Any build, deploy, host mutation, or push (the orchestrator drives the evo-x2 rebuild + signed
+- Any build, deploy, host mutation, or push (the orchestrator drives the <deploy-host> rebuild + signed
   redeploy + live verify).
 - Live latency verification (only provable post-redeploy).
 - Changing the agent reasoning path, the warmup, the digest, or the chat surface.

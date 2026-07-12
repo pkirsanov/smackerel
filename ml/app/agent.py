@@ -73,7 +73,7 @@ def resolve_ollama_determinism_options() -> dict[str, Any]:
     keys infrastructure.ollama.test.request_*) and return them as a
     kwargs dict for the litellm completion call.
 
-    Empty / unset vars are skipped so dev / home-lab environments
+    Empty / unset vars are skipped so dev / self-hosted environments
     (which do not populate these vars) get the scenario-driven defaults
     untouched. The test environment populates all five keys via
     config/generated/test.env so the agent's E2E happy-path test pins
@@ -282,7 +282,7 @@ async def handle_invoke(
 
     # Spec 043 — overlay Ollama determinism knobs (top_p, top_k, seed,
     # num_predict, temperature) sourced from OLLAMA_TEST_REQUEST_* env
-    # vars when the resolved provider is ollama. In dev / home-lab the
+    # vars when the resolved provider is ollama. In dev / self-hosted the
     # vars are unset and this is a no-op; in test they pin the call to
     # the byte-identical envelope the E2E happy-path test asserts on.
     extra_kwargs: dict[str, Any] = {}

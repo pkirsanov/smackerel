@@ -7,7 +7,7 @@
 // REAL modelswitch validator (built from the combined catalog) — no second
 // validator/store is introduced, and a non-tool-capable gather selection is
 // NEVER accepted. Unit (pure mechanism); the live multi-provider fork/precedence
-// e2e-api leg is the deferred home-lab dispatch.
+// e2e-api leg is the deferred self-hosted dispatch.
 package api
 
 import (

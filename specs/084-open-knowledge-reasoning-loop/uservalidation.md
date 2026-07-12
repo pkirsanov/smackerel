@@ -5,7 +5,7 @@
 > item to report that the behavior is broken in live use. An unchecked item is
 > a user-reported regression and is BLOCKING for further work.
 
-## Live-behavior expectations (home-lab `/ask`, gemma4:26b)
+## Live-behavior expectations (self-hosted `/ask`, gemma4:26b)
 
 - [x] A comparison question ("what is a better place to grow pomegranate, X or Y?")
   produces an answer that addresses BOTH places and reaches a comparison
@@ -24,11 +24,11 @@
   latency envelope.
 - [x] The cite-back / provenance trust contract is intact: no fabricated URLs,
   no zero-source "answers", citations still hash-match the tool trace.
-- [x] The deployed model is unchanged (gemma4:26b on home-lab, gemma3:4b on dev).
+- [x] The deployed model is unchanged (gemma4:26b on self-hosted, gemma3:4b on dev).
 
 ## Verification note
 
-This spec terminates at **validated-in-repo**. The live home-lab re-verification
+This spec terminates at **validated-in-repo**. The live self-hosted re-verification
 of the pomegranate query (turn `73900d2089b6a557` motivating case) is performed
 by the downstream `bubbles.devops` dispatch AFTER the isolated push + CI + apply.
 The owner re-checks the boxes above against that live run.

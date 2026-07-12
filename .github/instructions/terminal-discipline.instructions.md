@@ -59,7 +59,7 @@ Read-only inspection commands are allowed:
 
 Printing the value of a secret-bearing variable is FORBIDDEN — directly, or
 accidentally via a shell-parameter-expansion default. Secrets include
-`COSIGN_PASSWORD` (operator cosign signing in `build --target home-lab`),
+`COSIGN_PASSWORD` (operator cosign signing in `build --target self-hosted`),
 `config/smackerel.yaml` secret fields (`runtime.auth_token`, `llm.api_key`,
 `telegram.bot_token`, connector `access_token`), any `*_TOKEN` / `*_KEY` /
 `*_PASSWORD` / `*_SECRET`, and decrypted env files under `config/generated/`.

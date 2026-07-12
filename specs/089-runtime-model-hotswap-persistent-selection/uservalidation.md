@@ -5,7 +5,7 @@
 > below is UNCHECKED `[ ]` (pending). An item flips to `[x]` only when the
 > later implement → test → validate phases prove it in-repo, and the
 > live-behavior items are confirmed by the operator against the downstream
-> home-lab deploy (see Verification note). Anti-fabrication: nothing here
+> self-hosted deploy (see Verification note). Anti-fabrication: nothing here
 > is claimed as already-passing.
 >
 > Each item is phrased as something the **operator can actually check** on
@@ -15,12 +15,12 @@
 > rejection register, and the attribution primitive are carried forward
 > verbatim and widened to the sticky + gather + persistent-default axes.
 >
-> **Home-lab reference values used throughout** (from `config/smackerel.yaml`
+> **self-hosted reference values used throughout** (from `config/smackerel.yaml`
 > after this spec ships): gather model `gemma4:26b`
 > (`assistant.open_knowledge.llm_model_id`); standing synthesis default
 > `deepseek-r1:32b` (was `deepseek-r1:7b`); switchable set
 > `[deepseek-r1:32b, deepseek-r1:7b, gemma4:26b]`; ollama envelope raised
-> `28G → ≥48G`. Tool-capable gather models on home-lab: `gemma4:26b`
+> `28G → ≥48G`. Tool-capable gather models on self-hosted: `gemma4:26b`
 > (default), `llama3.1:8b`.
 
 ## Acceptance checklist
@@ -28,7 +28,7 @@
 ### SCN-089-A01 — The committed-SST persistent default is applied to every `/ask` with no selection
 
 - [ ] With no sticky preference and no `--model=`, a bare `/ask <question>`
-  on home-lab is answered by `deepseek-r1:32b` — confirmable because the
+  on self-hosted is answered by `deepseek-r1:32b` — confirmable because the
   API envelope for the same question reports `"model": "deepseek-r1:32b"`,
   `"model_source": "default"`, and `/model` shows
   `deepseek-r1:32b — system default, active now`.
@@ -90,7 +90,7 @@
 
 ### SCN-089-A06 — The persistent-default footprint headroom is verified safe (not just the profile number)
 
-- [ ] `./smackerel.sh config generate --env home-lab` succeeds **only**
+- [ ] `./smackerel.sh config generate --env self-hosted` succeeds **only**
   with `ollama_memory_limit` raised so `gemma4:26b` (gather) +
   `deepseek-r1:32b` (synthesis) are co-resident-consistent (owner figure:
   measured ~45824 MiB needs ≥48G); a config that leaves the envelope at
@@ -203,7 +203,7 @@ claim-binding, or the cross-surface parity defined here.
 > for the gather turn, because a single combined flag would silently push a
 > non-tool-capable synthesis model onto the gather turn (FR-8 hazard).
 
-### `/model` with no argument — discovery + current state (home-lab, un-set user)
+### `/model` with no argument — discovery + current state (self-hosted, un-set user)
 
 ```
 Your /ask model: deepseek-r1:32b (system default) — you have not set a personal model.
@@ -462,17 +462,17 @@ synthesize, which is exactly the A/B signal they need.
 > only the committed-SST edit + the `config generate` step.
 
 ```
-# Hot-swap the standing /ask synthesis model in prod (home-lab)
+# Hot-swap the standing /ask synthesis model in prod (self-hosted)
 
 # 1. Edit the committed SST default for the environment:
 #    config/smackerel.yaml →
-#      environments.home-lab.assistant_open_knowledge_synthesis_model_id: "deepseek-r1:32b"
+#      environments.self-hosted.assistant_open_knowledge_synthesis_model_id: "deepseek-r1:32b"
 #    If the new model needs more memory, RAISE the envelope FIRST:
-#      environments.home-lab.ollama_memory_limit: "48G"
+#      environments.self-hosted.ollama_memory_limit: "48G"
 #    (config generation fails loud if the co-resident envelope is busted — SCN-089-A06)
 
 # 2. Regenerate the env bundle (fail-loud SST; no hidden defaults):
-./smackerel.sh config generate --env home-lab
+./smackerel.sh config generate --env self-hosted
 
 # 3. Ensure the new model is pulled on the host, then the deploy overlay
 #    recreates ONLY the core service (no rebuild; digests from the running
@@ -544,7 +544,7 @@ chat-latency product.
 
 ## A/B operator journey (the thing this feature exists to enable)
 
-The owner can run this end-to-end on home-lab once the feature ships and
+The owner can run this end-to-end on self-hosted once the feature ships and
 the downstream devops dispatch has deployed it:
 
 1. Confirm the standing default: `/model` shows
@@ -576,7 +576,7 @@ The interaction flows backing this journey are diagrammed in
 ## Verification note
 
 This spec terminates at **validated-in-repo** (state.json
-`planningOnlyJustification` + constraint C9). The live home-lab deploy
+`planningOnlyJustification` + constraint C9). The live self-hosted deploy
 (persist the raised envelope + the `deepseek-r1:32b` standing default +
 pull-on-deploy + the live re-verify) is a separate downstream
 `bubbles.devops` dispatch AFTER the isolated push + CI + apply. The owner

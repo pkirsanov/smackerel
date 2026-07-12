@@ -7,13 +7,13 @@
   "featureName": "BUG-020-003: cmd/core/helpers.go env-reading helpers (parseFloatEnv, parseJSONArrayEnv, parseJSONObjectEnv) silently fall back to 0 / nil on missing or malformed env vars, codifying the FORBIDDEN fail-soft pattern under Gate G028 (NO-DEFAULTS / fail-loud SST policy)",
   "workflowMode": "bugfix-fastlane",
   "parentWorkflow": {
-    "mode": "home-lab-readiness-rescan-2026-05-14",
+    "mode": "self-hosted-readiness-rescan-2026-05-14",
     "trigger": "system-review-finding",
     "executionModel": "direct-per-finding-dispatch",
     "parentExpansion": "bubbles.goal runtime parent-expanded the bugfix-fastlane phase order because the bubbles.workflow runtime lacks runSubagent; this packet was created by the bubbles.bug specialist as the first phase of that expansion."
   },
   "discoveryRef": {
-    "source": "home-lab-readiness-rescan-2026-05-14",
+    "source": "self-hosted-readiness-rescan-2026-05-14",
     "findingId": "HL-RESCAN-014",
     "severity": "P3",
     "lens": "SST defaults",
@@ -138,7 +138,7 @@
         "agent": "bubbles.bug",
         "timestamp": "2026-05-15T00:00:00Z",
         "outcome": "in_progress",
-        "evidence": "Bug packet skeleton created at specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/. Authored: spec.md (full content with verified call-site inventory, discovery brief discrepancy declaration, sister-packet cross-references, policy anchors), state.json (this file — version 3 control-plane state with workflowMode=bugfix-fastlane, currentPhase=bug, parentWorkflow.mode=home-lab-readiness-rescan-2026-05-14, discoveryRef.findingId=HL-RESCAN-014), scenario-manifest.json (5 placeholder scenarios SCN-020-003-A through SCN-020-003-E covering symbol-removal, no-os-Getenv-silent-fallback, regression guard, suite-green canary, and live-caller-untouched canary; design specialist refines as needed). Stub artifacts initialized for downstream specialists: design.md (placeholder for bubbles.design — root cause analysis, fix-vs-refactor decision, alternatives considered), scopes.md (placeholder for bubbles.plan — scope definition with Tiered DoD, Test Plan table, Gherkin scenarios), report.md (placeholder for bubbles.implement / bubbles.test / bubbles.validate — execution evidence sections with required headers), uservalidation.md (placeholder for bubbles.validate — AC verification checklist). Honest-evidence pivot from discovery brief: brief listed 7 candidate functions for deletion, but in-spec verified call-site evidence shows parseJSONArray + parseJSONArrayVal are LIVE in production via cmd/core/connectors.go:76,103. Corrected dead-set candidates documented in spec.md Detection > Verified Call-Site Inventory + Discrepancy with Discovery Brief sections. Next phase: design — invoke bubbles.design to author design.md from this spec + the verified evidence."
+        "evidence": "Bug packet skeleton created at specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/. Authored: spec.md (full content with verified call-site inventory, discovery brief discrepancy declaration, sister-packet cross-references, policy anchors), state.json (this file — version 3 control-plane state with workflowMode=bugfix-fastlane, currentPhase=bug, parentWorkflow.mode=self-hosted-readiness-rescan-2026-05-14, discoveryRef.findingId=HL-RESCAN-014), scenario-manifest.json (5 placeholder scenarios SCN-020-003-A through SCN-020-003-E covering symbol-removal, no-os-Getenv-silent-fallback, regression guard, suite-green canary, and live-caller-untouched canary; design specialist refines as needed). Stub artifacts initialized for downstream specialists: design.md (placeholder for bubbles.design — root cause analysis, fix-vs-refactor decision, alternatives considered), scopes.md (placeholder for bubbles.plan — scope definition with Tiered DoD, Test Plan table, Gherkin scenarios), report.md (placeholder for bubbles.implement / bubbles.test / bubbles.validate — execution evidence sections with required headers), uservalidation.md (placeholder for bubbles.validate — AC verification checklist). Honest-evidence pivot from discovery brief: brief listed 7 candidate functions for deletion, but in-spec verified call-site evidence shows parseJSONArray + parseJSONArrayVal are LIVE in production via cmd/core/connectors.go:76,103. Corrected dead-set candidates documented in spec.md Detection > Verified Call-Site Inventory + Discrepancy with Discovery Brief sections. Next phase: design — invoke bubbles.design to author design.md from this spec + the verified evidence."
       },
       {
         "phase": "design",

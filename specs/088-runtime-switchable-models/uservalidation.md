@@ -7,7 +7,7 @@
 > `[ ]` (pending). An item flips to `[x]` only when the later
 > implement → test → validate phases prove it in-repo, and the
 > live-behavior items are confirmed by the operator against the downstream
-> home-lab A/B run (see Verification note). Anti-fabrication: nothing here
+> self-hosted A/B run (see Verification note). Anti-fabrication: nothing here
 > is claimed as already-passing.
 >
 > Each item is phrased as something the **operator can actually check** on
@@ -200,7 +200,7 @@ Off-allowlist (`400`):
 
 ## A/B operator journey (the thing this feature exists to enable)
 
-The owner can run this end-to-end on home-lab once the feature ships and
+The owner can run this end-to-end on self-hosted once the feature ships and
 the downstream devops dispatch has deployed it:
 
 1. Pick the motivating question (spec 087): *"what is a better place to
@@ -227,7 +227,7 @@ The interaction flows backing this journey are diagrammed in
 
 This spec terminates at **validated-in-repo** (state.json
 `planningOnlyJustification` + constraint C7). The decisive, live
-`gemma4:26b`-vs-`deepseek-r1:7b` A/B on home-lab hardware — the proof
+`gemma4:26b`-vs-`deepseek-r1:7b` A/B on self-hosted hardware — the proof
 spec 087 could not run on dev (no GPU/Ollama daemon) — is performed by a
 separate downstream `bubbles.devops` dispatch AFTER the isolated push +
 CI + apply. The owner re-checks the live-behavior boxes above against that

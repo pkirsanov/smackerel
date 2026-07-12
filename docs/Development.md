@@ -164,7 +164,7 @@ preflight, adding the resource dimension.
   (`internal/preflight/wiring_contract_test.go`) that asserts the guard stays
   wired into every heavy-op path.
 - **Scope boundary:** this guards LOCAL developer CLI operations only. The
-  home-lab / production apply pre-flight on the real deploy host is owned by the
+  self-hosted / production apply pre-flight on the real deploy host is owned by the
   operator-private knb deploy adapter and is out of this repo's scope.
 
 ### Docker-Only Development
@@ -442,7 +442,7 @@ Constraints:
 
 - A combined `go test -tags=e2e,e2e_ollama ./tests/e2e/agent/...` invocation is structurally invalid today: helper symbols (`postInvoke`, `liveDB`) are redeclared between `happy_path_test.go` and the spec-037 `e2e`-tagged helpers because the two helper signatures differ. `./smackerel.sh test e2e` (with `SMACKEREL_TEST_OLLAMA=1`) builds with `-tags=e2e_ollama` only, never the combined form.
 - The non-tagged `tests/e2e/agent/no_skip_guard_test.go` file MUST remain compilable under every tag config (default, `e2e`, `e2e_ollama`) so its `t.Skip`-bailout regression continues to fire on every test invocation.
-- See `docs/Testing.md` "Ollama-Backed Agent E2E Test Lane (Spec 043)" for the canonical operator workflow, env-var contract, exit codes from `scripts/commands/ollama-test-pull.sh`, and the per-environment `agent_provider_fast_model` override (`qwen2.5:0.5b-instruct` for `test`, `gpt-oss:20b` for `dev` and `home-lab`).
+- See `docs/Testing.md` "Ollama-Backed Agent E2E Test Lane (Spec 043)" for the canonical operator workflow, env-var contract, exit codes from `scripts/commands/ollama-test-pull.sh`, and the per-environment `agent_provider_fast_model` override (`qwen2.5:0.5b-instruct` for `test`, `gpt-oss:20b` for `dev` and `self-hosted`).
 
 ## Source Of Truth Documents
 
@@ -461,7 +461,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 |---------|---------|
 | `internal/annotation/` | User annotation model, freeform parser (ratings, tags, interactions, notes), PostgreSQL store, materialized summary view |
 | `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists, expense API (7 endpoints: query, export CSV, correction, classification, suggestions), meal plan API (12 endpoints), recipe domain scaling endpoint, notification intelligence operator API), Bearer auth, security headers, rate limiting |
-| `internal/auth/` | Two coexisting subsystems: (1) OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, encrypted token storage (`oauth.go`, `handler.go`, `store.go`); (2) spec 044 per-user PASETO v4.public bearer auth (`issue.go`, `verify.go`, `hash.go`, `session.go`, `startup.go`, `bearer_store.go`) plus `revocation/` cache + NATS broadcaster. Per-user surface is gated by `auth.enabled` per environment; dev/test default to off (legacy shared `SMACKEREL_AUTH_TOKEN` ergonomic preserved) and home-lab defaults to on. |
+| `internal/auth/` | Two coexisting subsystems: (1) OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, encrypted token storage (`oauth.go`, `handler.go`, `store.go`); (2) spec 044 per-user PASETO v4.public bearer auth (`issue.go`, `verify.go`, `hash.go`, `session.go`, `startup.go`, `bearer_store.go`) plus `revocation/` cache + NATS broadcaster. Per-user surface is gated by `auth.enabled` per environment; dev/test default to off (legacy shared `SMACKEREL_AUTH_TOKEN` ergonomic preserved) and self-hosted defaults to on. |
 | `internal/cardrewards/` | Spec 083 Card Rewards Companion domain — PostgreSQL-backed card catalog/wallet/offers/selections/bonuses/category-alias store, deterministic card-name resolver, one-time CCManager JSON→PG importer, and the strict-schema LLM rotating-category extraction orchestrator (`extract.go`; the model-gateway call lives in the Python sidecar per Constitution C2) |
 | `internal/config/` | SST-compliant configuration loader — reads all env vars, validates required fields, parses numeric config, cross-validates constraints |
 | `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `cardrewards/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `qfdecisions/` (Scope 1 QF bridge validation only; no artifact publication yet), `rss/`, `twitter/`, `weather/`, `youtube/`, plus the `photos/` provider-neutral library and adapters under `photos/adapters/{immich,photoprism}/` |

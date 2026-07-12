@@ -29,7 +29,7 @@ expected spans.**
 - `unit` / `ui-unit` — no real stack to trace. Use the normal unit path.
 - The **operate / prod** plane — read-only and off-limits to feature tests
   (G115; see [`bubbles-env-pollution-isolation`](../bubbles-env-pollution-isolation/SKILL.md)).
-  Never point a capture at a prod URL or `env=prod|home-lab` telemetry.
+  Never point a capture at a prod URL or `env=prod|self-hosted` telemetry.
 - Authoring a *new* telemetry adapter, or the generic discovery method itself →
   [`bubbles-observability-adapter`](../bubbles-observability-adapter/SKILL.md).
 - NO-DEFAULTS / config-fallback review → [`smackerel-no-defaults`](../smackerel-no-defaults/SKILL.md).

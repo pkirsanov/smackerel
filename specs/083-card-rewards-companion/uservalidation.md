@@ -14,7 +14,7 @@
 - [x] Regex scraper replacement by strict-schema LLM extraction is planned (no silent fallback; needs_verification on failure/low-confidence)
 - [x] Multiple data sources + reconciliation with confidence signal planned
 - [x] Go rewrite planned (Constitution C2); Python app + Render hosting retired
-- [x] Hosting on <home-lab-host> via smackerel's EXISTING home-lab deploy adapter (no new knb product adapter)
+- [x] Hosting on <deploy-host> via smackerel's EXISTING self-hosted deploy adapter (no new knb product adapter)
 - [x] All data planned in PostgreSQL (one-graph / PostgreSQL-only); JSON→PG one-time migration is a dedicated scope
 - [x] Google Calendar (CalDAV) preserved as the primary delivery surface (reusing the internal/mealplan CalendarBridge pattern)
 - [x] Full Web UI parity with CCManager's ~22 screens is a first-class deliverable across two dedicated e2e-ui scopes

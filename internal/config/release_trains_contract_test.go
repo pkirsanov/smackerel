@@ -81,7 +81,7 @@ var validPhases = map[string]bool{
 var validTargetSlots = map[string]bool{
 	"prod":     true,
 	"staging":  true,
-	"home-lab": true,
+	"self-hosted": true,
 	"none":     true,
 }
 
@@ -130,7 +130,7 @@ func assertTrainsContract(yamlBytes []byte) error {
 			return fmt.Errorf("contract violation: %s.phase=%q (expected one of active|maintained|frozen|retired)", where, tr.Phase)
 		}
 		if !validTargetSlots[tr.TargetSlot] {
-			return fmt.Errorf("contract violation: %s.target_slot=%q (expected one of prod|staging|home-lab|none)", where, tr.TargetSlot)
+			return fmt.Errorf("contract violation: %s.target_slot=%q (expected one of prod|staging|self-hosted|none)", where, tr.TargetSlot)
 		}
 		if strings.TrimSpace(tr.FlagsBundle) == "" {
 			return fmt.Errorf("contract violation: %s.flags_bundle is empty", where)
@@ -212,7 +212,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: self-hosted
   description: "no flags_bundle"
 `)
 	err := assertTrainsContract(bad)
@@ -226,7 +226,7 @@ trains:
 
 // TestReleaseTrainsContract_AdversarialInvalidTargetSlot proves the
 // contract test would FAIL if a target_slot regressed to a non-canonical
-// value (e.g., a typo like "homelab" or an invented "dev"). The shell
+// value (e.g., a typo like "selfhosted" or an invented "dev"). The shell
 // guard rejects this at pre-push but only for operators with yq.
 func TestReleaseTrainsContract_AdversarialInvalidTargetSlot(t *testing.T) {
 	bad := []byte(`version: 1
@@ -236,12 +236,12 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: homelab
+  target_slot: selfhosted
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertTrainsContract(bad)
 	if err == nil {
-		t.Fatalf("ADVERSARIAL FAILURE: contract test accepted target_slot=homelab (typo) — would break bubbles.train slot routing")
+		t.Fatalf("ADVERSARIAL FAILURE: contract test accepted target_slot=selfhosted (typo) — would break bubbles.train slot routing")
 	}
 	if !strings.Contains(err.Error(), "target_slot") {
 		t.Fatalf("expected target_slot rejection message, got: %v", err)
@@ -258,7 +258,7 @@ defaults:
 trains:
 - id: mvp
   phase: stable
-  target_slot: home-lab
+  target_slot: self-hosted
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertTrainsContract(bad)
@@ -281,7 +281,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: self-hosted
   flags_bundle: config/feature-flags.mvp.yaml
 - id: mvp
   phase: maintained
@@ -307,7 +307,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: self-hosted
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertTrainsContract(bad)
@@ -344,7 +344,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: self-hosted
   flags_bundle: config/feature-flags.mvp.yaml
 `)
 	err := assertBundleResolution(root, trains)
@@ -368,7 +368,7 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: self-hosted
   flags_bundle: config/feature-flags.does-not-exist.yaml
 `)
 	err := assertBundleResolution(root, trains)

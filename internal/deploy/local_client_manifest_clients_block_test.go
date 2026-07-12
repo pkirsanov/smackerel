@@ -4,13 +4,13 @@
 // Package deploy — spec 086 local-operator client-manifest emitter test.
 //
 // Exercises scripts/deploy/local-client-manifest-clients-block.sh — the
-// local-operator analogue of the spec-085 CI emitter. On evo-x2 the Flutter
+// local-operator analogue of the spec-085 CI emitter. On <deploy-host> the Flutter
 // Android client is BUILT + operator-signed LOCALLY, so its build-manifest
 // `clients:` entry carries `provenance: local-operator` (NOT cosign-keyless) and
 // a LOCAL `file://` ref (no ghcr / no embedded @sha256:). This test proves:
 //
 //	(1) happy path: well-formed YAML, provenance local-operator (trust-model
-//	    alignment with smackerel/home-lab/params.yaml::signing.trustModel), the
+//	    alignment with <deployment-owner>/<product>/<target>/params.yaml::signing.trustModel), the
 //	    real AAB/APK digests passed through, laneB false;
 //	(2) fail-closed: a missing OR malformed digest is REFUSED before it can enter
 //	    the manifest (mirrors the knb gate check (c) / E025-CLIENT-MANIFEST-NO-DIGEST,
@@ -150,7 +150,7 @@ func TestLocalClientManifestEmitter_ValidDigests(t *testing.T) {
 		t.Fatalf("emitted kind=%v, expected to contain aab AND apk", a.Kind)
 	}
 	// SCN-086-B04 — trust-model alignment: provenance MUST be local-operator, the
-	// ACTIVE evo-x2 mode, NEVER cosign-keyless (the parked CI mode).
+	// ACTIVE <deploy-host> mode, NEVER cosign-keyless (the parked CI mode).
 	if a.Provenance != "local-operator" {
 		t.Fatalf("emitted provenance=%q, expected local-operator (trust-model alignment); cosign-keyless is the PARKED CI path", a.Provenance)
 	}

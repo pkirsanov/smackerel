@@ -12,7 +12,7 @@
 // simple bearer/api-key auth class against the connection's configured
 // base_url / endpoint. Provider-specific credential semantics (Anthropic's
 // x-api-key header, Bedrock AWS SigV4, Vertex service-account exchange) and the
-// providers' default endpoints are validated by the DEFERRED home-lab
+// providers' default endpoints are validated by the DEFERRED self-hosted
 // bubbles.devops e2e leg (real reachability + real credentials), not in-repo. A
 // hosted connection with no configured endpoint is reported `unreachable` here
 // (honest: nothing to probe) rather than a fabricated ok.

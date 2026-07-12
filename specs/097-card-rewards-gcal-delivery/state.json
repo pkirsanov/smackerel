@@ -11,13 +11,13 @@
   "statusCeiling": "done",
   "planningOnly": false,
   "executionRuntime": "direct-implement",
-  "executionModelDetail": "Direct in-session feature build, parent-expanded by bubbles.workflow because the workflow runtime lacked the runSubagent tool. SCOPE-01 implemented + unit-proven; SCOPE-02 is the live home-lab delivery proof. The full-delivery certification ceremony was run this session and recorded in report.md + executionHistory.",
+  "executionModelDetail": "Direct in-session feature build, parent-expanded by bubbles.workflow because the workflow runtime lacked the runSubagent tool. SCOPE-01 implemented + unit-proven; SCOPE-02 is the live self-hosted delivery proof. The full-delivery certification ceremony was run this session and recorded in report.md + executionHistory.",
   "createdAt": "2026-06-14T04:00:00Z",
   "updatedAt": "2026-06-21T21:12:15Z",
   "certifiedAt": "2026-06-21T21:12:15Z",
   "requiresRevalidation": false,
   "releaseTrain": "mvp",
-  "certifiedReason": "Certified done on 2026-06-21 by a real bubbles.validate subagent dispatch (provenanceMode subagent-dispatch). Every gate re-executed green this session with captured output + exit codes: scoped Go unit suite incl BundleSecret (SCOPED_UNIT_EXIT=0; internal/deploy ok 31.489s, so the prior spec-096 A2 failure no longer reproduces), full Go unit suite (FULL_UNIT_EXIT=0), ./smackerel.sh check (CHECK_EXIT=0), ./smackerel.sh lint (LINT_EXIT=0), artifact-lint (exit 0, PASSED), traceability-guard (exit 0, RESULT: PASSED 0 warnings, DoD fidelity 4/4), and state-transition-guard (exit 0, TRANSITION PERMITTED). SCOPE-02 live home-lab delivery was not re-run (one-time operator-credential proof at report.md#live-calendar). The orchestrator bubbles.workflow owns the settle-commit. The spec-096 A2 fixture remains nominally routed to spec 096 but no longer reproduces a RED.",
+  "certifiedReason": "Certified done on 2026-06-21 by a real bubbles.validate subagent dispatch (provenanceMode subagent-dispatch). Every gate re-executed green this session with captured output + exit codes: scoped Go unit suite incl BundleSecret (SCOPED_UNIT_EXIT=0; internal/deploy ok 31.489s, so the prior spec-096 A2 failure no longer reproduces), full Go unit suite (FULL_UNIT_EXIT=0), ./smackerel.sh check (CHECK_EXIT=0), ./smackerel.sh lint (LINT_EXIT=0), artifact-lint (exit 0, PASSED), traceability-guard (exit 0, RESULT: PASSED 0 warnings, DoD fidelity 4/4), and state-transition-guard (exit 0, TRANSITION PERMITTED). SCOPE-02 live self-hosted delivery was not re-run (one-time operator-credential proof at report.md#live-calendar). The orchestrator bubbles.workflow owns the settle-commit. The spec-096 A2 fixture remains nominally routed to spec 096 but no longer reproduces a RED.",
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
     "tdd": {"mode": "off", "source": "repo-default"},
@@ -30,7 +30,7 @@
   "reworkQueue": [],
   "relatesTo": [
     "specs/083-card-rewards-companion",
-    "knb:specs/029-card-rewards-home-lab-activation"
+    "knb:specs/029-card-rewards-self-hosted-activation"
   ],
   "scopes": [
     "SCOPE-01",
@@ -42,7 +42,7 @@
   ],
   "scopeProgress": [
     {"scopeDir": "SCOPE-01", "name": "Google Calendar write client + config + wiring", "status": "Done", "dependsOn": [], "completedAt": "2026-06-14T06:00:00Z"},
-    {"scopeDir": "SCOPE-02", "name": "Live home-lab delivery proof", "status": "Done", "dependsOn": ["SCOPE-01"], "completedAt": "2026-06-20T02:30:00Z"}
+    {"scopeDir": "SCOPE-02", "name": "Live self-hosted delivery proof", "status": "Done", "dependsOn": ["SCOPE-01"], "completedAt": "2026-06-20T02:30:00Z"}
   ],
   "completedPhases": ["analyze", "design", "plan", "implement", "test", "regression", "security", "spec-review", "simplify", "gaps", "harden", "stabilize", "chaos", "docs", "validate", "audit"],
   "execution": {
@@ -72,7 +72,7 @@
         "statusBefore": "not_started",
         "statusAfter": "in_progress",
         "at": "2026-06-14T04:00:00Z",
-        "note": "Grounded the gap: the card-rewards CardCalendarBridge (spec 083) is built but its CalDAVClient was never constructed (wiring passed nil + warned 'production CalDAV client is not wired yet'); the only Google Calendar usage in the tree was the READ path (internal/connector/caldav), no event-WRITE client. Authored spec.md (FR-097-01..07 + SCN-097-A01/A02/A03), design.md, and scopes.md (SCOPE-01 write client + config + wiring; SCOPE-02 live home-lab proof)."
+        "note": "Grounded the gap: the card-rewards CardCalendarBridge (spec 083) is built but its CalDAVClient was never constructed (wiring passed nil + warned 'production CalDAV client is not wired yet'); the only Google Calendar usage in the tree was the READ path (internal/connector/caldav), no event-WRITE client. Authored spec.md (FR-097-01..07 + SCN-097-A01/A02/A03), design.md, and scopes.md (SCOPE-01 write client + config + wiring; SCOPE-02 live self-hosted proof)."
       },
       {
         "agent": "bubbles.implement",
@@ -84,7 +84,7 @@
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "at": "2026-06-14T05:30:00Z",
-        "note": "Commit fc931c6a: GoogleCalendarClient (343 LOC, idempotent PutEvent/DeleteEvent via deterministic event id) + ParseGCalCredential + wiring in cmd/core/wiring_cardrewards_scheduler.go + SST config (calendar_id + CARD_REWARDS_GCAL_CREDENTIALS across all 3 mirrors). CI build.yml cosign-signed core 73dd65dd + ml 909719f4 + home-lab bundle; the gcal credential was sops/age-encrypted into the knb adapter (knb 1856ca3) and apply.sh --trust-model=ci-keyless redeployed core 73dd65dd healthy with calendar_sync=true and 'production Google Calendar delivery wired' in the boot log."
+        "note": "Commit fc931c6a: GoogleCalendarClient (343 LOC, idempotent PutEvent/DeleteEvent via deterministic event id) + ParseGCalCredential + wiring in cmd/core/wiring_cardrewards_scheduler.go + SST config (calendar_id + CARD_REWARDS_GCAL_CREDENTIALS across all 3 mirrors). CI build.yml cosign-signed core 73dd65dd + ml 909719f4 + self-hosted bundle; the gcal credential was sops/age-encrypted into the knb adapter (knb 1856ca3) and apply.sh --trust-model=ci-keyless redeployed core 73dd65dd healthy with calendar_sync=true and 'production Google Calendar delivery wired' in the boot log."
       },
       {
         "agent": "bubbles.test",
@@ -120,7 +120,7 @@
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "at": "2026-06-20T02:40:00Z",
-        "note": "Secret discipline verified: 3-mirror agreement (TestSecretKeys_MirrorsYAMLManifest + TestSecretKeysMirror PASS); no literal value reaches the home-lab bundle (TestBundleSecretContract_NoLiteralSecretsInHomeLab PASS, the key is masked as a sentinel token); the client logs the event UID + calendar id only, never the credential."
+        "note": "Secret discipline verified: 3-mirror agreement (TestSecretKeys_MirrorsYAMLManifest + TestSecretKeysMirror PASS); no literal value reaches the self-hosted bundle (TestBundleSecretContract_NoLiteralSecretsInSelfHosted PASS, the key is masked as a sentinel token); the client logs the event UID + calendar id only, never the credential."
       },
       {
         "agent": "bubbles.spec-review",
@@ -193,7 +193,7 @@
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "at": "2026-06-20T02:57:00Z",
-        "note": "Independent re-verification: re-ran spec-097 unit suites (green), check (exit 0), lint (exit 0); confirmed no literal secret in the home-lab bundle; confirmed the one RED test (A2) is foreign (spec 096) + pre-existing on HEAD; confirmed the live-delivery evidence is real. VERDICT: the spec-097 deliverable is sound; the sole structural blocker to a full-delivery done promotion is state-transition-guard Check 17 (requires a spec(097) commit), which the no-commit validation constraint forbids."
+        "note": "Independent re-verification: re-ran spec-097 unit suites (green), check (exit 0), lint (exit 0); confirmed no literal secret in the self-hosted bundle; confirmed the one RED test (A2) is foreign (spec 096) + pre-existing on HEAD; confirmed the live-delivery evidence is real. VERDICT: the spec-097 deliverable is sound; the sole structural blocker to a full-delivery done promotion is state-transition-guard Check 17 (requires a spec(097) commit), which the no-commit validation constraint forbids."
       },
       {
         "agent": "bubbles.workflow",
@@ -215,7 +215,7 @@
         "statusBefore": "in_progress",
         "statusAfter": "done",
         "at": "2026-06-21T21:12:15Z",
-        "note": "Real bubbles.validate subagent dispatch (not parent-expanded): independently re-executed the full green bar this session and certified done. Gates + exit codes: scoped Go unit incl BundleSecret (./smackerel.sh test unit --go --go-run 'GoogleCalendar|CardRewards|GCal|SecretKeys|BundleSecret') SCOPED_UNIT_EXIT=0 with internal/cardrewards ok, internal/config ok, internal/deploy ok 31.489s (the prior spec-096 A2 leakage-detector failure no longer reproduces); full Go unit ./smackerel.sh test unit --go FULL_UNIT_EXIT=0; ./smackerel.sh check CHECK_EXIT=0; ./smackerel.sh lint LINT_EXIT=0; artifact-lint.sh exit 0 (PASSED); traceability-guard.sh exit 0 (RESULT: PASSED, 0 warnings, DoD fidelity 4/4); state-transition-guard.sh exit 0 (TRANSITION PERMITTED). SCOPE-02 live home-lab delivery NOT re-run (one-time operator-credential proof at report.md#live-calendar). No git commit taken — bubbles.workflow owns the settle-commit."
+        "note": "Real bubbles.validate subagent dispatch (not parent-expanded): independently re-executed the full green bar this session and certified done. Gates + exit codes: scoped Go unit incl BundleSecret (./smackerel.sh test unit --go --go-run 'GoogleCalendar|CardRewards|GCal|SecretKeys|BundleSecret') SCOPED_UNIT_EXIT=0 with internal/cardrewards ok, internal/config ok, internal/deploy ok 31.489s (the prior spec-096 A2 leakage-detector failure no longer reproduces); full Go unit ./smackerel.sh test unit --go FULL_UNIT_EXIT=0; ./smackerel.sh check CHECK_EXIT=0; ./smackerel.sh lint LINT_EXIT=0; artifact-lint.sh exit 0 (PASSED); traceability-guard.sh exit 0 (RESULT: PASSED, 0 warnings, DoD fidelity 4/4); state-transition-guard.sh exit 0 (TRANSITION PERMITTED). SCOPE-02 live self-hosted delivery NOT re-run (one-time operator-credential proof at report.md#live-calendar). No git commit taken — bubbles.workflow owns the settle-commit."
       }
     ]
   },
@@ -231,7 +231,7 @@
     "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "test", "regression", "security", "spec-review", "simplify", "gaps", "harden", "stabilize", "chaos", "docs", "validate", "audit"],
     "scopeProgress": [
       {"scope": 1, "name": "Google Calendar write client + config + wiring", "status": "done", "dependsOn": [], "evidenceFile": "report.md", "completedAt": "2026-06-14T06:00:00Z"},
-      {"scope": 2, "name": "Live home-lab delivery proof", "status": "done", "dependsOn": ["SCOPE-01"], "evidenceFile": "report.md", "completedAt": "2026-06-20T02:30:00Z"}
+      {"scope": 2, "name": "Live self-hosted delivery proof", "status": "done", "dependsOn": ["SCOPE-01"], "evidenceFile": "report.md", "completedAt": "2026-06-20T02:30:00Z"}
     ]
   }
 }

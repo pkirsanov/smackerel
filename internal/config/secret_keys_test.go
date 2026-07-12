@@ -82,7 +82,7 @@ func TestSecretKeys_MirrorsYAMLManifest(t *testing.T) {
 	if len(root.Infrastructure.ProductionClassTargets) == 0 {
 		t.Fatalf("yaml infrastructure.production_class_targets is empty — required by FR-052-002")
 	}
-	wantTarget := "home-lab"
+	wantTarget := "self-hosted"
 	found := false
 	for _, target := range root.Infrastructure.ProductionClassTargets {
 		if target == wantTarget {
@@ -360,7 +360,7 @@ func bytesContainsString(haystack []byte, needle string) bool {
 // TestWebRegistrationInviteToken_PlaceholderGuardClosesOpenSignupTrap
 // (spec 091 SCOPE-01) — the un-substituted-bundle-placeholder leak guard.
 //
-// home-lab placeholder-emits WEB_REGISTRATION_INVITE_TOKEN and the knb deploy
+// self-hosted placeholder-emits WEB_REGISTRATION_INVITE_TOKEN and the knb deploy
 // adapter substitutes the real value at apply time. If the adapter ever FAILED
 // to substitute (a deploy bug), the Go process would receive the literal
 // "__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__" — a publicly-known

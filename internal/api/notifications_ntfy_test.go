@@ -39,7 +39,7 @@ func TestNtfyProductionWebhookRouteDispatchesReceiverAndRejectsMalformedCases(t 
 	}()
 	handler := &NotificationHandlers{sources: staticNotificationSourceStatusProvider{statuses: []notification.SourceStatus{status}}, ntfyWebhooks: registry}
 
-	validReq := ntfyWebhookRequest(t, status.Config.SourceInstanceID, `{"id":"evt-route","event":"message","topic":"home-lab-alerts","title":"Route","message":"production webhook"}`)
+	validReq := ntfyWebhookRequest(t, status.Config.SourceInstanceID, `{"id":"evt-route","event":"message","topic":"self-hosted-alerts","title":"Route","message":"production webhook"}`)
 	validRec := httptest.NewRecorder()
 	handler.ReceiveNtfyWebhook(validRec, validReq)
 	if validRec.Code != http.StatusAccepted {
@@ -64,7 +64,7 @@ func TestNtfyProductionWebhookRouteDispatchesReceiverAndRejectsMalformedCases(t 
 	}
 
 	notRunningHandler := &NotificationHandlers{sources: staticNotificationSourceStatusProvider{statuses: []notification.SourceStatus{status}}, ntfyWebhooks: ntfysource.NewWebhookReceiverRegistry()}
-	notRunningReq := ntfyWebhookRequest(t, status.Config.SourceInstanceID, `{"id":"evt-not-running","event":"message","topic":"home-lab-alerts","message":"not running"}`)
+	notRunningReq := ntfyWebhookRequest(t, status.Config.SourceInstanceID, `{"id":"evt-not-running","event":"message","topic":"self-hosted-alerts","message":"not running"}`)
 	notRunningRec := httptest.NewRecorder()
 	notRunningHandler.ReceiveNtfyWebhook(notRunningRec, notRunningReq)
 	if notRunningRec.Code != http.StatusServiceUnavailable || !strings.Contains(notRunningRec.Body.String(), "ntfy_webhook_receiver_unavailable") {
@@ -73,7 +73,7 @@ func TestNtfyProductionWebhookRouteDispatchesReceiverAndRejectsMalformedCases(t 
 
 	streamStatus := validNtfySourceStatusForMetadataTest()
 	streamHandler := &NotificationHandlers{sources: staticNotificationSourceStatusProvider{statuses: []notification.SourceStatus{streamStatus}}, ntfyWebhooks: registry}
-	streamReq := ntfyWebhookRequest(t, streamStatus.Config.SourceInstanceID, `{"id":"evt-stream","event":"message","topic":"home-lab-alerts","message":"stream"}`)
+	streamReq := ntfyWebhookRequest(t, streamStatus.Config.SourceInstanceID, `{"id":"evt-stream","event":"message","topic":"self-hosted-alerts","message":"stream"}`)
 	streamRec := httptest.NewRecorder()
 	streamHandler.ReceiveNtfyWebhook(streamRec, streamReq)
 	if streamRec.Code != http.StatusBadRequest || !strings.Contains(streamRec.Body.String(), "invalid_ntfy_webhook_source") {
@@ -87,7 +87,7 @@ func TestNtfyDeadLetterAPIResponseRedactsReplayEligibleRawPayload(t *testing.T) 
 	if err != nil {
 		t.Fatalf("reconstruct ntfy webhook config: %v", err)
 	}
-	rawPayload := []byte(`{"id":"evt-api-redaction","event":"message","topic":"home-lab-alerts","message":"operator-visible metadata remains","api_key":"sk_live_055","token":"ntfy-token-055","password":"hunter2","Authorization":"Bearer secret-token-055"}`)
+	rawPayload := []byte(`{"id":"evt-api-redaction","event":"message","topic":"self-hosted-alerts","message":"operator-visible metadata remains","api_key":"sk_live_055","token":"ntfy-token-055","password":"hunter2","Authorization":"Bearer secret-token-055"}`)
 	event, err := ntfysource.ParseEvent(rawPayload, cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse replay-eligible event: %v", err)
@@ -118,7 +118,7 @@ func TestNtfyDeadLetterAPIResponseRedactsReplayEligibleRawPayload(t *testing.T) 
 
 func validNtfySourceStatusForMetadataTest() notification.SourceStatus {
 	now := time.Date(2026, 5, 24, 21, 0, 0, 0, time.UTC)
-	return notification.SourceStatus{Config: notification.SourceInstanceRecord{SourceType: ntfysource.SourceType, SourceInstanceID: "ntfy-test-source", SourceForm: notification.SourceFormStream, Enabled: true, ConfigHash: "sha256:ntfy-test-source", SecretRefNames: []string{"NTFY_HOME_LAB_TOKEN"}, RedactedMetadata: map[string]string{"display_name": "ntfy test source", "endpoint_label": "operator-managed ntfy endpoint", "endpoint_ref_name": "NTFY_HOME_LAB_ENDPOINT_URL", "transport_mode": ntfysource.TransportModeStream, "auth_mode": ntfysource.AuthModeBearerToken, "topic_count": "1", "topics": "home-lab-alerts", "retry_budget": "3", "reconnect_initial_delay_seconds": "1", "reconnect_max_delay_seconds": "5", "keepalive_timeout_seconds": "30", "lag_degraded_after_seconds": "60", "lag_disconnected_after_seconds": "300", "dead_letter_retry_budget": "2", "max_payload_bytes": "4096", "pressure_threshold_count": "2"}, CreatedAt: now, UpdatedAt: now}, Health: notification.SourceHealthReport{SourceType: ntfysource.SourceType, SourceInstanceID: "ntfy-test-source", SourceForm: notification.SourceFormStream, State: notification.SourceHealthDegraded, LastErrorKind: ntfysource.ErrorConnectivityFailed, ObservedAt: now}}
+	return notification.SourceStatus{Config: notification.SourceInstanceRecord{SourceType: ntfysource.SourceType, SourceInstanceID: "ntfy-test-source", SourceForm: notification.SourceFormStream, Enabled: true, ConfigHash: "sha256:ntfy-test-source", SecretRefNames: []string{"NTFY_SELF_HOSTED_TOKEN"}, RedactedMetadata: map[string]string{"display_name": "ntfy test source", "endpoint_label": "operator-managed ntfy endpoint", "endpoint_ref_name": "NTFY_SELF_HOSTED_ENDPOINT_URL", "transport_mode": ntfysource.TransportModeStream, "auth_mode": ntfysource.AuthModeBearerToken, "topic_count": "1", "topics": "self-hosted-alerts", "retry_budget": "3", "reconnect_initial_delay_seconds": "1", "reconnect_max_delay_seconds": "5", "keepalive_timeout_seconds": "30", "lag_degraded_after_seconds": "60", "lag_disconnected_after_seconds": "300", "dead_letter_retry_budget": "2", "max_payload_bytes": "4096", "pressure_threshold_count": "2"}, CreatedAt: now, UpdatedAt: now}, Health: notification.SourceHealthReport{SourceType: ntfysource.SourceType, SourceInstanceID: "ntfy-test-source", SourceForm: notification.SourceFormStream, State: notification.SourceHealthDegraded, LastErrorKind: ntfysource.ErrorConnectivityFailed, ObservedAt: now}}
 }
 
 func validNtfyWebhookSourceStatusForMetadataTest() notification.SourceStatus {

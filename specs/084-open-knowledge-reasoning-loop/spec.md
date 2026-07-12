@@ -7,7 +7,7 @@
 that plans, drills in, reconciles, and answers ANY question type —
 comparison, why, recommendation, trade-off, multi-hop factual — instead of
 stitching snippets from a single search. **Keep the current model**
-(gemma4:26b on home-lab, gemma3:4b on dev). No model swap, no deepseek-r1
+(gemma4:26b on self-hosted, gemma3:4b on dev). No model swap, no deepseek-r1
 wiring. This delivery is the **loop + prompt + honesty** changes only, so we
 can empirically test whether gemma4:26b reasons well once it is no longer in
 a straitjacket.
@@ -25,14 +25,14 @@ before any deepseek-r1 evaluation).
 
 **Out of scope (explicit):** model selection, the hardware-tier model
 matrix, `llm_model_id`, deepseek-r1 wiring, the spec-083 card-rewards WIP,
-and the home-lab deploy itself (a separate `bubbles.devops` dispatch).
+and the self-hosted deploy itself (a separate `bubbles.devops` dispatch).
 
 ---
 
 ## 1. Problem Statement
 
 Spec 064 shipped an open-knowledge agent loop behind `/ask`. In live use on
-home-lab (gemma4:26b, 2026-06-11) the agent answers single-fact and unit
+self-hosted (gemma4:26b, 2026-06-11) the agent answers single-fact and unit
 questions well but **fails open-ended reasoning questions**.
 
 Motivating case — turn `73900d2089b6a557`:
@@ -116,7 +116,7 @@ confident verdict, and never a fabricated citation.
 - The **happy path is unchanged**: a genuine cited synthesis is returned
   verbatim with no honest-salvage frame.
 - **No model change**: `llm_model_id` and the hardware-tier matrix are
-  untouched (gemma4:26b home-lab, gemma3:4b dev).
+  untouched (gemma4:26b self-hosted, gemma3:4b dev).
 - The latency envelope is **understood and bounded**: the `/ask` fast-path is
   bounded by the HTTP `WriteTimeout`, which is kept consistent with
   `max_iterations × llm_timeout_ms`.
@@ -244,5 +244,5 @@ Feature: Genuine synthesis and the cite-back trust contract are not regressed
 - Adding a new tool, a new external dependency, or a new model call.
 - Reopening `BUG-064-001` / `BUG-064-002`.
 - Touching spec-083 card-rewards files.
-- Performing the home-lab deploy or the live re-verification (separate
+- Performing the self-hosted deploy or the live re-verification (separate
   downstream `bubbles.devops` dispatch).

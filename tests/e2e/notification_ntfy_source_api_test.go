@@ -22,7 +22,7 @@ func TestNtfyProductionWebhookRouteAcceptsConfiguredSourceAndRejectsMalformedPay
 	cfg := loadE2EConfig(t)
 	waitForHealth(t, cfg, 120*time.Second)
 
-	validResp, err := apiPostRaw(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", []byte(`{"id":"evt-e2e-ntfy-webhook","event":"message","topic":"home-lab-alerts","title":"E2E ntfy","message":"webhook delivery enters source sink"}`))
+	validResp, err := apiPostRaw(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", []byte(`{"id":"evt-e2e-ntfy-webhook","event":"message","topic":"self-hosted-alerts","title":"E2E ntfy","message":"webhook delivery enters source sink"}`))
 	if err != nil {
 		t.Fatalf("valid ntfy webhook request failed: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestNtfyDeadLetterAPIRedactsReplayEligibleRawPayload(t *testing.T) {
 	seedNtfyE2ESource(t, store, ntfyCfg)
 	t.Cleanup(func() { cleanupNtfyE2EArtifacts(t, pool, prefix) })
 	ntfyStore := ntfysource.NewStore(pool)
-	rawPayload := []byte(`{"id":"evt-sensitive-dlq","event":"message","topic":"home-lab-alerts","message":"safe-visible status remains","api_key":"raw-api-key-456","token":"secret-token-123","password":"hunter2","Authorization":"Bearer raw-bearer-789"}`)
+	rawPayload := []byte(`{"id":"evt-sensitive-dlq","event":"message","topic":"self-hosted-alerts","message":"safe-visible status remains","api_key":"raw-api-key-456","token":"secret-token-123","password":"hunter2","Authorization":"Bearer raw-bearer-789"}`)
 	event, err := ntfysource.ParseEvent(rawPayload, ntfyCfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse sensitive dead-letter event: %v", err)
@@ -164,7 +164,7 @@ func TestNtfyDeadLetterReplayAPIIsIdempotent(t *testing.T) {
 	seedNtfyE2ESource(t, store, ntfyCfg)
 	t.Cleanup(func() { cleanupNtfyE2EArtifacts(t, pool, prefix) })
 	ntfyStore := ntfysource.NewStore(pool)
-	rawPayload := []byte(`{"id":"evt-e2e-replay-burst","event":"message","topic":"home-lab-alerts","title":"Replay API","message":"operator double submit"}`)
+	rawPayload := []byte(`{"id":"evt-e2e-replay-burst","event":"message","topic":"self-hosted-alerts","title":"Replay API","message":"operator double submit"}`)
 	event, err := ntfysource.ParseEvent(rawPayload, ntfyCfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse replay API event: %v", err)
@@ -248,7 +248,7 @@ func TestNtfySourceStatusAPIRedactsInvalidConfigAndAuthFailures(t *testing.T) {
 		t.Fatalf("record auth failure health: %v", err)
 	}
 	ntfyStore := ntfysource.NewStore(pool)
-	event, err := ntfysource.ParseEvent([]byte(`{"id":"evt-auth-dlq","event":"message","topic":"home-lab-alerts","message":"token=secret-token-123"}`), ntfyCfg.DeadLetter.MaxPayloadBytes)
+	event, err := ntfysource.ParseEvent([]byte(`{"id":"evt-auth-dlq","event":"message","topic":"self-hosted-alerts","message":"token=secret-token-123"}`), ntfyCfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse auth dead-letter event: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestNtfyRecoveredHealthRequiresAcceptedEventAndNoFallbackConnectedState(t *
 		t.Fatalf("reconnect fabricated connected health instead of degraded observable retry state: %+v", reconnecting)
 	}
 	eventID := "evt-e2e-ntfy-recovered-" + strings.ReplaceAll(time.Now().UTC().Format("150405.000000000"), ".", "-")
-	validResp, err := apiPostRaw(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", []byte(`{"id":"`+eventID+`","event":"message","topic":"home-lab-alerts","title":"Recovered ntfy","message":"accepted source event restores health"}`))
+	validResp, err := apiPostRaw(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", []byte(`{"id":"`+eventID+`","event":"message","topic":"self-hosted-alerts","title":"Recovered ntfy","message":"accepted source event restores health"}`))
 	if err != nil {
 		t.Fatalf("valid ntfy recovery webhook failed: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestNtfyRecoveredHealthRequiresAcceptedEventAndNoFallbackConnectedState(t *
 		t.Fatalf("accepted ntfy event did not restore connected health with real event/check timestamps: %+v", recovered)
 	}
 	detail := ntfyAPIDetail(t, cfg, "ntfy-local-webhook")
-	if detail.LastAcceptedEvent.SourceEventID != eventID || !detail.LastAcceptedEvent.RawStored || !detail.LastAcceptedEvent.Normalized || detail.LastAcceptedEvent.Topic != "home-lab-alerts" {
+	if detail.LastAcceptedEvent.SourceEventID != eventID || !detail.LastAcceptedEvent.RawStored || !detail.LastAcceptedEvent.Normalized || detail.LastAcceptedEvent.Topic != "self-hosted-alerts" {
 		t.Fatalf("accepted ntfy event proof mismatch after recovery: %+v", detail.LastAcceptedEvent)
 	}
 }
@@ -315,7 +315,7 @@ func TestNtfyMessagePipelineAPIRoundTripShowsRawNormalizedAndSourceFields(t *tes
 	cfg := loadE2EConfig(t)
 	waitForHealth(t, cfg, 120*time.Second)
 	eventID := "evt-e2e-ntfy-pipeline-" + strings.ReplaceAll(time.Now().UTC().Format("150405.000000000"), ".", "-")
-	payload := []byte(`{"id":"` + eventID + `","event":"message","topic":"home-lab-alerts","title":"Pipeline token=secret-token-123","message":"storage failure password=hunter2","priority":5,"tags":["disk","urgent"],"safe_context":"rack-7","unsafe_token":"must-not-preserve","smackerel_loop_guard_key":"loop-e2e","smackerel_decision_id":"decision-e2e"}`)
+	payload := []byte(`{"id":"` + eventID + `","event":"message","topic":"self-hosted-alerts","title":"Pipeline token=secret-token-123","message":"storage failure password=hunter2","priority":5,"tags":["disk","urgent"],"safe_context":"rack-7","unsafe_token":"must-not-preserve","smackerel_loop_guard_key":"loop-e2e","smackerel_decision_id":"decision-e2e"}`)
 	resp, err := apiPostRaw(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", payload)
 	if err != nil {
 		t.Fatalf("pipeline ntfy webhook failed: %v", err)
@@ -332,10 +332,10 @@ func TestNtfyMessagePipelineAPIRoundTripShowsRawNormalizedAndSourceFields(t *tes
 		t.Fatalf("ntfy detail did not expose raw/normalized event chain: %+v", detail.LastAcceptedEvent)
 	}
 	eventDetail := notificationEventDetail(t, cfg, detail.LastAcceptedEvent.NotificationID)
-	if eventDetail.Notification.SourceInstanceID != "ntfy-local-webhook" || eventDetail.Notification.SourceEventID != eventID || eventDetail.Notification.DeliveryMetadata["topic"] != "home-lab-alerts" {
+	if eventDetail.Notification.SourceInstanceID != "ntfy-local-webhook" || eventDetail.Notification.SourceEventID != eventID || eventDetail.Notification.DeliveryMetadata["topic"] != "self-hosted-alerts" {
 		t.Fatalf("normalized ntfy notification lost source/topic provenance: %+v", eventDetail.Notification)
 	}
-	if eventDetail.RawEvent.SourceSpecific["ntfy.priority"] != "urgent" || eventDetail.RawEvent.SourceSpecific["ntfy.topic"] != "home-lab-alerts" || !strings.Contains(eventDetail.RawEvent.SourceSpecific["ntfy.unknown_json"], "safe_context") {
+	if eventDetail.RawEvent.SourceSpecific["ntfy.priority"] != "urgent" || eventDetail.RawEvent.SourceSpecific["ntfy.topic"] != "self-hosted-alerts" || !strings.Contains(eventDetail.RawEvent.SourceSpecific["ntfy.unknown_json"], "safe_context") {
 		t.Fatalf("raw ntfy source-specific fields missing expected provenance: %+v", eventDetail.RawEvent.SourceSpecific)
 	}
 	if strings.Contains(eventDetail.RawEvent.SourceSpecific["ntfy.unknown_json"], "unsafe_token") || strings.Contains(eventDetail.Notification.Body, "hunter2") || strings.Contains(eventDetail.RawEvent.SourceSpecific["body"], "hunter2") {
@@ -427,7 +427,7 @@ func ntfyAPIDetail(t *testing.T, cfg e2eConfig, sourceID string) ntfyDetailRespo
 }
 
 func ntfyE2EConfig(sourceID string) ntfysource.Config {
-	return ntfysource.Config{Enabled: true, SourceInstanceID: sourceID, SourceForm: notification.SourceFormWebhook, TransportMode: ntfysource.TransportModeWebhook, EndpointURL: "http://smackerel-core:8080/api/notifications/sources/" + sourceID + "/ntfy/webhook", EndpointRefName: "NTFY_E2E_ENDPOINT_URL", Topics: []string{"home-lab-alerts"}, Auth: ntfysource.AuthConfig{Mode: ntfysource.AuthModeBearerToken, SecretRefNames: []string{"NTFY_E2E_TOKEN_REF"}}, Reconnect: ntfysource.ReconnectConfig{RetryBudget: 3, InitialDelaySeconds: 1, MaxDelaySeconds: 5, KeepaliveTimeoutSeconds: 30}, Lag: ntfysource.LagConfig{DegradedAfterSeconds: 60, DisconnectedAfterSeconds: 300}, DeadLetter: ntfysource.DeadLetterConfig{RetryBudget: 2, MaxPayloadBytes: 4096, PressureThresholdCount: 2}, RedactedMetadata: map[string]string{"display_name": "ntfy e2e redaction source", "endpoint_label": "redacted endpoint"}, ConfigHash: "sha256:" + sourceID}
+	return ntfysource.Config{Enabled: true, SourceInstanceID: sourceID, SourceForm: notification.SourceFormWebhook, TransportMode: ntfysource.TransportModeWebhook, EndpointURL: "http://smackerel-core:8080/api/notifications/sources/" + sourceID + "/ntfy/webhook", EndpointRefName: "NTFY_E2E_ENDPOINT_URL", Topics: []string{"self-hosted-alerts"}, Auth: ntfysource.AuthConfig{Mode: ntfysource.AuthModeBearerToken, SecretRefNames: []string{"NTFY_E2E_TOKEN_REF"}}, Reconnect: ntfysource.ReconnectConfig{RetryBudget: 3, InitialDelaySeconds: 1, MaxDelaySeconds: 5, KeepaliveTimeoutSeconds: 30}, Lag: ntfysource.LagConfig{DegradedAfterSeconds: 60, DisconnectedAfterSeconds: 300}, DeadLetter: ntfysource.DeadLetterConfig{RetryBudget: 2, MaxPayloadBytes: 4096, PressureThresholdCount: 2}, RedactedMetadata: map[string]string{"display_name": "ntfy e2e redaction source", "endpoint_label": "redacted endpoint"}, ConfigHash: "sha256:" + sourceID}
 }
 
 func seedNtfyE2ESource(t *testing.T, store *notification.Store, cfg ntfysource.Config) {

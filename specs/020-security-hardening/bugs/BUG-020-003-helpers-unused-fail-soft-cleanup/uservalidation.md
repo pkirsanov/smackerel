@@ -6,7 +6,7 @@
 
 ## Checklist
 
-- [x] AC-1 — A single-scope bug packet exists at `specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/` with all 7 standard artifacts (`spec.md`, `design.md`, `scopes.md`, `report.md`, `uservalidation.md`, `state.json`, `scenario-manifest.json`); `state.json` declares `parentWorkflow.mode = "home-lab-readiness-rescan-2026-05-14"`, `workflowMode = "bugfix-fastlane"`, and `discoveryRef.findingId = "HL-RESCAN-014"`. → `report.md` Summary + Validation Evidence → Packet completeness.
+- [x] AC-1 — A single-scope bug packet exists at `specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/` with all 7 standard artifacts (`spec.md`, `design.md`, `scopes.md`, `report.md`, `uservalidation.md`, `state.json`, `scenario-manifest.json`); `state.json` declares `parentWorkflow.mode = "self-hosted-readiness-rescan-2026-05-14"`, `workflowMode = "bugfix-fastlane"`, and `discoveryRef.findingId = "HL-RESCAN-014"`. → `report.md` Summary + Validation Evidence → Packet completeness.
 - [x] AC-2 — `grep_search` of all `*.go` files for the dead-set symbols (`parseFloatEnv`, `parseJSONArrayEnv`, `parseJSONObjectEnv`, `parseJSONObject`, `parseJSONObjectVal`) returns ZERO matches anywhere in the repo after the fix lands. → `report.md` Validation Evidence → Symbol-removal audit.
 - [x] AC-3 — `cmd/core/helpers.go` does not contain any `os.Getenv("KEY")` followed by a `return <literal>` / `return nil` silent-fallback path; any env reads remaining follow the Gate G028 canonical Go pattern. → `report.md` Test Evidence §6 + Validation Evidence → Imports verification.
 - [x] AC-4 — `cmd/core/main_test.go` does not contain any test function that locks the silent-fallback semantics for the deleted helpers. → `report.md` Test Evidence §1 (8 preserved `TestParseJSONArray_*` PASS, dead-set tests absent) + Code-diff stat in §5.
@@ -31,7 +31,7 @@
 Confirmed: this packet did NOT touch:
 
 - Foreign-owned spec 020 content (`spec.md`, `design.md`, `scopes.md`, `state.json`, `report.md`, `uservalidation.md` at the parent feature level — read-only references only).
-- Other parent specs' bug packets under the `home-lab-readiness-rescan-2026-05-14` discovery mode.
+- Other parent specs' bug packets under the `self-hosted-readiness-rescan-2026-05-14` discovery mode.
 - Parallel-session WIP under `specs/041-qf-companion-connector/` and `specs/052-bundle-secret-injection-contract/`.
 - Live production callers of `parseJSONArray` at `cmd/core/connectors.go:76,103`.
 - The ML sidecar (`ml/`) — Python equivalent finding HL-RESCAN-013 closed separately as BUG-020-002.

@@ -19,7 +19,7 @@
 //  5. Build api.Dependencies with Environment="production" and
 //     AuthConfig.Enabled=true so bearerAuthMiddleware runs Branch 1
 //     (per-user PASETO + RevocationCache) — the same code path the
-//     home-lab production deployment runs.
+//     self-hosted production deployment runs.
 //  6. Spin up the real Chi router under httptest.NewTLSServer so
 //     Secure cookies survive the round-trip in the cookie jar.
 //  7. POST /v1/web/login with the PASETO body, capture Set-Cookie,

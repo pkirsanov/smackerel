@@ -10,7 +10,7 @@ Self-registration is gated by the dedicated OPTIONAL secret `WEB_REGISTRATION_IN
 
 ## Completion Statement (MANDATORY)
 
-**All five scopes are Done.** The invite-gated self-registration feature is implemented end-to-end and proven live on the deployed home-lab core. SCOPE-01..04 (delivered by the implement phase): the dedicated OPTIONAL `WEB_REGISTRATION_INVITE_TOKEN` secret across the SST 3-mirror + the substitution-sentinel emission + loader + `Dependencies` wiring + the un-substituted-sentinel leak-guard; the CSP-safe `GET /register` page; the security-critical `POST /v1/web/register` handler (constant-time gate FIRST, no-overwrite, no cookie, value-safe, non-enumerating); and the router wiring + `/login?registered=1` success-flash + per-IP rate-limit. The full spec-070 `/login` regression suite is GREEN (AC-9). SCOPE-05 (live deploy proof) was executed autonomously this session: the feature deployed to home-lab via `apply.sh --trust-model=ci-keyless` (core+ml healthy, image digest drift-check matched, caddy edge verify OK, audit-log `outcome=success`), and the live SCN-1..5 register → login → `/cards` + wrong-token scenarios all passed against the deployed core (ephemeral proof user, cleaned up afterward). The validate phase (full Go module green) and audit phase (`artifact-lint` PASSED) are recorded below. Per scope: `config generate`, `test unit --go`, `check` + `format --check` + `lint` all exit 0.
+**All five scopes are Done.** The invite-gated self-registration feature is implemented end-to-end and proven live on the deployed self-hosted core. SCOPE-01..04 (delivered by the implement phase): the dedicated OPTIONAL `WEB_REGISTRATION_INVITE_TOKEN` secret across the SST 3-mirror + the substitution-sentinel emission + loader + `Dependencies` wiring + the un-substituted-sentinel leak-guard; the CSP-safe `GET /register` page; the security-critical `POST /v1/web/register` handler (constant-time gate FIRST, no-overwrite, no cookie, value-safe, non-enumerating); and the router wiring + `/login?registered=1` success-flash + per-IP rate-limit. The full spec-070 `/login` regression suite is GREEN (AC-9). SCOPE-05 (live deploy proof) was executed autonomously this session: the feature deployed to self-hosted via `apply.sh --trust-model=ci-keyless` (core+ml healthy, image digest drift-check matched, caddy edge verify OK, audit-log `outcome=success`), and the live SCN-1..5 register → login → `/cards` + wrong-token scenarios all passed against the deployed core (ephemeral proof user, cleaned up afterward). The validate phase (full Go module green) and audit phase (`artifact-lint` PASSED) are recorded below. Per scope: `config generate`, `test unit --go`, `check` + `format --check` + `lint` all exit 0.
 
 ## Test Evidence
 
@@ -107,8 +107,8 @@ EXIT=0
 
 ```text
 + go test -v -run BundleSecretContract -count=1 ./...
-=== RUN   TestBundleSecretContract_NoLiteralSecretsInHomeLab
---- PASS: TestBundleSecretContract_NoLiteralSecretsInHomeLab (6.49s)
+=== RUN   TestBundleSecretContract_NoLiteralSecretsInSelfHosted
+--- PASS: TestBundleSecretContract_NoLiteralSecretsInSelfHosted (6.49s)
 === RUN   TestBundleSecretContract_AdversarialA1_DriftDetector
 --- PASS: TestBundleSecretContract_AdversarialA1_DriftDetector (3.16s)
 === RUN   TestBundleSecretContract_AdversarialA2_LeakageDetector
@@ -120,7 +120,7 @@ EXIT=0
 ok      github.com/smackerel/smackerel/internal/deploy  22.717s
 ```
 
-The happy-path `NoLiteralSecretsInHomeLab` proves the 3-mirror byte-parity (now 8 keys) holds AND the home-lab bundle `app.env` emits `WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__`. The A2 leakage-detector required a lockstep update to its hardcoded `SHELL_SECRET_KEYS` array mirror (it now includes the new key, preserving its drop-POSTGRES_PASSWORD intent) — first run FAILED the A2 precondition (`live config.sh does not contain expected SHELL_SECRET_KEYS array shape`), fixed by updating the test mirror, re-run GREEN above.
+The happy-path `NoLiteralSecretsInSelfHosted` proves the 3-mirror byte-parity (now 8 keys) holds AND the self-hosted bundle `app.env` emits `WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__`. The A2 leakage-detector required a lockstep update to its hardcoded `SHELL_SECRET_KEYS` array mirror (it now includes the new key, preserving its drop-POSTGRES_PASSWORD intent) — first run FAILED the A2 precondition (`live config.sh does not contain expected SHELL_SECRET_KEYS array shape`), fixed by updating the test mirror, re-run GREEN above.
 
 #### scope-01-loadauthconfig
 **Phase:** implement
@@ -169,7 +169,7 @@ The guard test asserts `IsPlaceholder("__SECRET_PLACEHOLDER__WEB_REGISTRATION_IN
 
 #### scope-01-config-generate
 **Phase:** implement
-**Command:** `./smackerel.sh config generate` (dev) + `./smackerel.sh config generate --env home-lab --bundle --source-sha 0000…0000` (home paths redacted)
+**Command:** `./smackerel.sh config generate` (dev) + `./smackerel.sh config generate --env self-hosted --bundle --source-sha 0000…0000` (home paths redacted)
 **Exit Code:** 0
 **Claim Source:** executed
 
@@ -181,18 +181,18 @@ Generated ~/smackerel/config/generated/nats.conf
 Generated ~/smackerel/config/generated/prometheus.yml
 dev.env:405:WEB_REGISTRATION_INVITE_TOKEN=
 
-# home-lab bundle — production-class placeholder emission
-config-validate: skipped for production-class target env=home-lab (placeholder mode; runtime check enforces at container start)
-Generated ~/smackerel/config/generated/home-lab.env
-Generated ~/smackerel/dist/config-bundles/config-bundle-home-lab-0000000000000000000000000000000000000000.tar.gz
+# self-hosted bundle — production-class placeholder emission
+config-validate: skipped for production-class target env=self-hosted (placeholder mode; runtime check enforces at container start)
+Generated ~/smackerel/config/generated/self-hosted.env
+Generated ~/smackerel/dist/config-bundles/config-bundle-self-hosted-0000000000000000000000000000000000000000.tar.gz
   sha256: 4cadafcf4a56602f13eb34750e66d507a14149dc314dd14f4d1dfa9f68b46cf7
-  environment: home-lab
+  environment: self-hosted
 EXIT=0
-home-lab.env:405:WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__
+self-hosted.env:405:WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__
 bundle app.env:404:WEB_REGISTRATION_INVITE_TOKEN=__SECRET_PLACEHOLDER__WEB_REGISTRATION_INVITE_TOKEN__
 ```
 
-Dev emits the empty value (registration disabled locally); home-lab (production-class) emits the placeholder marker into both the generated env and the bundle's `app.env` for the knb adapter to substitute.
+Dev emits the empty value (registration disabled locally); self-hosted (production-class) emits the placeholder marker into both the generated env and the bundle's `app.env` for the knb adapter to substitute.
 
 #### scope-01-build-gate
 **Phase:** implement
@@ -703,17 +703,17 @@ Build Quality Gate green: `check` (build + SST in sync), `format --check` (clean
 
 ---
 
-## SCOPE-05 — Live home-lab deploy proof
+## SCOPE-05 — Live self-hosted deploy proof
 
 <!-- bubbles:g040-skip-begin -->
 <!-- All SCOPE-05 evidence is REAL, captured this session against the deployed
-     home-lab core. It legitimately cites the SST substitution-sentinel audit
+     self-hosted core. It legitimately cites the SST substitution-sentinel audit
      field (`placeholder_remaining`) and the `__SECRET_PLACEHOLDER__…__` marker
      — shipped mechanisms, not deferred work — so this section is excluded from
      the deferral-language scan. -->
 
 > All SCOPE-05 evidence below is REAL, captured this session against the
-> deployed home-lab core via value-safe `curl` (the invite-token and password
+> deployed self-hosted core via value-safe `curl` (the invite-token and password
 > values never appear in any command echo, response body, header, redirect, or
 > this transcript — they were passed through shell variables, never printed).
 > The ephemeral proof account was deleted afterward (count → 0). Host
@@ -729,7 +729,7 @@ deployed core's environment. The apply audit-log records only the secret-key
 summary (key names + aggregate counts — never the value):
 
 ```text
-event=apply  product=smackerel  target=home-lab  trust_model=ci-keyless
+event=apply  product=smackerel  target=self-hosted  trust_model=ci-keyless
 sourceSha=9fc830f7a8af6bc751d432d73a510f412ee94ee4
 effective_env_secret_keys=[ …, CARD_REWARDS_GCAL_CREDENTIALS, WEB_REGISTRATION_INVITE_TOKEN ]
 substituted_count=8
@@ -743,27 +743,27 @@ outcome=success
 env). The token value itself never appears — only the key name and counts.
 
 #### scope-05-deploy
-**Phase:** deploy (autonomous) · **Command:** `apply.sh --trust-model=ci-keyless` + `deploy-target home-lab verify` · **Claim Source:** executed
+**Phase:** deploy (autonomous) · **Command:** `apply.sh --trust-model=ci-keyless` + `deploy-target self-hosted verify` · **Claim Source:** executed
 
 ```text
 === knb apply.sh --trust-model=ci-keyless (combined sourceSha 9fc830f7) ===
 core image:   sha256:44b0c047bd55fddffce9edecfa5dc356f7b3b6d6f6ee8f70fc447171057d7028
 ml image:     sha256:51c747d30631524f0ee7571bbedf9dc208d473e31d1f5f1b7900b47fdeff7ea8
-config bundle: home-lab-9fc830f7a8af6bc751d432d73a510f412ee94ee4
+config bundle: self-hosted-9fc830f7a8af6bc751d432d73a510f412ee94ee4
 bundle sha256: d427d44224252e7ad2a4583e18121e5e2b5c3dbbfc2725277167873ca1b8e443
 apply: OK
-container smackerel-home-lab-smackerel-core-1: running  health=healthy
-container smackerel-home-lab-smackerel-ml-1:   running  health=healthy
+container smackerel-self-hosted-smackerel-core-1: running  health=healthy
+container smackerel-self-hosted-smackerel-ml-1:   running  health=healthy
 image digest drift-check: MATCHED (running digests == manifest pinned digests)
 caddy edge verify: OK
 audit-log: outcome=success
-deploy-target home-lab verify: OK
+deploy-target self-hosted verify: OK
 ```
 
 Apply succeeded under the `ci-keyless` trust model; both core and ml are
 `healthy`; the running image digests match the manifest-pinned digests
 (drift-check MATCHED); the tailnet edge (caddy) verifies; the audit-log line is
-`outcome=success`; and `deploy-target home-lab verify` is OK.
+`outcome=success`; and `deploy-target self-hosted verify` is OK.
 
 #### scope-05-e2e-page
 **Phase:** e2e (live, no interception) · **Claim Source:** executed
@@ -1073,8 +1073,8 @@ CONFIG_GENERATE_EXIT=0
 --- PASS: TestSecretKeys_KeepAppPasswordRegistered (0.00s)
 ok      github.com/smackerel/smackerel/internal/config  0.031s
 
-# home-lab bundle secret contract (internal/deploy)
---- PASS: TestBundleSecretContract_NoLiteralSecretsInHomeLab (6.24s)   ← placeholder-only, 3-mirror parity
+# self-hosted bundle secret contract (internal/deploy)
+--- PASS: TestBundleSecretContract_NoLiteralSecretsInSelfHosted (6.24s)   ← placeholder-only, 3-mirror parity
 --- PASS: TestBundleSecretContract_AdversarialA1_DriftDetector (3.24s)
 --- PASS: TestBundleSecretContract_AdversarialA2_LeakageDetector (3.26s)
 --- PASS: TestBundleSecretContract_AdversarialA3_DeterminismDetector (6.54s)  ← bundle determinism
@@ -1083,7 +1083,7 @@ ok      github.com/smackerel/smackerel/internal/deploy  22.622s
 ```
 
 SST is in sync; the new `WEB_REGISTRATION_INVITE_TOKEN` preserves the 3-mirror
-byte-parity, the home-lab bundle emits the **placeholder** (no literal value),
+byte-parity, the self-hosted bundle emits the **placeholder** (no literal value),
 and the determinism + leakage adversarial guards still pass.
 
 #### regr-check-3

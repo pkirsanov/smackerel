@@ -2,8 +2,8 @@
 
 ## 1. Investigation method
 
-All leads in `bug.md` were verified against the source tree AND the live home-lab
-deployment (read-only `tailscale ssh evo-x2 -- docker …`). Nothing below is
+All leads in `bug.md` were verified against the source tree AND the live self-hosted
+deployment (read-only `tailscale ssh <deploy-host> -- docker …`). Nothing below is
 assumed.
 
 ## 2. Routing is correct — the lead was wrong
@@ -182,7 +182,7 @@ keep the change minimal.
 
 ## 7. Deployment note
 
-Both fixes are in-repo (code + SST). The **live** home-lab symptom will only clear
+Both fixes are in-repo (code + SST). The **live** self-hosted symptom will only clear
 after a rebuild + config-bundle regen + redeploy through the knb adapter
 (`bubbles.devops`). Code+config alone fixes the repo; it does not mutate the
 running container. This is recorded as the next-owner handoff.

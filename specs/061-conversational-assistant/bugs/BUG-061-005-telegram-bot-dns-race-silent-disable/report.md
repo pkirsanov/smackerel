@@ -3,7 +3,7 @@
 ## Pre-fix observation (2026-06-09)
 
 ```bash
-$ ssh <deploy-host> 'docker logs smackerel-home-lab-smackerel-core-1 --since 7h --until 6h 2>&1 \
+$ ssh <deploy-host> 'docker logs smackerel-self-hosted-smackerel-core-1 --since 7h --until 6h 2>&1 \
               | grep -iE "telegram|bot" | tail -10'
 
 {"time":"2026-06-09T07:56:21.134574598Z","level":"WARN","msg":"telegram bot initialization failed","error":"create bot API: Post \"https://api.telegram.org/bot.../getMe\": dial tcp: lookup api.telegram.org on 127.0.0.11:53: server misbehaving"}
@@ -15,7 +15,7 @@ Total bot downtime: ~6h35m (07:56 PDT → 14:33 PDT manual restart).
 DNS was healthy inside the container moments later:
 
 ```bash
-$ ssh <deploy-host> 'docker exec smackerel-home-lab-smackerel-core-1 \
+$ ssh <deploy-host> 'docker exec smackerel-self-hosted-smackerel-core-1 \
                 wget -qO- --timeout=3 https://api.telegram.org/ 2>&1 | head -5'
 <!DOCTYPE html>
 <html class="">
@@ -56,7 +56,7 @@ status=completed conclusion=success
 Live deploy (via ci-keyless promote on knb):
 
 ```bash
-$ ssh <deploy-host> 'docker logs smackerel-home-lab-smackerel-core-1 --since 35m 2>&1 \
+$ ssh <deploy-host> 'docker logs smackerel-self-hosted-smackerel-core-1 --since 35m 2>&1 \
                 | grep "telegram bot started"'
 {"time":"2026-06-09T15:04:57.062286122Z","level":"INFO","msg":"telegram bot started","bot_name":"smackerel_bot"}
 ```

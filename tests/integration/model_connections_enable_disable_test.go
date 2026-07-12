@@ -21,7 +21,7 @@
 // This leg proves the LIVE wiring binds end-to-end. As of the SCOPE-06 backend
 // dispatch the connstore.Store CredentialSource + effective-enabled predicate
 // are wired, but the live catalog-aggregator path (SCOPE-04 discovery consuming
-// connstore.Store.DiscoveryConnections) is the deferred SCOPE-07 / home-lab
+// connstore.Store.DiscoveryConnections) is the deferred SCOPE-07 / self-hosted
 // bubbles.devops dispatch, so this test t.Skip's with an explicit message
 // rather than failing until those preconditions are seeded.
 //
@@ -44,7 +44,7 @@ func TestEnableDisable_CatalogMembershipFollows_Spec096(t *testing.T) {
 		t.Skip("DEFERRED (SCOPE-06 C7): set SPEC096_ADMIN_LIVE_CORE_URL + " +
 			"SPEC096_ADMIN_LIVE_OPERATOR_TOKEN to run the live enable/disable " +
 			"catalog-membership leg against the ephemeral stack; the live " +
-			"catalog-aggregator wiring is the deferred SCOPE-07 / home-lab dispatch")
+			"catalog-aggregator wiring is the deferred SCOPE-07 / self-hosted dispatch")
 	}
 	// Live assertion (run only when the env above is seeded): wire + test +
 	// enable a db-mode slot via /v1/admin/model-connections/{id}/{credential,
@@ -52,6 +52,6 @@ func TestEnableDisable_CatalogMembershipFollows_Spec096(t *testing.T) {
 	// present; POST …/disable and assert they are removed; re-enable and assert
 	// they return — proving the effective-enabled predicate is the single gate.
 	t.Fatal("SPEC096_ADMIN_LIVE_* set but the live enable/disable catalog-membership " +
-		"assertion is not yet implemented; it lands with the SCOPE-07 / home-lab " +
+		"assertion is not yet implemented; it lands with the SCOPE-07 / self-hosted " +
 		"aggregator wiring dispatch (do not green-paint this leg)")
 }

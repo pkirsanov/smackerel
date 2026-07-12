@@ -16,7 +16,7 @@
 > Dev has no GPU/Ollama daemon, so in-repo proof is mechanism-level
 > (fake-LLM agent traces, pure-validator tables, handler/adapter tests) —
 > exactly the spec-087 precedent. The decisive live
-> `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on home-lab hardware is a
+> `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on self-hosted hardware is a
 > SEPARATE downstream `bubbles.devops` dispatch. **No commit/push here.**
 > `nextRequiredOwner` after implement+test = `bubbles.devops` for the live
 > A/B.
@@ -61,7 +61,7 @@ or a missing validation checkpoint BEFORE the full plan is implemented.
 - **`agenttool`**: `SetSwitchableModels(*modelswitch.Allowlist)` / `SwitchableModels() *modelswitch.Allowlist` (atomic singleton, parallels `SetAgent`/`CurrentAgent`); `outputEnvelope.Model string json:"model,omitempty"`
 - **`contracts.AssistantMessage.ModelOverride string`** (NEW typed field — owner directive: NOT `TransportMetadata`); **`contracts.ModelAttribution{ ModelID string; OverrideApplied bool }`** + `AssistantResponse.ModelAttribution *ModelAttribution`
 - **`api.AgentInvokeRequest.Model string`** (NEW field) + 400 rejection envelope `{status, error_code, rejected_model, allowed_models, default_model, message}`
-- **SST** `assistant.open_knowledge.switchable_models: []string` (REQUIRED non-empty when enabled) → env `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS`; home-lab override `environments.<env>.assistant_open_knowledge_switchable_models`
+- **SST** `assistant.open_knowledge.switchable_models: []string` (REQUIRED non-empty when enabled) → env `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS`; self-hosted override `environments.<env>.assistant_open_knowledge_switchable_models`
 
 ### Validation Checkpoints (where breakage is caught before the next scope)
 
@@ -107,7 +107,7 @@ it.
 ### Surface (design CHANGE 1,2,3,4,5)
 
 - `config/smackerel.yaml` — NEW `assistant.open_knowledge.switchable_models`
-  (dev `[ "gemma3:4b" ]`) + the home-lab
+  (dev `[ "gemma3:4b" ]`) + the self-hosted
   `environments.<env>.assistant_open_knowledge_switchable_models:
   [ "gemma4:26b", "deepseek-r1:7b" ]` override. REQUIRED non-empty when
   enabled; NEVER a silent default (G028).
@@ -175,7 +175,7 @@ Scenario: SCN-088-A07 — Untrusted / un-profiled / over-envelope model never pa
 | supplementary (A06) | `internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_Resolve_SingleRejectionContract_Spec088` | unit | The SAME raw string ⇒ a byte-identical `Rejection` every call (the one shared contract both surfaces render — parity seam, design Two-Surface Parity table). |
 | build fail-loud | `internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_NewAllowlist_FailLoudBuild_Spec088` | unit | `NewAllowlist` rejects: empty switchable set; an entry with no profile; an entry that busts the envelope; an empty `defaultModel`. |
 | config fail-loud | `internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_SwitchableModelsRequiredWhenEnabled_Spec088` + extend `TestOpenKnowledgeConfig_MissingEnvVars` | unit | Empty `switchable_models` + enabled ⇒ fail-loud; missing `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS` env ⇒ fail-loud. |
-| Regression E2E (A02/A07) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` rejection path returns the fail-loud rejection (no backend call for the rejected model); executed in the home-lab `bubbles.devops` re-verify dispatch (model+GPU-dependent, C7). |
+| Regression E2E (A02/A07) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` rejection path returns the fail-loud rejection (no backend call for the rejected model); executed in the self-hosted `bubbles.devops` re-verify dispatch (model+GPU-dependent, C7). |
 
 ### Definition of Done — SCOPE-01 (all unchecked — implementation pending)
 
@@ -191,8 +191,8 @@ Scenario: SCN-088-A07 — Untrusted / un-profiled / over-envelope model never pa
 
 **Tier-2 (role-specific: config + validator):**
 
-- [x] D01-T2-1 — `assistant.open_knowledge.switchable_models` is SST + fail-loud (REQUIRED non-empty when enabled); dev `[gemma3:4b]`; home-lab override `[gemma4:26b, deepseek-r1:7b]`; resolved via the `config.sh` env-override pattern; `./smackerel.sh config generate` EXIT 0 with `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS` present in the generated dev + test env. → Evidence: report.md → SCOPE-01.
-- [x] D01-T2-2 — `validateModelEnvelopes` fails loud at config-generation for a `switchable_models` entry with no `model_memory_profiles` entry OR that busts the co-residence envelope; the home-lab set is envelope-consistent (gemma4:26b 18432 + deepseek-r1:7b 4864 = 23296 ≤ 28672) and `deepseek-r1:32b` is correctly NOT switchable there (40960 > 28672). → Evidence: report.md → SCOPE-01 (envelope arithmetic + test).
+- [x] D01-T2-1 — `assistant.open_knowledge.switchable_models` is SST + fail-loud (REQUIRED non-empty when enabled); dev `[gemma3:4b]`; self-hosted override `[gemma4:26b, deepseek-r1:7b]`; resolved via the `config.sh` env-override pattern; `./smackerel.sh config generate` EXIT 0 with `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS` present in the generated dev + test env. → Evidence: report.md → SCOPE-01.
+- [x] D01-T2-2 — `validateModelEnvelopes` fails loud at config-generation for a `switchable_models` entry with no `model_memory_profiles` entry OR that busts the co-residence envelope; the self-hosted set is envelope-consistent (gemma4:26b 18432 + deepseek-r1:7b 4864 = 23296 ≤ 28672) and `deepseek-r1:32b` is correctly NOT switchable there (40960 > 28672). → Evidence: report.md → SCOPE-01 (envelope arithmetic + test).
 - [x] D01-T2-3 — `modelswitch.Resolve` returns a zero `Override` for empty input (baseline, FR-1), an `Override{SynthesisModel}` for an in-list model, and a typed `Rejection` (never a silent default, never a backend passthrough) for off-list / un-profiled / over-envelope input (SCN-088-A02, A07). → Evidence: report.md → SCOPE-01.
 - [x] D01-T2-4 — The two reason-codes are correct and distinguishable: `model_not_allowlisted` (unknown/un-profiled/not-offered) vs `model_over_memory_envelope` (profiled but busts the env envelope); the `Rejection.Message` is the verbatim UX sentence for each. → Evidence: report.md → SCOPE-01 (golden test).
 - [x] D01-T2-5 — Each SCN-088-A02/A07 test is non-tautological and ADVERSARIAL: it fails if `Resolve` ever accepts an off-list/over-envelope model or silently falls back to baseline; no bailout early-returns. → Evidence: report.md → SCOPE-01 RED-before (neutralised validator).
@@ -317,7 +317,7 @@ Scenario: SCN-088-A08 — The latency envelope stays honest under a slower switc
 | SCN-088-A08 | `internal/assistant/openknowledge/agent/modelswitch_agent_spec088_test.go::TestAgent_SynthesisOverride_PreservesIterationEnvelope_Spec088` | unit | `WithModelOverride` changes only `SynthesisModel`; `MaxIterations` and `SynthesisRetryBudget` (the `WriteTimeout` formula inputs) are unchanged ⇒ the documented `(6+1)×600s` worst case is preserved (no added turns). |
 | — (contracts) | `internal/assistant/contracts/response_test.go::TestAssistantResponse_FieldInventory_ModelAttribution_Spec088` | unit | The `AssistantResponse` field inventory includes `ModelAttribution`; zero value ⇒ no attribution (baseline). |
 | — (regression) | `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go` + `synthesis_spec087_test.go` | unit | The spec-084 + spec-087 agent suites stay GREEN unchanged: a zero override is byte-for-byte the spec-087 path. |
-| Regression E2E (A01/A04/A05) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` override path returns a grounded, cited, model-attributed answer with the trust perimeter intact; executed in the home-lab `bubbles.devops` re-verify dispatch (C7). |
+| Regression E2E (A01/A04/A05) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` override path returns a grounded, cited, model-attributed answer with the trust perimeter intact; executed in the self-hosted `bubbles.devops` re-verify dispatch (C7). |
 
 ### Definition of Done — SCOPE-02 (all unchecked — implementation pending)
 
@@ -422,7 +422,7 @@ Scenario: SCN-088-A06 — Telegram and web/HTTP /ask validate and apply the over
 | SCN-088-A06 | `internal/assistant/openknowledge/modelswitch/allowlist_test.go::TestAllowlist_Resolve_SingleRejectionContract_Spec088` (parity seam) | unit | The SAME off-allowlist string ⇒ a byte-identical `Rejection` — the one shared contract both surfaces are bound to render verbatim (design Two-Surface Parity table). |
 | SCN-088-A03 / A04 | `internal/telegram/assistant_adapter/render_outbound_test.go::TestBuildTelegramRendering_ModelFooterOnOverrideOnly_Spec088` (ADVERSARIAL) | functional | `OverrideApplied:true` ⇒ trailing `— model: <id>` footer; baseline (`ModelAttribution == nil`) ⇒ NO footer. Fails if a baseline answer grows a footer (NFR-4) or an override answer loses it. |
 | SCN-088-A03 | `internal/api/agent_invoke_test.go::TestAgentInvoke_NoModel_EnvelopeModelPresent_Spec088` | functional | A request with no `model` field ⇒ the envelope still reports the resolved baseline `model` (structured metadata always present). |
-| Regression E2E (A06) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` override behaves identically on Telegram + HTTP (same model answers, same rejection); executed in the home-lab `bubbles.devops` re-verify dispatch (C7). |
+| Regression E2E (A06) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | e2e-api | The live `/ask` override behaves identically on Telegram + HTTP (same model answers, same rejection); executed in the self-hosted `bubbles.devops` re-verify dispatch (C7). |
 
 ### Definition of Done — SCOPE-03 (all unchecked — implementation pending)
 
@@ -464,7 +464,7 @@ path; do not remediate here (finding F-ENV-083, inherited from spec
 This plan ships and validates the switchable-model **primitive** in-repo
 only (mechanism-level proof: pure-validator tables, fake-LLM agent
 traces, handler/adapter tests). Dev has no GPU/Ollama daemon. The
-decisive live `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on home-lab
+decisive live `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on self-hosted
 hardware — the proof spec 087 could not run on dev — is a SEPARATE
 downstream `bubbles.devops` dispatch. After implement + test complete and
 all three scopes are validated-in-repo, `nextRequiredOwner = bubbles.devops`

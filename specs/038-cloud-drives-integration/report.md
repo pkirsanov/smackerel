@@ -4902,7 +4902,7 @@ $ bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integrati
 |---|---|---|
 | Intent | ✅ Met | Clear 22 + 22 reachable Go-stdlib vulnerabilities in 038's primary surfaces (`internal/drive/...`, `internal/api/...`) by upgrading the Go runtime to ≥1.25.9. |
 | Success Signal | ✅ Met | `govulncheck ./internal/drive/...` and `govulncheck ./internal/api/...` both report `Your code is affected by 0 vulnerabilities` on go1.25.10 (was 22 + 22 on go1.24.3). |
-| Hard Constraints | ✅ Met | No source code modified. No spec status / certification fields touched. No third-party dependencies bumped. User WIP in `.github/workflows/build.yml` + `deploy/contract.yaml` + `deploy/home-lab/manifest.yaml` + `deploy/home-lab/params.yaml` left intact. |
+| Hard Constraints | ✅ Met | No source code modified. No spec status / certification fields touched. No third-party dependencies bumped. User WIP in `.github/workflows/build.yml` + `deploy/contract.yaml` + `deploy/self-hosted/manifest.yaml` + `deploy/self-hosted/params.yaml` left intact. |
 | Failure Condition | ✅ Avoided | `./smackerel.sh build` (EXIT=0), `./smackerel.sh check` (EXIT=0), `./smackerel.sh test unit` (EXIT=0), `./smackerel.sh test integration` (EXIT=0 — including `tests/integration/drive 9.362s ok`). |
 
 ### Versions
@@ -5189,7 +5189,7 @@ $ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/03
 | `scripts/commands/config.sh` | Emit 3 `DRIVE_IO_LIMITS_*` exports + 3 env-file lines. |
 | `config/generated/dev.env` | Regenerated — adds 3 `DRIVE_IO_LIMITS_*` lines. |
 | `config/generated/test.env` | Regenerated — adds 3 `DRIVE_IO_LIMITS_*` lines. |
-| `config/generated/home-lab.env` | Regenerated — adds 3 `DRIVE_IO_LIMITS_*` lines. |
+| `config/generated/self-hosted.env` | Regenerated — adds 3 `DRIVE_IO_LIMITS_*` lines. |
 | `internal/config/drive.go` | New `DriveIOLimitsConfig` struct + field on `DriveConfig` + field on `DriveGoogleProviderConfig` + 3 `parsePositiveInt64` calls + provider-mirror copy in loader. |
 | `internal/config/drive_config_test.go` | 3 keys appended to `driveSSTKeys` + 4 IOLimits assertions in `TestDriveConfigPopulatesEveryField`. |
 | `internal/config/validate_test.go` | 3 `t.Setenv` calls in `setRequiredEnv`. |
@@ -5200,7 +5200,7 @@ $ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/03
 
 ### Files NOT Touched (per task constraints)
 
-- `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/home-lab/manifest.yaml`, `deploy/home-lab/params.yaml` — uncommitted user WIP, left intact in the working tree.
+- `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/self-hosted/manifest.yaml`, `deploy/self-hosted/params.yaml` — uncommitted user WIP, left intact in the working tree.
 - `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/` — framework files (immutable per copilot-instructions).
 - `certification.status`, `certification.completedScopes`, `certification.scopeProgress`, `certification.certifiedCompletedPhases`, top-level `status` — spec 038 is already feature-done.
 - `internal/drive/extract/service.go:255` — already enforces `maxFileSizeBytes`+1 cap (audit confirmed safe; do not touch).
@@ -5272,8 +5272,8 @@ The full integration suite passing (including `TestDriveScanFixturePreservesHier
   "files_NOT_touched_per_constraints": [
     ".github/workflows/build.yml",
     "deploy/contract.yaml",
-    "deploy/home-lab/manifest.yaml",
-    "deploy/home-lab/params.yaml",
+    "deploy/self-hosted/manifest.yaml",
+    "deploy/self-hosted/params.yaml",
     ".github/bubbles/",
     ".github/agents/",
     ".github/instructions/",

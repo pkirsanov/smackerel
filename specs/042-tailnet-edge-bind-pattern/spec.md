@@ -1,10 +1,10 @@
-# Spec 042 — Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
+# Spec 042 — Tailnet-Edge Bind Pattern (Self-Hosted Compose Readiness)
 
 **Status:** Done (certified per state.json)
 
 ## Problem Statement
 
-Smackerel is deployed self-hosted on the operator's home-lab machine (`<deploy-host>`,
+Smackerel is deployed self-hosted on the operator's self-hosted machine (`<deploy-host>`,
 Tailscale FQDN `<deploy-host-fqdn>`). Today `deploy/compose.deploy.yml`
 hard-binds every host-forwarded port to `127.0.0.1` (a decision recorded in
 spec 020 design.md §"Port Binding: HOST_BIND_ADDRESS Variable in Compose"). That
@@ -26,7 +26,7 @@ NO-DEFAULTS policy: deploy compose MUST require an adapter-provided
   deploy adapter; infra (Postgres, NATS) is reachable only from inside the
   compose network.
 
-The deploy adapter for smackerel (separate repo `knb/smackerel/home-lab/`) will
+The deploy adapter for smackerel (separate repo `<deployment-owner>/<product>/<target>/`) will
 write the host Caddy snippet from the canonical template and will write the
 final `HOST_BIND_ADDRESS` value into `app.env`. This spec only fixes the
 **compose-side prerequisites** so the adapter can do its job:
@@ -62,7 +62,7 @@ final `HOST_BIND_ADDRESS` value into `app.env`. This spec only fixes the
   under Required Runtime Standards so future agents do not re-introduce the
   literal-`127.0.0.1` hardcode.
 - `docs/Operations.md` documents how a devops user reaches Postgres and NATS
-  on the home-lab without host port mappings (concrete `docker exec` command
+  on the self-hosted without host port mappings (concrete `docker exec` command
   shapes), and how HTTP UI access flows through host Caddy.
 - `config/smackerel.yaml` carries an inline comment above
   `runtime.host_bind_address` cross-referencing the SKILL, the fail-loud
@@ -71,7 +71,7 @@ final `HOST_BIND_ADDRESS` value into `app.env`. This spec only fixes the
 
 ## Goals
 
-- Make the home-lab compose bundle **adapter-ready** for the tailnet-edge
+- Make the self-hosted compose bundle **adapter-ready** for the tailnet-edge
   pattern without committing the adapter or any host-side Caddy work in this
   repo (Adapter Locality rule —
   `.github/instructions/bubbles-deployment-target.instructions.md`).
@@ -120,7 +120,7 @@ final `HOST_BIND_ADDRESS` value into `app.env`. This spec only fixes the
   owned by the deploy adapter and MUST remain generic in this product repo.
 - **REQ-5** `.github/copilot-instructions.md` MUST contain a "Tailnet-Edge
   Bind Pattern" subsection under Required Runtime Standards.
-- **REQ-6** `docs/Operations.md` MUST contain a "DevOps Access on Home-Lab
+- **REQ-6** `docs/Operations.md` MUST contain a "DevOps Access on Self-Hosted
   (Tailnet-Edge Pattern)" section with the canonical `docker exec` command
   shapes for Postgres and NATS plus a note on HTTPS UI access.
 - **REQ-7** `config/smackerel.yaml` MUST carry an inline comment above
@@ -142,7 +142,7 @@ final `HOST_BIND_ADDRESS` value into `app.env`. This spec only fixes the
   compose examples MUST teach fail-loud `HOST_BIND_ADDRESS` substitution and
   explicit adapter-provided values only.
 - **NFR-6** Product-repo genericity preserved: this spec MUST NOT include real
-  home-lab hostnames, IP addresses, tailnet roots, or operator-private
+  self-hosted hostnames, IP addresses, tailnet roots, or operator-private
   topology.
 
 ## User Scenarios (Gherkin)
@@ -188,10 +188,10 @@ And the loopback value is traceable to adapter-provided configuration, not a com
 ### Scenario: Operations doc tells devops how to reach infra
 
 ```gherkin
-Given the home-lab compose has no host port for postgres or nats
+Given the self-hosted compose has no host port for postgres or nats
 When a devops user reads `docs/Operations.md`
 Then the document shows a `docker exec` command for `psql` against the
-   `smackerel-home-lab-postgres` container (Pattern P1)
+   `smackerel-self-hosted-postgres` container (Pattern P1)
 And the document shows a `docker exec` command for `nats` CLI access
 And the document shows that core API and ML sidecar HTTPS access goes
    through host Caddy on `<deploy-host-fqdn>`
@@ -236,7 +236,7 @@ Then the "Tailnet-Edge Bind Pattern" subsection under Required Runtime
 
 ## Out-of-Repo Coordination
 
-The deploy adapter at `knb/smackerel/home-lab/` will, in a separate change set:
+The deploy adapter at `<deployment-owner>/<product>/<target>/` will, in a separate change set:
 
 - Render `bubbles/templates/caddy-tailnet-snippet.caddy.template` into a
   Caddyfile snippet on `<deploy-host>`.

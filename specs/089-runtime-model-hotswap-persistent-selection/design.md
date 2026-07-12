@@ -42,14 +42,14 @@ applied via a per-invocation `Agent.WithModelOverride` clone
 ([agent.go:266](../../internal/assistant/openknowledge/agent/agent.go#L266)),
 and attributed back through `TurnResult.Model`. The override re-points
 the spec-087 **synthesis turn only**; the gather turns keep
-`cfg.Model`. Home-lab synthesis default is `deepseek-r1:7b`; switchable =
+`cfg.Model`. self-hosted synthesis default is `deepseek-r1:7b`; switchable =
 `[gemma4:26b, deepseek-r1:7b]`; `ollama_memory_limit: 28G`. There is **no
 persistent-default change path**, **no per-user store** (only the PASETO
 minter [per_user_token.go](../../internal/telegram/per_user_token.go)),
 **no gather override**, and **no documented prod hot-swap**.
 
 **Target State.** Promote `deepseek-r1:32b` to the **standing SST
-default** synthesis model on home-lab (owner-decided; the A/B fixed the Q1
+default** synthesis model on self-hosted (owner-decided; the A/B fixed the Q1
 false-balance + Q4 hallucination), with the envelope raised + the real
 footprint verified; add a **per-user sticky** `/model <id>` selector
 (claim-bound), a **per-request gather** override (`--gather-model=` /
@@ -204,12 +204,12 @@ re-derived from it). CT-1..CT-7 extend design 088's CT-1..CT-8.
 - **Gap (089-relevant):** the standing `synthesis_model_id` is NOT in any
   bucket and is NOT co-residence-checked — today it is only validated
   structurally (non-empty, [openknowledge.go:200](../../internal/config/openknowledge.go#L200)).
-  Spec 088 got away with this because the home-lab default (7b, 4864) is
+  Spec 088 got away with this because the self-hosted default (7b, 4864) is
   tiny. Promoting the default to 32b (22528) makes the EVERY-QUERY model
   large and un-envelope-checked — the design must close this.
 - Profiles ([smackerel.yaml:1551](../../config/smackerel.yaml#L1551)):
   `gemma4:26b`=18432, `deepseek-r1:7b`=4864, `deepseek-r1:32b`=22528,
-  `llama3.1:8b`=6144, `gemma3:4b`=4096. Home-lab `ollama_memory_limit:
+  `llama3.1:8b`=6144, `gemma3:4b`=4096. self-hosted `ollama_memory_limit:
   "28G"` (=28672); gather+32b = 18432+22528 = 40960 > 28672 ⇒ 32b is the
   `model_over_memory_envelope` opt-up TODAY (structurally rejected until
   the envelope is raised).
@@ -247,7 +247,7 @@ re-derived from it). CT-1..CT-7 extend design 088's CT-1..CT-8.
   returns true on empty OR ungrounded-excuse; the forced-final retry loop
   ([agent.go:391](../../internal/assistant/openknowledge/agent/agent.go#L391))
   is `for retry := 0; retry < SynthesisRetryBudget && synthesisNeedsRetry(...)`.
-  Home-lab `synthesis_retry_budget=1` ⇒ a blank forced-final DOES fire
+  self-hosted `synthesis_retry_budget=1` ⇒ a blank forced-final DOES fire
   exactly one escalated retry before the salvage. CT-confirmed (FR-14).
 
 ### CT-9 — The latency invariant (carried from 084/087/088, unchanged)
@@ -276,11 +276,11 @@ the owner directive, with the rejected alternative recorded.
 
 ### Fork A — Standing default + footprint guard → **DECISION: `deepseek-r1:32b` default, envelope 28G→48G, ADD a standing-default co-residence guard, rely on the cgroup cap as the real-KV bound (do NOT bump the profile)**
 
-**Decision.** Promote the home-lab persistent default synthesis model
+**Decision.** Promote the self-hosted persistent default synthesis model
 `deepseek-r1:7b → deepseek-r1:32b` (committed
-`environments.home-lab.assistant_open_knowledge_synthesis_model_id`);
-raise `environments.home-lab.ollama_memory_limit` `28G → 48G`; add
-`deepseek-r1:32b` to the home-lab `switchable_models` (keep `7b` +
+`environments.self-hosted.assistant_open_knowledge_synthesis_model_id`);
+raise `environments.self-hosted.ollama_memory_limit` `28G → 48G`; add
+`deepseek-r1:32b` to the self-hosted `switchable_models` (keep `7b` +
 `gemma4:26b`). Resolve the §2 footprint-correctness problem with a
 **four-part** mechanism rather than a single knob:
 
@@ -407,7 +407,7 @@ that re-points the gather/tool turns independently of `--model=`
 (synthesis). `--model=` keeps byte-for-byte spec-088 synthesis-only
 semantics. A gather selection is validated against a NEW operator-curated
 SST list `assistant.open_knowledge.tool_capable_gather_models`
-(home-lab = `[gemma4:26b, llama3.1:8b]`; dev = `[gemma3:4b]` == baseline,
+(self-hosted = `[gemma4:26b, llama3.1:8b]`; dev = `[gemma3:4b]` == baseline,
 testable no-op) and rejected `model_not_tool_capable` if absent. Gather
 sticky is **deferred** (F-STICKY-GATHER) — gather override is
 per-request only.
@@ -442,7 +442,7 @@ rework.
 ### Fork D — Hot-swap mechanism → **DECISION: the documented ~15s core-recreate IS the hot-swap; zero-downtime reload deferred (F-HOTRELOAD)**
 
 **Decision.** The prod hot-swap is: edit the committed SST default →
-`./smackerel.sh config generate --env home-lab` (fail-loud) → the operator
+`./smackerel.sh config generate --env self-hosted` (fail-loud) → the operator
 overlay recreates the core service only (`--no-deps`, image digests from
 the running container, ~15s) → verify via the boot log
 (`open-knowledge subsystem wired … synthesis_model=<new>`,
@@ -607,7 +607,7 @@ Resolution rules (deterministic, SCN-089-A05):
 
 ### Persistent-default SST edits (FR-1 / FR-2 / NFR-5 / C2)
 
-Committed `config/smackerel.yaml`, home-lab `environments.<env>` block
+Committed `config/smackerel.yaml`, self-hosted `environments.<env>` block
 (deployment-ownership-allowed generic per-env config, C5):
 
 ```yaml
@@ -621,7 +621,7 @@ Base `assistant.open_knowledge` block gains the new key (dev = baseline,
 testable no-op):
 
 ```yaml
-    tool_capable_gather_models: [ "gemma3:4b" ]   # REQUIRED non-empty when enabled. Spec 089 — the allowlist of models the GATHER turn may be runtime-switched TO (--gather-model= / API gather_model). Each MUST be tool-calling-capable on Ollama. Dev = [gemma3:4b] (== baseline gather; testable no-op; dev has no daemon). Home-lab override adds the real set. Fail-loud (G028); the baseline llm_model_id MUST be a member.
+    tool_capable_gather_models: [ "gemma3:4b" ]   # REQUIRED non-empty when enabled. Spec 089 — the allowlist of models the GATHER turn may be runtime-switched TO (--gather-model= / API gather_model). Each MUST be tool-calling-capable on Ollama. Dev = [gemma3:4b] (== baseline gather; testable no-op; dev has no daemon). self-hosted override adds the real set. Fail-loud (G028); the baseline llm_model_id MUST be a member.
 ```
 
 Fail-loud, no `${VAR:-default}`. `internal/config/openknowledge.go` loads
@@ -644,7 +644,7 @@ pattern (mirror `switchable_models`).
   cleanly via `parseCitations`. (`<think>` is already stripped pre-parse,
   CT-8 — no change there.)
 - **FR-14 (forced-final retry).** **Verified:** `synthesisNeedsRetry("")`
-  returns `true` (CT-8), so the home-lab `synthesis_retry_budget=1` DID
+  returns `true` (CT-8), so the self-hosted `synthesis_retry_budget=1` DID
   fire exactly one escalated retry on the 32b Q6 blank; it still blanked
   because the retry attempt ALSO returned empty/`<think>`-only, after
   which the salvage fired (the A/B `len=39` is the salvage/refusal, not a
@@ -653,7 +653,7 @@ pattern (mirror `switchable_models`).
   empty-forced-final → escalated-retry → still-empty →
   honest-salvage-with-sources (never a silently-empty body), the exact
   32b-Q6 shape. `WriteTimeout` stays 4200s (budget unchanged).
-- **Recorded finding F-RETRYBUDGET.** Raising home-lab
+- **Recorded finding F-RETRYBUDGET.** Raising self-hosted
   `synthesis_retry_budget` 1→2 would give the 32b default two escalated
   retries before salvage — but it widens `WriteTimeout` to (6+2)×600 =
   4800s (NFR-2). Deferred as an operator SST knob, NOT a forced change;
@@ -794,7 +794,7 @@ Telegram:  /ask [--model=S] [--gather-model=G] <q>     |  HTTP: POST /v1/agent/i
 
 | # | File | Change |
 |---|------|--------|
-| 1 | `config/smackerel.yaml` | home-lab: `ollama_memory_limit` 28G→48G; `assistant_open_knowledge_synthesis_model_id` 7b→32b; `switchable_models` += 32b; NEW `assistant_open_knowledge_tool_capable_gather_models`. Base `assistant.open_knowledge`: NEW `tool_capable_gather_models` (dev = baseline). |
+| 1 | `config/smackerel.yaml` | self-hosted: `ollama_memory_limit` 28G→48G; `assistant_open_knowledge_synthesis_model_id` 7b→32b; `switchable_models` += 32b; NEW `assistant_open_knowledge_tool_capable_gather_models`. Base `assistant.open_knowledge`: NEW `tool_capable_gather_models` (dev = baseline). |
 | 2 | `internal/config/openknowledge.go` | `OpenKnowledgeConfig.ToolCapableGatherModels []string`; load via `lookupJSONStringList("ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS")`; `Validate`: non-empty + `llm_model_id ∈ set`. |
 | 3 | `internal/config/config.go::validateModelEnvelopes` | (a) NEW standing-default co-residence guard (resolve `synthesis_model_id` + gather ≤ envelope) — closes CT-6 gap (Fork A.2); (b) each `tool_capable_gather_models` entry profiled (sanity). Fail-loud. |
 | 4 | `scripts/commands/config.sh` | resolve+emit `ASSISTANT_OPEN_KNOWLEDGE_TOOL_CAPABLE_GATHER_MODELS` (per-env override pattern, mirror `switchable_models`). |
@@ -952,7 +952,7 @@ clone / attribution / parity seam are EXTENDED, not re-built).
   cgroup cap). Deferred (Fork A.5); the Docker `OLLAMA_MEMORY_LIMIT`
   cgroup cap already bounds the real KV footprint (A/B-verified). Revisit
   only on observed pressure.
-- **F-RETRYBUDGET** — raise home-lab `synthesis_retry_budget` 1→2 for the
+- **F-RETRYBUDGET** — raise self-hosted `synthesis_retry_budget` 1→2 for the
   32b standing default (two escalated retries before salvage), at the cost
   of `WriteTimeout` 4200s→4800s. Deferred as an operator SST knob (NFR-2
   reliability↔latency tradeoff), recorded so the choice is conscious.

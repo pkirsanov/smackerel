@@ -43,7 +43,7 @@ The original FR-051-001 / FR-051-002 named `auth.signing.hmac_key` and `auth.sig
 
 ### Database secret contract (defense-in-depth)
 
-- **FR-051-005:** Deployment validation MUST reject the literal local-dev Postgres password (`smackerel`) and any other documented placeholder values for non-dev SST targets (`TARGET_ENV` ∈ `{home-lab}`) AND at runtime when `runtime.environment=production`. Both layers MUST fail with a clear error that names the offending key without printing the value. Reconciles `G-051-IMPL-05`.
+- **FR-051-005:** Deployment validation MUST reject the literal local-dev Postgres password (`smackerel`) and any other documented placeholder values for non-dev SST targets (`TARGET_ENV` ∈ `{self-hosted}`) AND at runtime when `runtime.environment=production`. Both layers MUST fail with a clear error that names the offending key without printing the value. Reconciles `G-051-IMPL-05`.
 
 ### Documentation and log-redaction
 
@@ -62,7 +62,7 @@ Scenario: SCN-051-S01 Missing auth signing key fails before runtime start
   And the Smackerel runtime does not start
 
 Scenario: SCN-051-S02 Default database password is rejected for deployment
-  Given TARGET_ENV=home-lab
+  Given TARGET_ENV=self-hosted
   And infrastructure.postgres.password is the local-dev placeholder "smackerel"
   When the SST loader (scripts/commands/config.sh) runs
   Then config generation fails before any env file is written

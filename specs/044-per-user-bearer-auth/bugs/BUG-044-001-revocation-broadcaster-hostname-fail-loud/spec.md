@@ -3,11 +3,11 @@
 ## Classification
 
 - **Type:** runtime wiring defect — silent default at startup env-read site (Gate G028 / no-defaults SST policy violation)
-- **Severity:** P2 — MEDIUM (the broadcaster is gated on `cfg.Auth.Enabled && cfg.Auth.RevocationNATSSubject != ""`; production home-lab today does not enable revocation broadcast, so the fallback is a no-op live, but the defect is the bypass of the Gate G028 fail-loud read AND the cross-replica deduplication failure that would silently surface the moment the operator turns on revocation broadcast)
+- **Severity:** P2 — MEDIUM (the broadcaster is gated on `cfg.Auth.Enabled && cfg.Auth.RevocationNATSSubject != ""`; production self-hosted today does not enable revocation broadcast, so the fallback is a no-op live, but the defect is the bypass of the Gate G028 fail-loud read AND the cross-replica deduplication failure that would silently surface the moment the operator turns on revocation broadcast)
 - **Parent Spec:** 044 — per-user-bearer-auth (the spec that introduced the auth revocation broadcaster surface in Scope 02 commit `5f4ceb98`)
 - **Workflow Mode:** test-to-doc
 - **Status:** Fixed
-- **Discovered By:** 2026-05-14 home-lab readiness re-scan (finding HL-RESCAN-008)
+- **Discovered By:** 2026-05-14 self-hosted readiness re-scan (finding HL-RESCAN-008)
 
 ## Problem Statement
 
@@ -36,9 +36,9 @@ The defect is the bypass of the SST gate AND the silent collision of replica ide
 
 | Aspect | Detail |
 |---|---|
-| Trigger | Home-lab readiness re-scan (system review session 2026-05-14) |
+| Trigger | self-hosted readiness re-scan (system review session 2026-05-14) |
 | Finding | HL-RESCAN-008 |
-| Severity | P2 (live home-lab today does not enable revocation broadcast on `cfg.Auth.RevocationNATSSubject != ""`, so the fallback is a no-op there; defect is the bypass of the Gate G028 fail-loud read AND the cross-replica deduplication failure that would silently surface the moment the operator turns on revocation broadcast) |
+| Severity | P2 (live self-hosted today does not enable revocation broadcast on `cfg.Auth.RevocationNATSSubject != ""`, so the fallback is a no-op there; defect is the bypass of the Gate G028 fail-loud read AND the cross-replica deduplication failure that would silently surface the moment the operator turns on revocation broadcast) |
 | Audit method | Searched `cmd/core/` and `internal/` for `os.Getenv` followed by `if .* == ""` + literal-string assignment; found one violation at `cmd/core/wiring.go` line 243 (`instanceID := os.Getenv("HOSTNAME")` followed by `if instanceID == "" { instanceID = "smackerel-core" }`). Cross-referenced `.github/instructions/smackerel-no-defaults.instructions.md` Gate G028 wording: Go must be `os.Getenv` + empty check → fatal, never a silent fallback. Cross-referenced `git log -S 'os.Getenv("HOSTNAME")'` to confirm the pre-fix form was introduced by spec 044 Scope 02 commit `5f4ceb98` (the broadcaster wiring landed there). |
 
 ## Acceptance Criteria

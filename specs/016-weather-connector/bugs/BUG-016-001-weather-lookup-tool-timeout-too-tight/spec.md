@@ -3,7 +3,7 @@
 ## Expected behavior
 
 The `weather_lookup` agent tool MUST complete successfully on cold-cache
-invocations against open-meteo from a healthy home-lab network. The
+invocations against open-meteo from a healthy self-hosted network. The
 per-call timeout MUST be sized to fit the **end-to-end** time of a
 single lookup (geocoding + forecast = two sequential HTTPS round
 trips, ~2-4s worst case), with reasonable headroom.

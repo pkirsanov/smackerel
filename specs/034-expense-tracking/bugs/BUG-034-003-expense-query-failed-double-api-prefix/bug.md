@@ -2,7 +2,7 @@
 
 **Status:** Confirmed
 **Severity:** High (P0 — entire expense + meal-plan HTTP API surfaces unreachable)
-**Reported:** 2026-05-28 11:44 AM (home-lab)
+**Reported:** 2026-05-28 11:44 AM (self-hosted)
 **Reporter:** User (Telegram bot interaction)
 **Parent spec:** `specs/034-expense-tracking/`
 **Co-affected spec:** `specs/036-meal-planning/` (identical defect in `internal/api/mealplan.go:28`)
@@ -25,7 +25,7 @@ if resp.StatusCode != http.StatusOK {
 }
 ```
 
-## Live evidence (home-lab, 2026-05-28)
+## Live evidence (self-hosted, 2026-05-28)
 
 ```
 {"time":"2026-05-28T18:44:24.26713234Z","level":"INFO","msg":"request","method":"GET","path":"/api/expenses","status":404,"duration_ms":0,"request_id":"9623ad891b1f/pbBNO1CDyv-003054"}
@@ -58,9 +58,9 @@ Startup wiring confirmed non-nil:
 
 ## Reproduction steps
 
-1. Send `/expense` to the home-lab Telegram bot.
+1. Send `/expense` to the self-hosted Telegram bot.
 2. Observe reply: `Failed to query expenses`.
-3. SSH to home-lab: `docker exec smackerel-home-lab-smackerel-core-1 wget -S -O /dev/null http://127.0.0.1:8080/api/expenses` → 404.
+3. SSH to self-hosted: `docker exec smackerel-self-hosted-smackerel-core-1 wget -S -O /dev/null http://127.0.0.1:8080/api/expenses` → 404.
 4. Compare to `/api/digest` → 401 (route exists, auth required).
 
 ## Expected behavior

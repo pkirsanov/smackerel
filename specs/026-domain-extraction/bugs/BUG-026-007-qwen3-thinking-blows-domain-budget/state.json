@@ -2,13 +2,13 @@
     "id": "BUG-026-007-qwen3-thinking-blows-domain-budget",
     "title": "qwen3 default thinking-mode adds a ~113s hidden reasoning block to structured-JSON extraction, blowing the 30s domain-extraction budget into the degraded fallback",
     "severity": "high",
-    "source": "redteam-adversarial-interrogation (live evo-x2 prod, both models WARM)",
+    "source": "redteam-adversarial-interrogation (live <deploy-host> prod, both models WARM)",
     "owningSpec": "026-domain-extraction",
     "workflowMode": "bugfix-fastlane",
     "status": "fixed_in_repo",
     "certification": {
         "status": "in_repo_verified",
-        "note": "MECHANISM CORRECTED. The first fix (the /no_think prompt-injection token) was INEFFECTIVE — qwen3's Ollama chat template ignores the /no_think text directive and honors ONLY the native `think` request field (measured live on evo-x2: /no_think -> thinking STILL on, >150s, invalid-JSON; native think=False -> thinking OFF, ~1s compute). Reworked ollama_thinking.py to set the native litellm `think=False` kwarg (verified forwarded to Ollama /api/chat top-level by the sidecar-pinned litellm 1.84.0 via a request-capture probe) and migrated the two legacy ollama/ routes (search-rerank, drive-classify) to ollama_chat/. Reworked unit tests are adversarial: RED 9-fail with the mutator neutralized -> GREEN 556-pass restored (./smackerel.sh test unit --python). Live 'domain+synthesis fast + valid JSON' is only provable after the orchestrator rebuilds + signs + redeploys smackerel-ml on evo-x2 — live verification PENDING redeploy."
+        "note": "MECHANISM CORRECTED. The first fix (the /no_think prompt-injection token) was INEFFECTIVE — qwen3's Ollama chat template ignores the /no_think text directive and honors ONLY the native `think` request field (measured live on <deploy-host>: /no_think -> thinking STILL on, >150s, invalid-JSON; native think=False -> thinking OFF, ~1s compute). Reworked ollama_thinking.py to set the native litellm `think=False` kwarg (verified forwarded to Ollama /api/chat top-level by the sidecar-pinned litellm 1.84.0 via a request-capture probe) and migrated the two legacy ollama/ routes (search-rerank, drive-classify) to ollama_chat/. Reworked unit tests are adversarial: RED 9-fail with the mutator neutralized -> GREEN 556-pass restored (./smackerel.sh test unit --python). Live 'domain+synthesis fast + valid JSON' is only provable after the orchestrator rebuilds + signs + redeploys smackerel-ml on <deploy-host> — live verification PENDING redeploy."
     },
     "execution": {
         "activeAgent": "bubbles.bug",

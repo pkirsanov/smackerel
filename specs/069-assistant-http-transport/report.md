@@ -396,12 +396,12 @@ RC=0
 
 **`internal/config/` was also exercised; an unrelated `pre-existing failure` was observed:**
 ```
---- FAIL: TestSSTLoader_HomeLabEmitsProductionRuntimeEnv_BUG051001 (4.35s)
-    BUG-051-001 SST-loader shell test failed: home-lab.env does NOT contain SMACKEREL_ENV=production
+--- FAIL: TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001 (4.35s)
+    BUG-051-001 SST-loader shell test failed: self-hosted.env does NOT contain SMACKEREL_ENV=production
 FAIL    github.com/smackerel/smackerel/internal/config  18.670s
 Exit Code: 1
 ```
-This failure is owned by BUG-051-001 (spec 051 home-lab SST-loader bundle) and is
+This failure is owned by BUG-051-001 (spec 051 self-hosted SST-loader bundle) and is
 **foreign to spec 069**. Recorded for honesty; not a spec-069 regression.
 
 **Live-stack tests (SCN-069-A01..A07 e2e + integration). Claim Source: not-run.**
@@ -661,6 +661,6 @@ tests/stress/assistant/http_turn_stress_test.go
 | Date | Issue | Disposition | Reference |
 |------|-------|-------------|-----------|
 | 2026-06-02 | Wrapper-level Ollama agent E2E skip phrase (`Skipping Ollama agent E2E`) observed in archived SCOPE-5 rerun log | Foreign to spec 069 — belongs to spec 043 real-LLM E2E harness; no spec-069 regression | specs/043-ollama-test-infrastructure |
-| 2026-06-02 | `internal/config/TestSSTLoader_HomeLabEmitsProductionRuntimeEnv_BUG051001` failure observed during cross-spec regression sweep | Foreign to spec 069; tracked by BUG-051-001 | specs/051-home-lab-sst-loader/bugs/BUG-051-001 |
+| 2026-06-02 | `internal/config/TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001` failure observed during cross-spec regression sweep | Foreign to spec 069; tracked by BUG-051-001 | specs/051-self-hosted-sst-loader/bugs/BUG-051-001 |
 | 2026-06-02 | Historical SCOPE-5 wrapper-driven e2e blocked by `smackerel-test-smackerel-core-1` unhealthy | Resolved by Scope 2 UserID Binding (cmd/core now starts cleanly with shared_user_id SST key) — see Scope 2 evidence block | report.md#scope-2--userid-binding-2026-06-02 |
 

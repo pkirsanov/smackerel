@@ -295,7 +295,7 @@ This feature initiates **no** financial action and carries **no** QF companion p
 
 ## 9. Release Train
 
-**Target train:** `next` (the staging promotion-candidate train — charter "synthesis + multi-source coordination"; see [config/release-trains.yaml](../../config/release-trains.yaml)). The active `mvp` home-lab train is frozen for new specs (see [docs/releases/mvp/features.md](../../docs/releases/mvp/features.md)), so this NEW spec targets `next` — consistent with `state.json.releaseTrain` and the V7 row in [docs/releases/v1/features.md](../../docs/releases/v1/features.md).
+**Target train:** `next` (the staging promotion-candidate train — charter "synthesis + multi-source coordination"; see [config/release-trains.yaml](../../config/release-trains.yaml)). The active `mvp` self-hosted train is frozen for new specs (see [docs/releases/mvp/features.md](../../docs/releases/mvp/features.md)), so this NEW spec targets `next` — consistent with `state.json.releaseTrain` and the V7 row in [docs/releases/v1/features.md](../../docs/releases/v1/features.md).
 
 This spec enhances always-on retrieval + lifecycle surfaces. **No new feature flag is required** — the routing and evergreen behaviors are gated by their SST keys (`retrieval.routing.*`, `retrieval.evergreen.*`), which live in `config/smackerel.yaml`. `state.json.flagsIntroduced` is therefore `[]`. Because no flag is introduced, there is **no default-off-on-other-trains toggle**: the new SST keys are REQUIRED in `config/smackerel.yaml` (the single source of truth all trains derive from), so behavior is identical on every train (`next` as the owning train and `mvp` as a non-owning train alike) — each reads the same SST contract.
 

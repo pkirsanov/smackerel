@@ -11,7 +11,7 @@ import (
 
 func TestNtfyMapperPreservesRawFieldsAndSeparatesLifecycleEvents(t *testing.T) {
 	cfg := testConfig()
-	raw := []byte(`{"id":"evt-map-1","time":1770000000,"event":"message","topic":"home-lab-alerts","title":"Disk token=secret-token","message":"storage password=hunter2","priority":5,"tags":["disk","urgent"],"click":"https://example.invalid/path?token=secret-token","icon":"https://example.invalid/icon.png?api_key=secret-key","markdown":true,"attachment":{"name":"disk.txt","url":"https://example.invalid/disk.txt?secret=value"},"actions":[{"action":"view","url":"https://example.invalid/action?token=secret-token"}],"smackerel_loop_guard_key":"loop-key-1","smackerel_origin_id":"origin-1","unsafe_token":"must-not-preserve","safe_context":"rack-7"}`)
+	raw := []byte(`{"id":"evt-map-1","time":1770000000,"event":"message","topic":"self-hosted-alerts","title":"Disk token=secret-token","message":"storage password=hunter2","priority":5,"tags":["disk","urgent"],"click":"https://example.invalid/path?token=secret-token","icon":"https://example.invalid/icon.png?api_key=secret-key","markdown":true,"attachment":{"name":"disk.txt","url":"https://example.invalid/disk.txt?secret=value"},"actions":[{"action":"view","url":"https://example.invalid/action?token=secret-token"}],"smackerel_loop_guard_key":"loop-key-1","smackerel_origin_id":"origin-1","unsafe_token":"must-not-preserve","safe_context":"rack-7"}`)
 	event, err := ParseEvent(raw, cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse ntfy event: %v", err)
@@ -27,7 +27,7 @@ func TestNtfyMapperPreservesRawFieldsAndSeparatesLifecycleEvents(t *testing.T) {
 	if string(envelope.RawPayload) != string(raw) || envelope.RawPayloadKind != notification.RawPayloadKindJSON {
 		t.Fatalf("raw payload was not preserved as JSON: kind=%s raw=%s", envelope.RawPayloadKind, string(envelope.RawPayload))
 	}
-	if envelope.DeliveryMetadata["topic"] != "home-lab-alerts" || envelope.SourceSpecificFields["ntfy.topic"] != "home-lab-alerts" {
+	if envelope.DeliveryMetadata["topic"] != "self-hosted-alerts" || envelope.SourceSpecificFields["ntfy.topic"] != "self-hosted-alerts" {
 		t.Fatalf("topic provenance missing: delivery=%v fields=%v", envelope.DeliveryMetadata, envelope.SourceSpecificFields)
 	}
 	if envelope.MappingHints["domain"] != "ops" || envelope.MappingHints["service"] != "storage" || envelope.MappingHints["intent"] != "investigate" || envelope.MappingHints["severity"] != "critical" {
@@ -46,7 +46,7 @@ func TestNtfyMapperPreservesRawFieldsAndSeparatesLifecycleEvents(t *testing.T) {
 		t.Fatalf("loop metadata not preserved: %+v", envelope.LoopMetadata)
 	}
 
-	lifecycle, err := ParseEvent([]byte(`{"event":"keepalive","topic":"home-lab-alerts"}`), cfg.DeadLetter.MaxPayloadBytes)
+	lifecycle, err := ParseEvent([]byte(`{"event":"keepalive","topic":"self-hosted-alerts"}`), cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse lifecycle event: %v", err)
 	}

@@ -1,4 +1,4 @@
-# Scopes - 042 Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
+# Scopes - 042 Tailnet-Edge Bind Pattern (Self-Hosted Compose Readiness)
 
 Single-file mode.
 
@@ -50,9 +50,9 @@ Done.
   `TestComposeContract_AdversarialNetworkModeHostBypass`
 - Documentation sections:
   `.github/copilot-instructions.md` ->
-  `Tailnet-Edge Bind Pattern (home-lab/production targets)`;
+  `Tailnet-Edge Bind Pattern (self-hosted/production targets)`;
   `docs/Operations.md` ->
-  `DevOps Access on Home-Lab (Tailnet-Edge Bind Pattern)`
+  `DevOps Access on Self-Hosted (Tailnet-Edge Bind Pattern)`
 
 ### Validation Checkpoints
 
@@ -328,7 +328,7 @@ render in both missing-value and explicit-value modes.
 
 ```gherkin
 Scenario: SCN-042-005 — Operations doc explains infra access without host ports
-  Given the home-lab deploy compose has no host port for `postgres` or `nats`
+  Given the self-hosted deploy compose has no host port for `postgres` or `nats`
   When a devops user reads `docs/Operations.md`
   Then the document shows a `docker exec` command for `psql` against the Smackerel Postgres container through a generic `<deploy-host>` placeholder
   And the document shows a `docker exec` command for NATS CLI access through a generic `<deploy-host>` placeholder
@@ -366,7 +366,7 @@ Scenario: SCN-042-006 — Copilot guardrail prevents fallback regression
 
 Allowed file families for Scope 2:
 - `.github/copilot-instructions.md` (Tailnet-Edge Bind Pattern subsection only)
-- `docs/Operations.md` (DevOps Access on Home-Lab section only)
+- `docs/Operations.md` (DevOps Access on Self-Hosted section only)
 
 Excluded surfaces for Scope 2:
 - Anything under `deploy/`
@@ -381,7 +381,7 @@ Excluded surfaces for Scope 2:
 | Test Type | Category | File / Location | Description | Command | Live System | Scenario |
 |-----------|----------|-----------------|-------------|---------|-------------|----------|
 | Doc-lint | doc-lint | `.github/copilot-instructions.md` | Tailnet-Edge Bind Pattern subsection contains the fail-loud `HOST_BIND_ADDRESS` compose form and explicit adapter-value wording. | `grep -nE 'Tailnet-Edge Bind Pattern|HOST_BIND_ADDRESS must be set by deploy adapter|explicit' .github/copilot-instructions.md` | No | SCN-042-006 |
-| Doc-lint | doc-lint | `docs/Operations.md` | DevOps Access section contains generic Pattern P1 `docker exec` shapes for Postgres and NATS and host-Caddy HTTPS access wording. | `grep -nE 'DevOps Access on Home-Lab|docker exec.*psql|docker exec.*nats|host Caddy' docs/Operations.md` | No | SCN-042-005 |
+| Doc-lint | doc-lint | `docs/Operations.md` | DevOps Access section contains generic Pattern P1 `docker exec` shapes for Postgres and NATS and host-Caddy HTTPS access wording. | `grep -nE 'DevOps Access on Self-Hosted|docker exec.*psql|docker exec.*nats|host Caddy' docs/Operations.md` | No | SCN-042-005 |
 | Regression | doc-lint | `.github/copilot-instructions.md` and `docs/Operations.md` | Active docs do not describe backend bind behavior as fallback, defaulted, or implicit-safety behavior. | `grep -nE 'safe.by.default|loopback default|fallback' .github/copilot-instructions.md docs/Operations.md` with any matches reviewed as forbidden-only historical text | No | SCN-042-006 |
 | Genericity scan | doc-lint | `.github/copilot-instructions.md` and `docs/Operations.md` | Product repo docs use placeholders and contain no real hostnames, IP addresses, tailnet roots, or operator-private topology. | project PII/genericity scan or targeted grep documented in report | No | SCN-042-005, SCN-042-006 |
 | Artifact lint | artifact | `specs/042-tailnet-edge-bind-pattern` | Spec artifacts pass lint after Scope 2 doc repair. | `bash .github/bubbles/scripts/artifact-lint.sh specs/042-tailnet-edge-bind-pattern` | No | governance |
@@ -399,7 +399,7 @@ doc-lint scan that prevents stale fallback guidance from remaining active.
   Evidence: `.github/copilot-instructions.md:221-242` — "Tailnet-Edge Bind Pattern" section with the fail-loud `${HOST_BIND_ADDRESS:?...}` form for core/ml.
   ```
   $ grep -n 'Tailnet-Edge Bind Pattern\|HOST_BIND_ADDRESS must be set by deploy adapter' .github/copilot-instructions.md
-  221:### Tailnet-Edge Bind Pattern (home-lab/production targets)
+  221:### Tailnet-Edge Bind Pattern (self-hosted/production targets)
   232:| `smackerel-core` ... ${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:...
   233:| `smackerel-ml`   ... ${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:...
   ```
@@ -425,9 +425,9 @@ doc-lint scan that prevents stale fallback guidance from remaining active.
       `docker exec` over a generic `<deploy-host>` placeholder.
   Evidence: `docs/Operations.md:88-89,244-267` — Pattern P1 `tailscale ssh <deploy-host> -- docker exec ...` for Postgres and NATS.
   ```
-  $ grep -nE 'Pattern P1|docker exec.*smackerel-home-lab-(postgres|nats)' docs/Operations.md
-  88:| PostgreSQL | `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres ...`
-  89:| NATS | `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats ...`
+  $ grep -nE 'Pattern P1|docker exec.*smackerel-self-hosted-(postgres|nats)' docs/Operations.md
+  88:| PostgreSQL | `tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-postgres ...`
+  89:| NATS | `tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats ...`
   244:### PostgreSQL (Pattern P1: docker exec over Tailscale SSH)
   ```
 - [x] `docs/Operations.md` documents HTTP access through host Caddy using
@@ -512,7 +512,7 @@ from rendered Markdown and is not an active scope inventory, Test Plan,
 Definition of Done, or completion record. Do not execute or certify this
 legacy content.
 
-# Scopes — 042 Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
+# Scopes — 042 Tailnet-Edge Bind Pattern (Self-Hosted Compose Readiness)
 
 Single-file mode.
 
@@ -556,9 +556,9 @@ Links: [spec.md](spec.md) | [design.md](design.md) |
   ```gherkin
   Given the deploy compose file `deploy/compose.deploy.yml`
   When `docker compose -f deploy/compose.deploy.yml --env-file
-       config/generated/home-lab.env config` renders the file
+       config/generated/self-hosted.env config` renders the file
   Then the rendered backend port mappings start with `127.0.0.1:` because
-       the SST sets `HOST_BIND_ADDRESS=127.0.0.1` in `home-lab.env`
+       the SST sets `HOST_BIND_ADDRESS=127.0.0.1` in `self-hosted.env`
   ```
 - **SCN-042-005 — Adversarial: literal `127.0.0.1:` would FAIL the lint test**
   ```gherkin
@@ -629,9 +629,9 @@ Excluded surfaces (must NOT be changed by Scope 1):
 | Unit (live file) | unit   | `internal/deploy/compose_contract_test.go::TestComposeContract_LiveFile`     | Parses `deploy/compose.deploy.yml`, asserts REQ-1 and REQ-2 (backend prefix + no infra ports)                     | `./smackerel.sh test unit --go`          | No          | SCN-042-001, SCN-042-002 |
 | Regression E2E | unit   | `internal/deploy/compose_contract_test.go::TestComposeContract_AdversarialLiteralBind` | Adversarial: literal `127.0.0.1:` prefix in `smackerel-core` MUST cause the contract assertion to fail (proves regression to spec 020 hardcoded form is detected) | `./smackerel.sh test unit --go`          | No          | SCN-042-005  |
 | Regression E2E | unit   | `internal/deploy/compose_contract_test.go::TestComposeContract_AdversarialInfraHasPorts` | Adversarial: a `ports:` block on `postgres` MUST cause the contract assertion to fail                              | `./smackerel.sh test unit --go`          | No          | SCN-042-002  |
-| Manual rendering proof (read-only) | proof | `report.md` evidence section                                                  | `docker compose -f deploy/compose.deploy.yml --env-file config/generated/home-lab.env config` renders backend ports as `127.0.0.1:41001:8080` and `127.0.0.1:41002:8081`, with no `ports:` block under `postgres` or `nats` | (recorded raw output)                    | No          | SCN-042-003  |
+| Manual rendering proof (read-only) | proof | `report.md` evidence section                                                  | `docker compose -f deploy/compose.deploy.yml --env-file config/generated/self-hosted.env config` renders backend ports as `127.0.0.1:41001:8080` and `127.0.0.1:41002:8081`, with no `ports:` block under `postgres` or `nats` | (recorded raw output)                    | No          | SCN-042-003  |
 | Static guard   | unit     | `./smackerel.sh check`                                                        | Existing config-validation path still exits 0 after compose edits                                                  | `./smackerel.sh check`                   | No          | SCN-042-001 (covers regression of the existing guard) |
-| SST regen      | unit     | `./smackerel.sh config generate`                                              | SST regeneration still produces `HOST_BIND_ADDRESS=127.0.0.1` in `config/generated/home-lab.env`                   | `./smackerel.sh config generate`         | No          | SCN-042-003  |
+| SST regen      | unit     | `./smackerel.sh config generate`                                              | SST regeneration still produces `HOST_BIND_ADDRESS=127.0.0.1` in `config/generated/self-hosted.env`                   | `./smackerel.sh config generate`         | No          | SCN-042-003  |
 
 Note on test classification: every row in this Test Plan executes against
 real artifacts (live compose file, real Go test runner, real config
@@ -774,7 +774,7 @@ transition-guard's mechanical regression-planning check is satisfied.
     # Bind address for backend host port mappings on the host (smackerel-core,
     # smackerel-ml). The deploy compose
     # `${HOST_BIND_ADDRESS:-${runtime.host_bind_address}}:` substitution makes
-    # the home-lab/production targets adapter-ready: a deploy adapter-adapter MAY override
+    # the self-hosted/production targets adapter-ready: a deploy adapter-adapter MAY override
     # HOST_BIND_ADDRESS in the bundled `deploy/app.env` to bind the Tailscale IP
     # so a host Caddy can front the backends with TLS. The default (`127.0.0.1`)
     # keeps every other compose project implicit-safety.
@@ -860,36 +860,36 @@ transition-guard's mechanical regression-planning check is satisfied.
   exited 0 with `EXIT_CHAIN=0`. Config validation, env_file drift
   guard, and scenario-lint all pass after compose contract edits.
 - [x] `./smackerel.sh config generate` exits 0 and resulting
-      `config/generated/home-lab.env` contains `HOST_BIND_ADDRESS=127.0.0.1`
-      (raw output ≥10 lines + `grep` evidence in [report.md#dod-1-9](report.md#dod-19--smackerelsh-config-generate-exits-0-host_bind_address1270001-in-home-labenv))
+      `config/generated/self-hosted.env` contains `HOST_BIND_ADDRESS=127.0.0.1`
+      (raw output ≥10 lines + `grep` evidence in [report.md#dod-1-9](report.md#dod-19--smackerelsh-config-generate-exits-0-host_bind_address1270001-in-self-hostedenv))
 
   **Inline Evidence (G025):**
 
   ```bash
   $ grep -H '^HOST_BIND_ADDRESS' config/generated/*.env
   config/generated/dev.env:HOST_BIND_ADDRESS=127.0.0.1
-  config/generated/home-lab.env:HOST_BIND_ADDRESS=127.0.0.1
+  config/generated/self-hosted.env:HOST_BIND_ADDRESS=127.0.0.1
   config/generated/test.env:HOST_BIND_ADDRESS=127.0.0.1
   ```
 
   `./smackerel.sh config generate` regenerated all three env files;
-  `HOST_BIND_ADDRESS=127.0.0.1` appears in `dev.env`, `home-lab.env`,
+  `HOST_BIND_ADDRESS=127.0.0.1` appears in `dev.env`, `self-hosted.env`,
   and `test.env` — proving the SST is unchanged by Scope 1 (the
   comment in `config/smackerel.yaml` does not affect generated
   values, only documents them).
 - [x] `docker compose -f deploy/compose.deploy.yml --env-file
-      config/generated/home-lab.env config` renders backend ports as
+      config/generated/self-hosted.env config` renders backend ports as
       `127.0.0.1:41001:8080` and `127.0.0.1:41002:8081`, with no `ports:`
       block under `postgres` or `nats` (raw output ≥10 lines in [report.md#dod-1-10](report.md#dod-110--compose-render-proves-substitution-backend-ports-become-1270001410018080-and-1270001410028081-postgresnats-have-no-published-ports))
 
   **Inline Evidence (G025):**
 
   ```bash
-  $ cp config/generated/home-lab.env deploy/app.env && \
+  $ cp config/generated/self-hosted.env deploy/app.env && \
     SMACKEREL_CORE_IMAGE=ghcr.io/example/core:test \
     SMACKEREL_ML_IMAGE=ghcr.io/example/ml:test \
     docker compose -f deploy/compose.deploy.yml \
-                   --env-file config/generated/home-lab.env config 2>&1 | \
+                   --env-file config/generated/self-hosted.env config 2>&1 | \
     grep -nE '^  (postgres|nats|smackerel-core|smackerel-ml|ollama):|published:|host_ip:|target:|protocol: tcp'; \
     RC=${PIPESTATUS[0]}; rm -f deploy/app.env; echo "compose-EXIT=$RC"
 
@@ -915,7 +915,7 @@ transition-guard's mechanical regression-planning check is satisfied.
   triple (no host port). `smackerel-core:` renders to
   `127.0.0.1:41001:8080` and `smackerel-ml:` to `127.0.0.1:41002:8081`,
   proving substitution of `[superseded colon-dash HOST_BIND_ADDRESS fallback]` =
-  `127.0.0.1` (from home-lab.env) and the per-service host/container
+  `127.0.0.1` (from self-hosted.env) and the per-service host/container
   ports. Per REQ-3 / SCN-042-003.
 - [x] Adversarial regression: `TestComposeContract_AdversarialLiteralBind`
       and `TestComposeContract_AdversarialInfraHasPorts` both PASS (proven
@@ -979,10 +979,10 @@ transition-guard's mechanical regression-planning check is satisfied.
 
 - **SCN-042-004 — Operations doc tells devops how to reach infra**
   ```gherkin
-  Given the home-lab compose has no host port for postgres or nats
+  Given the self-hosted compose has no host port for postgres or nats
   When a devops user reads `docs/Operations.md`
   Then the document shows a `docker exec` command for `psql` against the
-       `smackerel-home-lab-postgres` container (Pattern P1)
+       `smackerel-self-hosted-postgres` container (Pattern P1)
   And the document shows a `docker exec` command for `nats` CLI access
   And the document shows that core API and ML sidecar HTTPS access goes
        through host Caddy on `<deploy-host-fqdn>`
@@ -998,15 +998,15 @@ transition-guard's mechanical regression-planning check is satisfied.
 
 ### Implementation Plan
 
-- Add a "Tailnet-Edge Bind Pattern (home-lab/production targets)" subsection
+- Add a "Tailnet-Edge Bind Pattern (self-hosted/production targets)" subsection
   to `.github/copilot-instructions.md` inside the existing "Required Runtime
   Standards" section, after the "Build-Once Deploy-Many" subsection.
-- Add a "DevOps Access on Home-Lab (Tailnet-Edge Pattern)" section to
+- Add a "DevOps Access on Self-Hosted (Tailnet-Edge Pattern)" section to
   `docs/Operations.md` containing:
   - Concrete `tailscale ssh <deploy-host> -- docker exec -it
-    smackerel-home-lab-postgres psql ...` shape for Postgres CLI access.
+    smackerel-self-hosted-postgres psql ...` shape for Postgres CLI access.
   - Concrete `tailscale ssh <deploy-host> -- docker exec -it
-    smackerel-home-lab-nats nats ...` shape for NATS CLI access.
+    smackerel-self-hosted-nats nats ...` shape for NATS CLI access.
   - HTTPS UI access flow note: core API at
     `https://smackerel.<deploy-host-fqdn>/api/health` (or whatever the
     deploy adapter adapter chooses for the subdomain), with the host Caddy reverse-proxy
@@ -1031,7 +1031,7 @@ Excluded surfaces (must NOT be changed by Scope 2):
 | Test Type        | Category   | File / Location                                | Description                                                                                              | Command                                                                                  | Live System | Scenario     |
 |------------------|------------|-------------------------------------------------|----------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------|-------------|--------------|
 | Doc presence     | doc-lint   | `.github/copilot-instructions.md`               | New subsection title appears under "Required Runtime Standards" and forbids literal `127.0.0.1:` for backends in `deploy/compose.deploy.yml` | `grep -A2 'Tailnet-Edge Bind Pattern' .github/copilot-instructions.md`                   | No          | SCN-042-006  |
-| Doc presence     | doc-lint   | `docs/Operations.md`                            | New section title appears and includes both `docker exec ... psql` and `docker exec ... nats` shapes plus the host-Caddy HTTPS access note | `grep -A20 'DevOps Access on Home-Lab' docs/Operations.md`                               | No          | SCN-042-004  |
+| Doc presence     | doc-lint   | `docs/Operations.md`                            | New section title appears and includes both `docker exec ... psql` and `docker exec ... nats` shapes plus the host-Caddy HTTPS access note | `grep -A20 'DevOps Access on Self-Hosted' docs/Operations.md`                               | No          | SCN-042-004  |
 | Regression E2E   | doc-lint   | `.github/copilot-instructions.md` + `docs/Operations.md` | Adversarial: searching the two files for the legacy substring `literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden` MUST find at least one match in copilot-instructions.md (proves the guardrail text is present and would catch a regression to the spec 020 form) | `grep -nF 'literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden' .github/copilot-instructions.md`             | No          | SCN-042-006  |
 | Artifact lint    | artifact   | `bash .github/bubbles/scripts/artifact-lint.sh specs/042-tailnet-edge-bind-pattern` | Spec artifacts pass lint                                                                                  | `bash .github/bubbles/scripts/artifact-lint.sh specs/042-tailnet-edge-bind-pattern`      | No          | (governance) |
 
@@ -1045,7 +1045,7 @@ transition-guard's mechanical check.
 #### Core Items
 
 - [x] `.github/copilot-instructions.md` contains a "Tailnet-Edge Bind
-      Pattern (home-lab/production targets)" subsection inside "Required
+      Pattern (self-hosted/production targets)" subsection inside "Required
       Runtime Standards" (raw `grep` excerpt in [report.md#dod-2-1](report.md#dod-21--githubcopilot-instructionsmd-contains-tailnet-edge-bind-pattern-subsection-inside-required-runtime-standards))
 
   **Inline Evidence (G025):**
@@ -1054,13 +1054,13 @@ transition-guard's mechanical check.
   $ grep -nE '^### Tailnet-Edge Bind Pattern|^## Required Runtime Standards|^### Build-Once Deploy-Many|^## Testing Requirements' .github/copilot-instructions.md
   67:## Required Runtime Standards
   134:### Build-Once Deploy-Many (BLOCKING — bubbles G074)
-  189:### Tailnet-Edge Bind Pattern (home-lab/production targets)
+  189:### Tailnet-Edge Bind Pattern (self-hosted/production targets)
   231:## Testing Requirements
 
   $ sed -n '189,200p' .github/copilot-instructions.md
-  ### Tailnet-Edge Bind Pattern (home-lab/production targets)
+  ### Tailnet-Edge Bind Pattern (self-hosted/production targets)
 
-  Smackerel's home-lab and production deployments use the canonical
+  Smackerel's self-hosted and production deployments use the canonical
   tailnet-edge bind pattern (see
   `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` in the framework
   repo). The deploy compose file `deploy/compose.deploy.yml` ships with
@@ -1095,15 +1095,15 @@ transition-guard's mechanical check.
   Literal marker text present at line 205 (matches the `grep -nF`
   doc-lint adversarial check from the Test Plan). Cross-references to
   spec 042 at lines 193, 225, 226.
-- [x] `docs/Operations.md` contains a "DevOps Access on Home-Lab
-      (Tailnet-Edge Pattern)" section (raw `grep` evidence in [report.md#dod-2-3](report.md#dod-23--docsoperationsmd-contains-devops-access-on-home-lab-tailnet-edge-pattern-section))
+- [x] `docs/Operations.md` contains a "DevOps Access on Self-Hosted
+      (Tailnet-Edge Pattern)" section (raw `grep` evidence in [report.md#dod-2-3](report.md#dod-23--docsoperationsmd-contains-devops-access-on-self-hosted-tailnet-edge-pattern-section))
 
   **Inline Evidence (G025):**
 
   ```bash
-  $ grep -nE '^## DevOps Access on Home-Lab|^### HTTP UIs|^### PostgreSQL|^### NATS|^### Why this pattern|^## Stack Lifecycle|^## Connector Management' docs/Operations.md
+  $ grep -nE '^## DevOps Access on Self-Hosted|^### HTTP UIs|^### PostgreSQL|^### NATS|^### Why this pattern|^## Stack Lifecycle|^## Connector Management' docs/Operations.md
   92:## Stack Lifecycle
-  119:## DevOps Access on Home-Lab (Tailnet-Edge Pattern)
+  119:## DevOps Access on Self-Hosted (Tailnet-Edge Pattern)
   129:### HTTP UIs (Pattern P5: Host Caddy on the Tailscale IP)
   149:### PostgreSQL (Pattern P1: docker exec over Tailscale SSH)
   172:### NATS (Pattern P1: docker exec over Tailscale SSH)
@@ -1127,22 +1127,22 @@ transition-guard's mechanical check.
   There is no published Postgres host port. DevOps reaches Postgres via:
 
       # Interactive psql session (recommended)
-      tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres \
+      tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-postgres \
           psql -U smackerel -d smackerel
 
       # Single-shot query
-      tailscale ssh <deploy-host> -- docker exec -i smackerel-home-lab-postgres \
+      tailscale ssh <deploy-host> -- docker exec -i smackerel-self-hosted-postgres \
           psql -U smackerel -d smackerel -Atqc 'SELECT count(*) FROM artifacts'
 
       # Streaming pg_dump backup (write the dump on the operator's workstation)
-      tailscale ssh <deploy-host> -- docker exec smackerel-home-lab-postgres \
+      tailscale ssh <deploy-host> -- docker exec smackerel-self-hosted-postgres \
           pg_dump -U smackerel -d smackerel -Fc | \
-          cat > /tmp/smackerel-home-lab.pgdump
+          cat > /tmp/smackerel-self-hosted.pgdump
   ```
 
   Canonical Pattern P1 shape with three concrete variants
   (interactive psql, single-shot query, pg_dump streaming) — all using
-  `tailscale ssh <deploy-host> -- docker exec ... smackerel-home-lab-postgres
+  `tailscale ssh <deploy-host> -- docker exec ... smackerel-self-hosted-postgres
   psql ...`.
 - [x] That section contains the canonical `docker exec ... nats` shape (raw
       excerpt in [report.md#dod-2-5](report.md#dod-25--section-contains-canonical-docker-exec--nats-shape))
@@ -1157,21 +1157,21 @@ transition-guard's mechanical check.
   via:
 
       # Subscribe to all subjects (interactive monitoring)
-      tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
+      tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats \
           nats sub '>'
 
       # Inspect server health (NATS monitor endpoint, in-network)
-      tailscale ssh <deploy-host> -- docker exec smackerel-home-lab-nats \
+      tailscale ssh <deploy-host> -- docker exec smackerel-self-hosted-nats \
           wget -qO- http://localhost:8222/healthz
 
       # List streams
-      tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
+      tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats \
           nats stream ls
   ```
 
   Canonical Pattern P1 shape with three concrete variants (subscribe,
   healthz, stream ls) — all using `tailscale ssh <deploy-host> -- docker exec
-  ... smackerel-home-lab-nats nats ...`.
+  ... smackerel-self-hosted-nats nats ...`.
 - [x] That section contains the host-Caddy HTTPS access note for core API
       and ML sidecar (raw excerpt in [report.md#dod-2-6](report.md#dod-26--section-contains-host-caddy-https-access-note-for-core-api-and-ml-sidecar))
 

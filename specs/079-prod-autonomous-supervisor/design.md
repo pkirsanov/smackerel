@@ -8,7 +8,7 @@
 ## 1. Architecture Options Explored
 
 ### Option A — Separate Container, Same Host (RECOMMENDED for ratification)
-- Supervisor runs as its own Docker container on the home-lab host (e.g. `smackerel-supervisor`), launched and lifecycle-managed by the **knb deploy adapter** (NOT by `docker-compose.yml` in this repo).
+- Supervisor runs as its own Docker container on the self-hosted host (e.g. `smackerel-supervisor`), launched and lifecycle-managed by the **knb deploy adapter** (NOT by `docker-compose.yml` in this repo).
 - Network: dedicated bridge network; only egress to Prometheus, NATS metrics endpoint, Postgres read-only role, container runtime socket for healthcheck reads (NOT for exec). No shared volumes with smackerel-core.
 - Pros: strong fault isolation; clear ownership boundary (deploy adapter owns it); can be killed without touching prod.
 - Cons: requires deploy-adapter authoring; one more container to monitor.
@@ -18,9 +18,9 @@
 - Rejected: co-location breaks fault isolation (supervisor crash can take down the network namespace; supervisor noisy-neighbor competes for host resources budgeted for core).
 
 ### Option C — Off-Host Control Plane (DEFERRED)
-- Supervisor runs on a separate small host (e.g. raspberry-pi) and reaches the home-lab over the tailnet.
+- Supervisor runs on a separate small host (e.g. raspberry-pi) and reaches the self-hosted over the tailnet.
 - Pros: hardest isolation; supervisor failure cannot affect prod at all.
-- Cons: requires additional hardware + tailnet-edge configuration; out-of-scope for a single-host home-lab today. Worth revisiting if framework-promoted to `bubbles.supervisor`.
+- Cons: requires additional hardware + tailnet-edge configuration; out-of-scope for a single-host self-hosted today. Worth revisiting if framework-promoted to `bubbles.supervisor`.
 
 **Recommended for operator ratification: Option A.** Option C may become the recommended pattern at framework-promotion time.
 
@@ -30,7 +30,7 @@
 
 | Source | Surface | Read-only role / credential |
 |--------|---------|------------------------------|
-| Prometheus | HTTP `/api/v1/query` against home-lab Prometheus | No auth on home-lab; supervisor binds to tailnet IP only |
+| Prometheus | HTTP `/api/v1/query` against self-hosted Prometheus | No auth on self-hosted; supervisor binds to tailnet IP only |
 | Container health | Docker socket (read endpoints only) OR `cAdvisor` HTTP | Socket access is dangerous; prefer cAdvisor. If socket is used, mount read-only and document why |
 | NATS lag | NATS monitoring endpoint `/jsz`, `/connz` | Read-only by protocol |
 | Postgres slow-query log | Tail `pg_log/*.log` via filesystem mount OR query `pg_stat_statements` with a dedicated read-only role | Dedicated PG role with SELECT on `pg_stat_statements` only |
@@ -104,7 +104,7 @@ Revocation: operator deletes the token file. Supervisor re-reads the token direc
 
 The supervisor itself MUST be observable so the operator can detect when it has become the problem:
 - Supervisor exposes Prometheus metrics on a tailnet-bound port: classification rate, ledger-append rate, token-load count, deference count, self-throttle count, action-refused count, CPU/memory/disk-write gauges.
-- Operator's existing home-lab Prometheus scrapes the supervisor.
+- Operator's existing self-hosted Prometheus scrapes the supervisor.
 - If supervisor metrics breach declared self-budget, supervisor self-throttles AND writes a ledger entry; it does NOT page.
 
 ---

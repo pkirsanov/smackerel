@@ -8,7 +8,7 @@
 
 ## Summary
 
-`TestBundleSecretContract_NoLiteralSecretsInHomeLab` and its four adversarial
+`TestBundleSecretContract_NoLiteralSecretsInSelfHosted` and its four adversarial
 sub-tests (`AdversarialA1_DriftDetector`, `AdversarialA2_LeakageDetector`,
 `AdversarialA3_DeterminismDetector`, `AdversarialA4_OptOutDetector`) all FAIL
 with:

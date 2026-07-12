@@ -4,10 +4,10 @@
 
 - **Type:** Documentation defect — stale audit narrative in append-only spec history (zero runtime impact)
 - **Severity:** P2 — MEDIUM (live `deploy/compose.deploy.yml` is contract-compliant on HEAD; the defect is misleading historical narrative that contradicts the current binding policy and would cause a future agent or operator to mis-restore the FORBIDDEN form if they trusted the spec history as authoritative)
-- **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
+- **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (Self-Hosted Compose Readiness)
 - **Workflow Mode:** bugfix-fastlane
 - **Status:** Reported (Confirmed via line-precise grep)
-- **Discovered By:** 2026-05-15 home-lab readiness re-scan (finding HL-RESCAN-007)
+- **Discovered By:** 2026-05-15 self-hosted readiness re-scan (finding HL-RESCAN-007)
 
 ## Summary
 
@@ -26,7 +26,7 @@ The spec 042 audit text was never reconciled with the policy reversal. Today, an
 
 | Aspect | Detail |
 |---|---|
-| Trigger | 2026-05-15 home-lab readiness re-scan |
+| Trigger | 2026-05-15 self-hosted readiness re-scan |
 | Finding | HL-RESCAN-007 (lens: generic-only / SST-defaults; surface: `specs/042-tailnet-edge-bind-pattern/state.json`) |
 | Severity | P2 (live file already compliant on HEAD; the defect is **stale audit narrative** that misleads future readers) |
 | Audit method | Line-precise `grep -nE '127\.0\.0\.1\|loopback default\|loopback-only default\|preserves.*default'` against `specs/042-tailnet-edge-bind-pattern/state.json` returned 20+ matches; 5 distinct praise-narrative records identified across `execution.completedPhaseClaims[*].notes` and `execution.pendingTransitionRequests[*]` fields. Cross-referenced HEAD commit `eec1437c` (BUG-029-003) which reversed the substitution policy and `.github/instructions/smackerel-no-defaults.instructions.md` which codifies the reversal as binding agent policy. Confirmed live `deploy/compose.deploy.yml` already uses the fail-loud `:?` form on lines 128, 185, 243, 315. Confirmed Compose contract test `internal/deploy/compose_contract_test.go::TestComposeContract_AdversarialDefaultFallbackBind` (BUG-042-004) and `::TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms` (BUG-042-005) actively reject the praised form. |
@@ -76,7 +76,7 @@ Subsequently:
 - `BUG-042-003` (2026-05-13, HEAD `ded2fe5d`) added ollama coverage and tightened the contract.
 - `BUG-042-004` (2026-05-14, HEAD `da263ffe`) added adversarial coverage for the `${HOST_BIND_ADDRESS:-127.0.0.1}:` default-fallback form on `smackerel-core` and `smackerel-ml`. **This is the moment the substitution policy reversal began** — the test suite started actively rejecting the form spec 042's audit had praised.
 - `BUG-042-005` (2026-05-14, HEAD `6cdabe62`) extended the same adversarial coverage to `prometheus`.
-- `BUG-029-003` (2026-05-14, HEAD `eec1437c` — current HEAD) closed home-lab readiness re-scan finding HL-RESCAN-012 by sweeping ALL remaining `${VAR:-default}` substitutions out of the dev `docker-compose.yml` and authoring a new persistent in-tree contract test (`internal/deploy/dev_compose_default_fallback_test.go`) that locks the no-defaults policy on the dev compose file. This commit also strengthened the binding agent rule in `.github/instructions/smackerel-no-defaults.instructions.md` and `.github/copilot-instructions.md` to explicitly forbid the `${VAR:-default}` form for `HOST_BIND_ADDRESS` (and any SST-managed value).
+- `BUG-029-003` (2026-05-14, HEAD `eec1437c` — current HEAD) closed self-hosted readiness re-scan finding HL-RESCAN-012 by sweeping ALL remaining `${VAR:-default}` substitutions out of the dev `docker-compose.yml` and authoring a new persistent in-tree contract test (`internal/deploy/dev_compose_default_fallback_test.go`) that locks the no-defaults policy on the dev compose file. This commit also strengthened the binding agent rule in `.github/instructions/smackerel-no-defaults.instructions.md` and `.github/copilot-instructions.md` to explicitly forbid the `${VAR:-default}` form for `HOST_BIND_ADDRESS` (and any SST-managed value).
 
 The spec 042 `state.json` audit history was never updated to reconcile the prior praise narrative with the new policy. The audit-history-immutability contract correctly prevents anyone from deleting or rewriting the substance of the historical entries — but it does NOT prevent (and in fact REQUIRES) appending a new reconciliation entry that explicitly supersedes the prior narrative and annotating each stale entry with a leading supersession marker.
 

@@ -6,7 +6,7 @@
 # run with the complete env confirms a clean start.
 #
 # ENV-BLOCKED on cpu-tier / Docker-contended hosts: the full-stack core image
-# build + run is accel-tier-gated. Run on an accel-tier home-lab / CI host per
+# build + run is accel-tier-gated. Run on an accel-tier self-hosted / CI host per
 # the spec 095 environment-blocked DoD allowance (finding F-095-E2E-LIVE). The
 # script is statically valid (bash -n) and ready to run where the build fits.
 set -euo pipefail

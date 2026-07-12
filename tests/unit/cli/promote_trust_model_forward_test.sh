@@ -31,8 +31,8 @@ fail() {
 }
 
 # Isolated repo tree: real promote scripts + a fake smackerel.sh that records the
-# argv promote.sh execs, + an in-tree deploy/home-lab adapter params.
-mkdir -p "$TMP/scripts/deploy" "$TMP/deploy/home-lab"
+# argv promote.sh execs, + an in-tree deploy/self-hosted adapter params.
+mkdir -p "$TMP/scripts/deploy" "$TMP/deploy/self-hosted"
 cp "$PROMOTE" "$TMP/scripts/deploy/promote.sh"
 cp "$PARSE" "$TMP/scripts/deploy/promote_manifest_parse.sh"
 chmod +x "$TMP/scripts/deploy/promote.sh"
@@ -42,8 +42,8 @@ cat >"$TMP/smackerel.sh" <<EOF
 printf '%s\n' "\$*" >"$LOG"
 EOF
 chmod +x "$TMP/smackerel.sh"
-cat >"$TMP/deploy/home-lab/params.yaml" <<'EOF'
-environment: home-lab
+cat >"$TMP/deploy/self-hosted/params.yaml" <<'EOF'
+environment: self-hosted
 EOF
 
 mk_manifest() {
@@ -59,8 +59,8 @@ images:
   - name: smackerel-ml
     ref: ghcr.io/pkirsanov/smackerel-ml@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 configBundles:
-  - env: home-lab
-    ref: ghcr.io/pkirsanov/smackerel-config-bundles:home-lab-ae0d540cae0d540cae0d540cae0d540cae0d540c
+  - env: self-hosted
+    ref: ghcr.io/pkirsanov/smackerel-config-bundles:self-hosted-ae0d540cae0d540cae0d540cae0d540cae0d540c
     sha256: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 EOF
   } >"$out"
@@ -68,7 +68,7 @@ EOF
 
 run_promote() {
   : >"$LOG"
-  (cd "$TMP" && bash scripts/deploy/promote.sh --target home-lab --build-manifest "$1") >/dev/null 2>&1 || true
+  (cd "$TMP" && bash scripts/deploy/promote.sh --target self-hosted --build-manifest "$1") >/dev/null 2>&1 || true
 }
 
 # Case 1 — ci-keyless inference (manifest OMITS trustModel, like real CI).

@@ -189,7 +189,7 @@ environments:
   production:
     auth:
       enabled: true   # FR-AUTH-016: enabled-by-default in production
-  home-lab:
+  self-hosted:
     auth:
       enabled: true   # production-class environment
 ```
@@ -929,7 +929,7 @@ The audit phase and chaos phase recorded four LOW-severity / informational obser
 
 ### 14.4 SST line-number reconciliation
 
-The 14 `auth.*` SST keys live at `config/smackerel.yaml` lines 459-511 (top-level `auth:` block) plus per-environment `auth_enabled` overrides at lines 750 (dev), 767 (test), and 800 (home-lab). Earlier evidence blocks reference `lines 67-130` from the implement-phase snapshot before USER WIP merged additional config blocks above the `auth:` section; the current line numbers are reconciled here for posterity. The block content itself is unchanged from the implement-phase landing.
+The 14 `auth.*` SST keys live at `config/smackerel.yaml` lines 459-511 (top-level `auth:` block) plus per-environment `auth_enabled` overrides at lines 750 (dev), 767 (test), and 800 (self-hosted). Earlier evidence blocks reference `lines 67-130` from the implement-phase snapshot before USER WIP merged additional config blocks above the `auth:` section; the current line numbers are reconciled here for posterity. The block content itself is unchanged from the implement-phase landing.
 
 ---
 
@@ -954,7 +954,7 @@ The implement → test → validate → audit → chaos cycle for Scope 02 surfa
 
 The chaos phase recorded two LOW-severity / informational observations on the live middleware integration. Neither is a Scope 02 blocker; both are tracked here so subsequent scopes / future evolution can address them if/when warranted.
 
-- **OBS-CHAOS-044-S02-01** (LOW / informational) — at 128 concurrent verifies from a single source IP, the chi-router rate-limit middleware classifies 28/128 as HTTP 429 (throttled) BEFORE `bearerAuthMiddleware` runs. Auth verification correctness is unaffected — `auth_reject=0` (zero spurious 401/403 across the 128-request burst). 429 is the correct production behavior for single-IP burst load; rate-limit configuration is orthogonal to bearer-auth. **Recommended follow-up:** none required. If rate-limit tuning becomes a topic (e.g. for multi-tenant home-lab deployments serving multiple PWA clients behind a single upstream NAT), the rate limiter's `KeyFunc` could be made session-aware (per-`UserID` rather than per-source-IP) — but this is a multi-spec architectural question, not a 044 deliverable. Tracked in `report.md` → Chaos Evidence (Scope 02) → Observations.
+- **OBS-CHAOS-044-S02-01** (LOW / informational) — at 128 concurrent verifies from a single source IP, the chi-router rate-limit middleware classifies 28/128 as HTTP 429 (throttled) BEFORE `bearerAuthMiddleware` runs. Auth verification correctness is unaffected — `auth_reject=0` (zero spurious 401/403 across the 128-request burst). 429 is the correct production behavior for single-IP burst load; rate-limit configuration is orthogonal to bearer-auth. **Recommended follow-up:** none required. If rate-limit tuning becomes a topic (e.g. for multi-tenant self-hosted deployments serving multiple PWA clients behind a single upstream NAT), the rate limiter's `KeyFunc` could be made session-aware (per-`UserID` rather than per-source-IP) — but this is a multi-spec architectural question, not a 044 deliverable. Tracked in `report.md` → Chaos Evidence (Scope 02) → Observations.
 - **OBS-CHAOS-044-S02-02** (INFORMATIONAL) — the verify-vs-revoke window in C2-B02 was tight enough that 40/40 admit pre-revoke and 40/40 reject post-revoke cleanly — no admits leaked into the post-revoke window, demonstrating sub-millisecond cache convergence on the loopback NATS connection. NFR-AUTH-006's ≤1s budget is met by **>3 orders of magnitude**. The synchronous `cache.MarkRevoked` inside `Broadcaster.Publish` (Scope 01 design intent) is the reason the convergence is essentially atomic from the caller's perspective when both publisher and subscriber share a single NATS process. **Recommended follow-up:** none — this is the intended behavior. Add a chaos behavior at Scope 04 metrics phase that asserts the loopback-shared convergence is preserved when the metric counters (`smackerel_auth_revocation_broadcast_*`) are wired.
 
 ### 15.3 Helpers / refinements that DID land alongside Scope 02 work

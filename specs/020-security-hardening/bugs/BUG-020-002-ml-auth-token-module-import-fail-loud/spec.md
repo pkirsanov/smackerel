@@ -7,7 +7,7 @@
 - **Parent Spec:** 020 — Security Hardening (owns the SMACKEREL_AUTH_TOKEN contract; see `specs/020-security-hardening/spec.md` and the existing fail-loud branching in `ml/app/main.py:_check_required_config`)
 - **Workflow Mode:** test-to-doc
 - **Status:** Fixed
-- **Discovered By:** 2026-05-14 home-lab readiness re-scan (finding HL-RESCAN-013)
+- **Discovered By:** 2026-05-14 self-hosted readiness re-scan (finding HL-RESCAN-013)
 
 ## Problem Statement
 
@@ -37,7 +37,7 @@ The fix converts line 11 to the canonical Python fail-loud pattern (`os.environ[
 
 | Aspect | Detail |
 |---|---|
-| Trigger | Home-lab readiness re-scan (system review session 2026-05-14) |
+| Trigger | self-hosted readiness re-scan (system review session 2026-05-14) |
 | Finding | HL-RESCAN-013 |
 | Severity | P3 (the runtime branching in `ml/app/main.py:_check_required_config` already converts empty + production to `sys.exit(1)`; the gap is at module-import time and in unsanctioned import contexts) |
 | Audit method | `grep -nE 'os\.environ\.get\("SMACKEREL_AUTH_TOKEN"' ml/` returned `ml/app/auth.py:11`, `ml/app/main.py:146`, `ml/app/nats_client.py:180`. Cross-referenced with `.github/copilot-instructions.md` Secrets Management table. The `ml/app/auth.py:11` site is the highest-priority violation because it runs at module-import time (before any startup check has a chance to validate the env), and the named file is the canonical auth dependency for every non-health route via `Depends(verify_auth)`. The `ml/app/main.py:146` site runs INSIDE `_check_required_config()` which is the lifespan startup check — the unset case would still flow through to the production branch and exit, so the runtime risk is lower; the silent default there is functionally equivalent in current behaviour but should be migrated as a sequel packet for code-search audit cleanliness. The `ml/app/nats_client.py:180` site runs INSIDE `connect()` which is invoked AFTER `_check_required_config()` validates the env; the silent default there is functionally redundant. The latter two sites are scoped to a sequel packet to keep this fix minimum-touch and to avoid colliding with a parallel session that has uncommitted changes in `ml/app/nats_client.py`. |

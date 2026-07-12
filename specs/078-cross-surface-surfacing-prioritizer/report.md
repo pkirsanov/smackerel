@@ -638,7 +638,7 @@ Failing packages (3) and root causes — ALL pre-existing, none attributable to 
 | Package | Failing test(s) | Root cause | Spec 078 related? |
 |---------|----------------|------------|-------------------|
 | `internal/assistant` | `TestValidateScenariosPresent_HappyPath`, `TestSkillsManifest_AllScenariosLoadFromPromptContractsDir`, `TestSkillsManifest_EnabledIDsHaveLoadedScenarios` | `retrieval_qa` scenario references tools (`recommendation_parse_intent`, `recommendation_record_feedback`, `recommendation_explain_from_trace`, `entity_resolve`) not registered in tool registry; rejected by skills manifest loader | NO — assistant/recommendation tool registry; surfacing controller has no scenario contract |
-| `internal/deploy` | `TestBundleSecretContract_NoLiteralSecretsInHomeLab` + 4 adversarial variants (A1/A2/A3/A4) | `config-validate: skipped for production-class target env=home-lab (placeholder mode)`; loader exits 1 where contract expects 0 | NO — bundle/secret deployment contract; surfacing has no deploy bundle |
+| `internal/deploy` | `TestBundleSecretContract_NoLiteralSecretsInSelfHosted` + 4 adversarial variants (A1/A2/A3/A4) | `config-validate: skipped for production-class target env=self-hosted (placeholder mode)`; loader exits 1 where contract expects 0 | NO — bundle/secret deployment contract; surfacing has no deploy bundle |
 | `tests/unit/clients` | `TestRenderDescriptorV1_CrossLanguageCanary`, `TestRenderDescriptorV1_DartPreCompiled_NoFallbackToDartRun` | `node` and `dart` executables not on PATH; spec 073 cross-language renderer canary | NO — host toolchain absence; spec 073, not 078 |
 
 Surfacing-touching packages (per prior validate/harden evidence and re-run this round):
@@ -714,7 +714,7 @@ No test files removed (adopt-existing pattern adds the spec wrapper around exist
 | Coverage drops | none | none | 0 |
 | Deploy regressions | N/A | N/A | — |
 
-Pre-existing failures (assistant retrieval_qa scenario registration, home-lab bundle secret contract, missing host node/dart) are unrelated to surfacing and tracked outside this spec.
+Pre-existing failures (assistant retrieval_qa scenario registration, self-hosted bundle secret contract, missing host node/dart) are unrelated to surfacing and tracked outside this spec.
 
 **Next required owner:** `bubbles.simplify` — no regressions to fix; proceed with simplification review for adopt-existing remaining phases.
 
@@ -775,7 +775,7 @@ ok      github.com/smackerel/smackerel/internal/metrics (cached)
 ok      github.com/smackerel/smackerel/internal/config  21.927s
 ```
 
-Pre-existing `TestSSTLoader_HomeLabEmitsProductionRuntimeEnv_BUG051001` perms failure was caused by mode-0600 `config/generated/*.env` files left from a prior `./smackerel.sh --env test up` run by a different uid. Restored to 0644 and re-ran — PASS. Unrelated to surfacing changes.
+Pre-existing `TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001` perms failure was caused by mode-0600 `config/generated/*.env` files left from a prior `./smackerel.sh --env test up` run by a different uid. Restored to 0644 and re-ran — PASS. Unrelated to surfacing changes.
 
 **Verdict:** ✅ PASS — 2 dead-code removals applied, zero regressions, zero behavior change.
 

@@ -6,14 +6,14 @@
   "status": "blocked",
   "workflowMode": "bugfix-fastlane",
   "owner": "bubbles.workflow",
-  "discoveredBy": "operator (live home-lab Telegram bot)",
+  "discoveredBy": "operator (live self-hosted Telegram bot)",
   "discoveredAt": "2026-06-11",
   "lastUpdatedAt": "2026-06-11",
   "rootCause": {
     "defectA": "open_knowledge agent refuses every query at the pre-flight per-user-monthly USD gate (internal/assistant/openknowledge/agent/agent.go: PerUserMonthlyUSDRemaining <= 0 -> cap_usd) because config/smackerel.yaml set per_user_monthly_budget_usd: 0 while the production CostFn is a zero-cost stub. Code+config bug present on main; NOT deployment lag (deployed sourceSha 0bc04cfb contains the /ask->open_knowledge routing fix ebdbf852). Routing (/ask->open_knowledge) is correct.",
     "defectB": "Telegram adapter HandleUpdate passed verbatim msg.Text (which preserves the /ask prefix for shortcut detection) into the capture-as-fallback hook, so the captured idea title included /ask."
   },
-  "codeVsDeployment": "code+config (both fixed in-repo and validated). Live home-lab symptom additionally requires a redeploy via the knb adapter (bubbles.devops).",
+  "codeVsDeployment": "code+config (both fixed in-repo and validated). Live self-hosted symptom additionally requires a redeploy via the knb adapter (bubbles.devops).",
   "resolution": "DEFECT A: config/smackerel.yaml assistant.open_knowledge.monthly_budget_usd 0->100 and per_user_monthly_budget_usd 0->25 (positive ceilings; local zero-cost CostFn so they never bind; enabled:false is the disable switch). docs/Operations.md corrected (the stale '0 = unlimited' claim now states the SCN-064-A08 '0 = refuse-all' semantics). DEFECT B: internal/telegram/assistant_adapter/adapter.go HandleUpdate now strips the v1 slash-command prefix via assistant.StripShortcutPrefix before capture (local var renamed assistant->facade to avoid shadowing the import). Adversarial regression tests added in 3 new *_test.go files; all GREEN; go test ./... + gofmt clean.",
   "affectedSurface": [
     "config/smackerel.yaml (assistant.open_knowledge.monthly_budget_usd, per_user_monthly_budget_usd)",
@@ -45,12 +45,12 @@
     "validate",
     "docs"
   ],
-  "blockedReason": "In-repo code+config+docs fix is COMPLETE and validated at unit/adapter level (both scopes Done; adversarial regression GREEN; go test ./... + gofmt clean). Two genuine external blockers prevent a clean terminal 'done' in this environment: (1) DEPLOYMENT (owner bubbles.devops): the deployed image sourceSha 0bc04cfb ships the 0 budget, so the live home-lab S1 symptom is cleared ONLY after a rebuild of smackerel-core from the fixed SHA + home-lab config-bundle regen (so home-lab.env carries monthly=100 / per_user=25) + redeploy via the knb smackerel/home-lab adapter; (2) FULL LIVE CERTIFICATION (owners bubbles.validate / bubbles.audit / bubbles.test): the bugfix-fastlane done-grade gates (scenario-manifest, validate certification, live openknowledge E2E on the real Telegram+searxng+GPU stack, audit pass) require the home-lab GPU stack which is unavailable in this sandbox (and pypi/node/dart toolchains are absent). ACTIONABLE NEXT STEP: redeploy via bubbles.devops, then re-run /ask on the home-lab bot to confirm a sourced answer + a capture title without the /ask prefix, and run the full live certification on the real stack.",
+  "blockedReason": "In-repo code+config+docs fix is COMPLETE and validated at unit/adapter level (both scopes Done; adversarial regression GREEN; go test ./... + gofmt clean). Two genuine external blockers prevent a clean terminal 'done' in this environment: (1) DEPLOYMENT (owner bubbles.devops): the deployed image sourceSha 0bc04cfb ships the 0 budget, so the live self-hosted S1 symptom is cleared ONLY after a rebuild of smackerel-core from the fixed SHA + self-hosted config-bundle regen (so self-hosted.env carries monthly=100 / per_user=25) + redeploy via the knb <deployment-owner>/<product>/<target> adapter; (2) FULL LIVE CERTIFICATION (owners bubbles.validate / bubbles.audit / bubbles.test): the bugfix-fastlane done-grade gates (scenario-manifest, validate certification, live openknowledge E2E on the real Telegram+searxng+GPU stack, audit pass) require the self-hosted GPU stack which is unavailable in this sandbox (and pypi/node/dart toolchains are absent). ACTIONABLE NEXT STEP: redeploy via bubbles.devops, then re-run /ask on the self-hosted bot to confirm a sourced answer + a capture title without the /ask prefix, and run the full live certification on the real stack.",
   "nextRequiredOwner": "bubbles.devops",
   "followUps": [
     "FOLLOW-UP-1: tests/e2e/assistant_bs007_test.sh asserts stale /ask->retrieval_qa routing (tier-gated/skipped). Route to bubbles.plan/bubbles.test.",
     "FOLLOW-UP-2: spec-073 TestRenderDescriptorV1_* canaries t.Fatalf on missing node/dart instead of t.Skip (hard-fail the unit suite in minimal containers). Route to bubbles.test.",
-    "DEPLOY: live home-lab fix requires rebuild + config-bundle regen + redeploy via knb adapter. Owner bubbles.devops."
+    "DEPLOY: live self-hosted fix requires rebuild + config-bundle regen + redeploy via knb adapter. Owner bubbles.devops."
   ],
   "environmentalLimitations": [
     "./smackerel.sh lint and format --check exit non-zero ONLY at their Python (ml/) pip-install stage (pypi httpcore read-timeout in the sandbox). No Python changed. Go tooling (isolated golang container) runs first and is clean: gofmt exit 0, go vet via go test ./....",

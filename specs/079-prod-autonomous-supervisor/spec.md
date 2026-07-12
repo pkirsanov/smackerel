@@ -6,13 +6,13 @@
 **Planning Only:** true — implementation deferred until operator ratifies the safety model in `uservalidation.md`.
 
 **Owner Directive (2026-06-03):**
-> "bubbles agent running/monitoring/fixing service" on the production home-lab.
+> "bubbles agent running/monitoring/fixing service" on the production self-hosted.
 
 **Depends On (read-only):**
-- Deploy adapter overlay at sibling repo `<deploy-adapter-repo>/smackerel/home-lab/` (operator-private; supervisor runs OUTSIDE this repo's smackerel-core stack)
+- Deploy adapter overlay at sibling repo `<deploy-adapter-repo>/<deployment-owner>/<product>/<target>/` (operator-private; supervisor runs OUTSIDE this repo's smackerel-core stack)
 - `bubbles.upkeep` (calendar-driven hygiene) — supervisor is the event-driven complement, NOT a replacement
 - `bubbles.goal` (convergence loop) — optionally invoked for proposed fixes
-- Prometheus scrape config + container health + NATS lag metrics + Postgres slow-query log already published by the home-lab stack
+- Prometheus scrape config + container health + NATS lag metrics + Postgres slow-query log already published by the self-hosted stack
 
 **Unblocks:** nothing — this spec sits at `in_progress` until operator review.
 
@@ -20,7 +20,7 @@
 
 ## 1. Problem Statement
 
-The home-lab Smackerel deployment is the operator's daily production. Today, anomalies (SLO burn, scheduler stalls, ML sidecar latency drift, NATS lag, error spikes) are detected only when the operator notices them — typically hours late. The operator wants a Bubbles-agent supervisor that:
+The self-hosted Smackerel deployment is the operator's daily production. Today, anomalies (SLO burn, scheduler stalls, ML sidecar latency drift, NATS lag, error spikes) are detected only when the operator notices them — typically hours late. The operator wants a Bubbles-agent supervisor that:
 
 - Continuously reads prod telemetry (read-only by default).
 - Detects anomalies against declared SLOs and steady-state baselines.
@@ -33,9 +33,9 @@ The risk profile is severe: a misbehaving supervisor on prod can become the nois
 
 ## 2. Outcome Contract
 
-**Intent:** A read-only-by-default supervisor process runs on the home-lab host (outside the smackerel-core stack), watches declared SLOs + telemetry, and emits append-only evidence packets. Write actions (bug filing, fix dispatch) are gated by operator-issued capability tokens with explicit scope and TTL. The supervisor never modifies prod config, never touches the knb manifest, never pushes to git from prod, and never takes the stack down.
+**Intent:** A read-only-by-default supervisor process runs on the self-hosted host (outside the smackerel-core stack), watches declared SLOs + telemetry, and emits append-only evidence packets. Write actions (bug filing, fix dispatch) are gated by operator-issued capability tokens with explicit scope and TTL. The supervisor never modifies prod config, never touches the knb manifest, never pushes to git from prod, and never takes the stack down.
 
-**Success Signal:** With the supervisor running for 30 consecutive days on a quiet home-lab, the operator's `specs/<spec>/bugs/` directory contains zero spurious BUG-NNN folders, the supervisor's own resource footprint stays under its declared budget, and every real anomaly (verified post-hoc) produced a bug packet within its declared detection window.
+**Success Signal:** With the supervisor running for 30 consecutive days on a quiet self-hosted, the operator's `specs/<spec>/bugs/` directory contains zero spurious BUG-NNN folders, the supervisor's own resource footprint stays under its declared budget, and every real anomaly (verified post-hoc) produced a bug packet within its declared detection window.
 
 **Hard Constraints:**
 - Supervisor process MUST NOT share a Docker network, host PID namespace, or volume mount with `smackerel-core`, `smackerel-ml`, `postgres`, or `nats`.
@@ -67,7 +67,7 @@ This spec is bound by `.github/instructions/product-principles.instructions.md` 
 
 | Actor | Description | Key Goals | Permissions |
 |-------|-------------|-----------|-------------|
-| Operator | Sole human owner of the home-lab; reviews supervisor output and issues capability tokens | Reduce time-to-detect for prod anomalies without becoming a notification target | Issues/revokes capability tokens; merges proposed fixes; transitions this spec's status |
+| Operator | Sole human owner of the self-hosted; reviews supervisor output and issues capability tokens | Reduce time-to-detect for prod anomalies without becoming a notification target | Issues/revokes capability tokens; merges proposed fixes; transitions this spec's status |
 | Supervisor (default) | Read-only Bubbles-agent process running outside the smackerel-core stack | Detect, classify, and record anomalies | Read prod telemetry (Prometheus, container health, NATS lag, slow-query log); read `specs/*/state.json` + `bugs/`; write to its own append-only ledger |
 | Supervisor (write-scoped) | Same process holding an unexpired capability token | File a bug; dispatch a `bubbles.goal` run for a specific anomaly | Bounded by token scope + TTL + max-actions; never gains shell, never gains git push, never gains config mutation |
 | Existing `bubbles.upkeep` (Treena) | Calendar-driven hygiene agent | Run scheduled backup/restore-drill/BCDR/patch tasks | Distinct from supervisor; supervisor MUST NOT trigger upkeep tasks |
@@ -257,6 +257,6 @@ The supervisor introduces a new capability that two or more products (Smackerel,
 
 - Any line of supervisor implementation code (deferred).
 - `scopes.md` authoring (owned by `bubbles.plan`, blocked until operator ratification).
-- Real Evo-X2 hostname, IP, or tailnet identifiers (operator binds these in the knb deploy-adapter overlay; this repo stays generic — see `.github/copilot-instructions.md` "No Env-Specific Content").
+- Real <deploy-host> hostname, IP, or tailnet identifiers (operator binds these in the knb deploy-adapter overlay; this repo stays generic — see `.github/copilot-instructions.md` "No Env-Specific Content").
 - Integration with paging providers (PagerDuty/Opsgenie) — supervisor is anti-paging by design.
 - Modifying `bubbles.upkeep` — out of scope; coexistence boundary defined above.

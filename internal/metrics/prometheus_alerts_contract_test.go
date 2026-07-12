@@ -3,7 +3,7 @@
 // alerts.yml has no upstream validation surface in this repo: no CI step
 // runs `promtool check rules`, no Go test parses it. A regression that
 // truncates an expr, drops an alert, or breaks the YAML rule-group shape
-// would ship silently to a deploy adapter that loads it (home-lab Caddy
+// would ship silently to a deploy adapter that loads it (self-hosted Caddy
 // → Prometheus stack).
 //
 // This contract test enforces structural invariants:

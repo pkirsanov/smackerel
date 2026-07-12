@@ -6,7 +6,7 @@
   "featureDir": "specs/097-card-rewards-gcal-delivery",
   "scenarioIdPattern": "SCN-097-A0[1-3]",
   "totalScenarios": 4,
-  "note": "Scenario contract for the card-rewards Google Calendar delivery feature. The three canonical behaviours (SCN-097-A01 write+idempotent, A02 disabled->Web-UI-only, A03 enabled-but-misconfigured fail-loud) are unit-proven under SCOPE-01. SCN-097-A01 is ALSO tracked under SCOPE-02 as the live home-lab delivery proof (same behaviour, second delivery proof: a real event written to the operator's Google Calendar with idempotent no-duplicate re-sync). Every scenario is linked 1:1 to its owning scope, an existing Go test, and a report.md evidence anchor.",
+  "note": "Scenario contract for the card-rewards Google Calendar delivery feature. The three canonical behaviours (SCN-097-A01 write+idempotent, A02 disabled->Web-UI-only, A03 enabled-but-misconfigured fail-loud) are unit-proven under SCOPE-01. SCN-097-A01 is ALSO tracked under SCOPE-02 as the live self-hosted delivery proof (same behaviour, second delivery proof: a real event written to the operator's Google Calendar with idempotent no-duplicate re-sync). Every scenario is linked 1:1 to its owning scope, an existing Go test, and a report.md evidence anchor.",
   "scenarios": [
     {
       "scenarioId": "SCN-097-A01",
@@ -53,12 +53,12 @@
     {
       "scenarioId": "SCN-097-A01",
       "scopeId": "SCOPE-02",
-      "title": "Monthly recommendation is written to Google Calendar (live home-lab proof)",
+      "title": "Monthly recommendation is written to Google Calendar (live self-hosted proof)",
       "behaviorClass": "integration",
       "changeType": "new",
       "requiredTestType": ["e2e"],
       "regressionRequired": false,
-      "given": "the new signed image is deployed on the home-lab host with calendar_sync true and the operator's real Google OAuth credential",
+      "given": "the new signed image is deployed on the self-hosted host with calendar_sync true and the operator's real Google OAuth credential",
       "when": "the deployed GoogleCalendarClient runs a card-rewards calendar sync",
       "then": "a real card-rewards event is written to the operator's Google Calendar with the stable UID; a re-run updates the same event without duplicating it; a delete removes it",
       "linkedTests": ["internal/cardrewards/gcal_client_test.go::TestPutEvent_InsertsThenUpdates_Idempotent"],

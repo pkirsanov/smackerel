@@ -353,7 +353,7 @@ Scenario: SCOPE-04-C Live rebuild + render proof (light + dark) (UC-7 / AC-10)
   Then every /cards page renders the new design system in both light and dark
   And Docker bundle freshness is verified (the served markup contains the new
     design-system markers, not a stale bundle)
-  And the home-lab apply is operator-gated and ships in the same rebuild as spec 091
+  And the self-hosted apply is operator-gated and ships in the same rebuild as spec 091
 ```
 
 ### Implementation Plan
@@ -362,7 +362,7 @@ Scenario: SCOPE-04-C Live rebuild + render proof (light + dark) (UC-7 / AC-10)
 - **Full Go unit** — `./smackerel.sh test unit --go` (whole `internal/web` package incl. the cardrewards render test) green.
 - **Full card-rewards e2e-ui** — `./smackerel.sh test e2e-ui` (all 7 existing specs + `cardrewards_bonuses.spec.ts` + `cardrewards_chrome.spec.ts`) green; every CSP guard empty.
 - **`data-*` diff proof** (design §7, AC-9) — extract the `data-[a-z-]+` set from `cardrewards_templates.go` + `cardrewards_dashboard_templates.go` at the pre-redesign base vs HEAD (`git show <base>:<file>` vs working tree) and prove the post set ⊇ pre set with zero removals/renames. Capture the diff as evidence.
-- **Live rebuild + render proof** — `./smackerel.sh build` then `./smackerel.sh test e2e-ui` against the fresh stack is the deploy-grade proof that the **built artifact** renders the new design (light + dark via Playwright `colorScheme`); verify Docker bundle freshness (served markup contains the new markers). The home-lab `deploy-target apply` itself is **operator-gated** and ships in the **same rebuild as spec 091** (combined deploy) — the agent drives the rebuild + the e2e-ui proof; the operator authorizes the apply.
+- **Live rebuild + render proof** — `./smackerel.sh build` then `./smackerel.sh test e2e-ui` against the fresh stack is the deploy-grade proof that the **built artifact** renders the new design (light + dark via Playwright `colorScheme`); verify Docker bundle freshness (served markup contains the new markers). The self-hosted `deploy-target apply` itself is **operator-gated** and ships in the **same rebuild as spec 091** (combined deploy) — the agent drives the rebuild + the e2e-ui proof; the operator authorizes the apply.
 
 ### Test Plan (4 rows → 4 DoD test items; parity 4 == 4)
 

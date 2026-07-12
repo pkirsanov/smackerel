@@ -25,7 +25,7 @@
 #     them via `tailscale ssh <host> -- docker exec -it <container> ...`
 #     (Pattern P1). This closes a small footgun and keeps the persistence
 #     boundary off the host network entirely.
-#   - Volume names embed the project (env) suffix, e.g. smackerel-home-lab-postgres-data.
+#   - Volume names embed the project (env) suffix, e.g. smackerel-self-hosted-postgres-data.
 #     They are declared in app.env via POSTGRES_VOLUME_NAME etc. so the bundle
 #     environment owns the persistence boundary.
 
@@ -114,7 +114,7 @@ services:
       # Spec 082 SCOPE-082-04 — JetStream persists at-least-once in-flight
       # capture state (events accepted but not yet processed by core) to the
       # nats-data named volume. It MUST survive a `./smackerel.sh clean` /
-      # `down` on a running home-lab stack, so it is labelled `persistent`
+      # `down` on a running self-hosted stack, so it is labelled `persistent`
       # (was `ephemeral`, which marked it as fair game for cleanup and risked
       # wiping queued captures). The clean tooling preserves volumes whose
       # component is labelled persistent.
@@ -279,7 +279,7 @@ services:
     image: ollama/ollama:rocm@sha256:e658cf94b88ef88aa0868bc5900e6f83ccf77262ef2ca582601161f865a2b080
     restart: unless-stopped
     devices:
-      # AMD ROCm — required for GPU inference on home-lab (Radeon 8060S iGPU,
+      # AMD ROCm — required for GPU inference on self-hosted (Radeon 8060S iGPU,
       # gfx1151 / Strix Halo). Without these the daemon falls back to 100% CPU
       # and the 26B model can't fit within scenario budgets. /dev/kfd is the
       # kernel fusion driver IPC node; /dev/dri exposes the render node.

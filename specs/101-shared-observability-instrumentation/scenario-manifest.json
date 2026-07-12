@@ -6,7 +6,7 @@
     "featureDir": "specs/101-shared-observability-instrumentation",
     "scenarioIdPattern": "SCN-101-A0[1-4]",
     "totalScenarios": 4,
-    "note": "Scenario contract for smackerel's consumption of the knb spec-014 scope-03 shared-observability instrumentation contract (reconciliation, not greenfield). SCN-101-A01 (fail-loud 3-var read) + SCN-101-A03 (com.bubbles.* discovery labels) are fully unit/contract-proven offline under SCOPE-01. SCN-101-A02 has two halves: the in-repo /metrics route + handler existence is proven under SCOPE-01 (reuses internal/api/router.go + internal/metrics), while the LIVE 200 scraped by the shared Prometheus is apply-gated under SCOPE-02 (DEFERRED-to-flip; no live evo-x2 mutation this session). Every scenario is linked 1:1 to its owning scope and a report.md evidence anchor.",
+    "note": "Scenario contract for smackerel's consumption of the knb spec-014 scope-03 shared-observability instrumentation contract (reconciliation, not greenfield). SCN-101-A01 (fail-loud 3-var read) + SCN-101-A03 (com.bubbles.* discovery labels) are fully unit/contract-proven offline under SCOPE-01. SCN-101-A02 has two halves: the in-repo /metrics route + handler existence is proven under SCOPE-01 (reuses internal/api/router.go + internal/metrics), while the LIVE 200 scraped by the shared Prometheus is apply-gated under SCOPE-02 (DEFERRED-to-flip; no live <deploy-host> mutation this session). Every scenario is linked 1:1 to its owning scope and a report.md evidence anchor.",
     "scenarios": [
         {
             "scenarioId": "SCN-101-A01",
@@ -49,7 +49,7 @@
             "regressionRequired": true,
             "given": "smackerel core is running",
             "when": "GET /metrics is issued",
-            "then": "the route is wired in-repo (internal/api/router.go r.Handle(\"/metrics\", metrics.Handler()) → promhttp) and returns 200 text/plain with process + go runtime metrics; the LIVE 200 scraped by the shared Prometheus on evo-x2 is DEFERRED-to-flip under SCOPE-02 (apply-gated, no live mutation)",
+            "then": "the route is wired in-repo (internal/api/router.go r.Handle(\"/metrics\", metrics.Handler()) → promhttp) and returns 200 text/plain with process + go runtime metrics; the LIVE 200 scraped by the shared Prometheus on <deploy-host> is DEFERRED-to-flip under SCOPE-02 (apply-gated, no live mutation)",
             "linkedTests": [
                 "internal/api/health_test.go::(existing /metrics coverage)",
                 "internal/api/router.go::(r.Handle(\"/metrics\", metrics.Handler()) — reused, cited)"
@@ -93,7 +93,7 @@
                 "integration"
             ],
             "regressionRequired": false,
-            "given": "smackerel is flipped to sharedServices.observability: shared and the operator has run apply-shared-obs on evo-x2",
+            "given": "smackerel is flipped to sharedServices.observability: shared and the operator has run apply-shared-obs on <deploy-host>",
             "when": "the shared Prometheus docker_sd discovers smackerel-core by com.bubbles.product and scrapes /metrics",
             "then": "GET /metrics returns 200, the product=smackerel scrape label is visible, and OTLP spans land in the shared Tempo — DEFERRED-to-flip (no live host mutation this session; the in-repo route + discovery labels that enable this are proven by health_test.go + the labels contract test)",
             "linkedTests": [

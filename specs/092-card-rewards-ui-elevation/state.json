@@ -306,7 +306,7 @@
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "at": "2026-06-14T16:49:00Z",
-        "note": "Validate phase: integrated green bar — full Go unit (exit 0) + 19/19 e2e-ui (CSP guards empty, dark-mode adversarial green) + data-* byte-identical (AC-9) + the live home-lab GET /cards 200 with the elevated design rendering. Certifies AC-1..AC-11 on the integrated surface. Evidence at report.md#validate-phase + scope-04-deploy."
+        "note": "Validate phase: integrated green bar — full Go unit (exit 0) + 19/19 e2e-ui (CSP guards empty, dark-mode adversarial green) + data-* byte-identical (AC-9) + the live self-hosted GET /cards 200 with the elevated design rendering. Certifies AC-1..AC-11 on the integrated surface. Evidence at report.md#validate-phase + scope-04-deploy."
       },
       {
         "agent": "bubbles.audit",

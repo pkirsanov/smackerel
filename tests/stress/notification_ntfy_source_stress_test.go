@@ -22,7 +22,7 @@ func TestNtfyWebhookBurstUsesRuntimeReceiverWithoutDuplicateRejection(t *testing
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			payload := []byte(fmt.Sprintf(`{"id":"evt-stress-ntfy-%d","event":"message","topic":"home-lab-alerts","title":"stress ntfy %d","message":"runtime webhook receiver burst"}`, index, index))
+			payload := []byte(fmt.Sprintf(`{"id":"evt-stress-ntfy-%d","event":"message","topic":"self-hosted-alerts","title":"stress ntfy %d","message":"runtime webhook receiver burst"}`, index, index))
 			status, body, err := stressAPIPost(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", payload)
 			if err != nil {
 				t.Errorf("ntfy webhook burst request %d failed: %v", index, err)
@@ -57,7 +57,7 @@ func TestNtfyMalformedReconnectAndDuplicateBurstCreatesBoundedOperationalRecords
 		}
 	}
 	for index := 0; index < 3; index++ {
-		status, body, err := stressAPIPost(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", []byte(fmt.Sprintf(`{"id":"evt-stress-ntfy-dup","event":"message","topic":"home-lab-alerts","title":"dup %d","message":"duplicate upstream id preserves source provenance"}`, index)))
+		status, body, err := stressAPIPost(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", []byte(fmt.Sprintf(`{"id":"evt-stress-ntfy-dup","event":"message","topic":"self-hosted-alerts","title":"dup %d","message":"duplicate upstream id preserves source provenance"}`, index)))
 		if err != nil {
 			t.Fatalf("duplicate ntfy burst request %d failed: %v", index, err)
 		}

@@ -17,7 +17,7 @@ the user is stuck — they cannot acquire a cookie because the only way to do
 so is to manually craft a `POST /v1/web/login` with a JSON body containing
 their token.
 
-Observed live on `evo-x2`: tile `Smackerel → https://evo-x2.<tailnet>.ts.net/`
+Observed live on `<deploy-host>`: tile `Smackerel → https://<deploy-host>.<tailnet>.ts.net/`
 renders "Unauthorized" with no actionable path forward for the operator.
 
 The PWA-cookie design from spec 044 was correct at the API layer but never

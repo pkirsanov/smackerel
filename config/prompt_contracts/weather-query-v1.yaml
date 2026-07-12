@@ -109,7 +109,7 @@ output_schema:
 
 limits:
   max_loop_iterations: 3
-  # Sized for the home-lab path: one route LLM call + external geocode +
+  # Sized for the self-hosted path: one route LLM call + external geocode +
   # external forecast + final-reply LLM call, all running against a 26B
   # GPU-accelerated model with 24h keep_alive. 120s caps at the loader
   # ceiling (agent.defaults.timeout_ms_ceiling) and gives ample margin

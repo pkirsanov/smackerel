@@ -7,7 +7,7 @@
 - **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (compose contract owner)
 - **Workflow Mode:** test-to-doc
 - **Status:** Fixed
-- **Discovered By:** 2026-05-14 home-lab readiness re-scan (finding HL-RESCAN-005)
+- **Discovered By:** 2026-05-14 self-hosted readiness re-scan (finding HL-RESCAN-005)
 
 ## Problem Statement
 
@@ -25,7 +25,7 @@ ports:
   - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
 ```
 
-The contract test, however, did NOT enforce this — `ollama` was missing from `assertComposeContract` entirely. A future edit reverting `ollama` to literal `127.0.0.1:` (spec 020 form) or to the forbidden `${HOST_BIND_ADDRESS:-127.0.0.1}` default-fallback form (forbidden by Gate G028) would slip past `TestComposeContract_LiveFile` and ship to home-lab.
+The contract test, however, did NOT enforce this — `ollama` was missing from `assertComposeContract` entirely. A future edit reverting `ollama` to literal `127.0.0.1:` (spec 020 form) or to the forbidden `${HOST_BIND_ADDRESS:-127.0.0.1}` default-fallback form (forbidden by Gate G028) would slip past `TestComposeContract_LiveFile` and ship to self-hosted.
 
 The defect was a coverage gap in the contract: the live file was correct by convention, but no static-file lock prevented a regression. This collapsed the spec 042 / Gate G028 defense-in-depth to "trust whatever convention says" for the ollama service, while every other operator-facing service in the compose set was mechanically enforced.
 
@@ -33,7 +33,7 @@ The defect was a coverage gap in the contract: the live file was correct by conv
 
 | Aspect | Detail |
 |---|---|
-| Trigger | Home-lab readiness re-scan (system review session 2026-05-14) |
+| Trigger | self-hosted readiness re-scan (system review session 2026-05-14) |
 | Finding | HL-RESCAN-005 |
 | Severity | P2 (live file is correct today; the gap is regression-only — a future bad edit would not be caught at pre-merge) |
 | Audit method | Inspected `internal/deploy/compose_contract_test.go` for which service names `assertComposeContract` enforces; observed only `smackerel-core`, `smackerel-ml`, `postgres`, `nats`, `prometheus`. Cross-referenced `deploy/compose.deploy.yml` for which services use `${HOST_BIND_ADDRESS:?...}` substitution; found `ollama` (line 243) was substituted but unenforced. Confirmed RED→GREEN by temporarily removing the ollama enforcement block from a draft fix and re-running the new adversarial sub-tests. |

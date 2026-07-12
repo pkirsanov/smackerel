@@ -238,7 +238,7 @@ func TestClientsBuildWorkflow_AdversarialSshDeploy(t *testing.T) {
 	job := workflowJob{Steps: []workflowStep{
 		{Name: "Push", Run: "oras push reg:tag file"},
 		{Name: "Sign", Run: "cosign sign --yes reg@sha256:x"},
-		{Name: "Deploy", Run: "ssh deploy@evo-x2 'docker compose up -d'"},
+		{Name: "Deploy", Run: "ssh deploy@<deploy-host> 'docker compose up -d'"},
 	}}
 	err := assertClientsBuildJobSteps(job)
 	if err == nil {

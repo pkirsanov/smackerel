@@ -2,7 +2,7 @@
     "id": "BUG-026-006-llm-malformed-json-drops-capture",
     "title": "Malformed/truncated LLM JSON hard-drops the capture (no salvage, no SST-gated degraded fallback)",
     "severity": "high",
-    "source": "redteam-adversarial-interrogation (live evo-x2 prod)",
+    "source": "redteam-adversarial-interrogation (live <deploy-host> prod)",
     "owningSpec": "026-domain-extraction",
     "workflowMode": "bugfix-fastlane",
     "status": "partially_fixed_in_repo",

@@ -65,7 +65,7 @@ The exact pre-fix block at `.github/workflows/ci.yml` lines 125-159 (captured vi
 - Trivy vulnerability scans (`aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0`) at lines 102-148, with `severity: CRITICAL,HIGH`, `ignore-unfixed: true`, and `limit-severities-for-sarif: true` (per spec 047 / DEVOPS-HL-002).
 - Cosign keyless signing at lines 161-171 for both core and ml using `${IMAGE_*}@${{ steps.*.outputs.digest }}`.
 - SBOM attestation via syft + cosign attest at lines 176-188 with spdx-json predicate.
-- `build-bundles` job (line 191+) producing per-env config bundles for `dev`, `test`, `home-lab`.
+- `build-bundles` job (line 191+) producing per-env config bundles for `dev`, `test`, `self-hosted`.
 - `publish-build-manifest` job writing `build-manifest-<sha>.yaml` with all per-env bundle sha256 hashes.
 
 **Claim Source:** executed (live read of `.github/workflows/build.yml` ranges via the IDE `read_file` tool against the working-tree copy at HEAD `765adddb`).
@@ -83,8 +83,8 @@ NO equivalent contract test exists for `.github/workflows/ci.yml`. The absent co
 
 ### Sister-Packet Cross-References Confirmed at HEAD `765adddb`
 
-- [`specs/020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read/`](../../../020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read/) — most recent shipped packet under the same parent workflow `home-lab-readiness-rescan-external-2026-05-15` (close-out of HL-RESCAN-013-secondary, lens: SST defaults / Gate G028). Establishes the current cross-packet routing cadence.
-- [`specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/`](../../../042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/) — established packet template for the home-lab-readiness-rescan-external-2026-05-15 sweep (close-out of HL-RESCAN-007, lens: generic-only / SST-defaults). Canonical state.json + scenario-manifest shape reused here.
+- [`specs/020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read/`](../../../020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read/) — most recent shipped packet under the same parent workflow `self-hosted-readiness-rescan-external-2026-05-15` (close-out of HL-RESCAN-013-secondary, lens: SST defaults / Gate G028). Establishes the current cross-packet routing cadence.
+- [`specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/`](../../../042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/) — established packet template for the self-hosted-readiness-rescan-external-2026-05-15 sweep (close-out of HL-RESCAN-007, lens: generic-only / SST-defaults). Canonical state.json + scenario-manifest shape reused here.
 - [`specs/029-devops-pipeline/bugs/BUG-029-003-docker-compose-default-fallback-no-defaults-sweep/`](../BUG-029-003-docker-compose-default-fallback-no-defaults-sweep/) — sibling DevOps-pipeline packet under spec 029 (close-out of HL-RESCAN-012). Explicitly named HL-RESCAN-011 as a "separate sprint item" deferred until the parallel ci.yml session lands. This packet is that follow-up.
 
 **Claim Source:** executed (`file_search` and `read_file` against the three sister-packet directories; deferral-provenance line citations recorded in `state.json` -> `parentWorkflow.deferralProvenance`).
@@ -322,7 +322,7 @@ specs/029-devops-pipeline/bugs/BUG-029-004-ci-yml-parallel-publish-bypasses-bodm
 
 ### Design Finalization Summary
 
-`design.md` finalized by `bubbles.design` 2026-05-15 under parent workflow `home-lab-readiness-rescan-external-2026-05-15`, finding `HL-RESCAN-011`. The design replaces the discover-phase stub with DD-1 through DD-9 (FROZEN), a frozen test contract section (DD-8), a frozen file constraint set section (DD-9), resolutions for the three discover-phase open questions, tech-agnostic Gherkin BDD scenarios, an affected-files inventory with precise line ranges, a validation strategy, and an explicit non-goals list.
+`design.md` finalized by `bubbles.design` 2026-05-15 under parent workflow `self-hosted-readiness-rescan-external-2026-05-15`, finding `HL-RESCAN-011`. The design replaces the discover-phase stub with DD-1 through DD-9 (FROZEN), a frozen test contract section (DD-8), a frozen file constraint set section (DD-9), resolutions for the three discover-phase open questions, tech-agnostic Gherkin BDD scenarios, an affected-files inventory with precise line ranges, a validation strategy, and an explicit non-goals list.
 
 ### Frozen Design Decisions Recorded
 
@@ -420,7 +420,7 @@ specs/029-devops-pipeline/bugs/BUG-029-004-ci-yml-parallel-publish-bypasses-bodm
 <!-- Historical phase evidence below — see preamble note above. -->
 ## Plan Specialist Evidence — bubbles.plan — 2026-05-15
 
-**Parent workflow:** `home-lab-readiness-rescan-external-2026-05-15`
+**Parent workflow:** `self-hosted-readiness-rescan-external-2026-05-15`
 **Agent:** `bubbles.plan`
 **Action:** Refine `scopes.md` and `scenario-manifest.json` for BUG-029-004 / HL-RESCAN-011 per TR-BUG-029-004-002 from `bubbles.design`.
 **Owned-surface scope:** Planning-only artifacts (`scopes.md`, `scenario-manifest.json`, `report.md`). No source/test code authored. No commit. No state-flip beyond plan-phase ownership.
@@ -777,7 +777,7 @@ This proves the change is a real source-tree delivery (Go test file + workflow Y
 <!-- Historical phase evidence below — see preamble note above. -->
 ## Test Specialist Evidence — bubbles.test — 2026-05-15
 
-> **Phase:** test · **Agent:** bubbles.test · **Workflow:** bugfix-fastlane (parent: `home-lab-readiness-rescan-external-2026-05-15`, finding `HL-RESCAN-011`, lens BODM)
+> **Phase:** test · **Agent:** bubbles.test · **Workflow:** bugfix-fastlane (parent: `self-hosted-readiness-rescan-external-2026-05-15`, finding `HL-RESCAN-011`, lens BODM)
 > **Transition request consumed:** TR-BUG-029-004-004 (implement → test, accepted)
 > **Authority chain:** FROZEN [`design.md`](./design.md) DD-6 (tautology-freedom) + DD-8 (test contract: file path + parent function + sub-test names + adversarial mutation test names) + DD-9 (whitelist/blacklist) → FROZEN [`scopes.md`](./scopes.md) DoD A-H → this independent test-phase verification.
 > **Owned-only edits:** `report.md` (this append-only section) and `state.json` (TR-004 acceptance + TR-005 open + currentPhase advance to `test` + completedPhaseClaims += `test`). The temporary mutation of `.github/workflows/ci.yml` for the F.2 adversarial cycle was applied + reverted via the IDE `replace_string_in_file` tool; final post-revert `git diff HEAD -- .github/workflows/ci.yml` proves the canonical implement-phase state is restored (only the 3-step deletion remains; zero residual mutation noise). NO scope-DoD checkbox flips: the test phase verifies but does not re-flip A-H.
@@ -1193,7 +1193,7 @@ filesPreservedAsOutOfScope:
   - design.md, spec.md, scopes.md, scenario-manifest.json, uservalidation.md (FROZEN / not test-owned)
 addressedFindings: [HL-RESCAN-011]
 unresolvedFindings: []
-parentWorkflow: home-lab-readiness-rescan-external-2026-05-15
+parentWorkflow: self-hosted-readiness-rescan-external-2026-05-15
 findingId: HL-RESCAN-011
 findingLens: BODM (Build-Once Deploy-Many)
 transitionRequest: TR-BUG-029-004-004 (implement → test, accepted)
@@ -1221,7 +1221,7 @@ state-transition-guard exit 0 with verdict `TRANSITION PERMITTED with 2 warning(
 <!-- Historical phase evidence below — see preamble note above. -->
 ## Validate Specialist Evidence — bubbles.validate — 2026-05-15
 
-> **Dispatch:** Parent workflow `home-lab-readiness-rescan-external-2026-05-15` → BUG-029-004-scope-1 validate phase (TR-BUG-029-004-005). Validate consumed TR-005 and ran the dispatched gate matrix `{G021, G022, G023, G024, G025, G027, G028, G040, G041, G061}` plus G053 (implementation delta evidence) and G057 (scenario manifest coverage) against the current artifact reality at HEAD `765adddb` working tree.
+> **Dispatch:** Parent workflow `self-hosted-readiness-rescan-external-2026-05-15` → BUG-029-004-scope-1 validate phase (TR-BUG-029-004-005). Validate consumed TR-005 and ran the dispatched gate matrix `{G021, G022, G023, G024, G025, G027, G028, G040, G041, G061}` plus G053 (implementation delta evidence) and G057 (scenario manifest coverage) against the current artifact reality at HEAD `765adddb` working tree.
 >
 > **Outcome:** `blocked` — multiple real gate failures beyond the test-phase-flagged 3-checkbox cross-reference issue. Validate did NOT certify; per Gate G021 honesty rule + BUG-020-004 precedent, validate did NOT add itself to `execution.completedPhaseClaims`, did NOT flip `scopeProgress[0].status` to `done`, did NOT add the scope to `certification.completedScopes`, and did NOT open TR-BUG-029-004-006 to bubbles.audit. Routing follow-up TR-BUG-029-004-006 (validate → implement) for remediation.
 >
@@ -1546,7 +1546,7 @@ No operator-facing documentation changes are needed for this artifact repair. Re
 
 ## Implement Specialist Evidence — Remediation Pass (TR-BUG-029-004-006) — bubbles.implement — 2026-05-15
 
-**Triggered by:** `bubbles.validate` opened TR-BUG-029-004-006 with 13 state-transition-guard blockers. Parent workflow `home-lab-readiness-rescan-external-2026-05-15` routed the implement-owned subset (G053, DoD G.1, supplementary 3-checkbox mechanical-lint defense) to `bubbles.implement`. The plan-owned subset (G041-4B duplicate evidence, G040 deferral language, G057 scenario-manifest, Check-8 missing E2E entry) was remediated separately by `bubbles.plan` in an earlier pass (see "Plan Specialist Evidence — Remediation Pass" section above). The validate/audit-territory blockers (G061 transitionRequests cleanup, scope flip to Done, missing 6 specialist phase records, G027 phase-vs-completedScopes coherence) remain for the validate/audit chain to resolve and are NOT in scope for this implement-side remediation.
+**Triggered by:** `bubbles.validate` opened TR-BUG-029-004-006 with 13 state-transition-guard blockers. Parent workflow `self-hosted-readiness-rescan-external-2026-05-15` routed the implement-owned subset (G053, DoD G.1, supplementary 3-checkbox mechanical-lint defense) to `bubbles.implement`. The plan-owned subset (G041-4B duplicate evidence, G040 deferral language, G057 scenario-manifest, Check-8 missing E2E entry) was remediated separately by `bubbles.plan` in an earlier pass (see "Plan Specialist Evidence — Remediation Pass" section above). The validate/audit-territory blockers (G061 transitionRequests cleanup, scope flip to Done, missing 6 specialist phase records, G027 phase-vs-completedScopes coherence) remain for the validate/audit chain to resolve and are NOT in scope for this implement-side remediation.
 
 **Scope of this remediation pass:** report.md and scopes.md only. NO production source modified. NO state.json modified. NO planning artifacts (spec.md, design.md, scenario-manifest.json) modified.
 

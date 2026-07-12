@@ -13,9 +13,9 @@ defaults:
 trains:
 - id: mvp
   phase: active
-  target_slot: home-lab
+  target_slot: self-hosted
   flags_bundle: config/feature-flags.mvp.yaml
-  description: "Current home-lab train (ingest + digest + delivery foundation)"
+  description: "Current self-hosted train (ingest + digest + delivery foundation)"
 
 - id: next
   phase: active

@@ -129,7 +129,7 @@
 **Status:** Deferred — operator-action (live deploy + browser smoke)
 
 > This scope is intentionally deferred to the operator. It requires a
-> live home-lab deploy via `promote.sh --target home-lab` plus an
+> live self-hosted deploy via `promote.sh --target self-hosted` plus an
 > interactive browser session that no in-process agent can perform.
 > The DoD items below remain `[ ]` as **acceptance criteria** for the
 > operator to confirm post-deploy. The implementation code that this
@@ -146,7 +146,7 @@
 
 ### Implementation
 - Wait for CI on the SCOPE-1+2+3 commit(s).
-- `promote.sh --target home-lab --build-manifest <new>` per the
+- `promote.sh --target self-hosted --build-manifest <new>` per the
   canonical path.
 - `tailscale ssh <operator>@<deploy-host> -- docker exec -it
   smackerel-<env>-smackerel-core-1 smackerel-core users add operator`
@@ -156,9 +156,9 @@
 - [ ] CI build green — **Acceptance:** the build workflow run for the
       commit shipping SCOPE-1/2/3 reports `conclusion=success` on
       `.github/workflows/build.yml` and signed core+ml images plus the
-      `home-lab` config bundle are published to ghcr. **Claim Source:** not-run.
-- [ ] `promote.sh --target home-lab --build-manifest <new>` apply OK +
-      `./smackerel.sh deploy-target home-lab verify` OK. **Claim Source:** not-run.
+      `self-hosted` config bundle are published to ghcr. **Claim Source:** not-run.
+- [ ] `promote.sh --target self-hosted --build-manifest <new>` apply OK +
+      `./smackerel.sh deploy-target self-hosted verify` OK. **Claim Source:** not-run.
 - [ ] `tailscale ssh <host> -- docker exec smackerel-<env>-smackerel-core-1 smackerel-core users add operator`
       prints `user "operator" created` and inserts one row into
       `web_user_credentials`. **Claim Source:** not-run.

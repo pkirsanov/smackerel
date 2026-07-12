@@ -12,7 +12,7 @@
 #       if [[ -z "${SMACKEREL_COMMIT+set}" ]]; then SMACKEREL_COMMIT="unknown"; fi
 #
 #   CI exports SMACKEREL_COMMIT, so CI images were fine. But the local-operator
-#   (evo-x2) build path builds ON the host with no CI env, so SMACKEREL_COMMIT
+#   (<deploy-host>) build path builds ON the host with no CI env, so SMACKEREL_COMMIT
 #   fell through to the literal "unknown" — which is exactly what the redteam
 #   observed on the LIVE prod images (revision=unknown, commit_hash=unknown).
 #
@@ -87,7 +87,7 @@ if [[ "$SUB1_COMMIT" =~ ^[0-9a-f]{12}(-dirty)?$ ]]; then
 else
   echo "FAIL: dev.env SMACKEREL_COMMIT is not a real git SHA — actual: '${SUB1_COMMIT:-<none emitted>}'"
   echo "      redteam F6 / BUG-029-008 reintroduced: the git-derivation arm in scripts/commands/config.sh"
-  echo "      is missing or broken, so a locally-built (local-operator / evo-x2) image is stamped the opaque"
+  echo "      is missing or broken, so a locally-built (local-operator / <deploy-host>) image is stamped the opaque"
   echo "      'unknown' for org.opencontainers.image.revision + commit_hash instead of its source SHA."
   echo "      --- config.sh output ---"
   echo "$SUB1_OUT" | sed 's/^/        /'

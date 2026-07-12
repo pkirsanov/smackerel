@@ -7,7 +7,7 @@
 - **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (compose contract owner)
 - **Workflow Mode:** test-to-doc
 - **Status:** Fixed
-- **Discovered By:** 2026-05-14 home-lab readiness re-scan (finding HL-RESCAN-009)
+- **Discovered By:** 2026-05-14 self-hosted readiness re-scan (finding HL-RESCAN-009)
 
 ## Problem Statement
 
@@ -31,7 +31,7 @@ The defect was a coverage gap in the contract test, not a bug in the assertion c
 
 | Aspect | Detail |
 |---|---|
-| Trigger | Home-lab readiness re-scan (system review session 2026-05-14) |
+| Trigger | self-hosted readiness re-scan (system review session 2026-05-14) |
 | Finding | HL-RESCAN-009 |
 | Severity | P3 (live file is correct today; assertion is correct today; the gap is a defense-in-depth weakness against a future relaxation of the assertion) |
 | Audit method | Inspected `internal/deploy/compose_contract_test.go` adversarial test surface. Observed `TestComposeContract_AdversarialLiteralBind` only covers smackerel-core literal-bind; `TestComposeContract_AdversarialOllamaLiteralBind` covers both literal AND default-fallback for ollama; no equivalent existed for smackerel-core default-fallback or for smackerel-ml literal/default-fallback. Cross-referenced the BUG-042-003 close-out which added the analogous coverage for ollama. Confirmed RED→GREEN by temporarily relaxing the smackerel-core prefix check to `strings.Contains(p, "${HOST_BIND_ADDRESS:")` and re-running the new adversarial test. |

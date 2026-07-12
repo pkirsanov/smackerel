@@ -23,7 +23,7 @@
 // Cross-reference:
 //   - specs/086-local-client-build/ (FR-086-02..07; FC-3, FC-4, FC-5)
 //   - scripts/commands/local-client-build.sh
-//   - scripts/commands/build-home-lab.sh (the operator-sign precedent it mirrors)
+//   - scripts/commands/build-self-hosted.sh (the operator-sign precedent it mirrors)
 package deploy
 
 import (
@@ -330,7 +330,7 @@ func TestLocalClientBuild_HappyPath(t *testing.T) {
 	const apk = "FIXTURE-APK-BYTES-v086-not-a-real-package"
 	fx := newLCBFixture(t, aab, apk, 0)
 
-	stdout, stderr, code := runOrchestrator(t, fx.env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	stdout, stderr, code := runOrchestrator(t, fx.env, "--target", "self-hosted", "--allow-dirty", "--out-dir", fx.outDir)
 	if code != 0 {
 		t.Fatalf("orchestrator exited %d on happy path; stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -413,7 +413,7 @@ func manifestShortSha(t *testing.T, sourceSha string) string {
 // AAB aborts [F086-LCB-03] and writes NO manifest.
 func TestLocalClientBuild_FailClosedEmptyArtifact(t *testing.T) {
 	fx := newLCBFixture(t, "", "FIXTURE-APK", 0) // empty AAB
-	_, stderr, code := runOrchestrator(t, fx.env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	_, stderr, code := runOrchestrator(t, fx.env, "--target", "self-hosted", "--allow-dirty", "--out-dir", fx.outDir)
 	if code == 0 || !strings.Contains(stderr, "F086-LCB-03") {
 		t.Fatalf("empty AAB not rejected with [F086-LCB-03]; code=%d stderr=%s", code, stderr)
 	}
@@ -428,7 +428,7 @@ func TestLocalClientBuild_FailClosedEmptyArtifact(t *testing.T) {
 // (i.e. this is not a duplicate; it closes a real uncovered branch).
 func TestLocalClientBuild_FailClosedEmptyAPK(t *testing.T) {
 	fx := newLCBFixture(t, "FIXTURE-AAB", "", 0) // non-empty AAB, EMPTY APK
-	_, stderr, code := runOrchestrator(t, fx.env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	_, stderr, code := runOrchestrator(t, fx.env, "--target", "self-hosted", "--allow-dirty", "--out-dir", fx.outDir)
 	if code == 0 || !strings.Contains(stderr, "F086-LCB-03") {
 		t.Fatalf("empty APK not rejected with [F086-LCB-03]; code=%d stderr=%s", code, stderr)
 	}
@@ -440,7 +440,7 @@ func TestLocalClientBuild_FailClosedEmptyAPK(t *testing.T) {
 // failure aborts [F086-LCB-05] and writes NO manifest.
 func TestLocalClientBuild_FailClosedSignFailure(t *testing.T) {
 	fx := newLCBFixture(t, "FIXTURE-AAB", "FIXTURE-APK", 1) // cosign exits 1
-	_, stderr, code := runOrchestrator(t, fx.env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	_, stderr, code := runOrchestrator(t, fx.env, "--target", "self-hosted", "--allow-dirty", "--out-dir", fx.outDir)
 	if code == 0 || !strings.Contains(stderr, "F086-LCB-05") {
 		t.Fatalf("sign failure not rejected with [F086-LCB-05]; code=%d stderr=%s", code, stderr)
 	}
@@ -465,7 +465,7 @@ func TestLocalClientBuild_FailClosedManifestSignOrphan(t *testing.T) {
 	fx := newLCBFixture(t, "FIXTURE-AAB", "FIXTURE-APK", 0)
 	// AAB(1) + APK(2) sign OK; ONLY the manifest sign (call 3) fails.
 	env := lcbEnvReplace(fx.env, "LCB_COSIGN_FAIL_ON_CALL", "3")
-	_, stderr, code := runOrchestrator(t, env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	_, stderr, code := runOrchestrator(t, env, "--target", "self-hosted", "--allow-dirty", "--out-dir", fx.outDir)
 	if code == 0 {
 		t.Fatalf("orchestrator exited 0 when the manifest sign failed (fail-OPEN on a partial manifest); stderr=%s", stderr)
 	}
@@ -492,7 +492,7 @@ func TestLocalClientBuild_FailClosedManifestSignOrphan(t *testing.T) {
 func TestLocalClientBuild_FailClosedMissingCosignPassword(t *testing.T) {
 	fx := newLCBFixture(t, "FIXTURE-AAB", "FIXTURE-APK", 0)
 	env := lcbEnvWithout(fx.env, "COSIGN_PASSWORD") // trust secret genuinely absent
-	_, stderr, code := runOrchestrator(t, env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	_, stderr, code := runOrchestrator(t, env, "--target", "self-hosted", "--allow-dirty", "--out-dir", fx.outDir)
 	if code == 0 {
 		t.Fatalf("orchestrator exited 0 with COSIGN_PASSWORD absent (fail-OPEN on a missing trust secret); stderr=%s", stderr)
 	}
@@ -517,7 +517,7 @@ func TestLocalClientBuild_FailClosedMissingOperatorKey(t *testing.T) {
 	fx := newLCBFixture(t, "FIXTURE-AAB", "FIXTURE-APK", 0)
 	missingKey := filepath.Join(t.TempDir(), "absent", "cosign-operator.key")
 	env := lcbEnvReplace(fx.env, "OPERATOR_COSIGN_KEY", missingKey)
-	_, stderr, code := runOrchestrator(t, env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	_, stderr, code := runOrchestrator(t, env, "--target", "self-hosted", "--allow-dirty", "--out-dir", fx.outDir)
 	if code == 0 {
 		t.Fatalf("orchestrator exited 0 with OPERATOR_COSIGN_KEY missing (fail-OPEN on an absent signing key); stderr=%s", stderr)
 	}
@@ -534,7 +534,7 @@ func TestLocalClientBuild_FailClosedMissingOperatorKey(t *testing.T) {
 // value never appears in the orchestrator's stdout/stderr (presence only).
 func TestLocalClientBuild_SecretNotLeaked(t *testing.T) {
 	fx := newLCBFixture(t, "FIXTURE-AAB", "FIXTURE-APK", 0)
-	stdout, stderr, code := runOrchestrator(t, fx.env, "--target", "home-lab", "--allow-dirty", "--out-dir", fx.outDir)
+	stdout, stderr, code := runOrchestrator(t, fx.env, "--target", "self-hosted", "--allow-dirty", "--out-dir", fx.outDir)
 	if code != 0 {
 		t.Fatalf("orchestrator failed unexpectedly: code=%d stderr=%s", code, stderr)
 	}

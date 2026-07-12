@@ -3,7 +3,7 @@
 ### Summary
 
 qwen3's default thinking-mode adds a hidden `<think>` reasoning block (>150s live on the shared
-evo-x2 ollama daemon) before its answer on the ML sidecar's structured-JSON extraction calls —
+<deploy-host> ollama daemon) before its answer on the ML sidecar's structured-JSON extraction calls —
 blowing `DOMAIN_EXTRACTION_TIMEOUT = 30` (silent degrade) AND prefixing other structured callers
 with a `<think>` block that trips `LLM returned invalid JSON` (the F2 invalid-JSON failure). Fixed
 by an SST-gated, fail-loud thinking-disable (`ML_STRUCTURED_EXTRACTION_THINKING` /
@@ -14,12 +14,12 @@ path thinking-ON.
 ### ⚠️ Mechanism Correction (this report supersedes the first fix)
 
 **The FIRST fix was INEFFECTIVE and has been replaced.** It injected the qwen `/no_think` control
-token into the request messages. Measured live on evo-x2 (shared daemon, warm qwen3), qwen3's Ollama
+token into the request messages. Measured live on <deploy-host> (shared daemon, warm qwen3), qwen3's Ollama
 chat template **ignores** the `/no_think` text directive — thinking stayed ON (>150s), and the
 resulting `<think>`-prefixed output produced the live `ERROR smackerel-ml.synthesis LLM returned
 invalid JSON: Expecting value: line 1 column 1`. qwen3 honors ONLY the native `think` request field:
 
-| Mechanism (live evo-x2, shared daemon, warm qwen3) | Thinking | Wall / compute | JSON |
+| Mechanism (live <deploy-host>, shared daemon, warm qwen3) | Thinking | Wall / compute | JSON |
 |-----------------------------------------------------|----------|----------------|------|
 | `/no_think` in prompt messages (the FIRST fix)      | **STILL ON** | >150s | invalid (`<think>` prefix) |
 | native `think=False` (ollama `/api/chat` top-level) | **OFF** | trivial prompt `load=0.1s prompt_eval=0.1s gen=0.9s eval_tok=6` (~1s compute) vs `think=True`=119s | valid |
@@ -29,7 +29,7 @@ saturating the shared daemon; fixing the mechanism removes that self-inflicted s
 
 ### Root Cause
 
-See [design.md](design.md) → "Root Cause Analysis" and the live evo-x2 evidence in [bug.md](bug.md).
+See [design.md](design.md) → "Root Cause Analysis" and the live <deploy-host> evidence in [bug.md](bug.md).
 qwen3 (thinking model) defaults to a hidden `<think>` block before its JSON; on the extraction path
 that is pure latency (>150s vs ~1s compute), exceeding the 30s domain budget → `asyncio.TimeoutError`
 → degraded fallback, and tripping invalid-JSON on the non-budgeted structured callers.
@@ -178,7 +178,7 @@ short-circuits an assertion.
 ## Redeploy / Live-Verification Note (anti-fabrication)
 
 This is a **code change to `smackerel-ml`**. It takes effect only after the orchestrator rebuilds +
-signs + redeploys `smackerel-ml` on evo-x2. The live "domain+synthesis fast + valid JSON" outcome is
+signs + redeploys `smackerel-ml` on <deploy-host>. The live "domain+synthesis fast + valid JSON" outcome is
 therefore **PENDING that redeploy** and is NOT claimed here. No build, deploy, host mutation, or push
 was performed in this repo — local commit only.
 

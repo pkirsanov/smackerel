@@ -76,7 +76,7 @@ for r in d.get('workflow_runs', []):
 $ curl -s "https://api.github.com/repos/pkirsanov/smackerel/actions/workflows/ci.yml/runs?branch=main&per_page=20" | jq -r '.workflow_runs[] | "\(.head_sha[:8])     \(.conclusion)  \(.created_at)  \(.display_title[:80])"'
 # HTTP/2 200 OK; Exit Code: 0
 5c8d857e     failure  2026-05-16T22:30:36Z  chore(bubbles): framework refresh + local artifact-lint info() patch
-ad512fc6     failure  2026-05-15T17:25:49Z  docs(home-lab): scrub overlay-repo references to generic phrasing + c…
+ad512fc6     failure  2026-05-15T17:25:49Z  docs(self-hosted): scrub overlay-repo references to generic phrasing + c…
 e53ee406     failure  2026-05-15T17:22:43Z  spec(041): Stream D snapshot — Round 2L Scope 2 partial (capability g…
 0c67122e     failure  2026-05-15T17:10:33Z  bug(020-002): ML auth token fail-loud at module import (HL-RESCAN-013…
 3472f603     failure  2026-05-15T16:59:11Z  bug(020-003): remove dead-set fail-soft helpers from cmd/core/helpers.go
@@ -1042,7 +1042,7 @@ d20157a3   | success    | 2026-05-17T03:33:50Z   | plan(047-002): traceability c
 75bb1611   | success    | 2026-05-17T03:18:54Z   | spec(047): hygiene close-out — TR-BUG-047-002-004 (trace pat
 885fc190   | success    | 2026-05-17T02:04:43Z   | bug(045-002): CI integration failure persists — Path A parit
 5c8d857e   | failure    | 2026-05-16T22:30:36Z   | chore(bubbles): framework refresh + local artifact-lint info
-ad512fc6   | failure    | 2026-05-15T17:25:49Z   | docs(home-lab): scrub overlay-repo references to generic phr
+ad512fc6   | failure    | 2026-05-15T17:25:49Z   | docs(self-hosted): scrub overlay-repo references to generic phr
 e53ee406   | failure    | 2026-05-15T17:22:43Z   | spec(041): Stream D snapshot — Round 2L Scope 2 partial (cap
 0c67122e   | failure    | 2026-05-15T17:10:33Z   | bug(020-002): ML auth token fail-loud at module import (HL-R
 3472f603   | failure    | 2026-05-15T16:59:11Z   | bug(020-003): remove dead-set fail-soft helpers from cmd/cor

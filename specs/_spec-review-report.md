@@ -14,17 +14,17 @@
 > EXIT 0; the spec-100/083 e2e-ui journey pass; the spec-101 reconcile), the
 > **F-100-ENV-01** e2e-ui journey-pass reconcile candidate, and the
 > live-21-vs-historical-8 alert-count clarification, and routes the residual
-> open items. Beneath it, the **2026-06-30 evo-x2 readiness remediation
+> open items. Beneath it, the **2026-06-30 <deploy-host> readiness remediation
 > refresh** records the two closures
 > the earlier 2026-06-30 readiness-sweep layer understated (BUG-069-002 +
 > BUG-069-003 capture-disconnect durability both certified `done`; BUG-099-001 +
-> BUG-099-002 macOS pre-flight compat both `done`/mvp), the evo-x2 readiness
+> BUG-099-002 macOS pre-flight compat both `done`/mvp), the <deploy-host> readiness
 > remediation this session shipped as the current SST (the smackerel unit gate
 > now GREEN, the knb OPS-005 upkeep hardening, and the DEVOPS-RDY observability
 > wiring), the per-finding dispositions of the residual findings SR-02..SR-08,
 > and a factual reconcile of the `docs/Upkeep_Runbook.md` NATS-backup claim to
 > the shipped knb OPS-02 fix. Beneath it, the earlier **2026-06-30
-> readiness-sweep refresh** adds the OPS-003 / OPS-004 home-lab handoff packets
+> readiness-sweep refresh** adds the OPS-003 / OPS-004 self-hosted handoff packets
 > the 2026-06-20 / 06-23 layers omitted (the F3 stale-report finding), records
 > the readiness-sweep remediation, and dispositions the 082 `releaseTrain` (F4)
 > and 087/088 CI-as-producer (F5) narrative findings. Beneath that, the
@@ -118,8 +118,8 @@ blocked` (`DEFERRED-to-flip`). **Classification: CURRENT-in-flight (honest
   The pre-existing `/metrics` + OTLP/gRPC exporter were **REUSED, not forked**
   (knb FINDING-014-03-1). Inert under `observability: bundled` +
   `OTEL_ENABLED=false`.
-- **SCOPE-02 (live evo-x2 verification) operator-flip-gated deferral** — same
-  class as spec 082 R-082-D (actual evo-x2 deploy) and spec 100 F-100-ENV-01.
+- **SCOPE-02 (live <deploy-host> verification) operator-flip-gated deferral** — same
+  class as spec 082 R-082-D (actual <deploy-host> deploy) and spec 100 F-100-ENV-01.
   Unblocks when the operator flips `sharedServices.observability: shared` + runs
   `apply-shared-obs` on the host.
 - Reconciled + committed this session (local `d0905522`, finding **SM-F2**). The
@@ -151,8 +151,8 @@ lane was the last red). Two incidental framework syncs are also on the branch:
 drift gate) — `chore(bubbles)`, not readiness work.
 
 **knb (cross-repo — referenced by packet/finding id, NOT imported; deploy-overlay
-owned + tracked in knb):** the superseding evo-x2 activation handoff **OPS-007**
-was authored (supersedes the 332-commit-stale `docs/SMACKEREL-082-EVO-X2-HANDOFF.md`
+owned + tracked in knb):** the superseding <deploy-host> activation handoff **OPS-007**
+was authored (supersedes the 332-commit-stale `docs/SMACKEREL-082-<deploy-host>-HANDOFF.md`
 - spec 011); ops-hygiene **F1** (warning→ntfy page), **SM-F5** (adapter suite
 21/21 green on macOS), **SM-F6** (shellcheck/shfmt clean) + the alert-count mirror
 reconciled to 21; **KNB-SR-1** secret-rotation key-id regression fixed (conformed
@@ -187,7 +187,7 @@ active truth.**
 |------|-------|--------------|
 | **H2** bare-`integration-light`-lane green (schema/env wiring is PARTIAL; live-stack tests currently skip) | `bubbles.plan` | Lane-contract decision: define whether the bare lane should run live or remain skip-by-design. A contract decision, not a code fix. |
 | **OPS-005 / OPS-06** `name:epoch` rotation-id description | `bubbles.upkeep` | Append-only supersession note pointing at the **KNB-SR-1** fix (hook conformed back to the spec-023 uniform `sha256(name)` contract). Doc-reconcile only; no ledger rewrite. |
-| Operator/host-gated go-live set: **R-082-A/B/C/D/E**, **F2** (upkeep-timer + `NTFY_URL`), **spec-101 SCOPE-02** flip | operator / `bubbles.devops` / `bubbles.train` | All require live host mutation (evo-x2 apply / flip) out of scope for a read-only in-repo pass. Tracked in the knb **OPS-007** activation handoff. |
+| Operator/host-gated go-live set: **R-082-A/B/C/D/E**, **F2** (upkeep-timer + `NTFY_URL`), **spec-101 SCOPE-02** flip | operator / `bubbles.devops` / `bubbles.train` | All require live host mutation (<deploy-host> apply / flip) out of scope for a read-only in-repo pass. Tracked in the knb **OPS-007** activation handoff. |
 
 ### Trust deltas / dispatch (2026-07-08 refresh)
 
@@ -224,14 +224,14 @@ in-repo code blocker.
 - [x] No spec `state.json` mutated; no MAJOR_DRIFT / OBSOLETE → no mandatory `improve-existing` dispatch. F-100-ENV-01 recorded as owner reconcile candidate (lockdown-respecting).
 - [x] Residual items routed (H2 → `bubbles.plan`; OPS-06 → `bubbles.upkeep`; operator/host-gated set → knb OPS-007).
 - [x] Older layers (2026-06-30 ×2, 2026-06-23, 2026-06-20, Historical Record) preserved verbatim (append-only, newest-on-top).
-- [x] No knb / operator PII (knb items referenced by packet/finding id only; generic home-lab / operator framing).
+- [x] No knb / operator PII (knb items referenced by packet/finding id only; generic self-hosted / operator framing).
 
 ---
 
-## Summary (2026-06-30 evo-x2 readiness remediation refresh)
+## Summary (2026-06-30 <deploy-host> readiness remediation refresh)
 
 This refresh is the **newest layer**. It records (1) two closures the earlier
-2026-06-30 readiness-sweep layer understated, (2) the cross-repo evo-x2 readiness
+2026-06-30 readiness-sweep layer understated, (2) the cross-repo <deploy-host> readiness
 remediation this session shipped as the **current single source of truth**, and
 (3) the per-finding dispositions of the residual spec-review findings
 SR-02..SR-08. It is a read-only `spec-review-to-doc` layer: it documents
@@ -263,7 +263,7 @@ the host-native `/proc/meminfo` branch to Linux; BUG-099-002 adds a portable
 blockers that had kept the shared live-stack durability lane from running on a
 macOS host. **Classification: all four CURRENT (certified, terminal-for-mode).**
 
-### 2. evo-x2 readiness remediation shipped this session — current SST
+### 2. <deploy-host> readiness remediation shipped this session — current SST
 
 Recorded as the authoritative current state; verified live this pass (see Method).
 
@@ -286,7 +286,7 @@ honest `BCDR_Plan` wording; **OPS-02** `backup.sh` now archives the REAL
 `smackerel_nats_data` underscore path silently skipped) — the fix this pass
 reconciles into `docs/Upkeep_Runbook.md`; OPS-03 `bcdr-drill.sh` downgraded to
 the data-recovery leg it actually proves; OPS-04 patch-cycle threads the required
-config-bundle args; OPS-05 `shellcheck -x smackerel/home-lab/*.sh` EXIT 0; OPS-06
+config-bundle args; OPS-05 `shellcheck -x <deployment-owner>/<product>/<target>/*.sh` EXIT 0; OPS-06
 value-safe key-material-version rotation id. knb commits `9501baf` / `1a3105a` /
 `c41d2c1` / `8fb61c6`.
 
@@ -298,7 +298,7 @@ value-safe key-material-version rotation id. knb commits `9501baf` / `1a3105a` /
 | RDY-02 | Grafana / Alertmanager honestly documented as deferred to the shared host stack (spec 014) / knb standup, not bundled | `4f3695a5` (+ knb `24f44ee`) |
 | RDY-03 | corrected the stale `--profile ollama` go-live text to shared-host-ollama | `5f63fc27` |
 | RDY-04 | product `promote.sh` now forwards `--operator` | `e3cd2f23` |
-| RDY-05 | `build-home-lab.sh` Next hint gains `--operator` | `8d6a49fb` |
+| RDY-05 | `build-self-hosted.sh` Next hint gains `--operator` | `8d6a49fb` |
 | RDY-06 | dev-only ollama tag dispositioned out of deploy provenance | `431ce990` |
 
 ### 3. Residual spec-review dispositions (SR-02 … SR-08 — no `state.json` mutation)
@@ -308,10 +308,10 @@ value-safe key-material-version rotation id. knb commits `9501baf` / `1a3105a` /
 | **SR-02** | `BUG-069-003` cosmetic sub-field lag: top-level `status: done` + `certifiedAt` set, but `fixSequence` order-2 still `pending` and `execution.currentPhase: test` | **CLOSED-by-disposition (cosmetic).** Guard-legitimate — the state-transition guard PERMITTED the `done` transition; this is an annotation / sub-field lag, not a defect. No edit. |
 | **SR-03** | `BUG-099-001` `downstreamFinding` stale cross-ref: "…BUG-069-002/003 fixSequence order-2 stays pending" | **CLOSED — stale / benign.** The durability regression PASSED on Linux/WSL and both 069 bugs are `done`; the note narrates the discovery-session state, now superseded. No edit. |
 | **SR-04** | BUG-099-001 / BUG-099-002 omitted by the prior layers | **CLOSED — recorded** (§1 above). |
-| **SR-05** | `087` / `088` stale "CI-as-producer" narrative in `state.json` `devopsExecution.ci` ("build-images ✓ … cosign keyless+Rekor … ghcr digest push") | **SUPERSEDED — non-gating.** Contradicted by OPS-004's authoritative **local-operator** path (GitHub CI `disabled_manually`). Both specs `blocked` / `releaseTrain: next` / **non-MVP**, blocked solely on the operator-owned home-lab apply + live GPU A/B. **Recommendation:** reconcile 087/088's own `ci` / `deploy` narrative to the local-operator producer on next unblock (owner `bubbles.devops` / `bubbles.docs`). No `087` / `088` `state.json` edited (ownership-respecting). |
-| **SR-06** | OPS-004 `objective.md` (l.104) lists BUG-069-002 durability under "Post-Deploy Live Verifications That Close Gated Work" though the in-repo contract is certified | **CLOSED — freshness note.** A live Day-1 re-verify on the real home-lab stack remains reasonable even though the in-repo contract is `done`; documented, not a contradiction. |
+| **SR-05** | `087` / `088` stale "CI-as-producer" narrative in `state.json` `devopsExecution.ci` ("build-images ✓ … cosign keyless+Rekor … ghcr digest push") | **SUPERSEDED — non-gating.** Contradicted by OPS-004's authoritative **local-operator** path (GitHub CI `disabled_manually`). Both specs `blocked` / `releaseTrain: next` / **non-MVP**, blocked solely on the operator-owned self-hosted apply + live GPU A/B. **Recommendation:** reconcile 087/088's own `ci` / `deploy` narrative to the local-operator producer on next unblock (owner `bubbles.devops` / `bubbles.docs`). No `087` / `088` `state.json` edited (ownership-respecting). |
+| **SR-06** | OPS-004 `objective.md` (l.104) lists BUG-069-002 durability under "Post-Deploy Live Verifications That Close Gated Work" though the in-repo contract is certified | **CLOSED — freshness note.** A live Day-1 re-verify on the real self-hosted stack remains reasonable even though the in-repo contract is `done`; documented, not a contradiction. |
 | **SR-07** | `artifact-lint.sh` reports "missing spec.md / design.md / …" on the lean `_ops` packets (OPS-004: objective / runbook / state; OPS-005: objective / state) | **CLOSED — tool-scope mismatch, not a defect.** The lint applies the feature-contract artifact shape to an ops-packet shape; the lean deploy-pointer / ops packets are by-design. |
-| **SR-08** | `082` `releaseTrain: next` vs its "MVP / evo-x2 Readiness Hardening" title | **CONFIRMED honest / CLOSED.** `done`, `flagsIntroduced: []`, no `mvp`-bundle flag gated by 082 — a next-train hardening batch that benefits MVP; the retag `next`→`mvp` is `bubbles.train`'s call, not required for go-live. No edit. |
+| **SR-08** | `082` `releaseTrain: next` vs its "MVP / <deploy-host> Readiness Hardening" title | **CONFIRMED honest / CLOSED.** `done`, `flagsIntroduced: []`, no `mvp`-bundle flag gated by 082 — a next-train hardening batch that benefits MVP; the retag `next`→`mvp` is `bubbles.train`'s call, not required for go-live. No edit. |
 
 ### Cross-repo doc reconcile (authorized targeted edit)
 
@@ -356,41 +356,41 @@ observability tail (`bc7062df` / `4f3695a5`, + knb `24f44ee`) landed
 - [x] SR-02 (069-003 order-2 `pending` sub-field), SR-03 (099-001 `downstreamFinding`), SR-05 (087/088 `devopsExecution.ci`), SR-06 (OPS-004 `objective.md` l.104), SR-07 (OPS-004/OPS-005 lean packet contents), SR-08 (082 `releaseTrain: next` / `flagsIntroduced: []`) each verified against the actual file.
 - [x] No spec `state.json` mutated; no MAJOR_DRIFT / OBSOLETE → no mandatory dispatch. `docs/Upkeep_Runbook.md` NATS claim reconciled to knb OPS-02 (`9501baf`).
 - [x] Older layers (2026-06-30 readiness-sweep, 2026-06-23, 2026-06-20, Historical Record) preserved verbatim (append-only, newest-on-top).
-- [x] No knb / operator PII (generic home-lab / operator framing; knb items referenced by packet id + SHA only).
+- [x] No knb / operator PII (generic self-hosted / operator framing; knb items referenced by packet id + SHA only).
 
 ---
 
 ## Summary (2026-06-30 readiness-sweep refresh)
 
 This refresh closes the spec-review findings (F1 / F3 / F4 / F5) raised during the
-cross-repo MVP / evo-x2 readiness sweep that ran and **shipped remediation on
+cross-repo MVP / <deploy-host> readiness sweep that ran and **shipped remediation on
 2026-06-30** (all smackerel-side fixes committed + pushed to `origin/main`; the
 sibling knb-side fixes committed + pushed in the **knb** repo — referenced here,
 not imported). It is a read-only `spec-review-to-doc` layer: it documents
 classifications and dispositions and **mutates no spec `state.json`**.
 
-### 1. OPS-003 / OPS-004 home-lab handoff packets — now covered (F3)
+### 1. OPS-003 / OPS-004 self-hosted handoff packets — now covered (F3)
 
-The 2026-06-20 and 2026-06-23 layers predate the two home-lab handoff packets and
+The 2026-06-20 and 2026-06-23 layers predate the two self-hosted handoff packets and
 omitted them. Both are documentation-only `deploy-pointer` `_ops` packets
 (objective + runbook + state), `delivered_pending_activation`, owner
 `bubbles.devops`:
 
 | Packet | Status | Trust | Classification |
 |--------|--------|-------|----------------|
-| `_ops/OPS-003-gap06-bug067-homelab-deploy-handoff` | `delivered_pending_activation` (certified 2026-06-23) | **SUPERSEDED** | Handed off GAP-06 (spec 054 Scope 9) + BUG-067-001 (`ML_LOG_LEVEL` fail-loud SST) at interior payload SHA `78b293cc`. **Superseded for the live deploy by OPS-004** (which declares `supersedes: OPS-003`). Retained verbatim for audit trail; one-way supersession, no contract conflict between the two. |
-| `_ops/OPS-004-homelab-activation-handoff` | `delivered_pending_activation` (certified 2026-06-24) | **CURRENT** | The single consolidated, authoritative go-live mechanism. Folds OPS-003's payload in alongside every other runtime-relevant change on `main` awaiting a home-lab deploy + live GPU verify. Documents the **local-operator** build path (GitHub CI `disabled_manually`; producer = `./smackerel.sh build --target home-lab` → `local-build-manifest-<sourceSha>.yaml`, `trustModel: local-operator`, consumed identically by `promote.sh`), the PRE-DEPLOY config gates (`ML_LOG_LEVEL`; synthesis = `qwen3:30b-a3b`), per-bug live verifications, pointer-swap rollback, and Day-1 ops. |
+| `_ops/OPS-003-gap06-bug067-selfhosted-deploy-handoff` | `delivered_pending_activation` (certified 2026-06-23) | **SUPERSEDED** | Handed off GAP-06 (spec 054 Scope 9) + BUG-067-001 (`ML_LOG_LEVEL` fail-loud SST) at interior payload SHA `78b293cc`. **Superseded for the live deploy by OPS-004** (which declares `supersedes: OPS-003`). Retained verbatim for audit trail; one-way supersession, no contract conflict between the two. |
+| `_ops/OPS-004-selfhosted-activation-handoff` | `delivered_pending_activation` (certified 2026-06-24) | **CURRENT** | The single consolidated, authoritative go-live mechanism. Folds OPS-003's payload in alongside every other runtime-relevant change on `main` awaiting a self-hosted deploy + live GPU verify. Documents the **local-operator** build path (GitHub CI `disabled_manually`; producer = `./smackerel.sh build --target self-hosted` → `local-build-manifest-<sourceSha>.yaml`, `trustModel: local-operator`, consumed identically by `promote.sh`), the PRE-DEPLOY config gates (`ML_LOG_LEVEL`; synthesis = `qwen3:30b-a3b`), per-bug live verifications, pointer-swap rollback, and Day-1 ops. |
 
 OPS-004 is the packet the operator is routed to for go-live; OPS-003 is its direct
 predecessor.
 
-### 2. evo-x2 readiness-sweep remediation shipped 2026-06-30 (discharges F1)
+### 2. <deploy-host> readiness-sweep remediation shipped 2026-06-30 (discharges F1)
 
 The sweep (devops + code-review + spec-review passes) shipped fixes that discharge
 the prior layers' standing **F1 — local-operator-path readiness** risk (the
 readiness/clarity of the OPS-004 local-operator go-live path) plus the
 supply-chain / fail-loud nits found alongside it. **smackerel side** (committed +
-pushed to `origin/main`; tracked in `_ops/OPS-005-evo-x2-readiness-sweep-fixes`):
+pushed to `origin/main`; tracked in `_ops/OPS-005-<deploy-host>-readiness-sweep-fixes`):
 
 - **OPS-005 SF-1** — digest-pinned the two profile-gated third-party images
   (prometheus `…@sha256:2659f4c2…`, searxng `…@sha256:f134249d…`) in the SST
@@ -411,7 +411,7 @@ pushed to `origin/main`; tracked in `_ops/OPS-005-evo-x2-readiness-sweep-fixes`)
   the residual-item note below).
 
 **knb side** (committed + pushed in the **knb** repo, packet
-`specs/_ops/OPS-003-smackerel-evo-x2-readiness-sweep`, now complete — **referenced,
+`specs/_ops/OPS-003-smackerel-<deploy-host>-readiness-sweep`, now complete — **referenced,
 not imported** here): KF-1 `bcdr-drill.sh:43` syntax fix; KF-2 restore-test + bcdr
 trap-EXIT cleanup; KF-3 backup `gzip -t` integrity gate; KF-4 restic retention
 prune; KF-5 activation-doc reconcile. These land in the operator-private deploy
@@ -420,8 +420,8 @@ in knb.
 
 ### 3. Spec 082 `releaseTrain: next` rationale — documented (F4)
 
-`specs/082-mvp-evo-x2-readiness-hardening` (status `done`, certified 2026-06-10)
-carries `releaseTrain: next`, not `mvp`, despite its "MVP / evo-x2 readiness
+`specs/082-mvp-<deploy-host>-readiness-hardening` (status `done`, certified 2026-06-10)
+carries `releaseTrain: next`, not `mvp`, despite its "MVP / <deploy-host> readiness
 hardening" title. F4 offered "reconcile OR document"; the honest rationale is
 **documented here (082 `state.json` NOT edited)**:
 
@@ -444,13 +444,13 @@ hardening" title. F4 offered "reconcile OR document"; the honest rationale is
 `state.json` `ci` / `deploy` fields (e.g. "build workflow: build-images ✓ … cosign
 keyless + Rekor signed … ghcr digest push"). That contradicts **OPS-004's
 authoritative local-operator path** (GitHub CI is `disabled_manually`; the live
-producer is `./smackerel.sh build --target home-lab`, `trustModel:
+producer is `./smackerel.sh build --target self-hosted`, `trustModel:
 local-operator`).
 
 **Disposition:** the 087/088 CI-as-producer narrative is **SUPERSEDED by OPS-004**
 (the packet the operator is actually routed to for go-live) and is **non-gating
 for MVP** (087/088 are non-MVP, `next`-train, and `blocked` solely on the
-operator-owned `bubbles.devops` home-lab apply + live GPU A/B re-verify, which
+operator-owned `bubbles.devops` self-hosted apply + live GPU A/B re-verify, which
 OPS-004 already documents via the local-operator path). **Recommendation:**
 reconcile 087/088's own `ci` / `deploy` narrative to the local-operator producer
 **when they next unblock** (owner `bubbles.devops` / `bubbles.docs`). **No
@@ -467,7 +467,7 @@ reconcile 087/088's own `ci` / `deploy` narrative to the local-operator producer
 - **F1 / F3 discharged** by the 2026-06-30 sweep remediation + this refresh;
   **F4 / F5 dispositioned** above. The one **open** smackerel readiness item is
   **BUG-069-003**'s live-stack E2E (shared with BUG-069-002), folded into the
-  final go-live validation sweep on the live home-lab stack — tracked under its
+  final go-live validation sweep on the live self-hosted stack — tracked under its
   own bug packet, `in_progress`.
 - Read-only `spec-review-to-doc`; outcome = `docs_updated`. **No spec `state.json`
   mutated** (082 / 084 / 087 / 088 / … untouched); the only writes this pass are
@@ -481,7 +481,7 @@ reconcile 087/088's own `ci` / `deploy` narrative to the local-operator producer
 - [x] 087 / 088 CI-as-producer narrative dispositioned SUPERSEDED + non-gating; `state.json` read-only (NOT edited).
 - [x] Older layers (2026-06-23, 2026-06-20, Historical Record) preserved verbatim (append-only, newest-on-top).
 - [x] No spec `state.json` mutated by this pass; no MAJOR_DRIFT / OBSOLETE → no mandatory dispatch.
-- [x] No knb / operator PII (generic home-lab / operator framing; knb items referenced by packet id only).
+- [x] No knb / operator PII (generic self-hosted / operator framing; knb items referenced by packet id only).
 
 ---
 
@@ -493,7 +493,7 @@ since landed; `097` certified `done`; `099` shipped):
 
 1. **Model-target headline CORRECTED — committed reality is `qwen3:30b-a3b`, not
    `gpt-oss:20b`.** The 2026-06-20 refresh (headline #3 + the `087`/`088`/`089`
-   notes) recorded the home-lab open-knowledge *synthesis* target as the
+   notes) recorded the self-hosted open-knowledge *synthesis* target as the
    uncommitted-working-tree `gpt-oss:20b` (+ `gemma4:26b` gather). That interim
    value was **discarded, never committed**. The committed standing synthesis
    default is now **`qwen3:30b-a3b`** (`config/smackerel.yaml` ~L1230, commit
@@ -533,7 +533,7 @@ since landed; `097` certified `done`; `099` shipped):
 `087`, `088`) + 1 `in_progress` (`096`) = **99**. Deltas vs 2026-06-20: `097`
 `in_progress`→`done`; `099` added (`done`); `096` remains genuinely mid-flight.
 The four blocked specs remain honest, validated-in-repo, gated on the
-operator-owned `bubbles.devops` home-lab apply + live re-verify (`058` on the
+operator-owned `bubbles.devops` self-hosted apply + live re-verify (`058` on the
 keyless-OIDC / public-Rekor CI-release row).
 
 ### Trust-level deltas vs 2026-06-20
@@ -593,13 +593,13 @@ document their own state in `state.json`.
    a note is `098` (MINOR_DRIFT, below).
 3. **Uncommitted working-tree model reconciliation.** A model-config sync is live
    in the working tree (10 modified files, NOT committed): it repoints the
-   home-lab assistant synthesis selection from `deepseek-r1:32b` / `llama3.1:8b`
+   self-hosted assistant synthesis selection from `deepseek-r1:32b` / `llama3.1:8b`
    to the operator's optimized `gpt-oss:20b` + `gemma4:26b` set and adds
    **record-only** supersession notes to specs `087`/`088`/`089` + the A/B
-   experiment doc. `config/smackerel.yaml`'s home-lab block is now deepseek/llama-free.
+   experiment doc. `config/smackerel.yaml`'s self-hosted block is now deepseek/llama-free.
    Verified: status / certification / history for `087`/`088`/`089` are **unchanged**
    (only `notes` / `report.md` annotations were appended); `087`'s `state.json` was
-   not touched at all (only its `report.md`). No un-annotated "current home-lab
+   not touched at all (only its `report.md`). No un-annotated "current self-hosted
    model = deepseek/llama" claim remains elsewhere — the residual deepseek/llama
    mentions in `045`/`052`/`071`/`072`/`084` are all incidental/historical
    (memory-profile catalogs, git-log quote evidence, wiring notes, resolution
@@ -614,7 +614,7 @@ document their own state in `state.json`.
    keyless-OIDC / public-Rekor signing row that requires a real tagged CI release;
    `084`/`087`/`088` are validated-in-repo and gated on the owner-directed
    `bubbles.devops` deploy handoff (the CI-green precondition is now satisfied;
-   the live home-lab apply + GPU A/B re-verify remain operator-owned).
+   the live self-hosted apply + GPU A/B re-verify remain operator-owned).
 
 ---
 
@@ -630,7 +630,7 @@ document their own state in `state.json`.
    `ad372f13`) and that the build workflow is green / publishes a manifest.
 5. Inspected the uncommitted model-config reconciliation diffs (state.json `notes`
    - `report.md` supersession blocks for `087`/`088`/`089`; `config/smackerel.yaml`
-   home-lab block) to confirm they are record-only and status-preserving.
+   self-hosted block) to confirm they are record-only and status-preserving.
 6. Re-tested the 2026-06-02 MINOR_DRIFT signals: confirmed
    `internal/api/domain_intent.go` is still deleted and `039`/`067` still carry the
    prose references.
@@ -665,7 +665,7 @@ every spec — only where signals indicated drift.
 | Spec | State | Notes |
 |------|-------|-------|
 | `specs/058-chrome-extension-bridge` | blocked | All external-infra blockers discharged (MV3 e2e harness 11/11 PASS, live-Postgres + HTMX admin landed, build-manifest contract + supply-chain proofs PASSING). The **sole irreducible remaining DoD row** is keyless-OIDC: `cosign sign-blob` under a GitHub Actions OIDC token recorded in a real public-Rekor entry — requires a tagged CI release and cannot be honestly produced on a dev box. Honestly self-documented; out of MVP go-live scope. |
-| `specs/084-open-knowledge-reasoning-loop` | blocked | Validated-in-repo: 3 scopes Done, 9/9 unit tests GREEN, `check`/`format`/`artifact-lint`/`traceability-guard` pass. Gated on the owner-directed `bubbles.devops` handoff (isolated push + CI + home-lab apply + operator live re-verify). CI-green precondition now satisfied; live deploy remains operator-owned. `certifiedAt` correctly null. |
+| `specs/084-open-knowledge-reasoning-loop` | blocked | Validated-in-repo: 3 scopes Done, 9/9 unit tests GREEN, `check`/`format`/`artifact-lint`/`traceability-guard` pass. Gated on the owner-directed `bubbles.devops` handoff (isolated push + CI + self-hosted apply + operator live re-verify). CI-green precondition now satisfied; live deploy remains operator-owned. `certifiedAt` correctly null. |
 | `specs/087-open-knowledge-genuine-synthesis` | blocked | Same validated-in-repo / devops-handoff gate as 084. **Freshly reconciled** (uncommitted): `report.md` now carries a record-only supersession note (deepseek-r1:7b synthesis arm → `gpt-oss:20b` + `gemma4:26b`). Status/certification unchanged. |
 | `specs/088-runtime-switchable-models` | blocked | Same gate; 40/40 DoD + 30/30 spec-088 tests GREEN in-repo. **Freshly reconciled** (uncommitted): `report.md` + `state.json` `notes` carry the record-only supersession note (switchable set → `[gpt-oss:20b, gemma4:26b]`). Status/certification unchanged. |
 | `specs/096-multi-provider-model-connections` | in_progress | Genuinely mid-flight: SCOPE-01..07 + §13 observability landed across 2026-06-18..20; all seven artifacts present. **Caveat:** the `state.json` `notes` field is internally stale (still claims the 2026-06-18 analyst-bootstrap artifact absence). Correctly non-terminal; not promotable past `in_progress`. |
@@ -695,7 +695,7 @@ CURRENT = `001`–`098` minus `{039, 058, 067, 084, 087, 088, 096, 097, 098}`. B
 Freshly-reconciled CURRENT:
 
 - **`089-runtime-model-hotswap-persistent-selection`** (done) — its `report.md` +
-  `state.json` `notes` now carry the record-only home-lab model supersession note
+  `state.json` `notes` now carry the record-only self-hosted model supersession note
   (`deepseek-r1:32b` standing default → `gpt-oss:20b` + `gemma4:26b`). Status =
   `done`, certification unchanged. Annotation is uncommitted working-tree state.
 
@@ -738,7 +738,7 @@ so no `bubbles.workflow mode=improve-existing` dispatch is owed. This is a read-
 - [x] Report written to `specs/_spec-review-report.md` (this refresh; prior body preserved under Historical Record).
 - [x] Compact mode NOT engaged (detect + classify only).
 - [x] No MAJOR_DRIFT/OBSOLETE → no mandatory dispatch; no `state.json`/status/certification modified by this audit.
-- [x] No knb/operator PII in the report (generic home-lab/operator framing only).
+- [x] No knb/operator PII in the report (generic self-hosted/operator framing only).
 
 ---
 
@@ -898,13 +898,13 @@ No MAJOR_DRIFT in a spec with managed-docs impact was found that required immedi
 
 > **Append-only.** The 2026-06-02 body above is preserved verbatim as the
 > historical record. This addendum records portfolio drift observed during the
-> spec 082 MVP / evo-x2 readiness review; it does NOT rewrite any prior finding.
+> spec 082 MVP / <deploy-host> readiness review; it does NOT rewrite any prior finding.
 
 The 2026-06-02 baseline ("76 numbered + 2 ops = 78") is now stale. Deltas
 verified live on 2026-06-10:
 
 - **Portfolio grew** beyond the 2026-06-02 snapshot: specs `077`–`082` now exist
-  (`082-mvp-evo-x2-readiness-hardening` is this readiness-hardening feature).
+  (`082-mvp-<deploy-host>-readiness-hardening` is this readiness-hardening feature).
 - **Spec 076** (`assistant-completion-rescope`) is now `done` (certified
   2026-06-06), not in-progress. It carries two approved post-release exceptions
   (interactionMap removal; native iOS/Android adapters) — legitimate deferrals.
@@ -918,7 +918,7 @@ verified live on 2026-06-10:
   per-spec `state.json` as the authority for any go/no-go decision.
 
 This addendum is the go-live decision-input refresh referenced by the
-[Go-Live Readiness Checklist](../docs/Deployment.md#go-live-readiness-checklist-evo-x2--home-lab).
+[Go-Live Readiness Checklist](../docs/Deployment.md#go-live-readiness-checklist-<deploy-host>--self-hosted).
 A full portfolio re-classification (re-running detect + classify across all
 `specs/0*/`) remains future work; this addendum only corrects the inputs that
-materially affect the evo-x2 MVP go-live.
+materially affect the <deploy-host> MVP go-live.

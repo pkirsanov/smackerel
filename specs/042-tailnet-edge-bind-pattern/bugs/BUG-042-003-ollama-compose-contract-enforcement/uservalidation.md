@@ -23,4 +23,4 @@
 
 **Status: SHIP_IT**
 
-The fix closes home-lab readiness re-scan finding HL-RESCAN-005 (P2). The ollama compose service is now mechanically locked to the spec 042 fail-loud SST contract; a regression to the literal `127.0.0.1:` form (spec 020), the forbidden default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}` form (Gate G028 violation), or `network_mode: host` (Pattern P5 bypass) would be caught at pre-merge by the new adversarial sub-tests. The live `deploy/compose.deploy.yml` already complies, so the fix is risk-free to ship.
+The fix closes self-hosted readiness re-scan finding HL-RESCAN-005 (P2). The ollama compose service is now mechanically locked to the spec 042 fail-loud SST contract; a regression to the literal `127.0.0.1:` form (spec 020), the forbidden default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}` form (Gate G028 violation), or `network_mode: host` (Pattern P5 bypass) would be caught at pre-merge by the new adversarial sub-tests. The live `deploy/compose.deploy.yml` already complies, so the fix is risk-free to ship.

@@ -8,7 +8,7 @@
 # Background:
 #   Spec 052 Scope 2 reordered the FR-051-005 dev-default-Postgres-password
 #   gate inside scripts/commands/config.sh so that placeholder mode for
-#   production-class targets (home-lab) short-circuits the yaml-default
+#   production-class targets (self-hosted) short-circuits the yaml-default
 #   path BEFORE the dev-default check fires. The reorder is correct for
 #   the placeholder-mode happy path (Scope 2 BS-052-005) but it MUST NOT
 #   weaken the original FR-051-005 contract on the env-override path:
@@ -37,12 +37,12 @@
 #   is paired with the existing scripts/commands/config_secret_rejection_test.sh
 #   Sub-test 1 (which uses the same env-override drive) and with the
 #   bundle absence assertion below: if a bundle ever materialized at the
-#   expected path under POSTGRES_PASSWORD=smackerel TARGET_ENV=home-lab,
+#   expected path under POSTGRES_PASSWORD=smackerel TARGET_ENV=self-hosted,
 #   that proves the dev-default gate was bypassed (the loader is
 #   contracted to fail BEFORE any bundle bytes are written).
 #
 # Sub-tests:
-#   1. POSTGRES_PASSWORD=smackerel TARGET_ENV=home-lab against the live
+#   1. POSTGRES_PASSWORD=smackerel TARGET_ENV=self-hosted against the live
 #      smackerel.yaml MUST exit non-zero. The loader output MUST name
 #      "infrastructure.postgres.password" AND reference "spec 051" AND
 #      MUST NOT echo the literal value "smackerel" as a password value
@@ -55,9 +55,9 @@
 #   The smackerel.sh CLI's `config generate` writes
 #   $REPO_ROOT/config/generated/${TARGET_ENV}.env unconditionally. To
 #   keep the operator's working state untouched, this script backs up any
-#   pre-existing dev.env / test.env / home-lab.env files BEFORE running
+#   pre-existing dev.env / test.env / self-hosted.env files BEFORE running
 #   and restores them after, mirroring the same isolation strategy used
-#   by config_home_lab_runtime_env_test.sh.
+#   by config_self_hosted_runtime_env_test.sh.
 #
 # This script is invoked by `./smackerel.sh test unit` (via the bash
 # unit harness) so it runs in the standard unit-tier pipeline as well as
@@ -85,7 +85,7 @@ fi
 # never disturbed by this regression run.
 # -----------------------------------------------------------------------
 BACKUP_DIR="$(mktemp -d)"
-for env_name in dev test home-lab; do
+for env_name in dev test self-hosted; do
   src="$GENERATED_DIR/${env_name}.env"
   if [[ -f "$src" ]]; then
     cp "$src" "$BACKUP_DIR/${env_name}.env"
@@ -98,7 +98,7 @@ BUNDLE_OUT_DIR="$(mktemp -d)"
 
 restore_generated() {
   local rc=$?
-  for env_name in dev test home-lab; do
+  for env_name in dev test self-hosted; do
     src="$BACKUP_DIR/${env_name}.env"
     dst="$GENERATED_DIR/${env_name}.env"
     if [[ -f "$src" ]]; then
@@ -120,18 +120,18 @@ trap restore_generated EXIT
 failures=0
 
 # -----------------------------------------------------------------------
-# Sub-test 1: env-override dev-default value rejected for home-lab AND
+# Sub-test 1: env-override dev-default value rejected for self-hosted AND
 # error names infrastructure.postgres.password AND spec 051 AND does
 # NOT echo the literal value "smackerel" as a password value.
 # -----------------------------------------------------------------------
-echo "--- Sub-test 1 (T-052-013 / SCN-052-S06 / BS-052-006): env-override dev-default rejected for home-lab ---"
+echo "--- Sub-test 1 (T-052-013 / SCN-052-S06 / BS-052-006): env-override dev-default rejected for self-hosted ---"
 
 override_output="$(POSTGRES_PASSWORD=smackerel bash "$SMACKEREL_SH" config generate \
-  --env home-lab --bundle --output-dir "$BUNDLE_OUT_DIR" 2>&1)"
+  --env self-hosted --bundle --output-dir "$BUNDLE_OUT_DIR" 2>&1)"
 override_exit=$?
 
 if [[ "$override_exit" -eq 0 ]]; then
-  echo "FAIL: SST loader returned exit 0 for POSTGRES_PASSWORD=smackerel + TARGET_ENV=home-lab (expected non-zero)"
+  echo "FAIL: SST loader returned exit 0 for POSTGRES_PASSWORD=smackerel + TARGET_ENV=self-hosted (expected non-zero)"
   echo "----- captured output -----"
   echo "$override_output"
   echo "----- end output -----"
@@ -181,7 +181,7 @@ echo "--- Sub-test 2 (T-052-013 defense-in-depth): no bundle tarball written on 
 # The source-sha defaults to a git lookup when --source-sha is not
 # provided; use a glob to catch any sha. Zero matches is the contract.
 shopt -s nullglob
-written_bundles=("$BUNDLE_OUT_DIR"/config-bundle-home-lab-*.tar.gz)
+written_bundles=("$BUNDLE_OUT_DIR"/config-bundle-self-hosted-*.tar.gz)
 shopt -u nullglob
 
 if [[ "${#written_bundles[@]}" -eq 0 ]]; then

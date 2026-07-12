@@ -157,7 +157,7 @@ The HTTP-transport test was checking that with HTTP enabled and one HTTP key mis
 - `TestRuntimeConfig_S004_*` (auth-token warnings)
 - `TestDriveConfig*` (Drive OAuth secret loading)
 - `TestErrorPaths_NeverEcho*` (signature key / bootstrap token error redaction)
-- `TestBundleSecretContract_AdversarialA[1-4]_*` and `TestBundleSecretContract_NoLiteralSecretsInHomeLab` in `internal/deploy` (bundle generation regression)
+- `TestBundleSecretContract_AdversarialA[1-4]_*` and `TestBundleSecretContract_NoLiteralSecretsInSelfHosted` in `internal/deploy` (bundle generation regression)
 - `tests/unit/clients` (entire package)
 
 **Note on test.env:** SST-generated `config/generated/test.env` DOES contain all 12 `ASSISTANT_TRANSPORTS_WHATSAPP_*` keys with `ENABLED=false` plus disabled-state sentinel values. The live test stack would therefore start. The regression is strictly in-process validators invoked by Go unit tests that construct assistant config from custom env maps and do not (and should not have to) include the new WhatsApp keys.
@@ -416,12 +416,12 @@ performed in this session.
   at `IdempotencyCacheCapacity = 16384`. The file header explicitly
   states "a single core replica owns the webhook ingress". If the
   deployment ever scales to two or more core replicas behind a load
-  balancer (HPA, Compose replica count > 1, multi-host home-lab), Meta
+  balancer (HPA, Compose replica count > 1, multi-host self-hosted), Meta
   retries can land on a different replica than the original delivery and
   bypass dedup. This causes duplicate facade `Handle` calls AND duplicate
   capture-as-fallback artifacts for the same `wamid`.
 - Severity: HIGH if multi-replica is anticipated; LOW today on the
-  documented single-replica home-lab profile.
+  documented single-replica self-hosted profile.
 - Recommendation: Either (a) pin the WhatsApp ingress to a single
   replica in `deploy/compose.deploy.yml` with an explicit comment and
   `compose_contract_test` assertion, or (b) promote dedup to a shared

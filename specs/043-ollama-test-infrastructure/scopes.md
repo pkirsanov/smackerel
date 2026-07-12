@@ -83,7 +83,7 @@ Scenario: SCN-OLLAMA-006 Configuration flows through SST, no hardcoded model str
   - `infrastructure.ollama.test.request_num_predict` (512)
   - `environments.dev.ollama_enabled` (default true with profile gate)
   - `environments.test.ollama_enabled` (default false; test runner sets to true via `SMACKEREL_TEST_OLLAMA=1`)
-  - `environments.home-lab.ollama_enabled` (default false)
+  - `environments.self-hosted.ollama_enabled` (default false)
   - Reuse existing `environments.test.ollama_host_port` (47004 — distinct from postgres:47001, nats:47002, nats_monitor:47003 per design.md §3 correction)
   - Reuse existing `environments.test.ollama_volume_name` (`smackerel-test-ollama-data`)
 - Update `scripts/commands/config.sh` to emit all `OLLAMA_*` keys to `config/generated/test.env` with required-value validation.

@@ -1,0 +1,169 @@
+{
+  "version": 3,
+  "specId": "051-deployment-secret-auth-contract",
+  "bugId": "BUG-051-001-self-hosted-runtime-env-mode",
+  "featureDir": "specs/051-deployment-secret-auth-contract/bugs/BUG-051-001-self-hosted-runtime-env-mode",
+  "featureName": "BUG-051-001: self-hosted config bundle emits SMACKEREL_ENV=development, silently disabling production-mode runtime defense-in-depth",
+  "workflowMode": "test-to-doc",
+  "parentWorkflow": {
+    "mode": "self-hosted-deploy-readiness-sprint",
+    "round": null,
+    "totalRounds": null,
+    "seed": null,
+    "trigger": "system-review",
+    "executionModel": "parent-expanded-child-mode",
+    "sourceReview": "bubbles.system-review four-lens synthesis (devops + security + audit + spec-freshness) 2026-05-13",
+    "findingId": "SEC-HL-001"
+  },
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-13T22:00:00Z",
+    "completedPhaseClaims": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "test",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Authored scripts/commands/config_self_hosted_runtime_env_test.sh — a 4-sub-test adversarial shell driver mirroring scripts/commands/config_secret_rejection_test.sh. Sub-tests: (1) TARGET_ENV=self-hosted → SMACKEREL_ENV=production against patched yaml with non-default Postgres password; (2 canary) TARGET_ENV=dev → SMACKEREL_ENV=development; (3 canary) TARGET_ENV=test → SMACKEREL_ENV=test (MIT-040-S-004 preserved); (4 defense-in-depth) TARGET_ENV=self-hosted against unpatched live yaml → FR-051-005 generator-side guard still fires. AWK-based yaml patcher handles the 4-space-indented infrastructure.postgres.password line with sanity-check abort if patch fails. trap restore_generated EXIT INT TERM backs up + restores config/generated/{dev,test,self-hosted}.env so the operator's working state is unchanged. Authored internal/config/sst_loader_self_hosted_runtime_env_test.go — a thin Go driver mirroring sst_loader_test.go::TestSSTLoader_RejectsDevPostgresPassword_SelfHosted. Empirical RED state captured: reverted just the self-hosted arm of the per-target case in scripts/commands/config.sh, re-ran the shell test, Sub-test 1 FAILED with `actual: SMACKEREL_ENV=development` while Sub-tests 2/3/4 PASSED — proving non-tautological isolation. See report.md > Test Evidence > Red→Green proof."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Replaced the single-arm `if [[ \"$TARGET_ENV\" == \"test\" ]]; then SMACKEREL_ENV=\"test\"; fi` form in scripts/commands/config.sh (lines ~528-530) with a per-target `case \"$TARGET_ENV\" in test) SMACKEREL_ENV=\"test\" ;; self-hosted) SMACKEREL_ENV=\"production\" ;; esac` form. Added a 20-line comment block above the resolution explaining the BUG-051-001 / SEC-HL-001 rationale, the four downstream consumers that depend on SMACKEREL_ENV=production (internal/auth/startup.go::ValidateRuntimeAuthStartup, internal/config/config.go production-mode auth + DB-password fail-fast block, spec 044 production-mode signing-material requirements, spec 051 FR-051-005 runtime-side dev-default Postgres password rejection), and the masking interaction with the FR-051-005 generator-side guard. Re-applied the self-hosted arm and re-ran the shell test → all 4 sub-tests PASS. Confirmed via report.md > Implementation Code Diff: 1 file changed, +28/-3 lines."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Targeted Go-driver run: `go test -v -count=1 -run 'TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001|TestSSTLoader_RejectsDevPostgresPassword_SelfHosted' ./internal/config/...` exits 0 with both PASS lines. Cross-package smoke: full `./smackerel.sh test unit --go` shows zero FAIL lines across internal/config (16.565s, uncached because of new test), internal/auth (cached), internal/api (cached), internal/deploy (cached). Spec 042 contract regression: `go test -v -count=1 -run 'TestComposeContract' ./internal/deploy/...` shows all 6 functions PASS — BUG-042-001 + BUG-042-002 regression coverage preserved unchanged."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:40:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunities surfaced. The fix is the minimum viable change: 1 structural transformation (single-arm if → per-target case) with 1 added arm. The 20-line comment block expansion is justified by the SEC-HL-001 severity and the masking interaction with FR-051-005 — without context, a future agent could revert the self-hosted arm thinking it was over-reach. The shell-driven test pattern is preferred over a pure Go test because the SST loader is bash and config.sh hardcodes REPO_ROOT + output paths (see design.md > Why a shell-driven test). Per-target case is preferred over a single generic loop because spec 051 + spec 042 + future overlay specs need per-target policy (see design.md > Why per-target case and not a single generic loop)."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:42:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No flaky-test or stability concerns surfaced. The new tests are deterministic: no time.Now, no random IDs, no goroutine concurrency, no I/O beyond static yaml + bash subprocess invocations. The shell test backs up + restores config/generated/{dev,test,self-hosted}.env via trap restore_generated EXIT INT TERM, so concurrent tests or aborted runs leave the operator's working state intact. The 4 sub-tests run in ~12s end-to-end (the bash subprocess invocations dominate; the Go driver overhead is negligible)."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:43:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Security review recorded in report.md > Audit Evidence > OWASP review. The fix tightens A04 (Insecure Design) and A05 (Security Misconfiguration) by mechanically ensuring self-hosted bundles emit the correct runtime-mode signal so the spec 044 + spec 051 production-mode runtime checks fire as designed. No new attack surface introduced. No PII handled. The fix changes only the runtime-mode signal, not any data path. Build-Once Deploy-Many integrity (G079) preserved: bundles remain immutable per (env, sourceSha); rollback remains pointer-swap; cosign verification + bundle hash verification + digest pinning unchanged."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:45:00Z",
+        "outcome": "completed_owned",
+        "evidence": "./smackerel.sh lint exits 0 with `Web validation passed` and zero diagnostics — this is the gate the CI workflow .github/workflows/ci.yml runs on every push and PR. ./smackerel.sh test unit --go shows zero FAIL lines across all Go packages. Targeted gofmt -l on internal/config/sst_loader_self_hosted_runtime_env_test.go returns empty (gofmt-clean). The pre-existing internal/metrics/auth.go comment-alignment drift flagged by ./smackerel.sh format --check was committed at HEAD 9e3fc996 (predating BUG-051-001 work) and is NOT in any file modified by this fix; the CI workflow does NOT gate on format --check, so the pre-existing drift does not block the BUG-051-001 path to main. Documented in report.md > Validation Evidence > Pre-existing internal/metrics/auth.go format drift."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:48:00Z",
+        "outcome": "completed_owned",
+        "evidence": "OWASP A04/A05 review GREEN (improved). Privacy review GREEN (no PII). Minimum-viable-change audit GREEN: 1 file changed (scripts/commands/config.sh) — structural transformation of single-arm if to per-target case + 20-line comment block + 1 new arm. Two new test files (one shell driver, one Go driver). No production runtime code, compose, runtime config, or doc files modified outside the bug folder. Generic-only audit GREEN: the self-hosted) arm is target policy (not operator topology); the deploy adapter overlay (knb) continues to own all per-target topology. Build-Once Deploy-Many integrity (G079) preserved: bundles remain immutable per (env, sourceSha); rollback remains pointer-swap; cosign verification + bundle hash verification + digest pinning unchanged. Promotion decision: SHIP_IT."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.devops (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-13T22:50:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Authored bug-packet artifacts: spec.md (76 lines + AC table), design.md (Current Truth + Why this is real defect + Design Decision + Code change diff + Open Questions Resolved), scenario-manifest.json (4 scenarios SCN-051-001-A/B/C/D), scopes.md (Scope 1 with Gherkin + Implementation Plan + Test Plan + Test Plan Coverage Matrix + 13-item DoD with [x] marks + evidence pointers + Regression E2E Coverage), report.md (Implementation Code Diff + Implementation Test Diff + Test Evidence with Red→Green proof + Cross-package smoke + Regression Evidence + Validation Evidence + Consumer Impact Sweep + Audit Evidence + Concerns Carried Forward + Round Provenance), uservalidation.md (12-item checklist + sign-off), state.json (this file). No external doc updates required: the spec 051 parent spec already documents FR-051-005 + FR-051-001/002/003/004 contracts that this fix ensures fire on self-hosted; the .github/copilot-instructions.md SST Zero-Defaults section already requires SMACKEREL_ENV to originate from config/smackerel.yaml + the per-target generator override (which is exactly what this fix implements). The fix strengthens existing contracts without creating new ones."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.devops (parent-expanded test-to-doc)",
+    "certifiedAt": "2026-05-13T22:48:00Z",
+    "auditorAgent": "bubbles.devops (parent-expanded test-to-doc)",
+    "auditedAt": "2026-05-13T22:48:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "BUG-051-001 closes the self-hosted runtime-mode bypass surfaced as SEC-HL-001 by the self-hosted readiness review 2026-05-13 (bubbles.system-review four-lens synthesis: devops + security + audit + spec-freshness). The fix is the minimum viable change: structural transformation of the single-arm if [[ TARGET_ENV == test ]] form into a per-target case form with one new self-hosted) arm that overrides SMACKEREL_ENV to production. Empirical RED state proves the test is non-tautological: reverting only the self-hosted arm fails Sub-test 1 (self-hosted=production assertion) while Sub-tests 2 (dev canary), 3 (test canary), and 4 (FR-051-005 defense-in-depth canary) all continue to PASS. No production runtime code, compose, runtime config, or doc files modified outside the bug folder. Pre-existing FR-051-005 generator-side coverage preserved unchanged. Spec 042 contract regression coverage (BUG-042-001 + BUG-042-002) preserved unchanged. Cross-package smoke clean. ./smackerel.sh lint clean (CI gate). Generic-only invariant preserved (the self-hosted arm is target policy; deploy adapter overlay owns all per-target topology). Build-Once Deploy-Many integrity (G079) preserved.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Per-target self-hosted arm + adversarial 4-sub-test regression contract",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-13T22:48:00Z",
+        "dodTotal": 19,
+        "dodChecked": 19,
+        "notes": "Per-target case in scripts/commands/config.sh has the self-hosted) arm that sets SMACKEREL_ENV=production. The pre-existing test) arm is preserved unchanged (MIT-040-S-004 ergonomic). Two new test files (scripts/commands/config_self_hosted_runtime_env_test.sh shell driver + internal/config/sst_loader_self_hosted_runtime_env_test.go Go driver) lock the regression contract with 4 sub-tests (one per scenario SCN-051-001-A/B/C/D). Empirical RED state proves non-tautological isolation. Full DoD evidence inline in scopes.md > Definition of Done."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "test-to-doc",
+      "source": "self-hosted-deploy-readiness-sprint-2026-05-13"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "test-to-doc-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "test-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  }
+}

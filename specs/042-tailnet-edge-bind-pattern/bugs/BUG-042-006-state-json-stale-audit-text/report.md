@@ -4,7 +4,7 @@
 
 ## Summary
 
-Bug discovered during 2026-05-15 home-lab readiness re-scan (finding HL-RESCAN-007). `specs/042-tailnet-edge-bind-pattern/state.json` contains 9 distinct `notes` / `reason` / `closeReason` narratives that praise the now-FORBIDDEN substitution form `${HOST_BIND_ADDRESS:-127.0.0.1}:` as the canonical loopback-default pattern. Those narratives were accurate when written (2026-05-09) but were reversed by BUG-029-003 (HEAD `eec1437c`, 2026-05-14) which made the `${VAR:-default}` form FORBIDDEN by Gate G028 NO-DEFAULTS / fail-loud SST policy. The audit history was never reconciled with the policy reversal.
+Bug discovered during 2026-05-15 self-hosted readiness re-scan (finding HL-RESCAN-007). `specs/042-tailnet-edge-bind-pattern/state.json` contains 9 distinct `notes` / `reason` / `closeReason` narratives that praise the now-FORBIDDEN substitution form `${HOST_BIND_ADDRESS:-127.0.0.1}:` as the canonical loopback-default pattern. Those narratives were accurate when written (2026-05-09) but were reversed by BUG-029-003 (HEAD `eec1437c`, 2026-05-14) which made the `${VAR:-default}` form FORBIDDEN by Gate G028 NO-DEFAULTS / fail-loud SST policy. The audit history was never reconciled with the policy reversal.
 
 Severity: **P2 — MEDIUM**. Live `deploy/compose.deploy.yml` is already compliant on HEAD; the defect is misleading historical narrative that contradicts the current binding policy. See [`spec.md`](./spec.md) for the line-precise evidence and severity justification.
 

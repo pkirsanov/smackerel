@@ -506,7 +506,7 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		// "error"/"failing"/"degraded" instead (the fault paths never set
 		// "disconnected"; see e.g. youtube/discord/markets/guesthost), so real
 		// connector faults still degrade the aggregate below. On this single-user
-		// home-lab most source connectors are registered but never provisioned (no
+		// self-hosted most source connectors are registered but never provisioned (no
 		// OAuth/API credentials), so they legitimately sit at "disconnected". A
 		// deliberately-unprovisioned optional source must NOT drag the whole product
 		// to "degraded" (redteam degraded-driver finding: the live prod aggregate

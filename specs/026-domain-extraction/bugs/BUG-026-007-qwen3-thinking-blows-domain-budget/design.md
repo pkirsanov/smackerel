@@ -5,7 +5,7 @@
 `qwen3:30b-a3b` is a **thinking** model: by default it emits a hidden `<think>…</think>`
 chain-of-thought block before its answer. On the smackerel ML sidecar's **structured-JSON
 extraction** calls (where the model output is a machine-parsed JSON object), that reasoning block
-is pure latency. Live on evo-x2 (both models warm, identical recipe task) it costs **~113s** vs
+is pure latency. Live on <deploy-host> (both models warm, identical recipe task) it costs **~113s** vs
 **~10s** with thinking disabled — same 9/9-ingredient accuracy either way.
 
 `ml/app/domain.py` wraps `_do_domain_extract` in `asyncio.wait_for(..., timeout=30)`
@@ -28,7 +28,7 @@ param would be buried under `options` on the legacy `ollama/` route (as `keep_al
 premises were wrong:**
 
 1. **qwen3 ignores `/no_think`.** qwen3's Ollama chat template honors ONLY the native `think`
-   request field; a `/no_think` string in the messages is a no-op (proven live on evo-x2:
+   request field; a `/no_think` string in the messages is a no-op (proven live on <deploy-host>:
    `/no_think` → thinking STILL on, >150s, invalid-JSON output).
 2. **litellm 1.84.0 forwards top-level `think=` on BOTH routes.** An empirical request-capture probe
    (report.md → Test Evidence) shows `think=False` lands at the request TOP LEVEL (`data["think"]`)

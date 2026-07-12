@@ -6,8 +6,8 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 > **Done** (implemented + validated with real evidence in [report.md](report.md)
 > → the per-scope "Delivery — Scope NN" sections). Scope 05's final item
 > (SCN-083-E08 *successful* live Ollama inference round-trip) was proven on the
-> home-lab deployment on 2026-06-12 (gemma4:26b, HTTP 200, strict-schema
-> valid) — see report.md "Deploy to home-lab + Scope 05 E08 live-Ollama
+> self-hosted deployment on 2026-06-12 (gemma4:26b, HTTP 200, strict-schema
+> valid) — see report.md "Deploy to self-hosted + Scope 05 E08 live-Ollama
 > closure". Scenario IDs use the
 > `SCN-083-<LETTER><NN>` convention (letter = scope) so they match the default
 > artifact-lint pattern `SCN-[0-9]{3}-[A-Z][0-9]{2}`.
@@ -350,7 +350,7 @@ Scenario: SCN-083-D06 — cursor advances to last successful fetch
 
 ## Scope 05: LLM Category Extraction (replaces regex)
 
-**Status:** Done (E08 live-Ollama inference proven on the home-lab deployment 2026-06-12)
+**Status:** Done (E08 live-Ollama inference proven on the self-hosted deployment 2026-06-12)
 **Priority:** P0
 **Depends On:** 04
 **Spec Refs:** FR-CR-007, FR-CR-010, NFR-CR-001, NFR-CR-003, NFR-CR-008, §17.2 (Constitution C2), design §4
@@ -358,12 +358,12 @@ Scenario: SCN-083-D06 — cursor advances to last successful fetch
 > **Delivery note:** All 8 DoD items are complete with real evidence. The
 > final item — SCN-083-E08 *successful* live Ollama inference round-trip — was
 > pending during disposable-stack delivery (that Ollama serves no pulled model;
-> litellm `APIConnectionError`) and is now **proven on the home-lab
+> litellm `APIConnectionError`) and is now **proven on the self-hosted
 > deployment** (2026-06-12): a real POST to the deployed
 > `/extract-card-categories` route (gemma4:26b, 100% GPU) returned HTTP 200 with
 > a strict-schema-valid extraction. The E08 audit-run persistence + the
 > orchestrator→sidecar HTTP fail-loud contract were already proven live on PG.
-> See report.md "Deploy to home-lab + Scope 05 E08 live-Ollama closure".
+> See report.md "Deploy to self-hosted + Scope 05 E08 live-Ollama closure".
 
 ### Gherkin Scenarios
 
@@ -432,7 +432,7 @@ Scenario: SCN-083-E08 — extraction run is audited
 - [x] Adversarial scenario tests pass for SCN-083-E02 and SCN-083-E03 (malformed discarded; no silent fallback) — unit; each uses input that would PASS the old silent-fallback path but MUST fail-loud to verification → Evidence: report.md — `TestValidateExtraction_MalformedAndInvalidDiscarded_E02_E03 PASS` (8 discard subtests) + live-PG `TestExtractorLivePG_MalformedDiscardedNoOverwrite_E02_E03 PASS` (existing record categories/confidence/manual_override UNCHANGED; only needs_verification flipped true)
 - [x] Adversarial scenario tests pass for SCN-083-E04 and SCN-083-E05 (low-confidence flag; unknown-card skip) — unit → Evidence: report.md — `TestValidateExtraction_LowConfidenceFlagged_E04 PASS` + `TestValidateExtraction_UnknownCardSkipped_E05 PASS` + live-PG `TestExtractorLivePG_LowConfidenceStored_E04` / `TestExtractorLivePG_UnknownCardSkippedNoMismap_E05` PASS (no mismap onto co-resident known card)
 - [x] Scenario test passes for SCN-083-E06 (prompt-injection defense) — unit → Evidence: report.md — Go `TestExtractRequest_PageContentIsDataNotInstructions_E06` + `TestValidateExtraction_RejectsCardOrPeriodMismatch_E06` PASS, and Python `test_card_categories.py::test_build_messages_treats_page_content_as_data_E06` (injected text only in the untrusted PAGE_CONTENT data block; system prompt declares it untrusted + forbids following it)
-- [x] Scenario test passes for SCN-083-E08 (extraction run audited) — integration (live PG + Ollama per spec 043) → **PROVEN ON LIVE DEPLOYMENT (2026-06-12).** Two halves, both now green: (1) audit-run persistence + the orchestrator→`/extract-card-categories` HTTP fail-loud contract were proven on live PG by `TestCardRewardsExtractLiveStackAudited_E08` + `TestExtractorLivePG_ExtractionRunAudited_E08 PASS`; (2) the previously-pending SUCCESSFUL sidecar→Ollama inference is now proven on the home-lab deployment — a real POST to the deployed `/extract-card-categories` route (gemma4:26b, 100% GPU, in-stack `ollama:11434`) returned `HTTP 200` with a strict-schema-valid object (categories=[Gas Stations, Select Streaming Services], period 2026-07-01..09-30, confidence 1.0, verbatim source_evidence; card/period echo-guard passed). The disposable-stack `APIConnectionError` was purely a no-pulled-model artifact, resolved on the host. See report.md "Deploy to home-lab + Scope 05 E08 live-Ollama closure (2026-06-12)".
+- [x] Scenario test passes for SCN-083-E08 (extraction run audited) — integration (live PG + Ollama per spec 043) → **PROVEN ON LIVE DEPLOYMENT (2026-06-12).** Two halves, both now green: (1) audit-run persistence + the orchestrator→`/extract-card-categories` HTTP fail-loud contract were proven on live PG by `TestCardRewardsExtractLiveStackAudited_E08` + `TestExtractorLivePG_ExtractionRunAudited_E08 PASS`; (2) the previously-pending SUCCESSFUL sidecar→Ollama inference is now proven on the self-hosted deployment — a real POST to the deployed `/extract-card-categories` route (gemma4:26b, 100% GPU, in-stack `ollama:11434`) returned `HTTP 200` with a strict-schema-valid object (categories=[Gas Stations, Select Streaming Services], period 2026-07-01..09-30, confidence 1.0, verbatim source_evidence; card/period echo-guard passed). The disposable-stack `APIConnectionError` was purely a no-pulled-model artifact, resolved on the host. See report.md "Deploy to self-hosted + Scope 05 E08 live-Ollama closure (2026-06-12)".
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); §17.2 strict-schema contract honored; artifact-lint clean; docs aligned → Evidence: report.md "Build Quality Gate (Scope 05)" (`CHECK_EXIT=0`; `LINT_EXIT=0` All checks passed! + Web validation passed; `FORMAT_RECHECK_EXIT=0`) + connector-count + doc-freshness contracts green + artifact-lint (report.md "Gate: artifact-lint — Scope 05")
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent adversarial regression guards (Test Plan row T-05-RE: malformed-discard, no silent overwrite) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 05"
 - [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"
@@ -884,7 +884,7 @@ Scenario: SCN-083-K08 — admin page triggers sync-calendar-now
 - [x] Scenario tests pass for SCN-083-K01 and SCN-083-K06 (dashboard + report) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 2: SCN-083-K01 + SCN-083-K06" (scenarios 3 + 5; dashboard renders recommendations + active-rotating + needs_verification badge + re-enrollment alert; report renders best-card-per-category with a non-empty reason)
 - [x] Scenario tests pass for SCN-083-K02 and SCN-083-K03 (recommendations CRUD + override) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 3: SCN-083-K02 + SCN-083-K03" (scenarios 7 + 13; add/edit/star persist + re-render; ADVERSARIAL — regenerate-from-UI preserves the starred override even though the card has no matching benefit)
 - [x] Scenario tests pass for SCN-083-K04 and SCN-083-K05 (verify badge + manual override clears flag) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 4: SCN-083-K04 + SCN-083-K05" (scenarios 9 + 11; needs_verification badge + confidence + 2 source citations from the real reconciler; ADVERSARIAL — a later high-confidence disagreeing reconcile does NOT overwrite the manual override)
-- [x] Scenario tests pass for SCN-083-K07 and SCN-083-K08 (admin scrape-now/sync-now + run history) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-K07 + SCN-083-K08" (scenarios 4 + 6; scrape-now fires the Scope 09 manual refresh trigger → a manual scrape run is logged; sync-now fires the manual recommend trigger → a manual optimize run is logged with events_written; non-zero CalDAV write deferred to enabled home-lab [awaiting-operator-commit])
+- [x] Scenario tests pass for SCN-083-K07 and SCN-083-K08 (admin scrape-now/sync-now + run history) — e2e-ui (live stack) — Evidence: [report.md](report.md) → "Evidence — DoD 5: SCN-083-K07 + SCN-083-K08" (scenarios 4 + 6; scrape-now fires the Scope 09 manual refresh trigger → a manual scrape run is logged; sync-now fires the manual recommend trigger → a manual optimize run is logged with events_written; non-zero CalDAV write deferred to enabled self-hosted [awaiting-operator-commit])
 - [x] Build Quality Gate: build/check/lint/format clean (zero warnings); e2e-ui hits real stack (no interception); Docker bundle freshness verified; artifact-lint clean; docs aligned — Evidence: [report.md](report.md) → "Evidence — DoD 6: Build Quality Gate" (E2EUI_EXIT=0, 15 passed incl. 7 Scope 10; no-interception + silent-pass scans clean; LINT_EXIT=0; FORMATCHK_EXIT=0; Docker bundle freshness rebuild captured; scopesdriftguard ratchet re-verified; artifact-lint recorded below)
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior persist — this scope's scenarios are covered by persistent e2e-ui regression guards (Test Plan row T-11-RE: starred-override preserved, manual-verify clears flag) exercised by the card-rewards live suite — Evidence: [report.md](report.md) → "Delivery — Scope 11"
 - [x] Broader E2E regression suite passes — the card-rewards live e2e suite (e2e-api SCN-083-B08/G08 + e2e-ui SCN-083-J01..K08, 15 passed) is green with no regressions in adjacent scopes — Evidence: [report.md](report.md) → "Delivery — Scope 11"

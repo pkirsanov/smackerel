@@ -2,7 +2,7 @@
 
 - **Severity:** HIGH (redteam **F1**)
 - **Owning spec:** `050-ml-sidecar-health-isolation`
-- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on evo-x2
+- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host>
 - **Status:** PARTIALLY FIXED IN-REPO (non-destabilizing part) + ROUTED (consumer adoption) — not pushed
 
 ## Summary
@@ -54,9 +54,9 @@ Files:
 
 ## Routed (out of this repo / follow-up)
 
-1. **knb** `smackerel/home-lab/verify.sh` + shared-observability alerting → adopt
+1. **knb** `<deployment-owner>/<product>/<target>/verify.sh` + shared-observability alerting → adopt
    `/api/health?strict=true` (or parse the JSON `status` field). `verify.sh` lives in the **knb**
-   repo (`knb/smackerel/home-lab/verify.sh`), out of scope for this in-repo change → **routed to
+   repo (`<deployment-owner>/<product>/<target>/verify.sh`), out of scope for this in-repo change → **routed to
    bubbles.devops / knb**.
 2. **Healthcheck-target consistency:** dev [docker-compose.yml](../../../../docker-compose.yml)
    core healthcheck still targets `/api/health`, while `docker-compose.prod.yml` targets

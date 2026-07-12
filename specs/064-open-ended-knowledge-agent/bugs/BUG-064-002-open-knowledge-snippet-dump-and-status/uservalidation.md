@@ -2,7 +2,7 @@
 
 These items default to CHECKED `[x]` (validated by the bug's adversarial
 regression tests in this session). The operator unchecks an item to report it as
-still broken on the live home-lab stack after redeploy.
+still broken on the live self-hosted stack after redeploy.
 
 ## Checklist
 
@@ -12,7 +12,7 @@ still broken on the live home-lab stack after redeploy.
 - [x] The citation list is deduplicated and capped to the sources actually used (DEFECT 3b) — validated by T4.
 
 > NOTE: these are validated in-repo against the un-redacted assembled body via Go
-> unit/integration tests. The LIVE home-lab confirmation (real Telegram + searxng
+> unit/integration tests. The LIVE self-hosted confirmation (real Telegram + searxng
 > + GPU) requires the redeploy owned by `bubbles.devops`; after redeploy, re-send
 > the tide prompt and confirm a single synthesized answer (highs/lows + ft where
 > the model can extract them), no `thinking…` header, no triplicate, and a short

@@ -230,7 +230,7 @@ services:
 
   ollama:
     # Spec 043 — image hoisted to SST. Resolves to infrastructure.ollama.image
-    # for dev/home-lab and infrastructure.ollama.test.image for the test stack.
+    # for dev/self-hosted and infrastructure.ollama.test.image for the test stack.
     image: ${OLLAMA_IMAGE}
     restart: unless-stopped
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
@@ -382,7 +382,7 @@ services:
   # Spec 061 SCOPE-09a design §8.3.2 Step 1 — Jaeger all-in-one sidecar
   # for OTel span emission. Lifecycle: ENABLED ONLY when the `test` or
   # `dev-otel` compose profile is selected (matches §18.4 stub-providers
-  # pattern). Production and home-lab stacks NEVER see this container.
+  # pattern). Production and self-hosted stacks NEVER see this container.
   # When started, the test/dev core flips ASSISTANT_OBSERVABILITY_OTEL_ENABLED=true
   # via env override and points ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT at
   # smackerel-test-jaeger:4317 so OTLP/gRPC spans land in the in-memory
@@ -424,7 +424,7 @@ services:
   # `searxng` compose profile is selected (scripts/lib/runtime.sh adds
   # `--profile searxng` iff ENABLE_SEARXNG=true in the generated env file).
   # The test env auto-enables it so the integration leg runs
-  # `TestSearxNGIntegration_Smoke` against a real container. Dev/home-lab
+  # `TestSearxNGIntegration_Smoke` against a real container. Dev/self-hosted
   # are opt-in (developer adds `--profile searxng` manually; deploy adapter
   # overlays a real instance if it wants one — deploy/compose.deploy.yml is
   # intentionally NOT modified by this scope). Zero persistent volume per

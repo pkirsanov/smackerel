@@ -1,24 +1,24 @@
-# Open-Knowledge Synthesis-Model A/B — Live Home-Lab Evidence
+# Open-Knowledge Synthesis-Model A/B — Live Self-Hosted Evidence
 
 **Status:** complete — 3-way matrix (7b / 32b / gemma4:26b) captured + analyzed; 70b dropped
 **Date:** 2026-06-14
-**Environment:** home-lab `<home-lab-host>` (AMD Strix Halo APU, 109 GiB RAM), live stack,
+**Environment:** self-hosted `<deploy-host>` (AMD Strix Halo APU, 109 GiB RAM), live stack,
 real `/ask` pipeline (`POST /v1/agent/invoke`, `scenario_id: open_knowledge`).
 **Validates:** spec 087 (split synthesis model) + spec 088 (runtime model switch).
 
-> **SUPERSEDED (2026-06-20) — home-lab optimized to `gpt-oss:20b`.** This A/B
+> **SUPERSEDED (2026-06-20) — self-hosted optimized to `gpt-oss:20b`.** This A/B
 > concluded `deepseek-r1:32b` was the quality-first standing synthesis default
-> (promoted in spec 089). The operator has since optimized the home-lab Ollama
+> (promoted in spec 089). The operator has since optimized the self-hosted Ollama
 > host to a two-model set — **`gpt-oss:20b`** (synthesis / substrate) +
 > **`gemma4:26b`** (gather / vision / ml) — and no longer pulls the deepseek
-> arms. `environments.home-lab.assistant_open_knowledge_synthesis_model_id` is
+> arms. `environments.self-hosted.assistant_open_knowledge_synthesis_model_id` is
 > now `gpt-oss:20b`, superseding the `deepseek-r1:32b` standing default this
 > experiment recommended. This historical A/B record is retained verbatim as the
 > evidence trail for how the synthesis model evolved; it is NOT the current
 > selection.
 
 > Raw responses are captured verbatim in the **Raw Data** appendix below. Every
-> body is real captured output from the live home-lab agent loop, not a summary.
+> body is real captured output from the live self-hosted agent loop, not a summary.
 
 ---
 
@@ -118,7 +118,7 @@ follow-up fix independent of which model is chosen.
 
 ---
 
-## 4. <home-lab-host> hardware validation (2026-06-14)
+## 4. <deploy-host> hardware validation (2026-06-14)
 
 | Property | Value |
 |----------|-------|
@@ -198,10 +198,10 @@ candidate set. It is not interactive-viable on this APU alongside the live stack
 
 ### 32b live-API quality arm (2026-06-14)
 
-Reconfig (reversible): backed up the home-lab `app.env`, raised
+Reconfig (reversible): backed up the self-hosted `app.env`, raised
 `OLLAMA_MEMORY_LIMIT` 28G→48G, added `deepseek-r1:32b` to
 `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS`, recreated **core only** (project
-`smackerel-home-lab`, `--no-deps`, image digests injected from the running
+`smackerel-self-hosted`, `--no-deps`, image digests injected from the running
 container — the deploy leaves `*_IMAGE` empty in `app.env`). Core healthy in 15s;
 baseline synthesis stays `deepseek-r1:7b` (normal users unaffected); 32b fires
 only on explicit `model=deepseek-r1:32b`. Memory under co-resident load: 82 GiB
@@ -264,11 +264,11 @@ per question. The one open follow-up regardless of model: the spec-087
 `<think>`/`<CITATIONS>` scaffolding leak (seen on 7b, absent on 32b) and the Q6
 forced-final blank both point at synthesis-turn output-hygiene hardening.
 
-_Prod note: the home-lab `app.env` was reversibly modified for this arm
+_Prod note: the self-hosted `app.env` was reversibly modified for this arm
 (envelope 48G + 32b in the allowlist) and is restored to baseline after capture;
 the throwaway A/B token is revoked. See restore log._
 
-Captured verbatim from `/tmp/abresults.txt` on `<home-lab-host>` (mirrored locally). Each
+Captured verbatim from `/tmp/abresults.txt` on `<deploy-host>` (mirrored locally). Each
 block is one live `/ask` turn. Bodies reproduced in the per-arm sections of the
 companion raw file; the per-question verdicts in §2–§3 are derived directly from
 these bodies.

@@ -14,7 +14,7 @@
 // usageledger + migration 062) binds end-to-end.
 //
 // As of SCOPE-05 the live wiring is in place but the end-to-end run is
-// deferred to a downstream bubbles.devops home-lab dispatch (paired with the
+// deferred to a downstream bubbles.devops self-hosted dispatch (paired with the
 // SCOPE-03/04/06/07 live hosted-provider legs), so this test t.Skip's with an
 // explicit message rather than failing until those preconditions are seeded.
 //
@@ -40,7 +40,7 @@ func TestAsk_PaidModelExhaustedBudget_RefusedBeforeProviderCall_Spec096(t *testi
 	coreURL := os.Getenv("SPEC096_BUDGET_LIVE_CORE_URL")
 	authToken := os.Getenv("SPEC096_BUDGET_LIVE_AUTH_TOKEN")
 	if coreURL == "" || authToken == "" {
-		t.Skip("SPEC096_BUDGET_LIVE_CORE_URL / SPEC096_BUDGET_LIVE_AUTH_TOKEN not set; the paid-provider fixture + seeded model_usage_ledger are deferred to the SCOPE-05 home-lab live dispatch (alongside the SCOPE-03/04/06/07 live legs).")
+		t.Skip("SPEC096_BUDGET_LIVE_CORE_URL / SPEC096_BUDGET_LIVE_AUTH_TOKEN not set; the paid-provider fixture + seeded model_usage_ledger are deferred to the SCOPE-05 self-hosted live dispatch (alongside the SCOPE-03/04/06/07 live legs).")
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}

@@ -342,7 +342,7 @@ def test_handle_invoke_does_not_inject_ollama_kwargs_for_other_providers(monkeyp
 
 
 def test_handle_invoke_no_determinism_env_is_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Dev / home-lab path: env vars are unset; the handler MUST pass
+    """Dev / self-hosted path: env vars are unset; the handler MUST pass
     the request temperature through unchanged and inject NO extra
     kwargs."""
     _set_route_env(monkeypatch, provider="ollama", model="some-other-model:7b")

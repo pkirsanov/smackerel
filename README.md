@@ -146,7 +146,7 @@ values all live in the operator-private deploy-adapter overlay repo, which binds
 Smackerel's generic artifacts to a specific machine via per-target `apply.sh` /
 `rollback.sh` / `verify.sh` scripts.
 
-If you are wiring up a home-lab (or any other concrete) deployment, do that work
+If you are wiring up a self-hosted (or any other concrete) deployment, do that work
 in the deploy-adapter overlay, not here. For the full Build-Once Deploy-Many
 operator workflow that this repo's deployment surface implements, see
 [docs/Deployment.md](docs/Deployment.md).
@@ -238,7 +238,7 @@ Authorization: Bearer your-secret-token-here
 
 For multi-user / production-class deployments, Smackerel ships a per-user
 PASETO v4.public bearer-auth subsystem alongside the legacy shared
-`runtime.auth_token`. The per-user model is the **home-lab default** and the
+`runtime.auth_token`. The per-user model is the **self-hosted default** and the
 recommended production posture; the shared token remains the local-dev and
 local-test contract (no per-user enrollment is required for `./smackerel.sh
 up`).
@@ -278,7 +278,7 @@ for the deploy-time secrets checklist and API-consumer migration steps.
 
 #### Managed Secrets & Bundle Substitution (spec 052) — 3-Layer Defense
 
-For production-class deployments (anything that goes through `--env home-lab`
+For production-class deployments (anything that goes through `--env self-hosted`
 or another non-dev/non-test target), Smackerel's secrets pipeline is governed
 by spec 052's **bundle secret-injection contract**. The full design lives in
 [`specs/052-bundle-secret-injection-contract/design.md`](specs/052-bundle-secret-injection-contract/design.md);
@@ -298,7 +298,7 @@ the operator-facing summary is below.
 
 **Three layers of defense** (any one of which catches a missing secret on its own):
 
-1. **L1 — SST loader** (`./smackerel.sh config generate --env home-lab --bundle`):
+1. **L1 — SST loader** (`./smackerel.sh config generate --env self-hosted --bundle`):
    For production-class targets, the bundle materializes the deterministic
    marker `__SECRET_PLACEHOLDER__<KEY>__` for every managed key instead of
    refusing to render. The marker is byte-identical across runs (FR-052-002 —
@@ -1018,12 +1018,12 @@ Current runtime entrypoints:
 - `./smackerel.sh logs`
 - `./smackerel.sh clean smart|full|status|measure`
 
-## Shared Observability (evo-x2)
+## Shared Observability (<deploy-host>)
 
 Smackerel runs its **own bundled** monitoring today (see the [Observability](#observability)
 section above) — the knb shared-services selector resolves `observability: bundled`.
 
-It is instrumented and selector-gated to migrate to the **shared evo-x2
+It is instrumented and selector-gated to migrate to the **shared <deploy-host>
 observability stack** (Prometheus + Loki + Tempo + Grafana — one stack for all
 Bubbles products, governed by knb spec 014). When the operator activates that
 stack and flips the selector to `shared`, smackerel's metrics, logs, and traces

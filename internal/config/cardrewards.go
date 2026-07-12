@@ -32,7 +32,7 @@ type CardRewardsSource struct {
 type CardRewardsExtractionConfig struct {
 	// Model is the host Ollama model name (e.g. "gpt-oss:20b"). REQUIRED when enabled.
 	Model string
-	// Endpoint is the host Ollama URL (e.g. the home-lab host endpoint). REQUIRED when enabled.
+	// Endpoint is the host Ollama URL (e.g. the self-hosted host endpoint). REQUIRED when enabled.
 	Endpoint string
 	// ConfidenceThreshold below which a reconciled record is flagged
 	// needs_verification. REQUIRED when enabled; MUST be in [0,1].

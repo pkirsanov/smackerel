@@ -20,7 +20,7 @@
 // digest + provenance rule (check c) on the published build manifest. The block
 // also pins the two-lane contract: Lane B (Play Store) is default-OFF
 // (`laneB: false`), gated by the clientReleaseLaneB flag, and Lane A is the
-// evo-x2 self-host delivery performed by the knb home-lab adapter.
+// <deploy-host> self-host delivery performed by the knb self-hosted adapter.
 //
 // This test locks that shape permanently (mirrors
 // external_images_contract_test.go). The adversarial sub-tests prove the check

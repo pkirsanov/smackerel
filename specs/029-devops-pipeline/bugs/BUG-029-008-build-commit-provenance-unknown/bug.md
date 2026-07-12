@@ -2,7 +2,7 @@
 
 - **Severity:** MEDIUM (redteam **F6**)
 - **Owning spec:** `029-devops-pipeline` (owns the SMACKEREL_COMMIT / build-metadata SST contract; cf. BUG-029-003)
-- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on evo-x2
+- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host>
 - **Status:** FIXED IN-REPO (build wiring; verified statically) — requires rebuild+redeploy — not pushed
 
 ## Summary
@@ -10,7 +10,7 @@
 The running prod core + ml images carry OCI `org.opencontainers.image.revision = unknown` and core
 `SMACKEREL_COMMIT = unknown`, so the app's `commit_hash` reports `unknown` — the running artifact is
 **not self-identifying**. The Dockerfile ARG/LABEL/ldflags wiring was already correct; the defect was
-that the **local-operator (evo-x2) build path never supplied the SHA**, so it fell through to the
+that the **local-operator (<deploy-host>) build path never supplied the SHA**, so it fell through to the
 literal `"unknown"`.
 
 ## Reproduction
@@ -31,14 +31,14 @@ core `SMACKEREL_COMMIT=unknown`; app `commit_hash` would report `unknown`.
   if [[ -z "${SMACKEREL_COMMIT+set}" ]]; then SMACKEREL_COMMIT="unknown"; fi
   ```
 
-  CI exports `SMACKEREL_COMMIT`, so CI images were fine — but the **local-operator / evo-x2 build
+  CI exports `SMACKEREL_COMMIT`, so CI images were fine — but the **local-operator / <deploy-host> build
   builds ON the host with no CI env**, so it fell through to `"unknown"`.
 
 ## Root cause
 
 The build-metadata resolution had exactly two sources: (1) shell env (CI), (2) the literal
 `"unknown"`. There was **no derivation from the git working tree**, so any non-CI (local-operator)
-build — which is the evo-x2 prod build path — produced `unknown` provenance.
+build — which is the <deploy-host> prod build path — produced `unknown` provenance.
 
 ## Fix (in-repo — build wiring)
 
@@ -49,7 +49,7 @@ build never claims a clean SHA). Falls back to `"unknown"` **only** outside a gi
 source tarball). **CI / shell-env precedence is preserved** — the derivation arm runs only when
 `SMACKEREL_COMMIT` is unset, so a CI `SMACKEREL_COMMIT=<sha>` export still wins.
 
-Verified **statically** via a config-generator test (per the finding: *do not run a full home-lab
+Verified **statically** via a config-generator test (per the finding: *do not run a full self-hosted
 image build*):
 
 - [scripts/commands/config_build_commit_provenance_test.sh](../../../../scripts/commands/config_build_commit_provenance_test.sh) — Sub-test 1: unset ⇒ real 12-hex SHA; Sub-test 2: exported sentinel ⇒ preserved.

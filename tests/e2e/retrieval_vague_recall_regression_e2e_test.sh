@@ -7,7 +7,7 @@
 # router falls back to vague_recall (no riskier guess) with the recorded reason.
 #
 # ENV-BLOCKED on cpu-tier: full-stack bring-up is accel-tier-gated AND routing
-# depends on the facade wiring (PKT-095-A). Run on accel-tier home-lab / CI per
+# depends on the facade wiring (PKT-095-A). Run on accel-tier self-hosted / CI per
 # the spec 095 environment-blocked DoD allowance (finding F-095-E2E-LIVE).
 # Statically valid (bash -n).
 set -euo pipefail

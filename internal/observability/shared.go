@@ -1,10 +1,10 @@
 // Package observability implements smackerel's service-tier consumption of the
 // knb spec-014 shared-observability instrumentation contract (scope 03).
 //
-// The home-lab shared observability stack (one Prometheus, one Grafana, one
+// The self-hosted shared observability stack (one Prometheus, one Grafana, one
 // Tempo, one Loki, one OTLP collector) is owned by the knb adapter
-// `shared/observability/home-lab/`. When an operator flips smackerel to the
-// shared posture, the knb adapter (`smackerel/home-lab/apply.sh`) injects three
+// `shared/observability/self-hosted/`. When an operator flips smackerel to the
+// shared posture, the knb adapter (`<deployment-owner>/<product>/<target>/apply.sh`) injects three
 // env vars into smackerel's generated `app.env` bundle:
 //
 //	OTLP_TRACES_ENDPOINT          — OTLP/gRPC traces collector endpoint

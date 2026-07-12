@@ -15,7 +15,7 @@ required raw-evidence sub-sections per DoD item.
 ## Summary
 
 Spec 042 locks `deploy/compose.deploy.yml` into the L3 invariants of the
-canonical tailnet-edge bind pattern so the home-lab deploy bundle becomes
+canonical tailnet-edge bind pattern so the self-hosted deploy bundle becomes
 adapter-ready: backend services bind a configurable host address (loopback
 by default), and infra services (Postgres, NATS) have no host port mapping.
 A Go unit lint test (`internal/deploy/compose_contract_test.go`) parses the
@@ -212,7 +212,7 @@ runtime:
   # Bind address for backend host port mappings on the host (smackerel-core,
   # smackerel-ml). The deploy compose
   # `${HOST_BIND_ADDRESS:-${runtime.host_bind_address}}:` substitution makes
-  # the home-lab/production targets adapter-ready: a deploy adapter-adapter MAY override
+  # the self-hosted/production targets adapter-ready: a deploy adapter-adapter MAY override
   # HOST_BIND_ADDRESS in the bundled `deploy/app.env` to bind the Tailscale IP
   # so a host Caddy can front the backends with TLS. The default (`127.0.0.1`)
   # keeps every other compose project safe-by-default.
@@ -301,7 +301,7 @@ Plus chained subsequent commands (`format --check` and `lint`) all exited 0 with
 
 - [x] DoD-1.8 satisfied.
 
-#### DoD-1.9 — `./smackerel.sh config generate` exits 0; HOST_BIND_ADDRESS=127.0.0.1 in home-lab.env
+#### DoD-1.9 — `./smackerel.sh config generate` exits 0; HOST_BIND_ADDRESS=127.0.0.1 in self-hosted.env
 
 **Phase:** implement
 **Claim Source:** executed
@@ -309,11 +309,11 @@ Plus chained subsequent commands (`format --check` and `lint`) all exited 0 with
 ```bash
 $ grep -H '^HOST_BIND_ADDRESS' config/generated/*.env
 config/generated/dev.env:HOST_BIND_ADDRESS=127.0.0.1
-config/generated/home-lab.env:HOST_BIND_ADDRESS=127.0.0.1
+config/generated/self-hosted.env:HOST_BIND_ADDRESS=127.0.0.1
 config/generated/test.env:HOST_BIND_ADDRESS=127.0.0.1
 ```
 
-`./smackerel.sh config generate` (run during the prior session step) regenerated all three env files; `HOST_BIND_ADDRESS=127.0.0.1` appears in `dev.env`, `home-lab.env`, and `test.env` — proving the SST is unchanged by Scope 1 (the comment in `config/smackerel.yaml` does not affect generated values, only documents them). ✅
+`./smackerel.sh config generate` (run during the prior session step) regenerated all three env files; `HOST_BIND_ADDRESS=127.0.0.1` appears in `dev.env`, `self-hosted.env`, and `test.env` — proving the SST is unchanged by Scope 1 (the comment in `config/smackerel.yaml` does not affect generated values, only documents them). ✅
 
 - [x] DoD-1.9 satisfied.
 
@@ -323,11 +323,11 @@ config/generated/test.env:HOST_BIND_ADDRESS=127.0.0.1
 **Claim Source:** executed
 
 ```bash
-$ cp config/generated/home-lab.env deploy/app.env && \
+$ cp config/generated/self-hosted.env deploy/app.env && \
   SMACKEREL_CORE_IMAGE=ghcr.io/example/core:test \
   SMACKEREL_ML_IMAGE=ghcr.io/example/ml:test \
   docker compose -f deploy/compose.deploy.yml \
-                 --env-file config/generated/home-lab.env config 2>&1 | \
+                 --env-file config/generated/self-hosted.env config 2>&1 | \
   grep -nE '^  (postgres|nats|smackerel-core|smackerel-ml|ollama):|published:|host_ip:|target:|protocol: tcp'; \
   RC=${PIPESTATUS[0]}; rm -f deploy/app.env; echo "compose-EXIT=$RC"
 
@@ -355,7 +355,7 @@ compose-EXIT=0
 Reading the rendered output:
 - `nats:` block (lines 3–51) — only volume `target:` entries; NO `host_ip:`/`published:`/`target:` port triple. ✅ No published port.
 - `postgres:` block (lines 52–87) — only volume `target:` entry; NO published port. ✅
-- `smackerel-core:` block — line 459-462 renders to `host_ip: 127.0.0.1`, `target: 8080`, `published: "41001"`, `protocol: tcp`. Substitution worked: `${HOST_BIND_ADDRESS:-127.0.0.1}` = `127.0.0.1` (from home-lab.env), `${CORE_HOST_PORT}` = `41001`, `${CORE_CONTAINER_PORT}` = `8080`. ✅
+- `smackerel-core:` block — line 459-462 renders to `host_ip: 127.0.0.1`, `target: 8080`, `published: "41001"`, `protocol: tcp`. Substitution worked: `${HOST_BIND_ADDRESS:-127.0.0.1}` = `127.0.0.1` (from self-hosted.env), `${CORE_HOST_PORT}` = `41001`, `${CORE_CONTAINER_PORT}` = `8080`. ✅
 - `smackerel-ml:` block — line 845-848 renders to `host_ip: 127.0.0.1`, `target: 8081`, `published: "41002"`. Substitution: `${HOST_BIND_ADDRESS:-127.0.0.1}` = `127.0.0.1`, `${ML_HOST_PORT}` = `41002`, `${ML_CONTAINER_PORT}` = `8081`. ✅
 
 Note: The `cp` + `rm` pair temporarily stages `deploy/app.env` (the file the deploy compose's `env_file:` directive references) just long enough for `docker compose config` to render. This is required because the adapter normally provides this file at apply time; for local rendering we synthesize it from the generated env. The `cp` is a file copy (not a redirect) and is permitted by terminal-discipline. The grep here filters the 38KB compose render output to make the proof readable; full unfiltered output was captured earlier in this session's chat-resources file (380 lines). Per REQ-3 / SCN-042-003. ✅
@@ -507,12 +507,12 @@ Change Boundary respected. ✅
 
 ### Summary
 
-`.github/copilot-instructions.md` gained a "Tailnet-Edge Bind Pattern (home-lab/production targets)" subsection inside the existing "Required Runtime Standards" section, immediately after the "Build-Once Deploy-Many" subsection. The subsection contains the per-service contract table (smackerel-core, smackerel-ml use `${HOST_BIND_ADDRESS:-127.0.0.1}:`; postgres, nats have no `ports:` block); the literal forbidden-pattern marker text `literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden`; the forbidden-pattern entry against re-publishing infra ports; the cross-reference to `internal/deploy/compose_contract_test.go` (the mechanical enforcement); and references to `specs/042-tailnet-edge-bind-pattern/`, `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md`, and `docs/Operations.md`.
+`.github/copilot-instructions.md` gained a "Tailnet-Edge Bind Pattern (self-hosted/production targets)" subsection inside the existing "Required Runtime Standards" section, immediately after the "Build-Once Deploy-Many" subsection. The subsection contains the per-service contract table (smackerel-core, smackerel-ml use `${HOST_BIND_ADDRESS:-127.0.0.1}:`; postgres, nats have no `ports:` block); the literal forbidden-pattern marker text `literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden`; the forbidden-pattern entry against re-publishing infra ports; the cross-reference to `internal/deploy/compose_contract_test.go` (the mechanical enforcement); and references to `specs/042-tailnet-edge-bind-pattern/`, `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md`, and `docs/Operations.md`.
 
-`docs/Operations.md` gained a "DevOps Access on Home-Lab (Tailnet-Edge Pattern)" section between "Stack Lifecycle" and "Connector Management". The section documents:
+`docs/Operations.md` gained a "DevOps Access on Self-Hosted (Tailnet-Edge Pattern)" section between "Stack Lifecycle" and "Connector Management". The section documents:
 - Pattern P5 HTTP UI access via host Caddy on the Tailscale FQDN (with concrete `curl --max-time 5 https://smackerel.<host-tailnet-fqdn>/api/health` example for core API and `curl ... ml.smackerel.<host-tailnet-fqdn>/health` for ML sidecar).
-- Pattern P1 Postgres access via `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres psql -U smackerel -d smackerel` (with single-shot query and pg_dump streaming variants).
-- Pattern P1 NATS access via `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats nats sub '>'` (with healthz and `nats stream ls` variants).
+- Pattern P1 Postgres access via `tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-postgres psql -U smackerel -d smackerel` (with single-shot query and pg_dump streaming variants).
+- Pattern P1 NATS access via `tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats nats sub '>'` (with healthz and `nats stream ls` variants).
 - A "Why this pattern" rationale block.
 
 ### Completion Statement
@@ -530,13 +530,13 @@ All 9 Core DoD items and all 5 Build Quality Gate DoD items for Scope 2 are sati
 $ grep -nE '^### Tailnet-Edge Bind Pattern|^## Required Runtime Standards|^### Build-Once Deploy-Many|^## Testing Requirements' .github/copilot-instructions.md
 67:## Required Runtime Standards
 134:### Build-Once Deploy-Many (BLOCKING — bubbles G074)
-189:### Tailnet-Edge Bind Pattern (home-lab/production targets)
+189:### Tailnet-Edge Bind Pattern (self-hosted/production targets)
 231:## Testing Requirements
 
 $ sed -n '189,200p' .github/copilot-instructions.md
-### Tailnet-Edge Bind Pattern (home-lab/production targets)
+### Tailnet-Edge Bind Pattern (self-hosted/production targets)
 
-Smackerel's home-lab and production deployments use the canonical
+Smackerel's self-hosted and production deployments use the canonical
 tailnet-edge bind pattern (see
 `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` in the framework
 repo). The deploy compose file `deploy/compose.deploy.yml` ships with
@@ -571,15 +571,15 @@ Literal marker text present at line 205 (matches the `grep -nF` doc-lint adversa
 
 - [x] DoD-2.2 satisfied.
 
-#### DoD-2.3 — `docs/Operations.md` contains "DevOps Access on Home-Lab (Tailnet-Edge Pattern)" section
+#### DoD-2.3 — `docs/Operations.md` contains "DevOps Access on Self-Hosted (Tailnet-Edge Pattern)" section
 
 **Phase:** implement
 **Claim Source:** executed
 
 ```bash
-$ grep -nE '^## DevOps Access on Home-Lab|^### HTTP UIs|^### PostgreSQL|^### NATS|^### Why this pattern|^## Stack Lifecycle|^## Connector Management' docs/Operations.md
+$ grep -nE '^## DevOps Access on Self-Hosted|^### HTTP UIs|^### PostgreSQL|^### NATS|^### Why this pattern|^## Stack Lifecycle|^## Connector Management' docs/Operations.md
 92:## Stack Lifecycle
-119:## DevOps Access on Home-Lab (Tailnet-Edge Pattern)
+119:## DevOps Access on Self-Hosted (Tailnet-Edge Pattern)
 129:### HTTP UIs (Pattern P5: Host Caddy on the Tailscale IP)
 149:### PostgreSQL (Pattern P1: docker exec over Tailscale SSH)
 172:### NATS (Pattern P1: docker exec over Tailscale SSH)
@@ -604,25 +604,25 @@ There is no published Postgres host port. DevOps reaches Postgres via:
 
 ```bash
 # Interactive psql session (recommended)
-tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres \
+tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-postgres \
     psql -U smackerel -d smackerel
 
 # Single-shot query
-tailscale ssh <deploy-host> -- docker exec -i smackerel-home-lab-postgres \
+tailscale ssh <deploy-host> -- docker exec -i smackerel-self-hosted-postgres \
     psql -U smackerel -d smackerel -Atqc 'SELECT count(*) FROM artifacts'
 
 # Streaming pg_dump backup (write the dump on the operator's workstation)
-tailscale ssh <deploy-host> -- docker exec smackerel-home-lab-postgres \
+tailscale ssh <deploy-host> -- docker exec smackerel-self-hosted-postgres \
     pg_dump -U smackerel -d smackerel -Fc | \
-    cat > /tmp/smackerel-home-lab.pgdump
+    cat > /tmp/smackerel-self-hosted.pgdump
 ```
 
 Container name follows the pattern `smackerel-<env>-postgres` because the
 deploy compose's `COMPOSE_PROJECT` env var is set per environment by the
-adapter (e.g., `smackerel-home-lab` for the home-lab target).
+adapter (e.g., `smackerel-self-hosted` for the self-hosted target).
 ```
 
-Canonical Pattern P1 shape with three concrete variants (interactive psql, single-shot query, pg_dump streaming) — all using `tailscale ssh <deploy-host> -- docker exec ... smackerel-home-lab-postgres psql ...`. ✅
+Canonical Pattern P1 shape with three concrete variants (interactive psql, single-shot query, pg_dump streaming) — all using `tailscale ssh <deploy-host> -- docker exec ... smackerel-self-hosted-postgres psql ...`. ✅
 
 - [x] DoD-2.4 satisfied.
 
@@ -640,20 +640,20 @@ via:
 
 ```bash
 # Subscribe to all subjects (interactive monitoring)
-tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
+tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats \
     nats sub '>'
 
 # Inspect server health (NATS monitor endpoint, in-network)
-tailscale ssh <deploy-host> -- docker exec smackerel-home-lab-nats \
+tailscale ssh <deploy-host> -- docker exec smackerel-self-hosted-nats \
     wget -qO- http://localhost:8222/healthz
 
 # List streams
-tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
+tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats \
     nats stream ls
 ```
 ```
 
-Canonical Pattern P1 shape with three concrete variants (subscribe, healthz, stream ls) — all using `tailscale ssh <deploy-host> -- docker exec ... smackerel-home-lab-nats nats ...`. ✅
+Canonical Pattern P1 shape with three concrete variants (subscribe, healthz, stream ls) — all using `tailscale ssh <deploy-host> -- docker exec ... smackerel-self-hosted-nats nats ...`. ✅
 
 - [x] DoD-2.5 satisfied.
 
@@ -765,7 +765,7 @@ copilot-instructions.md, the grep would return zero matches and the
 doc-lint would fail. This is the adversarial regression for SCN-042-006.
 
 For SCN-042-004, the grep for the section header
-`^## DevOps Access on Home-Lab` against `docs/Operations.md` (DoD-2.3
+`^## DevOps Access on Self-Hosted` against `docs/Operations.md` (DoD-2.3
 above) returns one match. If a future agent removed that section, the
 grep would return zero matches.
 
@@ -989,9 +989,9 @@ index aed8166..70bcfc7 100644
 --- a/.github/copilot-instructions.md
 +++ b/.github/copilot-instructions.md
 @@ -186,6 +186,46 @@ See [`docs/Deployment.md`](../docs/Deployment.md) for full operator workflow,
-+### Tailnet-Edge Bind Pattern (home-lab/production targets)
++### Tailnet-Edge Bind Pattern (self-hosted/production targets)
 +
-+Smackerel's home-lab and production deployments use the canonical
++Smackerel's self-hosted and production deployments use the canonical
 +tailnet-edge bind pattern (see
 +`bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` in the framework
 +repo). The deploy compose file `deploy/compose.deploy.yml` ships with
@@ -1025,9 +1025,9 @@ index d38988c..6d94607 100644
 --- a/docs/Operations.md
 +++ b/docs/Operations.md
 @@ -116,6 +116,94 @@ Returns JSON with status for: API, PostgreSQL, NATS, ML sidecar, Telegram bot, O
-+## DevOps Access on Home-Lab (Tailnet-Edge Pattern)
++## DevOps Access on Self-Hosted (Tailnet-Edge Pattern)
 +
-+On home-lab and production deployments, the deploy compose
++On self-hosted and production deployments, the deploy compose
 +(`deploy/compose.deploy.yml`) implements the canonical tailnet-edge bind
 +pattern (see `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` and
 +[spec 042](../specs/042-tailnet-edge-bind-pattern/spec.md)). Backend
@@ -1083,7 +1083,7 @@ Both scopes complete with full inline evidence. Spec 042 implementation is **com
 
 ### Validation Scope
 
-The user invoked `bubbles.validate` after `bubbles.implement` returned `route_required` for both scopes. Validation ran the full Tier 1 gate set against `specs/042-tailnet-edge-bind-pattern/`, executed the smackerel native check/lint/test surface, and rendered the deploy compose under both the safe-by-default loopback case and the real <deploy-host> tailnet IP override case to prove the env-var substitution works for the home-lab deployment target.
+The user invoked `bubbles.validate` after `bubbles.implement` returned `route_required` for both scopes. Validation ran the full Tier 1 gate set against `specs/042-tailnet-edge-bind-pattern/`, executed the smackerel native check/lint/test surface, and rendered the deploy compose under both the safe-by-default loopback case and the real <deploy-host> tailnet IP override case to prove the env-var substitution works for the self-hosted deployment target.
 
 ### Gate Result Matrix
 
@@ -1452,12 +1452,12 @@ EXIT_TEST_UNIT=0
 The user explicitly requested compose-render verification under both bind cases. The deploy compose uses `${HOST_BIND_ADDRESS:-127.0.0.1}` substitution at the `smackerel-core` and `smackerel-ml` `ports:` entries. The render command pattern:
 
 ```bash
-$ cp config/generated/home-lab.env deploy/app.env && \
+$ cp config/generated/self-hosted.env deploy/app.env && \
     SMACKEREL_CORE_IMAGE=ghcr.io/example/core:test \
     SMACKEREL_ML_IMAGE=ghcr.io/example/ml:test \
     HOST_BIND_ADDRESS=<value> \
     docker compose -f deploy/compose.deploy.yml \
-      --env-file config/generated/home-lab.env config 2>&1
+      --env-file config/generated/self-hosted.env config 2>&1
 $ rm -f deploy/app.env
 ```
 
@@ -1519,7 +1519,7 @@ Full 936-line rendered compose was captured to chat-resources file (38KB). Key p
 EXIT_COMPOSE_RENDER_TAILNET=0
 ```
 
-✅ **Verified:** When the deploy adapter sets `HOST_BIND_ADDRESS=<host-tailnet-ip>` in the bundled `app.env`, both backends bind to the tailnet IP for fronting by host Caddy on `<deploy-host-fqdn>`. Infra services remain container-network-only regardless. This proves the env-var substitution mechanism works correctly for the real home-lab deployment target.
+✅ **Verified:** When the deploy adapter sets `HOST_BIND_ADDRESS=<host-tailnet-ip>` in the bundled `app.env`, both backends bind to the tailnet IP for fronting by host Caddy on `<deploy-host-fqdn>`. Infra services remain container-network-only regardless. This proves the env-var substitution mechanism works correctly for the real self-hosted deployment target.
 
 ### Cross-Reference Integrity Verification
 
@@ -1584,22 +1584,22 @@ The implementation is genuinely complete and the runtime behavior is correct, bu
 
 ### Cross-Repo Handoff (Documented for Future deploy adapter Adapter Work)
 
-When `knb/smackerel/home-lab/apply.sh` is updated to consume this contract (separate spec, NOT part of 042's scope), the adapter MUST:
+When `<deployment-owner>/<product>/<target>/apply.sh` is updated to consume this contract (separate spec, NOT part of 042's scope), the adapter MUST:
 
 | Variable / Constant | Value | Purpose |
 |---|---|---|
 | `HOST_BIND_ADDRESS` | `<host-tailnet-ip>` (<deploy-host> tailnet IP) | Override loopback default; bind backends to tailnet for host-Caddy fronting |
 | `SMACKEREL_CORE_IMAGE` | `ghcr.io/<org>/smackerel-core@sha256:<digest>` | Pinned digest from build manifest (Build-Once Deploy-Many) |
 | `SMACKEREL_ML_IMAGE` | `ghcr.io/<org>/smackerel-ml@sha256:<digest>` | Pinned digest from build manifest |
-| `CORE_HOST_PORT` | `41001` | From `config/generated/home-lab.env` |
-| `CORE_CONTAINER_PORT` | `8080` | From `config/generated/home-lab.env` |
-| `ML_HOST_PORT` | `41002` | From `config/generated/home-lab.env` |
-| `ML_CONTAINER_PORT` | `8081` | From `config/generated/home-lab.env` |
-| Container names | `smackerel-home-lab-core`, `smackerel-home-lab-ml`, `smackerel-home-lab-postgres`, `smackerel-home-lab-nats` | For `tailscale ssh <deploy-host> -- docker exec -it <name> ...` Pattern P1 access |
+| `CORE_HOST_PORT` | `41001` | From `config/generated/self-hosted.env` |
+| `CORE_CONTAINER_PORT` | `8080` | From `config/generated/self-hosted.env` |
+| `ML_HOST_PORT` | `41002` | From `config/generated/self-hosted.env` |
+| `ML_CONTAINER_PORT` | `8081` | From `config/generated/self-hosted.env` |
+| Container names | `smackerel-self-hosted-core`, `smackerel-self-hosted-ml`, `smackerel-self-hosted-postgres`, `smackerel-self-hosted-nats` | For `tailscale ssh <deploy-host> -- docker exec -it <name> ...` Pattern P1 access |
 | Tailscale FQDN | `<deploy-host-fqdn>` | Host Caddy `tls` directive subject for Pattern P5 HTTP UI fronting |
 | Caddy proxy targets | `127.0.0.1:41001` (core), `127.0.0.1:41002` (ml) | Caddy upstreams (since backends bind to tailnet IP, Caddy on <deploy-host> can also reach via loopback once the tailnet IP is bound — 0.0.0.0 also works) |
 
-**Important:** The home-lab compose host Caddy and Tailscale TLS work — proven by the `tailnet-edge bind pattern` SKILL — but actually wiring `apply.sh` to set `HOST_BIND_ADDRESS=<host-tailnet-ip>` and updating the host Caddyfile is **a separate concern outside the spec 042 boundary**. Spec 042 only proves the contract; deploy adapter adapter wiring is tracked elsewhere.
+**Important:** The self-hosted compose host Caddy and Tailscale TLS work — proven by the `tailnet-edge bind pattern` SKILL — but actually wiring `apply.sh` to set `HOST_BIND_ADDRESS=<host-tailnet-ip>` and updating the host Caddyfile is **a separate concern outside the spec 042 boundary**. Spec 042 only proves the contract; deploy adapter adapter wiring is tracked elsewhere.
 
 ---
 
@@ -1670,7 +1670,7 @@ This is a re-validation pass after `bubbles.implement` closed 26 of the previous
 
 | Field | Declared (spec.md) | Evidence | Status |
 |-------|--------------------|----------|--------|
-| Intent | Make home-lab compose adapter-ready for tailnet-edge bind pattern; reverse spec-020's literal `127.0.0.1:` decision | Scope 1 + Scope 2 implemented; live `git diff deploy/compose.deploy.yml` proof in report.md §"git diff for deploy/compose.deploy.yml" | ✅ |
+| Intent | Make self-hosted compose adapter-ready for tailnet-edge bind pattern; reverse spec-020's literal `127.0.0.1:` decision | Scope 1 + Scope 2 implemented; live `git diff deploy/compose.deploy.yml` proof in report.md §"git diff for deploy/compose.deploy.yml" | ✅ |
 | Success Signal | `internal/deploy/compose_contract_test.go::TestComposeContract_LiveFile` passes; backends bind via `${HOST_BIND_ADDRESS:-127.0.0.1}:`; postgres/nats have no `ports:` block | `go test -v -run TestComposeContract ./internal/deploy/...` → 3 PASS in 0.007s (live + 2 adversarial), captured in §"Raw Gate Outputs" → "deploy contract verbose run" below | ✅ |
 | Hard Constraints | (1) `docker-compose.yml` (dev) untouched; (2) `services.ollama` untouched; (3) SST variable name `HOST_BIND_ADDRESS` preserved; (4) safe-by-default for local runs | `git status` shows modified set is exactly `.github/copilot-instructions.md`, `config/smackerel.yaml`, `deploy/compose.deploy.yml`, `docs/Operations.md` (per Code Diff Evidence section); `docker-compose.yml` and `services.ollama` not touched | ✅ |
 | Failure Condition | Compose binds backend on `0.0.0.0:` by default OR infra services publish host ports | `TestComposeContract_AdversarialLiteralBind` proves literal-prefix rejection; `TestComposeContract_AdversarialInfraHasPorts` proves postgres-with-ports rejection; default substitution `${HOST_BIND_ADDRESS:-127.0.0.1}` ensures loopback-by-default | ✅ Not triggered |
@@ -2112,7 +2112,7 @@ bubbles.test — next specialist in the `bugfix-fastlane` chain (`implement → 
 | SCN-042-001 | Backend ports use the configurable bind address (`${HOST_BIND_ADDRESS:-127.0.0.1}:`) | `internal/deploy/compose_contract_test.go` | `TestComposeContract_LiveFile` (REQ-1 assertion on `smackerel-core` + `smackerel-ml`) | ✅ PASS |
 | SCN-042-002 | Infra services have NO host port mapping (postgres + nats) | `internal/deploy/compose_contract_test.go` | `TestComposeContract_LiveFile` (REQ-2 assertion on `postgres` + `nats`) **and** `TestComposeContract_AdversarialInfraHasPorts` (rejects published infra port) | ✅ PASS |
 | SCN-042-003 | Compose default is safe for local runs (no env-var override → loopback bind, no exposure) | `internal/deploy/compose_contract_test.go` (live-file static parse) **plus** runtime proof captured earlier in this report by `docker compose ... config` render showing `127.0.0.1:41001:8080` / `127.0.0.1:41002:8081` | `TestComposeContract_LiveFile` + manual rendering proof referenced from Scope 1 evidence | ✅ PASS |
-| SCN-042-004 | Operations doc tells DevOps how to reach infra (Pattern P1 docker exec + Pattern P5 host Caddy) | `docs/Operations.md` | `grep -A20 'DevOps Access on Home-Lab' docs/Operations.md` (executed below) | ✅ PASS |
+| SCN-042-004 | Operations doc tells DevOps how to reach infra (Pattern P1 docker exec + Pattern P5 host Caddy) | `docs/Operations.md` | `grep -A20 'DevOps Access on Self-Hosted' docs/Operations.md` (executed below) | ✅ PASS |
 | SCN-042-005 | Adversarial: literal `127.0.0.1:` would FAIL the lint test (proves regression to spec 020 form is detected) | `internal/deploy/compose_contract_test.go` | `TestComposeContract_AdversarialLiteralBind` (synthesizes spec-020-style literal bind, asserts contract rejects it) | ✅ PASS |
 | SCN-042-006 | Copilot guardrail prevents regression (subsection title + literal forbidden-pattern marker text in `.github/copilot-instructions.md`) | `.github/copilot-instructions.md` | `grep -A2 'Tailnet-Edge Bind Pattern' .github/copilot-instructions.md` + `grep -nF 'literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden' .github/copilot-instructions.md` (executed below) | ✅ PASS |
 
@@ -2243,19 +2243,19 @@ END: 2026-05-09T05:53:27Z
 
 ````text
 $ cd <home>/smackerel && grep -A2 'Tailnet-Edge Bind Pattern' .github/copilot-instructions.md
-### Tailnet-Edge Bind Pattern (home-lab/production targets)
+### Tailnet-Edge Bind Pattern (self-hosted/production targets)
 
-Smackerel's home-lab and production deployments use the canonical
+Smackerel's self-hosted and production deployments use the canonical
 EXIT_CODE_006a=0
 
 $ grep -nF 'literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden' .github/copilot-instructions.md
 205:Forbidden — `literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden`
 EXIT_CODE_006b=0
 
-$ grep -A20 'DevOps Access on Home-Lab' docs/Operations.md
-## DevOps Access on Home-Lab (Tailnet-Edge Pattern)
+$ grep -A20 'DevOps Access on Self-Hosted' docs/Operations.md
+## DevOps Access on Self-Hosted (Tailnet-Edge Pattern)
 
-On home-lab and production deployments, the deploy compose
+On self-hosted and production deployments, the deploy compose
 (`deploy/compose.deploy.yml`) implements the canonical tailnet-edge bind
 pattern (see `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` and
 [spec 042](../specs/042-tailnet-edge-bind-pattern/spec.md)). Backend
@@ -2359,7 +2359,7 @@ bubbles.regression — next specialist in the `bugfix-fastlane` chain (`implemen
 
 #### Step 2 — Cross-Spec Impact Scan
 
-Spec 042 modifies exactly three production files: `deploy/compose.deploy.yml` (host bind prefix change), `.github/copilot-instructions.md` (Tailnet-Edge Bind Pattern guardrail subsection), and `docs/Operations.md` (DevOps Access on Home-Lab section). Plus the new test file `internal/deploy/compose_contract_test.go` and its validator `internal/deploy/compose_contract.go`. None of these files are referenced by any other spec's design or scope artifacts (spec 020 is the only other spec that defines deploy/compose.deploy.yml semantics, and spec 042 explicitly supersedes spec 020's literal-bind form for the two app services while preserving loopback default behavior via `${HOST_BIND_ADDRESS:-127.0.0.1}` substitution). No route collisions, no shared-table mutations, no API-contract changes. Cross-spec impact: **NONE**.
+Spec 042 modifies exactly three production files: `deploy/compose.deploy.yml` (host bind prefix change), `.github/copilot-instructions.md` (Tailnet-Edge Bind Pattern guardrail subsection), and `docs/Operations.md` (DevOps Access on Self-Hosted section). Plus the new test file `internal/deploy/compose_contract_test.go` and its validator `internal/deploy/compose_contract.go`. None of these files are referenced by any other spec's design or scope artifacts (spec 020 is the only other spec that defines deploy/compose.deploy.yml semantics, and spec 042 explicitly supersedes spec 020's literal-bind form for the two app services while preserving loopback default behavior via `${HOST_BIND_ADDRESS:-127.0.0.1}` substitution). No route collisions, no shared-table mutations, no API-contract changes. Cross-spec impact: **NONE**.
 
 #### Step 3 — Design Coherence Review
 
@@ -2530,7 +2530,7 @@ Spec 042 is, by design, a **single static-file contract change**:
 1. **One contract subject** — `deploy/compose.deploy.yml` (the YAML parsed by the validator).
 2. **One enforcement surface** — `internal/deploy/compose_contract_test.go` (the validator + 3 sub-tests, all in one file).
 3. **One agent-facing forbidden-pattern marker** — the `Forbidden — \`literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden\`` line in `.github/copilot-instructions.md`.
-4. **One operator-facing runbook** — the `## DevOps Access on Home-Lab (Tailnet-Edge Pattern)` section in `docs/Operations.md`.
+4. **One operator-facing runbook** — the `## DevOps Access on Self-Hosted (Tailnet-Edge Pattern)` section in `docs/Operations.md`.
 
 The four artifacts have distinct, non-overlapping audiences (compose parser / Go test / agent grep / human operator). Consolidating any pair would either merge audiences inappropriately (e.g., putting the operator runbook inside copilot-instructions would clutter the agent-facing surface) or destroy the layered enforcement (e.g., removing the copilot marker line would leave only the test as a backstop, eliminating the "warn before fail" loop). The validator and the live-file test are already in the same file; there is no further co-location available without removing the test.
 
@@ -2606,7 +2606,7 @@ Per Gate G066, this `simplify` phase claim is recorded under provenance `bubbles
 
 ## ROUTE-REQUIRED
 
-bubbles.stabilize — next specialist in the `bugfix-fastlane` chain (position 5 of 8: `implement → test → regression → simplify → stabilize → security → validate → audit`). The `simplify` phase is now provenanced. Verdict was 🟢 NO_SIMPLIFICATION_NEEDED — zero production code, compose, config, doc, or test changes were applied (verify-and-stamp pass). Spec 042 remains at its simplest viable shape: one contract YAML + one co-located validator+test file (3 sub-tests) + one forbidden-pattern marker in copilot-instructions + one ops-doc runbook section. `bubbles.stabilize` should: (1) confirm the contract holds under repeated `./smackerel.sh check` / `./smackerel.sh test unit --go` runs (no flake); (2) confirm `./smackerel.sh config generate` continues to emit `HOST_BIND_ADDRESS=127.0.0.1` in the dev/test/home-lab env files (regression-stable from `bubbles.implement` Scope 1); (3) record the `stabilize` phase claim under provenance `bubbles.stabilize` per G066; (4) chain forward to `bubbles.security`. No production code or test changes are expected.
+bubbles.stabilize — next specialist in the `bugfix-fastlane` chain (position 5 of 8: `implement → test → regression → simplify → stabilize → security → validate → audit`). The `simplify` phase is now provenanced. Verdict was 🟢 NO_SIMPLIFICATION_NEEDED — zero production code, compose, config, doc, or test changes were applied (verify-and-stamp pass). Spec 042 remains at its simplest viable shape: one contract YAML + one co-located validator+test file (3 sub-tests) + one forbidden-pattern marker in copilot-instructions + one ops-doc runbook section. `bubbles.stabilize` should: (1) confirm the contract holds under repeated `./smackerel.sh check` / `./smackerel.sh test unit --go` runs (no flake); (2) confirm `./smackerel.sh config generate` continues to emit `HOST_BIND_ADDRESS=127.0.0.1` in the dev/test/self-hosted env files (regression-stable from `bubbles.implement` Scope 1); (3) record the `stabilize` phase claim under provenance `bubbles.stabilize` per G066; (4) chain forward to `bubbles.security`. No production code or test changes are expected.
 
 ---
 
@@ -2699,17 +2699,17 @@ drwxr-xr-x 2 <user> <user>  4096 May  7 22:05 .
 drwxr-xr-x 4 <user> <user>  4096 May  8 06:03 ..
 -rw-r--r-- 1 <user> <user>     5 Apr  6 03:57 .gitignore
 -rw------- 1 <user> <user> 14415 May  9 06:10 dev.env
--rw------- 1 <user> <user> 14461 May  8 20:08 home-lab.env
+-rw------- 1 <user> <user> 14461 May  8 20:08 self-hosted.env
 -rw------- 1 <user> <user> 14531 May  9 02:43 test.env
 -rw------- 1 <user> <user>   165 May  9 06:10 nats.conf
 ```
 
-**Result:** ✅ EXIT=0 in 3s. `HOST_BIND_ADDRESS=127.0.0.1` confirmed at line 34 in both `dev.env` and `test.env` (also present at line 34 in `home-lab.env` from the prior generation at 2026-05-08T20:08Z). Generated files have `0600` permissions (secrets-safe). The generator emits the loopback default to ALL three target environments — overrides happen at the deploy adapter layer per spec 042 design. No drift from the value committed during `bubbles.implement` Scope 1 (regression-stable across the test/regression/simplify/stabilize phases).
+**Result:** ✅ EXIT=0 in 3s. `HOST_BIND_ADDRESS=127.0.0.1` confirmed at line 34 in both `dev.env` and `test.env` (also present at line 34 in `self-hosted.env` from the prior generation at 2026-05-08T20:08Z). Generated files have `0600` permissions (secrets-safe). The generator emits the loopback default to ALL three target environments — overrides happen at the deploy adapter layer per spec 042 design. No drift from the value committed during `bubbles.implement` Scope 1 (regression-stable across the test/regression/simplify/stabilize phases).
 
 #### Stabilize Check 4 — Compose render with `HOST_BIND_ADDRESS` unset → default `127.0.0.1` resolution
 
 To prove the **default-loopback** path of `${HOST_BIND_ADDRESS:-127.0.0.1}` (REQ-1 default behavior preserved), an ephemeral test fixture was assembled in `/tmp/smackerel-stabilize-render/` containing:
-- `app.env` — copy of `home-lab.env` minus `HOST_BIND_ADDRESS` (created via IDE `create_file` tool, NOT shell redirection — terminal-discipline compliant; image vars `SMACKEREL_CORE_IMAGE` / `SMACKEREL_ML_IMAGE` set to placeholder digests so `docker compose config` validates).
+- `app.env` — copy of `self-hosted.env` minus `HOST_BIND_ADDRESS` (created via IDE `create_file` tool, NOT shell redirection — terminal-discipline compliant; image vars `SMACKEREL_CORE_IMAGE` / `SMACKEREL_ML_IMAGE` set to placeholder digests so `docker compose config` validates).
 - `compose.deploy.yml` — `cp` of `deploy/compose.deploy.yml` (file-copy command, not redirection; allowed by terminal-discipline §1).
 
 The compose render was then executed against the scrubbed env file. Because `HOST_BIND_ADDRESS` is unset in `app.env` AND unset in the shell, the compose substitution `${HOST_BIND_ADDRESS:-127.0.0.1}` MUST resolve to the literal `127.0.0.1` per Docker Compose's documented `${VAR:-default}` semantics.
@@ -2819,7 +2819,7 @@ services:
           memory: "1073741824"
     environment:
       AGENT_SCENARIO_DIR: /app/prompt_contracts
-      COMPOSE_PROJECT: smackerel-home-lab
+      COMPOSE_PROJECT: smackerel-self-hosted
       COMPOSE_WAIT_TIMEOUT_S: "180"
       CORE_CONTAINER_PORT: "8080"
       CORE_HOST_PORT: "41001"
@@ -2836,17 +2836,17 @@ services:
       NATS_MONITOR_HOST_PORT: "43003"
       NATS_MONITOR_PORT: "8222"
       NATS_URL: nats://nats:4222
-      NATS_VOLUME_NAME: smackerel-home-lab-nats-data
+      NATS_VOLUME_NAME: smackerel-self-hosted-nats-data
       OLLAMA_CONTAINER_PORT: "11434"
       OLLAMA_HOST_PORT: "43004"
-      OLLAMA_VOLUME_NAME: smackerel-home-lab-ollama-data
+      OLLAMA_VOLUME_NAME: smackerel-self-hosted-ollama-data
       PORT: "8080"
       POSTGRES_CONTAINER_PORT: "5432"
       POSTGRES_DB: smackerel
       POSTGRES_HOST_PORT: "43001"
       POSTGRES_PASSWORD: smackerel
       POSTGRES_USER: smackerel
-      POSTGRES_VOLUME_NAME: smackerel-home-lab-postgres-data
+      POSTGRES_VOLUME_NAME: smackerel-self-hosted-postgres-data
       PROJECT_NAME: smackerel
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
       SMACKEREL_AUTH_TOKEN: ""
@@ -2915,7 +2915,7 @@ services:
         limits:
           memory: "3221225472"
     environment:
-      COMPOSE_PROJECT: smackerel-home-lab
+      COMPOSE_PROJECT: smackerel-self-hosted
       COMPOSE_WAIT_TIMEOUT_S: "180"
       CORE_CONTAINER_PORT: "8080"
       CORE_HOST_PORT: "41001"
@@ -2931,16 +2931,16 @@ services:
       NATS_MONITOR_HOST_PORT: "43003"
       NATS_MONITOR_PORT: "8222"
       NATS_URL: nats://nats:4222
-      NATS_VOLUME_NAME: smackerel-home-lab-nats-data
+      NATS_VOLUME_NAME: smackerel-self-hosted-nats-data
       OLLAMA_CONTAINER_PORT: "11434"
       OLLAMA_HOST_PORT: "43004"
-      OLLAMA_VOLUME_NAME: smackerel-home-lab-ollama-data
+      OLLAMA_VOLUME_NAME: smackerel-self-hosted-ollama-data
       POSTGRES_CONTAINER_PORT: "5432"
       POSTGRES_DB: smackerel
       POSTGRES_HOST_PORT: "43001"
       POSTGRES_PASSWORD: smackerel
       POSTGRES_USER: smackerel
-      POSTGRES_VOLUME_NAME: smackerel-home-lab-postgres-data
+      POSTGRES_VOLUME_NAME: smackerel-self-hosted-postgres-data
       PROJECT_NAME: smackerel
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
       SMACKEREL_AUTH_TOKEN: ""
@@ -2997,9 +2997,9 @@ networks:
     name: smackerel-stabilize-render_default
 volumes:
   nats-data:
-    name: smackerel-home-lab-nats-data
+    name: smackerel-self-hosted-nats-data
   postgres-data:
-    name: smackerel-home-lab-postgres-data
+    name: smackerel-self-hosted-postgres-data
 EXIT_CODE=0
 END: 2026-05-09T06:12:44Z
 ```
@@ -3021,7 +3021,7 @@ The compose substitution `${HOST_BIND_ADDRESS:-127.0.0.1}` correctly resolves to
 |-------|--------|
 | St1 — Native compile gate green | ✅ `./smackerel.sh check` EXIT=0 (SST sync, env_file drift, scenario-lint all OK). |
 | St2 — Targeted contract suite green & no flake | ✅ `go test -count=3 -run TestComposeContract` EXIT=0; 9/9 PASS in 0.007s; 3-iteration flake-detection table is uniform (zero variance). |
-| St3 — SST → env-file generation stable | ✅ `./smackerel.sh config generate` EXIT=0; `HOST_BIND_ADDRESS=127.0.0.1` at line 34 in both `dev.env` and `test.env` (also `home-lab.env` from prior generation); `0600` perms on all generated env files. |
+| St3 — SST → env-file generation stable | ✅ `./smackerel.sh config generate` EXIT=0; `HOST_BIND_ADDRESS=127.0.0.1` at line 34 in both `dev.env` and `test.env` (also `self-hosted.env` from prior generation); `0600` perms on all generated env files. |
 | St4 — Compose render proves default-loopback path | ✅ With `HOST_BIND_ADDRESS` unset in env file AND shell, both backend services render with `host_ip: 127.0.0.1`; both infra services (`postgres`, `nats`) have no `ports:` block. EXIT=0. |
 | St5 — No production code modified | ✅ Zero edits to `internal/`, `deploy/`, `config/`, `.github/`, `docs/`. Only `report.md` and `state.json` mutated by this phase. |
 | St6 — No tests modified | ✅ `compose_contract_test.go` untouched (re-executed only). |
@@ -3158,7 +3158,7 @@ specs/042-tailnet-edge-bind-pattern/report.md:1610: ... Reword `report.md` line 
 specs/042-tailnet-edge-bind-pattern/report.md:1616: ... DoD-1.12 / DoD-2.8 wording so the guard's pattern detector recognizes ... the doc-lint adversarial grep for Scope 2 — both ARE scenario-specific regressions, but the wording doesn't carry the tokens the guard scans for ...
 specs/042-tailnet-edge-bind-pattern/report.md:2704: ... Generated files have `0600` permissions (secrets-safe). The generator emits the loopback default to ALL three target environments ...
 specs/042-tailnet-edge-bind-pattern/report.md:3073: ... secret handling in `app.env` ... HOST_BIND_ADDRESS=<tailnet-ip> ... Pattern P1 (`tailscale ssh + docker exec`) ...
-specs/042-tailnet-edge-bind-pattern/state.json:184: ... secret handling in deploy/app.env (env_file directive for both backend services); ... verify the SMACKEREL_AUTH_TOKEN handling does not regress (currently empty string in dev/test, MUST be populated in home-lab/production deploy bundle) ...
+specs/042-tailnet-edge-bind-pattern/state.json:184: ... secret handling in deploy/app.env (env_file directive for both backend services); ... verify the SMACKEREL_AUTH_TOKEN handling does not regress (currently empty string in dev/test, MUST be populated in self-hosted/production deploy bundle) ...
 
 (13 lines total — no literal credentials, all use the keywords in lexical/parsing/field-name/discussion sense)
 ```
@@ -3223,7 +3223,7 @@ $ cd <home>/smackerel && grep -nE 'sshpass|password.*ssh|ssh.*password|PasswordA
 | **P5** | smackerel-core (HTTP API) | `https://smackerel.<host-tailnet-fqdn>/api/health` (host Caddy + `tailscale cert`) | Tailscale node identity + Bearer token (`SMACKEREL_AUTH_TOKEN`) | ✅ SAFE — TLS termination on the tailnet IP via free `tailscale cert`; bearer-token auth enforced by Go core middleware (defense-in-depth: tailnet identity + SMACKEREL_AUTH_TOKEN). |
 | **P5** | smackerel-ml (HTTP sidecar) | `https://ml.smackerel.<host-tailnet-fqdn>/health` (host Caddy + `tailscale cert`) | Tailscale node identity + Bearer token (Python ML lifespan validates SMACKEREL_AUTH_TOKEN) | ✅ SAFE — Same construction as core API. |
 
-**`SMACKEREL_AUTH_TOKEN` regression check:** `config/smackerel.yaml:19` keeps `auth_token: ""` empty by default; `runtime.environment` defaults to `development` (line 26). The MIT-040-S-004 contract documented at lines 22-25 forces fail-loud startup if `environment=production` AND `auth_token=""`. This is unchanged by spec 042 (no edits to `config/smackerel.yaml` lines 17-26 in this spec). The home-lab/production deploy bundle's `app.env` MUST populate `SMACKEREL_AUTH_TOKEN`; this is the operator's responsibility per the deploy adapter contract (out of scope for spec 042).
+**`SMACKEREL_AUTH_TOKEN` regression check:** `config/smackerel.yaml:19` keeps `auth_token: ""` empty by default; `runtime.environment` defaults to `development` (line 26). The MIT-040-S-004 contract documented at lines 22-25 forces fail-loud startup if `environment=production` AND `auth_token=""`. This is unchanged by spec 042 (no edits to `config/smackerel.yaml` lines 17-26 in this spec). The self-hosted/production deploy bundle's `app.env` MUST populate `SMACKEREL_AUTH_TOKEN`; this is the operator's responsibility per the deploy adapter contract (out of scope for spec 042).
 
 #### Final Security Verdict
 
@@ -3252,7 +3252,7 @@ $ cd <home>/smackerel && grep -nE 'sshpass|password.*ssh|ssh.*password|PasswordA
 | A02: Cryptographic Failures | TLS for HTTP UIs via host Caddy + `tailscale cert`; SSH for P1 access (no password fallback) | ✅ Strong by construction |
 | A03: Injection | N/A — spec 042 is a static infra contract change; no input parsing changes | ✅ N/A |
 | A04: Insecure Design | Tailnet-edge bind pattern is documented in `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` and enforced by `internal/deploy/compose_contract_test.go` adversarial sub-tests (locks SCN-042-002 + SCN-042-005 against regression to spec 020 form) | ✅ Threat-modeled and locked |
-| A05: Security Misconfiguration | Loopback-default preserved when `HOST_BIND_ADDRESS` unset; safe-by-default in dev/test/home-lab generated env files (`HOST_BIND_ADDRESS=127.0.0.1` at line 34 in all three) | ✅ Safe defaults |
+| A05: Security Misconfiguration | Loopback-default preserved when `HOST_BIND_ADDRESS` unset; safe-by-default in dev/test/self-hosted generated env files (`HOST_BIND_ADDRESS=127.0.0.1` at line 34 in all three) | ✅ Safe defaults |
 | A06: Vulnerable Components | N/A — no dependency changes in spec 042 | ✅ N/A |
 | A07: Auth Failures | `SMACKEREL_AUTH_TOKEN` MIT-040-S-004 contract enforces fail-loud in production; Tailscale ACL gates network reach | ✅ Defense-in-depth |
 | A08: Data Integrity Failures | N/A — no serialization/deserialization changes | ✅ N/A |
@@ -3532,7 +3532,7 @@ $ awk '/^```/ || /^    ```/ {in_block = !in_block; next} !in_block {print NR": "
 
 **Root cause:** Markdown structural fence corruption in the bubbles.test evidence section around lines 2242–2276 of `report.md`.
 
-The author opened a single-backtick fenced code block at line 2242 (` ```text `) intending to wrap the OUTPUT of `grep -A20 'DevOps Access on Home-Lab' docs/Operations.md`. That grep output contains the literal characters ` ```bash ` at line 2272 (because `docs/Operations.md` itself has a Bash code-fence example at line 218). Markdown sees the inner ` ```bash ` as a fence-close (since same-language nesting requires a longer outer fence), prematurely closing the outer ` ```text ` block. From line 2272 onward, the parser's "in code block" state is INVERTED for the rest of the file. The cumulative effect: lines 3179, 3183, and 3193–3199 — which are clearly grep output of `config/smackerel.yaml` field comments containing the word "placeholder" describing empty Telegram/Discord/AirNow/Finnhub/FRED/GuestHost API key placeholders — are misclassified as outside code blocks by the awk fence-tracker that Check 18 uses, and therefore trigger G036 deferral hits.
+The author opened a single-backtick fenced code block at line 2242 (` ```text `) intending to wrap the OUTPUT of `grep -A20 'DevOps Access on Self-Hosted' docs/Operations.md`. That grep output contains the literal characters ` ```bash ` at line 2272 (because `docs/Operations.md` itself has a Bash code-fence example at line 218). Markdown sees the inner ` ```bash ` as a fence-close (since same-language nesting requires a longer outer fence), prematurely closing the outer ` ```text ` block. From line 2272 onward, the parser's "in code block" state is INVERTED for the rest of the file. The cumulative effect: lines 3179, 3183, and 3193–3199 — which are clearly grep output of `config/smackerel.yaml` field comments containing the word "placeholder" describing empty Telegram/Discord/AirNow/Finnhub/FRED/GuestHost API key placeholders — are misclassified as outside code blocks by the awk fence-tracker that Check 18 uses, and therefore trigger G036 deferral hits.
 
 **Toggle proof:**
 
@@ -3777,7 +3777,7 @@ After this validate pass: Check 6 will report only `audit` as missing, which is 
 | 4 | 3164 | `placeholder` (in security-phase narrowed-credential-scan introduction) | **JUSTIFIED-NARRATIVE** | Security audit narrowing-strategy description. Quote: "**Narrowed literal-credential scan (excludes placeholder/doc syntax):**". Describes the search-filter strategy used to exclude documentation placeholder syntax (`<token>`, `<password>`, etc.) from a credential-leak scan. Standard cybersecurity audit vocabulary; cannot be removed without weakening the security record. |
 | 5 | 3187 | `placeholder` (×3 in security-phase Operations.md credential-scan conclusion) | **JUSTIFIED-NARRATIVE** | Security audit conclusion explaining why every credential-keyword match in `docs/Operations.md` is benign: documentation `<token>` placeholder syntax, empty-string `password: ""` placeholder, runtime error message text "SMACKEREL_AUTH_TOKEN rejected: known placeholder", or field-name commentary. This is the canonical OWASP-aligned vocabulary for documenting audit findings. Removing it would invalidate the security audit. |
 | 6 | 3204 | `placeholder` (in security-phase config/smackerel.yaml credential-scan conclusion) | **JUSTIFIED-NARRATIVE** | Security audit conclusion: "auth_token: \"\" is the documented empty placeholder that is REQUIRED before runtime; the runtime emits a fail-loud error if it is left empty in production environment (MIT-040-S-004 cross-reference at line 22-25)." Documents the SST policy contract; not deferred work. |
-| 7 | 3224 | `out of scope` (in security-phase SMACKEREL_AUTH_TOKEN regression check conclusion) | **JUSTIFIED-NARRATIVE** | Legitimate scope-boundary statement. Quote: "The home-lab/production deploy bundle's app.env MUST populate SMACKEREL_AUTH_TOKEN; this is the operator's responsibility per the deploy adapter contract (out of scope for spec 042)." Spec 042 is the COMPOSE CONTRACT change; production secret population is owned by the deploy adapter contract (a separate concern). This is correct scope demarcation per Constitution Principle XII (separation of concerns), NOT work being skipped. |
+| 7 | 3224 | `out of scope` (in security-phase SMACKEREL_AUTH_TOKEN regression check conclusion) | **JUSTIFIED-NARRATIVE** | Legitimate scope-boundary statement. Quote: "The self-hosted/production deploy bundle's app.env MUST populate SMACKEREL_AUTH_TOKEN; this is the operator's responsibility per the deploy adapter contract (out of scope for spec 042)." Spec 042 is the COMPOSE CONTRACT change; production secret population is owned by the deploy adapter contract (a separate concern). This is correct scope demarcation per Constitution Principle XII (separation of concerns), NOT work being skipped. |
 | 8 | 3518 | `deferred`, `future work`, `placeholder` (in prior-validate's diagnostic finding section) | **JUSTIFIED-NARRATIVE** | Meta-commentary from the prior validate diagnostic pass: "**Finding:** All 10 BLOCK hits are the word 'placeholder' appearing inside grep command output... ZERO of the hits represent actual deferred or future work." The prior validate AGENT explicitly asserted that no work is deferred — but documenting that fact uses the same trigger vocabulary. This is the paradoxical false-positive cluster the user's task explicitly anticipated. Removing it would erase the diagnostic audit trail that explains the entire route-back-to-implement loop. |
 | 9 | 3529 | `placeholder` (in prior-validate's exclusion-pattern arithmetic explanation) | **JUSTIFIED-NARRATIVE** | Diagnostic explanation of the guard's exclusion arithmetic: "(Guard reports 10 because one of the 11 is excluded by the deferral_exclusion_pattern — but the substance is identical: ALL trigger tokens are 'placeholder'.)" Meta-commentary about scanner behavior. Documents WHY the guard reports the count it does. |
 | 10 | 3533 | `placeholder` (in prior-validate's root-cause analysis) | **JUSTIFIED-NARRATIVE** | Forensic root-cause analysis explaining that lines 3179/3183/3193-3199 are "grep output of config/smackerel.yaml field comments containing the word 'placeholder' describing empty Telegram/Discord/AirNow/Finnhub/FRED/GuestHost API key placeholders". This is the technical explanation of why the false positives occurred. Required for the audit trail. |
@@ -3930,7 +3930,7 @@ EXIT_CODE=0
 
 | Field | Declared in spec.md | Evidence | Status |
 |-------|---------------------|----------|--------|
-| Intent | "Make `deploy/compose.deploy.yml` adapter-ready for tailnet-edge fronting on home-lab while preserving spec 020's loopback-default for local dev/test." | Compose substitution `${HOST_BIND_ADDRESS:-127.0.0.1}:` at lines 109/155; live render confirms 127.0.0.1 default when unset (stabilize Check 4) | ✅ PASS |
+| Intent | "Make `deploy/compose.deploy.yml` adapter-ready for tailnet-edge fronting on self-hosted while preserving spec 020's loopback-default for local dev/test." | Compose substitution `${HOST_BIND_ADDRESS:-127.0.0.1}:` at lines 109/155; live render confirms 127.0.0.1 default when unset (stabilize Check 4) | ✅ PASS |
 | Success Signal | Compose contract test asserts the substitution form on the live file; adversarial sub-tests reject the spec-020 literal form and any postgres/nats port re-publish | `TestComposeContract_LiveFile` PASS + 2 adversarial PASS | ✅ PASS |
 | Hard Constraints | Loopback default preserved when HOST_BIND_ADDRESS unset; postgres/nats have NO host port mapping | Stabilize Check 4 docker compose render proves loopback default; Security Scan 3 confirms 0 postgres/nats `ports:` blocks in `deploy/` | ✅ PASS |
 | Failure Condition | Reverting to spec-020 literal `127.0.0.1:` form OR re-publishing postgres/nats ports | Both blocked by `TestComposeContract_AdversarialLiteralBind` and `TestComposeContract_AdversarialInfraHasPorts` | ✅ PASS (NOT triggered) |

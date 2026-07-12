@@ -2,14 +2,14 @@
 
 - **Severity:** HIGH (redteam **F2**, latency half)
 - **Owning spec:** `026-domain-extraction` (owns the domain-extraction 30s-budget ML-processing contract)
-- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on evo-x2 (both models WARM)
+- **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host> (both models WARM)
 - **Status:** MECHANISM CORRECTED (native Ollama `think` field) + UNIT TESTS REWORKED IN-REPO — not pushed; live verification pending orchestrator redeploy. The FIRST fix (the `/no_think` prompt token) was INEFFECTIVE — see "⚠️ Mechanism Correction" below.
 
 ## Summary
 
 smackerel's ML sidecar calls `qwen3:30b-a3b` (the prod `LLM_MODEL`) for structured-JSON
 extraction, but qwen3 runs with its **thinking mode ON by default**, generating a large hidden
-`<think>…</think>` reasoning block BEFORE the JSON. Measured live on the evo-x2 SHARED ollama
+`<think>…</think>` reasoning block BEFORE the JSON. Measured live on the <deploy-host> SHARED ollama
 daemon — both models already WARM, identical recipe-extraction task, ground truth 9 ingredients /
 5 steps:
 
@@ -37,7 +37,7 @@ This is the **remaining half of the redteam F2 (LLM-enrichment latency) fix**:
 
 The FIRST fix injected the qwen `/no_think` control token into the request messages. **That is
 INEFFECTIVE on qwen3**: qwen3's Ollama chat template ignores the `/no_think` text directive and
-honors ONLY the native `think` request field. Measured live on evo-x2 (shared daemon, warm qwen3):
+honors ONLY the native `think` request field. Measured live on <deploy-host> (shared daemon, warm qwen3):
 
 - `/no_think` in prompt → thinking **STILL ON** (>150s), and the `<think>`-prefixed output produced
   the live `ERROR smackerel-ml.synthesis LLM returned invalid JSON: Expecting value: line 1 column 1`
@@ -56,7 +56,7 @@ migrates the two legacy `ollama/` routes (search-rerank, drive-classify) to `oll
 
 ## Reproduction
 
-**Redteam (live evo-x2 prod, both models WARM):** identical recipe-extraction task against the
+**Redteam (live <deploy-host> prod, both models WARM):** identical recipe-extraction task against the
 shared ollama daemon —
 
 - `qwen3:30b-a3b` with ollama native top-level `"think": true` (the current default): **113.4s**
@@ -98,7 +98,7 @@ sets `completion_kwargs["think"] = False` (SST-gated, ollama-only) on every in-s
 call. Rationale (corrected):
 
 - qwen3's Ollama chat template honors ONLY the native `think` field; a `/no_think` string in the
-  messages is IGNORED (the first fix's error — proven live on evo-x2, see ⚠️ Mechanism Correction).
+  messages is IGNORED (the first fix's error — proven live on <deploy-host>, see ⚠️ Mechanism Correction).
 - litellm 1.84.0 forwards a top-level `think=` kwarg to the Ollama request **top level**
   (`data["think"]`) for BOTH the `ollama_chat/` and legacy `ollama/` transforms — verified with a
   request-capture probe (`litellm/llms/ollama/{chat,completion}/transformation.py`). Unlike
@@ -141,7 +141,7 @@ See [report.md](report.md) → "Test Evidence" for the RED (pre-fix) and GREEN (
 
 ## Redeploy note
 
-This is a **code change to `smackerel-ml`**. The running prod image on evo-x2 is **unchanged** until
+This is a **code change to `smackerel-ml`**. The running prod image on <deploy-host> is **unchanged** until
 the orchestrator rebuilds + signs + redeploys `smackerel-ml`. The live "domain extraction now < 30s"
 outcome is therefore **PENDING that redeploy** — it cannot be, and is not, claimed here. No build,
 no deploy, no host mutation, no push performed in this repo.

@@ -18,7 +18,7 @@
 //	${VAR?error msg}   # fails loud when VAR is unset (empty allowed)
 //	${VAR}             # substitutes VAR's value (empty if VAR is empty)
 //
-// Discovered: home-lab readiness re-scan finding HL-RESCAN-012 (P3),
+// Discovered: self-hosted readiness re-scan finding HL-RESCAN-012 (P3),
 // 2026-05-14. The pre-fix `docker-compose.yml` carried 14 occurrences of
 // the forbidden `${VAR:-default}` form across 10 unique vars. Fix
 // (BUG-029-003 + BUG-029-005):

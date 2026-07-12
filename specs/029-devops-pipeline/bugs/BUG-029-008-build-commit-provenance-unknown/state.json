@@ -1,8 +1,8 @@
 {
     "id": "BUG-029-008-build-commit-provenance-unknown",
-    "title": "Locally-built (local-operator/evo-x2) images stamp SMACKEREL_COMMIT=unknown; no source-SHA provenance",
+    "title": "Locally-built (local-operator/<deploy-host>) images stamp SMACKEREL_COMMIT=unknown; no source-SHA provenance",
     "severity": "medium",
-    "source": "redteam-adversarial-interrogation (live evo-x2 prod)",
+    "source": "redteam-adversarial-interrogation (live <deploy-host> prod)",
     "owningSpec": "029-devops-pipeline",
     "workflowMode": "bugfix-fastlane",
     "status": "fixed_in_repo",
@@ -12,5 +12,5 @@
     "createdAt": "2026-07-08",
     "fixedAt": "2026-07-08",
     "redeployRequired": true,
-    "notes": "Fix in scripts/commands/config.sh (git-derive SMACKEREL_COMMIT when CI has not exported it). Dockerfile ARG/LABEL/ldflags wiring was already correct; only the local build path fed 'unknown'. Verified statically via a config-generator test (no full home-lab image build). Requires a rebuild+redeploy for the running images to become self-identifying."
+    "notes": "Fix in scripts/commands/config.sh (git-derive SMACKEREL_COMMIT when CI has not exported it). Dockerfile ARG/LABEL/ldflags wiring was already correct; only the local build path fed 'unknown'. Verified statically via a config-generator test (no full self-hosted image build). Requires a rebuild+redeploy for the running images to become self-identifying."
 }

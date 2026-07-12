@@ -103,9 +103,9 @@ egress restriction:
 
 - Container egress firewall (Docker network policy, nftables on the
   host, or a `network_mode: bridge` ACL).
-- Per-container outbound DNS allowlist (the home-lab overlay could
+- Per-container outbound DNS allowlist (the self-hosted overlay could
   ship a CoreDNS forwarder that resolves only allowed hosts).
-- Tailscale egress ACL when the home-lab adapter binds to the
+- Tailscale egress ACL when the self-hosted adapter binds to the
   tailnet.
 
 Recommendation in this packet: the application-layer allowlist
@@ -117,7 +117,7 @@ decide.
 ### 2.4 SearxNG self-hosted profile
 
 When `assistant.open_knowledge.searxng_enabled=true` (test profile,
-future home-lab profile), the core makes outbound HTTP requests to
+future self-hosted profile), the core makes outbound HTTP requests to
 the in-cluster SearxNG container (`http://searxng:8080`). That
 traffic is allowed by the application-layer transport (the
 provider_endpoint host is implicitly in the allowlist) and never

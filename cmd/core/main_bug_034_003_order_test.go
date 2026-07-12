@@ -13,7 +13,7 @@ package main
 // This source-scan test pins the ordering: wireExpenseTracking MUST
 // appear before api.NewRouter in main.go. If a future refactor reverts
 // the order, this test fails loudly long before a release reaches
-// home-lab.
+// self-hosted.
 
 import (
 	"os"

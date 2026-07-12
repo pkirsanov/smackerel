@@ -148,7 +148,7 @@ credential for the `litellm` call and holds no static provider secret and
 never the master key.
 
 **Out of scope (per spec §4):** per-user BYOK; graph partitioning;
-amending 088/089; new data connectors; the live home-lab A/B run;
+amending 088/089; new data connectors; the live self-hosted A/B run;
 replacing the model gateway; unifying the already-provider-aware
 `synthesis.py` / `drive_classify.py` config into `connections[]` (those
 paths are not redesigned here).

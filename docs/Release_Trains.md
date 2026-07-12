@@ -6,7 +6,7 @@ Owned by `bubbles.train` (Detroit Velvet Smooth).
 
 | Train | Phase | Slot | Purpose |
 |-------|-------|------|---------|
-| `mvp` | active | home-lab | Current home-lab train; ingest + digest + delivery |
+| `mvp` | active | self-hosted | Current self-hosted train; ingest + digest + delivery |
 | `next` | active | staging | Next promotion candidate; synthesis + multi-source coord |
 
 See [`config/release-trains.yaml`](../config/release-trains.yaml).
@@ -25,5 +25,5 @@ G110, G111, G112, G113, G114 (prod-slot), G115, G116, G117-G120.
 
 - [`Upkeep_Runbook.md`](Upkeep_Runbook.md)
 - BCDR plan (knb-side): `<knb-repo>/docs/BCDR_Plan.md`
-- Per-target deploy adapter: `<knb-repo>/smackerel/home-lab/`
+- Per-target deploy adapter: `<deployment-owner>/<product>/<target>/`
 - Framework skill: `bubbles-release-train-model`

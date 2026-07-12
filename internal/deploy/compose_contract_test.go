@@ -83,13 +83,13 @@ const (
 	requiredCorePrefix       = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:`
 	requiredMLPrefix         = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:`
 	requiredPrometheusPrefix = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${PROMETHEUS_HOST_PORT}:`
-	// BUG-042-003 (home-lab readiness re-scan, finding HL-RESCAN-005, 2026-05-14).
+	// BUG-042-003 (self-hosted readiness re-scan, finding HL-RESCAN-005, 2026-05-14).
 	// Ollama is profile-gated (`profiles: [ollama]`) and the live deploy compose
 	// file at deploy/compose.deploy.yml line 243 uses the fail-loud SST form
 	// today, but no contract assertion existed before this constant was added.
 	// A future edit reverting ollama to literal `127.0.0.1:` or to the forbidden
 	// `${HOST_BIND_ADDRESS:-127.0.0.1}` default-fallback form would slip past
-	// TestComposeContract_LiveFile and ship to home-lab. The home-lab readiness
+	// TestComposeContract_LiveFile and ship to self-hosted. The self-hosted readiness
 	// re-scan classified this gap P2 because the live file is correct today; the
 	// risk is regression-only.
 	requiredOllamaPrefix = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:`
@@ -212,7 +212,7 @@ func assertComposeContract(yamlBytes []byte) error {
 		}
 	}
 
-	// BUG-042-003 (home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14).
+	// BUG-042-003 (self-hosted readiness re-scan finding HL-RESCAN-005, 2026-05-14).
 	// Ollama is profile-gated (`profiles: [ollama]`) but its service definition
 	// still exists in the compose document. When present, its host port MUST
 	// inherit the spec 042 fail-loud HOST_BIND_ADDRESS substitution like other
@@ -222,7 +222,7 @@ func assertComposeContract(yamlBytes []byte) error {
 	// — mirrors the pattern used for postgres + nats + prometheus above.
 	if oll, ok := doc.Services["ollama"]; ok {
 		if oll.NetworkMode == "host" {
-			return fmt.Errorf("contract violation: services.ollama.network_mode=%q — `network_mode: host` is forbidden by spec 042 (host networking exposes Ollama on every host NIC and defeats the HOST_BIND_ADDRESS-substituted port mapping; BUG-042-003 closes the ollama enforcement gap discovered by the home-lab readiness re-scan)", oll.NetworkMode)
+			return fmt.Errorf("contract violation: services.ollama.network_mode=%q — `network_mode: host` is forbidden by spec 042 (host networking exposes Ollama on every host NIC and defeats the HOST_BIND_ADDRESS-substituted port mapping; BUG-042-003 closes the ollama enforcement gap discovered by the self-hosted readiness re-scan)", oll.NetworkMode)
 		}
 		if len(oll.Ports) > 0 {
 			for i, p := range oll.Ports {
@@ -467,7 +467,7 @@ func TestComposeContract_AdversarialNetworkModeHostBypass(t *testing.T) {
     network_mode: host
 `,
 		},
-		// BUG-042-003 (home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14).
+		// BUG-042-003 (self-hosted readiness re-scan finding HL-RESCAN-005, 2026-05-14).
 		// Adds ollama to the network_mode: host bypass guard. The contract
 		// function MUST reject ollama.network_mode=host with an error mentioning
 		// the service name and BUG-042-003 attribution, matching the pattern
@@ -528,7 +528,7 @@ func TestComposeContract_AdversarialNetworkModeHostBypass(t *testing.T) {
 // Each MUST return a non-nil error mentioning 'ollama' and the BUG-042-003
 // attribution.
 //
-// Discovered: home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14.
+// Discovered: self-hosted readiness re-scan finding HL-RESCAN-005, 2026-05-14.
 func TestComposeContract_AdversarialOllamaLiteralBind(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -605,7 +605,7 @@ func TestComposeContract_AdversarialOllamaLiteralBind(t *testing.T) {
 // terminology — the assertComposeContract error message includes all
 // three terms in its rejection text).
 //
-// Discovered: home-lab readiness re-scan finding HL-RESCAN-009 (P3),
+// Discovered: self-hosted readiness re-scan finding HL-RESCAN-009 (P3),
 // 2026-05-14. Coverage gap classified P3 because the live file is correct
 // today; the risk is regression-only.
 func TestComposeContract_AdversarialDefaultFallbackBind(t *testing.T) {
@@ -722,7 +722,7 @@ func TestComposeContract_AdversarialDefaultFallbackBind(t *testing.T) {
 // "${HOST_BIND_ADDRESS:-127.0.0.1}", "literal 127.0.0.1:") — those
 // terms collectively prove the rejection lands on the right contract.
 //
-// Discovered: home-lab readiness re-scan finding HL-RESCAN-010 (P3),
+// Discovered: self-hosted readiness re-scan finding HL-RESCAN-010 (P3),
 // 2026-05-14. Coverage gap classified P3 because the live file is correct
 // today; the risk is regression-only (live-file test catches a regression
 // in the file, but only this synthetic adversarial test catches a

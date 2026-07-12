@@ -2204,9 +2204,9 @@ func parseComposeMemoryToMiB(raw string) (int, error) {
 //   - Every used model's required memory MUST fit within the
 //     envelope of the deploy service that actually loads the model
 //     at runtime — ollama-resident models against
-//     c.OllamaMemoryLimitMiB (8 GiB on default home-lab config) and
+//     c.OllamaMemoryLimitMiB (8 GiB on default self-hosted config) and
 //     ml-sidecar-resident models against c.MLMemoryLimitMiB (3 GiB
-//     on default home-lab config).
+//     on default self-hosted config).
 //
 // "Used models" are sourced from the SST runtime config. Buckets
 // below cover every model field this Config struct surfaces that
@@ -2376,7 +2376,7 @@ func (c *Config) validateModelEnvelopes() error {
 	// model (llm_model_id), which stays resident during synthesis — the
 	// SAME arithmetic the runtime modelswitch.Allowlist uses. Checked only
 	// when open-knowledge is enabled and the ollama envelope is known
-	// (OllamaMemoryLimitMiB != 0 — e.g. home-lab; dev has no daemon and
+	// (OllamaMemoryLimitMiB != 0 — e.g. self-hosted; dev has no daemon and
 	// resolves to 0, so the check is skipped there, matching the runtime
 	// validator). FR-10 / SCN-088-A07: an operator cannot ship a
 	// switchable list that busts the envelope.
@@ -2406,7 +2406,7 @@ func (c *Config) validateModelEnvelopes() error {
 	// (closes the CT-6 gap). The spec-088 switchable pass above checks
 	// only the runtime-switchable entries, NOT the STANDING DEFAULT
 	// synthesis model (synthesis_model_id) that runs on EVERY /ask with
-	// no override. Spec 088 got away with this because the home-lab
+	// no override. Spec 088 got away with this because the self-hosted
 	// default (deepseek-r1:7b, 4864 MiB) is tiny; spec 089 promotes the
 	// default to a large reasoning model (deepseek-r1:32b, 22528 MiB),
 	// making the every-query model the ONE large selection that was NOT

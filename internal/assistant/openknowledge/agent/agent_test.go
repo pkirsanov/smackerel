@@ -634,7 +634,7 @@ func TestParseCitations_UnknownKind(t *testing.T) {
 // for that." even though the agent had run multiple successful
 // web_search calls.
 //
-// Reproduction (live home-lab evidence on 2026-06-02):
+// Reproduction (live self-hosted evidence on 2026-06-02):
 //   - User asked "/ask palm springs ca, humidity"
 //   - openknowledge.turn log: 4 iterations, 3 web_search outcome=success,
 //     status=success, num_sources=0, termination=final
@@ -727,7 +727,7 @@ func TestAgent_EmptyCitationsSalvage_DoesNotFireWithoutTraceSources(t *testing.T
 }
 
 // TestAgent_BodyQualitySalvage_ReplacesUngroundedExcuseWithSnippets
-// regresses the production failure pattern seen on home-lab 2026-06-02
+// regresses the production failure pattern seen on self-hosted 2026-06-02
 // where /ask returned bodies like:
 //
 //	"I am unable to provide the humidity for Palm Springs, CA,

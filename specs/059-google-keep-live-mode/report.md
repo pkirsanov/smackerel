@@ -179,7 +179,7 @@ EXIT=0
 
 This covers:
 - `TestComposeEnvFileSharedAcrossCoreAndMlServices` — new SCN-059-002 application-layer-boundary contract.
-- `TestBundleSecretContract_NoLiteralSecretsInHomeLab` — proves the bundle generator emits `KEEP_GOOGLE_APP_PASSWORD=__SECRET_PLACEHOLDER__KEEP_GOOGLE_APP_PASSWORD__` in `app.env` for `home-lab` (production-class target) AND ships it in the sibling `secret-keys.yaml` manifest.
+- `TestBundleSecretContract_NoLiteralSecretsInSelfHosted` — proves the bundle generator emits `KEEP_GOOGLE_APP_PASSWORD=__SECRET_PLACEHOLDER__KEEP_GOOGLE_APP_PASSWORD__` in `app.env` for `self-hosted` (production-class target) AND ships it in the sibling `secret-keys.yaml` manifest.
 - `TestBundleSecretContract_AdversarialA1_DriftDetector` — dynamically drops the LAST key from `SHELL_SECRET_KEYS` and asserts the bundle reflects the drift; since `KEEP_GOOGLE_APP_PASSWORD` is the last entry today, this test confirms the adversarial regression contract for the new entry.
 - `TestBundleSecretContract_AdversarialA2_LeakageDetector` — tampered config.sh + yaml prove the placeholder shielding gate works key-by-key.
 - `TestBundleSecretContract_AdversarialA3_DeterminismDetector` — bundle bytes are deterministic across two runs.
@@ -204,19 +204,19 @@ KEEP_GOOGLE_EMAIL=
 KEEP_GOOGLE_APP_PASSWORD=
 ```
 
-Home-lab (production-class) target — deterministic placeholder per spec-052 FR-052-002:
+self-hosted (production-class) target — deterministic placeholder per spec-052 FR-052-002:
 
 ```text
-$ ./smackerel.sh config generate --env home-lab
-config-validate: skipped for production-class target env=home-lab (placeholder mode; runtime check enforces at container start)
-Generated ~/smackerel/config/generated/home-lab.env
+$ ./smackerel.sh config generate --env self-hosted
+config-validate: skipped for production-class target env=self-hosted (placeholder mode; runtime check enforces at container start)
+Generated ~/smackerel/config/generated/self-hosted.env
 
-$ grep -E '^KEEP_GOOGLE' ~/smackerel/config/generated/home-lab.env
+$ grep -E '^KEEP_GOOGLE' ~/smackerel/config/generated/self-hosted.env
 KEEP_GOOGLE_EMAIL=
 KEEP_GOOGLE_APP_PASSWORD=__SECRET_PLACEHOLDER__KEEP_GOOGLE_APP_PASSWORD__
 ```
 
-**Interpretation note for DoD item 4:** the planning text says "`config/generated/dev.env` carries the secret placeholder marker". The spec-052 contract (FR-052-002 / FR-052-011) gates placeholder emission on `TARGET_ENV ∈ production_class_targets`. dev/test environments are explicitly NEVER in the production-class list and therefore receive yaml-literal values (empty by default for `KEEP_GOOGLE_APP_PASSWORD`). The DoD item is treated as satisfied by demonstrating both target shapes work as spec-052 prescribes (dev=empty, home-lab=placeholder). A planning-text refinement to remove the "dev" wording is routed to `bubbles.plan` (non-blocking; the underlying contract is correctly enforced).
+**Interpretation note for DoD item 4:** the planning text says "`config/generated/dev.env` carries the secret placeholder marker". The spec-052 contract (FR-052-002 / FR-052-011) gates placeholder emission on `TARGET_ENV ∈ production_class_targets`. dev/test environments are explicitly NEVER in the production-class list and therefore receive yaml-literal values (empty by default for `KEEP_GOOGLE_APP_PASSWORD`). The DoD item is treated as satisfied by demonstrating both target shapes work as spec-052 prescribes (dev=empty, self-hosted=placeholder). A planning-text refinement to remove the "dev" wording is routed to `bubbles.plan` (non-blocking; the underlying contract is correctly enforced).
 
 ### Fail-Loud SST Audit
 
@@ -916,7 +916,7 @@ This section catalogs every routed Uncertainty Declaration, acknowledged trade-o
 
 All four entries below are present in `state.json.transitionRequests` and are explicitly Uncertainty-Declared `**Claim Source:** not-run` in the corresponding scope DoDs. They are NOT deferred work; they are honest live-stack proofs that require the disposable Compose test stack with ML sidecar + NATS + Postgres, which was outside the scope of the unit/adversarial implementation round.
 
-1. **Scope 3 live-stack round-trip + hybrid-mode dedup + sidecar-boot canary** \u2014 routed `2026-05-28T00:00:00Z`. Three live DoD rows: end-to-end `keep.sync.request \u2192 KeepSyncResponse \u2192 RawArtifact`, hybrid-mode `note_id` dedup against the live store, sidecar-boot canary proving Drive/Photos/YouTube subscribers still register after `register_nats_handler`. Unit-only evidence covers encode/decode/handshake paths. Disposition: integration follow-up before any live home-lab enablement.
+1. **Scope 3 live-stack round-trip + hybrid-mode dedup + sidecar-boot canary** \u2014 routed `2026-05-28T00:00:00Z`. Three live DoD rows: end-to-end `keep.sync.request \u2192 KeepSyncResponse \u2192 RawArtifact`, hybrid-mode `note_id` dedup against the live store, sidecar-boot canary proving Drive/Photos/YouTube subscribers still register after `register_nats_handler`. Unit-only evidence covers encode/decode/handshake paths. Disposition: integration follow-up before any live self-hosted enablement.
 2. **Scope 4 live malformed-stream breaker trip** \u2014 routed `2026-05-28T11:30:00Z`. One live DoD row: `TestKeepBridgeBreakerTripsAfterFourConsecutiveMalformedResponses`. Requires a sidecar fixture mode that returns invalid envelopes on demand + a real NATS stack. Unit + adversarial coverage of every breaker transition is green. Disposition: integration follow-up.
 3. **Scope 5 live `/metrics` scrape + label cardinality** \u2014 routed `2026-05-28T11:30:00Z`. Two live DoD rows: `TestKeepGkeepMetricsExposedViaPrometheusEndpoint` and `TestKeepDriftCounterStableLabelCardinality`. All three metrics are registered via `internal/metrics/keep.go init()`; counter-once, Health, log-redaction, and histogram unit tests PASS at exit code 0. Disposition: integration follow-up.
 4. **Scope 6 pii-scan staged-diff + regression-baseline-guard registration** \u2014 routed `2026-05-28T11:30:00Z`. Two artifact-test rows that need either a pre-commit re-run or a baseline registry entry. Disposition: planning follow-up (pii-scan runs at pre-commit; baseline registration may be a no-op for spec 059 because the new docs subsection uses only generic placeholders the gitleaks ruleset does not flag).

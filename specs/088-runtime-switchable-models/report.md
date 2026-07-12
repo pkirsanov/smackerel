@@ -21,7 +21,7 @@
 > (same precedent as specs 084 / 087).
 >
 > **Terminal posture (C7):** validated-in-repo only. The live
-> `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on home-lab hardware is a
+> `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on self-hosted hardware is a
 > SEPARATE downstream `bubbles.devops` dispatch. No commit/push in this
 > run.
 
@@ -54,7 +54,7 @@ suite green except the out-of-changeset spec-083/073 reds.
 
 | # | File | Change | Scope |
 |---|------|--------|-------|
-| 1 | `config/smackerel.yaml` | NEW `assistant.open_knowledge.switchable_models` (dev `[gemma3:4b]`) + home-lab override `[gemma4:26b, deepseek-r1:7b]`. | SCOPE-01 |
+| 1 | `config/smackerel.yaml` | NEW `assistant.open_knowledge.switchable_models` (dev `[gemma3:4b]`) + self-hosted override `[gemma4:26b, deepseek-r1:7b]`. | SCOPE-01 |
 | 2 | `internal/config/openknowledge.go` | `SwitchableModels []string` field, load, struct-level validate. | SCOPE-01 |
 | 3 | `internal/config/config.go` | `validateModelEnvelopes` switchable co-residence pass (fail-loud). | SCOPE-01 |
 | 4 | `scripts/commands/config.sh` | resolve (per-env override) + emit `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS`. | SCOPE-01 |
@@ -107,26 +107,26 @@ CONFIG_GEN_EXIT=0
 config-validate: ~/smackerel/config/generated/test.env.tmp.* OK
 Generated ~/smackerel/config/generated/test.env
 TEST_GEN_EXIT=0
-config-validate: skipped for production-class target env=home-lab (placeholder mode; runtime check enforces at container start)
-Generated ~/smackerel/config/generated/home-lab.env
-HOMELAB_GEN_EXIT=0
+config-validate: skipped for production-class target env=self-hosted (placeholder mode; runtime check enforces at container start)
+Generated ~/smackerel/config/generated/self-hosted.env
+SELFHOSTED_GEN_EXIT=0
 === SWITCHABLE across envs ===
 config/generated/dev.env:ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["gemma3:4b"]
 config/generated/test.env:ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["gemma3:4b"]
-config/generated/home-lab.env:ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["gemma4:26b","deepseek-r1:7b"]
+config/generated/self-hosted.env:ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS=["gemma4:26b","deepseek-r1:7b"]
 ```
 
-Dev/test correctly fall back to the base `[gemma3:4b]`; home-lab resolves
+Dev/test correctly fall back to the base `[gemma3:4b]`; self-hosted resolves
 the per-env override `[gemma4:26b, deepseek-r1:7b]`. The dev/test
 `config-validate ... OK` lines are the Go `validateModelEnvelopes`
 switchable pass accepting the envelope-consistent sets (dev gather
-gemma3:4b 4096 ≤ 8192; the home-lab arithmetic gemma4:26b 18432 +
+gemma3:4b 4096 ≤ 8192; the self-hosted arithmetic gemma4:26b 18432 +
 deepseek-r1:7b 4864 = 23296 ≤ 28672 is pinned by the unit test below).
 
 **Env-override boundary fix (finding F-088-CFGSH, fixed in-scope).** The
 first `config generate` failed because the original `yaml_get_json`
 env-path query bled across sibling `environments:` blocks and returned
-the home-lab switchable list for `env=dev` (validated against dev's 8 GiB
+the self-hosted switchable list for `env=dev` (validated against dev's 8 GiB
 envelope → correct fail-loud "envelope exceeded"). Root cause: the shared
 `yaml_get_json` tree-walk does not respect environment-block boundaries.
 Fixed by resolving the env override through `yaml_get` (exact
@@ -198,7 +198,7 @@ full-env map): the spec-064/076/087 config suites stay GREEN —
 
 ### Files touched (SCOPE-01)
 
-- `config/smackerel.yaml` — `assistant.open_knowledge.switchable_models` (dev `[gemma3:4b]`) + home-lab override `[gemma4:26b, deepseek-r1:7b]`.
+- `config/smackerel.yaml` — `assistant.open_knowledge.switchable_models` (dev `[gemma3:4b]`) + self-hosted override `[gemma4:26b, deepseek-r1:7b]`.
 - `internal/config/openknowledge.go` — `SwitchableModels []string` field + load (`lookupJSONStringList`) + struct-level Validate (non-empty list + non-empty entries, enabled-gated).
 - `internal/config/config.go` — `validateModelEnvelopes` switchable co-residence pass (missing-profile + over-envelope, gated on enabled + ollama envelope known).
 - `scripts/commands/config.sh` — env-override resolve via `yaml_get` (boundary-safe) + compact-JSON normalise + emit `ASSISTANT_OPEN_KNOWLEDGE_SWITCHABLE_MODELS`.
@@ -497,11 +497,11 @@ salvage) is preserved model-agnostically; the no-override path is
 byte-for-byte spec-087 (`TestAgent_NoOverride_ByteForByteBaseline_Spec088`
 + the unchanged spec-084/087 suites); `WriteTimeout` is unchanged at
 `4200s`. `./smackerel.sh check` + `format --check` + `config generate`
-(dev/test/home-lab) all EXIT 0; the full `internal/`+`cmd/` unit
+(dev/test/self-hosted) all EXIT 0; the full `internal/`+`cmd/` unit
 regression is `119 ok / 0 FAIL`.
 
 **Terminal posture (C7): validated-in-repo, no commit/push.** The
-decisive live `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on home-lab
+decisive live `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on self-hosted
 GPU/Ollama hardware is the separate downstream owner.
 `nextRequiredOwner = bubbles.test` (then `bubbles.devops` for the live
 A/B re-verify).
@@ -974,7 +974,7 @@ re-verified): 40/40 DoD, 30/30 spec-088 tests GREEN, trust perimeter
 preserved model-agnostically, no-override path byte-for-byte spec-087, SST
 fail-loud intact, do-not-touch boundary clean. Terminal status `blocked`
 (validated-in-repo) — the `done` ceiling (owner-forbidden commit/push + the
-GPU/home-lab live A/B) is the separate downstream `bubbles.devops` dispatch.
+GPU/self-hosted live A/B) is the separate downstream `bubbles.devops` dispatch.
 This is NOT a `done` certification and NOT a clean-guard pass; the
 state-guard correctly refuses `done`. `nextRequiredOwner = bubbles.devops`
 (state.json terminal owner); next parent-expanded diagnostic phase =
@@ -1022,12 +1022,12 @@ NO-DEFAULTS + trust-perimeter seams.
    when enabled), NOT a runtime-hiding shell fallback. Envelope-consistency
    is enforced fail-loud in `validateModelEnvelopes` (config.go:2288–2310 —
    per-entry `model_memory_profiles` lookup + co-residence arithmetic vs the
-   ollama envelope). Grounded in real SST values: home-lab
+   ollama envelope). Grounded in real SST values: self-hosted
    `ollama_memory_limit: "28G"` (28672 MiB); `gemma4:26b` 18432 (gather,
    single load); `deepseek-r1:7b` 4864 (co-resident 18432+4864 = 23296 ≤
    28672); `deepseek-r1:32b` (18432+22528 = 40960 > 28672) is structurally
-   excluded. `config generate home-lab` EXIT 0 proves the fail-loud validator
-   *accepts* the home-lab set — no switchable entry can OOM the host.
+   excluded. `config generate self-hosted` EXIT 0 proves the fail-loud validator
+   *accepts* the self-hosted set — no switchable entry can OOM the host.
 2. **Trust perimeter (the product's core promise) — ✅ PASS.** The override
    changes WHICH model runs, never the grounding/citation enforcement.
    `Agent.WithModelOverride` (agent.go:268) is a shallow per-request clone
@@ -1043,7 +1043,7 @@ NO-DEFAULTS + trust-perimeter seams.
    and model-agnostic. Corroborated by the security phase (file:line) +
    validate (executed) + this audit's code read.
 3. **Deployment-ownership boundary (NON-NEGOTIABLE) — ✅ PASS.** No
-   environment-specific content leaked. The home-lab override
+   environment-specific content leaked. The self-hosted override
    `assistant_open_knowledge_switchable_models: [ "gemma4:26b", "deepseek-r1:7b" ]`
    (smackerel.yaml:2069) is a generic model-tag list expressed through the
    SAME `environments.<env>.assistant_open_knowledge_*` shape as spec-087's
@@ -1144,8 +1144,8 @@ non-blocking.
 2. Build + sign the core/ML images (cosign keyless + Rekor + SBOM/SLSA) and
    generate the per-env config bundle that carries the
    `switchable_models` allowlist.
-3. Ensure `deepseek-r1:7b` is present on the home-lab Ollama host and the
-   28 GiB envelope holds; apply the bundle (pointer-swap) to home-lab.
+3. Ensure `deepseek-r1:7b` is present on the self-hosted Ollama host and the
+   28 GiB envelope holds; apply the bundle (pointer-swap) to self-hosted.
 4. Run the live `gemma4:26b`-vs-`deepseek-r1:7b` synthesis A/B on real
    GPU/Ollama hardware (the proof spec 087 could not run on dev) +
    the `tests/e2e/openknowledge` regression on the live stack.
@@ -1161,9 +1161,9 @@ non-blocking.
 2. **The live A/B is the real remaining proof.** Every in-repo claim is
    mechanism-level (fake-LLM traces, validator tables). The decisive
    `gemma4:26b`-vs-`deepseek-r1:7b` synthesis quality comparison is the
-   devops home-lab run — verify it produces a grounded, cited, correctly
+   devops self-hosted run — verify it produces a grounded, cited, correctly
    attributed verdict on the real models before trusting the A/B result.
-3. **Envelope headroom on home-lab.** The 28 GiB envelope fits the
+3. **Envelope headroom on self-hosted.** The 28 GiB envelope fits the
    switchable set arithmetically (23296 ≤ 28672); confirm real resident
    memory under the concurrent interactive working-set + the on-demand
    `deepseek-r1:7b` during the live run.
@@ -1190,7 +1190,7 @@ done-promotion. `nextRequiredOwner = bubbles.devops`.
 
 Owner: `bubbles.devops` — finalize the `done` ceiling for the
 `088→087→084` validated-in-repo chain: isolate + commit + push the spec-088
-changeset, build/sign images, generate + apply the home-lab config bundle
+changeset, build/sign images, generate + apply the self-hosted config bundle
 carrying the `switchable_models` allowlist (ensure `deepseek-r1:7b` resident
 within the 28 GiB envelope), run the live `gemma4:26b`-vs-`deepseek-r1:7b`
 synthesis A/B + `tests/e2e/openknowledge` regression, then promote the chain.
@@ -1202,7 +1202,7 @@ No spec-088 substance rework is required.
 `064→084→087→088` chain. **Claim Source: executed** for STEP 1–3 (git + `gh run`
 observed); **blocked-on-operator** for STEP 4–5 (no live result fabricated).
 
-> **SHA reconciliation (2026-06-24):** the commit pushed below as `99c8d629` was rebased to **`9d0716b3`** during reconcile-20260612 (`f686b88d`); `9d0716b3` is the current on-main commit carrying the combined 087+088 work (verify: `git show 9d0716b3`). Every `99c8d629` reference below — the commit, the push range, the CI re-run target, `build-manifest-99c8d629.yaml`, and the `home-lab-99c8d629` config bundle — should be read as `9d0716b3` / `build-manifest-9d0716b3.yaml` / `home-lab-9d0716b3`. The historical STEP 1–2 text records the original push SHA and is left intact.
+> **SHA reconciliation (2026-06-24):** the commit pushed below as `99c8d629` was rebased to **`9d0716b3`** during reconcile-20260612 (`f686b88d`); `9d0716b3` is the current on-main commit carrying the combined 087+088 work (verify: `git show 9d0716b3`). Every `99c8d629` reference below — the commit, the push range, the CI re-run target, `build-manifest-99c8d629.yaml`, and the `self-hosted-99c8d629` config bundle — should be read as `9d0716b3` / `build-manifest-9d0716b3.yaml` / `self-hosted-9d0716b3`. The historical STEP 1–2 text records the original push SHA and is left intact.
 
 ### What completed (executed)
 
@@ -1210,12 +1210,12 @@ observed); **blocked-on-operator** for STEP 4–5 (no live result fabricated).
 |------|---------|
 | 1 — commit | DONE — combined 087+088 commit `99c8d629` (50 files, 8690 insertions). The 088 `--model` override (`modelswitch` pkg) + 087 split-synthesis hunks co-mingle across `agent.go`/`facade.go`/config; a clean per-spec hunk-split was error-prone, so both ship intact (a clean combined commit beats a broken split). pii-scan clean; transient `clients/.../.kotlin` excluded. |
 | 2 — push | DONE — `origin/main 10ed4a48..99c8d629`; pre-push uniformity lint PASSED; no `--no-verify`. Also carried the pre-existing unpushed spec-085, spec-086, framework-7.12.0 commits. |
-| 3 — CI | CI workflow (lint-and-test + cross-language-canary + build) **GREEN** — 088 Go validated on origin/main (agent-invoke model-override path, `switchable_models` allowlist, facade two-surface parity). `build-images` ✓ (core+ML cosign keyless+Rekor signed, SBOM+SLSA attested, ghcr digest push), `build-bundles` (dev/test/home-lab) ✓. |
+| 3 — CI | CI workflow (lint-and-test + cross-language-canary + build) **GREEN** — 088 Go validated on origin/main (agent-invoke model-override path, `switchable_models` allowlist, facade two-surface parity). `build-images` ✓ (core+ML cosign keyless+Rekor signed, SBOM+SLSA attested, ghcr digest push), `build-bundles` (dev/test/self-hosted) ✓. |
 
 ### What is blocked-on-operator (no result fabricated)
 
 - **STEP 3 gap — no build manifest.** `build-clients` ✗ (operator-private Android upload keystore secret missing) → `publish-build-manifest` was SKIPPED (`needs: build-clients`) → **`build-manifest-99c8d629.yaml` was NOT published**. Build-Once Deploy-Many therefore has no deploy input.
-- **STEP 4 — deploy.** Reachability is fine (home-lab reachable via tailscale root ssh; deploy-adapter overlay present; cosign installed), but (a) no build manifest, and (b) `deepseek-r1:7b` is NOT resident on the home-lab ollama (`gemma4:26b` IS, 17 GB). The live stack still runs the pre-088 build, so the wire does not yet honor `--model`.
+- **STEP 4 — deploy.** Reachability is fine (self-hosted reachable via tailscale root ssh; deploy-adapter overlay present; cosign installed), but (a) no build manifest, and (b) `deepseek-r1:7b` is NOT resident on the self-hosted ollama (`gemma4:26b` IS, 17 GB). The live stack still runs the pre-088 build, so the wire does not yet honor `--model`.
 - **STEP 5 — the decisive A/B.** Requires the 088 code deployed + `deepseek-r1:7b` resident; cannot be run meaningfully against the pre-088 live stack.
 
 ### Findings (operator-private CI secrets — surfaced by the push; all in spec-085/086, NOT 087/088)
@@ -1226,28 +1226,28 @@ observed); **blocked-on-operator** for STEP 4–5 (no live result fabricated).
 
 ### Operator runbook — finish STEP 4–5
 
-Substitute `<home-lab-host>` / `<home-lab-core-fqdn>` with your real (operator-private) values.
+Substitute `<deploy-host>` / `<self-hosted-core-fqdn>` with your real (operator-private) values.
 
 **A. Unblock the build manifest (CI secrets → re-run the build):**
 1. Add the Android upload keystore + deploy-overlay checkout token CI secrets.
 2. Re-run the `build` workflow on `99c8d629`; confirm `publish-build-manifest` writes `build-manifest-99c8d629.yaml`.
 
-**B. Ensure both synthesis models resident on the home-lab ollama (within the 28672 MiB envelope):**
+**B. Ensure both synthesis models resident on the self-hosted ollama (within the 28672 MiB envelope):**
 
 ```bash
-tailscale ssh root@<home-lab-host> -- 'docker exec smackerel-home-lab-ollama-1 ollama pull deepseek-r1:7b'
-tailscale ssh root@<home-lab-host> -- 'docker exec smackerel-home-lab-ollama-1 ollama list'   # expect deepseek-r1:7b + gemma4:26b
+tailscale ssh root@<deploy-host> -- 'docker exec smackerel-self-hosted-ollama-1 ollama pull deepseek-r1:7b'
+tailscale ssh root@<deploy-host> -- 'docker exec smackerel-self-hosted-ollama-1 ollama list'   # expect deepseek-r1:7b + gemma4:26b
 ```
 
 **C. Deploy (Build-Once Deploy-Many, from the deploy-adapter overlay):**
 
 ```bash
-bash scripts/deploy/promote.sh --target home-lab --build-manifest <path>/build-manifest-99c8d629.yaml
-# promote resolves digests + the home-lab-99c8d629 bundle and calls:
-#   ./smackerel.sh deploy-target home-lab apply \
+bash scripts/deploy/promote.sh --target self-hosted --build-manifest <path>/build-manifest-99c8d629.yaml
+# promote resolves digests + the self-hosted-99c8d629 bundle and calls:
+#   ./smackerel.sh deploy-target self-hosted apply \
 #     --image-core=sha256:<core-digest> --image-ml=sha256:<ml-digest> \
-#     --config-bundle=home-lab-99c8d629 --config-bundle-sha=<sha256-hex>
-./smackerel.sh deploy-target home-lab verify
+#     --config-bundle=self-hosted-99c8d629 --config-bundle-sha=<sha256-hex>
+./smackerel.sh deploy-target self-hosted verify
 ```
 
 **D. Run the A/B (the decisive test) — two-town pomegranate-growing comparison:**
@@ -1269,12 +1269,12 @@ HTTP surface (`POST /v1/agent/invoke`; baseline omits `model`, override sets it;
 
 ```bash
 # Baseline (configured synthesis model)
-curl --max-time 300 -X POST https://<home-lab-core-fqdn>/v1/agent/invoke \
+curl --max-time 300 -X POST https://<self-hosted-core-fqdn>/v1/agent/invoke \
   -H 'Content-Type: application/json' \
   -d '{"raw_input":"what is a better place to grow pomegranate, <town-A> or <town-B>, <ST>?"}'
 
 # Override (deepseek-r1:7b)
-curl --max-time 300 -X POST https://<home-lab-core-fqdn>/v1/agent/invoke \
+curl --max-time 300 -X POST https://<self-hosted-core-fqdn>/v1/agent/invoke \
   -H 'Content-Type: application/json' \
   -d '{"raw_input":"what is a better place to grow pomegranate, <town-A> or <town-B>, <ST>?","model":"deepseek-r1:7b"}'
 ```
@@ -1391,7 +1391,7 @@ ok  github.com/smackerel/smackerel/internal/telegram/assistant_adapter          
    `...TrustContractsHoldUnderOverride_Spec088`.
 
 **No genuine stability finding on spec 088's owned surface.** `findingsTotal: 0`.
-The `blocked` status is blocked-on-operator (CI build-manifest + live home-lab
+The `blocked` status is blocked-on-operator (CI build-manifest + live self-hosted
 `gemma4:26b`-vs-`deepseek-r1:7b` A/B), NOT a stability defect — that operational
 A/B is the separately-owned `operator/user-session` runbook above, not an
 in-repo stabilize finding.
@@ -1409,16 +1409,16 @@ in-repo stabilize finding.
 
 ---
 
-## SUPERSESSION NOTE — home-lab model optimization (2026-06-20)
+## SUPERSESSION NOTE — self-hosted model optimization (2026-06-20)
 
-Record-only; this spec's status and history are unchanged. The home-lab
+Record-only; this spec's status and history are unchanged. The self-hosted
 switchable synthesis set this spec shipped
-(`environments.home-lab.assistant_open_knowledge_switchable_models: [gemma4:26b, deepseek-r1:7b]`)
-has been superseded by the operator's optimized home-lab model set: the
+(`environments.self-hosted.assistant_open_knowledge_switchable_models: [gemma4:26b, deepseek-r1:7b]`)
+has been superseded by the operator's optimized self-hosted model set: the
 switchable set is now **`[gpt-oss:20b, gemma4:26b]`** — the only two models the
-operator's home-lab Ollama host pulls. `gpt-oss:20b` is the standing synthesis
+operator's self-hosted Ollama host pulls. `gpt-oss:20b` is the standing synthesis
 default and `gemma4:26b` is the gather model; the deepseek switchable arms are
-retired from the home-lab active selection. The spec-088 runtime-switch
+retired from the self-hosted active selection. The spec-088 runtime-switch
 machinery, the `switchable_models` co-residence envelope guard
 (`validateModelEnvelopes`), and the trust invariants are unchanged — only the
 offered model set changed. See `docs/Operations.md` → "Model Envelope Sizing".

@@ -191,7 +191,7 @@ func TestSQLNoticeLedger_FirstTurn_MissingRow_IsBestEffort(t *testing.T) {
 	)
 	// Deliberately do NOT call seedConversation — this user has no
 	// assistant_conversations row, mirroring the production first-turn
-	// state observed on home-lab user "philip".
+	// state observed on self-hosted user "philip".
 	userID := fmt.Sprintf("tp-075-firstturn-user-%d", time.Now().UnixNano())
 	t.Cleanup(func() {
 		cctx, ccancel := context.WithTimeout(context.Background(), 5*time.Second)

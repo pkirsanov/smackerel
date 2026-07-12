@@ -1,7 +1,7 @@
 # Report — Spec 084 (Open-Knowledge Reasoning Loop)
 
 **Mode:** full-delivery (prelude: analyze-design-plan) · **Amends:** spec 064
-**Terminal target:** validated-in-repo (NO push; home-lab deploy is a separate
+**Terminal target:** validated-in-repo (NO push; self-hosted deploy is a separate
 `bubbles.devops` dispatch).
 
 > Evidence policy: every block below is REAL terminal output captured in THIS
@@ -46,7 +46,7 @@ in the container) and the scopes-path-ref drift ratchet (100% attributable to
 the operator's uncommitted spec-083 card-rewards WIP; spec 084 contributes 0
 broken refs). No model / spec-083 file was touched; no commit/push performed. Terminal
 state: validated-in-repo. Next owner: `bubbles.devops` for the isolated push +
-CI + home-lab apply + operator live re-verify.
+CI + self-hosted apply + operator live re-verify.
 
 ---
 
@@ -366,5 +366,5 @@ Model-matrix diff check over `config/smackerel.yaml` (`llm_model_id`,
 `ollama_model`, `agent_provider_*_model`): the only matched diff lines are my
 `max_iterations` / `per_query_token_budget` edits whose COMMENT text mentions
 "gemma4:26b" — no `llm_model_id` / `ollama_model` / model-matrix VALUE changed.
-The model matrix is unchanged (gemma4:26b home-lab / gemma3:4b dev). No
+The model matrix is unchanged (gemma4:26b self-hosted / gemma3:4b dev). No
 deepseek-r1 wiring added.

@@ -4,7 +4,7 @@
 # Spec 085 — Client Binary Release. Emit the `clients:` block that the CI
 # `publish-build-manifest` job appends to build-manifest-<sourceSha>.yaml, under
 # the knb spec 025 schema. The block pins smackerel's Android client artifact
-# (AAB + APK) by digest so the knb home-lab adapter (Lane A) can pull + cosign-
+# (AAB + APK) by digest so the knb self-hosted adapter (Lane A) can pull + cosign-
 # verify it, and so the knb conformance gate's fail-closed manifest check (c)
 # passes (a contracted platform with an empty/malformed digest is REFUSED here,
 # before it ever reaches the manifest).

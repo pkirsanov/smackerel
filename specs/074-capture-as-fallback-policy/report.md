@@ -181,7 +181,7 @@ wget: can't connect to remote host: Connection refused
 
 Core's own log shows it reaches `"waiting for ML sidecar readiness","timeout":60000000000,"url":"http://smackerel-ml:8081"` and never opens its own HTTP listener on `:8080` during the healthcheck window. The HTTP listener does not bind until after the ML readiness wait completes, and the healthcheck (5s start_period + 5s interval × 5 retries = ~30s budget) expires before core finishes that wait.
 
-This blocker is **not** the SCOPE-074-04A code, the previously-cleared `internal/config` baseline, or the (now-resolved) scopes.md decomposition. It is a pre-existing test-stack startup-race in the home-lab/test-runner infrastructure that affects ALL `./smackerel.sh test integration` invocations on this host today (the parallel OpenKnowledge integration test invocation that ran during this pass exited with the same EXIT=1 symptom).
+This blocker is **not** the SCOPE-074-04A code, the previously-cleared `internal/config` baseline, or the (now-resolved) scopes.md decomposition. It is a pre-existing test-stack startup-race in the self-hosted/test-runner infrastructure that affects ALL `./smackerel.sh test integration` invocations on this host today (the parallel OpenKnowledge integration test invocation that ran during this pass exited with the same EXIT=1 symptom).
 
 **Phase:** implement. **Claim Source:** executed (2026-06-01b 21:03–21:05 UTC).
 

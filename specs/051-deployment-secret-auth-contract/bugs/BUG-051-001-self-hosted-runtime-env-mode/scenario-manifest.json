@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "bugId": "BUG-051-001-self-hosted-runtime-env-mode",
+  "parentSpec": "051-deployment-secret-auth-contract",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-051-001-A",
+      "title": "TARGET_ENV=self-hosted emits SMACKEREL_ENV=production into the generated env file",
+      "scopeId": "1",
+      "requiredTestType": "shell-driven-go-unit",
+      "regressionRequired": true,
+      "linkedTests": ["TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "scripts/commands/config.sh (pre-fix per-target block had only a TARGET_ENV=test arm; no self-hosted arm)",
+      "redGreenProbe": "bash scripts/commands/config_self_hosted_runtime_env_test.sh"
+    },
+    {
+      "scenarioId": "SCN-051-001-B",
+      "title": "(canary) TARGET_ENV=dev still emits SMACKEREL_ENV=development",
+      "scopeId": "1",
+      "requiredTestType": "shell-driven-go-unit",
+      "regressionRequired": true,
+      "linkedTests": ["TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "scripts/commands/config.sh (the dev target inherits runtime.environment=development from smackerel.yaml; the BUG-051-001 fix MUST NOT over-reach to dev)",
+      "redGreenProbe": "bash scripts/commands/config_self_hosted_runtime_env_test.sh"
+    },
+    {
+      "scenarioId": "SCN-051-001-C",
+      "title": "(canary) TARGET_ENV=test still emits SMACKEREL_ENV=test (MIT-040-S-004 preserved)",
+      "scopeId": "1",
+      "requiredTestType": "shell-driven-go-unit",
+      "regressionRequired": true,
+      "linkedTests": ["TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "scripts/commands/config.sh (the pre-existing test arm of the per-target case must remain; MIT-040-S-004 ergonomic for integration/e2e/stress runs)",
+      "redGreenProbe": "bash scripts/commands/config_self_hosted_runtime_env_test.sh"
+    },
+    {
+      "scenarioId": "SCN-051-001-D",
+      "title": "(defense-in-depth) TARGET_ENV=self-hosted against unpatched live yaml is still rejected by FR-051-005 generator-side guard with spec 051 attribution and without echoing the literal value",
+      "scopeId": "1",
+      "requiredTestType": "shell-driven-go-unit",
+      "regressionRequired": true,
+      "linkedTests": ["TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "scripts/commands/config.sh lines ~415-433 (the FR-051-005 generator-side guard MUST continue to fire for the dev-default Postgres password on the self-hosted target — it is orthogonal to the BUG-051-001 SMACKEREL_ENV mapping)",
+      "redGreenProbe": "bash scripts/commands/config_self_hosted_runtime_env_test.sh"
+    }
+  ]
+}

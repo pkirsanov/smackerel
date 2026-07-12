@@ -80,3 +80,25 @@ else
     "       knb CI safety net catches drift on push to main." >&2
 fi
 # === end knb spec 025 client-binary conformance gate ===
+
+# === knb product deployment-boundary guard ===
+# Product repos contain only target-neutral contracts, env seams, and generic
+# placeholder examples. All concrete deployment identity/topology lives in knb.
+# This check is fail-closed: without the knb-owned scanner/token registry, the
+# push is refused rather than silently weakening the boundary.
+if _knb_root="$(resolve_knb_checkout)"; then
+  _deployment_boundary_guard="$_knb_root/scripts/lint/product-deployment-boundary.sh"
+  if [ ! -f "$_deployment_boundary_guard" ]; then
+    printf '%s\n' \
+      "[E-PDB-PRE-PUSH-MISSING-GUARD] product deployment-boundary guard missing in knb" \
+      "       Push rejected. Update the knb checkout before retrying." >&2
+    exit 1
+  fi
+  bash "$_deployment_boundary_guard" --repo "$(git rev-parse --show-toplevel)" || exit $?
+else
+  printf '%s\n' \
+    "[E-PDB-PRE-PUSH-MISSING-KNB] knb checkout is required for deployment-boundary validation" \
+    "       Push rejected. Set KNB_REPO_ROOT or check out knb at the standard operator location." >&2
+  exit 1
+fi
+# === end knb product deployment-boundary guard ===

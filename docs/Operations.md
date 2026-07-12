@@ -32,7 +32,7 @@ Portfolio sweeps (`spec-dashboard.sh`, `bubbles.status`, `bubbles.recap`, retro 
 
 ### Production Deploy (Build-Once Deploy-Many)
 
-For a production-class deploy on any target — self-hosted home lab,
+For a production-class deploy on any target — self-hosted self-hosted environment,
 staging, or production — **start here, not in First-Time Setup**.
 
 Smackerel uses the Build-Once Deploy-Many architecture: this repo's CI
@@ -40,7 +40,7 @@ publishes immutable signed images, SBOM + SLSA attestations, and
 per-environment config bundles; a per-target deploy adapter (in-tree
 under `deploy/<target>/` for generic targets, or out-of-tree under
 `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled
-targets like home-lab adapters) consumes those artifacts and applies them by
+targets like self-hosted adapters) consumes those artifacts and applies them by
 digest.
 
 Read the production guide first:
@@ -50,43 +50,43 @@ Read the production guide first:
   dependency, and Generic Pre-Apply Prerequisites
 - [`deploy/README.md`](../deploy/README.md) — adapter locality rule
   (in-tree vs out-of-tree) and `DEPLOY_TARGETS_ROOT` resolution
-- [`docs/Home_Lab_Deployment_Plan.md`](Home_Lab_Deployment_Plan.md) —
+- [`docs/Self_Hosted_Deployment_Plan.md`](Self_Hosted_Deployment_Plan.md) —
   migration-pointer stub naming the deploy-adapter overlay
-  as the owner of the home-lab adapter
+  as the owner of the self-hosted adapter
 
 Production secret prerequisites are enumerated in
 [`docs/Deployment.md`](Deployment.md) §"Generic Pre-Apply
 Prerequisites (Product Contract)" — confirm them before invoking any
 adapter `apply.sh`.
 
-### Home-Lab Activation Boundary
+### Self-Hosted Activation Boundary
 
 This product repo proves generic artifact production, status delegation, and
-runtime contracts. It does not prove live home-lab activation by itself. A live
-home-lab apply requires the operator-private adapter packet:
+runtime contracts. It does not prove live self-hosted activation by itself. A live
+self-hosted apply requires the operator-private adapter packet:
 
 | Input | Source |
 |-------|--------|
 | Source SHA | Upstream build manifest for the chosen release. |
 | Core and ML image digests | Upstream build manifest, passed as digest-only apply flags. |
-| Config bundle ref | `home-lab-<sourceSha>` from the build manifest. |
+| Config bundle ref | `self-hosted-<sourceSha>` from the build manifest. |
 | Config bundle SHA | Build-manifest `sha256` value for the same bundle. |
 | Out-of-tree adapter root | `DEPLOY_TARGETS_ROOT` resolving to `<adapter-root>/smackerel/<target>/`. |
 | Concrete params | Adapter `params.yaml`, including target identity, ports, paths, Caddy, and bind address. |
 | Encrypted secrets | Adapter-owned SOPS/age ciphertext for the target. |
 | Release proof | Cosign, SLSA, SBOM, vulnerability proof, and bundle/source identity receipts. |
-| Live approval | Human operator authorization; static docs and fixture tests do not mutate the home-lab host. |
+| Live approval | Human operator authorization; static docs and fixture tests do not mutate the self-hosted host. |
 
-Current KNB home-lab port guidance is `41001` for `smackerel-core` and `41002`
+Current KNB self-hosted port guidance is `41001` for `smackerel-core` and `41002`
 for `smackerel-ml`. Local dev remains on `40001/40002`; do not treat those dev
-ports as home-lab activation values.
+ports as self-hosted activation values.
 
-| Surface | Placeholder-only access path | Home-lab adapter port | Owner boundary |
+| Surface | Placeholder-only access path | self-hosted adapter port | Owner boundary |
 |---------|------------------------------|-----------------------|----------------|
 | Core API and web UI | `https://smk.<tailnet-fqdn>` through host Caddy to `127.0.0.1:41001` | `41001` | KNB adapter writes explicit `HOST_BIND_ADDRESS`; host Caddy owns TLS/tailnet identity. |
 | ML sidecar health/devops | `https://smk-ml.<tailnet-fqdn>` through host Caddy to `127.0.0.1:41002` | `41002` | KNB adapter writes route and bind; host-owned `devops_auth` gates access. |
-| PostgreSQL | `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres ...` | No host port | Compose service is internal only. |
-| NATS | `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats ...` | No host port | Compose service is internal only. |
+| PostgreSQL | `tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-postgres ...` | No host port | Compose service is internal only. |
+| NATS | `tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats ...` | No host port | Compose service is internal only. |
 | Status | `./smackerel.sh deploy-target <target> status` or adapter `status.sh` | Read-only | Product dispatcher delegates to adapter `status.sh` when executable and otherwise prints a generic read-only fallback. |
 
 ### First-Time Setup (Local Dev)
@@ -220,9 +220,9 @@ Returns JSON with status for: API, PostgreSQL, NATS, ML sidecar, Telegram bot, O
 
 Available at `http://127.0.0.1:40001/metrics` (unauthenticated, standard Prometheus scrape endpoint).
 
-## DevOps Access on Home-Lab (Tailnet-Edge Pattern)
+## DevOps Access on Self-Hosted (Tailnet-Edge Pattern)
 
-On home-lab and production deployments, the deploy compose
+On self-hosted and production deployments, the deploy compose
 (`deploy/compose.deploy.yml`) implements the canonical tailnet-edge bind
 pattern (see `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` and
 [spec 042](../specs/042-tailnet-edge-bind-pattern/spec.md)). Backend
@@ -260,22 +260,22 @@ There is no published Postgres host port. DevOps reaches Postgres via:
 
 ```bash
 # Interactive psql session (recommended)
-tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres \
+tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-postgres \
     psql -U smackerel -d smackerel
 
 # Single-shot query
-tailscale ssh <deploy-host> -- docker exec -i smackerel-home-lab-postgres \
+tailscale ssh <deploy-host> -- docker exec -i smackerel-self-hosted-postgres \
     psql -U smackerel -d smackerel -Atqc 'SELECT count(*) FROM artifacts'
 
 # Streaming pg_dump backup (write the dump on the operator's workstation)
-tailscale ssh <deploy-host> -- docker exec smackerel-home-lab-postgres \
+tailscale ssh <deploy-host> -- docker exec smackerel-self-hosted-postgres \
     pg_dump -U smackerel -d smackerel -Fc | \
-    cat > /tmp/smackerel-home-lab.pgdump
+    cat > /tmp/smackerel-self-hosted.pgdump
 ```
 
 Container name follows the pattern `smackerel-<env>-postgres` because the
 deploy compose's `COMPOSE_PROJECT` env var is set per environment by the
-adapter (e.g., `smackerel-home-lab` for the home-lab target).
+adapter (e.g., `smackerel-self-hosted` for the self-hosted target).
 
 ### NATS (Pattern P1: docker exec over Tailscale SSH)
 
@@ -284,15 +284,15 @@ via:
 
 ```bash
 # Subscribe to all subjects (interactive monitoring)
-tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
+tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats \
     nats sub '>'
 
 # Inspect server health (NATS monitor endpoint, in-network)
-tailscale ssh <deploy-host> -- docker exec smackerel-home-lab-nats \
+tailscale ssh <deploy-host> -- docker exec smackerel-self-hosted-nats \
     wget -qO- http://localhost:8222/healthz
 
 # List streams
-tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
+tailscale ssh <deploy-host> -- docker exec -it smackerel-self-hosted-nats \
     nats stream ls
 ```
 
@@ -368,7 +368,7 @@ When introducing a new stream to `internal/nats.AllStreams()`:
 ### Why this pattern
 
 - Closes the host network footgun: no operator or agent can accidentally
-  `psql -h 127.0.0.1 -p <pg_host_port>` into the home-lab database from a
+  `psql -h 127.0.0.1 -p <pg_host_port>` into the self-hosted database from a
   tool that happens to share the env file. The only access path is via
   the audited `tailscale ssh` + `docker exec` chain.
 - Reuses the Tailscale identity for authentication. No extra credentials
@@ -407,7 +407,7 @@ Prometheus, not by push:
 - Liveness is the synthetic `up{job="smackerel-core"}` /
   `up{job="smackerel-ml"}` series (the availability alerts key off `up == 0`).
 - The `/metrics` scrape endpoint is unauthenticated and **compose-network-only**
-  on home-lab (reach it through the Prometheus UI, not a host `curl`); on local
+  on self-hosted (reach it through the Prometheus UI, not a host `curl`); on local
   dev it is `http://127.0.0.1:40001/metrics`.
 - Every backing metric is listed in the [Alert Runbook](#alert-runbook) and
   [Dashboard Inventory](#dashboard-inventory) tables.
@@ -433,7 +433,7 @@ tailscale ssh <deploy-host> -- docker logs --since 15m <core-container>
 # 4. HTTP health — local dev (loopback):
 curl --max-time 5 http://127.0.0.1:40001/api/health    # core
 curl --max-time 5 http://127.0.0.1:40002/health        # ml
-# Home-lab: reach the same endpoints over the Pattern P5 host-Caddy route
+# self-hosted: reach the same endpoints over the Pattern P5 host-Caddy route
 # (see "HTTP UIs (Pattern P5: Host Caddy on the Tailscale IP)" above).
 ```
 
@@ -498,7 +498,7 @@ search serving while you do.
 ```bash
 ./smackerel.sh config generate
 ./smackerel.sh down && ./smackerel.sh up        # local dev
-# Home-lab: the SST change ships in a new config bundle and is applied via the
+# self-hosted: the SST change ships in a new config bundle and is applied via the
 # adapter — ./smackerel.sh deploy-target <target> apply (see Deployment.md).
 ```
 
@@ -557,7 +557,7 @@ tailscale ssh <deploy-host> -- docker exec smackerel-<target>-postgres \
 ```
 
 **Remediate.** Bump `infrastructure.postgres.max_conns` in the SST (regenerate +
-restart locally, or re-apply via the adapter on home-lab), or terminate a runaway
+restart locally, or re-apply via the adapter on self-hosted), or terminate a runaway
 backend:
 
 ```bash
@@ -616,7 +616,7 @@ skip it on the next cycle:
 ```bash
 # config/smackerel.yaml:  connectors.<name>.enabled: false
 ./smackerel.sh config generate
-./smackerel.sh down && ./smackerel.sh up        # local dev; home-lab re-applies via the adapter
+./smackerel.sh down && ./smackerel.sh up        # local dev; self-hosted re-applies via the adapter
 ```
 
 ### Break-glass / emergency stop
@@ -625,7 +625,7 @@ skip it on the next cycle:
 # Local dev — stop the whole stack (named volumes are PRESERVED):
 ./smackerel.sh down
 
-# Home-lab / production — the deploy ADAPTER owns lifecycle. Stop on the host
+# self-hosted / production — the deploy ADAPTER owns lifecycle. Stop on the host
 # via the adapter-owned compose (no rebuild, no data loss):
 tailscale ssh <deploy-host> -- sudo docker compose -f <COMPOSE_DIR>/docker-compose.yml down
 
@@ -648,7 +648,7 @@ exercises live in [`docs/Upkeep_Runbook.md`](Upkeep_Runbook.md) (`restore-test.s
 
 ## Bundle Secret Substitution (spec 052)
 
-For production-class targets (`home-lab`, `production`, and any future
+For production-class targets (`self-hosted`, `production`, and any future
 non-dev/non-test environment), Smackerel uses a 3-layer defense-in-depth
 secret pipeline (Spec 052). The bundle generator emits the deterministic
 placeholder marker `__SECRET_PLACEHOLDER__<KEY>__` for every managed
@@ -756,7 +756,7 @@ no placeholder ever leaks to logs, telemetry, or error paths.
 1. **Inspect the apply audit log.** From the target host:
 
    ```bash
-   tailscale ssh <home-lab-host>
+   tailscale ssh <deploy-host>
    sudo tail -n 50 /var/log/smackerel/apply.log
    ```
 
@@ -774,7 +774,7 @@ no placeholder ever leaks to logs, telemetry, or error paths.
 2. **Inspect the resolved Compose env (live).** From the target host:
 
    ```bash
-   tailscale ssh <home-lab-host>
+   tailscale ssh <deploy-host>
    sudo docker compose -f <COMPOSE_DIR>/docker-compose.yml config | grep '__SECRET_PLACEHOLDER__'
    ```
 
@@ -786,7 +786,7 @@ no placeholder ever leaks to logs, telemetry, or error paths.
    target host:
 
    ```bash
-   tailscale ssh <home-lab-host>
+   tailscale ssh <deploy-host>
    sudo docker exec smackerel-<env>-core sh -c 'env | cut -d= -f1 | sort'
    ```
 
@@ -800,7 +800,7 @@ no placeholder ever leaks to logs, telemetry, or error paths.
    host:
 
    ```bash
-   tailscale ssh <home-lab-host>
+   tailscale ssh <deploy-host>
    sudo docker logs smackerel-<env>-core 2>&1 | grep -E '__SECRET_PLACEHOLDER__|<known-canary-fragment>'
    ```
 
@@ -821,7 +821,7 @@ no placeholder ever leaks to logs, telemetry, or error paths.
    ```
 
    The two lists MUST match exactly (same keys, same order). The unit
-   test `internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInHomeLab`
+   test `internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInSelfHosted`
    enforces this in CI; auditors MAY re-verify post-hoc.
 
 **No-credential-required scope.** The full audit can be performed without
@@ -1120,7 +1120,7 @@ webhook receiver is registered:
 ```bash
 curl --max-time 5 -X POST -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  --data '{"id":"evt-local-check","event":"message","topic":"home-lab-alerts","title":"Check","message":"source sink path"}' \
+  --data '{"id":"evt-local-check","event":"message","topic":"self-hosted-alerts","title":"Check","message":"source sink path"}' \
   http://127.0.0.1:40001/api/notifications/sources/ntfy-local-webhook/ntfy/webhook
 ```
 
@@ -1825,8 +1825,8 @@ Distributed trace context propagation through NATS messages is available but dis
 2. Set the shared-observability OTLP endpoints in the `observability:` block —
    `otlp_traces_endpoint` and `otlp_logs_endpoint` — to your OTLP/gRPC collector
    (e.g. `http://localhost:4317`); `metrics_scrape_label_product` is the
-   Prometheus `product=` scrape label (default `smackerel`). Under the home-lab
-   shared posture the knb adapter (`smackerel/home-lab/apply.sh`) injects these
+   Prometheus `product=` scrape label (default `smackerel`). Under the self-hosted
+   shared posture the knb adapter (`<deployment-owner>/<product>/<target>/apply.sh`) injects these
    into `app.env` automatically. When `otel_enabled=true` all three are
    validated fail-loud at boot — a missing/empty value aborts startup (knb
    spec 014 scope 03 / smackerel spec 101; no default, no fallback).
@@ -1871,7 +1871,7 @@ curl -s http://127.0.0.1:42005/-/healthy
 curl -s http://127.0.0.1:42005/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
 ```
 
-On home-lab / production deployments the deploy adapter sets
+On self-hosted / production deployments the deploy adapter sets
 `HOST_BIND_ADDRESS` (typically the tailnet IP) so Prometheus
 becomes reachable on the overlay network. The fail-loud
 substitution `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set
@@ -2039,7 +2039,7 @@ deploy the Prometheus `blackbox_exporter` pointed at the ML sidecar
 ## TLS Setup
 
 This section is generic local/self-hosted reverse-proxy guidance for the product
-stack. It is not the KNB home-lab activation path. KNB home-lab activation uses
+stack. It is not the KNB self-hosted activation path. KNB self-hosted activation uses
 the out-of-tree adapter packet, explicit `HOST_BIND_ADDRESS`, host Caddy, and
 adapter ports `41001/41002`.
 
@@ -2122,7 +2122,7 @@ Certbot automatically configures HTTPS and sets up a renewal cron job.
 ### Which Ports to Expose
 
 The `40001/40002` values below are product dev/local values. Current KNB
-home-lab guidance uses `41001/41002` behind host Caddy and fail-loud
+self-hosted guidance uses `41001/41002` behind host Caddy and fail-loud
 `HOST_BIND_ADDRESS` assignment by the adapter.
 
 | Port | Service | Expose Externally? |
@@ -2186,7 +2186,7 @@ the operator-facing reference.
 |---|---|---|
 | `dev` | `false` | Shared `SMACKEREL_AUTH_TOKEN` (legacy). No per-user setup required. |
 | `test` | `false` | Shared `SMACKEREL_AUTH_TOKEN` (disposable). No per-user setup required. |
-| `home-lab` | `true` | Per-user PASETO required. Operator MUST populate the three secrets below before the runtime starts. |
+| `self-hosted` | `true` | Per-user PASETO required. Operator MUST populate the three secrets below before the runtime starts. |
 
 The per-environment override lives at `environments.<env>.auth_enabled` in
 `config/smackerel.yaml`. Production-class deployments (any environment with
@@ -2256,7 +2256,7 @@ docker exec -it smackerel-<env>-smackerel-core-1 smackerel-core auth <subcommand
 ```
 
 The container project name varies by environment: `smackerel-dev-smackerel-core-1`,
-`smackerel-test-smackerel-core-1`, `smackerel-home-lab-smackerel-core-1`. Use
+`smackerel-test-smackerel-core-1`, `smackerel-self-hosted-smackerel-core-1`. Use
 `./smackerel.sh status` to confirm the exact container name.
 
 Available subcommands (per `cmd/core/cmd_auth.go`):
@@ -2276,7 +2276,7 @@ missing material); `2` invocation error (missing args, unknown subcommand).
 ### Key Generation
 
 ```bash
-docker exec -it smackerel-home-lab-smackerel-core-1 smackerel-core auth keygen
+docker exec -it smackerel-self-hosted-smackerel-core-1 smackerel-core auth keygen
 ```
 
 Output (placeholder values shown):
@@ -2323,19 +2323,19 @@ After bootstrap, use the regular subcommands. Examples (placeholder ids shown):
 
 ```bash
 # Enroll a second user
-docker exec -it smackerel-home-lab-smackerel-core-1 \
+docker exec -it smackerel-self-hosted-smackerel-core-1 \
   smackerel-core auth enroll --notes 'household co-owner' '<user-id>'
 
 # Rotate a user's token (during planned key rotation or after suspected leakage)
-docker exec -it smackerel-home-lab-smackerel-core-1 \
+docker exec -it smackerel-self-hosted-smackerel-core-1 \
   smackerel-core auth rotate --prior-token-id '<old-token-id>' '<user-id>'
 
 # Revoke a specific token immediately (e.g. after device loss)
-docker exec -it smackerel-home-lab-smackerel-core-1 \
+docker exec -it smackerel-self-hosted-smackerel-core-1 \
   smackerel-core auth revoke --reason 'device-lost' '<token-id>'
 
 # List enrolled users
-docker exec -it smackerel-home-lab-smackerel-core-1 \
+docker exec -it smackerel-self-hosted-smackerel-core-1 \
   smackerel-core auth list-users
 ```
 
@@ -3169,7 +3169,7 @@ sideload zip from CI.
 ### Sideload Workflow (Operator)
 
 1. **Pick the build manifest.** Identify the smackerel-core git SHA running
-   on your deployment (e.g. from `./smackerel.sh deploy-target home-lab
+   on your deployment (e.g. from `./smackerel.sh deploy-target self-hosted
    verify`), then download the matching `build-manifest-<sourceSha>.yaml`
    from the GitHub Actions `build` workflow run. The manifest's
    `chromeBridge` section names the artifact and its SHA-256.
@@ -3463,28 +3463,28 @@ Migration `025_photo_libraries.sql` plus `029_photo_scope3_lifecycle_dedupe_remo
 
 ## Model Envelope Sizing (Spec 045 / BUG-045-001)
 
-> **SUPERSESSION — home-lab model selection is deploy-adapter-owned
-> (single-source).** Home-lab's model selection AND its Ollama memory envelope
+> **SUPERSESSION — self-hosted model selection is deploy-adapter-owned
+> (single-source).** self-hosted's model selection AND its Ollama memory envelope
 > are no longer pinned in `config/smackerel.yaml`. They are operator/hardware-
 > specific and owned by the deploy adapter's per-target `params.yaml`
 > `model_selection:` block; the adapter's `apply.sh` injects the resolved model
 > env vars + `OLLAMA_MEMORY_LIMIT` into the bundle's `app.env` at apply time
 > (appended after the generated values, last-occurrence-wins — the same pattern
-> as `HOST_BIND_ADDRESS`). The in-repo home-lab bundle therefore ships the
+> as `HOST_BIND_ADDRESS`). The in-repo self-hosted bundle therefore ships the
 > **generic commodity base, identical to dev**: the tier-matrix interactive
 > model plus the base `agent.provider_routing.*` / `photos.intelligence.*` /
 > `assistant.open_knowledge.*` model fields and the `8G`
-> `deploy_resources.ollama.memory` envelope. The 17 per-env home-lab model keys
+> `deploy_resources.ollama.memory` envelope. The 17 per-env self-hosted model keys
 > that previously lived here (and the spec-087/088/089 deepseek / gpt-oss:20b /
 > gemma4:26b narrative in the blockquotes below) are retained only as the
-> historical record of how the home-lab set evolved — they are no longer the
+> historical record of how the self-hosted set evolved — they are no longer the
 > in-repo selection. The `model_memory_profiles` catalog still profiles the
 > operator models (`gpt-oss:20b`, `gemma4:26b`, `deepseek-r1:32b`) so the
 > **runtime** `validateModelEnvelopes` check (at container start, against the
 > adapter-injected values) validates the operator's real selection against the
 > operator's real envelope. Enforced by
-> `tests/integration/agent_provider_homelab_model_override_test.go`
-> (`TestHomeLabDoesNotHardcodeModels`), which fails if any of the 17 home-lab
+> `tests/integration/agent_provider_selfhosted_model_override_test.go`
+> (`TestSelfHostedDoesNotHardcodeModels`), which fails if any of the 17 self-hosted
 > model fields diverges from dev's commodity base.
 
 Smackerel's local-inference model selection MUST fit two independent memory envelopes:
@@ -3557,7 +3557,7 @@ The integration harness can substitute a precompiled validator binary by setting
 The per-model envelope check above proves each configured model fits the
 ollama envelope **alone**. It does NOT, by itself, prove that the models the
 runtime keeps **co-resident** fit together. Under a resident `OLLAMA_KEEP_ALIVE`
-(`-1` = never unload, or any duration ≥ 10 minutes such as the home-lab/prod
+(`-1` = never unload, or any duration ≥ 10 minutes such as the self-hosted/prod
 `24h`), ollama retains every model it loads, so the distinct interactive
 hot-path models are simultaneously resident and their **sum** must also fit
 `OLLAMA_MEMORY_LIMIT`. If it does not, Docker OOM-kills the ollama container
@@ -3578,12 +3578,12 @@ or shorten `OLLAMA_KEEP_ALIVE`.
 |-----|--------------------------|-----------|-----------------------|--------|
 | dev | `gemma3:4b` + `qwen2.5:0.5b-instruct` | 5120 | 8G (8192) | fits |
 | test | `qwen2.5:0.5b-instruct` | 1024 | 8G (8192) | fits |
-| home-lab (in-repo bundle) | commodity base (== dev) | ≤ 5120 | 8G (8192) | fits |
-| home-lab (operator set, adapter-injected at apply) | `gpt-oss:20b` + `gemma4:26b` | 32768 | 48G (49152) | fits — validated at container start |
+| self-hosted (in-repo bundle) | commodity base (== dev) | ≤ 5120 | 8G (8192) | fits |
+| self-hosted (operator set, adapter-injected at apply) | `gpt-oss:20b` + `gemma4:26b` | 32768 | 48G (49152) | fits — validated at container start |
 
-The in-repo home-lab bundle ships the commodity base, so its in-repo concurrent
+The in-repo self-hosted bundle ships the commodity base, so its in-repo concurrent
 interactive set fits the `8G` commodity envelope exactly like dev. The
-operator's real home-lab interactive set — `gpt-oss:20b` (14336) + `gemma4:26b`
+operator's real self-hosted interactive set — `gpt-oss:20b` (14336) + `gemma4:26b`
 (18432) = 32768 MiB — and its `48G` (`OLLAMA_MEMORY_LIMIT`) envelope are
 injected by the deploy adapter into `app.env` at apply (the `model_selection:`
 block in the adapter's per-target `params.yaml`). Because those values land at
@@ -4788,11 +4788,11 @@ for the full outcome contract and refusal taxonomy.
 > hard-caps `timeout_ms` at 120000. The real ceiling is the HTTP server
 > `WriteTimeout` in `cmd/core/main.go`, sized to the worst-case invariant
 > `max_iterations × llm_timeout_ms`; spec 084 raised it to `6 × 600s = 3600s`.
-> Realistic home-lab (gemma4:26b, resident) reasoning turns are ~40-60s at 6
+> Realistic self-hosted (gemma4:26b, resident) reasoning turns are ~40-60s at 6
 > iterations (vs ~25-36s at 4); the 3600s ceiling is a slow-CPU-dev backstop. If
 > an operator later raises `max_iterations` to 8+, revisit ONLY the `WriteTimeout`
 > invariant — not the substrate limits. The deployed model matrix (gemma4:26b
-> home-lab / gemma3:4b dev) is unchanged by spec 084.
+> self-hosted / gemma3:4b dev) is unchanged by spec 084.
 
 > **Spec 087 — genuine synthesis (split reasoning model + retry-before-salvage).**
 > Spec 084's hypothesis (gemma4:26b reasons well once unshackled) was empirically
@@ -4804,7 +4804,7 @@ for the full outcome contract and refusal taxonomy.
 >   tool-calling GATHER turns keep using `llm_model_id` (gemma — a strong
 >   tool-caller). The tools-stripped forced-final SYNTHESIS turn (and its retries)
 >   uses `synthesis_model_id` — a reasoning model. Dev default `gemma3:4b`
->   (== `llm_model_id`, no effective split, envelope-safe); home-lab override
+>   (== `llm_model_id`, no effective split, envelope-safe); self-hosted override
 >   `assistant_open_knowledge_synthesis_model_id: deepseek-r1:7b`. `deepseek-r1:7b`
 >   (4864 MiB) is already in the ollama envelope via `OLLAMA_REASONING_MODEL` and
 >   is an on-demand specialist (NOT in the concurrent interactive working-set
@@ -4828,13 +4828,13 @@ for the full outcome contract and refusal taxonomy.
 >   `(max_iterations + synthesis_retry_budget) × llm_timeout_ms` =
 >   `(6 + 1) × 600s = 4200s` (`cmd/core/main.go`). The synthesis turn (+ retry)
 >   runs the reasoning model bounded by the same `llm_timeout_ms`, so the envelope
->   stays honest. Realistic home-lab turns (gemma4:26b gather + deepseek-r1:7b
+>   stays honest. Realistic self-hosted turns (gemma4:26b gather + deepseek-r1:7b
 >   synthesis, GPU-resident) complete in ~40-90s. If an operator raises
 >   `max_iterations` or `synthesis_retry_budget`, recompute `WriteTimeout`.
 >
 > All spec-064 trust invariants are preserved verbatim: the cite-back verifier and
 > provenance gate run on the post-`<think>`-strip text; capture-as-fallback (the
-> Facade) is untouched and inviolable. The decisive home-lab re-verification of the
+> Facade) is untouched and inviolable. The decisive self-hosted re-verification of the
 > pomegranate turn is a separate `bubbles.devops` dispatch (build new signed images
 > carrying the synthesis split + `deepseek-r1:7b` model pull + bundle that sets the
 > per-environment `synthesis_model_id`).
@@ -4855,7 +4855,7 @@ for the full outcome contract and refusal taxonomy.
 >     answering `model`.
 > - **Allowlist (`assistant.open_knowledge.switchable_models`).** A REQUIRED,
 >   non-empty-when-enabled, operator-curated list of models `/ask` may switch the
->   synthesis turn TO. Dev `[gemma3:4b]`; home-lab override
+>   synthesis turn TO. Dev `[gemma3:4b]`; self-hosted override
 >   `assistant_open_knowledge_switchable_models: [gemma4:26b, deepseek-r1:7b]`.
 >   Each entry MUST have a `model_memory_profiles` entry AND co-resident-fit the
 >   env `ollama_memory_limit` alongside the gather model (`llm_model_id`) — the
@@ -4863,7 +4863,7 @@ for the full outcome contract and refusal taxonomy.
 >   synthesis `deepseek-r1:7b` 4864 = 23296 ≤ 28672). This is enforced **fail-loud
 >   at config-generation** (`internal/config/config.go::validateModelEnvelopes`):
 >   an envelope-busting or un-profiled list aborts `config generate`.
->   `deepseek-r1:32b` is NOT switchable on home-lab (40960 > 28672) — the operator
+>   `deepseek-r1:32b` is NOT switchable on self-hosted (40960 > 28672) — the operator
 >   opt-up (raise `ollama_memory_limit` first).
 > - **Fail-loud rejection (two reason-codes).** An off-allowlist / un-profiled /
 >   over-envelope `--model=` is rejected fail-loud BEFORE any Ollama call — never a
@@ -4899,9 +4899,9 @@ for the full outcome contract and refusal taxonomy.
 > (`user_model_preferences` / `modelpref`), and ONE attribution shape across
 > Telegram + web/HTTP (SCN-089-A11 parity).
 >
-> - **Persistent default (committed SST).** Home-lab promotes the standing
+> - **Persistent default (committed SST).** self-hosted promotes the standing
 >   synthesis default `deepseek-r1:7b → deepseek-r1:32b`
->   (`environments.home-lab.assistant_open_knowledge_synthesis_model_id`),
+>   (`environments.self-hosted.assistant_open_knowledge_synthesis_model_id`),
 >   raises `ollama_memory_limit` `28G → 48G` (so gather `gemma4:26b` 18432 +
 >   synthesis `deepseek-r1:32b` 22528 = 40960 ≤ 49152), and adds `deepseek-r1:32b`
 >   to `switchable_models` (7b stays the speed escape hatch). The **standing
@@ -4923,7 +4923,7 @@ for the full outcome contract and refusal taxonomy.
 >     default + a structured log — it never breaks every `/ask` for that user.
 > - **Per-request gather override (`--gather-model=` / `gather_model`).** SEPARATE
 >   from `--model=` (synthesis). Re-points the gather/tool turns only, gated by the
->   NEW `assistant.open_knowledge.tool_capable_gather_models` SST set (home-lab
+>   NEW `assistant.open_knowledge.tool_capable_gather_models` SST set (self-hosted
 >   `[gemma4:26b, llama3.1:8b]`; the baseline `llm_model_id` MUST be a member). A
 >   non-tool-capable gather is refused `model_not_tool_capable` (`rejected_turn:
 >   gather`) BEFORE any gather turn runs — `deepseek-r1*` tool-calling is weak,

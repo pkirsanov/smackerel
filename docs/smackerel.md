@@ -2379,7 +2379,7 @@ Per-user bearer auth (spec 044) extends the access-control layer with PASETO
 v4.public per-user enrollment, an in-memory revocation cache propagated over
 NATS (≤60s budget), and stateless hot-path validation with no DB roundtrip per
 request. The legacy single-tenant `runtime.auth_token` remains the dev/test
-contract; per-user PASETO is the home-lab default and the production-class
+contract; per-user PASETO is the self-hosted default and the production-class
 posture. Spec 044 Scope 02 closes MIT-040-S-008, MIT-038-S-003, and the
 MIT-027-TRACE-001 actor-source segment by deriving actor identity from the
 verified bearer-token session in production mode and rejecting body / header

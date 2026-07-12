@@ -23,7 +23,7 @@
       "evidenceRefs": [
         "report.md#bug-reproduction-after-fix-in-process-integration-regression",
         "report.md#g060-red--green-markers--testbug034003_expenseandmealplanroutesmountedbehindauth",
-        "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+        "report.md#live-self-hosted-validation--after-redeploy-2026-06-01"
       ],
       "testMapping": {
         "type": "integration",
@@ -32,8 +32,8 @@
       },
       "liveEvidence": {
         "type": "e2e-api",
-        "label": "Home-lab HTTP probe: GET /api/expenses -> 401",
-        "evidenceRef": "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+        "label": "self-hosted HTTP probe: GET /api/expenses -> 401",
+        "evidenceRef": "report.md#live-self-hosted-validation--after-redeploy-2026-06-01"
       },
       "status": "verified"
     },
@@ -57,7 +57,7 @@
       "evidenceRefs": [
         "report.md#bug-reproduction-after-fix-in-process-integration-regression",
         "report.md#g060-red--green-markers--testbug034003_expenseandmealplanroutesmountedbehindauth",
-        "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+        "report.md#live-self-hosted-validation--after-redeploy-2026-06-01"
       ],
       "testMapping": {
         "type": "integration",
@@ -66,8 +66,8 @@
       },
       "liveEvidence": {
         "type": "e2e-api",
-        "label": "Home-lab HTTP probe: GET /api/meal-plans -> 401",
-        "evidenceRef": "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+        "label": "self-hosted HTTP probe: GET /api/meal-plans -> 401",
+        "evidenceRef": "report.md#live-self-hosted-validation--after-redeploy-2026-06-01"
       },
       "status": "verified"
     },
@@ -96,7 +96,7 @@
       "evidenceRefs": [
         "report.md#bug-reproduction-after-fix-in-process-integration-regression",
         "report.md#g060-red--green-markers--testbug034003_expenseandmealplanroutesmountedbehindauth",
-        "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+        "report.md#live-self-hosted-validation--after-redeploy-2026-06-01"
       ],
       "testMapping": {
         "type": "integration",
@@ -105,8 +105,8 @@
       },
       "liveEvidence": {
         "type": "e2e-api",
-        "label": "Home-lab HTTP probe: GET /api/api/expenses -> 404, /api/api/meal-plans -> 404",
-        "evidenceRef": "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+        "label": "self-hosted HTTP probe: GET /api/api/expenses -> 404, /api/api/meal-plans -> 404",
+        "evidenceRef": "report.md#live-self-hosted-validation--after-redeploy-2026-06-01"
       },
       "status": "verified"
     },
@@ -128,7 +128,7 @@
         }
       ],
       "evidenceRefs": [
-        "report.md#live-home-lab-validation--after-redeploy-2026-06-01",
+        "report.md#live-self-hosted-validation--after-redeploy-2026-06-01",
         "uservalidation.md"
       ],
       "testMapping": {
@@ -139,7 +139,7 @@
       "liveEvidence": {
         "type": "proxy",
         "label": "HTTP route now returns 401 (auth gate) instead of 404; bot bearer mint path proven via sibling routes /api/knowledge/concepts and /api/knowledge/entities",
-        "evidenceRef": "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+        "evidenceRef": "report.md#live-self-hosted-validation--after-redeploy-2026-06-01"
       },
       "status": "pending-owner-confirmation"
     }

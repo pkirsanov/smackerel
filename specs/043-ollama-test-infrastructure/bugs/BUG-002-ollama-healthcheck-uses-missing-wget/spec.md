@@ -63,7 +63,7 @@ Discovered while running the validate phase of spec 044; the integration stack s
 | `./smackerel.sh test integration` | BLOCKED — `docker compose up -d --wait --wait-timeout 80` exits 124 because ollama never reports healthy. Every downstream Go integration test fails to even start. |
 | `./smackerel.sh test e2e` (live-stack lane) | BLOCKED — same `up` path, same wait-timeout. |
 | `./smackerel.sh --env test up` | BLOCKED — same wait. |
-| `./smackerel.sh --env home-lab up --profile ollama` | BLOCKED — same `wget`-based healthcheck in `deploy/compose.deploy.yml`. |
+| `./smackerel.sh --env self-hosted up --profile ollama` | BLOCKED — same `wget`-based healthcheck in `deploy/compose.deploy.yml`. |
 | `./smackerel.sh test unit` | NOT IMPACTED — unit lane does not bring up the test stack. |
 | `./smackerel.sh check` | NOT IMPACTED — config-only validation. |
 

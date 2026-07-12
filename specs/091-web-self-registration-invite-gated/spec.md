@@ -344,7 +344,7 @@ or mirror, so work can resume without re-investigation:
 
 ## Release Train
 
-Targets the **`mvp`** train (the active home-lab train that carries the core
+Targets the **`mvp`** train (the active self-hosted train that carries the core
 web UI surface, including the spec 070 login layer this extends). Default-off
 behavior on other trains follows the repo release-train model; whether an
 explicit train flag is introduced is an open design decision (above).
@@ -385,7 +385,7 @@ The `/login` page renders a **success banner** — text **"Account created — s
 in."** — when `?registered=1` is present.
 
 **Chosen over auto-login (set `auth_token` + 303 → `/cards`) because, for a
-single-operator full-admin home-lab tool:**
+single-operator full-admin self-hosted tool:**
 
 1. **One canonical session-establishing path.** The session cookie is set
    **only** by `POST /v1/web/login` (the existing `authCookie` path in

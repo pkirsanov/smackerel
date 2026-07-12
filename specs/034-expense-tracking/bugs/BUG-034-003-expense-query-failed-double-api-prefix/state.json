@@ -54,17 +54,17 @@
         "category": "live-host verification (post-deploy)",
         "owner": "operator",
         "blockingThisPacket": false,
-        "dodRef": "scopes.md Scope 1 DoD — Live home-lab GET /api/expenses returns 401 without bearer",
-        "acceptanceCriteria": "After ./smackerel.sh deploy-target home-lab apply with image carrying the BUG-034-003 fix, capture `curl -i http://<home-lab-host>/api/expenses` showing HTTP/1.1 401 (was 404 pre-fix). Paste raw response into report.md and tick scopes.md DoD + uservalidation.md item.",
-        "note": "In-process regression proven via internal/api/router_mount_bug_034_003_test.go (PASS); requires fresh image build + adapter apply on home-lab, which is operator-gated per deploy adapter policy."
+        "dodRef": "scopes.md Scope 1 DoD — Live self-hosted GET /api/expenses returns 401 without bearer",
+        "acceptanceCriteria": "After ./smackerel.sh deploy-target self-hosted apply with image carrying the BUG-034-003 fix, capture `curl -i http://<deploy-host>/api/expenses` showing HTTP/1.1 401 (was 404 pre-fix). Paste raw response into report.md and tick scopes.md DoD + uservalidation.md item.",
+        "note": "In-process regression proven via internal/api/router_mount_bug_034_003_test.go (PASS); requires fresh image build + adapter apply on self-hosted, which is operator-gated per deploy adapter policy."
       },
       {
         "id": "BUG-034-003-LIVE-002",
         "category": "live-host verification (post-deploy)",
         "owner": "operator",
         "blockingThisPacket": false,
-        "dodRef": "scopes.md Scope 1 DoD — Live home-lab GET /api/meal-plans returns 401 without bearer",
-        "acceptanceCriteria": "After home-lab redeploy, capture `curl -i http://<home-lab-host>/api/meal-plans` showing HTTP/1.1 401 (was 404 pre-fix). Paste raw response into report.md and tick scopes.md DoD + uservalidation.md item.",
+        "dodRef": "scopes.md Scope 1 DoD — Live self-hosted GET /api/meal-plans returns 401 without bearer",
+        "acceptanceCriteria": "After self-hosted redeploy, capture `curl -i http://<deploy-host>/api/meal-plans` showing HTTP/1.1 401 (was 404 pre-fix). Paste raw response into report.md and tick scopes.md DoD + uservalidation.md item.",
         "note": "Same root cause as LIVE-001; covered by the same in-process adversarial sub-test for /api/api/meal-plans."
       },
       {
@@ -73,7 +73,7 @@
         "owner": "operator",
         "blockingThisPacket": false,
         "dodRef": "scopes.md Scope 1 DoD — Live Telegram /expense returns empty-state, not 'Failed to query expenses'",
-        "acceptanceCriteria": "After home-lab redeploy, send /expense to the home-lab Telegram bot. Expected reply: empty-state message (e.g. 'No expenses yet') or formatted list — NOT 'Failed to query expenses'. Capture Telegram screenshot or `docker logs smackerel-home-lab-smackerel-core-1` showing `GET /api/expenses status=200` and update report.md + uservalidation.md.",
+        "acceptanceCriteria": "After self-hosted redeploy, send /expense to the self-hosted Telegram bot. Expected reply: empty-state message (e.g. 'No expenses yet') or formatted list — NOT 'Failed to query expenses'. Capture Telegram screenshot or `docker logs smackerel-self-hosted-smackerel-core-1` showing `GET /api/expenses status=200` and update report.md + uservalidation.md.",
         "note": "End-user-visible confirmation; cannot be executed by an agent."
       }
     ]
@@ -91,7 +91,7 @@
   "reworkQueue": [],
   "routing": {
     "nextOwner": "operator",
-    "reason": "Certified done with auditVerdict=passed-with-known-drift (precedent: BUG-045-002). Engineering fix shipped and proven via in-process adversarial regression (internal/api/router_mount_bug_034_003_test.go — TestRouterMount_BUG_034_003 + 4 sub-tests PASS). Three remaining live-host DoD items (LIVE-001/002/003) strictly require operator-run home-lab redeploy via ./smackerel.sh deploy-target home-lab apply and are recorded as certification.unresolvedFindings with concrete acceptance criteria. Not agent-executable."
+    "reason": "Certified done with auditVerdict=passed-with-known-drift (precedent: BUG-045-002). Engineering fix shipped and proven via in-process adversarial regression (internal/api/router_mount_bug_034_003_test.go — TestRouterMount_BUG_034_003 + 4 sub-tests PASS). Three remaining live-host DoD items (LIVE-001/002/003) strictly require operator-run self-hosted redeploy via ./smackerel.sh deploy-target self-hosted apply and are recorded as certification.unresolvedFindings with concrete acceptance criteria. Not agent-executable."
   },
   "createdAt": "2026-05-28T18:55:00Z",
   "updatedAt": "2026-06-01T22:00:00Z"

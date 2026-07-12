@@ -71,7 +71,7 @@ $ grep -n -A 28 "^infrastructure:" config/smackerel.yaml | head -60
 20-  # time; dev/test paths preserve inline values per FR-052-011 (explicit
 21-  # opt-in only — never expand without spec amendment).
 22-  production_class_targets:
-23-    - home-lab
+23-    - self-hosted
 ```
 
 **A2 — `internal/config/secret_keys.go` (new):**
@@ -170,7 +170,7 @@ Test exists at `internal/config/secret_keys_test.go:51`. Reads the
 canonical `config/smackerel.yaml`, unmarshals
 `infrastructure.secret_keys` into a `[]string`, and asserts byte-identical
 match against `SecretKeys()` via `reflect.DeepEqual`. Also verifies
-`production_class_targets` contains `"home-lab"`. The package-level
+`production_class_targets` contains `"self-hosted"`. The package-level
 PASS line `ok github.com/smackerel/smackerel/internal/config 20.660s`
 above proves the test executed and passed.
 
@@ -370,7 +370,7 @@ fi
 ~/smackerel$ sed -n '516,526p' scripts/commands/config.sh
 if [[ "$POSTGRES_PASSWORD_SOURCE" != "placeholder" ]]; then
   case "$TARGET_ENV" in
-    home-lab)
+    self-hosted)
       case "$(printf '%s' "$POSTGRES_PASSWORD" | tr '[:upper:]' '[:lower:]')" in
         smackerel|postgres|password|changeme|change-me|default)
           echo "ERROR: infrastructure.postgres.password is a known dev-default value — refusing to generate config for TARGET_ENV=$TARGET_ENV (spec 051 FR-051-005). Set a strong random password in config/smackerel.yaml or via the POSTGRES_PASSWORD env override before running config generate." >&2
@@ -453,10 +453,10 @@ The reorder in A2 keeps the env-override path subject to the FR-051-005 dev-defa
 
 **A6 — Three regression tests rewritten / extended to cover the new code paths**
 
-- `scripts/commands/config_secret_rejection_test.sh` — rewritten with 3 sub-tests: (1) env-override dev-default still refused for `home-lab`; (2) placeholder mode emits `__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__` for `home-lab` when no env-override is in effect; (3) `dev` canary still emits inline literal `smackerel`.
-- `scripts/commands/config_home_lab_runtime_env_test.sh` — sub-test 4 updated to drive the env-override path explicitly (`POSTGRES_PASSWORD=smackerel run_generator ...`), preserving BUG-051-001 regression coverage with the new placeholder-mode-aware loader.
-- `tests/config/placeholder_emit_test.sh` (NEW, 184 LoC) — pinned-input/pinned-output sub-cases for SCN-052-S03 (home-lab placeholder emission) and SCN-052-S04 (dev inline preservation).
-- `tests/config/bundle_home_lab_integration_test.sh` (NEW, 221 LoC) — end-to-end determinism + sibling-yaml + literal-shielding integration check for SCN-052-S03 plus the persistent T-052-007-REG regression.
+- `scripts/commands/config_secret_rejection_test.sh` — rewritten with 3 sub-tests: (1) env-override dev-default still refused for `self-hosted`; (2) placeholder mode emits `__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__` for `self-hosted` when no env-override is in effect; (3) `dev` canary still emits inline literal `smackerel`.
+- `scripts/commands/config_self_hosted_runtime_env_test.sh` — sub-test 4 updated to drive the env-override path explicitly (`POSTGRES_PASSWORD=smackerel run_generator ...`), preserving BUG-051-001 regression coverage with the new placeholder-mode-aware loader.
+- `tests/config/placeholder_emit_test.sh` (NEW, 184 LoC) — pinned-input/pinned-output sub-cases for SCN-052-S03 (self-hosted placeholder emission) and SCN-052-S04 (dev inline preservation).
+- `tests/config/bundle_self_hosted_integration_test.sh` (NEW, 221 LoC) — end-to-end determinism + sibling-yaml + literal-shielding integration check for SCN-052-S03 plus the persistent T-052-007-REG regression.
 
 #### scope-2-tests
 
@@ -464,15 +464,15 @@ The reorder in A2 keeps the env-override path subject to the FR-051-005 dev-defa
 
 ```
 ~/smackerel$ bash tests/config/placeholder_emit_test.sh
---- Sub-test A: home-lab target emits placeholders for 4 managed keys ---
-PASS: smackerel config generate --env home-lab --bundle exited 0
-PASS: bundle tarball produced at /tmp/tmp.ZKeVEqAgKx/home-lab-bundle/config-bundle-home-lab-0000000000000000000000000000000000000000.tar.gz
+--- Sub-test A: self-hosted target emits placeholders for 4 managed keys ---
+PASS: smackerel config generate --env self-hosted --bundle exited 0
+PASS: bundle tarball produced at /tmp/tmp.ZKeVEqAgKx/self-hosted-bundle/config-bundle-self-hosted-0000000000000000000000000000000000000000.tar.gz
 PASS: POSTGRES_PASSWORD emitted as placeholder marker
 PASS: AUTH_SIGNING_ACTIVE_PRIVATE_KEY emitted as placeholder marker
 PASS: AUTH_AT_REST_HASHING_KEY emitted as placeholder marker
 PASS: AUTH_BOOTSTRAP_TOKEN emitted as placeholder marker
 PASS: exactly 4 placeholder markers emitted (one per managed key)
-PASS: home-lab app.env does NOT contain literal POSTGRES_PASSWORD=smackerel
+PASS: self-hosted app.env does NOT contain literal POSTGRES_PASSWORD=smackerel
 
 --- Sub-test B: dev target preserves inline yaml values ---
 PASS: smackerel config generate --env dev --bundle exited 0
@@ -483,10 +483,10 @@ PASS: dev app.env contains ZERO __SECRET_PLACEHOLDER__ markers (FR-052-011)
 All sub-tests passed
 ```
 
-**T-052-006 + T-052-007-REG — `tests/config/bundle_home_lab_integration_test.sh`**
+**T-052-006 + T-052-007-REG — `tests/config/bundle_self_hosted_integration_test.sh`**
 
 ```
-~/smackerel$ bash tests/config/bundle_home_lab_integration_test.sh
+~/smackerel$ bash tests/config/bundle_self_hosted_integration_test.sh
 --- Sub-test A: bundle determinism (two invocations → identical sha256) ---
 PASS: run A exited 0
 PASS: run B exited 0
@@ -524,15 +524,15 @@ All sub-tests passed
 
 ```
 ~/smackerel$ bash scripts/commands/config_secret_rejection_test.sh
---- Sub-test 1: SST loader refuses env-override dev-default for home-lab ---
+--- Sub-test 1: SST loader refuses env-override dev-default for self-hosted ---
 PASS: SST loader refused env-override dev-default with exit code 1
 PASS: SST loader stderr names infrastructure.postgres.password
 PASS: SST loader stderr references spec 051
 PASS: SST loader stderr does not echo 'smackerel' as a password value
---- Sub-test 2 (spec 052): SST loader emits placeholder for home-lab ---
-PASS: SST loader exited 0 for TARGET_ENV=home-lab (placeholder mode active)
-PASS: home-lab.env contains POSTGRES_PASSWORD placeholder marker
-PASS: home-lab.env does NOT contain literal POSTGRES_PASSWORD=smackerel
+--- Sub-test 2 (spec 052): SST loader emits placeholder for self-hosted ---
+PASS: SST loader exited 0 for TARGET_ENV=self-hosted (placeholder mode active)
+PASS: self-hosted.env contains POSTGRES_PASSWORD placeholder marker
+PASS: self-hosted.env does NOT contain literal POSTGRES_PASSWORD=smackerel
 --- Sub-test 3 (canary): SST loader still works for TARGET_ENV=dev ---
 PASS: canary passed — SST loader for TARGET_ENV=dev exited 0
 PASS: canary produced config/generated/dev.env
@@ -540,18 +540,18 @@ PASS: canary produced config/generated/dev.env
 All sub-tests passed
 ```
 
-**BUG-051-001 regression — `scripts/commands/config_home_lab_runtime_env_test.sh`** (sub-test 4 updated in this scope to drive the env-override path now that placeholder mode shields the yaml path):
+**BUG-051-001 regression — `scripts/commands/config_self_hosted_runtime_env_test.sh`** (sub-test 4 updated in this scope to drive the env-override path now that placeholder mode shields the yaml path):
 
 ```
-~/smackerel$ bash scripts/commands/config_home_lab_runtime_env_test.sh
---- Sub-test 1: TARGET_ENV=home-lab emits SMACKEREL_ENV=production ---
-PASS: home-lab.env contains SMACKEREL_ENV=production
+~/smackerel$ bash scripts/commands/config_self_hosted_runtime_env_test.sh
+--- Sub-test 1: TARGET_ENV=self-hosted emits SMACKEREL_ENV=production ---
+PASS: self-hosted.env contains SMACKEREL_ENV=production
 --- Sub-test 2 (canary): TARGET_ENV=dev emits SMACKEREL_ENV=development ---
 PASS: dev.env contains SMACKEREL_ENV=development
 --- Sub-test 3 (canary): TARGET_ENV=test emits SMACKEREL_ENV=test ---
 PASS: test.env contains SMACKEREL_ENV=test
---- Sub-test 4: FR-051-005 generator-side Postgres dev-default check still fires for home-lab ---
-PASS: FR-051-005 generator-side guard still fires for home-lab via env-override (refused with spec 051 attribution)
+--- Sub-test 4: FR-051-005 generator-side Postgres dev-default check still fires for self-hosted ---
+PASS: FR-051-005 generator-side guard still fires for self-hosted via env-override (refused with spec 051 attribution)
 
 All BUG-051-001 sub-tests passed
 ```
@@ -704,10 +704,10 @@ Artifact lint PASSED.
 ```
 $ grep -rn 'TODO\|FIXME\|STUB\|HACK' scripts/commands/config.sh tests/config/ ; echo "EXIT=$?"
 EXIT=1
-$ wc -l scripts/commands/config.sh tests/config/placeholder_emit_test.sh tests/config/bundle_home_lab_integration_test.sh
+$ wc -l scripts/commands/config.sh tests/config/placeholder_emit_test.sh tests/config/bundle_self_hosted_integration_test.sh
  1837 scripts/commands/config.sh
   184 tests/config/placeholder_emit_test.sh
-  221 tests/config/bundle_home_lab_integration_test.sh
+  221 tests/config/bundle_self_hosted_integration_test.sh
  2242 total
 ```
 
@@ -716,15 +716,15 @@ $ wc -l scripts/commands/config.sh tests/config/placeholder_emit_test.sh tests/c
 **Change Boundary respected** — diffstat confirms only the allowed file families were touched in Scope 2:
 
 ```
-~/smackerel$ git --no-pager diff --stat -- scripts/commands/config.sh scripts/commands/config_secret_rejection_test.sh scripts/commands/config_home_lab_runtime_env_test.sh
+~/smackerel$ git --no-pager diff --stat -- scripts/commands/config.sh scripts/commands/config_secret_rejection_test.sh scripts/commands/config_self_hosted_runtime_env_test.sh
  scripts/commands/config.sh                         | 164 +++++++++++++++++++--
- .../commands/config_home_lab_runtime_env_test.sh   |  14 +-
+ .../commands/config_self_hosted_runtime_env_test.sh   |  14 +-
  scripts/commands/config_secret_rejection_test.sh   | 109 +++++++++-----
  3 files changed, 233 insertions(+), 54 deletions(-)
 
-~/smackerel$ wc -l tests/config/placeholder_emit_test.sh tests/config/bundle_home_lab_integration_test.sh
+~/smackerel$ wc -l tests/config/placeholder_emit_test.sh tests/config/bundle_self_hosted_integration_test.sh
   184 tests/config/placeholder_emit_test.sh
-  221 tests/config/bundle_home_lab_integration_test.sh
+  221 tests/config/bundle_self_hosted_integration_test.sh
   405 total
 ```
 
@@ -735,9 +735,9 @@ No edits to `internal/config/config.go::Validate`, `internal/auth/startup.go`, `
 `git status --short` for the Scope 2 owned files (concurrent-stream files listed elsewhere are not part of this scope):
 
 ```
-$ git status --short -- scripts/commands/config.sh scripts/commands/config_home_lab_runtime_env_test.sh scripts/commands/config_secret_rejection_test.sh tests/config/
+$ git status --short -- scripts/commands/config.sh scripts/commands/config_self_hosted_runtime_env_test.sh scripts/commands/config_secret_rejection_test.sh tests/config/
  M scripts/commands/config.sh
- M scripts/commands/config_home_lab_runtime_env_test.sh
+ M scripts/commands/config_self_hosted_runtime_env_test.sh
  M scripts/commands/config_secret_rejection_test.sh
 ?? tests/config/
 EXIT=0
@@ -747,9 +747,9 @@ Per-file change footprint:
 
 - `scripts/commands/config.sh` — `+164 / -? = 233 insertions, 54 deletions` (net +179 LoC) covering: helper functions + arrays (lines 355-411), POSTGRES_PASSWORD env-override + placeholder + reordered FR-051-005 check (lines 477-526), AUTH_* placeholder logic (lines 998-1026), sibling secret-keys.yaml emission + bundle-manifest.yaml entry + TAR_FILES entry (lines 1627-1660 + downstream `files:` block).
 - `scripts/commands/config_secret_rejection_test.sh` — `+109 / -? = 109 insertions, 50ish deletions` (rewrite from the old "no env-override" stub to the new 3-sub-test suite covering env-override path + placeholder path + dev canary).
-- `scripts/commands/config_home_lab_runtime_env_test.sh` — `+14 lines` (sub-test 4 updated to use `POSTGRES_PASSWORD=smackerel run_generator ...` env-override path now that placeholder mode shields the yaml path).
+- `scripts/commands/config_self_hosted_runtime_env_test.sh` — `+14 lines` (sub-test 4 updated to use `POSTGRES_PASSWORD=smackerel run_generator ...` env-override path now that placeholder mode shields the yaml path).
 - `tests/config/placeholder_emit_test.sh` — NEW, 184 LoC.
-- `tests/config/bundle_home_lab_integration_test.sh` — NEW, 221 LoC.
+- `tests/config/bundle_self_hosted_integration_test.sh` — NEW, 221 LoC.
 
 Untracked working-tree files NOT owned by Scope 2 (concurrent streams from spec 041 qfdecisions connector + spec 020 BUG-020-002 ml auth + ml/* python module changes) are excluded from this scope's commit boundary and are tracked separately.
 
@@ -768,13 +768,13 @@ Scope 3 lands the L1+L2 contract test surface plus its persistent regression. Th
 $ cd ~/smackerel
 $ ls -la internal/deploy/bundle_secret_contract_test.go \
     tests/config/postgres_dev_default_env_override_test.sh \
-    tests/config/bundle_home_lab_integration_test.sh
+    tests/config/bundle_self_hosted_integration_test.sh
 -rw-r--r-- 1 <operator> <operator> 28623 May 15 04:35 internal/deploy/bundle_secret_contract_test.go
 -rw-r--r-- 1 <operator> <operator>  9009 May 15 04:35 tests/config/postgres_dev_default_env_override_test.sh
--rw-r--r-- 1 <operator> <operator>  7437 May 15 04:35 tests/config/bundle_home_lab_integration_test.sh
+-rw-r--r-- 1 <operator> <operator>  7437 May 15 04:35 tests/config/bundle_self_hosted_integration_test.sh
 
 $ grep -n '^func Test' internal/deploy/bundle_secret_contract_test.go
-271:func TestBundleSecretContract_NoLiteralSecretsInHomeLab(t *testing.T) {
+271:func TestBundleSecretContract_NoLiteralSecretsInSelfHosted(t *testing.T) {
 344:func TestBundleSecretContract_AdversarialA1_DriftDetector(t *testing.T) {
 425:func TestBundleSecretContract_AdversarialA2_LeakageDetector(t *testing.T) {
 521:func TestBundleSecretContract_AdversarialA3_DeterminismDetector(t *testing.T) {
@@ -783,9 +783,9 @@ $ grep -n '^func Test' internal/deploy/bundle_secret_contract_test.go
 
 Footprint mapping (per design.md §5 + scopes.md Test Plan rows T-052-007..013):
 
-- `internal/deploy/bundle_secret_contract_test.go` — NEW, 28 623 bytes, 5 Go test functions covering T-052-007 (`NoLiteralSecretsInHomeLab` — main contract), T-052-008 (A1 drift detector), T-052-009 (A2 leakage detector), T-052-010 (A3 determinism detector), T-052-011 (A4 opt-out detector). All 5 functions reside in the `internal/deploy` package; the package's aggregate `go test` result (`ok github.com/smackerel/smackerel/internal/deploy`) is the canonical PASS signal because Go reports per-package `ok` only when every test in the package passes.
-- `tests/config/postgres_dev_default_env_override_test.sh` — NEW, 9 009 bytes (159 LoC), 6 PASS assertions covering T-052-013 / SCN-052-S06 / BS-052-006 (env-override dev-default rejection MUST fire for `home-lab` AND no bundle tarball is written when rejection fires; FR-051-007 redaction preserved across the new path).
-- `tests/config/bundle_home_lab_integration_test.sh` — extended in Scope 2 (7 437 bytes total) with the T-052-012 sub-tests covering bundle determinism (two invocations → identical sha256) AND sibling `secret-keys.yaml` shipping plus app.env placeholder shielding of literals.
+- `internal/deploy/bundle_secret_contract_test.go` — NEW, 28 623 bytes, 5 Go test functions covering T-052-007 (`NoLiteralSecretsInSelfHosted` — main contract), T-052-008 (A1 drift detector), T-052-009 (A2 leakage detector), T-052-010 (A3 determinism detector), T-052-011 (A4 opt-out detector). All 5 functions reside in the `internal/deploy` package; the package's aggregate `go test` result (`ok github.com/smackerel/smackerel/internal/deploy`) is the canonical PASS signal because Go reports per-package `ok` only when every test in the package passes.
+- `tests/config/postgres_dev_default_env_override_test.sh` — NEW, 9 009 bytes (159 LoC), 6 PASS assertions covering T-052-013 / SCN-052-S06 / BS-052-006 (env-override dev-default rejection MUST fire for `self-hosted` AND no bundle tarball is written when rejection fires; FR-051-007 redaction preserved across the new path).
+- `tests/config/bundle_self_hosted_integration_test.sh` — extended in Scope 2 (7 437 bytes total) with the T-052-012 sub-tests covering bundle determinism (two invocations → identical sha256) AND sibling `secret-keys.yaml` shipping plus app.env placeholder shielding of literals.
 
 #### scope-3-tests
 
@@ -816,13 +816,13 @@ EXIT=0
 
 Per-package result: `internal/deploy ok 16.444s` covers all 5 contract test functions (T-052-007..011); zero per-test FAILs reported. The Go test runner emits per-package `ok` only when EVERY test in the package passes, satisfying the contract that all 5 NEW adversarial tests pass on the live working tree.
 
-##### T-052-012 — bundle home-lab integration (determinism + sibling secret-keys.yaml + literal shielding)
+##### T-052-012 — bundle self-hosted integration (determinism + sibling secret-keys.yaml + literal shielding)
 
 **Phase:** implement
-**Claim Source:** executed (`bash tests/config/bundle_home_lab_integration_test.sh 2>&1`)
+**Claim Source:** executed (`bash tests/config/bundle_self_hosted_integration_test.sh 2>&1`)
 
 ```
-$ cd ~/smackerel && bash tests/config/bundle_home_lab_integration_test.sh 2>&1
+$ cd ~/smackerel && bash tests/config/bundle_self_hosted_integration_test.sh 2>&1
 --- Sub-test A: bundle determinism (two invocations → identical sha256) ---
 PASS: run A exited 0
 PASS: run B exited 0
@@ -866,7 +866,7 @@ Confirms NFR Determinism (FR-052-002) AND FR-052-003 sibling manifest presence A
 
 ```
 $ cd ~/smackerel && bash tests/config/postgres_dev_default_env_override_test.sh 2>&1
---- Sub-test 1 (T-052-013 / SCN-052-S06 / BS-052-006): env-override dev-default rejected for home-lab ---
+--- Sub-test 1 (T-052-013 / SCN-052-S06 / BS-052-006): env-override dev-default rejected for self-hosted ---
 PASS: SST loader refused env-override dev-default with exit code 1
 PASS: SST loader output names infrastructure.postgres.password
 PASS: SST loader output references spec 051
@@ -936,18 +936,18 @@ All 3 BQG checks exit 0 with zero blocking warnings. The 4 lint warnings are all
 $ cd ~/smackerel && wc -l \
     internal/deploy/bundle_secret_contract_test.go \
     tests/config/postgres_dev_default_env_override_test.sh \
-    tests/config/bundle_home_lab_integration_test.sh
+    tests/config/bundle_self_hosted_integration_test.sh
    615 internal/deploy/bundle_secret_contract_test.go
    159 tests/config/postgres_dev_default_env_override_test.sh
-   221 tests/config/bundle_home_lab_integration_test.sh
+   221 tests/config/bundle_self_hosted_integration_test.sh
    995 total
 
 $ ls -la internal/deploy/bundle_secret_contract_test.go \
     tests/config/postgres_dev_default_env_override_test.sh \
-    tests/config/bundle_home_lab_integration_test.sh
+    tests/config/bundle_self_hosted_integration_test.sh
 -rw-r--r-- 1 <operator> <operator> 28623 May 15 04:35 internal/deploy/bundle_secret_contract_test.go
 -rw-r--r-- 1 <operator> <operator>  9009 May 15 04:35 tests/config/postgres_dev_default_env_override_test.sh
--rw-r--r-- 1 <operator> <operator>  7437 May 15 04:35 tests/config/bundle_home_lab_integration_test.sh
+-rw-r--r-- 1 <operator> <operator>  7437 May 15 04:35 tests/config/bundle_self_hosted_integration_test.sh
 ```
 
 Footprint summary: ~995 LoC across 3 files (1 NEW Go test file, 1 NEW bash regression, 1 bash test extended in Scope 2). All three are in the working tree, untracked at the time of this evidence capture (per the user's session-level "Do NOT touch git, do NOT commit, do NOT push, do NOT modify state.json — that is the goal runtime's job" constraint, the goal runtime / bubbles.workflow will own the commit and the corresponding `git diff --stat` evidence will be appended to this section after the close-out commit lands).
@@ -995,9 +995,9 @@ Two new branches at ~L86-88 and ~L99-101 reject `SigningActivePrivateKey` and `A
 **A3 — Redaction discipline (FR-051-007 extended)**:
 Both A1 and A2 error paths name the KEY only — no resolved value is interpolated, no placeholder marker literal is interpolated. T-052-016 sentinel-value drive (subtest `TestRuntimeRejection_NameKeyOnly_NoValueLeakage`) proves the assertion mechanically by injecting unique sentinel substrings into each key's resolved value and confirming the returned error contains the KEY name AND does NOT contain any sentinel substring.
 
-**A4 — `README.md` Configuration / Secrets section** (lines ~256-330): the "Managed Secrets & Bundle Substitution (spec 052) — 3-Layer Defense" subsection describes placeholder discipline, the L1 SST loader / L2 knb adapter / L3 Go runtime layering, and the "how to add a new managed secret" recipe (one yaml line in `config/smackerel.yaml::infrastructure.secret_keys` + one Go mirror line in `internal/config/secret_keys.go::secretKeys` + one shell mirror line in `scripts/commands/config.sh::SHELL_SECRET_KEYS` + one `home-lab.enc.env` entry in the knb deploy adapter overlay).
+**A4 — `README.md` Configuration / Secrets section** (lines ~256-330): the "Managed Secrets & Bundle Substitution (spec 052) — 3-Layer Defense" subsection describes placeholder discipline, the L1 SST loader / L2 knb adapter / L3 Go runtime layering, and the "how to add a new managed secret" recipe (one yaml line in `config/smackerel.yaml::infrastructure.secret_keys` + one Go mirror line in `internal/config/secret_keys.go::secretKeys` + one shell mirror line in `scripts/commands/config.sh::SHELL_SECRET_KEYS` + one `self-hosted.enc.env` entry in the knb deploy adapter overlay).
 
-**A5 — `docs/Deployment.md` "Bundle Secret Injection (spec 052)"**: subsection under Build-Once Deploy-Many describing the 3-layer defense-in-depth, the two-`--env-file` Compose semantics (bundled `app.env` + the knb-decrypted `home-lab.env` overlay), and where the manifest lives (cite spec 052 FR-052-001 through FR-052-007). Includes the manifest table, L1/L2/L3 swimlanes, and operator workflows.
+**A5 — `docs/Deployment.md` "Bundle Secret Injection (spec 052)"**: subsection under Build-Once Deploy-Many describing the 3-layer defense-in-depth, the two-`--env-file` Compose semantics (bundled `app.env` + the knb-decrypted `self-hosted.env` overlay), and where the manifest lives (cite spec 052 FR-052-001 through FR-052-007). Includes the manifest table, L1/L2/L3 swimlanes, and operator workflows.
 
 **A6 — `docs/Architecture.md` "Secret Boundary (spec 052)"**: NEW section with the 3-layer ASCII diagram, trust boundaries table (CI / knb adapter / runtime), and the defense-in-depth invariants enumerated.
 
@@ -1062,7 +1062,7 @@ EXIT=0
 
 The sentinel-value drive: every error path in the new `Validate` and `ValidateRuntimeAuthStartup` placeholder branches is invoked with a unique sentinel substring (e.g., `SENTINEL_POSTGRES_LEAK_CHECK`). The returned error string MUST contain the KEY name AND MUST NOT contain the sentinel substring. The `internal/config ok 15-16s` PASS line above subsumes this assertion (the test FAILS noisily if any sentinel leaks). Mirrors the spec 051 Scope 3 `log_redaction_test.go` pattern verbatim.
 
-##### T-052-017 — POST-PUSH CI integration (matrix dev/test/home-lab green + manifest produced + F-047-B closed)
+##### T-052-017 — POST-PUSH CI integration (matrix dev/test/self-hosted green + manifest produced + F-047-B closed)
 
 **Phase:** implement
 **Claim Source:** not-run
@@ -1199,8 +1199,8 @@ EXIT=0
 2. ✅ Contract test PASSES (T-052-007..011 via `internal/deploy ok 16.444s`).
 3. ✅ Bash unit test PASSES (T-052-004, T-052-005 captured in scope-2-tests).
 4. ✅ `./smackerel.sh test unit --go` PASSES with zero new regressions (73/0/12 above).
-5. ✅ Local home-lab placeholder bundle is deterministic + zero literal secret values (T-052-012 above).
-6. ⏳ CI `build-bundles` matrix GREEN for `dev` + `test` + `home-lab` on the new HEAD SHA — POST-PUSH (deferred to goal runtime per user constraint).
+5. ✅ Local self-hosted placeholder bundle is deterministic + zero literal secret values (T-052-012 above).
+6. ⏳ CI `build-bundles` matrix GREEN for `dev` + `test` + `self-hosted` on the new HEAD SHA — POST-PUSH (deferred to goal runtime per user constraint).
 7. ⏳ F-047-B marked RESOLVED in `specs/047-ci-image-vulnerability-gate/report.md` Surfaced Findings — POST-PUSH (requires the close-out commit SHA which doesn't exist yet).
 
 #### scope-4-code-diff
@@ -1333,15 +1333,15 @@ The two NEW files (`internal/config/secret_keys.go` + `_test.go`) are not in `gi
 
 ### Code Diff Evidence — Scope 2: SST loader + bundle
 
-_Awaiting scope 2 execution. The `git diff --stat` for scope 2 changes will be captured here once `scripts/commands/config.sh` placeholder-emit additions + NEW `tests/config/placeholder_emit_test.sh` + NEW `tests/config/bundle_home_lab_integration_test.sh` are landed in the working tree._
+_Awaiting scope 2 execution. The `git diff --stat` for scope 2 changes will be captured here once `scripts/commands/config.sh` placeholder-emit additions + NEW `tests/config/placeholder_emit_test.sh` + NEW `tests/config/bundle_self_hosted_integration_test.sh` are landed in the working tree._
 
 ### Code Diff Evidence — Scope 3: Contract test + regression
 
 **Source paths changed (non-artifact, captured against the working tree on 2026-05-15):**
 
-- `internal/deploy/bundle_secret_contract_test.go` — NEW, 615 LoC / 28 623 bytes / 5 Go test functions covering T-052-007 (`TestBundleSecretContract_NoLiteralSecretsInHomeLab` @L271) + T-052-008 (`AdversarialA1_DriftDetector` @L344) + T-052-009 (`AdversarialA2_LeakageDetector` @L425) + T-052-010 (`AdversarialA3_DeterminismDetector` @L521) + T-052-011 (`AdversarialA4_OptOutDetector` @L562).
-- `tests/config/postgres_dev_default_env_override_test.sh` — NEW, 159 LoC / 9 009 bytes covering T-052-013 / SCN-052-S06 / BS-052-006 (env-override dev-default rejection MUST fire for `home-lab` AND no bundle tarball is written when rejection fires; FR-051-007 redaction preserved).
-- `tests/config/bundle_home_lab_integration_test.sh` — extended in Scope 2 to 221 LoC / 7 437 bytes; the T-052-012 sub-tests (bundle determinism + sibling secret-keys.yaml + literal-shielding) live here.
+- `internal/deploy/bundle_secret_contract_test.go` — NEW, 615 LoC / 28 623 bytes / 5 Go test functions covering T-052-007 (`TestBundleSecretContract_NoLiteralSecretsInSelfHosted` @L271) + T-052-008 (`AdversarialA1_DriftDetector` @L344) + T-052-009 (`AdversarialA2_LeakageDetector` @L425) + T-052-010 (`AdversarialA3_DeterminismDetector` @L521) + T-052-011 (`AdversarialA4_OptOutDetector` @L562).
+- `tests/config/postgres_dev_default_env_override_test.sh` — NEW, 159 LoC / 9 009 bytes covering T-052-013 / SCN-052-S06 / BS-052-006 (env-override dev-default rejection MUST fire for `self-hosted` AND no bundle tarball is written when rejection fires; FR-051-007 redaction preserved).
+- `tests/config/bundle_self_hosted_integration_test.sh` — extended in Scope 2 to 221 LoC / 7 437 bytes; the T-052-012 sub-tests (bundle determinism + sibling secret-keys.yaml + literal-shielding) live here.
 
 **Aggregate footprint:** ~995 LoC across 3 files (1 NEW Go test file, 1 NEW bash regression, 1 bash test extended in Scope 2). All three are in the working tree, untracked at this evidence-capture timestamp. Per the user's session-level constraint ("Do NOT touch git, do NOT commit, do NOT push, do NOT modify state.json — that is the goal runtime's job"), the canonical `git diff --stat` evidence for Scope 3 will be appended here after the goal runtime / bubbles.workflow lands the close-out commit.
 
@@ -1375,8 +1375,8 @@ The 7 convergence items lifted from spec.md Outcome Contract Success Signal:
 2. **Contract test PASSES** — see scope-3-tests B1-B5 (T-052-007 through T-052-011).
 3. **Bash unit test PASSES** — see scope-2-tests B1-B2 (T-052-004, T-052-005).
 4. **`./smackerel.sh test unit` PASSES with zero regressions** — see scope-4-build-quality C1.
-5. **Local home-lab placeholder bundle is deterministic + zero literal secret values** — see scope-3-tests B6 (T-052-012).
-6. **CI `build-bundles` matrix GREEN** for `dev` + `test` + `home-lab` on the new HEAD SHA — see scope-4-tests B4 (T-052-017).
+5. **Local self-hosted placeholder bundle is deterministic + zero literal secret values** — see scope-3-tests B6 (T-052-012).
+6. **CI `build-bundles` matrix GREEN** for `dev` + `test` + `self-hosted` on the new HEAD SHA — see scope-4-tests B4 (T-052-017).
 7. **F-047-B marked RESOLVED** in `specs/047-ci-image-vulnerability-gate/report.md` Surfaced Findings — see scope-4-tests B4 (T-052-017).
 
 ## Validate Phase Evidence (2026-05-15)
@@ -1396,7 +1396,7 @@ This section satisfies Gate G060 (scenario-first / red→green TDD evidence) for
 all 8 SCN-052-S0N scenarios. The red state for every scenario is captured
 verbatim from `design.md §3 Risk Table` (regression classes A1 drift / A2
 leakage / A3 determinism / A4 opt-out) and the spec 047 surfaced finding F-047-B
-("CI build-bundles home-lab leg fails the spec 051 FR-051-005 dev-default
+("CI build-bundles self-hosted leg fails the spec 051 FR-051-005 dev-default
 Postgres password gate"). The green state for every scenario is the live test
 PASS evidence captured in scope-1-tests / scope-2-tests / scope-3-tests /
 scope-4-tests sections above and re-verified by the validate-phase
@@ -1406,12 +1406,12 @@ re-execution transcripts below.
 |--------------|---------------------------------------|-----------------------------------------|-----------|
 | SCN-052-S01  | Pre-fix: 3-mirror manifest drift undetected (regression class A1, design.md §3) | `TestSecretKeys_MirrorsYAMLManifest` PASS — `internal/config 14.313s` | `internal/config/secret_keys_test.go` |
 | SCN-052-S02  | Pre-fix: `IsPlaceholder` did not exist; placeholder-vs-value discriminator absent | `TestIsPlaceholder_TrueFalseMatrix` + `TestPlaceholder_DeterministicKeyDerived` PASS — `internal/config 14.313s` | `internal/config/secret_keys_test.go` |
-| SCN-052-S03  | Pre-fix: home-lab bundle would carry literal dev secrets (F-047-B observed failure) | `tests/config/placeholder_emit_test.sh` home-lab sub-case PASS (4 placeholder grep matches) | `tests/config/placeholder_emit_test.sh` |
-| SCN-052-S04  | Pre-fix: dev/test bundles non-deterministic if managed-key path not opted out | `tests/config/bundle_home_lab_integration_test.sh` → sha256 `1f9f7202b35ac7b23b94cc51ff8cbba0329f88f112e9c124783e5bbed5c123e4` byte-identical across two consecutive `--bundle` runs | `tests/config/bundle_home_lab_integration_test.sh` |
-| SCN-052-S05  | Pre-fix: contract drift between yaml / Go / shell mirrors had no adversarial detector (regression classes A1+A2+A3+A4, design.md §8) | `TestBundleSecretContract_NoLiteralSecretsInHomeLab` + 4 adversarial sub-tests A1 drift / A2 leakage / A3 determinism / A4 opt-out PASS — `internal/deploy (cached)` | `internal/deploy/bundle_secret_contract_test.go` |
-| SCN-052-S06  | Pre-fix: env-override dev-default would be silently accepted on home-lab path (BS-052-006 regression class) | `tests/config/postgres_dev_default_env_override_test.sh` PASS — SST loader refused with exit 1, named `infrastructure.postgres.password`, FR-051-007 redaction preserved (no `smackerel` literal echoed) | `tests/config/postgres_dev_default_env_override_test.sh` |
+| SCN-052-S03  | Pre-fix: self-hosted bundle would carry literal dev secrets (F-047-B observed failure) | `tests/config/placeholder_emit_test.sh` self-hosted sub-case PASS (4 placeholder grep matches) | `tests/config/placeholder_emit_test.sh` |
+| SCN-052-S04  | Pre-fix: dev/test bundles non-deterministic if managed-key path not opted out | `tests/config/bundle_self_hosted_integration_test.sh` → sha256 `1f9f7202b35ac7b23b94cc51ff8cbba0329f88f112e9c124783e5bbed5c123e4` byte-identical across two consecutive `--bundle` runs | `tests/config/bundle_self_hosted_integration_test.sh` |
+| SCN-052-S05  | Pre-fix: contract drift between yaml / Go / shell mirrors had no adversarial detector (regression classes A1+A2+A3+A4, design.md §8) | `TestBundleSecretContract_NoLiteralSecretsInSelfHosted` + 4 adversarial sub-tests A1 drift / A2 leakage / A3 determinism / A4 opt-out PASS — `internal/deploy (cached)` | `internal/deploy/bundle_secret_contract_test.go` |
+| SCN-052-S06  | Pre-fix: env-override dev-default would be silently accepted on self-hosted path (BS-052-006 regression class) | `tests/config/postgres_dev_default_env_override_test.sh` PASS — SST loader refused with exit 1, named `infrastructure.postgres.password`, FR-051-007 redaction preserved (no `smackerel` literal echoed) | `tests/config/postgres_dev_default_env_override_test.sh` |
 | SCN-052-S07  | Pre-fix: smackerel-core would boot with `__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__` as POSTGRES_PASSWORD (no L3 runtime defense) | `TestValidate_RejectsPlaceholderValues` + `TestValidateRuntimeAuthStartup_RejectsPlaceholderValues` + `TestRuntimeRejection_NameKeyOnly_NoValueLeakage` PASS — `internal/config 14.313s` + `internal/auth (cached)` | `internal/config/placeholder_runtime_test.go`, `internal/auth/startup_placeholder_test.go` |
-| SCN-052-S08  | Pre-fix: F-047-B (spec 047 R13) → CI `build-bundles` home-lab leg failed FR-051-005 dev-default gate | Close-out commit `d1e74a1f` lands the L1+L3 defense; F-047-B annotated **RESOLVED** in `specs/047-ci-image-vulnerability-gate/report.md`; CI matrix observation deferred to post-push (concern C-A11/B4) per operator decision 3c | `specs/047-ci-image-vulnerability-gate/report.md` |
+| SCN-052-S08  | Pre-fix: F-047-B (spec 047 R13) → CI `build-bundles` self-hosted leg failed FR-051-005 dev-default gate | Close-out commit `d1e74a1f` lands the L1+L3 defense; F-047-B annotated **RESOLVED** in `specs/047-ci-image-vulnerability-gate/report.md`; CI matrix observation deferred to post-push (concern C-A11/B4) per operator decision 3c | `specs/047-ci-image-vulnerability-gate/report.md` |
 
 ### Re-Run Unit Suite Transcript (2026-05-15)
 
@@ -1461,7 +1461,7 @@ Captured to: `/tmp/smackerel-spec052-bs006.log` (9 lines)
 
 ```
 $ bash tests/config/postgres_dev_default_env_override_test.sh
---- Sub-test 1 (T-052-013 / SCN-052-S06 / BS-052-006): env-override dev-default rejected for home-lab ---
+--- Sub-test 1 (T-052-013 / SCN-052-S06 / BS-052-006): env-override dev-default rejected for self-hosted ---
 PASS: SST loader refused env-override dev-default with exit code 1
 PASS: SST loader output names infrastructure.postgres.password
 PASS: SST loader output references spec 051
@@ -1633,7 +1633,7 @@ This note is informational only. No DoD checkbox flips and no source-code
 edits are made by this note.
 The chaos-phase observation about envsubst asymmetry is now resolved
 in the working tree (helper landed, contract test PASSes); the C-A12
-and C-B5 home-lab live-smoke concerns are unaffected by this fix and
+and C-B5 self-hosted live-smoke concerns are unaffected by this fix and
 remain operator-owned.
 
 ### Security Sweep (security-to-doc) — 2026-06-17
@@ -1661,7 +1661,7 @@ Executed evidence (PoC):
    `./smackerel.sh test unit --go --go-run 'BundleSecretContract' --verbose`:
 
    ```
-   --- PASS: TestBundleSecretContract_NoLiteralSecretsInHomeLab (10.29s)
+   --- PASS: TestBundleSecretContract_NoLiteralSecretsInSelfHosted (10.29s)
    --- PASS: TestBundleSecretContract_AdversarialA1_DriftDetector (3.65s)
    --- PASS: TestBundleSecretContract_AdversarialA2_LeakageDetector (3.84s)
    --- PASS: TestBundleSecretContract_AdversarialA3_DeterminismDetector (7.66s)
@@ -1671,7 +1671,7 @@ Executed evidence (PoC):
    ```
 
    Proves: every key in `config.SecretKeys()` (all 8) emits as
-   `__SECRET_PLACEHOLDER__<KEY>__` in the home-lab bundle `app.env`; no
+   `__SECRET_PLACEHOLDER__<KEY>__` in the self-hosted bundle `app.env`; no
    `DevDBPasswords` literal appears; the sibling `secret-keys.yaml` carries
    key NAMES only and matches `SecretKeys()`; two consecutive generations are
    byte-identical (A3 determinism); placeholder mode is opt-in keyed on
@@ -1789,8 +1789,8 @@ OK`; (b) focused re-run below.
 `./smackerel.sh test unit --go --go-run 'BundleSecretContract' --verbose`:
 
 ```
-=== RUN   TestBundleSecretContract_NoLiteralSecretsInHomeLab
---- PASS: TestBundleSecretContract_NoLiteralSecretsInHomeLab (21.09s)
+=== RUN   TestBundleSecretContract_NoLiteralSecretsInSelfHosted
+--- PASS: TestBundleSecretContract_NoLiteralSecretsInSelfHosted (21.09s)
 === RUN   TestBundleSecretContract_AdversarialA1_DriftDetector
 --- PASS: TestBundleSecretContract_AdversarialA1_DriftDetector (4.15s)
 === RUN   TestBundleSecretContract_AdversarialA2_LeakageDetector

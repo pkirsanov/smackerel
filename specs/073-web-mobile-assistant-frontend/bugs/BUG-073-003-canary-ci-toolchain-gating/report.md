@@ -260,7 +260,7 @@ $ gh run view 27394284069 --json jobs   # workflow: CI
   JOB integration:            completed/failure    <-- PRE-EXISTING, out of scope (see below)
 
 $ gh run view 27394284025 --json jobs   # workflow: build (build.yml, BODM signed images)
-  build-images / build-chrome-bridge / build-bundles (dev|home-lab|test) / publish-build-manifest
+  build-images / build-chrome-bridge / build-bundles (dev|self-hosted|test) / publish-build-manifest
   ALL completed/success                          <-- GREEN
 
   Gitleaks workflow: completed/success           <-- GREEN

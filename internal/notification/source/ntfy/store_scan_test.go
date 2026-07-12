@@ -16,7 +16,7 @@ func TestNtfyScanSubscriptionStatesRejectsMalformedRedactionState(t *testing.T) 
 	if err == nil {
 		t.Fatalf("expected malformed subscription redaction_state decode error, got states=%+v", states)
 	}
-	for _, required := range []string{"decode ntfy subscription redaction state", "ntfy-source", "home-lab-alerts"} {
+	for _, required := range []string{"decode ntfy subscription redaction state", "ntfy-source", "self-hosted-alerts"} {
 		if !strings.Contains(err.Error(), required) {
 			t.Fatalf("subscription redaction_state error missing %q context: %v", required, err)
 		}
@@ -91,7 +91,7 @@ func malformedSubscriptionStateRow(redactionJSON []byte) ntfyScanRow {
 	now := time.Date(2026, 5, 24, 23, 59, 0, 0, time.UTC)
 	return ntfyScanRow{scan: func(dest ...any) error {
 		*dest[0].(*string) = "ntfy-source"
-		*dest[1].(*string) = "home-lab-alerts"
+		*dest[1].(*string) = "self-hosted-alerts"
 		*dest[2].(*string) = "webhook"
 		*dest[3].(*string) = "webhook"
 		*dest[4].(*string) = SubscriptionConnected
@@ -118,7 +118,7 @@ func malformedDeadLetterRow(redactionJSON []byte) ntfyScanRow {
 	return ntfyScanRow{scan: func(dest ...any) error {
 		*dest[0].(*string) = "ntfy-dlq-1"
 		*dest[1].(*string) = "ntfy-source"
-		*dest[2].(*string) = "home-lab-alerts"
+		*dest[2].(*string) = "self-hosted-alerts"
 		*dest[3].(*string) = "evt-redaction-state"
 		*dest[4].(*string) = "message"
 		*dest[5].(*time.Time) = now

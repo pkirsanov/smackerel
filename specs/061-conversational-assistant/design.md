@@ -986,7 +986,7 @@ intent_examples:
 - "did I capture anything on sourdough?"
 - "find my notes on ACL tags"
 - "do I have anything on CGNAT?"
-- "remind me what I wrote about the home lab"
+- "remind me what I wrote about the self-hosted environment"
 
 system_prompt: |
   You are Smackerel's retrieval assistant. Answer ONLY from artifacts
@@ -1047,7 +1047,7 @@ side_effect_class: read
 >
 > Rationale per cell:
 > 1. **accel × interactive = 5000 ms** — restores the original Round 58
->    production contract. Operator's home-lab accelerator host has the GPU/RAM to serve
+>    production contract. Operator's self-hosted accelerator host has the GPU/RAM to serve
 >    `gemma3:4b` in budget; the 5 s invariant is the right user-facing target
 >    when hardware can meet it.
 > 2. **cpu × interactive = 15000 ms** — measured-honest: `qwen2.5:0.5b-instruct`
