@@ -4,7 +4,7 @@
 
 ## Scope 1: Fix double-`/api` prefix in expense + meal-plan handlers
 
-**Status:** [x] Done (in-process); live-host DoD items pending home-lab redeploy
+**Status:** [x] Done (in-process); live-host DoD items pending self-hosted redeploy
 **Depends On:** none
 
 ### Gherkin Scenarios (Regression Tests)
@@ -41,7 +41,7 @@ Feature: BUG-034-003 — Expense and meal-plan API routes are reachable behind b
 3. Update `internal/api/expenses_test.go` helper to mount the handler inside an `r.Route("/api", ...)` wrapper that mirrors production composition; keep existing `/api/expenses` request paths in the tests.
 4. If `internal/api/mealplan_test.go` exists, apply the same wrapper update.
 5. Add adversarial regression test (new file or appended) covering Scenarios 1–3 against full `NewRouter(deps)`.
-6. Confirm the empty-state Telegram reply on home-lab after deploy (Scenario 4).
+6. Confirm the empty-state Telegram reply on self-hosted after deploy (Scenario 4).
 
 ### Test Plan
 
@@ -52,7 +52,7 @@ Feature: BUG-034-003 — Expense and meal-plan API routes are reachable behind b
 | Integration | `integration` | `internal/api/router_mount_bug_034_003_test.go` | Scenario "Expense list route is mounted behind auth": `NewRouter(deps)` returns 401 on `GET /api/expenses` without bearer (not 404) | `./smackerel.sh test integration` | Yes |
 | Integration | `integration` | `internal/api/router_mount_bug_034_003_test.go` | Scenario "Meal-plan list route is mounted behind auth": `NewRouter(deps)` returns 401 on `GET /api/meal-plans` without bearer (not 404) | `./smackerel.sh test integration` | Yes |
 | Integration | `integration` | `internal/api/router_mount_bug_034_003_test.go` | Adversarial: `GET /api/api/expenses` stays 404 (no double-prefix regression) | `./smackerel.sh test integration` | Yes |
-| E2E API | `e2e-api` | `internal/api/router_mount_bug_034_003_test.go` (live probe post-deploy via `tests/e2e/telegram/expense_empty_state_e2e_test.go`) | Scenario "Telegram /expense command succeeds against empty DB": live home-lab `GET /api/expenses` → 401 without bearer, 200 with bearer; `/api/meal-plans` → 401 | `./smackerel.sh test e2e` | Yes |
+| E2E API | `e2e-api` | `internal/api/router_mount_bug_034_003_test.go` (live probe post-deploy via `tests/e2e/telegram/expense_empty_state_e2e_test.go`) | Scenario "Telegram /expense command succeeds against empty DB": live self-hosted `GET /api/expenses` → 401 without bearer, 200 with bearer; `/api/meal-plans` → 401 | `./smackerel.sh test e2e` | Yes |
 | E2E UI | `e2e-ui` | `tests/e2e/telegram/expense_empty_state_e2e_test.go` | Telegram `/expense` reply is empty-state, not "Failed to query expenses" | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done — 3-Part Validation
@@ -65,14 +65,14 @@ Feature: BUG-034-003 — Expense and meal-plan API routes are reachable behind b
 - [x] New router-mount regression test FAILS on pre-fix code (proves it detects the bug) — Evidence: [report.md#bug-reproduction-after-fix-in-process-integration-regression] (RED block: all 4 sub-tests FAIL with status mismatch)
 - [x] New router-mount regression test PASSES on post-fix code — Evidence: [report.md#bug-reproduction-after-fix-in-process-integration-regression] (GREEN block: all 4 sub-tests PASS)
 - [x] Adversarial sub-test (`/api/api/expenses` → 404) is present and passing — Evidence: [report.md#bug-reproduction-after-fix-in-process-integration-regression] (`adversarial_double_prefix_expense_stays_404` PASS; `adversarial_double_prefix_meal_plan_stays_404` PASS)
-- [ ] Live home-lab `GET /api/expenses` returns 401 without bearer (was 404) — **Blocked on home-lab redeploy.** Evidence: pending `bubbles.validate` post-deploy. See [report.md#live-deployment-required-not-yet-performed].
-- [ ] Live home-lab `GET /api/meal-plans` returns 401 without bearer (was 404) — **Blocked on home-lab redeploy.** Evidence: pending `bubbles.validate` post-deploy.
-- [ ] Live Telegram `/expense` returns empty-state, not "Failed to query expenses" — **Blocked on home-lab redeploy.** Evidence: pending `bubbles.validate` post-deploy.
+- [ ] Live self-hosted `GET /api/expenses` returns 401 without bearer (was 404) — **Blocked on self-hosted redeploy.** Evidence: pending `bubbles.validate` post-deploy. See [report.md#live-deployment-required-not-yet-performed].
+- [ ] Live self-hosted `GET /api/meal-plans` returns 401 without bearer (was 404) — **Blocked on self-hosted redeploy.** Evidence: pending `bubbles.validate` post-deploy.
+- [ ] Live Telegram `/expense` returns empty-state, not "Failed to query expenses" — **Blocked on self-hosted redeploy.** Evidence: pending `bubbles.validate` post-deploy.
 - [ ] Full `./smackerel.sh test pre-push` passes — Not run in this session (no smackerel `test pre-push` command exists; equivalent surface is `check + lint + test unit + test integration`, all of which are green per the four evidence blocks above). Recommend running before merge; flagged for follow-up if a `pre-push` orchestrator is added to `smackerel.sh`.
 - [x] bug.md status updated to "Fixed" then "Verified" — partial: code-fix portion marked Fixed via state.json; "Verified" pending live-host evidence post-deploy.
 
-⚠️ E2E (live home-lab + Telegram) is MANDATORY — this is a production-deploy bug class.
+⚠️ E2E (live self-hosted + Telegram) is MANDATORY — this is a production-deploy bug class.
 
 ### Honest Gap Summary
 
-In-process implementation work is complete with full RED+GREEN evidence for the routing fix and adversarial coverage proving the buggy shape cannot return. Live-host verification + Telegram round-trip cannot be checked from this development session because they require a fresh image build + `apply.sh` invocation on the home-lab target, which is explicitly owner-gated per `knb` deploy adapter policy. Three live-host DoD items therefore remain `[ ]` and the bug status remains `in_progress` with `routing.nextOwner: bubbles.validate` (pending operator-run deploy).
+In-process implementation work is complete with full RED+GREEN evidence for the routing fix and adversarial coverage proving the buggy shape cannot return. Live-host verification + Telegram round-trip cannot be checked from this development session because they require a fresh image build + `apply.sh` invocation on the self-hosted target, which is explicitly owner-gated per `knb` deploy adapter policy. Three live-host DoD items therefore remain `[ ]` and the bug status remains `in_progress` with `routing.nextOwner: bubbles.validate` (pending operator-run deploy).

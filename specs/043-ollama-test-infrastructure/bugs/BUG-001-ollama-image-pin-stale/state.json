@@ -19,7 +19,7 @@
     "tests/integration/ollama_image_availability_test.go",
     "config/generated/dev.env",
     "config/generated/test.env",
-    "config/generated/home-lab.env"
+    "config/generated/self-hosted.env"
   ],
   "execution": {
     "activeAgent": null,
@@ -74,7 +74,7 @@
       "phase": "implement",
       "agent": "bubbles.bug",
       "timestamp": "2026-05-10T00:30:00Z",
-      "summary": "Fix landed: (1) config/smackerel.yaml infrastructure.ollama.image and infrastructure.ollama.test.image both re-pinned 0.6 -> 0.23.2 with audit-trail comment; (2) deploy/contract.yaml externalImages.ollama.image bumped 0.6 -> 0.23.2; (3) deploy/compose.deploy.yml services.ollama.image bumped 0.6 -> 0.23.2; (4) tests/integration/ollama_config_contract_test.go AdversarialMissingTestImage strip target updated 0.6 -> 0.23.2 (so the existing strip-and-rerun adversarial continues to find its target line in the live YAML); (5) config/generated/{dev,test,home-lab}.env regenerated via for env in dev test home-lab; do ./smackerel.sh --env $env config generate; done -- all three carry OLLAMA_IMAGE=ollama/ollama:0.23.2; (6) NEW tests/integration/ollama_image_availability_test.go (build tag integration) -- TestOllamaImagePinIsPublished_LiveTag reads OLLAMA_IMAGE from config/generated/test.env and HEADs https://hub.docker.com/v2/repositories/ollama/ollama/tags/<tag>, asserts HTTP 200; TestOllamaImagePinIsPublished_AdversarialYankedTag asserts HTTP 404 for the synthetic input ollama/ollama:0.6 (proves the live test is non-tautological). Zero t.Skip-family calls; fail-loud paths use t.Fatalf."
+      "summary": "Fix landed: (1) config/smackerel.yaml infrastructure.ollama.image and infrastructure.ollama.test.image both re-pinned 0.6 -> 0.23.2 with audit-trail comment; (2) deploy/contract.yaml externalImages.ollama.image bumped 0.6 -> 0.23.2; (3) deploy/compose.deploy.yml services.ollama.image bumped 0.6 -> 0.23.2; (4) tests/integration/ollama_config_contract_test.go AdversarialMissingTestImage strip target updated 0.6 -> 0.23.2 (so the existing strip-and-rerun adversarial continues to find its target line in the live YAML); (5) config/generated/{dev,test,self-hosted}.env regenerated via for env in dev test self-hosted; do ./smackerel.sh --env $env config generate; done -- all three carry OLLAMA_IMAGE=ollama/ollama:0.23.2; (6) NEW tests/integration/ollama_image_availability_test.go (build tag integration) -- TestOllamaImagePinIsPublished_LiveTag reads OLLAMA_IMAGE from config/generated/test.env and HEADs https://hub.docker.com/v2/repositories/ollama/ollama/tags/<tag>, asserts HTTP 200; TestOllamaImagePinIsPublished_AdversarialYankedTag asserts HTTP 404 for the synthetic input ollama/ollama:0.6 (proves the live test is non-tautological). Zero t.Skip-family calls; fail-loud paths use t.Fatalf."
     },
     {
       "phase": "test",

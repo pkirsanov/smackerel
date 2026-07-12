@@ -7,7 +7,7 @@
 // verified WITHOUT a live stack. No request interception — correctly classified
 // unit (the rendering + numbering is a pure mechanism). The live Telegram
 // pick→persist→dispatch leg (TestTelegram_PickHostedModelPersists_Spec096) is
-// the deferred home-lab e2e-api dispatch.
+// the deferred self-hosted e2e-api dispatch.
 package telegram
 
 import (

@@ -10,7 +10,7 @@
 
 **Current State.** `internal/config/config.go::validateMLModelEnvelope()` (lines 1745-1801) buckets THREE model env vars (`LLM_MODEL`, `OLLAMA_MODEL`, `EMBEDDING_MODEL`) against the SINGLE envelope `c.MLMemoryLimitMiB` (3 GiB on default config). `OLLAMA_MEMORY_LIMIT` IS emitted by `scripts/commands/config.sh:446` and IS in `Config.OllamaMemoryLimit` (line 560) and IS in `requiredVars()` (line 1378), but no parsed-MiB integer field exists. Default `config/smackerel.yaml` ships every `llm.*`, `agent.provider_routing.*.model`, and `photos.intelligence.*_model` field referencing `gemma4:26b` (profile 18432 MiB) against an 8 GiB ollama envelope — internally unsatisfiable.
 
-**Target State.** Validator splits ollama-routed models from ml-sidecar-routed models and checks each bucket against its CORRECT envelope; error messages name the correct envelope key. `OllamaMemoryLimit` is parsed to `OllamaMemoryLimitMiB` mirroring the existing `MLMemoryLimit` parse pattern. A config-generate-time self-consistency check rejects internally-unsatisfiable YAML BEFORE the env file is written. Default `config/smackerel.yaml` is changed to a multimodal model family that fits the default 8 GiB ollama envelope. `./smackerel.sh up`, `./smackerel.sh test integration`, and the spec 052 home-lab canary all succeed on default config.
+**Target State.** Validator splits ollama-routed models from ml-sidecar-routed models and checks each bucket against its CORRECT envelope; error messages name the correct envelope key. `OllamaMemoryLimit` is parsed to `OllamaMemoryLimitMiB` mirroring the existing `MLMemoryLimit` parse pattern. A config-generate-time self-consistency check rejects internally-unsatisfiable YAML BEFORE the env file is written. Default `config/smackerel.yaml` is changed to a multimodal model family that fits the default 8 GiB ollama envelope. `./smackerel.sh up`, `./smackerel.sh test integration`, and the spec 052 self-hosted canary all succeed on default config.
 
 **Patterns to Follow.**
 - [internal/config/config.go](../../../../internal/config/config.go) `MLMemoryLimit` → `MLMemoryLimitMiB` parse at lines 694-700 is the canonical pattern for compose-style memory parsing. The new `OllamaMemoryLimit` parse mirrors it byte-for-byte.
@@ -96,7 +96,7 @@ The four root causes in `spec.md` § Root Cause Analysis are confirmed unchanged
 
 - **Affected components:** `internal/config/config.go` (validator + Config struct widening for parsed-MiB field); a NEW `cmd/config-validate` binary (DD-2); `internal/config/validate_ml_envelope_test.go` (extend with AC-5 cases); `scripts/commands/config.sh` (pre-emit invocation of the new binary); `config/smackerel.yaml` (9 ollama-routed default model changes + 2 profile catalog additions + comment block); `docs/Operations.md` (new "Model Envelope Sizing" section); spec 052 close-out artifacts (state.json + scopes.md + report.md).
 - **Affected data:** Generated env files in `config/generated/<env>.env` — names and values unchanged; only the loud-rejection behavior of `config generate` changes (fails earlier and more clearly). No DB schema, no NATS payload, no on-wire HTTP contract change.
-- **Affected users:** (1) Operators running `./smackerel.sh up` on default config — currently broken, post-fix works on any host with ≥ 8 GiB free for ollama. (2) CI integration job — currently failing on every run, post-fix passes. (3) Spec 052 home-lab canary path — currently blocked, post-fix unblocked. (4) Home-lab and production operators who already raise the ollama envelope to 16-32 GiB and use `gemma4:26b` — NO change to their working configuration provided they continue to override defaults in their deploy overlay (per the deploy-overlay ownership rules in copilot-instructions).
+- **Affected users:** (1) Operators running `./smackerel.sh up` on default config — currently broken, post-fix works on any host with ≥ 8 GiB free for ollama. (2) CI integration job — currently failing on every run, post-fix passes. (3) Spec 052 self-hosted canary path — currently blocked, post-fix unblocked. (4) self-hosted and production operators who already raise the ollama envelope to 16-32 GiB and use `gemma4:26b` — NO change to their working configuration provided they continue to override defaults in their deploy overlay (per the deploy-overlay ownership rules in copilot-instructions).
 
 ---
 
@@ -306,12 +306,12 @@ Two ollama models loaded simultaneously (e.g. `gemma3:4b` + `deepseek-r1:7b` if 
 
 ```yaml
 # Spec 045 BUG-045-001 (resolved 2026-05-16) — Default model choices fit
-# the default deploy_resources.ollama.memory = "8G" envelope. Home-lab and
+# the default deploy_resources.ollama.memory = "8G" envelope. self-hosted and
 # production operators with ≥ 16 GiB free for ollama may opt UP to
 # gemma4:26b / deepseek-r1:32b / gpt-oss:20b by RAISING the envelope FIRST
 # in deploy_resources.ollama.memory, THEN swapping the model fields here.
 # See docs/Operations.md § "Model Envelope Sizing" for the per-service
-# envelope contract and the dev / home-lab / production trade-off matrix.
+# envelope contract and the dev / self-hosted / production trade-off matrix.
 ```
 
 ### DD-6 — Adversarial test fixture design
@@ -460,7 +460,7 @@ cfg := &Config{
 | `cmd/config-validate/main_test.go` (NEW) | Unit tests for env-file loading + exit-code behavior | `bubbles.implement` |
 | `scripts/commands/config.sh` | Add pre-emit invocation of `cmd/config-validate` per DD-2 sketch; TEMP write + atomic promote on success or abort on failure | `bubbles.implement` |
 | `config/smackerel.yaml` | Change 9 ollama-routed default model fields per DD-5; add `gemma3:4b` and `deepseek-r1:7b` to `services.ml.model_memory_profiles`; add comment block near `llm.model` and `deploy_resources.ollama` per DD-5 | `bubbles.implement` |
-| `docs/Operations.md` | Add "Model Envelope Sizing" section per AC-9 covering (a) per-service envelope contract, (b) dev/home-lab/production trade-off matrix, (c) fix-path order (raise envelope FIRST, then change model), (d) cross-reference to `services.ml.model_memory_profiles` catalog | `bubbles.implement` |
+| `docs/Operations.md` | Add "Model Envelope Sizing" section per AC-9 covering (a) per-service envelope contract, (b) dev/self-hosted/production trade-off matrix, (c) fix-path order (raise envelope FIRST, then change model), (d) cross-reference to `services.ml.model_memory_profiles` catalog | `bubbles.implement` |
 | `specs/052-bundle-secret-injection-contract/state.json` | Mark `C-A12`, `C-B5`, `C-B6` resolved per DD-4 (lightweight metadata-only update, no re-certification) | `bubbles.implement` |
 | `specs/052-bundle-secret-injection-contract/scopes.md` | Flip Scope-4 DoD checkboxes for `C-A12`/`C-B5`/`C-B6` to `[x]` with inline evidence per DD-4 | `bubbles.implement` |
 | `specs/052-bundle-secret-injection-contract/report.md` | Append Scope-4 resolution evidence section naming this packet's HEAD SHA + AC-6/AC-7 PASS outputs per DD-4 | `bubbles.implement` |

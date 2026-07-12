@@ -1,7 +1,7 @@
 """BUG-026-007 (redteam F2, latency half) — qwen3 thinking-disable wiring tests.
 
 Root cause: qwen3:30b-a3b runs with thinking mode ON by default, adding a hidden
-``<think>…</think>`` reasoning block (>150s live on evo-x2) before its JSON on the
+``<think>…</think>`` reasoning block (>150s live on <deploy-host>) before its JSON on the
 structured-JSON extraction path — blowing the 30s DOMAIN_EXTRACTION_TIMEOUT and
 prefixing callers with a ``<think>`` block that trips ``LLM returned invalid
 JSON``. The fix sets the NATIVE Ollama ``think=False`` request field on the
@@ -14,7 +14,7 @@ structured-JSON extraction call sends the native ``think=False`` kwarg to litell
 when SST disables thinking (and does NOT when SST enables it) — not the live prod
 latency (which only the orchestrator's redeploy can confirm). The mechanism is
 the native ``think`` field, NOT the ``/no_think`` prompt token the FIRST fix used
-(qwen3's Ollama chat template ignores that string; measured live on evo-x2). A
+(qwen3's Ollama chat template ignores that string; measured live on <deploy-host>). A
 top-level ``think=`` kwarg is forwarded to the Ollama request top level by
 litellm 1.84.0 for BOTH the ``ollama_chat/`` and legacy ``ollama/`` transforms,
 and the two formerly-legacy routes (search-rerank, drive-classify) are migrated

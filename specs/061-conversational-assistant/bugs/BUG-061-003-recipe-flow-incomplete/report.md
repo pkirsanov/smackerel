@@ -829,7 +829,7 @@ d0266558f246e233551b13d7aa33f20b041f83ed
 $ git log --oneline -3
 d0266558 fix(BUG-061-003): switch S05 e2e to canonical loadE2EConfig helper
 39be6ec2 fix(BUG-061-003): restore recipe_search skill implementation
-1047ad45 fix(home-lab): keep Ollama models warm + headroom for weather budget
+1047ad45 fix(self-hosted): keep Ollama models warm + headroom for weather budget
 ```
 
 ### S01–S04 — targeted unit run

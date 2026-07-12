@@ -388,7 +388,7 @@ Routing owner: implementation specialist for the StateStore capability-column CR
 **Finding F2 — WSL2 stress harness incompatibility (infrastructure, medium)**
 
 - Decision: **Accept WSL2 limitation; allow native-Linux execution evidence for the freshness SLA stress DoD item.** Do NOT introduce a separate Scope 2.6 for WSL2 compatibility. The freshness instrumentation (`smackerel_qf_freshness_p95_seconds{stage}` gauge from Round 2L) is independent of the stress runner; the production code path is unchanged. The WSL2-loopback incompatibility on `--network host` is a developer-environment limitation, not a code defect.
-- Acceptable evidence sources for the freshness SLA p95 stress DoD item: (a) native-Linux CI runner, (b) native-Linux operator host, (c) the home-lab target. Evidence must include raw `./smackerel.sh test stress` output and the gauge readings.
+- Acceptable evidence sources for the freshness SLA p95 stress DoD item: (a) native-Linux CI runner, (b) native-Linux operator host, (c) the self-hosted target. Evidence must include raw `./smackerel.sh test stress` output and the gauge readings.
 Developer-experience note: a runtime `t.Skip()` guard in `tests/stress/qf_decision_event_replay_test.go` could detect WSL2 (via `/proc/sys/fs/binfmt_misc/WSLInterop` or `/proc/version` containing `microsoft`) and point to the operator runbook. This note is not a Scope 2 DoD item.
 Routing owner: test specialist for the stress workload on a native-Linux execution surface and evidence capture. Implementation specialist may own the WSL2-skip guard if that developer-experience note is picked up.
 

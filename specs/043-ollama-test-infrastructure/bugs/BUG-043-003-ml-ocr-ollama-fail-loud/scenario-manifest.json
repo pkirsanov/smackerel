@@ -51,7 +51,7 @@
         "TestEnableOllamaFailLoudGating::test_enable_ollama_falsy_skips_ollama_fallback"
       ],
       "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
-      "specSource": "specs/043-ollama-test-infrastructure/design.md line 91 (per-env ENABLE_OLLAMA defaults to false for dev and home-lab)",
+      "specSource": "specs/043-ollama-test-infrastructure/design.md line 91 (per-env ENABLE_OLLAMA defaults to false for dev and self-hosted)",
       "redGreenProbe": "./smackerel.sh test unit --python -k 'TestEnableOllamaFailLoudGating'",
       "adversarial": "NO (positive guard rail — passes on both pre-fix and post-fix; locks the behavior contract going forward)"
     },

@@ -54,14 +54,14 @@
         "owner": "operator",
         "scope": "SCOPE-4",
         "dodRef": "scopes.md#scope-4-dod-1",
-        "acceptanceCriterion": "Build workflow run for the commit shipping SCOPE-1/2/3 reports conclusion=success on .github/workflows/build.yml; signed core+ml images plus home-lab config bundle published to ghcr."
+        "acceptanceCriterion": "Build workflow run for the commit shipping SCOPE-1/2/3 reports conclusion=success on .github/workflows/build.yml; signed core+ml images plus self-hosted config bundle published to ghcr."
       },
       {
         "id": "OP-070-SCOPE4-PROMOTE-APPLY",
         "owner": "operator",
         "scope": "SCOPE-4",
         "dodRef": "scopes.md#scope-4-dod-2",
-        "acceptanceCriterion": "promote.sh --target home-lab --build-manifest <new> apply OK and ./smackerel.sh deploy-target home-lab verify OK."
+        "acceptanceCriterion": "promote.sh --target self-hosted --build-manifest <new> apply OK and ./smackerel.sh deploy-target self-hosted verify OK."
       },
       {
         "id": "OP-070-SCOPE4-USERS-ADD",
@@ -85,7 +85,7 @@
         "acceptanceCriterion": "Navigating to at least two distinct admin routes after login does not re-prompt for credentials."
       }
     ],
-    "notes": "Spec 070 (originally scaffolded as 063, renumbered 2026-05-31 to resolve duplicate 063 collision with knowledge-ai-enrichment) scaffolded 2026-05-30. SCOPE-1/2/3 implemented and verified with executed unit + integration evidence on 2026-06-01 (see report.md). SCOPE-4 (live home-lab deploy + browser smoke) is operator-action and certified under passed-with-known-drift per BUG-045-002 precedent: its 5 DoD items are routed as certification.unresolvedFindings with explicit operator acceptance criteria. Spec status flipped to done 2026-06-01T23:30Z.",
+    "notes": "Spec 070 (originally scaffolded as 063, renumbered 2026-05-31 to resolve duplicate 063 collision with knowledge-ai-enrichment) scaffolded 2026-05-30. SCOPE-1/2/3 implemented and verified with executed unit + integration evidence on 2026-06-01 (see report.md). SCOPE-4 (live self-hosted deploy + browser smoke) is operator-action and certified under passed-with-known-drift per BUG-045-002 precedent: its 5 DoD items are routed as certification.unresolvedFindings with explicit operator acceptance criteria. Spec status flipped to done 2026-06-01T23:30Z.",
     "recertifications": [
       {
         "recertifiedAt": "2026-06-07T19:30:00Z",
@@ -94,7 +94,7 @@
         "basis": "passed-with-known-drift (reaffirmed; SAME basis as original closure)",
         "trigger": "Round-2 stochastic-quality-sweep harden remediation edited PROTECTED artifacts (F6 spec.md ## Status draft->done; F7 documented rate-limit 10->20/min to match internal/api/router.go LimitByIP(20,1m)) plus a scopes.md citation reconciliation; bubbles.implement set requiresRevalidation:true and routed the G088 re-cert decision to bubbles.spec-review.",
         "regressionCheck": "No new drift. Independent git diff HEAD shows F1-F7 are drift-REMOVING (spec.md status reconciled to the already-certified done state; rate-limit doc reconciled to real code; scopes.md citation reconciled to the F1/F2 dispatch-seam tests) plus additive GREEN test strengthening (cmd_users dispatcher exit-code tests, login.html field tests, timing-test rename). state-transition-guard failure count DECREASED 42 (HEAD, pre-F1-F7) -> 39 (working tree, post-F1-F7); zero new structural failures. post-cert-spec-edit-guard (Gate G088 Check 30) PASS at both HEAD and working tree.",
-        "knownDriftReaffirmed": "The 39 current-policy (--profile changed) failures are the SAME pre-existing structural known-drift carried at the closure epoch: 070 was certified via the streamlined implement/test/validate/audit path with SCOPE-4 (live home-lab deploy + browser smoke) deferred as operator-action (certification.unresolvedFindings OP-070-SCOPE4-*). The full-delivery-policy items it never satisfied (missing regression/simplify/gaps/harden/stabilize/security/docs/chaos specialist phases; SCOPE-4 deferral language G040/G041; missing Validation/Audit/Chaos report sections; Code Diff Evidence G053; regression-E2E planning) are accepted known-drift, not regressions.",
+        "knownDriftReaffirmed": "The 39 current-policy (--profile changed) failures are the SAME pre-existing structural known-drift carried at the closure epoch: 070 was certified via the streamlined implement/test/validate/audit path with SCOPE-4 (live self-hosted deploy + browser smoke) deferred as operator-action (certification.unresolvedFindings OP-070-SCOPE4-*). The full-delivery-policy items it never satisfied (missing regression/simplify/gaps/harden/stabilize/security/docs/chaos specialist phases; SCOPE-4 deferral language G040/G041; missing Validation/Audit/Chaos report sections; Code Diff Evidence G053; regression-E2E planning) are accepted known-drift, not regressions.",
         "alsoCorrected": "Fixed pre-existing dangling specDependsOn reference specs/057-form-encoded-web-login -> specs/057-browser-login-redirect (the form-login dependency spec was renamed; target status is done). The dangling reference existed identically at HEAD (git show HEAD confirmed) and was not an F1-F7 regression; this is a referential correction, not a dependency-intent change.",
         "finalizationNote": "Clean terminal Gate G088 (requiresRevalidation:false + green post-cert-spec-edit-guard) seals at commit time: the F1-F7 planning-truth edits must be committed, then certifiedAt re-stamped to post-date that commit per the established OPS-002 certifiedAt re-stamp pattern (commit eea5e568). This recert does NOT fabricate a clean current-policy pass; the ~37 remaining structural items stay documented known-drift and done-spec-audit --profile changed remains exit 1 by design."
       }

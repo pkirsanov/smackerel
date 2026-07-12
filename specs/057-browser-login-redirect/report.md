@@ -24,7 +24,7 @@ expose `runSubagent`; per workflow policy the parent orchestrator
 executed the planning synthesis directly). The output reflects an
 analyst → ux → design → plan convergence:
 
-- **Analyst:** identified the live observation on `evo-x2` and traced
+- **Analyst:** identified the live observation on `<deploy-host>` and traced
   it to the missing HTML entry point in `internal/api/router.go`.
 - **UX:** specified the minimal interaction model (token paste, no
   framework, progressive enhancement, accessible password-typed input,
@@ -946,7 +946,7 @@ To counteract automation bias, the user / next reviewer should manually verify:
 
 1. **`internal/api/sanitize_next.go` lines 30–60** — confirm the 5-step reject pipeline matches design.md §"next Sanitization". The implementation rejects on each step; verify no logical gap (e.g., a path like `/legit/../../../etc/passwd` is permitted by `sanitizeNext` because it has a single `/` prefix and empty scheme/host — confirm that the downstream router behaviour matches expectation, since path traversal is NOT a redirect concern but might surprise an op).
 2. **`internal/api/web_login.go` line ~190** — verify the `Secure: strings.EqualFold(d.Environment, "production")` check matches how `Environment` is actually populated in deploy bundles. If `Environment` is `"prod"` or empty in some deploy targets, the cookie ships without `Secure`.
-3. **`internal/api/admin_ui_static/login.html`** — manually view the rendered page in a real browser against the home-lab stack to confirm the `disabled` banner renders correctly when `AuthEnabled=false` (no test-stack coverage for the disabled path was confirmed in evidence).
+3. **`internal/api/admin_ui_static/login.html`** — manually view the rendered page in a real browser against the self-hosted stack to confirm the `disabled` banner renders correctly when `AuthEnabled=false` (no test-stack coverage for the disabled path was confirmed in evidence).
 4. **`docs/Operations.md`** — confirm the new `/login` and `/admin_ui_static/*` routes are documented before merging.
 
 ## Phase Validate (2026-05-28T09:18Z) — bubbles.validate (certification pre-flight)

@@ -41,7 +41,7 @@
   ],
   "relatesTo": [
     "specs/099-preflight-resource-guard",
-    "specs/_ops/OPS-005-evo-x2-readiness-sweep-fixes",
+    "specs/_ops/OPS-005-<deploy-host>-readiness-sweep-fixes",
     "specs/069-assistant-http-transport/bugs/BUG-069-002-capture-context-cancellation",
     "specs/069-assistant-http-transport/bugs/BUG-069-003-capture-endpoint-context-cancellation"
   ],

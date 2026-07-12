@@ -1134,7 +1134,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		// is wired. Rationale: the substrate enforces a per-tool
 		// timeout (open_knowledge.yaml: per_tool_timeout_ms=120s) that
 		// is too tight for slow on-prem LLMs (e.g. gemma3:26b on
-		// home-lab GPU), even though the agent itself has its own
+		// self-hosted GPU), even though the agent itself has its own
 		// iteration + LLM timeouts. The fast-path invokes the agent
 		// directly with the request context (HTTP WriteTimeout) so the
 		// agent's internal budgets are authoritative.

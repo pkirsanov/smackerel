@@ -11,7 +11,7 @@
 // #round-56-defect3-verify), structurally unreachable inside 5000ms. The
 // authorized fix is a per-env SST override that pins the default-tier model
 // to qwen2.5:0.5b-instruct in the test environment ONLY, leaving dev /
-// home-lab / prod on gemma3:4b via the base agent.provider_routing.default.model.
+// self-hosted / prod on gemma3:4b via the base agent.provider_routing.default.model.
 //
 // This test enforces both halves of the override at the env-file boundary,
 // so any future regression (silently dropping the override, or silently

@@ -162,7 +162,7 @@ $ go test -count=1 ./tests/unit/... ./internal/... 2>&1 | grep -E "^(FAIL|---.FA
 --- FAIL: TestSkillsManifest_AllScenariosLoadFromPromptContractsDir (0.01s)
 --- FAIL: TestSkillsManifest_EnabledIDsHaveLoadedScenarios (0.01s)
 FAIL    github.com/smackerel/smackerel/internal/assistant       0.432s
---- FAIL: TestBundleSecretContract_NoLiteralSecretsInHomeLab (11.06s)
+--- FAIL: TestBundleSecretContract_NoLiteralSecretsInSelfHosted (11.06s)
 --- FAIL: TestBundleSecretContract_AdversarialA1_DriftDetector (9.17s)
 --- FAIL: TestBundleSecretContract_AdversarialA2_LeakageDetector (5.23s)
 --- FAIL: TestBundleSecretContract_AdversarialA3_DeterminismDetector (5.14s)
@@ -174,7 +174,7 @@ Pre-existence verification (git stash → re-run without my changes):
 
 ```
 $ git stash && go test -count=1 ./internal/deploy/ ./internal/assistant/ 2>&1 | grep -E "^(FAIL|---.FAIL)"
---- FAIL: TestBundleSecretContract_NoLiteralSecretsInHomeLab (7.03s)
+--- FAIL: TestBundleSecretContract_NoLiteralSecretsInSelfHosted (7.03s)
 --- FAIL: TestBundleSecretContract_AdversarialA1_DriftDetector (5.68s)
 --- FAIL: TestBundleSecretContract_AdversarialA2_LeakageDetector (5.97s)
 --- FAIL: TestBundleSecretContract_AdversarialA3_DeterminismDetector (6.14s)

@@ -10,13 +10,13 @@ decisions + findings the analyze phase surfaced.
 
 ## Current Truth (gathered 2026-06-11, solution-blind)
 
-The `/ask` open-knowledge request path on home-lab:
+The `/ask` open-knowledge request path on self-hosted:
 
 ```
 Telegram / web /ask
   -> internal/assistant/facade.go  (router + capability dispatch)
      -> scenarioID == "open_knowledge" AND okagenttool.CurrentAgent() != nil ?
-        YES (home-lab, agent wired):
+        YES (self-hosted, agent wired):
           -> facade.go::runOpenKnowledgeDirect(ctx, ...)        [FAST-PATH]
              -> okagent.Agent.Run(ctx, prompt)                  [the loop]
         NO (agent not wired / other scenarios):
@@ -166,12 +166,12 @@ spec-064 comment sizes as `max_iterations × per_llm_timeout`. At
 invariant is `6 × 600s = 3600s`. We raise `WriteTimeout` from `1800s` to
 `3600s` in `cmd/core/main.go` and update the comment so the invariant stays
 honest. This only matters in the pathological all-calls-hit-the-10-minute-cap
-case (impossible on home-lab GPU, where calls are seconds); realistic
-6-iteration home-lab turns are ~40-60s (observed 4-iteration turns are
+case (impossible on self-hosted GPU, where calls are seconds); realistic
+6-iteration self-hosted turns are ~40-60s (observed 4-iteration turns are
 25-36s end-to-end), leaving enormous headroom. The change is a defensive
 backstop, not a hot-path latency cost.
 
-Expected latency at 6 iterations (home-lab, gemma4:26b resident,
+Expected latency at 6 iterations (self-hosted, gemma4:26b resident,
 keep_alive=24h): ~40-60s per reasoning turn (vs ~25-36s at 4 iterations).
 Worst-case-cold (rare, once per 24h eviction): ~70-114s. All well inside the
 3600s WriteTimeout.
@@ -240,7 +240,7 @@ hardware-tier model matrix.
 ## Operator Safety & Rollback
 
 - **Worst-case failure mode:** if 6 iterations + the larger context regress
-  latency or quality on home-lab, the operator reverts the four edits
+  latency or quality on self-hosted, the operator reverts the four edits
   (prompt, two SST values, WriteTimeout, agent.go) — they are independent and
   contain no schema/migration changes. The cite-back / provenance trust
   contracts are untouched, so there is no trust regression surface.
@@ -252,5 +252,5 @@ hardware-tier model matrix.
 ## Pre-Apply Verification Impact
 
 This spec changes no deploy adapter, no manifest, and no secret. The spec-064
-SCOPE-17/18 deploy contract is unchanged. The home-lab apply is a separate
+SCOPE-17/18 deploy contract is unchanged. The self-hosted apply is a separate
 `bubbles.devops` dispatch; this spec terminates at validated-in-repo.

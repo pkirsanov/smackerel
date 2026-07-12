@@ -7,7 +7,7 @@
 # schema. This is the `local-operator` analogue of the spec-085 CI emitter
 # (scripts/deploy/client-manifest-clients-block.sh): same schema, but
 # `provenance: local-operator` (NOT cosign-keyless) and a LOCAL filesystem `ref`
-# (no ghcr / no @sha256: in the ref) — because on evo-x2 the client is BUILT +
+# (no ghcr / no @sha256: in the ref) — because on <deploy-host> the client is BUILT +
 # operator-signed LOCALLY and acquired by the knb adapter as a local path
 # (knb/scripts/deploy/client-delivery-step.sh::knb_client_acquire_local).
 #

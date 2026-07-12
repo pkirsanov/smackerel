@@ -103,6 +103,6 @@ truncated success. Specifically:
 - Refactoring `ExpenseHandler.Pool` from the concrete `*pgxpool.Pool` to an
   interface (the repo's established unit-tier pattern tests an extracted
   `rowScanner` helper, not the whole handler — see `internal/list/harden_test.go`).
-- Live home-lab deploy verification (no deploy required; this is a unit-tier code
+- Live self-hosted deploy verification (no deploy required; this is a unit-tier code
   fix). The consolidated commit + parent recertification is deferred to the
   end-of-sweep `bubbles.devops` pass per the sweep contract.

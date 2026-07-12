@@ -272,7 +272,7 @@ The following files were intentionally left unchanged by the plan-phase update (
 - `ml/app/auth.py`, `ml/app/main.py`, `ml/tests/conftest.py`, `ml/tests/test_auth_module_import_fail_loud.py` — explicit FROZEN-blacklist per DD-8.
 - All Go runtime files (`cmd/core/wiring.go`, etc.), deployment adapters, Compose, generated config, `.github/copilot-instructions.md`, `.github/instructions/smackerel-no-defaults.instructions.md`, parent spec 020 artifacts.
 
-No commit was made by `bubbles.plan` in this session (commit / docs / audit evidence is the docs-phase + audit-phase territory under the parent rescan workflow `home-lab-readiness-rescan-external-2026-05-15`).
+No commit was made by `bubbles.plan` in this session (commit / docs / audit evidence is the docs-phase + audit-phase territory under the parent rescan workflow `self-hosted-readiness-rescan-external-2026-05-15`).
 
 ### RESULT-ENVELOPE
 
@@ -288,7 +288,7 @@ ownedArtifactsUpdated:
   - specs/020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read/scopes.md
   - specs/020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read/scenario-manifest.json
   - specs/020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read/report.md
-parentWorkflow: home-lab-readiness-rescan-external-2026-05-15
+parentWorkflow: self-hosted-readiness-rescan-external-2026-05-15
 findingId: HL-RESCAN-013-secondary
 transitionRequest: TR-BUG-020-004-002 (design → plan, completed)
 nextTransitionRequest: none opened by this planning repair
@@ -298,7 +298,7 @@ nextTransitionRequest: none opened by this planning repair
 
 ## Implementation Evidence — 2026-05-15 (FROZEN-aligned rerun)
 
-> **Phase:** implement · **Agent:** bubbles.implement · **Workflow:** bugfix-fastlane (parent: `home-lab-readiness-rescan-external-2026-05-15`)
+> **Phase:** implement · **Agent:** bubbles.implement · **Workflow:** bugfix-fastlane (parent: `self-hosted-readiness-rescan-external-2026-05-15`)
 > **Transition request consumed:** TR-BUG-020-004-003 (plan → implement, accepted)
 > **Authority chain:** FROZEN `design.md` (DD-1 through DD-9 + Frozen Test Contract + Frozen File Constraint Set) → FROZEN `scopes.md` (DoD A-H + Implementation Plan steps 1-9) → this implement run.
 > **Scope discipline:** zero edits to foreign-owned artifacts (`spec.md`, `design.md`, `scenario-manifest.json`, `uservalidation.md`, `state.json` certification fields). Owned-artifact updates: production source (`ml/app/nats_client.py` — already-correct, mutation-revert cycle exercised), test source (`ml/tests/test_nats_client.py` — `TestSecretReadContract` docstring upgrade to FROZEN DD-7 multiline form), `scopes.md` execution-progress (DoD A-H checkboxes flipped to `[x]` with raw inline evidence), and this `report.md` append-only section.
@@ -503,7 +503,7 @@ The test body (lines 416-435), FORBIDDEN-pattern list, assertion logic, and fail
 
 ### Step 9 — NO commit (per FROZEN Implementation Plan)
 
-No `git add` / `git commit` operation was performed by this implement run. Per the FROZEN Implementation Plan Step 9 + the user directive: "Step 9: NO commit". Commit / docs / audit evidence is the docs-phase + audit-phase territory under the parent rescan workflow `home-lab-readiness-rescan-external-2026-05-15`.
+No `git add` / `git commit` operation was performed by this implement run. Per the FROZEN Implementation Plan Step 9 + the user directive: "Step 9: NO commit". Commit / docs / audit evidence is the docs-phase + audit-phase territory under the parent rescan workflow `self-hosted-readiness-rescan-external-2026-05-15`.
 
 ### Tier-1 + Tier-2 self-validation
 
@@ -565,7 +565,7 @@ filesPreservedAsOutOfScope:
   - tests/integration/auth_chaos_test.go
 addressedFindings: [HL-RESCAN-013-secondary]
 unresolvedFindings: []
-parentWorkflow: home-lab-readiness-rescan-external-2026-05-15
+parentWorkflow: self-hosted-readiness-rescan-external-2026-05-15
 findingId: HL-RESCAN-013-secondary
 transitionRequest: TR-BUG-020-004-003 (plan → implement, accepted)
 nextTransitionRequest: none opened by this planning repair
@@ -576,7 +576,7 @@ nextRequiredOwner: bubbles.test
 
 ## Test Specialist Evidence — bubbles.test — 2026-05-15
 
-> **Phase:** test · **Agent:** bubbles.test · **Workflow:** bugfix-fastlane (parent: `home-lab-readiness-rescan-external-2026-05-15`)
+> **Phase:** test · **Agent:** bubbles.test · **Workflow:** bugfix-fastlane (parent: `self-hosted-readiness-rescan-external-2026-05-15`)
 > **Transition request consumed:** TR-BUG-020-004-004 (implement → test, accepted)
 > **Authority chain:** FROZEN `design.md` DD-7 (test contract: file path + class names + method names) + DD-5 (tautology-freedom proof requirement) → FROZEN `scopes.md` DoD A-H → this independent test-phase verification.
 > **Owned-only edits:** `report.md` (this append-only section) and `state.json` (TR-004 acceptance + TR-005 open + currentPhase advance). The temporary mutation of `ml/app/nats_client.py` for the adversarial cycle was applied + reverted via the IDE `replace_string_in_file` tool; final post-revert grep proves the canonical fix is restored byte-for-byte. NO scope-DoD checkbox flips: per the dispatch directive, the test phase verifies but does not re-flip A-H.
@@ -967,7 +967,7 @@ filesPreservedAsOutOfScope:
   - design.md, spec.md, scopes.md, scenario-manifest.json, uservalidation.md, bug.md (FROZEN / not test-owned)
 addressedFindings: [HL-RESCAN-013-secondary]
 unresolvedFindings: []
-parentWorkflow: home-lab-readiness-rescan-external-2026-05-15
+parentWorkflow: self-hosted-readiness-rescan-external-2026-05-15
 findingId: HL-RESCAN-013-secondary
 transitionRequest: TR-BUG-020-004-004 (implement → test, accepted)
 nextTransitionRequest: TR-BUG-020-004-005 (test → validate, pending)
@@ -1188,7 +1188,7 @@ nextRequiredOwner: bubbles.test
 
 **Phase:** validate (BLOCKED)
 **Agent:** bubbles.validate
-**Parent Workflow:** home-lab-readiness-rescan-external-2026-05-15
+**Parent Workflow:** self-hosted-readiness-rescan-external-2026-05-15
 **Mode:** bubbles.validate (deep)
 **Outcome:** blocked
 
@@ -1340,7 +1340,7 @@ All state.json mutations performed by the validate phase are mechanically suppor
 | Gap | Required Owner | Required Action |
 |-----|----------------|-----------------|
 | 8 unchecked DoD items in `scopes.md` lack inline raw evidence | `bubbles.plan` (or the orchestrator may instead reconcile DoD shape to the FROZEN A-H form per design DD-7) | Either (a) reduce DoD to the FROZEN A-H acceptance-criteria form per `design.md` and add inline raw evidence per G025, or (b) leave the 15-item form and add raw evidence + flip checkboxes for the 8 currently-unchecked items |
-| Bugfix-fastlane phases `regression`, `simplify`, `stabilize`, `security`, `audit` not yet executed | Parent workflow orchestrator (`home-lab-readiness-rescan-external-2026-05-15`) | Dispatch each missing phase in order against this packet before re-attempting validate |
+| Bugfix-fastlane phases `regression`, `simplify`, `stabilize`, `security`, `audit` not yet executed | Parent workflow orchestrator (`self-hosted-readiness-rescan-external-2026-05-15`) | Dispatch each missing phase in order against this packet before re-attempting validate |
 | `state.json` `transitionRequests` non-empty (G061) | Re-run validate after upstream blockers cleared | TR-BUG-020-004-005 marked accepted by this validate run; the array remains non-empty (2 accepted entries) and will require formal closure / clearance at done-time per G061 logic |
 
 ### Self-validation table — Tier 1 + Tier 2 (validate mode)
@@ -1378,7 +1378,7 @@ artifactsCreated: []
 artifactsUpdated:
   - report.md (validate-phase evidence appended)
   - state.json (TR-005 accepted, currentPhase advanced to validate, executionHistory appended with outcome=blocked, failures refreshed, lastUpdatedAt bumped)
-nextRequiredOwner: orchestrator (home-lab-readiness-rescan-external-2026-05-15)
+nextRequiredOwner: orchestrator (self-hosted-readiness-rescan-external-2026-05-15)
 secondaryOwners:
   - bubbles.plan (reconcile DoD shape OR add evidence + flip the 8 currently-unchecked DoD items)
   - dispatch chain — bubbles.implement / bubbles.test / bubbles.validate / bubbles.audit equivalents must execute the 5 missing bugfix-fastlane phases (regression, simplify, stabilize, security, audit)
@@ -1963,7 +1963,7 @@ Verdict: G021 PASS.
 | 1 | G024 (scope status In Progress) | Flip Scope 1 status to `Done` in scopes.md (line 38 status field + Scope Summary table line 36); set `scopeProgress[0].status` to `done` in state.json | bubbles.plan |
 | 2 | G040 (3 deferral hits in scopes.md lines 465/466/472) | Wrap the lint-verdict prose paragraph in a code-fenced block or with `<!-- bubbles:g040-skip-begin --> ... <!-- bubbles:g040-skip-end -->` markers | bubbles.plan |
 | 3 | G027 (phase-scope coherence) | Resolves automatically when (1) completes | bubbles.plan (transitive) |
-| 4 | G022 (missing security/validate/audit phases) | Dispatch security phase, then validate re-run, then audit phase | orchestrator (home-lab-readiness-rescan-external-2026-05-15) |
+| 4 | G022 (missing security/validate/audit phases) | Dispatch security phase, then validate re-run, then audit phase | orchestrator (self-hosted-readiness-rescan-external-2026-05-15) |
 | 5 | G061 (TR-005 + TR-006 in array) | Audit drains the queue at done-time | bubbles.audit (final) |
 
 ### Validate Phase Claim — outcome: blocked
@@ -2794,7 +2794,7 @@ nextRequiredOwner: bubbles.security
 
 ## Security Specialist Evidence — bubbles.security — 2026-05-15 (re-dispatch re-verification)
 
-> **Phase:** security · **Agent:** bubbles.security · **Workflow:** bugfix-fastlane (re-dispatched by `home-lab-readiness-rescan-external-2026-05-15`)
+> **Phase:** security · **Agent:** bubbles.security · **Workflow:** bugfix-fastlane (re-dispatched by `self-hosted-readiness-rescan-external-2026-05-15`)
 > **Claim Source:** executed in this re-dispatch session on 2026-05-15.
 > **Boundary:** Re-verification only. Re-runs every prior security-pass scan against the CURRENT working tree to confirm zero drift. No production source, config, deploy, Compose, or generated-config file edited. No new transition request opened. No duplicate phase claim recorded.
 

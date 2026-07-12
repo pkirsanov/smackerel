@@ -5,7 +5,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 > **Node n13 (PRODUCER).** Implements the knb spec 028 **Local Client-Build
 > Phase Contract** for smackerel. Scenario IDs use `SCN-086-<LETTER><NN>`
 > (letter = scope). The DoD is split: **locally-proven** items (this node) are
-> `- [x]` with evidence; the **evo-x2-runtime** real-build/sign/placement is the
+> `- [x]` with evidence; the **<deploy-host>-runtime** real-build/sign/placement is the
 > approval-gated downstream node **n11** and is documented as a Runtime
 > Execution Boundary (NOT a checkbox here — FC-4, no fabrication).
 
@@ -49,9 +49,9 @@ Scenario: SCN-086-A02 — a missing/unsupported target fails loud
   Then the command aborts non-zero with [F086-LCB-01] and no build/sign runs
 
 Scenario: SCN-086-A03 — supported flags parse
-  Given `./smackerel.sh local-client-build --target home-lab --allow-dirty --out-dir <dir>`
+  Given `./smackerel.sh local-client-build --target self-hosted --allow-dirty --out-dir <dir>`
   When the orchestrator parses argv
-  Then target=home-lab, allow-dirty=on, out-dir=<dir> are accepted
+  Then target=self-hosted, allow-dirty=on, out-dir=<dir> are accepted
 ```
 
 ### Implementation Plan
@@ -62,8 +62,8 @@ Scenario: SCN-086-A03 — supported flags parse
 - Add a `local-client-build` line to `usage()`.
 - Create `scripts/commands/local-client-build.sh` with `set -euo pipefail`, fail
   helpers `lcb_fail`/`lcb_require_cmd`/`lcb_require_env` (mirror
-  `build-home-lab.sh`), and the arg parser (`--target` required, only
-  `home-lab`; `--allow-dirty`; `--out-dir`).
+  `build-self-hosted.sh`), and the arg parser (`--target` required, only
+  `self-hosted`; `--allow-dirty`; `--out-dir`).
 
 ### Test Plan
 
@@ -159,7 +159,7 @@ Scenario: SCN-086-C01 — build, sign, and emit a local-operator manifest (stubb
   Given a stub SMACKEREL_FLUTTER_BUILD_CMD that writes fixture AAB+APK bytes
     And a recording SMACKEREL_COSIGN_CMD shim
     And dummy operator key/pubkey files and COSIGN_PASSWORD present
-  When `local-client-build --target home-lab --allow-dirty --out-dir <tmp>` runs
+  When `local-client-build --target self-hosted --allow-dirty --out-dir <tmp>` runs
   Then a local-client-manifest-<sha>.yaml is written with trustModel local-operator
     And the clients artifact carries provenance local-operator and the REAL
         sha256 of the fixture bytes
@@ -203,7 +203,7 @@ Scenario: SCN-086-C04 — secret discipline
 | Integration (orchestrator happy) | `integration` | `internal/deploy/local_client_build_test.go` | SCN-086-C01: full build→sign→emit with stubs; real sha256; recording cosign shim | `./smackerel.sh test unit --go --go-run TestLocalClientBuild_HappyPath` | No (stubbed tools, real fs) |
 | Unit (fail-closed) | `unit` | `internal/deploy/local_client_build_test.go` | SCN-086-C02, SCN-086-C03: empty artifact `[F086-LCB-03]`; sign failure `[F086-LCB-05]`; no partial manifest | `./smackerel.sh test unit --go --go-run TestLocalClientBuild_FailClosed` | No |
 | Unit (secret discipline) | `unit` | `internal/deploy/local_client_build_test.go` | SCN-086-C04: COSIGN_PASSWORD value never emitted (presence only) | `./smackerel.sh test unit --go --go-run TestLocalClientBuild_SecretNotLeaked` | No |
-| Functional (real cosign round-trip over fixture blob) | `functional` | terminal evidence | `cosign sign-blob`→`verify-blob --key` round-trip proves the on-evo-x2 sign/verify contract | `cosign sign-blob …; cosign verify-blob …` | No |
+| Functional (real cosign round-trip over fixture blob) | `functional` | terminal evidence | `cosign sign-blob`→`verify-blob --key` round-trip proves the on-<deploy-host> sign/verify contract | `cosign sign-blob …; cosign verify-blob …` | No |
 | Lint | `unit` | orchestrator script | shellcheck + shfmt clean; secret-echo scan | `shellcheck -x …; shfmt -d …; grep COSIGN_PASSWORD` | No |
 
 ### Definition of Done
@@ -211,23 +211,23 @@ Scenario: SCN-086-C04 — secret discipline
 - [x] Orchestrator builds (stubbed), signs, and emits a `trustModel: local-operator` manifest with the REAL fixture sha256 + recorded sign-blob invocations (SCN-086-C01) → Evidence: [report.md#c01]
 - [x] Fail-closed on empty artifact `[F086-LCB-03]` and on sign failure `[F086-LCB-05]`; NO partial manifest (SCN-086-C02, C03) → Evidence: [report.md#c02]
 - [x] `COSIGN_PASSWORD` value never appears in output; presence-checked only (SCN-086-C04, NFR-086-03) → Evidence: [report.md#c04]
-- [x] Real `cosign sign-blob`→`verify-blob --key` round-trip over a FIXTURE blob succeeds (proves the on-evo-x2 sign/verify contract; FC-4 — fixture, not a real AAB) → Evidence: [report.md#c-cosign]
+- [x] Real `cosign sign-blob`→`verify-blob --key` round-trip over a FIXTURE blob succeeds (proves the on-<deploy-host> sign/verify contract; FC-4 — fixture, not a real AAB) → Evidence: [report.md#c-cosign]
 - [x] Native Go orchestrator test passes (`TestLocalClientBuild*`) → Evidence: [report.md#c-gotest]
 - [x] Build Quality Gate passes as a grouped block: shellcheck + shfmt clean; zero warnings; zero deferrals; docs/artifacts aligned → Evidence: [report.md#c-bqg]
 
 ---
 
-## Runtime Execution Boundary (evo-x2 / node n11 — NOT a checkbox here)
+## Runtime Execution Boundary (<deploy-host> / node n11 — NOT a checkbox here)
 
-Per FC-4 (no fabrication), the following REAL on-evo-x2 actions are the
+Per FC-4 (no fabrication), the following REAL on-<deploy-host> actions are the
 approval-gated downstream node **n11** and are deliberately NOT claimed here:
 
 - A genuine `flutter build aab` + `flutter build apk` (Flutter SDK + Android
-  toolchain on evo-x2).
+  toolchain on <deploy-host>).
 - A REAL operator `cosign sign-blob` with the operator PRIVATE key + real
   `COSIGN_PASSWORD`.
 - The REAL content sha256 of the REAL AAB/APK and a REAL manifest.
-- The knb home-lab adapter consuming the real manifest (`knb_client_acquire_local`
+- The knb self-hosted adapter consuming the real manifest (`knb_client_acquire_local`
   → `cosign verify-blob --key` → sha256 byte-match → placement under
   `serveRoot`), and a green `knb/scripts/lint/client-binary-conformance.sh` run
   against the REAL manifest.

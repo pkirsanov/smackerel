@@ -13,7 +13,7 @@ import (
 func TestNtfyMultiTopicAndMultiInstanceEventsDoNotCollapseIdentity(t *testing.T) {
 	_, notificationStore, pool := ntfyIntegrationStores(t)
 	prefix := ntfyIntegrationPrefix()
-	primary := ntfyIntegrationConfig(prefix+"-a", notification.SourceFormWebhook, []string{"home-lab-alerts"})
+	primary := ntfyIntegrationConfig(prefix+"-a", notification.SourceFormWebhook, []string{"self-hosted-alerts"})
 	secondary := ntfyIntegrationConfig(prefix+"-b", notification.SourceFormWebhook, []string{"shared-alerts"})
 	seedNtfyIntegrationSource(t, notificationStore, primary)
 	seedNtfyIntegrationSource(t, notificationStore, secondary)
@@ -22,7 +22,7 @@ func TestNtfyMultiTopicAndMultiInstanceEventsDoNotCollapseIdentity(t *testing.T)
 		cfg   Config
 		topic string
 	}{
-		{cfg: primary, topic: "home-lab-alerts"},
+		{cfg: primary, topic: "self-hosted-alerts"},
 		{cfg: secondary, topic: "shared-alerts"},
 	} {
 		event, err := ParseEvent([]byte(`{"id":"same-upstream-id","event":"message","topic":"`+item.topic+`","message":"overlap"}`), item.cfg.DeadLetter.MaxPayloadBytes)

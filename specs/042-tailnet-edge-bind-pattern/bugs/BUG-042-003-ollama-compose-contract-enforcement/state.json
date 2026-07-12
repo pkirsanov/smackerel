@@ -6,7 +6,7 @@
   "featureName": "BUG-042-003: Ollama service exempt from spec 042 compose contract enforcement",
   "workflowMode": "test-to-doc",
   "parentWorkflow": {
-    "mode": "home-lab-readiness-rescan-2026-05-14",
+    "mode": "self-hosted-readiness-rescan-2026-05-14",
     "trigger": "system-review-finding",
     "executionModel": "direct-per-finding-dispatch"
   },
@@ -32,7 +32,7 @@
         "agent": "bubbles.devops",
         "timestamp": "2026-05-14T00:00:00Z",
         "outcome": "completed_owned",
-        "evidence": "Inspected internal/deploy/compose_contract_test.go and observed assertComposeContract enforces only smackerel-core, smackerel-ml, postgres, nats, prometheus — ollama branch absent. Cross-referenced deploy/compose.deploy.yml line 243 which uses the fail-loud SST form ${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT} for ollama, but no contract test enforces it. Confirmed the gap is regression-only: live file complies today, but a future bad edit would slip past TestComposeContract_LiveFile. Direct HL-RESCAN-005 finding from the home-lab readiness re-scan against c586f912."
+        "evidence": "Inspected internal/deploy/compose_contract_test.go and observed assertComposeContract enforces only smackerel-core, smackerel-ml, postgres, nats, prometheus — ollama branch absent. Cross-referenced deploy/compose.deploy.yml line 243 which uses the fail-loud SST form ${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT} for ollama, but no contract test enforces it. Confirmed the gap is regression-only: live file complies today, but a future bad edit would slip past TestComposeContract_LiveFile. Direct HL-RESCAN-005 finding from the self-hosted readiness re-scan against c586f912."
       },
       {
         "phase": "implement",
@@ -111,7 +111,7 @@
     "auditorAgent": "bubbles.devops",
     "auditedAt": "2026-05-14T00:15:00Z",
     "auditVerdict": "SHIP_IT",
-    "auditNote": "Home-lab readiness re-scan (system review session 2026-05-14, against HEAD c586f912) finding HL-RESCAN-005 (P2). The compose contract test internal/deploy/compose_contract_test.go enforced spec 042 fail-loud SST form for smackerel-core, smackerel-ml, postgres, nats, prometheus — but NOT for ollama. The live deploy/compose.deploy.yml line 243 uses the correct fail-loud form for ollama by convention, but a future regression to literal 127.0.0.1: (spec 020 form), default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1}: (Gate G028 violation), or network_mode: host (Pattern P5 bypass) would silently slip past TestComposeContract_LiveFile and ship to home-lab. Fix adds requiredOllamaPrefix constant + optional-service enforcement block in assertComposeContract (mirrors the prometheus pattern exactly) + new TestComposeContract_AdversarialOllamaLiteralBind with two sub-cases (literal-127.0.0.1, default-fallback) + new ollama uses network_mode host sub-case in the existing TestComposeContract_AdversarialNetworkModeHostBypass table-driven sweep. RED→GREEN proven via temporary no-op replacement of the enforcement block: exactly THREE new ollama sub-tests FAIL with explicit `the contract is tautological` messages, every OTHER test PASSES unchanged. Restoration via replace_string_in_file returns the suite to all-PASS GREEN. Cross-package smoke (deploy, config, auth, auth/revocation) PASS in ~36s. Spec 042 BUG-042-001 + BUG-042-002 canaries + spec 047 vuln-gate canary + BUG-047-001 bundle-hash canary all PASS unchanged. Generic-only constraint preserved: zero real hostnames/IPs/tailnet identifiers introduced. Single-file code change: only internal/deploy/compose_contract_test.go (121 insertions / 2 deletions). Bug-packet artifacts contained in specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-003-ollama-compose-contract-enforcement/. Foreign-owned spec 042 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules. Promotion decision: SHIP_IT.",
+    "auditNote": "self-hosted readiness re-scan (system review session 2026-05-14, against HEAD c586f912) finding HL-RESCAN-005 (P2). The compose contract test internal/deploy/compose_contract_test.go enforced spec 042 fail-loud SST form for smackerel-core, smackerel-ml, postgres, nats, prometheus — but NOT for ollama. The live deploy/compose.deploy.yml line 243 uses the correct fail-loud form for ollama by convention, but a future regression to literal 127.0.0.1: (spec 020 form), default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1}: (Gate G028 violation), or network_mode: host (Pattern P5 bypass) would silently slip past TestComposeContract_LiveFile and ship to self-hosted. Fix adds requiredOllamaPrefix constant + optional-service enforcement block in assertComposeContract (mirrors the prometheus pattern exactly) + new TestComposeContract_AdversarialOllamaLiteralBind with two sub-cases (literal-127.0.0.1, default-fallback) + new ollama uses network_mode host sub-case in the existing TestComposeContract_AdversarialNetworkModeHostBypass table-driven sweep. RED→GREEN proven via temporary no-op replacement of the enforcement block: exactly THREE new ollama sub-tests FAIL with explicit `the contract is tautological` messages, every OTHER test PASSES unchanged. Restoration via replace_string_in_file returns the suite to all-PASS GREEN. Cross-package smoke (deploy, config, auth, auth/revocation) PASS in ~36s. Spec 042 BUG-042-001 + BUG-042-002 canaries + spec 047 vuln-gate canary + BUG-047-001 bundle-hash canary all PASS unchanged. Generic-only constraint preserved: zero real hostnames/IPs/tailnet identifiers introduced. Single-file code change: only internal/deploy/compose_contract_test.go (121 insertions / 2 deletions). Bug-packet artifacts contained in specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-003-ollama-compose-contract-enforcement/. Foreign-owned spec 042 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules. Promotion decision: SHIP_IT.",
     "scopeProgress": [
       {
         "scope": 1,
@@ -134,7 +134,7 @@
   "policySnapshot": {
     "workflowMode": {
       "mode": "test-to-doc",
-      "source": "home-lab-readiness-rescan-2026-05-14"
+      "source": "self-hosted-readiness-rescan-2026-05-14"
     },
     "grill": {
       "mode": "off",

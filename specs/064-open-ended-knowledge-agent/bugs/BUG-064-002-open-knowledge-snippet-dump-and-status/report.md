@@ -28,7 +28,7 @@ salvage no longer presents a raw passthrough; DEFECT 2 (triplicate) —
 `StatusAnswered`; DEFECT 3b (32 sources) — agent caps + dedups to
 `assistant.sources_max`. Scope-01 is Done, all 9 DoD items `[x]` with inline raw
 evidence, 3 adversarial regression tests RED→GREEN, full `go test ./...` GREEN,
-`check` + `format --check` clean. The LIVE home-lab S1 symptom is cleared only
+`check` + `format --check` clean. The LIVE self-hosted S1 symptom is cleared only
 by a redeploy (owner `bubbles.devops`) — see Deployment note. Bug status:
 **blocked** on that redeploy + live certification on the GPU stack (unavailable
 in this sandbox), mirroring BUG-064-001.
@@ -296,7 +296,7 @@ Real `git diff` hunks for the source fix (captured this session; `git` paths are
 ## Deployment note
 
 The in-repo code + config + prompt fix is validated at the Go unit/integration
-level. The LIVE home-lab symptom clears only after a redeploy (rebuild
-`smackerel-core` from the fixed SHA + home-lab config-bundle regen + redeploy via
-the knb `smackerel/home-lab` adapter — the same build-once-deploy-many chain as
+level. The LIVE self-hosted symptom clears only after a redeploy (rebuild
+`smackerel-core` from the fixed SHA + self-hosted config-bundle regen + redeploy via
+the knb `<deployment-owner>/<product>/<target>` adapter — the same build-once-deploy-many chain as
 BUG-064-001). Owner: `bubbles.devops`.

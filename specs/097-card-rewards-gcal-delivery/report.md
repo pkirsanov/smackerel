@@ -9,7 +9,7 @@ implementing the existing `cardrewards.CalDAVClient`), added the SST config
 (calendar_id + the managed `CARD_REWARDS_GCAL_CREDENTIALS` secret across all 3
 mirrors), and wired the real client + bridge into the card-rewards scheduler when
 `calendar_sync` is enabled. Both scopes are complete: SCOPE-01 is unit-proven;
-SCOPE-02 is live on the home-lab host (new signed image `fc931c6a` deployed,
+SCOPE-02 is live on the self-hosted host (new signed image `fc931c6a` deployed,
 calendar delivery wired, and a real event written to the operator's "Credit
 cards" Google Calendar with idempotent no-duplicate re-sync).
 
@@ -57,13 +57,13 @@ ok      github.com/smackerel/smackerel/internal/config
 
 Secret-key 3-mirror agreement — `CARD_REWARDS_GCAL_CREDENTIALS` is present and
 consistent across all three mirrors (`config/smackerel.yaml`,
-`internal/config/secret_keys.go`, `scripts/commands/config.sh`); the home-lab
+`internal/config/secret_keys.go`, `scripts/commands/config.sh`); the self-hosted
 bundle masks it as a sentinel token, never the literal value:
 
 ```text
 --- PASS: TestSecretKeys_MirrorsYAMLManifest (0.01s)
 --- PASS: TestSecretKeysMirror (0.00s)
---- PASS: TestBundleSecretContract_NoLiteralSecretsInHomeLab (8.87s)
+--- PASS: TestBundleSecretContract_NoLiteralSecretsInSelfHosted (8.87s)
 --- PASS: TestBundleSecretContract_AdversarialA1_DriftDetector (3.34s)
 --- PASS: TestBundleSecretContract_AdversarialA3_DeterminismDetector (6.85s)
 --- PASS: TestBundleSecretContract_AdversarialA4_OptOutDetector (3.91s)
@@ -100,7 +100,7 @@ calendar_sync=false  -> bridge=nil, recommendations persist to the Web UI only
 malformed credential -> WARN logged, bridge=nil (no crash), Web UI path preserved
 ```
 
-The constructed bridge is exercised end-to-end by the live home-lab proof at
+The constructed bridge is exercised end-to-end by the live self-hosted proof at
 [#live-calendar](#live-calendar); the deployed boot log emits "production Google
 Calendar delivery wired". Compiles clean (no errors on the changed files).
 
@@ -141,20 +141,20 @@ LINT_EXIT=0
 ## SCOPE-02 — live image build {#build}
 
 Commit `fc931c6a` pushed to main → CI `build.yml` built + cosign-signed the new
-images and published the home-lab config bundle (the `build-clients` Android lane
+images and published the self-hosted config bundle (the `build-clients` Android lane
 fails on an operator-private keystore, unrelated; `build-images` + `build-bundles`
 succeed):
 
 ```text
 success build-images
 failure build-clients          # operator-private Android keystore; unrelated
-success build-bundles (home-lab)
+success build-bundles (self-hosted)
 success build-bundles (test)
 success build-bundles (dev)
 
 core digest:  sha256:73dd65dd3bddc3c648704563317780544e0da4ea6fd25254d83f371eb3daf546
 ml   digest:  sha256:909719f454c852c66ffd30a81514ed7ad79b4aea16b71ec8cd8c3c857b61bcf5
-bundle:       home-lab-fc931c6a... sha256 e40a0caeba7d...
+bundle:       self-hosted-fc931c6a... sha256 e40a0caeba7d...
 ```
 
 The new bundle contains the gcal-credential masked-secret line (sops substitutes
@@ -167,11 +167,11 @@ CARD_REWARDS_GCAL_CREDENTIALS=__SECRET_PLACEHOLDER__CARD_REWARDS_GCAL_CREDENTIAL
 ## SCOPE-02 — sops delivery + redeploy {#deploy}
 
 The gcal credential JSON (client_id, client_secret, refresh_token, token_uri) was
-sops/age-encrypted into the knb `smackerel/secrets/home-lab.enc.env` (ciphertext
+sops/age-encrypted into the knb `smackerel/secrets/self-hosted.enc.env` (ciphertext
 only; the value never appears in the working tree). knb `params.yaml` sets
 `calendar_sync: "true"` + `calendar_id`, and `apply.sh` emits
 `CARD_REWARDS_CALENDAR_ID` (knb commit `1856ca3`). Redeployed the new digest on
-the home-lab host (`apply.sh --trust-model=ci-keyless ...`): cosign verified,
+the self-hosted host (`apply.sh --trust-model=ci-keyless ...`): cosign verified,
 bundle sha matched, the gcal secret substituted from sops, core+ml recreated and
 verified healthy.
 
@@ -253,13 +253,13 @@ spec 096 — see [Discovered Issues](#discovered-issues).
 The feature handles an OAuth credential secret; secret discipline is proven:
 
 - 3-mirror agreement: `TestSecretKeys_MirrorsYAMLManifest` + `TestSecretKeysMirror` PASS.
-- No literal value reaches the home-lab bundle: `TestBundleSecretContract_NoLiteralSecretsInHomeLab` PASS (the key is masked as a sentinel token).
+- No literal value reaches the self-hosted bundle: `TestBundleSecretContract_NoLiteralSecretsInSelfHosted` PASS (the key is masked as a sentinel token).
 - No secret value is logged: the client logs the event UID + calendar id only.
 
 ```text
 --- PASS: TestSecretKeys_MirrorsYAMLManifest (0.01s)
 --- PASS: TestSecretKeysMirror (0.00s)
---- PASS: TestBundleSecretContract_NoLiteralSecretsInHomeLab (8.87s)
+--- PASS: TestBundleSecretContract_NoLiteralSecretsInSelfHosted (8.87s)
 ```
 
 ### Spec Review
@@ -291,7 +291,7 @@ No drift between the planned and the delivered behavior.
 **Phase Agent:** bubbles.validate (subagent dispatch, 2026-06-21)
 
 Integrated green bar for the spec-097 deliverable — every gate re-executed this
-session with real captured output and exit codes. SCOPE-02's live home-lab
+session with real captured output and exit codes. SCOPE-02's live self-hosted
 delivery was deliberately NOT re-run (a one-time operator-credential proof, not a
 CI job; independently evidenced at [#live-calendar](#live-calendar)).
 
@@ -391,7 +391,7 @@ session.
 Independent re-verification this session:
 
 - Re-ran the spec-097 unit suites (green), `check` (exit 0), `lint` (exit 0).
-- Confirmed secret discipline: no literal value in the home-lab bundle.
+- Confirmed secret discipline: no literal value in the self-hosted bundle.
 - Confirmed the one RED test (A2) originated in spec 096 and is present on committed HEAD; it does not test spec-097 behavior.
 - Confirmed the live-delivery evidence at [#live-calendar](#live-calendar) is real (insert -> idempotent -> delete on the real calendar).
 
@@ -532,7 +532,7 @@ nominal owner of that fixture, but there is no longer an open RED to chase.
 SCOPE-01 (the Google Calendar write client, config, secret-key 3-mirror, and
 scheduler wiring) is unit-proven and re-confirmed green this session
 (write-client suite + config fail-loud + secret-key 3-mirror agreement + bundle
-no-literal-leak all PASS; `check` + `lint` exit 0). SCOPE-02 (live home-lab
+no-literal-leak all PASS; `check` + `lint` exit 0). SCOPE-02 (live self-hosted
 delivery) is proven on the real host: the signed image `fc931c6a` (core
 `73dd65dd`) is deployed and healthy with calendar delivery wired, the gcal
 credential is delivered via sops (no literal value in the tree), and the deployed

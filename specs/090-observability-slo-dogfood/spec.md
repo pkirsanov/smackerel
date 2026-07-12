@@ -31,7 +31,7 @@ pattern generalises beyond the first repo.
 
 ## Release Train
 
-This spec targets the **mvp** train (the current active `home-lab` slot). It
+This spec targets the **mvp** train (the current active `self-hosted` slot). It
 introduces **no feature flags** (`flagsIntroduced: []`): the SLO registry entry
 and capture tool are unconditional infrastructure, not flag-gated behavior, so
 there is no default-off obligation on the `next` train. The work instruments the

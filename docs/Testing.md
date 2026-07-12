@@ -506,7 +506,7 @@ Without `SMACKEREL_TEST_OLLAMA=1`, the runner skips both the pull script and the
 | `OLLAMA_TEST_REQUEST_SEED` | `infrastructure.ollama.test.request_seed` | Determinism: PRNG seed (default `42`) |
 | `OLLAMA_TEST_REQUEST_NUM_PREDICT` | `infrastructure.ollama.test.request_num_predict` | Determinism: max tokens (default `256`) |
 
-Dev and home-lab environments emit these `OLLAMA_TEST_*` keys as empty strings; `ml/app/agent.resolve_ollama_determinism_options()` reads them only when set and passes them to `litellm.acompletion` as `extra_kwargs` only when the routed provider is `ollama` (no-op for `openai` / `anthropic` / etc.).
+Dev and self-hosted environments emit these `OLLAMA_TEST_*` keys as empty strings; `ml/app/agent.resolve_ollama_determinism_options()` reads them only when set and passes them to `litellm.acompletion` as `extra_kwargs` only when the routed provider is `ollama` (no-op for `openai` / `anthropic` / etc.).
 
 #### Cold-pull workflow
 
@@ -524,21 +524,21 @@ The first invocation against an empty `smackerel-test-ollama-data` volume incurs
 
 #### Per-environment model selection
 
-Spec 043 introduces a per-environment override for the agent `fast` provider model so the test lane can pin a small, deterministic model without affecting dev/home-lab routing:
+Spec 043 introduces a per-environment override for the agent `fast` provider model so the test lane can pin a small, deterministic model without affecting dev/self-hosted routing:
 
 | Environment | `agent_provider_fast_model` | Source |
 |-------------|----------------------------|--------|
 | `dev` | `gpt-oss:20b` | `config/smackerel.yaml::environments.dev.agent_provider_fast_model` (top-level default) |
 | `test` | `qwen2.5:0.5b-instruct` | `config/smackerel.yaml::environments.test.agent_provider_fast_model` (per-env override) |
-| `home-lab` | `gpt-oss:20b` | `config/smackerel.yaml::environments.home-lab.agent_provider_fast_model` (matches dev) |
+| `self-hosted` | `gpt-oss:20b` | `config/smackerel.yaml::environments.self-hosted.agent_provider_fast_model` (matches dev) |
 
 After editing the per-env value, regenerate every environment so the override propagates:
 
 ```bash
-for env in dev test home-lab; do ./smackerel.sh --env "$env" config generate; done
+for env in dev test self-hosted; do ./smackerel.sh --env "$env" config generate; done
 ```
 
-`environments.<env>.ollama_enabled` follows the same per-env pattern: `true` for `test` (the only environment that auto-starts the `ollama` profile when running E2E), `false` for `dev` and `home-lab` (operators opt in locally per `docs/Development.md` runtime contract).
+`environments.<env>.ollama_enabled` follows the same per-env pattern: `true` for `test` (the only environment that auto-starts the `ollama` profile when running E2E), `false` for `dev` and `self-hosted` (operators opt in locally per `docs/Development.md` runtime contract).
 
 #### Required adversarial cases
 
@@ -548,7 +548,7 @@ for env in dev test home-lab; do ./smackerel.sh --env "$env" config generate; do
 
 ### SearxNG Test Container (Spec 064 SCOPE-07)
 
-The open-ended knowledge agent web search provider is backed by a self-hosted SearxNG container behind the `searxng` Compose profile. The `test` env auto-enables the profile (`environments.test.searxng_enabled: true`) so `./smackerel.sh test integration` brings up `searxng/searxng:2026.5.30-bd863f16b` alongside the rest of the test stack and injects `OPEN_KNOWLEDGE_SEARXNG_URL=http://searxng:8080` into the Go test runner. `dev` and `home-lab` ship with the profile disabled; developers can opt in for ad-hoc work by setting `environments.dev.searxng_enabled: true` and regenerating config, then running `docker compose --profile searxng up -d searxng`. `deploy/compose.deploy.yml` intentionally does NOT include SearxNG — operators who want a self-hosted instance overlay it via the deploy adapter. The image tag is pinned via `assistant.open_knowledge.searxng.image` (SST); bump it deliberately and never use `:latest`. SearxNG settings (including required JSON output format) live in [`config/searxng/settings.yml`](../config/searxng/settings.yml) and are mounted read-only.
+The open-ended knowledge agent web search provider is backed by a self-hosted SearxNG container behind the `searxng` Compose profile. The `test` env auto-enables the profile (`environments.test.searxng_enabled: true`) so `./smackerel.sh test integration` brings up `searxng/searxng:2026.5.30-bd863f16b` alongside the rest of the test stack and injects `OPEN_KNOWLEDGE_SEARXNG_URL=http://searxng:8080` into the Go test runner. `dev` and `self-hosted` ship with the profile disabled; developers can opt in for ad-hoc work by setting `environments.dev.searxng_enabled: true` and regenerating config, then running `docker compose --profile searxng up -d searxng`. `deploy/compose.deploy.yml` intentionally does NOT include SearxNG — operators who want a self-hosted instance overlay it via the deploy adapter. The image tag is pinned via `assistant.open_knowledge.searxng.image` (SST); bump it deliberately and never use `:latest`. SearxNG settings (including required JSON output format) live in [`config/searxng/settings.yml`](../config/searxng/settings.yml) and are mounted read-only.
 
 **Fabricated-cite fixture mode (pending).** The spec 064 SCOPE-17 adversarial regression for the cite-back verifier requires the ML sidecar `/llm/chat` route to support a `fixture-fabricated-cite` test mode that returns a planner response whose citations are deliberately absent from the per-turn `ToolResultStore`. That fixture knob is routed as finding #3 under [`specs/064-open-ended-knowledge-agent/route-packets/PKT-WORKFLOW-A.md`](../specs/064-open-ended-knowledge-agent/route-packets/PKT-WORKFLOW-A.md). When the fixture lands, `TestOpenKnowledgeE2E_A06_FabricatedSourceRejected` activates without modification and asserts `open_knowledge_refusal_total{cause="fabricated-source-blocked"}` increments exactly once.
 

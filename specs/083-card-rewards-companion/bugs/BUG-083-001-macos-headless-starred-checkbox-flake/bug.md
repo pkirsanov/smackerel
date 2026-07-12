@@ -65,7 +65,7 @@ Why this is the correct side and not a tautological weakening:
   test still submits the form and, after a full page reload, asserts
   `data-starred="true"` on the server-re-rendered row (twice). Remove the star and
   those assertions fail.
-- On Linux / evo-x2 the checkbox is click-stable, so `check({ force: true })`
+- On Linux / <deploy-host> the checkbox is click-stable, so `check({ force: true })`
   behaves as a plain `check()` there.
 
 ## Evidence

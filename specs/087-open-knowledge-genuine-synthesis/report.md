@@ -15,7 +15,7 @@ Spec 087 makes the open-knowledge `/ask` agent run a genuine synthesis on the
 forced-final turn instead of falling to a snippet wall. Three changes land on
 top of the spec-084 baseline: (1) a split SST `synthesis_model_id` routes the
 tools-stripped forced-final turn (and its retries) to a reasoning model
-(`deepseek-r1:7b` home-lab, `gemma3:4b` dev); (2) the reasoning model's
+(`deepseek-r1:7b` self-hosted, `gemma3:4b` dev); (2) the reasoning model's
 `<think>` chain-of-thought is stripped before citation parsing + cite-back so
 it can never leak into the body or become a citation; (3) a structured
 forced-final prompt + a bounded `synthesis_retry_budget` (default 1) re-issue
@@ -29,7 +29,7 @@ In-repo evidence: 7 spec-087 agent tests (4 adversarial RED→GREEN + 3 trust
 guards) + 2 spec-087 config tests GREEN; 9 spec-084 reasoning-loop/salvage
 tests preserved unchanged; `config generate` / `check` / `format --check`
 EXIT 0; full Go unit suite 124/124 packages green after regenerating the
-stale `test.env`. The decisive home-lab live re-verify of the pomegranate
+stale `test.env`. The decisive self-hosted live re-verify of the pomegranate
 turn is a separate `bubbles.devops` dispatch (terminal posture:
 validated-in-repo).
 
@@ -39,7 +39,7 @@ validated-in-repo).
 
 | File | Change |
 |------|--------|
-| `config/smackerel.yaml` | `assistant.open_knowledge.synthesis_model_id` (dev `gemma3:4b`) + `synthesis_retry_budget: 1`; home-lab `environments.<env>.assistant_open_knowledge_synthesis_model_id: "deepseek-r1:7b"`. |
+| `config/smackerel.yaml` | `assistant.open_knowledge.synthesis_model_id` (dev `gemma3:4b`) + `synthesis_retry_budget: 1`; self-hosted `environments.<env>.assistant_open_knowledge_synthesis_model_id: "deepseek-r1:7b"`. |
 | `internal/config/openknowledge.go` | `SynthesisModelID` + `SynthesisRetryBudget` fields, load, validate. |
 | `scripts/commands/config.sh` | resolve + emit the two new env vars. |
 | `internal/assistant/openknowledge/agent/agent.go` | `Config.SynthesisModel`/`SynthesisRetryBudget`; `New()` validation; forced-final model swap + structured prompt; `stripThinkBlocks`; retry-before-salvage. |
@@ -82,10 +82,10 @@ FORMAT_EXIT=0
 ```
 
 The dev `synthesis_model_id` resolves to `gemma3:4b` (== `llm_model_id`,
-no effective split); the home-lab override
+no effective split); the self-hosted override
 `environments.<env>.assistant_open_knowledge_synthesis_model_id` resolves to
 `deepseek-r1:7b`. Envelope arithmetic (design.md CT-5): gemma4:26b (18432)
-+ deepseek-r1:7b (4864) = 23296 MiB ≤ 28672 MiB home-lab `ollama_memory_limit`;
++ deepseek-r1:7b (4864) = 23296 MiB ≤ 28672 MiB self-hosted `ollama_memory_limit`;
 deepseek-r1:7b is on-demand (NOT in the concurrent interactive working-set
 guard) and already validated via `OLLAMA_REASONING_MODEL` — no envelope change.
 
@@ -223,7 +223,7 @@ structured prompt + `<think>` strip + retry-before-salvage:
 `config/smackerel.yaml` + `cmd/core/main.go` — SST keys + latency invariant:
 
 ```diff
-+ synthesis_model_id: "gemma3:4b"      # dev; home-lab override deepseek-r1:7b
++ synthesis_model_id: "gemma3:4b"      # dev; self-hosted override deepseek-r1:7b
 + synthesis_retry_budget: 1            # REQUIRED >= 0 when enabled
 + assistant_open_knowledge_synthesis_model_id: "deepseek-r1:7b"   # environments.<env> override
 - WriteTimeout: 3600 * time.Second
@@ -285,7 +285,7 @@ posture, are:
 |---------|-------|-------------|
 | `implementation-reality-scan` ml/app/main.py:22,257 (G028) | out-of-changeset | spec-083 card-rewards WIP (do-not-touch); spec 087 touches no `ml/` source. |
 | inter-spec dependency (G089): depends on spec-084 status `blocked` | dependency chain | spec 087 builds on spec-084's committed code; spec-084 is itself validated-in-repo awaiting its own devops handoff. The devops dispatch finalizes the 064→084→087 chain. |
-| broader/scenario-specific E2E regression EXECUTION | devops-owned | the E2E PLANNING (DoD items + `tests/e2e/agent/openknowledge_e2e_test.go` Test Plan rows) is complete in-repo; the live `/ask` run is model+GPU-dependent and executes in the home-lab devops re-verify. |
+| broader/scenario-specific E2E regression EXECUTION | devops-owned | the E2E PLANNING (DoD items + `tests/e2e/agent/openknowledge_e2e_test.go` Test Plan rows) is complete in-repo; the live `/ask` run is model+GPU-dependent and executes in the self-hosted devops re-verify. |
 
 In-repo planning/evidence is complete; only live-stack execution + the
 owner-forbidden push remain, both owned by the separate `bubbles.devops` dispatch.
@@ -300,7 +300,7 @@ the 9 spec-084 reasoning-loop/salvage tests are preserved unchanged. The
 spec-064 trust perimeter (cite-back verifier, provenance gate, capture-as-
 fallback) is intact and proven by the fabricated-citation + think-leak guards.
 
-**Terminal posture:** validated-in-repo. The decisive home-lab live re-verify of
+**Terminal posture:** validated-in-repo. The decisive self-hosted live re-verify of
 the pomegranate `/ask` turn (does deepseek-r1:7b now synthesize the real
 verdict?) is model+GPU-dependent and is a SEPARATE `bubbles.devops` dispatch
 (build signed images carrying the synthesis split + pull `deepseek-r1:7b` +
@@ -324,7 +324,7 @@ gemma4:26b-vs-deepseek-r1:7b A/B). 087-specific summary:
 | 1 — commit | DONE — combined 087+088 commit `99c8d629` (50 files); pii-scan clean; `.kotlin` excluded. |
 | 2 — push | DONE — `origin/main 10ed4a48..99c8d629`; pre-push uniformity lint PASSED; no `--no-verify`. |
 | 3 — CI build/sign | CI lint+test+canary GREEN (087 validated). `build-images` ✓ (core+ML cosign+Rekor signed, SBOM+SLSA, ghcr digest). `build-clients` ✗ (operator Android keystore secret) → `publish-build-manifest` SKIPPED → **no `build-manifest-99c8d629.yaml`**. |
-| 4 — deploy home-lab | BLOCKED-ON-OPERATOR — no build manifest = no Build-Once Deploy-Many input; `deepseek-r1:7b` not resident on the home-lab host; live stack still pre-087/088. |
+| 4 — deploy self-hosted | BLOCKED-ON-OPERATOR — no build manifest = no Build-Once Deploy-Many input; `deepseek-r1:7b` not resident on the self-hosted host; live stack still pre-087/088. |
 | 5 — live A/B | BLOCKED-ON-OPERATOR — depends on STEP 4 + the model pull; no A/B captured. |
 
 **Honest terminal status:** `status` held at `blocked` (NOT `done`) — the live
@@ -332,17 +332,17 @@ A/B + `verify` did not run. `nextRequiredOwner: operator/user-session`.
 
 ---
 
-## SUPERSESSION NOTE — home-lab model optimization (2026-06-20)
+## SUPERSESSION NOTE — self-hosted model optimization (2026-06-20)
 
 Record-only; this spec's status and history are unchanged. The split-synthesis
-home-lab model this spec introduced
-(`environments.home-lab.assistant_open_knowledge_synthesis_model_id: deepseek-r1:7b`)
-has been superseded by the operator's optimized home-lab model set:
+self-hosted model this spec introduced
+(`environments.self-hosted.assistant_open_knowledge_synthesis_model_id: deepseek-r1:7b`)
+has been superseded by the operator's optimized self-hosted model set:
 **`gpt-oss:20b`** (the tool-capable synthesis / substrate model) + **`gemma4:26b`**
-(gather / vision / ml). Those are the only two models the operator's home-lab
+(gather / vision / ml). Those are the only two models the operator's self-hosted
 Ollama host pulls, so `config/smackerel.yaml`
-`environments.home-lab.assistant_open_knowledge_synthesis_model_id` now resolves
-to `gpt-oss:20b` and the deepseek synthesis arm is retired from the home-lab
+`environments.self-hosted.assistant_open_knowledge_synthesis_model_id` now resolves
+to `gpt-oss:20b` and the deepseek synthesis arm is retired from the self-hosted
 active selection. The spec-087 synthesis-split machinery and trust invariants
 (cite-back, provenance, `<think>`-strip + retry-before-salvage) are unchanged —
 only WHICH model runs the forced-final synthesis turn changed. See

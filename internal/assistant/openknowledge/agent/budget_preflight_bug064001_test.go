@@ -12,7 +12,7 @@ import (
 // at the per-user-monthly USD pre-flight gate on a zero-cost (local Ollama +
 // searxng) deployment.
 //
-// Live evidence (home-lab, 2026-06-11): every /ask routed to open_knowledge
+// Live evidence (self-hosted, 2026-06-11): every /ask routed to open_knowledge
 // and returned `termination_reason=cap_usd, iterations:1, tokens_used:0,
 // tool_calls:[]` — refused BEFORE any LLM/tool call — because the SST budget
 // per_user_monthly_budget_usd was 0 while the production CostFn charges $0.

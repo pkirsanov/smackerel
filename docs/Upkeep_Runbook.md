@@ -13,9 +13,9 @@ Owned by `bubbles.upkeep` (Treena Lahey).
 
 See [`config/upkeep-calendar.yaml`](../config/upkeep-calendar.yaml).
 
-Per-task hooks live in `<knb-repo>/smackerel/home-lab/`:
+Per-task hooks live in `<deployment-owner>/<product>/<target>/`:
 - `backup.sh` — knb-side scheduling + Compose volume backup + offsite shipping
-  (restic). On the artifact-only home-lab target (the product source/CLI is NOT
+  (restic). On the artifact-only self-hosted target (the product source/CLI is NOT
   present) it performs its OWN inline `pg_dump | gzip` with a `gzip -t` integrity
   gate + restic retention prune, rather than calling `./smackerel.sh backup` (see
   **Backup: Two-Layer Split** below).
@@ -32,9 +32,9 @@ scheduling, volume backup, and offsite shipping **out** (see its header comment)
 | Layer | Owner | Entrypoint | Responsibilities |
 |-------|-------|------------|------------------|
 | **Product** | this repo | `./smackerel.sh backup` (`scripts/commands/backup.sh`), on a host where the product CLI is present (dev / operator host) | `pg_dump \| gzip` of smackerel core state, gzip-integrity validation, retention (7 daily + 4 weekly), status JSON for the `SmackerelBackupStale` alert, secret redaction |
-| **knb / target adapter** | knb overlay | `<knb-repo>/smackerel/home-lab/backup.sh` | Scheduling (systemd/cron timer); on the artifact-only home-lab target, its OWN inline `pg_dump \| gzip` + `gzip -t` integrity gate + restic retention prune (the product CLI is not deployed there); NATS JetStream volume backup — resolves the real volume via `${NATS_VOLUME_NAME}` / `docker volume inspect` and archives the volume **contents** (`cp -a`, not a fixed `/var/lib/docker/volumes/...` path); off-host shipping (restic / `BACKUP_DESTINATION_URL`) |
+| **knb / target adapter** | knb overlay | `<deployment-owner>/<product>/<target>/backup.sh` | Scheduling (systemd/cron timer); on the artifact-only self-hosted target, its OWN inline `pg_dump \| gzip` + `gzip -t` integrity gate + restic retention prune (the product CLI is not deployed there); NATS JetStream volume backup — resolves the real volume via `${NATS_VOLUME_NAME}` / `docker volume inspect` and archives the volume **contents** (`cp -a`, not a fixed `/var/lib/docker/volumes/...` path); off-host shipping (restic / `BACKUP_DESTINATION_URL`) |
 
-On the artifact-only home-lab **target**, the knb hook does NOT call
+On the artifact-only self-hosted **target**, the knb hook does NOT call
 `./smackerel.sh backup` — the product source/CLI is not deployed there (images +
 config bundle only). Instead it performs its own inline `pg_dump | gzip` with a
 `gzip -t` integrity gate and a restic retention prune, then the NATS JetStream

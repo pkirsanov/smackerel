@@ -7,7 +7,7 @@
 - **Parent Spec:** 020 — Security Hardening (the parent spec that owns Gate G028 / NO-DEFAULTS / fail-loud SST policy enforcement under "SST Zero-Defaults Enforcement (NON-NEGOTIABLE)" in `.github/copilot-instructions.md` and `.github/instructions/smackerel-no-defaults.instructions.md`)
 - **Workflow Mode:** bugfix-fastlane (parent-expanded from `bubbles.goal` runtime because `bubbles.workflow` runtime lacks `runSubagent`)
 - **Status:** Reported
-- **Discovered By:** 2026-05-14 home-lab readiness re-scan (finding HL-RESCAN-014)
+- **Discovered By:** 2026-05-14 self-hosted readiness re-scan (finding HL-RESCAN-014)
 
 ## Problem Statement
 
@@ -73,7 +73,7 @@ The fix is a deletion (or fail-loud conversion — design specialist decides) bo
 
 | Aspect | Detail |
 |---|---|
-| Trigger | Home-lab readiness re-scan (system review session 2026-05-14) |
+| Trigger | self-hosted readiness re-scan (system review session 2026-05-14) |
 | Finding | HL-RESCAN-014 |
 | Severity | P3 (zero production callers; risk is documentation/audit drift + copy-paste hazard, not live runtime fail-soft) |
 | Lens | SST defaults / Gate G028 NO-DEFAULTS fail-loud policy |
@@ -114,7 +114,7 @@ The design specialist receives this honest evidence and may choose any of:
 
 ## Acceptance Criteria
 
-- AC-1: A single-scope bug packet exists at `specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/` with all 7 standard artifacts (`spec.md`, `design.md`, `scopes.md`, `report.md`, `uservalidation.md`, `state.json`, `scenario-manifest.json`) authored. The packet's `state.json` declares `parentWorkflow.mode = "home-lab-readiness-rescan-2026-05-14"`, `workflowMode = "bugfix-fastlane"`, and `discoveryRef.source` matching the sister packets exactly.
+- AC-1: A single-scope bug packet exists at `specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/` with all 7 standard artifacts (`spec.md`, `design.md`, `scopes.md`, `report.md`, `uservalidation.md`, `state.json`, `scenario-manifest.json`) authored. The packet's `state.json` declares `parentWorkflow.mode = "self-hosted-readiness-rescan-2026-05-14"`, `workflowMode = "bugfix-fastlane"`, and `discoveryRef.source` matching the sister packets exactly.
 - AC-2: After the fix lands, `grep_search` of all `*.go` files for the dead-set symbols (`parseFloatEnv`, `parseJSONArrayEnv`, `parseJSONObjectEnv`, `parseJSONObject`, `parseJSONObjectVal`) returns ZERO matches anywhere in the repo (no source definitions, no test references, no comment mentions). Equivalent for any helpers the design specialist confirms are transitively dead after the deletion.
 - AC-3: `cmd/core/helpers.go` does not contain any `os.Getenv("KEY")` followed by a `return <literal>` / `return nil` silent-fallback path. Any env reads remaining in `cmd/core/helpers.go` (e.g., from helpers transitively kept alive by live string-form callers) MUST follow the Gate G028 canonical Go pattern: `os.Getenv("KEY")` + empty/parse-error → `log.Fatal` (or, for connector-side parse failures, propagate the error up to the wiring block which decides whether to refuse construction with `slog.Error`).
 - AC-4: `cmd/core/main_test.go` does not contain any test function that locks the silent-fallback semantics for the deleted helpers. Tests for the deleted helpers are removed in the same change set; tests for any kept helpers are rewritten to assert the fail-loud / error-returning contract, not the legacy silent-fallback contract.
@@ -134,7 +134,7 @@ The design specialist receives this honest evidence and may choose any of:
 - Implementing the fix itself. This packet's scope is strictly the BUG-phase artifact creation (spec.md authored by `bubbles.bug`, design.md by `bubbles.design`, scopes.md by `bubbles.plan`, source/test changes by `bubbles.implement`, validation by `bubbles.test` / `bubbles.validate`, audit by `bubbles.audit`).
 - Editing parallel-session WIP under `specs/041-qf-companion-connector/` and `specs/052-bundle-secret-injection-contract/` (out-of-scope per discovery-brief constraints).
 
-## Sister Packets (Same Discovery Mode `home-lab-readiness-rescan-2026-05-14`)
+## Sister Packets (Same Discovery Mode `self-hosted-readiness-rescan-2026-05-14`)
 
 These packets share the same discovery source and `parentWorkflow.mode` value. They are referenced for shape-template consistency and to prevent duplicate work; this packet does not modify any of their content.
 

@@ -2,12 +2,12 @@
 
 - **Spec:** `specs/064-open-ended-knowledge-agent`
 - **Severity:** S1 (the headline open-knowledge capability is dead-on-arrival for every user query on the default self-hosted config)
-- **Discovered by:** operator, live home-lab Telegram bot
+- **Discovered by:** operator, live self-hosted Telegram bot
 - **Discovered at:** 2026-06-11
 
 ## Summary
 
-On the live home-lab Telegram bot a user sent:
+On the live self-hosted Telegram bot a user sent:
 
 ```
 /ask tide schedule for 06/11 in wa-town-A, wa
@@ -29,7 +29,7 @@ This surfaces **two distinct defects**:
 
 ## Reproduction steps (observed, live)
 
-1. On a home-lab deployment with the Telegram assistant bound and
+1. On a self-hosted deployment with the Telegram assistant bound and
    `assistant.open_knowledge.enabled=true`.
 2. Send `/ask tide schedule for 06/11 in wa-town-A, wa` to the bot.
 3. Observe two replies: a `. Saved: "/ask …" (idea)` capture ack containing the
@@ -52,7 +52,7 @@ deployment (see `design.md`):
   but the **actual Go routing map** (`internal/assistant/shortcuts.go`,
   Spec 064 SCOPE-17, commit `ebdbf852`, 2026-06-01) maps `/ask → open_knowledge`.
   The deployed image (`sourceSha 0bc04cfb`) contains this fix.
-- ❌ **DISPROVEN:** "deployment lag — home-lab runs a stale pre-064 image." The
+- ❌ **DISPROVEN:** "deployment lag — self-hosted runs a stale pre-064 image." The
   deployed `sourceSha 0bc04cfb` post-dates the routing fix and the live
   `assistant_turn` log shows `scenario_id="open_knowledge"`. Routing is correct.
 - ✅ **TRUE ROOT CAUSE (A):** `open_knowledge` refuses every query at the
@@ -70,7 +70,7 @@ deployment (see `design.md`):
 ## Live evidence (captured this session, read-only)
 
 `openknowledge.turn` structured log from the deployed core container
-(`smackerel-home-lab-smackerel-core-1`):
+(`smackerel-self-hosted-smackerel-core-1`):
 
 ```
 {"msg":"openknowledge.turn","turn_id":"43cdf83f81d3fce6","iterations":1,

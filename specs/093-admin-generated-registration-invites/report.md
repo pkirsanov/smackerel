@@ -6,11 +6,11 @@
 
 ## Summary
 
-Spec 093 gives the spec-091 registration invite a real lifecycle and an in-app management surface: a logged-in operator generates **single-use, hashed-at-rest, DB-backed** registration invites from a new `/cards/admin/invites` page (one-time plaintext reveal), lists/revokes them, and `/register` now accepts a live DB invite **OR** the static `WEB_REGISTRATION_INVITE_TOKEN` (kept as bootstrap), consuming the DB invite atomically with account creation. Four scopes (see [scopes.md](scopes.md) for the DAG + Test-Plan↔DoD parity): (01) migration `058` + the `internal/auth/webinvite` repo + `webcreds.HashAndInsertTx`; (02) the `/register` OR-gate DB-invite consume + wiring; (03) the CSP-clean admin invites UI; (04) consolidated verification + live home-lab deploy proof.
+Spec 093 gives the spec-091 registration invite a real lifecycle and an in-app management surface: a logged-in operator generates **single-use, hashed-at-rest, DB-backed** registration invites from a new `/cards/admin/invites` page (one-time plaintext reveal), lists/revokes them, and `/register` now accepts a live DB invite **OR** the static `WEB_REGISTRATION_INVITE_TOKEN` (kept as bootstrap), consuming the DB invite atomically with account creation. Four scopes (see [scopes.md](scopes.md) for the DAG + Test-Plan↔DoD parity): (01) migration `058` + the `internal/auth/webinvite` repo + `webcreds.HashAndInsertTx`; (02) the `/register` OR-gate DB-invite consume + wiring; (03) the CSP-clean admin invites UI; (04) consolidated verification + live self-hosted deploy proof.
 
 ## Completion Statement (MANDATORY)
 
-**Planning complete; implementation and evidence are pending.** This is the plan-phase evidence skeleton — no scope is Done and no DoD box in [scopes.md](scopes.md) is checked. The implement/test phase delivers SCOPE-01..03 and records per-DoD-item raw output under the anchors below; SCOPE-04 consolidates the full suites and the live home-lab deploy proof. The spec must not be marked `done` until every scope is Done with ≥10-line raw evidence per `[x]` item, the spec-091/092 regression is proven byte-identical, the atomic single-use is proven under concurrency, the CSP guard is green, and `artifact-lint` + the state-transition guard exit 0.
+**Planning complete; implementation and evidence are pending.** This is the plan-phase evidence skeleton — no scope is Done and no DoD box in [scopes.md](scopes.md) is checked. The implement/test phase delivers SCOPE-01..03 and records per-DoD-item raw output under the anchors below; SCOPE-04 consolidates the full suites and the live self-hosted deploy proof. The spec must not be marked `done` until every scope is Done with ≥10-line raw evidence per `[x]` item, the spec-091/092 regression is proven byte-identical, the atomic single-use is proven under concurrency, the CSP guard is green, and `artifact-lint` + the state-transition guard exit 0.
 
 ## Test Evidence
 
@@ -730,7 +730,7 @@ CSP-clean (no inline `<script>`/handlers in the invite templates), value-safe (t
 
 ---
 
-## SCOPE-04 — Consolidated verification + live home-lab deploy proof
+## SCOPE-04 — Consolidated verification + live self-hosted deploy proof
 
 #### scope-04-unit
 **Phase:** test (full-delivery finalization — consolidated baseline)
@@ -822,19 +822,19 @@ F-093-R2 (scopesdriftguard): RESOLVED — scopes.md path-refs corrected to real 
 ```
 
 #### scope-04-live
-**Phase:** test (full-delivery finalization — live home-lab deploy proof)
+**Phase:** test (full-delivery finalization — live self-hosted deploy proof)
 **Command:** knb `apply.sh --trust-model=ci-keyless` (CI-built, cosign-signed digests) → value-safe `curl` against the deployed `<deploy-host>` core over `<tailnet>` (ephemeral test users + invites, cleaned up)
 **Exit Code:** 0
 **Claim Source:** executed (live deployed core, this session)
 
-The feature was rebuilt by CI, cosign-signed, and DEPLOYED to the home-lab `<deploy-host>` core via the knb adapter; migration `058` ran on container start. A live value-safe generate→register→used→reuse-rejected cycle (plus the spec-091 static-secret regression) passed on the deployed core. No plaintext token appears in any log, redirect, or list view. Ephemeral proof users + invites were deleted afterward.
+The feature was rebuilt by CI, cosign-signed, and DEPLOYED to the self-hosted `<deploy-host>` core via the knb adapter; migration `058` ran on container start. A live value-safe generate→register→used→reuse-rejected cycle (plus the spec-091 static-secret regression) passed on the deployed core. No plaintext token appears in any log, redirect, or list view. Ephemeral proof users + invites were deleted afterward.
 ```text
 $ curl --max-time 5 -s -o /dev/null -w '%{http_code}\n' https://<deploy-host>/cards/admin/invites   # value-safe SCN-0..8 checks on the deployed core
 === DEPLOY (knb apply.sh --trust-model=ci-keyless) ===
 apply outcome=success; core+ml healthy; image digests matched manifest
   core image digest: sha256:aa25e921…  (the committed 117ac27e CI build)
   ml   image digest: sha256:fecf3071…
-  config bundle: home-lab-117ac27e… sha256:946439dc…
+  config bundle: self-hosted-117ac27e… sha256:946439dc…
   effective_env_substituted_count=8  placeholder_remaining=0  (WEB_REGISTRATION_INVITE_TOKEN substituted)
   audit log: /var/log/knb-apply.log → outcome=success
 === LIVE SCENARIOS on the deployed <deploy-host> core (value-safe curl over <tailnet>) ===
@@ -1304,6 +1304,6 @@ SCN-3 (live <deploy-host>): reuse same invite → http=401; zero second account 
 
 ## Completion Statement
 
-The full-delivery run is complete for SCOPE-01 through SCOPE-04. SCOPE-01..03 shipped the migration `058` + `internal/auth/webinvite` repo + `webcreds.HashAndInsertTx`, the `/register` OR-gate DB-invite consume, and the CSP-clean admin invites UI — each scope Done with real, per-DoD-item evidence above. SCOPE-04 consolidated the full suites (full Go unit GREEN incl. the now-closed F-093-R1/R2 meta-gates; the live-PostgreSQL integration surface; 20/20 card-rewards e2e-ui), proved the deployed-spec surface (091 + 092) REGRESSION_FREE, and recorded the **live home-lab deploy proof** on the `<deploy-host>` core (migration 058 applied, 117ac27e CI-built cosign-signed digests matched, apply `outcome=success`, and a value-safe generate→register→used→reuse-rejected cycle + the 091 static regression — SCN-0..8).
+The full-delivery run is complete for SCOPE-01 through SCOPE-04. SCOPE-01..03 shipped the migration `058` + `internal/auth/webinvite` repo + `webcreds.HashAndInsertTx`, the `/register` OR-gate DB-invite consume, and the CSP-clean admin invites UI — each scope Done with real, per-DoD-item evidence above. SCOPE-04 consolidated the full suites (full Go unit GREEN incl. the now-closed F-093-R1/R2 meta-gates; the live-PostgreSQL integration surface; 20/20 card-rewards e2e-ui), proved the deployed-spec surface (091 + 092) REGRESSION_FREE, and recorded the **live self-hosted deploy proof** on the `<deploy-host>` core (migration 058 applied, 117ac27e CI-built cosign-signed digests matched, apply `outcome=success`, and a value-safe generate→register→used→reuse-rejected cycle + the 091 static regression — SCN-0..8).
 
 All full-delivery verification phases are recorded in [Verification Phases](#verification-phases-full-delivery-finalization): test/integration/regression green, security 12/12 SECURE, validate = the integrated green bar + the live SCN-0..8 cycle, audit = artifact-lint exit 0 + the value-safe token audit, docs aligned (migration 058 documented), spec-review CURRENT, chaos = the concurrent-consume single-use proof, and simplify/gaps/harden/stabilize honestly no-op for a focused single-capability feature (recorded as `phaseStubs`). `state.json` is finalized to `status: done` / `certification.status: done` with all 4 scopes in `certification.completedScopes` and all 13 certified phases recorded with parent-expanded provenance. The `state-transition-guard` for this finalization passes every check except the structured-commit gate (Check 17), whose only requirement is a `spec(093):`-prefixed finalization commit — owned by the goal controller (the implementation already shipped on `origin/main` as commit `117ac27e`). All non-commit-gated residuals are cleared; `certifiedAt` postdates the pending finalization commit, so G088 stays clean.

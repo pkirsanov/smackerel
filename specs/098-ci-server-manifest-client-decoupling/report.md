@@ -6,7 +6,7 @@
 
 Decoupled the CI mobile-client build from the server deploy manifest in
 `.github/workflows/build.yml` so a missing Android signing secret can no longer
-block a home-lab SERVER deploy. Four additive `if:` guards + one
+block a self-hosted SERVER deploy. Four additive `if:` guards + one
 `workflow_dispatch` input gate `build-clients` on release intent and make
 `publish-build-manifest` publish a server-only manifest when clients are skipped.
 The lockstep drift-detector contract test
@@ -213,7 +213,7 @@ found** for both.
 - Non-release push: build-clients SKIPPED; publish-build-manifest still runs and
   publishes a SERVER-ONLY build-manifest (core + ml + per-env bundles +
   chrome-bridge); the android platform is NOT contracted (no clients block).
-  Same clients-absent shape as `./smackerel.sh build --target home-lab` emits;
+  Same clients-absent shape as `./smackerel.sh build --target self-hosted` emits;
   promote.sh promotes it through the identical core+ml+bundle path.
 - Tagged release / build_clients: true dispatch: clients built, signed, pinned by
   sha256 under clients.artifacts[] (Build-Once-Deploy-Many preserved); a

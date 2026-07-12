@@ -13,7 +13,7 @@
   "statusCeiling": "done",
   "nextRequiredOwner": "bubbles.validate",
   "finding": "F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL",
-  "discoveredBy": "bubbles.code-review MVP/evo-x2 readiness sweep (F-01)",
+  "discoveredBy": "bubbles.code-review MVP/<deploy-host> readiness sweep (F-01)",
   "fixSequence": [
     {
       "order": 1,
@@ -45,7 +45,7 @@
         "expandedBy": "bubbles.goal",
         "timestamp": "2026-06-30T00:00:00Z",
         "claimSource": "executed",
-        "summary": "MVP/evo-x2 readiness sweep finding F-01. Read the direct capture path: internal/api/capture.go::CaptureHandler dispatches d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{...}); pipeline.Processor.Process -> submitForProcessing runs a ctx-honoring Postgres INSERT (storeInitialArtifact) + NATS publish (NATS.Publish(ctx, ...)) (internal/pipeline/processor.go ~L471). net/http cancels r.Context() the instant the client connection drops, so a capture client (chrome extension / PWA / API caller) that disconnects after the body is received but before the durable write completes aborts Process with context.Canceled and the capture is SILENTLY LOST. Finding F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL (MEDIUM): same inviolable capture-as-fallback violation (Hard Constraint 5 / BS-001) as BUG-069-002, but at the DIRECT /api/capture endpoint which was never in BUG-069-002's scope (BUG-069-002 only fixed internal/assistant/httpadapter/adapter.go::ServeHTTP). Telegram unaffected (long-poll background ctx)."
+        "summary": "MVP/<deploy-host> readiness sweep finding F-01. Read the direct capture path: internal/api/capture.go::CaptureHandler dispatches d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{...}); pipeline.Processor.Process -> submitForProcessing runs a ctx-honoring Postgres INSERT (storeInitialArtifact) + NATS publish (NATS.Publish(ctx, ...)) (internal/pipeline/processor.go ~L471). net/http cancels r.Context() the instant the client connection drops, so a capture client (chrome extension / PWA / API caller) that disconnects after the body is received but before the durable write completes aborts Process with context.Canceled and the capture is SILENTLY LOST. Finding F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL (MEDIUM): same inviolable capture-as-fallback violation (Hard Constraint 5 / BS-001) as BUG-069-002, but at the DIRECT /api/capture endpoint which was never in BUG-069-002's scope (BUG-069-002 only fixed internal/assistant/httpadapter/adapter.go::ServeHTTP). Telegram unaffected (long-poll background ctx)."
       },
       {
         "phase": "implement",
@@ -135,7 +135,7 @@
         "runCompletedAt": "2026-06-30T00:00:00Z",
         "outcome": "route_required",
         "nextRequiredOwner": "bubbles.test",
-        "summary": "bubbles.code-review MVP/evo-x2 readiness sweep (F-01) discovered F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL: the direct POST /api/capture handler binds the durable pipeline.Process write to r.Context(), silently dropping the capture on client disconnect — the same root cause as the already-fixed BUG-069-002, at the endpoint BUG-069-002 never covered. LANDED the fix: internal/api/capture.go now calls d.Pipeline.Process(context.WithoutCancel(r.Context()), ...) (+ added the missing context import), proven by TestCaptureHandler_CaptureSurvivesClientDisconnect adversarial unit regression (RED->GREEN) + handler-family regression green (ok internal/api). ROUTED the remaining done-ceiling certification to bubbles.test -> bubbles.validate as ONE SHARED live-stack E2E disconnect-race regression covering BOTH /api/assistant/turn (BUG-069-002) and /api/capture (this bug); not runnable in this session (no live stack). One finding, one root cause, one Scope 1 — no cherry-picking. The already-done parent spec 069 artifacts and the BUG-069-002 packet are left untouched; this finding and fix are recorded entirely in this bug packet."
+        "summary": "bubbles.code-review MVP/<deploy-host> readiness sweep (F-01) discovered F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL: the direct POST /api/capture handler binds the durable pipeline.Process write to r.Context(), silently dropping the capture on client disconnect — the same root cause as the already-fixed BUG-069-002, at the endpoint BUG-069-002 never covered. LANDED the fix: internal/api/capture.go now calls d.Pipeline.Process(context.WithoutCancel(r.Context()), ...) (+ added the missing context import), proven by TestCaptureHandler_CaptureSurvivesClientDisconnect adversarial unit regression (RED->GREEN) + handler-family regression green (ok internal/api). ROUTED the remaining done-ceiling certification to bubbles.test -> bubbles.validate as ONE SHARED live-stack E2E disconnect-race regression covering BOTH /api/assistant/turn (BUG-069-002) and /api/capture (this bug); not runnable in this session (no live stack). One finding, one root cause, one Scope 1 — no cherry-picking. The already-done parent spec 069 artifacts and the BUG-069-002 packet are left untouched; this finding and fix are recorded entirely in this bug packet."
       },
       {
         "agent": "bubbles.goal",

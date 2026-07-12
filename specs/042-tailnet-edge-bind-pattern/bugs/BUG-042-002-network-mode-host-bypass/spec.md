@@ -4,7 +4,7 @@
 
 - **Type:** Code defect — incomplete validator coverage (security-relevant test integrity gap)
 - **Severity:** MEDIUM (the live `deploy/compose.deploy.yml` does not declare `network_mode: host` for any service, so no live exposure exists today; however the contract test would silently accept a regression where a future edit adds `network_mode: host` to `smackerel-core`, `smackerel-ml`, `postgres`, or `nats`, which would categorically defeat the spec 042 loopback-default guard for backends and the no-host-port invariant for infra by sharing the host network namespace and exposing every container port on every host NIC)
-- **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
+- **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (Self-Hosted Compose Readiness)
 - **Workflow Mode:** test-to-doc (parent: stochastic-quality-sweep round 11 of 20)
 - **Status:** Fixed
 - **Discovered By:** stochastic-quality-sweep (seed `20520512`), trigger=`test`, mapped child mode=`test-to-doc`, executionModel=`parent-expanded-child-mode`

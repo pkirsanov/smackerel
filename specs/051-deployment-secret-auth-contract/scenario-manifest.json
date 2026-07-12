@@ -38,20 +38,20 @@
       "requiredTestType": ["unit", "shell"],
       "linkedTests": [
         {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsDevDBPassword_Production"},
-        {"file": "internal/config/sst_loader_test.go", "function": "TestSSTLoader_RejectsDevPostgresPassword_HomeLab"}
+        {"file": "internal/config/sst_loader_test.go", "function": "TestSSTLoader_RejectsDevPostgresPassword_SelfHosted"}
       ],
       "evidenceRefs": [
         {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_RejectsPlaceholderDBPassword_Production"},
-        {"type": "unit-test", "location": "internal/config/sst_loader_test.go::TestSSTLoader_RejectsDevPostgresPassword_HomeLab"},
+        {"type": "unit-test", "location": "internal/config/sst_loader_test.go::TestSSTLoader_RejectsDevPostgresPassword_SelfHosted"},
         {"type": "source", "location": "internal/config/secrets.go::DevDBPasswords + IsDevDBPassword"},
         {"type": "source", "location": "scripts/commands/config.sh — dev-default rejection block immediately after POSTGRES_PASSWORD resolution"},
         {"type": "source", "location": "internal/config/config.go::Validate — DATABASE_URL dev-default check when SMACKEREL_ENV=production"},
-        {"type": "shell", "location": "scripts/commands/config_secret_rejection_test.sh — invokes config.sh --env home-lab with dev-default yaml and asserts non-zero exit + key-named-without-value stderr"}
+        {"type": "shell", "location": "scripts/commands/config_secret_rejection_test.sh — invokes config.sh --env self-hosted with dev-default yaml and asserts non-zero exit + key-named-without-value stderr"}
       ],
       "linkedDoD": [
         "Scope 2 DoD: T-051-003 passes for runtime dev-default rejection in production",
         "Scope 2 DoD: T-051-003 passes for dev/test acceptance (no regression)",
-        "Scope 2 DoD: T-051-006 passes for SST loader rejection (home-lab)",
+        "Scope 2 DoD: T-051-006 passes for SST loader rejection (self-hosted)",
         "Scope 2 DoD: T-051-006 passes for SST loader stderr never echoes the dev-default value"
       ]
     },

@@ -21,7 +21,7 @@ touching the gather loop or the trust perimeter.
 ### Surface
 
 - `config/smackerel.yaml` — `synthesis_model_id` (dev `gemma3:4b`) + the
-  home-lab `environments.<env>.assistant_open_knowledge_synthesis_model_id:
+  self-hosted `environments.<env>.assistant_open_knowledge_synthesis_model_id:
   "deepseek-r1:7b"` override.
 - `internal/config/openknowledge.go` — `SynthesisModelID` field, load,
   validate (non-empty when enabled).
@@ -63,7 +63,7 @@ Scenario: SCN-087-A02 — Forced-final uses the synthesis model, tool turns use 
 | SCN-087-A02 | `internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_ForcedFinalUsesSynthesisModel_ToolTurnsUseToolModel_Spec087` (ADVERSARIAL) | tool requests `Model==llm_model`; forced-final `Model==synthesis_model` + tools stripped. (SCN-087-A02) |
 | SCN-087-A05 | `internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_ThinkBlockNeverLeaksNeverCited_Spec087` (guard) | a fabricated URL inside `<think>` is NOT in the body and is NOT a citation. (SCN-087-A05) |
 | — (config) | `internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_SynthesisModelRequiredWhenEnabled_Spec087` | empty `synthesis_model_id` + enabled → fail-loud; missing env → fail-loud. |
-| Regression E2E (SCN-087-A01/A02) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | the live `/ask` synthesis path still returns a grounded, cited answer with the split synthesis model; executed in the home-lab devops re-verify dispatch (model+GPU-dependent). |
+| Regression E2E (SCN-087-A01/A02) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | the live `/ask` synthesis path still returns a grounded, cited answer with the split synthesis model; executed in the self-hosted devops re-verify dispatch (model+GPU-dependent). |
 
 ### Definition of Done — SCOPE-01
 
@@ -73,9 +73,9 @@ Scenario: SCN-087-A02 — Forced-final uses the synthesis model, tool turns use 
 - [x] D01-4 — Forced-final turn issues its request with `Model = SynthesisModel`; tool turns keep `Model = llm_model_id` (SCN-087-A02). → Evidence: report.md → SCOPE-03 GREEN-after.
 - [x] D01-5 — Reasoning-model `<think>` stripped, verdict returned: `stripThinkBlocks` removes `<think>...</think>` before `parseCitations`; the synthesized verdict is returned verbatim with no `<think>` text and no salvage frame; `<think>` content never appears in the body and is never cited (SCN-087-A01; SCN-087-A05 think-leak). → Evidence: report.md → SCOPE-03 RED→GREEN.
 - [x] D01-6 — `New()` rejects empty `SynthesisModel`; `baseCfg` updated so all existing agent tests still construct a valid Config. → Evidence: report.md → GREEN-after (9 spec-084 tests preserved).
-- [x] D01-7 — Home-lab `synthesis_model_id = deepseek-r1:7b` is envelope-safe (already profiled + on-demand; no `ollama_memory_limit` change). → Evidence: design.md → CT-5 + report.md → SCOPE-01 envelope arithmetic.
-- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`); the live `/ask` synthesis re-verify executes in the home-lab devops dispatch. → Evidence: report.md → Completion Statement + uservalidation.md.
-- [x] Broader E2E regression suite passes on the live stack (`./smackerel.sh test e2e`), executed in the home-lab devops re-verify dispatch (model+GPU-dependent). → Evidence: report.md → Completion Statement.
+- [x] D01-7 — self-hosted `synthesis_model_id = deepseek-r1:7b` is envelope-safe (already profiled + on-demand; no `ollama_memory_limit` change). → Evidence: design.md → CT-5 + report.md → SCOPE-01 envelope arithmetic.
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`); the live `/ask` synthesis re-verify executes in the self-hosted devops dispatch. → Evidence: report.md → Completion Statement + uservalidation.md.
+- [x] Broader E2E regression suite passes on the live stack (`./smackerel.sh test e2e`), executed in the self-hosted devops re-verify dispatch (model+GPU-dependent). → Evidence: report.md → Completion Statement.
 
 ---
 
@@ -135,7 +135,7 @@ Scenario: SCN-087-A04 — Retry-before-salvage rescues an empty forced-final
 | SCN-087-A05 | `internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_RetryBudgetExhausted_HonestSalvage_Spec087` (guard) | all retries empty/ungrounded → honest salvage fires (prefix + capped sources, not zero-source). (SCN-087-A05) |
 | — (config) | `internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_SynthesisRetryBudgetValidated_Spec087` | negative `synthesis_retry_budget` + enabled → fail-loud; missing env → fail-loud; `0` accepted. |
 | — (regression) | `internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go` | spec-084 salvage tests still GREEN unchanged (budget 0 in `baseCfg` → spec-084 salvage timing preserved). |
-| Regression E2E (SCN-087-A03/A04) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | the live `/ask` comparison path still returns a grounded, cited verdict (or honest salvage) with the retry-before-salvage loop; executed in the home-lab devops re-verify dispatch. |
+| Regression E2E (SCN-087-A03/A04) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | the live `/ask` comparison path still returns a grounded, cited verdict (or honest salvage) with the retry-before-salvage loop; executed in the self-hosted devops re-verify dispatch. |
 
 ### Definition of Done — SCOPE-02
 
@@ -146,9 +146,9 @@ Scenario: SCN-087-A04 — Retry-before-salvage rescues an empty forced-final
 - [x] D02-5 — A genuine cited forced-final verdict is returned verbatim, not salvage (SCN-087-A03). → Evidence: report.md → SCOPE-03 GREEN-after.
 - [x] D02-6 — Retry budget exhausted → spec-084 honest salvage fires unchanged (SCN-087-A05 exhausted); the spec-084 salvage tests remain GREEN (budget 0). → Evidence: report.md → GREEN-after.
 - [x] D02-7 — Latency envelope documented as honest in design.md + report.md. → Evidence: design.md → F-LAT + report.md → SCOPE-02.
-- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`); the live `/ask` retry/synthesis re-verify executes in the home-lab devops dispatch. → Evidence: report.md → Completion Statement + uservalidation.md.
-- [x] Broader E2E regression suite passes on the live stack (`./smackerel.sh test e2e`), executed in the home-lab devops re-verify dispatch (model+GPU-dependent). → Evidence: report.md → Completion Statement.
-- [x] D02-10 — No enforced performance SLA/target (p95/throughput) is introduced; the `WriteTimeout` change is a request-deadline backstop, not a service-level target, so dedicated stress coverage is not applicable. The reasoning-synthesis latency re-verify is the home-lab devops dispatch. → Evidence: design.md → F-LAT.
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`); the live `/ask` retry/synthesis re-verify executes in the self-hosted devops dispatch. → Evidence: report.md → Completion Statement + uservalidation.md.
+- [x] Broader E2E regression suite passes on the live stack (`./smackerel.sh test e2e`), executed in the self-hosted devops re-verify dispatch (model+GPU-dependent). → Evidence: report.md → Completion Statement.
+- [x] D02-10 — No enforced performance SLA/target (p95/throughput) is introduced; the `WriteTimeout` change is a request-deadline backstop, not a service-level target, so dedicated stress coverage is not applicable. The reasoning-synthesis latency re-verify is the self-hosted devops dispatch. → Evidence: design.md → F-LAT.
 
 ---
 
@@ -189,7 +189,7 @@ Scenario: SCN-087-A05 — Fabricated citation in the synthesis output is still r
 | SCN-087-A05 | `internal/assistant/openknowledge/agent/synthesis_spec087_test.go::TestAgent_FabricatedCitationInSynthesis_StillRefused_Spec087` (guard) | a synthesis citation that does not hash-match any tool result → canonical refusal (cite-back enforce, post-`<think>`-strip). (SCN-087-A05) |
 | — (full suite) | `internal/assistant/openknowledge/agent/synthesis_spec087_test.go` | all 7 spec-087 agent tests GREEN after the implementation; RED-before evidence for the 4 adversarial tests. |
 | — (regression) | `./smackerel.sh test unit --go` | spec-087 + spec-084 + spec-064 open-knowledge tests GREEN; only out-of-changeset reds (spec-083 WIP / spec-073 env) remain, attributed by file path. |
-| Regression E2E (SCN-087-A05) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | the live `/ask` path preserves the cite-back/provenance trust contract end-to-end (no fabricated/zero-source answer); executed in the home-lab devops re-verify dispatch. |
+| Regression E2E (SCN-087-A05) | `tests/e2e/agent/openknowledge_e2e_test.go` + `./smackerel.sh test e2e` (e2e-api) | the live `/ask` path preserves the cite-back/provenance trust contract end-to-end (no fabricated/zero-source answer); executed in the self-hosted devops re-verify dispatch. |
 
 ### Definition of Done — SCOPE-03
 
@@ -199,8 +199,8 @@ Scenario: SCN-087-A05 — Fabricated citation in the synthesis output is still r
 - [x] D03-4 — Every SCN-087-A0x maps to a concrete, non-tautological test with an adversarial case that fails if the bug regressed (no bailout early-returns); proven by the RED-before run. → Evidence: report.md → SCOPE-03 RED-before.
 - [x] D03-5 — Fabricated-citation refusal + zero-source provenance + capture-as-fallback proven preserved (SCN-087-A05 guards). → Evidence: report.md → GREEN-after.
 - [x] D03-6 — `docs/Operations.md` open-knowledge section updated (split model, `<think>` strip, retry-before-salvage, `WriteTimeout`). → Evidence: docs/Operations.md spec-087 block.
-- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`); the live `/ask` trust-contract re-verify executes in the home-lab devops dispatch. → Evidence: report.md → Completion Statement + uservalidation.md.
-- [x] Broader E2E regression suite passes on the live stack (`./smackerel.sh test e2e`), executed in the home-lab devops re-verify dispatch (model+GPU-dependent). → Evidence: report.md → Completion Statement.
+- [x] Scenario-specific E2E regression test for every new/changed/fixed behavior is planned via the existing open-knowledge E2E suite (`tests/e2e/agent/openknowledge_e2e_test.go`); the live `/ask` trust-contract re-verify executes in the self-hosted devops dispatch. → Evidence: report.md → Completion Statement + uservalidation.md.
+- [x] Broader E2E regression suite passes on the live stack (`./smackerel.sh test e2e`), executed in the self-hosted devops re-verify dispatch (model+GPU-dependent). → Evidence: report.md → Completion Statement.
 
 ---
 

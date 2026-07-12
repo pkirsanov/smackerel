@@ -34,7 +34,7 @@ fails fast with an actionable message instead of letting a doomed `build` / `up`
 - [x] **Heavy ops gated; light ops not** — the drift-detector contract test proves
   `build`, `up`, `test integration|e2e|e2e-ui|stress` invoke the guard and the
   helper runs the Go evaluator; 2 adversarial sub-tests reject a removed guard.
-- [x] **Scope boundary documented** — guards LOCAL dev CLI ops only; the home-lab
+- [x] **Scope boundary documented** — guards LOCAL dev CLI ops only; the self-hosted
   apply pre-flight is knb-deploy-adapter-owned and out of this repo's scope.
 - [x] **Gates green** — 22/22 Go unit+contract PASS, full `go test ./...` OK,
   `check` exit 0, `lint` exit 0, `artifact-lint` clean, `traceability-guard` clean,

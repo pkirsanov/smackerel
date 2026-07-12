@@ -2,7 +2,7 @@
 
 **Status:** in_progress
 **Workflow mode:** full-delivery · **Status ceiling:** done
-**Relates to:** [083-card-rewards-companion](../083-card-rewards-companion/spec.md) (delivers its Scope-08 calendar bridge), knb spec 029 (home-lab activation)
+**Relates to:** [083-card-rewards-companion](../083-card-rewards-companion/spec.md) (delivers its Scope-08 calendar bridge), knb spec 029 (self-hosted activation)
 
 ## Problem
 

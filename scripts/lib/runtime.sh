@@ -75,7 +75,7 @@ smackerel_compose() {
   # Spec 064 SCOPE-07 — `searxng` compose profile gates the self-hosted
   # SearxNG container that backs the open-knowledge web provider. Enabled
   # via ENABLE_SEARXNG=true in the generated env file (test env auto-on;
-  # dev/home-lab opt-in by flipping environments.<env>.searxng_enabled).
+  # dev/self-hosted opt-in by flipping environments.<env>.searxng_enabled).
   enable_searxng="$(smackerel_env_value "$env_file" "ENABLE_SEARXNG")"
   if smackerel_is_truthy "$enable_searxng"; then
     args+=(--profile searxng)

@@ -36,7 +36,7 @@
 
 - [x] Default `config/smackerel.yaml` is internally consistent (default model fits default ollama envelope).
   - **What:** Default `llm.model` / `llm.ollama_model` / `llm.ollama_vision_model` / `llm.ollama_ocr_model` / `llm.ollama_reasoning_model` / `llm.ollama_fast_model` / `photos.intelligence.classify_model` / `photos.intelligence.sensitivity_model` / `photos.intelligence.aesthetic_model` are CHANGED from `gemma4:26b` to a model with profile ≤ 8192 MiB. Chosen model is added to `services.ml.model_memory_profiles` with a cited resident-size measurement.
-  - **Verify:** `grep -n gemma4:26b config/smackerel.yaml` returns zero matches in default fields (matches are allowed only in `model_memory_profiles` and in comment blocks documenting the home-lab/production trade-off).
+  - **Verify:** `grep -n gemma4:26b config/smackerel.yaml` returns zero matches in default fields (matches are allowed only in `model_memory_profiles` and in comment blocks documenting the self-hosted/production trade-off).
   - **Expected:** `./smackerel.sh up` succeeds on default config out of the box.
   - **Evidence:** `report.md` (post-implementation Validation Evidence section).
   - **Notes:** Closes root cause (c) — default-config side. Maps to AC-4.
@@ -58,7 +58,7 @@
 - [x] `./smackerel.sh up` + `./smackerel.sh status` shows all services healthy on default config.
   - **What:** Out-of-the-box stack health on default config.
   - **Verify:** Run `./smackerel.sh up` then `./smackerel.sh status`; confirm all services healthy.
-  - **Expected:** Spec 052 home-lab live canary path is unblocked.
+  - **Expected:** Spec 052 self-hosted live canary path is unblocked.
   - **Evidence:** `report.md` (post-implementation Validation Evidence section).
   - **Notes:** Maps to AC-7.
 
@@ -70,7 +70,7 @@
   - **Notes:** Maps to AC-8.
 
 - [x] `docs/Operations.md` has a new "Model Envelope Sizing" section.
-  - **What:** New section documenting per-service envelope contract (ollama envelope vs ml-sidecar envelope) and the dev/home-lab/production model-selection trade-off.
+  - **What:** New section documenting per-service envelope contract (ollama envelope vs ml-sidecar envelope) and the dev/self-hosted/production model-selection trade-off.
   - **Verify:** `grep -n 'Model Envelope Sizing' docs/Operations.md` returns at least one match.
   - **Expected:** Operator-facing docs explain how to right-size for their hardware.
   - **Evidence:** `report.md` (post-implementation Docs Evidence section).

@@ -8,7 +8,7 @@
 // the `nats-data` named volume. Before SCOPE-082-04 the nats service was
 // labelled `com.smackerel.lifecycle: ephemeral`, which marked its volume as
 // fair game for `./smackerel.sh clean` flows — a `clean` on a running
-// home-lab stack could have wiped queued capture events that were durably
+// self-hosted stack could have wiped queued capture events that were durably
 // accepted but not yet persisted to Postgres.
 //
 // This contract pins the nats service's lifecycle label to `persistent` so
@@ -17,8 +17,8 @@
 // is rejected.
 //
 // Cross-reference:
-//   - specs/082-mvp-evo-x2-readiness-hardening/spec.md FR-082-004
-//   - specs/082-mvp-evo-x2-readiness-hardening/scenario-manifest.json SCN-082-D01
+//   - specs/082-mvp-target-readiness-hardening/spec.md FR-082-004
+//   - specs/082-mvp-target-readiness-hardening/scenario-manifest.json SCN-082-D01
 //   - deploy/compose.deploy.yml (services.nats.labels)
 package deploy
 
@@ -63,7 +63,7 @@ func assertNatsVolumeLifecycle(yamlBytes []byte) error {
 		return fmt.Errorf("contract violation: services.%s has no %q label — SCOPE-082-04 requires it to be %q (JetStream holds at-least-once in-flight capture state that MUST survive `clean`)", natsServiceName, lifecycleLabelKey, natsRequiredLifecycle)
 	}
 	if got != natsRequiredLifecycle {
-		return fmt.Errorf("contract violation: services.%s.labels[%q]=%q, expected %q — SCOPE-082-04: nats-data holds queued capture events not yet persisted to Postgres; labelling it %q would let `./smackerel.sh clean` wipe them on a running home-lab stack", natsServiceName, lifecycleLabelKey, got, natsRequiredLifecycle, got)
+		return fmt.Errorf("contract violation: services.%s.labels[%q]=%q, expected %q — SCOPE-082-04: nats-data holds queued capture events not yet persisted to Postgres; labelling it %q would let `./smackerel.sh clean` wipe them on a running self-hosted stack", natsServiceName, lifecycleLabelKey, got, natsRequiredLifecycle, got)
 	}
 	return nil
 }

@@ -239,13 +239,13 @@
     {
       "scenarioId": "SCN-093-19",
       "scope": "04",
-      "title": "Live home-lab generate -> register -> used -> reuse-rejected (success signal)",
+      "title": "Live self-hosted generate -> register -> used -> reuse-rejected (success signal)",
       "uc": "Outcome Contract",
       "requiredTestType": "e2e-ui",
       "changeType": "new",
       "lockdown": false,
       "regressionRequired": true,
-      "linkedTests": ["live home-lab deployed core :: generate->register(used)->reuse-rejected (no interception)"],
+      "linkedTests": ["live self-hosted deployed core :: generate->register(used)->reuse-rejected (no interception)"],
       "evidenceRefs": ["report.md#scope-04-live"]
     }
   ]

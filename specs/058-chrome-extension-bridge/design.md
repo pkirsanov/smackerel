@@ -661,7 +661,7 @@ Each regression test MUST include an adversarial twin:
    empty. No client to drive it yet.
 2. **Phase B (extension dev):** ship the extension as a sideload zip
    in a tagged GitHub pre-release; smoke-test against a single
-   operator's home lab.
+   operator's self-hosted environment.
 3. **Phase C (general availability):** flip `extension.ingest.enabled`
    to operator-on, document sideload workflow, publish first signed
    GA release.

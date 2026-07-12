@@ -34,7 +34,7 @@ straitjacket removed, gemma4:26b STILL fails to synthesize.
 (`internal/cardrewards/`, `ml/app/card_categories.py`,
 `ml/app/main.py`, `ml/tests/test_card_categories.py`,
 `specs/083-card-rewards-companion/`,
-`tests/integration/cardrewards_extract_test.go`); the home-lab deploy
+`tests/integration/cardrewards_extract_test.go`); the self-hosted deploy
 itself (a separate `bubbles.devops` dispatch); a full deterministic
 decompose→gather→reconcile→synthesize re-architecture (Axis B —
 considered, designed at a high level, and DEFERRED; see design.md).
@@ -53,7 +53,7 @@ reflect-before-final nudge, and made the snippet salvage honest. Spec
 
 Spec 084's stated hypothesis was that gemma4:26b would reason well once
 unshackled. **That hypothesis is now empirically DISPROVEN.** Live on
-home-lab (gemma4:26b, 2026-06-13):
+self-hosted (gemma4:26b, 2026-06-13):
 
 > User: `/ask what is better place to grow pomegranate wa-town-A or
 > wa-town-B, wa?`
@@ -91,7 +91,7 @@ better; it did not make it reason better.
 |-------|-------------|-------|-------------|
 | **Human user (chat owner)** | Single operator on any spec 061 transport (Telegram / web `/ask`). | Ask an open-ended comparison/why/recommendation question and get the ACTUAL synthesized verdict — or an honest "couldn't directly answer; here's what I found". | All spec 061 transport permissions; per-user monthly budget cap. |
 | **Open-Knowledge Agent Loop** (amended) | The spec 064/084 bounded planner ↔ tool ↔ observation loop in `agent.go::Run`. | Gather evidence with the tool-calling model, then SYNTHESIZE the actual answer on the forced-final turn with a reasoning model, retrying once with a stronger prompt before falling to honest salvage. | Calls allowlisted tools via the Registry; bounded by SST iteration / token / USD budgets and the HTTP request deadline. |
-| **Synthesis Model** (new role) | The reasoning model used ONLY on the tools-stripped forced-final synthesis turn (and its bounded retry). deepseek-r1:7b on home-lab; equals the tool-calling model on dev. | Reason over the gathered, structured evidence and write the comparison verdict / causal explanation / recommendation. Emits `<think>` chain-of-thought that MUST be stripped before citation parsing. | Read-only over the per-turn evidence; no tool access (tools are already stripped on this turn). |
+| **Synthesis Model** (new role) | The reasoning model used ONLY on the tools-stripped forced-final synthesis turn (and its bounded retry). deepseek-r1:7b on self-hosted; equals the tool-calling model on dev. | Reason over the gathered, structured evidence and write the comparison verdict / causal explanation / recommendation. Emits `<think>` chain-of-thought that MUST be stripped before citation parsing. | Read-only over the per-turn evidence; no tool access (tools are already stripped on this turn). |
 | **Cite-Back Verifier / Provenance Gate** (unchanged) | The spec 064 mechanical, non-LLM trust mechanism. | Reject any citation that does not hash-match a recorded tool result; refuse zero-source responses. | Pure function over the per-turn tool trace. **Preserved verbatim. Runs on the post-`<think>`-strip text.** |
 | **Operator** | Owns SST config + budgets + the hardware-tier model matrix. | Choose the synthesis model per tier; understand the latency envelope. | Edits `config/smackerel.yaml` `assistant.open_knowledge.*` + the per-environment override layer. |
 
@@ -112,7 +112,7 @@ remains the genuine-failure fallback, not the default outcome.
   on the tools-stripped forced-final synthesis turn (and its retry).
   The tool-calling turns keep using `llm_model_id`. Dev default =
   `gemma3:4b` (== `llm_model_id`, no effective split, envelope-safe);
-  home-lab override = `deepseek-r1:7b` (a reasoning model already in
+  self-hosted override = `deepseek-r1:7b` (a reasoning model already in
   the ollama envelope via `OLLAMA_REASONING_MODEL`).
 - **Reasoning-model `<think>` handling.** The synthesis turn output is
   stripped of any leading `<think>...</think>` chain-of-thought BEFORE
@@ -142,7 +142,7 @@ remains the genuine-failure fallback, not the default outcome.
   model's per-turn time is bounded by the same `llm_timeout_ms`.
 - **Model matrix consistency preserved.** `synthesis_model_id` is SST
   and fail-loud; the selected models already have
-  `model_memory_profiles` entries; the home-lab `deepseek-r1:7b`
+  `model_memory_profiles` entries; the self-hosted `deepseek-r1:7b`
   co-resides with `gemma4:26b` (23296 MiB) within the 28672 MiB
   envelope with margin and is an on-demand specialist (not in the
   concurrent interactive working-set guard).
@@ -270,7 +270,7 @@ Feature: The cite-back trust contract and honest fallback are not regressed
   `${VAR:-default}`), flow through `scripts/commands/config.sh` into
   the generated env, and are loaded + validated in
   `internal/config/openknowledge.go`.
-- **FR-12.** The home-lab synthesis model is set via the per-environment
+- **FR-12.** The self-hosted synthesis model is set via the per-environment
   override layer (`environments.<env>.assistant_open_knowledge_synthesis_model_id`),
   mirroring the existing `assistant_open_knowledge_llm_model_id`
   override; the dev default is the tool-calling model (no split).
@@ -310,7 +310,7 @@ This spec amends an existing capability (the spec 064/084 open-knowledge
 agent) and introduces **no new feature flag** — the synthesis
 improvement is unconditional, exactly like spec 084's loop/prompt
 changes (which also introduced no flag). The per-tier behavior
-difference (dev vs home-lab synthesis model) is governed by the
+difference (dev vs self-hosted synthesis model) is governed by the
 existing SST per-environment override layer, not by a release-train
 flag. Targets the current trunk; no train-scoped flag bundle change.
 
@@ -320,7 +320,7 @@ flag. Targets the current trunk; no train-scoped flag bundle change.
 
 The decisive proof — does the model now synthesize a real verdict for
 the pomegranate question? — is model+GPU-dependent and runs on the live
-home-lab stack (dev's `gemma3:4b`/`qwen` cannot synthesize either, and
+self-hosted stack (dev's `gemma3:4b`/`qwen` cannot synthesize either, and
 the dev sandbox has no Ollama daemon). In-repo work is:
 prompt/scaffold/model-wiring/config edits + adversarial tests using
 scripted fake-LLM traces that prove the mechanism fires correctly:
@@ -339,7 +339,7 @@ fail if the bug regressed (no tautological tests, no bailout
 early-returns).
 
 **Terminal posture:** in-repo work is implemented + validated;
-the home-lab live re-verify of the pomegranate turn is a separate
+the self-hosted live re-verify of the pomegranate turn is a separate
 `bubbles.devops` dispatch (build + signed images + apply + operator
 live re-verify). This spec terminates at validated-in-repo with
 `nextRequiredOwner: bubbles.devops` if the `done` ceiling's live-stack

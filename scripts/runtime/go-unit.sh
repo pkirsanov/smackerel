@@ -5,7 +5,7 @@
 # invocations — so command tracing is safe to leave on in CI.
 set -euxo pipefail
 
-# spec-047 R2R-CI / spec-052 chaos finding: TestSSTLoader_RejectsDevPostgresPassword_HomeLab
+# spec-047 R2R-CI / spec-052 chaos finding: TestSSTLoader_RejectsDevPostgresPassword_SelfHosted
 # in internal/config (and any other test that shells out to
 # scripts/commands/config.sh) calls envsubst (provided by gettext-base
 # on Debian/Ubuntu). The golang:bookworm test image does not include

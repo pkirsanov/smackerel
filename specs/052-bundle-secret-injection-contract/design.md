@@ -2,14 +2,14 @@
 
 ## Design Brief
 
-**Current State.** Spec 051 added a defense-in-depth gate at [scripts/commands/config.sh:413-433](../../scripts/commands/config.sh) that rejects dev-default Postgres passwords when `TARGET_ENV=home-lab`. The CI matrix in [.github/workflows/build.yml:191-211](../../.github/workflows/build.yml) builds three bundles per source SHA (`dev`, `test`, `home-lab`) by invoking `./smackerel.sh config generate --env <env> --bundle ...`. The home-lab leg trips that gate because `infrastructure.postgres.password: "smackerel"` flows through unchanged, blocking every push to `main`. The bundle's value is also semantically meaningless at apply time because [knb/smackerel/home-lab/apply.sh:660-668](../../../knb/smackerel/home-lab/apply.sh) already overrides it via a second `--env-file` from the sops-decrypted secrets file. (Bundle generation block: [scripts/commands/config.sh:1460-1556](../../scripts/commands/config.sh).)
+**Current State.** Spec 051 added a defense-in-depth gate at [scripts/commands/config.sh:413-433](../../scripts/commands/config.sh) that rejects dev-default Postgres passwords when `TARGET_ENV=self-hosted`. The CI matrix in [.github/workflows/build.yml:191-211](../../.github/workflows/build.yml) builds three bundles per source SHA (`dev`, `test`, `self-hosted`) by invoking `./smackerel.sh config generate --env <env> --bundle ...`. The self-hosted leg trips that gate because `infrastructure.postgres.password: "smackerel"` flows through unchanged, blocking every push to `main`. The bundle's value is also semantically meaningless at apply time because [<deployment-owner>/<product>/<target>/apply.sh:660-668](../../../<deployment-owner>/<product>/<target>/apply.sh) already overrides it via a second `--env-file` from the sops-decrypted secrets file. (Bundle generation block: [scripts/commands/config.sh:1460-1556](../../scripts/commands/config.sh).)
 
-**Target State.** A single SST-owned secret-key manifest at `infrastructure.secret_keys` declares which keys must be substituted at apply time rather than inlined into the bundle. For production-class targets (declared via `infrastructure.production_class_targets`), the SST loader emits `__SECRET_PLACEHOLDER__<KEY>__` instead of literal yaml values, and the bundle ships a sibling `secret-keys.yaml` enumerating the expected placeholder set. The knb home-lab adapter validates substitution completeness AND scans post-up that zero placeholder markers remain in resolved env. The Go runtime refuses to start if any placeholder slips through. Defense in depth at three layers (loader, adapter, runtime).
+**Target State.** A single SST-owned secret-key manifest at `infrastructure.secret_keys` declares which keys must be substituted at apply time rather than inlined into the bundle. For production-class targets (declared via `infrastructure.production_class_targets`), the SST loader emits `__SECRET_PLACEHOLDER__<KEY>__` instead of literal yaml values, and the bundle ships a sibling `secret-keys.yaml` enumerating the expected placeholder set. The knb self-hosted adapter validates substitution completeness AND scans post-up that zero placeholder markers remain in resolved env. The Go runtime refuses to start if any placeholder slips through. Defense in depth at three layers (loader, adapter, runtime).
 
 **Patterns to Follow.**
 - **SST + Go-mirror + shell-mirror triple, drift-detected by contract test** — established by spec 051 with [internal/config/secrets.go:18-25](../../internal/config/secrets.go) (`var DevDBPasswords`) mirrored to [scripts/commands/config.sh:421-431](../../scripts/commands/config.sh). Spec 052 extends this pattern: yaml manifest → [internal/config/secret_keys.go](../../internal/config/secret_keys.go) (new) → shell mirror in `scripts/commands/config.sh` placeholder-emit block (new).
 - **Contract test in `internal/deploy/`** — established by [internal/deploy/build_workflow_bundle_hash_contract_test.go](../../internal/deploy/build_workflow_bundle_hash_contract_test.go), [internal/deploy/compose_contract_test.go](../../internal/deploy/compose_contract_test.go), [internal/deploy/build_workflow_vuln_gate_contract_test.go](../../internal/deploy/build_workflow_vuln_gate_contract_test.go). Adversarial sub-tests are mandatory.
-- **Two-`--env-file` Compose override semantics** — established by [knb/smackerel/home-lab/apply.sh:660-668](../../../knb/smackerel/home-lab/apply.sh) (`--env-file "$COMPOSE_DIR/app.env" --env-file "$SECRETS_TMPFILE"`). Compose's documented "later wins" semantics already do the substitution; spec 052 adds validation, NOT a new substitution mechanism.
+- **Two-`--env-file` Compose override semantics** — established by [<deployment-owner>/<product>/<target>/apply.sh:660-668](../../../<deployment-owner>/<product>/<target>/apply.sh) (`--env-file "$COMPOSE_DIR/app.env" --env-file "$SECRETS_TMPFILE"`). Compose's documented "later wins" semantics already do the substitution; spec 052 adds validation, NOT a new substitution mechanism.
 - **Fail-loud SST without colon-dash defaults** — Gate G028 (`smackerel-no-defaults` skill). The placeholder marker is the explicit "missing-real-value-here" signal; an unsubstituted placeholder reaching runtime is a fail-loud event, not a silent fallback.
 - **FR-051-007 redaction discipline** — error messages name the offending KEY, never the value. New runtime error in `Validate()` follows the same shape as [internal/config/config.go:1457-1461](../../internal/config/config.go).
 
@@ -26,7 +26,7 @@
 - OQ-052-02 → `__SECRET_PLACEHOLDER__<KEY>__` (deterministic, key-derived, no nonce).
 - OQ-052-03 → existing two-`--env-file` semantics + post-up scan (no new substitution step).
 - OQ-052-04 → Go contract test in `internal/deploy/bundle_secret_contract_test.go`.
-- OQ-052-05 → opt-in via `infrastructure.production_class_targets: [home-lab]` (explicit > implicit).
+- OQ-052-05 → opt-in via `infrastructure.production_class_targets: [self-hosted]` (explicit > implicit).
 - OQ-052-06 → out of scope; bundle cosign + sha256 already cover tampering with sibling files.
 
 **Open Questions.** None. All 6 OQ-052-NN have resolutions captured in the Decision Summary.
@@ -41,7 +41,7 @@
 | OQ-052-02 | Placeholder format? | `__SECRET_PLACEHOLDER__<KEY>__` (no nonce). | Deterministic; pure-key-derived; trivial grep; uniqueness from format alone. |
 | OQ-052-03 | Substitution mechanism? | Existing two-`--env-file` Compose override + post-up `docker compose config` scan. | Preserves spec 051 trust boundary; adapter only adds a verification step, not a new substitution path. |
 | OQ-052-04 | Where does the contract test live? | `internal/deploy/bundle_secret_contract_test.go` (Go). | Aligns with spec 047's existing contract-test pattern in same package. |
-| OQ-052-05 | How are new production targets opted in? | Explicit declaration in `infrastructure.production_class_targets: [home-lab]`. | Explicit > implicit; prevents accidental opt-in via target-name typo; forces spec 052 contract awareness when adding a new target. |
+| OQ-052-05 | How are new production targets opted in? | Explicit declaration in `infrastructure.production_class_targets: [self-hosted]`. | Explicit > implicit; prevents accidental opt-in via target-name typo; forces spec 052 contract awareness when adding a new target. |
 | OQ-052-06 | Does the contract need additional bundle-time provenance for `secret-keys.yaml`? | No. The whole bundle is already cosign-signed and sha256-verified (spec 047 R13). Tampering with `secret-keys.yaml` breaks the bundle hash → caught by existing adapter sha256 check BEFORE extraction. | No additional signing surface needed; existing layer covers the threat. |
 
 ---
@@ -68,7 +68,7 @@
                                   ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ L2: KNB ADAPTER (apply time, on target host with sops + age key)      │
-│ knb/smackerel/home-lab/apply.sh                                       │
+│ <deployment-owner>/<product>/<target>/apply.sh                                       │
 │                                                                       │
 │   1. Verify bundle cosign signature (existing)                        │
 │   2. Verify bundle sha256 against build manifest (existing)           │
@@ -139,12 +139,12 @@ infrastructure:
   # FR-052-011). Adding a new production target = explicit one-line
   # change here AND adapter follow-up in the knb repo.
   production_class_targets:
-    - home-lab
+    - self-hosted
 ```
 
 **Initial values rationale.**
-- `POSTGRES_PASSWORD` — spec 051 FR-051-005 already requires real value for home-lab; this routes it through the placeholder pipeline.
-- `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`, `AUTH_AT_REST_HASHING_KEY` — spec 044 [internal/auth/startup.go:46-58](../../internal/auth/startup.go) requires non-empty values for production with auth enabled. Today they ship empty in the bundle and the adapter `home-lab.enc.env` provides them; making them placeholders makes the contract explicit AND lets the adapter validation catch a missing entry.
+- `POSTGRES_PASSWORD` — spec 051 FR-051-005 already requires real value for self-hosted; this routes it through the placeholder pipeline.
+- `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`, `AUTH_AT_REST_HASHING_KEY` — spec 044 [internal/auth/startup.go:46-58](../../internal/auth/startup.go) requires non-empty values for production with auth enabled. Today they ship empty in the bundle and the adapter `self-hosted.enc.env` provides them; making them placeholders makes the contract explicit AND lets the adapter validation catch a missing entry.
 - `AUTH_BOOTSTRAP_TOKEN` — spec 051 FR-051-004 always-required-in-production semantics (until operator clears).
 - **NOT in initial set:** connector API keys (LLM, Telegram, Discord, Hospitable, Twitter, GuestHost, Finnhub, FRED, AirNow, QF). Per spec.md IP-052-004, those are gated by `<connector>.enabled=false` today and are backfilled in a separate follow-up spec once the manifest infrastructure is proven. Spec 052 ships the rails; IP-052-004 widens the train.
 
@@ -157,7 +157,7 @@ infrastructure:
 **Today (lines 413-433, spec 051 FR-051-005):**
 ```bash
 case "$TARGET_ENV" in
-  home-lab)
+  self-hosted)
     case "$(printf '%s' "$POSTGRES_PASSWORD" | tr '[:upper:]' '[:lower:]')" in
       smackerel|postgres|password|changeme|change-me|default)
         echo "ERROR: ... dev-default value ..." >&2
@@ -192,12 +192,12 @@ esac
    else
      # Existing FR-051-005 dev-default check fires HERE (only for literal values).
      case "$TARGET_ENV" in
-       home-lab) case "$(printf '%s' "$POSTGRES_PASSWORD" | tr ...)" in ... ;; esac ;;
+       self-hosted) case "$(printf '%s' "$POSTGRES_PASSWORD" | tr ...)" in ... ;; esac ;;
      esac
    fi
    ```
 
-   **Critical reorder per spec.md FR-052-010:** the FR-051-005 dev-default check now fires only when emitting a literal value — i.e., placeholder mode short-circuits the check for the placeholder path. The check still fires when an operator explicitly env-overrides with a dev-default (e.g., `POSTGRES_PASSWORD=smackerel ./smackerel.sh config generate --env home-lab --bundle`), because in that case `required_value` returns the env-override literal which is no longer in placeholder mode (env override beats yaml; the resulting literal must still pass the dev-default gate). This preserves BS-052-006 (regression scenario).
+   **Critical reorder per spec.md FR-052-010:** the FR-051-005 dev-default check now fires only when emitting a literal value — i.e., placeholder mode short-circuits the check for the placeholder path. The check still fires when an operator explicitly env-overrides with a dev-default (e.g., `POSTGRES_PASSWORD=smackerel ./smackerel.sh config generate --env self-hosted --bundle`), because in that case `required_value` returns the env-override literal which is no longer in placeholder mode (env override beats yaml; the resulting literal must still pass the dev-default gate). This preserves BS-052-006 (regression scenario).
 
 4. **Bundle now ships `secret-keys.yaml`** (new, in the bundle staging block at [config.sh:1495-1525](../../scripts/commands/config.sh)):
    ```bash
@@ -221,7 +221,7 @@ esac
 
 ## Knb Adapter Behavior
 
-**File:** [knb/smackerel/home-lab/apply.sh](../../../knb/smackerel/home-lab/apply.sh)
+**File:** [<deployment-owner>/<product>/<target>/apply.sh](../../../<deployment-owner>/<product>/<target>/apply.sh)
 
 **Today** (lines 562-668): adapter decrypts secrets file, computes sha256, runs `docker compose ... --env-file app.env --env-file <tmpfile> up -d --pull never`. The two-`--env-file` order means Compose resolves variables from `tmpfile` last, overriding `app.env`. No validation that placeholder substitution is complete.
 
@@ -233,11 +233,11 @@ esac
 | B | After step A, before sops decrypt | Validate every key in `BUNDLE_SECRET_KEYS` exists in extracted `app.env` AS a placeholder marker (literal `__SECRET_PLACEHOLDER__<KEY>__`). Fail loud (and name the offending KEY only) if any key is missing or has a literal value. |
 | C | After sops decrypt, before docker compose up | Validate every key in `BUNDLE_SECRET_KEYS` exists in decrypted tmpfile with a non-empty AND non-placeholder value. Fail loud (KEY name only) on any miss. |
 | D | After existing `docker compose up`, before `verify.sh` | Run `docker compose --env-file "$COMPOSE_DIR/app.env" --env-file "$SECRETS_TMPFILE" --project-name "$COMPOSE_PROJECT" config` and grep stdout for `__SECRET_PLACEHOLDER__`. MUST find zero matches. Fail loud if any remain (defense against misconfigured Compose override). |
-| E | Audit log line ([apply.sh:155](../../../knb/smackerel/home-lab/apply.sh)) | Add `secrets_substituted=<N>` (count of declared keys validated) and `placeholders_remaining=<M>` (always 0 on success path, ≥1 on the failure path that caused step D to abort). |
+| E | Audit log line ([apply.sh:155](../../../<deployment-owner>/<product>/<target>/apply.sh)) | Add `secrets_substituted=<N>` (count of declared keys validated) and `placeholders_remaining=<M>` (always 0 on success path, ≥1 on the failure path that caused step D to abort). |
 
-**Compose `up` invocation unchanged** ([apply.sh:660-668](../../../knb/smackerel/home-lab/apply.sh)). The two-`--env-file` order is correct as written; Compose's "later wins" semantics resolve every placeholder when the second `--env-file` declares the real value. Spec 052 only adds verification, not a new substitution path.
+**Compose `up` invocation unchanged** ([apply.sh:660-668](../../../<deployment-owner>/<product>/<target>/apply.sh)). The two-`--env-file` order is correct as written; Compose's "later wins" semantics resolve every placeholder when the second `--env-file` declares the real value. Spec 052 only adds verification, not a new substitution path.
 
-**Required-knb-follow-up flag: YES.** Spec 052 design, scopes, and implementation cover the smackerel-side changes (loader, manifest, runtime, contract test, bash unit test). The matching knb adapter PR (steps A-E above) is filed under a separate spec in the knb repo and tracked as a hard cross-repo dependency for go-live: smackerel-side spec 052 lands first (CI green); knb-side adapter spec lands before the next home-lab apply.
+**Required-knb-follow-up flag: YES.** Spec 052 design, scopes, and implementation cover the smackerel-side changes (loader, manifest, runtime, contract test, bash unit test). The matching knb adapter PR (steps A-E above) is filed under a separate spec in the knb repo and tracked as a hard cross-repo dependency for go-live: smackerel-side spec 052 lands first (CI green); knb-side adapter spec lands before the next self-hosted apply.
 
 ---
 
@@ -327,11 +327,11 @@ func IsPlaceholder(v string) bool {
   run: |
     ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
 ```
-continues to work unchanged for all 3 entries (`dev`, `test`, `home-lab`). Placeholder mode is implicit when `TARGET_ENV ∈ infrastructure.production_class_targets`. dev and test legs continue to ship inline values per FR-052-011. The home-lab leg now succeeds because the spec 051 FR-051-005 dev-default check no longer fires for the `POSTGRES_PASSWORD` placeholder path.
+continues to work unchanged for all 3 entries (`dev`, `test`, `self-hosted`). Placeholder mode is implicit when `TARGET_ENV ∈ infrastructure.production_class_targets`. dev and test legs continue to ship inline values per FR-052-011. The self-hosted leg now succeeds because the spec 051 FR-051-005 dev-default check no longer fires for the `POSTGRES_PASSWORD` placeholder path.
 
 **No new GitHub Actions secret required.** No `CI_BUNDLE_POSTGRES_PASSWORD` or equivalent. CI's zero-production-secret-access invariant is preserved per spec.md Hard Constraint 3.
 
-`publish-build-manifest` ([build.yml:253-330](../../.github/workflows/build.yml)) continues to enumerate all 3 bundles unchanged; the home-lab `configBundles[*]` entry now writes successfully with a real sha256 per source SHA.
+`publish-build-manifest` ([build.yml:253-330](../../.github/workflows/build.yml)) continues to enumerate all 3 bundles unchanged; the self-hosted `configBundles[*]` entry now writes successfully with a real sha256 per source SHA.
 
 ---
 
@@ -339,11 +339,11 @@ continues to work unchanged for all 3 entries (`dev`, `test`, `home-lab`). Place
 
 | Test Type | Category | File / Location | Description | Command |
 |-----------|----------|------------------|-------------|---------|
-| **unit (bash)** | `unit` | `tests/config/placeholder_emit_test.sh` (new) | Pinned input → pinned output: invoke `./smackerel.sh config generate --env home-lab --bundle` against a fixture yaml, assert `app.env` contains `POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__` for each declared key. | `./smackerel.sh test unit` |
+| **unit (bash)** | `unit` | `tests/config/placeholder_emit_test.sh` (new) | Pinned input → pinned output: invoke `./smackerel.sh config generate --env self-hosted --bundle` against a fixture yaml, assert `app.env` contains `POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__` for each declared key. | `./smackerel.sh test unit` |
 | **unit (Go)** | `unit` | `internal/config/secret_keys_test.go` (new) | (a) `SecretKeys()` returns a defensive copy, (b) `IsPlaceholder("__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__") == true`, (c) `IsPlaceholder("smackerel") == false`, (d) `IsPlaceholder("__SECRET_PLACEHOLDER__UNKNOWN_KEY__") == false`, (e) `IsPlaceholder("") == false`. | `./smackerel.sh test unit` |
-| **contract (Go)** | `contract` | `internal/deploy/bundle_secret_contract_test.go` (new) | Runs `./smackerel.sh config generate --env home-lab --bundle --output-dir <tmp>`, extracts the resulting tar.gz, asserts: **(a)** every key in `config.SecretKeys()` appears in `app.env` as `__SECRET_PLACEHOLDER__<KEY>__`. **(b)** No value from `internal/config/secrets.go::DevDBPasswords` appears anywhere in `app.env` (grep for each literal). **(c)** Sibling `secret-keys.yaml` exists, parses as yaml, and its `secretKeys` field equals `config.SecretKeys()`. **(d) ADVERSARIAL 1:** mutate the shell mirror's `SHELL_SECRET_KEYS` array to drop one key, re-run loader, assert test fails (drift detector). **(e) ADVERSARIAL 2:** patch `config/smackerel.yaml` so a manifest key resolves to a literal in `app.env` (i.e., placeholder mode bypassed), assert test fails (leakage detector). **(f) ADVERSARIAL 3:** invoke loader twice, sha256 the two bundles, assert equal (determinism detector — fails if a non-deterministic placeholder is reintroduced). **(g) ADVERSARIAL 4:** patch `config/smackerel.yaml` to remove `home-lab` from `production_class_targets`, re-run loader, assert test fails (regression detector for the explicit-opt-in invariant). | `go test -v -count=1 -run BundleSecretContract ./internal/deploy/` |
-| **integration** | `integration` | `tests/config/bundle_home_lab_integration_test.sh` (new or extension of existing config-test) | End-to-end: `./smackerel.sh config generate --env home-lab --bundle --output-dir <tmp>` succeeds (exit 0). Bundle SHA stable across 2 invocations. `tar tzf <bundle>` shows `secret-keys.yaml`. `tar xzf <bundle> ./app.env -O \| grep -c __SECRET_PLACEHOLDER__` returns ≥4 hits (one per declared key). `tar xzf <bundle> ./app.env -O \| grep -E '^POSTGRES_PASSWORD=smackerel$'` returns 0 lines. | `./smackerel.sh test integration` |
-| **regression (bash)** | `regression` | Existing `scripts/commands/config_secret_rejection_test.sh` ([line 2](../../scripts/commands/config_secret_rejection_test.sh)) — extend OR add `tests/config/postgres_dev_default_env_override_test.sh` | Spec 051 FR-051-005 still fires when operator runs `POSTGRES_PASSWORD=smackerel ./smackerel.sh config generate --env home-lab --bundle` (env override of dev-default literal). Asserts non-zero exit AND error message names `infrastructure.postgres.password` AND error message does NOT contain the literal `smackerel` (FR-051-007 redaction). | `./smackerel.sh test unit` |
+| **contract (Go)** | `contract` | `internal/deploy/bundle_secret_contract_test.go` (new) | Runs `./smackerel.sh config generate --env self-hosted --bundle --output-dir <tmp>`, extracts the resulting tar.gz, asserts: **(a)** every key in `config.SecretKeys()` appears in `app.env` as `__SECRET_PLACEHOLDER__<KEY>__`. **(b)** No value from `internal/config/secrets.go::DevDBPasswords` appears anywhere in `app.env` (grep for each literal). **(c)** Sibling `secret-keys.yaml` exists, parses as yaml, and its `secretKeys` field equals `config.SecretKeys()`. **(d) ADVERSARIAL 1:** mutate the shell mirror's `SHELL_SECRET_KEYS` array to drop one key, re-run loader, assert test fails (drift detector). **(e) ADVERSARIAL 2:** patch `config/smackerel.yaml` so a manifest key resolves to a literal in `app.env` (i.e., placeholder mode bypassed), assert test fails (leakage detector). **(f) ADVERSARIAL 3:** invoke loader twice, sha256 the two bundles, assert equal (determinism detector — fails if a non-deterministic placeholder is reintroduced). **(g) ADVERSARIAL 4:** patch `config/smackerel.yaml` to remove `self-hosted` from `production_class_targets`, re-run loader, assert test fails (regression detector for the explicit-opt-in invariant). | `go test -v -count=1 -run BundleSecretContract ./internal/deploy/` |
+| **integration** | `integration` | `tests/config/bundle_self_hosted_integration_test.sh` (new or extension of existing config-test) | End-to-end: `./smackerel.sh config generate --env self-hosted --bundle --output-dir <tmp>` succeeds (exit 0). Bundle SHA stable across 2 invocations. `tar tzf <bundle>` shows `secret-keys.yaml`. `tar xzf <bundle> ./app.env -O \| grep -c __SECRET_PLACEHOLDER__` returns ≥4 hits (one per declared key). `tar xzf <bundle> ./app.env -O \| grep -E '^POSTGRES_PASSWORD=smackerel$'` returns 0 lines. | `./smackerel.sh test integration` |
+| **regression (bash)** | `regression` | Existing `scripts/commands/config_secret_rejection_test.sh` ([line 2](../../scripts/commands/config_secret_rejection_test.sh)) — extend OR add `tests/config/postgres_dev_default_env_override_test.sh` | Spec 051 FR-051-005 still fires when operator runs `POSTGRES_PASSWORD=smackerel ./smackerel.sh config generate --env self-hosted --bundle` (env override of dev-default literal). Asserts non-zero exit AND error message names `infrastructure.postgres.password` AND error message does NOT contain the literal `smackerel` (FR-051-007 redaction). | `./smackerel.sh test unit` |
 
 **Adversarial coverage (per Test Integrity Skill):**
 - **A1** (drift detector) catches Go-mirror missing entries.
@@ -365,9 +365,9 @@ Every Test Plan row maps 1:1 to a DoD checkbox in scopes.md (created by `/bubble
 | [docs/Deployment.md](../../docs/Deployment.md) | Add a "Bundle Secret Injection" subsection under Build-Once Deploy-Many: explain the L1/L2/L3 layering, the two-`--env-file` Compose semantics, and where the manifest lives. |
 | [docs/Architecture.md](../../docs/Architecture.md) | Add a "Secret Boundary" diagram or paragraph describing the trust boundary between CI, knb adapter, and runtime. |
 | [docs/Operations.md](../../docs/Operations.md) | Add an "Auditor Inspection" workflow: how to pull a published bundle, verify cosign sig, extract `app.env`, read `secret-keys.yaml`, and confirm zero literal secrets. Also document the operator's secret rotation procedure (UC-052-004). |
-| [specs/047-ci-image-vulnerability-gate/report.md](../047-ci-image-vulnerability-gate/report.md) Surfaced Findings § F-047-B | At spec 052 finalize phase, append: "**RESOLVED** by spec 052 close-out commit `<sha>` — CI matrix `build-bundles (home-lab)` now succeeds via SST placeholder + adapter substitution contract. See `specs/052-bundle-secret-injection-contract/`." Close-out SHA filled at finalize. |
+| [specs/047-ci-image-vulnerability-gate/report.md](../047-ci-image-vulnerability-gate/report.md) Surfaced Findings § F-047-B | At spec 052 finalize phase, append: "**RESOLVED** by spec 052 close-out commit `<sha>` — CI matrix `build-bundles (self-hosted)` now succeeds via SST placeholder + adapter substitution contract. See `specs/052-bundle-secret-injection-contract/`." Close-out SHA filled at finalize. |
 
-The knb-side `apply.sh` and `knb/smackerel/home-lab/README.md` updates are tracked in the separate knb spec (see "Required knb follow-up" below) and are out of scope for spec 052's documentation impact list.
+The knb-side `apply.sh` and `<deployment-owner>/<product>/<target>/README.md` updates are tracked in the separate knb spec (see "Required knb follow-up" below) and are out of scope for spec 052's documentation impact list.
 
 ---
 
@@ -379,8 +379,8 @@ Lifted verbatim from spec.md Outcome Contract Success Signal, plus enforceable m
 2. **Contract test PASSES.** `go test -v -count=1 -run BundleSecretContract ./internal/deploy/` exits 0 with all 4 adversarial sub-tests (A1, A2, A3, A4) reporting PASS in the test output.
 3. **Bash unit test PASSES.** `tests/config/placeholder_emit_test.sh` exits 0.
 4. **`./smackerel.sh test unit` PASSES with zero regressions** — no previously-green test fails.
-5. **Local home-lab placeholder bundle is deterministic + zero literal secret values.** Two invocations of `./smackerel.sh config generate --env home-lab --bundle --output-dir <tmp>` produce identical sha256. `tar xzf <bundle> ./app.env -O | grep -E '^(POSTGRES_PASSWORD|AUTH_SIGNING_ACTIVE_PRIVATE_KEY|AUTH_AT_REST_HASHING_KEY|AUTH_BOOTSTRAP_TOKEN)=__SECRET_PLACEHOLDER__'` returns exactly 4 lines. `tar xzf <bundle> ./app.env -O | grep -E '^POSTGRES_PASSWORD=smackerel$'` returns 0 lines.
-6. **CI `build-bundles` matrix GREEN** for `dev` + `test` + `home-lab` on the new HEAD SHA. `publish-build-manifest` writes a `build-manifest-<sha>.yaml` containing all 3 `configBundles[*]` entries with valid sha256 digests.
+5. **Local self-hosted placeholder bundle is deterministic + zero literal secret values.** Two invocations of `./smackerel.sh config generate --env self-hosted --bundle --output-dir <tmp>` produce identical sha256. `tar xzf <bundle> ./app.env -O | grep -E '^(POSTGRES_PASSWORD|AUTH_SIGNING_ACTIVE_PRIVATE_KEY|AUTH_AT_REST_HASHING_KEY|AUTH_BOOTSTRAP_TOKEN)=__SECRET_PLACEHOLDER__'` returns exactly 4 lines. `tar xzf <bundle> ./app.env -O | grep -E '^POSTGRES_PASSWORD=smackerel$'` returns 0 lines.
+6. **CI `build-bundles` matrix GREEN** for `dev` + `test` + `self-hosted` on the new HEAD SHA. `publish-build-manifest` writes a `build-manifest-<sha>.yaml` containing all 3 `configBundles[*]` entries with valid sha256 digests.
 7. **F-047-B marked RESOLVED** in [specs/047-ci-image-vulnerability-gate/report.md](../047-ci-image-vulnerability-gate/report.md) Surfaced Findings with the spec 052 close-out commit SHA inline.
 
 If any of (1)-(7) is FALSE, status remains `in_progress` or `blocked`. Spec 052 cannot reach `done` until ALL 7 pass with raw evidence in `report.md`.
@@ -391,19 +391,19 @@ If any of (1)-(7) is FALSE, status remains `in_progress` or `blocked`. Spec 052 
 
 **Flag: YES.**
 
-Spec 052 ships smackerel-side changes only. The knb-side adapter changes are tracked in a separate spec/PR within the [knb repo](../../../knb/) and are a hard cross-repo dependency for go-live (CI green from spec 052 + adapter substitution from knb spec must both ship before the next home-lab apply).
+Spec 052 ships smackerel-side changes only. The knb-side adapter changes are tracked in a separate spec/PR within the [knb repo](../../../knb/) and are a hard cross-repo dependency for go-live (CI green from spec 052 + adapter substitution from knb spec must both ship before the next self-hosted apply).
 
-**Expected changes to [knb/smackerel/home-lab/apply.sh](../../../knb/smackerel/home-lab/apply.sh):**
+**Expected changes to [<deployment-owner>/<product>/<target>/apply.sh](../../../<deployment-owner>/<product>/<target>/apply.sh):**
 
 - **A.** Parse `secret-keys.yaml` from extracted bundle into `BUNDLE_SECRET_KEYS` array. Fail loud if file missing.
 - **B.** Validate every key in `BUNDLE_SECRET_KEYS` exists in extracted `app.env` AS literal `__SECRET_PLACEHOLDER__<KEY>__`. Fail loud (KEY name only) on mismatch.
 - **C.** After sops decrypt: validate every declared key has non-empty + non-placeholder value in decrypted tmpfile.
 - **D.** After existing `docker compose ... up`: run `docker compose ... config` and grep stdout for `__SECRET_PLACEHOLDER__`. Zero matches required.
-- **E.** Audit log line ([apply.sh:155](../../../knb/smackerel/home-lab/apply.sh)) gains `secrets_substituted=<count>` and `placeholders_remaining=<n>`.
+- **E.** Audit log line ([apply.sh:155](../../../<deployment-owner>/<product>/<target>/apply.sh)) gains `secrets_substituted=<count>` and `placeholders_remaining=<n>`.
 
-The two-`--env-file` `docker compose up` invocation at [apply.sh:660-668](../../../knb/smackerel/home-lab/apply.sh) is unchanged. The Compose "later wins" override is the canonical substitution mechanism — spec 052 only adds validation around it.
+The two-`--env-file` `docker compose up` invocation at [apply.sh:660-668](../../../<deployment-owner>/<product>/<target>/apply.sh) is unchanged. The Compose "later wins" override is the canonical substitution mechanism — spec 052 only adds validation around it.
 
-The knb-side `preconditions.sh`, `bootstrap.sh`, `verify.sh`, `rollback.sh`, and `teardown.sh` do NOT need changes for spec 052. The encrypted secrets file `knb/smackerel/secrets/home-lab.enc.env` MUST contain real values for all 4 declared keys before the knb adapter PR ships (operator pre-flight responsibility).
+The knb-side `preconditions.sh`, `bootstrap.sh`, `verify.sh`, `rollback.sh`, and `teardown.sh` do NOT need changes for spec 052. The encrypted secrets file `knb/smackerel/secrets/self-hosted.enc.env` MUST contain real values for all 4 declared keys before the knb adapter PR ships (operator pre-flight responsibility).
 
 ---
 
@@ -413,7 +413,7 @@ The knb-side `preconditions.sh`, `bootstrap.sh`, `verify.sh`, `rollback.sh`, and
 |------|------------|--------|-------------|
 | Drift between 3 manifest mirrors (yaml, Go, shell) | Medium (humans forget mirrors) | High (silent secret leakage OR loader crash) | Contract test adversarial A1 catches drift on every CI run. Spec 052 lands the test in same change set as the manifest, NOT later. |
 | Placeholder format collides with a real secret value | Negligible (format is `__SECRET_PLACEHOLDER__<KEY>__` — extremely unlikely real value) | High (would boot with placeholder as credential) | (a) Format uniqueness — no realistic password contains this exact prefix+suffix shape. (b) Runtime adversarial check: `IsPlaceholder()` refuses any value matching the format AT runtime, so even a hypothetical attacker who set a real secret to that exact string would fail-loud at L3. |
-| Operator forgets to add a new secret to `home-lab.enc.env` | Medium (especially for new keys via IP-052-004 backfill) | Medium (apply.sh fails BEFORE container start, no broken deploy) | Knb adapter step C (per "Required Knb Follow-Up" above) validates every declared key has a real value in the decrypted tmpfile. Fails loud with KEY name (no value echo per FR-051-007). Operator fixes the gap and retries. |
+| Operator forgets to add a new secret to `self-hosted.enc.env` | Medium (especially for new keys via IP-052-004 backfill) | Medium (apply.sh fails BEFORE container start, no broken deploy) | Knb adapter step C (per "Required Knb Follow-Up" above) validates every declared key has a real value in the decrypted tmpfile. Fails loud with KEY name (no value echo per FR-051-007). Operator fixes the gap and retries. |
 | Future production target added without manifest update | Low (explicit-opt-in design forces awareness) | High (target would inherit dev-mode literal-value behavior, leaking secrets in bundle) | Opt-in via `infrastructure.production_class_targets` is required AND visible in PR diff. Add a CI lint OR a separate spec for any new production target that mechanically enforces the manifest update. (Out of scope for spec 052 — first new target is the natural enforcement event.) |
 | Placeholder substitution silently fails (Compose override misconfigured) | Low | High (placeholder reaches runtime as credential) | 3-layer defense: L2 step D scans resolved Compose env for placeholder markers; L3 `Validate()` refuses to start if any env var equals a placeholder. Either layer alone catches the regression; both layers in series make it impossible to ship. |
 | Spec 051 FR-051-005 inadvertently weakened by reorder | Low | High (spec 051 contract regression) | BS-052-006 regression test asserts the dev-default check still fires when `POSTGRES_PASSWORD=smackerel` is provided via env-override on a non-CI invocation. Shipped as part of spec 052 Test Plan. |

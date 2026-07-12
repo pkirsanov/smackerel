@@ -8,7 +8,7 @@ The same `git SHA` produces:
 1. **One immutable application image** per service (`smackerel-core`, `smackerel-ml`),
    identified by `repository@sha256:<digest>`, signed with cosign keyless and accompanied by
    SBOM + SLSA provenance attestations.
-2. **One immutable config bundle per environment** (`dev`, `test`, `home-lab`),
+2. **One immutable config bundle per environment** (`dev`, `test`, `self-hosted`),
    identified by `<env>-<sourceSha>`. Bundles are deterministic tarballs of the env files
    produced by `./smackerel.sh config generate --env <env> --bundle`. CI builds exactly
    these three environments (`.github/workflows/build.yml` `build-bundles` matrix); there
@@ -39,14 +39,14 @@ deploy/
 └── observability/       ← telemetry overlay consumed by adapters
 ```
 
-The operator-coupled **home-lab adapter is out-of-tree**: it lives in the
+The operator-coupled **self-hosted adapter is out-of-tree**: it lives in the
 operator-private overlay (the `knb` repo) and is resolved by `DEPLOY_TARGETS_ROOT`
 (see *Adapter Locality* below), never in this repo. Its internal shape is the
 [`_example/target-skeleton/`](_example/target-skeleton/) expanded with real
 target values:
 
 ```
-${DEPLOY_TARGETS_ROOT}/smackerel/home-lab/   ← per-target adapter (operator-private)
+<deployment-owner>/<product>/<target>/   ← per-target adapter (operator-private)
 ├── README.md
 ├── params.yaml      ← target-specific knobs (rollout strategy, replicas, hostnames)
 ├── manifest.yaml    ← current deployment pointer (image digest + bundle hash)
@@ -145,17 +145,17 @@ See [`bubbles-deployment-target.instructions.md`](../.github/instructions/bubble
 #                            ghcr.io/pkirsanov/smackerel-config-bundles/<env>-<sourceSha>.tar.gz
 
 # 2) Operator picks a release (image digests + bundle hash) and applies to the target
-./smackerel.sh deploy-target home-lab apply \
+./smackerel.sh deploy-target self-hosted apply \
     --image-core=sha256:abc123... \
     --image-ml=sha256:def456... \
-    --config-bundle=home-lab-9f8a7b6c \
-    --config-bundle-sha=<sha256-hex>   # BUG-047-001 / DEVOPS-HL-002 — copy from configBundles[env=home-lab].sha256 in the build manifest
+    --config-bundle=self-hosted-9f8a7b6c \
+    --config-bundle-sha=<sha256-hex>   # BUG-047-001 / DEVOPS-HL-002 — copy from configBundles[env=self-hosted].sha256 in the build manifest
 
 # 3) Verify
-./smackerel.sh deploy-target home-lab verify
+./smackerel.sh deploy-target self-hosted verify
 
 # 4) On regression, pointer-swap rollback (no rebuild)
-./smackerel.sh deploy-target home-lab rollback
+./smackerel.sh deploy-target self-hosted rollback
 ```
 
 ## Per-Spec SST Key Catalogs

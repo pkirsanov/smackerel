@@ -16,7 +16,7 @@ otherwise:
 | OTLP/gRPC span exporter | `internal/assistant/tracing/tracer.go` — real `otlptrace.New` + `otlptracegrpc.NewClient` + `sdktrace.NewTracerProvider` (BatchSpanProcessor, `service.name` resource), no-op fallback when disabled, fail-loud 5 s TCP boot probe in `cmd/core/wiring.go::initAssistantTracing`, shutdown flush in `cmd/core/shutdown.go`, tests in `cmd/core/wiring_otel_test.go` | **ALREADY EXISTS** — reuse, do NOT fork (knb FINDING-014-03-1) |
 | otel-go SDK deps | `go.mod`: `otel v1.44.0`, `otlptrace`, `otlptracegrpc`, `sdk`, `trace` | **ALREADY PRESENT** |
 | env-var contract | `internal/config/config.go` read `OTEL_ENABLED` + `OTEL_EXPORTER_ENDPOINT` (single); `OTEL_EXPORTER_ENDPOINT` was **declared-but-NOT-consumed** (0 Go consumers, grep-verified) | **WRONG NAMING** — migrate to knb 3-var (option (a)) |
-| knb adapter injection | `knb/smackerel/home-lab/apply.sh` already injects `OTLP_TRACES_ENDPOINT` / `OTLP_LOGS_ENDPOINT` / `METRICS_SCRAPE_LABEL_PRODUCT` | **knb side DONE** — zero rework |
+| knb adapter injection | `<deployment-owner>/<product>/<target>/apply.sh` already injects `OTLP_TRACES_ENDPOINT` / `OTLP_LOGS_ENDPOINT` / `METRICS_SCRAPE_LABEL_PRODUCT` | **knb side DONE** — zero rework |
 | container labels | `com.smackerel.component` + `com.smackerel.lifecycle` only | **GAP** — add `com.bubbles.product` + `com.bubbles.service` |
 
 **Conclusion:** the genuine gaps are (1) env-var contract naming, (2) a fail-loud
@@ -95,7 +95,7 @@ cmd/core/services.go::SetupServices
 
 docker-compose.yml + deploy/compose.deploy.yml
    labels: com.bubbles.product=${METRICS_SCRAPE_LABEL_PRODUCT}, com.bubbles.service=<svc>
-        │  Prometheus docker_sd on evo-x2 (shared stack) scopes by label
+        │  Prometheus docker_sd on <deploy-host> (shared stack) scopes by label
         ▼  [DEFERRED-to-flip — operator apply-shared-obs; no live mutation here]
 ```
 

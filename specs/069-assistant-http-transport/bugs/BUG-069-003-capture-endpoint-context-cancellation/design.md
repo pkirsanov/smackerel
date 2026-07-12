@@ -6,7 +6,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [scopes.md](scopes.md) | [report.
 
 ### Investigation Summary
 
-A **bubbles.code-review MVP/evo-x2 readiness sweep** (finding **F-01**) read the
+A **bubbles.code-review MVP/<deploy-host> readiness sweep** (finding **F-01**) read the
 direct capture path top-to-bottom:
 
 1. `internal/api/capture.go::(*Dependencies).CaptureHandler` handles

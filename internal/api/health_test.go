@@ -1274,7 +1274,7 @@ func TestHealthHandler_IntelligenceFreshInstallNotStale(t *testing.T) {
 // initial state — NOT a fault) MUST NOT. Before DEV-003-002 the aggregation only
 // checked "down"/"stale" so real connector faults were invisible; DEV-003-002
 // then over-corrected by treating "disconnected" as a fault too, which made a
-// single-user home-lab with unprovisioned optional connectors report the whole
+// single-user self-hosted with unprovisioned optional connectors report the whole
 // product "degraded". This test pins both halves of the refined contract.
 func TestHealthHandler_ConnectorErrorDegrades(t *testing.T) {
 	tests := []struct {

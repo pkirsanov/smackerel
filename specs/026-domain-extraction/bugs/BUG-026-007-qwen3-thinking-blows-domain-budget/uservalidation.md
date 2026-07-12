@@ -18,7 +18,7 @@
   - **Verify:** `./smackerel.sh test unit --python`
   - **Evidence:** report.md → "Test Evidence"
   - **Notes:** Live "< 30s domain extraction" is verified only AFTER the orchestrator rebuilds +
-    signs + redeploys `smackerel-ml` on evo-x2 — pending redeploy (out of this repo's scope).
+    signs + redeploys `smackerel-ml` on <deploy-host> — pending redeploy (out of this repo's scope).
 - [x] **What:** The switch is fail-loud (NO default) — a missing/invalid value stops the sidecar.
   - **Steps:** Unset `ML_STRUCTURED_EXTRACTION_THINKING` for the ollama provider and start the
     sidecar (or call the resolver).

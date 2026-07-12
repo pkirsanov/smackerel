@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// spec088TestAllowlist builds the canonical home-lab-shaped allowlist used
+// spec088TestAllowlist builds the canonical self-hosted-shaped allowlist used
 // across the spec-088 SCOPE-01 validator tests. The default model is
 // gemma4:26b so the golden rejection wording reads "gemma4:26b (default)"
 // (matching spec.md §UI Wireframes verbatim); the retry hint then resolves
@@ -20,7 +20,7 @@ func spec088TestAllowlist(t *testing.T) *Allowlist {
 			"deepseek-r1:32b": 22528, // profiled but busts the envelope co-resident with gather
 			"gemma3:4b":       4096,
 		},
-		28672,                  // home-lab ollama_memory_limit
+		28672,                  // self-hosted ollama_memory_limit
 		"gemma4:26b",           // gather model (co-resident during synthesis)
 		"gemma4:26b",           // default = baseline synthesis model (wireframe marks this "(default)")
 		[]string{"gemma4:26b"}, // spec 089 tool-capable gather set (baseline gemma4:26b is a member)
@@ -233,7 +233,7 @@ func TestAllowlist_NewAllowlist_DevEnvelopeSkipped_Spec088(t *testing.T) {
 	}
 }
 
-// spec089TestAllowlist builds the home-lab-shaped spec-089 allowlist: the
+// spec089TestAllowlist builds the self-hosted-shaped spec-089 allowlist: the
 // standing default is deepseek-r1:32b, the switchable set adds it at the 48G
 // envelope, and the tool-capable gather set is [gemma4:26b, llama3.1:8b] with
 // the baseline gather gemma4:26b a member. llama3.1:8b is tool-capable but NOT
@@ -251,7 +251,7 @@ func spec089TestAllowlist(t *testing.T) *Allowlist {
 			"llama3.1:8b":     6144,
 			"gemma3:4b":       4096,
 		},
-		49152,                                 // home-lab 48G
+		49152,                                 // self-hosted 48G
 		"gemma4:26b",                          // gather (baseline)
 		"deepseek-r1:32b",                     // standing default synthesis
 		[]string{"gemma4:26b", "llama3.1:8b"}, // tool-capable gather set (baseline gemma4:26b is a member)

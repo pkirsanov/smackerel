@@ -305,7 +305,7 @@ Scenario: SCN-081-04 — Process-local _failure_counts removed; num_delivered is
   `infrastructure.nats.consumer.ack_wait_seconds` (int ≥ 1).
   `scripts/commands/config.sh` MUST emit them as
   `NATS_CONSUMER_MAX_DELIVER` and `NATS_CONSUMER_ACK_WAIT_SECONDS`
-  in `config/generated/{dev,test,home-lab}.env`. Missing key →
+  in `config/generated/{dev,test,self-hosted}.env`. Missing key →
   generator or sidecar fails loud with the key name.
 
 - **FR-081-002 — `ConsumerConfig` threaded into `pull_subscribe`.**

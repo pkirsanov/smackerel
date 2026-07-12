@@ -14,12 +14,12 @@ import (
 // command surfaces both unit-tier and shell-tier coverage of the spec
 // 051 contract.
 
-// TestSSTLoader_RejectsDevPostgresPassword_HomeLab is the linked test
+// TestSSTLoader_RejectsDevPostgresPassword_SelfHosted is the linked test
 // referenced by specs/051-deployment-secret-auth-contract/scenario-manifest.json
 // for SCN-051-S02 evidence. It defers the assertion logic to the
 // shell driver (which is the same script an operator would run by
 // hand to repro a deployment refusal).
-func TestSSTLoader_RejectsDevPostgresPassword_HomeLab(t *testing.T) {
+func TestSSTLoader_RejectsDevPostgresPassword_SelfHosted(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("SST loader shell test requires bash; skipping on windows")
 	}

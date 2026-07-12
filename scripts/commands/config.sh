@@ -7,7 +7,7 @@ CONFIG_FILE="$REPO_ROOT/config/smackerel.yaml"
 # Generated-output directory for the non-bundle env render (env file, nats.conf,
 # token read-back). Defaults to the canonical $REPO_ROOT/config/generated. Test
 # harnesses that run config.sh concurrently (e.g.
-# scripts/commands/config_home_lab_runtime_env_test.sh under `go test ./...`)
+# scripts/commands/config_self_hosted_runtime_env_test.sh under `go test ./...`)
 # set SMACKEREL_GENERATED_DIR to a private temp dir so parallel generations do
 # not race on the shared output path. Mirrors the BUNDLE_OUTPUT_DIR idiom below.
 [[ -n "${SMACKEREL_GENERATED_DIR:-}" ]] || SMACKEREL_GENERATED_DIR="$REPO_ROOT/config/generated"
@@ -481,7 +481,7 @@ PYEOF
 }
 
 case "$TARGET_ENV" in
-  dev|test|home-lab)
+  dev|test|self-hosted)
     ;;
   *)
     echo "Unsupported environment: $TARGET_ENV" >&2
@@ -524,7 +524,7 @@ SHELL_SECRET_KEYS=(
 # in this list (they keep inline values for local-dev convenience per
 # FR-052-011). Mirrors config/smackerel.yaml::infrastructure.production_class_targets.
 SHELL_PRODUCTION_CLASS_TARGETS=(
-  home-lab
+  self-hosted
 )
 
 # Returns the SHELL_SECRET_KEYS list one-per-line.
@@ -608,7 +608,7 @@ ML_CPU_LIMIT="$(required_value deploy_resources.smackerel_ml.cpus)"
 ML_MEMORY_LIMIT="$(required_value deploy_resources.smackerel_ml.memory)"
 OLLAMA_CPU_LIMIT="$(required_value deploy_resources.ollama.cpus)"
 # Spec 045 BUG-045-001 — ollama envelope is per-environment overridable so a
-# production-class target (e.g. home-lab) can run gemma4:26b / gpt-oss:20b /
+# production-class target (e.g. self-hosted) can run gemma4:26b / gpt-oss:20b /
 # deepseek-r1:32b without forcing the same envelope on dev/test/laptop. For
 # such targets the deploy adapter injects OLLAMA_MEMORY_LIMIT into app.env at
 # apply (the in-repo bundle ships the commodity deploy_resources.ollama.memory
@@ -680,7 +680,7 @@ fi
 # Fires only when emitting a literal value (env override or yaml). Placeholder
 # mode short-circuits the check because the placeholder marker is not a
 # credential and is rejected by the knb adapter + Go runtime if it leaks.
-# When the SST loader runs for a non-dev/test target (currently: home-lab; any
+# When the SST loader runs for a non-dev/test target (currently: self-hosted; any
 # future production-class target should be added to the case below), the
 # Postgres password MUST NOT match a known dev-default value. The list below
 # is the parallel grep-friendly mirror of internal/config/secrets.go's
@@ -690,7 +690,7 @@ fi
 # (FR-051-007 redaction contract).
 if [[ "$POSTGRES_PASSWORD_SOURCE" != "placeholder" ]]; then
   case "$TARGET_ENV" in
-    home-lab)
+    self-hosted)
       case "$(printf '%s' "$POSTGRES_PASSWORD" | tr '[:upper:]' '[:lower:]')" in
         smackerel|postgres|password|changeme|change-me|default)
           echo "ERROR: infrastructure.postgres.password is a known dev-default value — refusing to generate config for TARGET_ENV=$TARGET_ENV (spec 051 FR-051-005). Set a strong random password in config/smackerel.yaml or via the POSTGRES_PASSWORD env override before running config generate." >&2
@@ -719,7 +719,7 @@ NATS_MAX_MEM_STORE_BYTES="$(required_value infrastructure.nats.max_mem_store_byt
 # Spec 046 FR-046-003 — per-stream MaxBytes ceilings (JSON list).
 NATS_STREAM_MAX_BYTES_JSON="$(required_json_value infrastructure.nats.stream_max_bytes)"
 
-# Spec 043 — Ollama enabled flag uses per-env override so dev/test/home-lab can
+# Spec 043 — Ollama enabled flag uses per-env override so dev/test/self-hosted can
 # differ. infrastructure.ollama.enabled remains as the legacy fallback when no
 # per-env value is set.
 OLLAMA_ENABLED="$(env_override_value ollama_enabled infrastructure.ollama.enabled)"
@@ -768,7 +768,7 @@ LLM_PROVIDER="$(required_value llm.provider)"
 # for all 6 model env vars below and the interactive-role retrieval-qa
 # timeouts. Fail-loud per smackerel-no-defaults: missing/empty/invalid tier
 # aborts here with [F061-HARDWARE-TIER-*]. Per-env overrides (e.g. the deploy
-# adapter's app.env injection for a production-class target like home-lab)
+# adapter's app.env injection for a production-class target like self-hosted)
 # remain a tier-orthogonal layer: if
 # environments.<env>.<key> is set, it wins; otherwise the tier matrix value.
 if [[ -z "${SMACKEREL_HARDWARE_TIER-}" ]]; then
@@ -918,9 +918,9 @@ LOG_LEVEL="$(required_value runtime.log_level)"
 # warn-and-continue ergonomic for empty auth_token even when smackerel.yaml is
 # configured for production.
 #
-# BUG-051-001 — TARGET_ENV=home-lab MUST also override SMACKEREL_ENV to
-# "production" so the runtime defense-in-depth fires on the home-lab tailnet
-# bundle. Without this override, a home-lab bundle generated against the
+# BUG-051-001 — TARGET_ENV=self-hosted MUST also override SMACKEREL_ENV to
+# "production" so the runtime defense-in-depth fires on the self-hosted tailnet
+# bundle. Without this override, a self-hosted bundle generated against the
 # default smackerel.yaml (runtime.environment: development) emits
 # SMACKEREL_ENV=development, which silently disables:
 #   - internal/auth/startup.go::ValidateRuntimeAuthStartup (returns nil unless
@@ -931,11 +931,11 @@ LOG_LEVEL="$(required_value runtime.log_level)"
 #   - the spec 051 FR-051-005 dev-default Postgres password rejection at
 #     runtime (the generator-side guard at lines ~415-433 still fires, but
 #     the runtime-side guard becomes a no-op).
-# The resulting bundle would auth-bypass on the home-lab tailnet endpoint and
+# The resulting bundle would auth-bypass on the self-hosted tailnet endpoint and
 # collapse spec 044 + spec 051 defense-in-depth to bundle-generator-only,
-# violating the SEC-HL-001 finding from the home-lab readiness review
+# violating the SEC-HL-001 finding from the self-hosted readiness review
 # 2026-05-13. The per-target case below is the single fix point: it preserves
-# the existing TARGET_ENV=test override and adds the home-lab→production
+# the existing TARGET_ENV=test override and adds the self-hosted→production
 # override required by BUG-051-001.
 SMACKEREL_ENV="$(required_value runtime.environment)"
 case "$SMACKEREL_ENV" in
@@ -949,7 +949,7 @@ case "$TARGET_ENV" in
   test)
     SMACKEREL_ENV="test"
     ;;
-  home-lab)
+  self-hosted)
     SMACKEREL_ENV="production"
     ;;
 esac
@@ -1026,7 +1026,7 @@ PHOTOS_POLICY_DELETE_ACTION_TOKEN_TTL_SECONDS="$(required_value photos.policy.de
 PHOTOS_POLICY_TELEGRAM_MAX_INLINE_SIZE_BYTES="$(required_value photos.policy.telegram_max_inline_size_bytes)"
 PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE="$(required_value photos.policy.actions_max_scope_size)"
 # Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a
-# production-class target (e.g. home-lab) sets the photos VISION specialists
+# production-class target (e.g. self-hosted) sets the photos VISION specialists
 # to its pulled model set via the deploy adapter, which injects the
 # environments.<env>.photos_intelligence_{classify,sensitivity,aesthetic,ocr}_model
 # equivalents into app.env at apply; otherwise the commodity base
@@ -1236,7 +1236,7 @@ OLLAMA_VOLUME_NAME="$(required_value environments.$TARGET_ENV.ollama_volume_name
 # restart without re-downloading from HuggingFace.
 ML_MODEL_CACHE_VOLUME_NAME="$(required_value environments.$TARGET_ENV.ml_model_cache_volume_name)"
 # Spec 049 — per-environment Prometheus TSDB volume name. Keeps dev,
-# test, and home-lab data fully separated even when the same image is
+# test, and self-hosted data fully separated even when the same image is
 # reused; also satisfies spec 045's docker-lifecycle isolation contract.
 PROMETHEUS_VOLUME_NAME="$(required_value environments.$TARGET_ENV.prometheus_volume_name)"
 
@@ -1523,7 +1523,7 @@ METRICS_SCRAPE_LABEL_PRODUCT="$(required_value observability.metrics_scrape_labe
 # runtime startup when SMACKEREL_ENV=production AND AUTH_ENABLED=true AND any
 # required signing/hashing/bootstrap value is empty (SCN-AUTH-006). The
 # generator does NOT short-circuit on empty secret values because the
-# operator MUST be able to run `./smackerel.sh config generate --env home-lab`
+# operator MUST be able to run `./smackerel.sh config generate --env self-hosted`
 # and edit the resulting bundle before redeploying — the runtime is the
 # fail-loud authority for production-mode validation.
 AUTH_ENABLED="$(env_override_value auth_enabled auth.enabled)"
@@ -1602,7 +1602,7 @@ AGENT_PROVIDER_DEFAULT_PROVIDER="$(required_value agent.provider_routing.default
 AGENT_PROVIDER_DEFAULT_MODEL="$(tier_interactive_model_or_override agent_provider_default_model)"
 AGENT_PROVIDER_REASONING_PROVIDER="$(required_value agent.provider_routing.reasoning.provider)"
 # Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a
-# production-class target (e.g. home-lab) sets the reasoning specialist to its
+# production-class target (e.g. self-hosted) sets the reasoning specialist to its
 # pulled model set via the deploy adapter, which injects the
 # environments.<env>.agent_provider_reasoning_model equivalent into app.env at
 # apply; otherwise the commodity base (agent.provider_routing.reasoning.model)
@@ -1618,7 +1618,7 @@ AGENT_PROVIDER_VISION_PROVIDER="$(required_value agent.provider_routing.vision.p
 AGENT_PROVIDER_VISION_MODEL="$(tier_interactive_model_or_override agent_provider_vision_model)"
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
 # Per-env override (mirrors OLLAMA_MEMORY_LIMIT / OLLAMA_ENABLED): a
-# production-class target (e.g. home-lab) sets the OCR specialist to its pulled
+# production-class target (e.g. self-hosted) sets the OCR specialist to its pulled
 # model set via the deploy adapter, which injects the
 # environments.<env>.agent_provider_ocr_model equivalent into app.env at apply;
 # otherwise the commodity base (agent.provider_routing.ocr.model) wins,
@@ -1754,8 +1754,8 @@ fi
 # Spec 087 — synthesis-turn model. Per-environment override layer mirrors
 # llm_model_id: the base key is the commodity default (gemma3:4b), and any
 # env that sets environments.<env>.assistant_open_knowledge_synthesis_model_id
-# overrides it. The in-repo home-lab bundle ships the commodity base; the
-# operator's real home-lab synthesis model is injected by the deploy adapter
+# overrides it. The in-repo self-hosted bundle ships the commodity base; the
+# operator's real self-hosted synthesis model is injected by the deploy adapter
 # into app.env at apply (the model_selection block, last-occurrence-wins).
 # yaml_get (not required_value) because the value is legally empty when
 # enabled=false.
@@ -1775,11 +1775,11 @@ if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST" ]]; then
 fi
 # Spec 088 — switchable_models allowlist. Per-environment override layer
 # mirrors synthesis_model_id (the in-repo bundle ships the commodity base;
-# the operator's real home-lab switchable set is injected by the deploy
+# the operator's real self-hosted switchable set is injected by the deploy
 # adapter at apply). The env override is resolved via yaml_get
 # (exact flattened-key match) NOT yaml_get_json: yaml_get_json walks the
 # YAML tree and would bleed across sibling environment blocks when the
-# active env omits the key (returning home-lab's list for dev/test);
+# active env omits the key (returning self-hosted's list for dev/test);
 # yaml_get matches the exact flattened path and returns nothing when the
 # env omits it. The inline-list value is normalised to compact JSON
 # (spaces stripped; ollama model tags never contain spaces) so the
@@ -1799,10 +1799,10 @@ fi
 # Spec 089 (Fork C) — tool_capable_gather_models allowlist. Same per-env
 # override pattern as switchable_models (the in-repo bundle ships the
 # commodity base [gemma3:4b] == the baseline gather, a testable no-op; the
-# operator's real home-lab tool-capable gather set is injected by the deploy
+# operator's real self-hosted tool-capable gather set is injected by the deploy
 # adapter at apply). yaml_get (exact flattened-key
 # match) for the override — NOT yaml_get_json — so the dev/test env that
-# omits the key does not bleed home-lab's list across sibling environment
+# omits the key does not bleed self-hosted's list across sibling environment
 # blocks; the inline-list value is normalised to compact JSON (spaces
 # stripped; ollama model tags never contain spaces). Legally empty when
 # enabled=false; the Go validator enforces non-empty + baseline membership
@@ -1917,7 +1917,7 @@ LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAILY_INVOCATIONS="$(required_value legacy_
 # Per-target override for the test e2e suite: force webhook mode and
 # inject a stable, known test secret so the BS-001 webhook e2e shell
 # test can POST authenticated requests against the live test stack.
-# Production/home-lab/dev targets retain whatever assistant.transports.telegram.mode
+# Production/self-hosted/dev targets retain whatever assistant.transports.telegram.mode
 # resolves from the SST yaml (default long_poll until a public HTTPS
 # deployment story exists per design §17.6).
 ASSISTANT_TELEGRAM_WEBHOOK_SECRET=""
@@ -1969,7 +1969,7 @@ if [[ -z "${SMACKEREL_VERSION+set}" ]]; then
 fi
 if [[ -z "${SMACKEREL_COMMIT+set}" ]]; then
   # redteam F6 / BUG-029-008 — build provenance. When CI has NOT exported the
-  # commit (the local-operator / evo-x2 build path builds ON the host with no
+  # commit (the local-operator / <deploy-host> build path builds ON the host with no
   # CI env), derive the source SHA from the git working tree so the built image
   # is self-identifying — OCI org.opencontainers.image.revision + the core
   # `commitHash` ldflag + the app's reported commit_hash — instead of the
@@ -2715,7 +2715,7 @@ chmod 0600 "$OUTPUT_FILE_TMP"
 # operator so the violating envelope/model/profile is named explicitly.
 #
 # Skip rationale for production-class (placeholder-mode) targets: when
-# TARGET_ENV is a production-class target (e.g. home-lab), shell-managed
+# TARGET_ENV is a production-class target (e.g. self-hosted), shell-managed
 # secrets like POSTGRES_PASSWORD and runtime.auth_token are intentionally
 # empty or emitted as __SECRET_PLACEHOLDER__ markers (spec 052 FR-052-002
 # bundle contract; downstream secret injection fills real values at apply
@@ -2724,7 +2724,7 @@ chmod 0600 "$OUTPUT_FILE_TMP"
 # SMACKEREL_ENV=production" — a false positive because the operator's
 # deploy adapter is the legitimate filler. The runtime envelope check
 # inside smackerel-core's startup still enforces the model envelope at
-# container start, so home-lab operators STILL get fail-loud on broken
+# container start, so self-hosted operators STILL get fail-loud on broken
 # model choices; the difference is that the failure surfaces at apply
 # time instead of generate time. Dev/test targets DO get pre-emit
 # enforcement (they have literal values, not placeholders).

@@ -4,7 +4,7 @@
 
 - **Type:** Code defect — incomplete validator coverage (security-relevant test integrity gap)
 - **Severity:** MEDIUM (the live `deploy/compose.deploy.yml` is currently single-port-only and contract-compliant, so no live exposure exists today; however the contract test would silently accept a regression where a future edit adds a second port mapping like `0.0.0.0:8443:8080` that exposes the API on every host NIC, defeating the spec 042 loopback-default guard)
-- **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
+- **Parent Spec:** 042 — Tailnet-Edge Bind Pattern (Self-Hosted Compose Readiness)
 - **Workflow Mode:** chaos-hardening (parent: stochastic-quality-sweep round 9 of 20)
 - **Status:** Fixed
 - **Discovered By:** stochastic-quality-sweep (seed `20520512`), trigger=`chaos`, mapped child mode=`chaos-hardening`, executionModel=`parent-expanded-child-mode`

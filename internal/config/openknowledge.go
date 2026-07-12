@@ -33,7 +33,7 @@ type OpenKnowledgeConfig struct {
 	// SynthesisModelID is the model used ONLY on the tools-stripped
 	// forced-final synthesis turn (and its retries). Spec 087 — the
 	// GATHER turns use LLMModelID (a strong tool-caller); the SYNTHESIS
-	// turn uses a reasoning model (deepseek-r1:7b on home-lab). REQUIRED
+	// turn uses a reasoning model (deepseek-r1:7b on self-hosted). REQUIRED
 	// non-empty when Enabled=true (G028 — no silent default).
 	SynthesisModelID string
 	MaxIterations    int

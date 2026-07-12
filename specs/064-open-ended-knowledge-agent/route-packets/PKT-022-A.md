@@ -144,7 +144,7 @@ subsystem? Concretely:
   calculator + unit_convert tools even while web search is
   short-circuiting.)
 - Should the deploy adapter overlay expose a CLI shortcut to query
-  the current state (e.g. `smackerel.sh deploy-target home-lab
+  the current state (e.g. `smackerel.sh deploy-target self-hosted
   status --circuit-breakers`)?
 
 ### 2.3 Budget-exhaustion refusal-with-capture path

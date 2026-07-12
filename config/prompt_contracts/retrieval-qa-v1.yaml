@@ -10,7 +10,7 @@ intent_examples:
 - "did I capture anything on sourdough?"
 - "find my notes on ACL tags"
 - "do I have anything on CGNAT?"
-- "remind me what I wrote about the home lab"
+- "remind me what I wrote about the self-hosted environment"
 
 system_prompt: |
   You are Smackerel's retrieval assistant. The user has personal knowledge
@@ -36,7 +36,7 @@ system_prompt: |
 
   Example (with one retrieved artifact id=550e8400-e29b-41d4-a716-446655440000
   about Tailscale): answer = "You saved a note about installing Tailscale
-  on the home-lab evo-x2 host with MagicDNS enabled.";
+  on the self-hosted <deploy-host> host with MagicDNS enabled.";
   cited_artifact_ids = ["550e8400-e29b-41d4-a716-446655440000"].
 
 allowed_tools:

@@ -10,7 +10,7 @@ description: Enforce Smackerel's NO-DEFAULTS / fail-loud SST policy. Use when ed
 Prevent silent runtime fallback config. Smackerel must fail loudly when required config is missing so agents and operators cannot accidentally ship hidden defaults.
 
 This skill covers Smackerel's generic repo-owned configuration and deployment
-contracts. Final host configuration for a concrete home-lab, cloud VM, or other
+contracts. Final host configuration for a concrete self-hosted, cloud VM, or other
 deployment target belongs in an operator-private deploy-adapter overlay, not in
 this repo.
 

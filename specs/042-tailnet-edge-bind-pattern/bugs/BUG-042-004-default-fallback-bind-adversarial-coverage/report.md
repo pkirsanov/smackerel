@@ -2,7 +2,7 @@
 
 ## Summary
 
-Closes home-lab readiness re-scan finding **HL-RESCAN-009** (P3): the spec 042 / Gate G028 compose contract test in `internal/deploy/compose_contract_test.go` previously had no adversarial sub-case proving that `assertComposeContract` rejects the **default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}:` bind form on `smackerel-core` / `smackerel-ml`** (Gate G028 NO-DEFAULTS violation), and no adversarial sub-case proving rejection of the **literal `127.0.0.1:` spec 020 form on `smackerel-ml`** (the smackerel-core literal-bind case was already covered by the pre-existing `TestComposeContract_AdversarialLiteralBind`). The runtime behavior of `assertComposeContract` was correct — it rejects all three forms today — but the test surface had a coverage gap that would let a future maintainer accidentally relax the strict `strings.HasPrefix` check (e.g., to a too-loose `strings.Contains` substring match) without any test failing RED.
+Closes self-hosted readiness re-scan finding **HL-RESCAN-009** (P3): the spec 042 / Gate G028 compose contract test in `internal/deploy/compose_contract_test.go` previously had no adversarial sub-case proving that `assertComposeContract` rejects the **default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}:` bind form on `smackerel-core` / `smackerel-ml`** (Gate G028 NO-DEFAULTS violation), and no adversarial sub-case proving rejection of the **literal `127.0.0.1:` spec 020 form on `smackerel-ml`** (the smackerel-core literal-bind case was already covered by the pre-existing `TestComposeContract_AdversarialLiteralBind`). The runtime behavior of `assertComposeContract` was correct — it rejects all three forms today — but the test surface had a coverage gap that would let a future maintainer accidentally relax the strict `strings.HasPrefix` check (e.g., to a too-loose `strings.Contains` substring match) without any test failing RED.
 
 The fix is **purely additive at the test layer**: a single new persistent in-tree test function `TestComposeContract_AdversarialDefaultFallbackBind` with three table-driven sub-cases. The function pins three guarantees:
 
@@ -14,7 +14,7 @@ Each sub-case asserts the rejection error mentions the violating service name AN
 
 **Workflow Mode:** test-to-doc — the fix is the test addition itself plus one bug-packet that documents it. No production runtime code changes; no `assertComposeContract` change; no `requiredCorePrefix` / `requiredMLPrefix` constant change; no `deploy/compose.deploy.yml` change.
 
-**Parent re-scan:** home-lab readiness re-scan 2026-05-14, finding HL-RESCAN-009. Sequential per-finding bug-packet workflow.
+**Parent re-scan:** self-hosted readiness re-scan 2026-05-14, finding HL-RESCAN-009. Sequential per-finding bug-packet workflow.
 
 ## Completion Statement
 
@@ -42,7 +42,7 @@ $ grep -n 'TestComposeContract_AdversarialDefaultFallbackBind\|HL-RESCAN-009\|th
 499:                            t.Fatalf("adversarial contract test failed: fixture with %s.network_mode=host was accepted (the contract is tautological — it would NOT catch a regression to host networking; BUG-042-002 network_mode bypass is reintroduced)", tc.service)
 567:                            t.Fatalf("adversarial contract test failed: ollama port %q was accepted (the contract is tautological — it would NOT catch a regression to the spec 020 literal form or to the default-fallback form for ollama)", tc.port)
 580:// TestComposeContract_AdversarialDefaultFallbackBind proves the contract
-608:// Discovered: home-lab readiness re-scan finding HL-RESCAN-009 (P3),
+608:// Discovered: self-hosted readiness re-scan finding HL-RESCAN-009 (P3),
 611:func TestComposeContract_AdversarialDefaultFallbackBind(t *testing.T) {
 665:                            t.Fatalf("adversarial contract test failed: fixture with %s using forbidden bind form was accepted (the contract is tautological — it would NOT catch a regression to ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback or literal 127.0.0.1: form; HL-RESCAN-009 default-fallback / literal-bind ml-side coverage gap is reintroduced)", tc.service)
 673:                    // to prove the rejection lands on the right contract. The HL-RESCAN-009
@@ -266,7 +266,7 @@ The compose contract surface is a **static-file invariant**: there is no daemon,
 - **No defaults regression:** Gate G028 NO-DEFAULTS / fail-loud SST policy is strengthened by this fix — the test now explicitly proves rejection of the forbidden `${HOST_BIND_ADDRESS:-127.0.0.1}:` default-fallback form on both `smackerel-core` AND `smackerel-ml`.
 - **PII scan:** no real hostnames, no real IPs, no real Tailscale identifiers, no real Linux usernames in any of the seven packet artifacts. The only address strings are the generic `127.0.0.1` loopback and the `${HOST_BIND_ADDRESS:?...}` SST substitution form — both explicitly allow-listed by the repo policy.
 - **Bubbles.devops mode discipline:** all bug-local artifacts (this packet) authored; foreign-owned parent-spec files (`specs/042-tailnet-edge-bind-pattern/spec.md`, `design.md`, `scopes.md`, `state.json`, `uservalidation.md`, `report.md`) NOT edited.
-- **Single-bug-scope discipline:** the change addresses HL-RESCAN-009 (P3) only. The remaining home-lab readiness re-scan findings (HL-RESCAN-010 prometheus mechanically identical pattern, HL-RESCAN-011..014) are tracked under their own per-finding bug-packets in the parent home-lab-readiness-rescan-2026-05-14 sweep.
+- **Single-bug-scope discipline:** the change addresses HL-RESCAN-009 (P3) only. The remaining self-hosted readiness re-scan findings (HL-RESCAN-010 prometheus mechanically identical pattern, HL-RESCAN-011..014) are tracked under their own per-finding bug-packets in the parent self-hosted-readiness-rescan-2026-05-14 sweep.
 
 ## Verdict (DevOps)
 

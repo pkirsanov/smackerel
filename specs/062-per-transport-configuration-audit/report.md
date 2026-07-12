@@ -256,7 +256,7 @@ $ go test -count=1 -v ./internal/assistant/transportconfig/...
 === RUN   TestRegistry_RequiredEntriesHaveFailLoud
 --- PASS: TestRegistry_RequiredEntriesHaveFailLoud (0.00s)
 === RUN   TestRegistry_NoForbiddenFallbacks
-    registry_failloud_test.go:171: skip unreadable env file "home-lab.env": open ~/smackerel/config/generated/home-lab.env: permission denied
+    registry_failloud_test.go:171: skip unreadable env file "self-hosted.env": open ~/smackerel/config/generated/self-hosted.env: permission denied
 --- PASS: TestRegistry_NoForbiddenFallbacks (0.01s)
 === RUN   TestRegistry_CoversYAMLNamespaces
 --- PASS: TestRegistry_CoversYAMLNamespaces (0.01s)
@@ -266,7 +266,7 @@ PASS
 ok      github.com/smackerel/smackerel/internal/assistant/transportconfig      0.054s
 ```
 
-(The skip on `home-lab.env` reflects an environment-level 0600 file
+(The skip on `self-hosted.env` reflects an environment-level 0600 file
 written by `root` during a prior docker-driven config generation;
 `dev.env` and `test.env` are user-readable and were both scanned.
 The skip is logged-not-failed by design: see `registry_failloud_test.go:171`

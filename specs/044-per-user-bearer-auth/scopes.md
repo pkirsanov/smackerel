@@ -118,7 +118,7 @@ Scope 01 touches the following shared bootstrap / fixture surfaces whose blast r
 
 - `cmd/core/wiring.go` — startup fail-loud ordering (per-request bootstrap contract; downstream contract: every subcommand and HTTP route depends on this not panicking) — protected by `internal/auth/startup_test.go::TestValidateRuntimeAuthStartup` (8 sub-cases) and `internal/config/validate_test.go` AuthConfig hardening cases.
 - `internal/db/migrations/033_auth_per_user_bearer.sql` — DB schema bootstrap contract (`auth_users`, `auth_tokens`, `auth_revocations` tables; downstream contract: every Scope 02+ middleware test fixture re-applies this on the test stack) — protected by `tests/integration/auth_bootstrap_test.go::TestAuthBootstrap_FreshProduction_EnrollsFirstUser` which exercises the migration end-to-end against the disposable test postgres.
-- `config/smackerel.yaml` `auth.*` SST keys + `config/generated/{dev,test,home-lab}.env` derived `AUTH_*` values — config bootstrap contract (downstream contract: every container in the deploy bundle reads these on startup) — protected by `./smackerel.sh check` env-file drift guard + `internal/auth/sst_grep_guard_test.go::TestSST_NoHardcodedAuthValues` adversarial fixture.
+- `config/smackerel.yaml` `auth.*` SST keys + `config/generated/{dev,test,self-hosted}.env` derived `AUTH_*` values — config bootstrap contract (downstream contract: every container in the deploy bundle reads these on startup) — protected by `./smackerel.sh check` env-file drift guard + `internal/auth/sst_grep_guard_test.go::TestSST_NoHardcodedAuthValues` adversarial fixture.
 - `internal/auth/revocation/cache.go` `BootstrapFromDB` — process-startup cache bootstrap contract (downstream contract: middleware revocation lookups depend on cache being populated before first request) — protected by `internal/auth/revocation/cache_test.go::TestRevocationCache_BootstrapAndPropagate`.
 
 Blast radius (timing, ordering, storage, session, context, role, bootstrap contract, downstream contract): per-environment startup ordering changes propagate to every Scope 02+ integration test that brings up the test stack; rollback path verified by re-running prior commit's migration sequence (033 has DOWN migration; SST keys can be removed by reverting `config/smackerel.yaml` and re-running `./smackerel.sh config generate`).
@@ -141,9 +141,9 @@ Blast radius (timing, ordering, storage, session, context, role, bootstrap contr
 - [x] Scenario "SCN-AUTH-001 User enrollment issues a per-user bearer token": 14 SST keys added to `config/smackerel.yaml` (after USER WIP merges); `./smackerel.sh config generate --env production` emits all `AUTH_*` keys; `./smackerel.sh auth enroll <user-id>` issues a PASETO v4.public token with claims bound to the user.
 
   **Evidence (Phase: implement):**
-  - 14 SST keys land at `config/smackerel.yaml` lines 459-511 (auth top-level block; line numbers reconciled at spec-review against HEAD `1f25d49e`) plus per-env `auth_enabled` overrides at environments.dev:750 / environments.test:767 / environments.home-lab:800. Generator emits all 16 AUTH_* keys per env file (verified):
+  - 14 SST keys land at `config/smackerel.yaml` lines 459-511 (auth top-level block; line numbers reconciled at spec-review against HEAD `1f25d49e`) plus per-env `auth_enabled` overrides at environments.dev:750 / environments.test:767 / environments.self-hosted:800. Generator emits all 16 AUTH_* keys per env file (verified):
     ```
-    $ for env in dev test home-lab; do echo "=== $env ==="; grep -E '^AUTH_' config/generated/$env.env; done
+    $ for env in dev test self-hosted; do echo "=== $env ==="; grep -E '^AUTH_' config/generated/$env.env; done
     === dev ===
     AUTH_ENABLED=false
     AUTH_TOKEN_FORMAT=paseto-v4-public
@@ -164,7 +164,7 @@ Blast radius (timing, ordering, storage, session, context, role, bootstrap contr
     === test ===
     AUTH_ENABLED=false
     [...identical AUTH_* block...]
-    === home-lab ===
+    === self-hosted ===
     AUTH_ENABLED=true
     [...identical AUTH_* block, AUTH_ENABLED=true...]
     ```
@@ -1221,10 +1221,10 @@ Scope 04 touches the following shared bootstrap / fixture / cross-spec contract 
 
 - `cmd/core/wiring.go::startTelegramBotIfConfigured` — startup ordering of `PerUserTokenMinter` construction (downstream contract: every Telegram bot internal-API call depends on the minter being set OR the dev shared-bearer fallback path).
 - `internal/metrics/auth.go` `init()` — process-startup Prometheus registration contract (downstream contract: every emitter site assumes the 7 series are already registered against the default registerer).
-- `config/smackerel.yaml` line 514 (`auth.production_shared_token_fallback_enabled: false`) + `config/generated/{home-lab,production}.env` deploy bundle env-var contract (downstream contract: every container in the deploy bundle reads `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED` on startup; flipping this flag changes the per-request hot-path semantics globally).
+- `config/smackerel.yaml` line 514 (`auth.production_shared_token_fallback_enabled: false`) + `config/generated/{self-hosted,production}.env` deploy bundle env-var contract (downstream contract: every container in the deploy bundle reads `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED` on startup; flipping this flag changes the per-request hot-path semantics globally).
 - Cross-spec docs surfaces (`docs/Operations.md` "Authentication Metrics" + "Deprecation Pathway" subsections) — operator runbook bootstrap contract (downstream contract: spec 030 dashboards + every operator transitioning a deployment from shared-token to per-user reads these to decide when to flip the flag).
 
-Blast radius (timing, ordering, storage, session, context, role, bootstrap contract, downstream contract): the deprecation-flag default change reshapes the production hot-path session contract globally; rollback path = revert `config/smackerel.yaml` line 514 to `true` AND re-run `./smackerel.sh config generate --env home-lab --bundle` AND redeploy the new bundle (or, in-place, override `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=true` via the deploy adapter overlay and restart). No DB rollback required.
+Blast radius (timing, ordering, storage, session, context, role, bootstrap contract, downstream contract): the deprecation-flag default change reshapes the production hot-path session contract globally; rollback path = revert `config/smackerel.yaml` line 514 to `true` AND re-run `./smackerel.sh config generate --env self-hosted --bundle` AND redeploy the new bundle (or, in-place, override `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=true` via the deploy adapter overlay and restart). No DB rollback required.
 
 ### Definition of Done
 
@@ -1251,9 +1251,9 @@ Blast radius (timing, ordering, storage, session, context, role, bootstrap contr
 
   **Evidence (Phase: implement):**
   ```
-  $ grep -n 'production_shared_token_fallback_enabled' config/smackerel.yaml config/generated/home-lab.env config/generated/dev.env config/generated/test.env
+  $ grep -n 'production_shared_token_fallback_enabled' config/smackerel.yaml config/generated/self-hosted.env config/generated/dev.env config/generated/test.env
   config/smackerel.yaml:514:  production_shared_token_fallback_enabled: false
-  config/generated/home-lab.env:303:AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false
+  config/generated/self-hosted.env:303:AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false
   config/generated/dev.env:304:AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false
   config/generated/test.env:304:AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false
   $ ./smackerel.sh check
@@ -1367,7 +1367,7 @@ Blast radius (timing, ordering, storage, session, context, role, bootstrap contr
 - [x] Rollback or restore path for shared infrastructure changes is documented and verified
 
   **Evidence (Phase: artifact-restructure):**
-  - Deprecation flag rollback path: revert `config/smackerel.yaml` line 514 to `true` → re-run `./smackerel.sh config generate --env home-lab --bundle --source-sha <sha>` → redeploy via `./smackerel.sh deploy-target home-lab apply --image-core=sha256:<d> --image-ml=sha256:<d> --config-bundle=home-lab-<sha>`. In-place rollback alternative: deploy adapter overlay can override `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=true` in the bundled `app.env` and restart the smackerel-core container without rebuilding.
+  - Deprecation flag rollback path: revert `config/smackerel.yaml` line 514 to `true` → re-run `./smackerel.sh config generate --env self-hosted --bundle --source-sha <sha>` → redeploy via `./smackerel.sh deploy-target self-hosted apply --image-core=sha256:<d> --image-ml=sha256:<d> --config-bundle=self-hosted-<sha>`. In-place rollback alternative: deploy adapter overlay can override `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=true` in the bundled `app.env` and restart the smackerel-core container without rebuilding.
   - F02 wiring rollback path: revert `cmd/core/wiring.go::startTelegramBotIfConfigured` minter construction; the bot falls back to shared-bearer immediately on next restart. No DB rollback required.
   - Auth metrics rollback path: remove `init()` registration in `internal/metrics/auth.go`; emitter sites no-op safely (they call `.Inc()` against the package-level vars which become uninitialized). Spec 030 dashboards lose the `smackerel_auth_*` series but no other metrics regress.
 

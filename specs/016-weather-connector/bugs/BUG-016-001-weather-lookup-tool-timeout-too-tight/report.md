@@ -17,7 +17,7 @@ the fix wouldn't have helped that one alone.
 ## Open-Meteo latency measurement (read-only)
 
 ```bash
-$ ssh <deploy-host> 'docker exec smackerel-home-lab-smackerel-core-1 sh -c \
+$ ssh <deploy-host> 'docker exec smackerel-self-hosted-smackerel-core-1 sh -c \
    "for i in 1 2 3; do t0=\$(date +%s.%N); \
                        wget -qO- --timeout=3 \\
                          \"https://geocoding-api.open-meteo.com/v1/search?name=Seattle&count=1\" > /dev/null; \
@@ -54,7 +54,7 @@ Diff (relevant section):
 - PerCallTimeoutMs: 2000,
 + // A single lookup is geocode + forecast, two sequential HTTPS
 + // round trips to open-meteo. Measured worst case from the
-+ // home-lab container is ~2s per call (so ~4s end-to-end on a
++ // self-hosted container is ~2s per call (so ~4s end-to-end on a
 + // cold cache). The previous 2000 ms cap was tighter than a
 + // single HTTP call and made /weather fail with
 + // `provider_unavailable` on most cold-cache invocations. 8s

@@ -39,7 +39,7 @@
 > integration with **synthetic** secrets only. The live hosted-provider
 > `e2e-api` legs (real Anthropic/OpenAI reachability, live Ollama
 > `/api/tags`, GPU-dependent answers) are a SEPARATE downstream
-> `bubbles.devops` dispatch on home-lab hardware — `nextRequiredOwner`
+> `bubbles.devops` dispatch on self-hosted hardware — `nextRequiredOwner`
 > after implement+test. **No commit/push from the planning phase.**
 
 ---
@@ -146,7 +146,7 @@ elaborated in this file, SCOPE-05..07 in the continuation.
   suites and the Go `client_provider` / `dispatch_resolver` /
   `attribution_provider` suites GREEN; `./smackerel.sh check` +
   `./smackerel.sh test unit` EXIT 0. The live hosted `e2e-api` leg is
-  deferred to the home-lab dispatch (C7). Catches an Ollama-path
+  deferred to the self-hosted dispatch (C7). Catches an Ollama-path
   regression, a secret leak, or a silent fallback BEFORE discovery.
 - **After SCOPE-04** — `catalog/aggregator_test.go` +
   `catalog/canonical_test.go` + the ephemeral `model_discovery_test.go`
@@ -164,14 +164,14 @@ elaborated in this file, SCOPE-05..07 in the continuation.
   `model_connections_enable_disable_test.go` GREEN; `./smackerel.sh check`
   EXIT 0. Catches an echoed secret, a false-success test, an unverified
   enable, or a non-operator reaching the surface BEFORE combined selection
-  wiring. (Live hosted-provider `e2e-api` legs deferred to home-lab — C7.)
+  wiring. (Live hosted-provider `e2e-api` legs deferred to self-hosted — C7.)
 - **After SCOPE-07** — `telegram/model_command_multiprovider_test.go` +
   `api/agent_model_multiprovider_test.go` +
   `api/agent_model_parity_spec096_test.go` GREEN; `./smackerel.sh check` +
   `./smackerel.sh test unit` EXIT 0. Catches a second validator/store, a
   broken `allowed_models[]` byte-parity (R2), or an accepted
   non-tool-capable gather selection (R3) — the final in-repo gate before
-  the home-lab `e2e-api` dispatch (C7).
+  the self-hosted `e2e-api` dispatch (C7).
 
 ---
 
@@ -528,7 +528,7 @@ Scenario: SCN-096-G05 — Provider secrets never leak to users
 
 `unit` proves the parity, additive-contract, typed-error, attribution, and
 secret-scrub mechanisms; `integration` proves the Go→sidecar hosted seam;
-the live hosted answer is an `e2e-api` deferred to the home-lab dispatch
+the live hosted answer is an `e2e-api` deferred to the self-hosted dispatch
 (C7). Entries are copied verbatim from
 [scenario-manifest.json](scenario-manifest.json).
 
@@ -554,11 +554,11 @@ the live hosted answer is an `e2e-api` deferred to the home-lab dispatch
 |----------|--------------------------------|---------|
 | SCN-096-A02 | `tests/integration/openknowledge_hosted_dispatch_test.go::TestAsk_HostedConnection_ProviderAware_Spec096` | Against the live ephemeral Go core + sidecar, a hosted-connection `/ask` takes the provider-aware seam end-to-end (Go decrypts → `/llm/chat` carries provider fields → sidecar hosted branch); hits the REAL services — NO request interception. |
 
-**Category: e2e-api (deferred to home-lab `bubbles.devops` dispatch — C7)**
+**Category: e2e-api (deferred to self-hosted `bubbles.devops` dispatch — C7)**
 
 | Scenario | Concrete test (file::function) | Asserts |
 |----------|--------------------------------|---------|
-| SCN-096-G04 | `tests/e2e/agent/openknowledge_e2e_test.go::TestAsk_HostedAnswer_AttributedToProviderModel_Spec096` | The live `/ask` against a real hosted provider returns a grounded answer attributed to the provider-qualified model; runs in the home-lab dispatch (real credentials + reachability), NOT in-repo. |
+| SCN-096-G04 | `tests/e2e/agent/openknowledge_e2e_test.go::TestAsk_HostedAnswer_AttributedToProviderModel_Spec096` | The live `/ask` against a real hosted provider returns a grounded answer attributed to the provider-qualified model; runs in the self-hosted dispatch (real credentials + reachability), NOT in-repo. |
 
 > Live-stack note: every `integration`/`e2e-api` row hits the REAL running
 > system; the Python parity/scrub tests construct the kwargs/error from the
@@ -583,14 +583,14 @@ the live hosted answer is an `e2e-api` deferred to the home-lab dispatch
 - [x] D03-T2-4 — **Fail-loud, never-fallback-to-Ollama adversarial:** a missing required key returns typed `llm_misconfigured` (`test_hosted_missing_api_key_typed_error_no_ollama_substitution`) and the resolver refuses a not-effective-enabled target (`TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096`) — both fail if Ollama is ever silently substituted. → Evidence: report.md → SCOPE-03.
 - [x] D03-T2-5 — **Provider-qualified attribution:** `ModelAttribution`/`TurnResult.Model` is the provider-qualified id (`TestAttribution_ProviderQualified_Spec096`); two providers' answers are distinguishable. → Evidence: report.md → SCOPE-03.
 - [x] D03-T2-6 — Each adversarial test is non-tautological with a captured RED-before (e.g. a build that leaks a provider field into the Ollama kwargs, or that logs the key, would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-03 RED-before.
-- [ ] D03-T2-7 — All `unit` + `integration` SCOPE-03 tests pass with NO skips; the live hosted `e2e-api` row (`TestAsk_HostedAnswer_AttributedToProviderModel_Spec096`) is explicitly handed to the home-lab `bubbles.devops` dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-03 (test run + deferral note). _(Unit leg done with NO skips — E1–E3; the `integration` (`TestAsk_HostedConnection_ProviderAware_Spec096`) + `e2e-api` rows are DEFERRED to a clean-stack `bubbles.devops` dispatch, not marked passing from dev.)_
+- [ ] D03-T2-7 — All `unit` + `integration` SCOPE-03 tests pass with NO skips; the live hosted `e2e-api` row (`TestAsk_HostedAnswer_AttributedToProviderModel_Spec096`) is explicitly handed to the self-hosted `bubbles.devops` dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-03 (test run + deferral note). _(Unit leg done with NO skips — E1–E3; the `integration` (`TestAsk_HostedConnection_ProviderAware_Spec096`) + `e2e-api` rows are DEFERRED to a clean-stack `bubbles.devops` dispatch, not marked passing from dev.)_
 
 **Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
 
-- [x] D03-T2-8 — **SCN-096-A02** — The `/ask` agent dispatches to the SELECTED model's provider (provider-aware through the credential seam, never Ollama): the resolver routes a fully-configured hosted connection to its hosted provider (the control case) and never coerces it to a local model. (Live end-to-end `/ask` hosted-answer leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/assistant/openknowledge/llm/dispatch_resolver_test.go::TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096` (unit, GREEN control) + report.md → SCOPE-03.
+- [x] D03-T2-8 — **SCN-096-A02** — The `/ask` agent dispatches to the SELECTED model's provider (provider-aware through the credential seam, never Ollama): the resolver routes a fully-configured hosted connection to its hosted provider (the control case) and never coerces it to a local model. (Live end-to-end `/ask` hosted-answer leg deferred to the self-hosted dispatch — C7.) → Evidence: `internal/assistant/openknowledge/llm/dispatch_resolver_test.go::TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096` (unit, GREEN control) + report.md → SCOPE-03.
 - [x] D03-T2-9 — **SCN-096-A03** — With NO model selection, today's Ollama behavior is byte-for-byte unchanged: a zero-value provider-fields request serializes to the exact pre-096 wire shape, so no provider credential or routing change is observable on the Ollama path. → Evidence: `internal/assistant/openknowledge/llm/client_provider_test.go::TestChatRequest_ProviderFieldsAdditive_Spec096` (unit, GREEN) + report.md → SCOPE-03.
 - [x] D03-T2-10 — **SCN-096-G01** — A misconfigured connection fails loud and NEVER falls back to Ollama: the resolver refuses a not-effective-enabled / misconfigured target with a typed reason and never silently re-routes to a local model (ADVERSARIAL). → Evidence: `internal/assistant/openknowledge/llm/dispatch_resolver_test.go::TestDispatchResolver_MisconfiguredConnection_NeverFallsBackToOllama_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-03.
-- [x] D03-T2-11 — **SCN-096-G04** — Every answer is attributed to the model that produced it: `ModelAttribution`/`TurnResult.Model` is provider-qualified (e.g. `anthropic/claude-3-5-sonnet`) so two providers' answers are distinguishable by attribution. (Live hosted-answer attribution leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/assistant/openknowledge/agent/attribution_provider_test.go::TestAttribution_ProviderQualified_Spec096` (unit, GREEN) + report.md → SCOPE-03.
+- [x] D03-T2-11 — **SCN-096-G04** — Every answer is attributed to the model that produced it: `ModelAttribution`/`TurnResult.Model` is provider-qualified (e.g. `anthropic/claude-3-5-sonnet`) so two providers' answers are distinguishable by attribution. (Live hosted-answer attribution leg deferred to the self-hosted dispatch — C7.) → Evidence: `internal/assistant/openknowledge/agent/attribution_provider_test.go::TestAttribution_ProviderQualified_Spec096` (unit, GREEN) + report.md → SCOPE-03.
 - [x] D03-T2-12 — **SCN-096-G05** — Provider secrets never leak to users: the decrypted key never appears in a log line, span, or error body on the Go dispatch side (ADVERSARIAL). → Evidence: `internal/assistant/openknowledge/llm/dispatch_resolver_test.go::TestDispatch_SecretNeverInLogsOrErrors_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-03.
 
 ---
@@ -673,7 +673,7 @@ Scenario: SCN-096-D04 — Selecting a model absent from the catalog is refused
 `unit` proves aggregation, graceful degradation, canonicalization, and
 off-catalog rejection in isolation; `integration` proves one-provider-down
 against the live ephemeral stack; the live multi-provider catalog is an
-`e2e-api` deferred to the home-lab dispatch (C7). Entries are copied
+`e2e-api` deferred to the self-hosted dispatch (C7). Entries are copied
 verbatim from [scenario-manifest.json](scenario-manifest.json).
 
 **Category: unit**
@@ -692,11 +692,11 @@ verbatim from [scenario-manifest.json](scenario-manifest.json).
 |----------|--------------------------------|---------|
 | SCN-096-D01 | `tests/integration/model_discovery_test.go::TestDiscovery_OneProviderDown_CatalogStillServes_Spec096` | Against the live ephemeral stack, with one provider deliberately down, the catalog still serves the reachable subset and the down provider emits a typed status; hits the REAL aggregator/services — NO request interception. |
 
-**Category: e2e-api (deferred to home-lab `bubbles.devops` dispatch — C7)**
+**Category: e2e-api (deferred to self-hosted `bubbles.devops` dispatch — C7)**
 
 > SCN-096-D04's `requiredTestType` includes `e2e-api`; the live
 > off-catalog rejection over the real `/ask` selection path runs in the
-> home-lab dispatch (model/Ollama-dependent), surfaced through the SCOPE-07
+> self-hosted dispatch (model/Ollama-dependent), surfaced through the SCOPE-07
 > selection-surface e2e (`tests/e2e/agent/openknowledge_e2e_test.go`). It
 > is NOT marked passing from dev (C7).
 
@@ -722,17 +722,17 @@ verbatim from [scenario-manifest.json](scenario-manifest.json).
 - [x] D04-T2-4 — **Fail-loud discovery SST (G028):** `cache_ttl_ms` + `per_provider_timeout_ms` come from SST `> 0` (SCOPE-01); no hardcoded TTL/timeout default appears in the aggregator. → Evidence: report.md → SCOPE-04 (grep). _(E1 — `TestCatalogAggregator_FailLoudOnNonPositiveSSTBounds_Spec096`: zero/negative ttl + timeout all fail loud at construction.)_
 - [x] D04-T2-5 — **Canonicalization round-trip + off-catalog rejection:** split-on-first-`/` round-trips (`TestCanonicalize_SplitOnFirstSlash_RoundTrip_Spec096`), a bare Ollama id normalizes iff installed (`TestCanonicalize_BareOllamaIdNormalized_Spec096`), and an off-catalog id yields the same `modelswitch.Rejection` with NO store write / NO dispatch (`TestValidate_OffCatalogRefused_TypedRejection_Spec096`, ADVERSARIAL). → Evidence: report.md → SCOPE-04. _(E1 — the bare `gemma3:4b` control validates, so 089 bare-Ollama selections keep working.)_
 - [x] D04-T2-6 — Each adversarial test is non-tautological with a captured RED-before (a build that silently drops a down provider, or that accepts an off-catalog id, would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-04 RED-before. _(E2 — both adversarial tests fail with the injected silent-drop / accept-any regressions, GREEN after revert.)_
-- [ ] D04-T2-7 — All `unit` + `integration` SCOPE-04 tests pass with NO skips; the SCN-096-D04 `e2e-api` leg is handed to the home-lab dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-04 (test run + deferral note). _(PARTIAL — the `unit` leg passes with NO skips (E1); the `integration` `TestDiscovery_OneProviderDown_CatalogStillServes_Spec096` + the `e2e-api` leg are live-stack, DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev.)_
+- [ ] D04-T2-7 — All `unit` + `integration` SCOPE-04 tests pass with NO skips; the SCN-096-D04 `e2e-api` leg is handed to the self-hosted dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-04 (test run + deferral note). _(PARTIAL — the `unit` leg passes with NO skips (E1); the `integration` `TestDiscovery_OneProviderDown_CatalogStillServes_Spec096` + the `e2e-api` leg are live-stack, DEFERRED to a clean-stack `bubbles.devops` dispatch, NOT marked passing from dev.)_
 
 **Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
 
-- [x] D04-T2-8 — **SCN-096-D01** — Discovery aggregates local (Ollama) and hosted models into ONE provider-qualified catalog: Ollama-installed + hosted-curated models merge into one list where each descriptor carries a provider-qualified `id` + `connection_id` + `kind` + capabilities. (Live multi-provider discovery leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/assistant/openknowledge/catalog/aggregator_test.go::TestCatalogAggregator_AggregatesOllamaAndHostedProviderQualified_Spec096` (unit, GREEN) + report.md → SCOPE-04.
+- [x] D04-T2-8 — **SCN-096-D01** — Discovery aggregates local (Ollama) and hosted models into ONE provider-qualified catalog: Ollama-installed + hosted-curated models merge into one list where each descriptor carries a provider-qualified `id` + `connection_id` + `kind` + capabilities. (Live multi-provider discovery leg deferred to the self-hosted dispatch — C7.) → Evidence: `internal/assistant/openknowledge/catalog/aggregator_test.go::TestCatalogAggregator_AggregatesOllamaAndHostedProviderQualified_Spec096` (unit, GREEN) + report.md → SCOPE-04.
 
 ---
 
 ## Scope 5: SCOPE-05 — Model-aware CostFn + load-bearing USD budget enforcement
 
-**Status:** [~] In Progress (11 of 13 DoD met + evidenced; the model-aware CostFn `costfn_modelaware.go`, the load-bearing budget pre-flight, migration 062 `model_usage_ledger`, and the unit tests all shipped + GREEN; the 2 residuals are home-lab-gated live legs — D05-T2-4 migration-062 live-apply + D05-T2-7 the live budget-enforcement integration leg — deferred [C7], see report.md → SCOPE-05)
+**Status:** [~] In Progress (11 of 13 DoD met + evidenced; the model-aware CostFn `costfn_modelaware.go`, the load-bearing budget pre-flight, migration 062 `model_usage_ledger`, and the unit tests all shipped + GREEN; the 2 residuals are self-hosted-gated live legs — D05-T2-4 migration-062 live-apply + D05-T2-7 the live budget-enforcement integration leg — deferred [C7], see report.md → SCOPE-05)
 **Scope-Kind:** code (model-aware CostFn closure + budget pre-flight wiring + migration 062 companion table)
 **Depends on:** SCOPE-04
 **Foundation:** false (the cost/budget seam that makes the EXISTING
@@ -837,7 +837,7 @@ Entries are copied verbatim from
 > cost mapping + refusal WITHOUT network interception — correctly
 > classified `unit`.
 
-### Definition of Done — SCOPE-05 (11 of 13 met + evidenced; the 2 residuals are home-lab-gated live legs — D05-T2-4 migration-062 live-apply + D05-T2-7 the live budget-enforcement integration leg — deferred [C7])
+### Definition of Done — SCOPE-05 (11 of 13 met + evidenced; the 2 residuals are self-hosted-gated live legs — D05-T2-4 migration-062 live-apply + D05-T2-7 the live budget-enforcement integration leg — deferred [C7])
 
 **Tier-1 (universal):**
 
@@ -859,7 +859,7 @@ Entries are copied verbatim from
 
 **Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
 
-- [x] D05-T2-8 — **SCN-096-G03** — Selecting a paid model enforces the USD budgets BEFORE dispatch: a paid model whose estimated cost would breach the per-user or global month-to-date ceiling is refused (`ErrCapUSDPerUserMonth` / `ErrCapUSDMonthly`) before any billable provider call — the fake LLM fails the test if any dispatch is reached (ADVERSARIAL). (Live exhausted-budget integration leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/assistant/openknowledge/agent/budget_preflight_modelcost_test.go::TestBudgetPreflight_PaidOverBudget_RefusesBeforeDispatch_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-05.
+- [x] D05-T2-8 — **SCN-096-G03** — Selecting a paid model enforces the USD budgets BEFORE dispatch: a paid model whose estimated cost would breach the per-user or global month-to-date ceiling is refused (`ErrCapUSDPerUserMonth` / `ErrCapUSDMonthly`) before any billable provider call — the fake LLM fails the test if any dispatch is reached (ADVERSARIAL). (Live exhausted-budget integration leg deferred to the self-hosted dispatch — C7.) → Evidence: `internal/assistant/openknowledge/agent/budget_preflight_modelcost_test.go::TestBudgetPreflight_PaidOverBudget_RefusesBeforeDispatch_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-05.
 
 ---
 
@@ -984,7 +984,7 @@ pass/fail, the `409` enable guard, the `404` unknown-slot, the per-kind
 secret fields, and the operator gate in isolation; `integration` proves
 enable/disable catalog membership against the live ephemeral stack; the
 live `e2e-api` legs (real hosted-provider reachability) are **deferred to
-the home-lab `bubbles.devops` dispatch (C7)**. Entries are copied verbatim
+the self-hosted `bubbles.devops` dispatch (C7)**. Entries are copied verbatim
 from [scenario-manifest.json](scenario-manifest.json).
 
 **Category: unit**
@@ -1005,18 +1005,18 @@ from [scenario-manifest.json](scenario-manifest.json).
 |----------|--------------------------------|---------|
 | SCN-096-W03 | `tests/integration/model_connections_enable_disable_test.go::TestEnableDisable_CatalogMembershipFollows_Spec096` | Against the live ephemeral stack, enabling a credentialed+tested slot adds its models to the combined catalog and disabling removes them (the effective-enabled predicate is the single gate); hits the REAL aggregator/DB — NO interception. |
 
-**Category: e2e-api (deferred to home-lab `bubbles.devops` dispatch — C7)**
+**Category: e2e-api (deferred to self-hosted `bubbles.devops` dispatch — C7)**
 
 | Scenario | Concrete test (file::function) | Asserts |
 |----------|--------------------------------|---------|
-| SCN-096-W01 | `tests/e2e/admin/model_connections_e2e_test.go::TestAdmin_WireTestEnableAnthropic_Spec096` | The live operator wire → truthful test → enable flow against a REAL Anthropic connection; runs in the home-lab dispatch (real credential + reachability), NOT in-repo. |
-| SCN-096-W02 | `tests/e2e/admin/model_connections_e2e_test.go::TestAdmin_AddFourHostedProviders_Independent_Spec096` | Adding OpenAI / Azure-Foundry / Google / Bedrock as four independent live connections; home-lab dispatch (real credentials). |
-| SCN-096-W04 | `tests/e2e/admin/model_connections_e2e_test.go::TestAdmin_BadCredential_FailsTruthfully_Spec096` | A bad credential against a REAL provider endpoint fails truthfully (`outcome:failed`, typed detail); home-lab dispatch (real endpoint reachability). |
+| SCN-096-W01 | `tests/e2e/admin/model_connections_e2e_test.go::TestAdmin_WireTestEnableAnthropic_Spec096` | The live operator wire → truthful test → enable flow against a REAL Anthropic connection; runs in the self-hosted dispatch (real credential + reachability), NOT in-repo. |
+| SCN-096-W02 | `tests/e2e/admin/model_connections_e2e_test.go::TestAdmin_AddFourHostedProviders_Independent_Spec096` | Adding OpenAI / Azure-Foundry / Google / Bedrock as four independent live connections; self-hosted dispatch (real credentials). |
+| SCN-096-W04 | `tests/e2e/admin/model_connections_e2e_test.go::TestAdmin_BadCredential_FailsTruthfully_Spec096` | A bad credential against a REAL provider endpoint fails truthfully (`outcome:failed`, typed detail); self-hosted dispatch (real endpoint reachability). |
 
 > Live-stack note: the `integration` row hits the REAL aggregator + DB on
 > the ephemeral test stack (no request interception). The `e2e-api` rows
 > require real hosted-provider reachability + real credentials and are
-> handed to the home-lab `bubbles.devops` dispatch (C7); they are NOT
+> handed to the self-hosted `bubbles.devops` dispatch (C7); they are NOT
 > marked passing from dev. The `unit` rows exercise the real handler +
 > operator middleware with synthetic credentials and a stubbed probe
 > seam, asserting the redaction / typed-outcome / gate logic — correctly
@@ -1037,24 +1037,24 @@ from [scenario-manifest.json](scenario-manifest.json).
 - [x] D06-T2-1 — **R1 operator gate (binding, adversarial):** the operator-only boundary is enforced by the `infrastructure.operator_user_ids` SST allowlist over the existing `internal/auth` subject; `TestAdminModelConnections_OperatorGate_403NonOperator_401Anonymous_Spec096` proves `403` non-operator / `401` anonymous; an empty `operator_user_ids` while a connection-mutating endpoint is reachable aborts fail-loud at startup (NO-DEFAULTS, G028). → Evidence: report.md → SCOPE-06 (gate test + fail-loud grep).
 - [x] D06-T2-2 — **Write-only secret (binding):** the stored credential is NEVER echoed, returned, or logged; `PUT …/credential` returns only a redacted view; reads expose only `secret_present` + `secret_redaction` (last-4) + `last_tested_*` — proven by `TestAdminModelConnections_PutCredentialWriteOnly_RedactedView_Spec096` + a grep that no handler logs/returns the bundle. → Evidence: report.md → SCOPE-06.
 - [x] D06-T2-3 — **Truthful test, never false success, never Ollama (adversarial):** `TestAdminModelConnections_FailedTest_TypedError_NeverFalseSuccess_Spec096` proves a failed probe reports `failed` with a typed `detail` and persists `failed` (never the secret) and never substitutes Ollama; non-tautological (fails if a failed probe is ever reported `ok`). → Evidence: report.md → SCOPE-06.
-- [ ] D06-T2-4 — **Enable 409-guard + effective-enabled single gate:** enable is refused `409` unless a credential is present AND `last_test_outcome = ok` (`TestAdminModelConnections_EnableUntested_Blocked409_Spec096`), and the effective-enabled predicate (registry-declared AND DB `enabled` AND `last_test_outcome = ok` AND credential present) is the single gate discovery consults (`TestEnableDisable_CatalogMembershipFollows_Spec096`). → Evidence: report.md → SCOPE-06 + → Post-Implementation Fix. **Core boot now proven `Healthy`** (the master-key predicate fix); the live `TestEnableDisable_CatalogMembershipFollows_Spec096` enable/disable integration leg stays DEFERRED LIVE — it SKIPs (needs `SPEC096_ADMIN_LIVE_CORE_URL` + `SPEC096_ADMIN_LIVE_OPERATOR_TOKEN`, home-lab C7) and is NOT marked passing.
+- [ ] D06-T2-4 — **Enable 409-guard + effective-enabled single gate:** enable is refused `409` unless a credential is present AND `last_test_outcome = ok` (`TestAdminModelConnections_EnableUntested_Blocked409_Spec096`), and the effective-enabled predicate (registry-declared AND DB `enabled` AND `last_test_outcome = ok` AND credential present) is the single gate discovery consults (`TestEnableDisable_CatalogMembershipFollows_Spec096`). → Evidence: report.md → SCOPE-06 + → Post-Implementation Fix. **Core boot now proven `Healthy`** (the master-key predicate fix); the live `TestEnableDisable_CatalogMembershipFollows_Spec096` enable/disable integration leg stays DEFERRED LIVE — it SKIPs (needs `SPEC096_ADMIN_LIVE_CORE_URL` + `SPEC096_ADMIN_LIVE_OPERATOR_TOKEN`, self-hosted C7) and is NOT marked passing.
 - [x] D06-T2-5 — **Closed-set slot + per-kind secret fields:** an `id` not in the SST registry is `404` (`TestAdminModelConnections_UnknownSlotRejected404_Spec096`); each kind saves its provider-specific write-only secret fields with non-secret params read-only from the registry (`TestAdminModelConnections_PerKindSecretFields_OpenAIFoundryGoogleBedrock_Spec096`); a brand-new kind is an SST topology edit, not a UI invention. → Evidence: report.md → SCOPE-06.
-- [ ] D06-T2-6 — **Live-stack authenticity + C7 deferral:** the `integration` row hits the REAL aggregator/DB with no request interception; each `e2e-api` row (`TestAdmin_WireTestEnableAnthropic_Spec096`, `TestAdmin_AddFourHostedProviders_Independent_Spec096`, `TestAdmin_BadCredential_FailsTruthfully_Spec096`) is explicitly handed to the home-lab `bubbles.devops` dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-06 (test run + deferral note).
+- [ ] D06-T2-6 — **Live-stack authenticity + C7 deferral:** the `integration` row hits the REAL aggregator/DB with no request interception; each `e2e-api` row (`TestAdmin_WireTestEnableAnthropic_Spec096`, `TestAdmin_AddFourHostedProviders_Independent_Spec096`, `TestAdmin_BadCredential_FailsTruthfully_Spec096`) is explicitly handed to the self-hosted `bubbles.devops` dispatch (C7) and NOT marked passing from dev. → Evidence: report.md → SCOPE-06 (test run + deferral note).
 - [x] D06-T2-7 — Each adversarial test is non-tautological with a captured RED-before (a build that echoes the secret, reports a failed probe as `ok`, enables an untested slot, or lets a non-operator through would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-06 RED-before.
-- [ ] D06-T2-8 — All `unit` + `integration` SCOPE-06 tests pass with NO skips; the live `e2e-api` legs are deferred to the home-lab dispatch (C7). → Evidence: report.md → SCOPE-06 (test run).
+- [ ] D06-T2-8 — All `unit` + `integration` SCOPE-06 tests pass with NO skips; the live `e2e-api` legs are deferred to the self-hosted dispatch (C7). → Evidence: report.md → SCOPE-06 (test run).
 
 **Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
 
-- [x] D06-T2-9 — **SCN-096-W01** — Operator adds an Anthropic connection and tests it: the credential is stored write-only (redacted view, never echoed) and "test connection" reports a truthful pass/fail outcome (persisted `last_test_outcome`). (LIVE operator wire→test→enable against a real Anthropic connection deferred to the home-lab dispatch — C7.) → Evidence: `internal/api/model_connections_admin_test.go::TestAdminModelConnections_PutCredentialWriteOnly_RedactedView_Spec096` (unit ADVERSARIAL, GREEN) + `…::TestAdminModelConnections_TestConnection_TruthfulOutcome_Spec096` (unit, GREEN) + report.md → SCOPE-06.
-- [x] D06-T2-10 — **SCN-096-W02** — Operator adds OpenAI, Microsoft Foundry, Google, and Amazon Bedrock connections: each kind saves its provider-specific write-only secret fields with non-secret params read-only from the SST registry, and each can be tested/enabled/disabled independently. (LIVE four-provider add deferred to the home-lab dispatch — C7.) → Evidence: `internal/api/model_connections_admin_test.go::TestAdminModelConnections_PerKindSecretFields_OpenAIFoundryGoogleBedrock_Spec096` (unit, GREEN) + report.md → SCOPE-06.
-- [x] D06-T2-11 — **SCN-096-W03** — Operator enables and disables a connection: the effective-enabled predicate (registry-declared AND DB `enabled` AND `last_test_outcome = ok` AND credential present) is the single gate, so disabling removes a provider's models from the combined catalog and re-enabling restores them. (The LIVE catalog-membership-follows integration leg is the deferred D06-T2-4 — home-lab C7.) → Evidence: `internal/assistant/openknowledge/connstore/store_test.go::TestEffectiveEnabled_SingleGate_Spec096` (unit, GREEN) + report.md → SCOPE-06.
+- [x] D06-T2-9 — **SCN-096-W01** — Operator adds an Anthropic connection and tests it: the credential is stored write-only (redacted view, never echoed) and "test connection" reports a truthful pass/fail outcome (persisted `last_test_outcome`). (LIVE operator wire→test→enable against a real Anthropic connection deferred to the self-hosted dispatch — C7.) → Evidence: `internal/api/model_connections_admin_test.go::TestAdminModelConnections_PutCredentialWriteOnly_RedactedView_Spec096` (unit ADVERSARIAL, GREEN) + `…::TestAdminModelConnections_TestConnection_TruthfulOutcome_Spec096` (unit, GREEN) + report.md → SCOPE-06.
+- [x] D06-T2-10 — **SCN-096-W02** — Operator adds OpenAI, Microsoft Foundry, Google, and Amazon Bedrock connections: each kind saves its provider-specific write-only secret fields with non-secret params read-only from the SST registry, and each can be tested/enabled/disabled independently. (LIVE four-provider add deferred to the self-hosted dispatch — C7.) → Evidence: `internal/api/model_connections_admin_test.go::TestAdminModelConnections_PerKindSecretFields_OpenAIFoundryGoogleBedrock_Spec096` (unit, GREEN) + report.md → SCOPE-06.
+- [x] D06-T2-11 — **SCN-096-W03** — Operator enables and disables a connection: the effective-enabled predicate (registry-declared AND DB `enabled` AND `last_test_outcome = ok` AND credential present) is the single gate, so disabling removes a provider's models from the combined catalog and re-enabling restores them. (The LIVE catalog-membership-follows integration leg is the deferred D06-T2-4 — self-hosted C7.) → Evidence: `internal/assistant/openknowledge/connstore/store_test.go::TestEffectiveEnabled_SingleGate_Spec096` (unit, GREEN) + report.md → SCOPE-06.
 - [x] D06-T2-12 — **SCN-096-W04** — A failed test connection reports a typed, actionable error and never a false success: a failed probe yields `outcome:failed` with a typed `detail` (`auth_failed`|`unreachable`|`timeout`) naming the connection, persists `failed` (never the secret), and never substitutes Ollama (ADVERSARIAL); an unknown slot is `404` closed-set. → Evidence: `internal/api/model_connections_admin_test.go::TestAdminModelConnections_FailedTest_TypedError_NeverFalseSuccess_Spec096` (unit ADVERSARIAL, GREEN) + `…::TestAdminModelConnections_UnknownSlotRejected404_Spec096` (unit ADVERSARIAL, GREEN) + report.md → SCOPE-06.
 
 ---
 
 ## Scope 7: SCOPE-07 — Combined catalog selection across Telegram + web, 088/089 parity
 
-**Status:** [~] In progress (unified selection surfaces + 088/089 parity implemented and unit-GREEN; the previously-deferred live-wiring ACTIVATION — cmd/core constructs+installs the CatalogAggregator + BudgetProvider + DispatchResolver and the `/ask` loop consumes the resolver at both dispatch points — is now DONE + boot-validated [core boots Healthy; the `/model` picker shows the live combined catalog; `/ask` dispatches to the selected provider; budget wired], see report.md → SCOPE-07 Live-Wiring Activation; the `format --check` global gate stays red ONLY on a foreign untracked file, and only the live hosted-provider `e2e-api` leg remains home-lab-gated [C7] — see report.md → SCOPE-07)
+**Status:** [~] In progress (unified selection surfaces + 088/089 parity implemented and unit-GREEN; the previously-deferred live-wiring ACTIVATION — cmd/core constructs+installs the CatalogAggregator + BudgetProvider + DispatchResolver and the `/ask` loop consumes the resolver at both dispatch points — is now DONE + boot-validated [core boots Healthy; the `/model` picker shows the live combined catalog; `/ask` dispatches to the selected provider; budget wired], see report.md → SCOPE-07 Live-Wiring Activation; the `format --check` global gate stays red ONLY on a foreign untracked file, and only the live hosted-provider `e2e-api` leg remains self-hosted-gated [C7] — see report.md → SCOPE-07)
 **Scope-Kind:** code (Telegram `/model` picker + `/v1/agent/model` enrichment over the existing validator/store)
 **Depends on:** SCOPE-04, SCOPE-06
 **Foundation:** false (the unified selection surface that renders the
@@ -1169,7 +1169,7 @@ unreachable-shown-disabled / only-reachable-numbered rule, the additive
 enrichment (allowed_models byte-for-byte — R2), the sticky+precedence
 contract, and the one-validator/one-store + non-tool-capable-gather parity
 (R3) in isolation; the live cross-surface `e2e-api` parity legs (real
-hosted models) are **deferred to the home-lab `bubbles.devops` dispatch
+hosted models) are **deferred to the self-hosted `bubbles.devops` dispatch
 (C7)**. Entries are copied verbatim from
 [scenario-manifest.json](scenario-manifest.json).
 
@@ -1185,17 +1185,17 @@ hosted models) are **deferred to the home-lab `bubbles.devops` dispatch
 | SCN-096-G06 | `internal/api/agent_model_parity_spec096_test.go::TestParity_OneValidatorOneStore_ForkPrecedence_ProviderAgnostic_Spec096` (ADVERSARIAL) | The gather-vs-synthesis fork + per-request > sticky > default precedence + one-validator/one-store behave EXACTLY as 088/089 define provider-agnostically; fails if a second validator/store is introduced. |
 | SCN-096-G06 | `internal/api/agent_model_parity_spec096_test.go::TestParity_NonToolCapableGatherShownDisabled_RejectedFailLoud_Spec096` (ADVERSARIAL — R3) | A non-tool-capable model is shown-but-disabled for gather and a direct gather selection of it is rejected fail-loud (the same `modelswitch.Rejection`); fails if a non-tool-capable gather selection is ever accepted. |
 
-**Category: e2e-api (deferred to home-lab `bubbles.devops` dispatch — C7)**
+**Category: e2e-api (deferred to self-hosted `bubbles.devops` dispatch — C7)**
 
 | Scenario | Concrete test (file::function) | Asserts |
 |----------|--------------------------------|---------|
-| SCN-096-D02 | `tests/e2e/agent/openknowledge_e2e_test.go::TestTelegram_PickHostedModelPersists_Spec096` | The live Telegram pick → persist → dispatch of a REAL hosted model; home-lab dispatch (real reachability). |
-| SCN-096-D03 | `tests/e2e/agent/openknowledge_e2e_test.go::TestWebTelegramModelParity_Spec096` | The live web and Telegram surfaces return the SAME selection result over the real combined catalog; home-lab dispatch. |
-| SCN-096-D05 | `tests/e2e/agent/openknowledge_e2e_test.go::TestAsk_StickyHostedSelectionPersistsAcrossTurns_Spec096` | A sticky hosted selection persists across live `/ask` turns; home-lab dispatch (real hosted model). |
-| SCN-096-G06 | `tests/e2e/agent/openknowledge_e2e_test.go::TestForkPrecedenceParity_MultiProvider_Spec096` | The live gather-vs-synthesis fork + precedence parity across providers; home-lab dispatch. |
+| SCN-096-D02 | `tests/e2e/agent/openknowledge_e2e_test.go::TestTelegram_PickHostedModelPersists_Spec096` | The live Telegram pick → persist → dispatch of a REAL hosted model; self-hosted dispatch (real reachability). |
+| SCN-096-D03 | `tests/e2e/agent/openknowledge_e2e_test.go::TestWebTelegramModelParity_Spec096` | The live web and Telegram surfaces return the SAME selection result over the real combined catalog; self-hosted dispatch. |
+| SCN-096-D05 | `tests/e2e/agent/openknowledge_e2e_test.go::TestAsk_StickyHostedSelectionPersistsAcrossTurns_Spec096` | A sticky hosted selection persists across live `/ask` turns; self-hosted dispatch (real hosted model). |
+| SCN-096-G06 | `tests/e2e/agent/openknowledge_e2e_test.go::TestForkPrecedenceParity_MultiProvider_Spec096` | The live gather-vs-synthesis fork + precedence parity across providers; self-hosted dispatch. |
 
 > Live-stack note: every `e2e-api` row hits the REAL running system with
-> real hosted models and is handed to the home-lab `bubbles.devops`
+> real hosted models and is handed to the self-hosted `bubbles.devops`
 > dispatch (C7) — NOT marked passing from dev. The `unit` rows construct
 > the picker/view + validator/store directly and assert the rendering,
 > additive-enrichment, precedence, and parity logic WITHOUT request
@@ -1203,7 +1203,7 @@ hosted models) are **deferred to the home-lab `bubbles.devops` dispatch
 > + non-tool-capable-gather parity is a pure-mechanism guarantee provable
 > in-repo).
 
-### Definition of Done — SCOPE-07 (14 of 16 met + evidenced; the previously-deferred live-wiring ACTIVATION is now DONE + boot-validated [report.md → SCOPE-07 Live-Wiring Activation]; the 2 still-open items are NOT activation-satisfied — D07-T1-3 `format --check` stays red ONLY on a foreign untracked file, and D07-T2-6 is the live hosted-provider `e2e-api` leg, home-lab-gated [C7])
+### Definition of Done — SCOPE-07 (14 of 16 met + evidenced; the previously-deferred live-wiring ACTIVATION is now DONE + boot-validated [report.md → SCOPE-07 Live-Wiring Activation]; the 2 still-open items are NOT activation-satisfied — D07-T1-3 `format --check` stays red ONLY on a foreign untracked file, and D07-T2-6 is the live hosted-provider `e2e-api` leg, self-hosted-gated [C7])
 
 **Tier-1 (universal):**
 
@@ -1220,15 +1220,15 @@ hosted models) are **deferred to the home-lab `bubbles.devops` dispatch
 - [x] D07-T2-3 — **R3 non-tool-capable gather (binding, adversarial):** a non-tool-capable model is shown-but-disabled for gather and a direct gather selection of it is rejected fail-loud (same `modelswitch.Rejection`) — `TestParity_NonToolCapableGatherShownDisabled_RejectedFailLoud_Spec096` fails if a non-tool-capable gather selection is ever accepted; the disable-vs-filter choice is justified (shown for transparency, disabled/rejected so a numbered reply never maps to a non-dispatchable gather selection), consistent with the unreachable-provider treatment. → Evidence: report.md → SCOPE-07.
 - [x] D07-T2-4 — **Combined provider-grouped catalog:** the Telegram `/model` picker renders one provider-grouped, provider-qualified, cost-hinted list (Ollama/local first) with only reachable models numbered and an unreachable provider shown-but-disabled with its typed status (`TestModelPicker_TelegramCombinedProviderGroupedList_Spec096` + `TestModelPicker_UnreachableShownDisabledOnlyReachableNumbered_Spec096`); a numbered reply always maps to a dispatchable model. → Evidence: report.md → SCOPE-07; runtime now boot-validated — the picker shows the live combined catalog (`catalog_installed=true`): report.md → SCOPE-07 Live-Wiring Activation.
 - [x] D07-T2-5 — **Selection persistence + precedence (089 contract):** a hosted selection persists via the EXISTING claim-bound `modelpref` store and per-request > sticky > default precedence is byte-for-byte the 089 contract with provider-qualified ids only (`TestAgentModel_StickyHostedPersistsPrecedence_Spec096`). → Evidence: report.md → SCOPE-07.
-- [ ] D07-T2-6 — **Live-stack parity + C7 deferral:** each `e2e-api` row (`TestTelegram_PickHostedModelPersists_Spec096`, `TestWebTelegramModelParity_Spec096`, `TestAsk_StickyHostedSelectionPersistsAcrossTurns_Spec096`, `TestForkPrecedenceParity_MultiProvider_Spec096`) hits the REAL system (Telegram↔web same result) and is handed to the home-lab `bubbles.devops` dispatch (C7), NOT marked passing from dev. → Evidence: report.md → SCOPE-07 (test run + deferral note).
+- [ ] D07-T2-6 — **Live-stack parity + C7 deferral:** each `e2e-api` row (`TestTelegram_PickHostedModelPersists_Spec096`, `TestWebTelegramModelParity_Spec096`, `TestAsk_StickyHostedSelectionPersistsAcrossTurns_Spec096`, `TestForkPrecedenceParity_MultiProvider_Spec096`) hits the REAL system (Telegram↔web same result) and is handed to the self-hosted `bubbles.devops` dispatch (C7), NOT marked passing from dev. → Evidence: report.md → SCOPE-07 (test run + deferral note).
 - [x] D07-T2-7 — Each adversarial test is non-tautological with a captured RED-before (a build that introduces a second validator/store, breaks `allowed_models` byte-parity, or accepts a non-tool-capable gather selection would fail it); no bailout early-returns. → Evidence: report.md → SCOPE-07 RED-before.
-- [x] D07-T2-8 — All `unit` SCOPE-07 tests pass with NO skips; the live cross-surface `e2e-api` parity legs are deferred to the home-lab dispatch (C7). → Evidence: report.md → SCOPE-07 (test run).
+- [x] D07-T2-8 — All `unit` SCOPE-07 tests pass with NO skips; the live cross-surface `e2e-api` parity legs are deferred to the self-hosted dispatch (C7). → Evidence: report.md → SCOPE-07 (test run).
 
 **Tier-2 — Scenario fidelity (each Gherkin scenario's behavioral claim is a DoD obligation):**
 
-- [x] D07-T2-9 — **SCN-096-D02** — A user lists the combined models in Telegram and picks a hosted model: the `/model` picker renders ONE provider-grouped, provider-qualified, numbered list over the combined catalog and selecting a hosted model sets it as the user's model for subsequent questions. (Live Telegram pick→persist→dispatch leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/telegram/model_command_multiprovider_test.go::TestModelPicker_TelegramCombinedProviderGroupedList_Spec096` (unit, GREEN) + report.md → SCOPE-07.
-- [x] D07-T2-10 — **SCN-096-D03** — The same list and selection are available over HTTP/web (parity): `GET`/`PUT /v1/agent/model` returns the same combined catalog and accepts the same selection as Telegram, both resolving through the SAME `modelswitch` validator + `modelpref` store. (Live cross-surface parity leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/api/agent_model_multiprovider_test.go::TestAgentModel_TelegramWebParity_SameValidatorSameStore_Spec096` (unit, GREEN) + `internal/api/agent_model_parity_spec096_test.go` (parity suite) + report.md → SCOPE-07.
-- [x] D07-T2-11 — **SCN-096-D05** — A user's selection persists across turns: a sticky hosted selection persists via the EXISTING claim-bound `modelpref` store and per-request > sticky > default precedence is honored byte-for-byte the 089 contract. (Live across-turns `/ask` persistence leg deferred to the home-lab dispatch — C7.) → Evidence: `internal/api/agent_model_multiprovider_test.go::TestAgentModel_StickyHostedPersistsPrecedence_Spec096` (unit, GREEN) + report.md → SCOPE-07 (modelpref sticky-pref reuse of the 088/089 store).
+- [x] D07-T2-9 — **SCN-096-D02** — A user lists the combined models in Telegram and picks a hosted model: the `/model` picker renders ONE provider-grouped, provider-qualified, numbered list over the combined catalog and selecting a hosted model sets it as the user's model for subsequent questions. (Live Telegram pick→persist→dispatch leg deferred to the self-hosted dispatch — C7.) → Evidence: `internal/telegram/model_command_multiprovider_test.go::TestModelPicker_TelegramCombinedProviderGroupedList_Spec096` (unit, GREEN) + report.md → SCOPE-07.
+- [x] D07-T2-10 — **SCN-096-D03** — The same list and selection are available over HTTP/web (parity): `GET`/`PUT /v1/agent/model` returns the same combined catalog and accepts the same selection as Telegram, both resolving through the SAME `modelswitch` validator + `modelpref` store. (Live cross-surface parity leg deferred to the self-hosted dispatch — C7.) → Evidence: `internal/api/agent_model_multiprovider_test.go::TestAgentModel_TelegramWebParity_SameValidatorSameStore_Spec096` (unit, GREEN) + `internal/api/agent_model_parity_spec096_test.go` (parity suite) + report.md → SCOPE-07.
+- [x] D07-T2-11 — **SCN-096-D05** — A user's selection persists across turns: a sticky hosted selection persists via the EXISTING claim-bound `modelpref` store and per-request > sticky > default precedence is honored byte-for-byte the 089 contract. (Live across-turns `/ask` persistence leg deferred to the self-hosted dispatch — C7.) → Evidence: `internal/api/agent_model_multiprovider_test.go::TestAgentModel_StickyHostedPersistsPrecedence_Spec096` (unit, GREEN) + report.md → SCOPE-07 (modelpref sticky-pref reuse of the 088/089 store).
 
 ---
 
@@ -1251,5 +1251,5 @@ The plan is NOT executable and MUST NOT be transitioned to a terminal
 status until all seven scopes above are Done and `state.json`
 `certification.scopeProgress` reflects them. The live hosted-provider
 `e2e-api` legs across SCOPE-03/04/06/07 are a SEPARATE downstream
-`bubbles.devops` home-lab dispatch (C7) — `nextRequiredOwner` after
+`bubbles.devops` self-hosted dispatch (C7) — `nextRequiredOwner` after
 implement + test.

@@ -304,7 +304,7 @@ The spec 054 classifier may accept, downgrade, or upgrade this hint. The adapter
 
 The adapter may derive hints from explicit SST mapping rules only. Examples:
 
-- Topic `home-lab-alerts` may map to subject `home-lab` and domain `ops` when configured.
+- Topic `self-hosted-alerts` may map to subject `self-hosted` and domain `ops` when configured.
 - Tags such as `disk`, `backup`, or `recovery` may map to service or intent only when the mapping rule is explicit.
 - Without configured mapping, the adapter preserves topic/tags and supplies only title/body/severity hints.
 
@@ -448,19 +448,19 @@ Proposed config shape:
 notification_sources:
   ntfy:
     instances:
-      - source_instance_id: "ntfy-home-lab-alerts"
+      - source_instance_id: "ntfy-self-hosted-alerts"
         enabled: true
         source_form: "stream"
         transport_mode: "stream"
-        endpoint_ref_name: "NTFY_HOME_LAB_ENDPOINT_URL"
-        topics: ["home-lab-alerts"]
+        endpoint_ref_name: "NTFY_SELF_HOSTED_ENDPOINT_URL"
+        topics: ["self-hosted-alerts"]
         auth:
           mode: "bearer_token"
-          secret_ref_names: ["NTFY_HOME_LAB_TOKEN"]
+          secret_ref_names: ["NTFY_SELF_HOSTED_TOKEN"]
         mapping:
           default_domain: "ops"
           topic_subjects:
-            home-lab-alerts: "home-lab"
+            self-hosted-alerts: "self-hosted"
           tag_services: {}
           tag_intents: {}
         reconnect:
@@ -476,7 +476,7 @@ notification_sources:
           max_payload_bytes: 65536
           pressure_threshold_count: 5
         redacted_metadata:
-          display_name: "ntfy home lab alerts"
+          display_name: "ntfy self-hosted environment alerts"
           endpoint_label: "operator-managed ntfy endpoint"
 ```
 
@@ -550,20 +550,20 @@ Response:
 {
   "source": {
     "source_type": "ntfy",
-    "source_instance_id": "ntfy-home-lab-alerts",
+    "source_instance_id": "ntfy-self-hosted-alerts",
     "source_form": "stream",
     "health_state": "degraded",
     "config_hash": "sha256:...",
-    "secret_ref_names": ["NTFY_HOME_LAB_TOKEN"],
+    "secret_ref_names": ["NTFY_SELF_HOSTED_TOKEN"],
     "redacted_metadata": {
-      "display_name": "ntfy home lab alerts",
+      "display_name": "ntfy self-hosted environment alerts",
       "endpoint_label": "operator-managed ntfy endpoint",
       "auth_mode": "bearer_token"
     }
   },
   "topics": [
     {
-      "topic": "home-lab-alerts",
+      "topic": "self-hosted-alerts",
       "subscription_state": "reconnecting",
       "last_ntfy_event_id": "abc123",
       "last_event_at": "2026-05-23T02:40:00Z",
@@ -585,7 +585,7 @@ Response:
     "source_event_id": "abc123",
     "raw_event_id": "notif_raw_...",
     "notification_id": "notif_...",
-    "topic": "home-lab-alerts",
+    "topic": "self-hosted-alerts",
     "raw_stored": true,
     "normalized": true
   }
@@ -614,7 +614,7 @@ Success response:
 
 ```json
 {
-  "source_instance_id": "ntfy-home-lab-alerts",
+  "source_instance_id": "ntfy-self-hosted-alerts",
   "accepted": true,
   "state": "reconnecting",
   "retry_count": 0,
@@ -649,8 +649,8 @@ Response:
   "dead_letters": [
     {
       "id": "ntfy_dlq_...",
-      "source_instance_id": "ntfy-home-lab-alerts",
-      "topic": "home-lab-alerts",
+      "source_instance_id": "ntfy-self-hosted-alerts",
+      "topic": "self-hosted-alerts",
       "source_event_id": "abc123",
       "observed_at": "2026-05-23T02:40:00Z",
       "payload_hash": "sha256:...",
@@ -1383,8 +1383,8 @@ notification_sources:
         endpoint_url_env: "NTFY_SOURCE_ENDPOINT_URL_ENV_NAME"
         endpoint_display_name: "operator-safe endpoint label"
         topics:
-          - topic: "home-lab-alerts"
-            subject_hint: "home-lab"
+          - topic: "self-hosted-alerts"
+            subject_hint: "self-hosted"
             service_hint: ""
             domain_hint: "ops"
         auth:
@@ -1570,7 +1570,7 @@ Dead-letter list response:
     {
       "dead_letter_id": "ntfy_dlq_01J...",
       "source_instance_id": "operator-chosen-id",
-      "topic": "home-lab-alerts",
+      "topic": "self-hosted-alerts",
       "source_event_id": "ntfy-event-id",
       "cause": "sink_unavailable",
       "status": "pending",

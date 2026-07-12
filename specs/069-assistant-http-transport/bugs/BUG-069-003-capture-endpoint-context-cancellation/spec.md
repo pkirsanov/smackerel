@@ -22,7 +22,7 @@ This is the **same root cause** as the already-fixed
 HTTP adapter's capture-as-fallback branch, `internal/assistant/httpadapter/adapter.go`),
 but at the **DIRECT `/api/capture` endpoint**, which was **never in
 BUG-069-002's scope**. Discovered by an independent **bubbles.code-review
-MVP/evo-x2 readiness sweep**, finding **F-01**; finding id
+MVP/<deploy-host> readiness sweep**, finding **F-01**; finding id
 **F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL**. This bug spec defines the production
 behavior the fix must guarantee.
 

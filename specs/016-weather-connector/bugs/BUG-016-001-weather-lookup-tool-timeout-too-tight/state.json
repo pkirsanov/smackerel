@@ -4,7 +4,7 @@
   "spec": "specs/016-weather-connector",
   "severity": "S1",
   "status": "done",
-  "resolution": "internal/agent/tools/weather/tool.go: PerCallTimeoutMs bumped 2000 → 8000 ms with an 8-line doc comment explaining the measurement (open-meteo geocode + forecast = 2-4s end-to-end on home-lab) and the 2x headroom rationale. Shipped in commit 96acf294 (2026-06-09T05:53 UTC), CI green, deployed to <deploy-host> via ci-keyless promote (2026-06-09T15:33:39Z).",
+  "resolution": "internal/agent/tools/weather/tool.go: PerCallTimeoutMs bumped 2000 → 8000 ms with an 8-line doc comment explaining the measurement (open-meteo geocode + forecast = 2-4s end-to-end on self-hosted) and the 2x headroom rationale. Shipped in commit 96acf294 (2026-06-09T05:53 UTC), CI green, deployed to <deploy-host> via ci-keyless promote (2026-06-09T15:33:39Z).",
   "owner": "bubbles.devops",
   "discoveredBy": "bubbles.devops session 2026-06-09 during /weather triage",
   "discoveredAt": "2026-06-09T08:00:00Z",

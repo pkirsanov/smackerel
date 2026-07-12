@@ -313,9 +313,9 @@ func TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089(t *t
 // TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089 pins
 // the not-over-tight half of the guard: at the raised 48G envelope the
 // same deepseek-r1:32b standing default co-resident with the gemma4:26b
-// gather (40960 <= 49152) PASSES, AND the spec-089 home-lab switchable
+// gather (40960 <= 49152) PASSES, AND the spec-089 self-hosted switchable
 // set [deepseek-r1:32b, deepseek-r1:7b, gemma4:26b] all fit. The guard
-// must not false-positive on the real shipped home-lab configuration.
+// must not false-positive on the real shipped self-hosted configuration.
 // SCN-089-A06 / SCN-089-A01.
 func TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089(t *testing.T) {
 	profiles := map[string]int{
@@ -337,7 +337,7 @@ func TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089(t *testin
 	c.Assistant.OpenKnowledge.SwitchableModels = []string{"deepseek-r1:32b", "deepseek-r1:7b", "gemma4:26b"}
 	c.Assistant.OpenKnowledge.ToolCapableGatherModels = []string{"gemma4:26b", "llama3.1:8b"}
 	if err := c.validateModelEnvelopes(); err != nil {
-		t.Fatalf("the shipped 48G home-lab standing-default + switchable + tool-capable set MUST pass, got: %v", err)
+		t.Fatalf("the shipped 48G self-hosted standing-default + switchable + tool-capable set MUST pass, got: %v", err)
 	}
 }
 
@@ -594,7 +594,7 @@ func TestValidateModelEnvelopes_AC5b_OllamaRoutedExceedsOllamaEnvelopeRejectedWi
 // ALONE. But under a resident keep-alive, ollama retains every model it
 // loads, so the distinct interactive hot-path models are co-resident and
 // their SUM must ALSO fit the envelope — otherwise Docker OOM-kills the
-// ollama container into a restart crash-loop (the live home-lab failure
+// ollama container into a restart crash-loop (the live self-hosted failure
 // these tests prevent). The guard sums the distinct interactive slots
 // (LLM_MODEL + OLLAMA_MODEL + OLLAMA_VISION_MODEL + AGENT_PROVIDER_DEFAULT
 // + AGENT_PROVIDER_FAST + AGENT_PROVIDER_VISION) and rejects when resident
@@ -607,7 +607,7 @@ func TestValidateModelEnvelopes_AC5b_OllamaRoutedExceedsOllamaEnvelopeRejectedWi
 // every model referenced by setRequiredEnv() after the SCOPE-082-02
 // interactive overrides below. big-a (18432) and big-b (6144) each fit a
 // 20 GiB ollama envelope ALONE but sum to 24576 MiB (> 20480), exactly the
-// home-lab gemma4:26b + llama3.1:8b over-subscription this guard catches.
+// self-hosted gemma4:26b + llama3.1:8b over-subscription this guard catches.
 const spec082InteractiveProfiles = `[` +
 	`{"model":"spec082-big-a-18g","memory_mib":18432},` +
 	`{"model":"spec082-big-b-6g","memory_mib":6144},` +

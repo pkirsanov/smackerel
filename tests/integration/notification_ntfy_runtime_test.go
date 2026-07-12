@@ -20,7 +20,7 @@ func TestNtfyRuntimeStartsConfiguredWebhookAdapterAndSubmitsObservedMessages(t *
 		"transport_mode":"webhook",
 		"endpoint_url":"http://smackerel-core:8080/api/notifications/sources/ntfy-integration-webhook/ntfy/webhook",
 		"endpoint_ref_name":"NTFY_INTEGRATION_WEBHOOK_ENDPOINT_URL",
-		"topics":["home-lab-alerts"],
+		"topics":["self-hosted-alerts"],
 		"auth_mode":"none",
 		"secret_ref_names":[],
 		"default_domain":"ops",
@@ -51,7 +51,7 @@ func TestNtfyRuntimeStartsConfiguredWebhookAdapterAndSubmitsObservedMessages(t *
 		}
 	}()
 	waitForIntegrationWebhookRegistration(t, registry, cfg.SourceInstanceID)
-	if err := registry.ReceiveRaw(context.Background(), cfg.SourceInstanceID, []byte(`{"id":"evt-integration-webhook","event":"message","topic":"home-lab-alerts","title":"Integration","message":"webhook runtime"}`)); err != nil {
+	if err := registry.ReceiveRaw(context.Background(), cfg.SourceInstanceID, []byte(`{"id":"evt-integration-webhook","event":"message","topic":"self-hosted-alerts","title":"Integration","message":"webhook runtime"}`)); err != nil {
 		t.Fatalf("receive webhook: %v", err)
 	}
 	if got := sink.waitForEnvelopeCount(t, 1); got[0].SourceEventID != "evt-integration-webhook" {
@@ -75,7 +75,7 @@ func waitForIntegrationWebhookRegistration(t *testing.T, registry *ntfysource.We
 }
 
 func ntfyIntegrationConfig() ntfysource.Config {
-	return ntfysource.Config{Enabled: true, SourceInstanceID: "ntfy-integration-webhook", SourceForm: notification.SourceFormWebhook, TransportMode: ntfysource.TransportModeWebhook, EndpointURL: "http://smackerel-core:8080/api/notifications/sources/ntfy-integration-webhook/ntfy/webhook", EndpointRefName: "NTFY_INTEGRATION_WEBHOOK_ENDPOINT_URL", Topics: []string{"home-lab-alerts"}, Auth: ntfysource.AuthConfig{Mode: ntfysource.AuthModeNone}, Reconnect: ntfysource.ReconnectConfig{RetryBudget: 3, InitialDelaySeconds: 1, MaxDelaySeconds: 5, KeepaliveTimeoutSeconds: 30}, Lag: ntfysource.LagConfig{DegradedAfterSeconds: 60, DisconnectedAfterSeconds: 300}, DeadLetter: ntfysource.DeadLetterConfig{RetryBudget: 2, MaxPayloadBytes: 4096, PressureThresholdCount: 2}, RedactedMetadata: map[string]string{"display_name": "ntfy integration webhook", "endpoint_label": "integration webhook endpoint"}, ConfigHash: "sha256:ntfy-integration-webhook"}
+	return ntfysource.Config{Enabled: true, SourceInstanceID: "ntfy-integration-webhook", SourceForm: notification.SourceFormWebhook, TransportMode: ntfysource.TransportModeWebhook, EndpointURL: "http://smackerel-core:8080/api/notifications/sources/ntfy-integration-webhook/ntfy/webhook", EndpointRefName: "NTFY_INTEGRATION_WEBHOOK_ENDPOINT_URL", Topics: []string{"self-hosted-alerts"}, Auth: ntfysource.AuthConfig{Mode: ntfysource.AuthModeNone}, Reconnect: ntfysource.ReconnectConfig{RetryBudget: 3, InitialDelaySeconds: 1, MaxDelaySeconds: 5, KeepaliveTimeoutSeconds: 30}, Lag: ntfysource.LagConfig{DegradedAfterSeconds: 60, DisconnectedAfterSeconds: 300}, DeadLetter: ntfysource.DeadLetterConfig{RetryBudget: 2, MaxPayloadBytes: 4096, PressureThresholdCount: 2}, RedactedMetadata: map[string]string{"display_name": "ntfy integration webhook", "endpoint_label": "integration webhook endpoint"}, ConfigHash: "sha256:ntfy-integration-webhook"}
 }
 
 type integrationRecordingSink struct {

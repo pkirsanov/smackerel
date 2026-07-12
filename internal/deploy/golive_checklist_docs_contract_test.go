@@ -3,7 +3,7 @@
 
 // Spec 082 SCOPE-082-08 — operator Go-Live Readiness Checklist docs contract.
 //
-// A holistic MVP → evo-x2 readiness review found that the go-live
+// A holistic MVP → <deploy-host> readiness review found that the go-live
 // dependencies (spec 051 secrets, spec 052 L2 knb secret injection, spec 017
 // local-operator vs CI trust, Compose profile enablement, backup/restore
 // sequencing, supervised canary) were scattered across spec internals with no
@@ -15,8 +15,8 @@
 // sub-test proves a missing anchor is rejected.
 //
 // Cross-reference:
-//   - specs/082-mvp-evo-x2-readiness-hardening/spec.md FR-082-008
-//   - specs/082-mvp-evo-x2-readiness-hardening/scenario-manifest.json SCN-082-H01
+//   - specs/082-mvp-target-readiness-hardening/spec.md FR-082-008
+//   - specs/082-mvp-target-readiness-hardening/scenario-manifest.json SCN-082-H01
 //   - docs/Deployment.md ("Go-Live Readiness Checklist")
 package deploy
 

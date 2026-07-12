@@ -20,7 +20,7 @@ See [spec.md](spec.md) SCN-BUG-052-001-1, SCN-BUG-052-001-2, SCN-BUG-052-001-3.
 
 | ID | Test | File | Expectation |
 |----|------|------|-------------|
-| T-BUG-052-001-1 | `TestBundleSecretContract_NoLiteralSecretsInHomeLab` + A1/A2/A3/A4 | `internal/deploy/bundle_secret_contract_test.go` | All five sub-tests pass (red→green) |
+| T-BUG-052-001-1 | `TestBundleSecretContract_NoLiteralSecretsInSelfHosted` + A1/A2/A3/A4 | `internal/deploy/bundle_secret_contract_test.go` | All five sub-tests pass (red→green) |
 | T-BUG-052-001-2 | Adversarial-preservation re-run | `internal/deploy/bundle_secret_contract_test.go` | A1 drift / A2 leakage / A3 determinism / A4 opt-out still enforce original expectations |
 
 ### Definition of Done

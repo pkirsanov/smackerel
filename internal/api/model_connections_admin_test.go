@@ -5,7 +5,7 @@
 // fake probe — proving the write-only-credential redaction, the truthful typed
 // pass/fail, the 409 enable-guard, the 404 closed-set slot, and the per-kind
 // secret fields in isolation. The live hosted-provider e2e legs (real
-// reachability + real credentials) are DEFERRED to the home-lab bubbles.devops
+// reachability + real credentials) are DEFERRED to the self-hosted bubbles.devops
 // dispatch (C7).
 //
 // All secret values are SYNTHETIC; lines whose values resemble a key carry a

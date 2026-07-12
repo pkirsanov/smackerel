@@ -57,13 +57,13 @@ Re-ran `bash .github/bubbles/scripts/artifact-lint.sh specs/083-card-rewards-com
 Honest, fully-disclosed discovered issues / external-actor-gated deferrals for
 this in-progress spec, each with an explicit disposition (Gate G095). They are
 intentionally NOT resolved in-session because they require an external actor
-(operator-provisioned live Ollama on the home-lab ops node) or belong to another
+(operator-provisioned live Ollama on the self-hosted ops node) or belong to another
 owning area; the spec correctly stays `in_progress` until they clear.
 
 | Date | Discovered issue | Disposition | Reference |
 |------|------------------|-------------|-----------|
-| 2026-06-12 | SCN-083-E08 — a *successful* live-Ollama category-extraction inference round-trip cannot run on the disposable test stack (its Ollama serves no pulled LLM model; litellm returns APIConnectionError). The orchestrator→sidecar HTTP fail-loud contract and the `extract` audit-run persistence ARE proven live on PG. | ops-filed / routed — satisfiable on the operator's home-lab ops node (live Ollama + model) per the spec-043 Ollama test infrastructure; tracked as the single remaining Scope 05 DoD item. | spec.md FR-CR-007 / FR-CR-010; specs/043-ollama-test-infrastructure; report.md "SCN-083-E08 (live PG + real ml sidecar round-trip)" |
-| 2026-06-12 | A non-zero CalDAV calendar-event WRITE against a real CalDAV server is gated on the operator enabling `card_rewards.calendar_sync` on the home-lab deployment. The CalDAV bridge, stable-UID update-not-duplicate behavior, and the `calendar_sync` audit run ARE proven against an external-boundary fake on live PG (H06). | routed — operator-gated at home-lab deploy time; `bubbles.train` owns the `card_rewards` flag bundle and the deploy adapter owns the CalDAV credentials. | spec.md FR-CR-015; scopes.md Scope 08 + Scope 11 K07/K08 |
+| 2026-06-12 | SCN-083-E08 — a *successful* live-Ollama category-extraction inference round-trip cannot run on the disposable test stack (its Ollama serves no pulled LLM model; litellm returns APIConnectionError). The orchestrator→sidecar HTTP fail-loud contract and the `extract` audit-run persistence ARE proven live on PG. | ops-filed / routed — satisfiable on the operator's self-hosted ops node (live Ollama + model) per the spec-043 Ollama test infrastructure; tracked as the single remaining Scope 05 DoD item. | spec.md FR-CR-007 / FR-CR-010; specs/043-ollama-test-infrastructure; report.md "SCN-083-E08 (live PG + real ml sidecar round-trip)" |
+| 2026-06-12 | A non-zero CalDAV calendar-event WRITE against a real CalDAV server is gated on the operator enabling `card_rewards.calendar_sync` on the self-hosted deployment. The CalDAV bridge, stable-UID update-not-duplicate behavior, and the `calendar_sync` audit run ARE proven against an external-boundary fake on live PG (H06). | routed — operator-gated at self-hosted deploy time; `bubbles.train` owns the `card_rewards` flag bundle and the deploy adapter owns the CalDAV credentials. | spec.md FR-CR-015; scopes.md Scope 08 + Scope 11 K07/K08 |
 | 2026-06-12 | A pre-existing `qf-decisions` connector gap surfaced during Scope 04 — outside this spec's card-rewards remit; no card-rewards behavior depends on it. | routed — owned by the qf-decisions / connector area; recorded, not fixed here. | report.md "Delivery — Scope 04" |
 | 2026-06-12 | A shared `internal/web` head ↔ global CSP htmx trailing-slash mismatch surfaced during Scope 10 e2e-ui. Card-rewards pages use a script-free, CSP-clean head and are unaffected. | routed — owned by the web/spec-044/057 area; recorded for that area to address separately. | report.md "Pre-existing out-of-scope finding (shared head ↔ CSP htmx mismatch)" |
 
@@ -1234,7 +1234,7 @@ PASS: go-integration
 E08LIVE_EXIT=0
 ```
 
-**HONEST status (disposable-stack live-Ollama unavailable; now RESOLVED on home-lab).** The test exercised the real
+**HONEST status (disposable-stack live-Ollama unavailable; now RESOLVED on self-hosted).** The test exercised the real
 orchestrator → ml-sidecar HTTP round-trip end-to-end: the sidecar's
 `/extract-card-categories` route returned a STRUCTURED HTTP 502
 (`model gateway unreachable: APIConnectionError`) — which proves the route is
@@ -1249,8 +1249,8 @@ model (the `integration` lane does not run the spec-043 `ollama-test-pull`
 step, and — confirmed empirically — does not forward `SMACKEREL_TEST_OLLAMA`
 into the go-test container). A SUCCESSFUL live Ollama inference round-trip
 was therefore outstanding on the disposable stack and is now **PROVEN on the
-home-lab deployment** (Ollama + the gemma4:26b model) — see the "Deploy to
-home-lab + Scope 05 E08 live-Ollama closure" section below. The audit-run
+self-hosted deployment** (Ollama + the gemma4:26b model) — see the "Deploy to
+self-hosted + Scope 05 E08 live-Ollama closure" section below. The audit-run
 PERSISTENCE half of E08 is independently PROVEN on live Postgres by
 `TestExtractorLivePG_ExtractionRunAudited_E08` (PASS, above).
 
@@ -2691,7 +2691,7 @@ triggers still record `scrape`/`optimize` audit runs. This is safe: when
 disabled the connector is never connected, so the refresh's extract stage
 receives ZERO inputs and never dereferences the nil sidecar (`Extractor.Run`
 calls the sidecar only per-input). Live extraction is simply unavailable until
-`card_rewards` is enabled with a real `AUTH_TOKEN` (home-lab ops node).
+`card_rewards` is enabled with a real `AUTH_TOKEN` (self-hosted ops node).
 
 ### K08 / CalDAV constraint (honest disclosure)
 
@@ -2699,11 +2699,11 @@ K08 ("sync calendar now") fires `TriggerCardRewardsRecommendNow` → the recomme
 pipeline (optimize → recommend → calendar sync). The disposable e2e-ui stack has
 **no CalDAV server** wired, so the pipeline's calendar bridge is nil and the
 recommend run records `events_written=0` (calendar delivery requires operator
-CalDAV credentials on the home-lab ops node — same class of operator-infra
+CalDAV credentials on the self-hosted ops node — same class of operator-infra
 deferral as Scope 05's live-Ollama item). The admin trigger, the manual-trigger
 wiring, the run logging, and the `events_written` column are all REAL and
 asserted; only the non-zero calendar-event write is gated on enabling
-card_rewards on the home-lab deployment. K08's e2e asserts the recommend pipeline ran and logged an
+card_rewards on the self-hosted deployment. K08's e2e asserts the recommend pipeline ran and logged an
 `optimize` run carrying an `events_written` value (`0` here).
 
 ### Path reconciliation + scopesdriftguard fix
@@ -2928,11 +2928,11 @@ live-Ollama DoD item is the only open work). Not committed (autoCommit off) —
 the orchestrator owns the preservation checkpoint.
 
 
-## Deploy to home-lab + Scope 05 E08 live-Ollama closure (2026-06-12)
+## Deploy to self-hosted + Scope 05 E08 live-Ollama closure (2026-06-12)
 
-The `cardrewards-home-lab` scenario was driven through the release-readiness
+The `cardrewards-self-hosted` scenario was driven through the release-readiness
 audit, git reconciliation (rebased onto origin/main, zero loss), CI build, and
-the operator-approved home-lab deploy. The build-once-deploy-many pipeline and
+the operator-approved self-hosted deploy. The build-once-deploy-many pipeline and
 the previously-pending Scope 05 E08 item are both proven on the live host below.
 
 ### CI build — signed images + build-manifest
@@ -2942,42 +2942,42 @@ triggered `.github/workflows/build.yml`, which completed green:
 
 - `smackerel-core` @ `sha256:1a48bb431f59edc13122616aba649b50ee65d74aa733f6b9a60b5e32e17e6dee`
 - `smackerel-ml`   @ `sha256:6457e60d62fbf790e5bbadf50023f90668bee44bfc44e26f0cce2372e741c970`
-- config bundle `home-lab-a8d2abb2…` (cosign-keyless + Rekor + SBOM + SLSA, Trivy CRITICAL/HIGH gate passed)
+- config bundle `self-hosted-a8d2abb2…` (cosign-keyless + Rekor + SBOM + SLSA, Trivy CRITICAL/HIGH gate passed)
 - `build-manifest-a8d2abb2….yaml` published
 
-### Apply on the home-lab host (knb home-lab adapter, ci-keyless trust model)
+### Apply on the self-hosted host (knb self-hosted adapter, ci-keyless trust model)
 
-`knb/smackerel/home-lab/apply.sh` verified cosign signatures + bundle hash via
+`<deployment-owner>/<product>/<target>/apply.sh` verified cosign signatures + bundle hash via
 the 8 pre-apply checks, then recreate-swapped core + ml. Canonical provenance in
 `/var/log/knb-apply.log`:
 
 ```
-event=apply timestamp=2026-06-12T02:45:04Z operator=phwp@<home-lab-host> knb_sha=6e2603f
+event=apply timestamp=2026-06-12T02:45:04Z operator=<operator>@<deploy-host> knb_sha=6e2603f
 source_sha=a8d2abb2e4aadbc4b65d752d0e37b65dcd1ec0f9
 image_core=sha256:1a48bb431f59edc13122616aba649b50ee65d74aa733f6b9a60b5e32e17e6dee
 image_ml=sha256:6457e60d62fbf790e5bbadf50023f90668bee44bfc44e26f0cce2372e741c970
-config_bundle=home-lab-a8d2abb2e4aadbc4b65d752d0e37b65dcd1ec0f9
+config_bundle=self-hosted-a8d2abb2e4aadbc4b65d752d0e37b65dcd1ec0f9
 secrets_decrypted=true effective_env_substituted_count=6
 effective_env_placeholder_remaining_count=0 cleanup_status=ok outcome=success
 ```
 
 `verify`: core `/api/health` healthy, ml `/health` healthy, running digests
-MATCH the expected core/ml digests, Caddy edge `https://<home-lab-host>/ → 401`
+MATCH the expected core/ml digests, Caddy edge `https://<deploy-host>/ → 401`
 (auth-gated as designed). Migration `057_card_rewards.sql` applied — all 10
-card-rewards tables present in the live home-lab Postgres; covered by the knb
+card-rewards tables present in the live self-hosted Postgres; covered by the knb
 `backup.sh` `pg_dump`.
 
 ### SCN-083-E08 — successful live Ollama inference (CLOSES the previously-pending item)
 
 The one DoD item that could not run on the disposable test stack (the sidecar
 returned `APIConnectionError` because that Ollama serves no pulled model) is now
-proven against the deployed sidecar on the home-lab host, whose configured `gemma4:26b`
+proven against the deployed sidecar on the self-hosted host, whose configured `gemma4:26b`
 runs 100% on GPU (`ollama ps` confirmed). A real POST to the deployed
 `/extract-card-categories` route (internal `:8081`, Bearer-authed via the
 container's `SMACKEREL_AUTH_TOKEN`, in-stack `ollama:11434`):
 
 ```
-=== E08 LIVE: POST /extract-card-categories on the home-lab host (real route, gemma4:26b via in-stack Ollama) ===
+=== E08 LIVE: POST /extract-card-categories on the self-hosted host (real route, gemma4:26b via in-stack Ollama) ===
 HTTP 200
 {
   "card_id": "chase-freedom-flex",
@@ -3011,7 +3011,7 @@ policy — the schema, route, scheduler wiring, and inference path are all live
 and proven, but full daily/monthly operation needs operator-supplied activation
 values (real offer-source URLs, tracked categories, a chosen Ollama model, and a
 CalDAV/Google-Calendar credential + sidecar `AUTH_TOKEN`). Those belong in the
-knb home-lab overlay (`environments.home-lab.card_rewards` override + the
+knb self-hosted overlay (`environments.self-hosted.card_rewards` override + the
 encrypted secrets file), NOT the generic smackerel tree.
 
 <!-- bubbles:evidence-legitimacy-skip-end -->
@@ -3091,7 +3091,7 @@ environment-dependent and lives outside the card-rewards surface; it is a
 discovered non-card-rewards issue, reported here and **not** modified (the
 concurrent-work guard forbids touching non-card-rewards code).
 
-### Evidence — test (integration/e2e: environmentally blocked this pass; corroborated by prior live-PG runs + the home-lab deployment)
+### Evidence — test (integration/e2e: environmentally blocked this pass; corroborated by prior live-PG runs + the self-hosted deployment)
 
 The card-rewards live-PG integration lane was attempted twice via the repo CLI
 (`./smackerel.sh test integration --go-run 'CardRewards|LivePG'`). Both attempts
@@ -3135,7 +3135,7 @@ Card-rewards integration / e2e behavior is independently proven by:
 - the **prior committed live-PG runs** in this report (Scopes 02–11: all
   `B*/C*/E*/F*/G*/H*/I*/J*/K*` scenarios PASS on a disposable Postgres with clean
   ephemeral teardown), and
-- the **live home-lab deployment** above (E08 successful live-Ollama `HTTP 200`
+- the **live self-hosted deployment** above (E08 successful live-Ollama `HTTP 200`
   against the deployed sidecar, migration `057_card_rewards.sql` applied, all 10
   card-rewards tables live, running digests MATCH).
 

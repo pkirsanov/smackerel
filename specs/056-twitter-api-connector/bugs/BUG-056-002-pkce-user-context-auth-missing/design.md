@@ -230,7 +230,7 @@ state companion. Twitter owns its tables, mirroring Drive.
 callback (`GET /v1/connectors/drive/oauth/callback`) because it is a multi-account,
 browser-from-the-web-UI connect flow. The Twitter connector is a single-operator, headless,
 one-time authorize; requiring a publicly-reachable OAuth redirect endpoint on a Tailscale/Caddy
-home-lab box is friction the CLI-paste flow avoids. Twitter deprecated true OOB
+self-hosted box is friction the CLI-paste flow avoids. Twitter deprecated true OOB
 (`urn:ietf:wg:oauth:2.0:oob`), so we use a registered loopback `redirect_uri`
 (recommended `http://127.0.0.1/callback`) and have the operator copy `state` + `code` from the
 browser address bar after authorizing — the redirect target need not run a server.
@@ -428,7 +428,7 @@ MUST be updated to describe the now-shipped PKCE delivery accurately.
    must not inherit for a long-lived refresh token, and no PKCE-state companion. Dedicated Twitter
    tables mirror the Drive precedent.
 4. **HTTP redirect callback (mirror Drive).** REJECTED for the headless single-user case:
-   requires a publicly-reachable redirect endpoint on the home-lab box; CLI-paste is simpler and
+   requires a publicly-reachable redirect endpoint on the self-hosted box; CLI-paste is simpler and
    robust (A.4).
 5. **Silent fallback to App-Only when the user-context token is missing.** REJECTED: re-creates
    this exact bug and violates smackerel-no-defaults. Fail loud (A.7).

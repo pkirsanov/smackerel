@@ -50,9 +50,9 @@ BUG-015-001 triage.
 (Pre-fix) Take down ollama or any LLM dependency:
 
 ```bash
-ssh <deploy-host> 'docker stop smackerel-home-lab-ollama-1'
+ssh <deploy-host> 'docker stop smackerel-self-hosted-ollama-1'
 # Send /weather <city> via Telegram
-ssh <deploy-host> 'docker logs smackerel-home-lab-smackerel-core-1 --since 1m \
+ssh <deploy-host> 'docker logs smackerel-self-hosted-smackerel-core-1 --since 1m \
               | grep assistant_turn'
 # Pre-fix: only error_cause:"provider_unavailable" — no clue ollama is down.
 # Post-fix: includes outcome="provider-error", outcome_detail="error=llm_driver_error detail=dial tcp ollama:11434: connect: connection refused".

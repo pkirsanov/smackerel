@@ -3,11 +3,11 @@
 ## Classification
 
 - **Type:** DevOps defect — dev-compose Gate G028 violation sweep (operational hardening)
-- **Severity:** P3 — LOW (the dev compose file `docker-compose.yml` is used only by `./smackerel.sh up` / `./smackerel.sh test` workflows; the production / home-lab compose file `deploy/compose.deploy.yml` is unaffected and was already converted to fail-loud forms by spec 042 and BUG-042-001..005). The risk of the pre-fix state is silent SST drift: a developer who manually invokes `docker compose -f docker-compose.yml up` without first running `./smackerel.sh config generate` would see the dev image silently use `dev / unknown / unknown` for VERSION / COMMIT / BUILD_TIME and silently fall back to `config/generated/dev.env` for the env-file path, masking real misconfiguration.
+- **Severity:** P3 — LOW (the dev compose file `docker-compose.yml` is used only by `./smackerel.sh up` / `./smackerel.sh test` workflows; the production / self-hosted compose file `deploy/compose.deploy.yml` is unaffected and was already converted to fail-loud forms by spec 042 and BUG-042-001..005). The risk of the pre-fix state is silent SST drift: a developer who manually invokes `docker compose -f docker-compose.yml up` without first running `./smackerel.sh config generate` would see the dev image silently use `dev / unknown / unknown` for VERSION / COMMIT / BUILD_TIME and silently fall back to `config/generated/dev.env` for the env-file path, masking real misconfiguration.
 - **Parent Spec:** 029 — DevOps Pipeline & Image Governance (owns `./smackerel.sh up` workflow + dev `docker-compose.yml` + `./smackerel.sh config generate` SST chain)
 - **Workflow Mode:** test-to-doc
 - **Status:** Fixed
-- **Discovered By:** 2026-05-14 home-lab readiness re-scan (finding HL-RESCAN-012)
+- **Discovered By:** 2026-05-14 self-hosted readiness re-scan (finding HL-RESCAN-012)
 
 ## Problem Statement
 
@@ -32,7 +32,7 @@ The runtime behavior of the smackerel-core / smackerel-ml services was correct i
 
 | Aspect | Detail |
 |---|---|
-| Trigger | Home-lab readiness re-scan (system review session 2026-05-14) |
+| Trigger | self-hosted readiness re-scan (system review session 2026-05-14) |
 | Finding | HL-RESCAN-012 |
 | Severity | P3 (sanctioned `./smackerel.sh up` workflow already supplies the env file; the gap is silent fallback in unsanctioned manual invocations and SST drift) |
 | Audit method | `grep -nE '\$\{[A-Z_]+:-' docker-compose.yml` returned 14 matches. Cross-referenced against `scripts/commands/config.sh` (the SST generator) and observed: SMACKEREL_VERSION / SMACKEREL_COMMIT / SMACKEREL_BUILD_TIME / SMACKEREL_CORE_IMAGE / SMACKEREL_ML_IMAGE are NOT emitted into `config/generated/dev.env` (or `config/generated/test.env`). SMACKEREL_ENV_FILE IS emitted (line 5 of dev.env, populated as `config/generated/dev.env`) but the dev compose still had the forbidden `:-` fallback because no test locked it. The four volume-mount vars are emitted (as empty strings — load-bearing for the connector code's "no import" signal). Cross-referenced with `internal/deploy/compose_contract_test.go` (the prod-compose contract test): no equivalent test exists for the dev compose file. Gate G028 reference: `.github/copilot-instructions.md` SST Zero-Defaults Enforcement table. |
@@ -52,7 +52,7 @@ The runtime behavior of the smackerel-core / smackerel-ml services was correct i
 ## Out of Scope
 
 - Converting the four volume-mount `${X:-./data/...}` defaults to fail-loud forms. The empty value is load-bearing for the connector code's "no import configured" signal. Converting them requires (a) emitting `BOOKMARKS_IMPORT_DIR` / `MAPS_IMPORT_DIR` / `BROWSER_HISTORY_PATH` / `TWITTER_ARCHIVE_DIR` from the SST as truly empty (already done) and (b) the connector code recognising the difference between "explicit empty SST value (no import)" and "unset env var (real misconfiguration)" — which is a connector-side refactor outside the dev-compose contract surface. Filed as a follow-up bug.
-- Editing `deploy/compose.deploy.yml` (the prod / home-lab compose file). Already locked by spec 042 + BUG-042-001..005 with `internal/deploy/compose_contract_test.go`.
+- Editing `deploy/compose.deploy.yml` (the prod / self-hosted compose file). Already locked by spec 042 + BUG-042-001..005 with `internal/deploy/compose_contract_test.go`.
 - Editing `specs/029-devops-pipeline/spec.md`, `specs/029-devops-pipeline/design.md`, `specs/029-devops-pipeline/scopes.md`, `specs/029-devops-pipeline/state.json`, `specs/029-devops-pipeline/uservalidation.md`, or `specs/029-devops-pipeline/report.md` — foreign-owned parent-spec content; outside `bubbles.devops` mode edit scope.
 - Editing `.github/workflows/ci.yml` to export `SMACKEREL_VERSION` / `SMACKEREL_COMMIT` differently. The existing workflow already exports both via `git describe` / `${{ github.sha }}` before invoking `./smackerel.sh build`; the SST generator change in this fix preserves that flow (the resolution order is "shell env wins; placeholder fallback is only used when neither shell env nor `config/smackerel.yaml` provides a value").
 - Cosign-signing or attesting the dev compose file itself (the dev compose file is not a release artifact — only the prod compose file under `deploy/` is part of the build-once-deploy-many surface).

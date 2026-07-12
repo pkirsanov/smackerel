@@ -123,7 +123,7 @@ The primary HL-RESCAN-013 close-out (BUG-020-002, commit `0c67122e`, 2026-05-14)
 
 > `ml/app/nats_client.py` line 180 — runs INSIDE `connect()` which is invoked AFTER `_check_required_config()` validates the env, so the silent default there is functionally redundant. ... Scoped to a sequel packet to be filed once the parallel session merges.
 
-This bug packet (`BUG-020-004`) is that deferred sequel for the connect-time call site. The 2026-05-15 home-lab readiness re-scan (run AFTER the BUG-020-002 close-out) re-audited the ML sidecar surface and found the deferred site at `ml/app/nats_client.py:184` (line number against HEAD `ad512fc6`) still pre-fix, exactly as BUG-020-002 had documented.
+This bug packet (`BUG-020-004`) is that deferred sequel for the connect-time call site. The 2026-05-15 self-hosted readiness re-scan (run AFTER the BUG-020-002 close-out) re-audited the ML sidecar surface and found the deferred site at `ml/app/nats_client.py:184` (line number against HEAD `ad512fc6`) still pre-fix, exactly as BUG-020-002 had documented.
 
 The reason BUG-020-002 deferred this site: the parallel session that produced today's working-tree autoformatter noise (`internal/metrics/auth.go`, `ml/app/embedder.py`, `ml/tests/test_embedder.py`, `ml/tests/test_main.py`, `ml/tests/test_ocr.py`, `tests/integration/auth_chaos_test.go`) had concurrent uncommitted edits to `ml/app/nats_client.py` (the multi-line `raise RuntimeError(...)` collapse at lines 153-156 and 168-170 visible in `git diff HEAD`). Bundling the fail-loud fix together with that autoformatter collapse would have mixed two unrelated changes; sequel-packet treatment keeps the change-boundary discipline clean.
 

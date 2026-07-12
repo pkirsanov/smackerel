@@ -139,7 +139,7 @@ immutable build artifacts (signed images + per-env config bundles via
 `./smackerel.sh config generate --env <env> --bundle`) and exposes adapter
 contracts. It does NOT hold environment-specific final configuration.
 
-Home-lab and all other environment-specific final configuration — real
+self-hosted and all other environment-specific final configuration — real
 hostnames, real IPs, real Tailscale tailnet identity (tailnet IDs, FQDNs,
 CGNAT IPs), real Caddy/nginx site files, real `ufw` rules, real systemd unit
 names tied to an operator's host, real secret values, and real per-target
@@ -149,7 +149,7 @@ overlay repo. Adding any operator-coupled topology to THIS repo is a
 
 | FORBIDDEN in this repo | ALLOWED in this repo |
 |------------------------|----------------------|
-| Real hostnames | Generic placeholders (`<home-lab-host>`, `<deploy-host>`) |
+| Real hostnames | Generic placeholders (`<deploy-host>`, `<deploy-host>`) |
 | Real IP addresses (CGNAT, public, RFC 6598) | `127.0.0.1`, `localhost`, RFC1918 references |
 | Real Tailscale tailnet IDs / FQDNs (`*.ts.net`) | `<tailnet-id>`, `<tailnet-fqdn>` placeholders |
 | Real Caddy/nginx site filenames | Generic per-product fragment naming (`<product>.caddy`) |
@@ -204,13 +204,13 @@ SHA produces immutable artifacts that any environment consumes:
 **Operator commands:**
 
 ```bash
-./smackerel.sh deploy-target home-lab apply \
+./smackerel.sh deploy-target self-hosted apply \
     --image-core=sha256:<digest> --image-ml=sha256:<digest> \
-    --config-bundle=home-lab-<sourceSha> \
+    --config-bundle=self-hosted-<sourceSha> \
     --config-bundle-sha=<sha256-hex>
-./smackerel.sh deploy-target home-lab verify
-./smackerel.sh deploy-target home-lab rollback
-bash scripts/deploy/promote.sh --target home-lab --build-manifest <path>
+./smackerel.sh deploy-target self-hosted verify
+./smackerel.sh deploy-target self-hosted rollback
+bash scripts/deploy/promote.sh --target self-hosted --build-manifest <path>
 ```
 
 See [`docs/Deployment.md`](../docs/Deployment.md) for full operator workflow,
@@ -218,9 +218,9 @@ See [`docs/Deployment.md`](../docs/Deployment.md) for full operator workflow,
 and [`.github/skills/bubbles-deployment-target-adapter/SKILL.md`](skills/bubbles-deployment-target-adapter/SKILL.md)
 for framework rationale.
 
-### Tailnet-Edge Bind Pattern (home-lab/production targets)
+### Tailnet-Edge Bind Pattern (self-hosted/production targets)
 
-Smackerel's home-lab and production deployments use the canonical
+Smackerel's self-hosted and production deployments use the canonical
 tailnet-edge bind pattern (see
 `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` in the framework
 repo). The deploy compose file `deploy/compose.deploy.yml` ships with
@@ -251,7 +251,7 @@ mention runtime defaults, load and follow
 
 Forbidden — re-publishing host ports for `postgres` or `nats` in
 `deploy/compose.deploy.yml`. Infra services have no business reason to be
-reachable from outside the compose network on home-lab; Pattern P1
+reachable from outside the compose network on self-hosted; Pattern P1
 (`docker exec` over Tailscale SSH) is the recommended and only DevOps
 access path.
 
@@ -264,7 +264,7 @@ form or to a re-published infra port.
 References:
 - `specs/042-tailnet-edge-bind-pattern/` — spec, design, scope DoD
 - `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` — canonical pattern
-- `docs/Operations.md` → "DevOps Access on Home-Lab (Tailnet-Edge Pattern)"
+- `docs/Operations.md` → "DevOps Access on Self-Hosted (Tailnet-Edge Pattern)"
 
 ---
 

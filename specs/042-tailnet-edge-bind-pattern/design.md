@@ -1,4 +1,4 @@
-# Design 042 — Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
+# Design 042 — Tailnet-Edge Bind Pattern (Self-Hosted Compose Readiness)
 
 Links: [spec.md](spec.md) | [scopes.md](scopes.md) |
 [uservalidation.md](uservalidation.md)
@@ -37,7 +37,7 @@ adapter-provided value, not because Compose invented it through fallback syntax.
   active deploy design, Compose examples, or validation expectations.
 - Do not describe the bind behavior as defaulting, implicitly loopback-bound,
   or fallback-preserved behavior.
-- Do not hardcode real home-lab hostnames, IP addresses, tailnet identifiers,
+- Do not hardcode real self-hosted hostnames, IP addresses, tailnet identifiers,
   or deploy-adapter repository paths in this product repo.
 
 ### Resolved Decisions
@@ -93,8 +93,8 @@ the Tailscale identity (`tailscale ssh`) for authentication.
 | `deploy/compose.deploy.yml`     | (1) Change `smackerel-core` port mapping prefix from `127.0.0.1:` to `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:`. (2) Same for `smackerel-ml`. (3) Delete the `ports:` block from `postgres` (replace with explanatory comment). (4) Delete the `ports:` block from `nats` (replace with explanatory comment). |
 | `config/smackerel.yaml`         | Add a multi-line comment above `runtime.host_bind_address` cross-referencing the SKILL, the fail-loud deploy compose contract, and the adapter-owned explicit-value path. No value or schema change. |
 | `internal/deploy/compose_contract_test.go` | Go unit test, package `deploy`, parses `deploy/compose.deploy.yml` with `gopkg.in/yaml.v3` and asserts the four invariants, including rejection of fallback syntax. |
-| `.github/copilot-instructions.md` | Add a "Tailnet-Edge Bind Pattern (home-lab/production targets)" subsection inside the "Required Runtime Standards" section. |
-| `docs/Operations.md`            | Add a "DevOps Access on Home-Lab (Tailnet-Edge Pattern)" section with concrete `docker exec` shapes for Postgres and NATS, plus the HTTPS Caddy URL flow. |
+| `.github/copilot-instructions.md` | Add a "Tailnet-Edge Bind Pattern (self-hosted/production targets)" subsection inside the "Required Runtime Standards" section. |
+| `docs/Operations.md`            | Add a "DevOps Access on Self-Hosted (Tailnet-Edge Pattern)" section with concrete `docker exec` shapes for Postgres and NATS, plus the HTTPS Caddy URL flow. |
 
 ### What Is NOT Edited
 
@@ -104,7 +104,7 @@ the Tailscale identity (`tailscale ssh`) for authentication.
 - `scripts/commands/config.sh`: unchanged. `HOST_BIND_ADDRESS` is already
   exported at line 398 / 805 from `runtime.host_bind_address` in
   `config/smackerel.yaml`, and is already present in
-  `config/generated/{dev,test,home-lab}.env`. Re-using the existing SST
+  `config/generated/{dev,test,self-hosted}.env`. Re-using the existing SST
   value is the explicit non-goal.
 - `deploy/contract.yaml`: unchanged. Image list, signing requirements, and
   config-bundle environments are stable.
@@ -116,8 +116,8 @@ the Tailscale identity (`tailscale ssh`) for authentication.
   reversal normative going forward.
 - `ollama` service in `deploy/compose.deploy.yml`: NOT edited.
   `ollama` is profile-gated (`profiles: [ollama]`) and is not started in
-  the default home-lab deployment. If a future spec enables ollama on
-  home-lab, that spec is responsible for migrating ollama to the same
+  the default self-hosted deployment. If a future spec enables ollama on
+  self-hosted, that spec is responsible for migrating ollama to the same
   pattern.
 
 ## Spec 020 Decision Reversal And Spec 042 Fallback Supersession
@@ -190,7 +190,7 @@ Not applicable — no UI surface in this spec.
 
 ## Security/Compliance
 
-This spec **improves** the network exposure posture of the home-lab deploy
+This spec **improves** the network exposure posture of the self-hosted deploy
 bundle:
 
 | Change                                | Pre-spec exposure                  | Post-spec exposure                  |
@@ -204,7 +204,7 @@ bundle:
 Removing infra host ports also closes a small operational footgun: a future
 agent or operator cannot accidentally `psql -h 127.0.0.1 -p <pg_host_port>`
 into the deploy compose's database from another tool that happens to be
-reading the same `.env` file. All Postgres/NATS access on home-lab now
+reading the same `.env` file. All Postgres/NATS access on self-hosted now
 flows through `docker exec`, which is the auditable path.
 
 The fail-loud substitution ensures deploy compose cannot start from an implicit

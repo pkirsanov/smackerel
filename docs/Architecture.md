@@ -155,7 +155,7 @@ this section is the operator-facing summary.
                                   ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │ L2: KNB ADAPTER (apply time, on target host with sops + age key)      │
-│ <knb-repo>/smackerel/home-lab/apply.sh                                │
+│ <deployment-owner>/<product>/<target>/apply.sh                                │
 │                                                                       │
 │   1. Verify bundle cosign signature (existing)                        │
 │   2. Verify bundle sha256 against build manifest (existing)           │
@@ -191,7 +191,7 @@ this section is the operator-facing summary.
 | Layer | Host | Privilege | Secret access |
 |-------|------|-----------|---------------|
 | L1 SST loader | CI runner OR operator workstation | Build-time only; runs `./smackerel.sh config generate --env <env> --bundle` | **None** for production-class targets — emits placeholder marker only |
-| L2 knb adapter | Target host (e.g. home-lab box) | Operator-trusted; runs `<knb-repo>/smackerel/<target>/apply.sh` | sops + age private key (`/etc/sops/age/keys.txt` or operator-mounted) |
+| L2 knb adapter | Target host (e.g. self-hosted box) | Operator-trusted; runs `<knb-repo>/smackerel/<target>/apply.sh` | sops + age private key (`/etc/sops/age/keys.txt` or operator-mounted) |
 | L3 Go runtime | Inside `smackerel-core` container on target host | Container-scoped; runs Smackerel process | Process env vars only — no key material on disk inside the container |
 
 ### Defense-in-depth invariants

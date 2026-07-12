@@ -610,7 +610,7 @@ Scenario: UC-10 REGRESSION — existing spec 091 /register + /login are unchange
 
 ## Release Train
 
-Targets the **`mvp`** train (the active home-lab train carrying the spec 070/091
+Targets the **`mvp`** train (the active self-hosted train carrying the spec 070/091
 web auth surface this extends). Default-off behavior on other trains follows the
 repo release-train model; whether an explicit train flag is introduced beyond the
 existing gate is left to design (`flagsIntroduced` is empty at the analyst phase).

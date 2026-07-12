@@ -14,7 +14,7 @@ Filing now per "for found issues file bugs and resolve" instruction.
 
 ## Symptoms
 
-After `smackerel-home-lab-smackerel-core-1` restarted at
+After `smackerel-self-hosted-smackerel-core-1` restarted at
 2026-06-09T07:56:12Z, the Telegram bot was unreachable for ~6.5
 hours. Logs showed:
 

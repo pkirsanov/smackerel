@@ -21,10 +21,10 @@ should also have an api/option to do so."*
 
 **Depends On:** spec 087 (open-knowledge genuine synthesis) — which added
 the split synthesis model (`okagent.Config.SynthesisModel`, SST key
-`assistant.open_knowledge.synthesis_model_id`, home-lab override
+`assistant.open_knowledge.synthesis_model_id`, self-hosted override
 `deepseek-r1:7b`) but could NOT prove on dev whether the reasoning-model
 swap fixes the live pomegranate-comparison failure (that proof is
-GPU/home-lab-dependent). This spec is the enabling primitive that lets
+GPU/self-hosted-dependent). This spec is the enabling primitive that lets
 the owner A/B that swap **live**. Transitively builds on the
 064 → 084 → 087 chain (the open-knowledge loop, the cite-back verifier,
 the provenance gate, the SST config block, the reasoning-prompt rewrite,
@@ -38,7 +38,7 @@ any closed bug. Every spec-064/084/087 trust and synthesis behavior is
 **Out of scope (explicit):** the spec-083 card-rewards WIP
 (`internal/cardrewards/`, `ml/app/card_categories.py`, `ml/app/main.py`,
 `ml/tests/test_card_categories.py`, `specs/083-card-rewards-companion/`,
-`tests/integration/cardrewards_extract_test.go`); the home-lab deploy +
+`tests/integration/cardrewards_extract_test.go`); the self-hosted deploy +
 the live `gemma4:26b`-vs-`deepseek-r1:7b` A/B run itself (a separate
 `bubbles.devops` dispatch); adding any NEW model to the matrix (the
 override selects from the EXISTING `model_memory_profiles` set);
@@ -70,10 +70,10 @@ wiring time:
   runtime override anywhere in the path.**
 
 Spec 087 shipped the split synthesis model so the operator *could* point
-the reasoning turn at `deepseek-r1:7b` on home-lab — but it terminated
+the reasoning turn at `deepseek-r1:7b` on self-hosted — but it terminated
 at **validated-in-repo**: dev has no GPU/Ollama daemon, so whether the
 reasoning swap actually fixes the live pomegranate-comparison failure is
-unproven and can only be settled by an A/B on the home-lab hardware.
+unproven and can only be settled by an A/B on the self-hosted hardware.
 Today, comparing `gemma4:26b` vs `deepseek-r1:7b` on the synthesis turn
 requires editing SST, regenerating the config bundle, and
 **redeploying** between every arm — too slow and too coarse for the

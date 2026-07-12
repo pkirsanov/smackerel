@@ -3,17 +3,17 @@
 **Status:** in_progress — `full-delivery` (ceiling `done`). The deliverable is
 the **`./smackerel.sh local-client-build` SURFACE** and its locally-provable
 correctness (CLI dispatch, arg parsing, fail-closed manifest emit, operator-sign
-invocation, trust-model alignment). The **real on-evo-x2 build execution** (a
+invocation, trust-model alignment). The **real on-<deploy-host> build execution** (a
 genuine `flutter build aab/apk` + real operator `cosign sign-blob` + real
 placement + real knb-gate-green run) is the **approval-gated downstream node
-n11** that runs ON evo-x2; it is explicitly NOT claimed as executed by this node
-(see [§ Runtime Execution Boundary](#runtime-execution-boundary-evo-x2--n11) and
+n11** that runs ON <deploy-host>; it is explicitly NOT claimed as executed by this node
+(see [§ Runtime Execution Boundary](#runtime-execution-boundary-<deploy-host>--n11) and
 [report.md](report.md)).
 
-> **Producer node n13.** This spec is the PRODUCER side of the reframed evo-x2
+> **Producer node n13.** This spec is the PRODUCER side of the reframed <deploy-host>
 > client delivery. Operator fact (knb spec 028 node n12): *"we do not use CI for
-> evo-x2; ALL builds and deployment happen ON evo-x2."* So the client binary
-> must be **BUILT + OPERATOR-SIGNED LOCALLY on evo-x2** (the `local-operator`
+> <deploy-host>; ALL builds and deployment happen ON <deploy-host>."* So the client binary
+> must be **BUILT + OPERATOR-SIGNED LOCALLY on <deploy-host>** (the `local-operator`
 > trust model), not in CI. This spec IMPLEMENTS the **Local Client-Build Phase
 > Contract** that knb spec 028 defined, for smackerel — the simplest product
 > (Flutter Android client only).
@@ -23,7 +23,7 @@ n11** that runs ON evo-x2; it is explicitly NOT claimed as executed by this node
 > schema, or the Lane-A delivery lib (those are knb-owned):
 > - [`knb/specs/028-client-binary-local-operator-trust-model`](../../../knb/specs/028-client-binary-local-operator-trust-model/spec.md) — the trust-model-aware amendment that DEFINED the local-client-build phase contract this spec implements.
 > - [`knb/specs/025-client-binary-release-and-delivery-pattern`](../../../knb/specs/025-client-binary-release-and-delivery-pattern/spec.md) — the canonical `clients:` manifest schema + the `E025-CLIENT-*` conformance gate (`knb/scripts/lint/client-binary-conformance.sh`).
-> - smackerel spec [`085-client-binary-release`](../085-client-binary-release/spec.md) — the sibling CI / `ci-keyless` path (PARKED on evo-x2, like Lane B); this spec adds the ACTIVE `local-operator` build path alongside it without forking it.
+> - smackerel spec [`085-client-binary-release`](../085-client-binary-release/spec.md) — the sibling CI / `ci-keyless` path (PARKED on <deploy-host>, like Lane B); this spec adds the ACTIVE `local-operator` build path alongside it without forking it.
 
 ---
 
@@ -37,17 +37,17 @@ emitter ([`scripts/deploy/client-manifest-clients-block.sh`](../../scripts/deplo
 stamps `provenance: cosign-keyless`, and the only acquisition primitive is
 `oras pull` from GHCR.
 
-**evo-x2 has NO CI and NO GHCR pull.** ALL builds and deployment happen ON
-evo-x2 under the `local-operator` trust model — the SAME model smackerel's
-**server images** already use (`smackerel/home-lab/params.yaml` →
+**<deploy-host> has NO CI and NO GHCR pull.** ALL builds and deployment happen ON
+<deploy-host> under the `local-operator` trust model — the SAME model smackerel's
+**server images** already use (`<deployment-owner>/<product>/<target>/params.yaml` →
 `signing.trustModel: local-operator`, built locally by
-[`scripts/commands/build-home-lab.sh`](../../scripts/commands/build-home-lab.sh)
+[`scripts/commands/build-self-hosted.sh`](../../scripts/commands/build-self-hosted.sh)
 with the operator cosign key). The client path has **no local equivalent**:
 there is no smackerel surface that builds the Flutter client locally,
 operator-signs it, and records it in a `local-operator` build manifest.
 
 The inconsistency proven on the live tree (2026-06-13):
-[`smackerel/home-lab/params.yaml`](../../../knb/smackerel/home-lab/params.yaml)
+[`<deployment-owner>/<product>/<target>/params.yaml`](../../../<deployment-owner>/<product>/<target>/params.yaml)
 already sets `signing.trustModel: local-operator` for images AND carries a
 `clientDelivery:` block whose knb adapter (knb spec 028) acquires a LOCAL signed
 client artifact by path + verifies it offline with `cosign verify-blob --key
@@ -58,20 +58,20 @@ spec adds it.
 ## Outcome Contract
 
 **Intent:** smackerel gains a `./smackerel.sh local-client-build --target
-home-lab` surface that, ON evo-x2, builds the Flutter Android client
+self-hosted` surface that, ON <deploy-host>, builds the Flutter Android client
 (`clients/mobile/assistant`) **LOCALLY** (AAB + APK), **operator-signs** each
 artifact with the operator cosign key (`cosign sign-blob` → adjacent `.sig`),
 computes the **real content sha256**, and emits a **local build manifest**
 `clients:` entry with `trustModel: local-operator` + `provenance:
 local-operator` + `ref` = a LOCAL filesystem path + non-empty `sha256` —
-conforming to the knb spec 025/028 schema so the knb home-lab adapter's
+conforming to the knb spec 025/028 schema so the knb self-hosted adapter's
 `local-operator` Lane-A delivery (`knb_client_acquire_local` →
 `cosign verify-blob --key` → sha256 byte-match → place under `serveRoot`)
 accepts it and the knb `client-binary-conformance.sh` gate passes.
 
 **Trust-model alignment:** the produced provenance is `local-operator` (NOT
 `cosign-keyless`); it aligns with the EXISTING
-`smackerel/home-lab/params.yaml::signing.trustModel: local-operator`. The
+`<deployment-owner>/<product>/<target>/params.yaml::signing.trustModel: local-operator`. The
 `ci-keyless` path (smackerel spec 085) stays fully coded but **PARKED** — exactly
 like the Lane-B store-submission flag.
 
@@ -81,13 +81,13 @@ written.
 
 **Boundary (what this node delivers vs what n11 delivers):**
 
-| Surface | This node (n13, locally provable) | evo-x2 runtime (n11, approval-gated) |
+| Surface | This node (n13, locally provable) | <deploy-host> runtime (n11, approval-gated) |
 |---------|-----------------------------------|--------------------------------------|
 | CLI dispatch + arg parse | ✅ delivered + tested | — |
 | Manifest `clients:` emit (real sha256 over a FIXTURE blob, fail-closed) | ✅ delivered + tested | — |
 | Operator-sign **invocation** (recording cosign shim; real `sign-blob`/`verify-blob` round-trip over a fixture blob) | ✅ delivered + tested | — |
 | Trust-model alignment (`local-operator`) | ✅ delivered + tested | — |
-| **Real `flutter build aab`/`apk`** of the Android client | ❌ NOT here (needs Flutter+Android SDK on evo-x2) | ✅ n11 |
+| **Real `flutter build aab`/`apk`** of the Android client | ❌ NOT here (needs Flutter+Android SDK on <deploy-host>) | ✅ n11 |
 | **Real operator `cosign sign-blob`** with the real private key | ❌ NOT here (operator-private key) | ✅ n11 |
 | **Real placement + knb adapter acquisition + gate-green** | ❌ NOT here | ✅ n11 |
 
@@ -106,11 +106,11 @@ written.
   `flutter build` and does NOT fabricate a built AAB, a real signature over a
   real AAB, or a real on-host placement. The build command is a real, correct
   invocation guarded behind a stubbable seam (`SMACKEREL_FLUTTER_BUILD_CMD`);
-  its REAL execution is the on-evo-x2 node n11.
+  its REAL execution is the on-<deploy-host> node n11.
 - **FC-5 — smackerel SST + discipline.** New required values are fail-loud
   (`${VAR:?…}`, no `${VAR:-default}` for SST-managed runtime values); the
   operator key path / tool-name seams mirror the EXISTING
-  `scripts/commands/build-home-lab.sh` precedent. `COSIGN_PASSWORD` is
+  `scripts/commands/build-self-hosted.sh` precedent. `COSIGN_PASSWORD` is
   presence-checked only, NEVER echoed (terminal discipline).
 
 ## Functional Requirements
@@ -118,7 +118,7 @@ written.
 - **FR-086-01** — `./smackerel.sh local-client-build` dispatches to
   `scripts/commands/local-client-build.sh` and appears in `./smackerel.sh
   --help`.
-- **FR-086-02** — the command requires `--target home-lab` (fail-loud on a
+- **FR-086-02** — the command requires `--target self-hosted` (fail-loud on a
   missing/unsupported target); supports `--allow-dirty` and `--out-dir <dir>`.
 - **FR-086-03** — the command builds the Flutter Android AAB **and** APK via the
   real `flutter build aab` / `flutter build apk` invocation, guarded behind
@@ -159,19 +159,19 @@ written.
 - **NFR-086-04** — the emitter + orchestrator are exercised by native Go tests
   (no Docker dependency) via the smackerel `test unit --go` surface.
 
-## Runtime Execution Boundary (evo-x2 / n11)
+## Runtime Execution Boundary (<deploy-host> / n11)
 
-The following are REAL on-evo-x2 actions, performed under operator control by the
+The following are REAL on-<deploy-host> actions, performed under operator control by the
 approval-gated node **n11**, and are explicitly **NOT executed or claimed** by
 this node (FC-4):
 
 - A genuine `flutter build aab` + `flutter build apk` of `clients/mobile/assistant`
-  with the Flutter SDK + Android toolchain installed on evo-x2.
+  with the Flutter SDK + Android toolchain installed on <deploy-host>.
 - A REAL operator `cosign sign-blob` of the real AAB/APK with the operator's
-  PRIVATE key (`$HOME/.config/knb/operator-keys/cosign-operator.key`) +
+  PRIVATE key (`<operator-key-path>`) +
   `COSIGN_PASSWORD`.
 - The REAL content sha256 of the REAL artifacts.
-- The knb home-lab adapter consuming the real manifest (`knb_client_acquire_local`
+- The knb self-hosted adapter consuming the real manifest (`knb_client_acquire_local`
   → `cosign verify-blob --key <pubkey> --insecure-ignore-tlog` → sha256
   byte-match → placement under `serveRoot: /srv/smackerel/clients`).
 - A green `knb/scripts/lint/client-binary-conformance.sh` run against the real
@@ -196,14 +196,14 @@ pinned client artifacts) consistent with the platform's provenance posture.
 
 - **Target train:** `mvp`. No new feature flag is introduced (`flagsIntroduced:
   []`); the local-client-build surface is always available, and trust-model
-  selection flows from `smackerel/home-lab/params.yaml::signing.trustModel`
+  selection flows from `<deployment-owner>/<product>/<target>/params.yaml::signing.trustModel`
   (knb mirror), not a smackerel feature flag. On every other train the surface
   is identically present (it is target-parameterized, not flag-gated), so there
   is no default-on/default-off divergence to manage.
 
 ## Success Criteria
 
-1. `./smackerel.sh local-client-build --target home-lab` dispatches and prints a
+1. `./smackerel.sh local-client-build --target self-hosted` dispatches and prints a
    coherent plan/handoff; `--help` documents it.
 2. Unsupported/missing target, empty digest, missing signature, and sign failure
    each abort fail-closed with a non-empty exit and no partial manifest.
@@ -214,9 +214,9 @@ pinned client artifacts) consistent with the platform's provenance posture.
    --output-signature <artifact>.sig <artifact>` is invoked for AAB, APK, and
    the manifest.
 5. A real `cosign sign-blob`→`verify-blob` round-trip over a FIXTURE blob
-   succeeds locally (proves the on-evo-x2 sign/verify contract is correct).
+   succeeds locally (proves the on-<deploy-host> sign/verify contract is correct).
 6. `shellcheck`/`shfmt`/`yamllint` clean; native Go tests pass via
    `./smackerel.sh test unit --go`.
-7. The evo-x2 runtime steps (real flutter build, real operator-sign, real
+7. The <deploy-host> runtime steps (real flutter build, real operator-sign, real
    placement, gate-green) are documented as the downstream node n11 — NOT
    fabricated.
