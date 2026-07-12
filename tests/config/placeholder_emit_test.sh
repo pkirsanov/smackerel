@@ -3,10 +3,10 @@
 #
 # Asserts that the SST loader (scripts/commands/config.sh) correctly emits
 # placeholder markers for managed secret keys when the target is a
-# production-class target (currently: home-lab) and inline literal yaml
+# production-class target (currently: self-hosted) and inline literal yaml
 # values when the target is dev/test (per FR-052-011).
 #
-# Sub-test A (home-lab target — placeholder mode):
+# Sub-test A (self-hosted target — placeholder mode):
 #   - Loader exits 0
 #   - Resulting app.env (staged in bundle) contains exactly 4 lines matching
 #     ^<KEY>=__SECRET_PLACEHOLDER__<KEY>__$ for the 4 managed keys
@@ -45,54 +45,54 @@ MANAGED_KEYS=(
 )
 
 # -----------------------------------------------------------------------------
-# Sub-test A: home-lab target → placeholder mode.
+# Sub-test A: self-hosted target → placeholder mode.
 # -----------------------------------------------------------------------------
-echo "--- Sub-test A: home-lab target emits placeholders for 4 managed keys ---"
-HOME_LAB_BUNDLE_DIR="$SCOPE_TMP/home-lab-bundle"
-mkdir -p "$HOME_LAB_BUNDLE_DIR"
+echo "--- Sub-test A: self-hosted target emits placeholders for 4 managed keys ---"
+SELF_HOSTED_BUNDLE_DIR="$SCOPE_TMP/self-hosted-bundle"
+mkdir -p "$SELF_HOSTED_BUNDLE_DIR"
 
 cd "$REPO_ROOT"
-home_lab_output="$(bash "$SMACKEREL_SH" config generate \
-  --env home-lab \
+self_hosted_output="$(bash "$SMACKEREL_SH" config generate \
+  --env self-hosted \
   --bundle \
-  --output-dir "$HOME_LAB_BUNDLE_DIR" \
+  --output-dir "$SELF_HOSTED_BUNDLE_DIR" \
   --source-sha 0000000000000000000000000000000000000000 2>&1)"
-home_lab_exit=$?
+self_hosted_exit=$?
 
-if [[ "$home_lab_exit" -ne 0 ]]; then
-  echo "FAIL: smackerel config generate --env home-lab --bundle returned exit $home_lab_exit"
+if [[ "$self_hosted_exit" -ne 0 ]]; then
+  echo "FAIL: smackerel config generate --env self-hosted --bundle returned exit $self_hosted_exit"
   echo "----- captured output -----"
-  echo "$home_lab_output"
+  echo "$self_hosted_output"
   echo "----- end output -----"
   failures=$((failures + 1))
 else
-  echo "PASS: smackerel config generate --env home-lab --bundle exited 0"
+  echo "PASS: smackerel config generate --env self-hosted --bundle exited 0"
 fi
 
-HOME_LAB_TARBALL="$HOME_LAB_BUNDLE_DIR/config-bundle-home-lab-0000000000000000000000000000000000000000.tar.gz"
-if [[ ! -f "$HOME_LAB_TARBALL" ]]; then
-  echo "FAIL: bundle tarball not produced at $HOME_LAB_TARBALL"
+SELF_HOSTED_TARBALL="$SELF_HOSTED_BUNDLE_DIR/config-bundle-self-hosted-0000000000000000000000000000000000000000.tar.gz"
+if [[ ! -f "$SELF_HOSTED_TARBALL" ]]; then
+  echo "FAIL: bundle tarball not produced at $SELF_HOSTED_TARBALL"
   failures=$((failures + 1))
 else
-  echo "PASS: bundle tarball produced at $HOME_LAB_TARBALL"
-  HOME_LAB_EXTRACT="$SCOPE_TMP/home-lab-extract"
-  mkdir -p "$HOME_LAB_EXTRACT"
-  tar xzf "$HOME_LAB_TARBALL" -C "$HOME_LAB_EXTRACT"
+  echo "PASS: bundle tarball produced at $SELF_HOSTED_TARBALL"
+  SELF_HOSTED_EXTRACT="$SCOPE_TMP/self-hosted-extract"
+  mkdir -p "$SELF_HOSTED_EXTRACT"
+  tar xzf "$SELF_HOSTED_TARBALL" -C "$SELF_HOSTED_EXTRACT"
 
-  HOME_LAB_APPENV="$HOME_LAB_EXTRACT/app.env"
-  if [[ ! -f "$HOME_LAB_APPENV" ]]; then
-    echo "FAIL: extracted bundle does not contain app.env at $HOME_LAB_APPENV"
+  SELF_HOSTED_APPENV="$SELF_HOSTED_EXTRACT/app.env"
+  if [[ ! -f "$SELF_HOSTED_APPENV" ]]; then
+    echo "FAIL: extracted bundle does not contain app.env at $SELF_HOSTED_APPENV"
     failures=$((failures + 1))
   else
     placeholder_hits=0
     for key in "${MANAGED_KEYS[@]}"; do
-      if grep -qE "^${key}=__SECRET_PLACEHOLDER__${key}__$" "$HOME_LAB_APPENV"; then
+      if grep -qE "^${key}=__SECRET_PLACEHOLDER__${key}__$" "$SELF_HOSTED_APPENV"; then
         echo "PASS: $key emitted as placeholder marker"
         placeholder_hits=$((placeholder_hits + 1))
       else
         echo "FAIL: $key NOT emitted as placeholder marker (expected ^${key}=__SECRET_PLACEHOLDER__${key}__$)"
         echo "----- matching lines in app.env: -----"
-        grep "^${key}=" "$HOME_LAB_APPENV" || echo "(no matching key)"
+        grep "^${key}=" "$SELF_HOSTED_APPENV" || echo "(no matching key)"
         echo "----- end -----"
         failures=$((failures + 1))
       fi
@@ -105,11 +105,11 @@ else
       echo "PASS: exactly 4 placeholder markers emitted (one per managed key)"
     fi
 
-    if grep -qE '^POSTGRES_PASSWORD=smackerel$' "$HOME_LAB_APPENV"; then
-      echo "FAIL: home-lab app.env contains literal POSTGRES_PASSWORD=smackerel (placeholder mode failed to shield)"
+    if grep -qE '^POSTGRES_PASSWORD=smackerel$' "$SELF_HOSTED_APPENV"; then
+      echo "FAIL: self-hosted app.env contains literal POSTGRES_PASSWORD=smackerel (placeholder mode failed to shield)"
       failures=$((failures + 1))
     else
-      echo "PASS: home-lab app.env does NOT contain literal POSTGRES_PASSWORD=smackerel"
+      echo "PASS: self-hosted app.env does NOT contain literal POSTGRES_PASSWORD=smackerel"
     fi
   fi
 fi

@@ -18,7 +18,7 @@
 #     (or that contains an "error" object) is a hard failure.
 #
 # Skipped silently when SMACKEREL_PREWARM_ENABLED is "false". Used by
-# the dev / home-lab smackerel_run_up path which does not pre-warm.
+# the dev / self-hosted smackerel_run_up path which does not pre-warm.
 
 set -euo pipefail
 

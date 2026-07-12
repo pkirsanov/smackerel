@@ -15,7 +15,7 @@ import (
 func TestNtfyAdapterStartRequiresTransportClientAndStopsCleanly(t *testing.T) {
 	cfg := testConfig()
 	cfg.Auth = AuthConfig{Mode: AuthModeNone}
-	stream := newScriptedStreamClient([]Event{{EventType: "open", Topic: "home-lab-alerts"}, {EventType: "keepalive", Topic: "home-lab-alerts"}, {ID: "evt-transport", EventType: "message", Topic: "home-lab-alerts", Title: "Transport", Message: "observed through stream", Priority: "high", Raw: []byte(`{"id":"evt-transport","event":"message","topic":"home-lab-alerts","title":"Transport","message":"observed through stream","priority":"high"}`)}})
+	stream := newScriptedStreamClient([]Event{{EventType: "open", Topic: "self-hosted-alerts"}, {EventType: "keepalive", Topic: "self-hosted-alerts"}, {ID: "evt-transport", EventType: "message", Topic: "self-hosted-alerts", Title: "Transport", Message: "observed through stream", Priority: "high", Raw: []byte(`{"id":"evt-transport","event":"message","topic":"self-hosted-alerts","title":"Transport","message":"observed through stream","priority":"high"}`)}})
 	adapter, err := NewAdapter(cfg, WithStreamClient(stream))
 	if err != nil {
 		t.Fatalf("new adapter: %v", err)
@@ -24,9 +24,9 @@ func TestNtfyAdapterStartRequiresTransportClientAndStopsCleanly(t *testing.T) {
 	if err := adapter.Start(context.Background(), sink); err != nil {
 		t.Fatalf("start adapter: %v", err)
 	}
-	stream.waitStarted(t, "home-lab-alerts")
+	stream.waitStarted(t, "self-hosted-alerts")
 	sink.waitForEnvelopeCount(t, 1)
-	if got := sink.envelopes()[0]; got.SourceEventID != "evt-transport" || got.DeliveryMetadata["topic"] != "home-lab-alerts" {
+	if got := sink.envelopes()[0]; got.SourceEventID != "evt-transport" || got.DeliveryMetadata["topic"] != "self-hosted-alerts" {
 		t.Fatalf("transport event was not submitted through source sink: %+v", got)
 	}
 	sink.waitForHealthState(t, notification.SourceHealthConnected)
@@ -76,7 +76,7 @@ func TestNtfyStartConfiguredAdaptersReadsJSONAndStartsStreamAndWebhook(t *testin
 	webhookCfg.Auth = AuthConfig{Mode: AuthModeNone}
 	webhookCfg.ConfigHash = "sha256:test-webhook-config"
 	rawConfig := encodeRuntimeTestConfigs(t, streamCfg, webhookCfg)
-	stream := newScriptedStreamClient([]Event{{ID: "evt-runtime-stream", EventType: "message", Topic: "home-lab-alerts", Title: "Runtime Stream", Message: "configured stream", Raw: []byte(`{"id":"evt-runtime-stream","event":"message","topic":"home-lab-alerts","title":"Runtime Stream","message":"configured stream"}`)}})
+	stream := newScriptedStreamClient([]Event{{ID: "evt-runtime-stream", EventType: "message", Topic: "self-hosted-alerts", Title: "Runtime Stream", Message: "configured stream", Raw: []byte(`{"id":"evt-runtime-stream","event":"message","topic":"self-hosted-alerts","title":"Runtime Stream","message":"configured stream"}`)}})
 	registry := NewWebhookReceiverRegistry()
 	sink := &recordingSourceSink{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,10 +90,10 @@ func TestNtfyStartConfiguredAdaptersReadsJSONAndStartsStreamAndWebhook(t *testin
 			t.Fatalf("stop runtime: %v", err)
 		}
 	}()
-	stream.waitStarted(t, "home-lab-alerts")
+	stream.waitStarted(t, "self-hosted-alerts")
 	waitForWebhookRegistration(t, registry, webhookCfg.SourceInstanceID)
 	sink.waitForEnvelopeCount(t, 1)
-	if err := registry.ReceiveRaw(context.Background(), webhookCfg.SourceInstanceID, []byte(`{"id":"evt-runtime-webhook","event":"message","topic":"home-lab-alerts","title":"Runtime Webhook","message":"configured webhook"}`)); err != nil {
+	if err := registry.ReceiveRaw(context.Background(), webhookCfg.SourceInstanceID, []byte(`{"id":"evt-runtime-webhook","event":"message","topic":"self-hosted-alerts","title":"Runtime Webhook","message":"configured webhook"}`)); err != nil {
 		t.Fatalf("receive runtime webhook: %v", err)
 	}
 	sink.waitForEnvelopeCount(t, 2)

@@ -26,7 +26,7 @@
     {
       "scenarioId": "SCN-089-A01",
       "scopeId": "SCOPE-03",
-      "title": "With no per-user sticky and no per-request override, the open-knowledge /ask agent uses the committed-SST persistent default synthesis model (home-lab deepseek-r1:32b) byte-for-byte the spec-088 baseline shape, the gather turns keep the SST baseline tool model, and the answer is attributed to the default model with selection source \"default\" (no Telegram footer; the HTTP envelope always carries model + model_source)",
+      "title": "With no per-user sticky and no per-request override, the open-knowledge /ask agent uses the committed-SST persistent default synthesis model (self-hosted deepseek-r1:32b) byte-for-byte the spec-088 baseline shape, the gather turns keep the SST baseline tool model, and the answer is attributed to the default model with selection source \"default\" (no Telegram footer; the HTTP envelope always carries model + model_source)",
       "behaviorClass": "unit",
       "changeType": "new",
       "requiredTestType": ["unit"],
@@ -35,7 +35,7 @@
         "internal/assistant/openknowledge/agent/modelswitch_agent_spec089_test.go::TestAgent_NoSelection_UsesSstDefaultSynthesis_ByteForByteBaseline_Spec089",
         "internal/assistant/facade_modelswitch_spec089_test.go::TestFacade_BareDefault_NoFooter_AttributesModelSourceDefault_Spec089",
         "internal/api/agent_invoke_test.go::TestAgentInvoke_BareDefault_EnvelopeModel32bSourceDefault_Spec089",
-        "internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_HomeLabSynthesisDefaultIs32b_Spec089"
+        "internal/config/openknowledge_test.go::TestOpenKnowledgeConfig_SelfHostedSynthesisDefaultIs32b_Spec089"
       ],
       "evidenceRefs": ["report.md#scope-03", "report.md#scope-01"]
     },

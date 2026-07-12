@@ -2,7 +2,7 @@
     "id": "BUG-050-001-ml-model-loaded-fabricated",
     "title": "Core /api/health fabricates ML sidecar model_loaded:true (never parses the ml /health body)",
     "severity": "medium",
-    "source": "redteam-adversarial-interrogation (live evo-x2 prod)",
+    "source": "redteam-adversarial-interrogation (live <deploy-host> prod)",
     "owningSpec": "050-ml-sidecar-health-isolation",
     "workflowMode": "bugfix-fastlane",
     "status": "fixed_in_repo",

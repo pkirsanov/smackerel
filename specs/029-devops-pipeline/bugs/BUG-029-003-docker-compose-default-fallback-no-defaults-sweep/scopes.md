@@ -189,7 +189,7 @@ This bug fix does **not** rename or remove any externally-visible interface, rou
 **Excluded surfaces (this fix MUST NOT touch):**
 
 - `internal/deploy/compose_contract_test.go` — the prod-compose contract test; bit-identical to HEAD (the new dev-compose test is in a separate file targeting a different live file)
-- `deploy/compose.deploy.yml` — the prod / home-lab compose file; bit-identical to HEAD (already locked by spec 042 + BUG-042-001..005)
+- `deploy/compose.deploy.yml` — the prod / self-hosted compose file; bit-identical to HEAD (already locked by spec 042 + BUG-042-001..005)
 - `config/smackerel.yaml` — the SST source; bit-identical to HEAD (the SST generator change does not require a new SST source key — the build-metadata vars come from shell env at config-generate time, not from `smackerel.yaml`)
 - `specs/029-devops-pipeline/spec.md`, `specs/029-devops-pipeline/design.md`, `specs/029-devops-pipeline/scopes.md`, `specs/029-devops-pipeline/state.json`, `specs/029-devops-pipeline/uservalidation.md`, `specs/029-devops-pipeline/report.md` — foreign-owned parent-spec content; outside `bubbles.devops` mode edit scope
 - `specs/042-tailnet-edge-bind-pattern/**` — foreign-owned (different parent spec)

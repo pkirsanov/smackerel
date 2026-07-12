@@ -377,7 +377,7 @@ func TestExternalImagesContract_AdversarialLiteralImageMismatch(t *testing.T) {
 // + SBOM + SLSA supply chain that covers smackerel-core / smackerel-ml.
 // Pinning them by digest makes the deploy reproducible and prevents a
 // mutable upstream tag (`:pg16`, `:2.10-alpine`, `:rocm`) from silently
-// changing the bytes a home-lab apply pulls. Digests verified 2026-06-10
+// changing the bytes a self-hosted apply pulls. Digests verified 2026-06-10
 // via `docker buildx imagetools inspect <tag>`.
 // ─────────────────────────────────────────────────────────────────────────
 

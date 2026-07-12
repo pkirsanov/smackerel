@@ -5,14 +5,14 @@
 # short-circuits the yaml-default path for production-class targets).
 #
 # Sub-test 1 (env-override path): with POSTGRES_PASSWORD=smackerel set in
-# the environment AND TARGET_ENV=home-lab, the SST loader MUST exit
+# the environment AND TARGET_ENV=self-hosted, the SST loader MUST exit
 # non-zero because the env-override literal triggers the FR-051-005
 # dev-default rejection (spec 052 BS-052-006 — env override beats yaml
 # AND skips placeholder mode AND must pass the dev-default gate).
 #
 # Sub-test 2 (placeholder mode, spec 052): with NO env override and
-# TARGET_ENV=home-lab, the SST loader MUST exit 0 AND the resulting
-# config/generated/home-lab.env MUST contain
+# TARGET_ENV=self-hosted, the SST loader MUST exit 0 AND the resulting
+# config/generated/self-hosted.env MUST contain
 # POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__ AND MUST
 # NOT contain the literal dev-default value 'smackerel' as the password
 # value. This validates that placeholder mode shields the bundle from
@@ -48,28 +48,28 @@ failures=0
 # -----------------------------------------------------------------------------
 # Sub-test 1: env-override path drives FR-051-005 dev-default rejection.
 # -----------------------------------------------------------------------------
-echo "--- Sub-test 1: SST loader refuses env-override dev-default for home-lab ---"
-home_lab_output="$(POSTGRES_PASSWORD=smackerel bash "$CONFIG_SH" --env home-lab 2>&1)"
-home_lab_exit=$?
+echo "--- Sub-test 1: SST loader refuses env-override dev-default for self-hosted ---"
+self_hosted_output="$(POSTGRES_PASSWORD=smackerel bash "$CONFIG_SH" --env self-hosted 2>&1)"
+self_hosted_exit=$?
 
-if [[ "$home_lab_exit" -eq 0 ]]; then
-  echo "FAIL: SST loader returned exit 0 for POSTGRES_PASSWORD=smackerel + TARGET_ENV=home-lab (expected non-zero)"
+if [[ "$self_hosted_exit" -eq 0 ]]; then
+  echo "FAIL: SST loader returned exit 0 for POSTGRES_PASSWORD=smackerel + TARGET_ENV=self-hosted (expected non-zero)"
   echo "----- captured output -----"
-  echo "$home_lab_output"
+  echo "$self_hosted_output"
   echo "----- end output -----"
   failures=$((failures + 1))
 else
-  echo "PASS: SST loader refused env-override dev-default with exit code $home_lab_exit"
+  echo "PASS: SST loader refused env-override dev-default with exit code $self_hosted_exit"
 fi
 
-if ! echo "$home_lab_output" | grep -q "infrastructure.postgres.password"; then
+if ! echo "$self_hosted_output" | grep -q "infrastructure.postgres.password"; then
   echo "FAIL: SST loader stderr does NOT name infrastructure.postgres.password"
   failures=$((failures + 1))
 else
   echo "PASS: SST loader stderr names infrastructure.postgres.password"
 fi
 
-if ! echo "$home_lab_output" | grep -q "spec 051"; then
+if ! echo "$self_hosted_output" | grep -q "spec 051"; then
   echo "FAIL: SST loader stderr does NOT reference spec 051"
   failures=$((failures + 1))
 else
@@ -79,7 +79,7 @@ fi
 # Redaction assertion: the stderr MUST NOT contain the literal dev-default
 # value as a free-standing password value. The error message is allowed to
 # mention the project name "smackerel" in passing — but not as a credential.
-if echo "$home_lab_output" | grep -qE '(POSTGRES_PASSWORD|password)[[:space:]=:]+["'\''[:space:]]*smackerel[[:space:]"'\''$]'; then
+if echo "$self_hosted_output" | grep -qE '(POSTGRES_PASSWORD|password)[[:space:]=:]+["'\''[:space:]]*smackerel[[:space:]"'\''$]'; then
   echo "FAIL: SST loader stderr echoes dev-default value 'smackerel' as a password value"
   failures=$((failures + 1))
 else
@@ -89,37 +89,37 @@ fi
 # -----------------------------------------------------------------------------
 # Sub-test 2 (spec 052): yaml-default path → placeholder mode shields bundle.
 # -----------------------------------------------------------------------------
-echo "--- Sub-test 2 (spec 052): SST loader emits placeholder for home-lab ---"
-placeholder_output="$(bash "$CONFIG_SH" --env home-lab 2>&1)"
+echo "--- Sub-test 2 (spec 052): SST loader emits placeholder for self-hosted ---"
+placeholder_output="$(bash "$CONFIG_SH" --env self-hosted 2>&1)"
 placeholder_exit=$?
 
 if [[ "$placeholder_exit" -ne 0 ]]; then
-  echo "FAIL: SST loader returned exit $placeholder_exit for TARGET_ENV=home-lab (expected 0 in placeholder mode)"
+  echo "FAIL: SST loader returned exit $placeholder_exit for TARGET_ENV=self-hosted (expected 0 in placeholder mode)"
   echo "----- captured output -----"
   echo "$placeholder_output"
   echo "----- end output -----"
   failures=$((failures + 1))
 else
-  echo "PASS: SST loader exited 0 for TARGET_ENV=home-lab (placeholder mode active)"
+  echo "PASS: SST loader exited 0 for TARGET_ENV=self-hosted (placeholder mode active)"
 fi
 
-HOME_LAB_ENV="$REPO_ROOT/config/generated/home-lab.env"
-if [[ ! -f "$HOME_LAB_ENV" ]]; then
-  echo "FAIL: SST loader did not produce $HOME_LAB_ENV"
+SELF_HOSTED_ENV="$REPO_ROOT/config/generated/self-hosted.env"
+if [[ ! -f "$SELF_HOSTED_ENV" ]]; then
+  echo "FAIL: SST loader did not produce $SELF_HOSTED_ENV"
   failures=$((failures + 1))
 else
-  if grep -qE '^POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__$' "$HOME_LAB_ENV"; then
-    echo "PASS: home-lab.env contains POSTGRES_PASSWORD placeholder marker"
+  if grep -qE '^POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__$' "$SELF_HOSTED_ENV"; then
+    echo "PASS: self-hosted.env contains POSTGRES_PASSWORD placeholder marker"
   else
-    echo "FAIL: home-lab.env does NOT contain POSTGRES_PASSWORD placeholder marker"
+    echo "FAIL: self-hosted.env does NOT contain POSTGRES_PASSWORD placeholder marker"
     failures=$((failures + 1))
   fi
 
-  if grep -qE '^POSTGRES_PASSWORD=smackerel$' "$HOME_LAB_ENV"; then
-    echo "FAIL: home-lab.env contains literal POSTGRES_PASSWORD=smackerel (placeholder mode failed to shield)"
+  if grep -qE '^POSTGRES_PASSWORD=smackerel$' "$SELF_HOSTED_ENV"; then
+    echo "FAIL: self-hosted.env contains literal POSTGRES_PASSWORD=smackerel (placeholder mode failed to shield)"
     failures=$((failures + 1))
   else
-    echo "PASS: home-lab.env does NOT contain literal POSTGRES_PASSWORD=smackerel"
+    echo "PASS: self-hosted.env does NOT contain literal POSTGRES_PASSWORD=smackerel"
   fi
 fi
 

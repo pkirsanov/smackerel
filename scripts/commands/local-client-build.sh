@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
 # scripts/commands/local-client-build.sh
 #
-# Spec 086 — `./smackerel.sh local-client-build --target home-lab`
+# Spec 086 — `./smackerel.sh local-client-build --target self-hosted`
 #
 # Builds smackerel's Flutter Android client (clients/mobile/assistant) LOCALLY on
 # <deploy-host> (AAB + APK), operator-signs each artifact with the operator cosign key,
 # computes the real content sha256, and emits a LOCAL build manifest with
 # `trustModel: local-operator` + `provenance: local-operator` consumable by the
-# knb home-lab adapter's local-operator Lane-A delivery
+# knb self-hosted adapter's local-operator Lane-A delivery
 # (knb/scripts/deploy/client-delivery-step.sh::knb_client_acquire_local →
 #  cosign verify-blob --key <pubkey> → sha256 byte-match → place under serveRoot).
 #
 # This is the local-operator analogue of the spec-085 CI `build-clients` job and
 # composes by reference with the knb spec 028 "Local Client-Build Phase
-# Contract". It mirrors scripts/commands/build-home-lab.sh (which already does
+# Contract". It mirrors scripts/commands/build-self-hosted.sh (which already does
 # LOCAL operator-key signing of the two server images). The knb adapter stays
 # consume-only; smackerel BUILDS + SIGNS (FC-2).
 #
 # Trust model: local-operator (single-operator <deploy-host>). Aligns with
-# smackerel/home-lab/params.yaml::signing.trustModel: local-operator. The
+# <deployment-owner>/<product>/<target>/params.yaml::signing.trustModel: local-operator. The
 # ci-keyless path (spec 085) stays parked (FC-1).
 #
 # Required env:
 #   OPERATOR_COSIGN_KEY     path to operator cosign private key
-#                           (default $HOME/.config/knb/operator-keys/cosign-operator.key)
+#                           (default <operator-key-path>)
 #   OPERATOR_COSIGN_PUBKEY  path to operator cosign public key (for adapter handoff)
 #   COSIGN_PASSWORD         passphrase for the private key (presence-checked; NEVER echoed)
 #
 # Test seams (default to the real tool/path; tool plumbing, NOT SST runtime config —
-# mirrors build-home-lab.sh's `${OPERATOR_COSIGN_KEY:=...}` precedent):
+# mirrors build-self-hosted.sh's `${OPERATOR_COSIGN_KEY:=...}` precedent):
 #   SMACKEREL_FLUTTER_BUILD_CMD   build command (default: flutter)
 #   SMACKEREL_COSIGN_CMD          sign command  (default: cosign)
 #   SMACKEREL_LCB_PROJECT_DIR     Flutter project dir (default: <repo>/clients/mobile/assistant)
@@ -81,7 +81,7 @@ OUT_DIR=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --target)
-      [[ $# -ge 2 && -n "${2:-}" ]] || lcb_fail F086-LCB-01 "--target requires a value (only: home-lab)"
+      [[ $# -ge 2 && -n "${2:-}" ]] || lcb_fail F086-LCB-01 "--target requires a value (only: self-hosted)"
       TARGET="$2"
       shift 2
       ;;
@@ -103,17 +103,17 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      lcb_fail F086-LCB-01 "unknown argument: $1 (usage: local-client-build --target home-lab [--allow-dirty] [--out-dir <dir>])"
+      lcb_fail F086-LCB-01 "unknown argument: $1 (usage: local-client-build --target self-hosted [--allow-dirty] [--out-dir <dir>])"
       ;;
   esac
 done
 
 [[ -n "$TARGET" ]] \
-  || lcb_fail F086-LCB-01 "--target is required (only supported value: home-lab)"
-[[ "$TARGET" == "home-lab" ]] \
-  || lcb_fail F086-LCB-01 "unsupported --target '$TARGET' (only supported value: home-lab)"
+  || lcb_fail F086-LCB-01 "--target is required (only supported value: self-hosted)"
+[[ "$TARGET" == "self-hosted" ]] \
+  || lcb_fail F086-LCB-01 "unsupported --target '$TARGET' (only supported value: self-hosted)"
 
-# ---- Tool/path seams (default to the real tool; mirrors build-home-lab.sh) --
+# ---- Tool/path seams (default to the real tool; mirrors build-self-hosted.sh) --
 : "${SMACKEREL_FLUTTER_BUILD_CMD:=flutter}"
 : "${SMACKEREL_COSIGN_CMD:=cosign}"
 : "${SMACKEREL_LCB_PROJECT_DIR:=$REPO_ROOT/clients/mobile/assistant}"
@@ -123,9 +123,9 @@ lcb_require_cmd "$SMACKEREL_COSIGN_CMD"
 lcb_require_cmd git
 lcb_require_cmd sha256sum
 
-# ---- Operator key env (mirrors build-home-lab.sh) --------------------------
-: "${OPERATOR_COSIGN_KEY:=$HOME/.config/knb/operator-keys/cosign-operator.key}"
-: "${OPERATOR_COSIGN_PUBKEY:=$HOME/.config/knb/operator-keys/cosign-operator.pub}"
+# ---- Operator key env (mirrors build-self-hosted.sh) --------------------------
+: "${OPERATOR_COSIGN_KEY:=<operator-key-path>"
+: "${OPERATOR_COSIGN_PUBKEY:=<operator-key-path>"
 [[ -f "$OPERATOR_COSIGN_KEY" ]] \
   || lcb_fail F086-LCB-01 "OPERATOR_COSIGN_KEY not found at: $OPERATOR_COSIGN_KEY (run knb/scripts/operator-key/bootstrap.sh first)"
 [[ -f "$OPERATOR_COSIGN_PUBKEY" ]] \
@@ -282,9 +282,9 @@ echo "  aab:        $AAB_OUT (+ .sig)"
 echo "  apk:        $APK_OUT (+ .sig)"
 echo "  manifest:   $MANIFEST (+ .sig)"
 echo
-echo "Next (on <deploy-host>): the knb home-lab adapter acquires + verifies these LOCAL"
+echo "Next (on <deploy-host>): the knb self-hosted adapter acquires + verifies these LOCAL"
 echo "  signed artifacts under trustModel local-operator. cd ~/knb && \\"
 echo "    OPERATOR_COSIGN_PUBKEY=$OPERATOR_COSIGN_PUBKEY \\"
-echo "    bash scripts/deploy/promote.sh --target home-lab --product smackerel \\"
+echo "    bash scripts/deploy/promote.sh --target self-hosted --product smackerel \\"
 echo "      --local-build-manifest $MANIFEST"
 echo "=================================================================="

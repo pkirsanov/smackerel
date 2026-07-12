@@ -250,7 +250,7 @@ sufficient.
 |---------|-------------|-----------------|
 | Login form shows "Invalid username or password" for every attempt | User row missing OR password rotated since last knowledge | `users list` to confirm, `users set-password` to rotate |
 | `smackerel-core users add` errors `pq: relation "web_user_credentials" does not exist` | Migration 044 didn't run | Check migrate logs; re-run `migrate up` |
-| Browser stuck at `/login` after submit | Cookie not set due to `Secure` attr + plain HTTP | Production deploys MUST be HTTPS; home-lab is fronted by Caddy TLS → cookie sets fine |
+| Browser stuck at `/login` after submit | Cookie not set due to `Secure` attr + plain HTTP | Production deploys MUST be HTTPS; self-hosted is fronted by Caddy TLS → cookie sets fine |
 
 ## §10 Out of scope (anti-pattern catalog)
 - Server-side session table (cookie value IS the auth token; same

@@ -103,7 +103,7 @@ Concretely:
 - **Partitioning the knowledge graph per user.** The single shared graph is unchanged; this feature does not add `user_id` ownership to artifacts/topics/people/edges.
 - **Amending specs 088/089 synthesis/gather logic or reopening their closed bugs.** This feature *extends* their validator/store/precedence primitive and makes it provider-agnostic; it preserves their invariants verbatim.
 - **New connectors or new knowledge-ingestion sources.** This is about *model* connections, not data connectors.
-- **The live home-lab deploy / A-B model evaluation run.** A separate devops/ops dispatch owns running this on real hardware; this spec is product behavior.
+- **The live self-hosted deploy / A-B model evaluation run.** A separate devops/ops dispatch owns running this on real hardware; this spec is product behavior.
 - **Replacing the model gateway or re-implementing provider transports.** The existing gateway already routes the named providers; this feature wires routing + credentials + discovery on top.
 - **Auto-selecting a "best" model on the user's behalf.** Selection stays explicit and user-driven; the system does not silently switch a user's model.
 
@@ -380,7 +380,7 @@ Per [product-principles.instructions.md](../../.github/instructions/product-prin
 
 ## 11. Release Train
 
-**Target train:** `next` (the staging promotion-candidate train — charter "synthesis + multi-source coordination"; see [config/release-trains.yaml](../../config/release-trains.yaml)). The active `mvp` home-lab train is frozen for **new** specs (the precedent set by spec 095, which is also on `next`), so this net-new feature targets `next`. Multi-provider model connectivity is a natural fit for the `next` "multi-source coordination" charter.
+**Target train:** `next` (the staging promotion-candidate train — charter "synthesis + multi-source coordination"; see [config/release-trains.yaml](../../config/release-trains.yaml)). The active `mvp` self-hosted train is frozen for **new** specs (the precedent set by spec 095, which is also on `next`), so this net-new feature targets `next`. Multi-provider model connectivity is a natural fit for the `next` "multi-source coordination" charter.
 
 **No new feature flag is introduced.** `state.json.flagsIntroduced` is `[]`. The capability is gated by SST: a deployment with **no** hosted provider connection configured behaves byte-for-byte as today's Ollama-only path (FR-A4). Because no flag is introduced, there is no default-off-on-other-trains toggle — every train derives from the same `config/smackerel.yaml` SST contract, so behavior is determined solely by which provider connections the operator configures, identically on every train. (If the design phase later concludes a controlled-rollout flag is warranted, it MUST be declared in `state.json.flagsIntroduced`, default-ON only in the owning `next` train and default-OFF in every other train per the release-train policy.)
 

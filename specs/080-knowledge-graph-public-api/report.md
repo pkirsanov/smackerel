@@ -472,7 +472,7 @@ re-routed to the scope that mounts the first handler.
 - [internal/auth/scopes.go](../../internal/auth/scopes.go) — appended `"knowledge-graph"` to `RegisteredScopeSurfaces`; widened `ScopeNameRegex` surface character class from `[a-z][a-z0-9]*` to `[a-z][a-z0-9-]*` so multi-word surfaces like `knowledge-graph` validate. Backward-compatible (existing `extension` / `annotation` still match).
 - [internal/auth/scopes_test.go](../../internal/auth/scopes_test.go) — added `TestRegisteredScopeSurfaces_ContainsKnowledgeGraph` (mirrors spec 027 scope 9 `_ContainsAnnotation` pattern).
 - [config/smackerel.yaml](../../config/smackerel.yaml) — added `knowledge_graph_api:` block with 5 numeric keys + `cursor_secret_env: "KNOWLEDGE_GRAPH_API_CURSOR_SECRET"` (the env-var NAME; the secret value itself is operator-injected via the spec 052 secret path).
-- [scripts/commands/config.sh](../../scripts/commands/config.sh) — emits `KNOWLEDGE_GRAPH_API_*` (6 vars) at the SST-load site + at the dev/test/home-lab heredoc site; verified by `grep -c KNOWLEDGE_GRAPH_API config/generated/{dev,test,home-lab}.env` returning `6` for every file.
+- [scripts/commands/config.sh](../../scripts/commands/config.sh) — emits `KNOWLEDGE_GRAPH_API_*` (6 vars) at the SST-load site + at the dev/test/self-hosted heredoc site; verified by `grep -c KNOWLEDGE_GRAPH_API config/generated/{dev,test,self-hosted}.env` returning `6` for every file.
 - [internal/config/config.go](../../internal/config/config.go) — added `KnowledgeGraphAPI KnowledgeGraphAPIConfig` field to `Config` struct + wired `loadKnowledgeGraphAPIConfig` into `Load()`.
 - [internal/config/validate_test.go](../../internal/config/validate_test.go) — extended `setRequiredEnv` with the 6 new `KNOWLEDGE_GRAPH_API_*` keys so every existing config test continues to pass.
 
@@ -513,18 +513,18 @@ $ ./smackerel.sh config generate --env test
 config-validate: ...test.env.tmp.2591426 OK
 Generated ~/smackerel/config/generated/test.env
 
-$ grep -c KNOWLEDGE_GRAPH_API config/generated/dev.env config/generated/test.env config/generated/home-lab.env
+$ grep -c KNOWLEDGE_GRAPH_API config/generated/dev.env config/generated/test.env config/generated/self-hosted.env
 config/generated/dev.env:6
 config/generated/test.env:6
-config/generated/home-lab.env:6
+config/generated/self-hosted.env:6
 ```
 
 **Pre-existing unrelated test failure (NOT introduced by this scope; disposition row `ISSUE-080-DEFERRAL-PREEXISTING-UNRELATED` below covers G095, routed to spec 051 owner):**
 
-`TestSSTLoader_HomeLabEmitsProductionRuntimeEnv_BUG051001` in
-`internal/config/sst_loader_home_lab_runtime_env_test.go` fails with
-`cp: cannot open '~/smackerel/config/generated/home-lab.env' for
-reading: Permission denied`. The home-lab.env file is `-rw-------`
+`TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001` in
+`internal/config/sst_loader_self_hosted_runtime_env_test.go` fails with
+`cp: cannot open '~/smackerel/config/generated/self-hosted.env' for
+reading: Permission denied`. The self-hosted.env file is `-rw-------`
 owned by the current user and the test's shell-out `cp` cannot read
 it inside the test sandbox. This failure reproduces independently of
 the SCOPE-080-01 changes (the test reads SMACKEREL_ENV, not the new
@@ -537,7 +537,7 @@ SCOPE-080-01 deliberately does not touch it.
 - [x] D01-1 — Package present (doc/crosslink/cursor/limits/errors/reasons/config + tests under `internal/api/graphapi/`).
 - [x] D01-2 — Scope surface registered (`"knowledge-graph"` in `RegisteredScopeSurfaces`; `TestRegisteredScopeSurfaces_ContainsKnowledgeGraph` passes).
 - [x] D01-3 — SST config block present and fail-loud (`knowledge_graph_api:` block with 5 numeric keys + `cursor_secret_env`; `TestValidate_FailsWhenKnowledgeGraphAPIMissing` passes; zero in-source defaults — `grep -nE 'os\.Getenv.*KNOWLEDGE_GRAPH_API.*"[^"]+"' internal/` returns 0 hits).
-- [x] D01-4 — `./smackerel.sh config generate` succeeds for dev/test/home-lab and emits all 6 `KNOWLEDGE_GRAPH_API_*` env vars.
+- [x] D01-4 — `./smackerel.sh config generate` succeeds for dev/test/self-hosted and emits all 6 `KNOWLEDGE_GRAPH_API_*` env vars.
 - [x] D01-5 — Cursor codec round-trip + tamper rejection (`TestEncodeDecodeCursor_Roundtrip`, `TestDecodeCursor_RejectsGarbage`, `TestDecodeCursor_RejectsTamper`, `TestDecodeCursor_RejectsCrossKeyForgery` all pass).
 - [x] D01-6 — Limits clamp rejects above max (`TestClampLimit_RejectsAboveMax` + JSON-envelope assertion `TestWriteAPIError_LimitExceededEnvelope`).
 

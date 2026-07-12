@@ -53,7 +53,7 @@ Discovered while running spec 044 Scope 1 integration tests; the auth-test stack
 |---------|--------|
 | `./smackerel.sh test integration` | BLOCKED — test stack fails to start because `ENABLE_OLLAMA=true` (spec 043 Scope 01) and the pinned image is unpullable. Affects every downstream integration test, including spec 044 auth integration tests. |
 | `SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e` | BLOCKED — operator-driven cold-pull lane for spec 043 itself cannot run. The `scripts/commands/ollama-test-pull.sh` HTTP `/api/pull` call fails because the daemon never starts. |
-| `./smackerel.sh --env home-lab up --profile ollama` | BLOCKED — home-lab opt-in lane cannot start ollama. |
+| `./smackerel.sh --env self-hosted up --profile ollama` | BLOCKED — self-hosted opt-in lane cannot start ollama. |
 | `./smackerel.sh test unit` (Go + Python) | NOT IMPACTED — unit tests do not touch the live stack. |
 | `./smackerel.sh check` | NOT IMPACTED — config-only validation. |
 

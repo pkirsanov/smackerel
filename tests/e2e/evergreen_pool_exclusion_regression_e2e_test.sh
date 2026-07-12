@@ -9,7 +9,7 @@
 #
 # ENV-BLOCKED on cpu-tier: full-stack bring-up + synthesis/digest assembly are
 # accel-tier-gated AND the pool-builder call-site wiring is PKT-095-C. Run on
-# accel-tier home-lab / CI per the spec 095 environment-blocked DoD allowance
+# accel-tier self-hosted / CI per the spec 095 environment-blocked DoD allowance
 # (finding F-095-E2E-LIVE). Statically valid (bash -n).
 set -euo pipefail
 

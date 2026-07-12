@@ -182,7 +182,7 @@ tests shown above. **Claim Source:** executed.
 ### scope-4 evidence
 Deferred — operator-action. See SCOPE-4 acceptance criteria in
 `scopes.md`. No in-process evidence to capture until the operator runs
-`promote.sh --target home-lab`, executes `users add operator` in the
+`promote.sh --target self-hosted`, executes `users add operator` in the
 live container, and confirms browser login.
 
 ## Completion Statement
@@ -190,8 +190,8 @@ SCOPE-1, SCOPE-2, and SCOPE-3 are implementation-complete with
 executed unit + integration evidence (see Test Evidence above) and
 per-package `go vet` + `gofmt` clean across `internal/auth/webcreds/`,
 `internal/api/`, and `cmd/core/`. SCOPE-4 is intentionally deferred to
-the operator: it requires a live home-lab deploy (`promote.sh
---target home-lab`) plus an interactive browser smoke that no
+the operator: it requires a live self-hosted deploy (`promote.sh
+--target self-hosted`) plus an interactive browser smoke that no
 in-process agent can perform. SCOPE-4 DoD items remain `[ ]` as
 explicit acceptance criteria; matching `uservalidation.md` items also
 remain `[ ]` until the operator runs through the login flow.

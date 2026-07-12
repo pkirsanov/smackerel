@@ -96,7 +96,7 @@ plus the structural gates run against the authored artifacts.
   `pubspec.yaml` declares only an `ios` *plugin platform stub*).
 - `deploy/contract.yaml` confirmed to have NO `clients:` group today (has
   `images`/`externalImages`/`configBundles`/`signing`/`rolloutStrategies`/`sstKeyCatalog`).
-- Trains confirmed: `mvp`→home-lab, `next`→staging (`config/release-trains.yaml`);
+- Trains confirmed: `mvp`→self-hosted, `next`→staging (`config/release-trains.yaml`);
   flag-bundle format confirmed (`config/feature-flags.{mvp,next}.yaml`).
 - `release-train-guard.sh` Check 8 (G111) read in full: a flag is a violation
   ONLY if default-ON in a train other than the spec's `releaseTrain`;

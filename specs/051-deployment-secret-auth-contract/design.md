@@ -6,7 +6,7 @@ The R11 gaps probe (see [report.md](report.md) → "Gaps Probe Results — Round
 
 1. **Spec 044 already implements PASETO v4.public (Ed25519) signing material**, routed by `kid`. The previously-named `auth.signing.hmac_key` and `auth.signing.issuer` never existed in the live system. Spec 051 reconciles its requirements to the live contract.
 2. **Production-mode auth validation is partially implemented** at the SST loader (`internal/config/config.go::loadAuthConfig`) and at runtime (`internal/auth/startup.go::ValidateRuntimeAuthStartup`). The bootstrap-token gate at config-load is missing.
-3. **The default Postgres password (`smackerel`)** is currently accepted by the SST loader for ALL `TARGET_ENV` values including `home-lab`, and there is no runtime check that catches it when injected via `DATABASE_URL`. This is the highest-impact deployment-readiness gap.
+3. **The default Postgres password (`smackerel`)** is currently accepted by the SST loader for ALL `TARGET_ENV` values including `self-hosted`, and there is no runtime check that catches it when injected via `DATABASE_URL`. This is the highest-impact deployment-readiness gap.
 4. **No security-static log-redaction test** exists. Operators have no automated proof that secret values stay out of error messages.
 5. **No docs-static lint** asserts the canonical secret key names appear in [docs/Deployment.md](../../docs/Deployment.md) or [docs/Operations.md](../../docs/Operations.md). Manual inspection shows the names ARE there, but a regression could remove them silently.
 6. **`auth.at_rest_hashing_key`** is already validated at both layers under spec 044. Spec 051 credits this and folds it into the docs-static + log-redaction sweep.
@@ -35,14 +35,14 @@ When `runtime.environment=production` AND `auth.enabled=true`:
 - `AUTH_AT_REST_HASHING_KEY` — non-empty AND distinct from the signing key (FR-051-003)
 - `AUTH_BOOTSTRAP_TOKEN` — non-empty until operator clears it after first-user enrollment (FR-051-004)
 
-When `TARGET_ENV` ∈ `{home-lab}` (SST boundary) OR `runtime.environment=production` (runtime boundary):
+When `TARGET_ENV` ∈ `{self-hosted}` (SST boundary) OR `runtime.environment=production` (runtime boundary):
 
 - `infrastructure.postgres.password` (and the resolved `POSTGRES_PASSWORD` env var, and the `DATABASE_URL` password component) MUST NOT equal the local-dev value `smackerel` or any other documented dev-default value (FR-051-005).
 
 > **Footnote (spec 052 cross-reference):** Spec 052 (Bundle Secret Injection
 > Contract) introduces a production-class placeholder mode in which the SST
 > loader emits the deterministic marker `__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__`
-> for `home-lab`/`production` targets and the deploy adapter substitutes the
+> for `self-hosted`/`production` targets and the deploy adapter substitutes the
 > real value at apply time. FR-051-005 is **not weakened** — its dev-default
 > rejection still fires for any literal env-override path (e.g. an operator
 > manually exporting `POSTGRES_PASSWORD=smackerel` before running `apply`).
@@ -68,7 +68,7 @@ When `TARGET_ENV` ∈ `{home-lab}` (SST boundary) OR `runtime.environment=produc
                 │  - reject if POSTGRES_PASSWORD=='smackerel'
                 │    AND TARGET_ENV != dev|test         │
                 │  - reject if any required AUTH_* is   │
-                │    empty AND TARGET_ENV=home-lab AND  │
+                │    empty AND TARGET_ENV=self-hosted AND  │
                 │    SMACKEREL_ENV=production           │
                 └─────────────────┬──────────────────────┘
                                   │ produces config/generated/<env>.env
@@ -162,11 +162,11 @@ This treats the bootstrap token as required configuration on every production de
 
 `scripts/commands/config_secret_rejection_test.sh` (new bash test, called by the unit test driver as a runnable shell sub-process) MUST:
 
-1. Invoke `scripts/commands/config.sh --env home-lab --output-dir <temp>` with a temporary `config/smackerel.yaml` whose Postgres password is `smackerel`.
+1. Invoke `scripts/commands/config.sh --env self-hosted --output-dir <temp>` with a temporary `config/smackerel.yaml` whose Postgres password is `smackerel`.
 2. Assert the loader exits non-zero.
 3. Assert stderr contains the words `infrastructure.postgres.password` AND `forbidden` AND does NOT contain the word `smackerel` as a free-standing token (the value MUST NOT be echoed).
 
-The home-lab gate uses `TARGET_ENV` (not `SMACKEREL_ENV`) because the SST boundary fires per build target.
+The self-hosted gate uses `TARGET_ENV` (not `SMACKEREL_ENV`) because the SST boundary fires per build target.
 
 ## Test Strategy
 
@@ -177,7 +177,7 @@ The home-lab gate uses `TARGET_ENV` (not `SMACKEREL_ENV`) because the SST bounda
 | T-051-003 | unit/config | [internal/config/validate_test.go](../../internal/config/validate_test.go) | `DATABASE_URL` containing the dev-default password is rejected when `SMACKEREL_ENV=production` (NEW — FR-051-005 runtime layer). |
 | T-051-004 | security-static | [internal/config/log_redaction_test.go](../../internal/config/log_redaction_test.go) | No secret value appears in any error returned by `loadAuthConfig`, `Validate`, or `ValidateRuntimeAuthStartup` (NEW — FR-051-007). |
 | T-051-005 | docs-static | [internal/config/docs_required_keys_test.go](../../internal/config/docs_required_keys_test.go) | `docs/Deployment.md` and `docs/Operations.md` mention every canonical secret key name and no forbidden alias (NEW — FR-051-006). |
-| T-051-006 | shell | [scripts/commands/config_secret_rejection_test.sh](../../scripts/commands/config_secret_rejection_test.sh) | SST loader rejects `infrastructure.postgres.password=smackerel` for `TARGET_ENV=home-lab` and does not echo the value (NEW — FR-051-005 SST layer). |
+| T-051-006 | shell | [scripts/commands/config_secret_rejection_test.sh](../../scripts/commands/config_secret_rejection_test.sh) | SST loader rejects `infrastructure.postgres.password=smackerel` for `TARGET_ENV=self-hosted` and does not echo the value (NEW — FR-051-005 SST layer). |
 | T-051-007 | artifact | spec folder | Artifact lint, traceability guard, and state-transition guard pass. |
 
 ## Risk Controls

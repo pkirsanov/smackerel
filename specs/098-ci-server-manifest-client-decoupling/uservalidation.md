@@ -5,7 +5,7 @@
 ## Context
 
 This validates that the CI server deploy manifest is decoupled from the mobile
-client build, so a missing Android signing secret can no longer block a home-lab
+client build, so a missing Android signing secret can no longer block a self-hosted
 SERVER deploy — while preserving Build-Once-Deploy-Many client integrity on
 actual releases.
 

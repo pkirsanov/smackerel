@@ -5,7 +5,7 @@ report a regression.
 
 ## Planning-Phase Validation
 
-- [x] Problem statement accurately reflects the live observation on `evo-x2`
+- [x] Problem statement accurately reflects the live observation on `<deploy-host>`
 - [x] Scope covers GET /login form, 401→303 redirect, and logout UI
 - [x] Non-goals explicitly exclude new auth modes, password login, SSO/OAuth, Caddy edits
 - [x] Spec 044's wire contract (CLI/API → 401 JSON) is preserved

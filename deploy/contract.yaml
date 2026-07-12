@@ -60,7 +60,7 @@ configBundles:
   environments:
   - dev
   - test
-  - home-lab
+  - self-hosted
 
 # Signing requirements — adapter `apply` MUST verify these before container start.
 signing:
@@ -81,7 +81,7 @@ signing:
 # provenance-signed (Rekor) — the SAME scheme as the two images above — stored
 # as an immutable OCI artifact in `ref` addressed by sha256, and pinned by
 # digest in build-manifest-<sourceSha>.yaml under clients.artifacts[]. Lane A
-# (<deploy-host> self-host) is delivered by the existing knb home-lab adapter consuming
+# (<deploy-host> self-host) is delivered by the existing knb self-hosted adapter consuming
 # the digest (knb client-delivery-lib.sh — smackerel never builds clients in any
 # adapter); Lane B (Play Store) is coded but default-OFF behind the
 # clientReleaseLaneB flag and never auto-runs.
@@ -238,7 +238,7 @@ sstKeyCatalog:
     type: string
     secret: false
     notes: Host bind address; loopback by convention for dev/test.
-  # Spec 096 — Multi-Provider AI Model Connections. Home-lab / production
+  # Spec 096 — Multi-Provider AI Model Connections. self-hosted / production
   # adapter bring-up (deployment agent, out-of-tree adapter): (1) ship a real
   # LLM_PROVIDER_SECRET_MASTER_KEY in knb/smackerel/secrets/<target>.enc.env
   # (spec 052 secret-injection); (2) inject the operator's real

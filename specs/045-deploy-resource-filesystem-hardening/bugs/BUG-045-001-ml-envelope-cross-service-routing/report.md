@@ -2,7 +2,7 @@
 
 ## Summary
 
-Discovery and root cause analysis for the spec 045 FR-045-002 cross-service envelope routing defect. The `validateMLModelEnvelope()` function at `internal/config/config.go:1745-1801` conflates ollama-routed models (`LLM_MODEL`, `OLLAMA_MODEL`) and ml-sidecar-routed models (`EMBEDDING_MODEL`) into a single envelope check against `ML_MEMORY_LIMIT`, producing wrongly-named-envelope errors at runtime startup. This blocks chronic CI integration (10 consecutive FAILURE runs on `main`), blocks the spec 052 home-lab live canary (concerns `C-A12`, `C-B5`, `C-B6`), and breaks out-of-the-box `./smackerel.sh up` on default config.
+Discovery and root cause analysis for the spec 045 FR-045-002 cross-service envelope routing defect. The `validateMLModelEnvelope()` function at `internal/config/config.go:1745-1801` conflates ollama-routed models (`LLM_MODEL`, `OLLAMA_MODEL`) and ml-sidecar-routed models (`EMBEDDING_MODEL`) into a single envelope check against `ML_MEMORY_LIMIT`, producing wrongly-named-envelope errors at runtime startup. This blocks chronic CI integration (10 consecutive FAILURE runs on `main`), blocks the spec 052 self-hosted live canary (concerns `C-A12`, `C-B5`, `C-B6`), and breaks out-of-the-box `./smackerel.sh up` on default config.
 
 ## Completion Statement
 
@@ -174,7 +174,7 @@ $ sed -n '349,355p' specs/052-bundle-secret-injection-contract/state.json
   "severity": "low",
   "sourceDodItem": "Scope 4 A12 (independent canary suite for shared fixture/bootstrap contracts)",
   "followUpOwner": "operator",
-  "followUpAction": "Live-stack canary for the L2 (knb adapter substitution) + L3 (Go runtime defense per design.md §3 3-layer defense-in-depth) deferred to home-lab apply via the knb adapter.",
+  "followUpAction": "Live-stack canary for the L2 (knb adapter substitution) + L3 (Go runtime defense per design.md §3 3-layer defense-in-depth) deferred to self-hosted apply via the knb adapter.",
   "rationale": "Per operator decision 3c, dev box cannot host LLM gemma4:26b (18.4 GiB needed, 11.7 GiB available — pre-existing spec 045 ML envelope mismatch unrelated to spec 052). Concrete next-step owner for the spec 045 unblock: ml-config maintainer / spec 045 owner."
 }
 ```
@@ -931,7 +931,7 @@ $ ./smackerel.sh down
 $ bash .github/bubbles/scripts/cli.sh doctor
 Result: 15 passed, 1 failed, 0 advisory.
 ❌ [CONCRETE_TOOL] skills/bubbles-deployment-target-adapter/SKILL.md:406
-   | **recreate** | Now / single-host home-lab | `docker compose down && up -d` per service | 2-30 sec per service |
+   | **recreate** | Now / single-host self-hosted | `docker compose down && up -d` per service | 2-30 sec per service |
 ❌ [CONCRETE_TOOL] skills/bubbles-test-environment-isolation/SKILL.md:140
    docker compose --project-name <project>-test-integration ps
 ❌ [CONCRETE_TOOL] skills/bubbles-test-environment-isolation/SKILL.md:152
@@ -1117,7 +1117,7 @@ This subsection records the verified-current-state final disposition of all four
 - **AC-6 (`./smackerel.sh test integration` exit 0 on default config) — PASS:** Integration sweep at 2026-05-16T21:46:07Z exit 0; all 4 QF subtests PASS per RQ-QF-001 closure 2026-05-17 (fixture-only update to `tests/integration/qf_decisions_*_test.go`).
 - **AC-7 (`./smackerel.sh up` + `status` healthy on default config) — PASS:** Scope 3 §3.E evidence. All 4 core services (nats, postgres, smackerel-ml, smackerel-core) healthy.
 - **AC-8 (Spec 052 close-out artifacts updated) — PASS:** Scope 4 §4.A evidence. DD-4 metadata-only update applied to `specs/052-bundle-secret-injection-contract/state.json` (C-A12 + C-B5 + C-B6 marked `status: resolved` with full provenance), `scopes.md` (3 RESOLVED annotations), `report.md` (Scope-4 close-out addendum appended). NO re-certification of spec 052.
-- **AC-9 (`docs/Operations.md` "Model Envelope Sizing" section exists) — PASS:** `grep -n 'Model Envelope Sizing' docs/Operations.md` returns `2165:## Model Envelope Sizing (Spec 045 / BUG-045-001)` (exit 0). Section covers per-service envelope contract, dev/home-lab/production trade-off matrix, fix-path order, cross-references.
+- **AC-9 (`docs/Operations.md` "Model Envelope Sizing" section exists) — PASS:** `grep -n 'Model Envelope Sizing' docs/Operations.md` returns `2165:## Model Envelope Sizing (Spec 045 / BUG-045-001)` (exit 0). Section covers per-service envelope contract, dev/self-hosted/production trade-off matrix, fix-path order, cross-references.
 - **AC-10 (Full validator chain green) — PASS-with-known-drift:** All commands exit 0 EXCEPT `bash .github/bubbles/scripts/cli.sh doctor` exit 1 SOLELY for one intentional ceiling-delta entry covered by RQ-BUBBLES-ARTIFACT-LINT-INFO-001 upstream-pending. Per-command status captured in §4.C evidence + Audit Evidence section below.
 
 **Final Regression Sweep (2026-05-16T21:46:07Z, HEAD `de49b2f9` + working tree):**

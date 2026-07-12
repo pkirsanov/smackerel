@@ -16,7 +16,7 @@ planning:
 |-----------|---------------|------------------|
 | Connector interface | [`internal/connector/connector.go`](../../internal/connector/connector.go) | `Connector{ ID; Connect(ctx,cfg); Sync(ctx,cursor)→([]RawArtifact,string,error); Health; Close }`, `ConnectorConfig{ SyncSchedule cron; SourceConfig map }`, `RawArtifact{ SourceID,SourceRef,ContentType,Title,RawContent,URL,Metadata,CapturedAt }`, `ArtifactPublisher.PublishRawArtifact`. |
 | Existing connectors | `internal/connector/{rss,markets,weather,caldav,qfdecisions,imap,keep,youtube,twitter,maps,photos,bookmarks,discord}` | Pattern to copy for a new `cardrewards` connector. |
-| LLM gateway | `config/smackerel.yaml` `llm:` (lines ~80–89; `provider`, `model`, `ollama_url`, `ollama_model`, …) | Local Ollama extraction. On home-lab, point at home-lab host Ollama (`knb/docs/HomeLabServices.md`). |
+| LLM gateway | `config/smackerel.yaml` `llm:` (lines ~80–89; `provider`, `model`, `ollama_url`, `ollama_model`, …) | Local Ollama extraction. On self-hosted, point at self-hosted host Ollama (`knb/docs/SelfHostedServices.md`). |
 | Strict-schema LLM contract | [`docs/smackerel.md`](../../docs/smackerel.md) §17.2 | "Strict output schemas for all LLM calls; JSON validation before storage; malformed responses logged and discarded." |
 | Scheduler | [`internal/scheduler/`](../../internal/scheduler/) (`jobs.go`, `registration.go`, `scheduler.go`, `lifecycle.go`, `state.go`) | Register the daily-refresh and monthly-recommend cron jobs + manual triggers. |
 | CalDAV delivery pattern | [`internal/mealplan/calendar.go`](../../internal/mealplan/calendar.go) | `CalendarBridge` + `CalDAVClient{ PutEvent(...); DeleteEvent(uid) }`, stable UID scheme (`smackerel-meal-<id>`), `X-SMACKEREL-*` extra props. |
@@ -569,12 +569,12 @@ card_rewards:
   enabled: true
   scrape_cron: "0 6 * * *"              # REQUIRED when enabled — daily refresh
   monthly_recommend_cron: "0 7 1 * *"   # REQUIRED when enabled — 1st of month
-  calendar_sync: false                  # opt-in; true on home-lab
+  calendar_sync: false                  # opt-in; true on self-hosted
   calendar_uid_prefix: "smackerel-cardrec"  # REQUIRED when calendar_sync
   fetch_timeout_seconds: 20             # REQUIRED when enabled
   extraction:
     model: ""                           # REQUIRED when enabled — host Ollama model (e.g. gpt-oss:20b)
-    endpoint: ""                        # REQUIRED when enabled — e.g. home-lab host Ollama URL
+    endpoint: ""                        # REQUIRED when enabled — e.g. self-hosted host Ollama URL
     confidence_threshold: 0.0           # REQUIRED when enabled — below → needs_verification
     max_sources_per_card: 0             # REQUIRED when enabled
   sources:                              # REQUIRED non-empty when enabled
@@ -588,7 +588,7 @@ CalDAV credentials reuse the existing `connectors.caldav` credentials
 (infrastructure secret keys); the card-rewards bridge points at the same
 calendar with its own UID prefix + event category. The Ollama endpoint may
 reuse `llm.ollama_url` or override via `card_rewards.extraction.endpoint` to
-target the home-lab host Ollama. The generator (`scripts/commands/config.sh`)
+target the self-hosted host Ollama. The generator (`scripts/commands/config.sh`)
 emits `CARD_REWARDS_*` env vars; the Go config struct
 (`internal/config/config.go`) parses them with fail-loud validation, exactly as
 `MealPlanConfig` does.
@@ -660,4 +660,4 @@ override.
   monthly recommend over a large wallet.
 
 All live-stack tests use ephemeral storage (test-environment isolation) and the
-home-lab/test Ollama per spec 043. No mocks of internal components.
+self-hosted/test Ollama per spec 043. No mocks of internal components.

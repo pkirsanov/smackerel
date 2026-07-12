@@ -21,17 +21,17 @@ during planning:
 | Deploy contract | [`deploy/contract.yaml`](../../deploy/contract.yaml) | `contractVersion: 1`; `images:`, `externalImages:`, `configBundles:`, `signing:`, `rolloutStrategies:`, `sstKeyCatalog:`. **No `clients:` group yet** → Scope 01 adds it. |
 | Contract-drift lockstep tests | `internal/deploy/external_images_contract_test.go` (cited in `deploy/contract.yaml` `externalImages:` note) | The Go-contract-test pattern to copy for a `clients:`-block drift test. |
 | Build manifest (consumer side) | `deploy/contract.yaml` `configBundles.manifestSchema` (`refField: ref`, `hashField: sha256`) + `docs/Deployment.md` (Build-Once Deploy-Many) | `build-manifest-<sourceSha>.yaml` is the CI-produced artifact the `clients.artifacts[]` block is appended to. |
-| Release trains + flag bundles | [`config/release-trains.yaml`](../../config/release-trains.yaml) (`mvp`→home-lab, `next`→staging) + [`config/feature-flags.mvp.yaml`](../../config/feature-flags.mvp.yaml) + [`config/feature-flags.next.yaml`](../../config/feature-flags.next.yaml) | Where `clientReleaseLaneB: false` is declared in BOTH bundles. Format: `flags: { <name>: <bool> }` + `metadata`. |
+| Release trains + flag bundles | [`config/release-trains.yaml`](../../config/release-trains.yaml) (`mvp`→self-hosted, `next`→staging) + [`config/feature-flags.mvp.yaml`](../../config/feature-flags.mvp.yaml) + [`config/feature-flags.next.yaml`](../../config/feature-flags.next.yaml) | Where `clientReleaseLaneB: false` is declared in BOTH bundles. Format: `flags: { <name>: <bool> }` + `metadata`. |
 | Flag guard | `.github/bubbles/scripts/release-train-guard.sh` (framework — read-only) | Check 8 (G111): a flag is a violation only if default-ON in a train OTHER than the spec's `releaseTrain`. OFF-in-all-trains (dormant) PASSES. |
 | Pre-push downstream-sync precedent | [`scripts/git-hooks/pre-push`](../../scripts/git-hooks/pre-push) | `resolve_knb_checkout()` (→ `$KNB_REPO_ROOT` or `$HOME/knb`) then `bash "$_knb_root/scripts/lint/deploy-cli-uniformity.sh"`; WARN-if-missing; no bypass. The client-binary gate block is authored alongside this, IDENTICAL shape. |
-| knb home-lab adapter (Lane A consumer) | `smackerel.sh` `deploy-target` → `$KNB_REPO_ROOT/scripts/deploy/orchestrator.sh` (verified lines ~1873–1881) | Lane A delivery is the knb adapter's job (knb node n10). smackerel does NOT build clients or call the lib directly. |
+| knb self-hosted adapter (Lane A consumer) | `smackerel.sh` `deploy-target` → `$KNB_REPO_ROOT/scripts/deploy/orchestrator.sh` (verified lines ~1873–1881) | Lane A delivery is the knb adapter's job (knb node n10). smackerel does NOT build clients or call the lib directly. |
 
 ### knb pattern (conformance source) — verified
 
 | knb artifact | Verified path | Contract for smackerel |
 |---|---|---|
 | Conformance gate | [`knb/scripts/lint/client-binary-conformance.sh`](../../../knb/scripts/lint/client-binary-conformance.sh) | `--repo <path>` runs checks a–f; `E025-CLIENT-*` exit codes (91 source-no-contract, 92 manifest-no-digest, 93 contract-missing, 94 raw-signing-material, 95 laneb-autosubmit); C3 no-bypass. |
-| Lane-A shared lib | `knb/scripts/deploy/client-delivery-lib.sh` | knb-side; smackerel's home-lab adapter sources it (knb node n10). smackerel NEVER calls it. |
+| Lane-A shared lib | `knb/scripts/deploy/client-delivery-lib.sh` | knb-side; smackerel's self-hosted adapter sources it (knb node n10). smackerel NEVER calls it. |
 | Manifest/contract schema | knb spec 025 FR-003/FR-006 | `clients: { none: <bool>, artifacts: [ {platform,variant,kind,ref,sha256,provenance,embeds,laneB} ] }`. |
 | Binding instruction | `knb/.github/instructions/bubbles-client-binary-release.instructions.md` | Per-platform taxonomy: android → kind `aab`+`apk`, Lane A = APK sideload, Lane B = Play Store (AAB). |
 
@@ -182,7 +182,7 @@ Lane B (Play Store submission) is fully coded but dormant:
 
 ## 6. Lane A — delivered by the existing knb adapter (FR-CBR-010/012)
 
-Lane A is NOT smackerel's code. smackerel's home-lab deployment already routes
+Lane A is NOT smackerel's code. smackerel's self-hosted deployment already routes
 through the knb adapter (`smackerel.sh deploy-target` →
 `$KNB_REPO_ROOT/scripts/deploy/orchestrator.sh`). The knb adapter (knb node n10)
 sources `client-delivery-lib.sh` to: pull the android artifact by digest →

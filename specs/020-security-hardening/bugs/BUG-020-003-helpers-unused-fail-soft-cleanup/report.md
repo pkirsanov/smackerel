@@ -393,10 +393,10 @@ $ # 0 leaks found, 0 errors, 0 warnings — scan finished in 51.9ms
 
 Result: PASS. Zero secret/PII findings across the entire bug packet. Plus directed grep for known PII tokens:
 
-Command: `grep -rnE "/home/[a-z]+|evo-x2|EvoX2|tailscale|\.ts\.net" specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/`
+Command: `grep -rnE "/home/[a-z]+|<deploy-host>|<deploy-host>|tailscale|\.ts\.net" specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/`
 
 ```text
-$ grep -rnE "/home/[a-z]+|evo-x2|EvoX2|tailscale|\.ts\.net" specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/
+$ grep -rnE "/home/[a-z]+|<deploy-host>|<deploy-host>|tailscale|\.ts\.net" specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/
 (no matches)
 $ echo "exit code: $?"
 exit code: 1

@@ -31,7 +31,7 @@ The Build-Once Deploy-Many architecture (bubbles G074; smackerel specs 029, 047,
 `smackerel-ml`) first-class immutable artifacts: built once in CI
 ([`.github/workflows/build.yml`](../../.github/workflows/build.yml)), cosign-keyless
 signed (Rekor) + SBOM + SLSA provenance, Trivy CRITICAL/HIGH gated, pinned by
-digest in `build-manifest-<sourceSha>.yaml`, consumed by the knb home-lab
+digest in `build-manifest-<sourceSha>.yaml`, consumed by the knb self-hosted
 adapter, never rebuilt per environment.
 
 smackerel's **native client binary** gets NONE of this treatment today. The
@@ -48,8 +48,8 @@ Flutter mobile assistant lives at
 4. **Not declared in the deploy contract** — [`deploy/contract.yaml`](../../deploy/contract.yaml)
    has `images:`, `externalImages:`, `configBundles:`, `signing:` but no
    `clients:` group.
-5. **Not deliverable to evo-x2** — there is no Lane-A delivery path that places
-   a signed APK on the home-lab target.
+5. **Not deliverable to <deploy-host>** — there is no Lane-A delivery path that places
+   a signed APK on the self-hosted target.
 6. **Has no public-release lane** — no coded (even if dormant) Play Store path.
 
 The knb pattern (spec 025) makes all of this mandatory and mechanically
@@ -65,19 +65,19 @@ CI, made reproducible/deterministic, cosign-keyless provenance-signed, stored as
 an immutable OCI artifact in ghcr addressed by sha256, and pinned by digest in
 `build-manifest-<sourceSha>.yaml` under a `clients.artifacts[]` block — exactly
 like the two container images. smackerel's `deploy/contract.yaml` declares a
-`clients:` group (android). **Lane A** (evo-x2 self-host delivery) is performed
-by smackerel's EXISTING knb home-lab adapter consuming the signed artifact by
+`clients:` group (android). **Lane A** (<deploy-host> self-host delivery) is performed
+by smackerel's EXISTING knb self-hosted adapter consuming the signed artifact by
 digest (knb's `client-delivery-lib.sh`; smackerel never calls it directly and
 never builds clients in an adapter). **Lane B** (Play Store submission) is fully
 CODED but default-OFF behind the named flag `clientReleaseLaneB`, never
 auto-runs. Distribution signing material stays operator-private. smackerel's
 pre-push + CI invoke the knb conformance gate. The standalone outcome: a single
 `git push` produces a signed, digest-pinned client artifact ready for the knb
-adapter to deliver to evo-x2, with public-store release one flag-flip away.
+adapter to deliver to <deploy-host>, with public-store release one flag-flip away.
 
 ## FIXED Product Decisions (constraints — not re-litigated here)
 
-1. **Lane A** (evo-x2 self-host delivery) is the ONLY actively-executed
+1. **Lane A** (<deploy-host> self-host delivery) is the ONLY actively-executed
    distribution lane. **Lane B** (Play Store public submission) is fully CODED
    but default-OFF behind the named feature flag `clientReleaseLaneB`; it NEVER
    auto-runs.
@@ -104,7 +104,7 @@ adapter to deliver to evo-x2, with public-store release one flag-flip away.
   pre-push + CI wiring to the knb conformance gate.
 - **Out of scope:** editing the knb gate, the knb manifest schema, or the knb
   Lane-A `client-delivery-lib.sh` (all knb-owned — smackerel MUST NOT modify
-  framework/knb files); the knb home-lab adapter's client-delivery step (knb
+  framework/knb files); the knb self-hosted adapter's client-delivery step (knb
   node n10); **iOS** (no `ios/` app target exists at `clients/mobile/assistant`
   — see FR-CBR-013 + OQ-3); any actual implementation (this node is
   planning-only at the `specs_hardened` ceiling).
@@ -317,8 +317,8 @@ contract `clients:` block) is refused with the matching `E025-CLIENT-*` code.
   when the operator later activates Lane B; the runtime MUST read it from an env
   var with NO fallback default (missing ⇒ fail-fast). (release-train /
   flag-lifecycle model; G111)
-- **FR-CBR-010**: Lane A delivery to evo-x2 is performed by smackerel's EXISTING
-  knb home-lab adapter consuming the signed client artifact by digest (knb's
+- **FR-CBR-010**: Lane A delivery to <deploy-host> is performed by smackerel's EXISTING
+  knb self-hosted adapter consuming the signed client artifact by digest (knb's
   `client-delivery-lib.sh`). smackerel does NOT call that lib directly and does
   NOT build clients in any deploy adapter. (knb FR-010/FR-011; CBR-007/CBR-014)
 - **FR-CBR-011**: smackerel's pre-push hook MUST invoke the knb conformance gate
@@ -383,8 +383,8 @@ changes no user-visible product behavior. Alignment:
 
 ## Release Train
 
-- **Target train:** `mvp` (active; `target_slot: home-lab`). Lane A delivers to
-  the evo-x2 home-lab target, which is `mvp`'s slot, so the pipeline's active
+- **Target train:** `mvp` (active; `target_slot: self-hosted`). Lane A delivers to
+  the <deploy-host> self-hosted target, which is `mvp`'s slot, so the pipeline's active
   work ships on `mvp`.
 - **Flag introduced:** `clientReleaseLaneB`, declared **default-OFF (`false`)** in
   BOTH `config/feature-flags.mvp.yaml` and `config/feature-flags.next.yaml`.
@@ -399,7 +399,7 @@ changes no user-visible product behavior. Alignment:
 
 | Product | Target | Surface this spec plans | Lane |
 |---|---|---|---|
-| smackerel | home-lab (evo-x2) | client artifact delivered by the EXISTING knb home-lab adapter consuming the digest (knb node n10 wires the lib) | Lane A |
+| smackerel | self-hosted (<deploy-host>) | client artifact delivered by the EXISTING knb self-hosted adapter consuming the digest (knb node n10 wires the lib) | Lane A |
 | smackerel | Play Store | coded, default-OFF behind `clientReleaseLaneB` | Lane B |
 
 **Operator Safety:** every planned change is additive and version-controlled.
@@ -414,7 +414,7 @@ symlink (knb-owned).
 
 | platform | variant | kind | Lane A serve form | Lane B target | embeds | provenance | laneB |
 |---|---|---|---|---|---|---|---|
-| android | `-` | `aab` + `apk` | APK sideload served on evo-x2 (knb adapter) | Play Store (AAB) | — | cosign-keyless | gated by `clientReleaseLaneB` (false) |
+| android | `-` | `aab` + `apk` | APK sideload served on <deploy-host> (knb adapter) | Play Store (AAB) | — | cosign-keyless | gated by `clientReleaseLaneB` (false) |
 | ios | (RESERVED) | — | N/A — no `ios/` target exists | N/A | (would `embed` watchos) | — | — |
 
 ## Open Questions (routed)

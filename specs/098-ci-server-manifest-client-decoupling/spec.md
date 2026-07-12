@@ -8,7 +8,7 @@
 
 The CI `build` workflow (`.github/workflows/build.yml`) couples the **mobile
 client build** to the **server deploy manifest** in a way that lets a missing
-Android signing secret block an unrelated home-lab SERVER deploy:
+Android signing secret block an unrelated self-hosted SERVER deploy:
 
 - `publish-build-manifest` declares
   `needs: [ build-images, build-bundles, build-chrome-bridge, build-clients ]`
@@ -25,7 +25,7 @@ build-clients  ✗ (missing ANDROID_KEYSTORE_BASE64)
    └─> publish-build-manifest  SKIPPED  (a failed `needs` job skips the dependent)
           └─> build-manifest-<sha>.yaml  NOT published
                  └─> Build-Once-Deploy-Many has NO input
-                        └─> home-lab SERVER deploy (core + ml)  BLOCKED
+                        └─> self-hosted SERVER deploy (core + ml)  BLOCKED
 ```
 
 The server (`smackerel-core` + `smackerel-ml`) has nothing to do with the
@@ -37,10 +37,10 @@ CI-path deploys for specs 087 / 088 / 089 are stuck — their `state.json`
 > NOT published."
 
 A **clients-absent, server-deployable manifest is already an accepted shape** in
-this repo: `scripts/commands/build-home-lab.sh`
-(`./smackerel.sh build --target home-lab`) emits
+this repo: `scripts/commands/build-self-hosted.sh`
+(`./smackerel.sh build --target self-hosted`) emits
 `dist/local-build-manifests/local-build-manifest-<sha>.yaml` containing only
-core + ml images + the home-lab config bundle, operator-cosign-signed, with **no
+core + ml images + the self-hosted config bundle, operator-cosign-signed, with **no
 Android secret required**. `scripts/deploy/promote.sh` (via
 `scripts/deploy/promote_manifest_parse.sh`) already parses **both** manifest
 shapes and never reads a `clients:` block. So a server-only manifest is an
@@ -50,7 +50,7 @@ yet emit one.
 ## Goal
 
 Decouple the CI mobile-client build from the server deploy manifest so that a
-missing Android signing secret can never block a home-lab SERVER deploy, while
+missing Android signing secret can never block a self-hosted SERVER deploy, while
 **preserving** Build-Once-Deploy-Many client integrity on actual releases:
 
 - Non-release pushes (e.g. push to `main`) publish a **server-only** manifest
@@ -116,8 +116,8 @@ Scenario: Tagged release still builds and pins the clients
 
 Scenario: Server-only manifest is promotable
   Given a server-only build-manifest with no clients block
-  When scripts/deploy/promote.sh reads it for the home-lab target
-  Then it resolves core, ml and the home-lab bundle ref + sha256
+  When scripts/deploy/promote.sh reads it for the self-hosted target
+  Then it resolves core, ml and the self-hosted bundle ref + sha256
   And it never requires a clients block (matching the local-build-manifest)
 ```
 

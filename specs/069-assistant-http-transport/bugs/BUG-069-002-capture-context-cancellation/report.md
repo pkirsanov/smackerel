@@ -79,7 +79,7 @@ commit eadfada7238f12e12ab37ac80ac48862333bff96
 Author: pkirsanov <pkirsanov@users.noreply.github.com>
 Date:   Sat Jun 20 07:11:22 2026 +0000
 
-    chore(wip): prior-session code checkpoint — bug-fix code + spec 096 multi-provider feature + agent/connector/intelligence hardening (monitoring/alert cluster + gated docs + subscriptions_test held per evo-x2/PII handoff)
+    chore(wip): prior-session code checkpoint — bug-fix code + spec 096 multi-provider feature + agent/connector/intelligence hardening (monitoring/alert cluster + gated docs + subscriptions_test held per <deploy-host>/PII handoff)
 
  internal/assistant/httpadapter/adapter.go          |  11 ++-
  .../httpadapter/capture_disconnect_test.go         | 106 +++++++++++++++++++++
@@ -268,7 +268,7 @@ Git-backed proof — the fix is committed in `internal/assistant/httpadapter/ada
 
 ```text
 $ git log --oneline -n 1 -- internal/assistant/httpadapter/adapter.go
-eadfada7 chore(wip): prior-session code checkpoint — bug-fix code + spec 096 multi-provider feature + agent/connector/intelligence hardening (monitoring/alert cluster + gated docs + subscriptions_test held per evo-x2/PII handoff)
+eadfada7 chore(wip): prior-session code checkpoint — bug-fix code + spec 096 multi-provider feature + agent/connector/intelligence hardening (monitoring/alert cluster + gated docs + subscriptions_test held per <deploy-host>/PII handoff)
 
 $ git show eadfada7 -- internal/assistant/httpadapter/adapter.go
 diff --git a/internal/assistant/httpadapter/adapter.go b/internal/assistant/httpadapter/adapter.go

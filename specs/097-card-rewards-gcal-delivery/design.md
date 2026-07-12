@@ -78,11 +78,11 @@ overloading the read connector with an unrelated write responsibility.
 ## Credential provenance (operator)
 
 The operator supplies an existing Google OAuth2 installed-app credential with
-calendar write scope (`.../auth/calendar`). For the home-lab deployment this is
+calendar write scope (`.../auth/calendar`). For the self-hosted deployment this is
 the credential recovered from the operator's prior CCManager Render instance
 (same Google project, write scope, owner access to the target "Credit cards"
 calendar). It is delivered encrypted via the knb deploy adapter
-(`knb/smackerel/secrets/home-lab.enc.env`, sops/age) — never committed in
+(`knb/smackerel/secrets/self-hosted.enc.env`, sops/age) — never committed in
 plaintext, never logged.
 
 ## Deployment
@@ -90,7 +90,7 @@ plaintext, never logged.
 Build-once: a push to smackerel `main` triggers `.github/workflows/build.yml`
 (cosign keyless sign + attest + Trivy gate), producing a new signed
 `smackerel-core` digest. The knb adapter applies that digest with the new config
-bundle; `card_rewards.calendar_sync` flips to true on home-lab and the gcal
+bundle; `card_rewards.calendar_sync` flips to true on self-hosted and the gcal
 secret is substituted from sops at apply time. A monthly-recommend run (or the
 admin "sync calendar now" trigger) then writes events to the calendar.
 

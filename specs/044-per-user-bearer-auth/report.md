@@ -1243,7 +1243,7 @@ docs/Operations.md | +172 / -0
 # Verifier: source = ./smackerel.sh test integration; Exit Code: 0; 0 errors reported (re-runnable)
 ```
 
-- Added `## Per-User Bearer Authentication (Spec 044, Scope 01)` between OAuth Callback URL Update (line ~586) and Expense Tracking Configuration. Subsections: per-environment default table (dev=false / test=false / home-lab=true verified against `config/smackerel.yaml` `environments.<env>.auth_enabled`); required production secrets table (3 required + 2 rotation + 1 bootstrap, mapped to both `auth.*` SST keys and `AUTH_*` env vars); startup fail-loud (loader at `internal/config/config.go` + runtime at `internal/auth/startup.go` per OQ-8); CLI invocation contract (`docker exec -it smackerel-<env>-smackerel-core-1 smackerel-core auth <subcommand>` — explicit note that no `./smackerel.sh auth` wrapper exists at Scope 01); table of all six subcommands per `cmd/core/cmd_auth.go` with usage strings and exit-code contract (rc=0/1/2); key generation example; first-user bootstrap walkthrough; manual enroll/rotate/revoke examples (with sample IDs); admin HTTP endpoint table with explicit `(Scope 02)` annotation noting routes are NOT yet registered in `internal/api/router.go`; observability carry-forward note pointing to Scope 04.
+- Added `## Per-User Bearer Authentication (Spec 044, Scope 01)` between OAuth Callback URL Update (line ~586) and Expense Tracking Configuration. Subsections: per-environment default table (dev=false / test=false / self-hosted=true verified against `config/smackerel.yaml` `environments.<env>.auth_enabled`); required production secrets table (3 required + 2 rotation + 1 bootstrap, mapped to both `auth.*` SST keys and `AUTH_*` env vars); startup fail-loud (loader at `internal/config/config.go` + runtime at `internal/auth/startup.go` per OQ-8); CLI invocation contract (`docker exec -it smackerel-<env>-smackerel-core-1 smackerel-core auth <subcommand>` — explicit note that no `./smackerel.sh auth` wrapper exists at Scope 01); table of all six subcommands per `cmd/core/cmd_auth.go` with usage strings and exit-code contract (rc=0/1/2); key generation example; first-user bootstrap walkthrough; manual enroll/rotate/revoke examples (with sample IDs); admin HTTP endpoint table with explicit `(Scope 02)` annotation noting routes are NOT yet registered in `internal/api/router.go`; observability carry-forward note pointing to Scope 04.
 - All examples use generic sample IDs/keys (`<user-id>`, `<token-id>`, `<env>`) per Smackerel PII rule. No real Linux usernames, hostnames, or IPs.
 
 #### `docs/Deployment.md`
@@ -1288,7 +1288,7 @@ docs/smackerel.md | +7 / -0
 # Verifier: source = ./smackerel.sh test integration; Exit Code: 0; 0 errors reported (re-runnable)
 ```
 
-- Added a brief paragraph at the end of §17.2 Security Model acknowledging the spec 044 subsystem: PASETO v4.public per-user enrollment, NATS-backed revocation cache (≤60s propagation budget), stateless hot-path validation with no DB roundtrip per request, dev/test contract preserved on the legacy `runtime.auth_token`, home-lab default and production-class posture on per-user PASETO.
+- Added a brief paragraph at the end of §17.2 Security Model acknowledging the spec 044 subsystem: PASETO v4.public per-user enrollment, NATS-backed revocation cache (≤60s propagation budget), stateless hot-path validation with no DB roundtrip per request, dev/test contract preserved on the legacy `runtime.auth_token`, self-hosted default and production-class posture on per-user PASETO.
 - Cross-links Operations.md (operator runbook) and `specs/044-per-user-bearer-auth/` (design rationale). Does NOT duplicate spec content.
 
 ### Intentionally Unmodified
@@ -1412,7 +1412,7 @@ REGR_EXIT=0
 #### Gate F4 — `./smackerel.sh check`
 
 ```text
-file_path: config/smackerel.yaml + config/generated/{dev,test,home-lab}.env + config/prompt_contracts/*.yaml
+file_path: config/smackerel.yaml + config/generated/{dev,test,self-hosted}.env + config/prompt_contracts/*.yaml
 count_summary: SST in sync; env_file drift OK; scenario-lint OK (5 registered, 0 rejected)
 exit_status: 0
 # Verifier: source = ./smackerel.sh test integration; Exit Code: 0; 0 errors reported
@@ -1907,7 +1907,7 @@ EXIT_CODE=0
 |---|---|
 | test_runner | `./smackerel.sh check` |
 | exit_status | 0 |
-| file_path | `config/smackerel.yaml`, `config/generated/{dev,test,home-lab}.env`, `config/prompt_contracts/*.yaml` |
+| file_path | `config/smackerel.yaml`, `config/generated/{dev,test,self-hosted}.env`, `config/prompt_contracts/*.yaml` |
 | timing | < 5s |
 | count_summary | 5 scenarios registered, 0 rejected |
 
@@ -2349,7 +2349,7 @@ EXIT_CODE=0
 |---|---|
 | test_runner | `./smackerel.sh check` |
 | exit_status | 0 |
-| file_path | `config/smackerel.yaml`, `config/generated/{dev,test,home-lab}.env`, `config/prompt_contracts/*.yaml` |
+| file_path | `config/smackerel.yaml`, `config/generated/{dev,test,self-hosted}.env`, `config/prompt_contracts/*.yaml` |
 | timing | < 5s |
 | count_summary | Config in sync with SST; env_file drift guard OK; 5 scenarios registered, 0 rejected |
 
@@ -5329,7 +5329,7 @@ Cross-referenced current managed-doc text against the live Scope 03 implementati
 | docs/Deployment.md | "API-Consumer Migration (Scope 02)" only | No mention of how PWA users / extension users / Telegram users / admins migrate to the per-user model after Scope 03 | 4 caller-side surfaces shipped in Scope 03; the F02 carry-forward-to-finalize means Telegram users currently fall back to the shared `runtime.auth_token` until Scope 04 wires `PerUserTokenMinter` into the bot's outbound HTTP | ADDED new "### API-Consumer Migration (Scope 03)" + "#### Known Carry-Forward — Telegram Per-User Attribution Wiring (F02, Scope 04)" subsections (~100 lines) |
 | docs/Testing.md | "Per-User Bearer Auth Test Surface (Spec 044)" | Said Scope 03 PWA / extension / Telegram E2E tests are "NOT yet authored" and tracked under `scenario-manifest.json` | All 4 Scope 03 caller-surface test files PRESENT and PASSING (4 e2e tests + 9 integration tests + chaos suite + hot-path benchmark); 3 Scope 03 unit-test files PRESENT and PASSING | REPLACED stale Scope 03 scaffold paragraph with a complete "### Per-User Bearer Auth — Scope 03 Test Inventory (Spec 044)" subsection — 7-row test-file table + 12-case adversarial-coverage list + chaos suite inventory + invocation snippet |
 | docs/smackerel.md | §17.2 last paragraph | Did not mention Scope 03 closure of caller-side surfaces or the supplementary Telegram E2E coverage of MIT-027-TRACE-001 | Scope 03 closes PWA cookie session, extension per-user PASETO, Telegram per-user bridge, and admin token-management UI; `TestTelegramBridge_BodyClaimedActorRejected` proves the Scope 02 actor-source rejection works through the Telegram path; remaining NATS-segment closure carried into Scope 04 | APPENDED new paragraph to §17.2 documenting Scope 03 closure + the supplementary Telegram E2E coverage + the F02 / NATS-segment carry-forward |
-| README.md | "### Authentication" | Only mentioned the legacy shared `runtime.auth_token` model | Scope 03 ships PWA cookie session + extension per-user PASETO + Telegram chat→user mapping + admin UI; per-user model is the home-lab default and production posture | EXTENDED "### Authentication" with a new "#### Per-User Bearer Auth (spec 044) — Production Posture" subsection (~38 lines) covering all 4 caller surfaces and pointing readers to docs/Operations.md + docs/Deployment.md anchors |
+| README.md | "### Authentication" | Only mentioned the legacy shared `runtime.auth_token` model | Scope 03 ships PWA cookie session + extension per-user PASETO + Telegram chat→user mapping + admin UI; per-user model is the self-hosted default and production posture | EXTENDED "### Authentication" with a new "#### Per-User Bearer Auth (spec 044) — Production Posture" subsection (~38 lines) covering all 4 caller surfaces and pointing readers to docs/Operations.md + docs/Deployment.md anchors |
 
 All drift fixes were applied in this docs phase — zero carry-forward drift remaining for Scope 03 caller-side surfaces.
 
@@ -6326,7 +6326,7 @@ cross-spec MIT closure annotations + ensures everything reads correctly.
 | File | Δ lines | Purpose |
 |---|---|---|
 | `docs/Operations.md` | +68 / -0 (1520 → 1588) | NEW `##### Final Scope 04 Audit — End-To-End Migration` subsection inserted between the Deprecation Pathway and the Admin Token-Management UI subsections. Consolidates the operator-facing migration story for the four shipped scopes plus the supervised flag flip: a 5-step migration sequence table (Scope 1 → 2 → 3 → 4 → flag flip with cutover gates per step), three metric-based cutover criteria (legacy-fallback rate at zero across 5-min buckets; per-surface validation outcome counter increments; p95 validation latency under NFR-AUTH-001 5 ms budget), an explicit rollback paragraph (any step is reversible via the corresponding compose-level revert + restart; the flag flip itself reverses by setting `production_shared_token_fallback_enabled=true`, regenerating, restarting), and an explicit "Carried forward outside Scope 04 (intentional, NOT blocking)" paragraph documenting the MIT-027-TRACE-001 NATS-segment + per-user admin allowlist carry-forwards per `specs/044-per-user-bearer-auth/design.md` §17.3. |
-| `README.md` | +11 / -0 (897 → 908) | Final pass on the existing "Per-User Bearer Auth (spec 044) — Production Posture" section. Added one paragraph describing the `auth.production_shared_token_fallback_enabled` migration flag (default `false` per FR-AUTH-017), the operator workflow (flip to `true` → migrate every legacy caller while watching `smackerel_auth_legacy_fallback_used_total` → flip back to `false`), and a deep link into the new `docs/Operations.md` "Final Scope 04 Audit" subsection. The existing four-bullet caller-surface list and the existing two-doc cross-references at the end of the section are preserved verbatim. README continues to describe per-user bearer auth as the **production model** and the **home-lab default**. |
+| `README.md` | +11 / -0 (897 → 908) | Final pass on the existing "Per-User Bearer Auth (spec 044) — Production Posture" section. Added one paragraph describing the `auth.production_shared_token_fallback_enabled` migration flag (default `false` per FR-AUTH-017), the operator workflow (flip to `true` → migrate every legacy caller while watching `smackerel_auth_legacy_fallback_used_total` → flip back to `false`), and a deep link into the new `docs/Operations.md` "Final Scope 04 Audit" subsection. The existing four-bullet caller-surface list and the existing two-doc cross-references at the end of the section are preserved verbatim. README continues to describe per-user bearer auth as the **production model** and the **self-hosted default**. |
 | `specs/030-observability/state.json` | +19 / -3 (cross-spec annotation) | Appended `bubbles.docs` cross-spec annotation to `execution.executionHistory` (now 4 entries). Records that spec 044 Scope 04 landed the seven-series `smackerel_auth_*` Prometheus surface at `internal/metrics/auth.go` exposed by the same Go-core `/metrics` endpoint that spec 030 owns; spec 030's contract (Prometheus exposition format, default-registry registration, canonical `smackerel_*` prefix) is preserved; the spec 044 surface conforms. Spec 030 `status` / `certification.*` / `scopeProgress` / `completedScopes` / `certifiedCompletedPhases` UNTOUCHED — spec 030 stays at `done`; only `execution.executionHistory` appended with this cross-reference. `lastUpdatedAt` advanced to `2026-05-11T03:00:00Z`. |
 | `specs/044-per-user-bearer-auth/report.md` | +1 section / 0 prior content removed | NEW `### Docs Evidence (Scope 04)` section appended at end-of-file (this entry). |
 | `specs/044-per-user-bearer-auth/state.json` | claim entries + phase advance | Mutations recorded in dedicated subsection below. |
@@ -7082,7 +7082,7 @@ E2E intentionally NOT executed in this simplify pass per the orchestrator instru
 
 **Stabilize-phase responsibility:** identify performance, infrastructure, configuration, deployment, build, reliability, and resource-usage issues introduced or amplified by the 40 commits. (Security review owned by `bubbles.security` and recorded in the per-scope audit + chaos phases above.)
 
-**Files reviewed (count):** 27 production files (`internal/auth/{verify,issue,session,startup,handler,store,bearer_store,oauth,hash}.go`, `internal/auth/revocation/*.go`, `internal/api/router.go`, `internal/api/auth_handlers.go`, `internal/api/web_login.go`, `internal/api/admin_ui.go`, `cmd/core/main.go`, `cmd/core/wiring.go`, `cmd/core/services.go`, `cmd/core/cmd_auth.go`, `config/smackerel.yaml`, `config/generated/dev.env`, `config/generated/test.env`, `config/generated/home-lab.env`, `docker-compose.yml`, `web/pwa/src/login.html`, `web/pwa/src/login.js`, `Dockerfile`).
+**Files reviewed (count):** 27 production files (`internal/auth/{verify,issue,session,startup,handler,store,bearer_store,oauth,hash}.go`, `internal/auth/revocation/*.go`, `internal/api/router.go`, `internal/api/auth_handlers.go`, `internal/api/web_login.go`, `internal/api/admin_ui.go`, `cmd/core/main.go`, `cmd/core/wiring.go`, `cmd/core/services.go`, `cmd/core/cmd_auth.go`, `config/smackerel.yaml`, `config/generated/dev.env`, `config/generated/test.env`, `config/generated/self-hosted.env`, `docker-compose.yml`, `web/pwa/src/login.html`, `web/pwa/src/login.js`, `Dockerfile`).
 
 #### 1. Performance Scan (NFR-AUTH-001 ≤ 5 ms p99 hot-path validation)
 
@@ -7182,12 +7182,12 @@ $ git diff --stat config/generated/
 The Scope 02 production-hardening crux is `auth.production_shared_token_fallback_enabled: false` as the SST default. Verified across all three generated env files at HEAD `23f1265e`:
 
 ```
-$ for env in dev test home-lab; do
+$ for env in dev test self-hosted; do
     grep AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED config/generated/${env}.env
   done
 AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false   # dev.env
 AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false   # test.env
-AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false   # home-lab.env
+AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false   # self-hosted.env
 $ echo "Exit Code: $?"
 Exit Code: 0
 ```
@@ -7195,17 +7195,17 @@ Exit Code: 0
 Per-env `AUTH_ENABLED` posture matches design.md §3:
 
 ```
-$ for env in dev test home-lab; do
+$ for env in dev test self-hosted; do
     grep '^AUTH_ENABLED=' config/generated/${env}.env
   done
 dev.env       AUTH_ENABLED=false   (shared-token mode for single-tenant dev)
 test.env      AUTH_ENABLED=false   (shared-token mode; SMACKEREL_AUTH_TOKEN populated for fixture)
-home-lab.env  AUTH_ENABLED=true    (per-user PASETO required; signing material populated by operator before runtime)
+self-hosted.env  AUTH_ENABLED=true    (per-user PASETO required; signing material populated by operator before runtime)
 $ echo "Exit Code: $?"
 Exit Code: 0
 ```
 
-**SST-wired auth keys (verified present and empty-by-default per SST zero-defaults policy):** `AUTH_TOKEN_FORMAT`, `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`, `AUTH_SIGNING_ACTIVE_KEY_ID`, `AUTH_SIGNING_PRIOR_PUBLIC_KEY`, `AUTH_SIGNING_PRIOR_KEY_ID`, `AUTH_TOKEN_TTL_HOURS`, `AUTH_ROTATION_GRACE_WINDOW_HOURS`, `AUTH_CLOCK_SKEW_TOLERANCE_SECONDS`, `AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS`, `AUTH_REVOCATION_NATS_SUBJECT`, `AUTH_AT_REST_HASHING_KEY`, `AUTH_TELEMETRY_ENABLED`, `AUTH_TELEMETRY_METRIC_PREFIX`, `AUTH_BOOTSTRAP_TOKEN`. All present in dev/test/home-lab.
+**SST-wired auth keys (verified present and empty-by-default per SST zero-defaults policy):** `AUTH_TOKEN_FORMAT`, `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`, `AUTH_SIGNING_ACTIVE_KEY_ID`, `AUTH_SIGNING_PRIOR_PUBLIC_KEY`, `AUTH_SIGNING_PRIOR_KEY_ID`, `AUTH_TOKEN_TTL_HOURS`, `AUTH_ROTATION_GRACE_WINDOW_HOURS`, `AUTH_CLOCK_SKEW_TOLERANCE_SECONDS`, `AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS`, `AUTH_REVOCATION_NATS_SUBJECT`, `AUTH_AT_REST_HASHING_KEY`, `AUTH_TELEMETRY_ENABLED`, `AUTH_TELEMETRY_METRIC_PREFIX`, `AUTH_BOOTSTRAP_TOKEN`. All present in dev/test/self-hosted.
 
 **Hardcoded-fallback grep:**
 
@@ -7273,7 +7273,7 @@ E2E intentionally NOT executed in this stabilize pass per the orchestrator instr
 **Agent:** bubbles.security
 **Timestamp:** 2026-05-11T21:12:33Z
 **HEAD at run:** dfd56aeb
-**Scope:** spec 044 IS the per-user bearer-auth security feature — focused threat-model + dependency-scan + implementation review of the auth subsystem itself. Files in scope (commits `2e2a2b9c..dfd56aeb`): `internal/auth/*.go` (PASETO mint/verify, middleware, branch-3 fallback, revocation cache), `internal/api/router.go` + `internal/api/web_login.go` + `internal/api/auth_handlers.go` + `internal/api/admin_ui.go` (cookie + bearer wiring, admin REST surface), `cmd/core/wiring.go` (auth subsystem init + revocation broadcaster), `web/pwa/*` (PWA login flow + cookie handling), `config/smackerel.yaml` + `config/generated/home-lab.env` (auth keys + env outputs).
+**Scope:** spec 044 IS the per-user bearer-auth security feature — focused threat-model + dependency-scan + implementation review of the auth subsystem itself. Files in scope (commits `2e2a2b9c..dfd56aeb`): `internal/auth/*.go` (PASETO mint/verify, middleware, branch-3 fallback, revocation cache), `internal/api/router.go` + `internal/api/web_login.go` + `internal/api/auth_handlers.go` + `internal/api/admin_ui.go` (cookie + bearer wiring, admin REST surface), `cmd/core/wiring.go` (auth subsystem init + revocation broadcaster), `web/pwa/*` (PWA login flow + cookie handling), `config/smackerel.yaml` + `config/generated/self-hosted.env` (auth keys + env outputs).
 
 #### 1. Threat Model
 
@@ -7284,7 +7284,7 @@ E2E intentionally NOT executed in this stabilize pass per the orchestrator instr
 | T3 | Replay of expired token | PASETO `exp` claim enforced by `VerifyAndParse` against `opts.Now()` with `ClockSkewTolerance ≤ 60s` (NFR-AUTH-005); `ErrTokenExpired` returned on stale wire token | [internal/auth/verify.go](internal/auth/verify.go#L177-L191) (exp/nbf check) | ✅ Mitigated |
 | T4 | Replay of revoked token (≤ NFR-AUTH-006 60s window) | Revocation enforced by `revocation.Cache.IsRevoked(parsed.TokenID)` lookup on every request after PASETO verify; cache hydrated via DB bootstrap + NATS broadcaster + 30s periodic DB refresh | [internal/api/router.go](internal/api/router.go#L612-L621) (middleware revocation lookup), [internal/api/web_login.go](internal/api/web_login.go#L113-L116) (login-time revocation check), [internal/auth/revocation/cache.go](internal/auth/revocation/cache.go#L36-L60) | ✅ Mitigated |
 | T5 | Brute-force / signature forgery on PASETO | PASETO v4.public uses Ed25519 (256-bit) — computationally infeasible to forge; `paseto.NewParser().ParseV4Public` performs constant-time signature verification inside `aidanwoods.dev/go-paseto v1.6.0`; foreign-signed PASETO rejection covered by adversarial test `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/foreign-signed_paseto` | [internal/auth/verify.go](internal/auth/verify.go#L137-L142) (signature verify routing), [internal/auth/issue.go](internal/auth/issue.go#L86-L107) (mint with V4 secret) | ✅ Mitigated |
-| T6 | Compromised production-shared-token (single-tenant legacy token re-used) | Scope 02 disabled the production fallback in home-lab.env: `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false` (verified at [config/generated/home-lab.env](config/generated/home-lab.env#L303)); when `false`, branch-2 of `bearerAuthMiddleware` is unreachable and any shared-token request in production is rejected; opt-in to `true` emits `slog.Warn` ("production shared-token fallback used (deprecation pathway)") + increments `smackerel_auth_legacy_fallback_used_total` | [internal/api/router.go](internal/api/router.go#L633-L645) (Branch 2 gate + audit), [config/smackerel.yaml](config/smackerel.yaml#L514) (default `false`) | ✅ Mitigated |
+| T6 | Compromised production-shared-token (single-tenant legacy token re-used) | Scope 02 disabled the production fallback in self-hosted.env: `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false` (verified at [config/generated/self-hosted.env](config/generated/self-hosted.env#L303)); when `false`, branch-2 of `bearerAuthMiddleware` is unreachable and any shared-token request in production is rejected; opt-in to `true` emits `slog.Warn` ("production shared-token fallback used (deprecation pathway)") + increments `smackerel_auth_legacy_fallback_used_total` | [internal/api/router.go](internal/api/router.go#L633-L645) (Branch 2 gate + audit), [config/smackerel.yaml](config/smackerel.yaml#L514) (default `false`) | ✅ Mitigated |
 | T7 | Cookie session fixation (attacker pre-installs cookie, victim logs in) | The cookie value IS the user's PASETO; on `/v1/web/login` POST, `http.SetCookie(w, ...)` overwrites any pre-existing `auth_token` cookie with the freshly-validated user token; the attacker cannot observe the victim's token to install it pre-emptively because Ed25519-signed PASETO is unforgeable | [internal/api/web_login.go](internal/api/web_login.go#L132-L143) | ✅ Mitigated (functional equivalent of session-ID rotation) |
 | T8 | CSRF via cross-origin request to authenticated endpoints | `SameSite=Lax` cookie + bearer-token requirement for cross-origin API access (CORS allowlist via `deps.CORSAllowedOrigins`); top-level GETs from a foreign origin still send the cookie under Lax but the API surface uses POST/PUT/DELETE for mutations and `bearerAuthMiddleware` permits only matching origins | [internal/api/router.go](internal/api/router.go#L34-L42) (CORS), [internal/api/web_login.go](internal/api/web_login.go#L132-L141) (cookie attrs) | ✅ Mitigated |
 | T9 | Login CSRF (attacker forces victim to install attacker's session) | Mitigated by SameSite=Lax (cross-site form POST blocked); residual risk LOW — login CSRF would let an attacker harvest victim activity in an attacker-owned account but does not grant attacker access to victim data; rate-limited at `httprate.LimitByIP(20, 1*time.Minute)` | [internal/api/router.go](internal/api/router.go#L189-L194) | ⚠️ LOW residual (see L2 below) |
@@ -7365,8 +7365,8 @@ These transitive uncalled vulnerabilities are tracked outside spec 044 (recommen
 | Check | Verification | Verdict |
 |-------|-------------|---------|
 | All auth secrets read from env (zero hardcoded) | `internal/auth/sst_grep_guard_test.go` passes (Scope 01 SST guard); production literals (`auth.revocations`, `paseto-v4-public`) absent outside SST source + generator output + tests | ✅ PASS |
-| Secrets NOT committed | `.gitignore` excludes `config/generated/`; `config/generated/home-lab.env` shows `AUTH_SIGNING_ACTIVE_PRIVATE_KEY=` (empty entry), `AUTH_AT_REST_HASHING_KEY=` (empty entry), `AUTH_BOOTSTRAP_TOKEN=` (empty entry) — operator populates at deploy time | ✅ PASS |
-| Production-shared-token-fallback flag set for home-lab | `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false` at [config/generated/home-lab.env](config/generated/home-lab.env#L303) | ✅ PASS |
+| Secrets NOT committed | `.gitignore` excludes `config/generated/`; `config/generated/self-hosted.env` shows `AUTH_SIGNING_ACTIVE_PRIVATE_KEY=` (empty entry), `AUTH_AT_REST_HASHING_KEY=` (empty entry), `AUTH_BOOTSTRAP_TOKEN=` (empty entry) — operator populates at deploy time | ✅ PASS |
+| Production-shared-token-fallback flag set for self-hosted | `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false` at [config/generated/self-hosted.env](config/generated/self-hosted.env#L303) | ✅ PASS |
 | `pii-scan` allowlist limited to test fixtures | `.gitleaks.toml` allowlist scoped to test paths; pre-commit hook + CI workflow re-run on every commit | ✅ PASS |
 | No PASETO key file permissions issue | N/A — keys live in env vars only, not files | ✅ N/A |
 
@@ -7434,7 +7434,7 @@ Your code is affected by 0 vulnerabilities.
 - Code review findings: **0 critical/high/medium**, **2 LOW informational** (L1 differentiated 401 codes on PWA login, L2 missing Content-Type check on PWA login)
 - Issues fixed inline: **0** (no production-impacting issues)
 - Auth wiring: **complete + correct + ordering-safe** (middleware on every protected route; entry points correctly public + rate-limited; admin scope gated; constant-time compares everywhere; no auth-bypass conditions)
-- SST + secrets hygiene: **clean** (zero secrets committed; `production_shared_token_fallback_enabled=false` in home-lab.env)
+- SST + secrets hygiene: **clean** (zero secrets committed; `production_shared_token_fallback_enabled=false` in self-hosted.env)
 - Verification gates: **G1-G5 all EXIT=0**; G6 e2e left to prior regression evidence (no source changes this phase)
 - No `--no-verify`; no PII rule violations; no terminal-discipline violations
 

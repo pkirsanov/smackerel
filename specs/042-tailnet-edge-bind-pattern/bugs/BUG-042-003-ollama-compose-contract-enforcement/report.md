@@ -2,7 +2,7 @@
 
 ## Summary
 
-Closes the HL-RESCAN-005 finding from the 2026-05-14 home-lab readiness re-scan: `internal/deploy/compose_contract_test.go` enforced the spec 042 fail-loud SST contract for `smackerel-core`, `smackerel-ml`, `postgres`, `nats`, and `prometheus` — but NOT for `ollama`. The live `deploy/compose.deploy.yml` line 243 used the correct fail-loud form for ollama by convention, but a future regression to the literal `127.0.0.1:` (spec 020) form, the forbidden default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}:` (Gate G028 violation) form, or `network_mode: host` (Pattern P5 bypass) would silently slip past `TestComposeContract_LiveFile` and ship to home-lab. The fix adds a `requiredOllamaPrefix` constant, an ollama optional-service enforcement block in `assertComposeContract` (mirrors the prometheus pattern), and three new adversarial test cases (two sub-cases in a new `TestComposeContract_AdversarialOllamaLiteralBind` plus one new `ollama uses network_mode host` sub-case in the existing `TestComposeContract_AdversarialNetworkModeHostBypass` table-driven sweep).
+Closes the HL-RESCAN-005 finding from the 2026-05-14 self-hosted readiness re-scan: `internal/deploy/compose_contract_test.go` enforced the spec 042 fail-loud SST contract for `smackerel-core`, `smackerel-ml`, `postgres`, `nats`, and `prometheus` — but NOT for `ollama`. The live `deploy/compose.deploy.yml` line 243 used the correct fail-loud form for ollama by convention, but a future regression to the literal `127.0.0.1:` (spec 020) form, the forbidden default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}:` (Gate G028 violation) form, or `network_mode: host` (Pattern P5 bypass) would silently slip past `TestComposeContract_LiveFile` and ship to self-hosted. The fix adds a `requiredOllamaPrefix` constant, an ollama optional-service enforcement block in `assertComposeContract` (mirrors the prometheus pattern), and three new adversarial test cases (two sub-cases in a new `TestComposeContract_AdversarialOllamaLiteralBind` plus one new `ollama uses network_mode host` sub-case in the existing `TestComposeContract_AdversarialNetworkModeHostBypass` table-driven sweep).
 
 ### Completion Statement
 
@@ -29,18 +29,18 @@ $ git diff --stat internal/deploy/compose_contract_test.go
 $ ./smackerel.sh test unit --go --segment deploy
 # (the underlying grep on the modified test file is run for the inline evidence below)
 $ grep -n 'requiredOllamaPrefix\|services\["ollama"\]\|TestComposeContract_AdversarialOllamaLiteralBind\|ollama uses network_mode host\|BUG-042-003' internal/deploy/compose_contract_test.go
-86:	// BUG-042-003 (home-lab readiness re-scan, finding HL-RESCAN-005, 2026-05-14).
+86:	// BUG-042-003 (self-hosted readiness re-scan, finding HL-RESCAN-005, 2026-05-14).
 93:	requiredOllamaPrefix = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:`
-217:	// BUG-042-003 (home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14).
+217:	// BUG-042-003 (self-hosted readiness re-scan finding HL-RESCAN-005, 2026-05-14).
 223:	if oll, ok := doc.Services["ollama"]; ok {
 225:			return fmt.Errorf("contract violation: services.ollama.network_mode=%q ...BUG-042-003 closes the ollama enforcement gap...", oll.NetworkMode)
 230:					return fmt.Errorf("contract violation: services.ollama.ports[%d]=%q does not start with required prefix %q (BUG-042-003 closes the ollama enforcement gap...)", i, p, requiredOllamaPrefix)
-459:		// BUG-042-003 (home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14).
+459:		// BUG-042-003 (self-hosted readiness re-scan finding HL-RESCAN-005, 2026-05-14).
 466:			name:    "ollama uses network_mode host",
 500:			if !strings.Contains(err.Error(), "BUG-042-002") && !strings.Contains(err.Error(), "BUG-042-003") {
 501:				t.Fatalf("adversarial contract test failed: error did not mention BUG-042-002 or BUG-042-003 attribution (the defect this guard locks): %v", err)
 508:// TestComposeContract_AdversarialOllamaLiteralBind proves the contract
-516:// Discovered: home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14.
+516:// Discovered: self-hosted readiness re-scan finding HL-RESCAN-005, 2026-05-14.
 517:func TestComposeContract_AdversarialOllamaLiteralBind(t *testing.T) {
 540:			err := assertComposeContract([]byte(fixture))
 552:				t.Fatalf("adversarial contract test failed: ollama port %q was accepted (the contract is tautological — it would NOT catch a regression to the spec 020 literal form or to the default-fallback form for ollama)", tc.port)

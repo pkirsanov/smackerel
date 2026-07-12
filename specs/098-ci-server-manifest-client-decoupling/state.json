@@ -70,7 +70,7 @@
         "statusBefore": "not_started",
         "statusAfter": "in_progress",
         "at": "2026-06-20T04:45:00Z",
-        "note": "Verified the coupling solution-blind (build.yml publish-build-manifest needs build-clients with no guard; build-clients fail-fasts on ANDROID_KEYSTORE_BASE64; specs 087/088/089 confirm SKIPPED manifest), and the clients-absent precedent (build-home-lab.sh local-build-manifest + dual-shape promote_manifest_parse.sh). Authored spec.md (FR-098-01..07, SCN-098-A01..A04), design.md (Current-Truth map + 3-way design fork resolved to release-gating + skip-tolerance + success-gate, GitHub Actions needs/skip semantics, contract-test design, knb-side contract), and scopes.md (SCOPE-01 workflow+test, SCOPE-02 docs)."
+        "note": "Verified the coupling solution-blind (build.yml publish-build-manifest needs build-clients with no guard; build-clients fail-fasts on ANDROID_KEYSTORE_BASE64; specs 087/088/089 confirm SKIPPED manifest), and the clients-absent precedent (build-self-hosted.sh local-build-manifest + dual-shape promote_manifest_parse.sh). Authored spec.md (FR-098-01..07, SCN-098-A01..A04), design.md (Current-Truth map + 3-way design fork resolved to release-gating + skip-tolerance + success-gate, GitHub Actions needs/skip semantics, contract-test design, knb-side contract), and scopes.md (SCOPE-01 workflow+test, SCOPE-02 docs)."
       },
       {
         "agent": "bubbles.implement",

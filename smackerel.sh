@@ -91,14 +91,14 @@ Commands:
                               it (cosign sign-blob, trustModel local-operator),
                               and emit a local build manifest clients: block
                               (provenance local-operator) consumable by the knb
-                              home-lab adapter. The knb adapter consumes +
+                              self-hosted adapter. The knb adapter consumes +
                               verifies; this command BUILDS + SIGNS. Target:
-                              home-lab. The REAL flutter build + operator-sign
+                              self-hosted. The REAL flutter build + operator-sign
                               run on <deploy-host>.
   deploy-target <target> <action> [args]
                               Run a deployment-target adapter action (legacy
                               spec-017/018 form; preserved for backward compat).
-                              Targets: home-lab (see deploy/<target>/README.md)
+                              Targets: self-hosted (see deploy/<target>/README.md)
                               Actions: preconditions | bootstrap | apply | rollback |
                                        verify | teardown | status | manifest | params
 EOF
@@ -709,7 +709,7 @@ case "$COMMAND" in
     esac
     ;;
   build)
-    # Spec 017 scope 03 — `./smackerel.sh build --target home-lab` runs
+    # Spec 017 scope 03 — `./smackerel.sh build --target self-hosted` runs
     # the local-build deploy pipeline (operator-key signing, SBOM,
     # Trivy gate, local-build-manifest emission). Replaces the
     # external-CI build path for accel-tier deployments. See
@@ -717,17 +717,17 @@ case "$COMMAND" in
     # and knb/docs/new-product-onboarding.md for the operator workflow.
     if [[ "${1:-}" == "--target" ]]; then
       if [[ $# -lt 2 || -z "${2:-}" ]]; then
-        echo "ERROR: --target requires a target name (e.g. home-lab)" >&2
+        echo "ERROR: --target requires a target name (e.g. self-hosted)" >&2
         exit 1
       fi
       case "$2" in
-        home-lab)
+        self-hosted)
           shift 2
-          bash "$SCRIPT_DIR/scripts/commands/build-home-lab.sh" "$@"
+          bash "$SCRIPT_DIR/scripts/commands/build-self-hosted.sh" "$@"
           exit 0
           ;;
         *)
-          echo "ERROR: unknown --target value: $2 (supported: home-lab)" >&2
+          echo "ERROR: unknown --target value: $2 (supported: self-hosted)" >&2
           exit 1
           ;;
       esac
@@ -2318,8 +2318,8 @@ E2EUI_HELP
     # Do NOT shift again here — a second shift silently eats the <target>
     # positional, so the orchestrator refuses with E019-FLAG-INVALID ("got 0
     # positional argument"). That latent double-shift kept PATH 1 from ever
-    # being exercised on home-lab.
-    target="${1:?missing required: deploy <target> (e.g. home-lab); see ./smackerel.sh --help}"
+    # being exercised on self-hosted.
+    target="${1:?missing required: deploy <target> (e.g. self-hosted); see ./smackerel.sh --help}"
     shift
     KNB_REPO_ROOT="${KNB_REPO_ROOT:-${DEPLOY_TARGETS_ROOT:-$HOME/knb}}"
     if [[ ! -f "$KNB_REPO_ROOT/scripts/deploy/orchestrator.sh" ]]; then
@@ -2384,7 +2384,7 @@ E2EUI_HELP
         echo "  upkeep calendar         — list due tasks based on upkeep ledger on this host"
         echo ""
         echo "Per-product upkeep hooks (backup, restore-test, bcdr-drill, …) run on the"
-        echo "home-lab host via the knb-side dispatcher. See <knb-repo>/.github/skills/"
+        echo "self-hosted host via the knb-side dispatcher. See <knb-repo>/.github/skills/"
         echo "knb-upkeep-dispatcher/SKILL.md for systemd timer install + manual invocation."
         ;;
       *)

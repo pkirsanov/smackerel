@@ -2,7 +2,7 @@
     "id": "BUG-050-002-health-degraded-masked-http-200",
     "title": "/api/health returns degraded with HTTP 200; all status-code consumers blind to degraded",
     "severity": "high",
-    "source": "redteam-adversarial-interrogation (live evo-x2 prod)",
+    "source": "redteam-adversarial-interrogation (live <deploy-host> prod)",
     "owningSpec": "050-ml-sidecar-health-isolation",
     "workflowMode": "bugfix-fastlane",
     "status": "partially_fixed_in_repo",
@@ -15,7 +15,7 @@
     "routed": [
         {
             "to": "bubbles.devops / knb",
-            "what": "knb/smackerel/home-lab/verify.sh + shared observability alerting should adopt GET /api/health?strict=true (503-on-degraded) or parse the JSON status field; out-of-repo (knb)."
+            "what": "<deployment-owner>/<product>/<target>/verify.sh + shared observability alerting should adopt GET /api/health?strict=true (503-on-degraded) or parse the JSON status field; out-of-repo (knb)."
         },
         {
             "to": "bubbles.devops",

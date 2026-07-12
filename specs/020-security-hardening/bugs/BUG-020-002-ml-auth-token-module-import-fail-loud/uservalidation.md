@@ -126,9 +126,9 @@ they are owned by parallel-session work or are independent rescan findings:
   operator-specific values) is introduced. The fail-loud message points at
   the generic `./smackerel.sh config generate` workflow and the abstract
   Gate G028 contract.
-* **Home-lab posture:** The home-lab deploy adapter overlay (in the
+* **self-hosted posture:** The self-hosted deploy adapter overlay (in the
   separate `knb` repo per the standing user directive) MUST set
   `SMACKEREL_AUTH_TOKEN` in its bundled env file before applying. The
-  `./smackerel.sh deploy-target home-lab apply` flow is unaffected because
+  `./smackerel.sh deploy-target self-hosted apply` flow is unaffected because
   the bundled env file is loaded into the container's env at start time,
   satisfying the new fail-loud read at module import.

@@ -16,10 +16,10 @@ import (
 func TestNtfySinkFailureRetriesDeadLettersAndReplaysThroughSourceSink(t *testing.T) {
 	ntfyStore, notificationStore, pool := ntfyIntegrationStores(t)
 	prefix := ntfyIntegrationPrefix()
-	cfg := ntfyIntegrationConfig(prefix, notification.SourceFormWebhook, []string{"home-lab-alerts"})
+	cfg := ntfyIntegrationConfig(prefix, notification.SourceFormWebhook, []string{"self-hosted-alerts"})
 	seedNtfyIntegrationSource(t, notificationStore, cfg)
 	now := time.Date(2026, 5, 24, 23, 30, 0, 0, time.UTC)
-	event, err := ParseEvent([]byte(`{"id":"evt-replay-int","event":"message","topic":"home-lab-alerts","title":"Replay","message":"sink recovery"}`), cfg.DeadLetter.MaxPayloadBytes)
+	event, err := ParseEvent([]byte(`{"id":"evt-replay-int","event":"message","topic":"self-hosted-alerts","title":"Replay","message":"sink recovery"}`), cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse event: %v", err)
 	}
@@ -51,10 +51,10 @@ func TestNtfySinkFailureRetriesDeadLettersAndReplaysThroughSourceSink(t *testing
 func TestNtfyDeadLetterReplayBurstIsIdempotent(t *testing.T) {
 	ntfyStore, notificationStore, pool := ntfyIntegrationStores(t)
 	prefix := ntfyIntegrationPrefix()
-	cfg := ntfyIntegrationConfig(prefix, notification.SourceFormWebhook, []string{"home-lab-alerts"})
+	cfg := ntfyIntegrationConfig(prefix, notification.SourceFormWebhook, []string{"self-hosted-alerts"})
 	seedNtfyIntegrationSource(t, notificationStore, cfg)
 	now := time.Date(2026, 5, 24, 23, 45, 0, 0, time.UTC)
-	event, err := ParseEvent([]byte(`{"id":"evt-replay-burst","event":"message","topic":"home-lab-alerts","title":"Replay burst","message":"operator retry burst"}`), cfg.DeadLetter.MaxPayloadBytes)
+	event, err := ParseEvent([]byte(`{"id":"evt-replay-burst","event":"message","topic":"self-hosted-alerts","title":"Replay burst","message":"operator retry burst"}`), cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse event: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestNtfyDeadLetterReplayBurstIsIdempotent(t *testing.T) {
 func TestNtfyDeadLetterPressureThresholdReportsDegradedSourceHealth(t *testing.T) {
 	ntfyStore, notificationStore, pool := ntfyIntegrationStores(t)
 	prefix := ntfyIntegrationPrefix()
-	cfg := ntfyIntegrationConfig(prefix, notification.SourceFormWebhook, []string{"home-lab-alerts"})
+	cfg := ntfyIntegrationConfig(prefix, notification.SourceFormWebhook, []string{"self-hosted-alerts"})
 	cfg.DeadLetter.PressureThresholdCount = 2
 	seedNtfyIntegrationSource(t, notificationStore, cfg)
 	adapter, err := NewAdapter(cfg, WithStore(ntfyStore))

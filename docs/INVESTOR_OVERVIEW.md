@@ -364,6 +364,6 @@ This appendix surfaces every committed spec under [`specs/`](../specs/) for inve
 | Spec | Capability | Status |
 |------|------------|--------|
 | [038](../specs/038-cloud-drives-integration/) | Cloud Drives Integration | done |
-| [042](../specs/042-tailnet-edge-bind-pattern/) | Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness) | done |
+| [042](../specs/042-tailnet-edge-bind-pattern/) | Tailnet-Edge Bind Pattern (Self-Hosted Compose Readiness) | done |
 | [043](../specs/043-ollama-test-infrastructure/) | Ollama Test Infrastructure | done |
 | [048](../specs/048-backup-restore-automation/) | Backup and Restore Automation | done |

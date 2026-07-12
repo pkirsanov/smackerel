@@ -175,7 +175,7 @@ A valid ntfy message event is parsed and mapped into a `SourceEventEnvelope`, ac
 
 ```gherkin
 Scenario: SCN-055-002 ntfy message enters the spec 054 raw and normalized pipeline
-  Given an enabled ntfy source instance subscribes to the configured topic `home-lab-alerts`
+  Given an enabled ntfy source instance subscribes to the configured topic `self-hosted-alerts`
   When ntfy emits a valid JSON message event with id, time, topic, title, message, priority, and tags
   Then the adapter submits one `SourceEventEnvelope` with `source_type` set to `ntfy`
   And the core stores the raw ntfy JSON before normalization

@@ -7,7 +7,7 @@
       "title": "Sandbox bundle generation finds searxng settings",
       "scope": "Scope 1",
       "linkedTests": [
-        "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInHomeLab"
+        "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInSelfHosted"
       ]
     },
     {
@@ -15,7 +15,7 @@
       "title": "Contract suite is green",
       "scope": "Scope 1",
       "linkedTests": [
-        "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInHomeLab",
+        "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInSelfHosted",
         "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_AdversarialA1_DriftDetector",
         "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_AdversarialA2_LeakageDetector",
         "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_AdversarialA3_DeterminismDetector",

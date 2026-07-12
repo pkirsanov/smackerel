@@ -12,7 +12,7 @@ import (
 
 func TestNtfyDeadLetterRedactsCausesAndComputesReplayEligibility(t *testing.T) {
 	cfg := testConfig()
-	event, err := ParseEvent([]byte(`{"id":"evt-dlq","event":"message","topic":"home-lab-alerts","message":"token=secret-token"}`), cfg.DeadLetter.MaxPayloadBytes)
+	event, err := ParseEvent([]byte(`{"id":"evt-dlq","event":"message","topic":"self-hosted-alerts","message":"token=secret-token"}`), cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse replayable event: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestNtfySinkFailureRetriesWithinBudgetBeforeDeadLetter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new adapter: %v", err)
 	}
-	event, err := ParseEvent([]byte(`{"id":"evt-retry","event":"message","topic":"home-lab-alerts","message":"retry me"}`), cfg.DeadLetter.MaxPayloadBytes)
+	event, err := ParseEvent([]byte(`{"id":"evt-retry","event":"message","topic":"self-hosted-alerts","message":"retry me"}`), cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse retry event: %v", err)
 	}

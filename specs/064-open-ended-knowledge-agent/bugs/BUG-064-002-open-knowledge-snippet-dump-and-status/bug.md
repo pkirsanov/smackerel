@@ -2,7 +2,7 @@
 
 - **Spec:** `specs/064-open-ended-knowledge-agent`
 - **Severity:** S1 (the headline open-knowledge answer is unusable: no extracted data, duplicated 3×, mislabeled as in-flight)
-- **Discovered by:** operator, live home-lab Telegram bot
+- **Discovered by:** operator, live self-hosted Telegram bot
 - **Discovered at:** 2026-06-11
 - **Follows:** BUG-064-001 (routing + per-user budget fix, deployed). This is a NEW bug; BUG-064-001 stays closed.
 
@@ -47,7 +47,7 @@ The bot replied with the unsatisfactory answer:
 
 ## Reproduction steps (observed, live)
 
-1. Home-lab deployment with the Telegram assistant bound,
+1. self-hosted deployment with the Telegram assistant bound,
    `assistant.open_knowledge.enabled=true`, `provider=searxng`,
    `model=gemma4:26b`, budgets `100/25`.
 2. Send the NL prompt above (no slash) to the bot.
@@ -65,7 +65,7 @@ The bot replied with the unsatisfactory answer:
 
 ## Captured structured turn-logs (live core container, this session)
 
-`msg="openknowledge.turn"` (smackerel-home-lab-smackerel-core-1 on evo-x2):
+`msg="openknowledge.turn"` (smackerel-self-hosted-smackerel-core-1 on <deploy-host>):
 
 ```
 turn ba00c52368fdc93f: iterations=4, tokens_used=6088, usd_spent=0, status=success, termination_reason=final, num_sources=32, tool_calls=[web_search success x3]
@@ -111,8 +111,8 @@ model is a zero-cost `CostFn` stub.
 ## Code vs deployment
 
 Code + config + prompt-contract fix lands in-repo and is validated at the
-unit / integration level. The **live home-lab symptom clears only after a
-redeploy** (rebuild `smackerel-core` from the fixed SHA + home-lab
-config-bundle regen + redeploy via the knb `smackerel/home-lab` adapter) —
+unit / integration level. The **live self-hosted symptom clears only after a
+redeploy** (rebuild `smackerel-core` from the fixed SHA + self-hosted
+config-bundle regen + redeploy via the knb `<deployment-owner>/<product>/<target>` adapter) —
 the same build-once-deploy-many chain BUG-064-001 used. Owner of the redeploy:
 `bubbles.devops`.

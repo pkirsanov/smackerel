@@ -24,7 +24,7 @@ This spec is **NOT yet complete**. Status remains `in_progress` after Scope 1 of
 
 Implemented surfaces:
 
-- `config/smackerel.yaml` — added `infrastructure.ollama.image`, `infrastructure.ollama.test.{image,model,pull_timeout_seconds,request_temperature,request_top_p,request_top_k,request_seed,request_num_predict}`, and `environments.{dev,test,home-lab}.ollama_enabled` (12 new SST keys total per design.md §3).
+- `config/smackerel.yaml` — added `infrastructure.ollama.image`, `infrastructure.ollama.test.{image,model,pull_timeout_seconds,request_temperature,request_top_p,request_top_k,request_seed,request_num_predict}`, and `environments.{dev,test,self-hosted}.ollama_enabled` (12 new SST keys total per design.md §3).
 - `scripts/commands/config.sh` — `OLLAMA_ENABLED` switched from `required_value` to `env_override_value` so per-env `ollama_enabled` wins; new test-vs-non-test branch resolves `OLLAMA_IMAGE` (test image vs root image) and emits `OLLAMA_TEST_*` only for the test env.
 - `docker-compose.yml` — `image: ollama/ollama:0.6` replaced with `image: ${OLLAMA_IMAGE}`; profile gate `[ollama]` and `${OLLAMA_VOLUME_NAME}` indirection preserved.
 - `ml/app/intelligence.py` — pre-existing SST violation `url = ollama_url or "http://localhost:11434"` (line 40) replaced with explicit fail-loud branch (`if not ollama_url: ... return None`); the SST-source `OLLAMA_URL` is now the only configured URL path for the Python sidecar's Ollama branch.
@@ -52,10 +52,10 @@ Command evidence:
 $ ./smackerel.sh config generate
 Generated config/generated/dev.env
 Generated config/generated/nats.conf
-$ for env in dev test home-lab; do ./smackerel.sh config generate --env=$env; done
+$ for env in dev test self-hosted; do ./smackerel.sh config generate --env=$env; done
 Generated config/generated/dev.env  (ENABLE_OLLAMA=false; OLLAMA_TEST_MODEL=)
 Generated config/generated/test.env (ENABLE_OLLAMA=true;  OLLAMA_TEST_MODEL=qwen2.5:0.5b-instruct, OLLAMA_TEST_REQUEST_SEED=42, OLLAMA_TEST_REQUEST_NUM_PREDICT=256)
-Generated config/generated/home-lab.env (ENABLE_OLLAMA=false; OLLAMA_TEST_MODEL=)
+Generated config/generated/self-hosted.env (ENABLE_OLLAMA=false; OLLAMA_TEST_MODEL=)
 
 $ ./smackerel.sh check
 Config is in sync with SST
@@ -107,7 +107,7 @@ Commit 1 (Scope 2 PARTIAL — landed 2026-05-09 morning, SHA 26aec9e7):
 Commit 2 (Scope 2 COMPLETION — landed 2026-05-09 evening, this commit):
 - `ml/app/agent.py::resolve_ollama_determinism_options()` — reads `OLLAMA_TEST_REQUEST_TEMPERATURE/TOP_P/TOP_K/SEED/NUM_PREDICT` env vars (sourced from SST keys `infrastructure.ollama.test.request_*`) and forwards them as kwargs to `litellm.acompletion` when the resolved provider is `ollama`. Temperature is overridden as a named arg; the other 4 are passed via `**extra_kwargs`. For non-ollama providers the function is a strict no-op (test asserts no leak).
 - `ml/tests/test_agent.py` — 6 new pytest cases:
-  - `test_resolve_ollama_determinism_options_unset_is_empty` — dev/home-lab path
+  - `test_resolve_ollama_determinism_options_unset_is_empty` — dev/self-hosted path
   - `test_resolve_ollama_determinism_options_full_set` — full env var set parses correctly
   - `test_resolve_ollama_determinism_options_skips_malformed` — malformed seed is dropped, valid top_p preserved (logged warning)
   - `test_handle_invoke_passes_ollama_determinism_kwargs` — env vars forwarded as kwargs; temperature env var overrides request temperature
@@ -145,11 +145,11 @@ $ ./smackerel.sh test unit --python    # 417 PASS (411 → 417 after +6 determin
 $ go vet -tags=e2e_ollama ./tests/e2e/agent/...    # happy_path_test.go compiles + vets clean
 (no output)
 
-$ for env in dev test home-lab; do ./smackerel.sh --env "$env" config generate >/dev/null; done
-$ grep AGENT_PROVIDER_FAST_MODEL config/generated/{dev,test,home-lab}.env
+$ for env in dev test self-hosted; do ./smackerel.sh --env "$env" config generate >/dev/null; done
+$ grep AGENT_PROVIDER_FAST_MODEL config/generated/{dev,test,self-hosted}.env
 config/generated/dev.env:AGENT_PROVIDER_FAST_MODEL=gpt-oss:20b
 config/generated/test.env:AGENT_PROVIDER_FAST_MODEL=qwen2.5:0.5b-instruct
-config/generated/home-lab.env:AGENT_PROVIDER_FAST_MODEL=gpt-oss:20b
+config/generated/self-hosted.env:AGENT_PROVIDER_FAST_MODEL=gpt-oss:20b
 ```
 
 T2-05 manual smoke (`SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e`) is held until Scope 3 wires the gating into the e2e runner and unblocks the cold-pull of `qwen2.5:0.5b-instruct` (~397MB). The compile + vet evidence above proves the test code is correct; the live cold-pull run is Scope 3 surface.
@@ -282,7 +282,7 @@ Total delta: 12 new files + 2 modified files (+1912 / -5).
 | File | Scope | Type | Purpose |
 |------|-------|------|---------|
 | `config/prompt_contracts/e2e-ollama-smoke-v1.yaml` | 02 | NEW | Agent scenario `e2e_ollama_smoke` with `recommendation_parse_intent` allowlist; scenario-lint registered=5/0 |
-| `config/smackerel.yaml` | 01,02 | MODIFIED | New SST keys: `infrastructure.ollama.{image,container_port,test.*}` (12 keys) + `environments.{dev,test,home-lab}.ollama_enabled` + `environments.test.agent_provider_fast_model` |
+| `config/smackerel.yaml` | 01,02 | MODIFIED | New SST keys: `infrastructure.ollama.{image,container_port,test.*}` (12 keys) + `environments.{dev,test,self-hosted}.ollama_enabled` + `environments.test.agent_provider_fast_model` |
 | `docker-compose.yml` | 01 | MODIFIED | `services.ollama` extended with `${OLLAMA_IMAGE}` substitution + healthcheck on `/api/tags` |
 | `internal/config/sst_grep_guard_test.go` | 01 | NEW | SCN-OLLAMA-006 enforcement: zero hardcoded Ollama literals in production source; SCN-OLLAMA-005 per-env volume isolation |
 | `internal/deploy/compose_ollama_contract_test.go` | 01 | NEW | SCN-OLLAMA-001 contract test: live `docker-compose.yml` parsed; asserts `services.ollama` shape + profile-gating + per-env env-file substitution |
@@ -404,7 +404,7 @@ Validation outcome: **PASSED** — the `done_with_concerns` carryover from audit
 
 - **Build-tag isolation under 3 configurations:** `go vet` PASS under no tags, `-tags=e2e`, and `-tags=e2e_ollama`; `go test -list` under no tags returns ONLY 3 functions `{TestNoSkipBailoutInAgentE2E, TestNoSkipBailout_HappyPathTestExplicitlyForbidden, TestNoSkipBailout_AdversarialFinding}` (happy_path correctly tag-gated out); `go test -list -tags=e2e_ollama` adds 3 functions `{TestAgentHappyPath_PlanToolSynthesis, TestAgentHappyPath_DeterministicOutput, TestOllamaUnreachable_FailsLoudly}` for 6 total. Validates FR-OLLAMA-005 hard-constraint that happy_path does not pollute the default test lane (SCN-OLLAMA-002, SCN-OLLAMA-003, SCN-OLLAMA-004).
 - **SST hardcoded-literals static scan:** `internal/config/sst_grep_guard_test.go` enforces zero matches for `qwen2.5`, `ollama/ollama:`, `11434`, `47004` outside `config/` and outside `*_test.go` allowlist. Manual grep across `internal/`, `cmd/`, `ml/app/`, `scripts/`, `Dockerfile`, `docker-compose.yml`, `docker-compose.prod.yml` confirms all hits confined to `*_test.go` files (allowlisted by `sst_grep_guard.go`). Validates SCN-OLLAMA-006 zero-hardcoded-values requirement.
-- **Per-environment config override drift:** `tests/integration/ollama_config_contract_test.go` (build-tag integration) enforces `SST → test.env` round-trip with three adversarial strip-and-re-run `config.sh` subtests. Confirms `config/generated/test.env` has `AGENT_PROVIDER_FAST_MODEL=qwen2.5:0.5b-instruct` + `OLLAMA_TEST_MODEL=qwen2.5:0.5b-instruct` + `ENABLE_OLLAMA=true`; `config/generated/dev.env` and `home-lab.env` have `AGENT_PROVIDER_FAST_MODEL=gpt-oss:20b` + `OLLAMA_TEST_MODEL=<empty>` + `ENABLE_OLLAMA=false`. Validates SCN-OLLAMA-005 per-environment isolation and FR-OLLAMA-007 dev opt-in profile preservation.
+- **Per-environment config override drift:** `tests/integration/ollama_config_contract_test.go` (build-tag integration) enforces `SST → test.env` round-trip with three adversarial strip-and-re-run `config.sh` subtests. Confirms `config/generated/test.env` has `AGENT_PROVIDER_FAST_MODEL=qwen2.5:0.5b-instruct` + `OLLAMA_TEST_MODEL=qwen2.5:0.5b-instruct` + `ENABLE_OLLAMA=true`; `config/generated/dev.env` and `self-hosted.env` have `AGENT_PROVIDER_FAST_MODEL=gpt-oss:20b` + `OLLAMA_TEST_MODEL=<empty>` + `ENABLE_OLLAMA=false`. Validates SCN-OLLAMA-005 per-environment isolation and FR-OLLAMA-007 dev opt-in profile preservation.
 - **Opt-in lane gate behavior:** `grep -c 'SMACKEREL_TEST_OLLAMA' smackerel.sh` returns 4 (line 1136 spec-tag comment, line 1141 gate condition with `||true 'true'` alternative, line 1142 enabled-branch echo, line 1206 disabled-branch skip echo). Validates FR-OLLAMA-009 wiring (SCN-OLLAMA-007).
 - **Model determinism under temperature=0/seed=42:** `tests/e2e/agent/happy_path_test.go` `TestAgentHappyPath_DeterministicOutput` runs `qwen2.5:0.5b-instruct` twice with the same prompt and asserts byte-for-byte output equality with the determinism options resolved by `ml/app/agent.py::resolve_ollama_determinism_options` from the `OLLAMA_TEST_REQUEST_*` env vars (`temperature=0`, `top_p=1.0`, `top_k=1`, `seed=42`, `num_predict=256`). Validates SCN-OLLAMA-002.
 - **Cold-pull → warm-cache lifecycle:** `scripts/commands/ollama-test-pull.sh` runs between `test_runtime_health.sh` and the Go E2E `docker run`; the smackerel-test-ollama-data volume is preserved across `./smackerel.sh down` (warm cache for ~397 MB qwen2.5:0.5b-instruct artifact) and dropped only by the operator-explicit `./smackerel.sh clean full`. Validates SCN-OLLAMA-002 deterministic startup and NFR-OLLAMA-002 warm-cache budget.

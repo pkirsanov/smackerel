@@ -6081,7 +6081,7 @@ Runs after Phase E commit + push lands. Captured in the final orchestrator envel
 
 ### Observations
 
-- **BUG-051 SSTLoader load-induced flake** (severity: low; observation only). `TestSSTLoader_HomeLabEmitsProductionRuntimeEnv_BUG051001` flaked once in the pre-session full-repo `go test ./cmd/... ./internal/...` (28s wallclock); passes 2/2 in isolation under both default-parallel and `-p 1` serial. Characterized as pre-existing load-induced fixture pollution unrelated to SCOPE-09/SCOPE-10 surface; new SST keys validate cleanly in every targeted run. Routed as a new carry-forward finding for SCOPE-20 / spec-051 owner.
+- **BUG-051 SSTLoader load-induced flake** (severity: low; observation only). `TestSSTLoader_SelfHostedEmitsProductionRuntimeEnv_BUG051001` flaked once in the pre-session full-repo `go test ./cmd/... ./internal/...` (28s wallclock); passes 2/2 in isolation under both default-parallel and `-p 1` serial. Characterized as pre-existing load-induced fixture pollution unrelated to SCOPE-09/SCOPE-10 surface; new SST keys validate cleanly in every targeted run. Routed as a new carry-forward finding for SCOPE-20 / spec-051 owner.
 
 ### Shelved (reverted to HEAD) during Phase E
 
@@ -6145,7 +6145,7 @@ This Round 20 (continuation) session's contribution is therefore the *missing co
 4. **`internal/config/assistant_test.go`** — added both keys to `minimalAssistantEnv` AND authored three new tests:
    - `TestLoadAssistantConfig_WeatherURLsRequired` — adversarial: each key unset → fail-loud, error names the missing key.
    - `TestLoadAssistantConfig_WeatherURLsRoundTrip` — adversarial: distinct (non-default) URL values round-trip verbatim through the loader; guards against a regression that hard-codes the production URLs.
-   - `TestValidateAssistantConfig_StubProviders_ProductionSafetyGuard` — 8-case adversarial matrix covering the §18.3 production-safety guard: `production+stub-geocode→reject`, `production+stub-forecast→reject`, `production+both-stub→reject`, `development+stub→reject`, `home-lab+stub→reject`, `empty-env+stub→reject`, `production+real→pass`, **AND** the explicit tautology guard `test+stub→pass` (proves the guard does not block the actual test stack — without this case the test would be vacuously satisfied).
+   - `TestValidateAssistantConfig_StubProviders_ProductionSafetyGuard` — 8-case adversarial matrix covering the §18.3 production-safety guard: `production+stub-geocode→reject`, `production+stub-forecast→reject`, `production+both-stub→reject`, `development+stub→reject`, `self-hosted+stub→reject`, `empty-env+stub→reject`, `production+real→pass`, **AND** the explicit tautology guard `test+stub→pass` (proves the guard does not block the actual test stack — without this case the test would be vacuously satisfied).
 5. **`internal/telegram/assistant_adapter/translate_inbound_test.go`** — authored `TestTranslateInbound_TelegramUpdateIDPropagatedAsMetadata` with four sub-tests:
    - `text_path` — KindText carries `TransportMetadata["telegram_update_id"]`.
    - `reset_path` — KindReset carries it.
@@ -9580,7 +9580,7 @@ The user pre-authorized Option 2 in the dispatch. The other Round-56-enumerated 
 
 | Option | Approach | Disposition | Rationale |
 |--------|----------|-------------|-----------|
-| **2 (authorized)** | Per-environment `AGENT_PROVIDER_DEFAULT_MODEL` override via SST `environments.test.agent_provider_default_model`; test gets `qwen2.5:0.5b-instruct`, dev/home-lab/prod keep `gemma3:4b` | ✅ **CHOSEN** | Minimum surface; reuses existing `env_override_value` substrate verbatim; preserves the 5s production timeout contract verbatim; no scenario YAML touch; no foreign-spec touch; ~2 LOC config + ~30 LOC adversarial test. |
+| **2 (authorized)** | Per-environment `AGENT_PROVIDER_DEFAULT_MODEL` override via SST `environments.test.agent_provider_default_model`; test gets `qwen2.5:0.5b-instruct`, dev/self-hosted/prod keep `gemma3:4b` | ✅ **CHOSEN** | Minimum surface; reuses existing `env_override_value` substrate verbatim; preserves the 5s production timeout contract verbatim; no scenario YAML touch; no foreign-spec touch; ~2 LOC config + ~30 LOC adversarial test. |
 | (a) | Raise `retrieval-qa-v1.yaml::timeout_ms` to ~90000ms | ❌ rejected | Masks the test/prod hardware mismatch; weakens the production SLO baked into spec 037 / spec 061 design intent ("fast retrieval Q&A under 5s"); plan-triage must NOT silently patch scenario YAML (per Round 56 routing contract). |
 | (c) | Synchronous model-warmup gate in test stack `up` lifecycle | ❌ rejected | Does NOT solve the underlying steady-state latency (71s is WARM, not cold); load_duration_ms=458ms proves the model IS already RAM-resident; warmup would only mask cold-start which is not the bug. |
 | (d) | Split scenario contract with test-tier vs prod-tier timeout fields | ❌ rejected | Adds permanent dual-contract surface area to every scenario YAML; design and maintenance cost is disproportionate to the targeted fix. |
@@ -9599,7 +9599,7 @@ Option 2 is the only choice that preserves the production timeout contract while
    ```yaml
        # Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — pin the default-route model to
        # the same test-tier qwen model so retrieval-qa-v1 (model_preference:
-       # "default") fits within timeout_ms=5000 on test hardware. Dev/home-lab/
+       # "default") fits within timeout_ms=5000 on test hardware. Dev/self-hosted/
        # prod keep gemma3:4b via the base agent.provider_routing.default.model.
        agent_provider_default_model: "qwen2.5:0.5b-instruct"
    ```
@@ -9695,7 +9695,7 @@ The new integration test in Round 58 MUST satisfy the standard adversarial regre
     agent_provider_fast_model: "qwen2.5:0.5b-instruct"
     # Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — pin the default-route model to
     # the same test-tier qwen model so retrieval-qa-v1 (model_preference:
-    # "default") fits within timeout_ms=5000 on test hardware. Dev / home-lab
+    # "default") fits within timeout_ms=5000 on test hardware. Dev / self-hosted
     # / prod keep gemma3:4b via the base agent.provider_routing.default.model.
     agent_provider_default_model: "qwen2.5:0.5b-instruct"
 ```
@@ -9711,7 +9711,7 @@ AGENT_PROVIDER_DEFAULT_PROVIDER="$(required_value agent.provider_routing.default
 # timeout is structurally unreachable on test hardware (warm gemma3:4b
 # inference is ~71s for a 2-token reply). The model literal lives in
 # environments.<env>.agent_provider_default_model in config/smackerel.yaml;
-# dev / home-lab fall back to agent.provider_routing.default.model.
+# dev / self-hosted fall back to agent.provider_routing.default.model.
 AGENT_PROVIDER_DEFAULT_MODEL="$(env_override_value agent_provider_default_model agent.provider_routing.default.model)"
 ```
 
@@ -9797,8 +9797,8 @@ The new SST key `environments.test.agent_provider_default_model` flows through `
 
 There is NO `${VAR:-default}` syntax, NO silent fallback, NO `os.getenv("KEY", "default")` pattern. Behavior:
 - Test env: literal `qwen2.5:0.5b-instruct` from `environments.test.agent_provider_default_model`.
-- Dev/home-lab/prod env: literal `gemma3:4b` from base `agent.provider_routing.default.model` (because no per-env override key exists in those env blocks).
-- If the base key were deleted from `agent.provider_routing.default.model`, dev/home-lab/prod env regen would exit non-zero with `Missing config key: agent.provider_routing.default.model` (the same fail-loud behavior the precedent `agent_provider_fast_model` key already exhibits).
+- Dev/self-hosted/prod env: literal `gemma3:4b` from base `agent.provider_routing.default.model` (because no per-env override key exists in those env blocks).
+- If the base key were deleted from `agent.provider_routing.default.model`, dev/self-hosted/prod env regen would exit non-zero with `Missing config key: agent.provider_routing.default.model` (the same fail-loud behavior the precedent `agent_provider_fast_model` key already exhibits).
 
 `bash .github/bubbles/scripts/cli.sh doctor` and the `smackerel-no-defaults` skill checklist both pass for this change.
 
@@ -10163,7 +10163,7 @@ AGENT_PROVIDER_VISION_PROVIDER="$(required_value agent.provider_routing.vision.p
 # Spec 061 SCOPE-06a — vision model now uses env_override_value so the
 # test env can pin away from the production literal (`gemma3:4b`) and
 # eliminate the multi-path model-leak surfaced by
-# BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK. Dev / home-lab /
+# BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK. Dev / self-hosted /
 # prod fall back to the base agent.provider_routing.vision.model.
 AGENT_PROVIDER_VISION_MODEL="$(env_override_value agent_provider_vision_model agent.provider_routing.vision.model)"
 ```
@@ -10222,7 +10222,7 @@ All 6 model rows in scope pin to `qwen2.5:0.5b-instruct`. **Scoped grep for `gem
 442:ML_MODEL_MEMORY_PROFILES_JSON=[…"model":"gemma3:4b",…]  # SST memory-profile catalog (MUST list every known model)
 ```
 
-The PHOTOS_INTELLIGENCE_* hits are owned by spec 053 (photos pipeline) — never part of the SCOPE-06a 5-key set named in `scopes.md::SCOPE-06a` summary (LLM_MODEL, OLLAMA_MODEL, OLLAMA_VISION_MODEL, AGENT_PROVIDER_DEFAULT_MODEL, AGENT_PROVIDER_VISION_MODEL) and never exercised by the BS-002 / BS-007 retrieval-qa-v1 path. The `ML_MODEL_MEMORY_PROFILES_JSON` row is a catalog enumeration that MUST list every model the system knows about (dev/home-lab still reference `gemma3:4b`); stripping `gemma3:4b` from the catalog would break dev/home-lab validation. Both classes of remaining hits are pre-existing and unrelated to the multi-path model-leak finding.
+The PHOTOS_INTELLIGENCE_* hits are owned by spec 053 (photos pipeline) — never part of the SCOPE-06a 5-key set named in `scopes.md::SCOPE-06a` summary (LLM_MODEL, OLLAMA_MODEL, OLLAMA_VISION_MODEL, AGENT_PROVIDER_DEFAULT_MODEL, AGENT_PROVIDER_VISION_MODEL) and never exercised by the BS-002 / BS-007 retrieval-qa-v1 path. The `ML_MODEL_MEMORY_PROFILES_JSON` row is a catalog enumeration that MUST list every model the system knows about (dev/self-hosted still reference `gemma3:4b`); stripping `gemma3:4b` from the catalog would break dev/self-hosted validation. Both classes of remaining hits are pre-existing and unrelated to the multi-path model-leak finding.
 
 #### `report.md#scope-06a-warmup-fixtures` — DoD 3C (fixture warmup tracks SST)
 
@@ -10298,7 +10298,7 @@ $ grep -n 'smackerel_prewarm_test_model\|smackerel_run_up' smackerel.sh | head -
 1570:      smackerel_run_up "$TARGET_ENV" "$env_file" "$compose_wait_timeout_s"
 ```
 
-The prewarm fires after BOTH the first-attempt and retry-success branches of `smackerel_run_up` for `target_env=test`, sources the generated env file (so `AGENT_PROVIDER_DEFAULT_MODEL` + `OLLAMA_URL` are available), and is guarded by `OLLAMA_ENABLED=true` so dev / home-lab paths stay untouched.
+The prewarm fires after BOTH the first-attempt and retry-success branches of `smackerel_run_up` for `target_env=test`, sources the generated env file (so `AGENT_PROVIDER_DEFAULT_MODEL` + `OLLAMA_URL` are available), and is guarded by `OLLAMA_ENABLED=true` so dev / self-hosted paths stay untouched.
 
 **`SMACKEREL_PREWARM_ENABLED=false` adversarial branch** (proves the bypass works for local debugging without polluting the default behaviour):
 
@@ -11102,7 +11102,7 @@ PREWARM_EXIT=3
 $ set -o pipefail; E2E_STACK_MANAGED=1 timeout 300 bash tests/e2e/assistant_bs002_test.sh
 === Spec 061 SCOPE-06 §18.5 — BS-002 retrieval Q&A happy-path e2e ===
 --- seed: POST /api/capture with marker=bs002seed178010895329791 ---
-  seed_resp={"artifact_id":"01KSVC61TTE1V0KQ9FSKYSG7AK","title":"Tailscale mesh VPN setup notes (bs002seed178010895329791): I installed Tailscale on the home-lab evo","artifact_type":"generic","summary":"","connections":0,"topics":null,"processing_time_ms":7}
+  seed_resp={"artifact_id":"01KSVC61TTE1V0KQ9FSKYSG7AK","title":"Tailscale mesh VPN setup notes (bs002seed178010895329791): I installed Tailscale on the self-hosted evo","artifact_type":"generic","summary":"","connections":0,"topics":null,"processing_time_ms":7}
   seeded artifact_id=01KSVC61TTE1V0KQ9FSKYSG7AK
 --- LLM warmup: priming gemma3:4b inference ---
 --- ROW-1: webhook POST with /ask text (routes to retrieval_qa via shortcut) ---
@@ -11483,7 +11483,7 @@ Artifact lint PASSED.
 The Round 70 D6 finding closes the strategy space the Round 66 / Round 68 operator quality directive opened. Three observations forced the matrix design:
 
 1. **D6 is structural, not configurable.** `gemma3:4b` warm second-call /api/generate latency on this WSL2 host is 90 296 ms for 64-token gen (Round 70 prewarm summary `first_call_ms=21684 second_call_ms=90296 threshold_ms=55000`, PREWARM_EXIT=3). At 0.71 tok/s any retrieval-qa cited JSON answer (≥ ~50 tokens) exceeds 60 000 ms. No warmup, keep-alive, or budget raise short of ~120 s closes this on this hardware.
-2. **Operator directive 2026-05-30 explicitly separates production runtime from dev runtime.** Production targets Evo-X2 (Ryzen AI 9 HX 365+, Radeon 890M iGPU via ROCm, XDNA2 NPU) which has real inference capacity; dev runtime is WSL2 Cloud PC (Intel Xeon CPU-only). The CPU bottleneck on dev is NOT a production problem. Solving it at the production-contract layer (by raising the global budget) corrupts production behavior to fit a dev limitation.
+2. **Operator directive 2026-05-30 explicitly separates production runtime from dev runtime.** Production targets <deploy-host> (Ryzen AI 9 HX 365+, Radeon 890M iGPU via ROCm, XDNA2 NPU) which has real inference capacity; dev runtime is WSL2 Cloud PC (Intel Xeon CPU-only). The CPU bottleneck on dev is NOT a production problem. Solving it at the production-contract layer (by raising the global budget) corrupts production behavior to fit a dev limitation.
 3. **Operator directive also separates interactive role from background role.** Interactive (retrieval-QA, chat) blocks on user attention → 5 s budget on production. Background (synthesis, digests, ML pipeline) does not → generous timeout. Collapsing both into one budget number was the Round 66 mistake.
 
 Therefore SCOPE-06c introduces a **2×2 matrix** (hardware tier × model role) resolved at config-generate time via a fail-loud SST switch.
@@ -11494,8 +11494,8 @@ Therefore SCOPE-06c introduces a **2×2 matrix** (hardware tier × model role) r
 |---|---|---|---|
 | `cpu` × `interactive` | `qwen2.5:0.5b-instruct` | **15 000 ms** | Round 65 evidence: ~1.5 tok/s CPU. 15 s × 1.5 tok/s ≈ 22 tokens — smallest defensible cited JSON answer on this WSL hardware. **Honest math; subject to live-stack falsification.** |
 | `cpu` × `background` | `gemma3:4b` | **300 000 ms** | Round 70 evidence: 0.71 tok/s warm. 5 min covers cold-load (21 s) + multi-call synthesis. User not waiting. |
-| `accel` × `interactive` | `<operator-pick>` (recommended `gemma3:4b` on Radeon 890M ROCm) | **5 000 ms** | Restores design.md §5.1 production contract. Recommendation is operator-overridable in Evo-X2 deploy-adapter overlay. |
-| `accel` × `background` | `<operator-pick>` (recommended `gemma3:12b` or `deepseek-r1:7b`-class) | **300 000 ms** | Highest-quality model the Evo-X2 RAM envelope supports. Operator picks at deploy. |
+| `accel` × `interactive` | `<operator-pick>` (recommended `gemma3:4b` on Radeon 890M ROCm) | **5 000 ms** | Restores design.md §5.1 production contract. Recommendation is operator-overridable in <deploy-host> deploy-adapter overlay. |
+| `accel` × `background` | `<operator-pick>` (recommended `gemma3:12b` or `deepseek-r1:7b`-class) | **300 000 ms** | Highest-quality model the <deploy-host> RAM envelope supports. Operator picks at deploy. |
 
 **Switch mechanism (codified):** `SMACKEREL_HARDWARE_TIER={cpu,accel}` — REQUIRED SST key; resolved at `./smackerel.sh config generate` time. Fail-loud if unset/empty (no `${VAR:-default}` permitted per `smackerel-no-defaults`). Sourced from a gitignored per-machine overlay file `.smackerel.local.env` at repo root. Auto-detection (probing `/dev/dri`, `/dev/accel*`, ROCm SMI) REJECTED — brittle on WSL and silently flips production behavior on dev.
 
@@ -11514,7 +11514,7 @@ The 15 s number is therefore evidence-tied, not magic. The Honesty Note in SCOPE
 
 ### `report.md#scope-06c-out-of-scope` — What this scope explicitly does NOT touch
 
-- `deploy/compose.deploy.yml` — ROCm/NPU device passthrough for Evo-X2 is deploy-adapter territory (per `bubbles-deployment-target-adapter` skill + repo policy "No env-specific content in this repo"). Routed to deploy-overlay maintainer via SCOPE-06c PACKET 2 (recorded inline in scopes.md; not a separate file route).
+- `deploy/compose.deploy.yml` — ROCm/NPU device passthrough for <deploy-host> is deploy-adapter territory (per `bubbles-deployment-target-adapter` skill + repo policy "No env-specific content in this repo"). Routed to deploy-overlay maintainer via SCOPE-06c PACKET 2 (recorded inline in scopes.md; not a separate file route).
 - `docker-compose.yml` device blocks — same reasoning; out of scope.
 - SCOPE-06 / SCOPE-06a / SCOPE-06b DoD checkboxes — artifact-ownership boundary; previous-owners' history is preserved verbatim. SCOPE-06b is marked SUPERSEDED at the top of both body sections + in the scope-index matrix row.
 - `certification.status` / `certification.completedAt` / `certification.evidenceRef` / `certification.completedScopes` in state.json — bubbles.plan never writes these. `certification.scopeProgress` totals are updated (12→13 total; notStarted 4→5) because they are a planning artifact.
@@ -11524,7 +11524,7 @@ The 15 s number is therefore evidence-tied, not magic. The Honesty Note in SCOPE
 1. **THIS COMMIT (round 71, bubbles.plan):** scopes.md (SCOPE-06b SUPERSEDED + SCOPE-06c body authored) + state.json (executionHistory prepend + execution metadata bump + scopeProgress totals) + report.md (this section). Marks SCOPE-06b as superseded and frozen.
 2. **NEXT (bubbles.design, PACKET 1):** Amend design.md §5.1 retrieval-qa-v1 contract per SCOPE-06c PACKET 1. Replace Round 68b 60 000 ms / 30 000 ms literals with `${RETRIEVAL_QA_TIMEOUT_MS}` placeholder (or per-env regenerate path); replace the Round 68b "quality > speed for v1" rationale block with the new "Hardware-tier × model-role matrix" rationale block.
 3. **NEXT (bubbles.implement, SCOPE-06c DoD #2 → #4):** Add `models.tiers.{cpu,accel}.{interactive,background}` block to config/smackerel.yaml; wire `scripts/commands/config.sh` to resolve 9 env vars (6 model + 2 retrieval-qa timeout + 1 hardware tier) per tier+role; revert retrieval-qa-v1.yaml budget literal to env-var placeholder; add `.smackerel.local.env` to .gitignore + commit `.smackerel.local.env.example`; update `scripts/runtime/stack.sh` prewarm threshold to be derived from `RETRIEVAL_QA_TIMEOUT_MS`.
-4. **NEXT (bubbles.test, SCOPE-06c DoD #5):** RE-RUN BS-002 + BS-007 on WSL cpu tier (`SMACKEREL_HARDWARE_TIER=cpu`, `qwen2.5:0.5b-instruct`, 15 s budget). DoD #6 (accel tier) DEFERRED to operator on Evo-X2 — no agent in this session has Evo-X2 access.
+4. **NEXT (bubbles.test, SCOPE-06c DoD #5):** RE-RUN BS-002 + BS-007 on WSL cpu tier (`SMACKEREL_HARDWARE_TIER=cpu`, `qwen2.5:0.5b-instruct`, 15 s budget). DoD #6 (accel tier) DEFERRED to operator on <deploy-host> — no agent in this session has <deploy-host> access.
 
 ### `report.md#scope-06c-files-modified` — Files modified this round (owned by bubbles.plan)
 
@@ -11634,7 +11634,7 @@ UNIT_GO_EXIT=0
 ### Deferred items (NOT flipped this round)
 
 - **SCOPE-06c DoD #5 — cpu-tier live-stack RE-RUN PASS.** Owned by `bubbles.test` next round. Steps: `./smackerel.sh --env test up` then `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` + `… assistant_bs007_test.sh`; both must exit 0 with `assistant_turn` slog `latency_ms < 15000`. On RED, surface a finding to `bubbles.plan` per the Honesty Note — do NOT widen the 15 s budget silently.
-- **SCOPE-06c DoD #6 — accel-tier live-stack PASS on Evo-X2.** Deferred to operator validation on Evo-X2 hardware. No agent in this session has Evo-X2 access. PACKET 2 (deploy adapter ROCm/NPU passthrough) is operator-private and out of scope for this repo.
+- **SCOPE-06c DoD #6 — accel-tier live-stack PASS on <deploy-host>.** Deferred to operator validation on <deploy-host> hardware. No agent in this session has <deploy-host> access. PACKET 2 (deploy adapter ROCm/NPU passthrough) is operator-private and out of scope for this repo.
 - **SCOPE-06c DoD #7 — SCOPE-06 unblock note.** Deferred until #5 passes (the note must attach the cpu-tier live-stack PASS evidence pointer).
 
 ### Anti-fabrication ledger
@@ -11689,7 +11689,7 @@ $ export E2E_STACK_MANAGED=1 AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct
 $ timeout 600 bash tests/e2e/assistant_bs002_test.sh
 === Spec 061 SCOPE-06 §18.5 — BS-002 retrieval Q&A happy-path e2e ===
 --- seed: POST /api/capture with marker=bs002seed178011356304951 ---
-  seed_resp={"artifact_id":"01KSVGJQX4C9QX6HV4GH1JABN2","title":"Tailscale mesh VPN setup notes (bs002seed178011356304951): I installed Tailscale on the home-lab evo","artifact_type":"generic","summary":"","connections":0,"topics":null,"processing_time_ms":4}
+  seed_resp={"artifact_id":"01KSVGJQX4C9QX6HV4GH1JABN2","title":"Tailscale mesh VPN setup notes (bs002seed178011356304951): I installed Tailscale on the self-hosted evo","artifact_type":"generic","summary":"","connections":0,"topics":null,"processing_time_ms":4}
   seeded artifact_id=01KSVGJQX4C9QX6HV4GH1JABN2
 --- LLM warmup: priming qwen2.5:0.5b-instruct inference ---
 --- ROW-1: webhook POST with /ask text (routes to retrieval_qa via shortcut) ---

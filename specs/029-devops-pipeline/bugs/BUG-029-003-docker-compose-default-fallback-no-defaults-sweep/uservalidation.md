@@ -42,7 +42,7 @@ The fix is bounded to:
 The fix does **not** modify:
 
 - `internal/deploy/compose_contract_test.go` — the prod-compose contract test (different live file target)
-- `deploy/compose.deploy.yml` — the prod / home-lab compose file
+- `deploy/compose.deploy.yml` — the prod / self-hosted compose file
 - `config/smackerel.yaml` — the SST source
 - Foreign-owned parent-spec content (`specs/029-devops-pipeline/spec.md`, `design.md`, `scopes.md`, `state.json`, `uservalidation.md`, `report.md`)
 - Production runtime Go code under `internal/auth/...`, `internal/config/...`, `internal/api/...`, `cmd/...`

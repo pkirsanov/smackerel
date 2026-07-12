@@ -16,7 +16,7 @@
       "linkedTests": [
         "internal/config/secret_keys_test.go::TestSecretKeysMirror",
         "internal/config/secret_keys_test.go::TestSecretKeys_MirrorsYAMLManifest",
-        "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInHomeLab"
+        "internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInSelfHosted"
       ],
       "evidenceRefs": ["report.md#scope-01-secret-mirror", "report.md#scope-01-bundle-contract", "report.md#scope-01-config-generate"]
     },
@@ -183,7 +183,7 @@
       "changeType": "new",
       "lockdown": false,
       "regressionRequired": true,
-      "linkedTests": ["live-stack curl GET /register on the deployed home-lab core (no interception)"],
+      "linkedTests": ["live-stack curl GET /register on the deployed self-hosted core (no interception)"],
       "evidenceRefs": ["report.md#scope-05-e2e-page"]
     },
     {
@@ -194,7 +194,7 @@
       "changeType": "new",
       "lockdown": false,
       "regressionRequired": true,
-      "linkedTests": ["live-stack register -> /login?registered=1 -> login -> GET /cards on the deployed home-lab core (no interception)"],
+      "linkedTests": ["live-stack register -> /login?registered=1 -> login -> GET /cards on the deployed self-hosted core (no interception)"],
       "evidenceRefs": ["report.md#scope-05-e2e-happy"]
     },
     {
@@ -205,7 +205,7 @@
       "changeType": "new",
       "lockdown": false,
       "regressionRequired": true,
-      "linkedTests": ["live-stack wrong-token POST /v1/web/register on the deployed home-lab core (no interception)"],
+      "linkedTests": ["live-stack wrong-token POST /v1/web/register on the deployed self-hosted core (no interception)"],
       "evidenceRefs": ["report.md#scope-05-e2e-wrong"]
     }
   ]

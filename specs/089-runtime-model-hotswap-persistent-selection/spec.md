@@ -13,7 +13,7 @@ output only** — `design.md` / `scopes.md` / `report.md` /
 
 **Owner Directive (2026-06-14):** *"We should be able to hot-swap models
 in prod via config, and the previously-mentioned commands in telegram,
-api, other surfaces too."* Plus, after a live 3-way A/B on home-lab
+api, other surfaces too."* Plus, after a live 3-way A/B on self-hosted
 hardware, the owner chose *"do c" = BOTH*: (a) wire `deepseek-r1:32b` as
 the **persistent default** synthesis model in committed SST (quality
 first), keeping `deepseek-r1:7b` switchable for speed, AND (b) build the
@@ -64,7 +64,7 @@ verbatim** and made model-/selection-agnostic.
 **Out of scope (explicit):** the spec-083 card-rewards WIP
 (`internal/cardrewards/`, `ml/app/card_categories.py`, `ml/app/main.py`,
 `ml/tests/test_card_categories.py`, `specs/083-card-rewards-companion/`,
-`tests/integration/cardrewards_extract_test.go`); the home-lab deploy
+`tests/integration/cardrewards_extract_test.go`); the self-hosted deploy
 itself (persisting the raised envelope + the 32b default + the
 pull-on-deploy + the live re-verify) — a separate `bubbles.devops`
 dispatch; adding any NEW model not already in `model_memory_profiles`;
@@ -84,11 +84,11 @@ hallucination that 7b commits. The owner has now chosen 32b as the
 **standing** synthesis model, not just an occasional per-request opt-up.
 That choice exposes four gaps the per-request primitive does not close:
 
-1. **No persistent default selection.** Today the home-lab synthesis
+1. **No persistent default selection.** Today the self-hosted synthesis
    default is `deepseek-r1:7b`
-   (`environments.home-lab.assistant_open_knowledge_synthesis_model_id`).
+   (`environments.self-hosted.assistant_open_knowledge_synthesis_model_id`).
    Making 32b the standing default is a committed-SST change — and 32b
-   does NOT fit the current home-lab `ollama_memory_limit: "28G"`
+   does NOT fit the current self-hosted `ollama_memory_limit: "28G"`
    envelope co-resident with the gemma4:26b gather model
    (`18432 + 22528 = 40960 MiB > 28672 MiB`), so
    `validateModelEnvelopes` structurally rejects it today (it is the
@@ -197,7 +197,7 @@ trust perimeter and is attributed to the model(s) that produced it.
 **Success Signal:**
 - **Persistent default applies.** With no per-user sticky and no
   per-request override, `/ask` uses the committed-SST persistent default
-  synthesis model (home-lab → `deepseek-r1:32b`) for every invocation,
+  synthesis model (self-hosted → `deepseek-r1:32b`) for every invocation,
   and that default's footprint headroom is verified safe co-resident with
   the gather model and the ingestion pipeline.
 - **Sticky persists per user.** `/model <id>` sets the calling user's
@@ -481,7 +481,7 @@ Feature: A numbered model picker lets the user choose by replying with a number
   synthesis model MUST be selectable in committed `config/smackerel.yaml`
   via the established per-environment override pattern
   (`environments.<env>.assistant_open_knowledge_synthesis_model_id`).
-  Home-lab becomes `deepseek-r1:32b`; `deepseek-r1:7b` stays in the
+  self-hosted becomes `deepseek-r1:32b`; `deepseek-r1:7b` stays in the
   switchable set for speed. The baseline stays SST-sourced and fail-loud
   (G028): no `${VAR:-default}`, no hidden fallback.
 - **FR-2 — Envelope raised + footprint headroom verified.** To make a
@@ -786,7 +786,7 @@ No principle deviation. No financial-action surface is touched (Principle
 
 | Scenario | Actor | Entry Point | Steps | Expected Outcome | Surface(s) |
 |----------|-------|-------------|-------|------------------|------------|
-| Ask with the standing default | Human user | `/ask` (no flag) | Ask | Answer from the committed-SST persistent default (32b on home-lab), attributed source "default" | Telegram + Web/HTTP |
+| Ask with the standing default | Human user | `/ask` (no flag) | Ask | Answer from the committed-SST persistent default (32b on self-hosted), attributed source "default" | Telegram + Web/HTTP |
 | Set a sticky model | Operator/User | Telegram `/model <id>` / API affordance | Set an allowlisted model | Sticky default set; persists across subsequent `/ask` | Telegram + Web/HTTP |
 | Show current + allowed | Operator/User | `/model` (no arg) / API | Query selection | Current selection + allowed set + SST default shown | Telegram + Web/HTTP |
 | Reset sticky | Operator/User | `/model default` / API | Reset | Sticky cleared; back to SST default | Telegram + Web/HTTP |
@@ -804,7 +804,7 @@ External competitor web research was intentionally skipped: this is an
 internal infra primitive for a self-hosted, single-operator product, and
 fabricating a competitor matrix would add no grounded value. The
 evidence-based rationale is the owner's standing A/B practice plus the
-live home-lab 3-way A/B
+live self-hosted 3-way A/B
 ([`docs/experiments/open-knowledge-synthesis-model-ab.md`](../../docs/experiments/open-knowledge-synthesis-model-ab.md)),
 which empirically settled the standing-default choice (32b fixes the Q1
 false-balance + Q4 hallucination at ~1.9× latency). Persistent-default
@@ -895,7 +895,7 @@ verbatim golden strings are in [uservalidation.md](uservalidation.md).
 
 **Actor:** Operator/User | **Route:** Telegram `/model [id|default]` | **Status:** New | **Fork B**
 
-`/model` with no argument — discovery + the caller's current effective model (home-lab, un-set user):
+`/model` with no argument — discovery + the caller's current effective model (self-hosted, un-set user):
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -1102,10 +1102,10 @@ model_over_memory_envelope, model_not_tool_capable}`; `*_source` ∈
 **Actor:** Operator/Config-Owner | **Surface:** committed SST edit + `./smackerel.sh config generate` + operator overlay recreate | **Status:** New | **Fork D**
 
 ```
-1. Edit committed SST:  environments.home-lab.assistant_open_knowledge_synthesis_model_id: "deepseek-r1:32b"
-   (raise environments.home-lab.ollama_memory_limit FIRST if needed — config-gen fails loud if the
+1. Edit committed SST:  environments.self-hosted.assistant_open_knowledge_synthesis_model_id: "deepseek-r1:32b"
+   (raise environments.self-hosted.ollama_memory_limit FIRST if needed — config-gen fails loud if the
     co-resident envelope is busted, SCN-089-A06)
-2. Regenerate the env bundle (fail-loud SST):   ./smackerel.sh config generate --env home-lab
+2. Regenerate the env bundle (fail-loud SST):   ./smackerel.sh config generate --env self-hosted
 3. Host pulls the new model; the operator OVERLAY recreates ONLY core (--no-deps, ~15s, no rebuild).
    The host-specific recreate lives in the overlay, NOT this repo (deployment-ownership boundary / C5).
 4. Verify (two checks):

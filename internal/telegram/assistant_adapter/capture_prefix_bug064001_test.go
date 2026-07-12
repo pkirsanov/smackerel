@@ -10,7 +10,7 @@ import (
 // BUG-064-001 DEFECT B — a captured-as-fallback idea must NOT contain the
 // leading slash-command token (/ask, /weather, /remind, /recipe, /cook).
 //
-// Live evidence (home-lab, 2026-06-11): a "/ask tide schedule …" turn was
+// Live evidence (self-hosted, 2026-06-11): a "/ask tide schedule …" turn was
 // captured as `. Saved: "/ask tide schedule …" (idea)` — the /ask prefix
 // leaked into the idea title because HandleUpdate dispatched the verbatim
 // msg.Text (which translate_inbound preserves so the facade's LookupShortcut

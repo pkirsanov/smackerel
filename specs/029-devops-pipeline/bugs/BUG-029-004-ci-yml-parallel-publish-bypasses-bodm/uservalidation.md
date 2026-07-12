@@ -32,7 +32,7 @@
   - **Expected:** All four greps return zero matches (or, for grep #3, only locally-named retags WITHOUT a `<registry>/` prefix — exempt because they are a build-side smoke pattern, not a publish action).
   - **Verify:** Terminal greps as above.
   - **Evidence:** report.md#test-evidence
-  - **Notes:** Bug fix for HL-RESCAN-011 (lens: BODM Build-Once Deploy-Many; surface: `.github/workflows/ci.yml`) under parent workflow `home-lab-readiness-rescan-external-2026-05-15`.
+  - **Notes:** Bug fix for HL-RESCAN-011 (lens: BODM Build-Once Deploy-Many; surface: `.github/workflows/ci.yml`) under parent workflow `self-hosted-readiness-rescan-external-2026-05-15`.
 
 - [x] **What:** A new persistent in-tree adversarial workflow-yaml grep contract test (`internal/deploy/ci_workflow_no_parallel_publish_test.go`, exact path FROZEN by `bubbles.design` DD-8) parses the live `.github/workflows/ci.yml` and rejects any future re-introduction of the parallel publish path.
   - **Steps:**
@@ -76,7 +76,7 @@
 
 ## Sister-Packet Cross-References
 
-This bug packet is part of the `home-lab-readiness-rescan-external-2026-05-15` parent workflow. Operator-validation continuity across sister packets:
+This bug packet is part of the `self-hosted-readiness-rescan-external-2026-05-15` parent workflow. Operator-validation continuity across sister packets:
 
 - [`BUG-020-004` user-validation entries](../../../020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read/uservalidation.md) — most recent shipped sister packet (HL-RESCAN-013-secondary close-out, lens: SST defaults / Gate G028).
 - [`BUG-042-006` user-validation entries](../../../042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/uservalidation.md) — established packet template (HL-RESCAN-007 close-out, lens: generic-only / SST-defaults).

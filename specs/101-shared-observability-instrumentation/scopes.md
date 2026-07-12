@@ -6,7 +6,7 @@
 > Two scopes. SCOPE-01 is the full in-repo instrumentation (contract naming +
 > config SST + fail-loud reader + boot gate + `com.bubbles.*` labels + reuse of
 > the existing `/metrics` + OTLP exporter) — fully authorable, offline-provable,
-> and complete this session. SCOPE-02 is the LIVE flip verification on evo-x2
+> and complete this session. SCOPE-02 is the LIVE flip verification on <deploy-host>
 > (a `/metrics` 200 scraped by the shared Prometheus + OTLP spans in the shared
 > Tempo) — operator/apply-gated and explicitly **DEFERRED-to-flip** (no live host
 > mutation this session, per the acceptance constraints and the accepted
@@ -117,13 +117,13 @@ enumeration table + evidence: [report.md](report.md#consumer-sweep).
 
 ---
 
-## Scope 2: SCOPE-02 — Live shared-stack verification (evo-x2)
+## Scope 2: SCOPE-02 — Live shared-stack verification (<deploy-host>)
 
 **Status:** Blocked
 **Scope-Kind:** live-host-verification (operator/apply-gated)
 **Depends On:** SCOPE-01
 
-Prove the flip works against the LIVE shared observability stack on evo-x2: a
+Prove the flip works against the LIVE shared observability stack on <deploy-host>: a
 `/metrics` 200 scraped by the shared Prometheus with the `product=smackerel`
 label visible, and OTLP spans landing in the shared Tempo.
 
@@ -132,7 +132,7 @@ label visible, and OTLP spans landing in the shared Tempo.
 ```gherkin
 Scenario: SCN-101-A04 — live /metrics 200 in the shared Prometheus (deferred-to-flip)
   Given smackerel is flipped to sharedServices.observability: shared
-  And the operator has run apply-shared-obs on evo-x2
+  And the operator has run apply-shared-obs on <deploy-host>
   When the shared Prometheus docker_sd discovers smackerel-core by com.bubbles.product
   Then GET /metrics returns 200 and the product=smackerel scrape label is visible
   And OTLP spans from smackerel land in the shared Tempo
@@ -142,10 +142,10 @@ Scenario: SCN-101-A04 — live /metrics 200 in the shared Prometheus (deferred-t
 
 | Test Type | Category | File | Description | Command |
 |-----------|----------|------|-------------|---------|
-| integration | integration | `internal/api/health_test.go` | SCN-101-A04 — live /metrics 200 scraped by the shared Prometheus + OTLP spans in the shared Tempo; DEFERRED-to-flip (the in-repo /metrics-serving proof is health_test.go; the live scrape is operator-gated) | `[DEFERRED-to-flip] operator runs apply-shared-obs on evo-x2, then verifies the shared Prometheus target set + curl --max-time 5 /metrics` |
+| integration | integration | `internal/api/health_test.go` | SCN-101-A04 — live /metrics 200 scraped by the shared Prometheus + OTLP spans in the shared Tempo; DEFERRED-to-flip (the in-repo /metrics-serving proof is health_test.go; the live scrape is operator-gated) | `[DEFERRED-to-flip] operator runs apply-shared-obs on <deploy-host>, then verifies the shared Prometheus target set + curl --max-time 5 /metrics` |
 
 ### Definition of Done
 
-- [ ] **T4 — live `/metrics` 200 scraped by the shared Prometheus** — **DEFERRED-to-flip.** Unblock: operator sets smackerel `sharedServices.observability: shared` in the knb adapter params + runs `apply-shared-obs` on evo-x2; this session performs NO live host mutation. Evidence: [report.md](report.md#deferred-live)
+- [ ] **T4 — live `/metrics` 200 scraped by the shared Prometheus** — **DEFERRED-to-flip.** Unblock: operator sets smackerel `sharedServices.observability: shared` in the knb adapter params + runs `apply-shared-obs` on <deploy-host>; this session performs NO live host mutation. Evidence: [report.md](report.md#deferred-live)
 - [ ] **Live OTLP export lands in the shared Tempo** — **DEFERRED-to-flip.** Same unblock condition. Evidence: [report.md](report.md#deferred-live)
 - [ ] **`product=smackerel` label visible in the shared Prometheus target set** — **DEFERRED-to-flip.** Same unblock condition. Evidence: [report.md](report.md#deferred-live)

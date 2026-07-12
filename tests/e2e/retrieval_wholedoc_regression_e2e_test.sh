@@ -8,7 +8,7 @@
 #
 # ENV-BLOCKED on cpu-tier: full-stack bring-up + LLM synthesis is accel-tier-
 # gated AND the query routing depends on the facade router wiring (PKT-095-A).
-# Run on accel-tier home-lab / CI per the spec 095 environment-blocked DoD
+# Run on accel-tier self-hosted / CI per the spec 095 environment-blocked DoD
 # allowance (finding F-095-E2E-LIVE). Statically valid (bash -n).
 set -euo pipefail
 

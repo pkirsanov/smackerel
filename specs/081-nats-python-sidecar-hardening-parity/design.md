@@ -38,7 +38,7 @@ modules.
 | File | Change |
 |------|--------|
 | `config/smackerel.yaml` | Add `infrastructure.nats.consumer:` block with `max_deliver: 5` and `ack_wait_seconds: 120` (operator-tunable for `next`; `mvp` bundle MAY pick smaller `ack_wait`). |
-| `scripts/commands/config.sh` | Emit `NATS_CONSUMER_MAX_DELIVER` and `NATS_CONSUMER_ACK_WAIT_SECONDS` into `config/generated/{dev,test,home-lab}.env`. Fail-loud if either key is missing in `smackerel.yaml`. |
+| `scripts/commands/config.sh` | Emit `NATS_CONSUMER_MAX_DELIVER` and `NATS_CONSUMER_ACK_WAIT_SECONDS` into `config/generated/{dev,test,self-hosted}.env`. Fail-loud if either key is missing in `smackerel.yaml`. |
 | `ml/app/nats_client.py` | (a) read both env vars fail-loud (mirroring the existing reconnect-contract reads in `connect()`); (b) build `ConsumerConfig(max_deliver=..., ack_wait=...)` and pass it to every `pull_subscribe` call in `subscribe_all`; (c) remove `_failure_counts` from `__init__` and the consumer loop; (d) rewrite the poison-pill branch to read `msg.metadata.num_delivered`, publish to `deadletter.<subject>` with the canonical headers, then `term()`. If publish fails, `nak()` and let JetStream redeliver. |
 
 Test-stack support files (`docker-compose.yml`, NATS server

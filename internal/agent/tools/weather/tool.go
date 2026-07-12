@@ -236,7 +236,7 @@ func init() {
 		OwningPackage:   "internal/agent/tools/weather",
 		// A single lookup is geocode + forecast, two sequential HTTPS
 		// round trips to open-meteo. Measured worst case from the
-		// home-lab container is ~2s per call (so ~4s end-to-end on a
+		// self-hosted container is ~2s per call (so ~4s end-to-end on a
 		// cold cache). The previous 2000 ms cap was tighter than a
 		// single HTTP call and made /weather fail with
 		// `provider_unavailable` on most cold-cache invocations. 8s

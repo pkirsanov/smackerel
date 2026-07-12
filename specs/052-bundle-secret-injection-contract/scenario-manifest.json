@@ -52,18 +52,18 @@
     },
     {
       "scenarioId": "SCN-052-S03",
-      "name": "home-lab loader emits placeholders for declared secret keys",
+      "name": "self-hosted loader emits placeholders for declared secret keys",
       "scope": "scope-02",
       "status": "active",
       "requiredTestType": ["unit-bash", "integration"],
       "linkedTests": [
-        {"file": "tests/config/placeholder_emit_test.sh", "function": "sub-case home-lab"},
-        {"file": "tests/config/bundle_home_lab_integration_test.sh", "function": "main bundle determinism + sibling-yaml + placeholder-count check"},
-        {"file": "tests/config/bundle_home_lab_integration_test.sh", "function": "regression: bundle determinism (T-052-007-REG)"}
+        {"file": "tests/config/placeholder_emit_test.sh", "function": "sub-case self-hosted"},
+        {"file": "tests/config/bundle_self_hosted_integration_test.sh", "function": "main bundle determinism + sibling-yaml + placeholder-count check"},
+        {"file": "tests/config/bundle_self_hosted_integration_test.sh", "function": "regression: bundle determinism (T-052-007-REG)"}
       ],
       "evidenceRefs": [
-        {"type": "unit-bash", "location": "tests/config/placeholder_emit_test.sh — TARGET_ENV=home-lab sub-case asserts 4 __SECRET_PLACEHOLDER__<KEY>__ lines in staged app.env"},
-        {"type": "integration-bash", "location": "tests/config/bundle_home_lab_integration_test.sh — two consecutive --env home-lab --bundle invocations produce byte-identical sha256 AND tar.gz contains sibling secret-keys.yaml"},
+        {"type": "unit-bash", "location": "tests/config/placeholder_emit_test.sh — TARGET_ENV=self-hosted sub-case asserts 4 __SECRET_PLACEHOLDER__<KEY>__ lines in staged app.env"},
+        {"type": "integration-bash", "location": "tests/config/bundle_self_hosted_integration_test.sh — two consecutive --env self-hosted --bundle invocations produce byte-identical sha256 AND tar.gz contains sibling secret-keys.yaml"},
         {"type": "source", "location": "scripts/commands/config.sh — placeholder-emit block per design.md §4 step 3 (managed-key resolution wrap) + sibling secret-keys.yaml emission per step 4"},
         {"type": "report", "location": "report.md#scope-2-tests (T-052-004 + T-052-006 + T-052-007-REG evidence blocks)"}
       ],
@@ -88,7 +88,7 @@
       ],
       "evidenceRefs": [
         {"type": "unit-bash", "location": "tests/config/placeholder_emit_test.sh — TARGET_ENV=dev sub-case asserts POSTGRES_PASSWORD=smackerel literal AND zero __SECRET_PLACEHOLDER__ markers"},
-        {"type": "source", "location": "scripts/commands/config.sh — placeholder-mode short-circuit guard preserves FR-051-005 dev-default check on env-override path; dev/test bypass placeholder mode entirely because home-lab is the only production_class_target"},
+        {"type": "source", "location": "scripts/commands/config.sh — placeholder-mode short-circuit guard preserves FR-051-005 dev-default check on env-override path; dev/test bypass placeholder mode entirely because self-hosted is the only production_class_target"},
         {"type": "report", "location": "report.md#scope-2-tests (T-052-005 evidence block)"}
       ],
       "linkedDoD": [
@@ -104,16 +104,16 @@
       "status": "active",
       "requiredTestType": ["contract", "integration"],
       "linkedTests": [
-        {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_NoLiteralSecretsInHomeLab"},
+        {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_NoLiteralSecretsInSelfHosted"},
         {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_AdversarialA1_DriftDetector"},
         {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_AdversarialA2_LeakageDetector"},
         {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_AdversarialA3_DeterminismDetector"},
         {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_AdversarialA4_OptOutDetector"},
-        {"file": "tests/config/bundle_home_lab_integration_test.sh", "function": "extension: placeholder-count + zero DevDBPasswords match"}
+        {"file": "tests/config/bundle_self_hosted_integration_test.sh", "function": "extension: placeholder-count + zero DevDBPasswords match"}
       ],
       "evidenceRefs": [
         {"type": "contract-go", "location": "internal/deploy/bundle_secret_contract_test.go — happy-path + 4 adversarial sub-tests using t.TempDir() copies of scripts/commands/config.sh and config/smackerel.yaml"},
-        {"type": "integration-bash", "location": "tests/config/bundle_home_lab_integration_test.sh — extension asserts ≥4 placeholder lines AND zero DevDBPasswords matches in extracted app.env"},
+        {"type": "integration-bash", "location": "tests/config/bundle_self_hosted_integration_test.sh — extension asserts ≥4 placeholder lines AND zero DevDBPasswords matches in extracted app.env"},
         {"type": "source", "location": "internal/config/secret_keys.go::SecretKeys() consumed by happy-path test"},
         {"type": "report", "location": "report.md#scope-3-tests (T-052-007 through T-052-012 evidence blocks)"}
       ],
@@ -136,7 +136,7 @@
         {"file": "tests/config/postgres_dev_default_env_override_test.sh", "function": "main env-override drive"}
       ],
       "evidenceRefs": [
-        {"type": "regression-bash", "location": "tests/config/postgres_dev_default_env_override_test.sh — POSTGRES_PASSWORD=smackerel TARGET_ENV=home-lab ./smackerel.sh config generate --env home-lab --bundle exits non-zero with stderr naming infrastructure.postgres.password and never echoing 'smackerel' literal"},
+        {"type": "regression-bash", "location": "tests/config/postgres_dev_default_env_override_test.sh — POSTGRES_PASSWORD=smackerel TARGET_ENV=self-hosted ./smackerel.sh config generate --env self-hosted --bundle exits non-zero with stderr naming infrastructure.postgres.password and never echoing 'smackerel' literal"},
         {"type": "source", "location": "scripts/commands/config.sh — placeholder-mode short-circuit guard does NOT bypass FR-051-005 dev-default check on env-override path"},
         {"type": "source", "location": "scripts/commands/config_secret_rejection_test.sh — spec 051 regression asserted unchanged at Scope 3 exit"},
         {"type": "report", "location": "report.md#scope-3-tests (T-052-013 evidence block)"}
@@ -185,11 +185,11 @@
       "status": "active",
       "requiredTestType": ["integration-ci", "docs"],
       "linkedTests": [
-        {"file": ".github/workflows/build.yml", "function": "build-bundles matrix (env: dev, test, home-lab)"},
+        {"file": ".github/workflows/build.yml", "function": "build-bundles matrix (env: dev, test, self-hosted)"},
         {"file": ".github/workflows/build.yml", "function": "publish-build-manifest job"}
       ],
       "evidenceRefs": [
-        {"type": "integration-ci", "location": "GitHub Actions build.yml run on the new HEAD SHA — build-bundles matrix green for dev + test + home-lab; publish-build-manifest produces build-manifest-<HEAD-SHA>.yaml with 3 configBundles entries"},
+        {"type": "integration-ci", "location": "GitHub Actions build.yml run on the new HEAD SHA — build-bundles matrix green for dev + test + self-hosted; publish-build-manifest produces build-manifest-<HEAD-SHA>.yaml with 3 configBundles entries"},
         {"type": "docs", "location": "README.md Configuration / Secrets section — placeholder discipline + 3-layer defense-in-depth + how to add a new managed secret recipe"},
         {"type": "docs", "location": "docs/Deployment.md — Bundle Secret Injection subsection under Build-Once Deploy-Many"},
         {"type": "docs", "location": "docs/Architecture.md — Secret Boundary paragraph (CI / knb adapter / runtime trust boundary)"},

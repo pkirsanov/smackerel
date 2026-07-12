@@ -45,10 +45,10 @@ corpus:
   ground_truth_capture_expected: false
   ground_truth_slots: { topic: "Postgres pgvector" }
 - id: ret-003
-  text: "Find that article I saved about the home-lab Caddy setup."
+  text: "Find that article I saved about the self-hosted Caddy setup."
   ground_truth_intent: retrieval
   ground_truth_capture_expected: false
-  ground_truth_slots: { topic: "home-lab Caddy" }
+  ground_truth_slots: { topic: "self-hosted Caddy" }
 - id: ret-004
   text: "What was the recipe link I saved last week?"
   ground_truth_intent: retrieval
@@ -165,10 +165,10 @@ corpus:
   ground_truth_capture_expected: false
   ground_truth_slots: { topic: "cosign image signing" }
 - id: ret-027
-  text: "What did I save about the home-lab deployment plan?"
+  text: "What did I save about the self-hosted deployment plan?"
   ground_truth_intent: retrieval
   ground_truth_capture_expected: false
-  ground_truth_slots: { topic: "home-lab deployment plan" }
+  ground_truth_slots: { topic: "self-hosted deployment plan" }
 - id: ret-028
   text: "Pull up my Twitter archive notes."
   ground_truth_intent: retrieval
@@ -434,10 +434,10 @@ corpus:
   ground_truth_capture_expected: false
   ground_truth_slots: { action: "refill the water filter", when: "in an hour" }
 - id: nt-020
-  text: "Remind me to update the home-lab certificates next month."
+  text: "Remind me to update the self-hosted certificates next month."
   ground_truth_intent: notifications
   ground_truth_capture_expected: false
-  ground_truth_slots: { action: "update home-lab certificates", when: "next month" }
+  ground_truth_slots: { action: "update self-hosted certificates", when: "next month" }
 - id: nt-021
   text: "Set a reminder for the package pickup on Tuesday at noon."
   ground_truth_intent: notifications
@@ -521,7 +521,7 @@ corpus:
   ground_truth_capture_expected: true
   ground_truth_slots: {}
 - id: cap-007
-  text: "Reminder to self: the home-lab firewall blocks all egress except the tailnet by default."
+  text: "Reminder to self: the self-hosted firewall blocks all egress except the tailnet by default."
   ground_truth_intent: capture
   ground_truth_capture_expected: true
   ground_truth_slots: {}

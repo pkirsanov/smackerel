@@ -9,7 +9,7 @@ import (
 // HL-RESCAN-008: resolveBroadcasterInstanceID fail-loud gating.
 //
 // These tests are the adversarial proof for HL-RESCAN-008 (P2 finding from
-// the 2026-05-14 home-lab readiness re-scan against c586f912). The pre-fix
+// the 2026-05-14 self-hosted readiness re-scan against c586f912). The pre-fix
 // form at cmd/core/wiring.go:243 was:
 //
 //	instanceID := os.Getenv("HOSTNAME")

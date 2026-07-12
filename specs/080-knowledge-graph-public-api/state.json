@@ -204,7 +204,7 @@
         "agent": "bubbles.plan",
         "completedAt": "2026-06-03T23:12:00Z",
         "evidenceRef": "report.md#test--live-stack-tier-scope-080-0104-bubblestest--2026-06-03",
-        "notes": "Consolidated: pre-existing TestSSTLoader_HomeLabEmits failure attributed to spec 051; no new regressions introduced by spec 080."
+        "notes": "Consolidated: pre-existing TestSSTLoader_SelfHostedEmits failure attributed to spec 051; no new regressions introduced by spec 080."
       },
       {
         "phase": "simplify",

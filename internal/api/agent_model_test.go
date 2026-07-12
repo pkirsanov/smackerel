@@ -42,7 +42,7 @@ func (f *fakeModelPrefStore) Clear(_ context.Context, userID string) error {
 	return nil
 }
 
-// spec089WireModel installs a home-lab-shaped allowlist + the fake store into
+// spec089WireModel installs a self-hosted-shaped allowlist + the fake store into
 // the agenttool singletons and returns the store + a cleanup.
 func spec089WireModel(t *testing.T) (*fakeModelPrefStore, func()) {
 	t.Helper()

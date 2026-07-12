@@ -7,9 +7,9 @@
 
 ## Problem
 
-evo-x2 now runs a LIVE shared home-lab observability stack (one Prometheus,
+<deploy-host> now runs a LIVE shared self-hosted observability stack (one Prometheus,
 one Grafana, one Tempo, one Loki, one otel-collector) owned by the knb adapter
-`shared/observability/home-lab/`. knb spec 014 **scope 03** is the acceptance
+`shared/observability/self-hosted/`. knb spec 014 **scope 03** is the acceptance
 contract that makes smackerel *flip-ready* for that stack: smackerel must
 consume the three canonical instrumentation env vars the knb adapter injects
 (`OTLP_TRACES_ENDPOINT`, `OTLP_LOGS_ENDPOINT`, `METRICS_SCRAPE_LABEL_PRODUCT`),
@@ -43,7 +43,7 @@ injects exactly those 3 vars). Forking a second exporter is explicitly rejected
 Make smackerel **instrumentation-complete and flip-ready** for the shared
 observability stack by closing ONLY the genuine gaps, reusing the existing
 exporter + `/metrics`, and adopting the knb canonical contract — without
-forking a `done` subsystem, without any live evo-x2 mutation, and without
+forking a `done` subsystem, without any live <deploy-host> mutation, and without
 breaking bundled/dev/test startup (the contract is inert unless `OTEL_ENABLED=true`).
 
 ## Requirements
@@ -88,9 +88,9 @@ knb scope-03 Gherkin:
 
 ## Out of scope / Deferred
 
-- **Live verification on evo-x2** (SCOPE-02): a live `/metrics` 200 scraped by
+- **Live verification on <deploy-host>** (SCOPE-02): a live `/metrics` 200 scraped by
   the shared Prometheus + OTLP spans landing in the shared Tempo. These require
   an operator flip (`sharedServices.observability: shared` + `apply-shared-obs`
-  on evo-x2) and are explicitly **DEFERRED-to-flip** — this session performs NO
+  on <deploy-host>) and are explicitly **DEFERRED-to-flip** — this session performs NO
   live host mutation.
 - **knb adapter changes**: none required (already injects the 3 vars; option (a)).

@@ -72,7 +72,7 @@ func TestNtfyRuntimeRejectsInvalidEnabledConfigWithoutFallbacks(t *testing.T) {
 		},
 		{
 			name:    "missing endpoint identity",
-			raw:     `[{"enabled":true,"source_instance_id":"ntfy-broken-endpoint","source_form":"webhook","transport_mode":"webhook","topics":["home-lab-alerts"],"auth_mode":"none","retry_budget":3,"initial_delay_seconds":1,"max_delay_seconds":5,"keepalive_timeout_seconds":30,"lag_degraded_after_seconds":60,"lag_disconnected_after_seconds":300,"dead_letter_retry_budget":2,"max_payload_bytes":4096,"pressure_threshold_count":2,"display_name":"broken","endpoint_label":"missing","config_hash":"sha256:broken"}]`,
+			raw:     `[{"enabled":true,"source_instance_id":"ntfy-broken-endpoint","source_form":"webhook","transport_mode":"webhook","topics":["self-hosted-alerts"],"auth_mode":"none","retry_budget":3,"initial_delay_seconds":1,"max_delay_seconds":5,"keepalive_timeout_seconds":30,"lag_degraded_after_seconds":60,"lag_disconnected_after_seconds":300,"dead_letter_retry_budget":2,"max_payload_bytes":4096,"pressure_threshold_count":2,"display_name":"broken","endpoint_label":"missing","config_hash":"sha256:broken"}]`,
 			wantErr: "endpoint",
 		},
 		{
@@ -82,7 +82,7 @@ func TestNtfyRuntimeRejectsInvalidEnabledConfigWithoutFallbacks(t *testing.T) {
 		},
 		{
 			name:    "credential backed source without secret references",
-			raw:     `[{"enabled":true,"source_instance_id":"ntfy-broken-secret-ref","source_form":"webhook","transport_mode":"webhook","endpoint_url":"http://smackerel-core:8080/api/notifications/sources/ntfy-broken-secret-ref/ntfy/webhook","endpoint_ref_name":"NTFY_BROKEN_ENDPOINT_URL","topics":["home-lab-alerts"],"auth_mode":"bearer_token","secret_ref_names":[],"retry_budget":3,"initial_delay_seconds":1,"max_delay_seconds":5,"keepalive_timeout_seconds":30,"lag_degraded_after_seconds":60,"lag_disconnected_after_seconds":300,"dead_letter_retry_budget":2,"max_payload_bytes":4096,"pressure_threshold_count":2,"display_name":"broken","endpoint_label":"missing","config_hash":"sha256:broken"}]`,
+			raw:     `[{"enabled":true,"source_instance_id":"ntfy-broken-secret-ref","source_form":"webhook","transport_mode":"webhook","endpoint_url":"http://smackerel-core:8080/api/notifications/sources/ntfy-broken-secret-ref/ntfy/webhook","endpoint_ref_name":"NTFY_BROKEN_ENDPOINT_URL","topics":["self-hosted-alerts"],"auth_mode":"bearer_token","secret_ref_names":[],"retry_budget":3,"initial_delay_seconds":1,"max_delay_seconds":5,"keepalive_timeout_seconds":30,"lag_degraded_after_seconds":60,"lag_disconnected_after_seconds":300,"dead_letter_retry_budget":2,"max_payload_bytes":4096,"pressure_threshold_count":2,"display_name":"broken","endpoint_label":"missing","config_hash":"sha256:broken"}]`,
 			wantErr: "secret reference",
 		},
 	}
@@ -103,23 +103,23 @@ func TestNtfyRuntimeRejectsInvalidEnabledConfigWithoutFallbacks(t *testing.T) {
 func testConfig() Config {
 	return Config{
 		Enabled:          true,
-		SourceInstanceID: "ntfy-home-lab-alerts",
+		SourceInstanceID: "ntfy-self-hosted-alerts",
 		SourceForm:       notification.SourceFormStream,
 		TransportMode:    TransportModeStream,
 		EndpointURL:      "https://ntfy.invalid",
-		EndpointRefName:  "NTFY_HOME_LAB_ENDPOINT_URL",
-		Topics:           []string{"home-lab-alerts"},
-		Auth:             AuthConfig{Mode: AuthModeBearerToken, SecretRefNames: []string{"NTFY_HOME_LAB_TOKEN"}},
+		EndpointRefName:  "NTFY_SELF_HOSTED_ENDPOINT_URL",
+		Topics:           []string{"self-hosted-alerts"},
+		Auth:             AuthConfig{Mode: AuthModeBearerToken, SecretRefNames: []string{"NTFY_SELF_HOSTED_TOKEN"}},
 		Mapping: MappingConfig{
 			DefaultDomain: "ops",
-			TopicSubjects: map[string]string{"home-lab-alerts": "home-lab"},
+			TopicSubjects: map[string]string{"self-hosted-alerts": "self-hosted"},
 			TagServices:   map[string]string{"disk": "storage"},
 			TagIntents:    map[string]string{"urgent": "investigate"},
 		},
 		Reconnect:        ReconnectConfig{RetryBudget: 3, InitialDelaySeconds: 1, MaxDelaySeconds: 5, KeepaliveTimeoutSeconds: 30},
 		Lag:              LagConfig{DegradedAfterSeconds: 60, DisconnectedAfterSeconds: 300},
 		DeadLetter:       DeadLetterConfig{RetryBudget: 2, MaxPayloadBytes: 4096, PressureThresholdCount: 2},
-		RedactedMetadata: map[string]string{"display_name": "ntfy home lab alerts", "endpoint_label": "operator-managed ntfy endpoint"},
+		RedactedMetadata: map[string]string{"display_name": "ntfy self-hosted environment alerts", "endpoint_label": "operator-managed ntfy endpoint"},
 		ConfigHash:       "sha256:test-config",
 	}
 }

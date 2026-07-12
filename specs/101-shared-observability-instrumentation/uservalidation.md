@@ -33,13 +33,13 @@ cd /Users/pkirsanov/Projects/smackerel
 Expect: all observability + labels tests PASS; the 3 vars present in the env;
 `go vet` "All checks passed!".
 
-## What is DEFERRED (SCOPE-02 — needs an operator flip on evo-x2)
+## What is DEFERRED (SCOPE-02 — needs an operator flip on <deploy-host>)
 
 The live proof cannot be run without live host mutation, which the acceptance
 constraints forbid. To complete SCOPE-02, the operator (out of this session):
 
 1. Sets smackerel `sharedServices.observability: shared` in the knb adapter
-   params and runs `apply-shared-obs` on evo-x2 (this also injects the real OTLP
+   params and runs `apply-shared-obs` on <deploy-host> (this also injects the real OTLP
    endpoints + sets the shared posture).
 2. Confirms the shared Prometheus discovers `smackerel-core` by
    `com.bubbles.product` and `GET /metrics` returns 200 with the
@@ -52,7 +52,7 @@ Until then, the SCOPE-02 DoD items remain unchecked with their precise reason
 ## Verdict
 
 smackerel is **instrumentation-complete and flip-ready pending live
-verification**. No live evo-x2 mutation was performed.
+verification**. No live <deploy-host> mutation was performed.
 
 ## Checklist
 
@@ -62,4 +62,4 @@ verification**. No live evo-x2 mutation was performed.
 - [x] `com.bubbles.product` + `com.bubbles.service` labels on all smackerel containers (dev 9/9, deploy 7/7; contract test PASS).
 - [x] Existing exporter + `/metrics` reused, NOT forked (knb FINDING-014-03-1).
 - [x] gofmt clean · `go vet` clean · `config generate` exit 0 · PII scan 0 hits.
-- [ ] **SCOPE-02 live verification on evo-x2 — DEFERRED-to-flip** (operator `apply-shared-obs`; no live host mutation this session).
+- [ ] **SCOPE-02 live verification on <deploy-host> — DEFERRED-to-flip** (operator `apply-shared-obs`; no live host mutation this session).

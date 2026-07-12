@@ -15,7 +15,7 @@
  *
  * Note: the disposable e2e-ui stack has no CalDAV server wired, so the recommend
  * run records events_written=0 (calendar delivery requires operator CalDAV
- * credentials on the home-lab ops node — documented in report.md). The admin
+ * credentials on the self-hosted ops node — documented in report.md). The admin
  * trigger, the manual-trigger wiring, the run logging, and the events_written
  * column are all real and asserted here.
  */

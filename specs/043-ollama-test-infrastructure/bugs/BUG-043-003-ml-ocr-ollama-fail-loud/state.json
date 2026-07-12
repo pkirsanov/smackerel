@@ -6,7 +6,7 @@
   "featureName": "BUG-043-003: ML OCR fallback reads OLLAMA_URL with silent default, bypassing the spec 043 ENABLE_OLLAMA SST gate",
   "workflowMode": "test-to-doc",
   "parentWorkflow": {
-    "mode": "home-lab-readiness-rescan-2026-05-14",
+    "mode": "self-hosted-readiness-rescan-2026-05-14",
     "trigger": "system-review-finding",
     "executionModel": "direct-per-finding-dispatch"
   },
@@ -32,7 +32,7 @@
         "agent": "bubbles.devops",
         "timestamp": "2026-05-14T00:20:00Z",
         "outcome": "completed_owned",
-        "evidence": "Searched ml/app/ for `os.getenv` / `os.environ.get` with positional default; found one violation at ml/app/ocr.py line 235 (`os.environ.get(\"OLLAMA_URL\", \"\")`). Cross-referenced .github/instructions/smackerel-no-defaults.instructions.md Gate G028 wording: `os.getenv(\"KEY\", \"default\")` is explicitly banned in Python. Cross-referenced specs/043-ollama-test-infrastructure/spec.md line 331 + design.md lines 10/91/132/145/166/337/596 for the documented `ENABLE_OLLAMA` SST gate; confirmed the runtime gate at ml/app/ocr.py:235 was reading the wrong env var (OLLAMA_URL) with the wrong policy (silent default) instead of reading ENABLE_OLLAMA fail-loud. Direct HL-RESCAN-006 finding from the home-lab readiness re-scan against c586f912."
+        "evidence": "Searched ml/app/ for `os.getenv` / `os.environ.get` with positional default; found one violation at ml/app/ocr.py line 235 (`os.environ.get(\"OLLAMA_URL\", \"\")`). Cross-referenced .github/instructions/smackerel-no-defaults.instructions.md Gate G028 wording: `os.getenv(\"KEY\", \"default\")` is explicitly banned in Python. Cross-referenced specs/043-ollama-test-infrastructure/spec.md line 331 + design.md lines 10/91/132/145/166/337/596 for the documented `ENABLE_OLLAMA` SST gate; confirmed the runtime gate at ml/app/ocr.py:235 was reading the wrong env var (OLLAMA_URL) with the wrong policy (silent default) instead of reading ENABLE_OLLAMA fail-loud. Direct HL-RESCAN-006 finding from the self-hosted readiness re-scan against c586f912."
       },
       {
         "phase": "implement",
@@ -111,7 +111,7 @@
     "auditorAgent": "bubbles.devops",
     "auditedAt": "2026-05-14T00:31:00Z",
     "auditVerdict": "SHIP_IT",
-    "auditNote": "Home-lab readiness re-scan (system review session 2026-05-14, against HEAD c586f912) finding HL-RESCAN-006 (P2). The ML OCR fallback at ml/app/ocr.py line 235 (pre-fix) used `os.environ.get(\"OLLAMA_URL\", \"\")` — a silent positional default explicitly forbidden by .github/instructions/smackerel-no-defaults.instructions.md Gate G028 (`os.getenv(\"KEY\", \"default\")` is banned in Python). The defensive default `\"\"` silently swallowed a missing OLLAMA_URL by skipping the fallback, bypassing the spec 043 documented contract that ENABLE_OLLAMA (per-env SST flag) is the gate for the Ollama fallback. Fix replaces the silent default with a fail-loud read of ENABLE_OLLAMA (`os.environ[\"ENABLE_OLLAMA\"]`, raises KeyError when missing), strictly validates the value against canonical truthy/falsy tokens (raises RuntimeError naming Gate G028 for any other token), and lets the existing fail-loud read of OLLAMA_URL inside extract_text_ollama (line 91) own that variable. New TestEnableOllamaFailLoudGating class in ml/tests/test_ocr.py with 5 test methods covers truthy / falsy / unset / invalid / lazy-gating; 3 of 5 are adversarial. RED→GREEN proven via temporary revert of lines 244–256 to pre-fix form: exactly THREE new sub-tests FAIL with explicit error messages, every OTHER test PASSES unchanged. Restoration via replace_string_in_file returns the suite to all-PASS GREEN (445 passed in 12.79s). Two pre-existing tests in ml/tests/test_keep.py (test_ollama_fallback, test_both_ocr_fail_returns_ok) received minimal patch.dict(os.environ, ...) updates to declare ENABLE_OLLAMA explicitly; their assertions and intent preserved. Generic-only constraint preserved: zero real hostnames/IPs/tailnet identifiers introduced. Three-file code change: only ml/app/ocr.py (+24/-2), ml/tests/test_ocr.py (+150 new class), ml/tests/test_keep.py (+/- minimal updates). Bug-packet artifacts contained in specs/043-ollama-test-infrastructure/bugs/BUG-043-003-ml-ocr-ollama-fail-loud/. Foreign-owned spec 043 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules. Promotion decision: SHIP_IT.",
+    "auditNote": "self-hosted readiness re-scan (system review session 2026-05-14, against HEAD c586f912) finding HL-RESCAN-006 (P2). The ML OCR fallback at ml/app/ocr.py line 235 (pre-fix) used `os.environ.get(\"OLLAMA_URL\", \"\")` — a silent positional default explicitly forbidden by .github/instructions/smackerel-no-defaults.instructions.md Gate G028 (`os.getenv(\"KEY\", \"default\")` is banned in Python). The defensive default `\"\"` silently swallowed a missing OLLAMA_URL by skipping the fallback, bypassing the spec 043 documented contract that ENABLE_OLLAMA (per-env SST flag) is the gate for the Ollama fallback. Fix replaces the silent default with a fail-loud read of ENABLE_OLLAMA (`os.environ[\"ENABLE_OLLAMA\"]`, raises KeyError when missing), strictly validates the value against canonical truthy/falsy tokens (raises RuntimeError naming Gate G028 for any other token), and lets the existing fail-loud read of OLLAMA_URL inside extract_text_ollama (line 91) own that variable. New TestEnableOllamaFailLoudGating class in ml/tests/test_ocr.py with 5 test methods covers truthy / falsy / unset / invalid / lazy-gating; 3 of 5 are adversarial. RED→GREEN proven via temporary revert of lines 244–256 to pre-fix form: exactly THREE new sub-tests FAIL with explicit error messages, every OTHER test PASSES unchanged. Restoration via replace_string_in_file returns the suite to all-PASS GREEN (445 passed in 12.79s). Two pre-existing tests in ml/tests/test_keep.py (test_ollama_fallback, test_both_ocr_fail_returns_ok) received minimal patch.dict(os.environ, ...) updates to declare ENABLE_OLLAMA explicitly; their assertions and intent preserved. Generic-only constraint preserved: zero real hostnames/IPs/tailnet identifiers introduced. Three-file code change: only ml/app/ocr.py (+24/-2), ml/tests/test_ocr.py (+150 new class), ml/tests/test_keep.py (+/- minimal updates). Bug-packet artifacts contained in specs/043-ollama-test-infrastructure/bugs/BUG-043-003-ml-ocr-ollama-fail-loud/. Foreign-owned spec 043 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules. Promotion decision: SHIP_IT.",
     "scopeProgress": [
       {
         "scope": 1,
@@ -134,7 +134,7 @@
   "policySnapshot": {
     "workflowMode": {
       "mode": "test-to-doc",
-      "source": "home-lab-readiness-rescan-2026-05-14"
+      "source": "self-hosted-readiness-rescan-2026-05-14"
     },
     "grill": {
       "mode": "off",

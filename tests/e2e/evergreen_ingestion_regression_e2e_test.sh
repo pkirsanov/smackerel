@@ -8,7 +8,7 @@
 #
 # ENV-BLOCKED on cpu-tier: full-stack bring-up + the LLM scenario judge are
 # accel-tier-gated AND the ingest call-site wiring is PKT-095-B. Run on
-# accel-tier home-lab / CI per the spec 095 environment-blocked DoD allowance
+# accel-tier self-hosted / CI per the spec 095 environment-blocked DoD allowance
 # (finding F-095-E2E-LIVE). Statically valid (bash -n).
 set -euo pipefail
 

@@ -51,7 +51,7 @@ This scope adds one test-only Go file and two documentation rows. The boundary i
 | `internal/docfreshness/doc_freshness_test.go` (new test-only file) | Any runtime `.go` (non-test), `.py`, `.sql`, `.proto`, `.toml` |
 | `docs/Development.md` (Go Packages table insertion only) | `config/`, `docker-compose*.yml`, `Dockerfile`, `ml/Dockerfile` |
 | Bug-packet artifacts under `specs/032-documentation-freshness/bugs/BUG-003-development-doc-inventory-drift/` | `.github/bubbles/**`, `.github/workflows/**`, `.specify/memory/` |
-| Parent `specs/032-documentation-freshness/report.md` (evidence breadcrumb only) | `scripts/commands/build-home-lab.sh` (in-progress external work) and all other `scripts/` source |
+| Parent `specs/032-documentation-freshness/report.md` (evidence breadcrumb only) | `scripts/commands/build-self-hosted.sh` (in-progress external work) and all other `scripts/` source |
 | | Parent `spec.md` / `design.md` / `scopes.md` (no planning-truth edit) |
 
 ### Consumer Impact Sweep
@@ -88,6 +88,6 @@ This scope adds one test-only Go file and two documentation rows. The boundary i
 - [x] Consumer impact sweep complete and zero stale first-party references remain.
    → Evidence: see Consumer Impact Sweep above; the only consumers are the Go unit suite (passing) and `docs/Development.md` readers (additive rows). `git status --short -- '*.go'` lists only `internal/docfreshness/doc_freshness_test.go`.
 - [x] Change boundary respected: only the allowed surfaces were modified; excluded surfaces are untouched.
-   → Evidence: `git status --short` shows the only non-framework working-tree changes are `internal/docfreshness/doc_freshness_test.go` (new), `docs/Development.md`, the parent `report.md` breadcrumb, and this bug packet. No runtime `.go`/`.py`/`.sql`, no `config/`, no `.github/bubbles/**`, no `build-home-lab.sh`.
+   → Evidence: `git status --short` shows the only non-framework working-tree changes are `internal/docfreshness/doc_freshness_test.go` (new), `docs/Development.md`, the parent `report.md` breadcrumb, and this bug packet. No runtime `.go`/`.py`/`.sql`, no `config/`, no `.github/bubbles/**`, no `build-self-hosted.sh`.
 - [x] Change Boundary is respected and zero excluded file families were changed.
    → Evidence: same as prior line; `git status --short -- '*.py' '*.sql' config/ docker-compose.yml docker-compose.prod.yml Dockerfile ml/Dockerfile` returns zero bug-related matches.

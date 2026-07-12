@@ -192,7 +192,7 @@ Scenario: SCN-099-A05 — Heavy ops invoke the guard; the contract test proves w
 
 Document the new `pre-flight` command, the automatic heavy-op gating, the
 `SMACKEREL_PREFLIGHT_OVERRIDE` escape hatch, the SST thresholds, and the
-local-only scope boundary (NOT a home-lab apply gate).
+local-only scope boundary (NOT a self-hosted apply gate).
 
 ### Gherkin Scenarios
 
@@ -202,7 +202,7 @@ Scenario: SCN-099-A07 — Docs describe the resource guard and its boundary
   When they look up resource pre-flight
   Then the docs state which heavy ops are gated and which are not
   And they state the SST thresholds (runtime.preflight.*) and the override env var
-  And they state the guard protects local CLI ops only, not the home-lab apply
+  And they state the guard protects local CLI ops only, not the self-hosted apply
 ```
 
 ### Implementation plan

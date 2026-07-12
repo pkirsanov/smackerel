@@ -41,7 +41,7 @@ envelope; the planning packet remains lint-clean and `Not Started`.
 | G-051-IMPL-02 | FR-051-002 — require `auth.signing.issuer` | No `issuer` field exists in `AuthConfig` or in the env-var contract. Spec 044 routes by `kid`, not `iss`. | Planning reconciliation — design must decide whether to add `issuer` or drop the requirement. |
 | G-051-IMPL-03 | FR-051-003 — require `auth.at_rest_hashing_key` | Validated in production at `internal/config/config.go:1061` and at `internal/auth/startup.go:55-58`. Adversarial test exists at `internal/config/validate_test.go:1206`. | Already implemented under spec 044. Scope 1 DoD can credit this with an evidence link once reconciled. |
 | G-051-IMPL-04 | FR-051-004 — require `auth.bootstrap_token` | Loaded at `internal/config/config.go:981`, but production-mode `loadAuthConfig` does NOT add it to `authErrors`. Spec 044 treats the value as required at bootstrap-time, not at config-load time. | Planning reconciliation — design must align contract with spec 044's runtime-bootstrap gate. |
-| G-051-IMPL-05 | FR-051-005 — reject default Postgres password for deployment | `scripts/commands/config.sh:359` reads `infrastructure.postgres.password` via `required_value`; no allow-list / deny-list rejects the literal local-dev password for production / home-lab bundles. The Go core `Validate()` dev-default check (`config.go:1158-1170`) covers `SMACKEREL_AUTH_TOKEN` only. | Specialist work — needs design decision on where the check lives (config generator vs Go core vs adapter preconditions) plus implementation + adversarial test. |
+| G-051-IMPL-05 | FR-051-005 — reject default Postgres password for deployment | `scripts/commands/config.sh:359` reads `infrastructure.postgres.password` via `required_value`; no allow-list / deny-list rejects the literal local-dev password for production / self-hosted bundles. The Go core `Validate()` dev-default check (`config.go:1158-1170`) covers `SMACKEREL_AUTH_TOKEN` only. | Specialist work — needs design decision on where the check lives (config generator vs Go core vs adapter preconditions) plus implementation + adversarial test. |
 | G-051-IMPL-06 | FR-051-006 — docs name required keys without values | `docs/Deployment.md` lines 268-281 list `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`, `AUTH_SIGNING_ACTIVE_KEY_ID`, `AUTH_AT_REST_HASHING_KEY`, `AUTH_BOOTSTRAP_TOKEN` against current spec 044 names. No automated docs-static check enforces the list, and the spec/design language still says `hmac_key` / `issuer`. | Planning reconciliation + specialist work — align spec/design language with spec 044, then add docs-static check. |
 
 ### Test gaps vs scopes.md test plan
@@ -187,12 +187,12 @@ $ go test ./internal/config/ -run 'TestLoadAuthConfig_BootstrapToken|TestValidat
 --- PASS: TestDocs_NameAllCanonicalAuthKeys (0.00s)
 --- PASS: TestDocs_DoNotMentionForbiddenAliases (0.00s)
 --- PASS: TestDocs_CanaryReadsBaseline (0.00s)
---- PASS: TestSSTLoader_RejectsDevPostgresPassword_HomeLab (2.66s)
+--- PASS: TestSSTLoader_RejectsDevPostgresPassword_SelfHosted (2.66s)
 PASS
 
 $ bash scripts/commands/config_secret_rejection_test.sh 2>&1 | tail -10
---- Sub-test 1: SST loader refuses dev-default password for home-lab ---
-PASS: SST loader refused TARGET_ENV=home-lab with exit code 1
+--- Sub-test 1: SST loader refuses dev-default password for self-hosted ---
+PASS: SST loader refused TARGET_ENV=self-hosted with exit code 1
 PASS: SST loader stderr names infrastructure.postgres.password
 PASS: SST loader stderr references spec 051
 PASS: SST loader stderr mentions 'smackerel' only in non-credential context (project name OK)
@@ -247,9 +247,9 @@ Per-file change summary:
   test under `go test`.
 - **scripts/commands/config.sh**: new `case` block immediately after
   `POSTGRES_PASSWORD` resolution rejecting dev-default values for
-  `TARGET_ENV=home-lab` (Scope 2, FR-051-005 SST layer).
+  `TARGET_ENV=self-hosted` (Scope 2, FR-051-005 SST layer).
 - **scripts/commands/config_secret_rejection_test.sh** (NEW): shell test
-  invoking the SST loader for both home-lab (assertion) and dev (canary).
+  invoking the SST loader for both self-hosted (assertion) and dev (canary).
 - **config/smackerel.yaml**: comment block above `auth.bootstrap_token`
   updated to reflect always-required-in-production semantics.
 - **docs/Deployment.md**: new `### Spec 051 Defense-In-Depth Contract`
@@ -282,7 +282,7 @@ Per-scenario validation:
   `TestLoadAuthConfig_BootstrapTokenAcceptedInDev`.
 - SCN-051-S02 covered by 4 PASSes: `TestValidate_RejectsDevDBPassword_Production`,
   `TestValidate_AcceptsDevDBPasswordInDev`,
-  `TestSSTLoader_RejectsDevPostgresPassword_HomeLab`,
+  `TestSSTLoader_RejectsDevPostgresPassword_SelfHosted`,
   `bash scripts/commands/config_secret_rejection_test.sh` (6/6 sub-test
   assertions PASS).
 - SCN-051-S03 covered by 7 PASSes: `TestErrorPaths_NeverEchoSignatureKey`,
@@ -342,7 +342,7 @@ were touched.
 
 **Phase Agent:** bubbles.chaos (parent-expanded)
 **Executed:** YES
-**Command:** `go test ./internal/config/ -run 'TestErrorPaths_' -v` and `TARGET_ENV=home-lab POSTGRES_PASSWORD=changeme bash scripts/commands/config.sh`
+**Command:** `go test ./internal/config/ -run 'TestErrorPaths_' -v` and `TARGET_ENV=self-hosted POSTGRES_PASSWORD=changeme bash scripts/commands/config.sh`
 
 `bubbles.chaos` (parent-expanded) ran adversarial probes against each
 production-mode gate by deleting / blanking required env vars one at a time
@@ -368,14 +368,14 @@ $ go test ./internal/config/ -run 'TestErrorPaths_' -v 2>&1 | grep -E '^(=== RUN
 ```
 
 For SCN-051-S02 the chaos probe is the negative branch of T-051-006: if the
-SST loader EVER allowed a dev-default password through for `TARGET_ENV=home-lab`,
-the assertion `PASS: SST loader refused TARGET_ENV=home-lab with exit code 1`
+SST loader EVER allowed a dev-default password through for `TARGET_ENV=self-hosted`,
+the assertion `PASS: SST loader refused TARGET_ENV=self-hosted with exit code 1`
 would fail. Re-running confirms the gate holds:
 
 ```text
-$ TARGET_ENV=home-lab POSTGRES_PASSWORD=changeme bash scripts/commands/config.sh 2>&1 | tail -3
+$ TARGET_ENV=self-hosted POSTGRES_PASSWORD=changeme bash scripts/commands/config.sh 2>&1 | tail -3
 ERROR: infrastructure.postgres.password is set to a known dev-default value (spec 051 FR-051-005)
-       Generate a strong random Postgres password before deploying with TARGET_ENV=home-lab
+       Generate a strong random Postgres password before deploying with TARGET_ENV=self-hosted
        (e.g. openssl rand -base64 32). Refusing to generate the env file.
 ```
 
@@ -409,7 +409,7 @@ touched, and no phase was fabricated.
   startup log-redaction (the `LEAKCANARY-*` sentinel suite). Evidence anchor:
   the `security` phase claim and the `### Chaos Evidence` adversarial suite
   above. Additional P0 hardening `BUG-051-001` (`SEC-HL-001`, commit
-  `8fe34750`, status `done`) closed the home-lab runtime auth-bypass with a
+  `8fe34750`, status `done`) closed the self-hosted runtime auth-bypass with a
   Red→Green regression. This hardening was originally filed under the
   `security` / `chaos` phases and the `BUG-051-001` packet rather than a
   distinct `harden` phase claim.

@@ -12,14 +12,14 @@ import (
 func TestNtfyMessageAcceptedThroughSourceSinkCreatesRawAndNormalizedRecords(t *testing.T) {
 	ntfyStore, notificationStore, pool := ntfyIntegrationStores(t)
 	prefix := ntfyIntegrationPrefix()
-	cfg := ntfyIntegrationConfig(prefix, notification.SourceFormWebhook, []string{"home-lab-alerts"})
+	cfg := ntfyIntegrationConfig(prefix, notification.SourceFormWebhook, []string{"self-hosted-alerts"})
 	seedNtfyIntegrationSource(t, notificationStore, cfg)
 	service := ntfyIntegrationService(t, notificationStore)
 	adapter, err := NewAdapter(cfg, WithStore(ntfyStore))
 	if err != nil {
 		t.Fatalf("new adapter: %v", err)
 	}
-	event, err := ParseEvent([]byte(`{"id":"evt-int-ingest","event":"message","topic":"home-lab-alerts","title":"Integration raw","message":"normalized through core","priority":4,"tags":["disk"]}`), cfg.DeadLetter.MaxPayloadBytes)
+	event, err := ParseEvent([]byte(`{"id":"evt-int-ingest","event":"message","topic":"self-hosted-alerts","title":"Integration raw","message":"normalized through core","priority":4,"tags":["disk"]}`), cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse event: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestNtfyMessageAcceptedThroughSourceSinkCreatesRawAndNormalizedRecords(t *t
 	if len(states) != 1 || states[0].SubscriptionState != SubscriptionConnected || states[0].LastNtfyEventID != event.ID {
 		t.Fatalf("connected topic state not persisted: %+v", states)
 	}
-	lifecycle, err := ParseEvent([]byte(`{"event":"keepalive","topic":"home-lab-alerts"}`), cfg.DeadLetter.MaxPayloadBytes)
+	lifecycle, err := ParseEvent([]byte(`{"event":"keepalive","topic":"self-hosted-alerts"}`), cfg.DeadLetter.MaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("parse lifecycle event: %v", err)
 	}

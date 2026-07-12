@@ -9,7 +9,7 @@ apiVersion: bubbles.deploy/v1
 kind: DeployTargetParams
 
 metadata:
-  # Stable kebab-case identifier for THIS target. Examples: home-lab, aws-prod,
+  # Stable kebab-case identifier for THIS target. Examples: self-hosted, aws-prod,
   # fly-staging, local-dev. Must match the directory name.
   name: <target-name>
   # The project this adapter belongs to (matches the project's CLI / repo name).

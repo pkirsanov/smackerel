@@ -8,7 +8,7 @@
 // clients — R2); web PUT accepts the same selection Telegram accepts through the
 // SAME validator + store; and a sticky hosted selection persists with the 089
 // per-request > sticky > default precedence. No request interception — unit. The
-// live cross-surface e2e-api legs are the deferred home-lab dispatch.
+// live cross-surface e2e-api legs are the deferred self-hosted dispatch.
 package api
 
 import (

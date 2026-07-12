@@ -2,7 +2,7 @@
 
 ## Summary
 
-Closes home-lab readiness re-scan finding **HL-RESCAN-012** (P3): the dev compose file `docker-compose.yml` had **14 forbidden `${VAR:-default}` silent-fallback substitutions** in violation of Gate G028 (NO-DEFAULTS / fail-loud SST policy). The pre-fix state masked real misconfiguration in any unsanctioned `docker compose -f docker-compose.yml up` invocation that did not first run `./smackerel.sh config generate` — the fallback values silently substituted `dev / unknown / unknown` for `SMACKEREL_VERSION / SMACKEREL_COMMIT / SMACKEREL_BUILD_TIME`, silently fell back to `config/generated/dev.env` for `SMACKEREL_ENV_FILE`, and silently treated unset `SMACKEREL_CORE_IMAGE / SMACKEREL_ML_IMAGE` as "build from source".
+Closes self-hosted readiness re-scan finding **HL-RESCAN-012** (P3): the dev compose file `docker-compose.yml` had **14 forbidden `${VAR:-default}` silent-fallback substitutions** in violation of Gate G028 (NO-DEFAULTS / fail-loud SST policy). The pre-fix state masked real misconfiguration in any unsanctioned `docker compose -f docker-compose.yml up` invocation that did not first run `./smackerel.sh config generate` — the fallback values silently substituted `dev / unknown / unknown` for `SMACKEREL_VERSION / SMACKEREL_COMMIT / SMACKEREL_BUILD_TIME`, silently fell back to `config/generated/dev.env` for `SMACKEREL_ENV_FILE`, and silently treated unset `SMACKEREL_CORE_IMAGE / SMACKEREL_ML_IMAGE` as "build from source".
 
 The fix has three coordinated changes that close 10 of 14 violations and explicitly defer the remaining 4:
 
@@ -12,7 +12,7 @@ The fix has three coordinated changes that close 10 of 14 violations and explici
 
 **Workflow Mode:** test-to-doc — the fix bundles the SST emission, compose-form conversion, and test addition into a single packet. No production runtime Go/Python code changes; no `deploy/compose.deploy.yml` change; no foreign-owned spec content edits.
 
-**Parent re-scan:** home-lab readiness re-scan 2026-05-14, finding HL-RESCAN-012. Sequential per-finding bug-packet workflow under spec 029 (DevOps Pipeline & Image Governance — owns the `./smackerel.sh up` workflow + dev `docker-compose.yml` + `./smackerel.sh config generate` SST chain).
+**Parent re-scan:** self-hosted readiness re-scan 2026-05-14, finding HL-RESCAN-012. Sequential per-finding bug-packet workflow under spec 029 (DevOps Pipeline & Image Governance — owns the `./smackerel.sh up` workflow + dev `docker-compose.yml` + `./smackerel.sh config generate` SST chain).
 
 ## Completion Statement
 
@@ -344,7 +344,7 @@ The dev-compose contract surface is a **static-file invariant**: there is no dae
 - **No defaults regression:** Gate G028 NO-DEFAULTS / fail-loud SST policy is strengthened by this fix — the test now mechanically locks compliance against future drift on the dev compose file. 10 of 14 violations converted to fail-loud forms; the remaining 4 are explicitly allowlisted with inline justification + per-var allowlist gate in the lint test. The dev-compose Gate G028 surface now matches the prod-compose Gate G028 surface (both are locked by static-file lint tests).
 - **PII scan:** no real hostnames, no real IPs, no real Tailscale identifiers, no real Linux usernames in any of the seven packet artifacts (the evidence captures use `~/` for home paths per the repo policy). The only address strings are loopback / generic SST substitution forms.
 - **Bubbles.devops mode discipline:** all bug-local artifacts (this packet) authored; foreign-owned parent-spec files (`specs/029-devops-pipeline/spec.md`, `design.md`, `scopes.md`, `state.json`, `uservalidation.md`, `report.md`) NOT edited.
-- **Single-bug-scope discipline:** the change addresses HL-RESCAN-012 (P3) only. The remaining home-lab readiness re-scan findings (HL-RESCAN-011 — CI workflow; HL-RESCAN-013 — ml/app/auth.py module-import-time fail-loud; HL-RESCAN-014 — cmd/core/helpers.go dead helper functions, closed by [`specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/`](../../../020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/)) are tracked under their own per-finding bug-packets in the parent home-lab-readiness-rescan-2026-05-14 sweep.
+- **Single-bug-scope discipline:** the change addresses HL-RESCAN-012 (P3) only. The remaining self-hosted readiness re-scan findings (HL-RESCAN-011 — CI workflow; HL-RESCAN-013 — ml/app/auth.py module-import-time fail-loud; HL-RESCAN-014 — cmd/core/helpers.go dead helper functions, closed by [`specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/`](../../../020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/)) are tracked under their own per-finding bug-packets in the parent self-hosted-readiness-rescan-2026-05-14 sweep.
 
 ## Verdict (DevOps)
 

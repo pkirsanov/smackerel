@@ -6,7 +6,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 
 **Status:** Done
 **Depends On:** None
-**Owner sequence:** `bubbles.code-review` (MVP/evo-x2 readiness sweep → finding F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL) → `bubbles.implement` (scenario-first regression test, RED; then the `context.WithoutCancel` fix + `context` import, GREEN) → `bubbles.test` (package regression + shared live-stack E2E) → validate-owned certification.
+**Owner sequence:** `bubbles.code-review` (MVP/<deploy-host> readiness sweep → finding F-069-CR-CAPTURE-ENDPOINT-CTX-CANCEL) → `bubbles.implement` (scenario-first regression test, RED; then the `context.WithoutCancel` fix + `context` import, GREEN) → `bubbles.test` (package regression + shared live-stack E2E) → validate-owned certification.
 **Surfaces:** `internal/api/capture.go` (durable `Process` call site + `context` import), `internal/api/capture_disconnect_test.go` (new regression).
 
 ### Use Cases (Gherkin)

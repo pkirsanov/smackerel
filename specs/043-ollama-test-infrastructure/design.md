@@ -95,7 +95,7 @@ and fails loudly (no `t.Skip`, no fallback driver) when Ollama is missing.
 - **D2.** Per-env `ollama_enabled` override. Add
   `environments.<env>.ollama_enabled` slot and have
   [`scripts/commands/config.sh`](../../scripts/commands/config.sh) line 366
-  resolve `ENABLE_OLLAMA` via `env_override_value`. `dev` and `home-lab` stay
+  resolve `ENABLE_OLLAMA` via `env_override_value`. `dev` and `self-hosted` stay
   `false`; `test` becomes `true`. Resolves OQ-1 + FR-OLLAMA-007.
 - **D3.** Runner shells out to Ollama HTTP `/api/pull` and `/api/tags` after
   the test stack health check, before the Go E2E `docker run`. Resolves OQ-2
@@ -163,17 +163,17 @@ This satisfies FR-OLLAMA-001 (auto-start on test profile), FR-OLLAMA-002
 SST-driven differentiation — single compose file, no parallel
 `docker-compose.test.yml`.
 
-### Home-lab compose (`smackerel-home-lab` project)
+### self-hosted compose (`smackerel-self-hosted` project)
 
 | Value                                   | Source                                                          |
 |-----------------------------------------|-----------------------------------------------------------------|
-| Compose project                         | `smackerel-home-lab` (smackerel.yaml line 666)                   |
+| Compose project                         | `smackerel-self-hosted` (smackerel.yaml line 666)                   |
 | Compose file                            | [`deploy/compose.deploy.yml`](../../deploy/compose.deploy.yml)   |
 | Ollama service profile gate             | `profiles: [ollama]` (unchanged by this spec)                    |
-| `ENABLE_OLLAMA` resolution              | After D2 → `environments.home-lab.ollama_enabled` (= `false`)    |
-| Effective behavior                      | Unchanged — operator opts in per home-lab deployment workflow    |
+| `ENABLE_OLLAMA` resolution              | After D2 → `environments.self-hosted.ollama_enabled` (= `false`)    |
+| Effective behavior                      | Unchanged — operator opts in per self-hosted deployment workflow    |
 
-Out of scope for this spec — Non-Goal "Production / home-lab Ollama".
+Out of scope for this spec — Non-Goal "Production / self-hosted Ollama".
 
 ## 2. Component Diagram (Test Stack)
 
@@ -271,7 +271,7 @@ invocations.
 | `infrastructure.ollama.test.request_num_predict` | int     | `256`                                            | Determinism + bounded latency (D4, NFR-OLLAMA-003). |
 | `environments.dev.ollama_enabled`                | bool    | `false`                                          | Per-env override (D2). Preserves dev's opt-in behavior (FR-OLLAMA-007). |
 | `environments.test.ollama_enabled`               | bool    | `true`                                           | Per-env override (D2). Auto-starts Ollama in test compose (FR-OLLAMA-001). |
-| `environments.home-lab.ollama_enabled`           | bool    | `false`                                          | Per-env override (D2). Preserves opt-in for home-lab. |
+| `environments.self-hosted.ollama_enabled`           | bool    | `false`                                          | Per-env override (D2). Preserves opt-in for self-hosted. |
 
 ### Existing SST keys reused (NO change)
 
@@ -291,7 +291,7 @@ invocations.
 | Line 558 (no change): `OLLAMA_HOST_PORT` from per-env                  | Reused as-is. |
 | Line 561 (no change): `OLLAMA_VOLUME_NAME` from per-env                | Reused as-is. |
 | **NEW** before line 794 in the `OUTPUT_FILE` heredoc                   | Resolve `OLLAMA_IMAGE`: when `$TARGET_ENV == test` → `infrastructure.ollama.test.image`; else → `infrastructure.ollama.image`. Emit `OLLAMA_IMAGE=<value>` line. |
-| **NEW** for env=test only                                              | Emit `OLLAMA_TEST_MODEL`, `OLLAMA_TEST_PULL_TIMEOUT_SECONDS`, `OLLAMA_TEST_REQUEST_TEMPERATURE`, `OLLAMA_TEST_REQUEST_TOP_P`, `OLLAMA_TEST_REQUEST_TOP_K`, `OLLAMA_TEST_REQUEST_SEED`, `OLLAMA_TEST_REQUEST_NUM_PREDICT`. (For dev/home-lab these keys are absent — they are test-only.) |
+| **NEW** for env=test only                                              | Emit `OLLAMA_TEST_MODEL`, `OLLAMA_TEST_PULL_TIMEOUT_SECONDS`, `OLLAMA_TEST_REQUEST_TEMPERATURE`, `OLLAMA_TEST_REQUEST_TOP_P`, `OLLAMA_TEST_REQUEST_TOP_K`, `OLLAMA_TEST_REQUEST_SEED`, `OLLAMA_TEST_REQUEST_NUM_PREDICT`. (For dev/self-hosted these keys are absent — they are test-only.) |
 
 ### Compose changes (`docker-compose.yml`)
 
@@ -557,7 +557,7 @@ Commands table has ample headroom.
 
 | Isolation contract                                        | Mechanism                                                                                            |
 |-----------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| Compose project distinct from dev/home-lab                | `environments.test.compose_project: smackerel-test` (existing).                                       |
+| Compose project distinct from dev/self-hosted                | `environments.test.compose_project: smackerel-test` (existing).                                       |
 | Container name carries `-test-` infix                     | Compose default `<project>-<service>` → `smackerel-test-ollama`.                                      |
 | Network namespace distinct                                 | Compose default `smackerel-test_default`.                                                              |
 | Host port distinct from dev                               | `47004` (test) vs. `42004` (dev) — both inside the project's 40k–47k Smackerel block.                 |
@@ -616,7 +616,7 @@ This spec is closed in three phases, each with its own scope:
   - Emit `OLLAMA_TEST_*` lines for env=test only.
 - Replace the `ollama/ollama:0.6` literal in `docker-compose.yml` with
   `${OLLAMA_IMAGE}`.
-- `./smackerel.sh config generate` regenerates dev/test/home-lab env files;
+- `./smackerel.sh config generate` regenerates dev/test/self-hosted env files;
   diff check confirms only the expected new keys appear.
 - `./smackerel.sh test unit` (Go + Python) passes — no source changes.
 - `./smackerel.sh up` (dev) still does NOT start Ollama (FR-OLLAMA-007 sanity

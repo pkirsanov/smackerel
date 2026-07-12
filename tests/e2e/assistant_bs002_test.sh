@@ -87,7 +87,7 @@ echo "--- seed: POST /api/capture with marker=$SEED_MARKER ---"
 # Use distinctive, unambiguous Tailscale content with the marker embedded as a
 # unique tag so the small model has an unmistakable citation target.
 SEED_PAYLOAD=$(cat <<JSON
-{"text": "Tailscale mesh VPN setup notes (${SEED_MARKER}): I installed Tailscale on the home-lab evo-x2 host last month for SSH access from anywhere. Tag: tailscale-setup-${SEED_MARKER}. Key settings: MagicDNS enabled, ACL allows SSH from my devices only. This is the only Tailscale artifact in my graph."}
+{"text": "Tailscale mesh VPN setup notes (${SEED_MARKER}): I installed Tailscale on the self-hosted <deploy-host> host last month for SSH access from anywhere. Tag: tailscale-setup-${SEED_MARKER}. Key settings: MagicDNS enabled, ACL allows SSH from my devices only. This is the only Tailscale artifact in my graph."}
 JSON
 )
 SEED_RESP=$(curl -s --max-time 120 \

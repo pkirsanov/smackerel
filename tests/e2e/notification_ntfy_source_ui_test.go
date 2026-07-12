@@ -16,7 +16,7 @@ import (
 func TestNtfyOperatorWorkflowSourceListDetailDLQReplayTroubleshooting(t *testing.T) {
 	cfg := loadE2EConfig(t)
 	waitForHealth(t, cfg, 120*time.Second)
-	validResp, err := apiPostRaw(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", []byte(`{"id":"evt-e2e-ntfy-ui","event":"message","topic":"home-lab-alerts","title":"UI ntfy","message":"operator workflow"}`))
+	validResp, err := apiPostRaw(cfg, "/api/notifications/sources/ntfy-local-webhook/ntfy/webhook", []byte(`{"id":"evt-e2e-ntfy-ui","event":"message","topic":"self-hosted-alerts","title":"UI ntfy","message":"operator workflow"}`))
 	if err != nil {
 		t.Fatalf("valid ntfy UI setup webhook failed: %v", err)
 	}

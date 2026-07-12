@@ -3,7 +3,7 @@
 > Items default to checked `[x]` (validated by the delivering agent via
 > automated unit + live-stack integration evidence — see report.md). The
 > operator unchecks an item to report it is not working as expected. Items
-> left unchecked `[ ]` require a real provider API key + the home-lab live
+> left unchecked `[ ]` require a real provider API key + the self-hosted live
 > dispatch and are pending operator validation (postponed: only an Anthropic
 > key is currently available).
 
@@ -29,7 +29,7 @@
 ### Boot / operability (post-implementation fix)
 - [x] A fresh / dev / test stack boots with all hosted slots disabled and no `LLM_PROVIDER_SECRET_MASTER_KEY` set (proven: integration `PASS: go-integration`, core Healthy). The master key becomes mandatory only once a db-mode slot is enabled.
 
-### Live home-lab proof (PENDING — operator postponed; needs real provider keys)
+### Live self-hosted proof (PENDING — operator postponed; needs real provider keys)
 - [ ] Live: the operator enters a real Anthropic API key via the web UI, tests it OK, enables `anthropic`, picks the model in Telegram `/model`, and `/ask` returns an answer served by Anthropic. (Postponed by operator; only the Anthropic key is available.)
 - [ ] Live: enabling/disabling a connection is reflected in the model catalog membership against a running core (`TestEnableDisable_CatalogMembershipFollows_Spec096`, deferred live leg).
 - [ ] Live: an over-budget paid `/ask` is refused before the provider call against a running core (`TestAsk_PaidModelExhaustedBudget_RefusedBeforeProviderCall_Spec096`, deferred live leg).

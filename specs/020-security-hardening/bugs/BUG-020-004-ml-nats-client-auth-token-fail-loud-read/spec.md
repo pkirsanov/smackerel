@@ -8,13 +8,13 @@
 - **Sister Packet:** [`BUG-020-002`](../BUG-020-002-ml-auth-token-module-import-fail-loud/) — the **primary** HL-RESCAN-013 close-out, closed at HEAD `0c67122e` (`bug(020-002): ML auth token fail-loud at module import`). That commit converted `ml/app/auth.py` line 11 from `os.environ.get("SMACKEREL_AUTH_TOKEN", "")` to a try/except KeyError → RuntimeError block keyed on `os.environ["SMACKEREL_AUTH_TOKEN"]`, and explicitly listed `ml/app/nats_client.py:180` as **out-of-scope / sequel packet** (see [`BUG-020-002/spec.md`](../BUG-020-002-ml-auth-token-module-import-fail-loud/spec.md) → "Out of Scope" → second bullet: *"`ml/app/nats_client.py` line 180 — runs INSIDE `connect()` which is invoked AFTER `_check_required_config()` validates the env, so the silent default there is functionally redundant. ... Scoped to a sequel packet to be filed once the parallel session merges."*). This bug packet (`BUG-020-004`) is that sequel packet.
 - **Workflow Mode:** bugfix-fastlane
 - **Status:** Fixed and validated (current-session evidence recorded in `report.md`)
-- **Discovered By:** 2026-05-15 home-lab readiness re-scan (finding `HL-RESCAN-013-secondary`)
+- **Discovered By:** 2026-05-15 self-hosted readiness re-scan (finding `HL-RESCAN-013-secondary`)
 
 ## Discovery Brief
 
-The 2026-05-14 home-lab readiness re-scan flagged `ml/app/auth.py:11` as `HL-RESCAN-013` (silent-default read of `SMACKEREL_AUTH_TOKEN` at module import, violating Gate G028). That finding was closed by [`BUG-020-002`](../BUG-020-002-ml-auth-token-module-import-fail-loud/) at HEAD `0c67122e` on 2026-05-14, which converted line 11 of `auth.py` to the canonical Python fail-loud pattern (`_AUTH_TOKEN = os.environ["SMACKEREL_AUTH_TOKEN"]` wrapped in try/except KeyError → RuntimeError).
+The 2026-05-14 self-hosted readiness re-scan flagged `ml/app/auth.py:11` as `HL-RESCAN-013` (silent-default read of `SMACKEREL_AUTH_TOKEN` at module import, violating Gate G028). That finding was closed by [`BUG-020-002`](../BUG-020-002-ml-auth-token-module-import-fail-loud/) at HEAD `0c67122e` on 2026-05-14, which converted line 11 of `auth.py` to the canonical Python fail-loud pattern (`_AUTH_TOKEN = os.environ["SMACKEREL_AUTH_TOKEN"]` wrapped in try/except KeyError → RuntimeError).
 
-The 2026-05-15 home-lab readiness re-scan (run after the BUG-020-002 close-out) re-audited the ML sidecar surface for any remaining `os.environ.get("SMACKEREL_AUTH_TOKEN", ...)` call sites and found one secondary site that the primary close-out's "Out of Scope" section had explicitly deferred: `ml/app/nats_client.py:184` (line number against HEAD `ad512fc6`). This bug packet (`BUG-020-004`) is filed against that secondary site as the sister packet to BUG-020-002, following the same `parentWorkflow.mode = home-lab-readiness-rescan-external-2026-05-15` direct-per-finding-dispatch model established by [`BUG-042-006`](../../../042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/) at HEAD `eec1437c`.
+The 2026-05-15 self-hosted readiness re-scan (run after the BUG-020-002 close-out) re-audited the ML sidecar surface for any remaining `os.environ.get("SMACKEREL_AUTH_TOKEN", ...)` call sites and found one secondary site that the primary close-out's "Out of Scope" section had explicitly deferred: `ml/app/nats_client.py:184` (line number against HEAD `ad512fc6`). This bug packet (`BUG-020-004`) is filed against that secondary site as the sister packet to BUG-020-002, following the same `parentWorkflow.mode = self-hosted-readiness-rescan-external-2026-05-15` direct-per-finding-dispatch model established by [`BUG-042-006`](../../../042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/) at HEAD `eec1437c`.
 
 ## Problem Statement
 
@@ -61,7 +61,7 @@ The companion test file `ml/tests/test_nats_client.py` is updated correspondingl
 
 | Aspect | Detail |
 |---|---|
-| Trigger | 2026-05-15 home-lab readiness re-scan (run after BUG-020-002 close-out) |
+| Trigger | 2026-05-15 self-hosted readiness re-scan (run after BUG-020-002 close-out) |
 | Finding | `HL-RESCAN-013-secondary` (lens: SST defaults / Gate G028; surface: `ml/app/nats_client.py`) |
 | Severity | P3 — LOW (defense-in-depth at `ml/app/auth.py:11` post-BUG-020-002 close-out + lifespan startup check at `ml/app/main.py:_check_required_config` already convert UNSET + production to non-zero exit before `NATSClient.connect()` is ever invoked; the runtime risk is bounded) |
 | Audit method | `grep -nE 'os\.environ\.get\("SMACKEREL_AUTH_TOKEN"' ml/app/nats_client.py` against HEAD `ad512fc6` returned exactly one match: `ml/app/nats_client.py:184: auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")`. Confirmed the line lives inside `NATSClient.connect()` (not at module-import time). Confirmed the pre-fix block at HEAD lines 183-186 is the verbatim 4-line section quoted in the Problem Statement above (captured via `git show HEAD:ml/app/nats_client.py | sed -n '175,195p'`). Confirmed the canonical fail-loud-read constant `_AUTH_TOKEN` is defined at `ml/app/auth.py` lines 22-29 (post-BUG-020-002, HEAD `0c67122e`). |
@@ -206,7 +206,7 @@ A reader inspecting `ml/tests/test_nats_client.py` at HEAD `ad512fc6` finds:
 ## Related
 
 - **Sister packet (primary):** [`specs/020-security-hardening/bugs/BUG-020-002-ml-auth-token-module-import-fail-loud/`](../BUG-020-002-ml-auth-token-module-import-fail-loud/) — primary HL-RESCAN-013 close-out at HEAD `0c67122e`. This packet (`BUG-020-004`) is the deferred sequel for the connect-time call site explicitly named in BUG-020-002's "Out of Scope" → second bullet.
-- **Sister packet (template):** [`specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/`](../../../042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/) — established the `parentWorkflow.mode = home-lab-readiness-rescan-external-2026-05-15` direct-per-finding-dispatch packet pattern at HEAD `eec1437c`.
+- **Sister packet (template):** [`specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/`](../../../042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/) — established the `parentWorkflow.mode = self-hosted-readiness-rescan-external-2026-05-15` direct-per-finding-dispatch packet pattern at HEAD `eec1437c`.
 - **Parent Spec:** `specs/020-security-hardening/`
 - **Binding policy (workspace-facing):** [`.github/copilot-instructions.md`](../../../../.github/copilot-instructions.md) — "SST Zero-Defaults Enforcement (NON-NEGOTIABLE)" subsection inside Required Runtime Standards (Secrets Management table).
 - **Binding policy (agent-facing):** [`.github/instructions/smackerel-no-defaults.instructions.md`](../../../../.github/instructions/smackerel-no-defaults.instructions.md) — Gate G028 NO-DEFAULTS / fail-loud SST policy.

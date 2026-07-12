@@ -1,7 +1,7 @@
 // Spec 101 — shared-observability instrumentation contract (knb spec 014 scope 03).
 //
-// The shared home-lab observability stack (one Prometheus/Grafana/Tempo/Loki/
-// otel-collector, owned by the knb adapter shared/observability/home-lab/)
+// The shared self-hosted observability stack (one Prometheus/Grafana/Tempo/Loki/
+// otel-collector, owned by the knb adapter shared/observability/self-hosted/)
 // discovers and scopes each product's containers by the com.bubbles.product +
 // com.bubbles.service labels via Prometheus docker_sd. This contract pins those
 // two discovery labels onto every smackerel-owned service in BOTH the dev

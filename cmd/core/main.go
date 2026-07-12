@@ -440,7 +440,7 @@ func run() error {
 		// bounded by the SAME 4200s envelope — NO value change. A first-class
 		// compare-both affordance (deferred, F-COMPARE-LATENCY) WOULD run two
 		// full passes and double the bound to 8400s; if it is ever shipped this
-		// value MUST be re-derived. Realistic GPU / home-lab turns complete in
+		// value MUST be re-derived. Realistic GPU / self-hosted turns complete in
 		// ~40-90s; this is the pathological-slow-CPU-dev backstop. If an
 		// operator raises max_iterations or synthesis_retry_budget, recompute.
 		// Spec 089 — the persistent deepseek-r1:32b default + a per-request

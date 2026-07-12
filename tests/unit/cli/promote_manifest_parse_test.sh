@@ -6,7 +6,7 @@
 # Proves scripts/deploy/promote_manifest_parse.sh extracts IDENTICAL values
 # from BOTH build-manifest shapes:
 #   1. CI list shape       (.github/workflows/build.yml)
-#   2. local-operator shape (scripts/commands/build-home-lab.sh)
+#   2. local-operator shape (scripts/commands/build-self-hosted.sh)
 #
 # Auto-discovered by `./smackerel.sh test unit` (tests/unit/cli/*.sh
 # discovery). Also runnable directly: bash tests/unit/cli/promote_manifest_parse_test.sh
@@ -35,9 +35,9 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 EXP_SHA="abc123def4567890abc123def4567890abc123de"
 EXP_CORE="ghcr.io/pkirsanov/smackerel-core@sha256:1111111111111111111111111111111111111111111111111111111111111111"
 EXP_ML="ghcr.io/pkirsanov/smackerel-ml@sha256:2222222222222222222222222222222222222222222222222222222222222222"
-EXP_BUNDLE="ghcr.io/pkirsanov/smackerel-config-bundles:home-lab-${EXP_SHA}"
+EXP_BUNDLE="ghcr.io/pkirsanov/smackerel-config-bundles:self-hosted-${EXP_SHA}"
 EXP_BUNDLE_SHA="3333333333333333333333333333333333333333333333333333333333333333"
-ENV="home-lab"
+ENV="self-hosted"
 
 CI_MANIFEST="$TMP/ci-build-manifest.yaml"
 cat >"$CI_MANIFEST" <<EOF
@@ -66,7 +66,7 @@ images:
   smackerel-ml: "${EXP_ML}"
 configBundle:
   ref: "${EXP_BUNDLE}"
-  tag: "home-lab-${EXP_SHA}"
+  tag: "self-hosted-${EXP_SHA}"
   env: "${ENV}"
   sha256: "${EXP_BUNDLE_SHA}"
 signatures:
