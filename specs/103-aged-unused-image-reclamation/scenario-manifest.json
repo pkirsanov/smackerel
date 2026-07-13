@@ -1,0 +1,168 @@
+{
+    "specId": "103",
+    "specSlug": "103-aged-unused-image-reclamation",
+    "feature": "Age-Bounded Project-Scoped Unused-Image Reclamation (Smart Cleanup)",
+    "createdAt": "2026-07-13T00:00:00Z",
+    "note": "Stable SCN-* user-journey contracts. Tests MUST preserve these scenario IDs across revisions. Expectations describe the LIVE behavior to be verified during the implementation pass (authoring pass records the contract only). LABEL FINDING: smackerel images do NOT carry an identity/owner label today (Dockerfile + ml/Dockerfile stamp only OCI org.opencontainers.image.* labels; no io.smackerel.lifecycle.owner anywhere) — the 'else' branch. Scope 1 ADDS LABEL io.smackerel.lifecycle.owner=smackerel to both runtime stages; the smackerel-* dash-prefix name fallback is documented as explicitly-optional transitional coverage (not implemented). Both scopes exclude env=prod-labeled images (--filter label!=io.smackerel.environment=prod); the stage is dev-plane only (assert_dev_plane on SMACKEREL_ENV, dev-safe allow-list {development,test}). DRY_RUN convention: DRY_RUN=true prints '[DRY-RUN] Would execute: <cmd>' and executes nothing. Config is config/smackerel.yaml (SST, no template) via scripts/commands/config.sh required_value/config_key_missing (smackerel-no-defaults). CLI: ./smackerel.sh --env dev clean smart|test.",
+    "scenarios": [
+        {
+            "id": "SCN-103-01",
+            "title": "Aged unused project images reclaimed on clean smart (dev plane)",
+            "scope": "Scope 4 (end-to-end) / Scope 3 (argv)",
+            "acceptance": "AC-1",
+            "given": "remove_unused_images=true, unused_image_min_age_hours=48, unused_image_scope=project, SMACKEREL_ENV=development",
+            "when": "clean smart runs the new reclamation stage after the stack teardown",
+            "then": "docker image prune -a -f --filter until=48h --filter label=io.smackerel.lifecycle.owner=smackerel --filter label!=io.smackerel.environment=prod is executed and reclaimed space is logged",
+            "testExpectation": "build_unused_image_prune_argv 48 project == 'image prune -a -f --filter until=48h --filter label=io.smackerel.lifecycle.owner=smackerel --filter label!=io.smackerel.environment=prod'; DRY_RUN=true clean smart plan contains the exact command",
+            "category": [
+                "unit",
+                "integration",
+                "e2e-api"
+            ]
+        },
+        {
+            "id": "SCN-103-02",
+            "title": "Images newer than the minimum age are preserved",
+            "scope": "Scope 3",
+            "acceptance": "AC-2",
+            "given": "a smackerel unused image created 3 hours ago and unused_image_min_age_hours=48",
+            "when": "the reclamation stage runs",
+            "then": "the until=48h filter excludes the image and it is preserved",
+            "testExpectation": "argv contains until=<configured>h; changing age changes only the until token",
+            "category": [
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-03",
+            "title": "Peer-product images are never removed under project scope",
+            "scope": "Scope 3",
+            "acceptance": "AC-3",
+            "given": "a non-smackerel image lacking io.smackerel.lifecycle.owner=smackerel exists and unused_image_scope=project",
+            "when": "the reclamation stage runs",
+            "then": "the label filter scopes the prune to owner-labeled smackerel images only; the peer image is not referenced or removed",
+            "testExpectation": "project argv contains --filter label=io.smackerel.lifecycle.owner=smackerel; peer image excluded by construction",
+            "category": [
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-04",
+            "title": "Stage gated off when remove_unused_images=false",
+            "scope": "Scope 4",
+            "acceptance": "AC-4",
+            "given": "cleanup.remove_unused_images=false",
+            "when": "clean smart runs",
+            "then": "the reclamation stage is skipped and a 'disabled' line is logged; the prune command is absent from the plan",
+            "testExpectation": "clean smart (DRY_RUN) output omits the image-prune line and shows 'Aged unused-image reclamation disabled (cleanup.remove_unused_images=false)'",
+            "category": [
+                "integration"
+            ]
+        },
+        {
+            "id": "SCN-103-05",
+            "title": "DRY_RUN previews the plan and never touches volumes, containers, or state",
+            "scope": "Scope 3",
+            "acceptance": "AC-5",
+            "given": "SMACKEREL_ENV=development and DRY_RUN=true",
+            "when": "the reclamation stage runs",
+            "then": "it prints '[DRY-RUN] Would execute: docker image prune -a -f --filter until=<N>h ...', executes no docker image prune, references no docker volume / --volumes token, references no docker container / docker rm token",
+            "testExpectation": "DRY_RUN=true prune_unused_images_aged 48 project prints the [DRY-RUN] Would execute line and a shadowed docker stub proves non-invocation; helper function bodies grep-clean of volume/container tokens",
+            "category": [
+                "integration",
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-06",
+            "title": "A missing SST key fails loud",
+            "scope": "Scope 2",
+            "acceptance": "AC-6",
+            "given": "cleanup.remove_unused_images present but cleanup.unused_image_min_age_hours absent",
+            "when": "config generation resolves the cleanup keys",
+            "then": "config_key_missing aborts non-zero with 'Missing config key: cleanup.unused_image_min_age_hours' and no docker prune runs",
+            "testExpectation": "a temp config/smackerel.yaml copy with the key stripped, generated under SMACKEREL_GENERATED_DIR isolation, exits non-zero with the missing-key message",
+            "category": [
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-07",
+            "title": "The other clean levels are unchanged",
+            "scope": "Scope 4",
+            "acceptance": "AC-7",
+            "given": "clean full, clean status, and clean measure",
+            "when": "each runs",
+            "then": "full still runs smackerel_run_down true, status still runs smackerel_compose ps -a, measure still runs docker system df; none call prune_unused_images_aged",
+            "testExpectation": "grep proof that the full)/status)/measure) arms are byte-for-byte unchanged and do not reference prune_unused_images_aged",
+            "category": [
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-08",
+            "title": "The env=prod guard refuses to run on a non-dev plane",
+            "scope": "Scope 3",
+            "acceptance": "AC-8",
+            "given": "SMACKEREL_ENV=production (or any value not in {development, test})",
+            "when": "the reclamation stage runs",
+            "then": "assert_dev_plane aborts non-zero with 'refusing dev-plane image reclamation on a non-dev plane (SMACKEREL_ENV=production)' and no docker image prune runs",
+            "testExpectation": "assert_dev_plane production / staging / '' (empty) aborts non-zero; assert_dev_plane development and test return 0; a config with runtime.environment: production under --env dev emits SMACKEREL_ENV=production which the guard catches",
+            "category": [
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-09",
+            "title": "env=prod-labeled images are excluded",
+            "scope": "Scope 3",
+            "acceptance": "AC-9",
+            "given": "the reclamation stage builds its docker argv",
+            "when": "project or all scope is used",
+            "then": "the argv contains --filter label!=io.smackerel.environment=prod and an image labeled io.smackerel.environment=prod is excluded from removal",
+            "testExpectation": "both project and all argv contain --filter label!=io.smackerel.environment=prod",
+            "category": [
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-10",
+            "title": "The identity label is added to the build (label-add prerequisite)",
+            "scope": "Scope 1",
+            "acceptance": "AC-10",
+            "given": "smackerel images carried no io.smackerel.lifecycle.owner label before this feature (read-only finding)",
+            "when": "the label-add prerequisite stamps io.smackerel.lifecycle.owner=smackerel in Dockerfile and ml/Dockerfile",
+            "then": "a newly built smackerel-core / smackerel-ml image carries io.smackerel.lifecycle.owner=smackerel; the untagged <none> version it later orphans retains that label; the project-scope filter reclaims it",
+            "testExpectation": "Dockerfile core stage AND ml/Dockerfile runtime stage each contain LABEL io.smackerel.lifecycle.owner=\"smackerel\"; SMACKEREL_IMAGE_OWNER_LABEL constant matches the literal",
+            "category": [
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-11",
+            "title": "Never prune volumes or containers; never remove a running container's image",
+            "scope": "Scope 3",
+            "acceptance": "AC-11",
+            "given": "the reclamation stage runs (real or dry-run)",
+            "when": "it operates",
+            "then": "it references no docker volume / --volumes token, references no docker container prune / docker rm token, and docker image prune -a leaves any image backing a container in place; the persistent postgres/pgvector and NATS jetstream volumes are never referenced",
+            "testExpectation": "helper function bodies grep-clean of docker volume / --volumes / docker container / docker rm; docker image prune -a inherently refuses in-use image layers",
+            "category": [
+                "unit"
+            ]
+        },
+        {
+            "id": "SCN-103-12",
+            "title": "Repo-CLI clean test entrypoint runs the harness Docker-free (terminal-discipline)",
+            "scope": "Scope 4",
+            "acceptance": "AC-1 (evidence), SC-004",
+            "given": "the cleanup unit harness scripts/commands/clean_image_reclamation_test.sh exists",
+            "when": "./smackerel.sh --env dev clean test runs",
+            "then": "the clean) arm intercepts test before require_docker and execs the harness Docker-free; the whole harness runs green with full unfiltered output; clean test is listed in usage help",
+            "testExpectation": "the clean) dispatch execs the harness before require_docker; the harness exits 0 with all Scope 1-4 tests passing; 'clean test' appears in the clean help block",
+            "category": [
+                "integration"
+            ]
+        }
+    ]
+}
