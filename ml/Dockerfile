@@ -61,6 +61,14 @@ LABEL org.opencontainers.image.revision="${COMMIT_HASH}"
 LABEL org.opencontainers.image.created="${BUILD_TIME}"
 LABEL org.opencontainers.image.title="smackerel-ml"
 LABEL org.opencontainers.image.source="https://github.com/smackerel/smackerel"
+# spec 103 — project-scope identity for age-bounded unused-image reclamation.
+# `./smackerel.sh --env dev clean smart` prunes ONLY images carrying this owner
+# label (docker image prune -a --filter label=io.smackerel.lifecycle.owner=smackerel),
+# so peer products on the shared daemon are structurally untouched. Orphaned
+# <none> versions this image later leaves behind retain the label and are
+# reclaimed. MUST match SMACKEREL_IMAGE_OWNER_LABEL in
+# scripts/lib/cleanup-image-reclamation.sh (test_owner_label_parity).
+LABEL io.smackerel.lifecycle.owner="smackerel"
 
 # spec-047 R14 (BUG-047-002 close-out 2026-05-16): apply Debian Security
 # updates to OS packages shipped by the python:3.12-slim base image.

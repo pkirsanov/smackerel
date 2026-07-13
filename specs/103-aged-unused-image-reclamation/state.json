@@ -1,0 +1,99 @@
+{
+    "schemaVersion": 3,
+    "version": 3,
+    "specId": "103-aged-unused-image-reclamation",
+    "feature": "103-aged-unused-image-reclamation",
+    "featureDir": "specs/103-aged-unused-image-reclamation",
+    "featureName": "Age-Bounded Project-Scoped Unused-Image Reclamation (Smart Cleanup)",
+    "title": "Age-Bounded Project-Scoped Unused-Image Reclamation (Smart Cleanup)",
+    "status": "specs_scoped",
+    "executionRuntime": "planning",
+    "mode": "feature",
+    "workflowMode": "full-delivery",
+    "statusCeiling": "done",
+    "terminalAliases": [],
+    "planMaturityOnly": false,
+    "planningOnly": false,
+    "linkedImplementationSpec": null,
+    "releaseTrain": "mvp",
+    "flagsIntroduced": [],
+    "createdAt": "2026-07-13T00:00:00Z",
+    "updatedAt": "2026-07-13T00:00:00Z",
+    "lastUpdatedAt": "2026-07-13T00:00:00Z",
+    "deliveryNote": "Authoring/planning pass (bubbles.plan) COMPLETE. Produced spec.md + design.md + scopes.md + scenario-manifest.json + skeleton report.md/uservalidation.md. NO code, NO Docker, NO push; smackerel only. Mirrors WanderAide specs/162 + GuestHost specs/152 + QuantitativeFinance specs/096 (same gap, same fix), adapted to smackerel. CRITICAL LABEL FINDING (verified read-only): smackerel images do NOT carry an identity/owner label — Dockerfile (core runtime stage) and ml/Dockerfile (smackerel-ml runtime stage) stamp only OCI org.opencontainers.image.* labels; a repo-wide scan for io.smackerel/LABEL/lifecycle.owner found no image-identity label. Therefore this spec takes the 'ELSE' branch of the operator directive: Scope 1 is a label-ADD prerequisite that stamps LABEL io.smackerel.lifecycle.owner=\"smackerel\" on both runtime stages (the genuine structural difference from the 3 references, whose owner labels already existed), and the smackerel-* dash-prefix name fallback is documented as explicitly-optional transitional coverage (NOT implemented as a name-based removal function). Images are named smackerel-core/smackerel-ml (dash-prefix). Plane signal is SMACKEREL_ENV (development|test|production; dev-safe allow-list {development,test}); with runtime.environment: production under --env dev, SMACKEREL_ENV stays production (config.sh only overrides test/self-hosted), which assert_dev_plane catches — the real prod-leak guard. Config is the single config/smackerel.yaml (no .template) via scripts/commands/config.sh required_value/config_key_missing fail-loud (smackerel-no-defaults; no ${VAR:-default}). clean smart is currently just smackerel_run_down false (volume-preserving compose down); the new stage runs AFTER teardown. Planned (delivery pass): label-add to 2 Dockerfiles, 3 fail-loud SST keys under cleanup: in config/smackerel.yaml, load_cleanup extension (3 required_value reads + validate_unused_image_policy + 3 CLEANUP_* emit lines) in config.sh, a NEW sourceable helper scripts/lib/cleanup-image-reclamation.sh (build_unused_image_prune_argv pure, assert_dev_plane env=prod guard on SMACKEREL_ENV, prune_unused_images_aged DRY_RUN-aware+volume/container-free+reclaimed-space log), gated wiring into the clean) smart) arm after smackerel_run_down, ./smackerel.sh --env dev clean test entrypoint intercepted before require_docker. clean full/status/measure unchanged. All scopes Not Started; all DoD unchecked; no fabricated evidence.",
+    "completionReason": null,
+    "policySnapshot": {
+        "version": "2026-07-13",
+        "snapshotAt": "2026-07-13T00:00:00Z",
+        "source": "repo-default",
+        "workflowMode": "full-delivery",
+        "statusCeiling": "done",
+        "planMaturityOnly": false,
+        "grill": {
+            "mode": "off",
+            "source": "repo-default",
+            "rationale": "Authoring-only run; plan produces artifacts, no grill."
+        },
+        "tdd": {
+            "mode": "on",
+            "source": "repo-default",
+            "rationale": "smackerel standard requires test-first; Test Plans authored per scope, executed during the implementation run."
+        },
+        "autoCommit": {
+            "mode": "off",
+            "source": "user-request",
+            "rationale": "Operator directed artifacts-only; no auto-commit, no push."
+        },
+        "lockdown": {
+            "mode": "off",
+            "source": "repo-default",
+            "rationale": "Lockdown is established during the implementation run; authoring run does not enable it."
+        },
+        "regression": {
+            "mode": "protected-scenarios",
+            "source": "repo-default",
+            "rationale": "Every scope Test Plan carries persistent regression coverage (owner-label-added, fail-loud missing-key, argv, env=prod-exclude, prod-guard, no-volumes, no-containers, dry-run, other-levels-unchanged)."
+        },
+        "validation": {
+            "mode": "plan-maturity",
+            "source": "repo-default",
+            "rationale": "full-delivery forces deep validation at the implementation run; authoring run records the plan only."
+        }
+    },
+    "certification": {
+        "status": "specs_scoped",
+        "certifiedAt": null,
+        "certifiedBy": null,
+        "ratifiedBy": null,
+        "ratifiedAt": null,
+        "certifiedCompletedPhases": [
+            "analyze",
+            "design",
+            "plan"
+        ],
+        "lockdownState": {
+            "round": 0,
+            "lastCleanRound": 0,
+            "active": false
+        },
+        "observations": [
+            "Authoring pass verified read-only against the live smackerel repo: ./smackerel.sh --env <dev|test> clean <status|measure|smart|full> dispatches in the clean) arm (require_docker + smackerel_generate_config, then a subcommand case); clean smart = smackerel_run_down \"$TARGET_ENV\" false (docker compose down --timeout 30 --remove-orphans, volume-preserving), clean full = smackerel_run_down true (adds -v), clean status = smackerel_compose ps -a, clean measure = docker system df; there is NO docker image prune step anywhere in clean. --env accepts dev|test only (TARGET_ENV default dev). scripts/lib/runtime.sh defines smackerel_env_file (config/generated/<env>.env), smackerel_require_env_file, smackerel_env_value (awk KEY=value), smackerel_generate_config, smackerel_compose, smackerel_is_truthy; smackerel.sh sources runtime.sh at line 5 (so a scripts/lib/ helper source is the established pattern). scripts/commands/config.sh is the SST generator: required_value <dotted.key> -> yaml_get -> config_key_missing prints 'Missing config key: <key>' and exit 1 (the fail-loud mechanism the new keys extend); SMACKEREL_ENV = required_value runtime.environment (validated development|test|production; case overrides test->test, self-hosted->production; dev passes through). config/smackerel.yaml is the single SST (no .template). Dockerfile core stage (FROM alpine:3.22 AS core) + ml/Dockerfile runtime stage (FROM python:3.12-slim) stamp ONLY OCI org.opencontainers.image.* labels; NO io.smackerel.lifecycle.owner — the ELSE branch (label ADDED in Scope 1). Images named smackerel-core / smackerel-ml (dash-prefix; also ghcr.io/pkirsanov/smackerel-core/-ml). Shell unit tests are standalone bash under scripts/commands/*_test.sh (set -uo pipefail, SMACKEREL_GENERATED_DIR isolation for config tests, temp yaml copy), several Go-wired via internal/**/*_test.go under ./smackerel.sh test unit --go.",
+            "PROD-SAFETY (explicit): the stage NEVER prunes volumes (no docker volume / --volumes), NEVER prunes containers (no docker container prune / docker rm), NEVER removes a running container's image (docker image prune -a refuses in-use layers), and is DEV-PLANE ONLY (assert_dev_plane refuses when SMACKEREL_ENV not in {development,test}), with a defense-in-depth --filter label!=io.smackerel.environment=prod exclusion in both scopes. Persistent postgres/pgvector + NATS jetstream data volumes are structurally out of reach of an image-only prune.",
+            "Governance cited and enforced by design + scopes: bubbles-docker-lifecycle-governance (label-aware project scoping, protect volumes), bubbles-config-sst + smackerel-no-defaults (3 fail-loud SST keys, no ${VAR:-default}), storage-policy/data-safe, terminal-discipline (all ops via ./smackerel.sh, full unfiltered output). No feature flag introduced (train-agnostic; releaseTrain mvp)."
+        ]
+    },
+    "executionHistory": [
+        {
+            "agent": "bubbles.plan",
+            "phasesExecuted": [
+                "bootstrap",
+                "plan"
+            ],
+            "statusBefore": "specs_scoped",
+            "statusAfter": "specs_scoped",
+            "runStartedAt": "2026-07-13T00:00:00Z",
+            "runEndedAt": "2026-07-13T00:00:00Z",
+            "summary": "Authoring pass: created spec.md + design.md + scopes.md + scenario-manifest.json + skeleton report.md/uservalidation.md for the age-bounded, project-scoped, dev-plane-only unused-image reclamation stage in ./smackerel.sh clean smart. Read-only label finding: smackerel images carry no owner label (ELSE branch) -> Scope 1 adds io.smackerel.lifecycle.owner=smackerel to Dockerfile + ml/Dockerfile; smackerel-* name fallback documented-optional. 4 sequential scopes, all Not Started; 12 SCN contracts. No code, no Docker, no push."
+        }
+    ]
+}
