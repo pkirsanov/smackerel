@@ -23,12 +23,11 @@
 #
 # Required env:
 #   OPERATOR_COSIGN_KEY     path to operator cosign private key
-#                           (default <operator-key-path>)
 #   OPERATOR_COSIGN_PUBKEY  path to operator cosign public key (for adapter handoff)
 #   COSIGN_PASSWORD         passphrase for the private key (presence-checked; NEVER echoed)
 #
 # Test seams (default to the real tool/path; tool plumbing, NOT SST runtime config —
-# mirrors build-self-hosted.sh's `${OPERATOR_COSIGN_KEY:=...}` precedent):
+# signing-key paths remain required inputs with no product-side default):
 #   SMACKEREL_FLUTTER_BUILD_CMD   build command (default: flutter)
 #   SMACKEREL_COSIGN_CMD          sign command  (default: cosign)
 #   SMACKEREL_LCB_PROJECT_DIR     Flutter project dir (default: <repo>/clients/mobile/assistant)
@@ -118,18 +117,18 @@ done
 : "${SMACKEREL_COSIGN_CMD:=cosign}"
 : "${SMACKEREL_LCB_PROJECT_DIR:=$REPO_ROOT/clients/mobile/assistant}"
 
+lcb_require_env OPERATOR_COSIGN_KEY
+lcb_require_env OPERATOR_COSIGN_PUBKEY
 lcb_require_cmd "$SMACKEREL_FLUTTER_BUILD_CMD"
 lcb_require_cmd "$SMACKEREL_COSIGN_CMD"
 lcb_require_cmd git
 lcb_require_cmd sha256sum
 
-# ---- Operator key env (mirrors build-self-hosted.sh) --------------------------
-: "${OPERATOR_COSIGN_KEY:=<operator-key-path>"
-: "${OPERATOR_COSIGN_PUBKEY:=<operator-key-path>"
+# ---- Operator key env ---------------------------------------------------------
 [[ -f "$OPERATOR_COSIGN_KEY" ]] \
-  || lcb_fail F086-LCB-01 "OPERATOR_COSIGN_KEY not found at: $OPERATOR_COSIGN_KEY (run knb/scripts/operator-key/bootstrap.sh first)"
+  || lcb_fail F086-LCB-01 "OPERATOR_COSIGN_KEY does not name a readable file"
 [[ -f "$OPERATOR_COSIGN_PUBKEY" ]] \
-  || lcb_fail F086-LCB-01 "OPERATOR_COSIGN_PUBKEY not found at: $OPERATOR_COSIGN_PUBKEY"
+  || lcb_fail F086-LCB-01 "OPERATOR_COSIGN_PUBKEY does not name a readable file"
 lcb_require_env COSIGN_PASSWORD
 # cosign reads COSIGN_PASSWORD from the environment; export so the child inherits
 # it. Presence only — the value is NEVER echoed (terminal discipline).
@@ -282,9 +281,9 @@ echo "  aab:        $AAB_OUT (+ .sig)"
 echo "  apk:        $APK_OUT (+ .sig)"
 echo "  manifest:   $MANIFEST (+ .sig)"
 echo
-echo "Next (on <deploy-host>): the knb self-hosted adapter acquires + verifies these LOCAL"
+echo "Next (on <deploy-host>): the external target adapter acquires + verifies these LOCAL"
 echo "  signed artifacts under trustModel local-operator. cd ~/knb && \\"
 echo "    OPERATOR_COSIGN_PUBKEY=$OPERATOR_COSIGN_PUBKEY \\"
-echo "    bash scripts/deploy/promote.sh --target self-hosted --product smackerel \\"
+echo "    bash scripts/deploy/promote.sh --target <target> --product smackerel \\"
 echo "      --local-build-manifest $MANIFEST"
 echo "=================================================================="
