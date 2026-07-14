@@ -95,3 +95,38 @@ def test_classify_drive_file_returns_provider_neutral_metadata_with_evidence():
     assert "recipes" in result["domain_routes"]
     assert "provider_id" not in result
     assert result["evidence"] == llm_payload["evidence"]
+
+
+def test_classify_drive_file_applies_ollama_profile_spec102():
+    """TP-C3-04: drive classification retains native think=False and receives
+    the selected profile before dispatch."""
+    llm_payload = {
+        "classification": "recipe",
+        "topic": "Dinner",
+        "audience": "household",
+        "sensitivity": "none",
+        "confidence": 0.9,
+        "evidence": ["ingredients include chickpeas"],
+        "domain_routes": ["recipes"],
+    }
+    captured: dict = {}
+
+    async def capture(**kwargs):
+        captured.update(kwargs)
+        return _response(llm_payload)
+
+    with patch("app.drive_classify.litellm.acompletion", side_effect=capture):
+        result = asyncio.run(
+            classify_drive_file(
+                {"artifact_id": "drive-102", "extracted_text": "ingredients include chickpeas"},
+                provider="ollama",
+                model="qwen3:30b-a3b",
+                api_key="",
+            )
+        )
+
+    assert result["success"] is True
+    assert captured["model"] == "ollama_chat/qwen3:30b-a3b"
+    assert captured["options"]["num_ctx"] == 32768
+    assert captured["keep_alive"] == "30m"
+    assert captured["think"] is False

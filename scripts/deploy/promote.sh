@@ -7,7 +7,7 @@
 #
 # Usage:
 #   bash scripts/deploy/promote.sh \
-#       --target self-hosted \
+#       --target <target> \
 #       --build-manifest path/to/build-manifest.yaml \
 #       [--operator <name>]
 #

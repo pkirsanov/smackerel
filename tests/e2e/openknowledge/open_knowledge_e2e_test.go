@@ -128,7 +128,7 @@ func newTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		t.Skip("e2e: DATABASE_URL not set — live stack not available")
+		t.Fatal("e2e: DATABASE_URL not set; run through './smackerel.sh test e2e' so the live disposable stack is injected")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -195,6 +195,7 @@ func baseCfg(mode citeback.EnforcementMode) agent.Config {
 		MonthlyBudgetUSDRemaining:  10.0,
 		PerUserMonthlyUSDRemaining: 10.0,
 		CompactionThresholdRatio:   0.8,
+		SourcesMax:                 5,
 		// Spec 096 SCOPE-05 — CostFn is now the model-aware seam.
 		CostFn:          func(string, int) (float64, error) { return 0, nil },
 		EnforcementMode: string(mode),

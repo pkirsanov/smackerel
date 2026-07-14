@@ -523,3 +523,132 @@ def test_handle_crosssource_surface_level():
     assert result["confidence"] == 0.25
     assert result["insight_text"] == ""
     assert len(result["artifact_ids"]) == 2
+
+
+def test_handle_extract_threads_sst_num_ctx_spec102(monkeypatch):
+    """SCN-102-C3-01 — handle_extract threads the SST per-model num_ctx onto the
+    ollama completion request (options.num_ctx), replacing the host-tag
+    `ollama create num_ctx` hack. Proves the cap is request-level + host-
+    independent.
+    """
+    import asyncio
+    import json
+    import os
+    import sys
+    import tempfile
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    import yaml
+
+    from app.synthesis import handle_extract
+
+    monkeypatch.setenv(
+        "ML_MODEL_MEMORY_PROFILES_JSON",
+        '[{"model":"gemma4:26b","weights_mib":16384,"kv_mib_per_1k_ctx":256,"num_ctx":8192}]',
+    )
+
+    contract = {
+        "version": "spec102-extract-v1",
+        "type": "domain",
+        "description": "spec 102 num_ctx threading contract",
+        "system_prompt": "You extract JSON.",
+        "extraction_schema": {"type": "object", "properties": {}},
+        "validation_rules": {},
+        "temperature": 0.2,
+    }
+
+    captured: dict = {}
+
+    def _capture(**kwargs):
+        captured.update(kwargs)
+        resp = MagicMock()
+        resp.choices = [MagicMock(message=MagicMock(content=json.dumps({})))]
+        resp.usage = MagicMock(total_tokens=10)
+        resp.model = "ollama_chat/gemma4:26b"
+        return resp
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "spec102-extract-v1.yaml")
+        with open(path, "w") as f:
+            yaml.dump(contract, f)
+        monkeypatch.setenv("PROMPT_CONTRACTS_DIR", tmpdir)
+        mock_litellm = MagicMock()
+        mock_litellm.acompletion = AsyncMock(side_effect=_capture)
+        with patch.dict(sys.modules, {"litellm": mock_litellm}):
+            asyncio.run(
+                handle_extract(
+                    data={
+                        "artifact_id": "art-1",
+                        "prompt_contract_version": "spec102-extract-v1",
+                        "content_raw": "some plain content to extract",
+                        "content_type": "note",
+                    },
+                    provider="ollama",
+                    model="gemma4:26b",
+                    api_key="",
+                    ollama_url="http://ollama:11434",
+                )
+            )
+
+    assert "options" in captured, f"completion_kwargs must carry options: {captured}"
+    assert captured["options"].get("num_ctx") == 8192, (
+        f"SCN-102-C3-01: options.num_ctx must be the SST per-model value 8192, got: {captured.get('options')}"
+    )
+    # The keep_alive threading (F2) coexists — num_ctx is additive, not a clobber.
+    assert captured.get("keep_alive")
+
+
+def test_handle_crosssource_applies_ollama_profile_spec102(tmp_path, monkeypatch):
+    """TP-C3-13: cross-source synthesis adds the selected num_ctx without
+    losing top-level keep_alive or structured-extraction thinking control."""
+    import asyncio
+    import sys
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    import yaml
+
+    from app.synthesis import handle_crosssource
+
+    contract = {
+        "version": "cross-source-spec102-v1",
+        "system_prompt": "Assess connections.",
+        "temperature": 0.2,
+        "token_budget": 500,
+    }
+    (tmp_path / "cross-source-spec102-v1.yaml").write_text(yaml.safe_dump(contract))
+    monkeypatch.setenv("PROMPT_CONTRACTS_DIR", str(tmp_path))
+    captured: dict = {}
+
+    def capture(**kwargs):
+        captured.update(kwargs)
+        response = MagicMock()
+        response.choices = [
+            MagicMock(
+                message=MagicMock(content='{"has_genuine_connection":true,"insight_text":"linked","confidence":0.8}')
+            )
+        ]
+        response.model = kwargs["model"]
+        return response
+
+    fake_litellm = MagicMock(acompletion=AsyncMock(side_effect=capture))
+    with patch.dict(sys.modules, {"litellm": fake_litellm}):
+        result = asyncio.run(
+            handle_crosssource(
+                {
+                    "concept_id": "concept-102",
+                    "concept_title": "Connection",
+                    "prompt_contract_version": "cross-source-spec102-v1",
+                    "artifacts": [{"id": "a", "title": "A", "source_type": "email", "summary": "linked"}],
+                },
+                "ollama",
+                "qwen3:30b-a3b",
+                "",
+                "http://ollama:11434",
+            )
+        )
+
+    assert result["has_genuine_connection"] is True
+    assert captured["model"] == "ollama_chat/qwen3:30b-a3b"
+    assert captured["options"]["num_ctx"] == 32768
+    assert captured["keep_alive"] == "30m"
+    assert captured["think"] is False

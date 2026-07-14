@@ -9,7 +9,11 @@ opt-in Go test tests/integration/cardrewards_extract_test.go (SCN-083-E08).
 
 from __future__ import annotations
 
+import asyncio
 import json
+import sys
+import types
+from types import SimpleNamespace
 
 import pytest
 
@@ -98,3 +102,41 @@ def test_build_messages_requires_card_echo_in_system_E06() -> None:
     system = build_extraction_messages(req)[0]["content"]
     # The model is told to echo the exact card_id (mismap defense).
     assert "echo" in system.lower()
+
+
+def test_extract_card_categories_applies_ollama_profile_spec102(monkeypatch) -> None:
+    """TP-C3-02: strict card extraction preserves think=False and receives
+    the selected Ollama request profile."""
+    from app.card_categories import extract_card_categories
+
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setenv("LLM_MODEL", "qwen3:30b-a3b")
+    captured: dict = {}
+
+    async def capture(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(VALID_RESPONSE)))],
+        )
+
+    fake_litellm = types.ModuleType("litellm")
+    fake_litellm.acompletion = capture  # type: ignore[attr-defined]
+    fake_exceptions = types.ModuleType("litellm.exceptions")
+    for name in ("APIConnectionError", "APIError", "ServiceUnavailableError", "Timeout"):
+        setattr(fake_exceptions, name, type(name, (Exception,), {}))
+
+    request = ExtractCardCategoriesRequest(
+        card_id="discover-it",
+        period_label="Q3_2026",
+        page_text="Q3 2026 5% categories: Restaurants and PayPal.",
+    )
+    with monkeypatch.context() as context:
+        context.setitem(sys.modules, "litellm", fake_litellm)
+        context.setitem(sys.modules, "litellm.exceptions", fake_exceptions)
+        result = asyncio.run(extract_card_categories(request))
+
+    assert result["card_id"] == "discover-it"
+    assert captured["options"]["num_ctx"] == 32768
+    assert captured["keep_alive"] == "30m"
+    assert captured["think"] is False
+    assert captured["response_format"] == {"type": "json_object"}

@@ -1,7 +1,10 @@
 import asyncio
+import json
+import logging
 import sys
 import types
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -17,7 +20,7 @@ if "litellm" not in sys.modules:
     _mock_exc.InternalServerError = type("InternalServerError", (Exception,), {})  # type: ignore[attr-defined]
     sys.modules["litellm.exceptions"] = _mock_exc
 
-from app.main import _check_required_config, health
+from app.main import _check_required_config, _warmup_domain_model, health
 
 
 @pytest.fixture(autouse=True)
@@ -86,6 +89,77 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     assert config["ML_OLLAMA_KEEP_ALIVE"] == "30m"
     # BUG-026-007 — thinking switch is echoed back for the ml sidecar to consume.
     assert config["ML_STRUCTURED_EXTRACTION_THINKING"] == "false"
+
+
+def test_startup_rejects_invalid_model_profiles_spec102(monkeypatch):
+    """TP-C3-15: missing/malformed/duplicate/non-positive profiles and an
+    invalid keep_alive all fail at startup before an inference call."""
+    import litellm
+
+    network_call = AsyncMock()
+    monkeypatch.setattr(litellm, "acompletion", network_call, raising=False)
+    cases = {
+        "missing": None,
+        "malformed": "not-json",
+        "duplicate": '[{"model":"llama3.2","num_ctx":4096},{"model":"ollama_chat/LLAMA3.2","num_ctx":8192}]',
+        "non-positive": '[{"model":"llama3.2","num_ctx":0}]',
+    }
+    for value in cases.values():
+        with monkeypatch.context() as context:
+            _set_required_env_minus(context, "test", auth_token="unit-test-auth-token")
+            if value is None:
+                context.delenv("ML_MODEL_MEMORY_PROFILES_JSON", raising=False)
+            else:
+                context.setenv("ML_MODEL_MEMORY_PROFILES_JSON", value)
+            with pytest.raises(SystemExit):
+                _check_required_config()
+
+    for keep_alive in ("forever", "0", "-1", "0s", "-30m"):
+        with monkeypatch.context() as context:
+            _set_required_env_minus(context, "test", auth_token="unit-test-auth-token")
+            context.setenv("ML_OLLAMA_KEEP_ALIVE", keep_alive)
+            with pytest.raises(SystemExit):
+                _check_required_config()
+
+    network_call.assert_not_called()
+
+
+def test_startup_profile_error_log_redacts_supplied_value_security102(monkeypatch, caplog):
+    sentinel = "SENTINEL-STARTUP-PROFILE-SECRET-RR03"
+    _set_required_env_minus(monkeypatch, "test", auth_token="unit-test-auth-token")
+    monkeypatch.setenv(
+        "ML_MODEL_MEMORY_PROFILES_JSON",
+        f"[{json.dumps({'model': 'llama3.2', 'num_ctx': sentinel})}]",
+    )
+
+    with caplog.at_level(logging.ERROR, logger="smackerel-ml"):
+        with pytest.raises(SystemExit):
+            _check_required_config()
+
+    assert sentinel not in caplog.text
+    assert "invalid_num_ctx" in caplog.text
+
+
+def test_warmup_domain_model_applies_ollama_profile_spec102(monkeypatch):
+    """TP-C3-06: startup warmup emits a capped request."""
+    import litellm
+
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+    captured: dict = {}
+
+    async def capture(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(litellm, "acompletion", capture, raising=False)
+    asyncio.run(
+        _warmup_domain_model({"LLM_PROVIDER": "ollama", "LLM_MODEL": "gemma4:26b", "OLLAMA_URL": "http://ollama:11434"})
+    )
+
+    assert captured["model"] == "ollama_chat/gemma4:26b"
+    assert captured["options"]["num_ctx"] == 8192
+    assert captured["keep_alive"] == "30m"
+    assert captured["max_tokens"] == 1
 
 
 def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatch):

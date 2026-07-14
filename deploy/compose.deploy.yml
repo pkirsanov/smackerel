@@ -36,6 +36,11 @@ services:
     # deploy/contract.yaml::externalImages (external_images_contract_test.go).
     image: pgvector/pgvector:pg16@sha256:00ba258a66dac104fd5171074a0084462a64a1369d8513f3d0a634e2f24d15bc
     restart: unless-stopped
+    # Spec 102 SCOPE-102-01 — postgres joins ONLY the data-tier network. The
+    # compute-only smackerel-ml sidecar is NOT on data-tier, so it has no
+    # network route to postgres (defense-in-depth beneath the ml.env secret
+    # projection + python-compute-only-guard). smackerel-core joins both tiers.
+    networks: [ data-tier ]
     security_opt:
       - no-new-privileges:true
     # No host port published. DevOps reaches Postgres via:
@@ -83,6 +88,9 @@ services:
     # Spec 082 SCOPE-082-06 — pinned by sha256 digest (verified 2026-06-10).
     image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
     restart: unless-stopped
+    # Spec 102 SCOPE-102-01 — nats is on the compute-tier; both smackerel-core
+    # and the smackerel-ml sidecar reach it here (ml's only data path is NATS).
+    networks: [ compute-tier ]
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -130,6 +138,9 @@ services:
   smackerel-core:
     image: ${SMACKEREL_CORE_IMAGE:?SMACKEREL_CORE_IMAGE must be set by the deploy adapter at apply}
     restart: unless-stopped
+    # Spec 102 SCOPE-102-01 — the trusted typed tier joins BOTH tiers: data-tier
+    # for postgres, compute-tier for nats/ollama/ml/searxng/prometheus scrape.
+    networks: [ data-tier, compute-tier ]
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
     # The Go binary writes nothing under `/`; only `/tmp` (log buffering)
     # is needed. The contract test
@@ -204,6 +215,10 @@ services:
     image: ${SMACKEREL_ML_IMAGE:?SMACKEREL_ML_IMAGE must be set by the deploy adapter at apply}
     command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}" ]
     restart: unless-stopped
+    # Spec 102 SCOPE-102-01 — the compute-only sidecar joins ONLY the
+    # compute-tier (nats + ollama). It has NO route to postgres (data-tier),
+    # so even a popped pip dependency holding a driver could not reach the DB.
+    networks: [ compute-tier ]
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
     # Spec 082 SCOPE-082-03 — the HuggingFace + sentence-transformers model
     # caches now live on the PERSISTENT named volume `ml-model-cache`
@@ -224,8 +239,16 @@ services:
       - ALL
     ports:
       - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+    # Spec 102 SCOPE-102-01 — the compute-only sidecar loads the PROJECTED
+    # `ml.env` (allowlist ∩ app.env MINUS SHELL_SECRET_KEYS/POSTGRES_*/DATABASE_URL),
+    # NOT the full `app.env`. It therefore never receives POSTGRES_PASSWORD, the
+    # AUTH signing/at-rest keys, TELEGRAM_BOT_TOKEN, the connector secrets, or
+    # the LLM master key. ml.env is staged into the bundle by
+    # scripts/commands/config.sh::project_service_env. smackerel-core keeps
+    # ./app.env (the trusted typed tier). Guarded by
+    # scripts/lint/python-compute-only-guard.sh + bundle_secret_contract_test.go.
     env_file:
-      - ./app.env
+      - ./ml.env
     environment:
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
       # Spec 045 FR-045-003 + Spec 082 SCOPE-082-03 — point the HuggingFace +
@@ -278,6 +301,9 @@ services:
     # Spec 082 SCOPE-082-06 — pinned by sha256 digest (verified 2026-06-10).
     image: ollama/ollama:rocm@sha256:e658cf94b88ef88aa0868bc5900e6f83ccf77262ef2ca582601161f865a2b080
     restart: unless-stopped
+    # Spec 102 SCOPE-102-01 — ollama is on the compute-tier; smackerel-core and
+    # the smackerel-ml sidecar both reach the daemon here.
+    networks: [ compute-tier ]
     devices:
       # AMD ROCm — required for GPU inference on self-hosted (Radeon 8060S iGPU,
       # gfx1151 / Strix Halo). Without these the daemon falls back to 100% CPU
@@ -376,8 +402,11 @@ services:
   prometheus:
     image: ${PROMETHEUS_IMAGE:?PROMETHEUS_IMAGE must be set when the monitoring profile is enabled}
     restart: unless-stopped
+    # Spec 102 SECURITY F2 — Prometheus alone straddles compute-tier (to scrape
+    # smackerel-core + smackerel-ml) and monitoring-tier (to deliver alerts).
+    # The unauthenticated alert ingress does not share a network with ML.
+    networks: [ compute-tier, monitoring-tier ]
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
-    # The TSDB lives on the named volume prometheus-data mounted at
     # /prometheus. Only /tmp is allowlisted as writable tmpfs.
     read_only: true
     tmpfs:
@@ -431,6 +460,134 @@ services:
         max-size: "20m"
         max-file: "3"
 
+  # Spec 102 SCOPE-102-02 — Durable Prometheus -> Alertmanager -> ntfy routing.
+  # The 21 bundled alert rules (config/prometheus/alerts.yml) now have a DURABLE
+  # delivery path folded INTO this compose + the config bundle, so alerting
+  # survives every apply with ZERO manual re-run (retiring the fragile knb
+  # post-apply alertmanager-standup.sh). Profile-gated (monitoring); off by
+  # default, exactly like the prometheus service above. Reached in-network by
+  # Prometheus at alertmanager:9093 (the alerting block in prometheus.yml.tmpl);
+  # NO host port. Same spec-045/049 hardening posture as prometheus: read-only
+  # root, cap_drop:[ALL], no-new-privileges, fail-loud SST resource limits.
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE:?ALERTMANAGER_IMAGE must be set when the monitoring profile is enabled}
+    restart: unless-stopped
+    # Spec 102 SECURITY F2 — monitoring-tier only. Prometheus reaches this
+    # service through its monitoring-tier attachment, while ML has no route to
+    # Alertmanager's unauthenticated webhook/API ingress.
+    networks: [ monitoring-tier ]
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # Alertmanager's silence/nflog state (--storage.path) is intentionally
+    # ephemeral on a tmpfs: losing it on restart at most re-notifies a still-
+    # firing alert, which is acceptable for self-hosted alerting and keeps the
+    # service stateless (no persistent volume to back up).
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,nosuid,noexec,nodev
+      - /alertmanager:size=32m,mode=1777,nosuid,noexec,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: nobody
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.listen-address=:${ALERTMANAGER_CONTAINER_PORT}"
+    # No host port published. Prometheus reaches it in-network at
+    # alertmanager:9093; DevOps inspects it via `tailscale ssh <host> --
+    # docker exec ...` (Pattern P1).
+    volumes:
+      # The generic routing config (url_file receiver, no ntfy literal) and the
+      # bundle-rendered generic webhook target (the in-stack bridge address) are
+      # extracted from the deploy bundle into <composeDir>/ alongside compose.
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager_ntfy_url:/etc/alertmanager/ntfy_url:ro
+    profiles:
+      - monitoring
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${ALERTMANAGER_CONTAINER_PORT}/-/healthy" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          # Spec 102 SCOPE-102-02 — SST-derived; fail-loud per Gate G028.
+          cpus: "${ALERTMANAGER_CPU_LIMIT:?ALERTMANAGER_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${ALERTMANAGER_MEMORY_LIMIT:?ALERTMANAGER_MEMORY_LIMIT must be set by deploy adapter}"
+    labels:
+      com.smackerel.component: alertmanager
+      com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: alertmanager
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # Spec 102 SCOPE-102-02 — Alertmanager -> ntfy TEMPLATING bridge. A tiny
+  # stateless HTTP shim that rides the ALREADY-pinned smackerel-core image (no
+  # new external image to pin/sign). Alertmanager's webhook receiver posts here
+  # (via the rendered ./alertmanager_ntfy_url); the bridge templates each alert
+  # into an ntfy POST with X-Title / X-Priority / X-Tags derived from the alert
+  # severity label + summary/description annotations (so ntfy shows a titled/
+  # priority message, not the raw Alertmanager JSON). The OPERATOR-PRIVATE ntfy
+  # endpoint is read fail-loud from ALERTMANAGER_NTFY_URL — adapter-injected at
+  # apply (No env-specific content in this repo). Profile-gated (monitoring),
+  # no host port, same spec-045 hardening posture.
+  alertmanager-ntfy-bridge:
+    image: ${SMACKEREL_CORE_IMAGE:?SMACKEREL_CORE_IMAGE must be set by the deploy adapter at apply}
+    # Override the core image ENTRYPOINT (smackerel-core) with the bridge binary
+    # baked into the SAME image (Dockerfile builds ./cmd/alertmanager-ntfy-bridge
+    # alongside ./cmd/core).
+    entrypoint: [ "alertmanager-ntfy-bridge" ]
+    restart: unless-stopped
+    # Spec 102 SECURITY F2 — monitoring-tier only (reached by Alertmanager;
+    # posts out to the operator ntfy endpoint). Keeping this unauthenticated
+    # ingress off compute-tier prevents ML from invoking it directly.
+    networks: [ monitoring-tier ]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,nosuid,noexec,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # No host port published (reached in-network by alertmanager only).
+    environment:
+      # The bridge's in-network HTTP listen address (SST bridge_listen_port).
+      ALERTMANAGER_BRIDGE_LISTEN_ADDR: ":${ALERTMANAGER_BRIDGE_LISTEN_PORT}"
+      # The OPERATOR-PRIVATE ntfy endpoint the bridge posts titled messages to.
+      # Adapter-injected fail-loud (Gate G028) — NEVER a literal in this repo.
+      ALERTMANAGER_NTFY_URL: ${ALERTMANAGER_NTFY_URL:?ALERTMANAGER_NTFY_URL must be set by deploy adapter (operator-private ntfy endpoint)}
+    profiles:
+      - monitoring
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${ALERTMANAGER_BRIDGE_LISTEN_PORT}/healthz" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          # Spec 102 SCOPE-102-02 — SST-derived; fail-loud per Gate G028.
+          cpus: "${ALERTMANAGER_BRIDGE_CPU_LIMIT:?ALERTMANAGER_BRIDGE_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${ALERTMANAGER_BRIDGE_MEMORY_LIMIT:?ALERTMANAGER_BRIDGE_MEMORY_LIMIT must be set by deploy adapter}"
+    labels:
+      com.smackerel.component: alertmanager-ntfy-bridge
+      com.smackerel.lifecycle: ephemeral
+      com.bubbles.product: ${METRICS_SCRAPE_LABEL_PRODUCT}
+      com.bubbles.service: alertmanager-ntfy-bridge
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # Spec 064 SCOPE-17 — SearxNG self-hosted web search backend for the
   # open-knowledge agent. Opt-in via the `searxng` Compose profile;
   # ENABLE_SEARXNG=true in the deploy env file (driven by
@@ -439,6 +596,9 @@ services:
   searxng:
     image: ${SEARXNG_IMAGE:?SEARXNG_IMAGE must be set by deploy adapter}
     restart: unless-stopped
+    # Spec 102 SCOPE-102-01 — searxng is on the compute-tier; smackerel-core
+    # reaches it for the open-knowledge web_search backend.
+    networks: [ compute-tier ]
     profiles:
       - searxng
     security_opt:
@@ -502,3 +662,25 @@ volumes:
     name: ${ML_MODEL_CACHE_VOLUME_NAME}
     labels:
       com.smackerel.lifecycle: persistent
+
+# Spec 102 SCOPE-102-01 — network segmentation (defense-in-depth for the
+# compute-only ML sidecar). Three bridge networks split persistence, compute,
+# and unauthenticated monitoring ingress:
+#   data-tier    — postgres + smackerel-core ONLY. The database is reachable
+#                  ONLY by the trusted typed Go tier.
+#   compute-tier — smackerel-core, smackerel-ml, nats, ollama, prometheus,
+#                  searxng. ML reaches only its compute dependencies here.
+#   monitoring-tier — prometheus, alertmanager, alertmanager-ntfy-bridge.
+#                  Prometheus alone straddles compute + monitoring so it can
+#                  scrape metrics and deliver alerts without exposing either
+#                  unauthenticated monitoring receiver to ML.
+# smackerel-core straddles data + compute because it owns the datastore;
+# Prometheus straddles compute + monitoring because it owns alert delivery.
+# Asserted by compose_contract_test.go and alertmanager_bundle_contract_test.go.
+networks:
+  data-tier:
+    driver: bridge
+  compute-tier:
+    driver: bridge
+  monitoring-tier:
+    driver: bridge

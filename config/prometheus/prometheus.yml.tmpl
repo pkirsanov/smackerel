@@ -33,6 +33,27 @@ global:
 rule_files:
   - /etc/prometheus/alerts.yml
 
+# Spec 102 SCOPE-102-02 — DURABLE alert delivery path. The 21 rules in
+# alerts.yml now route to an in-stack Alertmanager that this block wires
+# statically, so alerting SURVIVES every `apply.sh` re-extract with ZERO
+# manual re-run (retiring the fragile knb post-apply alertmanager-standup.sh
+# that appended this block to the host file and had to be re-run after every
+# deploy). `alertmanager` is the compose service name (No env-specific
+# content — never an IP/host); it resolves via the compose-network DNS.
+# 9093 is Alertmanager's fixed upstream API port and MUST equal
+# monitoring.alertmanager.container_port in config/smackerel.yaml AND the
+# alertmanager service's web.listen-address port in
+# deploy/compose.deploy.yml — that three-way parity is LOCKED by
+# internal/deploy/alertmanager_bundle_contract_test.go so no drift is silent.
+# (The literal 9093 here — not an env placeholder — keeps this template's
+# envsubst allowlist unchanged; the parity lock catches any port drift.)
+# Harmless when the monitoring profile is off (Prometheus is down too).
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+
 scrape_configs:
   # smackerel-core publishes its Prometheus metrics on the
   # unauthenticated /metrics endpoint (spec 030 hard constraint).

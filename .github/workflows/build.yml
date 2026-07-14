@@ -307,19 +307,16 @@ jobs:
 
     - name: Generate config bundle for ${{ matrix.env }}
       env:
-        # Spec 061 SCOPE-06c — hardware-tier selector. CI uses 'cpu' for dev/test
-        # (commodity GHA runners) and 'accel' for self-hosted (the operator's
-        # accel-tier deploy target). The runtime tier on the actual deploy host
-        # is independent; this only selects which tier's interactive-model
-        # parameters get baked into the per-env bundle.
-        SMACKEREL_HARDWARE_TIER: ${{ matrix.env == 'self-hosted' && 'accel' || 'cpu' }}
+        # CI emits portable bundles only. Concrete hardware selection is an
+        # external deployment-owner input, never an environment-name mapping.
+        SMACKEREL_HARDWARE_TIER: cpu
       run: |
         ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
 
     - name: Verify bundle determinism
       id: bundle-sha
       env:
-        SMACKEREL_HARDWARE_TIER: ${{ matrix.env == 'self-hosted' && 'accel' || 'cpu' }}
+        SMACKEREL_HARDWARE_TIER: cpu
       run: |
         first_sha=$(sha256sum "dist/config-bundles/config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz" | awk '{print $1}')
         rm -rf dist/config-bundles/
@@ -813,5 +810,5 @@ jobs:
         if-no-files-found: error
   # NOTE: this workflow stops here. Deploy is downstream of CI on a different trust boundary.
   # An operator (or a separate, manually triggered workflow) runs:
-  #   ./smackerel.sh deploy-target self-hosted apply --image-core=<digest> --image-ml=<digest> --config-bundle=<bundle>
+  #   ./smackerel.sh deploy-target <target> apply --image-core=<digest> --image-ml=<digest> --config-bundle=<bundle>
   # CI MUST NOT SSH to any host. CI MUST NOT call deploy-target. (bubbles G074)

@@ -70,7 +70,16 @@ async def classify_drive_file(data: dict, provider: str, model: str, api_key: st
         "timeout": 30,
     }
     apply_structured_extraction_thinking(completion_kwargs, provider)
-    response = await litellm.acompletion(**completion_kwargs)
+    from .ollama_keepalive import dispatch_litellm, resolve_ollama_request_profile
+
+    profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
+    response = await dispatch_litellm(
+        completion_kwargs,
+        provider=provider,
+        model=model,
+        profile=profile,
+        litellm_module=litellm,
+    )
     raw = response.choices[0].message.content
     payload = json.loads(raw)
     validated = validate_drive_classification_result(payload)

@@ -44,6 +44,15 @@ jobs:
     - name: Lint
       run: ./smackerel.sh lint
 
+    # Spec 102 SCOPE-102-01 — smackerel-ml compute-only invariant guard.
+    # Asserts the Python ML sidecar (ml/**) holds no forbidden datastore driver,
+    # reads no direct datastore URL, and loads the PROJECTED secret-free ml.env
+    # (never app.env). Pure bash/grep/find/awk static gate (no Docker, no bundle
+    # build) — the SAME gate ./smackerel.sh test pre-push runs host-side. NO
+    # bypass flag; a re-added secret / driver / infra-URL read fails the build.
+    - name: Compute-only ML sidecar guard (spec 102)
+      run: bash scripts/lint/python-compute-only-guard.sh
+
     # spec-047 R9: generate the SST-derived config files
     # (config/generated/{dev.env,nats.conf,prometheus.yml}) before unit
     # tests run. R8 artifact-upload diagnostics revealed the chronic Go

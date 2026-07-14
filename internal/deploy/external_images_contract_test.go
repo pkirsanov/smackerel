@@ -70,6 +70,12 @@ type externalImagesDoc struct {
 var projectBuiltServices = map[string]bool{
 	"smackerel-core": true,
 	"smackerel-ml":   true,
+	// Spec 102 SCOPE-102-02 — the alertmanager -> ntfy templating bridge rides
+	// the ALREADY-pinned smackerel-core image (image: ${SMACKEREL_CORE_IMAGE},
+	// entrypoint overridden to the bridge binary baked into the same image).
+	// It builds no new image and MUST NOT appear in externalImages — it is a
+	// project-built service by virtue of reusing the core image.
+	"alertmanager-ntfy-bridge": true,
 }
 
 // assertExternalImagesContract returns nil iff both invariants hold for

@@ -133,7 +133,7 @@ func TestRun_ConstructedValidEnv_ExitsZero(t *testing.T) {
 			}
 		}
 		if strings.HasPrefix(ln, "ML_MODEL_MEMORY_PROFILES_JSON=") {
-			lines[i] = `ML_MODEL_MEMORY_PROFILES_JSON='[{"model":"bug-045-fixture-llm-6gib","memory_mib":6144},{"model":"bug-045-fixture-embed-512mib","memory_mib":512},{"model":"nomic-embed-text","memory_mib":768}]'`
+			lines[i] = `ML_MODEL_MEMORY_PROFILES_JSON='[{"model":"bug-045-fixture-llm-6gib","weights_mib":6144,"kv_mib_per_1k_ctx":0,"num_ctx":4096},{"model":"bug-045-fixture-embed-512mib","weights_mib":512,"kv_mib_per_1k_ctx":0,"num_ctx":4096},{"model":"nomic-embed-text","weights_mib":768,"kv_mib_per_1k_ctx":0,"num_ctx":4096}]'`
 		}
 		// Spec 088 — point the switchable_models allowlist at the profiled
 		// fixture model (JSON-list-shaped; co-resident with the gather model =
@@ -214,7 +214,7 @@ func TestRun_OversizedModel_ExitsOne(t *testing.T) {
 			}
 		}
 		if strings.HasPrefix(ln, "ML_MODEL_MEMORY_PROFILES_JSON=") {
-			lines[i] = `ML_MODEL_MEMORY_PROFILES_JSON='[{"model":"bug-045-fixture-llm-20gib","memory_mib":20480},{"model":"bug-045-fixture-llm-6gib","memory_mib":6144},{"model":"bug-045-fixture-embed-512mib","memory_mib":512},{"model":"nomic-embed-text","memory_mib":768}]'`
+			lines[i] = `ML_MODEL_MEMORY_PROFILES_JSON='[{"model":"bug-045-fixture-llm-20gib","weights_mib":20480,"kv_mib_per_1k_ctx":0,"num_ctx":4096},{"model":"bug-045-fixture-llm-6gib","weights_mib":6144,"kv_mib_per_1k_ctx":0,"num_ctx":4096},{"model":"bug-045-fixture-embed-512mib","weights_mib":512,"kv_mib_per_1k_ctx":0,"num_ctx":4096},{"model":"nomic-embed-text","weights_mib":768,"kv_mib_per_1k_ctx":0,"num_ctx":4096}]'`
 		}
 		if strings.HasPrefix(ln, "PHOTOS_INTELLIGENCE_EMBED_MODEL=") {
 			lines[i] = `PHOTOS_INTELLIGENCE_EMBED_MODEL="bug-045-fixture-embed-512mib"`

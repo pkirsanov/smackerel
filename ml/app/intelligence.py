@@ -33,25 +33,33 @@ def _truncate(text: str, max_chars: int = MAX_CONTENT_CHARS) -> str:
 
 async def _call_llm(prompt: str, provider: str, model: str, api_key: str, ollama_url: str = "") -> str | None:
     """Call LLM with the given prompt. Returns response text or None on failure."""
+    model = model.strip()
+    if not model:
+        raise RuntimeError("LLM model is required; no hardcoded model fallback is allowed")
+
+    ollama_payload: dict | None = None
+    ollama_profile = None
+    if provider == "ollama":
+        if not ollama_url:
+            raise RuntimeError("OLLAMA_URL is required for intelligence inference; no fallback is allowed")
+        from .ollama_keepalive import resolve_ollama_request_profile
+
+        ollama_payload = {"model": model, "prompt": prompt, "stream": False}
+        ollama_profile = resolve_ollama_request_profile(model)
+
     try:
         if provider == "ollama":
-            import httpx
+            from .ollama_keepalive import dispatch_ollama_native_json_async
 
-            # Spec 043 — SST: no hardcoded fallback URL. The caller MUST pass
-            # the resolved OLLAMA_URL (sourced from the ML sidecar's env file
-            # which is generated from infrastructure.ollama.* SST keys). An
-            # empty string here is a configuration bug, not a runtime branch.
-            if not ollama_url:
-                logger.warning("LLM call (provider=ollama) missing ollama_url; refusing fallback")
-                return None
-            url = ollama_url
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(
-                    f"{url}/api/generate",
-                    json={"model": model or "llama3", "prompt": prompt, "stream": False},
-                )
-                if resp.status_code == 200:
-                    return resp.json().get("response", "")
+            resp = await dispatch_ollama_native_json_async(
+                f"{ollama_url}/api/generate",
+                ollama_payload,
+                profile=ollama_profile,
+                model=model,
+                timeout=60.0,
+            )
+            if resp.status_code == 200:
+                return resp.json().get("response", "")
         elif provider in ("openai", "azure"):
             import httpx
 
@@ -61,7 +69,7 @@ async def _call_llm(prompt: str, provider: str, model: str, api_key: str, ollama
                     "https://api.openai.com/v1/chat/completions",
                     headers=headers,
                     json={
-                        "model": model or "gpt-4o-mini",
+                        "model": model,
                         "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.3,
                     },

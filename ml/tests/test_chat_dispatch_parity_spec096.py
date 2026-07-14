@@ -1,10 +1,8 @@
-"""Spec 096 SCOPE-03 — SCN-096-A03 byte-for-byte Ollama parity (ADVERSARIAL).
+"""Spec 096 parity plus Spec 102 profiled Ollama dispatch (ADVERSARIAL).
 
-The redesigned provider-aware ``_dispatch_live`` MUST leave the no-override /
-Ollama-only path byte-for-byte identical to the pre-096 code: the
-``litellm.acompletion(**kwargs)`` dict for a fixed Ollama request is unchanged
-and NO provider field (``api_key`` / ``provider`` / ``provider_params``) leaks
-into it (the spec 088 ``IsZero()`` baseline guarantee).
+The provider-aware ``_dispatch_live`` retains every pre-096 caller-owned field
+and never leaks provider credentials. Spec 102 deliberately adds the selected
+SST profile's ``options.num_ctx`` and top-level ``keep_alive``.
 
 These are UNIT tests: ``litellm.acompletion`` is patched to CAPTURE the kwargs
 without a live network call — we assert the COMPOSED arguments the real
@@ -16,9 +14,13 @@ scopes.md live-stack note).
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 import types
 from unittest.mock import MagicMock
+
+import pytest
+from fastapi import HTTPException
 
 from app.routes.chat import (
     _LIVE_DISPATCH_TIMEOUT_SECONDS,
@@ -94,8 +96,7 @@ def _fixed_ollama_request(**overrides) -> ChatRequest:
 
 
 def _expected_ollama_kwargs(req: ChatRequest) -> dict:
-    """The EXACT pre-096 _dispatch_live kwargs shape for a fixed Ollama
-    request."""
+    """The pre-096 fields plus the mandatory Spec-102 profile fields."""
     return {
         "model": "ollama_chat/gemma3:4b",
         "api_base": OLLAMA_URL,
@@ -104,15 +105,14 @@ def _expected_ollama_kwargs(req: ChatRequest) -> dict:
         "temperature": 0.0,
         "tools": _translate_tools(req.tools),
         "max_tokens": 256,
+        "options": {"num_ctx": 8192},
+        "keep_alive": "30m",
     }
 
 
-def test_dispatch_live_ollama_kwargs_byte_for_byte(monkeypatch) -> None:
-    """ADVERSARIAL — for a fixed Ollama request the captured
-    ``litellm.acompletion`` kwargs equal the pre-096 byte-for-byte shape, on
-    BOTH the spec-064 env-driven caller (no provider/api_base) and the explicit
-    spec-096 ``provider='ollama'`` + ``api_base`` caller. Fails if any provider
-    field leaks in or any existing key changes.
+def test_dispatch_ollama_applies_profile_spec102(monkeypatch) -> None:
+    """TP-C3-11 — both typed caller forms preserve their payload while adding
+    the same SST-selected num_ctx and top-level keep_alive.
     """
     # Case 1 — the spec 064 caller shape: NO provider, NO api_base; OLLAMA_URL
     # rides the environment exactly as before.
@@ -121,23 +121,39 @@ def test_dispatch_live_ollama_kwargs_byte_for_byte(monkeypatch) -> None:
     req = _fixed_ollama_request()
     resp = asyncio.run(_dispatch_live(req))
     assert resp.stop_reason.value == "end_turn"
-    assert captured["kwargs"] == _expected_ollama_kwargs(req), (
-        "Ollama dispatch kwargs drifted from the pre-096 byte-for-byte shape"
-    )
+    assert captured["kwargs"] == _expected_ollama_kwargs(req)
     for leaked in ("api_key", "provider", "provider_params"):
         assert leaked not in captured["kwargs"], f"provider field {leaked!r} leaked into the Ollama path"
 
     # Case 2 — the explicit spec-096 Ollama caller: provider='ollama',
     # api_base carries the SAME value with NO OLLAMA_URL in the env. The
-    # composed kwargs MUST be byte-for-byte identical to case 1.
+    # composed kwargs MUST remain identical to case 1.
     monkeypatch.delenv("OLLAMA_URL", raising=False)
     captured2 = _capture_acompletion(monkeypatch)
     req2 = _fixed_ollama_request(provider="ollama", api_base=OLLAMA_URL)
     asyncio.run(_dispatch_live(req2))
-    assert captured2["kwargs"] == _expected_ollama_kwargs(req2), (
-        "explicit provider='ollama' + api_base diverged from the env-driven path"
-    )
+    assert captured2["kwargs"] == _expected_ollama_kwargs(req2)
     assert "api_key" not in captured2["kwargs"]
+
+
+def test_hosted_dispatch_carries_no_ollama_profile_options_spec102(monkeypatch) -> None:
+    """TP-C3-19: hosted dispatch never reads or emits Ollama-only fields."""
+    monkeypatch.delenv("ML_MODEL_MEMORY_PROFILES_JSON", raising=False)
+    monkeypatch.delenv("ML_OLLAMA_KEEP_ALIVE", raising=False)
+    captured = _capture_acompletion(monkeypatch)
+    req = _fixed_ollama_request(
+        provider="openai",
+        model="gpt-4o-mini",
+        api_key="unit-test-provider-key",
+    )
+
+    response = asyncio.run(_dispatch_live(req))
+
+    assert response.stop_reason.value == "end_turn"
+    assert captured["kwargs"]["model"] == "openai/gpt-4o-mini"
+    assert captured["kwargs"]["api_key"] == "unit-test-provider-key"
+    assert "options" not in captured["kwargs"]
+    assert "keep_alive" not in captured["kwargs"]
 
 
 def test_ollama_branch_carries_no_api_key(monkeypatch) -> None:
@@ -152,3 +168,24 @@ def test_ollama_branch_carries_no_api_key(monkeypatch) -> None:
     asyncio.run(_dispatch_live(req))
     assert "api_key" not in captured["kwargs"], "an api_key leaked onto the Ollama dispatch path"
     assert captured["kwargs"]["model"] == "ollama_chat/gemma3:4b"
+
+
+def test_ollama_profile_error_redacts_supplied_value_from_http_and_logs(monkeypatch, caplog) -> None:
+    sentinel = "SENTINEL-CHAT-PROFILE-SECRET-RR03"
+    monkeypatch.setenv("OLLAMA_URL", OLLAMA_URL)
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", sentinel)
+    called = {"count": 0}
+
+    async def capture(**kwargs):
+        called["count"] += 1
+        return _fake_response()
+
+    _install_fake_litellm(monkeypatch, capture)
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(_dispatch_live(_fixed_ollama_request()))
+
+    assert exc_info.value.detail["error"] == "llm_misconfigured"
+    assert sentinel not in str(exc_info.value.detail)
+    assert sentinel not in caplog.text
+    assert called["count"] == 0

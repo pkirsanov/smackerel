@@ -129,6 +129,34 @@ runtime:
     # the multi-GB Ollama models and the ml image layers are never pulled here.
     min_available_disk_gb_ui: 8
 
+# ----------------------------------------------------------------------
+# spec 103 — Age-bounded, project-scoped, DEV-PLANE-ONLY UNUSED image
+# reclamation (consumed by `./smackerel.sh --env dev clean smart` after the
+# volume-preserving stack teardown). Removes orphaned smackerel image
+# *versions* (untagged <none> layers left by frequent `./smackerel.sh build`
+# rebuilds) so they never silently fill the disk — replacing the need for a
+# governance-noncompliant global host prune. SST + NO DEFAULTS
+# (smackerel-no-defaults): all three keys are REQUIRED and fail-loud via
+# required_value/config_key_missing (no fallback, no ${VAR:-default}); an
+# invalid value aborts via validate_unused_image_policy in
+# scripts/commands/config.sh.
+# ----------------------------------------------------------------------
+cleanup:
+  # Master switch for the smart reclamation stage (true|false, no default).
+  # false = the stage is skipped (logged), NOT a config error; a MISSING key
+  # is a fail-loud abort.
+  remove_unused_images: true
+  # Keep anything newer than this (docker image prune --filter until=<N>h).
+  # Positive integer hours; data-safe lower bound on eligibility.
+  unused_image_min_age_hours: 48
+  # project = label-scoped to io.smackerel.lifecycle.owner=smackerel (added to
+  #           Dockerfile + ml/Dockerfile by spec 103 Scope 1); peer-product
+  #           images on the shared daemon are structurally untouched.
+  # all     = system-wide age-bounded prune (still env=prod-excluded, still
+  #           volume/container-safe, still dev-plane-guarded) — an opt-in
+  #           breadth escape hatch, NOT the default.
+  unused_image_scope: project
+
 cors:
   # Allowed origins for cross-origin requests (empty = same-origin only).
   # Set when the API is accessed from a different domain/port (e.g., a separate frontend).
@@ -1820,6 +1848,17 @@ services:
     # host ollama daemon in prod (where smackerel's own ollama container is
     # profile-gated off and the 24h container default therefore does not apply).
     ollama_keep_alive: "30m"
+    # Spec 102 SCOPE-102-03 (BUG-026-006) — SST-owned output-token budget for the
+    # structured-JSON domain/synthesis extraction path. Emitted as
+    # ML_DOMAIN_OUTPUT_TOKEN_BUDGET and read fail-loud by the ml sidecar (no
+    # literal default; Gate G028). REPLACES the hardcoded `2000` magic number in
+    # ml/app/processor.py + ml/app/synthesis.py (the prompt-contract `token_budget`
+    # still wins when a contract sets one; this is the SST fallback, not a code
+    # literal). BUG-026-006 root-caused malformed-JSON capture drops partly to an
+    # under-provisioned output budget truncating the JSON mid-object; making the
+    # budget SST-owned lets the operator size it against the model without a code
+    # change. 4096 tokens comfortably fits a domain/synthesis JSON object.
+    domain_output_token_budget: 4096
     # BUG-026-007 (redteam F2, latency half) — disable qwen3's hidden thinking
     # block on the structured-JSON EXTRACTION path (domain / synthesis /
     # processor / search-rerank / card-categories / drive-classify). Emitted as
@@ -1835,6 +1874,70 @@ services:
     #   false = disable thinking on structured extraction (recommended posture).
     #   true  = keep thinking.
     structured_extraction_thinking: false
+    # Spec 102 SCOPE-102-01 — compute-only env projection allowlist for the
+    # smackerel-ml sidecar (DE4 per-service env-projection foundation).
+    #
+    # scripts/commands/config.sh::project_service_env stages a `ml.env` bundle
+    # artifact = { KEY=VALUE ∈ app.env : KEY matches an entry below } MINUS the
+    # managed-secret set (SHELL_SECRET_KEYS ∪ POSTGRES_* ∪ DATABASE_URL), which
+    # is ALWAYS hard-subtracted regardless of this list. deploy/compose.deploy.yml
+    # points smackerel-ml.env_file at ./ml.env (NOT ./app.env), so the
+    # least-trusted Python tier never receives POSTGRES_PASSWORD, the AUTH
+    # signing/at-rest keys, TELEGRAM_BOT_TOKEN, the connector secrets
+    # (KEEP_GOOGLE_APP_PASSWORD, CARD_REWARDS_GCAL_CREDENTIALS,
+    # WEB_REGISTRATION_INVITE_TOKEN), or the LLM master key. smackerel-core keeps
+    # ./app.env — it is the trusted typed tier that legitimately owns the
+    # datastore/auth secrets.
+    #
+    # An entry is either an EXACT key (NATS_URL) or a trailing-glob PREFIX
+    # (ML_*). The generator FAILS LOUD (Gate G028) if any entry here intersects
+    # SHELL_SECRET_KEYS — the tripwire that makes a naive AUTH_* / LLM_* prefix
+    # (which would leak LLM_PROVIDER_SECRET_MASTER_KEY) impossible to ship.
+    # The projection ADDITIONALLY hard-subtracts SHELL_SECRET_KEYS / POSTGRES_* /
+    # DATABASE_URL unconditionally, so a future mis-declaration still cannot leak.
+    #
+    # The list MUST cover every key the sidecar reads fail-loud at startup
+    # (ml/app/main.py::_check_required_config + ml/app/nats_client.py subscribe):
+    # NATS_URL, LLM_PROVIDER, LLM_MODEL, OLLAMA_URL, SMACKEREL_ENV, ML_LOG_LEVEL,
+    # ML_EMBEDDING_WORKERS, ML_EMBEDDING_QUEUE_MAX, ML_HEALTH_LATENCY_SLA_MS,
+    # ML_PROCESSING_DEGRADED_FALLBACK_ENABLED, ML_OLLAMA_KEEP_ALIVE,
+    # ML_STRUCTURED_EXTRACTION_THINKING, and the NATS_* reconnect/consumer keys —
+    # all covered by the ML_* / NATS_* / OLLAMA_* / AGENT_* prefixes plus the
+    # explicit keys below. Membership is validated against the sidecar's real
+    # env-read surface by scripts/lint/python-compute-only-guard.sh (check c) and
+    # internal/deploy/bundle_secret_contract_test.go.
+    #
+    # NOTE (Google Keep sidecar bridge, spec 059): ml/app/keep_bridge.py reads
+    # KEEP_GOOGLE_APP_PASSWORD (a SHELL_SECRET_KEY) lazily, ONLY when a
+    # keep.sync.request arrives AND connectors.google-keep.gkeep_enabled is true.
+    # It is DISABLED by default (gkeep_enabled: false), the read is lazy (boot is
+    # unaffected — the handshake degrades gracefully), so the password is
+    # deliberately projected OUT (secure-by-default). Enabling Keep live-sync on
+    # the isolated sidecar is an explicit operator security decision that would
+    # trip the tripwire above; the non-secret KEEP_GOOGLE_EMAIL is retained.
+    #
+    # Format: list of strings (exact keys + trailing-glob prefixes). List form
+    # (not a map) mirrors model_memory_profiles / expenses.categories so the SST
+    # flatten pipeline reads it as a JSON array via yaml_get_json.
+    env_allowlist:
+    - NATS_URL
+    - OLLAMA_URL
+    - SMACKEREL_ENV
+    - SMACKEREL_AUTH_TOKEN
+    - PROMPT_CONTRACTS_DIR
+    - HF_HOME
+    - SENTENCE_TRANSFORMERS_HOME
+    - EMBEDDING_MODEL
+    - PHOTOS_INTELLIGENCE_EMBED_MODEL
+    - LLM_PROVIDER
+    - LLM_MODEL
+    - LLM_API_KEY
+    - ENABLE_OLLAMA
+    - KEEP_GOOGLE_EMAIL
+    - "ML_*"
+    - "OLLAMA_*"
+    - "NATS_*"
+    - "AGENT_*"
     # core Validate() chain rejects any configured model whose profile
     # exceeds ML_MEMORY_LIMIT (deploy_resources.smackerel_ml.memory).
     #
@@ -1851,33 +1954,76 @@ services:
     # q4_K_S for deepseek). They are CEILINGS for envelope sizing — actual
     # resident size depends on context length and concurrent requests.
     #
-    # Format: list of {model, memory_mib} objects. List form (not a map) is
-    # required because the SST flatten/JSON pipeline cannot parse YAML map
-    # keys that contain ":" (e.g. "gemma4:26b") — they would be split on
-    # the first ":" and corrupt both key and value. The list-of-objects
-    # form is the same shape used by expenses.categories elsewhere in this
-    # file.
+    # Format: list of {model, weights_mib, kv_mib_per_1k_ctx, num_ctx} objects.
+    # List form (not a map) is required because the SST flatten/JSON pipeline
+    # cannot parse YAML map keys that contain ":" (e.g. "gemma4:26b") — they
+    # would be split on the first ":" and corrupt both key and value. The
+    # list-of-objects form is the same shape used by expenses.categories.
+    #
+    # Spec 102 SCOPE-102-03 — KV-AWARE PROFILE (replaces the old single static
+    # `memory_mib` ceiling that understated real resident footprint). Resident
+    # memory is computed by internal/config/config.go::validateModelEnvelopes as:
+    #     resident_mib = weights_mib
+    #                  + kv_mib_per_1k_ctx × (num_ctx / 1000) × OLLAMA_NUM_PARALLEL
+    #   - weights_mib        the quantized weight footprint (fixed per model/quant).
+    #   - kv_mib_per_1k_ctx  the KV-cache cost per 1000 tokens of context, PER
+    #                        PARALLEL SEQUENCE (0 for non-generative/embedding
+    #                        models, which have no growing KV cache).
+    #   - num_ctx            the per-model context window (SST-driven; REPLACES
+    #                        the host-only `ollama create <tag> PARAMETER num_ctx`
+    #                        hack — the ml sidecar + Go core now thread this onto
+    #                        every ollama request via options.num_ctx).
+    # This makes the validator TRUTHFUL: gemma4:26b's uncapped arch context
+    # (262144) would predict a physically-impossible KV footprint and is refused
+    # fail-loud; the SST-capped num_ctx that fits the host is accepted.
+    #
+    # R-102-D (operator-refinable): the constants below use the 2026-07-09 <deploy-host>
+    # validation measurements (e.g. qwen3:30b-a3b ≈ 31 GB resident @ 32768 ctx,
+    # num_parallel 4: 18432 + 102×32.768×4 ≈ 31.8 GB). A fresh `ollama ps` capture
+    # on <deploy-host> may refine them; the validator MATH is correct regardless of the
+    # exact constants. Every model referenced at runtime MUST have an entry here
+    # (fail-loud validateModelEnvelopes).
     model_memory_profiles:
     - model: "gemma4:26b"
-      memory_mib: 18432 # 18 GiB MoE 26B at q4 + 256K context buffer (operator opt-up; requires raising deploy_resources.ollama.memory first)
+      weights_mib: 16384 # ~16 GiB MoE 26B at q4
+      kv_mib_per_1k_ctx: 256 # gemma wide-head KV per 1k ctx per sequence
+      num_ctx: 8192 # SST cap (replaces the host `ollama create num_ctx 8192` hack; uncapped 262144 arch context would blow the envelope)
     - model: "gemma3:4b"
-      memory_mib: 4096 # 4.0 GiB multimodal (text+vision) at q4_K_M; 3.3 GiB download + ~25% context buffer at 4K context. Source: https://ollama.com/library/gemma3 (4b tag). Spec 045 BUG-045-001 default; ceiling is conservative published value; live `ollama ps` verification deferred to operator-host run (dev sandbox has no ollama daemon).
+      weights_mib: 3584 # 3.5 GiB multimodal (text+vision) at q4_K_M
+      kv_mib_per_1k_ctx: 48
+      num_ctx: 8192
     - model: "llama3.1:8b"
-      memory_mib: 6144 # 6 GiB at q4_K_M; 4.7 GiB download + context buffer. Tool-capable per Ollama tools support list. Used as substrate fast/default on self-hosted — fastest tool-calling Ollama model that emits real OpenAI tool_calls (gemma3:4b errors with "does not support tools"; qwen2.5:7b returns no tool_calls).
+      weights_mib: 5120 # 5 GiB at q4_K_M; tool-capable substrate fast/default
+      kv_mib_per_1k_ctx: 64
+      num_ctx: 8192
     - model: "deepseek-ocr:3b"
-      memory_mib: 2560 # 2.5 GiB
+      weights_mib: 2304 # 2.25 GiB
+      kv_mib_per_1k_ctx: 32
+      num_ctx: 4096
     - model: "deepseek-r1:32b"
-      memory_mib: 22528 # 22 GiB at q4 (operator opt-up; requires raising deploy_resources.ollama.memory first)
+      weights_mib: 20480 # 20 GiB at q4 (operator opt-up)
+      kv_mib_per_1k_ctx: 160
+      num_ctx: 8192
     - model: "deepseek-r1:7b"
-      memory_mib: 4864 # 4.75 GiB reasoning (distilled-from-Qwen-2.5) at q4_K_M; 4.7 GiB download + ~5% context buffer at 4K context. Source: https://ollama.com/library/deepseek-r1 (7b tag). Spec 045 BUG-045-001 default; ceiling is conservative published value; live `ollama ps` verification deferred to operator-host run (dev sandbox has no ollama daemon).
+      weights_mib: 4352 # 4.25 GiB reasoning (distilled-from-Qwen-2.5) at q4_K_M
+      kv_mib_per_1k_ctx: 56
+      num_ctx: 8192
     - model: "gpt-oss:20b"
-      memory_mib: 14336 # 14 GiB at q4 (operator opt-up; requires raising deploy_resources.ollama.memory first)
+      weights_mib: 13312 # 13 GiB at q4 (operator opt-up)
+      kv_mib_per_1k_ctx: 96
+      num_ctx: 8192
     - model: "nomic-embed-text"
-      memory_mib: 768 # 0.75 GiB embedding model
+      weights_mib: 768 # 0.75 GiB embedding model — no growing KV cache
+      kv_mib_per_1k_ctx: 0
+      num_ctx: 2048
     - model: "qwen2.5:0.5b-instruct"
-      memory_mib: 1024 # 1 GiB tiny test model
+      weights_mib: 896 # 0.875 GiB tiny test model
+      kv_mib_per_1k_ctx: 8
+      num_ctx: 4096
     - model: "qwen3:30b-a3b"
-      memory_mib: 20480 # 20 GiB ceiling: 18 GB q4 weights (host `ollama list` 2026-06-21) + ~2 GiB context buffer. 30.5B MoE (3B active). Open-knowledge SYNTHESIS standing default on self-hosted (operator 2026-06-21, superseding the interim gpt-oss:20b / spec 089's deepseek-r1:32b); co-resident with gemma4:26b gather (18432) = 38912 MiB inside the 49152 MiB / 48G envelope.
+      weights_mib: 18432 # 18 GiB q4 weights (host `ollama list` 2026-06-21); 30.5B MoE (3B active). Open-knowledge SYNTHESIS standing default on self-hosted.
+      kv_mib_per_1k_ctx: 102 # measured: 31 GB resident @ 32768 ctx, num_parallel 4 => KV 13312 MiB / 4 seq / 32.768k ≈ 102 MiB/1k/seq (R-102-D refinable)
+      num_ctx: 32768
 
 # Spec 045 FR-045-001 — deploy resource envelopes (CPU + memory) per service.
 # Every value is required (fail-loud SST). The deploy adapter consumes these
@@ -1938,6 +2084,22 @@ deploy_resources:
   searxng:
     cpus: "1.0"
     memory: "256M"
+  # Spec 102 SCOPE-102-02 — Alertmanager resource envelope. Profile-gated
+  # (monitoring); when the operator enables `--profile monitoring`, the
+  # deploy adapter MUST emit ALERTMANAGER_CPU_LIMIT and
+  # ALERTMANAGER_MEMORY_LIMIT into app.env or compose aborts at
+  # substitution time (Gate G028). Alertmanager is a tiny stateless router
+  # (dedup/group/inhibit) — a 128M/0.5cpu envelope is generous.
+  alertmanager:
+    cpus: "0.5"
+    memory: "128M"
+  # Spec 102 SCOPE-102-02 — the alertmanager -> ntfy templating bridge is a
+  # tiny stateless HTTP shim that rides the ALREADY-pinned smackerel-core
+  # image (no new external image to pin/sign). It only forwards a handful
+  # of alerts per event, so a 64M/0.25cpu envelope is ample. Fail-loud SST.
+  alertmanager_ntfy_bridge:
+    cpus: "0.25"
+    memory: "64M"
 
 # Spec 049 — Monitoring Stack SST (FR-049-001 / FR-049-003 / FR-049-005).
 #
@@ -1968,6 +2130,29 @@ monitoring:
     # plus weekly post-mortem queries without runaway disk usage on a
     # self-hosted-class machine. Tune via SST without code changes.
     retention_days: 15
+  # Spec 102 SCOPE-102-02 — Durable Prometheus -> Alertmanager -> ntfy
+  # routing. The 21 bundled alert rules (config/prometheus/alerts.yml) now
+  # have a DURABLE delivery path folded INTO the product bundle so alerting
+  # survives every apply (retiring the fragile knb post-apply
+  # alertmanager-standup.sh that had to be re-run after every deploy).
+  # Alertmanager runs under the same `monitoring` Compose profile as
+  # Prometheus (off by default). All keys fail-loud SST (Gate G028).
+  alertmanager:
+    # Pinned image tag@digest (no `latest`, no fallback). Digest =
+    # index/manifest-list digest (verified in the knb shared-observability
+    # image-digests.lock, regenerated by resolve-image-digests.sh --refresh).
+    # Bumping requires a design discussion + adversarial regression re-run.
+    image: "prom/alertmanager:v0.28.0@sha256:d5155cfac40a6d9250ffc97c19db2c5e190c7bc57c6b67125c94903358f8c7d8"
+    # Internal container port for the Alertmanager cluster/API. Matches the
+    # upstream default; Prometheus reaches it in-network at alertmanager:9093.
+    container_port: 9093
+    # Spec 102 SCOPE-102-02 — the alertmanager -> ntfy templating bridge's
+    # in-network HTTP listen port. The bridge has NO host port (reached only
+    # by Alertmanager in-network); this is a pure compose-internal address.
+    # The rendered <bundle>/alertmanager_ntfy_url points Alertmanager's
+    # webhook receiver at http://alertmanager-ntfy-bridge:<this-port>/ so the
+    # product alertmanager.yml carries NO endpoint literal (SCN-102-C2-04).
+    bridge_listen_port: 9099
 
 # Spec 048 — Backup and Restore Automation (FR-048-001 / FR-048-002 /
 # FR-048-003).
@@ -2183,6 +2368,28 @@ infrastructure:
     # so the prewarmed model stays resident for the full BS-002/BS-007
     # retrieval-qa-v1 budget window.
     keep_alive: "24h"
+    # Spec 102 SCOPE-102-03 — Ollama concurrency + residency posture, SST-driven
+    # (fail-loud, Gate G028; no host-tag `ollama create` override on the deploy
+    # path). Both feed the KV-aware validateModelEnvelopes envelope math AND set
+    # the daemon posture the operator's shared host ollama runs with:
+    #   num_parallel       — OLLAMA_NUM_PARALLEL. How many concurrent sequences
+    #                        the daemon allocates KV cache for PER LOADED MODEL.
+    #                        The KV term scales with this: a model's resident
+    #                        footprint = weights + kv_per_1k × (num_ctx/1000) ×
+    #                        num_parallel. Matches the knb shared-host override
+    #                        (OLLAMA_NUM_PARALLEL=4).
+    #   max_loaded_models  — OLLAMA_MAX_LOADED_MODELS. How many DISTINCT models
+    #                        the daemon keeps co-resident. `1` = on-demand SWAP
+    #                        (qwen3 gather ↔ gemma4 vision load one-at-a-time):
+    #                        the validator then requires only that each model
+    #                        fits ALONE, NOT that the co-resident SUM fits. `>1`
+    #                        = co-resident: the validator requires the working
+    #                        set SUM to fit OLLAMA_MEMORY_LIMIT. Default `1` is
+    #                        the SAFE posture until live `ollama ps` co-residency
+    #                        is proven on <deploy-host> (R-102-D); see docs/Operations.md
+    #                        "Model Envelope Sizing".
+    num_parallel: 4
+    max_loaded_models: 1
     test:
       image: ollama/ollama:0.23.2
       model: qwen2.5:0.5b-instruct
