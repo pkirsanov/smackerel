@@ -81,6 +81,7 @@ NEW MODEL:   System → observes everything → processes → connects → synth
 ```
 
 The user's primary job is **to live their life.** The system watches, absorbs, processes, and connects. The user interacts by:
+
 - Occasionally flagging something explicitly ("save this")
 - Asking vague questions ("what was that thing about...")
 - Reading the daily smackerel (brief digest)
@@ -351,7 +352,7 @@ sequenceDiagram
     CORE->>SRC: Poll for new data (Go connector, API call)
     SRC->>CORE: Raw data + source qualifiers
     CORE->>CORE: Dedup check (hash / ID)
-    
+
     alt New artifact
         CORE->>CORE: Extract content (go-readability)
         CORE->>NATS: Publish artifact for ML processing
@@ -381,7 +382,7 @@ sequenceDiagram
 
     U->>CH: Share URL / paste text / voice note
     CH->>CORE: Inbound message (via Go SDK)
-    
+
     alt URL detected
         CORE->>CORE: Fetch & extract content (go-readability)
         CORE->>NATS: Publish for ML processing
@@ -400,7 +401,7 @@ sequenceDiagram
         ML->>NATS: Structured artifact + embedding
         NATS->>CORE: Receive result
     end
-    
+
     CORE->>PG: Store + embed + link
     CORE->>CH: Brief confirmation (optional, configurable)
 ```
@@ -838,10 +839,10 @@ of the `contracts.TransportAdapter` interface. It lives at
 | `adapter.go` | `Adapter` struct, `Sender` interface, `CaptureFn` / `UserResolver` function types, `Options` (all required, no defaults), `NewAdapter` fail-loud constructor, `Translate` / `Render` / `HandleUpdate` / `Start` / `Stop` / `IsBound` / `Assistant` methods, `Name() == "telegram"`. |
 | `translate_inbound.go` | `*tgbotapi.Update` → `AssistantMessage` translation. Precedence: callback → `/reset` → other slash (returns `ErrNotAssistantMessage` so existing handlers run) → empty (also `ErrNotAssistantMessage`) → plain text. |
 | `render_outbound.go` | `AssistantResponse` → outbound Telegram message. Honors status token, body, sources block, confirm card, disambiguation prompt, error cause. Silent-path short-circuit when body+keyboard are both empty. Pure helper `buildTelegramRendering` powers golden tests. |
-| `render_sources.go` | Trailing numbered sources block (UX §14.B.1). Artifact references render as `  N. <8-hex> — <title> (<YYYY-MM-DD>)`; external as `  N. <provider> — <title> (<RFC3339>)`. |
+| `render_sources.go` | Trailing numbered sources block (UX §14.B.1). Artifact references render as `N. <8-hex> — <title> (<YYYY-MM-DD>)`; external as `N. <provider> — <title> (<RFC3339>)`. |
 | `render_confirm.go` | Inline-keyboard confirm card with `[positive][negative]` row + `callback_data` encoding the `ConfirmRef`. |
 | `render_disambig.go` | Numbered disambiguation list + optional inline-keyboard shortcut row (≤3 buttons). |
-| `callbacks.go` | Callback-data scheme `a:c:<confirmRef>:<pos|neg>` / `a:d:<disambigRef>:<num>`. Public `IsAssistantCallback(data)` predicate lets the bot dispatch only assistant-owned callbacks to the adapter. |
+| `callbacks.go` | Callback-data scheme `a:c:<confirmRef>:<pos|neg>` / `a:d:<disambigRef>:<num>`. Public`IsAssistantCallback(data)` predicate lets the bot dispatch only assistant-owned callbacks to the adapter. |
 | `identity.go`, `reset.go` | Documentation stubs for the identity-type-assertion contract and the `/reset` command shape. |
 
 **Bot wiring (`internal/telegram/bot.go` + `internal/telegram/assistant_wiring.go`):**
@@ -1380,6 +1381,7 @@ By default, confirmations are **minimal and optional** (configurable):
 ```
 
 Low-confidence captures:
+
 ```
 ❓ Not sure what to do with this. Can you add context?
 → Reply with what this is about
@@ -1404,7 +1406,7 @@ flowchart TD
     G --> H[Stage 5: Knowledge Graph Linking]
     H --> I[Stage 6: Topic Scoring]
     I --> J[Stored Artifact]
-    
+
     D --> H
 ```
 
@@ -1432,6 +1434,7 @@ flowchart TD
 Single LLM call per artifact with the Universal Processing Prompt (see §15.1):
 
 **Output per artifact:**
+
 | Field | Description |
 |---|---|
 | `artifact_type` | article, video, email, product, person, idea, place, book, recipe, bill, trip, trail, note, media, event |
@@ -1455,6 +1458,7 @@ Single LLM call per artifact with the Universal Processing Prompt (see §15.1):
 #### Stage 5: Knowledge Graph Linking
 
 For each new artifact:
+
 1. **Vector similarity search**: Find top 10 most related existing artifacts by embedding
 2. **Entity matching**: Link to existing people, organizations, places
 3. **Topic clustering**: Add to existing topic clusters or create new topic
@@ -1465,6 +1469,7 @@ For each new artifact:
 #### Stage 6: Topic Scoring
 
 When a new artifact is added to a topic:
+
 - Increment topic's `capture_count`
 - Update topic's `last_active` timestamp
 - Recalculate topic's `momentum_score` (see §11)
@@ -1579,13 +1584,13 @@ flowchart TD
     Q[User Query] --> PARSE[Parse intent]
     PARSE --> EMBED_Q[Embed query]
     PARSE --> FILTER[Extract filters: type, date, person, topic]
-    
+
     EMBED_Q --> VECTOR_SEARCH[Vector similarity: top 30]
     FILTER --> PRE_FILTER[Apply metadata filters]
-    
+
     VECTOR_SEARCH --> MERGE[Merge & intersect results]
     PRE_FILTER --> MERGE
-    
+
     MERGE --> GRAPH_EXPAND[Expand via knowledge graph: related + connected]
     GRAPH_EXPAND --> RERANK[LLM rerank: query + user context + recency]
     RERANK --> FORMAT[Format top result(s)]
@@ -1610,6 +1615,7 @@ flowchart TD
 ### 9.4 Result Formats
 
 **Single best result:**
+
 ```
 "SaaS Pricing Strategy" — YouTube video (42 min)
 Patrick Campbell, ProfitWell channel
@@ -1618,6 +1624,7 @@ Key idea: Price based on value metrics, not cost-plus.
 ```
 
 **Multiple results (list):**
+
 ```
 Found 5 items about negotiation:
 1. 📘 "Never Split the Difference" (book, saved Jan 8)
@@ -1628,6 +1635,7 @@ Found 5 items about negotiation:
 ```
 
 **Dossier (aggregated):**
+
 ```
 Your Lisbon Trip (May 12-18, 2026):
 ✈️ Flight: TAP TP502, LHR→LIS, May 12 (confirmation: ABC123)
@@ -1694,6 +1702,7 @@ momentum_score = (
 ```
 
 Where `recency_decay_factor`:
+
 ```
 recency_decay = exp(-0.02 * days_since_last_activity)
 ```
@@ -1711,7 +1720,7 @@ stateDiagram-v2
     Dormant --> Archived: No captures in 180 days AND user confirms
     Archived --> Active: New capture or user resurfaces
     Cooling --> Active: New capture
-    
+
     Hot --> Hot: Continued high engagement
 ```
 
@@ -1759,6 +1768,7 @@ relevance_score = (
 Delivered via user's preferred channel at configured time (default: 7:00 AM).
 
 **Format:**
+
 ```
 Good morning. Here's your smackerel:
 
@@ -1778,6 +1788,7 @@ Good morning. Here's your smackerel:
 ```
 
 **Constraints:**
+
 - Under 150 words
 - Phone-screen readable
 - Only include items that are actionable or noteworthy
@@ -1788,6 +1799,7 @@ Good morning. Here's your smackerel:
 Delivered Sunday at configured time (default: 4:00 PM).
 
 **Format:**
+
 ```
 WEEK IN REVIEW (Mar 30 – Apr 5):
 
@@ -1818,6 +1830,7 @@ Possible blind spot?
 ```
 
 **Constraints:**
+
 - Under 250 words
 - Honest and direct — not cheerful fluff
 - Always includes one serendipity resurface
@@ -1897,14 +1910,14 @@ stateDiagram-v2
     Silent --> Alerting: High-value contextual trigger
     Silent --> Digesting: Scheduled digest time
     Silent --> Prompting: Cannot resolve autonomously
-    
+
     Responding --> Silent: Response delivered
     Alerting --> Silent: Alert delivered (max 2/day)
     Digesting --> Silent: Digest delivered
     Prompting --> WaitingForInput: Prompt sent
     WaitingForInput --> Silent: User responds or dismisses
     WaitingForInput --> Silent: 24h timeout (auto-dismiss)
-    
+
     note right of Silent
         System is always ingesting
         and processing in background.
@@ -2859,6 +2872,7 @@ We evaluated four connector frameworks for potential reuse:
 - Self-hostable via Docker Compose
 
 **Smackerel differentiates from Khoj by:**
+
 - Passive email/calendar/YouTube ingestion (Khoj doesn't ingest these)
 - Cross-domain synthesis engine (Khoj doesn't find connections across sources)
 - Topic lifecycle with momentum scoring (Khoj doesn't model knowledge evolution)
