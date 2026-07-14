@@ -48,7 +48,6 @@ def _hosted_request(secret: str) -> ChatRequest:
         model="claude-3-5-sonnet",
         messages=[ChatMessage(role=Role.USER, content="hi")],
         provider="anthropic",
-        api_base="https://api.anthropic.test",
         api_key=secret,
     )
 

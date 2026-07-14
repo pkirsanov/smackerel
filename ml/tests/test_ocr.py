@@ -12,6 +12,7 @@ Focuses on functionality not covered by test_keep.py:
 import asyncio
 import base64
 import hashlib
+import json
 import os
 import sys
 from unittest.mock import patch
@@ -264,6 +265,154 @@ class TestExtractTextOllama:
                 result = extract_text_ollama(b"fake image", "http://localhost:11434")
 
         assert result == ""
+
+    @pytest.mark.parametrize(
+        ("profile_case", "expected_category"),
+        [
+            ("missing", "missing_document"),
+            ("unprofiled", "missing_model_profile"),
+            ("invalid", "invalid_num_ctx"),
+        ],
+    )
+    def test_profile_config_failure_is_category_only_and_never_cached_security102(
+        self, monkeypatch, caplog, profile_case, expected_category
+    ):
+        """Profile failures are fatal configuration errors, not OCR transport fallback."""
+        from app.ocr import extract_text_ollama
+        from app.ollama_keepalive import OllamaProfileConfigError
+
+        sentinel = f"SENTINEL-OCR-PROFILE-{profile_case.upper()}"
+        model = sentinel if profile_case != "invalid" else "deepseek-ocr:3b"
+        monkeypatch.setenv("ENABLE_OLLAMA", "true")
+        monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+        monkeypatch.setenv("OLLAMA_VISION_MODEL", model)
+        monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+        if profile_case == "missing":
+            monkeypatch.delenv("ML_MODEL_MEMORY_PROFILES_JSON", raising=False)
+        elif profile_case == "unprofiled":
+            monkeypatch.setenv(
+                "ML_MODEL_MEMORY_PROFILES_JSON",
+                '[{"model":"profiled-vision:1b","num_ctx":4096}]',
+            )
+        else:
+            monkeypatch.setenv(
+                "ML_MODEL_MEMORY_PROFILES_JSON",
+                json.dumps([{"model": model, "num_ctx": sentinel}]),
+            )
+
+        network_calls = 0
+
+        class FakeRequests:
+            @staticmethod
+            def post(url, json, timeout):
+                nonlocal network_calls
+                network_calls += 1
+                raise AssertionError("profile failure must precede Ollama network I/O")
+
+        with patch.dict(sys.modules, {"requests": FakeRequests}):
+            with pytest.raises(OllamaProfileConfigError) as exc_info:
+                extract_text_ollama(b"profile-failure-image", "http://ollama:11434")
+
+            caplog.clear()
+            with patch("app.ocr.extract_text_tesseract", return_value="tiny"):
+                response = asyncio.run(
+                    handle_ocr_request(
+                        {
+                            "image_hash": "caller-controlled",
+                            "image_data": base64.b64encode(b"profile-failure-image").decode(),
+                        }
+                    )
+                )
+
+        computed_hash = hashlib.sha256(b"profile-failure-image").hexdigest()
+        assert exc_info.value.category == expected_category
+        assert response == {
+            "status": "error",
+            "text": "",
+            "cached": False,
+            "ocr_engine": "none",
+            "image_hash": computed_hash,
+            "error": "ollama_profile_config_error",
+            "error_category": expected_category,
+        }
+        assert network_calls == 0
+        assert computed_hash not in _ocr_cache
+        assert response["status"] != "ok"
+        assert sentinel not in str(exc_info.value)
+        assert sentinel not in caplog.text
+        assert sentinel not in json.dumps(response, sort_keys=True)
+
+    def test_transport_failure_preserves_tesseract_fallback_and_cache(self, monkeypatch):
+        """Ordinary Ollama transport failure remains a non-fatal OCR fallback."""
+        monkeypatch.setenv("ENABLE_OLLAMA", "true")
+        monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+        monkeypatch.setenv("OLLAMA_VISION_MODEL", "deepseek-ocr:3b")
+        monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+        monkeypatch.setenv(
+            "ML_MODEL_MEMORY_PROFILES_JSON",
+            '[{"model":"deepseek-ocr:3b","num_ctx":4096}]',
+        )
+        image_bytes = b"transport-fallback-image"
+        computed_hash = hashlib.sha256(image_bytes).hexdigest()
+        network_calls = 0
+
+        class FakeRequests:
+            @staticmethod
+            def post(url, json, timeout):
+                nonlocal network_calls
+                network_calls += 1
+                raise ConnectionError("ollama unavailable")
+
+        with patch.dict(sys.modules, {"requests": FakeRequests}):
+            with patch("app.ocr.extract_text_tesseract", return_value="tiny"):
+                response = asyncio.run(
+                    handle_ocr_request(
+                        {
+                            "image_hash": "caller-controlled",
+                            "image_data": base64.b64encode(image_bytes).decode(),
+                        }
+                    )
+                )
+
+        assert network_calls == 1
+        assert response["status"] == "ok"
+        assert response["text"] == "tiny"
+        assert response["ocr_engine"] == "tesseract"
+        assert _ocr_cache[computed_hash] == {"text": "tiny", "engine": "tesseract"}
+
+
+def test_do_ocr_applies_native_ollama_profile_spec102(monkeypatch):
+    """TP-C3-09: native OCR JSON carries the vision profile and preserves the
+    production-generated image/prompt/stream payload."""
+    from app.ocr import extract_text_ollama
+
+    captured: dict = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"response": "visible text"}
+
+    class FakeRequests:
+        @staticmethod
+        def post(url, json, timeout):
+            captured.update({"url": url, "json": json, "timeout": timeout})
+            return FakeResponse()
+
+    monkeypatch.setenv("OLLAMA_VISION_MODEL", "deepseek-ocr:3b")
+    with patch.dict(sys.modules, {"requests": FakeRequests}):
+        result = extract_text_ollama(b"spec102-image", "http://ollama:11434")
+
+    payload = captured["json"]
+    assert result == "visible text"
+    assert captured["url"].endswith("/api/generate")
+    assert payload["model"] == "deepseek-ocr:3b"
+    assert payload["options"]["num_ctx"] == 4096
+    assert payload["keep_alive"] == "30m"
+    assert payload["stream"] is False
+    assert payload["images"] == [base64.b64encode(b"spec102-image").decode("utf-8")]
 
 
 # ---------------------------------------------------------------------------

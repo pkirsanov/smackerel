@@ -20,6 +20,44 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+_PROVIDER_PARAM_ALLOWLIST: dict[str, frozenset[str]] = {
+    "anthropic": frozenset(),
+    "openai": frozenset({"organization"}),
+    "azure-foundry": frozenset({"api_version", "deployment"}),
+    "google": frozenset({"project", "location"}),
+    "bedrock": frozenset({"region"}),
+}
+_API_BASE_PROVIDERS = frozenset({"", "ollama", "openai", "azure-foundry"})
+
+
+def validate_provider_dispatch_controls(
+    provider: str | None,
+    api_base: str | None,
+    provider_params: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Return a copy of provider-owned routing params or fail before dispatch."""
+    normalized_provider = (provider or "").strip().lower()
+    if api_base is not None and normalized_provider not in _API_BASE_PROVIDERS:
+        raise ValueError(
+            f"provider={normalized_provider or 'ollama'} key=api_base is not owned by this provider contract"
+        )
+
+    params = dict(provider_params or {})
+    if normalized_provider in ("", "ollama"):
+        allowed = frozenset()
+    else:
+        allowed = _PROVIDER_PARAM_ALLOWLIST.get(normalized_provider, frozenset())
+    unsupported = sorted(set(params) - allowed)
+    if unsupported:
+        raise ValueError(
+            f"provider={normalized_provider or 'ollama'} contains unsupported provider_params keys: "
+            + ", ".join(unsupported)
+        )
+    for key, value in params.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"provider={normalized_provider or 'ollama'} key={key} must be a non-empty string")
+    return params
+
 
 class Role(str, Enum):
     SYSTEM = "system"
@@ -140,6 +178,11 @@ class ChatRequest(BaseModel):
     api_base: str | None = None
     api_key: str | None = None
     provider_params: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def _validate_provider_controls(self) -> ChatRequest:
+        validate_provider_dispatch_controls(self.provider, self.api_base, self.provider_params)
+        return self
 
 
 class ChatResponse(BaseModel):

@@ -79,7 +79,7 @@ Feature: qwen3 thinking is disabled on structured-JSON extraction (BUG-026-007)
 - [x] All existing tests pass (no regressions)
   - Evidence: report.md "Test Evidence → Full ml unit suite".
 - [x] Bug marked as Fixed in bug.md
-   - Evidence: bug.md Status line = "MECHANISM CORRECTED (native Ollama `think` field) + UNIT TESTS
+  - Evidence: bug.md Status line = "MECHANISM CORRECTED (native Ollama `think` field) + UNIT TESTS
      REWORKED IN-REPO"; state.json `status` = `fixed_in_repo`, `certification.status` =
      `in_repo_verified`.
 - [ ] Live "domain+synthesis fast + valid JSON" verified — **PENDING orchestrator redeploy of

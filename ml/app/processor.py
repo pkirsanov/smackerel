@@ -13,7 +13,12 @@ from litellm.exceptions import (
     ServiceUnavailableError,
 )
 
-from .ollama_keepalive import resolve_ollama_keep_alive
+from .ollama_keepalive import (
+    OllamaProfileConfigError,
+    dispatch_litellm,
+    resolve_domain_output_token_budget,
+    resolve_ollama_request_profile,
+)
 from .ollama_thinking import apply_structured_extraction_thinking
 
 logger = logging.getLogger("smackerel-ml.processor")
@@ -144,23 +149,21 @@ async def process_content(
             "api_key": api_key,
             "api_base": api_base,
             "temperature": 0.1,
-            "max_tokens": 2000,
+            # Spec 102 SCOPE-102-03 (BUG-026-006) — SST-owned output-token
+            # budget, replacing the hardcoded 2000 magic number that could
+            # truncate a domain-extraction JSON mid-object (a BUG-026-006
+            # malformed-JSON-drop contributor).
+            "max_tokens": resolve_domain_output_token_budget(),
             "response_format": {"type": "json_object"},
             "timeout": 600,
         }
-        if provider == "ollama":
-            # F2 — keep the domain model resident across a capture session so
-            # sparse captures skip the 22-45s cold-load. Effective only via the
-            # ollama_chat/ route set above (keep_alive is top-level there; the
-            # legacy ollama/ generate transform buries it under `options`).
-            completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
-
         # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on this
         # universal-processing structured-JSON extraction call when SST says so
         # via native think=False (litellm forwards it top-level on the
         # ollama_chat/ route). No-op for non-ollama / when thinking stays on / on
         # non-qwen models.
         apply_structured_extraction_thinking(completion_kwargs, provider)
+        profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
 
         # Retry with exponential backoff for transient LLM errors
         max_attempts = 3
@@ -170,7 +173,13 @@ async def process_content(
 
         for attempt in range(max_attempts):
             try:
-                response = await litellm.acompletion(**completion_kwargs)
+                response = await dispatch_litellm(
+                    completion_kwargs,
+                    provider=provider,
+                    model=model,
+                    profile=profile,
+                    litellm_module=litellm,
+                )
                 break
             except (RateLimitError, ServiceUnavailableError, InternalServerError) as exc:
                 last_exc = exc
@@ -306,6 +315,8 @@ async def process_content(
             }
 
         return {"success": False, "error": f"Invalid JSON from LLM: {e}"}
+    except OllamaProfileConfigError:
+        raise
     except Exception as e:
         logger.error("LLM processing failed", exc_info=True)
 

@@ -101,6 +101,23 @@ def test_resolve_provider_route_missing_env(monkeypatch: pytest.MonkeyPatch) -> 
     assert resolve_provider_route("fast") is None
 
 
+def test_profile_error_response_envelope_redacts_supplied_value_security102(monkeypatch: pytest.MonkeyPatch) -> None:
+    sentinel = "SENTINEL-AGENT-PROFILE-SECRET-RR03"
+    _set_route_env(monkeypatch, provider="ollama", model="test-model")
+    monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", sentinel)
+    calls = {"count": 0}
+
+    async def capture(**kwargs):
+        calls["count"] += 1
+        return SimpleNamespace()
+
+    envelope = asyncio.run(handle_invoke(_request(), completion_fn=capture))
+
+    assert envelope["outcome"] == "provider-error"
+    assert sentinel not in json.dumps(envelope, sort_keys=True)
+    assert calls["count"] == 0
+
+
 def test_render_tools_uses_input_schema_as_parameters() -> None:
     tools = render_tools([{"name": "echo", "description": "d", "input_schema": {"type": "object", "x": 1}}])
     assert tools == [
@@ -309,6 +326,33 @@ def test_handle_invoke_passes_ollama_determinism_kwargs(monkeypatch: pytest.Monk
     assert seen_kwargs["top_k"] == 1
     assert seen_kwargs["seed"] == 42
     assert seen_kwargs["num_predict"] == 256
+
+
+def test_handle_invoke_applies_ollama_profile_spec102(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TP-C3-01: the real injected-completion builder applies the selected
+    profile without losing the determinism or tool-call envelope."""
+    _set_route_env(monkeypatch, provider="ollama", model="qwen2.5:0.5b-instruct")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TOP_K", "1")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_SEED", "42")
+    captured: dict[str, Any] = {}
+
+    async def capture(**kwargs):  # noqa: ANN003
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=None, content='{"answer":"ok"}'))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+            model=kwargs["model"],
+        )
+
+    result = asyncio.run(handle_invoke(_request(), completion_fn=capture))
+
+    assert "error" not in result
+    assert captured["model"] == "ollama_chat/qwen2.5:0.5b-instruct"
+    assert captured["options"]["num_ctx"] == 4096
+    assert captured["keep_alive"] == "30m"
+    assert captured["top_k"] == 1
+    assert captured["seed"] == 42
+    assert captured["tools"][0]["function"]["name"] == "echo"
 
 
 def test_handle_invoke_does_not_inject_ollama_kwargs_for_other_providers(monkeypatch: pytest.MonkeyPatch) -> None:

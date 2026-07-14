@@ -56,6 +56,10 @@ const (
 	// master key, or AAD mismatch). The wrapped vault error never carries
 	// plaintext.
 	RejectDecryptFailed RejectReason = "decrypt_failed"
+	// RejectInvalidConnectionParams — a connection carries a routing param
+	// outside its provider-owned closed contract, or a declared param has an
+	// invalid type. The supplied value is never retained in the error.
+	RejectInvalidConnectionParams RejectReason = "invalid_connection_params"
 )
 
 // ResolveError is the typed, fail-loud refusal returned by Resolve. It is
@@ -71,15 +75,22 @@ type ResolveError struct {
 	Kind string
 	// ConnID is the resolved connection id, when one was located.
 	ConnID string
+	// Param is the rejected non-secret connection-param key, when applicable.
+	// Its supplied value is intentionally never stored.
+	Param string
 	// err is the wrapped cause (e.g. the vault decryption error). The vault
 	// itself never includes plaintext in its errors.
 	err error
 }
 
 func (e *ResolveError) Error() string {
+	reason := string(e.Reason)
+	if e.Param != "" {
+		reason += fmt.Sprintf(" (param=%q)", e.Param)
+	}
 	return fmt.Sprintf(
 		"llm: dispatch resolution rejected provider-qualified model %q (kind=%q connection=%q): %s",
-		e.Model, e.Kind, e.ConnID, e.Reason)
+		e.Model, e.Kind, e.ConnID, reason)
 }
 
 // Unwrap exposes the wrapped cause for errors.Is / errors.As. The wrapped
@@ -157,14 +168,24 @@ func (r *DispatchResolver) Resolve(providerQualifiedModel string) (ResolvedDispa
 	if !conn.Enabled {
 		return ResolvedDispatch{}, &ResolveError{Reason: RejectConnectionDisabled, Model: providerQualifiedModel, Kind: kind, ConnID: conn.ID}
 	}
+	apiBase, providerParams, invalidParam := providerDispatchParams(kind, conn.Params)
+	if invalidParam != "" {
+		return ResolvedDispatch{}, &ResolveError{
+			Reason: RejectInvalidConnectionParams,
+			Model:  providerQualifiedModel,
+			Kind:   kind,
+			ConnID: conn.ID,
+			Param:  invalidParam,
+		}
+	}
 
 	// Local / no-secret connection (ollama): the byte-for-byte Ollama dispatch.
 	// Reached ONLY because the selected id named this kind — never as a
 	// fallback for a rejected hosted target.
 	if conn.SecretRef.Mode == config.ModelConnectionSecretModeNone {
 		req := ChatRequest{Model: backend, Provider: kind}
-		if base := apiBaseFromParams(conn.Params); base != "" {
-			b := base
+		if apiBase != "" {
+			b := apiBase
 			req.APIBase = &b
 		}
 		return ResolvedDispatch{Request: req, Attribution: providerQualifiedModel}, nil
@@ -195,12 +216,12 @@ func (r *DispatchResolver) Resolve(providerQualifiedModel string) (ResolvedDispa
 	}
 	key := apiKey
 	req.APIKey = &key
-	if base := apiBaseFromParams(conn.Params); base != "" {
-		b := base
+	if apiBase != "" {
+		b := apiBase
 		req.APIBase = &b
 	}
-	if pp := providerParamsFromConn(conn.Params); len(pp) > 0 {
-		req.ProviderParams = pp
+	if len(providerParams) > 0 {
+		req.ProviderParams = providerParams
 	}
 	return ResolvedDispatch{Request: req, Attribution: providerQualifiedModel}, nil
 }
@@ -231,44 +252,59 @@ func splitProviderQualified(id string) (kind, backend string, ok bool) {
 	return k, b, true
 }
 
-// apiBaseFromParams pulls the connection's endpoint/base URL from the generic
-// non-secret params. The two well-known keys are "base_url" (ollama, openai)
-// and "endpoint" (azure-foundry). Absent → "" (the field is then omitted).
-func apiBaseFromParams(params map[string]any) string {
-	for _, key := range []string{"base_url", "endpoint"} {
-		if v, ok := params[key]; ok {
-			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				return strings.TrimSpace(s)
-			}
-		}
-	}
-	return ""
+type providerDispatchContract struct {
+	apiBaseKey string
+	params     map[string]string
 }
 
-// providerParamsFromConn carries the non-secret per-kind routing extras to the
-// sidecar, excluding the keys already consumed as api_base. The result is the
-// generic routing map (Azure api_version+deployment, OpenAI org, Vertex
-// project+location, Bedrock region); it NEVER contains a credential (secrets
-// live in the vault, never in params — design §5.1).
-func providerParamsFromConn(params map[string]any) map[string]any {
-	if len(params) == 0 {
-		return nil
+// providerDispatchContracts is the only connection-param surface allowed onto
+// the sidecar wire. Source keys are SST names; values are the LiteLLM names.
+// Ollama-only controls such as options/keep_alive and generic controls such as
+// extra_headers/timeout are absent by design and therefore rejected.
+var providerDispatchContracts = map[string]providerDispatchContract{
+	config.ModelConnectionKindOllama:       {apiBaseKey: "base_url"},
+	config.ModelConnectionKindAnthropic:    {},
+	config.ModelConnectionKindOpenAI:       {apiBaseKey: "base_url", params: map[string]string{"org": "organization"}},
+	config.ModelConnectionKindAzureFoundry: {apiBaseKey: "endpoint", params: map[string]string{"api_version": "api_version", "deployment": "deployment"}},
+	config.ModelConnectionKindGoogle:       {params: map[string]string{"project": "project", "location": "location"}},
+	config.ModelConnectionKindBedrock:      {params: map[string]string{"region": "region"}},
+}
+
+// providerDispatchParams validates and translates one connection's generic SST
+// params into its closed per-provider wire contract. invalidParam is a key only;
+// supplied values never enter errors or logs.
+func providerDispatchParams(kind string, params map[string]any) (apiBase string, providerParams map[string]any, invalidParam string) {
+	contract, known := providerDispatchContracts[kind]
+	if !known {
+		return "", nil, "kind"
 	}
-	consumed := map[string]struct{}{"base_url": {}, "endpoint": {}}
-	out := make(map[string]any, len(params))
 	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
+	for key := range params {
+		keys = append(keys, key)
 	}
-	sort.Strings(keys) // deterministic ordering for stable wire bytes
-	for _, k := range keys {
-		if _, skip := consumed[k]; skip {
+	sort.Strings(keys)
+	for _, key := range keys {
+		wireKey := ""
+		isAPIBase := key == contract.apiBaseKey && contract.apiBaseKey != ""
+		if !isAPIBase {
+			wireKey = contract.params[key]
+			if wireKey == "" {
+				return "", nil, key
+			}
+		}
+		value, ok := params[key].(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return "", nil, key
+		}
+		value = strings.TrimSpace(value)
+		if isAPIBase {
+			apiBase = value
 			continue
 		}
-		out[k] = params[k]
+		if providerParams == nil {
+			providerParams = make(map[string]any, len(contract.params))
+		}
+		providerParams[wireKey] = value
 	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return apiBase, providerParams, ""
 }

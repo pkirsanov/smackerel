@@ -39,7 +39,7 @@ trap cleanup EXIT
 # containers from a previous run would otherwise confuse the health
 # probe.
 smackerel_run_with_timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
-"$REPO_DIR/smackerel.sh" --env "$TEST_ENV" build
+# Test-environment `up` performs the required build-fresh step itself.
 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
 
 ENV_FILE="$(smackerel_require_env_file "$TEST_ENV")"

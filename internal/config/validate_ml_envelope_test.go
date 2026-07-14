@@ -8,6 +8,35 @@ import (
 	"testing"
 )
 
+// staticMMPs builds a map[string]ModelMemoryProfile from a legacy
+// model→MiB map, encoding each value as WEIGHTS-only (kv_mib_per_1k_ctx: 0),
+// so ResidentMiB(anyParallel) == the given MiB. This preserves the exact
+// arithmetic the pre-spec-102 tests assert (profile value == resident) while
+// exercising the new KV-aware type. Spec 102 SCOPE-102-03.
+func staticMMPs(m map[string]int) map[string]ModelMemoryProfile {
+	out := make(map[string]ModelMemoryProfile, len(m))
+	for k, v := range m {
+		out[k] = ModelMemoryProfile{WeightsMiB: v, KVMiBPer1kCtx: 0, NumCtx: 4096}
+	}
+	return out
+}
+
+// mmpJSON renders a legacy model→MiB map as a weights-only
+// ML_MODEL_MEMORY_PROFILES_JSON payload (kv 0, num_ctx 4096) so resident ==
+// weights, preserving legacy envelope arithmetic under the KV-aware parser.
+func mmpJSON(entries ...[2]string) string {
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, e := range entries {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(`{"model":"` + e[0] + `","weights_mib":` + e[1] + `,"kv_mib_per_1k_ctx":0,"num_ctx":4096}`)
+	}
+	b.WriteByte(']')
+	return b.String()
+}
+
 // Spec 045 FR-045-002 — Per-service model memory envelope validation
 // (BUG-045-001: validator now routes each model env var to its correct
 // deploy envelope; ollama-routed against OLLAMA_MEMORY_LIMIT and
@@ -63,7 +92,7 @@ func TestValidate_RejectsOversizedMLModel(t *testing.T) {
 	t.Setenv("LLM_MODEL", "big-model")
 	t.Setenv("EMBEDDING_MODEL", "small-model")
 	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON",
-		`[{"model":"big-model","memory_mib":2048},{"model":"small-model","memory_mib":256},{"model":"gemma4:26b","memory_mib":256},{"model":"nomic-embed-text","memory_mib":256},{"model":"deepseek-ocr:3b","memory_mib":256}]`)
+		mmpJSON([2]string{"big-model", "2048"}, [2]string{"small-model", "256"}, [2]string{"gemma4:26b", "256"}, [2]string{"nomic-embed-text", "256"}, [2]string{"deepseek-ocr:3b", "256"}))
 
 	_, err := Load()
 	if err == nil {
@@ -96,7 +125,7 @@ func TestValidate_RejectsMissingModelProfileEntry(t *testing.T) {
 	t.Setenv("LLM_MODEL", "profiled-model")
 	t.Setenv("EMBEDDING_MODEL", "profiled-embed")
 	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON",
-		`[{"model":"profiled-model","memory_mib":1024},{"model":"profiled-embed","memory_mib":256},{"model":"gemma4:26b","memory_mib":256},{"model":"nomic-embed-text","memory_mib":256},{"model":"deepseek-ocr:3b","memory_mib":256}]`)
+		mmpJSON([2]string{"profiled-model", "1024"}, [2]string{"profiled-embed", "256"}, [2]string{"gemma4:26b", "256"}, [2]string{"nomic-embed-text", "256"}, [2]string{"deepseek-ocr:3b", "256"}))
 
 	_, err := Load()
 	if err == nil {
@@ -126,7 +155,7 @@ func TestValidate_AcceptsModelWithinEnvelope(t *testing.T) {
 	t.Setenv("LLM_MODEL", "fits-model")
 	t.Setenv("EMBEDDING_MODEL", "fits-embed")
 	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON",
-		`[{"model":"fits-model","memory_mib":2048},{"model":"fits-embed","memory_mib":256},{"model":"gemma4:26b","memory_mib":256},{"model":"nomic-embed-text","memory_mib":256},{"model":"deepseek-ocr:3b","memory_mib":256}]`)
+		mmpJSON([2]string{"fits-model", "2048"}, [2]string{"fits-embed", "256"}, [2]string{"gemma4:26b", "256"}, [2]string{"nomic-embed-text", "256"}, [2]string{"deepseek-ocr:3b", "256"}))
 
 	cfg, err := Load()
 	if err != nil {
@@ -135,9 +164,9 @@ func TestValidate_AcceptsModelWithinEnvelope(t *testing.T) {
 	if cfg.MLMemoryLimitMiB != 3072 {
 		t.Errorf("MLMemoryLimitMiB: expected 3072 (3G), got %d", cfg.MLMemoryLimitMiB)
 	}
-	if cfg.MLModelMemoryProfiles["fits-model"] != 2048 {
-		t.Errorf("MLModelMemoryProfiles[fits-model]: expected 2048, got %d",
-			cfg.MLModelMemoryProfiles["fits-model"])
+	if cfg.MLModelMemoryProfiles["fits-model"].WeightsMiB != 2048 {
+		t.Errorf("MLModelMemoryProfiles[fits-model].WeightsMiB: expected 2048, got %d",
+			cfg.MLModelMemoryProfiles["fits-model"].WeightsMiB)
 	}
 }
 
@@ -153,14 +182,16 @@ func TestValidate_AcceptsModelWithinEnvelope(t *testing.T) {
 // whole-config env dance — the ollama/ml bucket model fields are left
 // empty and skipped. SCN-088-A07 / FR-10.
 func TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088(t *testing.T) {
-	profiles := map[string]int{
+	profiles := staticMMPs(map[string]int{
 		"gemma4:26b":      18432,
 		"deepseek-r1:7b":  4864,
 		"deepseek-r1:32b": 22528,
-	}
+	})
 	base := func() *Config {
 		c := &Config{
 			MLModelMemoryProfiles: profiles,
+			OllamaNumParallel:     4,
+			OllamaMaxLoadedModels: 2, // co-resident posture: activate the sum checks (spec 102)
 			MLMemoryLimit:         "4G",
 			MLMemoryLimitMiB:      4096,
 			OllamaMemoryLimit:     "28G",
@@ -247,15 +278,17 @@ func TestValidateModelEnvelopes_SwitchableOverEnvelopeRejected_Spec088(t *testin
 // directly on a hand-built Config (the ollama/ml bucket model fields are
 // left empty and skipped). SCN-089-A06 / FR-2.
 func TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089(t *testing.T) {
-	profiles := map[string]int{
+	profiles := staticMMPs(map[string]int{
 		"gemma4:26b":      18432,
 		"deepseek-r1:7b":  4864,
 		"deepseek-r1:32b": 22528,
 		"llama3.1:8b":     6144,
-	}
+	})
 	base := func() *Config {
 		c := &Config{
 			MLModelMemoryProfiles: profiles,
+			OllamaNumParallel:     4,
+			OllamaMaxLoadedModels: 2, // co-resident posture: activate the sum checks (spec 102)
 			MLMemoryLimit:         "4G",
 			MLMemoryLimitMiB:      4096,
 			OllamaMemoryLimit:     "28G",
@@ -318,14 +351,16 @@ func TestValidateModelEnvelopes_StandingDefaultOverEnvelopeRejected_Spec089(t *t
 // must not false-positive on the real shipped self-hosted configuration.
 // SCN-089-A06 / SCN-089-A01.
 func TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089(t *testing.T) {
-	profiles := map[string]int{
+	profiles := staticMMPs(map[string]int{
 		"gemma4:26b":      18432,
 		"deepseek-r1:7b":  4864,
 		"deepseek-r1:32b": 22528,
 		"llama3.1:8b":     6144,
-	}
+	})
 	c := &Config{
 		MLModelMemoryProfiles: profiles,
+		OllamaNumParallel:     4,
+		OllamaMaxLoadedModels: 2, // co-resident posture: require the sum fits (spec 102)
 		MLMemoryLimit:         "4G",
 		MLMemoryLimitMiB:      4096,
 		OllamaMemoryLimit:     "48G",
@@ -347,12 +382,14 @@ func TestValidateModelEnvelopes_StandingDefaultCoResidenceFits_Spec089(t *testin
 // model_memory_profiles entry cannot be loaded and is rejected fail-loud.
 // SCN-089-A07 (supplementary) / FR-8.
 func TestValidateModelEnvelopes_ToolCapableGatherEntryUnprofiledRejected_Spec089(t *testing.T) {
-	profiles := map[string]int{
+	profiles := staticMMPs(map[string]int{
 		"gemma4:26b":      18432,
 		"deepseek-r1:32b": 22528,
-	}
+	})
 	c := &Config{
 		MLModelMemoryProfiles: profiles,
+		OllamaNumParallel:     4,
+		OllamaMaxLoadedModels: 2,
 		MLMemoryLimit:         "4G",
 		MLMemoryLimitMiB:      4096,
 		OllamaMemoryLimit:     "48G",
@@ -446,11 +483,11 @@ func setBug045RoutingFixture(t *testing.T) {
 	t.Helper()
 	setRequiredEnv(t)
 	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON",
-		`[`+
-			`{"model":"bug-045-fixture-llm-6gib","memory_mib":6144},`+
-			`{"model":"bug-045-fixture-llm-20gib","memory_mib":20480},`+
-			`{"model":"bug-045-fixture-embed-512mib","memory_mib":512}`+
-			`]`)
+		mmpJSON(
+			[2]string{"bug-045-fixture-llm-6gib", "6144"},
+			[2]string{"bug-045-fixture-llm-20gib", "20480"},
+			[2]string{"bug-045-fixture-embed-512mib", "512"},
+		))
 	// Ml-sidecar bucket — both fields use the 512 MiB synthetic embed.
 	t.Setenv("EMBEDDING_MODEL", "bug-045-fixture-embed-512mib")
 	t.Setenv("PHOTOS_INTELLIGENCE_EMBED_MODEL", "bug-045-fixture-embed-512mib")
@@ -504,8 +541,8 @@ func TestValidateModelEnvelopes_AC5a_OllamaRoutedFitsOllamaEnvelopeAccepted(t *t
 	if cfg.MLMemoryLimitMiB != 3072 {
 		t.Errorf("expected MLMemoryLimitMiB=3072 (3G), got %d", cfg.MLMemoryLimitMiB)
 	}
-	if cfg.MLModelMemoryProfiles["bug-045-fixture-llm-6gib"] != 6144 {
-		t.Errorf("expected fixture profile 6144 MiB, got %d", cfg.MLModelMemoryProfiles["bug-045-fixture-llm-6gib"])
+	if cfg.MLModelMemoryProfiles["bug-045-fixture-llm-6gib"].WeightsMiB != 6144 {
+		t.Errorf("expected fixture profile 6144 MiB, got %d", cfg.MLModelMemoryProfiles["bug-045-fixture-llm-6gib"].WeightsMiB)
 	}
 }
 
@@ -609,14 +646,14 @@ func TestValidateModelEnvelopes_AC5b_OllamaRoutedExceedsOllamaEnvelopeRejectedWi
 // 20 GiB ollama envelope ALONE but sum to 24576 MiB (> 20480), exactly the
 // self-hosted gemma4:26b + llama3.1:8b over-subscription this guard catches.
 const spec082InteractiveProfiles = `[` +
-	`{"model":"spec082-big-a-18g","memory_mib":18432},` +
-	`{"model":"spec082-big-b-6g","memory_mib":6144},` +
-	`{"model":"spec082-small-x-1g","memory_mib":1024},` +
-	`{"model":"spec082-small-y-4g","memory_mib":4096},` +
-	`{"model":"all-MiniLM-L6-v2","memory_mib":256},` +
-	`{"model":"gemma4:26b","memory_mib":3072},` +
-	`{"model":"nomic-embed-text","memory_mib":256},` +
-	`{"model":"deepseek-ocr:3b","memory_mib":2560}]`
+	`{"model":"spec082-big-a-18g","weights_mib":18432,"kv_mib_per_1k_ctx":0,"num_ctx":4096},` +
+	`{"model":"spec082-big-b-6g","weights_mib":6144,"kv_mib_per_1k_ctx":0,"num_ctx":4096},` +
+	`{"model":"spec082-small-x-1g","weights_mib":1024,"kv_mib_per_1k_ctx":0,"num_ctx":4096},` +
+	`{"model":"spec082-small-y-4g","weights_mib":4096,"kv_mib_per_1k_ctx":0,"num_ctx":4096},` +
+	`{"model":"all-MiniLM-L6-v2","weights_mib":256,"kv_mib_per_1k_ctx":0,"num_ctx":4096},` +
+	`{"model":"gemma4:26b","weights_mib":3072,"kv_mib_per_1k_ctx":0,"num_ctx":4096},` +
+	`{"model":"nomic-embed-text","weights_mib":256,"kv_mib_per_1k_ctx":0,"num_ctx":4096},` +
+	`{"model":"deepseek-ocr:3b","weights_mib":2560,"kv_mib_per_1k_ctx":0,"num_ctx":4096}]`
 
 // TestValidate_RejectsOversubscribedInteractiveOllamaSet — SCN-082-B01.
 // Two interactive models each fit a 20 GiB envelope alone but sum to
@@ -627,8 +664,9 @@ const spec082InteractiveProfiles = `[` +
 // every model fits the envelope individually).
 func TestValidate_RejectsOversubscribedInteractiveOllamaSet(t *testing.T) {
 	setRequiredEnv(t)
-	t.Setenv("OLLAMA_MEMORY_LIMIT", "20G") // 20480 MiB
-	t.Setenv("OLLAMA_KEEP_ALIVE", "-1")    // resident → sum guard active
+	t.Setenv("OLLAMA_MEMORY_LIMIT", "20G")    // 20480 MiB
+	t.Setenv("OLLAMA_KEEP_ALIVE", "-1")       // resident → sum guard active
+	t.Setenv("OLLAMA_MAX_LOADED_MODELS", "2") // co-resident posture → sum guard active (spec 102)
 	// Distinct interactive set = {big-a 18432, big-b 6144} = 24576 MiB.
 	t.Setenv("LLM_MODEL", "spec082-big-a-18g")
 	t.Setenv("OLLAMA_MODEL", "spec082-big-a-18g")
@@ -664,8 +702,9 @@ func TestValidate_RejectsOversubscribedInteractiveOllamaSet(t *testing.T) {
 // false-positive (5120 MiB ≤ 8192 MiB).
 func TestValidate_AcceptsFittingInteractiveOllamaSum(t *testing.T) {
 	setRequiredEnv(t)
-	t.Setenv("OLLAMA_MEMORY_LIMIT", "8G") // 8192 MiB
-	t.Setenv("OLLAMA_KEEP_ALIVE", "-1")   // resident → sum guard active
+	t.Setenv("OLLAMA_MEMORY_LIMIT", "8G")     // 8192 MiB
+	t.Setenv("OLLAMA_KEEP_ALIVE", "-1")       // resident → sum guard active
+	t.Setenv("OLLAMA_MAX_LOADED_MODELS", "2") // co-resident posture → sum guard active (spec 102)
 	// Distinct interactive set = {small-x 1024, small-y 4096} = 5120 MiB.
 	t.Setenv("LLM_MODEL", "spec082-small-x-1g")
 	t.Setenv("OLLAMA_MODEL", "spec082-small-x-1g")
@@ -687,7 +726,8 @@ func TestValidate_AcceptsFittingInteractiveOllamaSum(t *testing.T) {
 func TestValidate_SumGuardRelaxedForNonResidentKeepAlive(t *testing.T) {
 	setRequiredEnv(t)
 	t.Setenv("OLLAMA_MEMORY_LIMIT", "20G")
-	t.Setenv("OLLAMA_KEEP_ALIVE", "5m") // NON-resident → sum guard relaxed
+	t.Setenv("OLLAMA_KEEP_ALIVE", "5m")       // NON-resident → sum guard relaxed
+	t.Setenv("OLLAMA_MAX_LOADED_MODELS", "2") // co-resident posture: isolates the keep-alive gate (spec 102)
 	t.Setenv("LLM_MODEL", "spec082-big-a-18g")
 	t.Setenv("OLLAMA_MODEL", "spec082-big-a-18g")
 	t.Setenv("OLLAMA_VISION_MODEL", "spec082-big-a-18g")

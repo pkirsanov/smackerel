@@ -12,7 +12,12 @@ import time
 
 import yaml
 
-from .ollama_keepalive import resolve_ollama_keep_alive
+from .ollama_keepalive import (
+    OllamaProfileConfigError,
+    dispatch_litellm,
+    resolve_domain_output_token_budget,
+    resolve_ollama_request_profile,
+)
 from .ollama_thinking import apply_structured_extraction_thinking
 from .receipt_detection import detect_receipt_content
 
@@ -173,7 +178,10 @@ async def handle_extract(
     )
 
     temperature = contract.get("temperature", 0.3)
-    token_budget = contract.get("token_budget", 2000)
+    # Spec 102 SCOPE-102-03 (BUG-026-006) — the prompt contract's token_budget
+    # still wins when set; otherwise fall back to the SST-owned budget
+    # (ML_DOMAIN_OUTPUT_TOKEN_BUDGET) instead of a hardcoded 2000 magic number.
+    token_budget = contract.get("token_budget", resolve_domain_output_token_budget())
 
     start = time.time()
 
@@ -198,13 +206,7 @@ async def handle_extract(
             "response_format": {"type": "json_object"},
         }
         if provider == "ollama":
-            # F2 — ollama_chat/ (/api/chat) is the only litellm Ollama path that
-            # forwards keep_alive to the request TOP LEVEL; the legacy ollama/
-            # (/api/generate) transform buries it under `options` (Ollama ignores
-            # it there). Pass api_base + the SST-owned keep_alive window so the
-            # synthesis model stays resident across a capture session.
             completion_kwargs["api_base"] = ollama_url
-            completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
 
         # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on the
         # synthesis structured-JSON extraction call when SST says so via the
@@ -213,13 +215,21 @@ async def handle_extract(
         # qwen3's template). No-op for non-ollama / when thinking stays on / on
         # non-qwen models.
         apply_structured_extraction_thinking(completion_kwargs, provider)
-
-        response = await litellm.acompletion(**completion_kwargs)
+        profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
+        response = await dispatch_litellm(
+            completion_kwargs,
+            provider=provider,
+            model=model,
+            profile=profile,
+            litellm_module=litellm,
+        )
 
         llm_output_text = response.choices[0].message.content
         tokens_used = response.usage.total_tokens if response.usage else 0
         model_used = response.model or llm_model
 
+    except OllamaProfileConfigError:
+        raise
     except Exception as e:
         logger.error("LLM call failed for synthesis: %s", type(e).__name__)
         return {
@@ -340,23 +350,27 @@ async def handle_crosssource(
             "response_format": {"type": "json_object"},
         }
         if provider == "ollama":
-            # F2 — keep_alive is honored only at the request top level, which
-            # litellm forwards for ollama_chat/ but not the legacy ollama/
-            # generate transform. Keep the cross-source model resident too.
             crosssource_kwargs["api_base"] = ollama_url
-            crosssource_kwargs["keep_alive"] = resolve_ollama_keep_alive()
 
         # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on the
         # cross-source structured-JSON extraction call too via native
         # think=False (litellm forwards it top-level on the ollama_chat/ route).
         # No-op for non-ollama / when thinking stays on / on non-qwen models.
         apply_structured_extraction_thinking(crosssource_kwargs, provider)
-
-        response = await litellm.acompletion(**crosssource_kwargs)
+        profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
+        response = await dispatch_litellm(
+            crosssource_kwargs,
+            provider=provider,
+            model=model,
+            profile=profile,
+            litellm_module=litellm,
+        )
 
         output = json.loads(response.choices[0].message.content)
         model_used = response.model or llm_model
 
+    except OllamaProfileConfigError:
+        raise
     except Exception as e:
         logger.error("Cross-source LLM call failed: %s", type(e).__name__)
         return {

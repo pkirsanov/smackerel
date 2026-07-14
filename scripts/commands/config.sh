@@ -556,6 +556,167 @@ in_secret_keys() {
   done
   return 1
 }
+
+# ─────────────────────────────────────────────────────────────────────
+# Spec 102 SCOPE-102-01 — per-service compute-only env projection (DE4).
+#
+# project_service_env <service> <app_env_file> <out_env_file> <allowlist_json>
+#
+# Writes <out_env_file> = a header + every `KEY=VALUE` line in <app_env_file>
+# whose KEY matches an <allowlist_json> entry, MINUS the managed-secret set.
+# The managed-secret subtraction is ALWAYS applied regardless of the declared
+# allowlist (belt-and-braces):
+#   - every key in SHELL_SECRET_KEYS
+#   - every POSTGRES_* connection part
+#   - DATABASE_URL (embeds the postgres password)
+# so a future allowlist mis-declaration can never leak a managed secret into a
+# compute-only sidecar's env.
+#
+# An <allowlist_json> entry is a JSON string that is either an EXACT key
+# ("NATS_URL") or a trailing-glob PREFIX ("ML_*"); a `*` is honored ONLY as the
+# final character.
+#
+# TRIPWIRE (fail-loud, Gate G028): if ANY declared allowlist entry MATCHES a
+# SHELL_SECRET_KEYS member (exact key, or a prefix whose stem is a prefix of the
+# secret's name), the projection ABORTS non-zero — it refuses to ship an
+# allowlist that intersects the managed-secret set (this is what makes a naive
+# "AUTH_*" or "LLM_*" prefix impossible).
+#
+# Future-secret tripwire: a key selected by a prefix may not be registered in
+# SHELL_SECRET_KEYS yet. Any projected key ending in a credential suffix
+# (_KEY, _TOKEN, _SECRET, _PASSWORD, _PASSPHRASE, _CREDENTIAL, or
+# _CREDENTIALS) therefore fails loud unless it is in the narrow, reviewed
+# compute-credential sanction below. This prevents a future key such as
+# OLLAMA_CLOUD_TOKEN from silently riding the existing OLLAMA_* prefix.
+#
+# Determinism: input order is preserved and no timestamp/nonce is emitted, so
+# the projected file is byte-reproducible for a fixed app.env.
+PROJECTED_COMPUTE_CREDENTIAL_KEYS=(
+  LLM_API_KEY
+  SMACKEREL_AUTH_TOKEN
+)
+
+_is_projected_compute_credential() {
+  local candidate="$1" normalized
+  normalized="$(printf '%s' "$candidate" | tr '[:lower:]' '[:upper:]')"
+  case "$normalized" in
+    *_KEY | *_TOKEN | *_SECRET | *_PASSWORD | *_PASSPHRASE | *_CREDENTIAL | *_CREDENTIALS) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_is_sanctioned_compute_credential() {
+  local candidate="$1" sanctioned
+  for sanctioned in "${PROJECTED_COMPUTE_CREDENTIAL_KEYS[@]}"; do
+    [[ "$candidate" == "$sanctioned" ]] && return 0
+  done
+  return 1
+}
+
+_env_allowlist_match() {
+  # _env_allowlist_match <key> <newline-delimited-allowlist>
+  # Returns 0 iff <key> matches an allowlist entry (exact key OR trailing-glob
+  # prefix). Designed to be called in an `if` condition so it is set -e-safe.
+  local key="$1" allowlist="$2" entry stem
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    if [[ "$entry" == *'*' ]]; then
+      stem="${entry%\*}"
+      [[ "$key" == "$stem"* ]] && return 0
+    else
+      [[ "$key" == "$entry" ]] && return 0
+    fi
+  done <<<"$allowlist"
+  return 1
+}
+
+project_service_env() {
+  local service="$1"
+  local app_env_file="$2"
+  local out_env_file="$3"
+  local allowlist_json="$4"
+
+  [[ -f "$app_env_file" ]] || {
+    echo "ERROR: project_service_env: app env file not found: $app_env_file" >&2
+    exit 1
+  }
+
+  # Parse the JSON array of allowlist entries into a newline-delimited list.
+  local allowlist
+  allowlist="$(printf '%s' "$allowlist_json" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except Exception as exc:  # noqa: BLE001
+    sys.stderr.write("env_allowlist is not valid JSON: %s\n" % exc)
+    sys.exit(3)
+if not isinstance(data, list) or not data:
+    sys.stderr.write("env_allowlist must be a non-empty list\n")
+    sys.exit(3)
+for entry in data:
+    if not isinstance(entry, str) or entry == "":
+        sys.stderr.write("env_allowlist entry must be a non-empty string\n")
+        sys.exit(3)
+    print(entry)
+')" || {
+    echo "ERROR: project_service_env($service): could not parse env_allowlist JSON (fail-loud SST, no default)" >&2
+    exit 1
+  }
+
+  # TRIPWIRE — refuse an allowlist that intersects SHELL_SECRET_KEYS.
+  local entry sk stem
+  while IFS= read -r entry; do
+    [[ -z "$entry" ]] && continue
+    for sk in "${SHELL_SECRET_KEYS[@]}"; do
+      if [[ "$entry" == *'*' ]]; then
+        stem="${entry%\*}"
+        if [[ "$sk" == "$stem"* ]]; then
+          echo "ERROR: project_service_env($service) TRIPWIRE: env_allowlist prefix '$entry' matches managed secret '$sk' (SHELL_SECRET_KEYS). Refusing to project a secret-intersecting allowlist (spec 102 SCOPE-102-01, Gate G028)." >&2
+          exit 1
+        fi
+      elif [[ "$entry" == "$sk" ]]; then
+        echo "ERROR: project_service_env($service) TRIPWIRE: env_allowlist entry '$entry' IS a managed secret (SHELL_SECRET_KEYS). Refusing (spec 102 SCOPE-102-01, Gate G028)." >&2
+        exit 1
+      fi
+    done
+  done <<<"$allowlist"
+
+  # Header (self-documenting; no volatile content so the bundle stays reproducible).
+  {
+    echo "# Spec 102 SCOPE-102-01 — compute-only env projection for $service."
+    echo "# Generated by scripts/commands/config.sh::project_service_env from app.env"
+    echo "# via services.ml.env_allowlist MINUS SHELL_SECRET_KEYS / POSTGRES_* / DATABASE_URL."
+    echo "# The least-trusted compute tier MUST NOT receive any managed secret."
+  } >"$out_env_file"
+
+  # Project: emit allowlisted, non-secret KEY=VALUE lines in input order. The
+  # `if _env_allowlist_match ...; then` form keeps this set -e-safe (a
+  # non-matching final line must not make the loop — and thus this function —
+  # return non-zero and trip `set -e`).
+  local line key
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Only well-formed KEY=VALUE lines (skip comments/blanks).
+    case "$line" in
+      [A-Za-z_]*=*) : ;;
+      *) continue ;;
+    esac
+    key="${line%%=*}"
+    # Hard-subtract the managed-secret set UNCONDITIONALLY.
+    if in_secret_keys "$key"; then continue; fi
+    case "$key" in
+      POSTGRES_* | DATABASE_URL) continue ;;
+    esac
+    if _env_allowlist_match "$key" "$allowlist"; then
+      if _is_projected_compute_credential "$key" && ! _is_sanctioned_compute_credential "$key"; then
+        echo "ERROR: project_service_env($service) TRIPWIRE: projected key '$key' has a credential suffix but is not an explicitly sanctioned compute credential. Refusing prefix-based credential projection (spec 102 SCOPE-102-01, Gate G028)." >&2
+        exit 1
+      fi
+      printf '%s\n' "$line" >>"$out_env_file"
+    fi
+  done <"$app_env_file"
+
+  return 0
+}
 # ─────────────────────────────────────────────────────────────────────
 
 PROJECT_NAME="$(required_value project.name)"
@@ -592,6 +753,13 @@ ML_OLLAMA_KEEP_ALIVE="$(required_value services.ml.ollama_keep_alive)"
 # = keep thinking. A no-op on non-qwen Ollama models.
 ML_STRUCTURED_EXTRACTION_THINKING="$(required_value services.ml.structured_extraction_thinking)"
 
+# Spec 102 SCOPE-102-03 (BUG-026-006) — SST-owned output-token budget for the
+# structured-JSON domain/synthesis extraction path. Required SST value, read
+# fail-loud by the ml sidecar (ml/app/ollama_keepalive.py::resolve_domain_output_token_budget);
+# no literal default. REPLACES the hardcoded 2000 magic number in
+# ml/app/processor.py + ml/app/synthesis.py.
+ML_DOMAIN_OUTPUT_TOKEN_BUDGET="$(required_value services.ml.domain_output_token_budget)"
+
 # Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope + ML model
 # memory profile extraction. Every key is required (fail-loud SST). The
 # memory limit values are emitted both with their `compose-style` string
@@ -626,6 +794,13 @@ PROMETHEUS_MEMORY_LIMIT="$(required_value deploy_resources.prometheus.memory)"
 # profile is enabled.
 SEARXNG_CPU_LIMIT="$(required_value deploy_resources.searxng.cpus)"
 SEARXNG_MEMORY_LIMIT="$(required_value deploy_resources.searxng.memory)"
+# Spec 102 SCOPE-102-02 — Alertmanager + ntfy-bridge resource envelopes.
+# Fail-loud SST; the deploy adapter MUST emit these in app.env or compose
+# aborts at substitution time when the `monitoring` profile is enabled.
+ALERTMANAGER_CPU_LIMIT="$(required_value deploy_resources.alertmanager.cpus)"
+ALERTMANAGER_MEMORY_LIMIT="$(required_value deploy_resources.alertmanager.memory)"
+ALERTMANAGER_BRIDGE_CPU_LIMIT="$(required_value deploy_resources.alertmanager_ntfy_bridge.cpus)"
+ALERTMANAGER_BRIDGE_MEMORY_LIMIT="$(required_value deploy_resources.alertmanager_ntfy_bridge.memory)"
 ML_MODEL_MEMORY_PROFILES_JSON="$(required_json_value services.ml.model_memory_profiles)"
 
 # Spec 049 — Monitoring stack SST (FR-049-001 / FR-049-003).
@@ -638,6 +813,19 @@ PROMETHEUS_CONTAINER_PORT="$(required_value monitoring.prometheus.container_port
 PROMETHEUS_SCRAPE_INTERVAL_S="$(required_value monitoring.prometheus.scrape_interval_seconds)"
 PROMETHEUS_EVALUATION_INTERVAL_S="$(required_value monitoring.prometheus.evaluation_interval_seconds)"
 PROMETHEUS_RETENTION_DAYS="$(required_value monitoring.prometheus.retention_days)"
+
+# Spec 102 SCOPE-102-02 — Alertmanager SST. Fail-loud (Gate G028).
+# ALERTMANAGER_IMAGE is digest-pinned in config/smackerel.yaml
+# monitoring.alertmanager.image (byte-lockstep with deploy/contract.yaml
+# externalImages). ALERTMANAGER_BRIDGE_LISTEN_PORT is the in-network HTTP
+# port the templating bridge listens on (no host port); it renders the
+# generic <bundle>/alertmanager_ntfy_url so the product alertmanager.yml
+# carries NO endpoint literal. The operator-private ntfy endpoint itself
+# is NOT resolved here — it is adapter-injected via ALERTMANAGER_NTFY_URL
+# at apply (No env-specific content in this repo).
+ALERTMANAGER_IMAGE="$(required_value monitoring.alertmanager.image)"
+ALERTMANAGER_CONTAINER_PORT="$(required_value monitoring.alertmanager.container_port)"
+ALERTMANAGER_BRIDGE_LISTEN_PORT="$(required_value monitoring.alertmanager.bridge_listen_port)"
 
 # Spec 048 FR-048-001 / FR-048-002 / FR-048-003 — Backup and Restore
 # Automation SST. Every key is required; missing values fail loud here.
@@ -761,6 +949,15 @@ else
   OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT=""
   OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS=""
 fi
+# Spec 102 SCOPE-102-03 — Ollama concurrency + residency posture (SST-driven,
+# fail-loud). Same value in every env (a daemon posture, not env-conditional).
+# OLLAMA_NUM_PARALLEL feeds the KV-aware validateModelEnvelopes math (resident =
+# weights + kv_per_1k × num_ctx/1000 × num_parallel) AND the threaded ollama
+# request options; OLLAMA_MAX_LOADED_MODELS gates the co-resident SUM check
+# (==1 on-demand swap: each model need only fit alone; >1 co-resident: the
+# working set SUM must fit OLLAMA_MEMORY_LIMIT).
+OLLAMA_NUM_PARALLEL="$(required_value infrastructure.ollama.num_parallel)"
+OLLAMA_MAX_LOADED_MODELS="$(required_value infrastructure.ollama.max_loaded_models)"
 LLM_PROVIDER="$(required_value llm.provider)"
 # Spec 061 SCOPE-06c (Round 71d) — Hardware-tier × model-role matrix. The
 # SMACKEREL_HARDWARE_TIER switch (sourced from .smackerel.local.env by
@@ -953,6 +1150,41 @@ case "$TARGET_ENV" in
     SMACKEREL_ENV="production"
     ;;
 esac
+
+# spec 103 — Age-bounded, project-scoped, DEV-PLANE-ONLY unused-image
+# reclamation policy (config/smackerel.yaml cleanup.*). SST + NO DEFAULTS
+# (smackerel-no-defaults): all three keys are REQUIRED and fail-loud via
+# required_value/config_key_missing (a MISSING/empty key aborts naming it);
+# an INVALID value aborts via validate_unused_image_policy. There is no
+# ${VAR:-default} and no `|| echo <default>`. remove_unused_images: false is a
+# PRESENT value (stage skipped at runtime), distinct from a MISSING key (abort).
+# The 3 values are emitted as CLEANUP_* into the generated env and consumed by
+# the clean smart reclamation stage (scripts/lib/cleanup-image-reclamation.sh).
+CLEANUP_REMOVE_UNUSED_IMAGES="$(required_value cleanup.remove_unused_images)"
+CLEANUP_UNUSED_IMAGE_MIN_AGE_HOURS="$(required_value cleanup.unused_image_min_age_hours)"
+CLEANUP_UNUSED_IMAGE_SCOPE="$(required_value cleanup.unused_image_scope)"
+validate_unused_image_policy() {
+  case "$CLEANUP_REMOVE_UNUSED_IMAGES" in
+    true | false) ;;
+    *)
+      echo "Error: cleanup.remove_unused_images must be true|false, got '$CLEANUP_REMOVE_UNUSED_IMAGES'" >&2
+      exit 1
+      ;;
+  esac
+  if ! [[ "$CLEANUP_UNUSED_IMAGE_MIN_AGE_HOURS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Error: cleanup.unused_image_min_age_hours must be a positive integer, got '$CLEANUP_UNUSED_IMAGE_MIN_AGE_HOURS'" >&2
+    exit 1
+  fi
+  case "$CLEANUP_UNUSED_IMAGE_SCOPE" in
+    project | all) ;;
+    *)
+      echo "Error: cleanup.unused_image_scope must be project|all, got '$CLEANUP_UNUSED_IMAGE_SCOPE'" >&2
+      exit 1
+      ;;
+  esac
+}
+validate_unused_image_policy
+
 # Spec 052 FR-052-007 — placeholder substitution: when TARGET_ENV is a
 # production-class target AND TELEGRAM_BOT_TOKEN is in SHELL_SECRET_KEYS, emit
 # the deterministic placeholder for the deploy adapter to substitute from sops.
@@ -2088,6 +2320,8 @@ OLLAMA_TEST_REQUEST_TOP_K=${OLLAMA_TEST_REQUEST_TOP_K}
 OLLAMA_TEST_REQUEST_SEED=${OLLAMA_TEST_REQUEST_SEED}
 OLLAMA_TEST_REQUEST_NUM_PREDICT=${OLLAMA_TEST_REQUEST_NUM_PREDICT}
 OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE}
+OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL}
+OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS}
 OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT=${OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT}
 OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS=${OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS}
 ENABLE_OLLAMA=${OLLAMA_ENABLED}
@@ -2117,6 +2351,11 @@ LLM_MODEL=${LLM_MODEL}
 LLM_API_KEY=${LLM_API_KEY}
 SMACKEREL_AUTH_TOKEN=${SMACKEREL_AUTH_TOKEN}
 SMACKEREL_ENV=${SMACKEREL_ENV}
+# spec 103 — age-bounded, project-scoped, dev-plane-only unused-image
+# reclamation policy (fail-loud SST; consumed by clean smart). No default.
+CLEANUP_REMOVE_UNUSED_IMAGES=${CLEANUP_REMOVE_UNUSED_IMAGES}
+CLEANUP_UNUSED_IMAGE_MIN_AGE_HOURS=${CLEANUP_UNUSED_IMAGE_MIN_AGE_HOURS}
+CLEANUP_UNUSED_IMAGE_SCOPE=${CLEANUP_UNUSED_IMAGE_SCOPE}
 HOST_BIND_ADDRESS=${HOST_BIND_ADDRESS}
 COMPOSE_WAIT_TIMEOUT_S=${COMPOSE_WAIT_TIMEOUT_S}
 PREFLIGHT_MIN_AVAILABLE_RAM_MB=${PREFLIGHT_MIN_AVAILABLE_RAM_MB}
@@ -2425,6 +2664,7 @@ ML_HEALTH_LATENCY_SLA_MS=${ML_HEALTH_LATENCY_SLA_MS}
 ML_LOG_LEVEL=${ML_LOG_LEVEL}
 ML_OLLAMA_KEEP_ALIVE=${ML_OLLAMA_KEEP_ALIVE}
 ML_STRUCTURED_EXTRACTION_THINKING=${ML_STRUCTURED_EXTRACTION_THINKING}
+ML_DOMAIN_OUTPUT_TOKEN_BUDGET=${ML_DOMAIN_OUTPUT_TOKEN_BUDGET}
 KNOWLEDGE_ENABLED=${KNOWLEDGE_ENABLED}
 KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS=${KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS}
 KNOWLEDGE_LINT_CRON=${KNOWLEDGE_LINT_CRON}
@@ -2698,6 +2938,13 @@ PROMETHEUS_EVALUATION_INTERVAL_S=${PROMETHEUS_EVALUATION_INTERVAL_S}
 PROMETHEUS_RETENTION_DAYS=${PROMETHEUS_RETENTION_DAYS}
 PROMETHEUS_CPU_LIMIT=${PROMETHEUS_CPU_LIMIT}
 PROMETHEUS_MEMORY_LIMIT=${PROMETHEUS_MEMORY_LIMIT}
+ALERTMANAGER_IMAGE=${ALERTMANAGER_IMAGE}
+ALERTMANAGER_CONTAINER_PORT=${ALERTMANAGER_CONTAINER_PORT}
+ALERTMANAGER_BRIDGE_LISTEN_PORT=${ALERTMANAGER_BRIDGE_LISTEN_PORT}
+ALERTMANAGER_CPU_LIMIT=${ALERTMANAGER_CPU_LIMIT}
+ALERTMANAGER_MEMORY_LIMIT=${ALERTMANAGER_MEMORY_LIMIT}
+ALERTMANAGER_BRIDGE_CPU_LIMIT=${ALERTMANAGER_BRIDGE_CPU_LIMIT}
+ALERTMANAGER_BRIDGE_MEMORY_LIMIT=${ALERTMANAGER_BRIDGE_MEMORY_LIMIT}
 BACKUP_LOCAL_DIR=${BACKUP_LOCAL_DIR}
 BACKUP_STATUS_FILE=${BACKUP_STATUS_FILE}
 BACKUP_RETENTION_DAILY=${BACKUP_RETENTION_DAILY}
@@ -2862,6 +3109,11 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   PROMPT_CONTRACTS_DIR="$REPO_ROOT/config/prompt_contracts"
   ASSISTANT_MANIFEST_DIR="$REPO_ROOT/config/assistant"
   PROMETHEUS_ALERTS_FILE="$REPO_ROOT/config/prometheus/alerts.yml"
+  # Spec 102 SCOPE-102-02 — generic (target-agnostic) Alertmanager routing
+  # config. Carries a webhook receiver whose url_file points at the in-stack
+  # templating bridge; it contains NO operator ntfy host/topic literal
+  # (SCN-102-C2-04). Staged next to prometheus.yml/alerts.yml.
+  ALERTMANAGER_CONFIG_FILE="$REPO_ROOT/config/prometheus/alertmanager.yml"
   SEARXNG_SETTINGS_FILE="$REPO_ROOT/config/searxng/settings.yml"
 
   [[ -f "$COMPOSE_TEMPLATE" ]] || { echo "ERROR: deploy compose template not found: $COMPOSE_TEMPLATE" >&2; exit 1; }
@@ -2871,16 +3123,41 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   [[ -f "$ASSISTANT_MANIFEST_DIR/scenarios.yaml" ]] || { echo "ERROR: assistant scenarios manifest not found: $ASSISTANT_MANIFEST_DIR/scenarios.yaml" >&2; exit 1; }
   [[ -f "$PROM_OUT_FILE" ]] || { echo "ERROR: rendered prometheus.yml not found: $PROM_OUT_FILE" >&2; exit 1; }
   [[ -f "$PROMETHEUS_ALERTS_FILE" ]] || { echo "ERROR: prometheus alerts file not found: $PROMETHEUS_ALERTS_FILE" >&2; exit 1; }
+  [[ -f "$ALERTMANAGER_CONFIG_FILE" ]] || { echo "ERROR: alertmanager routing config not found: $ALERTMANAGER_CONFIG_FILE (spec 102 SCOPE-102-02)" >&2; exit 1; }
   [[ -f "$SEARXNG_SETTINGS_FILE" ]] || { echo "ERROR: searxng settings file not found: $SEARXNG_SETTINGS_FILE" >&2; exit 1; }
 
   # Strip the volatile `Generated:` line so the bundle is reproducible.
   # Renamed to app.env so the deploy compose can reference it generically.
   grep -v '^# Generated: ' "$OUTPUT_FILE" > "$STAGE_DIR/app.env"
+
+  # Spec 102 SCOPE-102-01 — compute-only env projection for smackerel-ml.
+  # The ML sidecar is the least-trusted, fastest-churning tier; it reaches data
+  # ONLY over NATS and holds NO datastore driver. Ship it a secret-free `ml.env`
+  # (allowlist ∩ app.env MINUS SHELL_SECRET_KEYS/POSTGRES_*/DATABASE_URL) instead
+  # of the full app.env. deploy/compose.deploy.yml points smackerel-ml.env_file
+  # at ./ml.env; smackerel-core keeps ./app.env (trusted typed tier).
+  ML_ENV_ALLOWLIST_JSON="$(yaml_get_json services.ml.env_allowlist)"
+  [[ -n "$ML_ENV_ALLOWLIST_JSON" && "$ML_ENV_ALLOWLIST_JSON" != "null" ]] || {
+    echo "ERROR: services.ml.env_allowlist is required (spec 102 SCOPE-102-01, fail-loud SST — Gate G028)" >&2
+    exit 1
+  }
+  project_service_env "smackerel-ml" "$STAGE_DIR/app.env" "$STAGE_DIR/ml.env" "$ML_ENV_ALLOWLIST_JSON"
+
   cp "$NATS_CONF_FILE" "$STAGE_DIR/nats.conf"
   cp "$COMPOSE_TEMPLATE" "$STAGE_DIR/docker-compose.yml"
   cp "$NATS_CONTRACT_FILE" "$STAGE_DIR/nats_contract.json"
   cp "$PROM_OUT_FILE" "$STAGE_DIR/prometheus.yml"
   cp "$PROMETHEUS_ALERTS_FILE" "$STAGE_DIR/alerts.yml"
+  # Spec 102 SCOPE-102-02 — stage the generic Alertmanager routing config and
+  # RENDER the generic webhook target file. The routing config is static (its
+  # webhook receiver reads url_file: /etc/alertmanager/ntfy_url), so the
+  # product bundle carries NO endpoint literal (SCN-102-C2-04). The url_file
+  # is rendered from the SST bridge listen port and points at the in-stack
+  # templating bridge (a generic compose service name — NOT operator-private);
+  # the bridge in turn posts to the operator-private ntfy endpoint it reads
+  # from the adapter-injected ALERTMANAGER_NTFY_URL at runtime.
+  cp "$ALERTMANAGER_CONFIG_FILE" "$STAGE_DIR/alertmanager.yml"
+  printf 'http://alertmanager-ntfy-bridge:%s/\n' "$ALERTMANAGER_BRIDGE_LISTEN_PORT" > "$STAGE_DIR/alertmanager_ntfy_url"
   mkdir -p "$STAGE_DIR/prompt_contracts"
   cp "$PROMPT_CONTRACTS_DIR"/*.yaml "$STAGE_DIR/prompt_contracts/"
   mkdir -p "$STAGE_DIR/assistant"
@@ -2891,9 +3168,10 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   # target path, breaking the searxng container's settings.yml load.
   mkdir -p "$STAGE_DIR/config/searxng"
   cp "$SEARXNG_SETTINGS_FILE" "$STAGE_DIR/config/searxng/settings.yml"
-  chmod 0644 "$STAGE_DIR/app.env" "$STAGE_DIR/nats.conf" \
+  chmod 0644 "$STAGE_DIR/app.env" "$STAGE_DIR/ml.env" "$STAGE_DIR/nats.conf" \
     "$STAGE_DIR/docker-compose.yml" "$STAGE_DIR/nats_contract.json" \
     "$STAGE_DIR/prometheus.yml" "$STAGE_DIR/alerts.yml" \
+    "$STAGE_DIR/alertmanager.yml" "$STAGE_DIR/alertmanager_ntfy_url" \
     "$STAGE_DIR/config/searxng/settings.yml" \
     "$STAGE_DIR/prompt_contracts"/*.yaml \
     "$STAGE_DIR/assistant"/*.yaml
@@ -2928,9 +3206,12 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
     echo "sourceSha: ${BUNDLE_SOURCE_SHA}"
     echo "environment: ${TARGET_ENV}"
     echo "files:"
+    echo "  - alertmanager.yml"
+    echo "  - alertmanager_ntfy_url"
     echo "  - alerts.yml"
     echo "  - app.env"
     echo "  - config/searxng/settings.yml"
+    echo "  - ml.env"
     echo "  - nats.conf"
     echo "  - docker-compose.yml"
     echo "  - nats_contract.json"
@@ -2952,12 +3233,15 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   # each once. Top-level files are listed in LC_ALL=C name order to make the
   # argv deterministic too.
   TAR_FILES=(
+    "alertmanager.yml"
+    "alertmanager_ntfy_url"
     "alerts.yml"
     "app.env"
     "assistant"
     "bundle-manifest.yaml"
     "config"
     "docker-compose.yml"
+    "ml.env"
     "nats.conf"
     "nats_contract.json"
     "prometheus.yml"

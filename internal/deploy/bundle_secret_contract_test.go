@@ -65,6 +65,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -753,4 +754,274 @@ func prefixLines(prefix string, lines []string) []string {
 		out[i] = prefix + line
 	}
 	return out
+}
+
+// =============================================================================
+// Spec 102 SCOPE-102-01 — ML-sidecar compute-only env projection (ml.env).
+//
+// scripts/commands/config.sh::project_service_env stages a `ml.env` bundle
+// artifact = { KEY=VALUE ∈ app.env : KEY ∈ services.ml.env_allowlist } MINUS
+// the managed-secret set (SHELL_SECRET_KEYS ∪ POSTGRES_* ∪ DATABASE_URL).
+// deploy/compose.deploy.yml points smackerel-ml.env_file at ./ml.env, so the
+// least-trusted Python tier never receives POSTGRES_PASSWORD, the AUTH
+// signing/at-rest keys, TELEGRAM_BOT_TOKEN, the connector secrets, or the LLM
+// master key. smackerel-core keeps ./app.env (the trusted typed tier).
+//
+// SCN-102-C1-01 (secrets absent) + SCN-102-C1-02 (compute keys present) +
+// the fail-loud tripwire (allowlist ∩ SHELL_SECRET_KEYS ⇒ abort).
+// =============================================================================
+
+// mlEnvKeySet parses a KEY=VALUE env body into the set of keys present
+// (comment + blank lines skipped).
+func mlEnvKeySet(body []byte) map[string]bool {
+	keys := map[string]bool{}
+	for _, raw := range strings.Split(string(body), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq <= 0 {
+			continue
+		}
+		keys[line[:eq]] = true
+	}
+	return keys
+}
+
+func sortedKeySet(keys map[string]bool) []string {
+	out := make([]string, 0, len(keys))
+	for k := range keys {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func bundleFileNames(files map[string][]byte) []string {
+	out := make([]string, 0, len(files))
+	for k := range files {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// generateMLEnvBody runs a live self-hosted bundle generation and returns the
+// ml.env body extracted from the bundle.
+func generateMLEnvBody(t *testing.T) []byte {
+	t.Helper()
+	tmpRoot := setupTestRepoRoot(t, nil, nil)
+	outputDir := filepath.Join(t.TempDir(), "bundle-out")
+	out, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outputDir)
+	if exit != 0 {
+		t.Fatalf("loader exited %d (expected 0)\n--- output ---\n%s\n--- end ---", exit, out)
+	}
+	files := extractTarGz(t, bundlePath(outputDir))
+	mlEnv, ok := files["ml.env"]
+	if !ok {
+		t.Fatalf("bundle missing ml.env (spec 102 SCOPE-102-01 projection artifact)\n--- bundle files ---\n%v\n--- end ---", bundleFileNames(files))
+	}
+	return mlEnv
+}
+
+// TestMLEnv_ExcludesManagedSecretsAndPostgres_Spec102 — SCN-102-C1-01.
+//
+// The projected ml.env MUST contain none of config.SecretKeys(), no POSTGRES_*
+// connection part, and no DATABASE_URL. The compose smackerel-ml.env_file MUST
+// point at ./ml.env (NOT ./app.env), while smackerel-core keeps ./app.env.
+func TestMLEnv_ExcludesManagedSecretsAndPostgres_Spec102(t *testing.T) {
+	mlEnv := generateMLEnvBody(t)
+	keys := mlEnvKeySet(mlEnv)
+
+	// (a) No SHELL_SECRET_KEYS member appears in ml.env.
+	for _, sk := range config.SecretKeys() {
+		if keys[sk] {
+			t.Fatalf("SECURITY REGRESSION: ml.env contains managed secret %q — the compute-only sidecar must hold NO SHELL_SECRET_KEYS (spec 102 SCN-102-C1-01)\n--- ml.env ---\n%s\n--- end ---", sk, mlEnv)
+		}
+		// Belt: catch even a malformed `KEY=` line the key-set parse might miss.
+		if bytes.Contains(mlEnv, []byte("\n"+sk+"=")) || bytes.HasPrefix(mlEnv, []byte(sk+"=")) {
+			t.Fatalf("SECURITY REGRESSION: ml.env has a %q= line (spec 102 SCN-102-C1-01)\n--- ml.env ---\n%s\n--- end ---", sk, mlEnv)
+		}
+	}
+	// (b) No POSTGRES_* connection part.
+	for _, k := range sortedKeySet(keys) {
+		if strings.HasPrefix(k, "POSTGRES_") {
+			t.Fatalf("SECURITY REGRESSION: ml.env contains postgres connection part %q — the compute-only sidecar has no data path to postgres (spec 102 SCN-102-C1-01)\n--- ml.env ---\n%s\n--- end ---", k, mlEnv)
+		}
+	}
+	// (c) No DATABASE_URL (it embeds POSTGRES_PASSWORD).
+	if keys["DATABASE_URL"] {
+		t.Fatalf("SECURITY REGRESSION: ml.env contains DATABASE_URL (embeds POSTGRES_PASSWORD) (spec 102 SCN-102-C1-01)\n--- ml.env ---\n%s\n--- end ---", mlEnv)
+	}
+	// (d) Compose: smackerel-ml.env_file = ./ml.env; smackerel-core = ./app.env.
+	assertMLEnvFileProjected(t)
+
+	t.Logf("SCN-102-C1-01 OK — projected ml.env carries no managed secret / POSTGRES_* / DATABASE_URL. Projected keys (%d):\n%s",
+		len(keys), strings.Join(sortedKeySet(keys), "\n"))
+}
+
+// assertMLEnvFileProjected parses the live deploy compose and asserts the
+// env_file wiring: smackerel-ml loads ./ml.env, smackerel-core keeps ./app.env.
+func assertMLEnvFileProjected(t *testing.T) {
+	t.Helper()
+	repoRoot := bundleSecretRepoRoot(t)
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "deploy", "compose.deploy.yml"))
+	if err != nil {
+		t.Fatalf("read deploy compose: %v", err)
+	}
+	var doc struct {
+		Services map[string]struct {
+			EnvFile []string `yaml:"env_file"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse compose: %v", err)
+	}
+	ml, ok := doc.Services["smackerel-ml"]
+	if !ok {
+		t.Fatal("compose missing smackerel-ml service")
+	}
+	if len(ml.EnvFile) != 1 || ml.EnvFile[0] != "./ml.env" {
+		t.Fatalf("SECURITY REGRESSION: smackerel-ml.env_file = %v, want [./ml.env] — the sidecar must load the projected ml.env, not the full app.env (spec 102 SCN-102-C1-01)", ml.EnvFile)
+	}
+	core, ok := doc.Services["smackerel-core"]
+	if !ok {
+		t.Fatal("compose missing smackerel-core service")
+	}
+	if len(core.EnvFile) != 1 || core.EnvFile[0] != "./app.env" {
+		t.Fatalf("smackerel-core.env_file = %v, want [./app.env] — the trusted typed tier keeps the full app.env (spec 102)", core.EnvFile)
+	}
+}
+
+// TestMLEnv_ContainsEveryComputeKey_Spec102 — SCN-102-C1-02.
+//
+// The projection MUST retain every env key the sidecar reads FAIL-LOUD at
+// startup (ml/app/main.py::_check_required_config + ml/app/nats_client.py
+// subscribe), or the sidecar exits 1 on boot. This is the boot-safety half of
+// the projection: it proves secret-removal did not strip a required compute key.
+func TestMLEnv_ContainsEveryComputeKey_Spec102(t *testing.T) {
+	mlEnv := generateMLEnvBody(t)
+	keys := mlEnvKeySet(mlEnv)
+
+	required := []string{
+		// _check_required_config unconditional keys.
+		"NATS_URL", "LLM_PROVIDER", "LLM_MODEL", "OLLAMA_URL",
+		"ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "SMACKEREL_ENV", "ML_LOG_LEVEL",
+		"ML_EMBEDDING_WORKERS", "ML_EMBEDDING_QUEUE_MAX", "ML_HEALTH_LATENCY_SLA_MS",
+		// Inter-service auth (ml/app/auth.py) — required at import.
+		"SMACKEREL_AUTH_TOKEN",
+		// nats_client subscribe-time fail-loud reads.
+		"NATS_MAX_RECONNECT_ATTEMPTS", "NATS_RECONNECT_TIME_WAIT_SECONDS",
+		"NATS_CONSUMER_MAX_DELIVER", "NATS_CONSUMER_ACK_WAIT_SECONDS",
+	}
+	var missing []string
+	for _, k := range required {
+		if !keys[k] {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("BOOT REGRESSION: ml.env is missing compute keys the sidecar reads fail-loud at startup: %v (spec 102 SCN-102-C1-02)\n--- ml.env keys present ---\n%v\n--- end ---", missing, sortedKeySet(keys))
+	}
+}
+
+// TestMLEnv_AllowlistIntersectsSecret_FailsLoud_Spec102 — projection tripwire
+// (adversarial). A declared env_allowlist that intersects SHELL_SECRET_KEYS —
+// whether by an EXACT secret key or a PREFIX glob whose stem covers a secret —
+// MUST abort config generation fail-loud, naming the offending secret. Removing
+// the tripwire makes this test fail (proves the protection has bite).
+func TestMLEnv_AllowlistIntersectsSecret_FailsLoud_Spec102(t *testing.T) {
+	repoRoot := bundleSecretRepoRoot(t)
+	liveYaml, err := os.ReadFile(filepath.Join(repoRoot, "config", "smackerel.yaml"))
+	if err != nil {
+		t.Fatalf("read live smackerel.yaml: %v", err)
+	}
+	const anchor = "    env_allowlist:\n    - NATS_URL\n"
+	if !bytes.Contains(liveYaml, []byte(anchor)) {
+		t.Fatalf("anchor %q not found in live smackerel.yaml — test needs updating", anchor)
+	}
+
+	cases := []struct {
+		name       string
+		inject     string // replacement for the anchor's first list entry region
+		wantSecret string
+	}{
+		{
+			name:       "exact secret key",
+			inject:     "    env_allowlist:\n    - POSTGRES_PASSWORD\n    - NATS_URL\n",
+			wantSecret: "POSTGRES_PASSWORD",
+		},
+		{
+			name:       "prefix glob covering a secret",
+			inject:     "    env_allowlist:\n    - \"AUTH_*\"\n    - NATS_URL\n",
+			wantSecret: "AUTH_SIGNING_ACTIVE_PRIVATE_KEY",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tampered := bytes.Replace(liveYaml, []byte(anchor), []byte(tc.inject), 1)
+			tmpRoot := setupTestRepoRoot(t, nil, tampered)
+			outputDir := filepath.Join(t.TempDir(), "bundle-out")
+			out, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outputDir)
+			if exit == 0 {
+				t.Fatalf("TRIPWIRE REGRESSION: generator exited 0 with a secret-intersecting env_allowlist (%s) — it MUST fail loud (spec 102 SCOPE-102-01 tripwire)\n--- output ---\n%s\n--- end ---", tc.name, out)
+			}
+			if !strings.Contains(out, "TRIPWIRE") || !strings.Contains(out, tc.wantSecret) {
+				t.Fatalf("tripwire fired (exit %d) but did not name TRIPWIRE + the offending secret %q; output:\n%s", exit, tc.wantSecret, out)
+			}
+		})
+	}
+}
+
+// TestMLEnv_CredentialSuffixRequiresSanction_Spec102 is the durable F1
+// adversarial contract for prefix allowlists. A future credential-shaped key
+// can match an existing non-secret prefix without appearing in
+// SHELL_SECRET_KEYS yet (for example OLLAMA_CLOUD_TOKEN under OLLAMA_*). The
+// projection must reject such keys by shape unless they are explicitly
+// sanctioned compute credentials. LLM_API_KEY and the sidecar's exact
+// inter-service SMACKEREL_AUTH_TOKEN are the reviewed compute credentials.
+func TestMLEnv_CredentialSuffixRequiresSanction_Spec102(t *testing.T) {
+	repoRoot := bundleSecretRepoRoot(t)
+	liveConfigSh, err := os.ReadFile(filepath.Join(repoRoot, "scripts", "commands", "config.sh"))
+	if err != nil {
+		t.Fatalf("read live config.sh: %v", err)
+	}
+
+	for _, testCase := range []struct {
+		name string
+		key  string
+	}{
+		{name: "uppercase suffix", key: "OLLAMA_CLOUD_TOKEN"},
+		{name: "mixed-case suffix", key: "OLLAMA_CLOUD_token"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			const anchor = "OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE}\n"
+			if !bytes.Contains(liveConfigSh, []byte(anchor)) {
+				t.Fatalf("anchor %q not found in live config.sh - test needs updating", anchor)
+			}
+			tampered := bytes.Replace(
+				liveConfigSh,
+				[]byte(anchor),
+				[]byte(anchor+testCase.key+"=synthetic-future-credential\n"),
+				1,
+			)
+			tmpRoot := setupTestRepoRoot(t, tampered, nil)
+			outputDir := filepath.Join(t.TempDir(), "bundle-out")
+			out, exit := runConfigGenerate(t, tmpRoot, "self-hosted", outputDir)
+			if exit == 0 {
+				t.Fatalf("SECURITY F1 REGRESSION: generator accepted %s through the OLLAMA_* projection prefix; future unregistered credentials must fail loud", testCase.key)
+			}
+			if !strings.Contains(out, testCase.key) || !strings.Contains(out, "TRIPWIRE") {
+				t.Fatalf("credential-suffix tripwire exited %d but did not name TRIPWIRE + %s; output:\n%s", exit, testCase.key, out)
+			}
+		})
+	}
+
+	t.Run("sanctioned LLM API key remains projected", func(t *testing.T) {
+		mlEnv := generateMLEnvBody(t)
+		if !mlEnvKeySet(mlEnv)["LLM_API_KEY"] {
+			t.Fatalf("LLM_API_KEY is the explicitly sanctioned compute credential and must remain in ml.env\n--- ml.env ---\n%s\n--- end ---", mlEnv)
+		}
+	})
 }
