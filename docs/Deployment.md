@@ -353,11 +353,12 @@ cannot drift silently.
 
 ---
 
-## Self-Hosted Activation Packet
+## Self-Hosted Config-Bundle Activation Contract
 
-self-hosted deployability in this product repo is non-live and static until the
-operator-private adapter supplies target values and release artifacts. Before a
-live self-hosted apply, the operator-owned packet must contain all of the following:
+The `self-hosted` product environment is non-live and static until an
+operator-private target adapter supplies target values and release artifacts.
+Before a live target apply, the operator-owned packet must contain all of the
+following:
 
 | Input | Owner | Purpose |
 |-------|-------|---------|
@@ -369,11 +370,11 @@ live self-hosted apply, the operator-owned packet must contain all of the follow
 | Concrete params | Deploy adapter overlay | Hostname, tailnet placeholders, bind address, Caddy paths, ports, install paths, and rollout strategy are adapter-owned. |
 | Encrypted secrets | Deploy adapter overlay | SOPS/age ciphertext supplies managed secret values and first-user bootstrap material without committing plaintext. |
 | Release proof | Upstream registry/build artifacts | Cosign signature, SLSA provenance, SBOM, vulnerability proof, bundle hash, and source identity checks. |
-| Live approval | Human operator | Static/docs/fixture readiness does not mutate the self-hosted host or authorize live activation. |
+| Live approval | Human operator | Static/docs/fixture readiness does not mutate the target host or authorize live activation. |
 
-Current KNB self-hosted adapter guidance uses `41001` for `smackerel-core` and
+Current external-adapter guidance uses `41001` for `smackerel-core` and
 `41002` for `smackerel-ml`. The product dev environment still uses `40001` and
-`40002`; do not copy those dev ports into self-hosted activation runbooks.
+`40002`; target adapters own their final host-port assignments.
 
 ## Operator workflow
 
@@ -382,10 +383,10 @@ Current KNB self-hosted adapter guidance uses `41001` for `smackerel-core` and
 gh run download <run-id> --name build-manifest-<sourceSha> --dir /tmp/sm-release
 
 # 2) Promote to a target (resolves digests + bundle ref from the manifest, calls apply)
-bash scripts/deploy/promote.sh --target self-hosted --build-manifest /tmp/sm-release/build-manifest.yaml
+bash scripts/deploy/promote.sh --target <target> --build-manifest /tmp/sm-release/build-manifest.yaml
 
 # 2b) Or apply directly with explicit digests
-./smackerel.sh deploy-target self-hosted apply \
+./smackerel.sh deploy-target <target> apply \
   --image-core=sha256:<core-image-digest> \
   --image-ml=sha256:<ml-image-digest> \
   --config-bundle=self-hosted-<sourceSha> \
@@ -393,10 +394,10 @@ bash scripts/deploy/promote.sh --target self-hosted --build-manifest /tmp/sm-rel
   --source-sha=<sourceSha>
 
 # 3) Verify
-./smackerel.sh deploy-target self-hosted verify
+./smackerel.sh deploy-target <target> verify
 
 # 4) On regression, pure pointer-swap rollback (NEVER rebuilds)
-./smackerel.sh deploy-target self-hosted rollback
+./smackerel.sh deploy-target <target> rollback
 ```
 
 > BUG-047-001 / DEVOPS-HL-002 — `--config-bundle-sha` is the operator's
@@ -581,12 +582,14 @@ smackerel.example.com {
 }
 ```
 
-3. Start Caddy:
+1. Start Caddy:
+
 ```bash
 sudo caddy start
 ```
 
 Caddy automatically:
+
 - Obtains a Let's Encrypt certificate for your domain
 - Redirects HTTP → HTTPS
 - Renews certificates before expiry
@@ -594,11 +597,12 @@ Caddy automatically:
 ### nginx + certbot
 
 1. Install nginx and certbot:
+
 ```bash
 sudo apt install nginx certbot python3-certbot-nginx
 ```
 
-2. Create `/etc/nginx/sites-available/smackerel`:
+1. Create `/etc/nginx/sites-available/smackerel`:
 
 ```nginx
 server {
@@ -620,7 +624,8 @@ server {
 }
 ```
 
-3. Enable and obtain a certificate:
+1. Enable and obtain a certificate:
+
 ```bash
 sudo ln -s /etc/nginx/sites-available/smackerel /etc/nginx/sites-enabled/
 sudo certbot --nginx -d smackerel.example.com
@@ -633,6 +638,7 @@ Certbot configures HTTPS automatically and installs a renewal timer.
 
 - **Caddy**: Automatic — no action needed.
 - **certbot/nginx**: Verify the renewal timer:
+
   ```bash
   sudo certbot renew --dry-run
   ```
@@ -653,12 +659,14 @@ runtime:
 ```
 
 **Rules:**
+
 - Known placeholder values like `development-change-me` are rejected at startup
 - Tokens shorter than 16 characters are rejected
 - Token comparison uses constant-time comparison (`subtle.ConstantTimeCompare`)
 - Rotate tokens by updating config, regenerating, and restarting
 
 After changing the token:
+
 ```bash
 ./smackerel.sh config generate
 ./smackerel.sh down && ./smackerel.sh up
@@ -1020,11 +1028,13 @@ services:
 ```
 
 Use with the base Compose file:
+
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 **Production considerations:**
+
 - Increase PostgreSQL memory limit for larger datasets
 - Increase ML sidecar memory if using larger embedding models
 - Set `restart: always` so services recover from crashes
@@ -1062,6 +1072,7 @@ The default Smackerel configuration uses long polling, which works behind a fire
 OAuth2 providers (Google) require HTTPS callback URLs in production. When switching from localhost to a public domain:
 
 1. Update `config/smackerel.yaml`:
+
    ```yaml
    oauth:
      google:
@@ -1071,12 +1082,14 @@ OAuth2 providers (Google) require HTTPS callback URLs in production. When switch
 2. Update the authorized redirect URI in Google Cloud Console to match
 
 3. Regenerate config and restart:
+
    ```bash
    ./smackerel.sh config generate
    ./smackerel.sh down && ./smackerel.sh up
    ```
 
 **Rules:**
+
 - Google requires HTTPS for production redirect URIs (localhost exemption only applies to `http://127.0.0.1`)
 - The redirect URL in config must exactly match the URL registered in Google Cloud Console
 - After updating, existing OAuth tokens remain valid — only new authorization flows use the updated URL
@@ -1314,5 +1327,3 @@ workflow (`.github/workflows/client-binary-conformance.yml`) invoke the knb gate
 regression (e.g. removing the contract `clients:` block) is refused with the
 matching `E025-CLIENT-*` code. There is no `--skip`/`--force`/`--insecure`/
 `--no-verify` bypass (C3).
-
-

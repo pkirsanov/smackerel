@@ -290,6 +290,40 @@ class TestResolveModel:
         assert _resolve_model("gemini-pro", "google", "") == "google/gemini-pro"
 
 
+def test_do_domain_extract_applies_ollama_profile_spec102(monkeypatch):
+    """TP-C3-03: domain extraction adds num_ctx and retains top-level
+    keep_alive through the real retry-capable production function."""
+    captured: dict = {}
+    response = MagicMock()
+    response.choices = [MagicMock(message=MagicMock(content='{"domain":"recipe","ingredients":[],"steps":[]}'))]
+    response.usage = MagicMock(total_tokens=12)
+
+    async def capture(**kwargs):
+        captured.update(kwargs)
+        return response
+
+    with patch("app.domain.litellm.acompletion", side_effect=capture):
+        result = asyncio.run(
+            handle_domain_extract(
+                {
+                    "artifact_id": "spec102-domain",
+                    "contract_version": "recipe-extraction-v1",
+                    "content_type": "recipe",
+                    "content_raw": "Ingredients: flour. Instructions: bake.",
+                },
+                "ollama",
+                "gemma4:26b",
+                "",
+                "http://ollama:11434",
+            )
+        )
+
+    assert result["success"] is True
+    assert captured["options"]["num_ctx"] == 8192
+    assert captured["keep_alive"] == "30m"
+    assert captured["model"] == "ollama_chat/gemma4:26b"
+
+
 class TestNormalizeIngredientNames:
     """C026-CHAOS-02: Verify ingredient name normalization to lowercase."""
 

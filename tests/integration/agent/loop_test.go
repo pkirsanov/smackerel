@@ -80,12 +80,11 @@ func startFakeResponder(t *testing.T, nc *nats.Conn, subject string, respond fun
 }
 
 // fakeNATSConn opens a core NATS connection for the integration test.
-// Skips the test if NATS_URL is unset (live stack not available).
 func fakeNATSConn(t *testing.T) *nats.Conn {
 	t.Helper()
 	url := os.Getenv("NATS_URL")
 	if url == "" {
-		t.Skip("integration: NATS_URL not set — live stack not available")
+		t.Fatal("integration: NATS_URL not set — canonical live stack is required")
 	}
 	opts := []nats.Option{nats.Name("agent-loop-test")}
 	if tok := os.Getenv("SMACKEREL_AUTH_TOKEN"); tok != "" {
@@ -223,6 +222,83 @@ func TestExecutor_LoopRoundTrip_ToolCallThenFinal(t *testing.T) {
 	if len(res.ToolCalls) != 1 || res.ToolCalls[0].Outcome != agent.OutcomeOK {
 		t.Fatalf("expected one ok tool call, got %+v", res.ToolCalls)
 	}
+}
+
+func TestSpec102NATSDriverUsesTypedBoundaryWithoutOllamaProtocol(t *testing.T) {
+	nc := fakeNATSConn(t)
+	subject := uniqueSubject("spec102_typed_boundary")
+	observed := make(chan map[string]any, 1)
+	startFakeResponder(t, nc, subject, func(req map[string]any, _ int) (map[string]any, time.Duration) {
+		observed <- req
+		return map[string]any{
+			"tool_calls": []map[string]any{},
+			"final":      `{"answer":"typed"}`,
+			"provider":   "ollama",
+			"model":      "gemma4:26b",
+			"tokens":     map[string]int{"prompt": 2, "completion": 1},
+		}, 0
+	})
+
+	driver, err := agent.NewNATSLLMDriverOnSubject(nc, subject)
+	if err != nil {
+		t.Fatalf("NewNATSLLMDriverOnSubject: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	response, err := driver.Turn(ctx, agent.TurnRequest{
+		TraceID:         "trace-spec102",
+		ScenarioID:      "scenario-spec102",
+		ScenarioVersion: "v1",
+		SystemPrompt:    "Use the typed compute boundary.",
+		TurnMessages: []agent.TurnMessage{{
+			Role:    agent.RoleUser,
+			Content: json.RawMessage(`{"query":"summarize"}`),
+		}},
+		TokenBudget:     512,
+		Temperature:     0.1,
+		ModelPreference: "quality",
+		DeadlineUnixMs:  time.Now().Add(4 * time.Second).UnixMilli(),
+		StructuredInput: json.RawMessage(`{"artifact_id":"artifact-spec102"}`),
+	})
+	if err != nil {
+		t.Fatalf("Turn: %v", err)
+	}
+	request := <-observed
+	for _, required := range []string{
+		"trace_id", "scenario_id", "scenario_version", "system_prompt", "turn_messages",
+		"token_budget", "temperature", "model_preference", "deadline_unix_ms", "structured_input", "reply_subject",
+	} {
+		if _, ok := request[required]; !ok {
+			t.Errorf("typed NATS request missing %q: %v", required, request)
+		}
+	}
+	for _, forbidden := range []string{"options", "num_ctx", "keep_alive", "prompt", "stream", "api_base"} {
+		if jsonTreeContainsKey(request, forbidden) {
+			t.Errorf("typed NATS request leaked Ollama protocol key %q: %v", forbidden, request)
+		}
+	}
+	if response.Provider != "ollama" || response.Model != "gemma4:26b" || string(response.Final) != `{"answer":"typed"}` {
+		t.Fatalf("unexpected typed response: %+v", response)
+	}
+	t.Logf("typed NATS boundary: subject=%s fields=%d provider=%s model=%s", subject, len(request), response.Provider, response.Model)
+}
+
+func jsonTreeContainsKey(value any, target string) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if key == target || jsonTreeContainsKey(child, target) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if jsonTreeContainsKey(child, target) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // TestExecutor_BS021_LLMTimeout is the adversarial regression for

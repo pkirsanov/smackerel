@@ -28,6 +28,7 @@ package stress
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -49,8 +50,9 @@ import (
 )
 
 const (
-	stressFileCount   = 5000
-	stressFolderCount = 50
+	stressFileCount           = 5000
+	stressFolderCount         = 50
+	driveStressCleanupTimeout = 10 * time.Second
 	// Per-file content size — the design.md NFR targets workload shape
 	// (file count, folder count, delta-replay) on the dev stack, not
 	// literal 25 GB byte volume. 5 KB per file keeps the fixture set
@@ -58,6 +60,86 @@ const (
 	// production extract pipeline runs (chunked read, hash, upsert).
 	stressFileSizeBytes = 5 * 1024
 )
+
+type driveStressCleanupExec func(context.Context, string, ...any) error
+
+func executeDriveStressCleanup(exec driveStressCleanupExec, connectionID, artifactIDPattern string, timeout time.Duration) []error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	operations := []struct {
+		name  string
+		query string
+		arg   string
+	}{
+		{name: "drive connection", query: `DELETE FROM drive_connections WHERE id=$1`, arg: connectionID},
+		{name: "drive artifacts", query: `DELETE FROM artifacts WHERE id LIKE $1`, arg: artifactIDPattern},
+	}
+
+	failures := make([]error, 0, len(operations))
+	for _, operation := range operations {
+		err := exec(ctx, operation.query, operation.arg)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("delete %s: %w", operation.name, err))
+		}
+	}
+	return failures
+}
+
+func scheduleDriveStressCleanup(t *testing.T, pool *pgxpool.Pool, connectionID, artifactIDPattern string) {
+	t.Helper()
+	t.Cleanup(func() {
+		failures := executeDriveStressCleanup(func(ctx context.Context, query string, args ...any) error {
+			_, err := pool.Exec(ctx, query, args...)
+			return err
+		}, connectionID, artifactIDPattern, driveStressCleanupTimeout)
+		for _, failure := range failures {
+			t.Logf("drive stress cleanup: %v", failure)
+		}
+		if len(failures) == 0 {
+			t.Logf("drive stress cleanup complete: connection_id=%s statements=2", connectionID)
+		}
+	})
+}
+
+func TestDriveScaleStress_CleanupCannotHang(t *testing.T) {
+	queries := make(chan string, 2)
+	blockingExec := func(ctx context.Context, query string, _ ...any) error {
+		queries <- query
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	done := make(chan []error, 1)
+	go func() {
+		done <- executeDriveStressCleanup(blockingExec, "scope8-stress-connection", "drive:google:scope8-stress-connection:%", 20*time.Millisecond)
+	}()
+
+	select {
+	case failures := <-done:
+		if len(failures) != 2 {
+			t.Fatalf("cleanup failures=%d, want 2 deadline failures", len(failures))
+		}
+		for _, failure := range failures {
+			if !errors.Is(failure, context.DeadlineExceeded) {
+				t.Fatalf("cleanup failure=%v, want context deadline exceeded", failure)
+			}
+		}
+		if len(queries) != 2 {
+			t.Fatalf("cleanup attempted %d statements, want both connection and artifact deletes", len(queries))
+		}
+		connectionDelete := <-queries
+		artifactDelete := <-queries
+		if connectionDelete != `DELETE FROM drive_connections WHERE id=$1` {
+			t.Fatalf("first cleanup query=%q, want drive connection delete", connectionDelete)
+		}
+		if artifactDelete != `DELETE FROM artifacts WHERE id LIKE $1` {
+			t.Fatalf("second cleanup query=%q, want drive artifacts delete", artifactDelete)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("drive stress cleanup exceeded its deadline guard")
+	}
+}
 
 func TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst(t *testing.T) {
 	cfg := loadDriveStressConfig(t)
@@ -162,10 +244,7 @@ func TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst(t *testing.
 	); err != nil {
 		t.Fatalf("insert memdrive stress connection: %v", err)
 	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM drive_connections WHERE id=$1`, memConnID)
-		_, _ = pool.Exec(context.Background(), `DELETE FROM artifacts WHERE id LIKE $1`, "drive:memdrive:"+memConnID+":%")
-	})
+	scheduleDriveStressCleanup(t, pool, memConnID, "drive:memdrive:"+memConnID+":%")
 	for i := 0; i < 200; i++ {
 		fileID := fmt.Sprintf("scope8-stress-mem-%04d", i)
 		memProvider.AddFile(memConnID, smdrive.FolderItem{
@@ -306,10 +385,7 @@ func createScope8StressConnection(t *testing.T, pool *pgxpool.Pool, fixtureServe
 	if err != nil {
 		t.Fatalf("FinalizeConnect stress: %v", err)
 	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM drive_connections WHERE id=$1`, connectionID)
-		_, _ = pool.Exec(context.Background(), `DELETE FROM artifacts WHERE id LIKE $1`, "drive:google:"+connectionID+":%")
-	})
+	scheduleDriveStressCleanup(t, pool, connectionID, "drive:google:"+connectionID+":%")
 	return connectionID
 }
 

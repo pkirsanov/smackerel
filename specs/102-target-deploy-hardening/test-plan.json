@@ -1,0 +1,546 @@
+{
+  "version": 1,
+  "specId": "102-target-deploy-hardening",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-07-10T17:37:46Z",
+  "scopeKind": "contract-only",
+  "coverageDeclarations": {
+    "e2eUi": "not-applicable: no interactive UI surface changes",
+    "e2eApi": "not-applicable-at-ship-time: no public API contract changes; live deployment is operator validation R-102-A/R-102-D",
+    "stress": "not-applicable: no concurrency, throughput, sustained-load, or latency acceptance threshold",
+    "load": "not-applicable: no sustained throughput or latency acceptance threshold"
+  },
+  "scopes": [
+    {
+      "scopeId": "SCOPE-102-01",
+      "scopeName": "ML-sidecar compute-only secret isolation",
+      "scopeKind": "contract-only",
+      "operatorValidationRefs": [
+        "R-102-A"
+      ],
+      "tests": [
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "internal/deploy/bundle_secret_contract_test.go",
+          "testName": "TestMLEnv_ExcludesManagedSecretsAndPostgres_Spec102",
+          "scenarioId": "SCN-102-C1-01",
+          "description": "Generated ml.env excludes every managed secret and POSTGRES_* key.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestMLEnv_ExcludesManagedSecretsAndPostgres_Spec102' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "internal/deploy/bundle_secret_contract_test.go",
+          "testName": "TestMLEnv_ContainsEveryComputeKey_Spec102",
+          "scenarioId": "SCN-102-C1-02",
+          "description": "Generated ml.env contains every fail-loud startup key; deployed boot remains R-102-A.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestMLEnv_ContainsEveryComputeKey_Spec102' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "unit",
+          "category": "unit",
+          "file": "scripts/lint/python-compute-only-guard.selftest.sh",
+          "scenarioId": "SCN-102-C1-03",
+          "description": "Re-added app.env/secret and bypass-shaped flags fail adversarially.",
+          "command": "bash scripts/lint/python-compute-only-guard.selftest.sh",
+          "liveSystem": false
+        },
+        {
+          "type": "unit",
+          "category": "unit",
+          "file": "scripts/lint/python-compute-only-guard.selftest.sh",
+          "scenarioId": "SCN-102-C1-04",
+          "description": "Forbidden driver or direct datastore URL read fails and names its source.",
+          "command": "bash scripts/lint/python-compute-only-guard.selftest.sh",
+          "liveSystem": false
+        },
+        {
+          "type": "contract",
+          "category": "unit",
+          "file": "internal/deploy/compose_contract_test.go",
+          "testName": "TestNetworkSegmentation_MLCannotReachPostgres_Spec102",
+          "scenarioId": "SCN-102-C1-05",
+          "description": "ML and postgres occupy disjoint tiers while core reaches both.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestNetworkSegmentation_' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "internal/deploy/bundle_secret_contract_test.go",
+          "testName": "TestMLEnv_CredentialSuffixRequiresSanction_Spec102",
+          "scenarioId": "SCN-102-C1-03",
+          "description": "Security F1: future same-prefix credentials fail case-insensitively unless sanctioned.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestMLEnv_CredentialSuffixRequiresSanction_Spec102' --verbose",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-102-02",
+      "scopeName": "Durable Prometheus to Alertmanager to ntfy routing",
+      "scopeKind": "contract-only",
+      "operatorValidationRefs": [
+        "R-102-A",
+        "R-102-C"
+      ],
+      "tests": [
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "internal/deploy/alertmanager_bundle_contract_test.go",
+          "testName": "TestBundle_CarriesAlertingBlockAndService_Spec102",
+          "scenarioId": "SCN-102-C2-01",
+          "description": "Generated bundle carries the alerting block, Alertmanager, bridge, and generic route.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestBundle_CarriesAlertingBlockAndService_Spec102' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "internal/deploy/alertmanager_bundle_contract_test.go",
+          "testName": "TestBundle_AlertingSurvivesReExtract_Spec102",
+          "scenarioId": "SCN-102-C2-02",
+          "description": "Consecutive generated bundles retain routing without the retired standup.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestBundle_AlertingSurvivesReExtract_Spec102' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "unit",
+          "category": "unit",
+          "file": "cmd/alertmanager-ntfy-bridge/bridge_test.go",
+          "testName": "TestBridge_TitledPriorityNtfyRequest_Spec102",
+          "scenarioId": "SCN-102-C2-03",
+          "description": "Bridge code emits title, priority, tags, and a human body rather than raw JSON.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestBridge_' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "internal/deploy/alertmanager_bundle_contract_test.go",
+          "testName": "TestAlertmanagerConfig_NoNtfyLiteral_UsesUrlFile_Spec102",
+          "scenarioId": "SCN-102-C2-04",
+          "description": "Product bundle contains no operator ntfy literal.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestAlertmanagerConfig_' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "contract",
+          "category": "unit",
+          "file": "internal/deploy/alertmanager_bundle_contract_test.go",
+          "testName": "TestCompose_MonitoringIngressIsolatedFromML_Spec102",
+          "scenarioId": "SCN-102-C2-01",
+          "description": "Security F2: monitoring ingress and ML compute tiers are disjoint.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestCompose_MonitoringIngressIsolatedFromML_Spec102' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "../<deployment-owner>/<product>/<target>/tests/unit/alertmanager_ntfy_output_hygiene_test.sh",
+          "scenarioId": "SCN-102-C2-04",
+          "description": "Security F3: adapter output confirms presence without expanding the private URL.",
+          "command": "bash ../<deployment-owner>/<product>/<target>/tests/unit/alertmanager_ntfy_output_hygiene_test.sh",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-102-03",
+      "scopeName": "Model-envelope correctness and BUG-026-006",
+      "scopeKind": "contract-only",
+      "status": "implemented_tested_pending_validation",
+      "reopenedAt": "2026-07-10T17:37:46Z",
+      "reconciliation": "Python is the sole Ollama inference issuer. All 13 production builders must use one fail-loud request-profile applicator; Go remains a typed validator/router with bounded read-only /api/tags probes.",
+      "operatorValidationRefs": [
+        "R-102-A",
+        "R-102-D"
+      ],
+      "tests": [
+        {
+          "planId": "TP-C3-01",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_agent.py",
+          "testName": "test_handle_invoke_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "agent.handle_invoke emits selected options.num_ctx and top-level keep_alive while preserving determinism options.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-02",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_card_categories.py",
+          "testName": "test_extract_card_categories_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Card-category extraction preserves think and emits the selected profile.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-03",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_domain.py",
+          "testName": "test_do_domain_extract_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Domain extraction adds selected num_ctx while retaining top-level keep_alive.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-04",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_drive_classify.py",
+          "testName": "test_classify_drive_file_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Drive classification preserves think and emits the selected profile.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-05",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_intelligence_handlers.py",
+          "testName": "test_synthesis_generator_generate_applies_native_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "SynthesisGenerator.generate native JSON contains nested options.num_ctx and top-level keep_alive with no hardcoded model fallback.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-06",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_main.py",
+          "testName": "test_warmup_domain_model_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Domain-model warmup emits a capped profile-selected request.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-07",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_nats_client.py",
+          "testName": "test_handle_search_rerank_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Search rerank preserves think and emits the selected profile.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-08",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_nats_client.py",
+          "testName": "test_handle_digest_generate_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Digest generation uses the Ollama chat route with nested num_ctx and top-level keep_alive.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-09",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_ocr.py",
+          "testName": "test_do_ocr_applies_native_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "OCR native JSON contains nested options.num_ctx and top-level keep_alive.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-10",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_processor.py",
+          "testName": "test_process_content_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "process_content has direct payload proof and preserves caller options.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-11",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_chat_dispatch_parity_spec096.py",
+          "testName": "test_dispatch_ollama_applies_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Typed chat-selected model receives options.num_ctx and top-level keep_alive.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-12",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_synthesis.py",
+          "testName": "test_handle_extract_threads_sst_num_ctx_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Existing handle_extract direct payload proof remains green and preserves think, format, and options.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-13",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_synthesis.py",
+          "testName": "test_handle_crosssource_applies_ollama_profile_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Cross-source synthesis emits selected num_ctx without losing top-level keep_alive.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-14",
+          "type": "contract",
+          "category": "unit",
+          "file": "ml/tests/test_ollama_keepalive.py",
+          "testName": "test_production_ollama_builder_inventory_is_complete_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Discovery equals the exact 13-builder inventory and rejects a new unregistered or bypassing production builder.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-15",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_main.py",
+          "testName": "test_startup_rejects_invalid_model_profiles_spec102",
+          "scenarioId": "SCN-102-C3-03",
+          "scenarioIds": [
+            "SCN-102-C3-01",
+            "SCN-102-C3-03"
+          ],
+          "description": "Ollama startup rejects missing, malformed, duplicate, and non-positive profile data before network I/O.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-16",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_ollama_keepalive.py",
+          "testName": "test_unprofiled_selected_ollama_model_fails_before_dispatch_spec102",
+          "scenarioId": "SCN-102-C3-03",
+          "scenarioIds": [
+            "SCN-102-C3-01",
+            "SCN-102-C3-03"
+          ],
+          "description": "A dynamic unprofiled selected Ollama model raises before either payload adapter invokes the network boundary.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-17",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_ollama_keepalive.py",
+          "testName": "test_litellm_adapter_merges_options_and_keep_alive_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "LiteLLM adapter preserves options, think, tools, format, token budget, and determinism while placing keep_alive top-level.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-18",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_ollama_keepalive.py",
+          "testName": "test_native_json_adapter_merges_options_and_keep_alive_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Native JSON adapter preserves existing options, nests num_ctx, and places keep_alive top-level.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-19",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_chat_dispatch_parity_spec096.py",
+          "testName": "test_hosted_dispatch_carries_no_ollama_profile_options_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Hosted chat dispatch contains neither Ollama options.num_ctx nor keep_alive.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-20",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_intelligence_handlers.py",
+          "testName": "test_hosted_intelligence_carries_no_ollama_profile_options_spec102",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Hosted intelligence dispatch contains no Ollama-only fields.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-21",
+          "type": "integration",
+          "category": "integration",
+          "file": "tests/integration/agent/loop_test.go",
+          "testName": "TestSpec102NATSDriverUsesTypedBoundaryWithoutOllamaProtocol",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Against real ephemeral NATS, the Go driver emits typed turns without Ollama generation fields.",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true
+        },
+        {
+          "planId": "TP-C3-22",
+          "type": "contract",
+          "category": "unit",
+          "file": "internal/assistant/openknowledge/llm/client_test.go",
+          "testName": "TestSpec102GoUsesTypedMLBoundary",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Go uses typed /llm/chat and does not construct an Ollama inference payload.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestSpec102GoUsesTypedMLBoundary' --verbose",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-23",
+          "type": "contract",
+          "category": "unit",
+          "file": "internal/assistant/openknowledge/llm/client_test.go",
+          "testName": "TestSpec102GoOllamaEndpointsAreReadOnlyTagsOnly",
+          "scenarioId": "SCN-102-C3-01",
+          "description": "Direct Go Ollama URLs are bounded GET /api/tags; /api/chat and /api/generate fail the contract.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestSpec102GoOllamaEndpointsAreReadOnlyTagsOnly' --verbose",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-24",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/config/validate_ml_envelope_kv_spec102_test.go",
+          "testName": "TestValidateModelEnvelopes_KVMathFailsUnderstated_Spec102",
+          "scenarioId": "SCN-102-C3-02",
+          "description": "Understated weights plus KV profile fails loud adversarially.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestValidateModelEnvelopes_KVMathFailsUnderstated_Spec102' --verbose",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-25",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/config/validate_ml_envelope_kv_spec102_test.go",
+          "testName": "TestValidateModelEnvelopes_RefusesUncappedAcceptsCapped_Spec102",
+          "scenarioId": "SCN-102-C3-03",
+          "description": "Uncapped context is refused and the SST-capped context fits.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestValidateModelEnvelopes_RefusesUncappedAcceptsCapped_Spec102' --verbose",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-26",
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/config/validate_ml_envelope_kv_spec102_test.go",
+          "testName": "TestValidateModelEnvelopes_CoResidentSumGatedByMaxLoaded_Spec102",
+          "scenarioId": "SCN-102-C3-04",
+          "description": "max_loaded_models selects on-demand or co-resident envelope enforcement.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestValidateModelEnvelopes_CoResidentSumGatedByMaxLoaded_Spec102' --verbose",
+          "liveSystem": false
+        },
+        {
+          "planId": "TP-C3-27",
+          "type": "unit",
+          "category": "unit",
+          "file": "ml/tests/test_processor.py",
+          "testName": "test_output_budget_read_from_sst_not_hardcoded_spec102",
+          "scenarioId": "SCN-102-C3-05",
+          "description": "Existing BUG-026-006 SST output-budget and synthesis routing regressions remain intact while profile application is centralized.",
+          "command": "./smackerel.sh test unit --python",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-102-04",
+      "scopeName": "Backup-adapter durability formalization",
+      "scopeKind": "contract-only",
+      "status": "implemented_tested_pending_validation",
+      "operatorValidationRefs": [
+        "R-102-A",
+        "R-102-C"
+      ],
+      "tests": [
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "../<deployment-owner>/<product>/<target>/tests/unit/backup_degraded_contract_test.sh",
+          "scenarioId": "SCN-102-C4-01",
+          "description": "NATS capture failure records warning and removes partial data.",
+          "command": "bash ../<deployment-owner>/<product>/<target>/tests/unit/backup_degraded_contract_test.sh",
+          "liveSystem": false
+        },
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "../<deployment-owner>/<product>/<target>/tests/unit/backup_degraded_contract_test.sh",
+          "scenarioId": "SCN-102-C4-02",
+          "description": "Unreadable manifest remains non-fatal when critical captures succeed.",
+          "command": "bash ../<deployment-owner>/<product>/<target>/tests/unit/backup_degraded_contract_test.sh",
+          "liveSystem": false
+        },
+        {
+          "type": "contract",
+          "category": "unit",
+          "file": "../<deployment-owner>/<product>/<target>/tests/unit/apply_manifest_contract_test.sh",
+          "scenarioId": "SCN-102-C4-02",
+          "description": "Apply contract preserves ordered operator chown and mode 0644.",
+          "command": "bash ../<deployment-owner>/<product>/<target>/tests/unit/apply_manifest_contract_test.sh",
+          "liveSystem": false
+        },
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "../<deployment-owner>/<product>/<target>/tests/unit/backup_status_advance_test.sh",
+          "scenarioId": "SCN-102-C4-03",
+          "description": "Critical capture advances freshness while failure holds it.",
+          "command": "bash ../<deployment-owner>/<product>/<target>/tests/unit/backup_status_advance_test.sh",
+          "liveSystem": false
+        },
+        {
+          "type": "unit",
+          "category": "unit",
+          "file": "internal/backup/status_test.go",
+          "testName": "TestLoadStatus_KnbAdapterSchemaParity",
+          "scenarioId": "SCN-102-C4-03",
+          "description": "Adapter JSON and product parser retain schema and field-set parity.",
+          "command": "./smackerel.sh test unit --go --go-run 'TestLoadStatus_KnbAdapterSchemaParity' --verbose",
+          "liveSystem": false
+        },
+        {
+          "type": "functional",
+          "category": "functional",
+          "file": "../<deployment-owner>/<product>/<target>/tests/run-tests.sh",
+          "scenarioId": "SCN-102-C4-01",
+          "scenarioIds": [
+            "SCN-102-C4-01",
+            "SCN-102-C4-02",
+            "SCN-102-C4-03"
+          ],
+          "description": "Canonical knb adapter wrapper exits zero across all suites.",
+          "command": "bash ../<deployment-owner>/<product>/<target>/tests/run-tests.sh",
+          "liveSystem": false,
+          "verificationState": "passed",
+          "evidenceRef": "report.md#test-phase-closure-2026-07-11"
+        }
+      ]
+    }
+  ]
+}

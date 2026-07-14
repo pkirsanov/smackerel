@@ -18,5 +18,13 @@
             "what": "gemma4:26b emits truncated JSON ('Unterminated string') and 71-95s synthesis / >30s domain-extraction latency under LIGHT host load. Root cause of the TRUNCATION is model quality + output-token budget (max_tokens=2000 hardcoded in processor.py) + model routing — an ops/model-selection call, not code resilience. Recommend: raise/SST-own the output-token budget, and/or route domain-extraction+synthesis to a model with adequate output budget/latency."
         }
     ],
-    "notes": "In-repo code-resilience part fixed: tolerant JSON extraction + SST-gated graceful degradation so a malformed/truncated response preserves the capture instead of hard-dropping it. The model-quality/latency root cause is routed to ops with evidence. Requires ml redeploy to take effect."
+    "advancedBy": [
+        {
+            "spec": "102-<deploy-host>-deploy-hardening",
+            "scope": "SCOPE-102-03",
+            "at": "2026-07-09",
+            "what": "The ops-routed output-token-budget half is now ADDRESSED IN-REPO. The hardcoded max_tokens=2000 in ml/app/processor.py + the token_budget=2000 fallback in ml/app/synthesis.py are REPLACED with an SST-owned budget: services.ml.domain_output_token_budget -> ML_DOMAIN_OUTPUT_TOKEN_BUDGET (fail-loud, no default; boot-checked by ml/app/main.py::_check_required_config; read by ml/app/ollama_keepalive.py::resolve_domain_output_token_budget). Default raised 2000 -> 4096 so a domain/synthesis JSON object is not truncated mid-object. Real before/after evidence: BEFORE grep showed `max_tokens: 2000` (processor.py) + `contract.get('token_budget', 2000)` (synthesis.py); AFTER grep shows both read from SST. Adversarial test ml/tests/test_processor.py::test_output_budget_read_from_sst_not_hardcoded_spec102 sets ML_DOMAIN_OUTPUT_TOKEN_BUDGET=1234 and asserts max_tokens==1234 AND !=2000 (a re-hardcoded 2000 flips it red). The KV-aware validateModelEnvelopes (spec 102) additionally makes gemma4:26b's context envelope truthful (num_ctx SST-driven, host `ollama create` hack retired). STILL OPS-GATED (R-102-D): the live model-quality / 71-95s latency verification on <deploy-host> under ROCm remains an operator-host step — the in-repo deliverable is the SST budget + KV-aware envelope, not the live latency proof."
+        }
+    ],
+    "notes": "In-repo code-resilience part fixed (2026-07-08): tolerant JSON extraction + SST-gated graceful degradation so a malformed/truncated response preserves the capture instead of hard-dropping it. Output-token-budget root-cause half ADDRESSED in-repo (2026-07-09, spec 102 SCOPE-102-03): budget is now SST-owned (ML_DOMAIN_OUTPUT_TOKEN_BUDGET), replacing the hardcoded 2000. The model-quality/latency root cause + live verification remain routed to ops (R-102-D). Requires ml redeploy to take effect."
 }

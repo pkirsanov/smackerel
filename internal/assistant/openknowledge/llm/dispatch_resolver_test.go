@@ -14,6 +14,7 @@ package llm
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -265,5 +266,137 @@ func TestDispatchResolver_DuplicateKind_FailsLoud_Spec096(t *testing.T) {
 	}
 	if _, err := NewDispatchResolver(conns, nil, memCreds{}); err == nil {
 		t.Fatalf("duplicate provider kind MUST fail loud at construction")
+	}
+}
+
+func TestDispatchResolver_ProviderParamsAreClosedPerProvider_Security102(t *testing.T) {
+	vault := spec096Vault(t, "0123456789abcdef0123456789abcdef")
+	rec, err := vault.Encrypt("openai-primary", config.ModelConnectionKindOpenAI, map[string]string{"api_key": spec096Secret})
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	t.Run("legitimate_openai_params_survive", func(t *testing.T) {
+		conns := []config.ModelConnection{{
+			ID:      "openai-primary",
+			Kind:    config.ModelConnectionKindOpenAI,
+			Enabled: true,
+			Params: map[string]any{
+				"base_url": "https://openai.example.test/v1",
+				"org":      "org-example",
+			},
+			SecretRef: config.ModelConnectionSecretRef{Mode: config.ModelConnectionSecretModeDB},
+		}}
+		resolver, err := NewDispatchResolver(conns, vault, memCreds{"openai-primary": rec})
+		if err != nil {
+			t.Fatalf("NewDispatchResolver: %v", err)
+		}
+
+		got, err := resolver.Resolve("openai/gpt-4o")
+		if err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if got.Request.APIBase == nil || *got.Request.APIBase != "https://openai.example.test/v1" {
+			t.Fatalf("APIBase=%v, want the provider-owned base_url", got.Request.APIBase)
+		}
+		if len(got.Request.ProviderParams) != 1 || got.Request.ProviderParams["organization"] != "org-example" {
+			t.Fatalf("ProviderParams=%v, want only mapped OpenAI organization", got.Request.ProviderParams)
+		}
+	})
+
+	for _, injectedKey := range []string{"api_base", "options", "keep_alive", "extra_headers", "timeout"} {
+		t.Run("reject_injected_"+injectedKey, func(t *testing.T) {
+			conns := []config.ModelConnection{{
+				ID:      "openai-primary",
+				Kind:    config.ModelConnectionKindOpenAI,
+				Enabled: true,
+				Params: map[string]any{
+					"org":       "org-example",
+					injectedKey: "SENTINEL-DISPATCH-CONTROL",
+				},
+				SecretRef: config.ModelConnectionSecretRef{Mode: config.ModelConnectionSecretModeDB},
+			}}
+			resolver, err := NewDispatchResolver(conns, vault, memCreds{"openai-primary": rec})
+			if err != nil {
+				t.Fatalf("NewDispatchResolver: %v", err)
+			}
+
+			got, err := resolver.Resolve("openai/gpt-4o")
+			if err == nil {
+				t.Fatalf("injected control %q MUST reject before the sidecar wire; got dispatch %+v", injectedKey, got)
+			}
+			var resolveErr *ResolveError
+			if !errors.As(err, &resolveErr) || resolveErr.Reason != RejectInvalidConnectionParams {
+				t.Fatalf("want typed %q rejection for %q, got %T: %v", RejectInvalidConnectionParams, injectedKey, err, err)
+			}
+			if got.Request.Provider != "" || got.Request.Model != "" || got.Request.ProviderParams != nil {
+				t.Fatalf("rejected injected control MUST yield zero dispatch, got %+v", got)
+			}
+			if strings.Contains(err.Error(), "SENTINEL-DISPATCH-CONTROL") {
+				t.Fatalf("rejection leaked the supplied control value: %v", err)
+			}
+		})
+	}
+}
+
+func TestProviderDispatchParams_LegitimateProviderContractsSurvive_Security102(t *testing.T) {
+	tests := []struct {
+		name           string
+		kind           string
+		params         map[string]any
+		wantAPIBase    string
+		wantParameters map[string]any
+	}{
+		{
+			name:        "ollama_base_url",
+			kind:        config.ModelConnectionKindOllama,
+			params:      map[string]any{"base_url": "http://ollama.test:11434"},
+			wantAPIBase: "http://ollama.test:11434",
+		},
+		{
+			name: "anthropic_has_no_non_secret_routing_params",
+			kind: config.ModelConnectionKindAnthropic,
+		},
+		{
+			name:           "openai_base_url_and_org",
+			kind:           config.ModelConnectionKindOpenAI,
+			params:         map[string]any{"base_url": "https://openai.example.test/v1", "org": "org-example"},
+			wantAPIBase:    "https://openai.example.test/v1",
+			wantParameters: map[string]any{"organization": "org-example"},
+		},
+		{
+			name:           "azure_endpoint_version_and_deployment",
+			kind:           config.ModelConnectionKindAzureFoundry,
+			params:         map[string]any{"endpoint": "https://azure.example.test", "api_version": "2024-06-01", "deployment": "gpt-4o"},
+			wantAPIBase:    "https://azure.example.test",
+			wantParameters: map[string]any{"api_version": "2024-06-01", "deployment": "gpt-4o"},
+		},
+		{
+			name:           "google_vertex_project_and_location",
+			kind:           config.ModelConnectionKindGoogle,
+			params:         map[string]any{"project": "project-example", "location": "us-central1"},
+			wantParameters: map[string]any{"project": "project-example", "location": "us-central1"},
+		},
+		{
+			name:           "bedrock_region",
+			kind:           config.ModelConnectionKindBedrock,
+			params:         map[string]any{"region": "us-east-1"},
+			wantParameters: map[string]any{"region": "us-east-1"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			apiBase, providerParams, invalidParam := providerDispatchParams(tc.kind, tc.params)
+			if invalidParam != "" {
+				t.Fatalf("legitimate provider contract rejected key %q", invalidParam)
+			}
+			if apiBase != tc.wantAPIBase {
+				t.Fatalf("apiBase=%q, want %q", apiBase, tc.wantAPIBase)
+			}
+			if fmt.Sprint(providerParams) != fmt.Sprint(tc.wantParameters) {
+				t.Fatalf("providerParams=%v, want %v", providerParams, tc.wantParameters)
+			}
+		})
 	}
 }

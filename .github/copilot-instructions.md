@@ -204,13 +204,13 @@ SHA produces immutable artifacts that any environment consumes:
 **Operator commands:**
 
 ```bash
-./smackerel.sh deploy-target self-hosted apply \
+./smackerel.sh deploy-target <target> apply \
     --image-core=sha256:<digest> --image-ml=sha256:<digest> \
     --config-bundle=self-hosted-<sourceSha> \
     --config-bundle-sha=<sha256-hex>
-./smackerel.sh deploy-target self-hosted verify
-./smackerel.sh deploy-target self-hosted rollback
-bash scripts/deploy/promote.sh --target self-hosted --build-manifest <path>
+./smackerel.sh deploy-target <target> verify
+./smackerel.sh deploy-target <target> rollback
+bash scripts/deploy/promote.sh --target <target> --build-manifest <path>
 ```
 
 See [`docs/Deployment.md`](../docs/Deployment.md) for full operator workflow,

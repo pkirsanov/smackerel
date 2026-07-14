@@ -192,5 +192,5 @@ call) and is left unchanged; flagged here for a follow-up bug rather than silent
 ### Completion Statement
 
 Mechanism corrected to the native Ollama `think` field (verified forwarded by litellm 1.84.0). Code
-+ reworked unit tests authored and passing locally (RED 9-fail → GREEN 556-pass). Live verification
+- reworked unit tests authored and passing locally (RED 9-fail → GREEN 556-pass). Live verification
 pending orchestrator redeploy of `smackerel-ml`.

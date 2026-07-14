@@ -185,7 +185,15 @@ async def extract_card_categories(req: ExtractCardCategoriesRequest) -> dict[str
     )
 
     try:
-        response = await litellm.acompletion(**completion_kwargs)
+        from .ollama_keepalive import dispatch_litellm, resolve_ollama_request_profile
+
+        response = await dispatch_litellm(
+            completion_kwargs,
+            provider="ollama",
+            model=model,
+            profile=resolve_ollama_request_profile(model),
+            litellm_module=litellm,
+        )
     except (APIConnectionError, ServiceUnavailableError, Timeout) as exc:
         logger.warning("card-categories model gateway unreachable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(status_code=502, detail=f"model gateway unreachable: {type(exc).__name__}") from exc

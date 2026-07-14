@@ -829,7 +829,17 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ML_MEMORY_LIMIT", "3G")
 	t.Setenv("OLLAMA_CPU_LIMIT", "4.0")
 	t.Setenv("OLLAMA_MEMORY_LIMIT", "8G")
-	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", `[{"model":"llama3.2","memory_mib":2048},{"model":"all-MiniLM-L6-v2","memory_mib":256},{"model":"gpt-4o-mini","memory_mib":512},{"model":"gemma4:26b","memory_mib":3072},{"model":"nomic-embed-text","memory_mib":256},{"model":"deepseek-ocr:3b","memory_mib":2560}]`)
+	// Spec 102 SCOPE-102-03 — KV-aware profiles {weights_mib, kv_mib_per_1k_ctx,
+	// num_ctx}. Small constants so every model fits the 8G test envelope at
+	// num_parallel 4 (resident = weights + kv_per_1k × num_ctx/1000 × 4).
+	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", `[{"model":"llama3.2","weights_mib":2048,"kv_mib_per_1k_ctx":8,"num_ctx":4096},{"model":"all-MiniLM-L6-v2","weights_mib":256,"kv_mib_per_1k_ctx":0,"num_ctx":512},{"model":"gpt-4o-mini","weights_mib":512,"kv_mib_per_1k_ctx":4,"num_ctx":4096},{"model":"gemma4:26b","weights_mib":2560,"kv_mib_per_1k_ctx":16,"num_ctx":4096},{"model":"nomic-embed-text","weights_mib":256,"kv_mib_per_1k_ctx":0,"num_ctx":2048},{"model":"deepseek-ocr:3b","weights_mib":2048,"kv_mib_per_1k_ctx":8,"num_ctx":4096}]`)
+	// Spec 102 SCOPE-102-03 — Ollama concurrency/residency posture + SST
+	// output-token budget (required fail-loud SST). Default posture is
+	// on-demand swap (max_loaded_models 1: per-model fit only, co-resident
+	// sums skipped); co-resident tests override OLLAMA_MAX_LOADED_MODELS.
+	t.Setenv("OLLAMA_NUM_PARALLEL", "4")
+	t.Setenv("OLLAMA_MAX_LOADED_MODELS", "1")
+	t.Setenv("ML_DOMAIN_OUTPUT_TOKEN_BUDGET", "4096")
 
 	// BUG-045-001 — Per-service envelope routing requires the SST
 	// emission of every ollama-routed and ml-sidecar-routed model env

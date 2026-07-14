@@ -203,7 +203,9 @@ def test_domain_extract_disables_thinking_when_sst_false(monkeypatch):
 
     with patch("app.domain.litellm.acompletion", new_callable=AsyncMock) as mock_comp:
         mock_comp.side_effect = _capture
-        result = asyncio.run(handle_domain_extract(_domain_data(), "ollama", "qwen3:30b-a3b", "", "http://ollama:11434"))
+        result = asyncio.run(
+            handle_domain_extract(_domain_data(), "ollama", "qwen3:30b-a3b", "", "http://ollama:11434")
+        )
 
     assert result["success"] is True
     # ADVERSARIAL: the proven 30s-budget path must disable thinking via the
@@ -231,7 +233,9 @@ def test_domain_extract_keeps_thinking_when_enabled(monkeypatch):
 
     with patch("app.domain.litellm.acompletion", new_callable=AsyncMock) as mock_comp:
         mock_comp.side_effect = _capture
-        result = asyncio.run(handle_domain_extract(_domain_data(), "ollama", "qwen3:30b-a3b", "", "http://ollama:11434"))
+        result = asyncio.run(
+            handle_domain_extract(_domain_data(), "ollama", "qwen3:30b-a3b", "", "http://ollama:11434")
+        )
 
     assert result["success"] is True
     assert "think" not in captured, captured

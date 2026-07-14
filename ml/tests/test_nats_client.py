@@ -282,6 +282,77 @@ class TestHandleSearchRerank:
         assert result["ranked_ids"] == ["art-1", "art-2"]
 
 
+def test_handle_search_rerank_applies_ollama_profile_spec102():
+    """TP-C3-07: rerank retains think=False and transforms a profiled model
+    response into ranked artifact IDs."""
+    client = NATSClient("nats://localhost:4222")
+    captured: dict = {}
+
+    async def capture(**kwargs):
+        captured.update(kwargs)
+        return MagicMock(
+            choices=[
+                MagicMock(message=MagicMock(content='{"ranked":[{"index":2,"relevance":"high","explanation":"best"}]}'))
+            ]
+        )
+
+    fake_litellm = MagicMock(acompletion=capture)
+    with patch.dict(sys.modules, {"litellm": fake_litellm}):
+        result = asyncio.run(
+            client._handle_search_rerank(
+                {
+                    "query_id": "rerank-102",
+                    "query": "best",
+                    "candidates": [
+                        {"id": "a", "title": "A", "summary": "first"},
+                        {"id": "b", "title": "B", "summary": "second"},
+                    ],
+                },
+                "ollama",
+                "qwen3:30b-a3b",
+                "",
+            )
+        )
+
+    assert result["ranked_ids"] == ["b"]
+    assert captured["model"] == "ollama_chat/qwen3:30b-a3b"
+    assert captured["options"]["num_ctx"] == 32768
+    assert captured["keep_alive"] == "30m"
+    assert captured["think"] is False
+
+
+def test_handle_digest_generate_applies_ollama_profile_spec102():
+    """TP-C3-08: digest uses the Ollama chat route with nested num_ctx,
+    top-level keep_alive, and native thinking control."""
+    client = NATSClient("nats://localhost:4222")
+    captured: dict = {}
+
+    async def capture(**kwargs):
+        captured.update(kwargs)
+        return MagicMock(choices=[MagicMock(message=MagicMock(content="! Reply to Alice."))])
+
+    fake_litellm = MagicMock(acompletion=capture)
+    with patch.dict(sys.modules, {"litellm": fake_litellm}):
+        result = asyncio.run(
+            client._handle_digest_generate(
+                {
+                    "digest_date": "2026-07-10",
+                    "action_items": [{"text": "Reply", "person": "Alice", "days_waiting": 2}],
+                },
+                "ollama",
+                "qwen3:30b-a3b",
+                "",
+            )
+        )
+
+    assert result["text"] == "! Reply to Alice."
+    assert captured["model"] == "ollama_chat/qwen3:30b-a3b"
+    assert not captured["model"].startswith("ollama/")
+    assert captured["options"]["num_ctx"] == 32768
+    assert captured["keep_alive"] == "30m"
+    assert captured["think"] is False
+
+
 # ---------------------------------------------------------------------------
 # Search embed handler
 # ---------------------------------------------------------------------------

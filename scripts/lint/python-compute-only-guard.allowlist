@@ -1,0 +1,18 @@
+# scripts/lint/python-compute-only-guard.allowlist
+#
+# Allowlist for scripts/lint/python-compute-only-guard.sh (Spec 102 SCOPE-102-01).
+#
+# Path globs (matched with [[ path == pattern ]]; `*` spans `/`), relative to
+# the repo root, to EXCLUDE from the dependency + infra-URL file scans — for a
+# future legitimate Python file that must be exempt with a recorded reason.
+# EMPTY by default.
+#
+# Adding a path is a normal reviewed change; there is NO runtime bypass flag
+# (--skip / --force / --ignore / --no-verify -> exit 2). A new sanctioned
+# situation is admitted by editing this allowlist, never by skipping the check.
+#
+# NOTE: `nats-py` / `NATS_URL` are NOT scanned as forbidden — NATS is the
+# sanctioned typed contract wire for smackerel's compute-only sidecar, so it
+# needs no allowlist entry (it is simply absent from the guard's denylist).
+
+# path exclusions — none today.

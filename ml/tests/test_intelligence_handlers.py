@@ -1,6 +1,9 @@
 """Tests for Phase 5 intelligence handlers."""
 
 import asyncio
+from unittest.mock import patch
+
+import pytest
 
 from app.intelligence import (
     handle_content_analyze,
@@ -239,3 +242,82 @@ class TestSeasonalAnalyze:
         assert "observations" in result
         assert isinstance(result["observations"], list)
         assert result["success"] is True
+
+
+class _FakeHTTPResponse:
+    def __init__(self, payload):
+        self.status_code = 200
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _CapturingAsyncClient:
+    captured: dict = {}
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+    async def post(self, url, **kwargs):
+        type(self).captured = {"url": url, **kwargs}
+        if url.endswith("/api/generate"):
+            return _FakeHTTPResponse(
+                {"response": '[{"title":"Angle","uniqueness_rationale":"Evidence","format_suggestion":"blog post"}]'}
+            )
+        return _FakeHTTPResponse({"choices": [{"message": {"content": '[{"title":"Hosted"}]'}}]})
+
+
+def test_synthesis_generator_generate_applies_native_ollama_profile_spec102():
+    """TP-C3-05: intelligence's shared native generator emits a profiled
+    /api/generate payload and refuses to restore a hardcoded model fallback."""
+    _CapturingAsyncClient.captured = {}
+    with patch("httpx.AsyncClient", _CapturingAsyncClient):
+        result = asyncio.run(
+            handle_content_analyze(
+                {"topic_id": "topic-102", "topic_name": "Ollama", "capture_count": 10, "source_diversity": 3},
+                "ollama",
+                "gemma4:26b",
+                "configured",
+                "http://ollama:11434",
+            )
+        )
+
+    payload = _CapturingAsyncClient.captured["json"]
+    assert result["success"] is True
+    assert _CapturingAsyncClient.captured["url"].endswith("/api/generate")
+    assert payload["model"] == "gemma4:26b"
+    assert payload["options"]["num_ctx"] == 8192
+    assert payload["keep_alive"] == "30m"
+    assert payload["stream"] is False
+
+    from app.intelligence import _call_llm
+
+    with pytest.raises(RuntimeError, match="model is required"):
+        asyncio.run(_call_llm("prompt", "ollama", "", "", "http://ollama:11434"))
+
+
+def test_hosted_intelligence_carries_no_ollama_profile_options_spec102():
+    """TP-C3-20: hosted intelligence never receives Ollama-only fields."""
+    _CapturingAsyncClient.captured = {}
+    with patch("httpx.AsyncClient", _CapturingAsyncClient):
+        asyncio.run(
+            handle_content_analyze(
+                {"topic_id": "hosted-102", "topic_name": "Hosted", "capture_count": 4, "source_diversity": 2},
+                "openai",
+                "gpt-4o-mini",
+                "secret-not-logged",
+            )
+        )
+
+    payload = _CapturingAsyncClient.captured["json"]
+    assert _CapturingAsyncClient.captured["url"] == "https://api.openai.com/v1/chat/completions"
+    assert payload["model"] == "gpt-4o-mini"
+    assert "options" not in payload
+    assert "keep_alive" not in payload

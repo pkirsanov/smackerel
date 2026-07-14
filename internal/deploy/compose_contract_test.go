@@ -843,3 +843,136 @@ func TestComposeEnvFileSharedAcrossCoreAndMlServices(t *testing.T) {
 		}
 	}
 }
+
+// =============================================================================
+// Spec 102 SCOPE-102-01 — network segmentation (SCN-102-C1-05).
+//
+// deploy/compose.deploy.yml splits the persistence boundary from the compute
+// boundary with two bridge networks:
+//   data-tier    — postgres + smackerel-core ONLY.
+//   compute-tier — smackerel-core, smackerel-ml, nats, ollama, prometheus, searxng.
+// The compute-only smackerel-ml sidecar is on compute-tier ONLY, so it has NO
+// network route to postgres (defense-in-depth beneath the ml.env secret
+// projection). smackerel-core straddles both tiers (it owns the datastore).
+// =============================================================================
+
+// assertNetworkSegmentation returns nil iff the spec-102 segmentation holds:
+// both tiers declared top-level; postgres on data-tier ONLY; smackerel-ml on
+// compute-tier and NOT data-tier; smackerel-core on BOTH. On any violation it
+// returns a non-nil error naming the service + tier so the adversarial
+// sub-tests can pattern-match the failure mode.
+func assertNetworkSegmentation(yamlBytes []byte) error {
+	var doc struct {
+		Services map[string]struct {
+			Networks []string `yaml:"networks"`
+		} `yaml:"services"`
+		Networks map[string]interface{} `yaml:"networks"`
+	}
+	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
+		return fmt.Errorf("yaml.Unmarshal failed: %w", err)
+	}
+	for _, n := range []string{"data-tier", "compute-tier"} {
+		if _, ok := doc.Networks[n]; !ok {
+			return fmt.Errorf("contract violation: top-level networks missing %q (spec 102 SCOPE-102-01 segmentation)", n)
+		}
+	}
+	has := func(list []string, want string) bool {
+		for _, v := range list {
+			if v == want {
+				return true
+			}
+		}
+		return false
+	}
+	pg, ok := doc.Services["postgres"]
+	if !ok {
+		return fmt.Errorf("contract violation: services.postgres not found")
+	}
+	if !has(pg.Networks, "data-tier") {
+		return fmt.Errorf("contract violation: services.postgres.networks=%v must include data-tier", pg.Networks)
+	}
+	if has(pg.Networks, "compute-tier") {
+		return fmt.Errorf("contract violation: services.postgres.networks=%v must NOT include compute-tier — postgres is data-tier ONLY so the compute-only smackerel-ml sidecar cannot reach it (spec 102 SCN-102-C1-05)", pg.Networks)
+	}
+	ml, ok := doc.Services["smackerel-ml"]
+	if !ok {
+		return fmt.Errorf("contract violation: services.smackerel-ml not found")
+	}
+	if !has(ml.Networks, "compute-tier") {
+		return fmt.Errorf("contract violation: services.smackerel-ml.networks=%v must include compute-tier", ml.Networks)
+	}
+	if has(ml.Networks, "data-tier") {
+		return fmt.Errorf("contract violation: services.smackerel-ml.networks=%v must NOT include data-tier — the compute-only sidecar must have NO route to postgres (spec 102 SCN-102-C1-05)", ml.Networks)
+	}
+	core, ok := doc.Services["smackerel-core"]
+	if !ok {
+		return fmt.Errorf("contract violation: services.smackerel-core not found")
+	}
+	if !has(core.Networks, "data-tier") || !has(core.Networks, "compute-tier") {
+		return fmt.Errorf("contract violation: services.smackerel-core.networks=%v must include BOTH data-tier and compute-tier (the trusted typed tier straddles both; it retains its route to postgres) (spec 102 SCN-102-C1-05)", core.Networks)
+	}
+	return nil
+}
+
+// TestNetworkSegmentation_MLCannotReachPostgres_Spec102 — SCN-102-C1-05 live file.
+func TestNetworkSegmentation_MLCannotReachPostgres_Spec102(t *testing.T) {
+	composePath := filepath.Join(repoRoot(t), "deploy", "compose.deploy.yml")
+	yamlBytes, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", composePath, err)
+	}
+	if err := assertNetworkSegmentation(yamlBytes); err != nil {
+		t.Fatalf("live deploy/compose.deploy.yml violates spec 102 network segmentation: %v", err)
+	}
+	t.Logf("contract OK: postgres is data-tier only; smackerel-ml is compute-tier only (no postgres route); smackerel-core straddles both tiers")
+}
+
+// TestNetworkSegmentation_AdversarialMLOnDataTier_Spec102 — a flattened topology
+// that re-exposes postgres to the compute-only sidecar MUST fail the contract.
+func TestNetworkSegmentation_AdversarialMLOnDataTier_Spec102(t *testing.T) {
+	fixture := []byte(`services:
+  postgres:
+    networks: [data-tier]
+  smackerel-core:
+    networks: [data-tier, compute-tier]
+  smackerel-ml:
+    networks: [compute-tier, data-tier]
+networks:
+  data-tier:
+    driver: bridge
+  compute-tier:
+    driver: bridge
+`)
+	err := assertNetworkSegmentation(fixture)
+	if err == nil {
+		t.Fatal("adversarial regression: assertNetworkSegmentation accepted smackerel-ml on data-tier (postgres re-exposed to the compute-only sidecar) — the contract has no bite")
+	}
+	if !strings.Contains(err.Error(), "smackerel-ml") || !strings.Contains(err.Error(), "data-tier") {
+		t.Fatalf("expected a smackerel-ml/data-tier violation, got: %v", err)
+	}
+}
+
+// TestNetworkSegmentation_AdversarialPostgresOnComputeTier_Spec102 — putting
+// postgres on compute-tier (reachable by the sidecar) MUST fail the contract.
+func TestNetworkSegmentation_AdversarialPostgresOnComputeTier_Spec102(t *testing.T) {
+	fixture := []byte(`services:
+  postgres:
+    networks: [data-tier, compute-tier]
+  smackerel-core:
+    networks: [data-tier, compute-tier]
+  smackerel-ml:
+    networks: [compute-tier]
+networks:
+  data-tier:
+    driver: bridge
+  compute-tier:
+    driver: bridge
+`)
+	err := assertNetworkSegmentation(fixture)
+	if err == nil {
+		t.Fatal("adversarial regression: assertNetworkSegmentation accepted postgres on compute-tier (reachable by the compute-only sidecar) — the contract has no bite")
+	}
+	if !strings.Contains(err.Error(), "postgres") || !strings.Contains(err.Error(), "compute-tier") {
+		t.Fatalf("expected a postgres/compute-tier violation, got: %v", err)
+	}
+}

@@ -353,6 +353,49 @@ After any change, run `./smackerel.sh config generate` then restart the
 stack (`./smackerel.sh down && ./smackerel.sh up`) so the new envelope
 takes effect.
 
+### Model Envelope Sizing (Ollama — KV-aware, spec 102 SCOPE-102-03)
+
+`config/smackerel.yaml` `services.ml.model_memory_profiles` is a KV-AWARE
+per-model profile `{model, weights_mib, kv_mib_per_1k_ctx, num_ctx}`.
+`internal/config/config.go::validateModelEnvelopes` computes each model's REAL
+resident footprint at config-generate time and refuses an over-envelope
+configuration BEFORE any container starts:
+
+```
+resident_mib = weights_mib + kv_mib_per_1k_ctx × (num_ctx / 1000) × OLLAMA_NUM_PARALLEL
+```
+
+- **`num_ctx` is SST-driven, per model** — it rides onto every ollama request
+  (`options.num_ctx`) from the ml sidecar (`ml/app/ollama_keepalive.py::resolve_ollama_num_ctx`
+  → `synthesis.py`/`processor.py`/`routes/chat.py`). This REPLACES the host-only
+  `ollama create <tag> PARAMETER num_ctx` tag-overwrite hack, which lived only on
+  the host and was silently lost on any `ollama pull` / host rebuild. `gemma4:26b`
+  is capped at `num_ctx: 8192` (its uncapped 262144 arch context would predict a
+  physically-impossible KV footprint and is refused fail-loud).
+- **`OLLAMA_NUM_PARALLEL`** (`infrastructure.ollama.num_parallel`) scales the KV
+  term — the daemon reserves KV cache for this many concurrent sequences per
+  loaded model. Keep it in lockstep with the actual host ollama daemon setting.
+
+#### Co-residency vs on-demand swap (`OLLAMA_MAX_LOADED_MODELS`)
+
+`infrastructure.ollama.max_loaded_models` is a DELIBERATE, documented posture
+decision that gates the co-resident-sum envelope check:
+
+| `max_loaded_models` | Posture | Validator requires |
+|---|---|---|
+| `1` (**default**) | **on-demand SWAP** — the daemon loads exactly ONE model at a time (qwen3 gather ↔ gemma4 vision swap on demand) | each model fits the envelope ALONE (per-model check only) |
+| `> 1` | **co-resident** — the daemon keeps N distinct models loaded together | the co-resident working-set SUM fits `OLLAMA_MEMORY_LIMIT` |
+
+The default is `1` (on-demand swap) — the SAFE posture until the true
+co-residency of `qwen3:30b-a3b` (text) + `gemma4:26b` (vision) under ROCm on the
+contended host is PROVEN with a live `ollama ps` capture on the deploy host
+(tracked as risk R-102-D; the dev sandbox has no ollama daemon, so co-residency
+can only be verified on the real Strix Halo iGPU). The operator flips
+`max_loaded_models` to `2` — and the validator then enforces the co-resident sum
+against `OLLAMA_MEMORY_LIMIT` — ONLY after that proof. Under swap, the two large
+models never sit in VRAM together, so the per-model fit is sufficient; the trade
+is a one-time load latency when the active model changes.
+
 #### Adding a new JetStream stream
 
 When introducing a new stream to `internal/nats.AllStreams()`:
@@ -3169,7 +3212,7 @@ sideload zip from CI.
 ### Sideload Workflow (Operator)
 
 1. **Pick the build manifest.** Identify the smackerel-core git SHA running
-   on your deployment (e.g. from `./smackerel.sh deploy-target self-hosted
+  on your deployment (e.g. from `./smackerel.sh deploy-target <target>
    verify`), then download the matching `build-manifest-<sourceSha>.yaml`
    from the GitHub Actions `build` workflow run. The manifest's
    `chromeBridge` section names the artifact and its SHA-256.

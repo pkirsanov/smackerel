@@ -26,6 +26,29 @@ import os
 
 os.environ.setdefault("SMACKEREL_AUTH_TOKEN", "")
 
+# Spec 102 SCOPE-102-03 — every Ollama request now resolves a positive num_ctx
+# fail-loud from ML_MODEL_MEMORY_PROFILES_JSON. Seed the finite unit-test model
+# inventory only when the repo CLI did not provide generated SST config. Tests
+# for missing/malformed/duplicate/unprofiled data replace or delete this value
+# explicitly, so the production no-default contract keeps adversarial coverage.
+os.environ.setdefault(
+    "ML_MODEL_MEMORY_PROFILES_JSON",
+    "["
+    '{"model":"m","num_ctx":4096},'
+    '{"model":"test-model","num_ctx":4096},'
+    '{"model":"gemma","num_ctx":4096},'
+    '{"model":"llama3","num_ctx":4096},'
+    '{"model":"llama3.2","num_ctx":4096},'
+    '{"model":"gemma3:4b","num_ctx":8192},'
+    '{"model":"gemma4:26b","num_ctx":8192},'
+    '{"model":"llava","num_ctx":4096},'
+    '{"model":"qwen2.5:0.5b-instruct","num_ctx":4096},'
+    '{"model":"qwen3:30b-a3b","num_ctx":32768},'
+    '{"model":"some-other-model:7b","num_ctx":4096},'
+    '{"model":"deepseek-ocr:3b","num_ctx":4096}'
+    "]",
+)
+
 # F2 (redteam LLM-enrichment cold-load) — the ML sidecar's ollama completions
 # read ML_OLLAMA_KEEP_ALIVE fail-loud at CALL time (ml/app/ollama_keepalive.py).
 # Several unit tests drive the ollama code path (test_processor / test_domain /
@@ -45,3 +68,14 @@ os.environ.setdefault("ML_OLLAMA_KEEP_ALIVE", "30m")
 # production module. The fail-loud contract itself is proven adversarially in
 # test_ollama_thinking.py via monkeypatch.delenv.
 os.environ.setdefault("ML_STRUCTURED_EXTRACTION_THINKING", "false")
+
+# Spec 102 SCOPE-102-03 (BUG-026-006) — the ML sidecar's structured-JSON domain/
+# synthesis extraction completions read ML_DOMAIN_OUTPUT_TOKEN_BUDGET fail-loud
+# at CALL time (ml/app/ollama_keepalive.py::resolve_domain_output_token_budget),
+# used regardless of provider. The unit tests that drive process_content /
+# handle_extract (test_processor / test_synthesis / test_ollama_keepalive) would
+# otherwise raise, so seed the SST default here IFF unset — the same
+# developer-ergonomic setdefault pattern as above, NOT a default in the
+# production module. The fail-loud contract is proven adversarially in
+# test_ollama_keepalive.py via monkeypatch.delenv.
+os.environ.setdefault("ML_DOMAIN_OUTPUT_TOKEN_BUDGET", "4096")

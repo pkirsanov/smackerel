@@ -3,6 +3,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/scripts/lib/runtime.sh"
+# spec 103 — age-bounded, project-scoped, dev-plane-only unused-image reclamation
+# helper (build_unused_image_prune_argv / assert_dev_plane / prune_unused_images_aged),
+# wired into the `clean smart` arm below. Sourced here so the monolith can call
+# the executor; the same helper is sourced directly by the Docker-free unit
+# harness (scripts/commands/clean_image_reclamation_test.sh) via `clean test`.
+source "$SCRIPT_DIR/scripts/lib/cleanup-image-reclamation.sh"
 
 # Spec 061 SCOPE-06c (Round 71d) — source per-machine hardware-tier overlay
 # (gitignored). Operator copies .smackerel.local.env.example → .smackerel.local.env
@@ -76,8 +82,12 @@ Commands:
   logs [service]              Stream docker compose logs
   clean status                Show project-scoped cleanup state
   clean measure               Show docker disk usage
-  clean smart                 Stop the current stack without deleting persistent volumes
+  clean smart                 Stop the stack (persistent volumes preserved), then
+                              reclaim aged unused project images on the dev plane
+                              (spec 103; gated by config/smackerel.yaml cleanup.*)
   clean full                  Stop the current stack and remove project-scoped volumes
+  clean test                  Run the Docker-free cleanup image-reclamation unit
+                              harness (spec 103; no Docker, no generated env)
   deploy <target>             Zero-manual deploy orchestrator (knb spec 019).
                               Sources scripts/deploy/orchestrator.sh from the
                               knb checkout resolved via $KNB_REPO_ROOT or
@@ -91,14 +101,14 @@ Commands:
                               it (cosign sign-blob, trustModel local-operator),
                               and emit a local build manifest clients: block
                               (provenance local-operator) consumable by the knb
-                              self-hosted adapter. The knb adapter consumes +
+                              target adapter. The knb adapter consumes +
                               verifies; this command BUILDS + SIGNS. Target:
                               self-hosted. The REAL flutter build + operator-sign
                               run on <deploy-host>.
   deploy-target <target> <action> [args]
                               Run a deployment-target adapter action (legacy
                               spec-017/018 form; preserved for backward compat).
-                              Targets: self-hosted (see deploy/<target>/README.md)
+                              Targets: any adapter resolved by deploy/<target> or DEPLOY_TARGETS_ROOT
                               Actions: preconditions | bootstrap | apply | rollback |
                                        verify | teardown | status | manifest | params
 EOF
@@ -613,9 +623,9 @@ smackerel_run_up() {
     # convention. Without it a bare `up` silently reuses a stale prebuilt
     # smackerel-core image, so a green run can mask an unbuilt change and a red
     # run can reflect stale code — the SCN-083-K01 reconcile hazard the e2e-ui
-    # lane hit. This mirrors the explicit `build` -> `up` that
-    # tests/integration/test_runtime_health.sh already does and the `up --build`
-    # the e2e-ui lane uses, applied once for all lanes. `--build-arg
+    # lane hit. tests/integration/test_runtime_health.sh delegates freshness to
+    # this path so each integration startup builds exactly once. This matches
+    # the e2e-ui lane's `up --build` behavior. `--build-arg
     # GO_BUILD_TAGS=e2e` matches the `build` subcommand's test-image contract.
     # The stores-only integration-light lane bypasses this path entirely (it
     # brings up ONLY postgres+nats via `smackerel_compose ... up ... postgres
@@ -1104,8 +1114,10 @@ case "$COMMAND" in
         }
         trap integration_cleanup_trap EXIT
 
-        # Run shell-based health probe (brings stack up + asserts health)
-        smackerel_run_with_timeout --kill-after=30s 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
+        # Run the shell-based health probe (one cold image build, stack start,
+        # and health assertions) under the same bounded budget used by other
+        # full-stack lanes.
+        smackerel_run_with_timeout --kill-after=30s 900 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
 
         # Run Go integration tests against the live test stack
         searxng_url=""
@@ -2210,6 +2222,16 @@ E2EUI_HELP
         bash "$SCRIPT_DIR/.github/bubbles/scripts/macos-portability-guard.sh" \
           "$SCRIPT_DIR/smackerel.sh" "$SCRIPT_DIR/scripts" || exit 1
         echo "macOS/WSL portability guard: OK"
+        # Spec 102 SCOPE-102-01 — smackerel-ml compute-only invariant guard.
+        # Asserts the Python ML sidecar (ml/**) holds no forbidden datastore
+        # driver, reads no direct datastore URL, and loads the PROJECTED
+        # secret-free ml.env (never app.env). Pure bash/grep/find/awk static
+        # gate -- no Docker, no bundle build -- so it runs identically here and
+        # in CI. Fail-closed with NO bypass flag (mirrors the isolated-ML-sidecar
+        # invariant + QF spec 089 Scope C).
+        echo "Running python-compute-only guard (smackerel-ml compute-only invariant)..."
+        bash "$SCRIPT_DIR/scripts/lint/python-compute-only-guard.sh" || exit 1
+        echo "python-compute-only guard: OK"
         ;;
       *)
         usage
@@ -2269,6 +2291,12 @@ E2EUI_HELP
     ;;
   clean)
     SUBCOMMAND="${1:-}"
+    # spec 103 — repo-CLI unit harness entrypoint (Docker-free). Intercept BEFORE
+    # require_docker / smackerel_generate_config so the cleanup-image-reclamation
+    # unit harness runs with no Docker daemon and no generated env.
+    if [[ "$SUBCOMMAND" == "test" ]]; then
+      exec bash "$SCRIPT_DIR/scripts/commands/clean_image_reclamation_test.sh"
+    fi
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     case "$SUBCOMMAND" in
@@ -2283,6 +2311,22 @@ E2EUI_HELP
           smackerel_with_stack_lock "$TARGET_ENV" smackerel_run_down "$TARGET_ENV" false
         else
           smackerel_run_down "$TARGET_ENV" false
+        fi
+        # spec 103 — age-bounded, project-scoped, dev-plane-only unused-image
+        # reclamation, AFTER the teardown (so `docker compose down` first releases
+        # the running containers' image references, making aged orphaned versions
+        # eligible while the just-built current image stays < min age). Gated by
+        # the SST flag; SMACKEREL_ENV (read from the generated env) is passed to
+        # the executor, whose assert_dev_plane refuses on any non-dev plane.
+        # clean full/status/measure are untouched.
+        clean_env_file="$(smackerel_require_env_file "$TARGET_ENV")"
+        if [[ "$(smackerel_env_value "$clean_env_file" "CLEANUP_REMOVE_UNUSED_IMAGES")" == "true" ]]; then
+          SMACKEREL_ENV="$(smackerel_env_value "$clean_env_file" "SMACKEREL_ENV")" \
+            prune_unused_images_aged \
+            "$(smackerel_env_value "$clean_env_file" "CLEANUP_UNUSED_IMAGE_MIN_AGE_HOURS")" \
+            "$(smackerel_env_value "$clean_env_file" "CLEANUP_UNUSED_IMAGE_SCOPE")"
+        else
+          echo "Aged unused-image reclamation disabled (cleanup.remove_unused_images=false)"
         fi
         ;;
       full)

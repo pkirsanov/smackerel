@@ -24,10 +24,18 @@
     "completedScopes": [],
     "createdAt": "2026-07-09",
     "fixedAt": "2026-07-09",
-    "lastUpdatedAt": "2026-07-09T00:00:00Z",
+    "lastUpdatedAt": "2026-07-09T15:45:00Z",
     "redeployRequired": true,
     "transitionRequests": [],
     "reworkQueue": [],
     "routed": [],
+    "advancedBy": [
+        {
+            "spec": "102-<deploy-host>-deploy-hardening",
+            "scope": "SCOPE-102-03",
+            "at": "2026-07-09",
+            "what": "Complementary hardening of the domain-extraction budget posture. The qwen3 thinking-off fix (this bug) removed the ~113s hidden reasoning block; spec 102 SCOPE-102-03 additionally makes the per-model context window (num_ctx) SST-driven and threaded onto every ollama request (options.num_ctx) instead of a host-baked `ollama create` tag, and makes validateModelEnvelopes KV-aware. qwen3:30b-a3b is profiled at num_ctx 32768; the SST num_ctx + the SST-owned output budget (BUG-026-006 advance) together give the structured-JSON extraction path a truthful, config-driven context+output envelope. Status unchanged (fixed_in_repo); live redeploy still required (R-102-A) for the combined effect."
+        }
+    ],
     "notes": "Remaining half of the redteam F2 (LLM-enrichment latency) finding. The keep_alive fix (BUG-026-006 sibling + ml/app/ollama_keepalive.py) removed the ~22-45s Ollama cold-load; this fixes the qwen3 hidden-reasoning latency on the structured-JSON extraction path by setting the native Ollama think=False request field (SST-gated by ML_STRUCTURED_EXTRACTION_THINKING / services.ml.structured_extraction_thinking) on every in-scope structured call, and migrating the two legacy ollama/ routes (search-rerank, drive-classify) to ollama_chat/. CORRECTION: the first fix used the /no_think prompt token, which qwen3 ignores; the SST switch + wiring are unchanged. The agent reasoning path (agent.py) is deliberately left thinking-ON (quality > latency). Adjacent finding (out of scope): _handle_generate_digest still carries its own inline /no_think, likely also ineffective on qwen3 — flagged for a follow-up bug. Requires a smackerel-ml image rebuild + signed redeploy to take effect."
 }

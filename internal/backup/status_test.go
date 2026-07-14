@@ -19,6 +19,7 @@
 package backup
 
 import (
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -249,4 +250,97 @@ func TestWatcher_NilSinkPanics(t *testing.T) {
 		}
 	}()
 	_ = NewWatcher("/tmp/foo", time.Second, nil)
+}
+
+// T-102-C4-03 — cross-repo schema parity (spec 102 SCOPE-102-04).
+//
+// The knb self-hosted backup adapter (<deployment-owner>/<product>/<target>/backup.sh,
+// write_backup_status) is the ONLY writer of the on-disk backup-status file
+// this watcher reads. This test embeds a verbatim replica of that writer's
+// heredoc (schema_version 1, the full 8-field set) and proves:
+//
+//  1. The knb-written JSON parses cleanly through LoadStatus at
+//     CurrentSchemaVersion — the watcher can consume what the adapter emits.
+//  2. The key SET the adapter writes is exactly the json-tag set backup.Status
+//     models — neither repo can silently add, drop, or rename a field without
+//     failing this test (the drift-lock the SCOPE-102-04 DoD requires).
+//
+// If backup.sh changes its heredoc, update the `knbWritten` literal here in the
+// same change; if backup.Status changes its json tags, this test fails until
+// the adapter and this literal are reconciled.
+func TestLoadStatus_KnbAdapterSchemaParity(t *testing.T) {
+	// Verbatim replica of <deployment-owner>/<product>/<target>/backup.sh::write_backup_status.
+	// Field order + key names MUST match that heredoc byte-for-byte (values
+	// are concrete stand-ins for the shell-expanded ${...} placeholders).
+	const knbWritten = `{
+  "schema_version": 1,
+  "last_run_unixtime": 1783669740,
+  "last_success_unixtime": 1783669740,
+  "last_status": "success",
+  "last_duration_ms": 4321,
+  "last_size_bytes": 1048576,
+  "last_artifact_name": "postgres-smackerel.sql.gz",
+  "last_error": ""
+}`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "status.json")
+	if err := os.WriteFile(path, []byte(knbWritten), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// (1) The adapter-written shape parses through the watcher's loader.
+	got, err := LoadStatus(path)
+	if err != nil {
+		t.Fatalf("knb-adapter-written status MUST parse via LoadStatus; got: %v", err)
+	}
+	if got.SchemaVersion != CurrentSchemaVersion {
+		t.Fatalf("schema parity: SchemaVersion=%d, want CurrentSchemaVersion=%d", got.SchemaVersion, CurrentSchemaVersion)
+	}
+	if got.LastRunUnixtime != 1783669740 || got.LastSuccessUnixtime != 1783669740 {
+		t.Fatalf("timestamps mis-parsed: run=%d success=%d", got.LastRunUnixtime, got.LastSuccessUnixtime)
+	}
+	if got.LastStatus != "success" {
+		t.Fatalf("last_status mis-parsed: %q", got.LastStatus)
+	}
+	if got.LastDurationMS != 4321 || got.LastSizeBytes != 1048576 {
+		t.Fatalf("duration/size mis-parsed: dur=%d size=%d", got.LastDurationMS, got.LastSizeBytes)
+	}
+	if got.LastArtifactName != "postgres-smackerel.sql.gz" {
+		t.Fatalf("last_artifact_name mis-parsed: %q", got.LastArtifactName)
+	}
+
+	// (2) Adversarial key-set parity. The knb writer's key set MUST equal the
+	// json-tag set of backup.Status. LastError is forced non-empty so the
+	// struct's `omitempty` tag still emits the key for the comparison.
+	var knbKeys map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(knbWritten), &knbKeys); err != nil {
+		t.Fatalf("unmarshal knb keys: %v", err)
+	}
+	structJSON, err := json.Marshal(Status{
+		SchemaVersion:       1,
+		LastRunUnixtime:     1,
+		LastSuccessUnixtime: 1,
+		LastStatus:          "success",
+		LastDurationMS:      1,
+		LastSizeBytes:       1,
+		LastArtifactName:    "x",
+		LastError:           "forced-non-empty",
+	})
+	if err != nil {
+		t.Fatalf("marshal struct: %v", err)
+	}
+	var structKeys map[string]json.RawMessage
+	if err := json.Unmarshal(structJSON, &structKeys); err != nil {
+		t.Fatalf("unmarshal struct keys: %v", err)
+	}
+	for k := range knbKeys {
+		if _, ok := structKeys[k]; !ok {
+			t.Fatalf("knb writer emits key %q that backup.Status does not model (cross-repo schema drift)", k)
+		}
+	}
+	for k := range structKeys {
+		if _, ok := knbKeys[k]; !ok {
+			t.Fatalf("backup.Status models key %q that the knb writer does not emit (cross-repo schema drift)", k)
+		}
+	}
 }

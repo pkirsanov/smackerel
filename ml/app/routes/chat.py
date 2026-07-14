@@ -37,6 +37,7 @@ from ..schemas import (
     StopReason,
     Tool,
     ToolCall,
+    validate_provider_dispatch_controls,
 )
 
 logger = logging.getLogger("smackerel-ml.openknowledge.chat")
@@ -161,11 +162,11 @@ async def _dispatch_ollama(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None,
 ) -> ChatResponse:
-    """The local Ollama dispatch — BYTE-FOR-BYTE the pre-096 ``_dispatch_live``
-    behaviour (spec 088/089 parity, proven by
-    ``test_chat_dispatch_parity_spec096``). The ``litellm.acompletion`` kwargs
-    for a fixed Ollama request are unchanged and NO ``api_key`` is ever
-    attached.
+    """Dispatch typed chat through Ollama with the SST request profile.
+
+    The Spec-096 caller-owned payload remains intact and no ``api_key`` is ever
+    attached. Spec 102 adds only the selected profile's ``options.num_ctx`` and
+    top-level request ``keep_alive`` through the shared applicator.
 
     ``api_base`` carries today's ``OLLAMA_URL``: the spec 064 caller omits it,
     so we read ``OLLAMA_URL`` from the environment exactly as before; the spec
@@ -206,8 +207,32 @@ async def _dispatch_ollama(
     if req.max_tokens is not None:
         kwargs["max_tokens"] = req.max_tokens
 
+    from ..ollama_keepalive import (
+        OllamaProfileConfigError,
+        dispatch_litellm,
+        resolve_ollama_request_profile,
+    )
+
     try:
-        response = await litellm.acompletion(**kwargs)
+        response = await dispatch_litellm(
+            kwargs,
+            provider="ollama",
+            model=req.model,
+            profile=resolve_ollama_request_profile(req.model),
+            litellm_module=litellm,
+        )
+    except OllamaProfileConfigError as e:
+        logger.error(
+            "open_knowledge live dispatch profile rejected (category=%s)",
+            e.category,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "llm_misconfigured",
+                "message": str(e),
+            },
+        ) from None
     except (APIConnectionError, ServiceUnavailableError, Timeout) as e:
         logger.warning(
             "open_knowledge live dispatch unreachable: %s: %s",
@@ -322,6 +347,17 @@ async def _dispatch_hosted(
     substitutes the local Ollama model (SCN-096-G01). Secrets are scrubbed from
     every error/log (SCN-096-G05).
     """
+    try:
+        provider_params = validate_provider_dispatch_controls(provider, req.api_base, req.provider_params)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "llm_misconfigured",
+                "message": str(exc),
+            },
+        ) from None
+
     api_key = req.api_key
     if not api_key:
         # NO-DEFAULTS / fail-loud (G028): a hosted dispatch with no credential
@@ -357,15 +393,23 @@ async def _dispatch_hosted(
     # Non-secret per-kind routing extras (Azure api_version+deployment, OpenAI
     # organization, Vertex project+location, Bedrock region). setdefault so they
     # never clobber model/messages/api_key.
-    for key, value in (req.provider_params or {}).items():
+    for key, value in provider_params.items():
         kwargs.setdefault(key, value)
     if tools:
         kwargs["tools"] = tools
     if req.max_tokens is not None:
         kwargs["max_tokens"] = req.max_tokens
 
+    from ..ollama_keepalive import dispatch_litellm
+
     try:
-        response = await litellm.acompletion(**kwargs)
+        response = await dispatch_litellm(
+            kwargs,
+            provider=provider,
+            model=req.model,
+            profile=None,
+            litellm_module=litellm,
+        )
     except (APIConnectionError, ServiceUnavailableError, Timeout) as e:
         raise _hosted_dispatch_error(502, "llm_provider_unreachable", provider, req.model, e, api_key)
     except APIError as e:

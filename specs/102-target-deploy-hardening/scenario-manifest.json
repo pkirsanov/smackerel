@@ -1,0 +1,445 @@
+{
+    "version": 1,
+    "featureDir": "specs/102-target-deploy-hardening",
+    "featureName": "<deploy-host> Deploy Hardening (durable replacement of live MVP-readiness expedients)",
+    "generatedBy": "bubbles.plan (2026-07-10 SCOPE-102-03 all-builder reconciliation; invoked by bubbles.goal)",
+    "generatedAt": "2026-07-10T17:37:46Z",
+    "amends": [],
+    "extends": [
+        "specs/050-ml-sidecar-health-isolation",
+        "specs/052-bundle-secret-injection-contract",
+        "specs/049-monitoring-stack",
+        "specs/048-backup-restore-automation",
+        "specs/082-mvp-target-readiness-hardening"
+    ],
+    "scopeKind": "contract-only",
+    "coverageDeclarations": {
+        "e2eUi": {
+            "applicable": false,
+            "reason": "No browser, mobile, admin, navigation, or other interactive UI surface changes."
+        },
+        "e2eApi": {
+            "applicableAtShipTime": false,
+            "reason": "No public product API contract changes; in-scope acceptance ends at generated bundles, request payloads, bridge behavior, and hermetic adapter hooks."
+        },
+        "stress": {
+            "applicable": false,
+            "reason": "No concurrency, throughput, sustained-load, or latency acceptance threshold is introduced."
+        },
+        "load": {
+            "applicable": false,
+            "reason": "No sustained throughput or latency acceptance threshold is introduced."
+        },
+        "operatorValidation": [
+            "R-102-A: live <deploy-host> re-apply",
+            "R-102-B: live <deploy-host> rollback drill",
+            "R-102-C: knb git reconcile/push",
+            "R-102-D: live Ollama co-residency proof"
+        ]
+    },
+    "traceabilityGuardScenarioIds": [
+        {
+            "scenarioId": "SCN-102-C1-01"
+        },
+        {
+            "scenarioId": "SCN-102-C1-02"
+        },
+        {
+            "scenarioId": "SCN-102-C1-03"
+        },
+        {
+            "scenarioId": "SCN-102-C1-04"
+        },
+        {
+            "scenarioId": "SCN-102-C1-05"
+        },
+        {
+            "scenarioId": "SCN-102-C2-01"
+        },
+        {
+            "scenarioId": "SCN-102-C2-02"
+        },
+        {
+            "scenarioId": "SCN-102-C2-03"
+        },
+        {
+            "scenarioId": "SCN-102-C2-04"
+        },
+        {
+            "scenarioId": "SCN-102-C3-01"
+        },
+        {
+            "scenarioId": "SCN-102-C3-02"
+        },
+        {
+            "scenarioId": "SCN-102-C3-03"
+        },
+        {
+            "scenarioId": "SCN-102-C3-04"
+        },
+        {
+            "scenarioId": "SCN-102-C3-05"
+        },
+        {
+            "scenarioId": "SCN-102-C4-01"
+        },
+        {
+            "scenarioId": "SCN-102-C4-02"
+        },
+        {
+            "scenarioId": "SCN-102-C4-03"
+        }
+    ],
+    "scenarios": [
+        {
+            "scenarioId": "SCN-102-C1-01",
+            "scopeId": "SCOPE-102-01",
+            "title": "The generated smackerel-ml env (ml.env) carries none of the SHELL_SECRET_KEYS and none of the POSTGRES_* connection parts (compute-only projection).",
+            "behaviorClass": "functional",
+            "changeType": "new",
+            "requiredTestType": [
+                "functional"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/deploy/bundle_secret_contract_test.go::TestMLEnv_ExcludesManagedSecretsAndPostgres_Spec102",
+                "internal/deploy/bundle_secret_contract_test.go::TestMLEnv_CredentialSuffixRequiresSanction_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-01"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C1-02",
+            "scopeId": "SCOPE-102-01",
+            "title": "The generated ml.env contains every fail-loud startup key read by smackerel-ml; the deployed container boot is operator validation R-102-A.",
+            "behaviorClass": "functional",
+            "changeType": "new",
+            "requiredTestType": [
+                "functional"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/deploy/bundle_secret_contract_test.go::TestMLEnv_ContainsEveryComputeKey_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-01"
+            ],
+            "operatorValidationRefs": [
+                "R-102-A"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C1-03",
+            "scopeId": "SCOPE-102-01",
+            "title": "A re-added env_file: ./app.env on smackerel-ml, or a SHELL_SECRET_KEY in the ml.env delivery, makes the compute-only guard exit non-zero naming the key; no --skip/--force/--ignore/--no-verify suppresses it (adversarial).",
+            "behaviorClass": "unit",
+            "changeType": "new",
+            "requiredTestType": [
+                "unit",
+                "functional"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "scripts/lint/python-compute-only-guard.selftest.sh",
+                "internal/deploy/bundle_secret_contract_test.go::TestMLEnv_CredentialSuffixRequiresSanction_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-01"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C1-04",
+            "scopeId": "SCOPE-102-01",
+            "title": "A forbidden datastore driver dependency or a direct DATABASE_URL/POSTGRES_URL/REDIS_URL/RABBITMQ_URL read in the ML Python surface makes the guard exit non-zero naming the file and line (adversarial).",
+            "behaviorClass": "unit",
+            "changeType": "new",
+            "requiredTestType": [
+                "unit"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "scripts/lint/python-compute-only-guard.selftest.sh"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-01"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C1-05",
+            "scopeId": "SCOPE-102-01",
+            "title": "The deploy compose segments postgres onto a data-tier network only smackerel-core joins; smackerel-ml (compute-tier) has no route to postgres while smackerel-core retains its route.",
+            "behaviorClass": "contract",
+            "changeType": "new",
+            "requiredTestType": [
+                "contract"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/deploy/compose_contract_test.go::TestNetworkSegmentation_MLCannotReachPostgres_Spec102",
+                "internal/deploy/alertmanager_bundle_contract_test.go::TestCompose_MonitoringIngressIsolatedFromML_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-01"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C2-01",
+            "scopeId": "SCOPE-102-02",
+            "title": "The generated bundle's prometheus.yml contains an alerting: block targeting alertmanager:9093, the compose declares an alertmanager service under profiles:[monitoring], and the bundle contains alertmanager.yml.",
+            "behaviorClass": "functional",
+            "changeType": "new",
+            "requiredTestType": [
+                "functional"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/deploy/alertmanager_bundle_contract_test.go::TestBundle_CarriesAlertingBlockAndService_Spec102",
+                "internal/deploy/alertmanager_bundle_contract_test.go::TestCompose_MonitoringIngressIsolatedFromML_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-02"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C2-02",
+            "scopeId": "SCOPE-102-02",
+            "title": "A re-extracted bundle still carries the alerting block and the alertmanager service; alerting survives a re-apply with no post-apply standup script.",
+            "behaviorClass": "functional",
+            "changeType": "new",
+            "requiredTestType": [
+                "functional"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/deploy/alertmanager_bundle_contract_test.go::TestBundle_AlertingSurvivesReExtract_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-02"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C2-03",
+            "scopeId": "SCOPE-102-02",
+            "title": "An Alertmanager webhook payload is templated into an ntfy request with X-Title/X-Priority/X-Tags derived from the alert severity label and summary/description annotations (not raw JSON).",
+            "behaviorClass": "unit",
+            "changeType": "new",
+            "requiredTestType": [
+                "unit"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "cmd/alertmanager-ntfy-bridge/bridge_test.go::TestBridge_TitledPriorityNtfyRequest_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-02"
+            ],
+            "operatorValidationRefs": [
+                "R-102-A",
+                "R-102-C"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C2-04",
+            "scopeId": "SCOPE-102-02",
+            "title": "The product alertmanager.yml contains a url_file (no operator ntfy host/IP/topic literal); the real endpoint is injected by the knb adapter at apply time.",
+            "behaviorClass": "functional",
+            "changeType": "new",
+            "requiredTestType": [
+                "functional"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/deploy/alertmanager_bundle_contract_test.go::TestAlertmanagerConfig_NoNtfyLiteral_UsesUrlFile_Spec102",
+                "../<deployment-owner>/<product>/<target>/tests/unit/alertmanager_ntfy_output_hygiene_test.sh"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-02"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C3-01",
+            "scopeId": "SCOPE-102-03",
+            "title": "Every production Python Ollama inference builder applies one fail-loud SST request profile: selected options.num_ctx plus top-level keep_alive; hosted providers carry no Ollama-only fields, Go remains a typed validator/router, and no host-side ollama create override is required.",
+            "behaviorClass": "contract",
+            "changeType": "new",
+            "requiredTestType": [
+                "unit",
+                "contract"
+            ],
+            "regressionRequired": true,
+            "verificationState": "reopened_pending_implementation",
+            "builderInventory": [
+                "ml/app/agent.py::handle_invoke",
+                "ml/app/card_categories.py::extract_card_categories",
+                "ml/app/domain.py::_do_domain_extract",
+                "ml/app/drive_classify.py::classify_drive_file",
+                "ml/app/intelligence.py::SynthesisGenerator.generate",
+                "ml/app/main.py::_warmup_domain_model",
+                "ml/app/nats_client.py::_handle_search_rerank",
+                "ml/app/nats_client.py::_handle_digest_generate",
+                "ml/app/ocr.py::_do_ocr",
+                "ml/app/processor.py::process_content",
+                "ml/app/routes/chat.py::_dispatch_ollama",
+                "ml/app/synthesis.py::handle_extract",
+                "ml/app/synthesis.py::handle_crosssource"
+            ],
+            "linkedTests": [
+                "ml/tests/test_agent.py::test_handle_invoke_applies_ollama_profile_spec102",
+                "ml/tests/test_card_categories.py::test_extract_card_categories_applies_ollama_profile_spec102",
+                "ml/tests/test_domain.py::test_do_domain_extract_applies_ollama_profile_spec102",
+                "ml/tests/test_drive_classify.py::test_classify_drive_file_applies_ollama_profile_spec102",
+                "ml/tests/test_intelligence_handlers.py::test_synthesis_generator_generate_applies_native_ollama_profile_spec102",
+                "ml/tests/test_main.py::test_warmup_domain_model_applies_ollama_profile_spec102",
+                "ml/tests/test_nats_client.py::test_handle_search_rerank_applies_ollama_profile_spec102",
+                "ml/tests/test_nats_client.py::test_handle_digest_generate_applies_ollama_profile_spec102",
+                "ml/tests/test_ocr.py::test_do_ocr_applies_native_ollama_profile_spec102",
+                "ml/tests/test_processor.py::test_process_content_applies_ollama_profile_spec102",
+                "ml/tests/test_chat_dispatch_parity_spec096.py::test_dispatch_ollama_applies_profile_spec102",
+                "ml/tests/test_synthesis.py::test_handle_extract_threads_sst_num_ctx_spec102",
+                "ml/tests/test_synthesis.py::test_handle_crosssource_applies_ollama_profile_spec102",
+                "ml/tests/test_ollama_keepalive.py::test_production_ollama_builder_inventory_is_complete_spec102",
+                "ml/tests/test_main.py::test_startup_rejects_invalid_model_profiles_spec102",
+                "ml/tests/test_ollama_keepalive.py::test_unprofiled_selected_ollama_model_fails_before_dispatch_spec102",
+                "ml/tests/test_ollama_keepalive.py::test_litellm_adapter_merges_options_and_keep_alive_spec102",
+                "ml/tests/test_ollama_keepalive.py::test_native_json_adapter_merges_options_and_keep_alive_spec102",
+                "ml/tests/test_chat_dispatch_parity_spec096.py::test_hosted_dispatch_carries_no_ollama_profile_options_spec102",
+                "ml/tests/test_intelligence_handlers.py::test_hosted_intelligence_carries_no_ollama_profile_options_spec102",
+                "tests/integration/agent/loop_test.go::TestSpec102NATSDriverUsesTypedBoundaryWithoutOllamaProtocol",
+                "internal/assistant/openknowledge/llm/client_test.go::TestSpec102GoUsesTypedMLBoundary",
+                "internal/assistant/openknowledge/llm/client_test.go::TestSpec102GoOllamaEndpointsAreReadOnlyTagsOnly"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-03-rework-evidence-contract"
+            ],
+            "operatorValidationRefs": [
+                "R-102-D"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C3-02",
+            "scopeId": "SCOPE-102-03",
+            "title": "validateModelEnvelopes computes resident = weights + KV(num_ctx, num_parallel) and fails loud on a profile that understates its measured footprint, naming the model, required MiB, and envelope (adversarial: removing the KV term makes the test fail).",
+            "behaviorClass": "unit",
+            "changeType": "new",
+            "requiredTestType": [
+                "unit"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/config/validate_ml_envelope_kv_spec102_test.go::TestValidateModelEnvelopes_KVMathFailsUnderstated_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-03"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C3-03",
+            "scopeId": "SCOPE-102-03",
+            "title": "An uncapped-context configuration is refused fail-loud before it can fail to load; the SST-capped num_ctx that fits the host envelope is accepted.",
+            "behaviorClass": "unit",
+            "changeType": "new",
+            "requiredTestType": [
+                "unit"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/config/validate_ml_envelope_kv_spec102_test.go::TestValidateModelEnvelopes_RefusesUncappedAcceptsCapped_Spec102",
+                "ml/tests/test_main.py::test_startup_rejects_invalid_model_profiles_spec102",
+                "ml/tests/test_ollama_keepalive.py::test_unprofiled_selected_ollama_model_fails_before_dispatch_spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-03"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C3-04",
+            "scopeId": "SCOPE-102-03",
+            "title": "The co-resident sum check keys off max_loaded_models: ==1 (on-demand swap) does not require the sum; >1 (co-resident) requires the working set to fit OLLAMA_MEMORY_LIMIT.",
+            "behaviorClass": "unit",
+            "changeType": "new",
+            "requiredTestType": [
+                "unit"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "internal/config/validate_ml_envelope_kv_spec102_test.go::TestValidateModelEnvelopes_CoResidentSumGatedByMaxLoaded_Spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-03"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C3-05",
+            "scopeId": "SCOPE-102-03",
+            "title": "The domain/synthesis output-token budget is read from SST (not a hardcoded 2000) and BUG-026-006 advances toward closure with real before/after evidence.",
+            "behaviorClass": "unit",
+            "changeType": "new",
+            "requiredTestType": [
+                "unit"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "ml/tests/test_processor.py::test_output_budget_read_from_sst_not_hardcoded_spec102"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-03"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C4-01",
+            "scopeId": "SCOPE-102-04",
+            "title": "A backup where the NATS volume is present but the docker-mediated capture fails is recorded as warning (degraded), never a clean success; the partial nats-data is rotated out (adversarial: a degraded run reporting success fails the test).",
+            "behaviorClass": "functional",
+            "changeType": "new",
+            "requiredTestType": [
+                "functional"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "../<deployment-owner>/<product>/<target>/tests/unit/backup_degraded_contract_test.sh"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-04"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C4-02",
+            "scopeId": "SCOPE-102-04",
+            "title": "A root:root 0600 (unreadable) manifest degrades to manifest_captured=false WITHOUT backup_degraded (the run stays a clean success on postgres); apply.sh chowns the manifest back to the operator (0644).",
+            "behaviorClass": "functional",
+            "changeType": "new",
+            "requiredTestType": [
+                "functional",
+                "contract"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "../<deployment-owner>/<product>/<target>/tests/unit/backup_degraded_contract_test.sh",
+                "../<deployment-owner>/<product>/<target>/tests/unit/apply_manifest_contract_test.sh"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-04"
+            ]
+        },
+        {
+            "scenarioId": "SCN-102-C4-03",
+            "scopeId": "SCOPE-102-04",
+            "title": "The backup-status file advances last_success_unixtime on a successful postgres capture and HOLDS it on a failure; the JSON matches internal/backup.Status schema_version 1 (two-repo lockstep).",
+            "behaviorClass": "functional",
+            "changeType": "new",
+            "requiredTestType": [
+                "functional",
+                "unit"
+            ],
+            "regressionRequired": true,
+            "linkedTests": [
+                "../<deployment-owner>/<product>/<target>/tests/unit/backup_status_advance_test.sh",
+                "internal/backup/status_test.go::TestLoadStatus_KnbAdapterSchemaParity"
+            ],
+            "evidenceRefs": [
+                "report.md#scope-102-04"
+            ]
+        }
+    ]
+}

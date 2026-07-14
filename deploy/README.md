@@ -145,17 +145,17 @@ See [`bubbles-deployment-target.instructions.md`](../.github/instructions/bubble
 #                            ghcr.io/pkirsanov/smackerel-config-bundles/<env>-<sourceSha>.tar.gz
 
 # 2) Operator picks a release (image digests + bundle hash) and applies to the target
-./smackerel.sh deploy-target self-hosted apply \
+./smackerel.sh deploy-target <target> apply \
     --image-core=sha256:abc123... \
     --image-ml=sha256:def456... \
     --config-bundle=self-hosted-9f8a7b6c \
     --config-bundle-sha=<sha256-hex>   # BUG-047-001 / DEVOPS-HL-002 — copy from configBundles[env=self-hosted].sha256 in the build manifest
 
 # 3) Verify
-./smackerel.sh deploy-target self-hosted verify
+./smackerel.sh deploy-target <target> verify
 
 # 4) On regression, pointer-swap rollback (no rebuild)
-./smackerel.sh deploy-target self-hosted rollback
+./smackerel.sh deploy-target <target> rollback
 ```
 
 ## Per-Spec SST Key Catalogs

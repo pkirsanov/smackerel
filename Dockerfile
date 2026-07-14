@@ -17,10 +17,17 @@ ARG COMMIT_HASH=unknown
 ARG BUILD_TIME=unknown
 ARG GO_BUILD_TAGS
 RUN if [ -n "${GO_BUILD_TAGS}" ]; then \
-			CGO_ENABLED=0 GOOS=linux go build -tags "${GO_BUILD_TAGS}" -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}" -o /bin/smackerel-core ./cmd/core; \
-		else \
-			CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}" -o /bin/smackerel-core ./cmd/core; \
-		fi
+	CGO_ENABLED=0 GOOS=linux go build -tags "${GO_BUILD_TAGS}" -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}" -o /bin/smackerel-core ./cmd/core; \
+	else \
+	CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}" -o /bin/smackerel-core ./cmd/core; \
+	fi
+
+# Spec 102 SCOPE-102-02 — build the alertmanager -> ntfy templating bridge into
+# the SAME core image (no new external image to pin/sign). The deploy compose
+# runs it as a monitoring-profiled service by overriding the entrypoint to this
+# binary. Pure stdlib HTTP shim; the build-tag toggle above is core-only and
+# does not apply here.
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/alertmanager-ntfy-bridge ./cmd/alertmanager-ntfy-bridge
 
 # --- Runtime stage ---
 # Named "core" so build.yml can target it with `--target core`.
@@ -38,6 +45,14 @@ LABEL org.opencontainers.image.revision="${COMMIT_HASH}"
 LABEL org.opencontainers.image.created="${BUILD_TIME}"
 LABEL org.opencontainers.image.title="smackerel-core"
 LABEL org.opencontainers.image.source="https://github.com/smackerel/smackerel"
+# spec 103 — project-scope identity for age-bounded unused-image reclamation.
+# `./smackerel.sh --env dev clean smart` prunes ONLY images carrying this owner
+# label (docker image prune -a --filter label=io.smackerel.lifecycle.owner=smackerel),
+# so peer products on the shared daemon are structurally untouched. Orphaned
+# <none> versions this image later leaves behind retain the label and are
+# reclaimed. MUST match SMACKEREL_IMAGE_OWNER_LABEL in
+# scripts/lib/cleanup-image-reclamation.sh (test_owner_label_parity).
+LABEL io.smackerel.lifecycle.owner="smackerel"
 
 # spec-047 R15 (BUG-047-003 close-out 2026-06-11): upgrade the OpenSSL
 # packages shipped by the alpine:3.22 base image. alpine:3.22 is a fixed
@@ -50,12 +65,17 @@ LABEL org.opencontainers.image.source="https://github.com/smackerel/smackerel"
 # the spec 047 R13 Trivy gate catches anything left behind. smackerel-ml
 # (Debian python:3.12-slim) is unaffected and carries its own R14 upgrade.
 RUN apk add --no-cache ca-certificates tzdata \
-    && apk upgrade --no-cache libssl3 libcrypto3
+	&& apk upgrade --no-cache libssl3 libcrypto3
 
 # SEC-002: Run as non-root user
 RUN addgroup -S smackerel && adduser -S smackerel -G smackerel
 
 COPY --from=builder /bin/smackerel-core /usr/local/bin/smackerel-core
+
+# Spec 102 SCOPE-102-02 — the alertmanager -> ntfy templating bridge rides this
+# same image. deploy/compose.deploy.yml runs it by overriding the entrypoint to
+# `alertmanager-ntfy-bridge` under the `monitoring` profile.
+COPY --from=builder /bin/alertmanager-ntfy-bridge /usr/local/bin/alertmanager-ntfy-bridge
 
 USER smackerel
 

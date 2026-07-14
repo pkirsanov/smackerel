@@ -253,15 +253,12 @@ async def handle_invoke(
     temperature = request.get("temperature", 0.0)
     token_budget = request.get("token_budget", 1000)
 
+    litellm_module = None
     if completion_fn is None:
         try:
             import litellm  # type: ignore[import-untyped]
 
-            completion_fn = litellm.acompletion
-            if provider == "ollama":
-                ollama_url = os.environ.get("OLLAMA_URL")
-                if ollama_url:
-                    litellm.api_base = ollama_url
+            litellm_module = litellm
         except ImportError as exc:  # pragma: no cover — import is lazy
             env = _provider_error(f"litellm import failed: {exc}", provider, model)
             env["trace_id"] = trace_id
@@ -304,6 +301,8 @@ async def handle_invoke(
         "max_tokens": token_budget,
         "api_key": api_key,
     }
+    if provider == "ollama":
+        completion_kwargs["api_base"] = os.environ.get("OLLAMA_URL")
     # Spec 037 BUG-061-004 follow-up — response_format={"type":"json_object"}
     # forces native format=json on the final-answer turn so the executor's
     # JSON parser accepts the output. It is INCOMPATIBLE with tool_use:
@@ -317,7 +316,14 @@ async def handle_invoke(
         completion_kwargs["response_format"] = {"type": "json_object"}
     completion_kwargs.update(extra_kwargs)
 
+    from .ollama_keepalive import (
+        OllamaProfileConfigError,
+        dispatch_litellm,
+        resolve_ollama_request_profile,
+    )
+
     try:
+        profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
         logger.info(
             "agent.invoke.request trace_id=%s model=%s tools_count=%d "
             "messages_count=%d temperature=%s max_tokens=%s first_user_msg_len=%d",
@@ -332,7 +338,23 @@ async def handle_invoke(
             # text in logs; mirrors the Go turn-log's prompt_sha256 discipline).
             next((len(str(m.get("content"))) for m in messages if m.get("role") == "user"), 0),
         )
-        response = await completion_fn(**completion_kwargs)
+        response = await dispatch_litellm(
+            completion_kwargs,
+            provider=provider,
+            model=model,
+            profile=profile,
+            completion_fn=completion_fn,
+            litellm_module=litellm_module,
+        )
+    except OllamaProfileConfigError as exc:
+        logger.error(
+            "agent.invoke completion profile rejected",
+            extra={"trace_id": trace_id, "category": exc.category},
+        )
+        env = _provider_error(str(exc), provider, model)
+        env["trace_id"] = trace_id
+        env["processing_time_ms"] = int((time.time() - start) * 1000)
+        return env
     except Exception as exc:  # noqa: BLE001 — provider errors must not crash the sidecar
         logger.exception(
             "agent.invoke completion failed",

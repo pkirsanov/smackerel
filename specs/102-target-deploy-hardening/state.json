@@ -1,0 +1,322 @@
+{
+    "schemaVersion": 3,
+    "version": 3,
+    "specId": "102-target-deploy-hardening",
+    "feature": "102-target-deploy-hardening",
+    "featureDir": "specs/102-target-deploy-hardening",
+    "featureName": "<deploy-host> Deploy Hardening (durable replacement of live MVP-readiness expedients)",
+    "status": "not_started",
+    "mode": "full-delivery",
+    "workflowMode": "full-delivery",
+    "statusCeiling": "done",
+    "planningOnly": false,
+    "executionRuntime": "direct-implement",
+    "executionModelDetail": "The two current SCOPE-102-03 security findings are closed in implementation and adversarial tests. OCR profile failures now return a category-only non-ok envelope before network/cache while ordinary transport failures preserve Tesseract fallback. The AST guard resolves aliases across module/function scopes, tracks bound HTTP methods, and requires exact discovered-builder equality with the 13-row inventory. Python 620 passed/2 skipped; focused Go/KV/provider, format, config, check, lint, pre-push, artifact, traceability, implementation-reality, and regression-quality gates pass. No unresolved implementation findings remain. SCOPE-102-03 remains In Progress and routes to bubbles.validate; status/certification, deploy, commit, and push are unchanged.",
+    "createdAt": "2026-07-09T00:00:00Z",
+    "updatedAt": "2026-07-11T02:57:48Z",
+    "requiresRevalidation": true,
+    "releaseTrain": "mvp",
+    "specDependsOn": [
+        "specs/050-ml-sidecar-health-isolation",
+        "specs/052-bundle-secret-injection-contract",
+        "specs/049-monitoring-stack",
+        "specs/048-backup-restore-automation",
+        "specs/082-mvp-target-readiness-hardening"
+    ],
+    "reconciliation": "Durable-replacement design, not greenfield. Each concern replaces an expedient landed during the live validation: smackerel-ml full-secret app.env -> per-service env projection + compute-only guard; post-apply alertmanager-standup.sh -> bundled Alertmanager service + prometheus alerting block + ntfy templating; host-baked `ollama create num_ctx 8192` -> SST per-model num_ctx/keep_alive/max_loaded + KV-aware validateModelEnvelopes; three hand-landed backup-adapter fixes (F-1/F-2/F-3) -> spec-tracked + adversarial regression tests. Existing surfaces (config.sh bundle staging, validateModelEnvelopes spec-082 concurrent guard, ml/app/synthesis.py keep_alive threading, backup.sh OPS-RDY-01 degraded doctrine) are REUSED/EXTENDED, not forked.",
+    "policySnapshot": {
+        "grill": {
+            "mode": "off",
+            "source": "repo-default"
+        },
+        "tdd": {
+            "mode": "off",
+            "source": "repo-default"
+        },
+        "autoCommit": {
+            "mode": "off",
+            "source": "repo-default"
+        },
+        "lockdown": {
+            "mode": "off",
+            "source": "repo-default"
+        },
+        "regression": {
+            "mode": "protected-scenarios",
+            "source": "repo-default"
+        },
+        "validation": {
+            "mode": "certification-required",
+            "source": "repo-default"
+        }
+    },
+    "transitionRequests": [],
+    "reworkQueue": [],
+    "relatesTo": [
+        "specs/050-ml-sidecar-health-isolation",
+        "specs/052-bundle-secret-injection-contract",
+        "specs/049-monitoring-stack",
+        "specs/048-backup-restore-automation",
+        "specs/082-mvp-target-readiness-hardening",
+        "specs/026-domain-extraction/bugs/BUG-026-006-llm-malformed-json-drops-capture",
+        "specs/026-domain-extraction/bugs/BUG-026-007-qwen3-thinking-blows-domain-budget",
+        "knb:<deployment-owner>/<product>/<target>/backup.sh",
+        "knb:<deployment-owner>/<product>/<target>/apply.sh",
+        "knb:<deployment-owner>/<product>/<target>/alertmanager-standup.sh",
+        "QF:specs/089 (python-compute-only-guard precedent)"
+    ],
+    "crossRepo": {
+        "productRepo": "smackerel",
+        "adapterRepo": "knb",
+        "adapterPath": "<deployment-owner>/<product>/<target>",
+        "productOwnedPaths": [
+            "scripts/commands/config.sh",
+            "deploy/compose.deploy.yml",
+            "config/prometheus/alertmanager.yml",
+            "cmd/alertmanager-ntfy-bridge/",
+            "internal/deploy/",
+            "internal/config/",
+            "internal/backup/status_test.go",
+            "ml/app/",
+            "ml/tests/"
+        ],
+        "adapterOwnedPaths": [
+            "knb:smackerel/contract.yaml",
+            "knb:<deployment-owner>/<product>/<target>/apply.sh",
+            "knb:<deployment-owner>/<product>/<target>/backup.sh",
+            "knb:<deployment-owner>/<product>/<target>/params.yaml",
+            "knb:<deployment-owner>/<product>/<target>/tests/"
+        ],
+        "operatorValidationRefs": [
+            "R-102-A",
+            "R-102-B",
+            "R-102-C",
+            "R-102-D"
+        ],
+        "note": "Product paths stay target-agnostic. The knb overlay owns concrete self-hosted topology, operator-private ntfy endpoint injection, backup hook behavior, and contract mirroring."
+    },
+    "planningContract": {
+        "reconciledAt": "2026-07-10T17:37:46Z",
+        "scopeKind": "contract-only",
+        "e2eUi": "not_applicable_no_ui_surface",
+        "e2eApi": "not_applicable_at_ship_time_no_public_api_change",
+        "stress": "not_applicable_no_load_or_latency_contract",
+        "load": "not_applicable_no_sustained_throughput_contract",
+        "consumerImpactSweep": "declared_in_scopes_md",
+        "changeBoundary": "declared_in_scopes_md",
+        "structuredTestPlan": "test-plan.json",
+        "reopenedScope": "SCOPE-102-03",
+        "requestBuilderCount": 13,
+        "requestBuilderFileCount": 12,
+        "soleInferenceIssuer": "Python ML tier",
+        "nextOwner": "bubbles.validate"
+    },
+    "scopes": [
+        "SCOPE-102-01",
+        "SCOPE-102-02",
+        "SCOPE-102-03",
+        "SCOPE-102-04"
+    ],
+    "completedScopes": [
+        "SCOPE-102-01",
+        "SCOPE-102-02"
+    ],
+    "certification": {
+        "status": "not_started",
+        "certifiedBy": null,
+        "certifiedAt": null,
+        "lockdownState": "unlocked",
+        "completedScopes": []
+    },
+    "completedPhases": [],
+    "execution": {
+        "activeAgent": null,
+        "currentPhase": "test",
+        "currentScope": null,
+        "executionModel": "direct",
+        "nextRequiredOwner": "bubbles.plan",
+        "unresolvedFindings": [],
+        "runStartedAt": null,
+        "completedPhaseClaims": [
+            {
+                "scope": "SCOPE-102-01",
+                "phase": "implement",
+                "agent": "bubbles.implement",
+                "completedAt": "2026-07-09T13:30:00Z",
+                "summary": "ML-sidecar compute-only secret isolation. DE4 per-service env-projection foundation (scripts/commands/config.sh::project_service_env) stages a secret-free ml.env = env_allowlist ∩ app.env MINUS SHELL_SECRET_KEYS/POSTGRES_*/DATABASE_URL, fail-loud tripwire on allowlist∩secrets. smackerel-ml.env_file repointed to ./ml.env + data-tier/compute-tier network segmentation. Added python-compute-only-guard.sh (+.allowlist+.selftest) wired no-bypass into pre-push + CI. Real evidence: bundle_secret_contract_test.go (ml.env secret-free, 86 compute keys, tripwire exact+prefix), compose_contract_test.go (segmentation +2 adversarial), guard selftest 10/10, pre-push EXIT 0, deploy+config regression green, check EXIT 0."
+            },
+            {
+                "scope": "SCOPE-102-02",
+                "phase": "implement",
+                "agent": "bubbles.implement",
+                "completedAt": "2026-07-09T15:30:00Z",
+                "summary": "Durable Prometheus->Alertmanager->ntfy routing folded into the product bundle so alerting survives every apply (retiring knb alertmanager-standup.sh). Product: static alerting block in prometheus.yml.tmpl (->alertmanager:9093), alertmanager + alertmanager-ntfy-bridge monitoring-profile services in compose.deploy.yml (RO-root, cap_drop ALL, no-new-priv, fail-loud SST limits), digest-pinned prom/alertmanager v0.28.0 in contract.yaml, generic config/prometheus/alertmanager.yml (url_file, NO ntfy literal), cmd/alertmanager-ntfy-bridge (stdlib HTTP shim on the core image; X-Title/X-Priority/X-Tags templating; fail-loud ALERTMANAGER_NTFY_URL), Dockerfile builds the bridge into the core image, config.sh stages alertmanager.yml + rendered url_file. knb (apply-ready): apply.sh injects ALERTMANAGER_NTFY_URL from params.yaml alerting.ntfy_url + attaches the bridge to alerting.ntfy_network; alertmanager-standup.sh + overlay alertmanager/alertmanager.yml RETIRED; README/params posture updated. Real evidence: bridge_test.go 5/5 (real HTTP round-trip, adversarial no-raw-JSON), alertmanager_bundle_contract_test.go 6/6 (alerting block+services+url_file, survives re-extract, no-literal with adversarial RED on a topic leak, 3 adversarial), config generate + alerting render + ALERTMANAGER_* emitted + check EXIT 0, internal/deploy + internal/config packages green, compute-only + macos-portability guards clean, knb readme/inventory/manifest/audit contract tests green. Env-constrained: full monitoring-profile container stack + live ntfy attach are operator-gated (R-102-A/C); httptest end-to-end is the in-scope equivalent."
+            },
+            {
+                "scope": "SCOPE-102-03",
+                "invalidatedPhase": "implement",
+                "agent": "bubbles.implement",
+                "claimStatus": "invalidated",
+                "invalidatedAt": "2026-07-10T17:37:46Z",
+                "invalidationReason": "Design reconciliation proved the three-call-site implementation did not cover the 13 production Python Ollama request builders.",
+                "completedAt": "2026-07-09T17:00:00Z",
+                "summary": "Model-envelope correctness + BUG-026-006. SST: KV-aware model_memory_profiles {model,weights_mib,kv_mib_per_1k_ctx,num_ctx} + infrastructure.ollama.num_parallel/max_loaded_models + services.ml.domain_output_token_budget (all fail-loud). Go: new ModelMemoryProfile type + ResidentMiB (weights + kv_per_1k x num_ctx/1000 x num_parallel), validateModelEnvelopes refactored to KV-aware resident + co-resident SUM gated on max_loaded_models>1; MLModelMemoryProfiles map[string]int -> map[string]ModelMemoryProfile threaded through cmd/core wiring (resident conversion + envelope-0 lever skips modelswitch co-residence under on-demand swap). Python: resolve_ollama_num_ctx + resolve_domain_output_token_budget (fail-loud), num_ctx threaded onto ollama options.num_ctx at synthesis.py/processor.py/routes/chat.py, hardcoded 2000 replaced with SST budget, main.py boot-check. docs/Operations.md co-residency posture (default max_loaded_models=1 on-demand swap, R-102-D). BUG-026-006 advanced (output-budget SST-owned, before/after evidence) + BUG-026-007 advance note. Real evidence: validate_ml_envelope_kv_spec102_test.go 4/4 (KV-math fails-understated adversarial accept<->reject, uncapped-refused/capped-accepted, max_loaded-gated sum), internal/config package green (existing spec-045/082/088/089 updated in lockstep), Python 563 passed (num_ctx threading + SST budget adversarial != 2000), config generate + check EXIT 0, cmd/core + modelswitch + openknowledge green, no 'ollama create' hack on the deploy path. Env-constrained: live ollama ps co-residency proof + live latency verification operator-gated (R-102-A/D). No Go ollama request builder (isolated-ML-sidecar delegates via /llm/chat) so the Go-side num_ctx test is N/A."
+            },
+            {
+                "scope": "SCOPE-102-04",
+                "phase": "implement",
+                "agent": "bubbles.implement",
+                "completedAt": "2026-07-09T18:30:00Z",
+                "outcome": "done_with_concerns",
+                "summary": "Backup-adapter durability formalization (test-only + one contract mirror). Adversarially locked the already-landed knb F-1/F-2/F-3 backup code. knb: backup_degraded_contract_test.sh extended with scenario C (F-1/SCN-102-C4-01: NATS volume PRESENT but docker-mediated capture FAILS => nats_captured=false + status=warning, partial nats-data rotated out, NOT a clean success) and scenario D (F-2/SCN-102-C4-02: unreadable root manifest => manifest_captured=false WITHOUT backup_degraded, run stays clean success); scenario B docker run-stub fixed for macOS BSD tar. New backup_status_advance_test.sh (F-3/SCN-102-C4-03: pg captured => last_status=success + last_success_unixtime advances 1->ts; pg skipped => last_status=failed + last_success HOLDS prior value — adversarial freshness-gauge lock). apply_manifest_contract_test.sh extended: $SUDO_USER-gated chown-back + chmod 0644 source contract + ordering after manifest commit + adversarial fixture #2. smackerel/contract.yaml: mirrored the SCOPE-102-02 alertmanager externalImage (closed contract_drift_test.sh drift). Product: internal/backup/status_test.go TestLoadStatus_KnbAdapterSchemaParity — verbatim knb write_backup_status heredoc parses into backup.Status at CurrentSchemaVersion=1 + key-set parity (two-repo lockstep). Real evidence: backup_degraded A/B/C/D PASS, backup_status_advance run1-advance/run2-hold PASS, apply_manifest chown-back PASS, internal/backup 10/10 incl schema-parity PASS, full knb shell-unit tier 21/22 green run DIRECTLY. CONCERN: run-tests.sh cannot reach EXIT 0 on macOS due to TWO pre-existing spec-102-UNMODIFIED environmental failures (shred-and-remove.bats test 7 BSD dd [spec-001]; verify_digest_contract_test.sh localhost health probe [spec-011]) — git status confirms neither verify.sh, scope04-fixtures.bash, nor the shred bats is in this change set. That one DoD item left [ ] with an Uncertainty Declaration; green wrapper confirmation routed to bubbles.validate on Linux CI. Env-constrained: live <deploy-host> backup + rollback drill + knb git reconcile/push operator-gated (R-102-A/B/C)."
+            },
+            {
+                "scope": "spec",
+                "phase": "test",
+                "agent": "bubbles.test",
+                "completedAt": "2026-07-11T18:45:38Z",
+                "outcome": "route_required",
+                "evidence": "report.md#test-phase-closure-2026-07-11",
+                "summary": "Closed the current contract-only test phase with independent current-session execution. Python unit lane: 620 passed/2 skipped, exit 0; the 19 Spec-102-selected files contain zero skip/only markers. Focused Go typed-boundary/provider/KV/backup-schema matrix passed, exit 0. The exact ./smackerel.sh test integration command passed against the disposable stack and cleaned containers/networks/volumes, exit 0. The canonical knb wrapper passed with 113/0 + 6/0 + status_verify_fixture_test.sh OK, exit 0. Artifact lint, traceability, test-integrity constituent scans, and regression-quality guard all passed. Planning-owned Scope 03/04 status text and test-plan verification flags remain stale; certification-derived state remains untouched and routes through bubbles.plan then bubbles.validate."
+            }
+        ],
+        "pendingTransitionRequests": [],
+        "deferredScopes": [],
+        "executionHistory": [
+            {
+                "agent": "bubbles.design",
+                "phasesExecuted": [
+                    "bootstrap"
+                ],
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": "2026-07-09T00:00:00Z",
+                "runEndedAt": "2026-07-09T00:00:00Z",
+                "summary": "Authored spec.md + design.md for the four-concern <deploy-host> deploy hardening feature (invoked via bubbles.goal). Objective research pass recon-confirmed all four expedients against both repos with cited code locations; per-concern durable designs, a reusable per-service env-projection capability foundation (DE4), an adversarial test strategy (scenario-to-test map), and operator-gated out-of-scope deferrals recorded. Ready for bubbles.plan to break into SCOPE-102-01..04."
+            },
+            {
+                "agent": "bubbles.plan",
+                "phasesExecuted": [
+                    "bootstrap",
+                    "extract-usecases",
+                    "build-scopes",
+                    "write-scopes",
+                    "plan-quality-gate"
+                ],
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": "2026-07-09T11:00:00Z",
+                "runEndedAt": "2026-07-09T12:00:00Z",
+                "summary": "Broke the feature into four sequential, scope-gated scopes (SCOPE-102-01..04), each a single vertical outcome mapping the spec's SCN-102-C1..C4 contracts to concrete cited implementation surfaces, REQUIRED tests, and a strict Test-Plan-to-DoD-parity DoD with adversarial regression coverage. Cross-repo boundary honored (product-generic vs knb concrete self-hosted topology). Re-read the current knb backup.sh/apply.sh: the existing backup_degraded_contract_test.sh already locks the F-1 NATS-missing + OPS-RDY-04 manifest branches, so SCOPE-102-04 ADDS only the uncovered branches (NATS-present-but-capture-fails, F-2 root-manifest non-fatal, F-3 status advance/hold + internal/backup.Status schema parity). Authored scopes.md, report.md (evidence skeleton), uservalidation.md (regression baseline [x] + pending acceptance [ ]), and scenario-manifest.json (17 SCN contracts). Operator-gated out-of-scope steps (R-102-A/B/C/D) recorded as post-implementation handoff, not planned as in-scope. Ready for bubbles.implement to execute SCOPE-102-01."
+            },
+            {
+                "agent": "bubbles.design",
+                "phasesExecuted": [
+                    "bootstrap"
+                ],
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": "2026-07-09T19:00:00Z",
+                "runEndedAt": "2026-07-09T19:15:00Z",
+                "summary": "G094 capability-foundation planning-gate closure (invoked via bubbles.goal; implementation already complete). Reconciled the capability framing to the HONEST classification from the actual code: the per-service compute-only env projection is a parameterized helper (scripts/commands/config.sh::project_service_env L604) with EXACTLY ONE concrete consumer (smackerel-ml, config.sh L3071 via services.ml.env_allowlist); smackerel-core is deliberately NOT projected. The four scopes are independent (no foundation->overlay dependency), so this is a single-implementation, NOT an N>=2 capability-foundation split. Added spec.md '## Domain Capability Model' + '### Single-Capability Justification'; replaced design.md's malformed backtick-wrapped split with a real '### Single-Implementation Justification' plus a factual Per-Service Env Projection seam description; reconciled the overstated 'REUSABLE foundation' Product-Principle bullet. capability-foundation-guard.sh EXIT 0 (G094 PASS). No scope/requirements/DoD changed. Note: 2 pre-existing artifact-lint anti-fabrication findings remain in the untouched scopes.md (SCOPE-102-02/04 DoD evidence blocks) — unrelated to G094, owned by bubbles.plan/bubbles.validate."
+            },
+            {
+                "agent": "bubbles.plan",
+                "phasesExecuted": [
+                    "bootstrap",
+                    "reconcile",
+                    "plan-quality-gate"
+                ],
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": "2026-07-10T15:20:32Z",
+                "runEndedAt": "2026-07-10T15:45:21Z",
+                "summary": "Reconciled DI-102-03 after implementation/security remediation: exact Smackerel/knb ownership and paths, contract-only E2E/stress/load declarations, consumer and change boundaries, real F1/F2/F3 test linkage, honest non-live taxonomy, G040 wording, G068 DoD fidelity, scenario-manifest links, test-plan.json, and uservalidation/report links. Artifact lint and traceability guard passed; state-transition planning checks pass while the full transition remains blocked by the unchecked canonical knb wrapper, validate-owned certification fields, missing downstream specialist phases, and the historical implement claim's missing execution-history provenance. No status or certification field changed."
+            },
+            {
+                "agent": "bubbles.analyst",
+                "phasesExecuted": [
+                    "analyze",
+                    "reconcile"
+                ],
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": "2026-07-10T15:51:23Z",
+                "runEndedAt": "2026-07-10T15:55:16Z",
+                "summary": "Reconciled PLAN-102-FOREIGN-01 in the analyst-owned spec contract against the current implementation: the typed Go tier parses and validates the SST model envelope, computes resident-memory routing constraints, and requests ML compute over NATS request/reply or the typed sidecar chat boundary; the compute-only Python tier alone constructs Ollama inference requests. Corrected SCN-102-C3-01, FR-102-C3-1/2, Concern 3 terminology, the scope map, and the mandatory Outcome Contract; documented options.num_ctx as an ML-tier inference option and distinguished Go health/model-discovery probes from inference. Post-edit artifact-lint passed and traceability-guard passed with zero warnings. No design, scopes, report, status, certification, scope-progress, or completed-phase claim was changed."
+            },
+            {
+                "agent": "bubbles.design",
+                "phasesExecuted": [
+                    "bootstrap"
+                ],
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": "2026-07-10T16:10:16Z",
+                "runEndedAt": "2026-07-10T16:10:38Z",
+                "summary": "Reconciled DESIGN-102-FOREIGN-01 and DESIGN-102-NUMCTX-COVERAGE-01 after the analyst correction. design.md now records the actual architecture: Go parses/validates the KV-aware SST envelope, computes resident-memory routing constraints, and requests Python compute over typed NATS request/reply or <ML_SIDECAR_URL>/llm/chat; Python alone constructs Ollama inference requests; Go direct Ollama calls are bounded read-only GET /api/tags probes. Inventoried all 13 Python Ollama-capable request builders across 12 files: processor.process_content, routes.chat._dispatch_ollama, and synthesis.handle_extract currently apply options.num_ctx; ten builders are implementation gaps, and no production Ollama model is intentionally unprofiled. Added a fail-loud shared request-profile foundation, daemon-wide versus per-request configuration contract, exact bubbles.implement source/test handoff, and exact bubbles.plan scope/Test Plan/DoD sync. Artifact lint and capability guard passed during the reconciliation. No scopes.md, report.md, source, status, certification, completed-scope, or phase-claim field changed."
+            },
+            {
+                "agent": "bubbles.plan",
+                "phasesExecuted": [
+                    "bootstrap",
+                    "reconcile",
+                    "plan-quality-gate"
+                ],
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": "2026-07-10T17:37:46Z",
+                "runEndedAt": "2026-07-10T17:59:57Z",
+                "summary": "Invoked by bubbles.goal. Reconciled SCOPE-102-03 to the design-owned Python-only 13-builder inventory and shared fail-loud request-profile applicator. Replaced the synthesis-only plan with 13 builder payload tests plus inventory, invalid-profile, unprofiled-model, LiteLLM/native merge, hosted-provider exclusion, typed Go boundary, and preserved KV/output-budget rows (27 Markdown rows = 27 structured rows). Reopened only SCOPE-102-03: scope status In Progress, removed it from top-level completedScopes, invalidated its historical three-call-site implement claim, opened REWORK-102-03-OLLAMA-BUILDER-COVERAGE for bubbles.implement, and left certification.* untouched. Updated scopes.md, test-plan.json, scenario-manifest.json, report.md, uservalidation.md, and state.json only; no source, deploy, test implementation, live host, git push, or certification mutation. Artifact lint, traceability, G094, G091, and G087 passed; state-transition guard intentionally blocked on open implementation/certification work and the real ml/app/main.py fallback violations."
+            },
+            {
+                "agent": "bubbles.implement",
+                "phasesExecuted": [
+                    "implement"
+                ],
+                "outcome": "route_required",
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": null,
+                "runEndedAt": "2026-07-10T20:12:42Z",
+                "summary": "Implemented and verified the shared fail-loud Python Ollama request-profile foundation across the design-owned 13/13 production builders. Added positive num_ctx/keep_alive validation, startup and request zero-I/O failures, LiteLLM/native merge guards, hosted-provider negatives, the exact 13-builder AST inventory, typed Go /llm/chat and GET /api/tags-only contracts, and a real-NATS typed-boundary integration test. TP-C3-01..20 and TP-C3-22..27 pass; TP-C3-21 passes through integration-light but its exact full integration command exits during the absent Ollama test-image pull before selector execution. Scope remains In Progress; no completed-phase claim, certification field, top-level terminal status, live deploy, rollback, git reconcile, commit, or push was written."
+            },
+            {
+                "agent": "bubbles.implement",
+                "phasesExecuted": [
+                    "implement"
+                ],
+                "outcome": "route_required",
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": null,
+                "runEndedAt": "2026-07-10T21:49:32Z",
+                "summary": "Addressed SEC-102-RR-01/02/03 in reopened SCOPE-102-03. Go and Python now enforce matching provider-specific control allowlists with positive matrices for all six providers; production Ollama network calls are centralized behind resolved-profile LiteLLM/native abstractions with structural alias/discard mutation guards and payload/profile model binding; profile errors redact supplied values from exception text, logs, HTTP details, and agent envelopes. Final evidence: Python 612 passed/2 skipped; focused Go security/boundary/KV, format, check, lint, pre-push compute-only/portability, artifact, traceability, implementation-reality, and regression-quality guards pass. TP-C3-21 remains the sole unresolved exact full-integration verdict, so ownership routes to bubbles.test. No acceptance checkbox, certification field, terminal status, live deploy, commit, or push changed."
+            },
+            {
+                "agent": "bubbles.implement",
+                "phasesExecuted": [
+                    "implement"
+                ],
+                "outcome": "route_required",
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": null,
+                "runEndedAt": "2026-07-11T02:57:48Z",
+                "summary": "Closed the two current SCOPE-102-03 security findings. OCR re-raises OllamaProfileConfigError before the transport catch and emits a category-only non-ok response before network/cache; missing, unprofiled, and invalid vision profiles plus ordinary transport fallback are adversarially covered. The structural guard now tracks imports, assignments, HTTP client instances, bound methods, and endpoint aliases across lexical scopes, rejects module/bound/mixed bypass mutations, and enforces exact equality with the 13-builder inventory. Current evidence: RED 7 failed/613 passed/2 skipped; GREEN Python 620 passed/2 skipped; focused Go/KV/provider, format, config, check, lint, pre-push, artifact, traceability, implementation-reality, and regression-quality gates pass. No unresolved implementation findings remain. SCOPE-102-03 remains In Progress and routes to bubbles.validate; no status/certification, deploy, commit, or push mutation occurred."
+            },
+            {
+                "agent": "bubbles.test",
+                "phasesExecuted": [
+                    "test"
+                ],
+                "outcome": "route_required",
+                "statusBefore": "not_started",
+                "statusAfter": "not_started",
+                "runStartedAt": null,
+                "runEndedAt": "2026-07-11T18:45:38Z",
+                "summary": "Standalone test-phase close-out for spec 102. Re-ran the canonical Python suite (620 passed/2 skipped, exit 0), focused Go typed-boundary/provider/KV/schema matrix (exit 0), exact integration lane against disposable storage (exit 0 with teardown), and canonical knb adapter wrapper (113/0 + 6/0 + status_verify_fixture_test.sh OK, exit 0). Executed artifact lint, traceability, selected-file skip/only and live-mock scans, and regression-quality --bugfix; all exited 0. Appended report.md#test-phase-closure-2026-07-11. No source, planning contract, certification, completedScopes, requiresRevalidation, deploy, commit, or push mutation. Registry drift routes to bubbles.plan; certification follows with bubbles.validate."
+            }
+        ]
+    }
+}

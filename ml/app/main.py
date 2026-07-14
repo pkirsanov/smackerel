@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import os
-import re
 import sys
 from contextlib import asynccontextmanager
 
@@ -74,17 +73,44 @@ def _check_required_config() -> dict[str, str]:
         else:
             required["LLM_API_KEY"] = val
 
+    # Spec 102 SCOPE-102-03 (BUG-026-006) — ML_DOMAIN_OUTPUT_TOKEN_BUDGET
+    # (services.ml.domain_output_token_budget) is the SST-owned output-token
+    # budget for the structured-JSON domain/synthesis extraction path,
+    # replacing the hardcoded 2000. Used on EVERY extraction regardless of
+    # provider (ollama OR hosted), so it is required unconditionally
+    # (fail-loud, no default; mirrors resolve_domain_output_token_budget()).
+    try:
+        budget = os.environ["ML_DOMAIN_OUTPUT_TOKEN_BUDGET"].strip()
+    except KeyError:
+        missing.append("ML_DOMAIN_OUTPUT_TOKEN_BUDGET")
+    else:
+        if not budget:
+            missing.append("ML_DOMAIN_OUTPUT_TOKEN_BUDGET")
+        required["ML_DOMAIN_OUTPUT_TOKEN_BUDGET"] = budget
+
     # F2 (redteam LLM-enrichment cold-load) — ML_OLLAMA_KEEP_ALIVE
     # (services.ml.ollama_keep_alive) keeps the domain/synthesis model resident
     # across a capture session so sparse captures skip the cold-load. Required
     # (fail-loud, no default) ONLY when the provider is ollama — it is
     # meaningless for hosted providers. Mirrors the LLM_API_KEY conditional.
     if llm_provider == "ollama":
-        keep_alive = os.environ.get("ML_OLLAMA_KEEP_ALIVE", "").strip()
-        if not keep_alive:
+        try:
+            keep_alive = os.environ["ML_OLLAMA_KEEP_ALIVE"].strip()
+        except KeyError:
             missing.append("ML_OLLAMA_KEEP_ALIVE")
         else:
+            if not keep_alive:
+                missing.append("ML_OLLAMA_KEEP_ALIVE")
             required["ML_OLLAMA_KEEP_ALIVE"] = keep_alive
+
+        try:
+            profiles_json = os.environ["ML_MODEL_MEMORY_PROFILES_JSON"].strip()
+        except KeyError:
+            missing.append("ML_MODEL_MEMORY_PROFILES_JSON")
+        else:
+            if not profiles_json:
+                missing.append("ML_MODEL_MEMORY_PROFILES_JSON")
+            required["ML_MODEL_MEMORY_PROFILES_JSON"] = profiles_json
 
         # BUG-026-007 (redteam F2, latency half) — ML_STRUCTURED_EXTRACTION_THINKING
         # (services.ml.structured_extraction_thinking) gates whether qwen3 keeps
@@ -92,30 +118,32 @@ def _check_required_config() -> dict[str, str]:
         # Required (fail-loud, no default) ONLY when the provider is ollama — it
         # is meaningless for hosted providers. Mirrors the ML_OLLAMA_KEEP_ALIVE
         # conditional above.
-        thinking = os.environ.get("ML_STRUCTURED_EXTRACTION_THINKING", "").strip()
-        if not thinking:
+        try:
+            thinking = os.environ["ML_STRUCTURED_EXTRACTION_THINKING"].strip()
+        except KeyError:
             missing.append("ML_STRUCTURED_EXTRACTION_THINKING")
         else:
+            if not thinking:
+                missing.append("ML_STRUCTURED_EXTRACTION_THINKING")
             required["ML_STRUCTURED_EXTRACTION_THINKING"] = thinking
 
     if missing:
         logger.error("Missing required configuration: %s", ", ".join(missing))
         sys.exit(1)
 
-    # F2 — light sanity check on the keep_alive window. Ollama accepts an
-    # integer number of seconds, a duration suffix (s/m/h), 0, or -1. Reject an
-    # obviously-wrong value (e.g. "forever") fail-loud rather than let Ollama
-    # silently fall back to its 5-minute default and re-open the cold-load bug.
     if llm_provider == "ollama":
-        keep_alive = required["ML_OLLAMA_KEEP_ALIVE"]
-        if not re.fullmatch(r"-?\d+[smh]?", keep_alive):
+        from .ollama_keepalive import OllamaProfileConfigError, resolve_ollama_request_profile
+
+        try:
+            resolve_ollama_request_profile(required["LLM_MODEL"])
+        except OllamaProfileConfigError as exc:
             logger.error(
-                "ML_OLLAMA_KEEP_ALIVE must be an integer number of seconds, a "
-                "duration like 30m/1h/90s, 0, or -1; got %r",
-                keep_alive,
+                "Invalid Ollama request profile configuration (category=%s)",
+                exc.category,
             )
             sys.exit(1)
 
+    if llm_provider == "ollama":
         # BUG-026-007 — the structured-extraction thinking switch must be exactly
         # true/false (mirrors the ML_PROCESSING_DEGRADED_FALLBACK_ENABLED
         # true/false contract). A bad value fails loud rather than silently
@@ -253,35 +281,45 @@ async def _warmup_domain_model(config: dict[str, str]) -> None:
     NEVER block or fail sidecar startup (F2)."""
     if config["LLM_PROVIDER"].lower() != "ollama":
         return
-    try:
-        from .ollama_keepalive import resolve_ollama_keep_alive
+    from .ollama_keepalive import OllamaProfileConfigError
 
-        keep_alive = resolve_ollama_keep_alive()
+    try:
+        from .ollama_keepalive import dispatch_litellm, resolve_ollama_request_profile
+
         model = config["LLM_MODEL"]
         ollama_url = config["OLLAMA_URL"]
 
         import litellm
 
-        await litellm.acompletion(
-            # ollama_chat/ (/api/chat) forwards keep_alive to the request top
-            # level; the legacy ollama/ (/api/generate) transform buries it.
-            model=f"ollama_chat/{model}",
-            api_base=ollama_url,
-            messages=[{"role": "user", "content": "warmup"}],
-            max_tokens=1,
-            keep_alive=keep_alive,
-            timeout=_WARMUP_TIMEOUT_SECONDS,
+        warmup_kwargs = {
+            "model": f"ollama_chat/{model}",
+            "api_base": ollama_url,
+            "messages": [{"role": "user", "content": "warmup"}],
+            "max_tokens": 1,
+            "timeout": _WARMUP_TIMEOUT_SECONDS,
+        }
+        profile = resolve_ollama_request_profile(model)
+        await dispatch_litellm(
+            warmup_kwargs,
+            provider="ollama",
+            model=model,
+            profile=profile,
+            litellm_module=litellm,
         )
         logger.info(
             "ollama domain-model warmup complete (model=%s keep_alive=%s)",
             model,
-            keep_alive,
+            profile.keep_alive,
+        )
+    except OllamaProfileConfigError as exc:
+        logger.warning(
+            "ollama domain-model warmup skipped (non-fatal profile error category=%s)",
+            exc.category,
         )
     except Exception as exc:  # noqa: BLE001 — warmup is best-effort, never fatal
         logger.warning(
-            "ollama domain-model warmup skipped (non-fatal): %s: %s",
+            "ollama domain-model warmup skipped (non-fatal): %s",
             type(exc).__name__,
-            exc,
         )
 
 

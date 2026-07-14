@@ -20,7 +20,6 @@ from litellm.exceptions import (
     ServiceUnavailableError,
 )
 
-from .ollama_keepalive import resolve_ollama_keep_alive
 from .ollama_thinking import apply_structured_extraction_thinking
 
 logger = logging.getLogger("smackerel-ml.domain")
@@ -134,16 +133,7 @@ async def _do_domain_extract(
         "timeout": 30,
     }
     if provider == "ollama":
-        # F2 (redteam LLM-enrichment cold-load) — keep the domain model resident
-        # across a capture session so sparse captures skip the 22-45s cold-load
-        # that blows DOMAIN_EXTRACTION_TIMEOUT and truncates the JSON. keep_alive
-        # reaches Ollama ONLY at the request TOP LEVEL; litellm forwards it there
-        # for the ollama_chat/ (/api/chat) prefix but buries it under `options`
-        # for the legacy ollama/ (/api/generate) transform (verified vs litellm
-        # 1.59.8 + 1.84.0). _resolve_model returns ollama_chat/… and we pass
-        # api_base + the SST-owned keep_alive window explicitly.
         completion_kwargs["api_base"] = ollama_url
-        completion_kwargs["keep_alive"] = resolve_ollama_keep_alive()
 
     # BUG-026-007 (redteam F2, latency half) — disable qwen3 thinking on this
     # structured-JSON extraction call when SST says so, so qwen3 skips its hidden
@@ -155,9 +145,19 @@ async def _do_domain_extract(
     # Ollama models.
     apply_structured_extraction_thinking(completion_kwargs, provider)
 
+    from .ollama_keepalive import dispatch_litellm, resolve_ollama_request_profile
+
+    profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
+
     for attempt in range(MAX_RETRIES + 1):
         try:
-            response = await litellm.acompletion(**completion_kwargs)
+            response = await dispatch_litellm(
+                completion_kwargs,
+                provider=provider,
+                model=model,
+                profile=profile,
+                litellm_module=litellm,
+            )
 
             raw_text = response.choices[0].message.content
             tokens_used = getattr(response.usage, "total_tokens", 0) if response.usage else 0

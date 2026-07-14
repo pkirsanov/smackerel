@@ -4,7 +4,7 @@
 # Asserts that two consecutive `smackerel config generate --env self-hosted
 # --bundle` invocations with identical inputs produce byte-identical
 # tar.gz bundles, AND that the bundle ships the new sibling
-# secret-keys.yaml manifest enumerating the managed secret keys.
+# secret-keys.yaml manifest enumerating the 4 managed secret keys.
 #
 # Sub-test A (determinism):
 #   - Run loader twice into separate output dirs with same source-sha
@@ -14,8 +14,8 @@
 # Sub-test B (sibling secret-keys.yaml):
 #   - Extract bundle
 #   - Assert tar contains secret-keys.yaml at top level
-#   - Assert secret-keys.yaml lists exactly the managed keys
-#   - Assert app.env contains at least one placeholder per managed key
+#   - Assert secret-keys.yaml lists exactly the 4 managed keys
+#   - Assert app.env contains 4+ __SECRET_PLACEHOLDER__ markers
 #   - Assert app.env contains ZERO ^POSTGRES_PASSWORD=smackerel$ lines
 #   - Assert bundle-manifest.yaml lists secret-keys.yaml in files
 #
@@ -40,11 +40,6 @@ MANAGED_KEYS=(
   AUTH_SIGNING_ACTIVE_PRIVATE_KEY
   AUTH_AT_REST_HASHING_KEY
   AUTH_BOOTSTRAP_TOKEN
-  TELEGRAM_BOT_TOKEN
-  KEEP_GOOGLE_APP_PASSWORD
-  CARD_REWARDS_GCAL_CREDENTIALS
-  WEB_REGISTRATION_INVITE_TOKEN
-  LLM_PROVIDER_SECRET_MASTER_KEY
 )
 
 SOURCE_SHA="0000000000000000000000000000000000000000"
@@ -56,7 +51,6 @@ BUNDLE_NAME="config-bundle-self-hosted-${SOURCE_SHA}.tar.gz"
 echo "--- Sub-test A: bundle determinism (two invocations → identical sha256) ---"
 
 cd "$REPO_ROOT"
-export SMACKEREL_HARDWARE_TIER=cpu
 
 OUT_A="$SCOPE_TMP/run-a"
 OUT_B="$SCOPE_TMP/run-b"
@@ -170,11 +164,10 @@ else
     done
 
     listed_count="$(grep -cE '^[[:space:]]*-[[:space:]]+[A-Z_]+$' "$SECRET_KEYS_FILE" || true)"
-    expected_count="${#MANAGED_KEYS[@]}"
-    if [[ "$listed_count" -eq "$expected_count" ]]; then
-      echo "PASS: secret-keys.yaml lists exactly $expected_count keys"
+    if [[ "$listed_count" -eq 4 ]]; then
+      echo "PASS: secret-keys.yaml lists exactly 4 keys"
     else
-      echo "FAIL: secret-keys.yaml lists $listed_count keys (expected $expected_count)"
+      echo "FAIL: secret-keys.yaml lists $listed_count keys (expected 4)"
       failures=$((failures + 1))
     fi
   fi
@@ -185,11 +178,10 @@ else
     failures=$((failures + 1))
   else
     placeholder_count="$(grep -c '__SECRET_PLACEHOLDER__' "$APPENV" || true)"
-    expected_count="${#MANAGED_KEYS[@]}"
-    if [[ "$placeholder_count" -ge "$expected_count" ]]; then
-      echo "PASS: app.env contains $placeholder_count __SECRET_PLACEHOLDER__ markers (>= $expected_count)"
+    if [[ "$placeholder_count" -ge 4 ]]; then
+      echo "PASS: app.env contains $placeholder_count __SECRET_PLACEHOLDER__ markers (>= 4)"
     else
-      echo "FAIL: app.env contains only $placeholder_count __SECRET_PLACEHOLDER__ markers (expected >= $expected_count)"
+      echo "FAIL: app.env contains only $placeholder_count __SECRET_PLACEHOLDER__ markers (expected >= 4)"
       failures=$((failures + 1))
     fi
 

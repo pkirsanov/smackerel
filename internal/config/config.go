@@ -18,6 +18,39 @@ type ExpenseCategory struct {
 	TaxCategory string `json:"tax_category"`
 }
 
+// ModelMemoryProfile is the spec 102 SCOPE-102-03 KV-aware memory profile for a
+// single ollama model. It REPLACES the prior single static `memory_mib` ceiling
+// that understated real resident footprint. Resident memory is computed by
+// ResidentMiB as:
+//
+//	resident = WeightsMiB + KVMiBPer1kCtx × (NumCtx/1000) × numParallel
+//
+// where WeightsMiB is the fixed quantized weight footprint, KVMiBPer1kCtx is the
+// KV-cache cost per 1000 context tokens PER PARALLEL SEQUENCE (0 for
+// non-generative/embedding models), NumCtx is the SST-driven per-model context
+// window (replacing the host-only `ollama create` tag hack), and numParallel is
+// OLLAMA_NUM_PARALLEL. The JSON tags match the fields config.sh emits into
+// ML_MODEL_MEMORY_PROFILES_JSON from services.ml.model_memory_profiles.
+type ModelMemoryProfile struct {
+	WeightsMiB    int `json:"weights_mib"`
+	KVMiBPer1kCtx int `json:"kv_mib_per_1k_ctx"`
+	NumCtx        int `json:"num_ctx"`
+}
+
+// ResidentMiB computes the model's real resident footprint at the given ollama
+// parallelism. KV cost scales with context length AND the number of concurrent
+// sequences the daemon reserves cache for (num_parallel). numParallel < 1 is
+// clamped to 1 so a mis-set value can never understate the footprint.
+func (p ModelMemoryProfile) ResidentMiB(numParallel int) int {
+	if numParallel < 1 {
+		numParallel = 1
+	}
+	// Integer KV term: kv_per_1k × num_ctx × num_parallel / 1000. Multiply
+	// before dividing so small kv_per_1k values are not truncated to zero.
+	kv := p.KVMiBPer1kCtx * p.NumCtx * numParallel / 1000
+	return p.WeightsMiB + kv
+}
+
 // Config holds all configuration values for smackerel-core.
 type Config struct {
 	DatabaseURL string
@@ -398,8 +431,28 @@ type Config struct {
 	// concurrent-envelope guard (validateModelEnvelopes) only enforces
 	// the interactive-set SUM against the ollama envelope when keep-alive
 	// keeps loaded models resident (see ollamaKeepAliveResident).
-	OllamaKeepAlive       string
-	MLModelMemoryProfiles map[string]int // model name → required MiB
+	OllamaKeepAlive string
+	// Spec 102 SCOPE-102-03 — Ollama concurrency + residency posture (SST).
+	// OllamaNumParallel (OLLAMA_NUM_PARALLEL) is the number of concurrent
+	// sequences the daemon reserves KV cache for per loaded model; it scales
+	// the KV term in ModelMemoryProfile.ResidentMiB. OllamaMaxLoadedModels
+	// (OLLAMA_MAX_LOADED_MODELS) gates the co-resident SUM checks below: 1 =
+	// on-demand swap (each model need only fit ALONE); >1 = co-resident (the
+	// working-set SUM must fit OLLAMA_MEMORY_LIMIT). The Raw* fields hold the
+	// on-the-wire strings so requiredVars() can name them fail-loud; Load()
+	// parses them into the ints below with range validation.
+	OllamaNumParallelRaw     string
+	OllamaNumParallel        int
+	OllamaMaxLoadedModelsRaw string
+	OllamaMaxLoadedModels    int
+	// Spec 102 SCOPE-102-03 (BUG-026-006) — SST-owned output-token budget for
+	// the structured-JSON domain/synthesis extraction path (ML_DOMAIN_OUTPUT_TOKEN_BUDGET),
+	// replacing the hardcoded 2000 magic number in the ml sidecar.
+	MLDomainOutputTokenBudgetRaw string
+	MLDomainOutputTokenBudget    int
+	// MLModelMemoryProfiles maps a model name → its KV-aware memory profile
+	// (spec 102 SCOPE-102-03; was map[string]int static MiB pre-102).
+	MLModelMemoryProfiles map[string]ModelMemoryProfile
 
 	// BUG-045-001 — Per-service envelope routing for model env vars.
 	// The 15 fields below name every ollama-routed model env var the
@@ -727,7 +780,11 @@ func Load() (*Config, error) {
 		OllamaCPULimit:      os.Getenv("OLLAMA_CPU_LIMIT"),
 		OllamaMemoryLimit:   os.Getenv("OLLAMA_MEMORY_LIMIT"),
 		OllamaKeepAlive:     os.Getenv("OLLAMA_KEEP_ALIVE"),
-
+		// Spec 102 SCOPE-102-03 — raw posture/budget strings (parsed to int
+		// with range validation in Load(); named fail-loud by requiredVars()).
+		OllamaNumParallelRaw:         os.Getenv("OLLAMA_NUM_PARALLEL"),
+		OllamaMaxLoadedModelsRaw:     os.Getenv("OLLAMA_MAX_LOADED_MODELS"),
+		MLDomainOutputTokenBudgetRaw: os.Getenv("ML_DOMAIN_OUTPUT_TOKEN_BUDGET"),
 		// BUG-045-001 — Per-service envelope routing model env vars.
 		// Every value below is loaded from the SST-emitted env var
 		// when set (scripts/commands/config.sh emits 12 ollama-routed
@@ -942,29 +999,78 @@ func Load() (*Config, error) {
 		cfg.OllamaMemoryLimitMiB = mib
 	}
 
-	// Spec 045 — Parse ML_MODEL_MEMORY_PROFILES_JSON. The generator
-	// emits a JSON array of {"model": "...", "memory_mib": N} objects
-	// (list-of-objects form because the SST flatten/JSON pipeline cannot
-	// safely parse YAML map keys that contain ":"). Convert to the
-	// internal map[modelName]MiB representation.
+	// Spec 045 / Spec 102 SCOPE-102-03 — Parse ML_MODEL_MEMORY_PROFILES_JSON.
+	// The generator emits a JSON array of
+	// {"model": "...", "weights_mib": N, "kv_mib_per_1k_ctx": N, "num_ctx": N}
+	// objects (list-of-objects form because the SST flatten/JSON pipeline cannot
+	// safely parse YAML map keys that contain ":"). Convert to the internal
+	// map[modelName]ModelMemoryProfile representation used by the KV-aware
+	// validateModelEnvelopes envelope math.
 	if rawProfiles := os.Getenv("ML_MODEL_MEMORY_PROFILES_JSON"); rawProfiles != "" {
 		var profileList []struct {
-			Model     string `json:"model"`
-			MemoryMiB int    `json:"memory_mib"`
+			Model         string `json:"model"`
+			WeightsMiB    int    `json:"weights_mib"`
+			KVMiBPer1kCtx int    `json:"kv_mib_per_1k_ctx"`
+			NumCtx        int    `json:"num_ctx"`
 		}
 		if err := json.Unmarshal([]byte(rawProfiles), &profileList); err != nil {
 			return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: invalid JSON: %w", err)
 		}
-		cfg.MLModelMemoryProfiles = make(map[string]int, len(profileList))
+		cfg.MLModelMemoryProfiles = make(map[string]ModelMemoryProfile, len(profileList))
 		for _, entry := range profileList {
 			if entry.Model == "" {
 				return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: entry has empty model name")
 			}
-			if entry.MemoryMiB <= 0 {
-				return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: entry %q has non-positive memory_mib (%d)", entry.Model, entry.MemoryMiB)
+			if entry.WeightsMiB <= 0 {
+				return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: entry %q has non-positive weights_mib (%d)", entry.Model, entry.WeightsMiB)
 			}
-			cfg.MLModelMemoryProfiles[entry.Model] = entry.MemoryMiB
+			if entry.KVMiBPer1kCtx < 0 {
+				return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: entry %q has negative kv_mib_per_1k_ctx (%d)", entry.Model, entry.KVMiBPer1kCtx)
+			}
+			if entry.NumCtx <= 0 {
+				return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: entry %q has non-positive num_ctx (%d) — a per-model context window is required (spec 102 SCOPE-102-03; no host-tag override)", entry.Model, entry.NumCtx)
+			}
+			cfg.MLModelMemoryProfiles[entry.Model] = ModelMemoryProfile{
+				WeightsMiB:    entry.WeightsMiB,
+				KVMiBPer1kCtx: entry.KVMiBPer1kCtx,
+				NumCtx:        entry.NumCtx,
+			}
 		}
+	}
+
+	// Spec 102 SCOPE-102-03 — parse the Ollama concurrency/residency posture and
+	// the SST output-token budget. All three are required fail-loud SST ints
+	// (requiredVars() names them if empty); parse errors and out-of-range values
+	// abort Load() so a broken posture can never silently understate the KV math.
+	if v := strings.TrimSpace(cfg.OllamaNumParallelRaw); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("OLLAMA_NUM_PARALLEL: %w", err)
+		}
+		if n < 1 {
+			return nil, fmt.Errorf("OLLAMA_NUM_PARALLEL must be >= 1; got %d", n)
+		}
+		cfg.OllamaNumParallel = n
+	}
+	if v := strings.TrimSpace(cfg.OllamaMaxLoadedModelsRaw); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("OLLAMA_MAX_LOADED_MODELS: %w", err)
+		}
+		if n < 1 {
+			return nil, fmt.Errorf("OLLAMA_MAX_LOADED_MODELS must be >= 1; got %d", n)
+		}
+		cfg.OllamaMaxLoadedModels = n
+	}
+	if v := strings.TrimSpace(cfg.MLDomainOutputTokenBudgetRaw); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("ML_DOMAIN_OUTPUT_TOKEN_BUDGET: %w", err)
+		}
+		if n < 1 {
+			return nil, fmt.Errorf("ML_DOMAIN_OUTPUT_TOKEN_BUDGET must be >= 1; got %d", n)
+		}
+		cfg.MLDomainOutputTokenBudget = n
 	}
 
 	// Parse CORS allowed origins (comma-separated)
@@ -1754,6 +1860,12 @@ func (c *Config) requiredVars() []struct {
 		{"ML_MEMORY_LIMIT", c.MLMemoryLimit},
 		{"OLLAMA_CPU_LIMIT", c.OllamaCPULimit},
 		{"OLLAMA_MEMORY_LIMIT", c.OllamaMemoryLimit},
+		// Spec 102 SCOPE-102-03 — Ollama concurrency/residency posture +
+		// SST output-token budget. Required fail-loud at every load; the
+		// ints are parsed with range validation in Load().
+		{"OLLAMA_NUM_PARALLEL", c.OllamaNumParallelRaw},
+		{"OLLAMA_MAX_LOADED_MODELS", c.OllamaMaxLoadedModelsRaw},
+		{"ML_DOMAIN_OUTPUT_TOKEN_BUDGET", c.MLDomainOutputTokenBudgetRaw},
 		// BUG-045-001 — Per-service envelope routing requires the
 		// SST emission of every ollama-routed and ml-sidecar-routed
 		// model env var. Names below MUST match the emitted set in
@@ -2297,7 +2409,7 @@ func (c *Config) validateModelEnvelopes() error {
 				continue
 			}
 			seen[key] = struct{}{}
-			profileMiB, ok := c.MLModelMemoryProfiles[ref.model]
+			profile, ok := c.MLModelMemoryProfiles[ref.model]
 			if !ok {
 				missing = append(missing, fmt.Sprintf("%s=%q has no entry in services.ml.model_memory_profiles", ref.envVar, ref.model))
 				continue
@@ -2310,27 +2422,32 @@ func (c *Config) validateModelEnvelopes() error {
 				// "exceeds 0 MiB" noise.
 				continue
 			}
-			if profileMiB > bucket.envelopeMiB {
-				oversized = append(oversized, fmt.Sprintf("%s=%q requires %d MiB but %s=%q resolves to %d MiB", ref.envVar, ref.model, profileMiB, bucket.envelopeKey, bucket.envelopeRaw, bucket.envelopeMiB))
+			// Spec 102 SCOPE-102-03 — KV-aware resident footprint:
+			// weights + kv_per_1k × (num_ctx/1000) × num_parallel. This
+			// REPLACES the prior static profileMiB ceiling that understated
+			// the real footprint (e.g. gemma4:26b's uncapped context).
+			resident := profile.ResidentMiB(c.OllamaNumParallel)
+			if resident > bucket.envelopeMiB {
+				oversized = append(oversized, fmt.Sprintf("%s=%q requires %d MiB (weights %d + KV %d @ num_ctx=%d × %d parallel) but %s=%q resolves to %d MiB", ref.envVar, ref.model, resident, profile.WeightsMiB, resident-profile.WeightsMiB, profile.NumCtx, c.OllamaNumParallel, bucket.envelopeKey, bucket.envelopeRaw, bucket.envelopeMiB))
 			}
 		}
 	}
 
-	// Spec 082 SCOPE-082-02 — concurrent interactive-set envelope guard.
-	// The per-model checks above ensure each model fits the ollama
-	// envelope ALONE. But under a resident keep-alive (OLLAMA_KEEP_ALIVE
-	// == "-1" or a long duration), ollama retains every model it loads,
-	// so the distinct interactive hot-path models are co-resident and
-	// their SUM must ALSO fit OLLAMA_MEMORY_LIMIT — otherwise Docker
-	// OOM-kills the ollama container into a restart crash-loop. Only the
-	// interactive hot-path slots (llm + ollama + ollama-vision + agent
-	// default/fast/vision) are summed: these serve live conversational/
-	// agent requests and are reliably co-resident. On-demand specialists
-	// (reasoning, OCR, photo-intelligence batch) are governed by the
-	// per-model individual check above plus operator keep-alive guidance,
-	// and are not guaranteed to be co-resident at full ceiling.
+	// Spec 082 SCOPE-082-02 — concurrent interactive-set envelope guard,
+	// spec 102 SCOPE-102-03 — GATED ON max_loaded_models. The per-model
+	// checks above ensure each model fits the ollama envelope ALONE. The
+	// SUM of the distinct interactive hot-path models must ALSO fit only
+	// when the daemon actually keeps them CO-RESIDENT — i.e. when
+	// OLLAMA_MAX_LOADED_MODELS > 1 AND keep-alive keeps them loaded. Under
+	// the default on-demand-swap posture (max_loaded_models == 1) the
+	// daemon loads exactly one model at a time (qwen3 gather ↔ gemma4
+	// vision swap), so the co-resident sum is NOT required — only the
+	// per-model fit above (R-102-D safe default until live `ollama ps`
+	// proves co-residency). When co-resident, an over-envelope sum would
+	// OOM-kill the ollama container into a restart crash-loop, so it is
+	// refused fail-loud.
 	var concurrent []string
-	if c.OllamaMemoryLimitMiB > 0 && ollamaKeepAliveResident(c.OllamaKeepAlive) {
+	if c.OllamaMemoryLimitMiB > 0 && c.OllamaMaxLoadedModels > 1 && ollamaKeepAliveResident(c.OllamaKeepAlive) {
 		interactive := []modelRef{
 			{"LLM_MODEL", c.LLMModel},
 			{"OLLAMA_MODEL", c.OllamaModel},
@@ -2351,20 +2468,21 @@ func (c *Config) validateModelEnvelopes() error {
 				continue
 			}
 			seenModel[ref.model] = struct{}{}
-			profileMiB, ok := c.MLModelMemoryProfiles[ref.model]
+			profile, ok := c.MLModelMemoryProfiles[ref.model]
 			if !ok {
 				// Missing profile is already reported by the per-model
 				// loop above; do not sum an unknown size.
 				allProfiled = false
 				continue
 			}
-			residentSum += profileMiB
-			residentNames = append(residentNames, fmt.Sprintf("%s=%d MiB", ref.model, profileMiB))
+			resident := profile.ResidentMiB(c.OllamaNumParallel)
+			residentSum += resident
+			residentNames = append(residentNames, fmt.Sprintf("%s=%d MiB", ref.model, resident))
 		}
 		if allProfiled && residentSum > c.OllamaMemoryLimitMiB {
 			concurrent = append(concurrent, fmt.Sprintf(
-				"interactive ollama working set {%s} sums to %d MiB but OLLAMA_MEMORY_LIMIT=%q resolves to %d MiB (keep-alive %q keeps these models co-resident; raise OLLAMA_MEMORY_LIMIT or shorten OLLAMA_KEEP_ALIVE)",
-				strings.Join(residentNames, ", "), residentSum, c.OllamaMemoryLimit, c.OllamaMemoryLimitMiB, c.OllamaKeepAlive))
+				"interactive ollama working set {%s} sums to %d MiB but OLLAMA_MEMORY_LIMIT=%q resolves to %d MiB (OLLAMA_MAX_LOADED_MODELS=%d keeps these models co-resident; raise OLLAMA_MEMORY_LIMIT, set OLLAMA_MAX_LOADED_MODELS=1 for on-demand swap, or shorten OLLAMA_KEEP_ALIVE)",
+				strings.Join(residentNames, ", "), residentSum, c.OllamaMemoryLimit, c.OllamaMemoryLimitMiB, c.OllamaMaxLoadedModels))
 		}
 	}
 
@@ -2382,22 +2500,28 @@ func (c *Config) validateModelEnvelopes() error {
 	// switchable list that busts the envelope.
 	if c.Assistant.OpenKnowledge.Enabled && c.OllamaMemoryLimitMiB != 0 {
 		gather := c.Assistant.OpenKnowledge.LLMModelID
-		baseMiB := c.MLModelMemoryProfiles[gather]
+		baseResident := c.MLModelMemoryProfiles[gather].ResidentMiB(c.OllamaNumParallel)
 		for _, m := range c.Assistant.OpenKnowledge.SwitchableModels {
 			if strings.TrimSpace(m) == "" {
 				continue // empty entry is reported by OpenKnowledgeConfig.Validate()
 			}
-			profileMiB, ok := c.MLModelMemoryProfiles[m]
+			profile, ok := c.MLModelMemoryProfiles[m]
 			if !ok {
 				missing = append(missing, fmt.Sprintf("assistant.open_knowledge.switchable_models entry %q has no entry in services.ml.model_memory_profiles", m))
 				continue
 			}
-			coresident := baseMiB
-			if m != gather {
-				coresident += profileMiB
-			}
-			if coresident > c.OllamaMemoryLimitMiB {
-				oversized = append(oversized, fmt.Sprintf("assistant.open_knowledge.switchable_models entry %q co-resident with gather model %q requires %d MiB but OLLAMA_MEMORY_LIMIT=%q resolves to %d MiB", m, gather, coresident, c.OllamaMemoryLimit, c.OllamaMemoryLimitMiB))
+			// Spec 102 SCOPE-102-03 — the co-resident sum (gather stays
+			// loaded during synthesis) only matters when the daemon keeps
+			// >1 model co-resident. Under on-demand swap (max_loaded==1)
+			// the per-model fit above is sufficient.
+			if c.OllamaMaxLoadedModels > 1 {
+				coresident := baseResident
+				if m != gather {
+					coresident += profile.ResidentMiB(c.OllamaNumParallel)
+				}
+				if coresident > c.OllamaMemoryLimitMiB {
+					oversized = append(oversized, fmt.Sprintf("assistant.open_knowledge.switchable_models entry %q co-resident with gather model %q requires %d MiB but OLLAMA_MEMORY_LIMIT=%q resolves to %d MiB", m, gather, coresident, c.OllamaMemoryLimit, c.OllamaMemoryLimitMiB))
+				}
 			}
 		}
 	}
@@ -2422,16 +2546,18 @@ func (c *Config) validateModelEnvelopes() error {
 	// skipped, matching the runtime validator).
 	if c.Assistant.OpenKnowledge.Enabled && c.OllamaMemoryLimitMiB != 0 {
 		gather := c.Assistant.OpenKnowledge.LLMModelID
-		baseMiB := c.MLModelMemoryProfiles[gather]
+		baseResident := c.MLModelMemoryProfiles[gather].ResidentMiB(c.OllamaNumParallel)
 		standingDefault := strings.TrimSpace(c.Assistant.OpenKnowledge.SynthesisModelID)
 		if standingDefault != "" {
-			profileMiB, ok := c.MLModelMemoryProfiles[standingDefault]
+			profile, ok := c.MLModelMemoryProfiles[standingDefault]
 			if !ok {
 				missing = append(missing, fmt.Sprintf("assistant.open_knowledge.synthesis_model_id (standing default) %q has no entry in services.ml.model_memory_profiles", standingDefault))
-			} else {
-				coresident := baseMiB
+			} else if c.OllamaMaxLoadedModels > 1 {
+				// Spec 102 SCOPE-102-03 — co-resident sum only when the
+				// daemon keeps gather + synthesis loaded together.
+				coresident := baseResident
 				if standingDefault != gather {
-					coresident += profileMiB
+					coresident += profile.ResidentMiB(c.OllamaNumParallel)
 				}
 				if coresident > c.OllamaMemoryLimitMiB {
 					oversized = append(oversized, fmt.Sprintf("assistant.open_knowledge.synthesis_model_id (standing default) %q co-resident with gather model %q requires %d MiB but OLLAMA_MEMORY_LIMIT=%q resolves to %d MiB", standingDefault, gather, coresident, c.OllamaMemoryLimit, c.OllamaMemoryLimitMiB))

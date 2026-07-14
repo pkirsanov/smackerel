@@ -286,10 +286,26 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 	// empty/un-profiled/envelope-busting set; the OllamaMemoryLimitMiB envelope
 	// is 0 on dev (no daemon) so the co-residence check is skipped there
 	// (config-generation already fails loud on an envelope-busting list).
+	//
+	// Spec 102 SCOPE-102-03 — the modelswitch allowlist operates on resident
+	// MiB ints, so convert the KV-aware profiles to their real resident
+	// footprint (weights + KV @ num_ctx × num_parallel) here, and gate the
+	// co-residence check on the SST max_loaded_models posture: under on-demand
+	// swap (==1) models are NEVER co-resident, so pass envelope 0 to skip the
+	// co-resident sum (config generation already enforced per-model fit). Only
+	// under co-resident posture (>1) is the real envelope passed.
+	residentProfiles := make(map[string]int, len(cfg.MLModelMemoryProfiles))
+	for name, p := range cfg.MLModelMemoryProfiles {
+		residentProfiles[name] = p.ResidentMiB(cfg.OllamaNumParallel)
+	}
+	allowlistEnvelopeMiB := cfg.OllamaMemoryLimitMiB
+	if cfg.OllamaMaxLoadedModels <= 1 {
+		allowlistEnvelopeMiB = 0
+	}
 	allow, err := modelswitch.NewAllowlist(
 		okCfg.SwitchableModels,
-		cfg.MLModelMemoryProfiles,     // model_memory_profiles
-		cfg.OllamaMemoryLimitMiB,      // env ollama envelope (0 ⇒ check skipped)
+		residentProfiles,              // spec 102 — resident MiB (weights + KV)
+		allowlistEnvelopeMiB,          // env ollama envelope (0 ⇒ co-residence check skipped)
 		okCfg.LLMModelID,              // gather model (co-resident on the synthesis turn)
 		okCfg.SynthesisModelID,        // baseline synthesis = the "default" in rejections
 		okCfg.ToolCapableGatherModels, // spec 089 — tool-capable gather set (--gather-model= validates against this; baseline llm_model_id must be a member)

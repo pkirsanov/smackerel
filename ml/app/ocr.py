@@ -91,27 +91,37 @@ def extract_text_ollama(image_bytes: bytes, ollama_url: str = "") -> str:
         ollama_url = os.environ["OLLAMA_URL"]
 
     ollama_url = _validate_ollama_url(ollama_url)
+    model = os.environ["OLLAMA_VISION_MODEL"]
+
+    import base64
+
+    from .ollama_keepalive import (
+        OllamaProfileConfigError,
+        dispatch_ollama_native_json,
+        resolve_ollama_request_profile,
+    )
+
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    payload = {
+        "model": model,
+        "prompt": "Extract all visible text from this image. Return only the text content, no commentary.",
+        "images": [b64_image],
+        "stream": False,
+    }
 
     try:
-        import base64
-
-        import requests
-
-        b64_image = base64.b64encode(image_bytes).decode("utf-8")
-
-        response = requests.post(
+        response = dispatch_ollama_native_json(
             f"{ollama_url}/api/generate",
-            json={
-                "model": os.environ["OLLAMA_VISION_MODEL"],
-                "prompt": "Extract all visible text from this image. Return only the text content, no commentary.",
-                "images": [b64_image],
-                "stream": False,
-            },
+            payload,
+            profile=resolve_ollama_request_profile(model),
+            model=model,
             timeout=60,
         )
         response.raise_for_status()
         result = response.json()
         return result.get("response", "").strip()
+    except OllamaProfileConfigError:
+        raise
     except ImportError:
         logger.warning("requests not installed — skipping Ollama OCR")
         return ""
@@ -243,7 +253,24 @@ async def handle_ocr_request(data: dict) -> dict:
     if len(text) < MIN_TESSERACT_CHARS:
         enable_ollama = os.environ["ENABLE_OLLAMA"].strip().lower()
         if enable_ollama in ("true", "1", "yes", "on"):
-            ollama_text = extract_text_ollama(image_bytes)
+            from .ollama_keepalive import OllamaProfileConfigError
+
+            try:
+                ollama_text = extract_text_ollama(image_bytes)
+            except OllamaProfileConfigError as exc:
+                logger.error(
+                    "Ollama vision OCR profile rejected category=%s",
+                    exc.category,
+                )
+                return {
+                    "status": "error",
+                    "text": "",
+                    "cached": False,
+                    "ocr_engine": "none",
+                    "image_hash": image_hash,
+                    "error": "ollama_profile_config_error",
+                    "error_category": exc.category,
+                }
             if len(ollama_text) > len(text):
                 text = ollama_text
                 engine = "ollama"

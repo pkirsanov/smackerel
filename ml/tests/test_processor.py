@@ -800,3 +800,85 @@ class TestTokenUsage:
             )
 
         assert result["tokens_used"] == 0
+
+
+def test_output_budget_read_from_sst_not_hardcoded_spec102(monkeypatch):
+    """SCN-102-C3-05 (BUG-026-006) — the domain/synthesis output-token budget is
+    read from SST (ML_DOMAIN_OUTPUT_TOKEN_BUDGET), NOT the hardcoded 2000.
+
+    A distinct non-2000 value proves the max_tokens flows from SST; the
+    ADVERSARIAL assert (!= 2000) fails if the literal 2000 is ever re-hardcoded
+    back into ml/app/processor.py.
+    """
+    import asyncio
+    import json
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    monkeypatch.setenv("ML_DOMAIN_OUTPUT_TOKEN_BUDGET", "1234")  # distinct, != 2000
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    from app.processor import process_content
+
+    captured: dict = {}
+
+    def _capture(**kwargs):
+        captured.update(kwargs)
+        resp = MagicMock()
+        resp.choices = [MagicMock(message=MagicMock(content=json.dumps({"artifact_type": "article", "title": "T"})))]
+        resp.usage = MagicMock(total_tokens=20)
+        return resp
+
+    with patch("app.processor.litellm") as mock_litellm:
+        mock_litellm.acompletion = AsyncMock(side_effect=_capture)
+        result = asyncio.run(
+            process_content(
+                content="hello world",
+                content_type="article",
+                source_id="s1",
+                processing_tier="standard",
+                user_context="",
+                model="gemma4:26b",
+                api_key="",
+                provider="ollama",
+            )
+        )
+
+    assert result["success"] is True
+    assert captured["max_tokens"] == 1234, (
+        "SCN-102-C3-05: max_tokens must be the SST ML_DOMAIN_OUTPUT_TOKEN_BUDGET "
+        f"(1234), got {captured.get('max_tokens')}"
+    )
+    # ADVERSARIAL: a re-hardcoded 2000 would flip this assertion red.
+    assert captured["max_tokens"] != 2000
+
+
+def test_process_content_applies_ollama_profile_spec102(monkeypatch):
+    """TP-C3-10: processor directly emits the selected profile while
+    preserving output budget, response format, timeout, and think=False."""
+    import asyncio
+    import json
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    monkeypatch.setenv("ML_DOMAIN_OUTPUT_TOKEN_BUDGET", "1234")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    from app.processor import process_content
+
+    captured: dict = {}
+
+    def capture(**kwargs):
+        captured.update(kwargs)
+        response = MagicMock()
+        response.choices = [MagicMock(message=MagicMock(content=json.dumps({"artifact_type": "note", "title": "T"})))]
+        response.usage = MagicMock(total_tokens=9)
+        return response
+
+    with patch("app.processor.litellm.acompletion", new_callable=AsyncMock, side_effect=capture):
+        result = asyncio.run(process_content("hello", "note", "source", "standard", "", "qwen3:30b-a3b", "", "ollama"))
+
+    assert result["success"] is True
+    assert result["result"]["artifact_type"] == "note"
+    assert captured["options"]["num_ctx"] == 32768
+    assert captured["keep_alive"] == "30m"
+    assert captured["think"] is False
+    assert captured["max_tokens"] == 1234
+    assert captured["response_format"] == {"type": "json_object"}
+    assert captured["timeout"] == 600

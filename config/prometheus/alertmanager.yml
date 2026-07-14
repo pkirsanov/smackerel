@@ -1,0 +1,58 @@
+# Spec 102 SCOPE-102-02 — Durable Prometheus -> Alertmanager -> ntfy routing.
+#
+# This is the PRODUCT-OWNED, TARGET-AGNOSTIC Alertmanager routing config. It is
+# folded INTO the deploy bundle by scripts/commands/config.sh (staged next to
+# prometheus.yml / alerts.yml) and mounted read-only into the in-stack
+# `alertmanager` service, so alerting SURVIVES every apply with ZERO manual
+# re-run. It replaces the fragile knb post-apply `alertmanager-standup.sh`
+# overlay (which appended an alerting block to the host prometheus.yml and had
+# to be re-run after every deploy because the next apply re-extracted the
+# bundle and dropped it).
+#
+# NO env-specific content (SCN-102-C2-04): there is NO operator ntfy host, IP,
+# or TOPIC value in this file (not even in a receiver name or a comment). The
+# single webhook receiver reads its target from `url_file: /etc/alertmanager/
+# ntfy_url`, which the bundle renders to the GENERIC in-stack templating bridge
+# address (a compose service name, not operator-private). The bridge, in turn,
+# posts to the OPERATOR-PRIVATE ntfy endpoint it reads fail-loud from the
+# adapter-injected ALERTMANAGER_NTFY_URL at apply time. The bridge does the
+# TEMPLATING (X-Title / X-Priority / X-Tags from the alert severity label +
+# summary/description annotations) so ntfy shows a titled/priority message, not
+# the raw Alertmanager JSON body.
+#
+# The routing STRUCTURE (route tree, group_by, group timers, inhibit_rules) is
+# ported verbatim from the retired knb overlay so behavior is unchanged; only
+# the endpoint moved from an operator-private literal to the adapter-injected
+# url_file + bridge.
+#
+# Contract test: internal/deploy/alertmanager_bundle_contract_test.go asserts
+# the bundled copy carries a url_file and NO ntfy literal, and that the
+# `alertmanager` service + the prometheus.yml alerting block are present.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: ntfy-bridge
+  group_by: ["alertname", "component", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: ntfy-bridge
+    webhook_configs:
+      # url_file (NOT url) — the target is read from a file the bundle renders
+      # to the in-stack templating bridge. No operator ntfy endpoint literal
+      # appears in this product repo (No env-specific content).
+      - url_file: /etc/alertmanager/ntfy_url
+        send_resolved: true
+
+# Suppress a warning-level alert when a critical alert for the same
+# component/alertname is already firing (standard Alertmanager hygiene;
+# ported verbatim from the retired knb overlay config).
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ["alertname", "component"]

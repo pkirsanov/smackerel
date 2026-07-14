@@ -76,7 +76,7 @@ func buildOversizedEnvFile(t *testing.T, root string) string {
 	livePath := filepath.Join(root, "config", "generated", "test.env")
 	liveBytes, err := os.ReadFile(livePath)
 	if err != nil {
-		t.Skipf("live config/generated/test.env not present: %v (run './smackerel.sh config generate --env test' first)", err)
+		t.Fatalf("live config/generated/test.env not present after canonical integration setup: %v", err)
 	}
 	live := string(liveBytes)
 
@@ -102,7 +102,7 @@ func buildOversizedEnvFile(t *testing.T, root string) string {
 			}
 		}
 		if strings.HasPrefix(ln, "ML_MODEL_MEMORY_PROFILES_JSON=") {
-			lines[i] = `ML_MODEL_MEMORY_PROFILES_JSON='[{"model":"bug-045-fixture-llm-20gib","memory_mib":20480},{"model":"bug-045-fixture-llm-6gib","memory_mib":6144},{"model":"bug-045-fixture-embed-512mib","memory_mib":512},{"model":"nomic-embed-text","memory_mib":768}]'`
+			lines[i] = `ML_MODEL_MEMORY_PROFILES_JSON='[{"model":"bug-045-fixture-llm-20gib","weights_mib":20480,"kv_mib_per_1k_ctx":0,"num_ctx":4096},{"model":"bug-045-fixture-llm-6gib","weights_mib":6144,"kv_mib_per_1k_ctx":0,"num_ctx":4096},{"model":"bug-045-fixture-embed-512mib","weights_mib":512,"kv_mib_per_1k_ctx":0,"num_ctx":2048},{"model":"nomic-embed-text","weights_mib":768,"kv_mib_per_1k_ctx":0,"num_ctx":2048}]'`
 		}
 		if strings.HasPrefix(ln, "PHOTOS_INTELLIGENCE_EMBED_MODEL=") {
 			lines[i] = `PHOTOS_INTELLIGENCE_EMBED_MODEL="bug-045-fixture-embed-512mib"`
@@ -189,22 +189,60 @@ func TestConfigValidate_AC5c_WrapperPropagatesRejection(t *testing.T) {
 		t.Fatalf("read source yaml: %v", err)
 	}
 
-	// Build a fixture YAML by overriding the llm.model and adding a
-	// profile entry, then write to a temp file.
+	// Build a fixture YAML by overriding the effective test-environment
+	// model keys and adding a profile entry, then write to a temp file.
 	src := string(srcBytes)
 
-	// Locate the llm.model: line (sibling under `llm:` block). The
-	// live yaml uses unquoted form: `  model: gemma4:26b` followed by
-	// `  api_key:` on the next line.
-	llmMarker := "  model: gemma4:26b\n  api_key:"
-	if !strings.Contains(src, llmMarker) {
-		t.Skipf("source yaml does not contain expected llm.model marker — yaml shape changed; rebase the fixture")
+	// The hardware-tier matrix now supplies the default model, and
+	// environments.test.{llm_model,ollama_model} is the authoritative
+	// override seam consumed by tier_interactive_model_or_override.
+	yamlLines := strings.Split(src, "\n")
+	inEnvironments := false
+	testBlockStart := -1
+	testBlockEnd := len(yamlLines)
+	for i, line := range yamlLines {
+		if line == "environments:" {
+			inEnvironments = true
+			continue
+		}
+		if !inEnvironments {
+			continue
+		}
+		if line == "  test:" {
+			testBlockStart = i
+			continue
+		}
+		if testBlockStart >= 0 && strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") && line != "" {
+			testBlockEnd = i
+			break
+		}
 	}
-	overridden := strings.Replace(src, llmMarker,
-		"  model: bug-045-fixture-llm-20gib\n  api_key:", 1)
-	if overridden == src {
-		t.Fatalf("substitution of llm.model produced no change")
+	if testBlockStart < 0 {
+		t.Fatal("source yaml does not contain environments.test")
 	}
+	llmModelReplaced := false
+	ollamaModelReplaced := false
+	for i := testBlockStart + 1; i < testBlockEnd; i++ {
+		switch {
+		case strings.HasPrefix(yamlLines[i], "    llm_model:"):
+			yamlLines[i] = `    llm_model: "bug-045-fixture-llm-20gib"`
+			llmModelReplaced = true
+		case strings.HasPrefix(yamlLines[i], "    ollama_model:"):
+			yamlLines[i] = `    ollama_model: "bug-045-fixture-llm-20gib"`
+			ollamaModelReplaced = true
+		}
+	}
+	var missingOverrides []string
+	if !llmModelReplaced {
+		missingOverrides = append(missingOverrides, `    llm_model: "bug-045-fixture-llm-20gib"`)
+	}
+	if !ollamaModelReplaced {
+		missingOverrides = append(missingOverrides, `    ollama_model: "bug-045-fixture-llm-20gib"`)
+	}
+	if len(missingOverrides) > 0 {
+		yamlLines = append(yamlLines[:testBlockStart+1], append(missingOverrides, yamlLines[testBlockStart+1:]...)...)
+	}
+	overridden := strings.Join(yamlLines, "\n")
 
 	// Add the fixture profile entry inside model_memory_profiles. Use
 	// the nomic-embed-text profile entry as the anchor — it's stable
@@ -212,10 +250,10 @@ func TestConfigValidate_AC5c_WrapperPropagatesRejection(t *testing.T) {
 	// not the ml-sidecar-routed embedding model).
 	profileAnchor := "    - model: \"nomic-embed-text\""
 	if !strings.Contains(overridden, profileAnchor) {
-		t.Skipf("source yaml does not contain expected profile anchor — yaml shape changed")
+		t.Fatal("source yaml does not contain the nomic-embed-text profile anchor")
 	}
 	overridden = strings.Replace(overridden, profileAnchor,
-		"    - model: \"bug-045-fixture-llm-20gib\"\n      memory_mib: 20480\n    - model: \"nomic-embed-text\"", 1)
+		"    - model: \"bug-045-fixture-llm-20gib\"\n      weights_mib: 20480\n      kv_mib_per_1k_ctx: 0\n      num_ctx: 4096\n    - model: \"nomic-embed-text\"", 1)
 
 	tmpYAML := filepath.Join(t.TempDir(), "smackerel.yaml")
 	if err := os.WriteFile(tmpYAML, []byte(overridden), 0o600); err != nil {

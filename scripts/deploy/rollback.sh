@@ -2,7 +2,7 @@
 # scripts/deploy/rollback.sh — pointer-swap rollback wrapper.
 #
 # Usage:
-#   bash scripts/deploy/rollback.sh --target self-hosted
+#   bash scripts/deploy/rollback.sh --target <target>
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

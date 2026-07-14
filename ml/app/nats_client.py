@@ -932,7 +932,20 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
                 "timeout": 600,
             }
             apply_structured_extraction_thinking(rerank_kwargs, provider)
-            response = await litellm.acompletion(**rerank_kwargs)
+            from .ollama_keepalive import (
+                OllamaProfileConfigError,
+                dispatch_litellm,
+                resolve_ollama_request_profile,
+            )
+
+            profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
+            response = await dispatch_litellm(
+                rerank_kwargs,
+                provider=provider,
+                model=model,
+                profile=profile,
+                litellm_module=litellm,
+            )
 
             result = json.loads(response.choices[0].message.content)
             ranked = []
@@ -954,6 +967,8 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
                 "ranked_ids": [r["artifact_id"] for r in ranked],
             }
 
+        except OllamaProfileConfigError:
+            raise
         except Exception as e:
             logger.error("Re-ranking failed: %s", e)
             # Fall back to returning candidates in original order
@@ -1034,12 +1049,14 @@ Write the digest text only, no JSON wrapper. Begin output now."""
             # falls back to its own default which is wrong inside the ml-sidecar
             # container (see processor.py for the same fix).
             api_base = os.environ.get("OLLAMA_URL") if provider == "ollama" else None
-            response = await litellm.acompletion(
-                model=model_name,
-                messages=[{"role": "user", "content": prompt}],
-                api_key=api_key,
-                api_base=api_base,
-                temperature=0.3,
+            if provider == "ollama":
+                model_name = f"ollama_chat/{model}"
+            digest_kwargs: dict = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "api_key": api_key,
+                "api_base": api_base,
+                "temperature": 0.3,
                 # Budget large enough to absorb gemma4:26b's <think>...</think>
                 # chain-of-thought preamble (typically 1.5-3K tokens) PLUS the
                 # post-think digest text (~150 words = ~250 tokens). The prior
@@ -1049,8 +1066,24 @@ Write the digest text only, no JSON wrapper. Begin output now."""
                 # metadata-only fallback every cycle). 4000 tokens is well below
                 # gemma4:26b's 8K context limit and gives the model headroom to
                 # think AND write.
-                max_tokens=4000,
-                timeout=600,
+                "max_tokens": 4000,
+                "timeout": 600,
+            }
+            from .ollama_keepalive import (
+                OllamaProfileConfigError,
+                dispatch_litellm,
+                resolve_ollama_request_profile,
+            )
+            from .ollama_thinking import apply_structured_extraction_thinking
+
+            apply_structured_extraction_thinking(digest_kwargs, provider)
+            profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
+            response = await dispatch_litellm(
+                digest_kwargs,
+                provider=provider,
+                model=model,
+                profile=profile,
+                litellm_module=litellm,
             )
 
             text = response.choices[0].message.content or ""
@@ -1103,6 +1136,8 @@ Write the digest text only, no JSON wrapper. Begin output now."""
                 "model_used": model_name,
             }
 
+        except OllamaProfileConfigError:
+            raise
         except Exception as e:
             logger.error("Digest generation failed: %s", e)
             # Fallback: plain-text digest from metadata
