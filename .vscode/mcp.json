@@ -9,14 +9,6 @@
             "env": {
                 "BUBBLES_MCP_LOG_LEVEL": "INFO"
             }
-        },
-        "playwright": {
-            "type": "stdio",
-            "command": "npx",
-            "args": [
-                "-y",
-                "@playwright/mcp@latest"
-            ]
         }
     }
 }
