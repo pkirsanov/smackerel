@@ -74,6 +74,9 @@ vendor/
 # Node (if ever added)
 node_modules/
 
+# Android/Gradle project-local caches
+**/.gradle/
+
 # Spec 077 SCOPE-1b — Playwright artifacts for the PWA e2e-ui harness.
 # Generated under web/pwa/ by `./smackerel.sh test e2e-ui` (Playwright
 # reporters write here). Never committed.
