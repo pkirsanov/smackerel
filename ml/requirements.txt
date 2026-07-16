@@ -32,22 +32,22 @@ pydantic-settings==2.6.0
 httpx==0.28.1
 litellm==1.84.0
 # spec-047 R17 (fixable-CVE family, smackerel-ml image): resolve CVE-2026-4372
-# — HIGH — transformers <5.3.0 (HuggingFace transformers vulnerable to remote
-# code execution; the fix landed in 5.3.0). transformers is transitive via
+# (HIGH, fixed in 5.3.0) and CVE-2026-5241 (HIGH, arbitrary code execution via
+# overridden trust_remote_code, fixed in 5.5.0). transformers is transitive via
 # sentence-transformers; sentence-transformers==3.3.0 capped transformers
 # <5.0.0, so bump sentence-transformers 3.3.0 -> 5.6.0 — the current release
 # whose spec relaxes the cap to `transformers<6.0.0,>=4.41.0`, permitting the
-# transformers 5.x line — and add an explicit transformers==5.3.0 pin (below)
+# transformers 5.x line — and add an explicit transformers==5.5.0 pin (below)
 # for a deterministic, auditable lock visible to the image Trivy scan. The
 # sidecar uses ONLY the stable SentenceTransformer(name).encode(text,
 # normalize_embeddings=True) API (ml/app/embedder.py), unchanged across the
 # 3.x -> 5.x bump — reviewed, so no app-code change is required.
 sentence-transformers==5.6.0
 # transformers is normally transitive via sentence-transformers; pinned
-# explicitly here so the CVE-2026-4372 fix (>=5.3.0) is deterministic and
-# visible to `trivy fs ml/requirements.txt`. Must stay >=5.3.0 and within
+# explicitly here so the CVE-2026-4372 and CVE-2026-5241 fixes (>=5.5.0) are deterministic and
+# visible to `trivy fs ml/requirements.txt`. Must stay >=5.5.0 and within
 # sentence-transformers' range (transformers<6.0.0,>=4.41.0).
-transformers==5.3.0
+transformers==5.5.0
 prometheus_client==0.21.0
 youtube-transcript-api==0.6.3
 trafilatura==1.12.0

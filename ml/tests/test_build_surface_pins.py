@@ -28,6 +28,7 @@ _PYPROJECT = os.path.join(_HERE, "..", "pyproject.toml")
 # well as the bare requirements.txt form. The anchored ``==`` is what
 # distinguishes an exact pin from a floated ``>=`` range.
 _EXACT_PIN = re.compile(r'^\s*["\']?gkeepapi==\d', re.MULTILINE)
+_TRANSFORMERS_FIXED_VERSION = "5.5.0"
 
 
 def _read(path: str) -> str:
@@ -43,6 +44,25 @@ def _strip_comments(manifest_text: str) -> str:
 def _has_exact_gkeepapi_pin(manifest_text: str) -> bool:
     """Return True iff an exact ``gkeepapi==<version>`` pin is present."""
     return bool(_EXACT_PIN.search(_strip_comments(manifest_text)))
+
+
+def _exact_requirement_versions(manifest_text: str, package_name: str) -> list[str]:
+    """Return active exact-pin versions for one normalized package name."""
+    normalized_target = package_name.lower().replace("_", "-")
+    versions: list[str] = []
+    for raw_line in manifest_text.splitlines():
+        active = raw_line.split("#", 1)[0].strip().strip("\"'").rstrip(",")
+        if not active or "==" not in active:
+            continue
+        name, version = (part.strip() for part in active.split("==", 1))
+        if name.lower().replace("_", "-") == normalized_target and version:
+            versions.append(version)
+    return versions
+
+
+def _transformers_pin_is_fixed(manifest_text: str) -> bool:
+    """Require exactly one active Transformers pin at the fixed release."""
+    return _exact_requirement_versions(manifest_text, "transformers") == [_TRANSFORMERS_FIXED_VERSION]
 
 
 def test_gkeepapi_pinned_in_requirements():
@@ -94,3 +114,17 @@ def test_detector_rejects_floated_range():
     assert not _has_exact_gkeepapi_pin("gkeepapi>=0.17.1\n")
     assert _has_exact_gkeepapi_pin("gkeepapi==0.17.1\n")
     assert _has_exact_gkeepapi_pin('    "gkeepapi==0.17.1",\n')
+
+
+def test_transformers_vulnerable_5_3_0_pin_is_rejected():
+    """Adversarial: the invalid pre-fix production lock cannot pass."""
+    assert not _transformers_pin_is_fixed("transformers==5.3.0\n")
+    assert not _transformers_pin_is_fixed("sentence-transformers==5.6.0\n")
+
+
+def test_transformers_patched_5_5_0_and_live_lock_pass():
+    """The patched fixture and live production lock carry one exact fixed pin."""
+    assert _transformers_pin_is_fixed("transformers==5.5.0\n")
+    live_lock = _read(_REQUIREMENTS)
+    assert _transformers_pin_is_fixed(live_lock)
+    assert _exact_requirement_versions(live_lock, "sentence-transformers") == ["5.6.0"]
