@@ -195,6 +195,63 @@ Validate-certified fields:
 
 This preserves execution velocity while making promotion authority explicit.
 
+### Registry-Bound Transition Audit Contract
+
+Transition policy is resolved, not inferred. The effective mode in
+`bubbles/workflows/modes.yaml` owns a closed `transitionAudit` binding whose
+target is the resolved `statusCeiling`. Artifact state supplies the persisted
+mode; `mode-resolver.sh --grandfather` resolves the effective definition; and
+`transition-contract-resolver.sh` emits one `transition-contract/v1` object
+containing the canonical mode, audit profile, ceiling/target, required gates,
+phase order, source-lockout requirement, contract reference/digest, and target
+revision. The resolver writes no state.
+
+Expectation arguments at runner, guard, validate, audit, and finalize
+boundaries are assertions against that object. Removing an assertion cannot
+change the derived profile, and a mismatch blocks. No boundary may infer a
+profile from a mode name, from `statusCeiling != done`, from prose, or from a
+caller/environment override.
+
+The supported profile set is intentionally narrow:
+
+| Registry binding | Target | Applicable evidence | Meaning |
+| --- | --- | --- | --- |
+| `planning-maturity-v1` on `product-to-planning` and `spec-scope-hardening` | `specs_hardened` | Universal + mode-required + planning-maturity checks | Planning contracts are coherent; delivery is `NOT_EVALUATED`. |
+| `delivery-completion-v1` on audit-bearing `done` modes | `done` | Universal + mode-required + delivery-completion checks | Existing strict completion and evidence semantics. |
+| No explicit supported binding | none | No check selection | Fail closed with `E009-AUDIT-PROFILE-UNSUPPORTED`. |
+
+A below-`done` ceiling is not itself a planning profile. All 22 adjacent
+non-done audit modes across docs, validated, activation, train, upkeep,
+propagation, incident, and framework-health semantics remain unsupported unless
+their own evidence contracts are explicitly designed and bound.
+
+`state-transition-guard.sh` resolves the contract internally and appends one
+ordered `TRANSITION_GUARD_RESULT_V1` after its human ledger. The result binds
+the verdict to the mode, profile, target, contract digest, target revision,
+applicable check classes, named non-applicable checks, gate IDs, failed checks,
+blocking code, failure count, and exit status. Exit `0` is profile-applicable
+PASS, exit `1` is applicable-check FAIL, and exit `2` is contract BLOCKED.
+Planning does not skip whole numbered checks: it preserves structural and
+honesty checks while marking only Check 4 completion, Check 5 all-Done, Check 8
+physical file existence, and Check 11 execution evidence `NOT_APPLICABLE`.
+
+Audit persists attempts under `execution.audit` as `audit-run/v1` evidence.
+At most one attempt may be ACTIVE and `currentAttemptId` must point to it. A new
+run supersedes the prior ACTIVE record, clears the pointer, and opens an
+INCOMPLETE attempt; interruption leaves that non-authoritative state intact.
+The frozen, ordered `AUDIT_RESULT_V1` is a projection of the persisted attempt
+and guard result. Its lint enforces matching digest/revision, result state,
+profile/target, finding accounting, and disjoint verdict vocabularies.
+
+For planning, the terminal tuple is exact: `PLANNING_AUDIT_CLEAN`, outcome
+`completed_diagnostic`, planning `CERTIFIED`, delivery `NOT_EVALUATED`, one
+matching ACTIVE attempt, and zero unresolved findings. This tuple is not a
+delivery or shipment assertion. Finalize performs no status write; it
+re-resolves and forwards the matching assertions to `bubbles.validate`.
+Validate alone may set top-level `status` and `certification.status` to exactly
+`specs_hardened`, preserving scope/DoD/completed-scope/delivery/audit facts.
+Done-ceiling certification continues to require the complete delivery chain.
+
 ### 4. Scenario Contract Manifest
 
 Gherkin is the true behavior contract, but today it mostly lives in markdown. The framework needs a generated scenario manifest with stable scenario IDs.

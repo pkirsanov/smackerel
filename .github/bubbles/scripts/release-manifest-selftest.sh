@@ -16,6 +16,22 @@ fail() {
   failures=$((failures + 1))
 }
 
+manifest_section_has_path() {
+  local section_name="$1"
+  local relative_path="$2"
+
+  awk -v section_name="$section_name" -v relative_path="$relative_path" '
+    BEGIN {
+      section_line="  \"" section_name "\": ["
+      expected_prefix="    {\"path\": \"" relative_path "\", \"sha256\": \""
+    }
+    $0 == section_line { in_section=1; next }
+    in_section && ($0 == "  ]," || $0 == "  ]") { exit }
+    in_section && index($0, expected_prefix) == 1 { found=1; exit }
+    END { exit found ? 0 : 1 }
+  ' "$manifest_file"
+}
+
 manifest_file="$ROOT_DIR/bubbles/release-manifest.json"
 
 echo "Running release-manifest selftest..."
@@ -68,6 +84,30 @@ if grep -q '"path": "tests/regression/test_18_capability_foundation_gate.sh"' "$
   pass "Source-only checksum inventory includes G094 regression test"
 else
   fail "Source-only checksum inventory includes G094 regression test"
+fi
+
+if manifest_section_has_path managedFileChecksums 'bubbles/scripts/adversarial-aggregate.sh'; then
+  pass "Managed checksum inventory includes IMP-020 S2 aggregator"
+else
+  fail "Managed checksum inventory includes IMP-020 S2 aggregator"
+fi
+
+if manifest_section_has_path managedFileChecksums 'bubbles/scripts/adversarial-aggregate-selftest.sh'; then
+  pass "Managed checksum inventory includes IMP-020 S2 aggregator selftest"
+else
+  fail "Managed checksum inventory includes IMP-020 S2 aggregator selftest"
+fi
+
+if manifest_section_has_path sourceOnlyFileChecksums 'bubbles/eval/schemas/adversarial-sample.schema.json'; then
+  pass "Source-only checksum inventory includes IMP-020 S2 sample schema"
+else
+  fail "Source-only checksum inventory includes IMP-020 S2 sample schema"
+fi
+
+if ! manifest_section_has_path managedFileChecksums 'bubbles/eval/schemas/adversarial-sample.schema.json'; then
+  pass "IMP-020 S2 sample schema remains source-only"
+else
+  fail "IMP-020 S2 sample schema remains source-only"
 fi
 
 profiles="$(bubbles_json_array_joined "$manifest_file" supportedProfiles ', ')"

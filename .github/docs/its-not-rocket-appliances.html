@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v7.19.2</div>
+  <div class="subtitle">Agent Orchestration System v7.20.0</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -1726,11 +1726,11 @@
   </div>
   <div class="workflow-card">
     <div class="wf-name">adversarial verification</div>
-    <div class="wf-desc">Green Bastard (<code>bubbles.redteam</code>) attacks a FINISHED result to falsify the &quot;done&quot; claim — evidence-first counterexamples, risk-gated multi-validator (voting) scrutiny, and bounded chaos-monkey probing of live systems. It emits findings and NEVER certifies (completion stays with <code>bubbles.validate</code>). OFF BY DEFAULT. The missing post-result adversary alongside <code>bubbles.grill</code>, which pressure-tests ideas pre-build.</div>
+    <div class="wf-desc">Green Bastard (<code>bubbles.redteam</code>) attacks a FINISHED result to falsify the &quot;done&quot; claim through evidence-first counterexamples, risk-bounded same-runtime-correlated samples, deterministic union/disagreement aggregation, and a bounded live-system probe. It emits findings and NEVER certifies (completion stays with <code>bubbles.validate</code>). OFF BY DEFAULT. The post-result adversary alongside <code>bubbles.grill</code>, which pressure-tests ideas pre-build.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">adversarial posture</div>
-    <div class="wf-desc">The effective on/off/passes/teeth resolved by <code>adversarial-resolve.sh</code> via one precedence chain: per-run directive (<code>adversarial: on passes: 3</code>) -&gt; <code>BUBBLES_ADVERSARIAL*</code> env -&gt; <code>.github/bubbles-project.yaml</code> <code>adversarial:</code> block -&gt; framework default <code>off</code>. Seamless opt-in; zero behavior change on upgrade.</div>
+    <div class="wf-desc">The effective mode/samples/teeth resolved by <code>adversarial-resolve.sh</code> via one precedence chain: per-run directive (<code>adversarial: on samples: 3</code>) -&gt; <code>BUBBLES_ADVERSARIAL</code>, <code>BUBBLES_ADVERSARIAL_SAMPLES</code>, and <code>BUBBLES_ADVERSARIAL_TEETH</code> env -&gt; <code>.github/bubbles-project.yaml</code> <code>adversarial:</code> block -&gt; framework default <code>off</code>. Additional samples are risk-bounded same-runtime-correlated checks.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">guided journey</div>
@@ -1796,10 +1796,6 @@
   <div class="line">
     <span class="situation">Repair the smallest failure first</span>
     <span class="quote-text"><code>microFixes</code></span>
-  </div>
-  <div class="line">
-    <span class="situation">Multi-AI second opinion on review</span>
-    <span class="quote-text"><code>crossModelReview</code></span>
   </div>
   <div class="line">
     <span class="situation">Parallel independent scopes via worktrees</span>
@@ -1994,7 +1990,6 @@
     <div class="gate-msg"><span class="status">📊</span><span class="msg">"Done with observations"</span><span class="context">— all gates pass, with non-status observations worth monitoring</span></div>
     <div class="gate-msg"><span class="status">📊</span><span class="msg">"Smart phase routing"</span><span class="context">— irrelevant phases skip with recorded justification, re-evaluate if artifacts change</span></div>
     <div class="gate-msg"><span class="status">📊</span><span class="msg">"Taste vs mechanical"</span><span class="context">— auto-resolve the obvious decisions, surface only the genuine tradeoffs</span></div>
-    <div class="gate-msg"><span class="status">📊</span><span class="msg">"Cross-model review"</span><span class="context">— two different AIs look at the same diff, compare what each catches</span></div>
     <div class="gate-msg"><span class="status">📊</span><span class="msg">"Adversarial regression skeleton"</span><span class="context">— every bug fix auto-generates a test that would FAIL if the bug came back</span></div>
     <div class="gate-msg"><span class="status">📊</span><span class="msg">"test-plan.json"</span><span class="context">— machine-readable test handoff from planning to test phase. No Markdown parsing lottery.</span></div>
     <div class="gate-msg"><span class="status">🏷️</span><span class="msg">"Lease the lot"</span><span class="context">— claim runtime ownership before starting or reusing a shared stack</span></div>
@@ -2400,7 +2395,7 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v7.19.2 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v7.20.0 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
   <p>109 Gates • 41 Agents • 60 Workflow Modes • 30 Phases • 0 Shit Hawks</p>

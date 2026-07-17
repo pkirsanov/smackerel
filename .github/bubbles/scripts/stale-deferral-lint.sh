@@ -46,6 +46,128 @@ cur_key=$(( CUR_MAJOR * 1000 + CUR_MINOR ))
 
 DEFERRAL_RE='[Dd]eferred (to|until) (the )?v?[0-9]+\.[0-9]+'
 
+is_markdown_heading() {
+  local line="$1"
+  local heading_re='^[[:space:]]{0,3}#{1,6}([[:space:]]|$)'
+  [[ "$line" =~ $heading_re ]]
+}
+
+is_markdown_fence_line() {
+  local line="$1"
+  local fence_re='^[[:space:]]{0,3}(```|~~~)'
+  [[ "$line" =~ $fence_re ]]
+}
+
+scan_report_live_content() {
+  local file="$1"
+  local line
+  local record_phase=0
+  local record_command=0
+  local record_exit_code=0
+  local record_claim_source=0
+  local in_candidate=0
+  local candidate_valid=0
+  local candidate_buffer=''
+  local in_other_fence=0
+  local other_fence_close=''
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if (( in_candidate )); then
+      candidate_buffer="${candidate_buffer}"$'\n'"${line}"
+      if [[ "$line" == '```' ]]; then
+        if (( ! candidate_valid )); then
+          printf '%s\n' "$candidate_buffer"
+        fi
+        in_candidate=0
+        candidate_valid=0
+        candidate_buffer=''
+        record_phase=0
+        record_command=0
+        record_exit_code=0
+        record_claim_source=0
+      elif is_markdown_heading "$line" || is_markdown_fence_line "$line"; then
+        candidate_valid=0
+      fi
+      continue
+    fi
+
+    if (( in_other_fence )); then
+      printf '%s\n' "$line"
+      if [[ "$line" == "$other_fence_close" ]]; then
+        in_other_fence=0
+        other_fence_close=''
+        record_phase=0
+        record_command=0
+        record_exit_code=0
+        record_claim_source=0
+      fi
+      continue
+    fi
+
+    if is_markdown_heading "$line"; then
+      record_phase=0
+      record_command=0
+      record_exit_code=0
+      record_claim_source=0
+      printf '%s\n' "$line"
+      continue
+    fi
+
+    if [[ "$line" == '```text' ]]; then
+      in_candidate=1
+      candidate_buffer="$line"
+      if (( record_phase && record_command && record_exit_code && record_claim_source )); then
+        candidate_valid=1
+      fi
+      record_phase=0
+      record_command=0
+      record_exit_code=0
+      record_claim_source=0
+      continue
+    fi
+
+    if is_markdown_fence_line "$line"; then
+      case "$line" in
+        '~~~'*) other_fence_close='~~~' ;;
+        *) other_fence_close='```' ;;
+      esac
+      in_other_fence=1
+      record_phase=0
+      record_command=0
+      record_exit_code=0
+      record_claim_source=0
+      printf '%s\n' "$line"
+      continue
+    fi
+
+    [[ "$line" == *'**Phase:**'* ]] && record_phase=1
+    if [[ "$line" == *'**Command:**'* || "$line" == *'**Commands:**'* ]]; then
+      record_command=1
+    fi
+    [[ "$line" == *'**Exit Code'*':**'* ]] && record_exit_code=1
+    [[ "$line" == *'**Claim Source:** executed'* ]] && record_claim_source=1
+    printf '%s\n' "$line"
+  done < "$file"
+
+  if (( in_candidate )); then
+    printf '%s\n' "$candidate_buffer"
+  fi
+}
+
+scan_file_refs() {
+  local file="$1"
+  if [[ "${file##*/}" == "report.md" ]]; then
+    scan_report_live_content "$file" \
+      | grep -oiE "$DEFERRAL_RE" \
+      | grep -oE '[0-9]+\.[0-9]+' \
+      || true
+  else
+    grep -oiE "$DEFERRAL_RE" "$file" 2>/dev/null \
+      | grep -oE '[0-9]+\.[0-9]+' \
+      || true
+  fi
+}
+
 FAILED=0
 while IFS= read -r f; do
   [[ -n "$f" ]] || continue
@@ -67,7 +189,7 @@ while IFS= read -r f; do
       err "$rel references 'deferred to v$ref' but current VERSION is $CURRENT_VERSION (>= v$ref). The promised release has arrived — implement it, or restate the status without a lapsed version promise."
       FAILED=1
     fi
-  done < <(grep -oiE "$DEFERRAL_RE" "$f" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+')
+  done < <(scan_file_refs "$f")
 done < <(
   grep -rilE "$DEFERRAL_RE" "$REPO_ROOT" \
     --include='*.md' --include='*.py' --include='*.sh' --include='*.json' \

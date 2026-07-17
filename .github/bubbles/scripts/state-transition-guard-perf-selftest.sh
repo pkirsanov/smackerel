@@ -136,15 +136,15 @@ EOF
   cat > "$b5_feature/state.json" <<'EOF'
 {
   "version": 3,
-  "status": "docs_updated",
-  "workflowMode": "docs-only",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
   "execution": { "completedPhaseClaims": ["docs"] },
   "certification": {
     "certifiedCompletedPhases": ["docs"],
     "completedScopes": ["01-perf-fixture"],
     "scopeProgress": [],
     "lockdownState": { "mode": "off", "lockedScenarioIds": [] },
-    "status": "docs_updated"
+    "status": "in_progress"
   },
   "policySnapshot": {
     "grill": { "mode": "off", "source": "repo-default" },
@@ -153,7 +153,7 @@ EOF
     "lockdown": { "mode": "off", "source": "repo-default" },
     "regression": { "mode": "protect-existing-scenarios", "source": "repo-default" },
     "validation": { "mode": "required", "source": "workflow-forced" },
-    "workflowMode": "docs-only"
+    "workflowMode": "bugfix-fastlane"
   },
   "transitionRequests": [],
   "reworkQueue": [],

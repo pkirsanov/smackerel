@@ -86,6 +86,7 @@ modes:
   value-first-e2e-batch:
     description: Discover highest-value next work (spec/scope/bug/gap/hardening/new feature), bootstrap missing artifacts, then run full E2E delivery loop.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ discover, select, bootstrap, implement, test, regression, simplify, stabilize, devops, security, docs, validate, audit, chaos, redteam, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G013, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 5
@@ -113,6 +114,9 @@ modes:
   spec-scope-hardening:
     description: Harden spec/design/scopes quality and expand Gherkin-to-E2E coverage before implementation.
     statusCeiling: specs_hardened
+    transitionAudit:
+      profile: planning-maturity-v1
+      target: statusCeiling
     terminalAliases: [ specs_hardened ]
     phaseOrder: [ select, bootstrap, harden, docs, validate, audit, finalize ]
     requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016, G073 ]
@@ -127,6 +131,9 @@ modes:
   product-to-planning:
     description: Full analysis and planning pipeline from business analysis through UX, design, and scope planning — no implementation. Use when creating specs, designs, scopes, or bug artifacts from findings, requirements, or review outputs.
     statusCeiling: specs_hardened
+    transitionAudit:
+      profile: planning-maturity-v1
+      target: statusCeiling
     terminalAliases: [ specs_hardened ]
     phaseOrder: [ analyze, select, bootstrap, harden, docs, validate, audit, finalize ]
     requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016, G032, G073 ]
@@ -143,6 +150,7 @@ modes:
   full-delivery:
     description: Default maximum-assurance delivery loop. Runs the full improvement and certification chain repeatedly until validate certifies done or returns a documented blocked verdict. Optional improvement preludes can front-load analyst/UX/design/plan passes for a bounded number of rounds.
     inherits: [ base-delivery, delivery-gate-baseline, delivery-quality-constraints ]
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, interrogate, implement, test, regression, simplify, gaps, harden, stabilize, devops, security, validate, audit, chaos, redteam, docs, finalize ]
     requiredGates: [ G002 ]
     maxChaosRounds: 5
@@ -198,6 +206,7 @@ modes:
   delivery-lockdown:
     description: Maximum-assurance delivery loop. Runs the full improvement and certification chain repeatedly until validate certifies done or returns a documented blocked verdict. Optional improvement preludes can front-load analyst/UX/design/plan passes for a bounded number of rounds.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, implement, test, regression, simplify, gaps, harden, stabilize, devops, security, validate, audit, chaos, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 5
@@ -256,6 +265,7 @@ modes:
   bugfix-fastlane:
     description: Focused bug loop with mandatory reproduction and verification. Loops until validate certifies the fix or returns a documented blocked verdict.
     inherits: [ base-delivery, delivery-gate-baseline, delivery-quality-constraints ]
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, implement, test, regression, simplify, gaps, harden, stabilize, devops, security, validate, audit, finalize ]
     requiredGates: [ G002, G060 ]
     constraints:
@@ -335,6 +345,7 @@ modes:
   chaos-hardening:
     description: Start with chaos probes, then run the remediation, verification, docs, and finalize chain until clean or retry limit.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, chaos, implement, test, regression, simplify, stabilize, devops, security, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G058, G059, G060, G061 ]
     maxChaosRounds: 5
@@ -362,12 +373,14 @@ modes:
   harden-to-doc:
     description: Start from validation baseline, then harden, implement fixes, and run full quality chain. For specs with existing implementation that need quality hardening.
     inherits: [ base-delivery, delivery-gate-baseline, delivery-quality-constraints, finding-owned-remediation ]
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, validate, harden, implement, test, regression, simplify, stabilize, devops, security, chaos, validate, audit, docs, finalize ]
     maxChaosRounds: 3
 
   gaps-to-doc:
     description: Start from validation baseline, then close implementation/design gaps, implement fixes, and run full quality chain. For specs needing gap remediation before quality verification.
     inherits: [ base-delivery, delivery-gate-baseline, delivery-quality-constraints, finding-owned-remediation ]
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, validate, gaps, implement, test, regression, simplify, stabilize, devops, security, chaos, validate, audit, docs, finalize ]
     requiredGates: [ G002 ]
     maxChaosRounds: 3
@@ -375,6 +388,7 @@ modes:
   harden-gaps-to-doc:
     description: Full quality sweep - validate baseline, harden existing implementation, close design gaps, implement fixes, then run complete quality chain. Most thorough pre-release verification.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, validate, harden, gaps, implement, test, regression, simplify, stabilize, devops, security, chaos, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
@@ -395,6 +409,7 @@ modes:
   reconcile-to-doc:
     description: Validate claimed completion against actual artifacts and evidence, reconcile stale state and scope status, then implement fixes and run the full quality chain.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, validate, implement, test, regression, simplify, stabilize, devops, security, validate, audit, chaos, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
@@ -424,6 +439,7 @@ modes:
   test-to-doc:
     description: Run tests, and if they expose real work, execute the full finding-owned planning/remediation chain before completing validation, audit, docs, and finalize.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, test, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
@@ -447,6 +463,7 @@ modes:
   chaos-to-doc:
     description: Run chaos probes, and if they expose real work, execute the full finding-owned planning/remediation chain before completing validation, audit, docs, and finalize.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, chaos, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
@@ -468,6 +485,7 @@ modes:
   redteam-to-doc:
     description: Run adversarial red-team attacks on a finished result (Green Bastard); if an attack exposes a real weakness, execute the full finding-owned planning/remediation chain before completing validation, audit, docs, and finalize. Off by default — resolves posture via adversarial-resolve.sh; redteam emits findings and never certifies.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, redteam, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
@@ -535,6 +553,7 @@ modes:
   product-to-delivery:
     description: Full pipeline from business analysis through UX, design, scopes, implementation, testing, and quality gates. Analyst/UX phases skippable if spec.md already has their output. Optional `releases` phase at the end refreshes the release packet (features.md / Phase Overview) when the delivered capability is declared in a phase release packet.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ analyze, select, bootstrap, implement, test, regression, simplify, stabilize, devops, security, docs, validate, audit, chaos, releases, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G013, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G032, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 5
@@ -568,6 +587,7 @@ modes:
   stabilize-to-doc:
     description: Start from validation baseline, diagnose stability issues, then execute the operational remediation through DevOps before running the full quality chain. For specs with existing implementation that need operational hardening.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, validate, stabilize, devops, implement, test, regression, simplify, security, chaos, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
@@ -592,6 +612,7 @@ modes:
   security-to-doc:
     description: Start from a security pass, then implement fixes and run the full quality chain through docs and finalize.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, security, implement, test, regression, simplify, stabilize, devops, chaos, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
@@ -616,6 +637,7 @@ modes:
   regression-to-doc:
     description: Start from regression analysis, then implement fixes and run the full quality chain through docs and finalize.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, regression, implement, test, simplify, stabilize, devops, security, chaos, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
@@ -640,6 +662,7 @@ modes:
   improve-existing:
     description: Analyze existing feature against competitors and best practices. Minor improvements update existing spec; sizable changes create new spec folder. Then implement, test, and run full quality chain.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ analyze, select, validate, harden, gaps, implement, test, regression, simplify, stabilize, devops, security, validate, audit, chaos, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G032, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
@@ -671,6 +694,7 @@ modes:
   simplify-to-doc:
     description: Simplify an existing implementation, and if simplification exposes real work, execute the full finding-owned planning/remediation chain before syncing docs and evidence.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, simplify, test, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G036, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
@@ -697,6 +721,7 @@ modes:
   devops-to-doc:
     description: "Execute focused DevOps work for an existing feature or bug: CI/CD, build, deployment, monitoring, observability, or release automation changes, then run the quality chain and sync docs."
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, bootstrap, devops, test, stabilize, security, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
@@ -740,6 +765,7 @@ modes:
   retro-to-simplify:
     description: "Data-driven simplification: run retro hotspot analysis (bug magnets, coupling, bus factor) to identify the worst offenders, then simplify those files, prove behavior still works, and sync docs."
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, retro, simplify, test, regression, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G036, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
@@ -763,6 +789,7 @@ modes:
   retro-to-harden:
     description: "Data-driven hardening: run retro hotspot analysis to find bug magnets and worsening hotspots, then harden and close gaps on those areas, test, and sync docs."
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, retro, harden, gaps, implement, test, regression, simplify, stabilize, security, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
@@ -817,6 +844,7 @@ modes:
   idea-to-release-completion:
     description: "Full lifecycle chained mode. Walks an idea end-to-end: optional brainstorm, release packet bootstrap (declaring the new capability as `planned`), spec/design/scopes via product-to-delivery, full implementation + hardening + audit, then a final release packet refresh that flips the capability to `delivered` with the spec evidence link AND updates the INVESTOR_OVERVIEW Phase Overview table. The `releases` phase appears TWICE: at the start (mode: bootstrap or refresh) to declare intent, and at the end (mode: refresh) to record reality. Both are owned exclusively by bubbles.releases (Sonny Iron Lung Smith). Refuses to run if the Product Direction Surfaces trio is missing — routes to bubbles.setup first."
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ analyze, releases, select, bootstrap, implement, test, regression, simplify, stabilize, devops, security, docs, validate, audit, chaos, redteam, releases, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G013, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G032, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 5
@@ -870,6 +898,7 @@ modes:
   retro-quality-sweep:
     description: "Data-driven quality sweep: run retro analysis first to identify the noisiest hotspots, then simplify those areas before hardening, gap-closing, fixing, and finishing with the full quality chain."
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, retro, simplify, harden, gaps, implement, test, regression, stabilize, devops, security, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
@@ -895,6 +924,7 @@ modes:
   stochastic-quality-sweep:
     description: Run multiple randomized rounds where each round picks a random spec (from all specs by default, or from a user-provided subset) AND a random trigger, then executes the mapped trigger-owned end-to-end workflow mode for that trigger. Stochastic sweep itself only chooses the target and trigger; the mapped mode owns probing, remediation, verification, docs, and finalize.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ select, chaos, harden, gaps, simplify, stabilize, devops, security, regression, validate, bug, implement, test, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 5
@@ -964,6 +994,7 @@ modes:
   iterate:
     description: Priority-driven iterative execution loop. Each iteration picks the highest-priority work item across all specs (bugs, incomplete scopes, gaps, hardening needs, improvements, chaos probes), auto-selects the correct workflow mode for that work, and executes a full delivery cycle. Runs for N iterations or until a time budget is exhausted. Unlike stochastic-quality-sweep (random probing), iterate is deterministic and priority-ordered. Supports ALL work types including implementation, bug fixes, improvements, chaos hardening, gap closure, and competitive analysis.
     inherits: [ base-delivery, delivery-gate-baseline, delivery-quality-constraints ]
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     # phaseOrder represents the SUPERSET of all possible phases iterate may use.
     # Each iteration selects a SUBSET based on auto-mode-selection (Work-Type-to-Mode Mapping).
     phaseOrder: [ discover, select, analyze, bootstrap, harden, gaps, simplify, stabilize, devops, security, regression, bug, implement, test, docs, validate, audit, chaos, finalize ]
@@ -1027,6 +1058,7 @@ modes:
   autonomous-goal:
     description: Fully autonomous single-goal execution. User provides a goal in natural language; the agent autonomously discovers requirements, creates specs/designs/scopes, implements, tests, validates, audits, runs chaos/E2E, remediates all findings, and loops until convergence (zero open findings + all gates pass) or max iterations reached. Never stops on fixable obstacles — searches for solutions, tries alternative approaches. Delegates to bubbles.goal as the outer convergence controller.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ discover, analyze, bootstrap, implement, test, validate, audit, chaos, redteam, harden, gaps, security, regression, simplify, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:
@@ -1074,6 +1106,7 @@ modes:
   autonomous-sprint:
     description: Multi-goal time-bounded autonomous execution. User provides a list of goals and a time budget; the agent prioritizes goals by estimated effort and impact, executes each goal using the autonomous-goal convergence loop, checks the wall clock before each goal/scope, and stops gracefully when time expires (finishing the current scope completely). Can reorder goals dynamically if a smaller goal fits remaining time better. Delegates to bubbles.sprint as the sprint controller.
     statusCeiling: done
+    transitionAudit: { profile: delivery-completion-v1, target: statusCeiling }
     phaseOrder: [ discover, select, analyze, bootstrap, implement, test, validate, audit, chaos, redteam, harden, gaps, security, regression, simplify, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
     constraints:

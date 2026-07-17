@@ -1,6 +1,6 @@
 ---
 description: Deterministic single-mode workflow runner for one explicit or bubbles.super-resolved workflow mode
-tools: [read, search, edit, agent, todo, web, execute, bubbles-repo, playwright]
+tools: [read, search, edit, agent, todo, web, execute, bubbles-smackerel, playwright]
 handoffs:
   - label: Business Analysis
     agent: bubbles.analyst

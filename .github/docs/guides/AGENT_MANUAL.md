@@ -124,6 +124,39 @@ An agent's `tools:` allowlist **declares** which tools an agent (and the workers
 2. **Subagents inherit the parent's tools.** When `bubbles.goal`/`bubbles.workflow`/etc. dispatch `bubbles.implement` and the dispatch returns `blocked`, the cause is that edit tools are not available in the session — so the inherited worker has none either. Enable Edit Files in the session, then re-run. (Running `/bubbles.implement` directly in Agent mode also works, because the worker then runs as the main agent in your tool-enabled session.)
 3. **After a framework upgrade, reload the VS Code window** so the editor re-reads the updated `.agent.md` frontmatter — a running session keeps the allowlist it loaded at startup.
 
+### Adversarial Samples And Host Limitation
+
+`samples: N` is the canonical adversarial count, with a normal default of `1`.
+The resolver emits `sampleSemantics=same-runtime-correlated`. The deprecated
+`passes` alias remains input-compatible only long enough to report
+`deprecation=passes-alias`; current environment, project config, directive, and
+output syntax uses `SAMPLES` or `samples`.
+
+One `bubbles.redteam` invocation emits exactly one JSON record conforming to
+`bubbles/eval/schemas/adversarial-sample.schema.json` version 1. The record
+contains a unique sample and invocation ID, `status`, `verdict`, findings or
+structured error details, and runtime/model/tool provenance with an explicit
+verification state. A direct invocation cannot satisfy `N > 1` by creating
+synthetic records.
+
+An active top-level workflow satisfies `samples: N` by dispatching N actual
+redteam invocations and passing their records to
+`bubbles/scripts/adversarial-aggregate.sh`. The deterministic aggregator emits:
+
+| Outcome | Runner action |
+| --- | --- |
+| `agreement-clear` | Continue after every completed sample is clear. |
+| `agreement-findings` | Route the complete common finding set. |
+| `disagreement` | Block normal continuation and escalate the complete finding union plus the per-sample matrix. |
+| `aggregation-error` | Block because count, schema, provenance, or sample completion is invalid. |
+
+No majority can suppress a finding. Current VS Code subagents inherit the
+active model and tools, and Bubbles has no verified external provider/model
+adapter. These are correlated checks, not cross-model execution. Provider/model
+labels or command names are not provenance proof. See
+[Adversarial Verification](../recipes/adversarial-verification.md) and the
+[Cross-Model Review migration note](../recipes/cross-model-review.md).
+
 ## Owners And Executors
 
 | Agent | Use When | Primary References |
@@ -202,3 +235,72 @@ Completion and evidence rules live in:
 - `evidence-rules.md`
 
 This manual should stay focused on ownership, use-cases, and where the real rules live.
+
+## Registry-Bound Transition Audits
+
+`bubbles/workflows/modes.yaml` is the authority for transition-audit
+semantics. An audit-bearing mode receives an explicit `transitionAudit` map:
+
+```yaml
+transitionAudit:
+  profile: planning-maturity-v1
+  target: statusCeiling
+```
+
+The closed profile enum is `planning-maturity-v1` or
+`delivery-completion-v1`; each mode binds exactly one value.
+
+Only `product-to-planning` and `spec-scope-hardening` bind
+`planning-maturity-v1`. Both resolve to the exact target `specs_hardened` and
+exclude implementation and test phases. All 22 adjacent non-done audit modes,
+including
+docs, validation, activation, train, upkeep, propagation, incident, and
+framework-health modes, do not inherit planning semantics from a below-`done`
+ceiling. They remain unsupported by transition audit until the registry binds
+an evidence contract explicitly. Audit-bearing `done` modes instead bind
+`delivery-completion-v1` and retain the full delivery bar.
+
+The read-only `transition-contract-resolver.sh` derives the mode, profile,
+target, required gates, phase order, contract digest, and target revision from
+artifact state plus the resolved registry. Its optional `--expect-mode`,
+`--expect-target`, and `--expect-contract-digest` arguments compare derived
+values; they cannot select policy. The guard follows the same rule:
+`--target-status`, `--expect-workflow-mode`, and
+`--expect-contract-digest` are equality assertions. There is no caller profile
+input or environment override.
+
+The guard emits exactly one ordered `TRANSITION_GUARD_RESULT_V1`. For planning
+maturity, universal checks, mode-required gates, planning structure,
+traceability, evidence integrity for any checked claim, and source-edit
+lockout remain applicable. Only the delivery-completion portions of Checks 4,
+5, 8, and 11 are reported as `NOT_APPLICABLE`; they are neither omitted nor
+counted as passing. Under `delivery-completion-v1`, those checks continue to
+require completed DoD, all scopes Done, physical test files, and execution
+evidence.
+
+Audit records an additive `execution.audit` `audit-run/v1` history. Opening a
+new attempt supersedes the previous ACTIVE attempt, clears
+`currentAttemptId`, and appends an INCOMPLETE attempt before evaluation. An
+interruption therefore leaves no reusable active verdict. Only after the
+guard/result pair passes the frozen `AUDIT_RESULT_V1` lint may the attempt
+become ACTIVE and current. Resume uses the persisted attempt and
+`resumeFromPhase`; stale digests/revisions, dangling pointers, multiple ACTIVE
+attempts, incomplete attempts, or disappearing findings block instead of
+reusing an older result.
+
+Planning and delivery vocabularies are deliberately disjoint. A clean planning
+attempt emits `PLANNING_AUDIT_CLEAN`, with planning certified and delivery
+`NOT_EVALUATED`. It never emits `SHIP_IT` or another delivery verdict and does
+not mean implemented, tested, merge-ready, releasable, deployable, delivered,
+or shipped. Delivery completion retains `SHIP_IT`, `SHIP_WITH_NOTES`,
+`REWORK_REQUIRED`, and `DO_NOT_SHIP`.
+
+Audit owns attempt evidence, not certification. Finalize re-resolves the
+contract and checks the current attempt, then asks `bubbles.validate` to repeat
+the boundary checks. Validate alone may mirror top-level `status` and
+`certification.status` to exactly `specs_hardened` for a matching
+`PLANNING_AUDIT_CLEAN` result. Scope statuses, DoD checkboxes, completed scopes,
+delivery evidence/evaluation, and audit history remain unchanged. See
+[Control Plane Design](CONTROL_PLANE_DESIGN.md#registry-bound-transition-audit-contract)
+for the invariant model and [Framework Operations](../recipes/framework-ops.md#inspect-and-operate-transition-audits)
+for commands, provenance checks, and rollback.

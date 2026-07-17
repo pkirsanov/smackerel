@@ -90,7 +90,7 @@ assert_log_contains() {
   local needle="$2"
   local label="$3"
 
-  if grep -Fq "$needle" "$log_file"; then
+  if grep -Fq -- "$needle" "$log_file"; then
     pass "$label"
   else
     fail "$label"
@@ -105,13 +105,111 @@ assert_log_not_contains() {
   local needle="$2"
   local label="$3"
 
-  if grep -Fq "$needle" "$log_file"; then
+  if grep -Fq -- "$needle" "$log_file"; then
     fail "$label"
     echo "--- offending log excerpt: $log_file ---"
     grep -F "$needle" "$log_file" || true
     echo "--- end offending log excerpt ---"
   else
     pass "$label"
+  fi
+}
+
+assert_transition_result() {
+  local log_file="$1"
+  local expected_mode="$2"
+  local expected_profile="$3"
+  local expected_target="$4"
+  local expected_not_applicable="$5"
+  local expected_verdict="$6"
+  local expected_exit="$7"
+  local label="$8"
+
+  if awk \
+    -v expected_mode="$expected_mode" \
+    -v expected_profile="$expected_profile" \
+    -v expected_target="$expected_target" \
+    -v expected_na="$expected_not_applicable" \
+    -v expected_verdict="$expected_verdict" \
+    -v expected_exit="$expected_exit" '
+    BEGIN {
+      field_count = split("schemaVersion workflowMode auditProfile targetStatus contractDigest targetRevision applicableCheckClasses notApplicableChecks passedGateIds failedGateIds failedChecks blockingCode failureCount exitStatus verdict", fields, " ")
+    }
+    $0 == "BEGIN TRANSITION_GUARD_RESULT_V1" {
+      begin_count++
+      active = 1
+      field_index = 0
+      next
+    }
+    $0 == "END TRANSITION_GUARD_RESULT_V1" {
+      end_count++
+      active = 0
+      next
+    }
+    active {
+      field_index++
+      expected_prefix = fields[field_index] ": "
+      if (field_index > field_count || index($0, expected_prefix) != 1) {
+        invalid = 1
+        next
+      }
+      values[fields[field_index]] = substr($0, length(expected_prefix) + 1)
+    }
+    END {
+      if (begin_count != 1 || end_count != 1 || field_index != field_count) invalid = 1
+      if (values["schemaVersion"] != "transition-guard-result/v1") invalid = 1
+      if (values["workflowMode"] != expected_mode) invalid = 1
+      if (values["auditProfile"] != expected_profile) invalid = 1
+      if (values["targetStatus"] != expected_target) invalid = 1
+      if (values["notApplicableChecks"] != expected_na) invalid = 1
+      if (values["verdict"] != expected_verdict || values["exitStatus"] != expected_exit) invalid = 1
+      for (field_number = 7; field_number <= 11; field_number++) {
+        if (values[fields[field_number]] !~ /^\[[A-Za-z0-9,-]*\]$/) invalid = 1
+      }
+      if (values["failureCount"] !~ /^[0-9]+$/) invalid = 1
+      failure_count = values["failureCount"] + 0
+      if (expected_verdict == "PASS" && (failure_count != 0 || values["blockingCode"] != "none")) invalid = 1
+      if (expected_verdict == "FAIL" && (failure_count < 1 || values["blockingCode"] == "none")) invalid = 1
+      if (expected_verdict == "BLOCKED" && (failure_count < 1 || values["blockingCode"] !~ /^E009-/)) invalid = 1
+      if (expected_mode == "UNRESOLVED") {
+        if (values["contractDigest"] != "UNRESOLVED" || values["targetRevision"] != "UNRESOLVED") invalid = 1
+      } else {
+        if (values["contractDigest"] !~ /^sha256:[0-9a-f]+$/ || length(values["contractDigest"]) != 71) invalid = 1
+        if (values["targetRevision"] !~ /^sha256:[0-9a-f]+$/ || length(values["targetRevision"]) != 71) invalid = 1
+      }
+      exit invalid ? 1 : 0
+    }
+  ' "$log_file"; then
+    pass "$label"
+  else
+    fail "$label"
+    echo "--- invalid transition result: $log_file ---"
+    sed -n '/BEGIN TRANSITION_GUARD_RESULT_V1/,/END TRANSITION_GUARD_RESULT_V1/p' "$log_file"
+    echo "--- end invalid transition result ---"
+  fi
+}
+
+assert_transition_list_contains() {
+  local log_file="$1"
+  local field="$2"
+  local expected_item="$3"
+  local label="$4"
+
+  if awk -v field="$field" -v expected_item="$expected_item" '
+    index($0, field ": [") == 1 {
+      value = substr($0, length(field) + 4)
+      sub(/\]$/, "", value)
+      count = split(value, items, ",")
+      for (item_number = 1; item_number <= count; item_number++) {
+        if (items[item_number] == expected_item) found = 1
+      }
+    }
+    END { exit found ? 0 : 1 }
+  ' "$log_file"; then
+    pass "$label"
+  else
+    fail "$label"
+    grep -F -- "$field:" "$log_file" || true
   fi
 }
 
@@ -245,6 +343,300 @@ EOF
   "lastUpdatedAt": "2026-03-27T10:00:09Z"
 }
 EOF
+}
+
+emit_honest_planning_fixture() {
+  local feature_dir="$1"
+  local future_test="$feature_dir/tests/regression/planning-maturity-future-test.sh"
+
+  mkdir -p "$feature_dir"
+
+  cat <<'EOF' > "$feature_dir/spec.md"
+# Guard Planning-Maturity Fixture
+
+## Problem
+
+A planning workflow must preserve honest incomplete delivery state while
+evaluating its registry-required planning contract.
+
+## User Scenarios & Testing
+
+### SCN-009-S03-001 - Preserve honest planning maturity
+
+```gherkin
+Scenario: Planning maturity preserves honest incomplete delivery
+Given a registry-bound planning packet
+When the transition guard evaluates planning maturity
+Then incomplete delivery remains honest and non-terminal
+```
+
+## Requirements
+
+- **FR-009-S03-001:** Planning maturity preserves honest incomplete delivery.
+EOF
+
+  cat <<'EOF' > "$feature_dir/design.md"
+# Guard Planning-Maturity Fixture Design
+
+## Approach
+
+Resolve one immutable transition contract and keep structural, planning, and
+honesty checks active while delivery completion remains non-applicable.
+
+## Change Boundary
+
+Only the temporary planning packet is evaluated. No implementation artifact is
+created to satisfy a delivery check.
+
+## Consumer Impact Sweep
+
+No route, identifier, command, or external consumer changes in this fixture.
+
+## Shared Infrastructure Impact Sweep
+
+No shared infrastructure or persistent state changes in this fixture.
+EOF
+
+  cat <<'EOF' > "$feature_dir/uservalidation.md"
+# User Validation
+
+## Checklist
+
+- [x] Planning maturity and delivery completion are visibly distinct.
+EOF
+
+  cat <<'EOF' > "$feature_dir/scopes.md"
+# Scope 01: Honest Planning Maturity
+
+**Status:** Not Started
+
+## Goal
+
+Preserve honest incomplete delivery state at the planning ceiling.
+
+## Gherkin Scenarios
+
+### SCN-009-S03-001 - Preserve honest planning maturity
+
+```gherkin
+Scenario: Planning maturity preserves honest incomplete delivery
+Given a registry-bound planning packet
+When the transition guard evaluates planning maturity
+Then incomplete delivery remains honest and non-terminal
+```
+
+## Implementation Plan
+
+1. Activate the registry-derived planning profile in the canonical guard.
+2. Preserve every structural and planning integrity check.
+
+## Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Regression E2E | `e2e` | `__FUTURE_TEST__` | Regression for SCN-009-S03-001 through the production guard. | `bash __FUTURE_TEST__` | No |
+| Broader regression | `regression` | `__FUTURE_TEST__` | Preserve planning and delivery profile isolation. | `bash __FUTURE_TEST__` | No |
+
+### Definition of Done
+
+- [ ] Planning maturity preserves honest incomplete delivery for SCN-009-S03-001.
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior protect SCN-009-S03-001.
+- [ ] Broader E2E regression suite passes with profile isolation active.
+EOF
+  bubbles_sed_inplace "s|__FUTURE_TEST__|$future_test|g" "$feature_dir/scopes.md"
+
+  cat <<'EOF' > "$feature_dir/report.md"
+# Report
+
+### Summary
+
+This report belongs to an honestly unimplemented planning scope.
+
+### Completion Statement
+
+No delivery completion is claimed at the planning ceiling.
+
+### Test Evidence
+
+Execution-evidence code blocks: zero. The implementation scope remains Not Started.
+
+### Code Diff Evidence
+
+No delivery implementation delta is claimed by this planning-only fixture.
+
+### Scope Evidence
+
+Scope 01 remains Not Started with implementation DoD unchecked.
+
+### Validation Evidence
+
+Validation evaluates planning maturity only.
+
+### Audit Evidence
+
+No delivery certification is claimed.
+EOF
+
+  cat <<'EOF' > "$feature_dir/scenario-manifest.json"
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "scenarioId": "SCN-009-S03-001",
+      "title": "Planning maturity preserves honest incomplete delivery",
+      "status": "planned",
+      "scope": "Scope 01",
+      "requirements": ["FR-009-S03-001"],
+      "requiredTestType": "e2e",
+      "linkedTests": ["__FUTURE_TEST__"],
+      "evidenceRefs": []
+    }
+  ]
+}
+EOF
+  bubbles_sed_inplace "s|__FUTURE_TEST__|$future_test|g" "$feature_dir/scenario-manifest.json"
+
+  cat <<'EOF' > "$feature_dir/state.json"
+{
+  "version": 3,
+  "status": "specs_hardened",
+  "workflowMode": "product-to-planning",
+  "planningOnly": true,
+  "planMaturityOnly": true,
+  "planningOnlyJustification": "This fixture evaluates planning maturity without delivery claims.",
+  "execution": {
+    "currentScope": null,
+    "currentPhase": "plan",
+    "completedPhaseClaims": ["analyze", "ux", "design", "plan"]
+  },
+  "certification": {
+    "status": "specs_hardened",
+    "certifiedCompletedPhases": ["analyze", "ux", "design", "plan"],
+    "completedScopes": [],
+    "scopeProgress": [
+      {
+        "scopeId": "S01",
+        "scopeName": "Honest Planning Maturity",
+        "status": "not_started"
+      }
+    ],
+    "lockdownState": {
+      "mode": "off",
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protect-existing-scenarios", "source": "repo-default" },
+    "validation": { "mode": "required", "source": "workflow-forced" },
+    "workflowMode": "product-to-planning"
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "phase": "analyze",
+      "agent": "bubbles.analyst",
+      "outcome": "completed_diagnostic",
+      "startedAt": "2026-07-10T10:00:00Z",
+      "completedAt": "2026-07-10T10:01:13Z"
+    },
+    {
+      "phase": "ux",
+      "agent": "bubbles.ux",
+      "outcome": "completed_diagnostic",
+      "startedAt": "2026-07-10T10:02:01Z",
+      "completedAt": "2026-07-10T10:04:29Z"
+    },
+    {
+      "phase": "design",
+      "agent": "bubbles.design",
+      "outcome": "completed_diagnostic",
+      "startedAt": "2026-07-10T10:05:17Z",
+      "completedAt": "2026-07-10T10:08:52Z"
+    },
+    {
+      "phase": "plan",
+      "agent": "bubbles.plan",
+      "outcome": "completed_diagnostic",
+      "startedAt": "2026-07-10T10:09:31Z",
+      "completedAt": "2026-07-10T10:14:47Z"
+    }
+  ],
+  "lastUpdatedAt": "2026-07-10T10:15:03Z"
+}
+EOF
+}
+
+set_fixture_contract() {
+  local state_file="$1"
+  local workflow_mode="$2"
+  local status="$3"
+
+  python3 - "$state_file" "$workflow_mode" "$status" <<'PY'
+import json
+import sys
+
+path, workflow_mode, status = sys.argv[1:]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+data["workflowMode"] = workflow_mode
+data["status"] = status
+snapshot = data.get("policySnapshot")
+if isinstance(snapshot, dict):
+    snapshot["workflowMode"] = workflow_mode
+certification = data.get("certification")
+if isinstance(certification, dict):
+    certification["status"] = status
+
+if workflow_mode == "autonomous-goal":
+    data.pop("planningOnly", None)
+    data.pop("planMaturityOnly", None)
+    data.pop("planningOnlyJustification", None)
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
+mark_first_dod_checked() {
+  local scope_file="$1"
+  local temp_file
+  temp_file="$(mktemp)"
+  awk '
+    !changed && /^- \[ \] / {
+      sub(/^- \[ \] /, "- [x] ")
+      changed=1
+    }
+    { print }
+    END { if (!changed) exit 1 }
+  ' "$scope_file" > "$temp_file"
+  mv "$temp_file" "$scope_file"
+}
+
+mark_scope_done() {
+  local scope_file="$1"
+  bubbles_sed_inplace 's/^\*\*Status:\*\* Not Started/**Status:** Done/' "$scope_file"
+}
+
+break_gherkin_dod_fidelity() {
+  local scope_file="$1"
+  bubbles_sed_inplace \
+    's/^Scenario: Planning maturity preserves honest incomplete delivery$/Scenario: Rotating archived credentials deletes obsolete transport records/' \
+    "$scope_file"
+}
+
+remove_planning_only_linkage() {
+  local state_file="$1"
+  local temp_file
+  temp_file="$(mktemp)"
+  jq 'del(.planningOnly, .planningOnlyJustification)' "$state_file" > "$temp_file"
+  mv "$temp_file" "$state_file"
 }
 
 emit_shared_infra_fixture() {
@@ -705,6 +1097,77 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 }
 
+mutate_delivery_contract() {
+  local state_file="$1"
+
+  python3 - "$state_file" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+  data = json.load(handle)
+
+data["status"] = "in_progress"
+data["workflowMode"] = "autonomous-goal"
+snapshot = data.get("policySnapshot")
+if isinstance(snapshot, dict):
+  snapshot["workflowMode"] = "autonomous-goal"
+
+execution = data.get("execution")
+if not isinstance(execution, dict):
+  execution = {}
+  data["execution"] = execution
+execution["completedPhaseClaims"] = ["test", "validate", "audit", "docs"]
+
+certification = data.get("certification")
+if not isinstance(certification, dict):
+  certification = {}
+  data["certification"] = certification
+certification["status"] = "in_progress"
+certification["certifiedCompletedPhases"] = ["test", "validate", "audit", "docs"]
+
+data["executionHistory"] = [
+  {
+    "phase": "test",
+    "agent": "bubbles.test",
+    "phasesExecuted": ["test"],
+    "runStartedAt": "2026-03-27T10:00:00Z",
+    "runCompletedAt": "2026-03-27T10:00:47Z",
+    "completedAt": "2026-03-27T10:00:47Z",
+  },
+  {
+    "phase": "validate",
+    "agent": "bubbles.validate",
+    "phasesExecuted": ["validate"],
+    "runStartedAt": "2026-03-27T10:01:13Z",
+    "runCompletedAt": "2026-03-27T10:02:31Z",
+    "completedAt": "2026-03-27T10:02:31Z",
+  },
+  {
+    "phase": "audit",
+    "agent": "bubbles.audit",
+    "phasesExecuted": ["audit"],
+    "runStartedAt": "2026-03-27T10:03:02Z",
+    "runCompletedAt": "2026-03-27T10:06:08Z",
+    "completedAt": "2026-03-27T10:06:08Z",
+  },
+  {
+    "phase": "docs",
+    "agent": "bubbles.docs",
+    "phasesExecuted": ["docs"],
+    "runStartedAt": "2026-03-27T10:07:19Z",
+    "runCompletedAt": "2026-03-27T10:11:44Z",
+    "completedAt": "2026-03-27T10:11:44Z",
+  },
+]
+
+with open(path, "w", encoding="utf-8") as handle:
+  json.dump(data, handle, indent=2)
+  handle.write("\n")
+PY
+}
+
 emit_g040_fixture() {
   # G040 / Check 18 selftest fixture builder.
   #
@@ -727,17 +1190,10 @@ emit_g040_fixture() {
   local legacy_compatibility="${6:-no}"
 
   emit_base_fixture "$feature_dir"
+  mutate_delivery_contract "$feature_dir/state.json"
 
-  # Mutate status only. We deliberately keep workflowMode as docs-only (the
-  # base default) so that Check 17's full-delivery git-log probe is skipped
-  # entirely (it gates on workflowMode == "full-delivery"). Check 17 with
-  # full-delivery + a /tmp feature_dir would invoke `git log -- /tmp/...`
-  # which fails with exit 128 inside the bubbles repo and aborts the script
-  # under set -euo pipefail BEFORE Check 18 can run. Check 18 itself is
-  # workflowMode-agnostic — it only cares about state.status — so the
-  # docs-only/done mismatch (Check 3 ceiling fail) is harmless to our
-  # assertions here. The unrelated checks may emit failures, but the script
-  # continues and Check 18 runs to completion.
+  # Mutate status only. autonomous-goal is a supported delivery contract and avoids
+  # Check 17's full-delivery git-log probe over the temporary fixture.
   python3 - "$feature_dir/state.json" "$status" "$legacy_compatibility" <<'PY'
 import json
 import sys
@@ -958,6 +1414,13 @@ execution_history_negative_feature_dir="$tmp_root/specs/909-transition-guard-sel
 lockdown_round_negative_feature_dir="$tmp_root/specs/910-transition-guard-selftest-lockdown-round"
 planning_done_negative_feature_dir="$tmp_root/specs/911-transition-guard-selftest-product-planning-done"
 planning_specs_hardened_positive_feature_dir="$tmp_root/specs/912-transition-guard-selftest-product-planning-specs-hardened"
+s03_planning_feature_dir="$tmp_root/specs/913-bug009-s03-planning-pass"
+s03_hardening_feature_dir="$tmp_root/specs/914-bug009-s03-hardening-pass"
+s03_delivery_negative_dir="$tmp_root/specs/915-bug009-s03-delivery-negative"
+s03_checked_evidence_dir="$tmp_root/specs/916-bug009-s03-checked-evidence"
+s03_done_honesty_dir="$tmp_root/specs/917-bug009-s03-done-honesty"
+s03_g068_dir="$tmp_root/specs/918-bug009-s03-g068-negative"
+s03_delivery_checked_dir="$tmp_root/specs/919-bug009-s03-delivery-checked-evidence"
 g040_pos_deferred_dir="$tmp_root/specs/920-g040-positive-deferred-prose"
 g040_pos_skip_for_now_dir="$tmp_root/specs/921-g040-positive-skip-for-now"
 g040_neg_followup_fields_dir="$tmp_root/specs/922-g040-negative-schema-yaml-only"
@@ -982,18 +1445,37 @@ cat <<'EOF' > "$dogfood_done_dir/state.json"
 EOF
 
 emit_base_fixture "$positive_feature_dir"
+mutate_delivery_contract "$positive_feature_dir/state.json"
 cp -R "$positive_feature_dir" "$negative_feature_dir"
 emit_shared_infra_fixture "$shared_positive_feature_dir"
+mutate_delivery_contract "$shared_positive_feature_dir/state.json"
 emit_shared_infra_negative_fixture "$shared_negative_feature_dir"
+mutate_delivery_contract "$shared_negative_feature_dir/state.json"
 cp -R "$positive_feature_dir" "$workflow_mode_negative_feature_dir"
 mutate_workflow_mode_contradiction "$workflow_mode_negative_feature_dir/state.json"
 cp -R "$positive_feature_dir" "$planning_done_negative_feature_dir"
 mutate_planning_mode_status "$planning_done_negative_feature_dir/state.json" "done" "true"
 cp -R "$positive_feature_dir" "$planning_specs_hardened_positive_feature_dir"
 mutate_planning_mode_status "$planning_specs_hardened_positive_feature_dir/state.json" "specs_hardened" "true"
+emit_honest_planning_fixture "$s03_planning_feature_dir"
+cp -R "$s03_planning_feature_dir" "$s03_hardening_feature_dir"
+set_fixture_contract "$s03_hardening_feature_dir/state.json" "spec-scope-hardening" "specs_hardened"
+cp -R "$s03_planning_feature_dir" "$s03_delivery_negative_dir"
+set_fixture_contract "$s03_delivery_negative_dir/state.json" "autonomous-goal" "in_progress"
+cp -R "$s03_planning_feature_dir" "$s03_checked_evidence_dir"
+mark_first_dod_checked "$s03_checked_evidence_dir/scopes.md"
+cp -R "$s03_planning_feature_dir" "$s03_done_honesty_dir"
+mark_scope_done "$s03_done_honesty_dir/scopes.md"
+cp -R "$s03_planning_feature_dir" "$s03_g068_dir"
+break_gherkin_dod_fidelity "$s03_g068_dir/scopes.md"
+cp -R "$s03_delivery_negative_dir" "$s03_delivery_checked_dir"
+mark_first_dod_checked "$s03_delivery_checked_dir/scopes.md"
 emit_per_scope_fixture "$per_scope_positive_feature_dir" "Done" "scope-1-index-parity-proof"
+mutate_delivery_contract "$per_scope_positive_feature_dir/state.json"
 emit_per_scope_fixture "$index_parity_negative_feature_dir" "In Progress" "scope-1-index-parity-proof"
+mutate_delivery_contract "$index_parity_negative_feature_dir/state.json"
 emit_per_scope_fixture "$phantom_scope_negative_feature_dir" "Done" "scope-15-stochastic-sweep-remediation"
+mutate_delivery_contract "$phantom_scope_negative_feature_dir/state.json"
 cp -R "$positive_feature_dir" "$execution_history_negative_feature_dir"
 mutate_execution_history_implausible "$execution_history_negative_feature_dir/state.json"
 cp -R "$positive_feature_dir" "$lockdown_round_negative_feature_dir"
@@ -1042,6 +1524,7 @@ emit_g040_fixture "$g040_pos_strict_done_mixed_dir" "done" \
 clone_framework_surface "$g064_framework_root"
 mkdir -p "$g064_framework_root/specs"
 emit_base_fixture "$g064_feature_dir"
+mutate_delivery_contract "$g064_feature_dir/state.json"
 inject_unauthorized_workflow_runner "$g064_framework_root/bubbles/agent-capabilities.yaml"
 
 cat <<'EOF' > "$negative_feature_dir/rework-queue.json"
@@ -1112,9 +1595,9 @@ echo "Running positive transition-guard selftest..."
 positive_log="$tmp_root/positive-guard.log"
 positive_status="$(run_capture "$positive_log" bash "$GUARD_SCRIPT" "$positive_feature_dir")"
 if [[ "$positive_status" -eq 0 ]]; then
-  pass "Docs-only positive fixture passes the transition guard"
+  pass "Supported delivery positive fixture passes the transition guard"
 else
-  fail "Docs-only positive fixture should pass the transition guard"
+  fail "Supported delivery positive fixture should pass the transition guard"
   sed -n '1,220p' "$positive_log"
   echo "--- artifact-lint output for positive fixture ---"
   set +e
@@ -1124,6 +1607,13 @@ else
 fi
 assert_log_contains "$positive_log" "Framework ownership lint passed" "Positive fixture exercises guard Check 3G"
 assert_log_contains "$positive_log" "TRANSITION PERMITTED" "Positive fixture reaches a permitted transition verdict"
+
+# BUG-022 managed zero-result canary: the real passing guard must serialize
+# empty failure collections without weakening nounset or the result grammar.
+assert_log_not_contains "$positive_log" "unbound variable" "BUG-022 empty result collections do not abort under nounset"
+assert_log_contains "$positive_log" "notApplicableChecks: []" "BUG-022 empty not-applicable checks serialize exactly"
+assert_log_contains "$positive_log" "failedGateIds: []" "BUG-022 empty failed gates serialize exactly"
+assert_log_contains "$positive_log" "failedChecks: []" "BUG-022 empty failed checks serialize exactly"
 
 # --- G053 Check 13B: shell (.sh) runtime-path recognition ---
 # Regression guard for the G053<->G093 alignment fix. The G093 delivery-delta
@@ -1136,7 +1626,7 @@ echo "Running G053 Check 13B shell-runtime-path recognition selftest..."
 g053_sh_dir="$tmp_root/specs/940-g053-shell-runtime-path"
 cp -R "$positive_feature_dir" "$g053_sh_dir"
 g053_sh_state_tmp="$(mktemp)"
-sed 's/"workflowMode": "docs-only"/"workflowMode": "bugfix-fastlane"/g' "$g053_sh_dir/state.json" > "$g053_sh_state_tmp"
+sed 's/"workflowMode": "autonomous-goal"/"workflowMode": "bugfix-fastlane"/g' "$g053_sh_dir/state.json" > "$g053_sh_state_tmp"
 mv "$g053_sh_state_tmp" "$g053_sh_dir/state.json"
 # Overwrite report.md so the ONLY runtime-extension token is the shell path —
 # otherwise the base fixture's `.ts` test filenames would make the case pass
@@ -1172,7 +1662,7 @@ assert_log_contains "$g053_sh_log" \
 g053_artifact_dir="$tmp_root/specs/941-g053-artifact-only"
 cp -R "$positive_feature_dir" "$g053_artifact_dir"
 g053_artifact_state_tmp="$(mktemp)"
-sed 's/"workflowMode": "docs-only"/"workflowMode": "bugfix-fastlane"/g' "$g053_artifact_dir/state.json" > "$g053_artifact_state_tmp"
+sed 's/"workflowMode": "autonomous-goal"/"workflowMode": "bugfix-fastlane"/g' "$g053_artifact_dir/state.json" > "$g053_artifact_state_tmp"
 mv "$g053_artifact_state_tmp" "$g053_artifact_dir/state.json"
 cat <<'EOF' > "$g053_artifact_dir/report.md"
 # Report
@@ -1341,6 +1831,120 @@ assert_log_not_contains "$check8_cmd_log" \
   "references non-existent file" \
   "Check 8 does not false-BLOCK a command-wrapped .sh test whose file exists"
 
+# BUG-019 managed twins: compound MJS paths must remain whole while ordinary
+# suffixes and shell command contexts retain their existing behavior.
+echo "Running BUG-019 Check 8 compound-MJS compatibility selftest..."
+check8_mjs_dir="$tmp_root/specs/945-check8-compound-mjs"
+cp -R "$per_scope_positive_feature_dir" "$check8_mjs_dir"
+check8_spec_mjs="$check8_mjs_dir/tests/example.spec.mjs"
+check8_test_mjs="$check8_mjs_dir/tests/example.test.mjs"
+check8_spec_ts="$check8_mjs_dir/tests/example.spec.ts"
+check8_test_js="$check8_mjs_dir/tests/example.test.js"
+check8_mjs_shell="$check8_mjs_dir/tests/example.sh"
+mkdir -p "$check8_mjs_dir/tests"
+printf '%s\n' 'export const compoundSpec = true;' > "$check8_spec_mjs"
+printf '%s\n' 'export const compoundTest = true;' > "$check8_test_mjs"
+printf '%s\n' 'export const ordinarySpec = true;' > "$check8_spec_ts"
+printf '%s\n' 'export const ordinaryTest = true;' > "$check8_test_js"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "shell control"' > "$check8_mjs_shell"
+chmod +x "$check8_mjs_shell"
+cat <<'EOF' > "$check8_mjs_dir/scopes/01-index-parity-proof/scope.md"
+# Scope 01: BUG-019 Compound MJS Compatibility
+
+**Status:** Done
+
+### Goal
+
+Prove Check 8 preserves complete compound MJS paths and existing controls.
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Regression E2E | `e2e-api` | `__SPEC_MJS__` | Compound spec MJS path remains complete. | `__SPEC_MJS__` | Yes |
+| Regression E2E | `e2e-api` | `__TEST_MJS__` | Compound test MJS path remains complete. | `__TEST_MJS__` | Yes |
+| Regression E2E | `e2e-api` | `__SPEC_TS__` | Ordinary spec TypeScript control remains complete. | `__SPEC_TS__` | Yes |
+| Regression E2E | `e2e-api` | `__TEST_JS__` | Ordinary test JavaScript control remains complete. | `__TEST_JS__` | Yes |
+| Regression E2E | `e2e-api` | `bash -n __SHELL__ && shellcheck -x __SHELL__` | Shell wrapper keeps the first accepted path. | `bash __SHELL__` | Yes |
+
+### Definition of Done
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior -> Evidence: report.md#test-evidence
+- [x] Broader E2E regression suite passes -> Evidence: report.md#test-evidence
+- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: report.md#summary
+EOF
+bubbles_sed_inplace "s|__SPEC_MJS__|$check8_spec_mjs|g" "$check8_mjs_dir/scopes/01-index-parity-proof/scope.md"
+bubbles_sed_inplace "s|__TEST_MJS__|$check8_test_mjs|g" "$check8_mjs_dir/scopes/01-index-parity-proof/scope.md"
+bubbles_sed_inplace "s|__SPEC_TS__|$check8_spec_ts|g" "$check8_mjs_dir/scopes/01-index-parity-proof/scope.md"
+bubbles_sed_inplace "s|__TEST_JS__|$check8_test_js|g" "$check8_mjs_dir/scopes/01-index-parity-proof/scope.md"
+bubbles_sed_inplace "s|__SHELL__|$check8_mjs_shell|g" "$check8_mjs_dir/scopes/01-index-parity-proof/scope.md"
+check8_mjs_log="$tmp_root/check8-compound-mjs.log"
+check8_mjs_status="$(run_capture "$check8_mjs_log" bash "$GUARD_SCRIPT" "$check8_mjs_dir")"
+if [[ "$check8_mjs_status" -eq 0 ]]; then
+  pass "BUG-019 compound-MJS compatibility fixture passes the transition guard"
+else
+  fail "BUG-019 compound-MJS compatibility fixture should pass the transition guard"
+  sed -n '1,220p' "$check8_mjs_log"
+fi
+assert_log_contains "$check8_mjs_log" "Test file exists: $check8_spec_mjs" "BUG-019 Check 8 preserves the complete .spec.mjs path"
+assert_log_contains "$check8_mjs_log" "Test file exists: $check8_test_mjs" "BUG-019 Check 8 preserves the complete .test.mjs path"
+assert_log_contains "$check8_mjs_log" "Test file exists: $check8_spec_ts" "BUG-019 Check 8 preserves the ordinary .spec.ts control"
+assert_log_contains "$check8_mjs_log" "Test file exists: $check8_test_js" "BUG-019 Check 8 preserves the ordinary .test.js control"
+assert_log_contains "$check8_mjs_log" "Test file exists: $check8_mjs_shell" "BUG-019 Check 8 preserves the command-wrapped shell control"
+assert_log_not_contains "$check8_mjs_log" "references non-existent file: ${check8_spec_mjs%.mjs}" "BUG-019 Check 8 never checks the shorter .spec prefix"
+assert_log_not_contains "$check8_mjs_log" "references non-existent file: ${check8_test_mjs%.mjs}" "BUG-019 Check 8 never checks the shorter .test prefix"
+
+# The negative twin uses an existing complete path so substring extraction
+# would become observable, but every declared context is intentionally inert.
+echo "Running BUG-019 Check 8 adversarial-context selftest..."
+check8_mjs_adversarial_dir="$tmp_root/specs/946-check8-compound-mjs-adversarial"
+cp -R "$per_scope_positive_feature_dir" "$check8_mjs_adversarial_dir"
+check8_mjs_adversarial_real="$check8_mjs_adversarial_dir/tests/example.spec.mjs"
+mkdir -p "$check8_mjs_adversarial_dir/tests"
+printf '%s\n' 'export const adversarialControl = true;' > "$check8_mjs_adversarial_real"
+cat <<'EOF' > "$check8_mjs_adversarial_dir/scopes/01-index-parity-proof/scope.md"
+# Scope 01: BUG-019 Adversarial Contexts
+
+**Status:** Done
+
+### Goal
+
+Prove unsupported suffixes, prose, and unrecognized commands stay inert.
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| Adversarial Regression E2E | `e2e-api` | `__REAL_MJS__.backup` | Extension-prefix adversary is rejected. | `__REAL_MJS__.backup` | Yes |
+| Adversarial Regression E2E | `e2e-api` | `the prose token __REAL_MJS__ is illustrative` | Extension-shaped prose is inert. | `node --test __REAL_MJS__` | Yes |
+| Adversarial Regression E2E | `e2e-api` | `node --test __REAL_MJS__` | Unrecognized command wrapper is inert. | `node --test __REAL_MJS__` | Yes |
+| Adversarial Regression E2E | `e2e-api` | `bash -c __REAL_MJS__` | Shell command-string syntax is not interpreted. | `bash -c __REAL_MJS__` | Yes |
+
+### Definition of Done
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior -> Evidence: report.md#test-evidence
+- [x] Broader E2E regression suite passes -> Evidence: report.md#test-evidence
+- [x] Documentation route metadata is recorded consistently across artifacts -> Evidence: report.md#summary
+EOF
+bubbles_sed_inplace "s|__REAL_MJS__|$check8_mjs_adversarial_real|g" "$check8_mjs_adversarial_dir/scopes/01-index-parity-proof/scope.md"
+check8_mjs_adversarial_log="$tmp_root/check8-compound-mjs-adversarial.log"
+check8_mjs_adversarial_status="$(run_capture "$check8_mjs_adversarial_log" bash "$GUARD_SCRIPT" "$check8_mjs_adversarial_dir")"
+if [[ "$check8_mjs_adversarial_status" -eq 0 ]]; then
+  pass "BUG-019 adversarial-context fixture passes without accepting a test path"
+else
+  fail "BUG-019 adversarial-context fixture should pass without accepting a test path"
+  sed -n '1,220p' "$check8_mjs_adversarial_log"
+fi
+assert_log_contains "$check8_mjs_adversarial_log" \
+  "No concrete test file paths found in Test Plan" \
+  "BUG-019 invalid contexts reach the no-concrete-path branch"
+assert_log_not_contains "$check8_mjs_adversarial_log" \
+  "Test file exists:" \
+  "BUG-019 invalid contexts never reach the existing-file branch"
+assert_log_not_contains "$check8_mjs_adversarial_log" \
+  "references non-existent file" \
+  "BUG-019 invalid contexts never reach the missing-file branch"
+
 echo "Running positive shared-infrastructure selftest..."
 shared_positive_log="$tmp_root/shared-positive-guard.log"
 shared_positive_status="$(run_capture "$shared_positive_log" bash "$GUARD_SCRIPT" "$shared_positive_feature_dir")"
@@ -1424,6 +2028,11 @@ else
 fi
 assert_log_contains "$negative_log" "missing a concrete owning specialist" "Negative fixture triggers the concrete owner packet check"
 assert_log_contains "$negative_log" "Gate G063" "Negative fixture reports the new concrete-result gate"
+assert_log_not_contains "$negative_log" "unbound variable" "BUG-022 genuine failure does not abort under nounset"
+assert_log_contains "$negative_log" "BEGIN TRANSITION_GUARD_RESULT_V1" "BUG-022 genuine failure emits a result start"
+assert_log_contains "$negative_log" "END TRANSITION_GUARD_RESULT_V1" "BUG-022 genuine failure emits a result end"
+assert_log_contains "$negative_log" "exitStatus: 1" "BUG-022 genuine failure preserves a nonzero structured exit"
+assert_log_contains "$negative_log" "verdict: FAIL" "BUG-022 genuine failure preserves the failing verdict"
 
 echo "Running workflowMode contradiction selftest..."
 workflow_mode_log="$tmp_root/workflow-mode.log"
@@ -1434,7 +2043,8 @@ else
   fail "workflowMode contradiction fixture should fail the transition guard"
   sed -n '1,220p' "$workflow_mode_log"
 fi
-assert_log_contains "$workflow_mode_log" "workflowMode contradiction" "Negative fixture triggers Check 2B"
+assert_log_contains "$workflow_mode_log" "E009-STATE-MODE-MISMATCH" "Contradictory workflow metadata fails loud through the S02 contract"
+assert_log_contains "$workflow_mode_log" "verdict: BLOCKED" "Contradictory workflow metadata emits a blocked transition result"
 
 echo "Running product-to-planning ceiling selftest..."
 planning_negative_log="$tmp_root/product-planning-negative.log"
@@ -1445,8 +2055,8 @@ else
   fail "product-to-planning/done fixture should fail the transition guard"
   sed -n '1,220p' "$planning_negative_log"
 fi
-assert_log_contains "$planning_negative_log" "Workflow mode 'product-to-planning' ceiling is 'specs_hardened', NOT 'done'" "Planning-only mode blocks done status using registry ceiling"
-assert_log_contains "$planning_negative_log" "planMaturityOnly=true is incompatible with status 'done'" "planMaturityOnly blocks delivery-done status"
+assert_log_contains "$planning_negative_log" "E009-TARGET-MISMATCH" "Planning-only mode blocks done status through the registry-derived contract"
+assert_log_contains "$planning_negative_log" "blockingCode: E009-TARGET-MISMATCH" "Planning done contradiction is machine-readable"
 
 planning_lint_log="$tmp_root/product-planning-artifact-lint-negative.log"
 planning_lint_status="$(run_capture "$planning_lint_log" bash "$SCRIPT_DIR/artifact-lint.sh" "$planning_done_negative_feature_dir")"
@@ -1468,6 +2078,267 @@ else
 fi
 assert_log_contains "$planning_positive_log" "Workflow mode 'product-to-planning' permits current status 'specs_hardened'" "Planning-only mode permits specs_hardened status"
 assert_log_contains "$planning_positive_log" "planMaturityOnly=true is not claiming delivery-done status" "planMaturityOnly is allowed below done"
+
+echo "Running BUG-009 S03 guard profile activation matrix..."
+s03_not_applicable='[Check-4-completion,Check-5-all-done,Check-8-file-existence,Check-11-execution-evidence]'
+
+s03_planning_log="$tmp_root/s03-planning-pass.log"
+s03_planning_status="$(run_capture "$s03_planning_log" bash "$GUARD_SCRIPT" "$s03_planning_feature_dir")"
+if [[ "$s03_planning_status" -eq 0 ]]; then
+  pass "BUG-009 S03: honest product-to-planning packet passes via legacy one-argument invocation"
+else
+  fail "BUG-009 S03: honest product-to-planning packet should pass"
+  sed -n '1,260p' "$s03_planning_log"
+fi
+assert_transition_result "$s03_planning_log" \
+  product-to-planning planning-maturity-v1 specs_hardened "$s03_not_applicable" PASS 0 \
+  "BUG-009 S03: planning success emits one complete ordered transition result"
+assert_log_contains "$s03_planning_log" "NOT_APPLICABLE: Check-4-completion" "BUG-009 S03: unchecked implementation DoD is explicitly non-applicable"
+assert_log_contains "$s03_planning_log" "NOT_APPLICABLE: Check-5-all-done" "BUG-009 S03: incomplete implementation scopes are explicitly non-applicable"
+assert_log_contains "$s03_planning_log" "NOT_APPLICABLE: Check-8-file-existence" "BUG-009 S03: future test file presence is explicitly non-applicable"
+assert_log_contains "$s03_planning_log" "NOT_APPLICABLE: Check-11-execution-evidence" "BUG-009 S03: honest unimplemented reports need no delivery evidence block"
+assert_log_contains "$s03_planning_log" "--- Check 4A:" "BUG-009 S03: Check 4A remains active under planning"
+assert_log_contains "$s03_planning_log" "--- Check 4B:" "BUG-009 S03: Check 4B remains active under planning"
+assert_log_contains "$s03_planning_log" "--- Check 5B:" "BUG-009 S03: Check 5B remains active under planning"
+assert_log_contains "$s03_planning_log" "--- Check 5C:" "BUG-009 S03: Check 5C remains active under planning"
+assert_log_contains "$s03_planning_log" "--- Check 8A:" "BUG-009 S03: Check 8A remains active under planning"
+assert_log_contains "$s03_planning_log" "--- Check 8B:" "BUG-009 S03: Check 8B remains active under planning"
+assert_log_contains "$s03_planning_log" "--- Check 8C:" "BUG-009 S03: Check 8C remains active under planning"
+assert_log_contains "$s03_planning_log" "--- Check 8D:" "BUG-009 S03: Check 8D remains active under planning"
+assert_log_contains "$s03_planning_log" "--- Check 9:" "BUG-009 S03: checked-item evidence audit remains active under planning"
+assert_log_contains "$s03_planning_log" "No undeclared source code edits detected" "BUG-009 S03: G073 remains active and clean"
+assert_log_contains "$s03_planning_log" "Gherkin scenarios have faithful DoD items" "BUG-009 S03: G068 remains active and clean"
+
+s03_hardening_log="$tmp_root/s03-hardening-pass.log"
+s03_hardening_status="$(run_capture "$s03_hardening_log" bash "$GUARD_SCRIPT" "$s03_hardening_feature_dir")"
+if [[ "$s03_hardening_status" -eq 0 ]]; then
+  pass "BUG-009 S03: honest spec-scope-hardening packet passes"
+else
+  fail "BUG-009 S03: honest spec-scope-hardening packet should pass"
+  sed -n '1,260p' "$s03_hardening_log"
+fi
+assert_transition_result "$s03_hardening_log" \
+  spec-scope-hardening planning-maturity-v1 specs_hardened "$s03_not_applicable" PASS 0 \
+  "BUG-009 S03: both designed planning modes share the same explicit profile contract"
+
+s03_contract_json="$tmp_root/s03-planning-contract.json"
+bash "$SCRIPT_DIR/transition-contract-resolver.sh" "$s03_planning_feature_dir" > "$s03_contract_json"
+s03_contract_digest="$(jq -r '.contractDigest' "$s03_contract_json")"
+s03_assertions_log="$tmp_root/s03-matching-assertions.log"
+s03_assertions_status="$(run_capture "$s03_assertions_log" bash "$GUARD_SCRIPT" "$s03_planning_feature_dir" \
+  --target-status specs_hardened \
+  --expect-workflow-mode product-to-planning \
+  --expect-contract-digest "$s03_contract_digest")"
+if [[ "$s03_assertions_status" -eq 0 ]]; then
+  pass "BUG-009 S03: matching target, mode, and digest assertions preserve the derived planning contract"
+else
+  fail "BUG-009 S03: matching assertion-only flags should pass"
+fi
+assert_log_contains "$s03_assertions_log" "contractDigest: $s03_contract_digest" "BUG-009 S03: assertion flags cannot replace the registry-derived digest"
+assert_transition_result "$s03_assertions_log" \
+  product-to-planning planning-maturity-v1 specs_hardened "$s03_not_applicable" PASS 0 \
+  "BUG-009 S03: assertion-only invocation emits the same result contract"
+
+s03_target_mismatch_log="$tmp_root/s03-target-mismatch.log"
+s03_target_mismatch_status="$(run_capture "$s03_target_mismatch_log" bash "$GUARD_SCRIPT" "$s03_planning_feature_dir" --target-status "done")"
+if [[ "$s03_target_mismatch_status" -eq 2 ]]; then
+  pass "BUG-009 S03: mismatched target assertion blocks with guard exit 2"
+else
+  fail "BUG-009 S03: mismatched target assertion should exit 2 (observed $s03_target_mismatch_status)"
+fi
+assert_log_contains "$s03_target_mismatch_log" "E009-TARGET-MISMATCH" "BUG-009 S03: target assertion mismatch preserves S02 E009 semantics"
+assert_transition_result "$s03_target_mismatch_log" \
+  UNRESOLVED UNRESOLVED UNRESOLVED '[]' BLOCKED 2 \
+  "BUG-009 S03: target mismatch emits one complete blocked result"
+
+s03_digest_mismatch_log="$tmp_root/s03-digest-mismatch.log"
+s03_digest_mismatch_status="$(run_capture "$s03_digest_mismatch_log" bash "$GUARD_SCRIPT" "$s03_planning_feature_dir" \
+  --expect-contract-digest "sha256:0000000000000000000000000000000000000000000000000000000000000000")"
+if [[ "$s03_digest_mismatch_status" -eq 2 ]]; then
+  pass "BUG-009 S03: stale digest assertion blocks with guard exit 2"
+else
+  fail "BUG-009 S03: stale digest assertion should exit 2 (observed $s03_digest_mismatch_status)"
+fi
+assert_log_contains "$s03_digest_mismatch_log" "E009-TARGET-MISMATCH" "BUG-009 S03: stale digest mismatch preserves S02 E009 semantics"
+assert_transition_result "$s03_digest_mismatch_log" \
+  UNRESOLVED UNRESOLVED UNRESOLVED '[]' BLOCKED 2 \
+  "BUG-009 S03: digest mismatch cannot omit or malform the blocked result"
+
+s03_profile_flag_log="$tmp_root/s03-profile-flag.log"
+s03_profile_flag_status="$(run_capture "$s03_profile_flag_log" bash "$GUARD_SCRIPT" "$s03_planning_feature_dir" --profile planning-maturity-v1)"
+if [[ "$s03_profile_flag_status" -eq 2 ]]; then
+  pass "BUG-009 S03: caller-selected profile syntax is rejected"
+else
+  fail "BUG-009 S03: caller-selected profile syntax should exit 2 (observed $s03_profile_flag_status)"
+fi
+assert_log_contains "$s03_profile_flag_log" "E009-USAGE" "BUG-009 S03: policy-selecting flags fail loud"
+assert_transition_result "$s03_profile_flag_log" \
+  UNRESOLVED UNRESOLVED UNRESOLVED '[]' BLOCKED 2 \
+  "BUG-009 S03: rejected profile syntax still emits the mandatory blocked result"
+
+s03_resolver_once_root="$tmp_root/s03-resolver-once-framework"
+clone_framework_surface "$s03_resolver_once_root"
+s03_resolver_once_feature="$s03_resolver_once_root/specs/001-resolver-once"
+emit_honest_planning_fixture "$s03_resolver_once_feature"
+mv "$s03_resolver_once_root/bubbles/scripts/transition-contract-resolver.sh" \
+  "$s03_resolver_once_root/bubbles/scripts/transition-contract-resolver.real.sh"
+cat <<'EOF' > "$s03_resolver_once_root/bubbles/scripts/transition-contract-resolver.sh"
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+: "${BUBBLES_TRANSITION_RESOLVER_COUNT_FILE:?count file required}"
+printf '%s\n' call >> "$BUBBLES_TRANSITION_RESOLVER_COUNT_FILE"
+exec bash "$SCRIPT_DIR/transition-contract-resolver.real.sh" "$@"
+EOF
+s03_resolver_count_file="$tmp_root/s03-resolver-count.txt"
+s03_resolver_once_log="$tmp_root/s03-resolver-once.log"
+s03_resolver_once_status="$(run_capture "$s03_resolver_once_log" env \
+  BUBBLES_TRANSITION_RESOLVER_COUNT_FILE="$s03_resolver_count_file" \
+  bash "$s03_resolver_once_root/bubbles/scripts/state-transition-guard.sh" "$s03_resolver_once_feature")"
+if [[ "$s03_resolver_once_status" -eq 0 \
+  && "$(wc -l < "$s03_resolver_count_file" | tr -d '[:space:]')" -eq 1 ]]; then
+  pass "BUG-009 S03: guard resolves the transition contract exactly once per invocation"
+else
+  fail "BUG-009 S03: guard must resolve exactly once (exit=$s03_resolver_once_status count=$(wc -l < "$s03_resolver_count_file" | tr -d '[:space:]'))"
+fi
+
+s03_delivery_log="$tmp_root/s03-delivery-negative.log"
+s03_delivery_status="$(run_capture "$s03_delivery_log" bash "$GUARD_SCRIPT" "$s03_delivery_negative_dir")"
+if [[ "$s03_delivery_status" -eq 1 ]]; then
+  pass "BUG-009 S03: the honest incomplete packet fails under done-ceiling delivery semantics"
+else
+  fail "BUG-009 S03: done-ceiling negative control should exit 1 (observed $s03_delivery_status)"
+  sed -n '1,260p' "$s03_delivery_log"
+fi
+assert_log_contains "$s03_delivery_log" "UNCHECKED DoD items" "BUG-009 S03: delivery Check 4 completion remains blocking"
+assert_log_contains "$s03_delivery_log" "still marked 'Not Started'" "BUG-009 S03: delivery Check 5 all-Done remains blocking"
+assert_log_contains "$s03_delivery_log" "Test Plan references non-existent file" "BUG-009 S03: delivery Check 8 file existence remains blocking"
+assert_log_contains "$s03_delivery_log" "has ZERO evidence code blocks" "BUG-009 S03: delivery Check 11 execution evidence remains blocking"
+assert_log_not_contains "$s03_delivery_log" "NOT_APPLICABLE: Check-" "BUG-009 S03: delivery mode receives no planning exemption"
+assert_transition_result "$s03_delivery_log" \
+  autonomous-goal delivery-completion-v1 "done" '[]' FAIL 1 \
+  "BUG-009 S03: done-mode negative control emits one complete delivery failure result"
+
+s03_delivery_checked_log="$tmp_root/s03-delivery-checked.log"
+run_capture "$s03_delivery_checked_log" bash "$GUARD_SCRIPT" "$s03_delivery_checked_dir" >/dev/null
+assert_log_contains "$s03_delivery_checked_log" "DoD item [x] has NO evidence block" "BUG-009 S03: delivery Check 9 checked-item evidence remains blocking"
+
+s03_checked_log="$tmp_root/s03-checked-evidence.log"
+s03_checked_status="$(run_capture "$s03_checked_log" bash "$GUARD_SCRIPT" "$s03_checked_evidence_dir")"
+if [[ "$s03_checked_status" -eq 1 ]]; then
+  pass "BUG-009 S03: checked planning DoD without evidence fails"
+else
+  fail "BUG-009 S03: checked planning DoD without evidence should exit 1"
+fi
+assert_log_contains "$s03_checked_log" "DoD item [x] has NO evidence block" "BUG-009 S03: Check 9 honesty remains universal"
+assert_transition_result "$s03_checked_log" \
+  product-to-planning planning-maturity-v1 specs_hardened "$s03_not_applicable" FAIL 1 \
+  "BUG-009 S03: planning honesty failure retains explicit non-applicable delivery checks"
+
+s03_done_log="$tmp_root/s03-done-honesty.log"
+s03_done_status="$(run_capture "$s03_done_log" bash "$GUARD_SCRIPT" "$s03_done_honesty_dir")"
+if [[ "$s03_done_status" -eq 1 ]]; then
+  pass "BUG-009 S03: falsely Done planning scope fails"
+else
+  fail "BUG-009 S03: falsely Done planning scope should exit 1"
+fi
+assert_log_contains "$s03_done_log" "Planning scope claims Done while unchecked DoD remain" "BUG-009 S03: planning status honesty remains blocking"
+
+s03_g068_log="$tmp_root/s03-g068.log"
+s03_g068_status="$(run_capture "$s03_g068_log" bash "$GUARD_SCRIPT" "$s03_g068_dir")"
+if [[ "$s03_g068_status" -eq 1 ]]; then
+  pass "BUG-009 S03: broken Gherkin-to-DoD fidelity fails planning guard"
+else
+  fail "BUG-009 S03: G068 adversary should exit 1"
+fi
+assert_log_contains "$s03_g068_log" "DoD-Gherkin content fidelity gap" "BUG-009 S03: G068 failure is visible and not hidden by delivery non-applicability"
+assert_log_contains "$s03_g068_log" "failedGateIds: [G068]" "BUG-009 S03: G068 is machine-readable in the result ledger"
+
+s03_planning_revert_log="$tmp_root/s03-planning-revert.log"
+run_capture "$s03_planning_revert_log" bash "$GUARD_SCRIPT" "$s03_g068_dir" --revert-on-fail >/dev/null
+if [[ "$(jq -r '.status' "$s03_g068_dir/state.json")" == "specs_hardened" \
+  && "$(jq -r '.certification.status' "$s03_g068_dir/state.json")" == "specs_hardened" ]]; then
+  pass "BUG-009 S03: --revert-on-fail does not rewrite planning state"
+else
+  fail "BUG-009 S03: planning --revert-on-fail must leave specs_hardened state unchanged"
+fi
+assert_log_contains "$s03_planning_revert_log" "--revert-on-fail is delivery-only" "BUG-009 S03: planning reversion refusal is explicit"
+
+s03_delivery_revert_dir="$tmp_root/specs/945-bug009-s03-delivery-revert"
+cp -R "$s03_delivery_negative_dir" "$s03_delivery_revert_dir"
+set_fixture_contract "$s03_delivery_revert_dir/state.json" autonomous-goal "done"
+s03_delivery_revert_log="$tmp_root/s03-delivery-revert.log"
+run_capture "$s03_delivery_revert_log" bash "$GUARD_SCRIPT" "$s03_delivery_revert_dir" --revert-on-fail >/dev/null
+if [[ "$(jq -r '.status' "$s03_delivery_revert_dir/state.json")" == "in_progress" \
+  && "$(jq -r '.certification.status' "$s03_delivery_revert_dir/state.json")" == "in_progress" \
+  && "$(jq -c '.certification.certifiedCompletedPhases' "$s03_delivery_revert_dir/state.json")" == "[]" ]]; then
+  pass "BUG-009 S03: delivery --revert-on-fail retains its state rollback behavior"
+else
+  fail "BUG-009 S03: delivery --revert-on-fail did not restore in_progress and clear completion claims"
+fi
+
+s03_g073_root="$tmp_root/s03-g073-repo"
+s03_g073_feature="$s03_g073_root/specs/001-g073-source-lockout"
+emit_honest_planning_fixture "$s03_g073_feature"
+git -C "$s03_g073_root" init -q
+git -C "$s03_g073_root" add -f specs
+git -C "$s03_g073_root" -c user.name='Bubbles Selftest' -c user.email='bubbles-selftest@example.invalid' \
+  commit -q -m 'test: seed planning fixture'
+mkdir -p "$s03_g073_root/runtime"
+printf '%s\n' 'print("undeclared source edit")' > "$s03_g073_root/runtime/undeclared.py"
+git -C "$s03_g073_root" add -f runtime/undeclared.py
+s03_g073_log="$tmp_root/s03-g073.log"
+s03_g073_status="$(run_capture "$s03_g073_log" bash "$GUARD_SCRIPT" "$s03_g073_feature")"
+if [[ "$s03_g073_status" -eq 1 ]]; then
+  pass "BUG-009 S03: G073 source-edit adversary blocks planning guard"
+else
+  fail "BUG-009 S03: G073 source-edit adversary should exit 1"
+fi
+assert_log_contains "$s03_g073_log" "forbids source code edits, but staged file modified: runtime/undeclared.py" "BUG-009 S03: G073 reports the concrete source edit"
+assert_log_contains "$s03_g073_log" "blockingCode: SOURCE_EDIT_LOCKOUT" "BUG-009 S03: G073 maps to the source-lockout blocking code"
+
+s03_planning_gates_root="$tmp_root/s03-planning-gates-framework"
+clone_framework_surface "$s03_planning_gates_root"
+s03_g087_feature="$s03_planning_gates_root/specs/001-g087-linkage-negative"
+s03_g091_feature="$s03_planning_gates_root/specs/002-g091-chain-negative"
+emit_honest_planning_fixture "$s03_g087_feature"
+emit_honest_planning_fixture "$s03_g091_feature"
+remove_planning_only_linkage "$s03_g087_feature/state.json"
+git -C "$s03_planning_gates_root" init -q
+git -C "$s03_planning_gates_root" add -f bubbles agents specs
+git -C "$s03_planning_gates_root" -c user.name='Bubbles Selftest' -c user.email='bubbles-selftest@example.invalid' \
+  commit -q -m 'test: seed planning gate fixtures'
+
+s03_g087_log="$tmp_root/s03-g087.log"
+s03_g087_status="$(run_capture "$s03_g087_log" env \
+  BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+  BUBBLES_REPO_ROOT="$s03_planning_gates_root" \
+  bash "$s03_planning_gates_root/bubbles/scripts/state-transition-guard.sh" "$s03_g087_feature")"
+if [[ "$s03_g087_status" -eq 1 ]]; then
+  pass "BUG-009 S03: G087 linkage adversary blocks the real planning guard"
+else
+  fail "BUG-009 S03: G087 linkage adversary should exit 1 (observed $s03_g087_status)"
+fi
+assert_log_contains "$s03_g087_log" "Planning packet implementation linkage failed — Gate G087" "BUG-009 S03: G087 remains active under planning profile"
+assert_transition_list_contains "$s03_g087_log" failedGateIds G087 "BUG-009 S03: G087 failure is machine-readable"
+
+printf '%s\n' 'Fallback route: invoke bubbles.design -> bubbles.plan when planning artifacts are missing.' \
+  >> "$s03_planning_gates_root/agents/bubbles.workflow.agent.md"
+git -C "$s03_planning_gates_root" add -f agents/bubbles.workflow.agent.md
+git -C "$s03_planning_gates_root" -c user.name='Bubbles Selftest' -c user.email='bubbles-selftest@example.invalid' \
+  commit -q -m 'test: inject G091 planning-chain adversary'
+s03_g091_log="$tmp_root/s03-g091.log"
+s03_g091_status="$(run_capture "$s03_g091_log" env \
+  BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST=0 \
+  BUBBLES_REPO_ROOT="$s03_planning_gates_root" \
+  bash "$s03_planning_gates_root/bubbles/scripts/state-transition-guard.sh" "$s03_g091_feature")"
+if [[ "$s03_g091_status" -eq 1 ]]; then
+  pass "BUG-009 S03: G091 chain adversary blocks the real planning guard"
+else
+  fail "BUG-009 S03: G091 chain adversary should exit 1 (observed $s03_g091_status)"
+fi
+assert_log_contains "$s03_g091_log" "Planning workflow chain guard failed — Gate G091" "BUG-009 S03: G091 remains active under planning profile"
+assert_transition_list_contains "$s03_g091_log" failedGateIds G091 "BUG-009 S03: G091 failure is machine-readable"
 
 echo "Running positive per-scope parity selftest..."
 per_scope_positive_log="$tmp_root/per-scope-positive.log"
@@ -1546,13 +2417,13 @@ assert_log_contains "$g064_log" "G064 cannot be certified" "Negative fixture sur
 #   1. Real deferred-work prose under status=done still BLOCKS.
 #   2. Schema-canonical followUp* field names (per completion-governance.md)
 #      do NOT trigger Check 18 by themselves.
-#   3. status=done_with_concerns short-circuits Check 18 with an INFO line.
+#   3. stale done_with_concerns metadata fails before downstream checks.
 #   4. <!-- bubbles:g040-skip-begin/end --> sentinel markers exclude only the
 #      bracketed prose; deferral prose outside the markers still BLOCKS.
 #
-# Each fixture's overall guard exit may be non-zero for OTHER reasons (the
-# fixture is shaped from a docs-only base). We only assert on Check 18 log
-# content via assert_log_contains / assert_log_not_contains.
+# Each valid-target fixture reaches Check 18 through a supported delivery
+# contract. Contradictory legacy terminal metadata is asserted at the resolver
+# boundary instead of being treated as an evaluable transition.
 
 echo "Running G040 Check 18 — positive: deferred-work prose BLOCKs..."
 g040_pos_deferred_log="$tmp_root/g040-pos-deferred.log"
@@ -1569,11 +2440,11 @@ g040_neg_followup_log="$tmp_root/g040-neg-followup.log"
 run_capture "$g040_neg_followup_log" bash "$GUARD_SCRIPT" "$g040_neg_followup_fields_dir" >/dev/null
 assert_log_not_contains "$g040_neg_followup_log" "deferral language hit" "G040 Check 18 ignores schema followUpOwner/followUpAction/followUpTarget/followUps tokens"
 
-echo "Running G040 Check 18 — negative: status=done_with_concerns short-circuits..."
+echo "Running transition metadata negative: done_with_concerns fails loud..."
 g040_neg_dwc_log="$tmp_root/g040-neg-dwc.log"
 run_capture "$g040_neg_dwc_log" bash "$GUARD_SCRIPT" "$g040_neg_done_with_concerns_dir" >/dev/null
-assert_log_contains "$g040_neg_dwc_log" "Check 18 skipped" "G040 Check 18 emits INFO skip line under done_with_concerns"
-assert_log_not_contains "$g040_neg_dwc_log" "deferral language hit" "G040 Check 18 does NOT BLOCK under done_with_concerns even when 'deferred' language appears"
+assert_log_contains "$g040_neg_dwc_log" "E009-TARGET-MISMATCH" "done_with_concerns is rejected as a contradictory terminal target"
+assert_log_contains "$g040_neg_dwc_log" "verdict: BLOCKED" "done_with_concerns metadata emits a blocked transition result"
 
 echo "Running G040 Check 18 — negative: skip-marker brackets exclude prose..."
 g040_neg_markers_log="$tmp_root/g040-neg-markers.log"
@@ -1585,11 +2456,11 @@ g040_pos_outside_log="$tmp_root/g040-pos-outside.log"
 run_capture "$g040_pos_outside_log" bash "$GUARD_SCRIPT" "$g040_pos_skip_marker_outside_dir" >/dev/null
 assert_log_contains "$g040_pos_outside_log" "deferral language hit" "G040 Check 18 BLOCKs on deferral prose OUTSIDE the marker pair"
 
-echo "Running G040 Check 18 — negative: spec-063-shaped excerpt under done_with_concerns..."
+echo "Running transition metadata negative: spec-063-shaped done_with_concerns fails loud..."
 g040_neg_063_log="$tmp_root/g040-neg-063.log"
 run_capture "$g040_neg_063_log" bash "$GUARD_SCRIPT" "$g040_neg_spec_063_excerpt_dir" >/dev/null
-assert_log_contains "$g040_neg_063_log" "Check 18 skipped" "G040 Check 18 emits INFO skip on spec-063-shaped done_with_concerns excerpt"
-assert_log_not_contains "$g040_neg_063_log" "deferral language hit" "G040 Check 18 does NOT BLOCK on spec-063-shaped excerpt"
+assert_log_contains "$g040_neg_063_log" "E009-TARGET-MISMATCH" "spec-063-shaped legacy terminal metadata is rejected before audit checks"
+assert_log_contains "$g040_neg_063_log" "blockingCode: E009-TARGET-MISMATCH" "legacy terminal mismatch remains machine-readable"
 
 echo "Running G040 Check 18 — positive: status=done with mixed schema tokens AND real deferral..."
 g040_pos_mixed_log="$tmp_root/g040-pos-mixed.log"

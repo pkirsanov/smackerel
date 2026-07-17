@@ -1477,6 +1477,8 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
   in_pre_window=0
   code_block_prewindow=0
   evidence_prewindow_skipped=0
+  duplicate_evidence=0
+  cw_evidence_fingerprints=""
   cw_marker_count=$(grep -cF -- '<!-- bubbles:certifying-window-begin -->' "$current_report_file" || true)
   if [[ "$cw_marker_count" -gt 1 ]]; then
     fail "Multiple <!-- bubbles:certifying-window-begin --> markers ($cw_marker_count) in $(relative_artifact_path "$current_report_file") — at most one is allowed (it marks the single current certifying-window start)"
@@ -1579,6 +1581,26 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
           illegitimate_evidence=$((illegitimate_evidence + 1))
           fail "Evidence block lacks terminal output signals ($terminal_signals/2 required): $(echo "$code_block_header" | head -c 60)"
         fi
+
+        # BFW-04 / IMP-024 — terminal same-session re-verification. Within the
+        # current certifying window (opt-in: ONLY when exactly one window marker
+        # is present, so grandfathered marker-less reports are untouched), an
+        # EXACT-duplicate evidence block is a redundant re-verification of an
+        # already-verified identical result. It MUST be a citation to the
+        # existing block, not a re-pasted fresh block (the Feature-010 loop where
+        # one identical matrix was re-documented across six sections). Exact-
+        # content only, so different-dimension re-runs (chaos/security/gaps —
+        # different output) are NEVER touched and the baseline_already_green
+        # no-skip rule is preserved.
+        if [[ "$cw_marker_count" -eq 1 ]]; then
+          cw_fp="$(printf '%s' "$code_block_content" | shasum -a 256 | awk '{print $1}')"
+          if [[ -n "$cw_evidence_fingerprints" ]] && printf '%s\n' "$cw_evidence_fingerprints" | grep -qxF -- "$cw_fp"; then
+            duplicate_evidence=$((duplicate_evidence + 1))
+            fail "Redundant identical evidence block in the current certifying window of $(relative_artifact_path "$current_report_file") — an already-verified identical result MUST be cited (reference the existing evidence section), not re-pasted as a fresh block (compact with 'spec-review compact'). Header: $(echo "$code_block_header" | head -c 60)"
+          else
+            cw_evidence_fingerprints="${cw_evidence_fingerprints}${cw_evidence_fingerprints:+$'\n'}$cw_fp"
+          fi
+        fi
       fi
     elif [[ "$in_code_block" -eq 1 ]]; then
       code_block_lines=$((code_block_lines + 1))
@@ -1597,7 +1619,7 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
     echo "ℹ️  Skipped $evidence_prewindow_skipped evidence blocks before <!-- bubbles:certifying-window-begin --> (prior-window history) in $(relative_artifact_path "$current_report_file")"
   fi
 
-  if [[ "$illegitimate_evidence" -eq 0 ]] && [[ "$evidence_sections_checked" -gt 0 ]]; then
+  if [[ "$illegitimate_evidence" -eq 0 ]] && [[ "$duplicate_evidence" -eq 0 ]] && [[ "$evidence_sections_checked" -gt 0 ]]; then
     pass "All $evidence_sections_checked evidence blocks in $(relative_artifact_path "$current_report_file") contain legitimate terminal output"
   elif [[ "$evidence_sections_checked" -eq 0 ]]; then
     fail "$(relative_artifact_path "$current_report_file") has no evidence code blocks (status is 'done' but no evidence exists)"

@@ -149,7 +149,13 @@ Evidence format per block:
     "currentPhase": null,
     "currentScope": null,
     "completedPhaseClaims": [],
-    "pendingTransitionRequests": []
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
   },
   "certification": {
     "status": "not_started",
@@ -166,3 +172,8 @@ Evidence format per block:
   "reworkQueue": []
 }
 ```
+
+`execution.audit` is an additive evidence container, never a policy source or
+certification authority. Leave `runId` and `currentAttemptId` null and
+`attempts` empty when creating state; templates MUST NOT pre-populate a clean
+verdict or any other positive audit result.

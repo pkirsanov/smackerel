@@ -48,6 +48,20 @@
               }
             },
             "statusCeiling": { "type": "string" },
+            "transitionAudit": {
+              "type": "object",
+              "required": ["profile", "target"],
+              "additionalProperties": false,
+              "properties": {
+                "profile": {
+                  "enum": [
+                    "planning-maturity-v1",
+                    "delivery-completion-v1"
+                  ]
+                },
+                "target": { "const": "statusCeiling" }
+              }
+            },
             "terminalAliases": {
               "type": "array",
               "items": { "type": "string" }

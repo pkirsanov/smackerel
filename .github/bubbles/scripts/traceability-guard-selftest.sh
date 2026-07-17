@@ -33,6 +33,7 @@ fail() { echo "  FAIL: $1"; failures=$((failures + 1)); }
 
 build_clean_feature() {
   local feature_dir="$1"
+  local test_plan_heading="${2:-### Test Plan}"
   mkdir -p "$feature_dir/tests"
 
   cat > "$feature_dir/tests/widget-render.e2e.spec.ts" <<'EOF'
@@ -47,7 +48,7 @@ EOF
 # Design — Widget Render
 EOF
 
-  cat > "$feature_dir/scopes.md" <<'EOF'
+  cat > "$feature_dir/scopes.md" <<EOF
 # Scope 01: Widget Render
 
 **Status:** In Progress
@@ -59,7 +60,7 @@ EOF
     When the widget mounts
     Then the rendered output displays "Hello"
 
-### Test Plan
+$test_plan_heading
 
 | Test Type | Category | File/Location | Description | Command | Live System |
 | --------- | -------- | ------------- | ----------- | ------- | ----------- |
@@ -103,6 +104,261 @@ EOF
   "status": "in_progress",
   "scopeLayout": "single-file"
 }
+EOF
+}
+
+CASE_OUTPUT=""
+CASE_STATUS=0
+CASE_INDEX=0
+
+run_trace_case() {
+  local feature_dir="$1"
+  local case_label="$2"
+  local case_log
+
+  CASE_INDEX=$((CASE_INDEX + 1))
+  case_log="$TMPDIR/bug018-case-${CASE_INDEX}.log"
+  CASE_STATUS=0
+  if bash "$GUARD" "$feature_dir" >"$case_log" 2>&1; then
+    CASE_STATUS=0
+  else
+    CASE_STATUS=$?
+  fi
+  CASE_OUTPUT="$(cat "$case_log")"
+  echo "[selftest traceability-guard] $case_label (exit $CASE_STATUS)"
+}
+
+run_trace_case_system_bash() {
+  local feature_dir="$1"
+  local case_label="$2"
+  local case_log
+
+  CASE_INDEX=$((CASE_INDEX + 1))
+  case_log="$TMPDIR/bug018-case-${CASE_INDEX}.log"
+  CASE_STATUS=0
+  if env -i HOME="$HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+    /bin/bash "$GUARD" "$feature_dir" >"$case_log" 2>&1; then
+    CASE_STATUS=0
+  else
+    CASE_STATUS=$?
+  fi
+  CASE_OUTPUT="$(cat "$case_log")"
+  echo "[selftest traceability-guard] $case_label (system Bash $(/bin/bash -c 'printf "%s" "$BASH_VERSION"'), exit $CASE_STATUS)"
+}
+
+run_trace_case_awk_failure() {
+  local feature_dir="$1"
+  local case_label="$2"
+  local case_log
+  local shim_dir="$TMPDIR/bug018-awk-failure-bin"
+  local real_awk
+
+  real_awk="$(command -v awk)"
+  mkdir -p "$shim_dir"
+  cat > "$shim_dir/awk" <<'SHIM'
+#!/usr/bin/env bash
+set -u
+
+: "${BUG018_REAL_AWK:?missing real awk path}"
+case "${1:-}" in
+  *without_html_comments*) exit 42 ;;
+esac
+exec "$BUG018_REAL_AWK" "$@"
+SHIM
+  chmod +x "$shim_dir/awk"
+
+  CASE_INDEX=$((CASE_INDEX + 1))
+  case_log="$TMPDIR/bug018-case-${CASE_INDEX}.log"
+  CASE_STATUS=0
+  if PATH="$shim_dir:$PATH" BUG018_REAL_AWK="$real_awk" \
+    bash "$GUARD" "$feature_dir" >"$case_log" 2>&1; then
+    CASE_STATUS=0
+  else
+    CASE_STATUS=$?
+  fi
+  CASE_OUTPUT="$(cat "$case_log")"
+  echo "[selftest traceability-guard] $case_label (exit $CASE_STATUS)"
+}
+
+assert_case_status() {
+  local expected="$1"
+  local label="$2"
+
+  if [[ "$CASE_STATUS" -eq "$expected" ]]; then
+    pass "$label"
+  else
+    fail "$label (expected exit $expected, got $CASE_STATUS)"
+    sed -n '1,200p' <<< "$CASE_OUTPUT"
+  fi
+}
+
+assert_case_contains() {
+  local expected="$1"
+  local label="$2"
+
+  if grep -Fq -- "$expected" <<< "$CASE_OUTPUT"; then
+    pass "$label"
+  else
+    fail "$label (missing: $expected)"
+    sed -n '1,200p' <<< "$CASE_OUTPUT"
+  fi
+}
+
+assert_case_not_contains() {
+  local forbidden="$1"
+  local label="$2"
+
+  if grep -Fq -- "$forbidden" <<< "$CASE_OUTPUT"; then
+    fail "$label (unexpected: $forbidden)"
+    sed -n '1,200p' <<< "$CASE_OUTPUT"
+  else
+    pass "$label"
+  fi
+}
+
+assert_case_occurrences() {
+  local expected="$1"
+  local needle="$2"
+  local label="$3"
+  local actual=0
+
+  if actual="$(grep -Fc -- "$needle" <<< "$CASE_OUTPUT")"; then
+    :
+  fi
+  if [[ "$actual" -eq "$expected" ]]; then
+    pass "$label"
+  else
+    fail "$label (expected $expected occurrence(s), got $actual: $needle)"
+    sed -n '1,200p' <<< "$CASE_OUTPUT"
+  fi
+}
+
+write_invalid_scope() {
+  local feature_dir="$1"
+  local test_plan_content="$2"
+
+  cat > "$feature_dir/scopes.md" <<EOF
+# Scope 01: Invalid Test Plan
+
+**Status:** In Progress
+
+### Gherkin
+
+  Scenario: Widget renders with provided label
+    Given a label "Hello"
+    When the widget mounts
+    Then the rendered output displays "Hello"
+
+$test_plan_content
+
+### Definition of Done
+
+- [x] Widget renders with provided label and displays the rendered output -> Evidence: report.md#test-evidence
+EOF
+}
+
+write_false_heading_scope() {
+  local feature_dir="$1"
+
+  cat > "$feature_dir/scopes.md" <<'EOF'
+# Scope 01: False Test Plan Headings
+
+**Status:** In Progress
+
+### Gherkin
+
+  Scenario: Widget renders with provided label
+    Given a label "Hello"
+    When the widget mounts
+    Then the rendered output displays "Hello"
+
+#### Test Plan
+
+| Test Type | File/Location | Description |
+| --- | --- | --- |
+| E2E | tests/widget-render.e2e.spec.ts | Widget renders with provided label |
+
+### Test Planning
+
+| Test Type | File/Location | Description |
+| --- | --- | --- |
+| E2E | tests/widget-render.e2e.spec.ts | Widget renders with provided label |
+
+```text
+## Test Plan
+| E2E | tests/widget-render.e2e.spec.ts | Widget renders with provided label |
+```
+
+<!--
+### Test Plan
+| E2E | tests/widget-render.e2e.spec.ts | Widget renders with provided label |
+-->
+
+### Definition of Done
+
+- [x] Widget renders with provided label and displays the rendered output -> Evidence: report.md#test-evidence
+EOF
+}
+
+write_boundary_scope() {
+  local feature_dir="$1"
+  local test_plan_heading="$2"
+  local nested_heading="$3"
+  local sibling_heading="$4"
+
+  cat > "$feature_dir/scopes.md" <<EOF
+# Scope 01: Test Plan Boundary
+
+**Status:** In Progress
+
+### Gherkin
+
+  Scenario: Widget renders with provided label
+    Given a label "Hello"
+    When the widget mounts
+    Then the rendered output displays "Hello"
+
+$test_plan_heading
+
+$nested_heading
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| E2E | e2e-ui | tests/widget-render.e2e.spec.ts | Widget renders with provided label and displays it | selftest:nested | Yes |
+
+$sibling_heading
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| E2E | e2e-ui | tests/must-not-leak.e2e.spec.ts | Unrelated later sibling row | selftest:sibling | Yes |
+
+#### Definition of Done
+
+- [x] Widget renders with provided label and displays the rendered output -> Evidence: report.md#test-evidence
+EOF
+}
+
+write_no_scenario_scope() {
+  local feature_dir="$1"
+
+  cat > "$feature_dir/scopes.md" <<'EOF'
+# Scope 01: No Scenario
+
+**Status:** In Progress
+
+### Gherkin
+
+This fixture intentionally contains no executable Scenario line.
+
+### Test Plan
+
+| Test Type | Category | File/Location | Description | Command | Live System |
+| --- | --- | --- | --- | --- | --- |
+| E2E | e2e-ui | tests/widget-render.e2e.spec.ts | Expected no-match reaches diagnostic | selftest:no-scenario | Yes |
+
+### Definition of Done
+
+- [x] Expected no-scenario input reaches its explicit diagnostic
 EOF
 }
 
@@ -293,6 +549,115 @@ else
   fail "expected 'scenario→row match confidence: ambiguous' in Case 4 log"
   sed -n '1,160p' "$log4"
 fi
+
+# --- BUG-018: exact level-2/level-3 heading equivalence ---
+level2_feature="$TMPDIR/specs/500-level2-feature"
+build_clean_feature "$level2_feature" "## Test Plan"
+run_trace_case "$level2_feature" "Case 5: exact level-2 Test Plan"
+assert_case_status 0 "Case 5 level-2 feature exits 0"
+assert_case_contains 'scenario mapped to Test Plan row' "Case 5 level-2 scenario maps"
+assert_case_contains 'RESULT: PASSED (0 warnings)' "Case 5 level-2 reaches final summary"
+level2_log="$TMPDIR/bug018-level2.log"
+printf '%s\n' "$CASE_OUTPUT" > "$level2_log"
+
+level2_mappings=""
+level3_mappings=""
+if level2_mappings="$(grep -F 'scenario mapped to Test Plan row:' "$level2_log" | sed -E 's/^.*scenario mapped to Test Plan row:[[:space:]]*//' | LC_ALL=C sort)"; then
+  :
+fi
+if level3_mappings="$(grep -F 'scenario mapped to Test Plan row:' "$log1" | sed -E 's/^.*scenario mapped to Test Plan row:[[:space:]]*//' | LC_ALL=C sort)"; then
+  :
+fi
+if [[ -n "$level2_mappings" && "$level2_mappings" == "$level3_mappings" ]]; then
+  pass "Case 5 level-2 mapping set equals the existing level-3 mapping set"
+else
+  fail "Case 5 level-2 and level-3 mapping sets differ"
+fi
+
+# --- BUG-018: missing and lookalike headings are distinct from rowless ---
+missing_feature="$TMPDIR/specs/600-missing-heading"
+build_clean_feature "$missing_feature"
+write_invalid_scope "$missing_feature" "This scope has no Test Plan heading."
+run_trace_case "$missing_feature" "Case 6: missing exact Test Plan"
+assert_case_status 1 "Case 6 missing heading exits 1"
+assert_case_occurrences 1 'has no recognized Test Plan section (expected exact ## Test Plan or ### Test Plan)' "Case 6 missing heading reports once"
+assert_case_not_contains 'has no concrete Test Plan rows to trace' "Case 6 missing heading is not rowless"
+assert_case_contains 'RESULT: FAILED (1 failures, 0 warnings)' "Case 6 missing heading reaches final summary"
+
+false_heading_feature="$TMPDIR/specs/610-false-headings"
+build_clean_feature "$false_heading_feature"
+write_false_heading_scope "$false_heading_feature"
+run_trace_case "$false_heading_feature" "Case 6: unsupported heading lookalikes"
+assert_case_status 1 "Case 6 unsupported headings exit 1"
+assert_case_occurrences 1 'has no recognized Test Plan section (expected exact ## Test Plan or ### Test Plan)' "Case 6 depth-four, Test Planning, fenced, and commented headings remain unrecognized"
+assert_case_contains 'RESULT: FAILED (1 failures, 0 warnings)' "Case 6 unsupported headings reach final summary"
+
+# --- BUG-018: recognized empty/header/separator-only sections are rowless ---
+empty_feature="$TMPDIR/specs/700-empty-test-plan"
+build_clean_feature "$empty_feature"
+write_invalid_scope "$empty_feature" "### Test Plan"
+run_trace_case "$empty_feature" "Case 7: empty recognized Test Plan"
+assert_case_status 1 "Case 7 empty section exits 1"
+assert_case_occurrences 1 'has no concrete Test Plan rows to trace' "Case 7 empty section reports rowless once"
+assert_case_not_contains 'has no recognized Test Plan section' "Case 7 empty section remains recognized"
+assert_case_contains 'RESULT: FAILED (1 failures, 0 warnings)' "Case 7 empty section reaches final summary"
+
+separator_feature="$TMPDIR/specs/710-separator-test-plan"
+build_clean_feature "$separator_feature"
+write_invalid_scope "$separator_feature" $'### Test Plan\n\n| --- | --- | --- |'
+run_trace_case "$separator_feature" "Case 7: separator-only Test Plan"
+assert_case_status 1 "Case 7 separator-only section exits 1"
+assert_case_occurrences 1 'has no concrete Test Plan rows to trace' "Case 7 separator-only section reports rowless once"
+assert_case_contains 'RESULT: FAILED (1 failures, 0 warnings)' "Case 7 separator-only section reaches final summary"
+
+header_feature="$TMPDIR/specs/720-header-test-plan"
+build_clean_feature "$header_feature"
+write_invalid_scope "$header_feature" $'### Test Plan\n\n| Test Type | File/Location | Description |\n| --- | --- | --- |'
+run_trace_case "$header_feature" "Case 7: header-only Test Plan"
+assert_case_status 1 "Case 7 header-only section exits 1"
+assert_case_occurrences 1 'has no concrete Test Plan rows to trace' "Case 7 header-only section reports rowless once"
+assert_case_contains 'RESULT: FAILED (1 failures, 0 warnings)' "Case 7 header-only section reaches final summary"
+
+run_trace_case_awk_failure "$clean_feature" "Case 7: Test Plan extractor failure"
+assert_case_status 1 "Case 7 extractor failure exits 1"
+assert_case_occurrences 1 'Test Plan extraction failed' "Case 7 extractor failure reports distinctly once"
+assert_case_not_contains 'has no recognized Test Plan section' "Case 7 extractor failure is not missing"
+assert_case_not_contains 'has no concrete Test Plan rows to trace' "Case 7 extractor failure is not rowless"
+assert_case_contains 'RESULT: FAILED (1 failures, 0 warnings)' "Case 7 extractor failure reaches final summary"
+
+# --- BUG-018: deeper content remains and same-depth siblings stop extraction ---
+boundary2_feature="$TMPDIR/specs/800-level2-boundary"
+build_clean_feature "$boundary2_feature"
+write_boundary_scope "$boundary2_feature" "## Test Plan" "### Nested Cases" "## Later Same-Depth Section"
+run_trace_case "$boundary2_feature" "Case 8: level-2 depth boundary"
+assert_case_status 0 "Case 8 level-2 boundary exits 0"
+assert_case_contains 'scenario mapped to Test Plan row' "Case 8 level-2 nested row remains eligible"
+assert_case_contains 'summary: scenarios=1 test_rows=1' "Case 8 level-2 same-depth sibling is excluded"
+assert_case_not_contains 'must-not-leak.e2e.spec.ts' "Case 8 level-2 sibling path remains inert"
+
+boundary3_feature="$TMPDIR/specs/810-level3-boundary"
+build_clean_feature "$boundary3_feature"
+write_boundary_scope "$boundary3_feature" "### Test Plan" "#### Nested Cases" "### Later Same-Depth Section"
+run_trace_case "$boundary3_feature" "Case 8: level-3 depth boundary"
+assert_case_status 0 "Case 8 level-3 boundary exits 0"
+assert_case_contains 'scenario mapped to Test Plan row' "Case 8 level-3 nested row remains eligible"
+assert_case_contains 'summary: scenarios=1 test_rows=1' "Case 8 level-3 same-depth sibling is excluded"
+assert_case_not_contains 'must-not-leak.e2e.spec.ts' "Case 8 level-3 sibling path remains inert"
+
+# --- BUG-018: expected scenario no-match reaches the existing diagnostic ---
+no_scenario_feature="$TMPDIR/specs/900-no-scenario"
+build_clean_feature "$no_scenario_feature"
+write_no_scenario_scope "$no_scenario_feature"
+run_trace_case "$no_scenario_feature" "Case 9: expected no-scenario no-match"
+assert_case_status 1 "Case 9 no-scenario feature exits 1"
+assert_case_occurrences 1 'has no Gherkin scenarios to trace' "Case 9 no-scenario diagnostic appears once"
+assert_case_contains 'RESULT: FAILED (1 failures, 0 warnings)' "Case 9 no-scenario feature reaches final summary"
+
+# --- BUG-018: optional fun mode cannot block macOS system Bash 3.2 ---
+run_trace_case_system_bash "$clean_feature" "Case 10: system Bash startup"
+assert_case_status 0 "Case 10 system Bash exits 0"
+assert_case_contains 'RESULT: PASSED (0 warnings)' "Case 10 system Bash reaches final summary"
+assert_case_not_contains 'unbound variable' "Case 10 optional fun mode does not break startup"
 
 if [[ "$failures" -eq 0 ]]; then
   echo "[selftest traceability-guard] PASS"

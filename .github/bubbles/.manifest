@@ -2,6 +2,8 @@
 # Files listed here are framework-owned and overwritten on upgrade.
 # DO NOT add project-specific files to these directories.
 bubbles/scripts/action-risk-registry-lint.sh
+bubbles/scripts/adversarial-aggregate-selftest.sh
+bubbles/scripts/adversarial-aggregate.sh
 bubbles/scripts/adversarial-resolve-selftest.sh
 bubbles/scripts/adversarial-resolve.sh
 bubbles/scripts/agent-ownership-lint-selftest.sh
@@ -15,6 +17,8 @@ bubbles/scripts/artifact-freshness-guard-selftest.sh
 bubbles/scripts/artifact-freshness-guard.sh
 bubbles/scripts/artifact-lint-selftest.sh
 bubbles/scripts/artifact-lint.sh
+bubbles/scripts/audit-result-contract-lint-selftest.sh
+bubbles/scripts/audit-result-contract-lint.sh
 bubbles/scripts/batch-promotion-lint-selftest.sh
 bubbles/scripts/batch-promotion-lint.sh
 bubbles/scripts/bubbles-drift-check-selftest.sh
@@ -175,6 +179,8 @@ bubbles/scripts/release-train-guard-selftest.sh
 bubbles/scripts/release-train-guard.sh
 bubbles/scripts/release-train-rollup-selftest.sh
 bubbles/scripts/release-train-rollup.sh
+bubbles/scripts/repo-binding-preflight-selftest.sh
+bubbles/scripts/repo-binding-preflight.sh
 bubbles/scripts/repo-drift-report-selftest.sh
 bubbles/scripts/repo-drift-report.sh
 bubbles/scripts/repo-readiness.sh
@@ -187,6 +193,8 @@ bubbles/scripts/retro-convergence-health-selftest.sh
 bubbles/scripts/retro-convergence-health.sh
 bubbles/scripts/retro-framework-health-selftest.sh
 bubbles/scripts/retro-framework-health.sh
+bubbles/scripts/risk-tier-resolve-selftest.sh
+bubbles/scripts/risk-tier-resolve.sh
 bubbles/scripts/runtime-lease-selftest.sh
 bubbles/scripts/runtime-leases.sh
 bubbles/scripts/scaffold-gate-selftest.sh
@@ -228,6 +236,8 @@ bubbles/scripts/traceability-guard-selftest.sh
 bubbles/scripts/traceability-guard.sh
 bubbles/scripts/trajectory-inspector-selftest.sh
 bubbles/scripts/trajectory-inspector.sh
+bubbles/scripts/transition-contract-resolver-selftest.sh
+bubbles/scripts/transition-contract-resolver.sh
 bubbles/scripts/trust-doctor-selftest.sh
 bubbles/scripts/trust-metadata.sh
 bubbles/scripts/upkeep-calendar-selftest.sh
@@ -240,6 +250,8 @@ bubbles/scripts/validation-latency-report-selftest.sh
 bubbles/scripts/validation-latency-report.sh
 bubbles/scripts/value-selection-lint-selftest.sh
 bubbles/scripts/value-selection-lint.sh
+bubbles/scripts/vertical-delivery-plan-guard-selftest.sh
+bubbles/scripts/vertical-delivery-plan-guard.sh
 bubbles/scripts/workflow-delegation-selftest.sh
 bubbles/scripts/workflow-planning-provenance-selftest.sh
 bubbles/scripts/workflow-registry-consistency.sh
@@ -249,6 +261,7 @@ bubbles/scripts/workflow-surface-selftest.sh
 bubbles/scripts/yaml-schema-validate.sh
 bubbles/scripts/guards/control-plane-checks.sh
 bubbles/scripts/guards/planning-checks.sh
+bubbles/scripts/guards/sensitive-client-storage-scan.py
 bubbles/scripts/guards/tail-convergence-gates.sh
 bubbles/scripts/guards/tail-delegated-gates.sh
 bubbles/adapters/observability/none.sh
@@ -371,6 +384,7 @@ docs/recipes/idea-to-release.md
 docs/recipes/impact-aware-validation.md
 docs/recipes/incident-response.md
 docs/recipes/just-tell-bubbles.md
+docs/recipes/live-deployment-convergence.md
 docs/recipes/multi-train-status.md
 docs/recipes/new-feature.md
 docs/recipes/observe-production.md

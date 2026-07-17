@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export LC_ALL=C
 
 # framework-dogfood-guard.sh
 #
@@ -11,22 +12,25 @@ set -euo pipefail
 #   The Bubbles source repository MUST NOT keep a persistent `specs/`
 #   tree. Its dogfood evidence comes from framework validation,
 #   hermetic selftests, the release manifest, and downstream/fixture
-#   specs. Downstream and hermetic fixture repositories may still use
-#   the traditional numbered-spec evidence model: at least one
-#   `specs/[0-9]*-*/state.json` file with top-level `.status == "done"`.
+#   specs. Downstream and hermetic fixture repositories pass with either
+#   current numbered-spec evidence (`.status == "done"`) or a proven first
+#   adoption: current numbered states exist, none is done, complete local Git
+#   history is available, and no reachable numbered state was ever done.
 #
 # The guard is source-aware. If pointed at the canonical Bubbles source
 # repository, it fails when `specs/` exists and otherwise verifies that
 # the validation/release evidence surfaces are present. If pointed at a
-# downstream or fixture repository, it scans `specs/` for done specs.
+# downstream or fixture repository, it checks current state first and
+# conditionally classifies repository-local history.
 #
 # Exit codes:
 #   0  source repo has no persistent specs/ and has validation evidence
-#      surfaces, OR downstream/fixture repo has at least one done spec
+#      surfaces, OR downstream/fixture repo has current done evidence or a
+#      proven first-adoption history
 #   1  source repo contains persistent specs/ or lacks validation
-#      evidence surfaces, OR downstream/fixture repo has zero done specs
+#      evidence surfaces, OR downstream policy evidence is absent/removed
 #   2  malformed / missing inputs (missing repo root, invalid argv,
-#      unparseable state.json) — diagnostic on stderr
+#      unparseable state.json, indeterminate Git history) — diagnostic on stderr
 #
 # Usage:
 #   bash bubbles/scripts/framework-dogfood-guard.sh [--repo-root <path>] [--quiet]
@@ -42,7 +46,7 @@ set -euo pipefail
 #
 # Dependencies:
 #   - jq      (hard dependency for downstream/fixture spec counting)
-#   - find    (POSIX)
+#   - git     (conditional dependency for zero-current-done downstreams)
 #
 # Reference:
 #   docs/recipes/framework-dogfood.md
@@ -64,9 +68,9 @@ Optional:
   -h, --help          Print this usage and exit.
 
 Exit codes:
-  0 = source repo has no persistent specs/ and evidence surfaces exist, or downstream/fixture done spec exists
-  1 = source repo contains specs/ or lacks evidence surfaces, or downstream/fixture has zero done specs
-  2 = malformed inputs, missing repo root, or unparseable state.json
+  0 = source evidence is valid, current downstream done evidence exists, or first adoption is proven
+  1 = source/downstream policy violation is proven
+  2 = malformed inputs/state or indeterminate repository history
 EOF
 }
 
@@ -208,26 +212,26 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 2
 fi
 
-# A missing specs/ directory is NOT a parse error — it is a textbook
-# zero-done condition for downstream/fixture repositories. Treat it as
-# count=0 and fall through to the violation path below.
-
 # --- Find numbered-feature state.json files ------------------------------
 #
 # Canonical shape: specs/<NNN>-<slug>/state.json where NNN matches the
 # leading-digit pattern documented in the spec/design (e.g.
-# specs/900-dogfood-fixture/state.json). We deliberately
-# use `find -maxdepth 2` so we only catch top-level numbered features
-# (per-scope state.json files, if any, are NOT counted).
+# specs/900-dogfood-fixture/state.json). The direct shell glob catches only
+# top-level numbered features, preserves paths with whitespace, and avoids a
+# GNU-only `sort -z` dependency.
 
 STATE_FILES=()
+MALFORMED_SPECS=()
 if [[ -d "$SPECS_DIR" ]]; then
-  while IFS= read -r -d '' candidate; do
+  for candidate in "$SPECS_DIR"/[0-9]*-*/state.json; do
+    [[ -e "$candidate" || -L "$candidate" ]] || continue
+    feature_dir="${candidate%/state.json}"
+    if [[ -L "$SPECS_DIR" || -L "$feature_dir" || -L "$candidate" || ! -f "$candidate" ]]; then
+      MALFORMED_SPECS+=("$candidate")
+      continue
+    fi
     STATE_FILES+=("$candidate")
-  done < <(find "$SPECS_DIR" -mindepth 2 -maxdepth 2 \
-              -type f -name state.json \
-              -path "$SPECS_DIR/[0-9]*-*/state.json" \
-              -print0 2>/dev/null | sort -z)
+  done
 fi
 
 TOTAL_SPECS="${#STATE_FILES[@]}"
@@ -236,7 +240,6 @@ TOTAL_SPECS="${#STATE_FILES[@]}"
 
 DONE_COUNT=0
 DONE_SPECS=()
-MALFORMED_SPECS=()
 
 for state_file in "${STATE_FILES[@]}"; do
   if ! jq empty "$state_file" >/dev/null 2>&1; then
@@ -251,36 +254,216 @@ for state_file in "${STATE_FILES[@]}"; do
 done
 
 if [[ "${#MALFORMED_SPECS[@]}" -gt 0 ]]; then
-  echo "framework-dogfood-guard: ${#MALFORMED_SPECS[@]} state.json file(s) failed to parse:" >&2
-  for s in "${MALFORMED_SPECS[@]}"; do
-    echo "  - $s" >&2
-  done
+  {
+    echo "G085 framework_dogfood_evidence_gate input integrity failure"
+    echo "  failureCode=E085-CURRENT-STATE-MALFORMED"
+    echo "  repositoryClass=downstream-or-fixture"
+    echo "  malformedCurrentStates=${#MALFORMED_SPECS[@]}"
+    echo "  error=${#MALFORMED_SPECS[@]} state.json path(s) failed trust or JSON validation"
+    echo "  requirement=current numbered state.json files must be regular non-symbolic-link files containing valid JSON"
+    echo "  malformed paths:"
+    for s in "${MALFORMED_SPECS[@]}"; do
+      echo "    - $s"
+    done
+    echo "  recipe=docs/recipes/framework-dogfood.md"
+  } >&2
   exit 2
 fi
 
 # --- Decision -----------------------------------------------------------
 
-if [[ "$DONE_COUNT" -lt 1 ]]; then
+if [[ "$DONE_COUNT" -gt 0 ]]; then
+  info "repositoryClass=downstream-or-fixture specsDir=$SPECS_DIR totalSpecs=$TOTAL_SPECS doneCount=$DONE_COUNT"
+  echo "PASS Gate G085 (framework_dogfood_evidence_gate) decisionCode=G085-CURRENT-DONE currentDone=$DONE_COUNT doneCount=$DONE_COUNT/$TOTAL_SPECS totalSpecs=$TOTAL_SPECS specsDir=$SPECS_DIR"
+  exit 0
+fi
+
+if [[ "$TOTAL_SPECS" -eq 0 ]]; then
   {
     echo "G085 framework_dogfood_evidence_gate violation"
-    echo "  repositoryClass:    downstream-or-fixture"
-    echo "  specsDir:           $SPECS_DIR"
-    echo "  numbered-feature state.json files found: $TOTAL_SPECS"
-    echo "  count with status==done:                 $DONE_COUNT"
-    echo "  requirement:        downstream/fixture dogfood evidence needs at least one specs/NNN-*/state.json with top-level \"status\": \"done\""
-    echo "  recipe:             docs/recipes/framework-dogfood.md"
-    echo "  remediation:        certify at least one downstream or fixture spec to done, or run against the Bubbles source repo where persistent specs/ is forbidden"
-    if [[ "$TOTAL_SPECS" -gt 0 ]]; then
-      echo "  candidate specs currently in-flight:"
-      for s in "${STATE_FILES[@]}"; do
-        cur_status="$(jq -r '.status // "<missing>"' "$s" 2>/dev/null || echo "<unreadable>")"
-        echo "    - $s  (status=$cur_status)"
-      done
-    fi
+    echo "  failureCode=E085-NO-CURRENT-SPEC"
+    echo "  repositoryClass=downstream-or-fixture"
+    echo "  specsDir=$SPECS_DIR"
+    echo "  currentSpecs=0"
+    echo "  currentDone=0"
+    echo "  numbered-feature state.json files found: 0"
+    echo "  count with status==done:                 0"
+    echo "  requirement=first adoption requires at least one current specs/NNN-*/state.json"
+    echo "  recipe=docs/recipes/framework-dogfood.md"
   } >&2
   exit 1
 fi
 
-info "repositoryClass=downstream-or-fixture specsDir=$SPECS_DIR totalSpecs=$TOTAL_SPECS doneCount=$DONE_COUNT"
-echo "PASS Gate G085 (framework_dogfood_evidence_gate) — downstream/fixture doneCount=$DONE_COUNT/$TOTAL_SPECS, specsDir=$SPECS_DIR"
+# --- Conditional first-adoption history classifier ----------------------
+
+history_integrity_failure() {
+  local failure_code="$1"
+  local integrity="$2"
+  local check="$3"
+  {
+    echo "G085 framework_dogfood_evidence_gate input integrity failure"
+    echo "  failureCode=$failure_code"
+    echo "  repositoryClass=downstream-or-fixture"
+    echo "  currentSpecs=$TOTAL_SPECS"
+    echo "  currentDone=0"
+    echo "  historyIntegrity=$integrity"
+    echo "  failedCheck=$check"
+    echo "  requirement=first adoption requires complete local Git history at the exact repository root"
+    echo "  remediation=restore complete local Git metadata and rerun the guard"
+    echo "  recipe=docs/recipes/framework-dogfood.md"
+  } >&2
+  exit 2
+}
+
+if ! command -v git >/dev/null 2>&1; then
+  history_integrity_failure "E085-HISTORY-UNAVAILABLE" "missing" "git executable is unavailable"
+fi
+
+if ! REQUESTED_ROOT_PHYSICAL="$(cd "$REPO_ROOT" 2>/dev/null && pwd -P)"; then
+  history_integrity_failure "E085-HISTORY-UNAVAILABLE" "missing" "requested repository root cannot be resolved physically"
+fi
+if ! INSIDE_WORK_TREE="$(git -C "$REPO_ROOT" rev-parse --is-inside-work-tree 2>/dev/null)"; then
+  history_integrity_failure "E085-HISTORY-UNAVAILABLE" "missing" "requested repository is not a Git worktree"
+fi
+if [[ "$INSIDE_WORK_TREE" != "true" ]]; then
+  history_integrity_failure "E085-HISTORY-UNAVAILABLE" "missing" "Git did not identify the requested repository as a worktree"
+fi
+if ! GIT_TOP_LEVEL="$(git -C "$REPO_ROOT" rev-parse --show-toplevel 2>/dev/null)"; then
+  history_integrity_failure "E085-HISTORY-UNAVAILABLE" "missing" "Git worktree root cannot be resolved"
+fi
+if ! GIT_TOP_LEVEL_PHYSICAL="$(cd "$GIT_TOP_LEVEL" 2>/dev/null && pwd -P)"; then
+  history_integrity_failure "E085-HISTORY-UNAVAILABLE" "missing" "Git worktree root cannot be resolved physically"
+fi
+if [[ "$REQUESTED_ROOT_PHYSICAL" != "$GIT_TOP_LEVEL_PHYSICAL" ]]; then
+  history_integrity_failure "E085-HISTORY-UNAVAILABLE" "missing" "requested repository root is not the exact Git worktree root"
+fi
+
+if ! SHALLOW_STATE="$(git -C "$REPO_ROOT" rev-parse --is-shallow-repository 2>/dev/null)"; then
+  history_integrity_failure "E085-HISTORY-QUERY-FAILED" "query-failed" "Git shallow-history query failed"
+fi
+case "$SHALLOW_STATE" in
+  true)
+    history_integrity_failure "E085-HISTORY-SHALLOW" "shallow" "Git reports a shallow repository"
+    ;;
+  false)
+    ;;
+  *)
+    history_integrity_failure "E085-HISTORY-QUERY-FAILED" "malformed" "Git returned an invalid shallow-history response"
+    ;;
+esac
+
+HISTORY_WORKSPACE="$(mktemp -d -t bubbles-g085-XXXXXXXX 2>/dev/null || true)"
+if [[ -z "$HISTORY_WORKSPACE" || ! -d "$HISTORY_WORKSPACE" ]]; then
+  history_integrity_failure "E085-HISTORY-QUERY-FAILED" "query-failed" "history scratch directory could not be created"
+fi
+
+cleanup_history_workspace() {
+  local cleanup_rc=$?
+  trap - EXIT
+  rm -rf "$HISTORY_WORKSPACE" 2>/dev/null || true
+  exit "$cleanup_rc"
+}
+trap cleanup_history_workspace EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+HISTORY_STDERR="$HISTORY_WORKSPACE/history.stderr"
+PARTIAL_CLONE_CONFIG="$HISTORY_WORKSPACE/partial-clone-config"
+PROMISOR_CONFIG="$HISTORY_WORKSPACE/promisor-config"
+
+set +e
+git -C "$REPO_ROOT" config --local --get extensions.partialClone > "$PARTIAL_CLONE_CONFIG" 2> "$HISTORY_STDERR"
+PARTIAL_CLONE_RC=$?
+set -e
+if [[ "$PARTIAL_CLONE_RC" -eq 0 ]]; then
+  history_integrity_failure "E085-HISTORY-PARTIAL" "partial" "extensions.partialClone metadata is present"
+fi
+if [[ "$PARTIAL_CLONE_RC" -ne 1 ]]; then
+  history_integrity_failure "E085-HISTORY-QUERY-FAILED" "query-failed" "partial-clone metadata query failed"
+fi
+
+set +e
+git -C "$REPO_ROOT" config --local --bool --get-regexp '^remote\..*\.promisor$' > "$PROMISOR_CONFIG" 2> "$HISTORY_STDERR"
+PROMISOR_CONFIG_RC=$?
+set -e
+if [[ "$PROMISOR_CONFIG_RC" -eq 0 ]]; then
+  while IFS=' ' read -r promisor_key promisor_value; do
+    if [[ "$promisor_value" == "true" ]]; then
+      history_integrity_failure "E085-HISTORY-PARTIAL" "partial" "remote promisor metadata is enabled for $promisor_key"
+    fi
+  done < "$PROMISOR_CONFIG"
+elif [[ "$PROMISOR_CONFIG_RC" -ne 1 ]]; then
+  history_integrity_failure "E085-HISTORY-QUERY-FAILED" "query-failed" "promisor metadata query failed"
+fi
+
+COMMITS_FILE="$HISTORY_WORKSPACE/commits"
+STATE_PATHS_FILE="$HISTORY_WORKSPACE/state-paths"
+HISTORICAL_BLOB_FILE="$HISTORY_WORKSPACE/historical-state.json"
+HISTORY_PATHSPEC=':(glob)specs/[0-9]*-*/state.json'
+
+if ! GIT_NO_LAZY_FETCH=1 git -C "$REPO_ROOT" rev-list --all -- "$HISTORY_PATHSPEC" > "$COMMITS_FILE" 2> "$HISTORY_STDERR"; then
+  history_integrity_failure "E085-HISTORY-QUERY-FAILED" "query-failed" "reachable commit traversal failed"
+fi
+
+is_numbered_top_level_state_path() {
+  local candidate_path="$1"
+  local feature_dir
+  case "$candidate_path" in
+    specs/[0-9]*-*/state.json)
+      feature_dir="${candidate_path#specs/}"
+      feature_dir="${feature_dir%/state.json}"
+      [[ "$feature_dir" != */* ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+while IFS= read -r history_commit; do
+  [[ -n "$history_commit" ]] || continue
+  if ! GIT_NO_LAZY_FETCH=1 git -C "$REPO_ROOT" ls-tree -r -z --name-only "$history_commit" -- specs > "$STATE_PATHS_FILE" 2> "$HISTORY_STDERR"; then
+    history_integrity_failure "E085-HISTORY-QUERY-FAILED" "query-failed" "historical tree traversal failed at commit $history_commit"
+  fi
+
+  while IFS= read -r -d '' history_path; do
+    is_numbered_top_level_state_path "$history_path" || continue
+    if ! GIT_NO_LAZY_FETCH=1 git -C "$REPO_ROOT" cat-file blob "$history_commit:$history_path" > "$HISTORICAL_BLOB_FILE" 2> "$HISTORY_STDERR"; then
+      history_integrity_failure "E085-HISTORY-QUERY-FAILED" "query-failed" "historical blob read failed at commit $history_commit path $history_path"
+    fi
+    if ! jq empty "$HISTORICAL_BLOB_FILE" >/dev/null 2>&1; then
+      {
+        echo "G085 framework_dogfood_evidence_gate input integrity failure"
+        echo "  failureCode=E085-HISTORICAL-STATE-MALFORMED"
+        echo "  repositoryClass=downstream-or-fixture"
+        echo "  currentSpecs=$TOTAL_SPECS"
+        echo "  currentDone=0"
+        echo "  historyIntegrity=malformed"
+        echo "  historyCommit=$history_commit"
+        echo "  historyPath=$history_path"
+        echo "  requirement=reachable numbered historical state.json blobs must contain valid JSON"
+        echo "  recipe=docs/recipes/framework-dogfood.md"
+      } >&2
+      exit 2
+    fi
+    if jq -e '.status == "done"' "$HISTORICAL_BLOB_FILE" >/dev/null 2>&1; then
+      {
+        echo "G085 framework_dogfood_evidence_gate violation"
+        echo "  failureCode=E085-ESTABLISHED-DONE-REMOVED"
+        echo "  repositoryClass=downstream-or-fixture"
+        echo "  currentSpecs=$TOTAL_SPECS"
+        echo "  currentDone=0"
+        echo "  historicalDone=1"
+        echo "  historyCommit=$history_commit"
+        echo "  historyPath=$history_path"
+        echo "  requirement=an established downstream repository must retain current top-level status done evidence"
+        echo "  recipe=docs/recipes/framework-dogfood.md"
+      } >&2
+      exit 1
+    fi
+  done < "$STATE_PATHS_FILE"
+done < "$COMMITS_FILE"
+
+info "repositoryClass=downstream-or-fixture specsDir=$SPECS_DIR totalSpecs=$TOTAL_SPECS currentDone=0 historicalDone=0 historyIntegrity=complete"
+echo "PASS Gate G085 (framework_dogfood_evidence_gate) decisionCode=G085-FIRST-ADOPTION currentDone=0 historicalDone=0 historyIntegrity=complete totalSpecs=$TOTAL_SPECS specsDir=$SPECS_DIR"
 exit 0

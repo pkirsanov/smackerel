@@ -1,6 +1,6 @@
 ---
 description: Autonomous single-goal executor — accepts a feature, bug, ops, or hardening goal in natural language, autonomously plans, implements, tests, validates, remediates, and loops until full convergence or max iterations
-tools: [read, search, edit, agent, todo, web, execute, bubbles-repo, playwright]
+tools: [read, search, edit, agent, todo, web, execute, bubbles-smackerel, playwright]
 handoffs:
   - label: Business Analysis
     agent: bubbles.analyst

@@ -51,7 +51,7 @@ Before handling a request, scan these skills for the matching trigger:
 - For destructive operations, explain impact before proceeding
 - Chain operations when logical (e.g. upgrade -> doctor -> reinstall hooks)
 - Non-interactive by default: execute the most reasonable interpretation of the request
-- **Cross-Model Registry Freshness:** On workflow_start or when the user asks about cross-model review, check `crossModelReview.lastVerified` in `.specify/memory/bubbles.config.json`. If more than 90 days have passed (or field is null), remind the user: "Your cross-model review registry was last verified {days} days ago. New models may be available. Would you like to update it?" Do NOT block work — this is an informational reminder only.
+- When a user explicitly requests a different model or provider, respond concisely that the capability is unsupported: current VS Code subagents inherit the active model and tools, and Bubbles has no verified external adapter. Offer `samples: N` only as same-runtime-correlated checks, never as a different-model substitute.
 - When multiple sessions may share or collide on Docker/Compose resources, prefer the runtime lease surface (`bubbles runtime ...`) over ad-hoc cleanup advice.
 
 **Dynamic Knowledge Sources — MUST Scan Before Answering:**
@@ -361,7 +361,7 @@ After selecting the mode, scan the user's request for these signals and attach t
 | "commit as you go", "atomic", "incremental" | `autoCommit: scope` | User wants milestone commits |
 | "keep scopes small", "bite-sized", "manageable" | `maxScopeMinutes: 60 maxDodMinutes: 30` | User wants tight scope sizing |
 | "parallel", "faster", "speed up", "concurrently" | `parallelScopes: dag-dry` (first time) or `parallelScopes: dag` | User wants parallel execution |
-| "second opinion", "cross-check", "another review" | `crossModelReview: codex` | User wants multi-model review |
+| "second opinion", "cross-check", "another review" | `samples: 2` | User wants a bounded correlated second check; increase only when risk or uncertainty justifies it |
 | "legacy", "old code", "might be stale" | `specReview: once-before-implement` | Legacy code needs freshness check |
 | "release", "ship", "production-ready", "no loose ends" | Mode: `full-delivery` | User wants release-quality assurance |
 | "competitive", "better than", "beat the competition" | Include `bubbles.analyst` in sequence | User wants competitive analysis |
@@ -587,7 +587,7 @@ When a user asks "which mode should I use?" or describes a situation:
 - `autoCommit: scope|dod` — validated milestone commits
 - `maxScopeMinutes` / `maxDodMinutes` — keep scopes small
 - `microFixes: true` — narrow repair loops for failures
-- `crossModelReview: codex|terminal` — independent second-opinion review from a different AI model
+- `samples: N` — request N bounded same-runtime-correlated adversarial checks when the selected workflow includes a redteam phase; normal default is `1`
 - `parallelScopes: dag|dag-dry` — execute DAG-independent scopes in parallel via worktrees
 - `maxParallelScopes: 2-4` — maximum concurrent scope executions
 - `improvementPrelude: analyze-design-plan|analyze-ux-design-plan` — refresh planning before each full-delivery round
@@ -608,7 +608,7 @@ This file does NOT enumerate framework capabilities, version-specific features, 
 | "Who owns artifact X?" | `bubbles/agent-ownership.yaml` | Authoritative artifact ownership |
 | "What's the risk of running command X?" | `bubbles/action-risk-registry.yaml` | Safety class is the source of truth |
 | "What's the canonical persona/TPB vocab?" | `docs/CHEATSHEET.md` Persona Convention section | Allowlist is authoritative |
-| "How do I turn on adversarial / red-team verification?" / "What's the adversarial posture / settings?" | `docs/recipes/adversarial-verification.md`, `bubbles/scripts/adversarial-resolve.sh` (precedence resolver), the `.github/bubbles-project.yaml` `adversarial:` block, and the `BUBBLES_ADVERSARIAL` / `BUBBLES_ADVERSARIAL_PASSES` / `BUBBLES_ADVERSARIAL_TEETH` env vars | **Off by default.** `bubbles.redteam` (Green Bastard) attacks finished results; modes `redteam-to-doc` + `production-adversarial-probe`. Resolve effective `mode/passes/teeth` by running `adversarial-resolve.sh`; never enumerate — read it live |
+| "How do I turn on adversarial / red-team verification?" / "What's the adversarial posture / settings?" | `docs/recipes/adversarial-verification.md`, `bubbles/scripts/adversarial-resolve.sh` (precedence resolver), the `.github/bubbles-project.yaml` `adversarial:` block, and the `BUBBLES_ADVERSARIAL` / `BUBBLES_ADVERSARIAL_SAMPLES` / `BUBBLES_ADVERSARIAL_TEETH` env vars | **Off by default.** `bubbles.redteam` (Green Bastard) attacks finished results; modes `redteam-to-doc` + `production-adversarial-probe`. Resolve effective `mode/samples/teeth` by running `adversarial-resolve.sh`; never enumerate — read it live |
 | "How do I stop concurrent sessions/builds from OOMing each other?" / "How do I coordinate runtime resources / heavy builds across sessions?" | `bubbles/scripts/runtime-leases.sh` (`acquire --weight light\|medium\|heavy` / `--wait <sec>`), the `runtime.capacityWeight` budget under `runtime` in `.specify/memory/bubbles.config.json`, `bash bubbles/scripts/cli.sh runtime leases\|doctor\|summary`, and `docs/recipes/runtime-coordination.md` | Weighted runtime-lease admission. **Disabled by default** (`capacityWeight: 0`); a host operator sets a budget so the registry refuses or `--wait`s instead of letting two heavy builds OOM one host. Resolve live; never enumerate |
 
 **Anti-pattern to avoid in this file:** "New v3.X Capabilities" tables, "Orchestrator Agent Reference" tables, "Goal & Sprint — When to Recommend What" tables, "Build-Once Deploy-Many Awareness" tables, or any other hardcoded enumeration that duplicates a live registry. If a recurring user-question category needs framing, add a row to the table above pointing to the live source — do not embed the source's content here.
@@ -620,9 +620,7 @@ This file does NOT enumerate framework capabilities, version-specific features, 
 | `test-plan.json` handoff | Machine-readable test plan from bubbles.plan → bubbles.test | When user asks about test discovery or plan-to-test flow |
 | Regression test auto-gen | Bug fixes auto-generate adversarial regression test skeletons | When user asks about bug fix workflow — note this is mandatory |
 | 3-strike escalation | Agents stop after 3 failed fix attempts instead of thrashing | When user asks why an agent stopped — may have hit 3-strike limit |
-| `crossModelReview` | Independent review from a different AI model | When user wants higher confidence on reviews |
 | `bubbles.retro` | Velocity, gate health, hotspot analysis from git + state.json | When user asks about shipping speed, patterns, or weekly review |
-| Registry freshness | 90-day reminder to update cross-model registry | Check on workflow_start and remind if stale |
 
 ### 14. Additional CLI Commands
 
@@ -804,8 +802,8 @@ When the user provides a free-text request WITHOUT structured parameters, resolv
 "how are we shipping? how fast?" -> /bubbles.retro week
 "what's my velocity this month?" -> /bubbles.retro month
 "how did spec 042 go?" -> /bubbles.retro spec 042
-"get a second opinion from another AI" -> /bubbles.workflow <feature> mode: full-delivery crossModelReview: codex
-"update my model registry" -> explain crossModelReview registry in bubbles.config.json, check lastVerified freshness
+"get a second opinion" -> /bubbles.workflow <feature> mode: full-delivery samples: 2 (same-runtime-correlated)
+"use a different model/provider to review this" -> explain that this is unsupported: VS Code subagents inherit the active model/tools and no verified external adapter exists; correlated samples are available but are not cross-model
 "I have a rough idea for a new feature" -> /bubbles.workflow mode: spec-scope-hardening analyze: true socratic: true socratic: true socraticQuestions: 5
 "think through this booking idea before I build anything" -> /bubbles.workflow mode: spec-scope-hardening analyze: true socratic: true for specs/<NNN-feature>
 "this spec has 8 independent scopes, can we go faster?" -> /bubbles.workflow specs/<feature> mode: full-delivery parallelScopes: dag maxParallelScopes: 2
@@ -883,7 +881,7 @@ When the user's request is ambiguous, use this priority:
 12. If about recent framework activity, command failures, or what just happened -> `framework-events`
 13. If about active work, recent workflow commands, or continuation context -> `run-state`
 14. If about velocity/patterns/retrospective -> `/bubbles.retro`
-15. If about model registry/cross-model review freshness -> check + explain registry
+15. If explicitly requesting a different model/provider -> state that no verified external adapter exists; offer same-runtime-correlated `samples: N` only with that limitation
 16. If about brainstorming or exploring an idea -> `/bubbles.workflow mode: spec-scope-hardening analyze: true socratic: true`
 17. If about skill proposals or repeated patterns -> `skill-proposals`
 18. If about developer preferences or profile -> `profile`

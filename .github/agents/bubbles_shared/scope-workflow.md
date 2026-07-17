@@ -388,10 +388,46 @@ Both iterate and implement follow these phases:
 ### Phase 7: Finalize (LAST STEP)
 1. **Update `uservalidation.md`** with all verifiable behaviors
 2. **Mark items `[x]` by default** (just validated via audit)
-3. **Resolve effective status from workflow mode `statusCeiling`** (see Status Ceiling Enforcement below)
-4. Mark scope status in the active scope definition file (`scope.md` or `scopes.md`) according to resolved status, and sync `_index.md` if present
-5. Route the resolved status through `bubbles.validate`, which writes the authoritative `certification.status` and mirrors the top-level compatibility status when promotion is allowed
-6. Record `workflowMode` in `state.json` so resume and downstream agents know what was executed
+3. **Independently re-resolve the transition contract** and compare the runner's expected workflow mode, target, contract digest, target revision, and current audit attempt ID with the fresh values
+4. **Validate the current audit result** when `audit` remains in `phaseOrder`: require exactly one matching ACTIVE attempt, a resolvable evidence ref, canonical audit-result lint success, and one-to-one finding accounting
+5. **Choose the profile-scoped closeout path:** done-ceiling delivery retains the existing completion chain; a clean `planning-maturity-v1` result preserves scope status, DoD, completed scopes, and delivery evidence exactly as they are
+6. Route the resolved status and frozen resolver/audit assertions through `bubbles.validate`; finalize MUST NOT write `certification.*` or the top-level status itself
+7. After validate returns, verify the terminal write did not exceed `statusCeiling`; for planning maturity, the only promotion writes are top-level `status` and `certification.status`, both exactly `specs_hardened`
+8. Record `workflowMode` in `state.json` so resume and downstream agents know what was executed
+
+#### Finalize Transition Boundary (BUG-009)
+
+Finalize MUST invoke `transition-contract-resolver.sh` against current state even
+when the runner, guard, validate, or audit already supplied a contract. It MUST
+compare `workflowMode`, `targetStatus`, `contractDigest`, and `targetRevision`
+with the runner assertions and the current `AUDIT_RESULT_V1`. It MUST also
+resolve `execution.audit.currentAttemptId` to exactly one ACTIVE attempt and
+compare attempt ID, profile, target, digest, revision, verdict, outcome,
+evidence ref, `addressedFindings`, and `unresolvedFindings`. The evidence ref
+must resolve to the complete result transcript, and the canonical
+`audit-result-contract-lint.sh --result <transcript>` check must pass against
+the current state.
+
+If `audit` is present in the resolved `phaseOrder`, pre-audit validation is
+reporting only. A green pre-audit guard does not authorize finalize or ceiling
+certification. Finalize may request terminal certification only after the one
+current attempt matches all fresh assertions.
+
+For `planning-maturity-v1`, the accepted terminal tuple is closed:
+`targetStatus=specs_hardened`, one current `ACTIVE` attempt,
+`auditVerdict=PLANNING_AUDIT_CLEAN`, `outcome=completed_diagnostic`,
+`deliveryEvaluation=NOT_EVALUATED`, and no unresolved findings. Finalize sends
+that tuple to `bubbles.validate` and performs no direct status write. Validate
+may mirror only top-level `status` and `certification.status` to
+`specs_hardened`; scope status, DoD, `certification.completedScopes`, scope
+progress, delivery evaluation/evidence, and `execution.audit` remain unchanged.
+
+Missing, stale, duplicated, dangling, `INCOMPLETE`, `SUPERSEDED`, mismatched,
+over-ceiling, or finding-incomplete results fail closed. Finalize MUST NOT reuse
+a prior attempt, infer a profile, repair audit history, or partially mutate
+state. `delivery-completion-v1` at a `done` ceiling continues through the
+existing all-scopes-Done, all-DoD-complete, evidence-backed delivery path with
+no relaxation.
 
 **⛔ COMPLETION CHAIN ENFORCEMENT (ABSOLUTE — from agent-common.md):**
 
@@ -407,18 +443,19 @@ Before marking ANY scope "Done" or setting spec status to "done", the agent MUST
 
 **⚠️ MANDATORY FINALIZATION CHECKS (NON-NEGOTIABLE — Execute ALL before finalizing):**
 
-7. **Run state transition guard script (Gate G023 — MECHANICAL ENFORCEMENT):**
+7. **Re-resolve the transition contract, then run the state transition guard script (Gate G023 — MECHANICAL ENFORCEMENT):**
    ```bash
-  bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}
+  bash bubbles/scripts/transition-contract-resolver.sh {FEATURE_DIR}
+  bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR} --target-status {RESOLVED_TARGET} --expect-workflow-mode {RESOLVED_MODE} --expect-contract-digest {RESOLVED_DIGEST}
    ```
-   - **This is the FIRST check to run.** If it exits with code 1, ALL subsequent checks are moot — status MUST remain `in_progress`.
+  - **This resolver/guard pair is the FIRST check to run.** If either exits nonzero, ALL subsequent checks are moot and status MUST remain unchanged.
    - The guard script consolidates checks 8-13 below into a single blocking pass, but agents MUST also verify these individually for transparency.
    - **NEVER write `"status": "done"` to state.json without guard script exit code 0.**
 
 8. **Run artifact lint** — `bash bubbles/scripts/artifact-lint.sh {FEATURE_DIR}` must exit 0
-9. **Verify ALL DoD items are `[x]`** — for per-scope dirs: `grep -c '^\- \[ \]' {FEATURE_DIR}/scopes/*/scope.md` must be 0; for single-file: `grep -c '^\- \[ \]' {FEATURE_DIR}/scopes.md` must be 0
-10. **Verify ALL scope statuses are Done** — check `_index.md` status column (per-scope dirs) or `scopes.md` (single-file): `grep -c 'Status:.*Not Started\|Status:.*In Progress' {SCOPE_FILES}` must be 0
-11. **Verify evidence legitimacy** — every `[x]` item must have inline evidence containing real terminal output signals (test results, file paths, exit codes, timing, build tool names)
+9. **For done-ceiling delivery, verify ALL DoD items are `[x]`** — for per-scope dirs: `grep -c '^\- \[ \]' {FEATURE_DIR}/scopes/*/scope.md` must be 0; for single-file: `grep -c '^\- \[ \]' {FEATURE_DIR}/scopes.md` must be 0. For planning maturity, the guard must classify this delivery check `NOT_APPLICABLE` and finalize must leave DoD unchanged.
+10. **For done-ceiling delivery, verify ALL scope statuses are Done** — check `_index.md` status column (per-scope dirs) or `scopes.md` (single-file): `grep -c 'Status:.*Not Started\|Status:.*In Progress' {SCOPE_FILES}` must be 0. For planning maturity, scope statuses remain unchanged.
+11. **Verify evidence legitimacy** — every `[x]` item must have inline evidence containing real terminal output signals (test results, file paths, exit codes, timing, build tool names); planning maturity does not create delivery evidence or check delivery DoD.
 12. **Verify no fabrication** — apply Fabrication Detection Heuristics (Gate G021 from agent-common.md):
     - No template placeholders unfilled
     - No narrative summaries as evidence
@@ -435,14 +472,16 @@ Before marking ANY scope "Done" or setting spec status to "done", the agent MUST
 
 **⚠️ STATE TRANSITION SEQUENCE (NON-NEGOTIABLE):**
 ```
-Step 1: Run guard script → bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}
-Step 2: IF exit code 1 → STOP. Status stays "in_progress". Fix ALL failures.
-Step 3: IF exit code 0 → Run artifact lint as confirmation
-Step 4: IF lint passes → Write the resolved status (never exceeding `statusCeiling`) to state.json
-Step 5: IF lint fails → STOP. Status stays "in_progress". Fix failures.
+Step 1: Independently resolve the current transition contract and compare runner mode/target/digest/revision assertions
+Step 2: Run the guard with the fresh target, mode, and digest assertions
+Step 3: IF either command is nonzero → STOP with no status mutation
+Step 4: IF audit is in phaseOrder → require exactly one matching ACTIVE linted audit result and complete finding accounting
+Step 5: Run artifact lint as confirmation
+Step 6: IF all checks pass → route the exact target and frozen assertions to bubbles.validate
+Step 7: bubbles.validate independently re-resolves and performs the only certification/status write
 ```
 
-**This sequence is ABSOLUTE. There is NO alternative path to "done" without the guard script passing.**
+**This sequence is ABSOLUTE. There is NO alternative path to a ceiling status without a fresh resolver match, guard pass, required audit match, and validate-owned write.**
 
 #### Status Ceiling Enforcement (NON-NEGOTIABLE)
 
@@ -519,8 +558,8 @@ Step 5: IF lint fails → STOP. Status stays "in_progress". Fix failures.
 | **3: Tests** | All test types pass (exit code 0); skip marker scan clean; coverage meets threshold | Raw terminal output in report.md for each test type |
 | **4: Validation** | Validation suite passes; no regressions vs baseline | Validation output in report.md |
 | **5: Documentation** | All impacted docs updated; no stale references | Doc file list in report.md |
-| **6: Audit** | Audit verdict is SHIP_IT or SHIP_WITH_NOTES; fabrication detection passes | Audit report in report.md; artifact lint exits 0 |
-| **7: Finalize** | uservalidation.md updated; scope status set to mode's `statusCeiling`; state.json status ≤ `statusCeiling`; `workflowMode` recorded; ALL finalization checks pass (steps 7-19 above); **state transition guard script exits 0 (Gate G023)**; **ALL scopes Done before spec done (Gate G024)**; **ALL DoD items have per-item raw evidence (Gate G025)**; **ALL tests cover all real scenarios with 100% coverage (Gate G025)**; **stress tests exist when SLAs are defined** | File timestamps verify updates; status matches ceiling; guard script exits 0; artifact lint exits 0; all DoD `[x]` with inline evidence; all scopes Done; specialist completion verified; test coverage verified; stress coverage verified |
+| **6: Audit** | Profile-scoped audit result is linted and current: `PLANNING_AUDIT_CLEAN` for planning maturity, or the existing delivery verdict for delivery completion; fabrication detection passes | Audit report in report.md; `execution.audit` and `AUDIT_RESULT_V1` agree; artifact lint exits 0 |
+| **7: Finalize** | Fresh resolver, guard, and current audit result agree; validate owns the terminal write; status does not exceed `statusCeiling`. Planning maturity changes only both status mirrors to `specs_hardened` and leaves scope/DoD/delivery facts incomplete. Done delivery still requires all scopes Done, all DoD/evidence/test/stress gates, and the unchanged completion chain. | Resolver/guard/audit assertions match; canonical audit-result lint exits 0; validate result shows the profile-appropriate write set; artifact lint exits 0 |
 
 **Rollback Protocol:** If a phase fails its exit gate and the agent cannot resolve the issue within 3 attempts:
 1. Revert any partial changes from the current phase
