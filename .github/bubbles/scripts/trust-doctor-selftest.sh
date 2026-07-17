@@ -51,12 +51,12 @@ clone_source_fixture() {
   # transient repo state wholesale. This lets the selftest run before the
   # current patch is committed while avoiding slow `cp -a` copies of .git and
   # local build/cache directories.
-  if ! git -C "$ROOT_DIR" diff --quiet -- .; then
-    git -C "$ROOT_DIR" diff --binary -- . | git -C "$dest" apply --binary
-  fi
-
   if ! git -C "$ROOT_DIR" diff --cached --quiet -- .; then
     git -C "$ROOT_DIR" diff --cached --binary -- . | git -C "$dest" apply --binary
+  fi
+
+  if ! git -C "$ROOT_DIR" diff --quiet -- .; then
+    git -C "$ROOT_DIR" diff --binary -- . | git -C "$dest" apply --binary
   fi
 }
 

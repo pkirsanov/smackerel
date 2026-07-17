@@ -47,7 +47,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 31 | [DevOps Work](recipes/devops-work.md) | `devops-to-doc` | CI/CD, deployment, monitoring |
 | 32 | [Ops Packet Work](recipes/ops-packet-work.md) | OPS packets | Cross-cutting infra work |
 | 33 | [Parallel Scopes](recipes/parallel-scopes.md) | `parallelScopes: dag` | Run independent scopes concurrently |
-| 34 | [Cross-Model Review](recipes/cross-model-review.md) | `crossModelReview` | Second AI opinion |
+| 34 | [Cross-Model Review: Unavailable](recipes/cross-model-review.md) | Migration note | No verified external provider/model adapter is enabled |
 | 35 | [Structured Commits](recipes/structured-commits.md) | `autoCommit: scope` | Clean git history |
 | 36 | [Custom Gates](recipes/custom-gates.md) | CLI | Project-specific quality checks |
 | 37 | [Framework Ops](recipes/framework-ops.md) | CLI / `bubbles.super` | Health, framework validation, release hygiene, hooks, gates, upgrades, metrics |
@@ -68,8 +68,9 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 52 | [Observe Production](recipes/observe-production.md) | `traceContracts.observability.endpoints` | Wire live telemetry through swappable observability adapters |
 | 53 | [Framework Health](recipes/framework-health.md) | `framework-health` | Analyze Bubbles itself and emit proposal-first improvement packets |
 | 54 | [Cross-Repo Goal Scenario](recipes/cross-repo-scenario.md) | `bubbles.goal` / `bubbles.sprint` | Compile an outcome (review → plan → deliver → deploy → operate, possibly cross-repo) into one approval-gated scenario DAG |
-| 55 | [Adversarial Verification](recipes/adversarial-verification.md) | `bubbles.redteam` / `redteam-to-doc` / `production-adversarial-probe` | Attack a finished result to falsify "done" — counterexamples, risk-gated voting validators, bounded prod chaos-monkey (Green Bastard "The Masked Attacker"). Off by default |
+| 55 | [Adversarial Verification](recipes/adversarial-verification.md) | `bubbles.redteam` / `redteam-to-doc` / `production-adversarial-probe` | Attack a finished result to falsify "done" with counterexamples, risk-gated correlated samples, or a bounded prod chaos-monkey probe. Off by default |
 | 56 | [Guided Journey](recipes/guided-journey.md) | `journey-refinement` / `bubbles.journey` | Walk the live product with the user toward a goal — verify UI/API/telemetry/data each step, capture friction, route refinements (Cathy Curtis) |
+| 57 | [Live Deployment Convergence](recipes/live-deployment-convergence.md) | `bubbles.goal` | Converge a real target through connector activation, approved seed data, Playwright journeys, and live four-layer proof |
 
 ---
 

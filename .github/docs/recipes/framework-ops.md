@@ -47,6 +47,99 @@ bash .github/bubbles/scripts/cli.sh guard-selftest
 
 `framework-events` exposes the typed framework event stream, and `run-state` shows the active and recent workflow-run records that make resume and runtime attachment explicit.
 
+## Inspect And Operate Transition Audits
+
+Use the canonical resolver before interpreting a transition guard or audit
+result. Run feature transitions from a project repo against its supported
+installed framework layer:
+
+```bash
+bash .github/bubbles/scripts/transition-contract-resolver.sh specs/NNN-feature
+bash .github/bubbles/scripts/state-transition-guard.sh specs/NNN-feature
+```
+
+At an orchestrated process boundary, pass the resolver's mode, target, and
+contract digest back as equality assertions. These flags cannot select a
+profile:
+
+```bash
+bash .github/bubbles/scripts/state-transition-guard.sh specs/NNN-feature \
+  --target-status specs_hardened \
+  --expect-workflow-mode product-to-planning \
+  --expect-contract-digest sha256:HEX
+```
+
+Read the ordered `TRANSITION_GUARD_RESULT_V1` block before the audit result.
+Then validate the complete transcript, including its persisted attempt, with:
+
+```bash
+bash .github/bubbles/scripts/audit-result-contract-lint.sh \
+  --result /path/to/audit-transcript
+```
+
+For `planning-maturity-v1`, a clean result is
+`PLANNING_AUDIT_CLEAN` at exactly `specs_hardened`; delivery is
+`NOT_EVALUATED`. The named delivery-completion portions of Checks 4, 5, 8, and
+11 must appear as non-applicable, not pass. Only `product-to-planning` and
+`spec-scope-hardening` have this binding. A different non-done mode without an
+explicit contract must fail unsupported, not borrow planning semantics.
+
+Do not resume from an old positive line in terminal output. Inspect
+`execution.audit.currentAttemptId`: it must resolve to exactly one ACTIVE
+attempt whose profile, target, contract digest, target revision, evidence ref,
+and findings match the transcript. An interrupted run leaves the new attempt
+INCOMPLETE with no current pointer. Re-enter at its recorded
+`resumeFromPhase`; the next audit attempt supersedes prior ACTIVE evidence and
+must pass result lint before becoming current. Validate, not audit or finalize,
+owns the exact-ceiling status write.
+
+### Release, Upgrade, And Installed Provenance
+
+Framework changes are canonical-source-first. Source maintainers validate the
+checkout with:
+
+```bash
+bash bubbles/scripts/cli.sh framework-validate
+bash bubbles/scripts/cli.sh agnosticity
+```
+
+Release ownership then regenerates derived registries and
+`bubbles/release-manifest.json` from canonical source, with the release
+manifest generated last, and runs `bash bubbles/scripts/cli.sh release-check`.
+Do not hand-edit the manifest to make a docs-only working tree appear fresh.
+
+After a published release passes its owning checks, upgrade a consumer only
+through its installed CLI:
+
+```bash
+bash .github/bubbles/scripts/cli.sh upgrade
+bash .github/bubbles/scripts/cli.sh doctor
+bash .github/bubbles/scripts/cli.sh framework-write-guard
+```
+
+For a trusted local-source rehearsal, use `upgrade --dry-run --local-source
+/path/to/bubbles` first. Installed provenance is established by
+`.github/bubbles/.install-source.json`, framework membership by
+`.github/bubbles/.manifest`, and managed-byte integrity by
+`.github/bubbles/.checksums`. Verify the resolver, guard, audit-result lint,
+agents, shared contracts, templates, and workflow registries through those
+surfaces; never patch a downstream managed file directly.
+
+Documentation validation does not itself prove release packaging, downstream
+upgrade, or consumer recertification. Those claims require their own executed
+release, install-provenance, byte-parity, and consumer-audit evidence.
+
+### Coherent Rollback
+
+Rollback the contract as one source change. Revert the complete canonical
+registry/resolver/guard/audit/validate/finalize change, regenerate derived
+outputs and the release manifest from that reverted source, pass
+`release-check`, and install the prior known-good release through the supported
+upgrade path. Do not leave only a planning exemption or prompt change in
+place, delete `execution.audit` history, rewrite consumer state, hand-copy old
+bytes, or rebuild rollback artifacts. A correct rollback restores the former
+delivery behavior and honestly reopens the planning-audit defect.
+
 ## Skills-First Discovery (v4.0+)
 
 The framework ships discovery skills that route agents and humans to the right governance module on demand instead of bulk-loading `agent-common.md`. When an agent (or you) is unsure which Bubbles rule applies, start at [`skills/bubbles-skills-first-discovery/SKILL.md`](../../skills/bubbles-skills-first-discovery/SKILL.md). It maps common situations to:

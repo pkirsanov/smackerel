@@ -91,6 +91,34 @@ This section owns the workflow final summary contract, including:
 - final status reporting by spec
 - failed-gate and resume-command reporting rules
 
+#### Registry-Bound Finalize Boundary
+
+Before requesting any terminal transition, the workflow runner MUST
+independently execute `transition-contract-resolver.sh` against current state.
+It compares the fresh `workflowMode`, target status, `contractDigest`, and
+`targetRevision` with its own frozen assertions and with the current
+`AUDIT_RESULT_V1`; no prior resolver output is reusable at this boundary.
+
+When the resolved `phaseOrder` contains `audit`, the runner MUST resolve
+`execution.audit.currentAttemptId` to exactly one ACTIVE attempt, resolve that
+attempt's evidence ref to exactly one complete result transcript, and run the
+canonical audit-result contract lint. Attempt ID, result state, audit profile,
+target, digest, revision, verdict, outcome, evidence ref, and one-to-one
+`addressedFindings`/`unresolvedFindings` accounting MUST match current runner
+state. Missing, stale, duplicate, dangling, `INCOMPLETE`, `SUPERSEDED`,
+over-ceiling, contradictory, or finding-incomplete evidence is terminally
+blocked with no prior-result reuse or guessed profile.
+
+A pre-audit validate pass may report checks but cannot certify the ceiling.
+After exactly one matching `planning-maturity-v1` attempt with
+`PLANNING_AUDIT_CLEAN`, the runner sends the frozen assertions to
+`bubbles.validate`. Finalize itself writes no certification or status. Validate
+independently repeats the boundary check and may mirror only top-level `status`
+and `certification.status` to exactly `specs_hardened`; scope statuses, DoD,
+completed scopes, scope progress, delivery evaluation/evidence, and audit
+history remain unchanged. The existing `delivery-completion-v1` done path keeps
+its all-scopes-Done, all-DoD-complete, evidence-backed strictness unchanged.
+
 ### Failure Routing Contract
 
 This section owns the failure-routing contract, including:

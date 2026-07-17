@@ -266,6 +266,18 @@ scans:
         - '\\bfalse\\b'
         - '\\bmissing\\b'
 
+  # G028 Scan 2B: exact, narrow session-only market-data credential
+  # classification. Omit the section for zero approvals.
+  sensitiveClientStorage:
+    approvedSessionCredentials:
+      - path: path/to/provider-client.js
+        storage: sessionStorage
+        key: marketProvider:provider-id:apiKey
+        provider: provider-id
+        credentialClass: third-party-market-data
+        privilege: low
+        lifetime: same-tab
+
 # Design-language opt-in (per repo). Lists the optional framework design-language
 # skills this repo vendors + the repo-wide default. An optional skill (declared in
 # bubbles/registry/optional-skills.txt, e.g. bubbles-cinematic-design) is installed
@@ -364,6 +376,34 @@ mcp:
 | **YAML structure** | Simple `key: value` or `key: [list]` format parseable by `sed`/`awk` in bash scripts |
 
 `regressionQuality.*` follows the standard override model: if provided, those lists replace the generic fallback patterns used by `regression-quality-guard.sh`.
+
+### `scans.sensitiveClientStorage` Contract
+
+This section is an exact classification boundary, not an allowlist pattern
+language. Omission means zero approved session credentials. Each
+`approvedSessionCredentials` item has exactly seven required fields:
+`path`, `storage`, `key`, `provider`, `credentialClass`, `privilege`, and
+`lifetime`.
+
+- `path` is one normalized repo-relative POSIX path. Absolute paths, `.`/`..`,
+  symlink escape, globs, regex syntax, and empty values are invalid.
+- `storage` is exactly `sessionStorage`; config cannot approve `localStorage`,
+  IndexedDB, AsyncStorage, SharedPreferences, or another durable store.
+- `key` and `provider` are exact nonempty literals. Wildcards and provider/key
+  inference from comments, filenames, display names, or runtime input are
+  forbidden.
+- `credentialClass`, `privilege`, and `lifetime` are the closed values
+  `third-party-market-data`, `low`, and `same-tab`.
+- Unknown fields, missing fields, duplicate tuples, multiple providers for one
+  path/storage/key boundary, malformed YAML, and an unavailable parser are
+  configuration-integrity violations. They never create an approval.
+- Auth/login/session/JWT/bearer/refresh/cookie/password/client-secret/payment/
+  card/CVV/CVC/SSN material remains blocking even when path, key, and provider
+  otherwise match. Durable credential access is decided before config matching.
+
+The scanner reads this project-owned section but never creates, normalizes, or
+mutates it. One entry authorizes one exact low-privilege provider credential in
+one tab and one source path only.
 
 `docsRegistryOverrides.*` follows the same ownership model: framework defaults remain in `bubbles/docs-registry.yaml`, while projects can override managed doc entries or classification values from `.github/bubbles-project.yaml`.
 

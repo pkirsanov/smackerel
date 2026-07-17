@@ -1387,6 +1387,91 @@ $line"
   cmd_list
 }
 
+# ---------------------------------------------------------------------------
+# Artifact-writer lease (BFW-03 / IMP-023)
+# ---------------------------------------------------------------------------
+# A THIN convention over the existing EXCLUSIVE lease: it keys write-exclusivity
+# on a spec/bug TARGET (plus the current worktree, already captured by acquire)
+# so two agents cannot mutate the same spec's owned source/tests/report at once.
+# It REUSES the exclusive share-mode, TTL/stale, heartbeat, attach --takeover,
+# and release machinery unchanged — it adds only (a) the target->purpose
+# convention, (b) owned-path recording via the existing --resource path:<family>,
+# and (c) an owner-naming refusal that FORBIDS "reconciling" two live writers by
+# appending evidence (the Feature-010 anti-pattern). Readers never take this
+# lease; multiple readers inspect freely. Acquire it BEFORE the first mutable
+# tool call against the target's owned paths; release it (or let its TTL lapse
+# for an audited takeover) when the scope is done.
+cmd_writer_acquire() {
+  local target='' paths='' environment='dev' session_id='' agent='' ttl_minutes=''
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --target) target="$2"; shift 2 ;;
+      --paths) paths="$2"; shift 2 ;;
+      --environment) environment="$2"; shift 2 ;;
+      --session-id) session_id="$2"; shift 2 ;;
+      --agent) agent="$2"; shift 2 ;;
+      --ttl-minutes) ttl_minutes="$2"; shift 2 ;;
+      *) die "Unknown runtime writer-acquire option: $1" ;;
+    esac
+  done
+
+  [[ -n "$target" ]] || die "Usage: runtime writer-acquire --target <spec-or-bug-dir> [--paths a,b,c] [--environment env] [--session-id id] [--agent name] [--ttl-minutes n]"
+
+  load_runtime_defaults
+  [[ -n "$session_id" ]] || session_id="$(derive_session_id)"
+  [[ -n "$agent" ]] || agent="$(derive_agent_name)"
+
+  local purpose
+  purpose="artifact-write:$(slugify "$target")"
+  local repo_name
+  repo_name="$(basename "$REPO_ROOT")"
+
+  # Owner-naming pre-check (BFW-03): a DIFFERENT active session already holding
+  # the writer lease for this target is a STRUCTURAL refusal, never a
+  # merge/append. cmd_acquire's exclusive guard is the atomic backstop; this
+  # pre-check exists only to name the current owner and forbid reconcile-by-append.
+  acquire_registry_lock
+  local line owner_session owner_agent owner_lease
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    [[ "$(effective_status "$line")" == "active" ]] || continue
+    if [[ "$(field_from_line "$line" repo)" == "$repo_name" \
+      && "$(field_from_line "$line" purpose)" == "$purpose" \
+      && "$(field_from_line "$line" environment)" == "$environment" \
+      && "$(field_from_line "$line" shareMode)" == "exclusive" \
+      && "$(field_from_line "$line" sessionId)" != "$session_id" ]]; then
+      owner_session="$(field_from_line "$line" sessionId)"
+      owner_agent="$(field_from_line "$line" agent)"
+      owner_lease="$(field_from_line "$line" leaseId)"
+      release_registry_lock
+      die "Artifact writer already active for '${target}' — owner session '${owner_session}' (agent '${owner_agent}'), lease '${owner_lease}'. Route the change to that owner or wait for release; do NOT reconcile two live writers by appending evidence. Take over ONLY a stale lease with: runtime attach ${owner_lease} --takeover"
+    fi
+  done <<< "$(lease_lines)"
+  release_registry_lock
+
+  # Reuse cmd_acquire for the actual exclusive acquisition. One always-non-empty
+  # array keeps this bash-3.2 safe (no unguarded empty-array expansion under set -u).
+  local -a acquire_args
+  acquire_args=(--purpose "$purpose" --environment "$environment" --share-mode exclusive \
+    --session-id "$session_id" --agent "$agent" --compatibility-key artifact-writer)
+  if [[ -n "$ttl_minutes" ]]; then
+    acquire_args+=(--ttl-minutes "$ttl_minutes")
+  fi
+  if [[ -n "$paths" ]]; then
+    local saved_ifs="$IFS"
+    IFS=','
+    local path_family
+    for path_family in $paths; do
+      [[ -n "$path_family" ]] && acquire_args+=(--resource "path:${path_family}")
+    done
+    IFS="$saved_ifs"
+  fi
+
+  echo "🔒 Acquiring artifact-writer lease for '${target}' (purpose ${purpose})"
+  cmd_acquire "${acquire_args[@]}"
+}
+
 cmd_help() {
   cat <<'EOF'
 Usage: runtime-leases.sh <command> [args]
@@ -1401,6 +1486,15 @@ Commands:
   heartbeat <lease-id>            Renew an existing lease
   release <lease-id> [--session-id <id>] Mark a lease as released or detach one session
   reclaim-stale                   Mark expired active leases as stale
+  writer-acquire --target <dir> [opts] Acquire an EXCLUSIVE artifact-writer lease keyed on a spec/bug target
+
+Writer-acquire options (BFW-03 — thin convention over an exclusive lease):
+  --target <spec-or-bug-dir>      REQUIRED. Write-exclusivity is keyed on this target (+ worktree)
+  --paths <a,b,c>                 Owned path families to record (e.g. source,tests,report)
+  --environment <env>             Default: dev
+  --session-id <id> / --agent <name> / --ttl-minutes <n>
+  A second writer on the same target is refused, naming the current owner. A
+  stale writer lease is taken over with: runtime attach <lease-id> --takeover.
 
 Acquire options:
   --environment <env>             Default: dev
@@ -1461,6 +1555,10 @@ case "${1:-help}" in
   reclaim-stale)
     shift
     cmd_reclaim_stale "$@"
+    ;;
+  writer-acquire)
+    shift
+    cmd_writer_acquire "$@"
     ;;
   help|--help|-h)
     cmd_help

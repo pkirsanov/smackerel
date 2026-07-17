@@ -180,6 +180,67 @@ In `deep`/`full` mode, command green status alone is insufficient. Validation MU
 
 All commands from `agents.md`. Run each step, record output in validation report.
 
+### Step 2.11A: Registry-Bound Audit Certification
+
+Step 2.11 is both a pre-audit reporting boundary and, when the mode requires
+`audit`, the post-audit terminal certification boundary. The two invocations
+MUST NOT be conflated.
+
+At every invocation, validate MUST independently run
+`transition-contract-resolver.sh` for the current feature and compare the fresh
+`workflowMode`, `targetStatus`, `contractDigest`, and `targetRevision` with the
+top-level runner assertions. It MUST then run the transition guard with the
+fresh target, mode, and digest assertions. A caller-selected or inferred audit
+profile is forbidden; the resolver output is the only profile source.
+
+When the fresh `phaseOrder` still contains `audit` and no current matching audit
+attempt exists, this is pre-audit validation. Validate may report the planning
+checks and record its own phase claim, but MUST NOT write top-level `status`,
+`certification.status`, `certification.completedScopes`, or any other terminal
+certification field. A green guard before audit does not certify the ceiling.
+
+After audit, validate MUST perform all of these checks again before any terminal
+write:
+
+1. Resolve the contract from current state and compare the runner-asserted mode,
+   target, contract digest, and target revision to the fresh values.
+2. Resolve `execution.audit.currentAttemptId` to exactly one persisted attempt;
+   exactly one attempt may be `ACTIVE`, and it MUST be that current attempt.
+3. Resolve the attempt's non-empty `evidenceRef` to exactly one complete
+   `AUDIT_RESULT_V1` transcript and run
+   `audit-result-contract-lint.sh --result <transcript>` against current state.
+4. Compare the transcript and persisted attempt to the fresh contract for
+   attempt ID, result state, workflow mode, audit profile, target status,
+   contract digest, target revision, audit verdict, outcome, and evidence ref.
+5. Compare the runner finding ledger with `addressedFindings` and
+   `unresolvedFindings`: every expected finding ID appears exactly once in one
+   collection, no collection overlaps, and no prior finding disappears.
+
+For `planning-maturity-v1`, terminal certification is permitted only when the
+resolved ceiling and target are exactly `specs_hardened`, the one matching
+current attempt is `ACTIVE`, the verdict is `PLANNING_AUDIT_CLEAN`, the outcome
+is `completed_diagnostic`, `deliveryEvaluation` is `NOT_EVALUATED`, and
+`unresolvedFindings` is empty. Validate alone then writes exactly the terminal
+status mirror: top-level `status` and `certification.status` become
+`specs_hardened`. Scope statuses, DoD checkboxes,
+`certification.completedScopes`, scope progress, delivery evaluation, delivery
+evidence, and audit-owned `execution.audit` history remain byte-for-byte
+unchanged. Validate may record only its normal validate-owned phase bookkeeping
+after its own gates pass.
+
+Missing or stale audit evidence, a missing or duplicated ACTIVE attempt, a
+dangling current pointer, `INCOMPLETE`/`SUPERSEDED` state, digest or revision
+drift, mode/profile/target mismatch, an over-ceiling status, an unresolved or
+disappearing finding, a missing evidence reference, or a non-clean verdict MUST
+return `blocked`. Validate MUST NOT reuse a prior result, guess a profile, repair
+audit history, or partially write certification.
+
+For `delivery-completion-v1` and a `done` ceiling, this section adds provenance
+comparison only. The existing strict delivery path remains behaviorally
+unchanged: all scopes are Done, all DoD and evidence requirements pass, the
+delivery audit verdict is valid, and the full completion chain is required
+before `done` certification.
+
 ### Step 2B: Contract Verification (MANDATORY for API changes)
 
 If the scope includes API endpoint changes, verify response contracts match spec:

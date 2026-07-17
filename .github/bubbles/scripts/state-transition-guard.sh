@@ -7,12 +7,16 @@
 # agents from fabricating completion status.
 #
 # Usage:
-#   bash bubbles/scripts/state-transition-guard.sh <feature-dir> [--revert-on-fail]
+#   bash bubbles/scripts/state-transition-guard.sh <feature-dir> \
+#     [--target-status STATUS] \
+#     [--expect-workflow-mode MODE] \
+#     [--expect-contract-digest sha256:HEX] \
+#     [--revert-on-fail]
 #
 # Exit codes:
-#   0 = All checks pass, transition to "done" is permitted
+#   0 = All applicable checks pass for the registry-derived target
 #   1 = One or more checks failed, transition BLOCKED
-#   2 = Usage error / missing arguments
+#   2 = Transition contract could not be resolved or asserted
 #
 # When --revert-on-fail is specified and checks fail, the script automatically
 # reverts the top-level and certification status to "in_progress" and clears
@@ -38,25 +42,255 @@ source "$SCRIPT_DIR/guard-lib.sh"
 # blockquote exclusion used by Check 4B + Check 5 so they stay in lockstep.
 source "$SCRIPT_DIR/scan-lib.sh"
 
-feature_dir="${1:-}"
-revert_on_fail="false"
+transition_workflow_mode="UNRESOLVED"
+transition_audit_profile="UNRESOLVED"
+transition_target_status="UNRESOLVED"
+transition_contract_digest="UNRESOLVED"
+transition_target_revision="UNRESOLVED"
+transition_source_edit_lockout_required="false"
+transition_applicable_check_classes=()
+transition_not_applicable_checks=()
+transition_required_gate_ids=()
+passed_gate_ids=()
+failed_gate_ids=()
+failed_check_ids=()
 
-for arg in "$@"; do
-  if [[ "$arg" == "--revert-on-fail" ]]; then
-    revert_on_fail="true"
+list_contains() {
+  local needle="$1"
+  shift
+  local item
+  for item in "$@"; do
+    if [[ "$item" == "$needle" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+record_passed_gate() {
+  local gate_id="$1"
+  list_contains "$gate_id" ${passed_gate_ids[@]+"${passed_gate_ids[@]}"} || passed_gate_ids+=("$gate_id")
+}
+
+record_failed_gate() {
+  local gate_id="$1"
+  list_contains "$gate_id" ${failed_gate_ids[@]+"${failed_gate_ids[@]}"} || failed_gate_ids+=("$gate_id")
+}
+
+record_failed_check() {
+  local check_id="$1"
+  list_contains "$check_id" ${failed_check_ids[@]+"${failed_check_ids[@]}"} || failed_check_ids+=("$check_id")
+}
+
+record_gate_ids_from_message() {
+  local outcome="$1"
+  local remaining="$2"
+  local gate_id
+  while [[ "$remaining" =~ (G[0-9][0-9][0-9]) ]]; do
+    gate_id="${BASH_REMATCH[1]}"
+    if [[ "$outcome" == "pass" ]]; then
+      record_passed_gate "$gate_id"
+    else
+      record_failed_gate "$gate_id"
+    fi
+    remaining="${remaining#*"$gate_id"}"
+  done
+}
+
+format_result_list() {
+  local first="true"
+  local item
+  printf '['
+  for item in "$@"; do
+    if [[ "$first" == "true" ]]; then
+      first="false"
+    else
+      printf ','
+    fi
+    printf '%s' "$item"
+  done
+  printf ']'
+}
+
+emit_transition_result() {
+  local verdict="$1"
+  local blocking_code="$2"
+  local failure_count="$3"
+  local exit_status="$4"
+  local gate_id
+  local effective_passed_gate_ids=()
+
+  if [[ "$verdict" == "PASS" ]]; then
+    for gate_id in ${transition_required_gate_ids[@]+"${transition_required_gate_ids[@]}"}; do
+      record_passed_gate "$gate_id"
+    done
   fi
+  for gate_id in ${passed_gate_ids[@]+"${passed_gate_ids[@]}"}; do
+    if ! list_contains "$gate_id" ${failed_gate_ids[@]+"${failed_gate_ids[@]}"}; then
+      effective_passed_gate_ids+=("$gate_id")
+    fi
+  done
+
+  printf '%s\n' 'BEGIN TRANSITION_GUARD_RESULT_V1'
+  printf '%s\n' 'schemaVersion: transition-guard-result/v1'
+  printf 'workflowMode: %s\n' "$transition_workflow_mode"
+  printf 'auditProfile: %s\n' "$transition_audit_profile"
+  printf 'targetStatus: %s\n' "$transition_target_status"
+  printf 'contractDigest: %s\n' "$transition_contract_digest"
+  printf 'targetRevision: %s\n' "$transition_target_revision"
+  printf 'applicableCheckClasses: %s\n' "$(format_result_list ${transition_applicable_check_classes[@]+"${transition_applicable_check_classes[@]}"})"
+  printf 'notApplicableChecks: %s\n' "$(format_result_list ${transition_not_applicable_checks[@]+"${transition_not_applicable_checks[@]}"})"
+  printf 'passedGateIds: %s\n' "$(format_result_list ${effective_passed_gate_ids[@]+"${effective_passed_gate_ids[@]}"})"
+  printf 'failedGateIds: %s\n' "$(format_result_list ${failed_gate_ids[@]+"${failed_gate_ids[@]}"})"
+  printf 'failedChecks: %s\n' "$(format_result_list ${failed_check_ids[@]+"${failed_check_ids[@]}"})"
+  printf 'blockingCode: %s\n' "$blocking_code"
+  printf 'failureCount: %s\n' "$failure_count"
+  printf 'exitStatus: %s\n' "$exit_status"
+  printf 'verdict: %s\n' "$verdict"
+  printf '%s\n' 'END TRANSITION_GUARD_RESULT_V1'
+}
+
+block_contract() {
+  local error_code="$1"
+  local detail="$2"
+  printf '%s: %s\n' "$error_code" "$detail" >&2
+  record_failed_check contract-resolution
+  emit_transition_result BLOCKED "$error_code" 1 2
+  exit 2
+}
+
+if (( $# == 0 )); then
+  block_contract E009-USAGE "FEATURE_DIR is required"
+fi
+
+feature_dir="$1"
+shift
+if [[ -z "$feature_dir" || "$feature_dir" == --* ]]; then
+  block_contract E009-USAGE "FEATURE_DIR must be the first argument"
+fi
+
+revert_on_fail="false"
+expect_target_status=""
+expect_workflow_mode=""
+expect_contract_digest=""
+while (( $# > 0 )); do
+  case "$1" in
+    --revert-on-fail)
+      revert_on_fail="true"
+      shift
+      ;;
+    --target-status)
+      (( $# >= 2 )) || block_contract E009-USAGE "--target-status requires a value"
+      [[ -z "$expect_target_status" ]] || block_contract E009-USAGE "--target-status may be supplied only once"
+      expect_target_status="$2"
+      shift 2
+      ;;
+    --target-status=*)
+      [[ -z "$expect_target_status" ]] || block_contract E009-USAGE "--target-status may be supplied only once"
+      expect_target_status="${1#*=}"
+      [[ -n "$expect_target_status" ]] || block_contract E009-USAGE "--target-status requires a value"
+      shift
+      ;;
+    --expect-workflow-mode)
+      (( $# >= 2 )) || block_contract E009-USAGE "--expect-workflow-mode requires a value"
+      [[ -z "$expect_workflow_mode" ]] || block_contract E009-USAGE "--expect-workflow-mode may be supplied only once"
+      expect_workflow_mode="$2"
+      shift 2
+      ;;
+    --expect-workflow-mode=*)
+      [[ -z "$expect_workflow_mode" ]] || block_contract E009-USAGE "--expect-workflow-mode may be supplied only once"
+      expect_workflow_mode="${1#*=}"
+      [[ -n "$expect_workflow_mode" ]] || block_contract E009-USAGE "--expect-workflow-mode requires a value"
+      shift
+      ;;
+    --expect-contract-digest)
+      (( $# >= 2 )) || block_contract E009-USAGE "--expect-contract-digest requires a value"
+      [[ -z "$expect_contract_digest" ]] || block_contract E009-USAGE "--expect-contract-digest may be supplied only once"
+      expect_contract_digest="$2"
+      shift 2
+      ;;
+    --expect-contract-digest=*)
+      [[ -z "$expect_contract_digest" ]] || block_contract E009-USAGE "--expect-contract-digest may be supplied only once"
+      expect_contract_digest="${1#*=}"
+      [[ -n "$expect_contract_digest" ]] || block_contract E009-USAGE "--expect-contract-digest requires a value"
+      shift
+      ;;
+    *)
+      block_contract E009-USAGE "unknown or policy-selecting argument: $1"
+      ;;
+  esac
 done
 
-if [[ -z "$feature_dir" ]]; then
-  echo "ERROR: missing feature directory argument"
-  echo "Usage: bash bubbles/scripts/state-transition-guard.sh specs/<NNN-feature-name> [--revert-on-fail]"
-  exit 2
+if [[ ! -d "$feature_dir" ]]; then
+  block_contract E009-STATE-MALFORMED "feature directory does not exist"
 fi
 
-if [[ ! -d "$feature_dir" ]]; then
-  echo "ERROR: feature directory not found: $feature_dir"
-  exit 2
+transition_contract_resolver="$SCRIPT_DIR/transition-contract-resolver.sh"
+if [[ ! -f "$transition_contract_resolver" ]]; then
+  block_contract E009-REGISTRY-MISSING "transition contract resolver is unavailable"
 fi
+
+transition_contract_stdout="$(mktemp "${TMPDIR:-/tmp}/bubbles-transition-guard-contract.XXXXXX")"
+transition_contract_stderr="$(mktemp "${TMPDIR:-/tmp}/bubbles-transition-guard-contract-error.XXXXXX")"
+transition_resolver_args=("$feature_dir")
+[[ -z "$expect_target_status" ]] || transition_resolver_args+=(--expect-target "$expect_target_status")
+[[ -z "$expect_workflow_mode" ]] || transition_resolver_args+=(--expect-mode "$expect_workflow_mode")
+[[ -z "$expect_contract_digest" ]] || transition_resolver_args+=(--expect-contract-digest "$expect_contract_digest")
+
+set +e
+bash "$transition_contract_resolver" "${transition_resolver_args[@]}" > "$transition_contract_stdout" 2> "$transition_contract_stderr"
+transition_resolver_status=$?
+set -e
+if [[ "$transition_resolver_status" -ne 0 ]]; then
+  transition_resolver_error=""
+  IFS= read -r transition_resolver_error < "$transition_contract_stderr" || true
+  rm -f "$transition_contract_stdout" "$transition_contract_stderr"
+  transition_resolver_code="${transition_resolver_error%%:*}"
+  if [[ ! "$transition_resolver_code" =~ ^E009-[A-Z0-9-]+$ ]]; then
+    transition_resolver_code="E009-REGISTRY-MISSING"
+    transition_resolver_error="E009-REGISTRY-MISSING: transition contract resolver failed without a valid E009 result"
+  fi
+  block_contract "$transition_resolver_code" "${transition_resolver_error#*: }"
+fi
+rm -f "$transition_contract_stderr"
+
+if ! jq -e '
+  .schemaVersion == "transition-contract/v1"
+  and (.workflowMode | type == "string" and length > 0)
+  and (.auditProfile == "planning-maturity-v1" or .auditProfile == "delivery-completion-v1")
+  and (.targetStatus | type == "string" and length > 0)
+  and (.currentStatus | type == "string" and length > 0)
+  and (.contractDigest | type == "string" and test("^sha256:[0-9a-f]{64}$"))
+  and (.targetRevision | type == "string" and test("^sha256:[0-9a-f]{64}$"))
+  and (.requiredGates | type == "array" and all(.[]; type == "string" and test("^G[0-9]{3}$")))
+  and (.sourceEditLockoutRequired | type == "boolean")
+' "$transition_contract_stdout" >/dev/null 2>&1; then
+  rm -f "$transition_contract_stdout"
+  block_contract E009-AUDIT-PROFILE-CONTRADICTION "transition contract resolver emitted a malformed contract"
+fi
+
+transition_workflow_mode="$(jq -r '.workflowMode' "$transition_contract_stdout")"
+transition_audit_profile="$(jq -r '.auditProfile' "$transition_contract_stdout")"
+transition_target_status="$(jq -r '.targetStatus' "$transition_contract_stdout")"
+transition_current_status="$(jq -r '.currentStatus' "$transition_contract_stdout")"
+transition_contract_digest="$(jq -r '.contractDigest' "$transition_contract_stdout")"
+transition_target_revision="$(jq -r '.targetRevision' "$transition_contract_stdout")"
+transition_source_edit_lockout_required="$(jq -r '.sourceEditLockoutRequired' "$transition_contract_stdout")"
+while IFS= read -r gate_id; do
+  [[ -n "$gate_id" ]] || continue
+  transition_required_gate_ids+=("$gate_id")
+done < <(jq -r '.requiredGates[]' "$transition_contract_stdout")
+rm -f "$transition_contract_stdout"
+
+case "$transition_audit_profile" in
+  planning-maturity-v1)
+    transition_applicable_check_classes=(universal mode-required planning-maturity)
+    transition_not_applicable_checks=(Check-4-completion Check-5-all-done Check-8-file-existence Check-11-execution-evidence)
+    ;;
+  delivery-completion-v1)
+    transition_applicable_check_classes=(universal mode-required delivery-completion)
+    ;;
+esac
 
 resolve_script_repo_root() {
   if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
@@ -107,15 +341,6 @@ resolve_workflow_registry_file() {
 }
 
 workflow_registry_file="$(resolve_workflow_registry_file || true)"
-# v6.1 (S2 true split): mode definitions live in bubbles/workflows/modes.yaml,
-# beside workflows.yaml. Prefer it for the raw modes: awk parse below; fall
-# back to workflows.yaml for pre-split repos that still embed an inline modes:
-# block. (The mode-resolver fallback path also composes modes.yaml on its own.)
-workflow_modes_file=""
-if [[ -n "$workflow_registry_file" ]]; then
-  workflow_modes_file="$(dirname "$workflow_registry_file")/workflows/modes.yaml"
-  [[ -f "$workflow_modes_file" ]] || workflow_modes_file="$workflow_registry_file"
-fi
 is_test_fixture_dir="false"
 case "$feature_abs" in
   "$guard_repo_root/tests/fixtures/"*|"$script_repo_root/tests/fixtures/"*)
@@ -148,6 +373,7 @@ fail() {
   echo "🔴 BLOCK: $message"
   fun_fail
   failures=$((failures + 1))
+  record_gate_ids_from_message fail "$message"
 }
 
 warn() {
@@ -160,6 +386,7 @@ warn() {
 pass() {
   local message="$1"
   echo "✅ PASS: $message"
+  record_gate_ids_from_message pass "$message"
 }
 
 info() {
@@ -189,59 +416,6 @@ json_first_bool() {
   grep -Eo '"'"$key"'"[[:space:]]*:[[:space:]]*(true|false)' "$file" \
     | head -n 1 \
     | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*(true|false)/\1/'
-}
-
-resolve_workflow_status_ceiling_from_registry() {
-  local workflow_mode="$1"
-  local status_ceiling=""
-
-  [[ -n "$workflow_mode" ]] || return 1
-  [[ -n "$workflow_modes_file" && -f "$workflow_modes_file" ]] || return 1
-
-  status_ceiling="$(awk -v mode="$workflow_mode" '
-    /^modes:[[:space:]]*$/ { in_modes = 1; next }
-    in_modes && /^[A-Za-z0-9_-]+:[[:space:]]*$/ { exit }
-    in_modes && $0 ~ "^  " mode ":[[:space:]]*$" { in_mode = 1; next }
-    in_mode && $0 ~ "^  [[:alnum:]_-]+:[[:space:]]*$" { exit }
-    in_mode {
-      line = $0
-      sub(/^[[:space:]]+/, "", line)
-      if (line ~ /^statusCeiling:[[:space:]]*/) {
-        sub(/^statusCeiling:[[:space:]]*/, "", line)
-        gsub(/"/, "", line)
-        print line
-        exit
-      }
-    }
-  ' "$workflow_modes_file")"
-
-  [[ -n "$status_ceiling" ]] || return 1
-  printf '%s\n' "$status_ceiling"
-}
-
-resolve_workflow_status_ceiling() {
-  local workflow_mode="$1"
-  local resolver="$SCRIPT_DIR/mode-resolver.sh"
-  local resolved=""
-  local status_ceiling=""
-
-  [[ -n "$workflow_mode" ]] || return 1
-  [[ -f "$resolver" ]] || return 1
-
-  status_ceiling="$(resolve_workflow_status_ceiling_from_registry "$workflow_mode" || true)"
-  if [[ -z "$status_ceiling" ]]; then
-    # v7: this resolves a PERSISTED workflowMode from an existing artifact, so
-    # grandfather the (possibly v5-name) registry key — the resolver rejects
-    # bare v5 names only for NEW operator input, not for stored modes.
-    if [[ -n "$workflow_registry_file" ]]; then
-      resolved="$(BUBBLES_MODE_GRANDFATHER=1 BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
-    else
-      resolved="$(BUBBLES_MODE_GRANDFATHER=1 bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
-    fi
-    status_ceiling="$(printf '%s\n' "$resolved" | awk -F':[[:space:]]*' '$1 == "statusCeiling" { gsub(/"/, "", $2); print $2; exit }')"
-  fi
-  [[ -n "$status_ceiling" ]] || return 1
-  printf '%s\n' "$status_ceiling"
 }
 
 json_nested_string() {
@@ -381,13 +555,13 @@ else
   report_files+=("$feature_dir/report.md")
 fi
 
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   build_scope_analysis_units "$scope_path"
 done
 
 if [[ ${#scope_analysis_files[@]} -eq 0 ]]; then
-  scope_analysis_files=("${scope_files[@]}")
-  for scope_path in "${scope_files[@]}"; do
+  scope_analysis_files=(${scope_files[@]+"${scope_files[@]}"})
+  for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
     scope_analysis_labels+=("${scope_path#$feature_dir/}")
   done
 fi
@@ -417,7 +591,7 @@ relative_artifact_path() {
 count_gherkin_scenarios() {
   local total=0
   local scope_path=""
-  for scope_path in "${scope_files[@]}"; do
+  for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
     [[ -f "$scope_path" ]] || continue
     total=$((total + $(grep -cE '^[[:space:]]*Scenario( Outline)?:' "$scope_path" || true)))
   done
@@ -460,7 +634,7 @@ if [[ "$scope_layout" == "per-scope-directory" ]]; then
   fi
 
   missing_scope_reports=0
-  for scope_path in "${scope_files[@]}"; do
+  for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
     scope_report_path="$(dirname "$scope_path")/report.md"
     if [[ -f "$scope_report_path" ]]; then
       pass "Scope report exists: ${scope_report_path#$feature_dir/}"
@@ -501,8 +675,8 @@ if [[ ! -f "$state_file" ]]; then
   exit 1
 fi
 
-state_status="$({ grep -Eo '"status"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" | head -n 1 | sed -E 's/.*"([^"]+)"/\1/'; } || true)"
-state_workflow_mode="$({ grep -Eo '"workflowMode"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" | head -n 1 | sed -E 's/.*"([^"]+)"/\1/'; } || true)"
+state_status="$transition_current_status"
+state_workflow_mode="$transition_workflow_mode"
 state_plan_maturity_only="$(json_first_bool "planMaturityOnly" "$state_file" || true)"
 wi_canonical_count="$({ grep -Eo '"canonicalCount"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" | head -n 1 | sed -E 's/.*:[[:space:]]*([0-9]+)/\1/'; } || true)"
 wi_provisional_count="$({ grep -Eo '"provisionalIntakeCount"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" | head -n 1 | sed -E 's/.*:[[:space:]]*([0-9]+)/\1/'; } || true)"
@@ -606,19 +780,13 @@ echo ""
 # CHECK 3: Status ceiling enforcement
 # =============================================================================
 echo "--- Check 3: Status Ceiling Enforcement ---"
-if [[ -n "$state_workflow_mode" ]]; then
-  state_status_ceiling="$(resolve_workflow_status_ceiling "$state_workflow_mode" || true)"
-  if [[ -z "$state_status_ceiling" ]]; then
-    fail "Unknown workflow mode '$state_workflow_mode' — cannot verify status ceiling from workflows.yaml"
-  elif [[ "$state_status" == "$state_status_ceiling" ]]; then
-    pass "Workflow mode '$state_workflow_mode' permits current status '$state_status' (ceiling: $state_status_ceiling)"
-  elif [[ "$state_status" == "done" && "$state_status_ceiling" != "done" ]]; then
-    fail "Workflow mode '$state_workflow_mode' ceiling is '$state_status_ceiling', NOT 'done'"
-  elif [[ "$state_status_ceiling" == "done" ]]; then
-    info "Workflow mode '$state_workflow_mode' allows status 'done'; current status is '$state_status'"
-  else
-    info "Workflow mode '$state_workflow_mode' ceiling is '$state_status_ceiling'; current status is '$state_status'"
-  fi
+state_status_ceiling="$transition_target_status"
+if [[ "$state_status" == "$state_status_ceiling" ]]; then
+  pass "Workflow mode '$state_workflow_mode' permits current status '$state_status' (ceiling: $state_status_ceiling)"
+elif [[ "$state_status_ceiling" == "done" ]]; then
+  info "Workflow mode '$state_workflow_mode' allows status 'done'; current status is '$state_status'"
+else
+  info "Workflow mode '$state_workflow_mode' ceiling is '$state_status_ceiling'; current status is '$state_status'"
 fi
 
 if [[ "$state_plan_maturity_only" == "true" && "$state_status" == "done" ]]; then
@@ -634,11 +802,9 @@ echo ""
 echo "--- Check 3B: Source Code Edit Lockout (Gate G073) ---"
 
 # Determine if the current mode forbids source code edits
-ceiling_forbids_code="false"
-ceiling_label="$(resolve_workflow_status_ceiling "$state_workflow_mode" || true)"
-if [[ -n "$ceiling_label" && "$ceiling_label" != "done" ]]; then
-  ceiling_forbids_code="true"
-fi
+ceiling_forbids_code="$transition_source_edit_lockout_required"
+ceiling_label="$transition_target_status"
+g073_failures_before="$failures"
 
 if [[ "$ceiling_forbids_code" == "true" ]]; then
   git_repo_root=""
@@ -757,6 +923,13 @@ except Exception:
 else
   pass "Workflow mode '$state_workflow_mode' permits source code edits (ceiling allows implementation)"
 fi
+if [[ "$transition_source_edit_lockout_required" == "true" ]]; then
+  if [[ "$failures" -gt "$g073_failures_before" ]]; then
+    record_failed_gate G073
+  else
+    record_passed_gate G073
+  fi
+fi
 echo ""
 
 # =============================================================================
@@ -828,7 +1001,7 @@ echo ""
 echo "--- Check 4: DoD Completion (Zero Unchecked) ---"
 total_checked=0
 total_unchecked=0
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   total_checked=$((total_checked + $(grep -cE '^\- \[x\] ' "$scope_path" || true)))
   total_unchecked=$((total_unchecked + $(grep -cE '^\- \[ \] ' "$scope_path" || true)))
@@ -838,11 +1011,15 @@ total_dod=$((total_checked + total_unchecked))
 info "DoD items total: $total_dod (checked: $total_checked, unchecked: $total_unchecked)"
 
 if [[ "$total_dod" -eq 0 ]]; then
+  record_failed_check Check-4-structure
   fail "Resolved scope artifacts have ZERO DoD checkbox items — cannot verify completion"
+elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+  info "NOT_APPLICABLE: Check-4-completion — planning maturity permits unchecked implementation DoD"
 elif [[ "$total_unchecked" -gt 0 ]]; then
+  record_failed_check Check-4-completion
   fail "Resolved scope artifacts have $total_unchecked UNCHECKED DoD items — ALL must be [x] for 'done'"
   shown_unchecked=0
-  for scope_path in "${scope_files[@]}"; do
+  for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
     [[ -f "$scope_path" ]] || continue
     while IFS= read -r unchecked_line; do
       [[ -n "$unchecked_line" ]] || continue
@@ -876,7 +1053,7 @@ _c4a_dod_header_re='^#{1,4}.*Definition of Done|^#{1,4}.*DoD'
 _c4a_heading_re='^#{1,4} '
 _c4a_listitem_re='^\- '
 _c4a_checkbox_re='^\- \[(x| )\] '
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
 
   # Extract lines inside DoD sections and check for non-checkbox list items
@@ -935,7 +1112,7 @@ echo ""
 # =============================================================================
 echo "--- Check 4B: Scope Status Canonicality (Gate G041) ---"
 non_canonical_statuses=0
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
 
   # Find all **Status:** lines. Blockquote (>-prefixed) lines are header/summary
@@ -987,7 +1164,7 @@ not_started_scopes=0
 in_progress_scopes=0
 blocked_scopes=0
 done_scopes=0
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   # Count per-scope statuses over the canonical status lines only (blockquote
   # summary lines excluded via the shared helper — BUG-006 / IMP-009).
@@ -1002,12 +1179,26 @@ total_scopes=$((not_started_scopes + in_progress_scopes + blocked_scopes + done_
 info "Resolved scopes: total=$total_scopes, Done=$done_scopes, In Progress=$in_progress_scopes, Not Started=$not_started_scopes, Blocked=$blocked_scopes"
 
 if [[ "$total_scopes" -eq 0 ]]; then
+  record_failed_check Check-5-structure
   fail "Resolved scope artifacts have no scope status markers"
+elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+  info "NOT_APPLICABLE: Check-5-all-done — planning maturity permits canonical incomplete implementation scopes"
+  for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
+    [[ -f "$scope_path" ]] || continue
+    if bubbles_status_lines "$scope_path" | grep -Eq '\*\*Status:\*\*.*Done' \
+      && grep -Eq '^\- \[ \] ' "$scope_path"; then
+      record_failed_check Check-5-status-honesty
+      fail "Planning scope claims Done while unchecked DoD remain in ${scope_path#$feature_dir/} — false completion claim"
+    fi
+  done
 elif [[ "$not_started_scopes" -gt 0 ]]; then
+  record_failed_check Check-5-all-done
   fail "Resolved scope artifacts have $not_started_scopes scope(s) still marked 'Not Started' — ALL scopes must be Done"
 elif [[ "$in_progress_scopes" -gt 0 ]]; then
+  record_failed_check Check-5-all-done
   fail "Resolved scope artifacts have $in_progress_scopes scope(s) still marked 'In Progress' — ALL scopes must be Done"
 elif [[ "$blocked_scopes" -gt 0 ]]; then
+  record_failed_check Check-5-all-done
   fail "Resolved scope artifacts have $blocked_scopes scope(s) still marked 'Blocked' — ALL scopes must be Done"
 else
   pass "All $done_scopes scope(s) are marked Done"
@@ -1051,7 +1242,7 @@ if [[ "$scope_layout" == "per-scope-directory" ]] && [[ -f "$scope_index_file" ]
   index_parity_failures=0
   index_parity_checked=0
   # Each scope.md path looks like: .../scopes/NN-name/scope.md
-  for scope_path in "${scope_files[@]}"; do
+  for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
     [[ -f "$scope_path" ]] || continue
     scope_dir_name="$(basename "$(dirname "$scope_path")")"
     # Strip leading "NN-" prefix to get the scope's natural-language identifier
@@ -1119,7 +1310,7 @@ elif [[ -f "$state_file" ]]; then
     [[ -n "$entry" ]] || continue
     found=0
     # Match completedScopes entry against any scope directory by suffix
-    for scope_path in "${scope_files[@]}"; do
+    for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
       scope_dir_name="$(basename "$(dirname "$scope_path")")"
       scope_dir_num="${scope_dir_name%%-*}"
       # Accept either full directory name match or numeric-prefix match
@@ -1169,7 +1360,7 @@ echo ""
 # =============================================================================
 echo "--- Check 5A: SLA Stress Coverage ---"
 sla_scope_count=0
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
 
   if grep -Eiq 'latency|throughput|p95|p99|response time|sla|slo' "$scope_path"; then
@@ -1839,16 +2030,128 @@ echo ""
 # CHECK 8: Test file existence — verify Test Plan files exist on disk
 # =============================================================================
 echo "--- Check 8: Test File Existence ---"
+
+_check8_candidate_has_supported_suffix() {
+  local candidate="$1"
+  local stem=""
+  local basename_stem=""
+
+  case "$candidate" in
+    ""|*[!A-Za-z0-9._/-]*) return 1 ;;
+  esac
+
+  case "$candidate" in
+    *.spec.mjs) stem="${candidate%.spec.mjs}" ;;
+    *.test.mjs) stem="${candidate%.test.mjs}" ;;
+    *.spec) stem="${candidate%.spec}" ;;
+    *.test) stem="${candidate%.test}" ;;
+    *.rs) stem="${candidate%.rs}" ;;
+    *.ts) stem="${candidate%.ts}" ;;
+    *.tsx) stem="${candidate%.tsx}" ;;
+    *.js) stem="${candidate%.js}" ;;
+    *.jsx) stem="${candidate%.jsx}" ;;
+    *.sh) stem="${candidate%.sh}" ;;
+    *.bash) stem="${candidate%.bash}" ;;
+    *.bats) stem="${candidate%.bats}" ;;
+    *.py) stem="${candidate%.py}" ;;
+    *.go) stem="${candidate%.go}" ;;
+    *.java) stem="${candidate%.java}" ;;
+    *.scala) stem="${candidate%.scala}" ;;
+    *.dart) stem="${candidate%.dart}" ;;
+    *) return 1 ;;
+  esac
+
+  basename_stem="${stem##*/}"
+  [[ -n "$basename_stem" ]]
+}
+
+_check8_path_prefix_before_control() {
+  local lexical_token="$1"
+  local token_pattern='^([A-Za-z0-9._/-]+)(&&|\|\||;|$)'
+
+  CHECK8_TOKEN_CANDIDATE=""
+  if [[ "$lexical_token" =~ $token_pattern ]]; then
+    CHECK8_TOKEN_CANDIDATE="${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+_check8_candidate_from_block() {
+  local block="$1"
+  local bare_path_pattern='^[A-Za-z0-9._/-]+$'
+  local candidate=""
+  local first_word=""
+  local token=""
+  local token_index=0
+  local options_open=1
+  local -a block_words
+
+  CHECK8_CANDIDATE=""
+  while [[ "$block" == [[:blank:]]* ]]; do block="${block#?}"; done
+  while [[ "$block" == *[[:blank:]] ]]; do block="${block%?}"; done
+  [[ -n "$block" ]] || return 1
+
+  IFS=$' \t' read -r -a block_words <<< "$block"
+  first_word="${block_words[0]:-}"
+
+  if [[ "$block" =~ $bare_path_pattern ]]; then
+    candidate="$block"
+  elif [[ "$first_word" == "bash" || "$first_word" == "sh" ]]; then
+    token_index=1
+    while [[ "$token_index" -lt "${#block_words[@]}" ]]; do
+      token="${block_words[$token_index]}"
+      if [[ "$options_open" -eq 1 ]]; then
+        case "$token" in
+          --)
+            options_open=0
+            token_index=$((token_index + 1))
+            continue
+            ;;
+          -c|-[A-Za-z]*c[A-Za-z]*)
+            return 1
+            ;;
+          -*)
+            token_index=$((token_index + 1))
+            continue
+            ;;
+        esac
+      fi
+      case "$token" in
+        '&&'*|'||'*|';'*) return 1 ;;
+      esac
+      if _check8_path_prefix_before_control "$token"; then
+        candidate="$CHECK8_TOKEN_CANDIDATE"
+      fi
+      break
+    done
+  elif _check8_path_prefix_before_control "$first_word"; then
+    case "$CHECK8_TOKEN_CANDIDATE" in
+      *.sh|*.bash|*.bats) candidate="$CHECK8_TOKEN_CANDIDATE" ;;
+    esac
+  fi
+
+  if _check8_candidate_has_supported_suffix "$candidate"; then
+    CHECK8_CANDIDATE="$candidate"
+    return 0
+  fi
+  return 1
+}
+
 test_files_in_plan=()
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   while IFS= read -r line; do
-    # Extract the file-path TOKEN from within a backtick block, not the whole
-    # block. Test Plans routinely reference tests as COMMANDS
-    # (`bash tests/x.sh`, `bash -n a.sh && shellcheck a.sh`, `./run.sh test`),
-    # so capturing the entire backtick block would treat the command string as
-    # a bogus non-existent "path" and false-BLOCK. Isolate the path token.
-    path="$(echo "$line" | grep -oE '`[^`]*`' | grep -oE '[A-Za-z0-9._/-]+\.(spec|test|rs|ts|tsx|js|jsx|sh|bash|bats|py|go|java|scala|dart)\b' | head -1 || true)"
+    path=""
+    backtick_marker='`'
+    while IFS= read -r backtick_block; do
+      block="${backtick_block#"$backtick_marker"}"
+      block="${block%"$backtick_marker"}"
+      if _check8_candidate_from_block "$block"; then
+        path="$CHECK8_CANDIDATE"
+        break
+      fi
+    done < <(printf '%s\n' "$line" | grep -oE '`[^`]*`' || true)
     if [[ -n "$path" ]] && [[ "$path" != "[path]" ]] && [[ ! "$path" =~ ^\[ ]]; then
       test_files_in_plan+=("$path")
     fi
@@ -1859,23 +2162,39 @@ missing_test_files=0
 if [[ ${#test_files_in_plan[@]} -gt 0 ]]; then
   for test_path in "${test_files_in_plan[@]}"; do
     if [[ -f "$test_path" ]]; then
-      pass "Test file exists: $test_path"
+      if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+        info "Planned test file already exists; physical existence is not used as planning-maturity proof: $test_path"
+      else
+        pass "Test file exists: $test_path"
+      fi
     elif [[ "$test_path" != */* ]]; then
       unique_match="$({ bubbles_pruned_find "$feature_dir/../.." -type f -name "$test_path" -print 2>/dev/null; } || true)"
       unique_match_count="$({ printf '%s\n' "$unique_match" | grep -c .; } || true)"
       if [[ "$unique_match_count" -eq 1 ]]; then
         warn "Test Plan uses basename-only path '$test_path'; uniquely resolved to $(echo "$unique_match" | sed "s#^$feature_dir/../..##")"
       else
+        record_failed_check Check-8-contract
         fail "Test Plan references non-existent or non-resolvable file: $test_path"
         missing_test_files=$((missing_test_files + 1))
       fi
+    elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+      info "Future implementation-owned test file is not physically required at planning maturity: $test_path"
+      missing_test_files=$((missing_test_files + 1))
     else
+      record_failed_check Check-8-file-existence
       fail "Test Plan references non-existent file: $test_path"
       missing_test_files=$((missing_test_files + 1))
     fi
   done
   if [[ "$missing_test_files" -gt 0 ]]; then
-    fail "$missing_test_files of ${#test_files_in_plan[@]} test files from Test Plan DO NOT EXIST"
+    if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+      info "NOT_APPLICABLE: Check-8-file-existence — $missing_test_files future implementation-owned test file(s) are absent"
+    else
+      record_failed_check Check-8-file-existence
+      fail "$missing_test_files of ${#test_files_in_plan[@]} test files from Test Plan DO NOT EXIST"
+    fi
+  elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+    info "NOT_APPLICABLE: Check-8-file-existence — planning maturity validates test contracts, not delivery file presence"
   fi
 else
   warn "No concrete test file paths found in Test Plan across resolved scope files (all may be placeholders)"
@@ -1892,6 +2211,7 @@ source "$SCRIPT_DIR/guards/planning-checks.sh"
 # CHECK 9: Evidence depth — DoD [x] items must have evidence blocks
 # =============================================================================
 echo "--- Check 9: DoD Evidence Presence ---"
+check9_failures_before="$failures"
 checked_without_evidence=0
 checked_with_evidence=0
 
@@ -2028,7 +2348,7 @@ _c9_evidence_marker_re='(→[[:space:]]*Evidence:|Evidence:)'
 _c9_report_link_re='\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)'
 _c9_inline_evidence_re='(Executed:|Command:|Evidence|```|Exit Code:|Raw Output)'
 
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   scope_dir="$(dirname "$scope_path")"
   while IFS= read -r line; do
@@ -2122,13 +2442,16 @@ if [[ "$checked_without_evidence" -eq 0 ]] && [[ "$checked_with_evidence" -gt 0 
 elif [[ "$checked_with_evidence" -eq 0 ]] && [[ "$total_checked" -gt 0 ]]; then
   fail "ALL checked DoD items across resolved scope files lack evidence blocks — BULK FABRICATION DETECTED"
 fi
+if [[ "$failures" -gt "$check9_failures_before" ]]; then
+  record_failed_check Check-9-evidence
+fi
 echo ""
 
 # =============================================================================
 # CHECK 10: Template placeholder detection
 # =============================================================================
 echo "--- Check 10: Template Placeholder Detection ---"
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   template_hits="$({ grep -cnE '\[ACTUAL terminal output|\[exact cmd\]|\[actual exit code\]|\[ACTUAL output|\[command \+ output|\[cmd\]|\[PASTE VERBATIM terminal output|\[PASTE VERBATIM.*output here' "$scope_path"; } || true)"
   if [[ "$template_hits" -gt 0 ]]; then
@@ -2138,7 +2461,7 @@ for scope_path in "${scope_files[@]}"; do
   fi
 done
 
-for report_path in "${report_files[@]}"; do
+for report_path in ${report_files[@]+"${report_files[@]}"}; do
   [[ -f "$report_path" ]] || continue
   report_template_hits="$({ grep -cnE '\[ACTUAL terminal output|\[exact cmd\]|\[actual exit code\]|\[ACTUAL output|\[command \+ output|\[PASTE VERBATIM terminal output|\[PASTE VERBATIM.*output here' "$report_path"; } || true)"
   if [[ "$report_template_hits" -gt 0 ]]; then
@@ -2154,8 +2477,21 @@ echo ""
 # =============================================================================
 echo "--- Check 11: Report.md Required Sections ---"
 if [[ ${#report_files[@]} -eq 0 ]]; then
+  record_failed_check Check-11-structure
   fail "No report.md files were resolved for this feature"
 fi
+
+implementation_phase_claim_count="$(jq -r '
+  [
+    ((.execution.completedPhaseClaims // [])[]? | if type == "string" then . else (.phase // empty) end),
+    ((.certification.certifiedCompletedPhases // [])[]? | if type == "string" then . else (.phase // empty) end),
+    ((.executionHistory // [])[]? | .phase // empty),
+    (.execution.currentPhase // empty),
+    (.currentPhase // empty)
+  ]
+  | map(select(. == "implement" or . == "test"))
+  | length
+' "$state_file" 2>/dev/null || printf '0')"
 
 # BUG-005: precompiled ERE patterns for the 8 evidence-signal categories used by
 # the per-line legitimacy scan below. Single-quoted so every regex metacharacter
@@ -2171,7 +2507,7 @@ _c11_sig_vi_re='[0-9]+ (passed|failed|errors?|warnings?|skipped|ignored|tests?)'
 _c11_sig_vii_re='(HTTP/|status.*[0-9]{3}|curl |GET /|POST /|PUT /|DELETE /|Content-Type)'
 _c11_sig_viii_re='(^[dl-][rwx-]{9} |^[0-9]+:|^\$ |^> )'
 
-for report_path in "${report_files[@]}"; do
+for report_path in ${report_files[@]+"${report_files[@]}"}; do
   if [[ ! -f "$report_path" ]]; then
     fail "Missing report file: $(relative_artifact_path "$report_path")"
     continue
@@ -2247,7 +2583,19 @@ for report_path in "${report_files[@]}"; do
   done < "$report_path"
 
   if [[ "$total_blocks" -eq 0 ]]; then
-    fail "$(relative_artifact_path "$report_path") has ZERO evidence code blocks — no execution evidence exists"
+    if [[ "$transition_audit_profile" == "planning-maturity-v1" \
+      && "$total_checked" -eq 0 \
+      && "$done_scopes" -eq 0 \
+      && "$state_completed_scopes_count" -eq 0 \
+      && "$implementation_phase_claim_count" -eq 0 ]]; then
+      info "Honest planning report has zero execution-evidence blocks: $(relative_artifact_path "$report_path")"
+    elif [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+      record_failed_check Check-11-execution-honesty
+      fail "$(relative_artifact_path "$report_path") has ZERO evidence code blocks but state or scope artifacts claim completed delivery work"
+    else
+      record_failed_check Check-11-execution-evidence
+      fail "$(relative_artifact_path "$report_path") has ZERO evidence code blocks — no execution evidence exists"
+    fi
   elif [[ "$illegitimate_blocks" -gt 0 ]]; then
     warn "$(relative_artifact_path "$report_path") has $illegitimate_blocks of $total_blocks evidence blocks that lack terminal output signals (potentially fabricated)"
   else
@@ -2267,13 +2615,16 @@ for report_path in "${report_files[@]}"; do
     pass "No narrative summary phrases detected outside code blocks in $(relative_artifact_path "$report_path")"
   fi
 done
+if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+  info "NOT_APPLICABLE: Check-11-execution-evidence — honest unimplemented scope reports need no delivery execution block"
+fi
 echo ""
 
 # =============================================================================
 # CHECK 12: Duplicate evidence detection
 # =============================================================================
 echo "--- Check 12: Duplicate Evidence Detection ---"
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   evidence_hashes=()
   in_evidence=0
@@ -2288,7 +2639,7 @@ for scope_path in "${scope_files[@]}"; do
       in_evidence=0
       if [[ -n "$current_evidence" ]]; then
         evidence_hash="$(echo "$current_evidence" | md5sum | cut -d' ' -f1)"
-        for prev_hash in "${evidence_hashes[@]}"; do
+        for prev_hash in ${evidence_hashes[@]+"${evidence_hashes[@]}"}; do
           if [[ "$evidence_hash" == "$prev_hash" ]]; then
             fail "Duplicate evidence blocks detected in $(relative_artifact_path "$scope_path") — COPY-PASTE FABRICATION"
             duplicate_found="true"
@@ -2358,7 +2709,7 @@ if [[ "$requires_impl_delta" == "true" ]]; then
   code_diff_git_signals=0
   code_diff_runtime_paths=0
 
-  for rpt_path in "${report_files[@]}"; do
+  for rpt_path in ${report_files[@]+"${report_files[@]}"}; do
     [[ -f "$rpt_path" ]] || continue
 
     if grep -qE '^### Code Diff Evidence' "$rpt_path"; then
@@ -2396,7 +2747,7 @@ echo ""
 # =============================================================================
 echo "--- Check 14: Implementation Completeness ---"
 impl_files=()
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   while IFS= read -r line; do
     path="$(echo "$line" | grep -oE '`[^`]+\.(rs|ts|tsx|js|jsx|py|go|java)\b[^`]*`' | sed 's/`//g' | head -1 || true)"
@@ -2620,7 +2971,7 @@ else
     !in_block && !skip { print }
   '
 
-  for scope_path in "${scope_files[@]}"; do
+  for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
     [[ -f "$scope_path" ]] || continue
 
     # Count deferral language hits (case-insensitive), excluding inside code fence blocks
@@ -2648,7 +2999,7 @@ else
   done
 
   # Also scan report files for deferral language
-  for rpt_path in "${report_files[@]}"; do
+  for rpt_path in ${report_files[@]+"${report_files[@]}"}; do
     [[ -f "$rpt_path" ]] || continue
     report_deferral_hits="$({
       awk "$deferral_strip_awk" "$rpt_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
@@ -2687,7 +3038,7 @@ if [[ -f "$PROJECT_CONFIG" ]]; then
 fi
 env_dep_hits=0
 
-for rpt_path in "${report_files[@]}"; do
+for rpt_path in ${report_files[@]+"${report_files[@]}"}; do
   [[ -f "$rpt_path" ]] || continue
   env_hits="$(grep -ciE "$env_dep_pattern" "$rpt_path" 2>/dev/null || true)"
   if [[ "$env_hits" -gt 0 ]]; then
@@ -2701,7 +3052,7 @@ for rpt_path in "${report_files[@]}"; do
 done
 
 # Also scan scope files for evidence blocks mentioning env-dependent failures
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
   env_evidence_hits="$(grep -ciE "$env_dep_pattern" "$scope_path" 2>/dev/null || true)"
   if [[ "$env_evidence_hits" -gt 0 ]]; then
@@ -2725,7 +3076,7 @@ echo ""
 # (Formerly tagged G049 — consolidated into G021 anti_fabrication_gate.)
 # =============================================================================
 echo "--- Check 20: Evidence Similarity Detection (Gate G021) ---"
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
 
   # Collect all evidence blocks as separate entries
@@ -2982,10 +3333,11 @@ source "$SCRIPT_DIR/guards/tail-convergence-gates.sh"
 # The guard is source-aware. In the Bubbles source repository, persistent
 # `specs/` are forbidden and dogfood evidence comes from framework
 # validation, hermetic selftests, release manifests, and downstream or
-# fixture specs. In downstream/fixture repositories, the traditional
-# evidence model still applies: at least one numbered spec at status
-# `done` demonstrates the installed framework can drive work to
-# certification.
+# fixture specs. In downstream/fixture repositories, G085-CURRENT-DONE
+# passes on current numbered state evidence with exact top-level `status:
+# done`. G085-FIRST-ADOPTION passes only when the required current-state
+# and complete-history evidence is proven; missing or incomplete evidence
+# fails closed.
 if [[ "${BUBBLES_STATE_TRANSITION_GUARD_SELFTEST_FAST:-0}" == "1" ]]; then
   echo "--- Check 26-39: Delegated Tail Gates (selftest fast path) ---"
   info "State-transition selftest fast path enabled; delegated gates G085-G095, G097, and G098-G100 are covered by their dedicated selftests in framework-validate"
@@ -3015,77 +3367,48 @@ if [[ "$failures" -gt 0 ]]; then
   echo "Fix ALL blocking failures above before attempting promotion."
   echo ""
 
-  if [[ "$revert_on_fail" == "true" ]] && [[ -f "$state_file" ]]; then
+  if [[ "$revert_on_fail" == "true" \
+    && "$transition_audit_profile" == "delivery-completion-v1" \
+    && -f "$state_file" ]]; then
     echo "--- Auto-Reverting state.json (--revert-on-fail) ---"
     now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-
-    clear_array_key() {
-      local array_key="$1"
-
-      if ! grep -qE '"'"$array_key"'"[[:space:]]*:[[:space:]]*\[' "$state_file"; then
-        return 0
-      fi
-
-      bubbles_sed_inplace -E 's/"'"$array_key"'"[[:space:]]*:[[:space:]]*\[[^]]*\]/"'"$array_key"'": []/' "$state_file"
-
-      awk -v key="$array_key" '
-        $0 ~ "\"" key "\"[[:space:]]*:[[:space:]]*\\[" {
-          if ($0 ~ /\[[^]]*\]/) {
-            print
-            next
-          }
-          sub(/"[^"]+"[[:space:]]*:[[:space:]]*.*/, "\"" key "\": [],", $0)
-          print
-          in_array = 1
-          next
-        }
-        in_array && /\]/ {
-          in_array = 0
-          next
-        }
-        in_array { next }
-        { print }
-      ' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-    }
-
-    # Revert status to in_progress
-    bubbles_sed_inplace -E 's/"status"[[:space:]]*:[[:space:]]*"done"/"status": "in_progress"/' "$state_file"
-
-    # Revert certification.status to in_progress if present
-    awk '
-      /"certification"[[:space:]]*:/ {
-        print
-        in_cert = 1
-        next
-      }
-      in_cert && /"status"[[:space:]]*:[[:space:]]*"done"/ {
-        sub(/"done"/, "\"in_progress\"", $0)
-        print
-        next
-      }
-      in_cert && /^[[:space:]]*}/ {
-        in_cert = 0
-        print
-        next
-      }
-      { print }
-    ' "$state_file" > "${state_file}.tmp" && mv "${state_file}.tmp" "$state_file"
-
-    clear_array_key "completedScopes"
-    clear_array_key "certifiedCompletedPhases"
-    clear_array_key "completedPhaseClaims"
-    clear_array_key "completedPhases"
-
-    # Update lastUpdatedAt
-    bubbles_sed_inplace -E 's/"lastUpdatedAt"[[:space:]]*:[[:space:]]*"[^"]+"/"lastUpdatedAt": "'"$now_utc"'"/' "$state_file"
-
-    # Add failure record if failures array exists
-    if grep -qE '"failures"[[:space:]]*:[[:space:]]*\[' "$state_file"; then
-      failure_record="{\"phase\": \"transition-guard\", \"summary\": \"$failures blocking failures detected by state-transition-guard.sh\", \"detectedAt\": \"$now_utc\"}"
-      # Append to failures array (simple single-line case)
-      bubbles_sed_inplace -E "s|\"failures\"[[:space:]]*:[[:space:]]*\[|\"failures\": [$failure_record, |" "$state_file"
-      # Clean up empty trailing comma if array was empty
-      bubbles_sed_inplace -E 's/\[({[^}]+}), \]/[\1]/' "$state_file"
+    revert_tmp="$(mktemp "${TMPDIR:-/tmp}/bubbles-transition-revert.XXXXXX")"
+    if ! jq \
+      --arg now "$now_utc" \
+      --arg summary "$failures blocking failures detected by state-transition-guard.sh" '
+      def clear_completion_arrays:
+        if type == "object" then
+          with_entries(
+            if (.key == "completedScopes"
+              or .key == "certifiedCompletedPhases"
+              or .key == "completedPhaseClaims"
+              or .key == "completedPhases") then
+              .value = []
+            else
+              .value |= clear_completion_arrays
+            end
+          )
+        elif type == "array" then
+          map(clear_completion_arrays)
+        else
+          .
+        end;
+      clear_completion_arrays
+      | .status = "in_progress"
+      | if (.certification | type) == "object" then .certification.status = "in_progress" else . end
+      | if has("lastUpdatedAt") then .lastUpdatedAt = $now else . end
+      | if (.failures | type) == "array" then
+          .failures = ([{
+            phase: "transition-guard",
+            summary: $summary,
+            detectedAt: $now
+          }] + .failures)
+        else . end
+    ' "$state_file" > "$revert_tmp"; then
+      rm -f "$revert_tmp"
+      fail "--revert-on-fail could not rewrite state.json atomically"
+    else
+      mv "$revert_tmp" "$state_file"
     fi
 
     echo "REVERTED: state.json status → 'in_progress'"
@@ -3122,6 +3445,21 @@ if [[ "$failures" -gt 0 ]]; then
     done < <(grep -E '^[[:space:]]*script:' "$PROJECT_CONFIG")
   fi
 
+  if [[ "$revert_on_fail" == "true" && "$transition_audit_profile" != "delivery-completion-v1" ]]; then
+    info "--revert-on-fail is delivery-only; planning state was not rewritten"
+  fi
+
+  if [[ ${#failed_check_ids[@]} -eq 0 && ${#failed_gate_ids[@]} -eq 0 ]]; then
+    record_failed_check applicable-integrity
+  fi
+  transition_blocking_code="DELIVERY_COMPLETION_FAILED"
+  if [[ "$transition_audit_profile" == "planning-maturity-v1" ]]; then
+    transition_blocking_code="PLANNING_GATE_FAILED"
+    if list_contains G073 ${failed_gate_ids[@]+"${failed_gate_ids[@]}"}; then
+      transition_blocking_code="SOURCE_EDIT_LOCKOUT"
+    fi
+  fi
+  emit_transition_result FAIL "$transition_blocking_code" "$failures" 1
   exit 1
 else
   if [[ "$warnings" -gt 0 ]]; then
@@ -3131,7 +3469,7 @@ else
     fun_summary pass
   fi
   echo ""
-  final_status_ceiling="$(resolve_workflow_status_ceiling "$state_workflow_mode" || true)"
+  final_status_ceiling="$transition_target_status"
   if [[ -n "$final_status_ceiling" && "$state_status" == "$final_status_ceiling" && "$final_status_ceiling" != "done" ]]; then
     echo "state.json is correctly set to '$state_status' for workflowMode '$state_workflow_mode'."
   elif [[ "$final_status_ceiling" == "done" ]]; then
@@ -3139,5 +3477,6 @@ else
   else
     echo "state.json status '$state_status' is permitted for workflowMode '$state_workflow_mode'."
   fi
+  emit_transition_result PASS none 0 0
   exit 0
 fi

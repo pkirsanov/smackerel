@@ -63,7 +63,7 @@ See [Cross-Repo Goal Scenario](../recipes/cross-repo-scenario.md) and the contra
 - `maxScopeMinutes` and `maxDodMinutes` tighten scope sizing (recommended: scope 60-120, DoD 15-45).
 - `microFixes: false` is the opt-out switch if you explicitly do not want narrow repair loops.
 - `specReview: once-before-implement` runs a one-shot `bubbles.spec-review` pass before legacy improvement or implementation-capable work begins. If the mode includes `analyze`, that review runs after analysis so it sees the refreshed intent. It does not repeat on retries or later rounds.
-- `crossModelReview: codex|terminal` requests an independent cross-model review during code-review or audit phases (requires model registry configuration in `.specify/memory/bubbles.config.json`).
+- `samples: N` applies when the selected mode has an active redteam phase. The normal default is `1`; higher bounded counts require risk or uncertainty justification. The top-level runner dispatches one actual `bubbles.redteam` invocation per sample and deterministically aggregates the schema-version-1 records. All samples are `same-runtime-correlated`; this is not cross-model execution, and Bubbles has no verified external provider/model adapter.
 - `parallelScopes: dag|dag-dry` executes DAG-independent scopes in parallel via git worktrees. Off by default. `dag-dry` shows the plan without executing.
 - `maxParallelScopes: 2-4` controls maximum concurrent scope executions when `parallelScopes: dag`.
 

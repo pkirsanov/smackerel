@@ -93,12 +93,12 @@ Use these sections as the single source of truth for agent-specific Tier 2 compl
 
 | ID | Check | Pass Criteria |
 |----|-------|---------------|
-| A1 | State transition guard passes | No blocking gate failures |
-| A2 | Independent verification rerun | Audit rechecks critical evidence independently |
-| A3 | Evidence cross-reference clean | Completed items have genuine evidence |
-| A4 | Fabrication heuristics clean | No fabrication indicators triggered |
-| A5 | Reality scan and coherence clean | No stale done claims or fake implementations |
-| A6 | Consumer-trace and regression fidelity | Renames/removals and changed behavior are fully traced |
+| A1 | Profile-scoped state transition guard passes | The registry-resolved profile, target, mode, digest, and revision assertions pass with no blocking applicable gate; delivery-completion sub-checks are explicit `NOT_APPLICABLE` only for planning-maturity |
+| A2 | Independent applicable verification rerun | Audit independently rechecks every critical evidence class applicable to the resolved profile; delivery execution checks are explicit `NOT_APPLICABLE`, never PASS or omission, for planning-maturity |
+| A3 | Applicable evidence cross-reference clean | Planning artifacts and checked honesty claims have genuine evidence; delivery completion evidence is required only for delivery-completion |
+| A4 | Universal fabrication heuristics clean | No fabrication indicator triggers under either profile; honest planning absence is not delivery proof |
+| A5 | Profile-scoped reality and coherence clean | Planning contract truth is coherent for planning-maturity; done claims and implementation reality are additionally required for delivery-completion |
+| A6 | Applicable consumer-trace and regression fidelity | Planning mappings and declared regression contracts are faithful; physical delivery tests and executed delivery regression evidence are required only for delivery-completion |
 
 ## Iterate
 

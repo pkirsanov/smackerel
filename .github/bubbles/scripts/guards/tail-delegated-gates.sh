@@ -27,7 +27,8 @@ elif [[ -x "$dog_guard" ]]; then
   else
     fail "Framework dogfood evidence contract failed — Gate G085. Run 'bash $dog_guard' for full diagnostic"
     info "Bubbles source requirement: no persistent specs/ tree; use framework validation, selftests, release manifest, and downstream/fixture specs as evidence"
-    info "Downstream/fixture requirement: at least one specs/[0-9]*-*/state.json has top-level \"status\": \"done\""
+    info "Downstream/fixture pass path G085-CURRENT-DONE: at least one current specs/[0-9]*-*/state.json has exact top-level \"status\": \"done\""
+    info "Downstream/fixture pass path G085-FIRST-ADOPTION: genuine first adoption has current numbered states, zero current done, complete exact-root non-shallow/non-partial local Git history, and zero reachable historical numbered top-level done states"
     info "Recipe: docs/recipes/framework-dogfood.md"
     info "Cross-references: G082 (convergence cap), G083 (compaction discipline), G084 (pre-existing deferral)"
   fi

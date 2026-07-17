@@ -62,7 +62,7 @@ Observability and execution evidence are not only anti-fabrication controls for 
 | How do workflow phases and state transitions work? | `scope-workflow.md`, `state-gates.md` |
 | How does smart phase routing (skip/re-evaluate) work? | `workflows.yaml` → `phaseRelevance` section |
 | How do mechanical vs taste decisions work? | `workflows.yaml` → `decisionPolicy` section |
-| How does cross-model review work? | `workflows.yaml` → `crossModelReview` section |
+| How do correlated adversarial samples run? | `agent-common.md` → Top-Level Adversarial Sample Execution Contract; `bubbles/scripts/adversarial-aggregate.sh` |
 | How does test-plan.json handoff work? | `planning-core.md`, `test-bootstrap.md` |
 | How does regression test auto-generation work (bug fixes)? | `implement-bootstrap.md` |
 | How do I run a retrospective? | `bubbles.retro.agent.md` |
@@ -85,6 +85,22 @@ Required behavior:
 - Direct specialist continuation commands such as `/bubbles.implement`, `/bubbles.test`, `/bubbles.validate`, or `/bubbles.audit` are allowed only when the user explicitly asks for a surgical direct-agent invocation.
 - Read-only continuation surfaces may emit a `## CONTINUATION-ENVELOPE` carrying `target`, `intent`, `preferredWorkflowMode`, `tags`, and `reason` so `bubbles.workflow` can consume the recommendation safely.
 - If a continuation recommendation came from recap, status, handoff, or another advisory surface, treat it as intent-routing metadata, not as permission to bypass workflow orchestration.
+
+## Top-Level Adversarial Sample Execution Contract (NON-NEGOTIABLE)
+
+Before entering any `redteam` phase, the active top-level runner MUST resolve the effective adversarial posture through `bubbles/scripts/adversarial-resolve.sh`. The canonical count is `samples: N`: it is bounded by the declared risk or uncertainty and applicable project configuration, and its normal default is `1`. There is no fixed reviewer roster.
+
+When the resolved posture enables the phase, the active top-level runner MUST:
+
+1. Invoke `bubbles.redteam` exactly `N` separate times. Every actual invocation receives a unique `sampleId` and a unique invocation ID.
+2. Require exactly one JSON result conforming to `bubbles/eval/schemas/adversarial-sample.schema.json` schema version 1 from each actual invocation. A redteam invocation executes one sample and cannot claim to create child invocations or synthetic sample records.
+3. Preserve the actual runtime, model, and tool provenance reported for each invocation together with its verification state. Inherited, self-reported, unavailable, or otherwise unverified identity metadata MUST remain honestly marked; the runner MUST NOT strengthen or guess it.
+4. After all actual invocations return, run `bubbles/scripts/adversarial-aggregate.sh --expected-samples N <sample-result.json>...` over those exact records. Resolving `N` without producing `N` records from `N` separate invocations is `aggregation-error` and blocks the workflow.
+5. Use the aggregator outcome directly: `agreement-clear` continues; `agreement-findings` routes the complete finding set; `disagreement` escalates the complete union and per-sample matrix; `aggregation-error` blocks. No finding may be dropped because another sample omitted or contradicted it.
+
+These repeated calls are `same-runtime-correlated` samples. They MUST NOT be described as independent validators, voting, consensus, or cross-model execution. Current VS Code subagents inherit the active model and tools, and no verified external model/provider adapter exists. An explicit request for a different model or provider is therefore unsupported; correlated samples may be offered, but MUST be identified as not cross-model.
+
+**Deprecated compatibility only:** `passes` remains accepted by `adversarial-resolve.sh` as a time-bounded alias for `samples`. Alias use MUST emit deprecation metadata/message. It is not current configuration or command syntax, and new examples and output MUST use `samples`.
 
 ## Artifact Ownership And Delegation Contract
 

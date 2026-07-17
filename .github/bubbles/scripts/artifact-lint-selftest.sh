@@ -188,5 +188,111 @@ expect_in "T4 the enforced failure names the unmarked block" \
 expect_not_in "T4 no prior-window skip happens without a marker" \
   "$out" "Skipped 1 evidence blocks before <!-- bubbles:certifying-window-begin -->"
 
+# ── T5 (BFW-04): marker present → two IDENTICAL post-marker blocks → the 2nd is a
+#    redundant re-verification of an already-verified identical result → flagged.
+d="$(make_fixture cw-dup-identical)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+<!-- bubbles:certifying-window-begin -->
+
+TP-01 first verification:
+```
+$ cargo test
+running 5 tests
+test result: ok. 5 passed; 0 failed; finished in 0.42s
+```
+
+TP-01 re-verified again (byte-identical result, different prose header):
+```
+$ cargo test
+running 5 tests
+test result: ok. 5 passed; 0 failed; finished in 0.42s
+```
+RPT
+out="$(run_lint "$d")"
+expect_in "T5 identical re-pasted evidence in the current window is flagged (BFW-04)" \
+  "$out" "Redundant identical evidence block in the current certifying window"
+
+# ── T6 (BFW-04): marker present → two DISTINCT post-marker blocks → NOT flagged.
+#    Proves different-dimension re-runs (different output) are never touched.
+d="$(make_fixture cw-dup-distinct)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+<!-- bubbles:certifying-window-begin -->
+
+Unit test evidence:
+```
+$ cargo test
+running 5 tests
+test result: ok. 5 passed; 0 failed; finished in 0.42s
+```
+
+E2E test evidence (different dimension, different output):
+```
+$ npm run test:e2e
+running 3 tests
+3 passed, 0 failed in 2.10s
+```
+RPT
+out="$(run_lint "$d")"
+expect_not_in "T6 distinct evidence blocks are NOT flagged as duplicates" \
+  "$out" "Redundant identical evidence block"
+expect_in "T6 distinct evidence blocks both pass Check-3" \
+  "$out" "contain legitimate terminal output"
+
+# ── T7 (BFW-04): NO marker → identical blocks NOT flagged (duplicate detection is
+#    opt-in per certifying-window marker, so grandfathered reports are untouched).
+d="$(make_fixture cw-dup-nomarker)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+First:
+```
+$ cargo test
+running 5 tests
+test result: ok. 5 passed; 0 failed; finished in 0.42s
+```
+
+Second (identical, but no window marker):
+```
+$ cargo test
+running 5 tests
+test result: ok. 5 passed; 0 failed; finished in 0.42s
+```
+RPT
+out="$(run_lint "$d")"
+expect_not_in "T7 identical blocks in a marker-less report are NOT flagged (opt-in)" \
+  "$out" "Redundant identical evidence block"
+
+# ── T8 (BFW-04): identical block PRE- and POST-marker → post-marker NOT flagged
+#    (prior-window history is skipped, so it is not a prior in-window fingerprint).
+d="$(make_fixture cw-dup-prewindow)"
+cat > "$d/report.md" <<'RPT'
+# Report
+
+Prior-window evidence:
+```
+$ cargo test
+running 5 tests
+test result: ok. 5 passed; 0 failed; finished in 0.42s
+```
+
+<!-- bubbles:certifying-window-begin -->
+
+Current-window evidence (same command, first time in this window):
+```
+$ cargo test
+running 5 tests
+test result: ok. 5 passed; 0 failed; finished in 0.42s
+```
+RPT
+out="$(run_lint "$d")"
+expect_not_in "T8 a post-marker block identical to a PRE-marker block is NOT flagged" \
+  "$out" "Redundant identical evidence block"
+expect_in "T8 the pre-marker identical block is a prior-window skip" \
+  "$out" "Skipped 1 evidence blocks before"
+
 echo
 echo "artifact-lint certifying-window selftest: $passes/$assertions assertions passed"

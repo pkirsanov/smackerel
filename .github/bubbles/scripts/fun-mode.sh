@@ -20,50 +20,49 @@ _BUBBLES_FUN_MODE="${BUBBLES_FUN_MODE:-false}"
 # ── Message catalog ─────────────────────────────────────────────────
 # Keyed by event name. Each event has one canonical message.
 
-declare -A _FUN_MESSAGES=(
-  # Gate / check results
-  [gate_passed]="Decent!"
-  [scope_ready]="Looks good, boys."
-  [gate_failed]="Something's fucky."
-  [fabrication_detected]="That's GREASY, boys. Real greasy."
-  [missing_evidence]="Where's your evidence? Shit hawk circling."
-  [all_gates_pass]="Way she goes, boys. Way she goes."
-  [build_failed]="Holy f***, boys."
-  [spec_completed]="DEEEE-CENT!"
-  [warnings_found]="The shit winds are coming, Randy."
-  [chaos_clean]="Worst case Ontario... nothing broke."
-  [regression_clean]="Steve French is purrin'. No regressions, boys."
-  [regression_found]="Something's prowlin' around in the code, boys."
-  [spec_conflict]="Steve French found another cougar's territory. Two specs, same route."
-  [recap]="So basically what happened was..."
-  [security_vuln]="Safety... always ON."
-  [docs_updated]="Know what I'm sayin'? It's published."
-  [deferral_detected]="You can't just NOT do things, Corey!"
-  [deferral_blocks_done]="That's NOT gettin' two birds stoned — that's just sayin' you WILL."
-  [manipulation_detected]="That's GREASY, boys. You can't just cross things out and say they're done!"
-  [format_bypass]="You can't just erase the checkboxes and call it a day, Ricky!"
-  [invented_status]="'Deferred — Planned Improvement'?! That's not even a real thing, Julian!"
-  [handoff_complete]="Have a good one, boys."
-  [gap_found]="This is f***ed. BAAAAM!"
-  [bug_located]="That's a nice f***ing kitty right there."
-  [build_succeeds]='Knock knock. Who'"'"'s there? A passing build.'
-  [milestone_reached]="Freedom 35, boys!"
-
-  # Script lifecycle
-  [guard_start]="Alright boys, here's what we're gonna do."
-  [guard_blocked]="Boys, we're in the eye of a shiticane."
-  [guard_clear]="Passed with flying carpets!"
-  [lint_start]="Let's see if this thing's got its grade 10."
-  [lint_clean]="Not bad. Not bad at all."
-  [lint_dirty]="It's like a tropical earthquake blew through here."
-  [dashboard_start]="Let me check on the boys."
-  [scan_start]="I got work to do."
-  [scan_clean]="It's not rocket appliances — and it's clean."
-  [scan_dirty]="Gorilla see, gorilla do. Found copied garbage."
-  [audit_start]="Mr. Lahey, I got a confession to make."
-  [audit_clean]="The liquor figured it out, Randy."
-  [audit_dirty]="I am the liquor, and the liquor says NO."
-)
+_fun_message_for_event() {
+  case "$1" in
+    gate_passed) printf '%s\n' "Decent!" ;;
+    scope_ready) printf '%s\n' "Looks good, boys." ;;
+    gate_failed) printf '%s\n' "Something's fucky." ;;
+    fabrication_detected) printf '%s\n' "That's GREASY, boys. Real greasy." ;;
+    missing_evidence) printf '%s\n' "Where's your evidence? Shit hawk circling." ;;
+    all_gates_pass) printf '%s\n' "Way she goes, boys. Way she goes." ;;
+    build_failed) printf '%s\n' "Holy f***, boys." ;;
+    spec_completed) printf '%s\n' "DEEEE-CENT!" ;;
+    warnings_found) printf '%s\n' "The shit winds are coming, Randy." ;;
+    chaos_clean) printf '%s\n' "Worst case Ontario... nothing broke." ;;
+    regression_clean) printf '%s\n' "Steve French is purrin'. No regressions, boys." ;;
+    regression_found) printf '%s\n' "Something's prowlin' around in the code, boys." ;;
+    spec_conflict) printf '%s\n' "Steve French found another cougar's territory. Two specs, same route." ;;
+    recap) printf '%s\n' "So basically what happened was..." ;;
+    security_vuln) printf '%s\n' "Safety... always ON." ;;
+    docs_updated) printf '%s\n' "Know what I'm sayin'? It's published." ;;
+    deferral_detected) printf '%s\n' "You can't just NOT do things, Corey!" ;;
+    deferral_blocks_done) printf '%s\n' "That's NOT gettin' two birds stoned — that's just sayin' you WILL." ;;
+    manipulation_detected) printf '%s\n' "That's GREASY, boys. You can't just cross things out and say they're done!" ;;
+    format_bypass) printf '%s\n' "You can't just erase the checkboxes and call it a day, Ricky!" ;;
+    invented_status) printf '%s\n' "'Deferred — Planned Improvement'?! That's not even a real thing, Julian!" ;;
+    handoff_complete) printf '%s\n' "Have a good one, boys." ;;
+    gap_found) printf '%s\n' "This is f***ed. BAAAAM!" ;;
+    bug_located) printf '%s\n' "That's a nice f***ing kitty right there." ;;
+    build_succeeds) printf '%s\n' "Knock knock. Who's there? A passing build." ;;
+    milestone_reached) printf '%s\n' "Freedom 35, boys!" ;;
+    guard_start) printf '%s\n' "Alright boys, here's what we're gonna do." ;;
+    guard_blocked) printf '%s\n' "Boys, we're in the eye of a shiticane." ;;
+    guard_clear) printf '%s\n' "Passed with flying carpets!" ;;
+    lint_start) printf '%s\n' "Let's see if this thing's got its grade 10." ;;
+    lint_clean) printf '%s\n' "Not bad. Not bad at all." ;;
+    lint_dirty) printf '%s\n' "It's like a tropical earthquake blew through here." ;;
+    dashboard_start) printf '%s\n' "Let me check on the boys." ;;
+    scan_start) printf '%s\n' "I got work to do." ;;
+    scan_clean) printf '%s\n' "It's not rocket appliances — and it's clean." ;;
+    scan_dirty) printf '%s\n' "Gorilla see, gorilla do. Found copied garbage." ;;
+    audit_start) printf '%s\n' "Mr. Lahey, I got a confession to make." ;;
+    audit_clean) printf '%s\n' "The liquor figured it out, Randy." ;;
+    audit_dirty) printf '%s\n' "I am the liquor, and the liquor says NO." ;;
+  esac
+}
 
 # ── Public API ──────────────────────────────────────────────────────
 
@@ -77,7 +76,8 @@ fun_mode_active() {
 fun_message() {
   fun_mode_active || return 0
   local event="$1"
-  local msg="${_FUN_MESSAGES[$event]:-}"
+  local msg
+  msg="$(_fun_message_for_event "$event")"
   if [[ -n "$msg" ]]; then
     echo "   🫧 $msg"
   fi
@@ -107,29 +107,32 @@ _FUN_WARN_POOL=(
   "That's a bit greasy, boys."
 )
 
-# Pick a random element from a bash array
+# Pick a random element from the provided arguments
 _fun_random_pick() {
-  local -n arr=$1
-  local len=${#arr[@]}
-  echo "${arr[$((RANDOM % len))]}"
+  local len=$#
+  local offset
+  [[ "$len" -gt 0 ]] || return 0
+  offset=$((RANDOM % len))
+  shift "$offset"
+  echo "$1"
 }
 
 # Print a random pass quip (no-op if fun mode is off)
 fun_pass() {
   fun_mode_active || return 0
-  echo "   🫧 $(_fun_random_pick _FUN_PASS_POOL)"
+  echo "   🫧 $(_fun_random_pick "${_FUN_PASS_POOL[@]}")"
 }
 
 # Print a random fail quip (no-op if fun mode is off)
 fun_fail() {
   fun_mode_active || return 0
-  echo "   🫧 $(_fun_random_pick _FUN_FAIL_POOL)"
+  echo "   🫧 $(_fun_random_pick "${_FUN_FAIL_POOL[@]}")"
 }
 
 # Print a random warn quip (no-op if fun mode is off)
 fun_warn() {
   fun_mode_active || return 0
-  echo "   🫧 $(_fun_random_pick _FUN_WARN_POOL)"
+  echo "   🫧 $(_fun_random_pick "${_FUN_WARN_POOL[@]}")"
 }
 
 # Print the fun mode banner at script start (no-op if fun mode is off)

@@ -122,6 +122,7 @@ bash bubbles/scripts/scenario-compile-lint.sh .specify/runtime/scenario-plan-<id
 - [DevOps Work](devops-work.md) — the delivery lane action nodes route through
 - [Build-Once Deploy-Many](build-once-deploy-many.md) — the deploy surface an action node invokes
 - [Add A Deployment Target](add-deployment-target.md) — authoring the adapter an action node deploys through
+- [Live Deployment Convergence](live-deployment-convergence.md) — connector, seed-data, and live-journey convergence on a real target
 - [Ask the Super First](ask-the-super-first.md) — when you don't know whether it's goal or sprint
 
 ## Related Skills & Modules

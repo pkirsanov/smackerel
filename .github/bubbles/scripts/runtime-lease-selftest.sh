@@ -306,6 +306,87 @@ else
   fail "A 1-unit lease should be refused when capacity is exactly full (got rc=$cap_over_rc)"
 fi
 
+# ---------------------------------------------------------------------------
+# Artifact-writer lease (BFW-03 / IMP-023) — exclusivity keyed on a spec/bug
+# target, over the SAME exclusive-lease machinery (no new lease system).
+# ---------------------------------------------------------------------------
+WRITER_ROOT="$TMP_ROOT/runtime-writer-repo"
+mkdir -p "$WRITER_ROOT/.specify/memory" "$WRITER_ROOT/.specify/runtime"
+cat > "$WRITER_ROOT/.specify/memory/bubbles.config.json" <<'EOF'
+{
+  "version": 2,
+  "defaults": {
+    "runtime": { "leaseTtlMinutes": 20, "staleAfterMinutes": 60, "reusePolicy": "fingerprint-match-only", "source": "repo-default" }
+  },
+  "modeOverrides": {},
+  "metrics": { "enabled": false, "activityTrackingEnabled": false }
+}
+EOF
+
+# W1 acquires the writer lease for a spec target (exclusive, target-keyed purpose).
+w1_output="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="writer-1" BUBBLES_AGENT_NAME="bubbles.implement" bash "$RUNTIME_SCRIPT" writer-acquire --target specs/010-company-fundamentals --paths source,tests,report)"
+w1_lease="$(printf '%s\n' "$w1_output" | sed -nE 's/leaseId=([^ ]+).*/\1/p')"
+if [[ -n "$w1_lease" ]] && printf '%s\n' "$w1_output" | grep -q 'purpose=artifact-write:'; then
+  pass "Artifact-writer lease acquires for a target (exclusive, target-keyed purpose)"
+else
+  fail "Artifact-writer lease should acquire for a target with an artifact-write purpose"
+fi
+
+# W2 (DIFFERENT session, SAME target) is refused with an owner-naming message.
+w2_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="writer-2" BUBBLES_AGENT_NAME="bubbles.test" bash "$RUNTIME_SCRIPT" writer-acquire --target specs/010-company-fundamentals 2>&1)" && w2_rc=0 || w2_rc=$?
+if [[ "$w2_rc" -ne 0 ]] && printf '%s\n' "$w2_out" | grep -Fq "Artifact writer already active for 'specs/010-company-fundamentals'" && printf '%s\n' "$w2_out" | grep -q "writer-1"; then
+  pass "Second writer on the SAME target is refused, naming the current owner"
+else
+  fail "Second writer on the same target should be refused naming the owner (got rc=$w2_rc)"
+fi
+
+# The refusal explicitly forbids reconcile-by-append (the Feature-010 anti-pattern).
+if printf '%s\n' "$w2_out" | grep -Fq 'do NOT reconcile two live writers by appending evidence'; then
+  pass "Writer refusal forbids reconcile-by-append"
+else
+  fail "Writer refusal should forbid reconcile-by-append"
+fi
+
+# W3 on a DIFFERENT target acquires concurrently (per-target isolation).
+w3_output="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="writer-3" bash "$RUNTIME_SCRIPT" writer-acquire --target specs/099-unrelated)"
+w3_lease="$(printf '%s\n' "$w3_output" | sed -nE 's/leaseId=([^ ]+).*/\1/p')"
+if [[ -n "$w3_lease" && "$w3_lease" != "$w1_lease" ]]; then
+  pass "A writer on a DIFFERENT target acquires concurrently (per-target isolation)"
+else
+  fail "A writer on a different target should acquire concurrently"
+fi
+
+# A reader inspects the held writer lease WITHOUT acquiring (readers never block).
+reader_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" bash "$RUNTIME_SCRIPT" lookup --lease-id "$w1_lease")"
+if printf '%s\n' "$reader_out" | grep -q 'owner=writer-1'; then
+  pass "A reader inspects the writer lease without acquiring (multiple readers allowed)"
+else
+  fail "A reader should inspect the writer lease without acquiring"
+fi
+
+# Releasing the owner permits the SAME target to be acquired by the next writer.
+BUBBLES_REPO_ROOT="$WRITER_ROOT" bash "$RUNTIME_SCRIPT" release "$w1_lease" >/dev/null
+w6_output="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="writer-6" bash "$RUNTIME_SCRIPT" writer-acquire --target specs/010-company-fundamentals)"
+w6_lease="$(printf '%s\n' "$w6_output" | sed -nE 's/leaseId=([^ ]+).*/\1/p')"
+if [[ -n "$w6_lease" ]]; then
+  pass "After the owner releases, a new writer acquires the same target (release permits next owner)"
+else
+  fail "After release, a new writer should acquire the same target"
+fi
+BUBBLES_REPO_ROOT="$WRITER_ROOT" bash "$RUNTIME_SCRIPT" release "$w6_lease" >/dev/null
+
+# A STALE writer lease is taken over via the existing audited attach --takeover.
+stale_w_output="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="writer-stale" bash "$RUNTIME_SCRIPT" writer-acquire --target specs/077-crashed --ttl-minutes 0)"
+stale_w_lease="$(printf '%s\n' "$stale_w_output" | sed -nE 's/leaseId=([^ ]+).*/\1/p')"
+sleep 1
+BUBBLES_REPO_ROOT="$WRITER_ROOT" bash "$RUNTIME_SCRIPT" reclaim-stale >/dev/null
+takeover_out="$(BUBBLES_REPO_ROOT="$WRITER_ROOT" BUBBLES_SESSION_ID="writer-takeover" bash "$RUNTIME_SCRIPT" attach "$stale_w_lease" --takeover)"
+if printf '%s\n' "$takeover_out" | grep -q 'Took over stale runtime lease'; then
+  pass "A stale artifact-writer lease is taken over via an audited attach --takeover"
+else
+  fail "A stale artifact-writer lease should be taken over via attach --takeover"
+fi
+
 mkdir -p "$DOWNSTREAM_ROOT"
 git -C "$DOWNSTREAM_ROOT" init -q
 
