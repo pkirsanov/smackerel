@@ -29,7 +29,7 @@ Pick the right workflow mode for a request, understand the mode's inherited and 
    - `gates` — the gate IDs activated for this mode
    - `decisionPolicy` — mechanical vs taste decision routing
    - `phaseRelevance` — which phases are required, optional, or skipped
-   - `crossModelReview` — whether cross-model review applies
+   - `samples` — risk/uncertainty-bounded same-runtime-correlated adversarial checks; default `1`, dispatched and aggregated by the active top-level runner when a redteam phase runs
 
 ## Common natural-language intent mappings
 | Plain-English intent | Mode |

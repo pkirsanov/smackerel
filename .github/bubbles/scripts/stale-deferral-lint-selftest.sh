@@ -14,6 +14,14 @@
 #  10. Adversarial: lapsed deferral re-detected even when a
 #      legit future deferral also exists in the same tree  -> exit 1
 #  11. The lint's own selftest path is excluded             -> exit 0
+#  12. Closed structured report evidence                    -> exit 0
+#  13. Equivalent live report narrative                     -> exit 1
+#  14. Structured report evidence missing metadata          -> exit 1
+#  15. Structured report evidence with an unclosed fence     -> exit 1
+#  16. Structured report evidence with a malformed close     -> exit 1
+#  17. Shell-source fence in report evidence                 -> exit 1
+#  18. Structured fenced text outside report.md              -> exit 1
+#  19. Valid report evidence mixed with live narrative       -> exit 1
 #
 # Exit 0 = all cases pass. Exit 1 = at least one case behaved wrong.
 
@@ -113,6 +121,114 @@ c11="$TMP/c11"; mkdir -p "$c11/bubbles/scripts"
 printf '2.0.0\n' > "$c11/VERSION"
 printf 'fixture: deferred to v1.0\n' > "$c11/bubbles/scripts/stale-deferral-lint-selftest.sh"
 run_case "Case 11: own selftest path is excluded" "$c11" 0
+
+# ── Case 12: closed, structured report evidence is historical ─────
+c12="$TMP/c12"; mkdir -p "$c12"
+printf '2.0.0\n' > "$c12/VERSION"
+printf '%s\n' \
+  '## Historical execution evidence' \
+  '**Phase:** regression' \
+  '**Command:** `bash bubbles/scripts/example-selftest.sh`' \
+  '**Exit Code:** 0' \
+  '**Claim Source:** executed' \
+  '```text' \
+  'Historical verdict: transport deferred to v1.0.' \
+  '```' > "$c12/report.md"
+run_case "Case 12: closed structured report evidence is allowed" "$c12" 0
+
+# ── Case 13: equivalent live narrative remains live policy ────────
+c13="$TMP/c13"; mkdir -p "$c13"
+printf '2.0.0\n' > "$c13/VERSION"
+printf '%s\n' \
+  '## Current status' \
+  'Historical verdict: transport deferred to v1.0.' > "$c13/report.md"
+run_case "Case 13: equivalent live report narrative fails" "$c13" 1
+
+# ── Case 14: incomplete evidence metadata fails closed ─────────────
+c14="$TMP/c14"; mkdir -p "$c14"
+printf '2.0.0\n' > "$c14/VERSION"
+printf '%s\n' \
+  '## Incomplete execution evidence' \
+  '**Phase:** regression' \
+  '**Command:** `bash bubbles/scripts/example-selftest.sh`' \
+  '**Claim Source:** executed' \
+  '```text' \
+  'Historical verdict: transport deferred to v1.0.' \
+  '```' > "$c14/report.md"
+run_case "Case 14: incomplete evidence metadata fails" "$c14" 1
+
+# ── Case 15: an unclosed candidate is scanned at EOF ───────────────
+c15="$TMP/c15"; mkdir -p "$c15"
+printf '2.0.0\n' > "$c15/VERSION"
+printf '%s\n' \
+  '## Unclosed execution evidence' \
+  '**Phase:** regression' \
+  '**Command:** `bash bubbles/scripts/example-selftest.sh`' \
+  '**Exit Code:** 0' \
+  '**Claim Source:** executed' \
+  '```text' \
+  'Historical verdict: transport deferred to v1.0.' > "$c15/report.md"
+run_case "Case 15: unclosed text fence fails" "$c15" 1
+
+# ── Case 16: a malformed or mismatched close is not a close ────────
+c16="$TMP/c16"; mkdir -p "$c16"
+printf '2.0.0\n' > "$c16/VERSION"
+printf '%s\n' \
+  '## Malformed execution evidence' \
+  '**Phase:** regression' \
+  '**Command:** `bash bubbles/scripts/example-selftest.sh`' \
+  '**Exit Code:** 0' \
+  '**Claim Source:** executed' \
+  '```text' \
+  'Historical verdict: transport deferred to v1.0.' \
+  '````' \
+  '```' > "$c16/report.md"
+run_case "Case 16: malformed or mismatched fence close fails" "$c16" 1
+
+# ── Case 17: executable shell/source fences remain scanner input ───
+c17="$TMP/c17"; mkdir -p "$c17"
+printf '2.0.0\n' > "$c17/VERSION"
+printf '%s\n' \
+  '## Source evidence' \
+  '**Phase:** regression' \
+  '**Command:** `bash bubbles/scripts/example-selftest.sh`' \
+  '**Exit Code:** 0' \
+  '**Claim Source:** executed' \
+  '```bash' \
+  'printf "%s\\n" "transport deferred to v1.0"' \
+  '```' > "$c17/report.md"
+run_case "Case 17: shell-source fence fails" "$c17" 1
+
+# ── Case 18: the exemption never applies outside report.md ─────────
+c18="$TMP/c18"; mkdir -p "$c18/docs"
+printf '2.0.0\n' > "$c18/VERSION"
+printf '%s\n' \
+  '## Historical execution evidence' \
+  '**Phase:** regression' \
+  '**Command:** `bash bubbles/scripts/example-selftest.sh`' \
+  '**Exit Code:** 0' \
+  '**Claim Source:** executed' \
+  '```text' \
+  'Historical verdict: transport deferred to v1.0.' \
+  '```' > "$c18/docs/notes.md"
+run_case "Case 18: fenced text outside report.md fails" "$c18" 1
+
+# ── Case 19: valid evidence cannot hide adjacent live narrative ────
+c19="$TMP/c19"; mkdir -p "$c19"
+printf '2.0.0\n' > "$c19/VERSION"
+printf '%s\n' \
+  '## Historical execution evidence' \
+  '**Phase:** regression' \
+  '**Commands:** `bash bubbles/scripts/example-selftest.sh`' \
+  '**Exit Codes:** 0' \
+  '**Claim Source:** executed' \
+  '```text' \
+  'Historical verdict: transport deferred to v1.0.' \
+  '```' \
+  '' \
+  '## Current policy' \
+  'Live transport remains deferred until v1.1.' > "$c19/report.md"
+run_case "Case 19: valid evidence mixed with live narrative fails" "$c19" 1
 
 echo
 echo "stale-deferral-lint-selftest: $pass_count pass, $fail_count fail"

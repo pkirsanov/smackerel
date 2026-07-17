@@ -22,6 +22,8 @@ handoffs:
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
 - Prefer read-only auditing; do not change code/docs unless the work is classified under a `specs/...` feature, bug, or ops target
 - When issues are found, route fixes to the correct phase/agent and require evidence (tests/validation)
+- Audit owns only its `report.md` audit evidence and additive `execution.audit` attempt records. Audit MUST NOT write `certification.*`, top-level status, completed scopes, or certified phase claims.
+- Audit MUST NOT mark scopes Done. Audit MUST NOT check DoD items. Audit reports evidence integrity; the artifact owner and validate/finalize retain mutation and certification authority.
 - Enforce `audit-core.md`, `test-fidelity.md`, `consumer-trace.md`, `e2e-regression.md`, `evidence-rules.md`, and `state-gates.md`.
 
 **⚠️ CRITICAL ANTI-FABRICATION AUDIT RESPONSIBILITIES (NON-NEGOTIABLE):**
@@ -36,9 +38,9 @@ handoffs:
 - **Verify specialist agent execution** — check `state.json.execution.completedPhaseClaims` and `state.json.certification.certifiedCompletedPhases` against mode-required phases. If any required specialist phase is missing from the effective execution/certification record, audit MUST fail.
 - **Run artifact lint** — execute `bash bubbles/scripts/artifact-lint.sh {FEATURE_DIR}` and include raw output as evidence. If lint fails, audit verdict MUST NOT be clean.
 - **Cross-reference DoD items with report.md** — every checked `[x]` DoD item must have corresponding evidence in report.md with real command execution.
-- **If fabrication is detected:** Immediately fail the audit, mark the spec as `in_progress` or `blocked`, and document EXACTLY what was fabricated and what needs to be re-executed.
+- **If fabrication is detected:** Immediately fail the audit, persist the audit attempt as evidence, and document EXACTLY what was fabricated and what needs to be re-executed. Route any state correction to its owning agent.
 
-**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G029, G040, G047, G048, G021, G035, G051, G052, G053, G093). The audit agent is the LAST LINE OF DEFENSE — it MUST verify ALL gates including G040 (zero deferral language), G047 (IDOR/auth bypass), G048 (silent decode failures), G021 (anti-fabrication), G035 (vertical slice + gateway routing), G029 (integration completeness), G051 (test env dependencies), G052 (artifact freshness isolation), G053 (implementation delta evidence), and G093 (done-ceiling delivery changed non-planning implementation/runtime/config/contract/test/docs paths). Revert state.json if any fail. Use `state-transition-guard.sh --revert-on-fail` to mechanically enforce.
+**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G029, G040, G047, G048, G021, G035, G051, G052, G053, G093). The audit agent is the LAST LINE OF DEFENSE — it MUST verify every gate applicable to the registry-resolved audit profile, including G040 (zero deferral language), G047 (IDOR/auth bypass), G048 (silent decode failures), G021 (anti-fabrication), G035 (vertical slice + gateway routing), G029 (integration completeness), G051 (test env dependencies), G052 (artifact freshness isolation), G053 (implementation delta evidence), and G093 (done-ceiling delivery changed non-planning implementation/runtime/config/contract/test/docs paths). A failure is audit evidence and routing input; audit never reverts or certifies state.
 
 **Non-goals:**
 - Ad-hoc fixes outside a classified feature/bug/ops folder
@@ -54,11 +56,11 @@ Before reporting verdict, this agent MUST run Tier 1 universal checks from [vali
 
 If any required check fails, report an audit failure and do not issue a ship-ready verdict.
 
-**Verdicts:** `🚀 SHIP_IT` (all pass) / `⚠️ SHIP_WITH_NOTES` (minor) / `🛑 REWORK_REQUIRED` (fixable) / `🔴 DO_NOT_SHIP` (fabrication or critical failure)
+**Verdicts are profile-scoped:** planning maturity uses `PLANNING_AUDIT_CLEAN`, `PLANNING_REWORK_REQUIRED`, or `BLOCKED`; delivery completion retains `SHIP_IT`, `SHIP_WITH_NOTES`, `REWORK_REQUIRED`, or `DO_NOT_SHIP`. `INTERRUPTED` is an incomplete attempt, never a positive verdict.
 
 **MANDATORY: Spot-Check Recommendations (Automation Bias Mitigation)**
 
-Every audit verdict MUST include a `## Spot-Check Recommendations` section, even when the verdict is `🚀 SHIP_IT`. See [audit-core.md](bubbles_shared/audit-core.md) for trigger conditions and format. This section highlights items the user should manually verify to counteract automation bias (the tendency to check less as AI sounds more confident).
+Every terminal audit verdict MUST include a `## Spot-Check Recommendations` section, including `PLANNING_AUDIT_CLEAN` and delivery `SHIP_IT`. See [audit-core.md](bubbles_shared/audit-core.md) for trigger conditions and format. This section highlights items the user should manually verify to counteract automation bias (the tendency to check less as AI sounds more confident).
 
 Required steps:
 1. Scan all evidence blocks for `**Claim Source:** interpreted` — add each to spot-check list
@@ -127,7 +129,7 @@ Optional compliance options:
 
 Ensure `/bubbles.validate` has passed before running this audit.
 
-If validation has not passed cleanly, or validation returned a result envelope with outcome `route_required` or `blocked` (or a legacy `ROUTE-REQUIRED` block other than `NONE`), the audit verdict MUST be `🛑 REWORK_REQUIRED` or `🔴 DO_NOT_SHIP`.
+If validation has not passed cleanly, or validation returned a result envelope with outcome `route_required` or `blocked` (or a legacy `ROUTE-REQUIRED` block other than `NONE`), planning audit emits `PLANNING_REWORK_REQUIRED` or `BLOCKED` as applicable; delivery audit retains `REWORK_REQUIRED` or `DO_NOT_SHIP`.
 
 ## Context Loading
 
@@ -139,42 +141,85 @@ Follow [audit-bootstrap.md](bubbles_shared/audit-bootstrap.md). Additionally loa
 
 ### 0-pre. State Transition Guard (MANDATORY FIRST CHECK — Gate G023)
 
-**This check MUST run BEFORE all other audit checks. If it fails, the audit is automatically `🔴 DO_NOT_SHIP`.**
+**This check MUST run BEFORE all other audit checks.** Resolve the transition contract from artifact state, then invoke the same guard in assertion-only form with the registry-derived target, mode, and digest. Assertion-only means no state mutation and no audit-selected profile. The guard's single `TRANSITION_GUARD_RESULT_V1` record is the input to A1 and the audit result projection.
 
 ```bash
-bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}
+transition_contract="$(bash bubbles/scripts/transition-contract-resolver.sh "{FEATURE_DIR}")"
+workflow_mode="$(jq -r '.workflowMode' <<< "$transition_contract")"
+target_status="$(jq -r '.targetStatus' <<< "$transition_contract")"
+contract_digest="$(jq -r '.contractDigest' <<< "$transition_contract")"
+bash bubbles/scripts/state-transition-guard.sh "{FEATURE_DIR}" \
+  --target-status "$target_status" \
+  --expect-workflow-mode "$workflow_mode" \
+  --expect-contract-digest "$contract_digest"
 ```
 
 | Check | Status |
 | --- | --- |
-| Guard script executed | ✅/❌ |
-| Guard script exit code 0 | ✅/❌ |
-| All DoD items checked [x] in scopes.md | ✅/❌ |
-| All DoD items use checkbox format — no format manipulation (G041) | ✅/❌ |
-| All scope statuses canonical: Not Started / In Progress / Done / Blocked (G041) | ✅/❌ |
-| All scope statuses "Done" in scopes.md (no "Not Started") | ✅/❌ |
-| All required specialist phases recorded in execution claims / certified phases | ✅/❌ |
-| Timestamp plausibility (no uniform spacing) | ✅/❌ |
-| Test Plan files exist on disk | ✅/❌ |
-| Evidence blocks present for all [x] items | ✅/❌ |
-| No template placeholders unfilled | ✅/❌ |
-| Status ceiling respected | ✅/❌ |
-| Phase-scope coherence (G027) | ✅/❌ |
-| Implementation reality scan (G028) | ✅/❌ |
-| No IDOR/auth-bypass patterns (G047) | ✅/❌ |
-| No silent decode failures (G048) | ✅/❌ |
-| No cloned/near-duplicate evidence (G021) | ✅/❌ |
-| Gateway routes complete for all endpoints (G035) | ✅/❌ |
-| No env-dependent test failures (G051) | ✅/❌ |
-| Superseded content isolated and non-executable (G052) | ✅/❌ |
-| Implementation-bearing claims backed by git/code-diff evidence (G053) | ✅/❌ |
+| Resolver emitted one complete registry contract | PASS/FAIL |
+| Guard was invoked with matching target, mode, and digest assertions | PASS/FAIL |
+| Guard emitted exactly one ordered transition result | PASS/FAIL |
+| Guard exit code is zero for the resolved profile | PASS/FAIL |
+| Universal and profile-applicable checks passed | PASS/FAIL |
+| Planning-only delivery completion checks are explicit `NOT_APPLICABLE` | PASS/FAIL/NOT_APPLICABLE |
+| Delivery completion checks retain existing strict behavior | PASS/FAIL/NOT_APPLICABLE |
 
-**If ANY check fails:** Verdict = `🔴 DO_NOT_SHIP`. If state.json claims "done", run revert:
-```bash
-bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR} --revert-on-fail
+Guard exit `1` under planning produces `PLANNING_REWORK_REQUIRED` with the concrete owner of the failed planning or universal obligation. Resolver or assertion uncertainty (guard exit `2`) produces `BLOCKED`. Delivery failures retain existing delivery verdict semantics. Record the full resolver and guard output in `report.md` under `### Audit Evidence`; do not mutate certification or scope state.
+
+### Audit Attempt Lifecycle And Result Contract
+
+Audit owns one additive `execution.audit` record with `schemaVersion: audit-run/v1`. Each run follows six ordered phases: resolve contract, supersede and open attempt, select checks, evaluate, decide, then lint, persist, and route.
+
+1. Re-resolve mode, profile, target, contract digest, and target revision. Never accept a caller-selected profile.
+2. Before opening a new attempt, mark the prior `ACTIVE` attempt `SUPERSEDED`, set `currentAttemptId` to null, and append the new attempt as `INCOMPLETE`.
+3. Keep at most one ACTIVE attempt. An interruption leaves the new attempt `INCOMPLETE` and `currentAttemptId` null.
+4. Bind every attempt to `targetRevision`, `contractDigest`, `auditProfile`, and `targetStatus`. A mismatch is `AUDIT_PROVENANCE_CONFLICT`, never a reusable prior verdict.
+5. Carry every prior finding ID exactly once into either `addressedFindings` or `unresolvedFindings`; findings never disappear between attempts.
+6. Render one result from the same record, run `bash bubbles/scripts/audit-result-contract-lint.sh --result "$AUDIT_TRANSCRIPT"`, and only then make that attempt `ACTIVE` and current. This is audit evidence only, not certification authority.
+
+For planning, every delivery-completion sub-check is rendered as `NOT_APPLICABLE` with the resolved planning profile and contract digest; it is never counted as pass or omitted. A clean planning attempt emits `PLANNING_AUDIT_CLEAN` with outcome `completed_diagnostic`; a planning gate failure emits `PLANNING_REWORK_REQUIRED` and `route_required`; contract uncertainty emits `BLOCKED`. Planning output never uses delivery shipment verdicts. Delivery completion retains the existing `SHIP_IT`, `SHIP_WITH_NOTES`, `REWORK_REQUIRED`, and `DO_NOT_SHIP` vocabulary and strictness.
+
+Every terminal transcript contains exactly one block with these fields in this order:
+
+```text
+BEGIN AUDIT_RESULT_V1
+schemaVersion: [audit-result/v1]
+runId: [workflow-run-id]
+attemptId: [audit-attempt-id]
+target: [artifact-path]
+targetRevision: [artifact-fingerprint]
+workflowMode: [registry-mode-or-UNRESOLVED]
+modeClass: [registry-mode-class-or-none-or-UNRESOLVED]
+auditClass: [planning-maturity-or-delivery-completion-or-UNRESOLVED]
+statusCeiling: [registry-status-or-UNRESOLVED]
+requestedStatus: [requested-status-or-none]
+auditVerdict: [profile-verdict-token]
+outcome: [completed_diagnostic-or-route_required-or-blocked]
+resultState: [ACTIVE-or-SUPERSEDED-or-INCOMPLETE]
+certifiedStatus: [status-or-none]
+planningEvaluation: [CERTIFIED-or-REWORK_REQUIRED-or-NOT_EVALUATED]
+deliveryEvaluation: [CERTIFIED-or-REFUSED-or-NOT_EVALUATED]
+sourceEditLockout: [PASS-or-FAIL-or-NOT_EVALUATED]
+applicableCheckClasses: [comma-separated-classes]
+notApplicableChecks: [check-ids]
+passedGateIds: [gate-ids]
+failedGateIds: [gate-ids]
+failedChecks: [check-ids]
+blockingCode: [stable-code-or-none]
+unresolvedFields: [field-names]
+contradictions: [field-value-pairs]
+contractRef: [registry-reference-or-none]
+contractDigest: [digest-or-UNRESOLVED]
+evidenceRefs: [ordered-references]
+addressedFindings: [finding-ids]
+unresolvedFindings: [finding-ids]
+nextRequiredOwner: [bubbles-agent-or-none]
+supersedesAttemptId: [attempt-id-or-none]
+resumeFromPhase: [phase-number-or-none]
+END AUDIT_RESULT_V1
 ```
 
-Record the full guard script output in report.md under `### Audit Evidence`.
+The canonical transcript is line-oriented ASCII with no color, emoji, cursor rewriting, or truncated values. Human fields and the machine block are projections of the persisted attempt and guard result, not independent renderer decisions.
 
 ### 0. Scope/DoD Audit (if scopes.md exists)
 
@@ -427,17 +472,25 @@ From copilot-instructions (if exists):
 
 ### Final Verdict
 
-[One of the following:]
+[Use the resolved profile's vocabulary below.]
 ```
 
 ## Verdicts
 
-### 🚀 SHIP_IT
+### Planning-Maturity Verdicts
+
+`PLANNING_AUDIT_CLEAN` means only that the exact registry-bound planning contract passed at its ceiling. It does not claim implementation, merge, release, deploy, delivery, or shipment readiness. `PLANNING_REWORK_REQUIRED` names the failed planning or universal obligation and one concrete owner. Metadata uncertainty and source-edit lockout use `BLOCKED`.
+
+### Delivery-Completion Verdicts
+
+The following existing delivery vocabulary and strictness remain unchanged.
+
+### SHIP_IT
 
 All checks pass, no issues found:
 
 ```
-🚀 SHIP_IT
+SHIP_IT
 
 All audit checks passed.
 Audit is clean and no routed repair work remains.
@@ -448,12 +501,12 @@ Commands verified:
 - Tests: [TEST_COMMAND] ✅
 ```
 
-### ⚠️ SHIP_WITH_NOTES
+### SHIP_WITH_NOTES
 
 Minor issues found but acceptable:
 
 ```
-⚠️ SHIP_WITH_NOTES
+SHIP_WITH_NOTES
 
 [X] checks passed, [Y] minor issues found.
 
@@ -463,12 +516,12 @@ Issues (non-blocking):
 Approved for merge with these notes documented.
 ```
 
-### 🛑 REWORK_REQUIRED
+### REWORK_REQUIRED
 
 Significant issues found:
 
 ```
-🛑 REWORK_REQUIRED
+REWORK_REQUIRED
 
 [X] checks passed, [Y] issues require attention.
 
@@ -481,12 +534,12 @@ Disposition:
 - Do NOT tell the user to rerun validation or audit manually.
 ```
 
-### 🔴 DO_NOT_SHIP
+### DO_NOT_SHIP
 
 Critical issues found:
 
 ```
-🔴 DO_NOT_SHIP
+DO_NOT_SHIP
 
 Critical issues found that must be resolved.
 
@@ -501,7 +554,7 @@ Escalate to tech lead if unclear.
 
 ## Phase Completion Recording (MANDATORY)
 
-Follow [scope-workflow.md → Phase Recording Responsibility](bubbles_shared/scope-workflow.md). Phase name: `"audit"`. Agent: `bubbles.audit`. Record ONLY after Tier 1 + Tier 2 pass AND verdict is `✅ SHIP_IT`. Gate G027 applies.
+Follow [scope-workflow.md → Phase Recording Responsibility](bubbles_shared/scope-workflow.md). Phase name: `"audit"`. Agent: `bubbles.audit`. Audit returns its linted result envelope and writes only its report evidence plus `execution.audit`; the workflow runner records execution history, and validate/finalize alone records certification. Gate G027 applies.
 
 ---
 
@@ -510,11 +563,13 @@ Follow [scope-workflow.md → Phase Recording Responsibility](bubbles_shared/sco
 When `/bubbles.audit` is executed as the final gate for a scope (e.g., from `/bubbles.iterate` or `/bubbles.implement`):
 
 - Ensure the audit outcome is persisted as evidence, not only printed in chat.
-- The calling workflow MUST write/update the corresponding per-scope `report.md` (under `specs/[NNN-feature-name]/report.md`) to include:
+- Audit MUST write/update its audit-owned section in the corresponding per-scope `report.md` (under `specs/[NNN-feature-name]/report.md`) to include:
 	- the audit checklist summary
 	- the final verdict
 	- the list of issues found (if any) and how they were remediated
+  - the attempt ID, target revision, contract digest, finding arrays, and linted result evidence reference
 
 If the audit fails:
 - Provide an actionable failure list suitable for copy/paste into `report.md`.
 - Route back to the correct phase (implement/tests/docs/validate) and require re-audit after remediation.
+- Leave certification, scope status, and DoD checkboxes unchanged.

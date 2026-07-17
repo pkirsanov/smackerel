@@ -60,7 +60,7 @@ mkdir -p "$tmp_root/.github/docs/generated"
 # Copy ONLY the scripts the v5.3 selftest exercises. We do NOT copy install.sh
 # / VERSION / README.md into the synthesized tree (that's the whole point of
 # the downstream-install fixture).
-for s in framework-validate.sh spec-review-handoff-selftest.sh \
+for s in framework-validate.sh guard-lib.sh spec-review-handoff-selftest.sh \
          workflow-delegation-selftest.sh \
          capability-ledger-selftest.sh capability-freshness-selftest.sh \
          competitive-docs-selftest.sh interop-apply-selftest.sh \

@@ -136,6 +136,40 @@ That updates the installed framework scripts and also scaffolds the runtime igno
 
 Do not run that installer command inside the Bubbles source repository itself. Source-repo maintainers should work directly in the framework checkout and validate with `bash bubbles/scripts/cli.sh framework-validate` or `bash bubbles/scripts/cli.sh release-check`.
 
+## Artifact-Writer Lease (One Writer Per Spec Target)
+
+The runtime lease also coordinates **artifact writers** — agents that mutate a
+spec/bug's owned source, tests, or report. This is a thin convention over the
+SAME exclusive lease (no separate lease system): write-exclusivity is keyed on a
+spec/bug **target** plus the current worktree, so two agents cannot mutate the
+same artifacts concurrently.
+
+```bash
+# Acquire BEFORE the first mutable tool call against a spec target:
+bash bubbles/scripts/cli.sh runtime writer-acquire \
+  --target specs/010-company-fundamentals --paths source,tests,report
+
+# ... do the scoped work, then release when the scope is done:
+bash bubbles/scripts/cli.sh runtime release <lease-id>
+```
+
+Rules:
+
+- **One writer per (target, worktree).** A second writer on the SAME target is
+  refused with a message naming the current owner (session + agent + lease id).
+  The refusal explicitly forbids "reconciling" two live writers by appending more
+  evidence — route the change to the owner or wait for release.
+- **Readers never take the lease.** Multiple readers inspect a target freely
+  (`runtime lookup --lease-id <id>` / `--purpose artifact-write:<slug>`).
+- **Different targets run concurrently.** Writers on different spec targets do
+  not block each other.
+- **Stale/crash takeover is audited, never silent.** A crashed writer's lease
+  lapses via its TTL; a new owner takes it over explicitly with
+  `runtime attach <lease-id> --takeover` (after `runtime reclaim-stale`).
+- **Parallel scopes** still follow the parent-owned shared-state contract
+  (IMP-004 SCOPE-2): child scopes run in isolated worktrees and never write
+  shared `state.json` / scenario-manifest / spec/design / another scope's report.
+
 ## Ask The Super Instead
 
 If you do not want to remember the command:

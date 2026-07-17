@@ -192,7 +192,9 @@ bubbles_json_array_joined() {
   local joined_value=''
   local items=()
 
-  mapfile -t items < <(bubbles_json_array_items "$json_file" "$field_name")
+  while IFS= read -r item; do
+    items+=("$item")
+  done < <(bubbles_json_array_items "$json_file" "$field_name")
   joined_value="$(bubbles_join_list_items "$separator" "${items[@]}")"
 
   if [[ -n "$joined_value" ]]; then
@@ -280,16 +282,15 @@ bubbles_framework_manifest_entries() {
   done
 
   # v6.1 (M4 guard split): state-transition-guard.sh sources self-contained
-  # check-fragments from bubbles/scripts/guards/. The bubbles/scripts/*.sh glob
-  # above is NON-recursive, so the guard fragments MUST be enumerated explicitly
-  # or they would be copied by install.sh yet absent from the framework
-  # manifest/checksums — leaving them unprotected by drift detection and
-  # framework-write-guard.
+  # check fragments from bubbles/scripts/guards/. The directory also owns
+  # internal parser helpers used by guards. The bubbles/scripts/*.sh glob above
+  # is NON-recursive, so every file here MUST be enumerated explicitly or it
+  # would be copied by install.sh yet absent from manifest/checksum protection.
   while IFS= read -r file_path; do
     [[ -f "$file_path" ]] || continue
     relative_path="${file_path#$source_root/}"
     bubbles_print_manifest_entry "$source_root" "$relative_path"
-  done < <(find "$source_root/bubbles/scripts/guards" -type f -name '*.sh' 2>/dev/null | LC_ALL=C sort)
+  done < <(find "$source_root/bubbles/scripts/guards" -type f 2>/dev/null | LC_ALL=C sort)
 
   while IFS= read -r file_path; do
     [[ -f "$file_path" ]] || continue

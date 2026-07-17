@@ -17,7 +17,7 @@ Optional execution tags you can append to many workflow commands:
 - `improvementPrelude: analyze-design-plan|analyze-ux-design-plan` to make `full-delivery` refresh planning before early rounds
 - `improvementPreludeRounds: N` to cap how many full-delivery rounds include that prelude
 - `specReview: once-before-implement` to run a one-shot stale/redundant spec audit before legacy improvement or implementation work starts
-- `crossModelReview: codex|terminal` to get an independent second-opinion review from a different AI model during code-review or audit phases
+- `samples: N` for bounded same-runtime-correlated checks when a workflow has an active redteam phase; `1` is the normal default, and N requires N actual top-level invocations
 - `parallelScopes: dag|dag-dry` to execute DAG-independent scopes in parallel via git worktrees (off by default)
 - `maxParallelScopes: 2-4` to control maximum concurrent scope executions
 
@@ -62,6 +62,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Autonomous Goal](autonomous-goal.md) | "Give it a single goal — feature, bug, ops, or hardening — and let it handle everything until done" |
 | [Autonomous Sprint](autonomous-sprint.md) | "Give it multiple goals + a time budget, let it prioritize and execute autonomously" |
 | [Cross-Repo Goal Scenario](cross-repo-scenario.md) | "Take a whole outcome — review → plan → deliver → deploy → operate, possibly across repos — and let goal/sprint compile and run it as one approval-gated scenario" |
+| [Live Deployment Convergence](live-deployment-convergence.md) | "Make a deployed product actually deliver every connector, seed-data requirement, and browser journey with live proof" |
 
 > **💡 Tip:** Use **goal** when you have one well-defined objective and want full autonomy. Use **sprint** when you have a backlog and a deadline. Both run convergence loops that don't stop until findings are zero or time runs out.
 
@@ -160,4 +161,4 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Validation Latency Budgets](validation-latency-budgets.md) | "I need to inspect validation phase latency and budget drift" |
 | [Structured Commits](structured-commits.md) | "I want clean, scope-by-scope git history" |
 | [Custom Gates](custom-gates.md) | "I need project-specific quality checks beyond the built-in framework gates" |
-| [Cross-Model Review](cross-model-review.md) | "I want a second AI opinion from a different model on my code review" |
+| [Cross-Model Review: Unavailable](cross-model-review.md) | Migration note explaining why Bubbles cannot currently verify a different provider/model invocation |

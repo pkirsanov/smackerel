@@ -198,7 +198,7 @@ echo "--- Check 8D: Change Boundary Containment ---"
 boundary_scope_hits=0
 missing_change_boundary=0
 
-for scope_path in "${scope_files[@]}"; do
+for scope_path in ${scope_files[@]+"${scope_files[@]}"}; do
   [[ -f "$scope_path" ]] || continue
 
   if grep -Eiq '\b(refactor|refactoring|simplify|simplification|cleanup|repair|hotspot)\b|Shared Infrastructure Impact Sweep' "$scope_path"; then

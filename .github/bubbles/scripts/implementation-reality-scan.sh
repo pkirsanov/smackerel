@@ -34,8 +34,21 @@
 # =============================================================================
 set -euo pipefail
 
-# Source fun mode support
-source "$(dirname "${BASH_SOURCE[0]}")/fun-mode.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+PROJECT_CONFIG="$REPO_ROOT/.github/bubbles-project.yaml"
+PROJECT_CONFIG_DISPLAY=".github/bubbles-project.yaml"
+
+# fun-mode.sh uses associative arrays, which macOS system Bash 3.2 does not
+# support. Fun output is optional; scanner enforcement remains fully active.
+if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+  # shellcheck source=/dev/null
+  source "$SCRIPT_DIR/fun-mode.sh"
+else
+  fun_fail() { :; }
+  fun_warn() { :; }
+  fun_message() { :; }
+fi
 
 feature_dir="${1:-}"
 verbose="false"
@@ -640,38 +653,62 @@ echo ""
 # =============================================================================
 # SCAN 2B: Sensitive Client Storage
 # =============================================================================
-# Detects auth/session/payment/secret material persisted in client-side storage.
+# Classifies storage operations, bounded constant/data-flow semantics, and the
+# one exact project-owned same-tab market-data credential tuple. Durable stores
+# and forbidden auth/session/payment classes have no approval branch.
 # =============================================================================
 echo "--- Scan 2B: Sensitive Client Storage ---"
 
-SENSITIVE_CLIENT_STORAGE_PATTERNS=(
-  'localStorage\.(setItem|getItem).*(token|auth|session|jwt|refresh|bearer|secret|api[_-]?key|card|payment|cvv|cvc|ssn)'
-  'sessionStorage\.(setItem|getItem).*(token|auth|session|jwt|refresh|bearer|secret|api[_-]?key|card|payment|cvv|cvc|ssn)'
-  'AsyncStorage\.(setItem|getItem).*(token|auth|session|jwt|refresh|bearer|secret|api[_-]?key|card|payment|cvv|cvc|ssn)'
-  'SharedPreferences.*(token|auth|session|jwt|refresh|bearer|secret|api[_-]?key|card|payment|cvv|cvc|ssn)'
-  'indexedDB.*(token|auth|session|jwt|refresh|bearer|secret|api[_-]?key|card|payment|cvv|cvc|ssn)'
-  '(token|auth|session|jwt|refresh|bearer|secret|api[_-]?key|card|paymentMethod|cvv|cvc|ssn).*(localStorage|sessionStorage|AsyncStorage|SharedPreferences|indexedDB)'
-)
-
+SENSITIVE_STORAGE_HELPER="$SCRIPT_DIR/guards/sensitive-client-storage-scan.py"
+SENSITIVE_STORAGE_FALLBACK_PATTERN='localStorage\.|sessionStorage\.|AsyncStorage\.|SharedPreferences\b|indexedDB\.|IDBObjectStore\b|\.objectStore[[:space:]]*\(|\.(setString|setStringList|setInt|setBool|setDouble|putString|putStringSet|putInt|putBoolean|putFloat|putLong)[[:space:]]*\('
+sensitive_storage_files=()
 for impl_file in "${impl_files[@]}"; do
   file_ext="${impl_file##*.}"
-
   if [[ "$file_ext" == "ts" || "$file_ext" == "tsx" || "$file_ext" == "js" || "$file_ext" == "jsx" || "$file_ext" == "dart" ]]; then
     if echo "$impl_file" | grep -qE '(\.test\.|\.spec\.|__tests__|__mocks__|e2e|playwright)'; then
       continue
     fi
-
-    for pattern in "${SENSITIVE_CLIENT_STORAGE_PATTERNS[@]}"; do
-      while IFS=: read -r line_num matched_line; do
-        [[ -z "$line_num" ]] && continue
-        if echo "$matched_line" | grep -qE '^\s*(//|#|/\*|\*|{/\*)'; then
-          continue
-        fi
-        violation "$impl_file" "$line_num" "SENSITIVE_CLIENT_STORAGE" "$matched_line"
-      done < <(grep -nEi "$pattern" "$impl_file" 2>/dev/null || true)
-    done
+    sensitive_storage_files+=("$impl_file")
   fi
 done
+
+if [[ ${#sensitive_storage_files[@]} -gt 0 ]]; then
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$SENSITIVE_STORAGE_HELPER" ]]; then
+    if [[ -f "$PROJECT_CONFIG" ]] && grep -qE '^[[:space:]]*sensitiveClientStorage[[:space:]]*:' "$PROJECT_CONFIG" 2>/dev/null; then
+      violation "$PROJECT_CONFIG_DISPLAY" "0" "SENSITIVE_CLIENT_STORAGE" "reason=SENSITIVE_STORAGE_CONFIG_INVALID storage=configuration operation=parse key=unresolved provider=unresolved configMatch=invalid"
+    fi
+    for impl_file in "${sensitive_storage_files[@]}"; do
+      while IFS=: read -r line_num _; do
+        [[ -z "$line_num" ]] && continue
+        violation "$impl_file" "$line_num" "SENSITIVE_CLIENT_STORAGE" "reason=SENSITIVE_STORAGE_CLASSIFICATION_UNRESOLVED storage=unknown operation=unresolved key=unresolved provider=unresolved configMatch=unresolved"
+      done < <(grep -nE "$SENSITIVE_STORAGE_FALLBACK_PATTERN" "$impl_file" 2>/dev/null || true)
+    done
+  else
+    sensitive_storage_output=""
+    sensitive_storage_status=0
+    if sensitive_storage_output="$(python3 "$SENSITIVE_STORAGE_HELPER" --repo-root "$REPO_ROOT" --config "$PROJECT_CONFIG" "${sensitive_storage_files[@]}" 2>&1)"; then
+      sensitive_storage_status=0
+    else
+      sensitive_storage_status=$?
+    fi
+    if [[ "$sensitive_storage_status" -ne 0 ]]; then
+      if [[ -f "$PROJECT_CONFIG" ]] && grep -qE '^[[:space:]]*sensitiveClientStorage[[:space:]]*:' "$PROJECT_CONFIG" 2>/dev/null; then
+        violation "$PROJECT_CONFIG_DISPLAY" "0" "SENSITIVE_CLIENT_STORAGE" "reason=SENSITIVE_STORAGE_CONFIG_INVALID storage=configuration operation=parse key=unresolved provider=unresolved configMatch=invalid"
+      fi
+      for impl_file in "${sensitive_storage_files[@]}"; do
+        while IFS=: read -r line_num _; do
+          [[ -z "$line_num" ]] && continue
+          violation "$impl_file" "$line_num" "SENSITIVE_CLIENT_STORAGE" "reason=SENSITIVE_STORAGE_CLASSIFICATION_UNRESOLVED storage=unknown operation=unresolved key=unresolved provider=unresolved configMatch=unresolved"
+        done < <(grep -nE "$SENSITIVE_STORAGE_FALLBACK_PATTERN" "$impl_file" 2>/dev/null || true)
+      done
+    else
+      while IFS=$'\t' read -r record_type finding_path finding_line finding_reason finding_storage finding_operation finding_key finding_provider finding_config_match; do
+        [[ "$record_type" == "FINDING" ]] || continue
+        violation "$finding_path" "$finding_line" "SENSITIVE_CLIENT_STORAGE" "reason=$finding_reason storage=$finding_storage operation=$finding_operation key=$finding_key provider=$finding_provider configMatch=$finding_config_match"
+      done <<< "$sensitive_storage_output"
+    fi
+  fi
+fi
 echo ""
 
 # =============================================================================
@@ -867,7 +904,7 @@ LIVE_TEST_INTERCEPT_PATTERNS=(
 )
 
 live_test_files_found=0
-for test_file in "${test_files[@]}"; do
+for test_file in "${test_files[@]+"${test_files[@]}"}"; do
   if [[ ! -f "$test_file" ]]; then
     continue
   fi
@@ -940,7 +977,6 @@ echo ""
 echo "--- Scan 7: IDOR / Auth Bypass Detection (Gate G047) ---"
 
 # Auto-generate project config if missing (just-in-time, fully automatic)
-PROJECT_CONFIG=".github/bubbles-project.yaml"
 SETUP_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/project-scan-setup.sh"
 if [[ ! -f "$PROJECT_CONFIG" ]] || ! grep -q '^scans:' "$PROJECT_CONFIG" 2>/dev/null; then
   if [[ -f "$SETUP_SCRIPT" ]]; then

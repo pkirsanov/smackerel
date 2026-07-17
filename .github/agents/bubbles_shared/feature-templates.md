@@ -311,7 +311,13 @@ Rules:
     "currentScope": null,
     "runStartedAt": "YYYY-MM-DDTHH:MM:SSZ",
     "completedPhaseClaims": [],
-    "pendingTransitionRequests": []
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
   },
   "certification": {
     "status": "not_started",
@@ -401,6 +407,7 @@ Rules:
 Only modes with `statusCeiling: done` (in `bubbles/workflows/modes.yaml`) may set `status: "done"`.
 Artifact-only modes set their ceiling status (e.g., `specs_hardened` for `spec-scope-hardening`).
 **`execution` vs `certification`:** execution records runtime claims; certification is the validate-owned authoritative state that must match top-level `status` before promotion.
+**`execution.audit`:** additive audit evidence only. It is not workflow configuration or certification authority. New templates contain no attempt and no positive verdict; only `bubbles.audit` appends attempts, and validate/finalize must re-resolve the transition contract before consuming one.
 **`policySnapshot`:** records the effective grill/TDD/auto-commit/lockdown/regression/validation settings together with provenance.
 **`scopeLayout`:** `single-file` uses `scopes.md` + `report.md`; `per-scope-directory` uses `scopes/_index.md` plus `scopes/NN-name/scope.md` and `scopes/NN-name/report.md`.  
 **`certification.scopeProgress`:** Machine-readable scope registry for dependency pickup, status sync, and evidence location.

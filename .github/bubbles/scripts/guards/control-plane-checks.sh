@@ -308,7 +308,7 @@ if [[ "$effective_tdd_mode" == "scenario-first" ]]; then
     # actual red-before-green ordering. detect_red_green_ordering passes ONLY when
     # a failing-proof (RED) marker precedes a passing-proof (GREEN) marker in the
     # SAME report.
-    if detect_red_green_ordering "${scope_files[@]}" "${report_files[@]}"; then
+    if detect_red_green_ordering ${scope_files[@]+"${scope_files[@]}"} ${report_files[@]+"${report_files[@]}"}; then
       pass "Scenario-first TDD red→green ordering is recorded in the scope/report artifacts (mode source: ${effective_tdd_source:-framework-default})"
     elif policy_spec_grandfathered "$state_file" "$control_plane_policy_cutoff"; then
       # Grandfather clause: a historical spec (createdAt before the cutoff, or

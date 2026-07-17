@@ -3,7 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-source "$SCRIPT_DIR/fun-mode.sh"
+if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+  # shellcheck source=/dev/null
+  source "$SCRIPT_DIR/fun-mode.sh"
+else
+  fun_fail() { :; }
+  fun_warn() { :; }
+  fun_banner() { :; }
+fi
 
 feature_dir="${1:-}"
 
@@ -24,6 +31,9 @@ detect_repo_root() {
 repo_root="$(detect_repo_root)"
 
 if [[ "$feature_dir" != /* ]]; then
+  if [[ -d "$PWD/$feature_dir" ]]; then
+    repo_root="$PWD"
+  fi
   feature_dir="$repo_root/$feature_dir"
 fi
 
@@ -192,24 +202,95 @@ significant_words() {
   printf '%s\n' "${output[@]}"
 }
 
-extract_section() {
-  local file_path="$1"
-  local heading_regex="$2"
-  awk -v heading_regex="$heading_regex" '
-    $0 ~ heading_regex {in_section=1; next}
-    /^### / {if (in_section) exit}
-    in_section {print}
-  ' "$file_path"
-}
-
 extract_test_rows() {
   local scope_path="$1"
-  local section
-  section="$(extract_section "$scope_path" '^### Test Plan')"
-  printf '%s\n' "$section" \
-    | grep -E '^\|' \
-    | grep -Ev '^\|[-:[:space:]|]+\|$' \
-    | grep -Evi '^\|[[:space:]]*test type[[:space:]]*\|'
+  [[ -f "$scope_path" && -r "$scope_path" ]] || return 2
+
+  awk '
+    function without_html_comments(value, result, start_at, end_at) {
+      result = ""
+      while (length(value) > 0) {
+        if (in_html_comment) {
+          end_at = index(value, "-->")
+          if (end_at == 0) return result
+          value = substr(value, end_at + 3)
+          in_html_comment = 0
+        } else {
+          start_at = index(value, "<!--")
+          if (start_at == 0) return result value
+          result = result substr(value, 1, start_at - 1)
+          value = substr(value, start_at + 4)
+          in_html_comment = 1
+        }
+      }
+      return result
+    }
+
+    function fence_marker(value, stripped, marker, count) {
+      stripped = value
+      sub(/^[ \t]*/, "", stripped)
+      marker = substr(stripped, 1, 1)
+      if (marker != "`" && marker != "~") return ""
+      count = 0
+      while (substr(stripped, count + 1, 1) == marker) count++
+      return count >= 3 ? marker : ""
+    }
+
+    function atx_heading_depth(value, count, following) {
+      count = 0
+      while (substr(value, count + 1, 1) == "#") count++
+      if (count < 1 || count > 6) return 0
+      following = substr(value, count + 1, 1)
+      if (following == "" || following == " " || following == "\t") return count
+      return 0
+    }
+
+    {
+      raw = $0
+      visible = without_html_comments(raw)
+
+      marker = fence_marker(visible)
+      if (in_fence != "") {
+        if (marker == in_fence) in_fence = ""
+        next
+      }
+      if (marker != "") {
+        in_fence = marker
+        next
+      }
+
+      candidate = visible
+      sub(/[ \t]+$/, "", candidate)
+
+      if (!in_section) {
+        if (candidate == "## Test Plan") {
+          in_section = 1
+          section_depth = 2
+          found = 1
+        } else if (candidate == "### Test Plan") {
+          in_section = 1
+          section_depth = 3
+          found = 1
+        }
+        next
+      }
+
+      heading_depth = atx_heading_depth(candidate)
+      if (heading_depth > 0 && heading_depth <= section_depth) exit
+
+      if (substr(raw, 1, 1) != "|") next
+      separator = raw
+      gsub(/[|: \t-]/, "", separator)
+      if (separator == "") next
+      lowered = tolower(raw)
+      if (lowered ~ /^\|[ \t]*test type[ \t]*\|/) next
+      print raw
+    }
+
+    END {
+      if (!found) exit 3
+    }
+  ' "$scope_path"
 }
 
 extract_dod_items() {
@@ -480,15 +561,37 @@ for scope_index in "${!scope_analysis_files[@]}"; do
 
   info "Checking traceability for $scope_label"
 
-  scenarios="$(extract_scenarios "$scope_path")"
-  test_rows="$(extract_test_rows "$scope_path")"
+  scenarios=""
+  scenario_status=0
+  if scenarios="$(extract_scenarios "$scope_path")"; then
+    scenario_status=0
+  else
+    scenario_status=$?
+  fi
 
-  if [[ -z "$scenarios" ]]; then
+  if [[ "$scenario_status" -eq 1 ]] || [[ -z "$scenarios" ]]; then
     fail "$scope_label has no Gherkin scenarios to trace"
+    continue
+  elif [[ "$scenario_status" -ne 0 ]]; then
+    fail "$scope_label Gherkin scenario extraction failed"
     continue
   fi
 
-  if [[ -z "$test_rows" ]]; then
+  test_rows=""
+  test_rows_status=0
+  if test_rows="$(extract_test_rows "$scope_path")"; then
+    test_rows_status=0
+  else
+    test_rows_status=$?
+  fi
+
+  if [[ "$test_rows_status" -eq 3 ]]; then
+    fail "$scope_label has no recognized Test Plan section (expected exact ## Test Plan or ### Test Plan)"
+    continue
+  elif [[ "$test_rows_status" -ne 0 ]]; then
+    fail "$scope_label Test Plan extraction failed"
+    continue
+  elif [[ -z "$test_rows" ]]; then
     fail "$scope_label has no concrete Test Plan rows to trace"
     continue
   fi
@@ -594,10 +697,19 @@ for scope_index in "${!scope_analysis_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
 
   scope_label="$(scope_analysis_label "$scope_index")"
-  scenarios="$(extract_scenarios "$scope_path")"
+  scenarios=""
+  scenario_status=0
+  if scenarios="$(extract_scenarios "$scope_path")"; then
+    scenario_status=0
+  else
+    scenario_status=$?
+  fi
   dod_items="$(extract_dod_items "$scope_path")"
 
-  if [[ -z "$scenarios" ]]; then
+  if [[ "$scenario_status" -eq 1 ]] || [[ -z "$scenarios" ]]; then
+    continue
+  elif [[ "$scenario_status" -ne 0 ]]; then
+    fail "$scope_label Gherkin scenario extraction failed"
     continue
   fi
 

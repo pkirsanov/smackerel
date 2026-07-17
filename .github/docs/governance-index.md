@@ -179,6 +179,7 @@ end-to-end flows.
 - [impact-aware-validation.md](recipes/impact-aware-validation.md)
 - [incident-response.md](recipes/incident-response.md)
 - [just-tell-bubbles.md](recipes/just-tell-bubbles.md)
+- [live-deployment-convergence.md](recipes/live-deployment-convergence.md)
 - [multi-train-status.md](recipes/multi-train-status.md)
 - [new-feature.md](recipes/new-feature.md)
 - [ops-packet-work.md](recipes/ops-packet-work.md)

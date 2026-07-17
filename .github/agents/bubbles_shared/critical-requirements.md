@@ -114,7 +114,10 @@ A fabricated completion is infinitely worse than an honest gap. An incorrect evi
 
 18. **No Sensitive Client Storage For Auth, Session, Or Payment Secrets**
    - Agents MUST NOT treat browser or client-side storage as an acceptable place for auth tokens, session secrets, refresh tokens, bearer credentials, payment method details, CVV/CVC, or similarly sensitive trust material.
-   - `localStorage`, `sessionStorage`, IndexedDB, AsyncStorage, SharedPreferences, and similar client storage are blocking risks when used for sensitive auth/payment state.
+   - Credential-bearing `localStorage`, IndexedDB, AsyncStorage, SharedPreferences, and equivalent durable client storage are always blocking, including when storage keys resolve through immutable constants or alias chains.
+   - Credential-bearing `sessionStorage` is default-deny. The only permitted classification is an exact project-owned path/key/provider tuple under `scans.sensitiveClientStorage.approvedSessionCredentials` with `storage: sessionStorage`, `credentialClass: third-party-market-data`, `privilege: low`, and `lifetime: same-tab`.
+   - The narrow session classification cannot authorize auth/login/session/JWT/bearer/refresh/cookie/password/client-secret/payment/card/CVV/CVC/SSN material. Unknown/dynamic providers, unresolved suspicious keys, and malformed, ambiguous, wildcard, traversal, duplicate, or unevaluable configuration fail closed.
+   - Inline comments and noncredential cache values do not create taint. `removeItem`, clear/delete operations, and rewrites proven to occur only after all known sensitive fields are deleted are cleanup rather than credential persistence; function names alone are not proof.
    - If a security or trust finding is only fixed on the backend while the frontend still reads or writes the risky storage path, the finding remains open.
 
 19. **Documentation Claims Must Match Runtime Reality**
@@ -188,7 +191,7 @@ bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose
 | No Defaults (7) | Scan 5 | `unwrap_or()`, `unwrap_or_default()`, `\\|\\| "default"`, `?? "fallback"`, `os.getenv("K", "default")` |
 | No Fallbacks (8) | Scan 5 | Same as defaults — any pattern that masks missing config with a silent value |
 | Real Implementation (9) | Scan 3 | Data hooks/services with ZERO API/query/client transport signals — returning hardcoded data |
-| No Sensitive Client Storage (17) | Scan 2B | `localStorage/sessionStorage/IndexedDB/AsyncStorage/SharedPreferences` storing auth/session/payment secrets |
+| No Sensitive Client Storage (18) | Scan 2B | Semantic client-storage operations; durable credentials and high-trust classes block, exact low-privilege same-tab market-data session tuple only |
 | No Fake Integrations (18) | Scan 1C + 1D | 501/not-implemented handlers, random/no-op provider adapters with no real upstream call signals |
 
 **If the reality scan exits with code 1, the scope CANNOT be "Done". Fix ALL violations first.**
