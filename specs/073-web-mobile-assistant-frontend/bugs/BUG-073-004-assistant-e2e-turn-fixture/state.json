@@ -5,14 +5,19 @@
   "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-004-assistant-e2e-turn-fixture",
   "featureName": "BUG-073-004: Contract-correct transport-hint parity fixture",
   "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
   "status": "in_progress",
   "execution": {
     "activeAgent": "bubbles.bug",
-    "currentPhase": "handoff",
+    "currentPhase": "governance-reconciliation",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19T00:00:00Z",
-    "completedPhaseClaims": [],
-    "executionHistory": []
+    "completedPhaseClaims": ["security", "validate", "audit"],
+    "executionHistory": [
+      {"at": "2026-07-19", "agent": "bubbles.security", "phasesExecuted": ["security"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate security review returned PASS for merge, build, and deploy."},
+      {"at": "2026-07-19", "agent": "bubbles.validate", "phasesExecuted": ["validate"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."},
+      {"at": "2026-07-19", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "blocked", "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."}
+    ]
   },
   "certification": {
     "status": "in_progress",
@@ -35,7 +40,7 @@
     "regressionStrictness": {"value": "standard", "source": "repo-default"},
     "validateCertificationRequired": {"value": true, "source": "repo-default"}
   },
-  "transitionRequests": [],
+  "transitionRequests": [{"id": "TR-BUG-073-004-GOVERNANCE-001", "requestedAt": "2026-07-19T23:20:00Z", "requestedBy": "bubbles.bug", "fromStatus": "in_progress", "toStatus": "route_required", "targetAgent": "bubbles.plan", "routedTo": "bubbles.plan", "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939", "productAction": "none", "crossRepoFollowUp": true, "reason": "Add canonical scenario-specific/broader E2E rows and DoD plus a complete Change Boundary section. Then bubbles.test fixes RED/GREEN marker and deferral-disposition evidence; bubbles.audit adds G053/G093 diff evidence before execution/validate reconciliation.", "packetRef": "report.md#open-findings", "status": "open"}],
   "reworkQueue": [],
   "observations": [
     {
@@ -44,5 +49,6 @@
       "followUpOwner": "parent-synthesis",
       "followUpAction": "Consolidate this tested packet while preserving validate-owned certification as in_progress."
     }
-  ]
+  ],
+  "routing": {"outcome": "route_required", "nextRequiredOwner": "bubbles.plan", "reason": "Repair scope E2E/change-boundary structure first; then fix report markers/disposition and packet-attributed diff evidence. Keep six package failures open and do not rerun full E2E.", "subsequentOwners": ["bubbles.test", "bubbles.audit", "bubbles.implement", "bubbles.validate"]}
 }

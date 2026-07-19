@@ -11,18 +11,23 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
   "status": "in_progress",
   "createdAt": "2026-07-19",
   "updatedAt": "2026-07-19",
   "execution": {
-    "activeAgent": "copilot",
-    "currentPhase": "handoff",
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "governance-reconciliation",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19T00:00:00Z",
     "completedScopes": [],
-    "completedPhaseClaims": [],
-    "executionHistory": [],
+    "completedPhaseClaims": ["security", "validate", "audit"],
+    "executionHistory": [
+      {"at": "2026-07-19", "agent": "bubbles.security", "phasesExecuted": ["security"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate security review returned PASS for merge, build, and deploy."},
+      {"at": "2026-07-19", "agent": "bubbles.validate", "phasesExecuted": ["validate"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."},
+      {"at": "2026-07-19", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "blocked", "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."}
+    ],
     "scopeSummary": [
       {
         "scopeId": "1",
@@ -58,6 +63,7 @@
     "regressionStrictness": {"value": "standard", "source": "repo-default"},
     "validateCertificationRequired": {"value": true, "source": "repo-default"}
   },
-  "transitionRequests": [],
-  "reworkQueue": []
+  "transitionRequests": [{"id": "TR-BUG-077-004-GOVERNANCE-001", "requestedAt": "2026-07-19T23:20:00Z", "requestedBy": "bubbles.bug", "fromStatus": "in_progress", "toStatus": "route_required", "targetAgent": "bubbles.analyst", "routedTo": "bubbles.analyst", "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939", "productAction": "none", "crossRepoFollowUp": true, "reason": "Add G094 capability justification; bubbles.design supplies foundation sections; bubbles.plan repairs canonical E2E/change-boundary scope shape; bubbles.test adds RED/GREEN markers and dispositions the explicit Ollama skip; bubbles.audit adds G053/G093 evidence before validate certification.", "packetRef": "report.md#test-evidence", "status": "open"}],
+  "reworkQueue": [],
+  "routing": {"outcome": "route_required", "nextRequiredOwner": "bubbles.analyst", "reason": "Repair G094 planning truth first, then scope shape, RED/GREEN/skip disposition, and packet-attributed diff evidence. Do not rerun full E2E; preserve skipped Ollama coverage as residual risk.", "subsequentOwners": ["bubbles.design", "bubbles.plan", "bubbles.test", "bubbles.audit", "bubbles.implement", "bubbles.validate"]}
 }

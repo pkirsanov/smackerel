@@ -11,6 +11,7 @@
   "status": "in_progress",
   "releaseTrain": "mvp",
   "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
   "flagsIntroduced": [],
   "createdAt": "2026-07-19",
   "updatedAt": "2026-07-19",
@@ -18,13 +19,13 @@
   "deploymentReached": false,
   "execution": {
     "activeAgent": null,
-    "currentPhase": "validation-handoff",
+    "currentPhase": "governance-reconciliation",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19",
     "lastUpdatedAt": "2026-07-19T19:12:38Z",
     "completedScopes": [],
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": ["security", "validate", "audit"],
     "completedPhaseClaimsByScope": {},
     "pendingTransitionRequests": [],
     "scopeSummary": [
@@ -51,6 +52,25 @@
       "reason": "Drive-local isolation, neighbor order, and full Drive package are green; the reproduced parent interruption defect is fixed in BUG-031-009 with RED/GREEN evidence. Certification remains validate-owned.",
       "packetRef": "report.md#post-fix-neighbor-and-drive-package-proof",
       "routedTo": "bubbles.validate",
+      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "status": "resolved",
+      "resolution": "Exact-candidate validate diagnostic ran in the outer session; terminal certification remains withheld pending planning and execution reconciliation."
+    },
+    {
+      "id": "TR-038-003-GOVERNANCE-001",
+      "requestedAt": "2026-07-19T23:20:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.analyst",
+      "routedTo": "bubbles.analyst",
+      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "reason": "Add the G094 capability justification to spec.md; bubbles.design then supplies capability foundation, concrete implementation, and variation-axis sections.",
+      "packetRef": "spec.md",
       "status": "open"
     }
   ],
@@ -73,6 +93,36 @@
       "provenanceMode": "direct-authorized-runner",
       "outcome": "route_required",
       "note": "Falsified Drive-local exhaustion and contamination, reproduced daemon-owned runner survival in BUG-031-009, verified exact-label cleanup and all 25 Drive E2Es, and routed certification without claiming specialist phases."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "completed_diagnostic",
+      "note": "Exact-candidate security review returned PASS for merge, build, and deploy."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "completed_diagnostic",
+      "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "blocked",
+      "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."
     }
   ],
   "certification": {
@@ -104,8 +154,9 @@
   },
   "routing": {
     "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.validate",
-    "reason": "Owning harness fix and Drive recovery evidence are complete; validate-owned certification intentionally remains in_progress.",
+    "nextRequiredOwner": "bubbles.analyst",
+    "reason": "Add the G094 capability justification to spec.md; bubbles.design then supplies capability foundation/concrete implementation/variation-axis sections. bubbles.audit must append git-backed G053 evidence before execution reconciliation and validate-owned certification.",
+    "subsequentOwners": ["bubbles.design", "bubbles.audit", "bubbles.implement", "bubbles.test", "bubbles.validate"],
     "owningFix": "specs/031-live-stack-testing/bugs/BUG-031-009-docker-e2e-runner-interruption-leak"
   }
 }

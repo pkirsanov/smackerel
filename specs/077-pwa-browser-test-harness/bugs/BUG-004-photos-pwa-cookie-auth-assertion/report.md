@@ -12,9 +12,9 @@ The one-file test repair is implemented and executable RED/GREEN evidence is cap
 
 ### Before Fix: Root Package RED
 
-**Executed:** YES, current session  
-**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e` followed by isolated root-package reproduction  
-**Exit Code:** 1  
+**Executed:** YES, current session
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e` followed by isolated root-package reproduction
+**Exit Code:** 1
 **Claim Source:** executed
 
 ```text
@@ -37,9 +37,9 @@ FAIL: go-e2e (exit=1)
 
 ### After Fix: Focused Live GREEN
 
-**Executed:** YES, current session  
-**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --go-run '^TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI$'` using the temporary closed root-package diagnostic selector  
-**Exit Code:** 0  
+**Executed:** YES, current session
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --go-run '^TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI$'` using the temporary closed root-package diagnostic selector
+**Exit Code:** 0
 **Claim Source:** executed
 
 ```text
@@ -60,9 +60,9 @@ Network smackerel-test_default Removed
 
 ### After Fix: Complete Root Package GREEN
 
-**Executed:** YES, current session  
-**Command:** complete root Go E2E package through the repository CLI's temporary closed diagnostic selector  
-**Exit Code:** 0  
+**Executed:** YES, current session
+**Command:** complete root Go E2E package through the repository CLI's temporary closed diagnostic selector
+**Exit Code:** 0
 **Claim Source:** executed
 
 ```text
