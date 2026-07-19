@@ -235,6 +235,43 @@ BUG026008_REALITY_WARNING_FREE_END exit=0
 
 The state-transition guard was also executed honestly at the done ceiling and returned nonzero because all DoD items, specialist phases, validate/audit certification, and final closure remain unset. It explicitly required that `state.json` stay non-terminal; this packet complies and routes the next phase to `bubbles.validate`.
 
+### Post-Rebase Combined-Head Verification
+
+**Phase:** bug
+**Command:** `./smackerel.sh test unit --python`, focused Go synthesis response tests, `./smackerel.sh check`, `./smackerel.sh lint`, artifact lint, traceability guard, and implementation-reality scan after rebasing onto `origin/main` `8cd13fff`
+**Exit Code:** 0 for every listed command
+**Claim Source:** executed
+
+```text
+BUG026008_POST_REBASE_PYTHON_START
+head=e2ac9405b453698b5325b4b92f8b9cab4bd3cc35
++ pytest ml/tests -q
+s....................................................................... [ 10%]
+.......................................................s................ [ 20%]
+........................................................................ [ 30%]
+........................................................................ [ 40%]
+........................................................................ [ 50%]
+........................................................................ [ 60%]
+........................................................................ [ 70%]
+........................................................................ [ 81%]
+........................................................................ [ 91%]
+..............................................................           [100%]
+708 passed, 2 skipped in 12.70s
+BUG026008_POST_REBASE_PYTHON_END exit=0
+TestSynthesisExtractResponse_SuccessMarksCompleted PASS
+TestSynthesisExtractResponse_FailureMarksFailed PASS
+TestSynthesisExtractResponse_FullPipelinePayload PASS
+BUG026008_POST_REBASE_GO_END exit=0
+Config is in sync with SST
+scenario-lint: OK
+BUG026008_POST_REBASE_CHECK_END exit=0
+Web validation passed
+BUG026008_POST_REBASE_LINT_END exit=0
+Artifact lint PASSED.
+Traceability RESULT: PASSED (0 warnings)
+Implementation reality: 13 files, 0 violations, 0 warnings
+```
+
 ### Code Diff Evidence
 
 Runtime/config/contract/test/doc delta:
@@ -257,6 +294,7 @@ The red shows one-call permanent failure; the green shows invalid-then-valid suc
 | Parsed schema-invalid synthesis output is terminal after one LLM call | `bug-filed` | `specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/bug.md` |
 | Targeted shell E2E marks the stack parent-managed but does not boot it, then times out because PostgreSQL is not running | `routed` to `bubbles.test` / spec 031 test-infrastructure owner | `state.json` transition request `TR-026-008-TEST-001` |
 | Dockerized full-unit tests cannot resolve a linked-worktree `.git` pointer because only the worktree path is mounted | `routed` to `bubbles.test` / spec 031 test-infrastructure owner | `state.json` transition request `TR-026-008-TEST-002` |
+| The repo CLI's full Python lane always collects two explicit opt-in live tests as skips, so this session cannot claim a literal zero-skip suite even though every changed BUG-026-008 test executed | `routed` to `bubbles.test` for a no-skip required-test selector or explicit category isolation | `state.json` transition request `TR-026-008-TEST-003` |
 | Repo-wide format check names `internal/config/release_trains_contract_test.go`, byte-identical to current baseline | `routed` to repository quality owner | `state.json` transition request `TR-026-008-QUALITY-001` |
 | Source/test/doc delivery awaits independent certification; no validate/audit specialist invocation tool exists in this runtime | `routed` to `bubbles.validate` then `bubbles.audit` | `state.json` transition request `TR-026-008-VALIDATE-001` |
 | Pushed source must be built and deployed through the signed delivery path before live accepted-runtime confirmation | `routed` to `bubbles.devops` | `state.json` transition request `TR-026-008-DEVOPS-001` |
