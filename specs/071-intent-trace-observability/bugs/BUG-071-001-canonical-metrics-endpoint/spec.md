@@ -10,8 +10,9 @@ The spec-071 refusal/trace join E2E MUST use the repository's canonical live cor
 2. The test performs a real HTTP scrape against the disposable stack with a bounded request timeout.
 3. Removing the canonical endpoint from the E2E runner causes a direct test failure.
 4. Removing either required metric family from the live registry causes a direct assertion failure.
-5. The full assistant package runs through a repository CLI package selector without invoking every E2E package.
-6. No request interception, canned metrics body, hidden endpoint value, or conditional success path is introduced.
+5. Both joined CounterVec families expose valid closed-vocabulary zero series before the first real event; zero initialization MUST NOT count as an event.
+6. The full assistant package runs through a repository CLI package selector without invoking every E2E package.
+7. No request interception, canned metrics body, hidden endpoint value, or conditional success path is introduced.
 
 ## Release Train
 

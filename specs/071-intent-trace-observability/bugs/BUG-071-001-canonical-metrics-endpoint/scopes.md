@@ -46,6 +46,10 @@ Excluded: production metrics registration, dashboards, deployment, release train
 - `smackerel.sh`
 - `scripts/runtime/go-e2e.sh`
 - `internal/deploy/assistant_e2e_package_contract_test.go`
+- `internal/assistant/intenttrace/export.go`
+- `internal/assistant/intenttrace/export_test.go`
+- `internal/assistant/openknowledge/metrics/metrics.go`
+- `internal/assistant/openknowledge/metrics/metrics_test.go`
 - `tests/e2e/assistant/intent_refusal_join_e2e_test.go`
 - `docs/Testing.md`
 - `docs/Development.md`
