@@ -12,6 +12,8 @@ Tests focus on:
 
 import asyncio
 import json
+import logging
+import os
 import sys
 import types
 from pathlib import Path
@@ -34,10 +36,218 @@ if "litellm" not in sys.modules:
 from app.nats_client import (  # isort: skip
     CRITICAL_SUBJECTS,
     NATSClient,
+    OUTGOING_VALIDATION_MODES,
     PUBLISH_SUBJECTS,
     SUBJECT_RESPONSE_MAP,
     SUBSCRIBE_SUBJECTS,
+    _validate_outgoing_result,
 )
+from app.validation import PayloadValidationError  # isort: skip
+
+
+class _StopConsumer(BaseException):
+    """End a one-message consumer-loop test after the next fetch."""
+
+
+def _single_message_subscription(data):
+    message = MagicMock()
+    message.data = json.dumps(data).encode()
+    message.ack = AsyncMock()
+    message.nak = AsyncMock()
+    subscription = MagicMock()
+    subscription.fetch = AsyncMock(side_effect=[[message], _StopConsumer()])
+    return message, subscription
+
+
+def _crosssource_request(**overrides):
+    request = {
+        "concept_id": "concept-1",
+        "concept_title": "Decision Making",
+        "artifacts": [
+            {
+                "id": "artifact-1",
+                "title": "Recommendation",
+                "source_type": "email",
+                "summary": "A recommendation was made.",
+            },
+            {
+                "id": "artifact-2",
+                "title": "Observed decision",
+                "source_type": "calendar",
+                "summary": "The recommendation influenced a later decision.",
+            },
+        ],
+        "prompt_contract_version": "cross-source-connection-v1",
+    }
+    request.update(overrides)
+    return request
+
+
+def _external_crosssource_response(**overrides):
+    payload = {
+        "has_genuine_connection": True,
+        "insight_text": "Two independent sources describe one decision.",
+        "confidence": 0.91,
+    }
+    payload.update(overrides)
+    return MagicMock(
+        choices=[MagicMock(message=MagicMock(content=json.dumps(payload)))],
+        model="test-model",
+    )
+
+
+def _run_crosssource_consumer(external_response, client, subscription):
+    env = {
+        "LLM_PROVIDER": "ollama",
+        "LLM_MODEL": "test-model",
+        "LLM_API_KEY": "",
+        "OLLAMA_URL": "http://ollama.test",
+        "PROMPT_CONTRACTS_DIR": "/workspace/config/prompt_contracts",
+    }
+    with (
+        patch.dict(os.environ, env, clear=False),
+        patch.object(sys.modules["litellm"], "acompletion", AsyncMock(return_value=external_response)),
+        pytest.raises(_StopConsumer),
+    ):
+        asyncio.run(client._consume_loop("synthesis.crosssource", subscription))
+
+
+def test_crosssource_dispatch_accepts_valid_concept_response(caplog):
+    """SCN-B0255-001: valid concept output must not use artifact validation."""
+    client = NATSClient("nats://localhost:4222")
+    request = _crosssource_request()
+    message, subscription = _single_message_subscription(request)
+    client._js = AsyncMock()
+
+    with caplog.at_level(logging.ERROR, logger="smackerel-ml.nats"):
+        _run_crosssource_consumer(_external_crosssource_response(), client, subscription)
+
+    client._js.publish.assert_awaited_once()
+    assert client._js.publish.await_args.args[0] == "synthesis.crosssource.result"
+    published = json.loads(client._js.publish.await_args.args[1])
+    assert published["concept_id"] == "concept-1"
+    assert published["artifact_ids"] == ["artifact-1", "artifact-2"]
+    assert published["confidence"] == 0.91
+    assert not any("artifact_id is required" in record.getMessage() for record in caplog.records)
+    message.ack.assert_awaited_once()
+    message.nak.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("source", "field", "value"),
+    [
+        ("request", "concept_id", ""),
+        ("external", "has_genuine_connection", 1),
+        ("external", "confidence", float("nan")),
+        ("external", "confidence", -0.01),
+        ("external", "confidence", 1.01),
+        ("request", "artifacts", []),
+        ("request", "artifacts", [{"id": "artifact-1"}]),
+        ("request", "artifacts", [{"id": "artifact-1"}, {"id": ""}]),
+        ("request", "artifacts", [{"id": "artifact-1"}, {"id": 2}]),
+    ],
+)
+def test_crosssource_dispatch_rejects_malformed_response_before_publish(source, field, value):
+    """SCN-B0255-002: malformed output reaches poison handling before publish."""
+    client = NATSClient("nats://localhost:4222")
+    request_overrides = {field: value} if source == "request" else {}
+    external_overrides = {field: value} if source == "external" else {}
+    request = _crosssource_request(**request_overrides)
+    message, subscription = _single_message_subscription(request)
+    client._js = AsyncMock()
+
+    _run_crosssource_consumer(
+        _external_crosssource_response(**external_overrides),
+        client,
+        subscription,
+    )
+
+    client._js.publish.assert_not_awaited()
+    message.ack.assert_not_awaited()
+    message.nak.assert_awaited_once()
+
+
+def test_crosssource_dispatch_rejects_missing_concept_id_before_publish():
+    """SCN-B0255-002: an absent concept_id is poison, not publishable output."""
+    client = NATSClient("nats://localhost:4222")
+    request = _crosssource_request()
+    del request["concept_id"]
+    message, subscription = _single_message_subscription(request)
+    client._js = AsyncMock()
+
+    _run_crosssource_consumer(_external_crosssource_response(), client, subscription)
+
+    client._js.publish.assert_not_awaited()
+    message.ack.assert_not_awaited()
+    message.nak.assert_awaited_once()
+
+
+def test_crosssource_dispatch_invalid_response_naks_via_real_poison_handler():
+    """SCN-B0255-002: the real poison path requests JetStream redelivery."""
+    client = NATSClient("nats://localhost:4222")
+    request = _crosssource_request(concept_id="")
+    message, subscription = _single_message_subscription(request)
+    client._js = AsyncMock()
+
+    _run_crosssource_consumer(_external_crosssource_response(), client, subscription)
+
+    client._js.publish.assert_not_awaited()
+    message.ack.assert_not_awaited()
+    message.nak.assert_awaited_once()
+
+
+def test_artifact_dispatch_still_requires_artifact_id_before_publish():
+    """SCN-B0255-003: artifact mode still enforces the real artifact validator."""
+    with pytest.raises(PayloadValidationError, match="artifact_id is required"):
+        _validate_outgoing_result("artifacts.process", "artifacts.processed", {"success": True})
+
+
+def test_digest_dispatch_remains_exempt_from_artifact_validation():
+    """SCN-B0255-003: a valid digest without artifact_id still publishes."""
+    client = NATSClient("nats://localhost:4222")
+    message, subscription = _single_message_subscription({"digest_date": "2026-07-19"})
+    client._js = AsyncMock()
+
+    with pytest.raises(_StopConsumer):
+        asyncio.run(client._consume_loop("digest.generate", subscription))
+
+    client._js.publish.assert_awaited_once()
+    assert client._js.publish.await_args.args[0] == "digest.generated"
+    message.ack.assert_awaited_once()
+    message.nak.assert_not_awaited()
+
+
+def test_photo_dispatch_remains_governed_by_photo_contract():
+    """SCN-B0255-003: the existing photo handler and validator still publish."""
+    client = NATSClient("nats://localhost:4222")
+    message, subscription = _single_message_subscription(
+        {"request_id": "request-1", "photo_id": "photo-1", "artifact_id": "artifact-1"}
+    )
+    client._js = AsyncMock()
+
+    with pytest.raises(_StopConsumer):
+        asyncio.run(client._consume_loop("photos.classify", subscription))
+
+    client._js.publish.assert_awaited_once()
+    assert client._js.publish.await_args.args[0] == "photos.classified"
+    published = json.loads(client._js.publish.await_args.args[1])
+    assert published["photo_id"] == "photo-1"
+    message.ack.assert_awaited_once()
+    message.nak.assert_not_awaited()
+
+
+def test_unknown_subject_remains_acknowledged_without_publish():
+    """SCN-B0255-003: unknown subject behavior is unchanged."""
+    client = NATSClient("nats://localhost:4222")
+    message, subscription = _single_message_subscription({"value": "ignored"})
+    client._js = AsyncMock()
+
+    with pytest.raises(_StopConsumer):
+        asyncio.run(client._consume_loop("unknown.subject", subscription))
+
+    client._js.publish.assert_not_awaited()
+    message.ack.assert_awaited_once()
+    message.nak.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +327,15 @@ class TestSubjectMaps:
 
     def test_no_duplicate_publish_subjects(self):
         assert len(PUBLISH_SUBJECTS) == len(set(PUBLISH_SUBJECTS))
+
+    def test_every_subscribe_subject_declares_outgoing_validation_mode(self):
+        assert set(OUTGOING_VALIDATION_MODES) == set(SUBSCRIBE_SUBJECTS)
+
+    def test_contract_specific_outgoing_validation_modes(self):
+        assert OUTGOING_VALIDATION_MODES["artifacts.process"] == "artifact"
+        assert OUTGOING_VALIDATION_MODES["synthesis.crosssource"] == "crosssource"
+        assert OUTGOING_VALIDATION_MODES["digest.generate"] is None
+        assert OUTGOING_VALIDATION_MODES["photos.classify"] == "photo"
 
 
 # ---------------------------------------------------------------------------

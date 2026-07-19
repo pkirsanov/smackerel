@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-005-crosssource-response-validation-routing",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-B0255-001",
+      "scope": "scope-1-enforce-subject-correct-outgoing-validation",
+      "title": "Valid concept response follows the cross-source validator",
+      "gherkin": {
+        "given": "a synthesis.crosssource message whose handler returns the documented CrossSourceResponse shape",
+        "when": "the actual NATS consumer dispatches and validates the result",
+        "then": "the result publishes once, the input acknowledges once, poison handling is not invoked, and artifact_id is not required"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "internal-contract",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "test_crosssource_dispatch_accepts_valid_concept_response"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-B0255-002",
+      "scope": "scope-1-enforce-subject-correct-outgoing-validation",
+      "title": "Malformed concept response enters poison handling before publish",
+      "gherkin": {
+        "given": "a synthesis.crosssource result with a missing concept_id, wrong field type, invalid confidence, or malformed artifact_ids",
+        "when": "the actual NATS consumer dispatches and validates the result",
+        "then": "no result publishes, the input does not acknowledge, and poison handling is invoked once with PayloadValidationError"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "internal-contract",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "test_crosssource_dispatch_rejects_malformed_response_before_publish"
+        },
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "test_crosssource_dispatch_rejects_missing_concept_id_before_publish"
+        },
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "test_crosssource_dispatch_invalid_response_naks_via_real_poison_handler"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-B0255-003",
+      "scope": "scope-1-enforce-subject-correct-outgoing-validation",
+      "title": "Neighboring subject semantics remain intact",
+      "gherkin": {
+        "given": "artifact, digest, photo, and unknown subjects",
+        "when": "each follows the outgoing dispatch boundary",
+        "then": "artifact_id remains required, digest remains exempt, photo uses its validator, and unknown subjects acknowledge without publication"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "internal-contract",
+      "changeType": "regression",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "test_artifact_dispatch_still_requires_artifact_id_before_publish"
+        },
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "test_digest_dispatch_remains_exempt_from_artifact_validation"
+        },
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "test_photo_dispatch_remains_governed_by_photo_contract"
+        },
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "test_unknown_subject_remains_acknowledged_without_publish"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
