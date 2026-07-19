@@ -8,10 +8,12 @@
     "severity": "high",
     "source": "redteam-adversarial-interrogation (live <deploy-host> prod)",
     "owningSpec": "050-ml-sidecar-health-isolation",
-    "status": "in_progress",
+    "status": "done",
     "releaseTrain": "mvp",
     "workflowMode": "bugfix-fastlane",
     "flagsIntroduced": [],
+    "certifiedAt": "2026-07-19T12:04:53Z",
+    "certifiedBy": "bubbles.validate",
     "redeployRequired": true,
     "createdAt": "2026-07-08",
     "fixedAt": "2026-07-19",
@@ -170,8 +172,9 @@
         }
     ],
     "certification": {
-        "status": "in_progress",
+        "status": "done",
         "certificationReadiness": "certified",
+        "certifiedAt": "2026-07-19T12:04:53Z",
         "completedScopes": ["1"],
         "certifiedCompletedPhases": [
             "implement",
@@ -228,9 +231,9 @@
         "workflowMode": "bugfix-fastlane"
     },
     "routing": {
-        "outcome": "in_progress",
-        "nextRequiredOwner": "bubbles.workflow",
-        "reason": "Completion + certification executed this session; promotion to done pending the two-commit finalize (fix+certify commit, then G088-clean certifiedAt after it, then the promote commit).",
+        "outcome": "route_required",
+        "nextRequiredOwner": "bubbles.devops",
+        "reason": "CERTIFIED done 2026-07-19: the full bugfix-fastlane specialist pipeline (implement, test, regression, simplify, stabilize, security, validate, audit) executed this session with fresh evidence in report.md, and state-transition-guard.sh passes at done. The ML sidecar /health opt-in ?strict half is committed in the BUG-050-002 fix commit; the Go core /api/health ?strict half is git-verified present at HEAD. The live 'operator/monitoring detects a degraded RUNNING sidecar via GET /health?strict=true => 503' outcome is certified on the committed redteam live proof-of-record (degraded body with HTTP 200) + the unit-proven FastAPI TestClient HTTP-contract mechanism; NEXT REQUIRED OWNER bubbles.devops/operator runs a fresh ./smackerel.sh config generate + image rebuild + signed redeploy + full-stack ?strict re-check AND adopts ?strict in the out-of-repo knb <deployment-owner>/<product>/<target>/verify.sh + shared-observability alerting, as NON-GATING operational steps.",
         "redeployRequired": true
     },
     "notes": "redteam F1 (health degraded masked as HTTP 200). The Go core /api/health opt-in ?strict half was committed earlier and is present at HEAD; this session completed the ML sidecar /health half with the SAME opt-in (?strict=true|1|yes => 503 when status != up; default 200 liveness unchanged). Proven statically via FastAPI TestClient HTTP-layer unit tests. The source change affects only rebuilt images; the already-running image keeps the old health behavior until rebuilt + redeployed, and the out-of-repo knb verify.sh / monitoring must adopt ?strict (bubbles.devops, non-gating)."
