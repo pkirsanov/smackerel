@@ -18,11 +18,11 @@
   "deploymentReached": false,
   "execution": {
     "activeAgent": "bubbles.bug",
-    "currentPhase": "validate",
+    "currentPhase": "bug",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19",
-    "lastUpdatedAt": "2026-07-19T13:37:00Z",
+    "lastUpdatedAt": "2026-07-19T16:03:34Z",
     "completedScopes": [],
     "completedPhaseClaims": [],
     "completedPhaseClaimsByScope": {},
@@ -51,7 +51,11 @@
       "reason": "Targeted shell E2E sets E2E_STACK_MANAGED=1 but does not boot the parent-owned stack, so test_synthesis.sh times out with service postgres is not running. Own under spec 031 live-stack test infrastructure.",
       "packetRef": "report.md#discovered-issues",
       "routedTo": "bubbles.test",
-      "status": "open"
+      "status": "addressed",
+      "addressedAt": "2026-07-19T16:03:34Z",
+      "addressedBy": "bubbles.test",
+      "resolution": "Targeted shared-stack shell E2E now pre-cleans, boots the disposable stack, passes SCN-004-001, and tears down through the parent lifecycle.",
+      "evidenceRef": "report.md#harness-and-category-repairs"
     },
     {
       "id": "TR-026-008-TEST-002",
@@ -63,7 +67,11 @@
       "reason": "Dockerized full-unit tests mount the linked worktree but not the primary checkout Git metadata, so provenance and local-client tests fail with fatal not a git repository at the .git/worktrees pointer. Own under spec 031 test infrastructure.",
       "packetRef": "report.md#discovered-issues",
       "routedTo": "bubbles.test",
-      "status": "open"
+      "status": "addressed",
+      "addressedAt": "2026-07-19T16:03:34Z",
+      "addressedBy": "bubbles.test",
+      "resolution": "Tooling containers now receive read-only linked-worktree Git metadata plus GIT_OPTIONAL_LOCKS=0; the focused mount contract and full Go unit lane pass.",
+      "evidenceRef": "report.md#harness-and-category-repairs"
     },
     {
       "id": "TR-026-008-TEST-003",
@@ -75,7 +83,11 @@
       "reason": "The repo CLI Python unit lane collects two explicit opt-in live tests as skips. Every changed BUG-026-008 test executes, but a literal zero-skip certification needs a supported required-test selector or category isolation owned by test infrastructure.",
       "packetRef": "report.md#post-rebase-combined-head-verification",
       "routedTo": "bubbles.test",
-      "status": "open"
+      "status": "addressed",
+      "addressedAt": "2026-07-19T16:03:34Z",
+      "addressedBy": "bubbles.test",
+      "resolution": "Python unit collection excludes integration and live-Ollama categories with zero skips, while the required dead-letter parity test passes in the canonical integration lane.",
+      "evidenceRef": "report.md#harness-and-category-repairs"
     },
     {
       "id": "TR-026-008-QUALITY-001",
@@ -87,6 +99,22 @@
       "reason": "Repo-wide format check names internal/config/release_trains_contract_test.go; git diff --exit-code proves it is byte-identical to origin/main and outside BUG-026-008's change boundary.",
       "packetRef": "report.md#format-classification",
       "routedTo": "bubbles.implement",
+      "status": "addressed",
+      "addressedAt": "2026-07-19T16:03:34Z",
+      "addressedBy": "bubbles.test",
+      "resolution": "Mechanical formatting was applied and the canonical repo-wide format check now passes.",
+      "evidenceRef": "report.md#final-cheap-closeout-checks"
+    },
+    {
+      "id": "TR-026-008-BROAD-001",
+      "requestedAt": "2026-07-19T16:03:34Z",
+      "requestedBy": "bubbles.test",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.bug",
+      "reason": "The final broad E2E run is RED on five independent assistant/PWA and Drive findings documented in report.md; later failures after core/network disappearance are cascade noise and must not be over-filed.",
+      "packetRef": "report.md#independent-broad-findings-routed-out-of-packet",
+      "routedTo": "bubbles.bug",
       "status": "open"
     },
     {
@@ -169,7 +197,8 @@
   },
   "routing": {
     "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.validate",
-    "reason": "Source/config/test/docs delivery is red-to-green and live-synthesis-E2E proven, but validate-owned certification and audit did not run in this runtime. Status remains in_progress; deployment remains routed to bubbles.devops after certification."
+    "nextRequiredOwner": "bubbles.bug",
+    "reason": "Five independent assistant/PWA and Drive regressions from the broad E2E run require owning bug packets before security, validate, audit, and signed deployment resume.",
+    "subsequentOwners": ["bubbles.security", "bubbles.validate", "bubbles.audit", "bubbles.devops"]
   }
 }

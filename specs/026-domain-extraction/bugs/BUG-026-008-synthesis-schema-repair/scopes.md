@@ -113,21 +113,21 @@ deployment adapters/manifests, release-train bundles, secrets, and host configur
 ### Definition of Done
 
 - [ ] Root cause and outcome contract are confirmed against the actual `handle_extract` branch.
-- [ ] Pre-fix focused regression fails because missing `concepts` returns permanent failure after one call.
+- [x] Pre-fix focused regression fails because missing `concepts` returns permanent failure after one call. Evidence: [report.md#red-bug-reproduction-before-fix](report.md#red-bug-reproduction-before-fix)
 - [ ] Fail-loud SST and generated ML env contract permit exactly one schema-repair attempt.
-- [ ] Missing required concepts is corrected once: invalid-then-valid succeeds after exactly two calls and summed token usage.
-- [ ] A second schema-invalid response is terminal: exactly two calls return the second response's content-free validator/path class.
-- [ ] Malformed repair JSON is terminal: exactly two calls return the repair decode class and no model output.
-- [ ] Repair LLM exception is terminal and content-free: exactly two calls return the exception type without message, artifact, or trace leakage.
-- [ ] Initially valid output remains a one-call path with no corrective request.
-- [ ] Repair retains the structured extraction request profile, original context, trace result contract, total token usage, and total processing duration.
-- [ ] Required semantic content is never normalized: missing required concepts/claims trigger correction instead of fabricated empty defaults.
+- [x] Missing required concepts is corrected once: invalid-then-valid succeeds after exactly two calls and summed token usage. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
+- [x] A second schema-invalid response is terminal: exactly two calls return the second response's content-free validator/path class. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
+- [x] Malformed repair JSON is terminal: exactly two calls return the repair decode class and no model output. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
+- [x] Repair LLM exception is terminal and content-free: exactly two calls return the exception type without message, artifact, or trace leakage. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
+- [x] Initially valid output remains a one-call path with no corrective request. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
+- [x] Repair retains the structured extraction request profile, original context, trace result contract, total token usage, and total processing duration. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
+- [x] Required semantic content is never normalized: missing required concepts/claims trigger correction instead of fabricated empty defaults. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
 - [ ] Change Boundary is respected: every changed file is in the allowed list and zero excluded surfaces changed.
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
 - [ ] Broader E2E regression suite passes
-- [ ] Full impacted Python suite passes, including BUG-026-006 malformed-JSON and BUG-026-007 thinking/token-profile regressions.
-- [ ] Regression tests contain no silent-pass bailout or tautological bugfix patterns.
-- [ ] Check, lint, and format validation pass with no warnings in changed surfaces.
-- [ ] Artifact lint, traceability guard, implementation-reality scan, and state-transition checks pass at the permitted status.
+- [x] Full impacted Python suite passes, including BUG-026-006 malformed-JSON and BUG-026-007 thinking/token-profile regressions. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
+- [x] Regression tests contain no silent-pass bailout or tautological bugfix patterns. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] Check, lint, and format validation pass with no warnings in changed surfaces. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] Artifact lint, traceability guard, implementation-reality scan, and state-transition checks pass at the permitted status. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [ ] Security and audit review find no content/exception secret leakage, unbounded retry, config fallback, or change-boundary violation.
 - [ ] Validate-owned certification records the strongest status supported by executed evidence.

@@ -436,7 +436,6 @@ def _health_strict_requested(strict: str) -> bool:
     return strict.strip().lower() in {"1", "true", "yes"}
 
 
-
 @app.get("/metrics")
 async def metrics_endpoint():
     """Prometheus metrics endpoint — unauthenticated (standard scrape pattern)."""
