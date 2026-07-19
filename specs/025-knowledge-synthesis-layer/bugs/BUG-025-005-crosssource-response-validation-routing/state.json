@@ -1,0 +1,118 @@
+{
+  "version": 3,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-005-crosssource-response-validation-routing",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "featureName": "BUG-025-005: Cross-Source Response Validation Routing",
+  "bugId": "BUG-025-005",
+  "status": "in_progress",
+  "releaseTrain": "mvp",
+  "workflowMode": "bugfix-fastlane",
+  "flagsIntroduced": [],
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": ["specs/025-knowledge-synthesis-layer"],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "completedScopes": [],
+  "completedPhases": [],
+  "execution": {
+    "executionModel": "direct-authorized-runner",
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "security",
+    "currentScope": "scope-1-enforce-subject-correct-outgoing-validation",
+    "runStartedAt": "2026-07-19T00:00:00Z",
+    "runCompletedAt": null,
+    "completedPhaseClaims": ["bug"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-07-19T13:20:00Z",
+        "claimSource": "executed",
+        "summary": "Discovered and packeted BUG-025-005, reproduced the generic-validator misrouting red, implemented and exercised the fix under the direct-authorized bugfix runner, and preserved validate-owned certification. No subagent execution is claimed."
+      }
+    ],
+    "pendingTransitionRequests": [
+      {
+        "findingId": "BUG-025-005-CERT-ROUTE",
+        "scenarioIds": ["SCN-B0255-001", "SCN-B0255-002", "SCN-B0255-003"],
+        "nextRequiredOwner": "bubbles.security",
+        "reason": "Review the pushed response-validation and poison-routing change, then route to bubbles.validate and bubbles.audit before build/deploy."
+      }
+    ],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"mode": "on", "source": "user-request"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-19T00:00:00Z",
+      "runCompletedAt": "2026-07-19T13:20:00Z",
+      "outcome": "route_required",
+      "summary": "Full bug packet created; red/green implementation and test evidence captured by the authorized top-level runner; specialist and validate-owned phase claims intentionally omitted because runSubagent is unavailable."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "2026-07-19 stabilization observation plus source inspection at 4b28bb9f0c2cc3a48ab78aa04395ebe817c50864",
+      "summary": "synthesis.crosssource valid concept results are routed through artifact validation; validation errors are logged and swallowed before publish/ack",
+      "resolution": null
+    }
+  ],
+  "routing": {
+    "outcome": "route_required",
+    "nextRequiredOwner": "bubbles.security",
+    "reason": "Pushed fix requires security review, validate-owned certification, independent audit, then build/deploy. No deployment occurred in this invocation.",
+    "subsequentOwners": ["bubbles.validate", "bubbles.audit", "bubbles.devops"],
+    "redeployRequired": true
+  },
+  "lastUpdatedAt": "2026-07-19T13:20:00Z",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "notes": "Initialized from a clean isolated worktree. No deployment is in scope."
+}
