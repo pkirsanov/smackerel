@@ -1,0 +1,32 @@
+{
+  "artifact": {
+    "artifact_id": "card-rewards-artifact",
+    "prompt_contract_version": "ingest-synthesis-v1",
+    "title": "Card rewards update",
+    "content_type": "email",
+    "source_id": "card-rewards",
+    "content_raw": "Quarterly rewards include grocery purchases.",
+    "trace_id": "trace-card-rewards-schema-repair"
+  },
+  "first_response": {
+    "entities": [],
+    "relationships": []
+  },
+  "corrected_response": {
+    "concepts": [
+      {
+        "name": "Quarterly Card Rewards",
+        "description": "A rotating rewards category announced for a card program.",
+        "claims": [
+          {
+            "text": "Grocery purchases are included in the quarterly rewards category.",
+            "confidence": 0.95
+          }
+        ],
+        "is_new": true
+      }
+    ],
+    "entities": [],
+    "relationships": []
+  }
+}

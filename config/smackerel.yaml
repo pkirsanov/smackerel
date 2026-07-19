@@ -1859,6 +1859,13 @@ services:
     # budget SST-owned lets the operator size it against the model without a code
     # change. 4096 tokens comfortably fits a domain/synthesis JSON object.
     domain_output_token_budget: 4096
+    # BUG-026-008 — a parsed synthesis response that violates its prompt-
+    # contract schema receives exactly one corrective model call before the
+    # failure becomes terminal. Emitted as ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS
+    # and validated fail-loud by the ML sidecar. The only supported value is 1:
+    # zero would silently disable the required repair, while a larger value
+    # would create an unbounded cost/latency policy outside this bug contract.
+    synthesis_schema_repair_attempts: 1
     # BUG-026-007 (redteam F2, latency half) — disable qwen3's hidden thinking
     # block on the structured-JSON EXTRACTION path (domain / synthesis /
     # processor / search-rerank / card-categories / drive-classify). Emitted as

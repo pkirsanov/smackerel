@@ -305,7 +305,7 @@ _EXPECTED_PROFILED_BUILDERS = {
     ("ocr.py", "extract_text_ollama"): "dispatch_ollama_native_json",
     ("processor.py", "process_content"): "dispatch_litellm",
     ("routes/chat.py", "_dispatch_ollama"): "dispatch_litellm",
-    ("synthesis.py", "handle_extract"): "dispatch_litellm",
+    ("synthesis.py", "_dispatch_synthesis_completion"): "dispatch_litellm",
     ("synthesis.py", "handle_crosssource"): "dispatch_litellm",
 }
 

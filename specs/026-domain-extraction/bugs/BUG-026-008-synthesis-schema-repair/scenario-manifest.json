@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "featureDir": "specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-026-008-SCN-001",
+      "scope": "scope-1-repair-one-parsed-schema-invalid-synthesis-response",
+      "title": "Missing concepts is corrected exactly once",
+      "gherkin": {
+        "given": "the committed ingest synthesis schema requires concepts, the first response omits concepts, and the second response is valid",
+        "when": "the actual handle_extract path processes the artifact",
+        "then": "it succeeds after exactly two calls and sums both token counts"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_repairs_missing_concepts_once"}],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-008-SCN-002",
+      "scope": "scope-1-repair-one-parsed-schema-invalid-synthesis-response",
+      "title": "Second schema-invalid response is terminal",
+      "gherkin": {
+        "given": "both initial and repair responses violate the extraction schema",
+        "when": "handle_extract validates the repair",
+        "then": "it fails with the final schema error after exactly two calls"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_fails_when_schema_repair_remains_invalid"}],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-008-SCN-003",
+      "scope": "scope-1-repair-one-parsed-schema-invalid-synthesis-response",
+      "title": "Malformed repair JSON is terminal",
+      "gherkin": {
+        "given": "the first response is schema-invalid and the repair response is malformed JSON",
+        "when": "handle_extract decodes the repair",
+        "then": "it fails with the repair decode class after exactly two calls"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_fails_when_schema_repair_is_malformed_json"}],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-008-SCN-004",
+      "scope": "scope-1-repair-one-parsed-schema-invalid-synthesis-response",
+      "title": "Repair exception is terminal and content-free",
+      "gherkin": {
+        "given": "the first response is schema-invalid and the repair LLM raises an exception containing a sensitive marker",
+        "when": "handle_extract handles the repair exception",
+        "then": "it fails with the exception type only and leaks neither marker nor artifact content"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_schema_repair_exception_is_content_free"}],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-008-SCN-005",
+      "scope": "scope-1-repair-one-parsed-schema-invalid-synthesis-response",
+      "title": "Initially valid response remains one call",
+      "gherkin": {
+        "given": "the initial response validates against the committed schema",
+        "when": "handle_extract processes it",
+        "then": "it succeeds after exactly one call"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_valid_first_response_remains_one_call"}],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-008-SCN-006",
+      "scope": "scope-1-repair-one-parsed-schema-invalid-synthesis-response",
+      "title": "Repair retains profile, context, accounting, and content-free telemetry",
+      "gherkin": {
+        "given": "Ollama structured extraction requires repair under configured profile and retry controls",
+        "when": "both external dispatch requests and repair telemetry are captured",
+        "then": "both requests retain profile and original context, usage sums, the result preserves trace ID, and model messages plus telemetry contain no trace/model/artifact content"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_schema_repair_retains_profile_and_sums_tokens"},
+        {"file": "internal/pipeline/synthesis_subscriber_test.go", "testId": "TestSynthesisExtractResponse_FullPipelinePayload"}
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-008-SCN-007",
+      "scope": "scope-1-repair-one-parsed-schema-invalid-synthesis-response",
+      "title": "Required semantic content is never normalized",
+      "gherkin": {
+        "given": "required concepts or claims are missing from parsed model output",
+        "when": "the actual handle_extract path evaluates the response",
+        "then": "it requests correction with the canonical schema and never inserts empty required semantic content"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_repairs_missing_concepts_once"}
+      ],
+      "evidenceRefs": ["report.md#post-fix-green-python-unit-lane"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

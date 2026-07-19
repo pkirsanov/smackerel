@@ -42,6 +42,8 @@ def clear_required_env(monkeypatch):
         "ML_HEALTH_LATENCY_SLA_MS",
         # F2 — Ollama keep_alive window SST contract.
         "ML_OLLAMA_KEEP_ALIVE",
+        # BUG-026-008 — exact-one synthesis schema-repair budget.
+        "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -73,6 +75,7 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     # BUG-026-007 — structured-extraction thinking switch (required when provider=ollama).
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
 
     config = _check_required_config()
 
@@ -89,6 +92,8 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     assert config["ML_OLLAMA_KEEP_ALIVE"] == "30m"
     # BUG-026-007 — thinking switch is echoed back for the ml sidecar to consume.
     assert config["ML_STRUCTURED_EXTRACTION_THINKING"] == "false"
+    # BUG-026-008 — schema repair is bounded to exactly one corrective call.
+    assert config["ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS"] == "1"
 
 
 def test_startup_rejects_invalid_model_profiles_spec102(monkeypatch):
@@ -177,6 +182,7 @@ def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatc
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
     # F2 — set so the ONLY failure under test is the invalid fallback flag.
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
 
     with pytest.raises(SystemExit):
         _check_required_config()
@@ -201,6 +207,7 @@ def test_check_required_config_requires_ollama_keep_alive(monkeypatch):
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
     # keep_alive deliberately absent (autouse fixture already cleared it).
     monkeypatch.delenv("ML_OLLAMA_KEEP_ALIVE", raising=False)
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
 
     with pytest.raises(SystemExit):
         _check_required_config()
@@ -223,6 +230,7 @@ def test_check_required_config_rejects_invalid_ollama_keep_alive(monkeypatch):
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "forever")
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
 
     with pytest.raises(SystemExit):
         _check_required_config()
@@ -243,6 +251,7 @@ def test_check_required_config_accepts_valid_ollama_keep_alive(monkeypatch):
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
 
     config = _check_required_config()
 
@@ -269,6 +278,7 @@ def test_check_required_config_requires_structured_extraction_thinking(monkeypat
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     # The thinking switch is deliberately absent (the conftest seed is cleared).
     monkeypatch.delenv("ML_STRUCTURED_EXTRACTION_THINKING", raising=False)
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
 
     with pytest.raises(SystemExit):
         _check_required_config()
@@ -292,6 +302,24 @@ def test_check_required_config_rejects_invalid_structured_extraction_thinking(mo
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "maybe")
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
+def test_check_required_config_requires_schema_repair_attempts(monkeypatch):
+    _set_required_env_minus(monkeypatch, "test", auth_token="unit-test-auth-token")
+    monkeypatch.delenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", raising=False)
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
+@pytest.mark.parametrize("value", ["", "0", "2", "not-an-integer"])
+def test_check_required_config_rejects_invalid_schema_repair_attempts(monkeypatch, value):
+    _set_required_env_minus(monkeypatch, "test", auth_token="unit-test-auth-token")
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", value)
 
     with pytest.raises(SystemExit):
         _check_required_config()
@@ -327,6 +355,8 @@ def _set_required_env_minus(monkeypatch, environment: str, *, auth_token: str | 
     monkeypatch.setenv("ML_OLLAMA_KEEP_ALIVE", "30m")
     # BUG-026-007 — structured-extraction thinking switch (required when provider=ollama).
     monkeypatch.setenv("ML_STRUCTURED_EXTRACTION_THINKING", "false")
+    # BUG-026-008 — one corrective synthesis schema repair (required for all providers).
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
     if auth_token is None:
         monkeypatch.delenv("SMACKEREL_AUTH_TOKEN", raising=False)
         monkeypatch.setattr("app.main._AUTH_TOKEN", "")
