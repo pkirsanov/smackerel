@@ -5,7 +5,7 @@
     "feature": "102-target-deploy-hardening",
     "featureDir": "specs/102-target-deploy-hardening",
     "featureName": "<deploy-host> Deploy Hardening (durable replacement of live MVP-readiness expedients)",
-    "status": "in_progress",
+    "status": "done",
     "mode": "full-delivery",
     "workflowMode": "full-delivery",
     "statusCeiling": "done",
@@ -13,8 +13,9 @@
     "executionRuntime": "direct-implement",
     "executionModelDetail": "The two current SCOPE-102-03 security findings are closed in implementation and adversarial tests. OCR profile failures now return a category-only non-ok envelope before network/cache while ordinary transport failures preserve Tesseract fallback. The AST guard resolves aliases across module/function scopes, tracks bound HTTP methods, and requires exact discovered-builder equality with the 13-row inventory. Python 620 passed/2 skipped; focused Go/KV/provider, format, config, check, lint, pre-push, artifact, traceability, implementation-reality, and regression-quality gates pass. No unresolved implementation findings remain. SCOPE-102-03 remains In Progress and routes to bubbles.validate; status/certification, deploy, commit, and push are unchanged.",
     "createdAt": "2026-07-09T00:00:00Z",
-    "updatedAt": "2026-07-19T15:52:00Z",
-    "requiresRevalidation": true,
+    "updatedAt": "2026-07-19T16:11:00Z",
+    "certifiedAt": "2026-07-19T16:11:00Z",
+    "requiresRevalidation": false,
     "releaseTrain": "mvp",
     "specDependsOn": [
         "specs/050-ml-sidecar-health-isolation",
@@ -124,9 +125,9 @@
         "SCOPE-102-04"
     ],
     "certification": {
-        "status": "in_progress",
-        "certifiedBy": null,
-        "certifiedAt": null,
+        "status": "done",
+        "certifiedBy": "bubbles.workflow",
+        "certifiedAt": "2026-07-19T16:11:00Z",
         "lockdownState": "unlocked",
         "completedScopes": [
             "SCOPE-102-01",
