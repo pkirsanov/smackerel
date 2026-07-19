@@ -1,0 +1,169 @@
+{
+    "version": 1,
+    "featureDir": "specs/026-domain-extraction/bugs/BUG-026-006-llm-malformed-json-drops-capture",
+    "generatedAt": "2026-07-19T00:00:00Z",
+    "scenarios": [
+        {
+            "scenarioId": "BUG-026-006-SCN-001",
+            "scope": "scope-1-preserve-capture-for-unparseable-llm-payload",
+            "title": "Truncated JSON preserves the capture via the SST-gated degraded fallback",
+            "gherkin": {
+                "given": "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED is 'true' and the LLM returns a truncated payload ('Unterminated string')",
+                "when": "process_content parses the response",
+                "then": "it returns success=true with topics=['degraded-fallback-malformed-json'] so the capture is preserved, not hard-dropped"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_processor.py",
+                    "testId": "test_malformed_json_uses_sst_gated_degraded_fallback"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-006-SCN-002",
+            "scope": "scope-1-preserve-capture-for-unparseable-llm-payload",
+            "title": "Prose-wrapped JSON is salvaged",
+            "gherkin": {
+                "given": "the LLM wraps a valid JSON object in a prose preamble/suffix",
+                "when": "process_content parses the response",
+                "then": "the widest {...} span is extracted and parsed with its real fields"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_processor.py",
+                    "testId": "test_json_with_prose_wrapper_is_salvaged"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-006-SCN-003",
+            "scope": "scope-1-preserve-capture-for-unparseable-llm-payload",
+            "title": "Malformed JSON hard-fails when the SST gate is disabled (no silent success)",
+            "gherkin": {
+                "given": "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED is 'false' and the LLM returns a truncated payload",
+                "when": "process_content parses the response",
+                "then": "it returns success=false with 'Invalid JSON' in the error (adversarial: proves the switch actually gates)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_processor.py",
+                    "testId": "test_malformed_json_hard_fails_when_fallback_disabled"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-006-SCN-004",
+            "scope": "scope-1-preserve-capture-for-unparseable-llm-payload",
+            "title": "Empty / None content preserves the capture on the same SST-gated branch",
+            "gherkin": {
+                "given": "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED is 'true' and the LLM returns content=None (an overrun/aborted generation)",
+                "when": "process_content parses the response",
+                "then": "it returns success=true with topics=['degraded-fallback-malformed-json'] and does NOT raise a TypeError that bypasses the degraded-fallback branch"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_processor.py",
+                    "testId": "test_none_llm_content_uses_sst_gated_degraded_fallback"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#scenario-first-tdd-red-green-ordering"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-006-SCN-005",
+            "scope": "scope-1-preserve-capture-for-unparseable-llm-payload",
+            "title": "Empty / None content hard-fails when the SST gate is disabled (gate integrity)",
+            "gherkin": {
+                "given": "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED is 'false' and the LLM returns content=None",
+                "when": "process_content parses the response",
+                "then": "it returns success=false with 'Invalid JSON' in the error, never the opaque generic 'LLM processing failed'"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_processor.py",
+                    "testId": "test_none_llm_content_hard_fails_when_fallback_disabled"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#scenario-first-tdd-red-green-ordering"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-006-SCN-006",
+            "scope": "scope-1-preserve-capture-for-unparseable-llm-payload",
+            "title": "The output-token budget is SST-owned, not the hardcoded 2000",
+            "gherkin": {
+                "given": "ML_DOMAIN_OUTPUT_TOKEN_BUDGET is a distinct non-2000 value",
+                "when": "process_content composes its litellm request",
+                "then": "max_tokens equals that SST value and is not the re-hardcoded 2000"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_processor.py",
+                    "testId": "test_output_budget_read_from_sst_not_hardcoded_spec102"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        }
+    ]
+}

@@ -3,7 +3,9 @@
 - **Severity:** HIGH (redteam **F2**)
 - **Owning spec:** `026-domain-extraction` (owns the "Invalid JSON from LLM" ML-processing contract)
 - **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host>
-- **Status:** CODE-RESILIENCE PART FIXED IN-REPO + MODEL/OPS PART ROUTED — not pushed
+- **Status:** FIXED & VERIFIED (2026-07-19) — capture-preservation resilience complete (incl. the
+  None/empty-content edge closed this session); MODEL/OPS latency root cause routed to bubbles.devops
+  (R-102-D, non-gating). Requires an `smackerel-ml` redeploy to take live effect. Not pushed.
 
 ## Summary
 
@@ -60,6 +62,20 @@ documented host-contention gotcha. Two independent problems:
 `test_json_with_prose_wrapper_is_salvaged` (adversarial — prose-wrapped JSON),
 `test_malformed_json_hard_fails_when_fallback_disabled` (SST-gate integrity).
 
+## Completion (this session, 2026-07-19) — None/empty-content edge closed
+
+A residual hole remained: some Ollama-served models return `content=None` on an overrun/aborted
+generation. `_parse_llm_json(None)` fed that to `json.loads(None)`, which raises a **`TypeError`**
+(not a `json.JSONDecodeError`) — so it BYPASSED the SST-gated degraded-fallback branch and hard-dropped
+the capture via the generic `except Exception` handler (a `TypeError` is not an "unavailable-LLM"
+error, so the unavailable branch did not catch it either). Fixed by a two-line guard in
+`_parse_llm_json`: `if text is None or not text.strip(): raise json.JSONDecodeError("empty LLM
+payload", text or "", 0)` — routing empty/None responses through the SAME capture-preserving branch.
+Adversarial regressions added: `test_none_llm_content_uses_sst_gated_degraded_fallback` (RED before
+the guard: `TypeError` → `success: False`) and `test_none_llm_content_hard_fails_when_fallback_disabled`
+(SST-gate integrity). See [report.md](report.md) → "Scenario-First TDD — RED → GREEN Ordering"
+(`2 failed → 624 passed`).
+
 ## Routed (model/ops — with evidence)
 
 **Owner: bubbles.devops / model-selection ops.** The TRUNCATION + latency root cause is not a code
@@ -67,12 +83,14 @@ bug:
 
 - `gemma4:26b` produces truncated JSON and 71–95s synthesis / >30s domain-extraction under light
   load.
-- `max_tokens=2000` is **hardcoded** in `processor.py` and is likely too small for the rich schema
-  on a verbose model → truncation.
-- **Recommendation:** SST-own the output-token budget (raise it so the schema fits) and/or route
-  domain-extraction + synthesis to a model with adequate output budget/latency; treat the 30s
-  domain budget vs 71–95s observed latency as a model-selection SLO decision. Changing the model /
-  token budget trades latency/cost and is an ops call, so it is **not** made here.
+- `max_tokens=2000` **was** hardcoded in `processor.py`; the output-token-budget half is now
+  ADDRESSED IN-REPO (spec 102 SCOPE-102-03 — `max_tokens = resolve_domain_output_token_budget()`,
+  SST-owned `ML_DOMAIN_OUTPUT_TOKEN_BUDGET`, default raised `2000 → 4096`). The remaining
+  model-quality / live-latency verification is the model-selection call.
+- **Recommendation:** route domain-extraction + synthesis to a model with adequate output
+  budget/latency; treat the 30s domain budget vs 71–95s observed latency as a model-selection SLO
+  decision. Changing the model trades latency/cost and is an ops call (R-102-D), so it is **not**
+  made here.
 
 ## Test evidence
 

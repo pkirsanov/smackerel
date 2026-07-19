@@ -85,7 +85,7 @@ def _is_llm_unavailable_error(exc: Exception) -> bool:
     return any(indicator in error_msg for indicator in ["connection", "connect", "refused", "timeout"])
 
 
-def _parse_llm_json(text: str) -> Any:
+def _parse_llm_json(text: str | None) -> Any:
     """Parse an LLM JSON payload, tolerating a prose preamble/trailing wrapper.
 
     litellm's response_format={"type":"json_object"} is not honored by every
@@ -96,7 +96,18 @@ def _parse_llm_json(text: str) -> Any:
     overrun output budget) has no closing brace to salvage, so it re-raises the
     JSONDecodeError — the caller then degrades gracefully rather than dropping
     the capture (redteam F2 / BUG-026-006).
+
+    An EMPTY or None payload (some Ollama-served models return content=None on
+    an overrun/aborted generation) is as unrecoverable as a truncated one and
+    MUST route through the SAME except-JSONDecodeError degraded-fallback branch
+    in the caller. Raising a plain json.JSONDecodeError here — instead of
+    letting json.loads(None) raise a TypeError that would BYPASS that branch and
+    hard-drop the capture via the generic exception handler — keeps every
+    unparseable response on one capture-preserving path (redteam F2 /
+    BUG-026-006).
     """
+    if text is None or not text.strip():
+        raise json.JSONDecodeError("empty LLM payload", text or "", 0)
     try:
         return json.loads(text)
     except json.JSONDecodeError:
