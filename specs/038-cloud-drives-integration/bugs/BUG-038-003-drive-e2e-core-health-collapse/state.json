@@ -1,0 +1,111 @@
+{
+  "version": 3,
+  "specId": "038-cloud-drives-integration",
+  "bugId": "BUG-038-003-drive-e2e-core-health-collapse",
+  "featureDir": "specs/038-cloud-drives-integration/bugs/BUG-038-003-drive-e2e-core-health-collapse",
+  "featureName": "BUG-038-003 Drive E2E core health collapse",
+  "title": "Drive observability waits two minutes after core and test-network disappearance",
+  "severity": "high",
+  "source": "BROAD-DRIVE-HEALTH-001 routed from BUG-026-008 synthesis closeout",
+  "owningSpec": "038-cloud-drives-integration",
+  "status": "in_progress",
+  "releaseTrain": "mvp",
+  "workflowMode": "bugfix-fastlane",
+  "flagsIntroduced": [],
+  "createdAt": "2026-07-19",
+  "updatedAt": "2026-07-19",
+  "redeployRequired": false,
+  "deploymentReached": false,
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "validation-handoff",
+    "currentScope": "1",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-07-19",
+    "lastUpdatedAt": "2026-07-19T19:12:38Z",
+    "completedScopes": [],
+    "completedPhaseClaims": [],
+    "completedPhaseClaimsByScope": {},
+    "pendingTransitionRequests": [],
+    "scopeSummary": [
+      {
+        "scopeId": "1",
+        "title": "Preserve core health through serialized Drive observability",
+        "owner": "bubbles.implement",
+        "dodCount": 16,
+        "status": "in_progress",
+        "dependsOn": [],
+        "notes": "Isolation-first and package-order live E2E diagnosis; certification remains validate-owned."
+      }
+    ]
+  },
+  "completedScopes": [],
+  "transitionRequests": [
+    {
+      "id": "TR-038-003-VALIDATE-001",
+      "requestedAt": "2026-07-19T19:12:38Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "in_progress",
+      "targetAgent": "bubbles.validate",
+      "reason": "Drive-local isolation, neighbor order, and full Drive package are green; the reproduced parent interruption defect is fixed in BUG-031-009 with RED/GREEN evidence. Certification remains validate-owned.",
+      "packetRef": "report.md#post-fix-neighbor-and-drive-package-proof",
+      "routedTo": "bubbles.validate",
+      "status": "open"
+    }
+  ],
+  "transitionHistory": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.bug",
+      "phase": "bug",
+      "phasesExecuted": ["bug"],
+      "provenanceMode": "direct-authorized-runner",
+      "note": "Created the complete Drive core-health packet from BROAD-DRIVE-HEALTH-001 and classified later missing-service failures as cascade noise."
+    },
+    {
+      "at": "2026-07-19T19:12:38Z",
+      "agent": "bubbles.bug",
+      "phase": "validation-handoff",
+      "phasesExecuted": ["bug"],
+      "provenanceMode": "direct-authorized-runner",
+      "outcome": "route_required",
+      "note": "Falsified Drive-local exhaustion and contamination, reproduced daemon-owned runner survival in BUG-031-009, verified exact-label cleanup and all 25 Drive E2Es, and routed certification without claiming specialist phases."
+    }
+  ],
+  "certification": {
+    "status": "in_progress",
+    "certificationReadiness": "not_ready",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "certifierAgent": null,
+    "certifiedAt": null,
+    "scopeProgress": [
+      {"scopeId": "1", "status": "in_progress", "dodComplete": 0, "dodTotal": 16}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "lastCleanRound": 0,
+      "lockedScenarioIds": []
+    },
+    "observations": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "bugfix-fastlane-mode-default"},
+    "autoCommit": {"mode": "on", "source": "user-request"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "bugfix-fastlane-mode-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"},
+    "workflowMode": "bugfix-fastlane"
+  },
+  "routing": {
+    "outcome": "route_required",
+    "nextRequiredOwner": "bubbles.validate",
+    "reason": "Owning harness fix and Drive recovery evidence are complete; validate-owned certification intentionally remains in_progress.",
+    "owningFix": "specs/031-live-stack-testing/bugs/BUG-031-009-docker-e2e-runner-interruption-leak"
+  }
+}
