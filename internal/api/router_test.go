@@ -324,6 +324,81 @@ func TestWebUI_RejectsWrongToken(t *testing.T) {
 	}
 }
 
+// --- Spec 057 parity for webAuthMiddleware: content-negotiated 303 vs 401 ---
+//
+// An unauthenticated top-level browser navigation to a webAuthMiddleware-gated
+// route lands on /login instead of a bare 401, matching bearerAuthMiddleware.
+// curl/API (Accept: */*) and HTMX (HX-Request) callers still receive 401, so the
+// wire contract — and the knb caddy acceptance probe that curls "/" — is preserved.
+
+func TestWebUI_Browser_GET_TextHTML_RedirectsToLogin(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		AuthToken:  "test-web-secret",
+		WebHandler: &mockWebUI{},
+	}
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	req.Header.Set("Accept", "text/html")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 for unauthenticated browser navigation, got %d", rec.Code)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.HasPrefix(loc, "/login?next=") {
+		t.Fatalf("expected redirect to /login?next=…, got Location=%q", loc)
+	}
+	if !strings.Contains(loc, "next=%2Fsettings") {
+		t.Errorf("expected sanitized next=/settings in redirect, got Location=%q", loc)
+	}
+}
+
+func TestWebUI_CurlDefault_StarAccept_Returns401(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		AuthToken:  "test-web-secret",
+		WebHandler: &mockWebUI{},
+	}
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "*/*")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for curl-default Accept: */*, got %d", rec.Code)
+	}
+}
+
+func TestWebUI_HTMX_Returns401(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		AuthToken:  "test-web-secret",
+		WebHandler: &mockWebUI{},
+	}
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for HTMX in-page request, got %d", rec.Code)
+	}
+}
+
 // --- SCN-020-010: Web UI allows all requests when auth_token is empty ---
 
 func TestWebUI_AllowsAll_WhenTokenEmpty(t *testing.T) {
