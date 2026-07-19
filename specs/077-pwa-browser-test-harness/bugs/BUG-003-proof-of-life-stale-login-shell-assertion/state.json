@@ -4,7 +4,7 @@
   "parentFeatureDir": "specs/077-pwa-browser-test-harness",
   "featureName": "BUG-003 proof_of_life e2e-ui stale 200-branch assertion (served login shell)",
   "bugId": "BUG-077-003",
-  "status": "in_progress",
+  "status": "done",
   "releaseTrain": "mvp",
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "agent",
@@ -22,8 +22,8 @@
   "planningOnly": false,
   "planningOnlyJustification": null,
   "specDependsOn": ["specs/077-pwa-browser-test-harness"],
-  "certifiedAt": null,
-  "certifiedBy": null,
+  "certifiedAt": "2026-07-19T20:52:00Z",
+  "certifiedBy": "bubbles.validate",
   "requiresRevalidation": false,
   "completedScopes": ["scope-1-proof-of-life-served-login-shell"],
   "completedPhases": [
@@ -37,22 +37,31 @@
     "audit"
   ],
   "certification": {
-    "status": "in_progress",
-    "certificationReadiness": "pending",
-    "certifiedBy": null,
-    "certifiedAt": null,
+    "status": "done",
+    "certificationReadiness": "certified",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-07-19T20:52:00Z",
     "completedScopes": ["scope-1-proof-of-life-served-login-shell"],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
     "certifierAgent": "bubbles.validate",
     "auditorAgent": "bubbles.audit",
-    "auditedAt": null,
-    "auditVerdict": null,
+    "auditedAt": "2026-07-19",
+    "auditVerdict": "pass",
     "scopeProgress": [
       {
         "scopeId": "scope-1-proof-of-life-served-login-shell",
         "status": "done",
-        "dodComplete": 9,
-        "dodTotal": 9
+        "dodComplete": 13,
+        "dodTotal": 13
       }
     ],
     "lockdownState": {
@@ -170,7 +179,7 @@
     "currentPhase": "finalize",
     "currentScope": "scope-1-proof-of-life-served-login-shell",
     "runStartedAt": "2026-07-19T20:00:00Z",
-    "runCompletedAt": null,
+    "runCompletedAt": "2026-07-19T20:52:00Z",
     "completedScopes": ["scope-1-proof-of-life-served-login-shell"],
     "completedPhaseClaims": [
       "implement",
@@ -199,7 +208,7 @@
         "scopeId": "scope-1-proof-of-life-served-login-shell",
         "title": "Correct the proof_of_life 200-branch to the real served login shell",
         "owner": "bubbles.implement",
-        "dodCount": 9,
+        "dodCount": 13,
         "status": "done",
         "dependsOn": [],
         "notes": "proof_of_life.spec.ts 200-branch updated to the ACTUAL live-observed served login shell (title 'Sign in — Smackerel', h1 'Sign in'); docstring corrected to the spec-057 login-shell reality. Before-fix RED (exit 1) and after-fix GREEN (exit 0) both captured live this session against the disposable smackerel-test-e2e-ui stack; regression-quality plain + --bugfix exit 0; +19/-8 in one test file; zero app/runtime/source edits. Root cause: spec-057 browser-login-redirect (/ -> 303 /login?next=/), surfaced by spec-100's F-100-OPT stack-boot fix, previously routed out-of-boundary by BUG-077-002. All 9 DoD [x] with current-session evidence."
@@ -219,6 +228,6 @@
     "rootCauseSpec": "057-browser-login-redirect",
     "surfacedBySpec": "100-unified-journey-ui-transformation",
     "priorRoutingRef": "specs/077-pwa-browser-test-harness/bugs/BUG-002-e2e-ui-login-ratelimit-session-reuse/report.md",
-    "fixCommit": null
+    "fixCommit": "2b8e145a82d8cd1028e20c681572c57f0cccdd17"
   }
 }
