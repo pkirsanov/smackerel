@@ -1,0 +1,119 @@
+{
+    "version": 1,
+    "featureDir": "specs/050-ml-sidecar-health-isolation/bugs/BUG-050-001-ml-model-loaded-fabricated",
+    "generatedAt": "2026-07-19T00:00:00Z",
+    "scenarios": [
+        {
+            "scenarioId": "BUG-050-001-SCN-001",
+            "scope": "scope-1-reflect-ml-sidecar-model-loaded-end-to-end",
+            "title": "Core reflects the ML sidecar's model_loaded:false instead of fabricating true",
+            "gherkin": {
+                "given": "the ML sidecar's GET /health returns 200 with {\"status\":\"up\",\"model_loaded\":false} (the live prod condition the redteam observed)",
+                "when": "core's checkMLSidecar probes the sidecar and builds the services.ml_sidecar aggregate entry",
+                "then": "core reports model_loaded:false (reflected from the sidecar body), never the fabricated true (adversarial: fails against the pre-fix hardcode loaded:=true)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "internal/api/health_test.go",
+                    "testId": "TestCheckMLSidecar_ModelNotLoaded"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-050-001-SCN-002",
+            "scope": "scope-1-reflect-ml-sidecar-model-loaded-end-to-end",
+            "title": "Core reflects the ML sidecar's self-declared degraded status",
+            "gherkin": {
+                "given": "the ML sidecar's GET /health returns 200 with {\"status\":\"degraded\",\"model_loaded\":false}",
+                "when": "core's checkMLSidecar probes the sidecar and builds the aggregate entry",
+                "then": "core reports status:degraded reflected from the sidecar body rather than overriding it to up, so a self-declared degraded sidecar surfaces into the aggregate"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "internal/api/health_test.go",
+                    "testId": "TestCheckMLSidecar_DegradedBody"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-050-001-SCN-003",
+            "scope": "scope-1-reflect-ml-sidecar-model-loaded-end-to-end",
+            "title": "Core does not fabricate a model_loaded claim on a reachable-but-unparseable body",
+            "gherkin": {
+                "given": "the ML sidecar returns 200 with an empty or unparseable body (reachable but unknown)",
+                "when": "core's checkMLSidecar probes the sidecar and builds the aggregate entry",
+                "then": "core reports status:up with NO model_loaded claim (nil), never a fabricated value — the anti-fabrication half of the fix"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "internal/api/health_test.go",
+                    "testId": "TestCheckMLSidecar_ReachableUnparseableBody"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-050-001-SCN-004",
+            "scope": "scope-1-reflect-ml-sidecar-model-loaded-end-to-end",
+            "title": "The ML sidecar's /health reports the embedder's live model_loaded, not a stale import snapshot",
+            "gherkin": {
+                "given": "the ML sidecar module app.main was imported while embedder._model was None and the model is loaded later on the first generate_embedding()",
+                "when": "GET /health is served after the lazy load reassigns embedder._model",
+                "then": "the sidecar reports model_loaded:true via embedder.is_model_loaded() (call-time read), never the frozen import-time false (adversarial: fails against the pre-fix from .embedder import _model binding)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_health_model_loaded.py",
+                    "testId": "test_health_model_loaded_tracks_embedder_not_stale_import"
+                },
+                {
+                    "file": "ml/tests/test_health_model_loaded.py",
+                    "testId": "test_health_model_loaded_true_after_generate_embedding"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        }
+    ]
+}
