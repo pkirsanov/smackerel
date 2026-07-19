@@ -333,6 +333,36 @@ REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
 === BUG-025 REGRESSION PASS ===
 ```
 
+### Post-Merge Discrimination
+
+**Executed:** YES (current session)
+**Merged Head:** `321ed4e0a3ae12f76b7d687df327e3d892defc0c`
+**Commands:** focused Python selector; focused Go synthesis response tests; shell/harness checks; repo format/check/lint; both packet gate sets
+**Exit Code:** 0 for every listed command
+**Claim Source:** executed
+
+```text
+78 passed, 632 deselected in 1.44s
+[py-unit] pytest ml/tests finished OK
+--- PASS: TestSynthesisExtractResponse_SuccessMarksCompleted (0.00s)
+--- PASS: TestSynthesisExtractResponse_FailureMarksFailed (0.00s)
+--- PASS: TestSynthesisExtractResponse_FullPipelinePayload (0.00s)
+[go-unit] go test ./... finished OK
+PASS: linked worktree tooling mounts common Git metadata read-only
+PASS: synthesis test harness preserves stack lifecycle and zero-skip category boundaries
+75 files already formatted
+Config is in sync with SST
+scenario-lint: OK
+All checks passed!
+Web validation passed
+Artifact lint PASSED.
+RESULT: PASSED (0 warnings)
+Violations: 0
+Warnings: 0
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+=== POST-MERGE BUG-025 GATES PASS ===
+```
+
 ## Ownership And Certification
 
 - `bubbles.bug` directly ran its authorized persisted `bugfix-fastlane` workflow because no `runSubagent` capability is exposed in this session.
