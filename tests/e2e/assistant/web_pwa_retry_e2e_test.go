@@ -27,6 +27,8 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 )
 
+const retryE2ETurnText = "/weather in barcelona"
+
 func postNeutralTurn(t *testing.T, stack httpTurnLiveStack, turnID string) httpadapter.TurnResponse {
 	t.Helper()
 	resp, raw := postAssistantTurn(t, stack, httpadapter.TurnRequest{
@@ -34,7 +36,7 @@ func postNeutralTurn(t *testing.T, stack httpTurnLiveStack, turnID string) httpa
 		TransportMessageID: turnID,
 		Kind:               string(contracts.KindText),
 		TransportHint:      "web",
-		Text:               "/reset",
+		Text:               retryE2ETurnText,
 	})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status=%d, want 200 (turn_id=%q); body=%s", resp.StatusCode, turnID, string(raw))
@@ -49,12 +51,15 @@ func postNeutralTurn(t *testing.T, stack httpTurnLiveStack, turnID string) httpa
 	if !out.FacadeInvoked {
 		t.Fatalf("facade_invoked=false for turn_id=%q; need a real live turn for the parity proof", turnID)
 	}
+	t.Logf("turn_id=%q assistant_turn_id=%q agent_trace_id=%q status=%q body=%q",
+		turnID, out.Trace.AssistantTurnID, out.Trace.AgentTraceID, out.Status, out.Body)
 	return out
 }
 
 func TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateSharedHTTPConversation(t)
 
 	turnID := "spec-073-scope-2-a03-tp-073-10-retry-" + time.Now().UTC().Format("20060102T150405.000000")
 
@@ -77,6 +82,7 @@ func TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10(t *test
 func TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateSharedHTTPConversation(t)
 
 	stamp := time.Now().UTC().Format("20060102T150405.000000")
 	idA := "spec-073-scope-2-a03-tp-073-10-adv-A-" + stamp

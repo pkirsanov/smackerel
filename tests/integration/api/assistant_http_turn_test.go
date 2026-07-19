@@ -80,6 +80,7 @@ func newAdapter(t *testing.T, facade contracts.Assistant) *httpadapter.HTTPAdapt
 			Enabled:                true,
 			SchemaVersion:          httpadapter.SchemaVersionV1,
 			BodySizeMaxBytes:       1 << 20,
+			ConversationTTL:        time.Hour,
 			TransportHintAllowlist: []string{"web", "mobile", "bridge"},
 			RequiredScope:          "assistant.turn",
 		},
@@ -137,6 +138,49 @@ func TestAssistantHTTPTurnInvokesFacadeExactlyOnce(t *testing.T) {
 	}
 	if counter.last.UserID != "u-int-1" {
 		t.Errorf("delivered user_id = %q, want u-int-1", counter.last.UserID)
+	}
+}
+
+// TestAssistantHTTPTurnRetryInvokesFacadeExactlyOnce is the integration-level
+// BUG-069-004 regression: an exact retry shares the authenticated identity and
+// transport_message_id, so the adapter must replay the first response without
+// a second facade invocation.
+func TestAssistantHTTPTurnRetryInvokesFacadeExactlyOnce(t *testing.T) {
+	counter := &countingFacade{inner: newTestFacade(t)}
+	adapter := newAdapter(t, counter)
+	body := mustJSON(t, httpadapter.TurnRequest{
+		SchemaVersion:      httpadapter.SchemaVersionV1,
+		TransportMessageID: "retry-turn-001",
+		Kind:               string(contracts.KindText),
+		TransportHint:      "web",
+		Text:               "weather in barcelona",
+	})
+
+	post := func() httpadapter.TurnResponse {
+		req := httptest.NewRequest(http.MethodPost, "/api/assistant/turn", bytes.NewReader(body))
+		req = req.WithContext(auth.WithSession(req.Context(), auth.Session{
+			UserID: "u-int-retry",
+			Source: auth.SessionSourcePerUserToken,
+		}))
+		recorder := httptest.NewRecorder()
+		adapter.ServeHTTP(recorder, req)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status=%d, want 200; body=%s", recorder.Code, recorder.Body.String())
+		}
+		var response httpadapter.TurnResponse
+		if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+			t.Fatalf("decode response: %v; body=%s", err, recorder.Body.String())
+		}
+		return response
+	}
+
+	first := post()
+	second := post()
+	if counter.calls != 1 {
+		t.Fatalf("Facade.Handle calls=%d, want exactly 1 for same-ID retry", counter.calls)
+	}
+	if first.Body != second.Body || first.Status != second.Status || first.EmittedAt != second.EmittedAt {
+		t.Fatalf("retry did not replay logical response:\nfirst=%+v\nsecond=%+v", first, second)
 	}
 }
 

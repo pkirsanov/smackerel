@@ -2,6 +2,7 @@ package httpadapter
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +44,7 @@ type HTTPAdapter struct {
 	capture CaptureFn
 	now     func() time.Time
 	cfg     HTTPTransportConfig
+	dedup   *turnResponseCache
 }
 
 // NewHTTPAdapter constructs the adapter and validates dependencies
@@ -67,11 +69,19 @@ func NewHTTPAdapter(opts Options) (*HTTPAdapter, error) {
 	if len(opts.Config.TransportHintAllowlist) == 0 {
 		return nil, errors.New("httpadapter: Config.TransportHintAllowlist must be non-empty")
 	}
+	if opts.Config.ConversationTTL <= 0 {
+		return nil, errors.New("httpadapter: Config.ConversationTTL must be positive")
+	}
+	dedup, err := newTurnResponseCache(HTTPTurnDedupCapacity, opts.Config.ConversationTTL, opts.Clock)
+	if err != nil {
+		return nil, err
+	}
 	return &HTTPAdapter{
 		facade:  opts.Facade,
 		capture: opts.Capture,
 		now:     opts.Clock,
 		cfg:     opts.Config,
+		dedup:   dedup,
 	}, nil
 }
 
@@ -362,10 +372,39 @@ func (a *HTTPAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, http.StatusBadRequest, "invalid_assistant_turn", req.TransportMessageID, requestID, false)
 		return
 	}
+	fingerprintBody, err := json.Marshal(req)
+	if err != nil {
+		a.writeError(w, http.StatusBadRequest, "invalid_assistant_turn", req.TransportMessageID, requestID, false)
+		return
+	}
+	lease, err := a.dedup.begin(userID, req.TransportMessageID, sha256.Sum256(fingerprintBody))
+	switch {
+	case errors.Is(err, errTransportMessageIDConflict):
+		a.writeError(w, http.StatusConflict, "transport_message_id_conflict", req.TransportMessageID, requestID, false)
+		return
+	case errors.Is(err, errTurnDedupCapacity):
+		a.writeError(w, http.StatusServiceUnavailable, "assistant_turn_capacity_exceeded", req.TransportMessageID, requestID, false)
+		return
+	case err != nil:
+		a.writeError(w, http.StatusInternalServerError, "assistant_turn_failed", req.TransportMessageID, requestID, false)
+		return
+	}
+	if !lease.owner {
+		cached, ok := lease.wait(r.Context())
+		if !ok {
+			return
+		}
+		replayed := cached.response
+		replayed.Trace.RequestID = requestID
+		a.writeResponse(w, cached.status, replayed)
+		return
+	}
 
 	resp, err := a.facade.Handle(r.Context(), msg)
 	if err != nil {
-		a.writeError(w, http.StatusInternalServerError, "assistant_turn_failed", req.TransportMessageID, requestID, true)
+		out := a.errorResponse("assistant_turn_failed", req.TransportMessageID, requestID, true)
+		lease.complete(turnDedupResult{status: http.StatusInternalServerError, response: out})
+		a.writeResponse(w, http.StatusInternalServerError, out)
 		return
 	}
 
@@ -383,12 +422,16 @@ func (a *HTTPAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := RenderJSON(resp, req.TransportMessageID, requestID, true)
-	_ = json.NewEncoder(w).Encode(out)
+	lease.complete(turnDedupResult{status: http.StatusOK, response: out})
+	a.writeResponse(w, http.StatusOK, out)
 }
 
 func (a *HTTPAdapter) writeError(w http.ResponseWriter, status int, code, transportMessageID, requestID string, facadeInvoked bool) {
-	w.WriteHeader(status)
-	out := TurnResponse{
+	a.writeResponse(w, status, a.errorResponse(code, transportMessageID, requestID, facadeInvoked))
+}
+
+func (a *HTTPAdapter) errorResponse(code, transportMessageID, requestID string, facadeInvoked bool) TurnResponse {
+	return TurnResponse{
 		SchemaVersion:      SchemaVersionV1,
 		Transport:          TransportName,
 		TransportMessageID: transportMessageID,
@@ -399,5 +442,10 @@ func (a *HTTPAdapter) writeError(w http.ResponseWriter, status int, code, transp
 		EmittedAt:          a.now().UTC().Format(time.RFC3339Nano),
 		Trace:              TraceJSON{RequestID: requestID},
 	}
+}
+
+func (a *HTTPAdapter) writeResponse(w http.ResponseWriter, status int, out TurnResponse) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(out)
 }
