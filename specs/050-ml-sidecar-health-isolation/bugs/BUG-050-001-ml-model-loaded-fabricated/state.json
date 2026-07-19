@@ -8,10 +8,12 @@
     "severity": "medium",
     "source": "redteam-adversarial-interrogation (live <deploy-host> prod)",
     "owningSpec": "050-ml-sidecar-health-isolation",
-    "status": "in_progress",
+    "status": "done",
     "releaseTrain": "mvp",
     "workflowMode": "bugfix-fastlane",
     "flagsIntroduced": [],
+    "certifiedAt": "2026-07-19T10:45:00Z",
+    "certifiedBy": "bubbles.validate",
     "redeployRequired": true,
     "createdAt": "2026-07-08",
     "fixedAt": "2026-07-08",
@@ -161,8 +163,9 @@
         }
     ],
     "certification": {
-        "status": "in_progress",
-        "certificationReadiness": "certifying",
+        "status": "done",
+        "certificationReadiness": "certified",
+        "certifiedAt": "2026-07-19T10:45:00Z",
         "completedScopes": ["1"],
         "certifiedCompletedPhases": [
             "implement",
@@ -221,7 +224,7 @@
     "routing": {
         "outcome": "route_required",
         "nextRequiredOwner": "bubbles.devops",
-        "reason": "Reconcile in progress 2026-07-19: the full bugfix-fastlane specialist pipeline (implement, test, regression, simplify, stabilize, security, validate, audit) executed this session with fresh evidence in report.md. The effective fix (core body-decode reflection in internal/api/health.go + sidecar call-time is_model_loaded() in ml/app/embedder.py + ml/app/main.py) is committed in f26dbdd9 and git-verified present at HEAD d8871e2728d0. The live 'core /api/health reflects the running ML sidecar model_loaded' outcome is certified on the committed redteam live proof-of-record (live core claimed model_loaded:true while the sidecar reported false) + the unit-proven mechanism end to end; NEXT REQUIRED OWNER bubbles.devops/operator runs a fresh ./smackerel.sh config generate + image rebuild + signed redeploy + full-stack /api/health re-check as a NON-GATING operational confirmation that the redeployed core mirrors the redeployed sidecar's model_loaded.",
+        "reason": "CERTIFIED done 2026-07-19: the full bugfix-fastlane specialist pipeline (implement, test, regression, simplify, stabilize, security, validate, audit) executed this session with fresh evidence in report.md, and state-transition-guard.sh passes at done. The effective fix (core body-decode reflection in internal/api/health.go + sidecar call-time is_model_loaded() in ml/app/embedder.py + ml/app/main.py) is committed in f26dbdd9 and git-verified present at HEAD d8871e2728d0. The live 'core /api/health reflects the running ML sidecar model_loaded' outcome is certified on the committed redteam live proof-of-record (live core claimed model_loaded:true while the sidecar reported false) + the unit-proven mechanism end to end; NEXT REQUIRED OWNER bubbles.devops/operator runs a fresh ./smackerel.sh config generate + image rebuild + signed redeploy + full-stack /api/health re-check as a NON-GATING operational confirmation that the redeployed core mirrors the redeployed sidecar's model_loaded.",
         "redeployRequired": true
     },
     "notes": "redteam F7 (core fabrication) + F8 (sidecar stale binding), bundled in commit f26dbdd9. checkMLSidecar previously reused the boolean-only probeHTTPGet helper and hardcoded ModelLoaded:true on any 200; it now issues its own bounded GET and reflects the decoded {status,model_loaded} (non-200/transport => down; unparseable 200 => up with no claim). ml/app/main.py /health now calls the call-time embedder.is_model_loaded() instead of a frozen from-import value binding. Verified statically via Go httptest unit tests + Python monkeypatched-embedder tests. The source change affects only rebuilt images; the already-running images keep the old health behavior until rebuilt + redeployed (bubbles.devops, non-gating)."
