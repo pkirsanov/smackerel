@@ -11,6 +11,7 @@
   "status": "in_progress",
   "releaseTrain": "mvp",
   "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
   "flagsIntroduced": [],
   "createdAt": "2026-07-19",
   "updatedAt": "2026-07-19",
@@ -18,13 +19,13 @@
   "deploymentReached": false,
   "execution": {
     "activeAgent": null,
-    "currentPhase": "validation-handoff",
+    "currentPhase": "governance-reconciliation",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19",
     "lastUpdatedAt": "2026-07-19T19:12:38Z",
     "completedScopes": [],
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": ["security", "validate", "audit"],
     "completedPhaseClaimsByScope": {},
     "pendingTransitionRequests": [],
     "scopeSummary": [
@@ -51,6 +52,25 @@
       "reason": "Controlled Docker-runner interruption RED and exact-label cleanup GREEN are recorded; existing shell cleanup, Drive neighbors/package, units, integration, and static/governance checks are green. Certification remains validate-owned.",
       "packetRef": "report.md#green-post-fix-interruption-verification",
       "routedTo": "bubbles.validate",
+      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "status": "resolved",
+      "resolution": "Exact-candidate validate diagnostic ran in the outer session; terminal certification remains withheld pending execution-owned DoD and phase reconciliation."
+    },
+    {
+      "id": "TR-031-009-GOVERNANCE-001",
+      "requestedAt": "2026-07-19T23:20:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.implement",
+      "routedTo": "bubbles.implement",
+      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "reason": "Reconcile execution-owned DoD items and missing implement/test/regression/simplify/stabilize phase records from existing report evidence only; do not rerun full E2E.",
+      "packetRef": "report.md#broader-recovery-and-quality-evidence",
       "status": "open"
     }
   ],
@@ -73,6 +93,36 @@
       "provenanceMode": "direct-authorized-runner",
       "outcome": "route_required",
       "note": "Reproduced the daemon-owned runner leak, implemented bounded exact-label cleanup before Compose teardown, preserved nonmatching containers and shell descendants, and routed certification without claiming specialist phases."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "completed_diagnostic",
+      "note": "Exact-candidate security review returned PASS for merge, build, and deploy."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "completed_diagnostic",
+      "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "provenanceMode": "specialist",
+      "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "claimSource": "operator-attested-outer-session",
+      "outcome": "blocked",
+      "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."
     }
   ],
   "certification": {
@@ -97,7 +147,8 @@
   },
   "routing": {
     "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.validate",
-    "reason": "Harness source and regression delivery is pushed-ready; validate-owned certification intentionally remains in_progress."
+    "nextRequiredOwner": "bubbles.implement",
+    "reason": "Reconcile execution-owned DoD items and missing implement/test/regression phase records from existing report evidence only; no full E2E rerun. Then bubbles.validate may certify.",
+    "subsequentOwners": ["bubbles.test", "bubbles.validate"]
   }
 }
