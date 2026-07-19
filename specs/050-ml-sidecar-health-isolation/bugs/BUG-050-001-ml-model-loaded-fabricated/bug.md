@@ -1,9 +1,9 @@
 # BUG-050-001 — Core `/api/health` fabricates ML sidecar `model_loaded:true`
 
-- **Severity:** MEDIUM (redteam **F7**)
+- **Severity:** MEDIUM (redteam **F7** core + **F8** sidecar)
 - **Owning spec:** `050-ml-sidecar-health-isolation`
 - **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host>
-- **Status:** FIXED IN-REPO (requires prod redeploy to take effect) — not pushed
+- **Status:** FIXED & VERIFIED (certified `done` 2026-07-19 via bugfix-fastlane; source fix committed in `f26dbdd9`, present at HEAD `d8871e2728d0`; running prod image restamp routed to `bubbles.devops` non-gating — not pushed)
 - **Coordinates with:** [BUG-050-002](../BUG-050-002-health-degraded-masked-http-200/bug.md) (F1) — the ML sub-status feeds the aggregate health.
 
 ## Summary
