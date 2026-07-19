@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-004-http-turn-dedup",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG069004-001",
+      "scope": "Scope 1",
+      "title": "Sequential same-ID retry replays one logical turn",
+      "gherkin": {"given": "an authenticated user submits a deterministic weather turn", "when": "the exact request is repeated with the same transport message ID", "then": "the facade executes once and both responses share assistant turn ID and body"},
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/web_pwa_retry_e2e_test.go", "name": "TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10"}],
+      "evidenceRefs": ["report.md#before-fix---deterministic-same-id-retry", "report.md#after-fix---focused-and-package-e2e"],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG069004-002",
+      "scope": "Scope 1",
+      "title": "Concurrent same-ID retries collapse",
+      "gherkin": {"given": "two matching authenticated requests arrive together", "when": "the first facade invocation is still running", "then": "the second waits and receives the first logical response"},
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "linkedTests": [{"type": "unit", "file": "internal/assistant/httpadapter/dedup_test.go", "name": "TestHTTPTurnDedup_ConcurrentReplayExecutesFacadeOnce"}],
+      "evidenceRefs": ["report.md#units-and-quality-gates"],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG069004-003",
+      "scope": "Scope 1",
+      "title": "Different IDs execute distinct turns",
+      "gherkin": {"given": "equivalent requests use different message IDs", "when": "both are processed", "then": "both non-empty assistant turn IDs differ"},
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/web_pwa_retry_e2e_test.go", "name": "TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial"}],
+      "evidenceRefs": ["report.md#before-fix---deterministic-same-id-retry", "report.md#after-fix---focused-and-package-e2e"],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG069004-004",
+      "scope": "Scope 1",
+      "title": "Identity and payload collisions do not leak or re-execute",
+      "gherkin": {"given": "two users reuse one message ID or one user changes the request body", "when": "the adapter resolves the idempotency key", "then": "users remain isolated and changed-payload reuse is rejected before execution"},
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        {"type": "unit", "file": "internal/assistant/httpadapter/dedup_test.go", "name": "TestHTTPTurnDedup_SameIDIsIsolatedAcrossUsers"},
+        {"type": "unit", "file": "internal/assistant/httpadapter/dedup_test.go", "name": "TestHTTPTurnDedup_ChangedPayloadConflictsWithoutReexecution"}
+      ],
+      "evidenceRefs": ["report.md#units-and-quality-gates"],
+      "status": "in_progress"
+    }
+  ]
+}
