@@ -3,7 +3,15 @@
 - **Severity:** HIGH (redteam **F2**, latency half)
 - **Owning spec:** `026-domain-extraction` (owns the domain-extraction 30s-budget ML-processing contract)
 - **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host> (both models WARM)
-- **Status:** MECHANISM CORRECTED (native Ollama `think` field) + UNIT TESTS REWORKED IN-REPO — not pushed; live verification pending orchestrator redeploy. The FIRST fix (the `/no_think` prompt token) was INEFFECTIVE — see "⚠️ Mechanism Correction" below.
+- **Status:** FIXED & VERIFIED — certified `done` (2026-07-19). Every in-scope structured-JSON
+  extraction call sends the native Ollama `think=false` request field (SST-gated by
+  `ML_STRUCTURED_EXTRACTION_THINKING`, fail-loud). The full bugfix-fastlane specialist pipeline
+  executed this session with fresh evidence (`622 passed`, regression guard `0 violations`,
+  check/lint clean) and `state-transition-guard` certifies the bug to `done`. The FIRST fix (the
+  `/no_think` prompt token) was INEFFECTIVE — see "⚠️ Mechanism Correction" below. The live
+  "domain+synthesis fast + valid JSON" confirmation on the rebuilt image is owned by bubbles.devops
+  as a non-gating operational step (the mechanism is already both live-proven and unit-proven).
+  Scoped local bug-folder commits only; not pushed.
 
 ## Summary
 

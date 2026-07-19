@@ -154,6 +154,33 @@
             ],
             "replacedBy": null,
             "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-026-007-SCN-005",
+            "scope": "scope-1-disable-qwen3-thinking-on-structured-json-extraction",
+            "title": "Non-qwen deployments are unaffected",
+            "gherkin": {
+                "given": "the LLM provider is not 'ollama'",
+                "when": "an in-scope structured-extraction handler builds its litellm request",
+                "then": "the request kwargs are returned unchanged (no think field) regardless of the SST value"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_ollama_thinking.py",
+                    "testId": "test_apply_is_noop_for_non_ollama_provider"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
         }
     ]
 }
