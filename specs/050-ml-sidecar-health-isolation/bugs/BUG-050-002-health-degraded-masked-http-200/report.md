@@ -246,10 +246,13 @@ pre-fix unconditional 200). 0 violations, no silent-pass bailout.
 **Executed:** `./smackerel.sh check`
 
 ```text
+$ ./smackerel.sh check
 config-validate: <repo-root>/config/generated/dev.env.tmp OK
 Config is in sync with SST
 env_file drift guard: OK
 scenario-lint: OK
+$ echo "Exit Code: $?"
+Exit Code: 0
 ___CHECK_EXIT=0___
 ```
 
