@@ -24,10 +24,13 @@ func TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI(t *testing.T) {
 	}
 
 	addJS := getE2EText(t, cfg.CoreURL+"/pwa/photo-library-add.js")
-	for _, expected := range []string{"/v1/photos/connectors/test", "/v1/photos/connectors", "Authorization", "included_albums"} {
+	for _, expected := range []string{"/v1/photos/connectors/test", "/v1/photos/connectors", `credentials: "same-origin"`, "included_albums"} {
 		if !strings.Contains(addJS, expected) {
 			t.Fatalf("photo-library-add.js missing %q", expected)
 		}
+	}
+	if strings.Contains(addJS, `credentials: "omit"`) {
+		t.Fatal("photo-library-add.js must not omit the same-origin auth cookie")
 	}
 
 	resp, err := apiGet(cfg, "/v1/photos/connectors")
