@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-004-assistant-e2e-turn-fixture",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG073004-001",
+      "scope": "Scope 1",
+      "title": "Web and mobile hints preserve visible response parity",
+      "gherkin": {
+        "given": "the shared HTTP identity state is isolated with its prior row saved",
+        "when": "equivalent ordinary text turns are sent with web and mobile hints",
+        "then": "contract-relevant response fields match and both responses use canonical HTTP transport web"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/transport_hint_parity_test.go", "name": "TestAssistantTransportHintParity_WebAndMobileShareResponseShape"}],
+      "evidenceRefs": ["report.md#before-fix---named-live-e2e", "report.md#after-fix---focused-and-package-e2e"],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG073004-002",
+      "scope": "Scope 1",
+      "title": "Exact-row restoration preserves neighboring identity state",
+      "gherkin": {
+        "given": "target and unrelated assistant conversation rows exist",
+        "when": "test isolation runs and cleanup executes",
+        "then": "the target row is restored exactly and the unrelated row is unchanged"
+      },
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/conversation_isolation_test.go", "name": "TestAssistantConversationIsolation_RestoresExactTargetAndPreservesNeighbor_Adversarial"}],
+      "evidenceRefs": ["report.md#after-fix---focused-and-package-e2e"],
+      "status": "in_progress"
+    }
+  ]
+}

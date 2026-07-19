@@ -500,6 +500,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/pipeline/` | Artifact processing pipeline — NATS subscribers for process/embed/rerank/digest/synthesis/domain-extract, result handlers, retry logic |
 | `internal/scheduler/` | Cron-based task scheduler — digest generation (configurable cron), intelligence synthesis (2AM), momentum (hourly), resurfacing (8AM), knowledge lint (configurable), alert checks |
 | `internal/stringutil/` | String utility functions — UTF-8 safe truncation, control character sanitization, text normalization |
+| `internal/testsupport/` | Shared test-only lexical support, including comment-aware JavaScript source inspection used by committed-source and served-asset policy guards |
 | `internal/telegram/` | Telegram bot — message handling (URLs, text, voice, forwards, media groups, conversations), 9 commands (/find, /concept, /person, /lint, /digest, /done, /status, /recent, /rate), annotation via reply, disambiguation flow, recipe commands (serving scaler, cook mode with session store), expense interactions (receipt confirmation, query, correction, suggestions), meal plan commands (create, assign, query, cook-from-plan) |
 | `internal/mealplan/` | Meal planning calendar — plan store, service (lifecycle, overlap, copy), shopping list bridge (reuses RecipeAggregator + ScaleIngredients), CalDAV calendar sync bridge |
 | `internal/recipe/` | Shared recipe types, serving scaler, kitchen fraction formatter, quantity parsing (extracted from list aggregator for reuse by scaler and cook mode) |
@@ -777,6 +778,13 @@ detection):
   transport identically (Telegram, HTTP per
   [spec 069](../specs/069-assistant-http-transport/), and any future
   adapter). This is enforced by a spec 067 CI guard.
+- HTTP assistant retries MUST reuse the original `transport_message_id` and the
+  exact semantic request body. The adapter scopes replay by authenticated user
+  plus canonical HTTP transport plus message ID, collapses concurrent retries,
+  and returns the original logical response with a fresh HTTP request ID. A
+  same-user message ID reused with a different body is rejected with HTTP 409
+  and `error_cause="transport_message_id_conflict"`; callers must mint a new ID
+  for a new logical turn.
 
 #### Adding A New Scenario (BS-001 — zero Go changes)
 

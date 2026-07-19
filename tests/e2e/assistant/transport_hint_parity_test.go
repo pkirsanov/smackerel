@@ -39,6 +39,8 @@ type parityLiveStack struct {
 	AuthToken string
 }
 
+const transportHintParityTurnText = "/weather in barcelona"
+
 func loadParityLiveStack(t *testing.T) parityLiveStack {
 	t.Helper()
 	baseURL := strings.TrimRight(os.Getenv("CORE_EXTERNAL_URL"), "/")
@@ -76,7 +78,7 @@ func postParityTurn(t *testing.T, stack parityLiveStack, turnID, hint string) ht
 		TransportMessageID: turnID,
 		Kind:               string(contracts.KindText),
 		TransportHint:      hint,
-		Text:               "/reset",
+		Text:               transportHintParityTurnText,
 	})
 	if err != nil {
 		t.Fatalf("marshal turn request: %v", err)
@@ -121,6 +123,16 @@ func shapeOnly(r httpadapter.TurnResponse) httpadapter.TurnResponse {
 	return r
 }
 
+func requireNormalParityTurn(t *testing.T, hint string, response httpadapter.TurnResponse) {
+	t.Helper()
+	if strings.EqualFold(strings.TrimSpace(response.Body), "context reset.") {
+		t.Fatalf("hint=%q parity fixture reached the /reset short circuit; parity requires an ordinary text turn", hint)
+	}
+	if response.Trace.AssistantTurnID == "" {
+		t.Fatalf("hint=%q parity fixture produced no assistant_turn_id; parity requires an ordinary traced turn", hint)
+	}
+}
+
 // TestAssistantTransportHintParity_WebAndMobileShareResponseShape —
 // SCN-073-A08 live regression. Sends the SAME scenario-neutral
 // turn body with hint="web" and hint="mobile" and asserts the
@@ -133,10 +145,14 @@ func shapeOnly(r httpadapter.TurnResponse) httpadapter.TurnResponse {
 func TestAssistantTransportHintParity_WebAndMobileShareResponseShape(t *testing.T) {
 	stack := loadParityLiveStack(t)
 	waitParityHealthy(t, stack, 30*time.Second)
+	isolation := isolateSharedHTTPConversation(t)
 
 	stamp := time.Now().UTC().Format("20060102T150405.000")
 	web := postParityTurn(t, stack, "spec-073-scope-1e-a08-parity-web-"+stamp, "web")
+	isolation.reset(t)
 	mobile := postParityTurn(t, stack, "spec-073-scope-1e-a08-parity-mobile-"+stamp, "mobile")
+	requireNormalParityTurn(t, "web", web)
+	requireNormalParityTurn(t, "mobile", mobile)
 
 	webShape := shapeOnly(web)
 	mobileShape := shapeOnly(mobile)

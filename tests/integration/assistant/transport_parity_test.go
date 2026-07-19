@@ -190,6 +190,7 @@ func TestAssistantTransportParity_TelegramAndHTTPUseSameFacadePath(t *testing.T)
 			Enabled:                true,
 			SchemaVersion:          httpadapter.SchemaVersionV1,
 			BodySizeMaxBytes:       1 << 20,
+			ConversationTTL:        time.Hour,
 			TransportHintAllowlist: []string{"web", "mobile", "bridge"},
 			RequiredScope:          "assistant.turn",
 		},

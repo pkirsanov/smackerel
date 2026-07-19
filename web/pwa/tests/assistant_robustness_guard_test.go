@@ -23,6 +23,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/testsupport/jssource"
 )
 
 // requiredRobustnessPatterns enumerates the client-side robustness wiring
@@ -51,9 +53,8 @@ func readAssistantJS(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
 	}
-	// Strip line comments so the wiring is matched in real code, not in a
-	// doc comment that merely names the mechanism.
-	return stripLineComments(string(body))
+	// Ignore comments so wiring is matched in real code, not documentation.
+	return jssource.WithoutComments(string(body))
 }
 
 // TestWebAssistantRobustnessGuard_BUG_073_002 fails if any client-side
