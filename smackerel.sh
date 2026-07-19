@@ -1465,6 +1465,7 @@ case "$COMMAND" in
         E2E_STACK_DOWN_SLOW_WARN_S=60
         E2E_LIFECYCLE_SHELL_TIMEOUT_S=600
         E2E_SHARED_SHELL_TIMEOUT_S=300
+        E2E_CHILD_RUN_LABEL="com.smackerel.e2e-child-run-id"
 
         e2e_process_group_has_members() {
           local process_group_id="$1"
@@ -1663,11 +1664,52 @@ case "$COMMAND" in
           kill -KILL "${!tracked[@]}" 2>/dev/null || true
         }
 
+        e2e_docker_child_ids() {
+          local run_id="$1"
+
+          if [[ -z "$run_id" ]]; then
+            return 0
+          fi
+          docker ps -aq --filter "label=${E2E_CHILD_RUN_LABEL}=${run_id}"
+        }
+
+        e2e_terminate_docker_children() {
+          local run_id="$1"
+          local -a container_ids=()
+          local container_id
+
+          while IFS= read -r container_id; do
+            if [[ -n "$container_id" ]]; then
+              container_ids+=("$container_id")
+            fi
+          done < <(e2e_docker_child_ids "$run_id")
+          if [[ ${#container_ids[@]} -eq 0 ]]; then
+            return 0
+          fi
+
+          echo "Stopping ${#container_ids[@]} Dockerized E2E child container(s) for run ${run_id}..."
+          if ! "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=5s 30 \
+            docker rm --force "${container_ids[@]}" >/dev/null; then
+            echo "ERROR: failed to remove Dockerized E2E child containers for run ${run_id}" >&2
+            return 1
+          fi
+          if [[ -n "$(e2e_docker_child_ids "$run_id")" ]]; then
+            echo "ERROR: Dockerized E2E child containers remain for run ${run_id}" >&2
+            return 1
+          fi
+        }
+
         e2e_stop_child() {
           local child_pid="${e2e_child_pid:-}"
           local process_group_id="${e2e_child_pgid:-}"
           local run_id="${e2e_child_run_id:-}"
+          local cleanup_status=0
 
+          # Docker daemon owns container processes independently of the host
+          # docker CLI process tree. Reap exact-run-labeled containers first so
+          # they cannot keep executing tests while Compose dependencies are
+          # torn down by the parent cleanup trap.
+          e2e_terminate_docker_children "$run_id" || cleanup_status=$?
           # Reap leaked descendants FIRST, while the process tree is still intact.
           # e2e_child_marker_pids derives the descendant closure from the live
           # tree; terminating the tracked child/group before reaping would orphan
@@ -1681,6 +1723,7 @@ case "$COMMAND" in
           e2e_child_pid=""
           e2e_child_pgid=""
           e2e_child_run_id=""
+          return "$cleanup_status"
         }
 
         e2e_validate_shell_test_target() {
@@ -1719,7 +1762,7 @@ case "$COMMAND" in
           local shell_test_target="$1"
 
           case "$shell_test_target" in
-            test_timeout_process_cleanup.sh|test_deploy_target_status.sh|test_compose_start.sh|test_persistence.sh|test_postgres_readiness_gate.sh|test_config_fail.sh)
+            fixtures/test_timeout_child_fixture.sh|test_timeout_process_cleanup.sh|test_deploy_target_status.sh|test_compose_start.sh|test_persistence.sh|test_postgres_readiness_gate.sh|test_config_fail.sh)
               return 0
               ;;
             *)
@@ -1740,13 +1783,17 @@ case "$COMMAND" in
 
         e2e_cleanup() {
           local cleanup_status=0
+          local child_cleanup_status=0
 
           if [[ "${e2e_cleanup_ran:-0}" == "1" ]]; then
             return 0
           fi
           e2e_cleanup_ran=1
-          e2e_stop_child
+          e2e_stop_child || child_cleanup_status=$?
           e2e_down_test_stack "exit cleanup" || cleanup_status=$?
+          if [[ "$child_cleanup_status" -ne 0 ]]; then
+            return "$child_cleanup_status"
+          fi
           return "$cleanup_status"
         }
 
@@ -1776,12 +1823,21 @@ case "$COMMAND" in
         trap 'e2e_signal_trap 129' HUP
 
         e2e_run_child() {
+          local -a child_command=("$@")
+
           e2e_child_run_id="smackerel-e2e-child-$$-$BASHPID-$(date +%s)-$RANDOM"
+          if [[ "${child_command[0]:-}" == "docker" && "${child_command[1]:-}" == "run" ]]; then
+            child_command=(
+              docker run
+              --label "${E2E_CHILD_RUN_LABEL}=${e2e_child_run_id}"
+              "${child_command[@]:2}"
+            )
+          fi
           if command -v setsid >/dev/null 2>&1; then
-            setsid --wait env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "$@" &
+            setsid --wait env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "${child_command[@]}" &
             e2e_child_pgid="$!"
           else
-            env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "$@" &
+            env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "${child_command[@]}" &
             e2e_child_pgid=""
           fi
           e2e_child_pid=$!

@@ -35,17 +35,18 @@ func TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers(t *testing.T)
 	liveConfig := loadE2EConfig(t)
 	waitForHealth(t, liveConfig, 120*time.Second)
 	pool := driveE2EPool(t)
+	searchTerm := "drivecrossprovider" + strings.ReplaceAll(uuid.NewString(), "-", "")
 
 	// Provider 1 (google fixture).
 	fixtureServer := fixtures.NewServer()
 	defer fixtureServer.Close()
 	fixtureServer.AddFiles([]fixtures.File{
 		{
-			ID: "scope8-e2e-google", Name: "Tomato salad e2e.txt", MimeType: "text/plain",
+			ID: "scope8-e2e-google", Name: searchTerm + " Google recipe.txt", MimeType: "text/plain",
 			SizeBytes: 96, FolderPath: []string{"Recipes", "Salads"},
 			RevisionID: "scope8-e2e-google-rev-1", Owner: "fixture-owner@example.com",
 			URL:     "https://drive.example/scope8-e2e-google",
-			Content: []byte("Tomato salad e2e: tomatoes, basil, olive oil. Action: buy basil."),
+			Content: []byte(searchTerm + ": tomatoes, basil, olive oil. Action: buy basil."),
 		},
 	})
 	googleProvider := newE2EGoogleProvider(fixtureServer, pool)
@@ -81,14 +82,14 @@ func TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers(t *testing.T)
 	memProvider.AddFile(memConnID, smdrive.FolderItem{
 		ProviderFileID:     "scope8-e2e-mem",
 		ProviderRevisionID: "scope8-e2e-mem-rev-1",
-		Title:              "Tomato salad e2e mem.txt",
+		Title:              searchTerm + " memdrive recipe.txt",
 		MimeType:           "text/plain",
 		SizeBytes:          96,
 		FolderPath:         []string{"Recipes", "Salads"},
 		ProviderURL:        "memdrive://files/scope8-e2e-mem",
 		ModifiedAt:         time.Now().UTC(),
 		OwnerLabel:         "fixture-owner",
-	}, []byte("Tomato salad e2e mem: tomatoes, mozzarella. Action: buy mozzarella."))
+	}, []byte(searchTerm+": tomatoes, mozzarella. Action: buy mozzarella."))
 
 	if _, err := smscan.NewService(memProvider, smscan.NewPostgresStore(pool)).InitialScan(ctx, memConnID); err != nil {
 		t.Fatalf("memdrive InitialScan: %v", err)
@@ -99,6 +100,30 @@ func TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers(t *testing.T)
 
 	googleArtifactID := "drive:google:" + googleConnID + ":scope8-e2e-google"
 	memArtifactID := "drive:memdrive:" + memConnID + ":scope8-e2e-mem"
+	contaminantPrefix := "drive-search-contaminant-" + uuid.NewString()
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO artifacts
+		 (id, artifact_type, title, summary, content_raw, content_hash, source_id,
+		  source_ref, source_quality, processing_status, created_at, updated_at)
+		SELECT $1 || '-' || sequence_number::text,
+		       'note',
+		       'Tomato salad',
+		       'Earlier package search contender',
+		       'Bounded search contamination fixture',
+		       'hash-' || $1 || '-' || sequence_number::text,
+		       'e2e-adversarial',
+		       $1 || '-' || sequence_number::text,
+		       'primary',
+		       'completed',
+		       now() + sequence_number * interval '1 millisecond',
+		       now() + sequence_number * interval '1 millisecond'
+		  FROM generate_series(1, 20) AS sequence_number`, contaminantPrefix,
+	); err != nil {
+		t.Fatalf("insert prior-package search contaminants: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM artifacts WHERE id LIKE $1`, contaminantPrefix+"%")
+	})
 
 	// Provider-neutral consumer surface: both providers must load identically.
 	for _, artifactID := range []string{googleArtifactID, memArtifactID} {
@@ -116,7 +141,7 @@ func TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers(t *testing.T)
 
 	// Live API search — both providers' rows surface in /api/search response.
 	body := postJSON(t, liveConfig, "/api/search", map[string]any{
-		"query": "tomato salad",
+		"query": searchTerm,
 		"limit": 20,
 	})
 	var resp map[string]any
