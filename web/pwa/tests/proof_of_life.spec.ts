@@ -3,8 +3,8 @@
  * harness. Anchors SCN-077-A01 (TP-077-01-01 + TP-077-01-01R).
  *
  * Loads `/` against `baseURL` (sourced via `requireSmackerelBaseUrl()`
- * in `playwright.config.ts`) and asserts the served document is the
- * Smackerel PWA shell — a real Chromium instance, a real network
+ * in `playwright.config.ts`) and asserts the served document is a real
+ * Smackerel-served shell — a real Chromium instance, a real network
  * round-trip to the disposable test stack brought up under Compose
  * project `smackerel-test-e2e-ui`.
  *
@@ -12,10 +12,15 @@
  * contract: any non-null response with status 200 (rendered shell) OR
  * 401 (served-and-auth-gated) proves the harness reached the live core
  * via a real network round-trip. Both outcomes confirm the disposable
- * test stack is reachable; the 401 path is the production-default
- * since the core's PWA root is bearer-auth gated and the proof-of-life
- * suite intentionally does not attach a session. Real feature coverage
- * (login flow exercising the auth path, CSP smoke) lands in SCOPE-3.
+ * test stack is reachable. The disposable stack runs dev-token mode
+ * (AuthConfig.Enabled=false), and per spec 057 (browser-login-redirect)
+ * an unauthenticated browser navigation to `/` is 303-redirected to
+ * `/login?next=/` — which Playwright follows — so here `/` resolves to
+ * 200 with the served login shell (internal/api/admin_ui_static/login.html).
+ * In production the PWA root is bearer-auth gated and returns the 401
+ * path since the proof-of-life suite intentionally does not attach a
+ * session. Real feature coverage (login flow exercising the auth path,
+ * CSP smoke) lands in SCOPE-3.
  *
  * `attachCSPGuard` is imported from `_support/csp.ts` as a smoke
  * import only — the skeleton is a no-op until SCOPE-3 wires the real
@@ -43,7 +48,13 @@ test("proof of life: served / route renders against the test stack", async ({
   ).toContain(status);
 
   if (status === 200) {
-    await expect(page).toHaveTitle("Smackerel");
-    await expect(page.locator("h1")).toHaveText("Smackerel");
+    // Spec 057 (browser-login-redirect): an unauthenticated browser
+    // navigation to `/` is 303-redirected to `/login?next=/`, which
+    // Playwright follows, so the served 200 document is the login shell
+    // (internal/api/admin_ui_static/login.html) — NOT the PWA index. These
+    // are the ACTUAL served identities; the exact matches keep the check
+    // adversarial (a blank/error/other-page `/` fails), no silent-pass.
+    await expect(page).toHaveTitle("Sign in — Smackerel");
+    await expect(page.locator("h1")).toHaveText("Sign in");
   }
 });
