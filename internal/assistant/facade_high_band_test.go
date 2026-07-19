@@ -212,14 +212,19 @@ func TestFacadeHighBandProvenanceGateRewritesWhenSourcesMissing(t *testing.T) {
 		t.Fatalf("Handle err = %v", err)
 	}
 
-	// Provenance gate canonical refusal — see provenance/gate.go.
-	if resp.Body != "I don't have a sourced answer for that." {
-		t.Errorf("Body = %q; want canonical refusal", resp.Body)
+	// Provenance first marks the response for capture; the facade's
+	// common successful-capture boundary renders the final user-visible
+	// acknowledgement shared by every transport.
+	if resp.Body != captureFallbackAcknowledgement {
+		t.Errorf("Body = %q; want canonical capture acknowledgement", resp.Body)
 	}
 	if resp.Status != contracts.StatusSavedAsIdea {
 		t.Errorf("Status = %q; want %q", resp.Status, contracts.StatusSavedAsIdea)
 	}
 	if !resp.CaptureRoute {
 		t.Errorf("CaptureRoute = false; provenance rewrite MUST set CaptureRoute=true")
+	}
+	if resp.ErrorCause != "" {
+		t.Errorf("ErrorCause = %q; successful capture must be a normal response", resp.ErrorCause)
 	}
 }

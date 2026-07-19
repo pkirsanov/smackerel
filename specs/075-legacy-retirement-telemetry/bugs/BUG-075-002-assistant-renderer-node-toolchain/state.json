@@ -1,0 +1,62 @@
+{
+  "version": 3,
+  "specId": "075-legacy-retirement-telemetry",
+  "bugId": "BUG-075-002-assistant-renderer-node-toolchain",
+  "featureDir": "specs/075-legacy-retirement-telemetry/bugs/BUG-075-002-assistant-renderer-node-toolchain",
+  "featureName": "BUG-075-002 assistant renderer Node toolchain",
+  "title": "Two live assistant renderer tests run in a Go container without Node",
+  "severity": "high",
+  "source": "current-session disposable-stack reproduction",
+  "owningSpec": "075-legacy-retirement-telemetry",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "workflowMode": "bugfix-fastlane",
+  "status": "in_progress",
+  "createdAt": "2026-07-19",
+  "updatedAt": "2026-07-19",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "handoff",
+    "currentScope": "1",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-07-19T00:00:00Z",
+    "completedScopes": [],
+    "completedPhaseClaims": [],
+    "executionHistory": [],
+    "scopeSummary": [{"scopeId": "1", "title": "Supply Node inside the sanctioned E2E container", "owner": "bubbles.test", "dodCount": 11, "status": "in_progress", "dependsOn": []}]
+  },
+  "certification": {
+    "status": "in_progress",
+    "certificationReadiness": "not_ready",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "certifierAgent": null,
+    "certifiedAt": null,
+    "scopeProgress": [{"scopeId": "1", "status": "in_progress", "dodComplete": 0, "dodTotal": 11}],
+    "lockdownState": {"active": false, "round": 0, "reason": "Active bugfix packet; certification is validate-owned.", "lastUpdatedAt": "2026-07-19T00:00:00Z"}
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "on", "source": "user-approved"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [
+    {
+      "id": "TR-BUG-075-002-VALIDATE-001",
+      "requestedAt": "2026-07-19T20:58:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.validate",
+      "reason": "Containerized Node bootstrap and both renderer regressions are green; validate/audit certification remains unexecuted.",
+      "packetRef": "report.md#green-containerized-renderer-execution",
+      "status": "open"
+    }
+  ],
+  "reworkQueue": []
+}

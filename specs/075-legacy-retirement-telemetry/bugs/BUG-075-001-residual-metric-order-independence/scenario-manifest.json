@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "featureDir": "specs/075-legacy-retirement-telemetry/bugs/BUG-075-001-residual-metric-order-independence",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-075-001-SCN-001",
+      "scope": "scope-1-live-residual-telemetry",
+      "title": "Real retired-command usage materializes privacy-safe telemetry",
+      "gherkin": {"given": "a clean disposable stack with an open retirement window", "when": "an authenticated retired-command turn runs", "then": "a concrete residual sample exposes only privacy-safe labels and bucket values"},
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/legacy_privacy_e2e_test.go", "testId": "TestLegacyResidualTelemetry_LiveMetricsExposeBucketsOnly"}],
+      "evidenceRefs": ["report.md#red-and-package-order-control"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-075-001-SCN-002",
+      "scope": "scope-1-live-residual-telemetry",
+      "title": "Telemetry absence cannot silently pass",
+      "gherkin": {"given": "a real retired-command request succeeded", "when": "the residual sample is absent", "then": "the E2E fails directly"},
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/legacy_privacy_e2e_test.go", "testId": "TestLegacyResidualTelemetry_LiveMetricsExposeBucketsOnly"}],
+      "evidenceRefs": ["report.md#red-and-package-order-control"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
