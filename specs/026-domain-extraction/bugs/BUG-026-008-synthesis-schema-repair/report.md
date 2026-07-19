@@ -439,6 +439,37 @@ REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
 
 These checks close the test-infrastructure and format requests only. The broad E2E result remains RED, and validate-owned certification remains unchanged.
 
+### Post-Merge Discrimination
+
+**Executed:** YES (current session)
+**Merged Head:** `321ed4e0a3ae12f76b7d687df327e3d892defc0c`
+**Commands:** focused Python selector; focused Go synthesis response tests; shell/harness checks; repo format/check/lint; both packet gate sets
+**Exit Code:** 0 for every listed command
+**Claim Source:** executed
+
+```text
+78 passed, 632 deselected in 1.44s
+[py-unit] pytest ml/tests finished OK
+=== RUN   TestSynthesisExtractResponse_SuccessMarksCompleted
+--- PASS: TestSynthesisExtractResponse_SuccessMarksCompleted (0.00s)
+=== RUN   TestSynthesisExtractResponse_FailureMarksFailed
+--- PASS: TestSynthesisExtractResponse_FailureMarksFailed (0.00s)
+=== RUN   TestSynthesisExtractResponse_FullPipelinePayload
+--- PASS: TestSynthesisExtractResponse_FullPipelinePayload (0.00s)
+[go-unit] go test ./... finished OK
+=== POST-MERGE CLI CONTRACTS PASS ===
+=== POST-MERGE FORMAT PASS ===
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: OK
+=== POST-MERGE LINT PASS ===
+Artifact lint PASSED.
+Traceability RESULT: PASSED (0 warnings)
+Implementation reality: 13 files, 0 violations, 0 warnings
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+=== POST-MERGE BUG-026 GATES PASS ===
+```
+
 ## Invocation Audit
 
 No subagent invocation API is available in this runtime. The authorized top-level `bubbles.bug` runner uses Smackerel's recorded parent-expanded phase convention and records each phase's real command provenance separately; it does not claim a `runSubagent` call occurred.
