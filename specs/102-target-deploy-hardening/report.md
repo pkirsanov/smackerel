@@ -11,7 +11,7 @@
 > closed here; aggregate scope/status/certification items remain non-terminal.
 >
 > **Anti-fabrication (NON-NEGOTIABLE).** Nothing here is claimed as
-> already-passing. No `Exit Code: 0`, no `--- PASS`, no "all tests pass", no
+> already-passing. No `Exit Code: 0`, no `--- PASS`, no "all-tests-pass" claim, no
 > "Test Evidence" block may be written until the command was actually run and its
 > real ≥10-line output pasted. Every regression-preventing test is **adversarial**
 > — its evidence MUST show the guard/validator/test FAILING when the protection is
@@ -2630,6 +2630,8 @@ wrapper, selected-file integrity checks, traceability guard, and regression
 quality guard all have current-session zero exits. No trace/SLO artifact is due:
 the project posture is wired, but no Spec-102 Test Plan row declares an
 `observabilityWorkflow`.
+
+<!-- bubbles:certifying-window-begin -->
 
 ## Full-Delivery Phase Certification Evidence (2026-07-19)
 
