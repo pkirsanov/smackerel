@@ -33,8 +33,7 @@ def resolve_synthesis_schema_repair_attempts() -> int:
     value = os.environ.get("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS")
     if value is None or not value.strip():
         raise RuntimeError(
-            "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS is required "
-            "(SST services.ml.synthesis_schema_repair_attempts)"
+            "ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS is required (SST services.ml.synthesis_schema_repair_attempts)"
         )
     try:
         attempts = int(value)
