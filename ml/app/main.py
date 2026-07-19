@@ -7,7 +7,7 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
@@ -375,17 +375,54 @@ app = FastAPI(
 
 
 @app.get("/health")
-async def health():
-    """Health check endpoint for the ML sidecar."""
+async def health(strict: str = ""):
+    """Health check endpoint for the ML sidecar.
+
+    Liveness vs readiness (redteam F1 / BUG-050-002, ML-sidecar half): the
+    DEFAULT ``GET /health`` is ALWAYS 200 because it is the container liveness
+    probe. The Docker ``HEALTHCHECK`` (docker-compose.yml) calls
+    ``urllib.request.urlopen('.../health')``, which RAISES on ANY non-2xx, so a
+    503 here would mark a still-ALIVE-but-degraded sidecar unhealthy and
+    flap/restart it. Callers on the operator / monitoring path OPT IN to a
+    status-aware signal via ``?strict=true|1|yes``, which returns 503 when the
+    sidecar status is not ``"up"`` (e.g. NATS disconnected). The default (no
+    param — exactly what the healthcheck sends) is byte-for-byte unchanged and
+    stays a plain 200 dict. This mirrors the Go core ``healthStrictRequested``
+    contract in ``internal/api/health.go`` so both health surfaces spec 050 owns
+    share one opt-in semantics.
+    """
     nats_connected = nats_client is not None and nats_client.is_connected
-    return {
-        "status": "up" if nats_connected else "degraded",
+    status = "up" if nats_connected else "degraded"
+    body = {
+        "status": status,
         "nats": "connected" if nats_connected else "disconnected",
         # Read the embedder's CURRENT state at call time (redteam F8): the model
         # is lazily loaded on the first generate_embedding(), long after this
         # module was imported.
         "model_loaded": is_model_loaded(),
     }
+    # Default liveness path: return a plain dict ⇒ FastAPI serialises it as an
+    # unconditional HTTP 200, byte-for-byte unchanged. Kept subscriptable so
+    # in-process callers (tests, BUG-050-001 regressions) can index it.
+    if not _health_strict_requested(strict):
+        return body
+    # Opt-in readiness path: surface a degraded state via the HTTP status code
+    # so a status-code consumer (operator / monitoring) can see it, WITHOUT
+    # touching the container liveness contract above.
+    return JSONResponse(
+        content=body,
+        status_code=200 if status == "up" else 503,
+    )
+
+
+def _health_strict_requested(strict: str) -> bool:
+    """Whether the caller opted into a status-aware ``/health`` via
+    ``?strict=true|1|yes`` (case-insensitive). Only the operator / monitoring
+    path sets it; the Docker liveness ``HEALTHCHECK`` never does, so container
+    liveness is unaffected. Mirrors the Go ``healthStrictRequested`` contract
+    (``internal/api/health.go``) — redteam F1 / BUG-050-002."""
+    return strict.strip().lower() in {"1", "true", "yes"}
+
 
 
 @app.get("/metrics")

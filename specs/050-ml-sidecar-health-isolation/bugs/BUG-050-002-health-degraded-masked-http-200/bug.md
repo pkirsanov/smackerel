@@ -3,7 +3,7 @@
 - **Severity:** HIGH (redteam **F1**)
 - **Owning spec:** `050-ml-sidecar-health-isolation`
 - **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host>
-- **Status:** PARTIALLY FIXED IN-REPO (non-destabilizing part) + ROUTED (consumer adoption) — not pushed
+- **Status:** FIXED & VERIFIED (certified `done` 2026-07-19 via bugfix-fastlane) — not pushed
 
 ## Summary
 
@@ -36,21 +36,28 @@ The correct model is **liveness (200, for the container) vs readiness/health (st
 the operator)**. A dedicated `/readyz` liveness probe already exists (`ReadyzHandler`, DB-only,
 200/503).
 
-## Fix (in-repo, non-destabilizing)
+## Fix (in-repo, non-destabilizing) — BOTH health surfaces spec 050 owns
 
-Added an **opt-in** status-aware signal to `/api/health`:
+Added an **opt-in** status-aware signal to BOTH `/api/health` (Go core) AND `/health` (ML sidecar):
 
 - `GET /api/health?strict=true|1|yes` → `503` when `overall != "healthy"`, else `200`.
-- Default `GET /api/health` (no param — exactly what the Docker liveness HEALTHCHECK sends) is
-  **byte-for-byte unchanged** (always `200`). Zero container-flap risk.
+- `GET /health?strict=true|1|yes` (ML sidecar) → `503` when `status != "up"` (e.g. NATS
+  disconnected), else `200`.
+- The DEFAULT of each (no param — exactly what the Docker liveness HEALTHCHECK sends) is
+  **byte-for-byte unchanged** (always `200`). Zero container-flap risk. The ML sidecar's Docker
+  `HEALTHCHECK` calls `urllib.request.urlopen('.../health')`, which RAISES on ANY non-2xx, so a
+  default 503-on-degraded would restart-flap a still-ALIVE degraded sidecar — the exact
+  destabilization the opt-in avoids.
 
-The operator / monitoring / knb `verify.sh` path opts into `?strict=true` to detect `degraded`
-via HTTP status without touching the container liveness contract.
+The operator / monitoring / knb `verify.sh` path opts into `?strict=true` on either surface to detect
+a degraded state via HTTP status without touching the container liveness contract.
 
 Files:
 
-- [internal/api/health.go](../../../../internal/api/health.go) — `healthStrictRequested(r)` + status-code selection at the writeJSON site.
+- [internal/api/health.go](../../../../internal/api/health.go) — `healthStrictRequested(r)` + status-code selection at the writeJSON site (earlier partial fix, committed at HEAD).
 - [internal/api/health_test.go](../../../../internal/api/health_test.go) — `TestHealthHandler_StrictDegradedReturns503` (adversarial), `TestHealthHandler_StrictHealthyReturns200`, `TestHealthHandler_DefaultDegradedStays200` (non-destabilization invariant).
+- [ml/app/main.py](../../../../ml/app/main.py) — `/health` accepts `strict`; default returns a plain dict (unconditional 200); `?strict=true|1|yes` returns `JSONResponse(503)` when status != `up`; new `_health_strict_requested` helper mirrors the Go contract. **(ML-sidecar completion, this session.)**
+- [ml/tests/test_health_strict_degraded.py](../../../../ml/tests/test_health_strict_degraded.py) — FastAPI-`TestClient` HTTP-layer regression suite: `test_strict_degraded_returns_503` (adversarial), `test_strict_truthy_variants_return_503` (adversarial), `test_strict_healthy_returns_200`, `test_default_degraded_stays_200` (non-destabilization invariant), `test_strict_falsey_and_absent_stay_200_when_degraded`, `test_default_returns_plain_dict_not_response` (backward-compat). **(this session.)**
 
 ## Routed (out of this repo / follow-up)
 
