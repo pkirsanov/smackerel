@@ -6,7 +6,7 @@
     "featureDir": "specs/103-aged-unused-image-reclamation",
     "featureName": "Age-Bounded Project-Scoped Unused-Image Reclamation (Smart Cleanup)",
     "title": "Age-Bounded Project-Scoped Unused-Image Reclamation (Smart Cleanup)",
-    "status": "in_progress",
+    "status": "done",
     "executionRuntime": "planning",
     "mode": "feature",
     "workflowMode": "full-delivery",
@@ -19,8 +19,8 @@
     "flagsIntroduced": [],
     "createdAt": "2026-07-13T00:00:00Z",
     "updatedAt": "2026-07-19T18:00:00Z",
-    "lastUpdatedAt": "2026-07-19T13:05:32Z",
-    "certifiedAt": null,
+    "lastUpdatedAt": "2026-07-19T13:17:28Z",
+    "certifiedAt": "2026-07-19T13:17:28Z",
     "deliveryNote": "Authoring/planning pass (bubbles.plan) COMPLETE. Produced spec.md + design.md + scopes.md + scenario-manifest.json + skeleton report.md/uservalidation.md. NO code, NO Docker, NO push; smackerel only. Mirrors WanderAide specs/162 + GuestHost specs/152 + QuantitativeFinance specs/096 (same gap, same fix), adapted to smackerel. CRITICAL LABEL FINDING (verified read-only): smackerel images do NOT carry an identity/owner label — Dockerfile (core runtime stage) and ml/Dockerfile (smackerel-ml runtime stage) stamp only OCI org.opencontainers.image.* labels; a repo-wide scan for io.smackerel/LABEL/lifecycle.owner found no image-identity label. Therefore this spec takes the 'ELSE' branch of the operator directive: Scope 1 is a label-ADD prerequisite that stamps LABEL io.smackerel.lifecycle.owner=\"smackerel\" on both runtime stages (the genuine structural difference from the 3 references, whose owner labels already existed), and the smackerel-* dash-prefix name fallback is documented as explicitly-optional transitional coverage (NOT implemented as a name-based removal function). Images are named smackerel-core/smackerel-ml (dash-prefix). Plane signal is SMACKEREL_ENV (development|test|production; dev-safe allow-list {development,test}); with runtime.environment: production under --env dev, SMACKEREL_ENV stays production (config.sh only overrides test/self-hosted), which assert_dev_plane catches — the real prod-leak guard. Config is the single config/smackerel.yaml (no .template) via scripts/commands/config.sh required_value/config_key_missing fail-loud (smackerel-no-defaults; no ${VAR:-default}). clean smart is currently just smackerel_run_down false (volume-preserving compose down); the new stage runs AFTER teardown. Planned (delivery pass): label-add to 2 Dockerfiles, 3 fail-loud SST keys under cleanup: in config/smackerel.yaml, load_cleanup extension (3 required_value reads + validate_unused_image_policy + 3 CLEANUP_* emit lines) in config.sh, a NEW sourceable helper scripts/lib/cleanup-image-reclamation.sh (build_unused_image_prune_argv pure, assert_dev_plane env=prod guard on SMACKEREL_ENV, prune_unused_images_aged DRY_RUN-aware+volume/container-free+reclaimed-space log), gated wiring into the clean) smart) arm after smackerel_run_down, ./smackerel.sh --env dev clean test entrypoint intercepted before require_docker. clean full/status/measure unchanged. All scopes Not Started; all DoD unchecked; no fabricated evidence.",
     "completionReason": null,
     "policySnapshot": {
@@ -84,8 +84,8 @@
         "pendingTransitionRequests": []
     },
     "certification": {
-        "status": "in_progress",
-        "certifiedAt": null,
+        "status": "done",
+        "certifiedAt": "2026-07-19T13:17:28Z",
         "certifiedBy": "bubbles.validate",
         "ratifiedBy": "bubbles.audit",
         "ratifiedAt": "2026-07-19T18:00:00Z",
