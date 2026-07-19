@@ -490,6 +490,19 @@ PASS/FAIL, non-zero on failure):
   fail-loud loader. No new abstraction layer, no provider/adapter split — the variation axis
   (`project` vs `all`) is a single config value handled by one branch in the builder.
 
+### Single-Implementation Justification
+
+This feature is delivered as a **single concrete implementation** — one executor
+(`prune_unused_images_aged`) + one pure argv builder (`build_unused_image_prune_argv`) + one
+prod-safety guard (`assert_dev_plane`) — with **no** provider / adapter / strategy / plugin /
+channel / driver split. The only variation axis (`unused_image_scope`: `project` vs `all`) is
+a single SST config value handled by one `case` branch in the builder, not a pluggable
+foundation. No second implementation, variant, or channel exists or is planned, so a
+capability-foundation split (`## Capability Foundation` + `## Concrete Implementations` +
+`### Variation Axes`) would be premature abstraction (YAGNI). The helper reuses `runtime.sh`'s
+existing `smackerel_is_truthy` and the `config.sh` fail-loud loader rather than introducing a
+new layer.
+
 ## Out of Scope
 
 - Implementing the `smackerel-*` name-pattern fallback as executable removal — documented as
