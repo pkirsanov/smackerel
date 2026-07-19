@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +11,7 @@ from app.synthesis import (
     build_synthesis_prompt,
     enforce_validation_rules,
     load_prompt_contract,
+    resolve_synthesis_schema_repair_attempts,
     truncate_content,
     validate_extraction,
 )
@@ -113,6 +115,48 @@ VALID_EXTRACTION = {
     ],
 }
 
+CARD_REWARDS_SCHEMA_FAILURE_FIXTURE = json.loads(
+    (Path(__file__).parent / "fixtures" / "card_rewards_missing_concepts.json").read_text()
+)
+INVALID_MISSING_CONCEPTS = CARD_REWARDS_SCHEMA_FAILURE_FIXTURE["first_response"]
+CARD_REWARDS_CORRECTED_EXTRACTION = CARD_REWARDS_SCHEMA_FAILURE_FIXTURE["corrected_response"]
+SYNTHESIS_ARTIFACT_CONTENT = CARD_REWARDS_SCHEMA_FAILURE_FIXTURE["artifact"]["content_raw"]
+
+
+def _synthesis_response(content, tokens: int):
+    from unittest.mock import MagicMock
+
+    response = MagicMock()
+    response.choices = [MagicMock(message=MagicMock(content=content))]
+    response.usage = MagicMock(total_tokens=tokens)
+    response.model = "ollama_chat/qwen3:30b-a3b"
+    return response
+
+
+def _run_handle_extract(monkeypatch, effects):
+    import asyncio
+    import sys
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.synthesis import handle_extract
+
+    contracts_dir = Path(__file__).resolve().parents[2] / "config" / "prompt_contracts"
+    monkeypatch.setenv("PROMPT_CONTRACTS_DIR", str(contracts_dir))
+    mock_litellm = MagicMock()
+    mock_litellm.acompletion = AsyncMock(side_effect=effects)
+    with patch.dict(sys.modules, {"litellm": mock_litellm}):
+        result = asyncio.run(
+            handle_extract(
+                data=CARD_REWARDS_SCHEMA_FAILURE_FIXTURE["artifact"],
+                provider="ollama",
+                model="qwen3:30b-a3b",
+                api_key="",
+                ollama_url="http://ollama:11434",
+            )
+        )
+    captured = [awaited.kwargs for awaited in mock_litellm.acompletion.await_args_list]
+    return result, captured
+
 
 # --- T2-07: validate_extraction valid output → True ---
 
@@ -176,6 +220,174 @@ def test_validate_extraction_invalid_relationship_type():
     }
     valid, error_msg = validate_extraction(invalid_output, schema)
     assert valid is False
+
+
+def test_handle_extract_repairs_missing_concepts_once(monkeypatch):
+    """BUG-026-008-SCN-001: one corrective call repairs missing concepts."""
+    result, captured = _run_handle_extract(
+        monkeypatch,
+        [
+            _synthesis_response(json.dumps(INVALID_MISSING_CONCEPTS), 11),
+            _synthesis_response(json.dumps(CARD_REWARDS_CORRECTED_EXTRACTION), 13),
+        ],
+    )
+
+    assert len(captured) == 2, result
+    assert result["success"] is True
+    assert result["tokens_used"] == 24
+    assert result["result"]["concepts"][0]["name"] == "Quarterly Card Rewards"
+    assert result["trace_id"] == "trace-card-rewards-schema-repair"
+
+
+def test_handle_extract_fails_when_schema_repair_remains_invalid(monkeypatch):
+    sensitive_invalid_value = "SENSITIVE-INVALID-ENTITY-TYPE"
+    result, captured = _run_handle_extract(
+        monkeypatch,
+        [
+            _synthesis_response(json.dumps(INVALID_MISSING_CONCEPTS), 7),
+            _synthesis_response(
+                json.dumps(
+                    {
+                        "concepts": VALID_EXTRACTION["concepts"],
+                        "entities": [
+                            {
+                                "name": "Issuer",
+                                "type": sensitive_invalid_value,
+                                "context": "Card rewards issuer",
+                            }
+                        ],
+                        "relationships": [],
+                    }
+                ),
+                9,
+            ),
+        ],
+    )
+
+    assert len(captured) == 2
+    assert result["success"] is False
+    assert result["error"] == "Schema validation failed after repair: validator=enum path=$.entities[0].type"
+    assert "'concepts' is a required property" not in result["error"]
+    assert sensitive_invalid_value not in json.dumps(result)
+    assert result["tokens_used"] == 16
+    assert result["trace_id"] == "trace-card-rewards-schema-repair"
+
+
+def test_handle_extract_fails_when_schema_repair_is_malformed_json(monkeypatch):
+    sensitive_model_text = "SENSITIVE-MODEL-OUTPUT-{"
+    result, captured = _run_handle_extract(
+        monkeypatch,
+        [
+            _synthesis_response(json.dumps(INVALID_MISSING_CONCEPTS), 5),
+            _synthesis_response(sensitive_model_text, 6),
+        ],
+    )
+
+    assert len(captured) == 2
+    assert result["success"] is False
+    assert result["error"] == "LLM schema repair returned invalid JSON: JSONDecodeError"
+    assert result["tokens_used"] == 11
+    assert sensitive_model_text not in json.dumps(result)
+    assert result["trace_id"] == "trace-card-rewards-schema-repair"
+
+
+def test_handle_extract_schema_repair_exception_is_content_free(monkeypatch, caplog):
+    sensitive_error = f"SENSITIVE-REPAIR-SECRET {SYNTHESIS_ARTIFACT_CONTENT}"
+    with caplog.at_level("INFO", logger="smackerel-ml.synthesis"):
+        result, captured = _run_handle_extract(
+            monkeypatch,
+            [
+                _synthesis_response(json.dumps(INVALID_MISSING_CONCEPTS), 8),
+                RuntimeError(sensitive_error),
+            ],
+        )
+
+    assert len(captured) == 2
+    assert result["success"] is False
+    assert result["error"] == "LLM schema repair failed: RuntimeError"
+    assert result["tokens_used"] == 8
+    assert sensitive_error not in json.dumps(result)
+    assert sensitive_error not in caplog.text
+    assert SYNTHESIS_ARTIFACT_CONTENT not in caplog.text
+    assert "class=schema_validation" in caplog.text
+    assert result["trace_id"] == "trace-card-rewards-schema-repair"
+    assert any(getattr(record, "repair_class", None) == "schema_validation" for record in caplog.records)
+
+
+def test_handle_extract_valid_first_response_remains_one_call(monkeypatch):
+    result, captured = _run_handle_extract(
+        monkeypatch,
+        [_synthesis_response(json.dumps(VALID_EXTRACTION), 17)],
+    )
+
+    assert len(captured) == 1
+    assert result["success"] is True
+    assert result["tokens_used"] == 17
+    assert result["trace_id"] == "trace-card-rewards-schema-repair"
+
+
+def test_handle_extract_schema_repair_retains_profile_and_sums_tokens(monkeypatch):
+    from unittest.mock import MagicMock, patch
+
+    from prometheus_client import REGISTRY
+
+    metric_name = "smackerel_ml_synthesis_schema_repair_attempts_total"
+    before = REGISTRY.get_sample_value(metric_name) or 0
+    synthesis_clock = MagicMock()
+    synthesis_clock.time.side_effect = [100.0, 100.25]
+    with patch("app.synthesis.time", synthesis_clock):
+        result, captured = _run_handle_extract(
+            monkeypatch,
+            [
+                _synthesis_response(json.dumps(INVALID_MISSING_CONCEPTS), 19),
+                _synthesis_response(json.dumps(VALID_EXTRACTION), 23),
+            ],
+        )
+    after = REGISTRY.get_sample_value(metric_name)
+
+    assert len(captured) == 2
+    assert result["success"] is True
+    assert result["tokens_used"] == 42
+    assert result["processing_time_ms"] == 250
+    assert after == before + 1
+
+    first, repair = captured
+    for request in (first, repair):
+        assert request["model"] == "ollama_chat/qwen3:30b-a3b"
+        assert request["temperature"] == 0.3
+        assert request["max_tokens"] == 2000
+        assert request["response_format"] == {"type": "json_object"}
+        assert request["think"] is False
+        assert request["keep_alive"] == "30m"
+        assert request["options"]["num_ctx"] == 32768
+
+    assert repair["messages"][: len(first["messages"])] == first["messages"]
+    assert SYNTHESIS_ARTIFACT_CONTENT in first["messages"][1]["content"]
+    assert repair["messages"][-2] == {
+        "role": "assistant",
+        "content": json.dumps(INVALID_MISSING_CONCEPTS),
+    }
+    assert "'concepts' is a required property" in repair["messages"][-1]["content"]
+    assert '"required"' in repair["messages"][-1]["content"]
+    assert "do not substitute empty values for required semantic content" in repair["messages"][-1]["content"]
+    assert "trace-card-rewards-schema-repair" not in json.dumps(first["messages"])
+    assert "trace-card-rewards-schema-repair" not in json.dumps(repair["messages"])
+
+
+@pytest.mark.parametrize("value", [None, "", " ", "zero", "0", "2", "-1"])
+def test_schema_repair_budget_fails_loud_unless_exactly_one(monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", raising=False)
+    else:
+        monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", value)
+
+    with pytest.raises(RuntimeError):
+        resolve_synthesis_schema_repair_attempts()
+
+
+def test_schema_repair_budget_accepts_exactly_one(monkeypatch):
+    monkeypatch.setenv("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")
+    assert resolve_synthesis_schema_repair_attempts() == 1
 
 
 # --- T2-09: SynthesisConsumer builds prompt with existing concepts context ---

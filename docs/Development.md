@@ -202,6 +202,25 @@ Rules:
 - Generated files are derived artifacts, never hand-edited sources of truth.
 - Missing required config must fail loudly.
 
+### Synthesis Schema Repair SST
+
+The ML synthesis handler permits one corrective model call when the first
+response is valid JSON but violates the selected prompt contract's
+`extraction_schema`. The retry policy is explicit and bounded:
+
+| YAML path | Generated env var | Required value | Runtime purpose |
+|---|---|---:|---|
+| `services.ml.synthesis_schema_repair_attempts` | `ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS` | `1` | Allows exactly one schema-guided correction before returning an explicit terminal synthesis failure. |
+
+`scripts/commands/config.sh` emits the value into generated development, test,
+and deployment environment contracts. `ml/app/main.py` validates it at startup,
+and `ml/app/synthesis.py` validates it again before any extraction request. A
+missing, empty, non-integer, zero, or value above one fails loudly; there is no
+code fallback and no indefinite retry. The corrective request reuses the
+original artifact prompt and Ollama request profile, while outward terminal
+errors expose only failure class and JSON Schema path, never model output or
+artifact content.
+
 ### Notification Intelligence SST (Spec 054)
 
 The source-neutral notification intelligence handler is configured only through

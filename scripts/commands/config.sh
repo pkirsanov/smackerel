@@ -760,6 +760,11 @@ ML_STRUCTURED_EXTRACTION_THINKING="$(required_value services.ml.structured_extra
 # ml/app/processor.py + ml/app/synthesis.py.
 ML_DOMAIN_OUTPUT_TOKEN_BUDGET="$(required_value services.ml.domain_output_token_budget)"
 
+# BUG-026-008 — bounded corrective call budget for parsed-but-schema-invalid
+# synthesis output. Required SST value, read fail-loud by the ML sidecar; the
+# supported contract is exactly one repair attempt with no code fallback.
+ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS="$(required_value services.ml.synthesis_schema_repair_attempts)"
+
 # Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope + ML model
 # memory profile extraction. Every key is required (fail-loud SST). The
 # memory limit values are emitted both with their `compose-style` string
@@ -2665,6 +2670,7 @@ ML_LOG_LEVEL=${ML_LOG_LEVEL}
 ML_OLLAMA_KEEP_ALIVE=${ML_OLLAMA_KEEP_ALIVE}
 ML_STRUCTURED_EXTRACTION_THINKING=${ML_STRUCTURED_EXTRACTION_THINKING}
 ML_DOMAIN_OUTPUT_TOKEN_BUDGET=${ML_DOMAIN_OUTPUT_TOKEN_BUDGET}
+ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS=${ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS}
 KNOWLEDGE_ENABLED=${KNOWLEDGE_ENABLED}
 KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS=${KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS}
 KNOWLEDGE_LINT_CRON=${KNOWLEDGE_LINT_CRON}
