@@ -66,6 +66,18 @@
       "status": "open"
     },
     {
+      "id": "TR-026-008-TEST-003",
+      "requestedAt": "2026-07-19T13:47:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.test",
+      "reason": "The repo CLI Python unit lane collects two explicit opt-in live tests as skips. Every changed BUG-026-008 test executes, but a literal zero-skip certification needs a supported required-test selector or category isolation owned by test infrastructure.",
+      "packetRef": "report.md#post-rebase-combined-head-verification",
+      "routedTo": "bubbles.test",
+      "status": "open"
+    },
+    {
       "id": "TR-026-008-QUALITY-001",
       "requestedAt": "2026-07-19T13:14:00Z",
       "requestedBy": "bubbles.bug",
