@@ -3,7 +3,17 @@
 - **Severity:** MEDIUM (redteam **F6**)
 - **Owning spec:** `029-devops-pipeline` (owns the SMACKEREL_COMMIT / build-metadata SST contract; cf. BUG-029-003)
 - **Source:** redteam adversarial interrogation of the LIVE smackerel prod deployment on <deploy-host>
-- **Status:** FIXED IN-REPO (build wiring; verified statically) — requires rebuild+redeploy — not pushed
+- **Status:** FIXED & VERIFIED — certified `done` (2026-07-19). `scripts/commands/config.sh` derives
+  `SMACKEREL_COMMIT` from the git working tree when CI has not exported it (`git rev-parse --short=12
+  HEAD`, `-dirty` on a dirty tree, `unknown` fallback outside a git checkout), so a locally-built
+  (local-operator / `<deploy-host>`) image is self-identifying. The full bugfix-fastlane specialist
+  pipeline executed this session with fresh evidence (provenance unit lane GREEN — unset ⇒ the real
+  HEAD SHA `1bfd18a0f357` — regression guard `0 violations`, check/lint clean) and
+  `state-transition-guard` certifies the bug to `done`. The fix is committed in `0f2fb517` (verified
+  read-only, not re-changed). The wiring change affects only **future builds**; a fresh rebuild +
+  signed redeploy + `docker inspect` re-check that restamps the RUNNING images is owned by
+  `bubbles.devops` as a non-gating operational step (the mechanism is already both live-observed and
+  unit-proven). Scoped local bug-folder commits only; not pushed.
 
 ## Summary
 

@@ -1,0 +1,69 @@
+{
+    "version": 1,
+    "featureDir": "specs/029-devops-pipeline/bugs/BUG-029-008-build-commit-provenance-unknown",
+    "generatedAt": "2026-07-19T00:00:00Z",
+    "scenarios": [
+        {
+            "scenarioId": "BUG-029-008-SCN-001",
+            "scope": "scope-1-git-derive-smackerel-commit-for-local-operator-builds",
+            "title": "Local-operator build derives the real source SHA when CI has not exported it",
+            "gherkin": {
+                "given": "SMACKEREL_COMMIT is unset (the local-operator / <deploy-host> build path with no CI env) and config generate runs inside a git checkout",
+                "when": "scripts/commands/config.sh resolves build metadata into config/generated/dev.env",
+                "then": "dev.env carries a real 12-hex git SHA (optionally -dirty), never the literal 'unknown' (adversarial: fails if the git-derivation arm is reverted to SMACKEREL_COMMIT=\"unknown\")"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "internal/config/sst_loader_build_commit_provenance_test.go",
+                    "testId": "TestSSTLoader_BuildCommitProvenance_BUG029008"
+                },
+                {
+                    "file": "scripts/commands/config_build_commit_provenance_test.sh",
+                    "testId": "sub-test-1-unset-emits-real-git-sha"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-029-008-SCN-002",
+            "scope": "scope-1-git-derive-smackerel-commit-for-local-operator-builds",
+            "title": "CI / shell-env SMACKEREL_COMMIT export precedence is preserved",
+            "gherkin": {
+                "given": "SMACKEREL_COMMIT=<sentinel> is exported (the CI build path) before config generate runs",
+                "when": "scripts/commands/config.sh resolves build metadata into config/generated/dev.env",
+                "then": "dev.env carries the exported sentinel verbatim (the git-derivation arm must run ONLY when SMACKEREL_COMMIT is unset, so a CI export always wins)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "internal/config/sst_loader_build_commit_provenance_test.go",
+                    "testId": "TestSSTLoader_BuildCommitProvenance_BUG029008"
+                },
+                {
+                    "file": "scripts/commands/config_build_commit_provenance_test.sh",
+                    "testId": "sub-test-2-exported-sentinel-preserved"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        }
+    ]
+}
