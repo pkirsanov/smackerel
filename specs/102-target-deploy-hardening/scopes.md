@@ -246,8 +246,8 @@ foundation, so no new cross-scope overlay dependency is introduced.
 | --- | --- | --- | --- | --- | --- | --- |
 | 01 | ML-sidecar compute-only secret isolation `foundation:true` | smackerel | `config/smackerel.yaml`, `scripts/commands/config.sh`, `deploy/compose.deploy.yml`, `scripts/lint/python-compute-only-guard.sh`(+`.allowlist`+selftest), `smackerel.sh` pre-push, `.github/workflows/ci.yml`, `internal/deploy/*_contract_test.go` | functional bundle projection, **guard selftest** (secret/driver/URL/bypass failures), network contract, security F1 credential-suffix regression | `ml.env` excludes managed/data credentials; guard is wired; data/compute tiers are separated | [x] Done |
 | 02 | Durable Prometheus→Alertmanager→ntfy routing | smackerel + knb | product bundle/compose/bridge plus exact knb paths in the ownership table | **functional bundle/re-extract/no-literal contracts**, unit bridge templating, security F2 topology contract, security F3 adapter-output hygiene | durable routing and templating contracts; endpoint remains adapter-owned; standup retired | [x] Done |
-| 03 | Model-envelope correctness + BUG-026-006 | smackerel | `config/smackerel.yaml`, `internal/config/**`, all 13 Python Ollama request builders + shared request-profile applicator, `docs/Operations.md`, BUG-026-006/007 | **13 builder payload units + inventory guard + fail-loud profile/adapters**, existing KV-math/uncapped/posture and SST output-budget units | every Ollama builder is capped fail-loud; hosted branches stay clean; Go remains typed-only | [~] Implemented and tested; validation pending |
-| 04 | Backup-adapter durability formalization | knb (+ product schema parity) | exact adapter tests plus product `internal/backup/status_test.go` | **functional degraded/root-manifest/status regressions**, apply contract, product schema unit, canonical wrapper | F-1/F-2/F-3 are locked; canonical wrapper is green | [~] Implemented and tested; validation pending |
+| 03 | Model-envelope correctness + BUG-026-006 | smackerel | `config/smackerel.yaml`, `internal/config/**`, all 13 Python Ollama request builders + shared request-profile applicator, `docs/Operations.md`, BUG-026-006/007 | **13 builder payload units + inventory guard + fail-loud profile/adapters**, existing KV-math/uncapped/posture and SST output-budget units | every Ollama builder is capped fail-loud; hosted branches stay clean; Go remains typed-only | [x] Done |
+| 04 | Backup-adapter durability formalization | knb (+ product schema parity) | exact adapter tests plus product `internal/backup/status_test.go` | **functional degraded/root-manifest/status regressions**, apply contract, product schema unit, canonical wrapper | F-1/F-2/F-3 are locked; canonical wrapper is green | [x] Done |
 
 ---
 
@@ -614,7 +614,7 @@ contract + bridge test + operator-gated live delivery), per env-pollution isolat
 
 ## SCOPE-102-03 — Model-envelope correctness + BUG-026-006
 
-**Status:** Implemented and tested; validation pending (2026-07-11)
+**Status:** Done (2026-07-19)
 **Tags:** `concern:3` · `repo:smackerel` · `bug:BUG-026-006` · `foundation:true`
 **Depends On:** SCOPE-102-02 done (independent surface; sequenced for scope isolation).
 
@@ -930,11 +930,14 @@ Python source/test paths in the Change Boundary, and `docs/Operations.md`.
 
 ## SCOPE-102-04 — Backup-adapter durability formalization
 
-**Status:** Implemented and tested; validation pending (2026-07-11)
-**Planning status basis:** all in-scope DoD items are checked, and the test-phase
-closure records the canonical knb wrapper at `113 tests, 0 failures`, `6 tests,
-0 failures`, plus `status_verify_fixture_test.sh OK`. Validation remains pending;
-this planning reconciliation does not certify the scope.
+**Status:** Done (2026-07-19)
+**Certification basis:** all in-scope DoD items are checked with real evidence; the
+product-side `internal/backup` schema-parity unit passes in this session's Go lane
+(`ok  github.com/smackerel/smackerel/internal/backup`), and the canonical knb wrapper
+is recorded at `113 tests, 0 failures`, `6 tests, 0 failures`, plus
+`status_verify_fixture_test.sh OK`. The knb-repo reconcile/push (R-102-C) is a
+NON-GATING operator handoff on the adapter side; the in-repo product surface needs
+zero further smackerel code.
 **Tags:** `concern:4` · `repo:knb` (+ product schema parity) · `test-formalization`
 **Depends On:** SCOPE-102-03 done (independent knb-adapter surface; sequenced last as
 lowest-risk test-only work).

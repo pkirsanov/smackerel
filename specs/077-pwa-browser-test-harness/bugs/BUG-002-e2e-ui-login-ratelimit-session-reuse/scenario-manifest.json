@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "featureDir": "specs/077-pwa-browser-test-harness/bugs/BUG-002-e2e-ui-login-ratelimit-session-reuse",
+  "parentFeatureDir": "specs/077-pwa-browser-test-harness",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-077-BUG-002-01",
+      "scope": "scope-1-worker-scoped-login-session-reuse",
+      "title": "login POSTs once per worker, then reuses the cached session",
+      "gherkin": {
+        "given": "a Playwright worker that has already performed one /v1/web/login POST",
+        "when": "a later test in the same worker calls the shared login(page)",
+        "then": "login() does NOT POST /v1/web/login again and it replays the cached auth_token cookie onto the new context via addCookies"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "test-infrastructure",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "web/pwa/tests/_support/cardrewards_login_session_reuse.test.ts",
+          "testId": "SCN-077-BUG-002-01 — login POSTs once per worker, then reuses the cached session"
+        },
+        {
+          "file": "web/pwa/tests/cardrewards_wallet.spec.ts",
+          "testId": "card-rewards suite authenticates without 429 (live e2e-ui)"
+        }
+      ],
+      "evidenceRefs": ["report.md#e2e-ui-live-run", "report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-077-BUG-002-02",
+      "scope": "scope-1-worker-scoped-login-session-reuse",
+      "title": "no cardrewards spec reintroduces a per-test login POST",
+      "gherkin": {
+        "given": "the card-rewards e2e-ui spec corpus",
+        "when": "the regression scans every cardrewards_*.spec.ts",
+        "then": "none of them contain their own page.request.post(\"/v1/web/login\") and all card-rewards login flows route through the shared cached helper"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "test-infrastructure",
+      "changeType": "regression",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "web/pwa/tests/_support/cardrewards_login_session_reuse.test.ts",
+          "testId": "SCN-077-BUG-002-02 — no cardrewards spec reintroduces a per-test /v1/web/login POST"
+        }
+      ],
+      "evidenceRefs": ["report.md#phase-regression", "report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

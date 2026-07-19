@@ -17,8 +17,8 @@ The ML NATS consumer routes valid `synthesis.crosssource` responses through the 
 - [x] Confirmed (source path and accepted live reproduction facts)
 - [x] In Progress
 - [x] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Verified (focused RED→GREEN and live integration paths; landed at `8cd13fff`)
+- [ ] Closed (broad E2E revalidation and certification are pending on the consolidated source)
 
 ## Reproduction Steps
 
