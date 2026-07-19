@@ -791,6 +791,16 @@ func (d *Dependencies) webAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		slog.Warn("web auth failure", "path", r.URL.Path, "remote_addr", r.RemoteAddr)
+		// A top-level browser navigation (GET/HEAD, non-HTMX, Accept: text/html)
+		// gets a 303 to /login?next=… so an unauthenticated visitor lands on the
+		// login page instead of a bare 401 body — identical content-negotiation to
+		// bearerAuthMiddleware (spec 057, via isBrowserNavigation/redirectToLogin).
+		// HTMX/XHR/API/curl callers still receive 401, preserving the wire contract
+		// asserted by the router tests and the knb caddy acceptance probe.
+		if isBrowserNavigation(r) {
+			redirectToLogin(w, r)
+			return
+		}
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	})
 }
