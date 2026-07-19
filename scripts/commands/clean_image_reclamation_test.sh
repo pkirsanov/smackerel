@@ -358,6 +358,7 @@ test_guard_allows_dev() {
 # docker stub proves non-invocation).
 test_dry_run_no_exec() {
   local out
+  # shellcheck disable=SC2317  # shadow stub invoked INDIRECTLY by prune_unused_images_aged; proves non-invocation under DRY_RUN
   docker() { echo "DOCKER_STUB_INVOKED $*"; }
   out="$(SMACKEREL_ENV=development DRY_RUN=true prune_unused_images_aged 48 project 2>&1)"
   unset -f docker

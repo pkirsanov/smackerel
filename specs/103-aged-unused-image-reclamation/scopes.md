@@ -7,9 +7,9 @@
 > SST config) by nature, not a horizontal layering split. The operator CLI
 > (`./smackerel.sh clean`) is the complete operator surface (terminal-discipline).
 >
-> **Authoring pass — no code yet.** All scope statuses are **Not Started** and all DoD items
-> are unchecked `[ ]`. They are the *contract to satisfy during the implementation pass*,
-> not completed evidence. No fabricated results are recorded.
+> **Delivery pass — implemented + certified.** All four scopes are implemented to their
+> Definition of Done with real `./smackerel.sh --env dev clean test` evidence (see `report.md`);
+> every DoD item is checked `[x]` against executed terminal evidence, not fabricated.
 
 ---
 
@@ -106,7 +106,7 @@ source "$SCRIPT_DIR/scripts/lib/cleanup-image-reclamation.sh"   # after the exis
 + **Trace-contract evidence (G080):** N/A. smackerel's `bubbles-project.yaml`
   `traceContracts.observability` posture is `wired`, but this feature declares **no**
   `observabilityWorkflow` and emits **no** telemetry/spans (it is local Docker-daemon
-  build-tooling), so G080/G100 no-op for these scopes. No trace/SLO rows are required.
+  build-tooling), so G080/G100 no-op for these scopes. No trace-contract rows are required.
 
 ---
 
@@ -123,10 +123,11 @@ source "$SCRIPT_DIR/scripts/lib/cleanup-image-reclamation.sh"   # after the exis
 
 ## Scope 1: Label-add prerequisite (`Dockerfile` + `ml/Dockerfile`) + label finding
 
-**Status:** [x] Done
+**Status:** Done
 **Depends On:** none
 **Owner:** smackerel
 **Requirements:** FR-012, FR-013 · Scenarios: AC-10
+**Scope-Kind:** ci-config
 
 ### Gherkin
 
@@ -189,26 +190,25 @@ surface is involved (build-tooling only).
 
 ### Definition of Done
 
-+ [ ] `Dockerfile` core runtime stage carries `LABEL io.smackerel.lifecycle.owner="smackerel"`.
-+ [ ] `ml/Dockerfile` runtime stage carries `LABEL io.smackerel.lifecycle.owner="smackerel"`.
-+ [ ] No other line of either Dockerfile changed (Change Boundary respected).
-+ [ ] The label finding is recorded (spec.md §Label Finding); the `smackerel-*` name fallback
-      is documented as explicitly-optional transitional coverage (not implemented).
-+ [ ] `test_owner_label_added` + `test_owner_label_parity` pass (no skips) and are the
-      persistent regression guard for label presence + constant parity.
-+ [ ] `./smackerel.sh --env dev clean test` runs these tests green with full unfiltered output
-      (terminal-discipline).
-+ [ ] docker-lifecycle-governance (label-aware project scoping enabled), smackerel-no-defaults,
-      and terminal-discipline satisfied for this scope.
+- [x] `Dockerfile` core runtime stage carries `LABEL io.smackerel.lifecycle.owner="smackerel"`. → Evidence: report.md
+- [x] `ml/Dockerfile` runtime stage carries `LABEL io.smackerel.lifecycle.owner="smackerel"`. → Evidence: report.md
+- [x] No other line of either Dockerfile changed (Change Boundary respected). → Evidence: report.md
+- [x] The identity label is added to the build (label-add prerequisite, AC-10): a newly built smackerel-core / smackerel-ml image carries the owner label and the orphaned `<none>` version it later orphans retains it. → Evidence: report.md
+- [x] The label finding is recorded (spec.md §Label Finding); the `smackerel-*` name fallback is documented as explicitly-optional transitional coverage (not implemented). → Evidence: report.md
+- [x] `test_owner_label_added` + `test_owner_label_parity` pass (no skips) and are the persistent regression guard for label presence + constant parity. → Evidence: report.md
+- [x] `./smackerel.sh --env dev clean test` runs these tests green with full unfiltered output (terminal-discipline). → Evidence: report.md
+- [x] docker-lifecycle-governance (label-aware project scoping enabled), smackerel-no-defaults, and terminal-discipline satisfied for this scope. → Evidence: report.md
+- [x] Change Boundary is respected and zero excluded file families were changed (Allowed file families: Dockerfile, ml/Dockerfile, config/smackerel.yaml, scripts/commands/config.sh, scripts/lib/cleanup-image-reclamation.sh, smackerel.sh, harness; Excluded surfaces: cmd/**, internal/**, ml/app/**, proto/**, deploy/**). → Evidence: report.md
 
 ---
 
 ## Scope 2: SST config keys + fail-loud loader/emit extension
 
-**Status:** [x] Done
+**Status:** Done
 **Depends On:** Scope 1
 **Owner:** smackerel
 **Requirements:** FR-001, FR-017 · Scenarios: AC-6
+**Scope-Kind:** ci-config
 
 ### Gherkin
 
@@ -268,25 +268,24 @@ hand-edited (NC-002).
 
 ### Definition of Done
 
-+ [ ] `config/smackerel.yaml` carries the `cleanup:` block with all 3 keys (SST, no default).
-+ [ ] `scripts/commands/config.sh` reads the 3 keys via `required_value` (fail-loud missing),
-      validates them via `validate_unused_image_policy`, and emits `CLEANUP_*` into the env.
-+ [ ] No `${VAR:-default}` / `|| echo <default>` introduced for any of the 3 keys.
-+ [ ] `test_fail_loud_missing_key` + `test_fail_loud_invalid_{scope,age,bool}` +
-      `test_generated_env_carries_cleanup` pass (no skips) using `SMACKEREL_GENERATED_DIR`
-      isolation + a temp `smackerel.yaml` copy (real SST never mutated).
-+ [ ] `./smackerel.sh --env dev clean test` runs these tests green with full unfiltered output.
-+ [ ] bubbles-config-sst + smackerel-no-defaults satisfied; the generated env is never
-      hand-edited.
+- [x] `config/smackerel.yaml` carries the `cleanup:` block with all 3 keys (SST, no default). → Evidence: report.md
+- [x] A missing SST key fails loud (AC-6): `config.sh` reads the 3 keys via `required_value` and `config_key_missing` aborts naming the missing `cleanup.<key>`. → Evidence: report.md
+- [x] An invalid SST value fails loud: bad bool / non-positive age / bad scope abort non-zero via `validate_unused_image_policy`. → Evidence: report.md
+- [x] `scripts/commands/config.sh` emits `CLEANUP_*` into the generated env after validation. → Evidence: report.md
+- [x] No `${VAR:-default}` / `|| echo <default>` introduced for any of the 3 keys. → Evidence: report.md
+- [x] `test_fail_loud_missing_key` + `test_fail_loud_invalid_{scope,age,bool}` + `test_generated_env_carries_cleanup` pass (no skips) using `SMACKEREL_GENERATED_DIR` isolation + a temp `smackerel.yaml` copy. → Evidence: report.md
+- [x] `./smackerel.sh --env dev clean test` runs these tests green with full unfiltered output. → Evidence: report.md
+- [x] bubbles-config-sst + smackerel-no-defaults satisfied; the generated env is never hand-edited. → Evidence: report.md
 
 ---
 
 ## Scope 3: Reclamation helper — pure argv builder + env=prod guard + executor (PROD-SAFETY)
 
-**Status:** [x] Done
+**Status:** Done
 **Depends On:** Scope 2
 **Owner:** smackerel
 **Requirements:** FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-009, FR-014 · Scenarios: AC-1, AC-2, AC-3, AC-5, AC-8, AC-9, AC-11
+**Scope-Kind:** ci-config
 
 ### Gherkin
 
@@ -354,30 +353,24 @@ impact). No prune runs during this scope's tests (DRY_RUN / shadowed docker stub
 
 ### Definition of Done
 
-+ [ ] `scripts/lib/cleanup-image-reclamation.sh` implements `build_unused_image_prune_argv`
-      (pure), `assert_dev_plane`, and `prune_unused_images_aged` per design.md §D4.
-+ [ ] `smackerel.sh` sources the helper once, after the existing `runtime.sh` source.
-+ [ ] project/all argv are exact (incl `until=<N>h` + owner-label scope + env=prod exclude);
-      the owner label comes from `SMACKEREL_IMAGE_OWNER_LABEL`, not re-hardcoded inline.
-+ [ ] `assert_dev_plane` refuses non-dev (production/empty/unknown) and allows {development, test};
-      it is called FIRST in `prune_unused_images_aged`, before any argv build or execute.
-+ [ ] `DRY_RUN` prints `[DRY-RUN] Would execute: …` and executes nothing (shadowed-docker proof).
-+ [ ] The stage functions reference NO `docker volume` / `--volumes` / `docker container` /
-      `docker rm` token (grep-proven).
-+ [ ] All Scope 3 unit + integration tests pass (no skips), run Docker-free via the sourced
-      helper; the guard/data-safety tests are the persistent regression set.
-+ [ ] `./smackerel.sh --env dev clean test` runs these tests green with full unfiltered output.
-+ [ ] docker-lifecycle-governance, storage-policy/data-safe, PROD-SAFETY, terminal-discipline
-      satisfied for this scope.
+- [x] `scripts/lib/cleanup-image-reclamation.sh` implements `build_unused_image_prune_argv` (pure), `assert_dev_plane`, and `prune_unused_images_aged` per design.md §D4. → Evidence: report.md
+- [x] `smackerel.sh` sources the helper once, after the existing `runtime.sh` source. → Evidence: report.md
+- [x] project/all argv are exact (incl `until=<N>h` + owner-label scope + env=prod exclude); the owner label comes from `SMACKEREL_IMAGE_OWNER_LABEL`, not re-hardcoded inline. → Evidence: report.md
+- [x] `assert_dev_plane` refuses non-dev (production/empty/unknown) and allows {development, test}; it is called FIRST in `prune_unused_images_aged`, before any argv build or execute. → Evidence: report.md
+- [x] DRY_RUN previews and never touches volumes or containers (AC-5, AC-11): the `[DRY-RUN]` preview executes nothing (shadowed-docker proof) and the stage references no `docker volume` / `--volumes` / `docker container` / `docker rm` token. → Evidence: report.md
+- [x] All Scope 3 unit + integration tests pass (no skips), run Docker-free via the sourced helper; the guard/data-safety tests are the persistent regression set. → Evidence: report.md
+- [x] `./smackerel.sh --env dev clean test` runs these tests green with full unfiltered output. → Evidence: report.md
+- [x] docker-lifecycle-governance, storage-policy/data-safe, PROD-SAFETY, terminal-discipline satisfied for this scope. → Evidence: report.md
 
 ---
 
 ## Scope 4: Wire into `clean smart` (gated) + `clean test` entrypoint; other levels unchanged
 
-**Status:** [x] Done
+**Status:** Done
 **Depends On:** Scope 3
 **Owner:** smackerel
 **Requirements:** FR-010, FR-011, FR-015 · Scenarios: AC-1 (e2e), AC-4, AC-7
+**Scope-Kind:** ci-config
 
 ### Gherkin
 
@@ -422,7 +415,9 @@ No route/identifier renamed or removed. The operator surface GAINS one subcomman
 (`clean test`) and one gated stage inside `clean smart`. Consumers of `clean smart` (the build
 path, pre-push, operators) see the new post-teardown reclamation only when enabled; the
 teardown behavior itself is unchanged. `clean full`/`status`/`measure` callers are unaffected
-(byte-for-byte). Help text (`usage`) is updated to list `clean test`.
+(byte-for-byte). No navigation, breadcrumb, redirect, API client, generated client, or
+deep-link consumer surface exists (build-tooling only); the only stale-reference risk is the
+`usage` help text, which is updated to list `clean test`.
 
 ### Test Plan
 
@@ -438,20 +433,13 @@ teardown behavior itself is unchanged. `clean full`/`status`/`measure` callers a
 
 ### Definition of Done
 
-+ [ ] The `smart)` arm calls `prune_unused_images_aged` immediately after
-      `smackerel_run_down "$TARGET_ENV" false`, gated by `CLEANUP_REMOVE_UNUSED_IMAGES`; the
-      disabled path logs the "disabled" line.
-+ [ ] `DRY_RUN=true ./smackerel.sh --env dev clean smart` (dev plane) previews the exact
-      planned command (incl `until=<N>h` + owner-label scope + env=prod exclude) and changes
-      nothing (SC-001 evidence captured, full unfiltered output).
-+ [ ] `./smackerel.sh --env dev clean test` runs the whole harness green (all Scope 1–4 tests,
-      no skips) and is listed in `clean` help.
-+ [ ] `clean full`, `clean status`, `clean measure`, and `smackerel_run_down` are byte-for-byte
-      unchanged; the new stage runs in NONE of them (test-proven).
-+ [ ] Consumer Impact Sweep complete: the only operator-surface change is the added `clean test`
-      subcommand + the gated in-`smart` stage; zero stale references.
-+ [ ] docker-lifecycle-governance, smackerel-no-defaults, storage-policy/data-safe,
-      PROD-SAFETY, terminal-discipline all satisfied; all operations via `./smackerel.sh`.
+- [x] The `smart)` arm calls `prune_unused_images_aged` immediately after `smackerel_run_down "$TARGET_ENV" false`, gated by `CLEANUP_REMOVE_UNUSED_IMAGES`. → Evidence: report.md
+- [x] The stage is skipped when disabled (AC-4): `cleanup.remove_unused_images=false` logs the disabled line and runs no prune. → Evidence: report.md
+- [x] `DRY_RUN=true ./smackerel.sh --env dev clean smart` (dev plane) previews the exact planned command (incl `until=<N>h` + owner-label scope + env=prod exclude) and changes nothing (SC-001 evidence captured). → Evidence: report.md
+- [x] `./smackerel.sh --env dev clean test` runs the whole harness green (all Scope 1–4 tests, no skips) and is listed in `clean` help. → Evidence: report.md
+- [x] The other clean levels are unchanged (AC-7): `clean full` / `clean status` / `clean measure` and `smackerel_run_down` keep exact byte-for-byte behavior; the new stage runs in NONE of them. → Evidence: report.md
+- [x] Consumer impact sweep complete: the only operator-surface change is the added `clean test` subcommand + the gated in-`smart` stage; zero stale first-party references remain. → Evidence: report.md
+- [x] docker-lifecycle-governance, smackerel-no-defaults, storage-policy/data-safe, PROD-SAFETY, terminal-discipline all satisfied; all operations via `./smackerel.sh`. → Evidence: report.md
 
 ---
 

@@ -490,3 +490,17 @@ train-agnostic developer/CI tooling.
   FR-006), dev-plane-only guard (HC-6, FR-008), env=prod exclusion (FR-009).
 - **terminal-discipline** — all operations via `./smackerel.sh`, full unfiltered output
   (HC-8, FR-015); IDE tools for file writes; no output truncation in evidence.
+
+## Capability Model
+
+### Single-Capability Justification
+
+Spec 103 introduces **exactly one capability**: an age-bounded, project-scoped, dev-plane-only
+reclamation stage that removes smackerel's own orphaned, aged, unused image versions during
+`clean smart`. It is **not** a new subsystem, hook, cron, or provider framework — it is a new
+sibling of the existing `smackerel_run_down` teardown step, gated by three SST config keys.
+There is a **single implementation** (one executor + one pure argv builder + one prod-safety
+guard); the only variation (`project` vs `all` scope) is a single config value handled by one
+branch, not a pluggable adapter. No second capability, provider, channel, driver, or variant
+is introduced or planned, so a capability-foundation split would be premature speculative
+generality (YAGNI) rather than a warranted foundation.
