@@ -547,6 +547,85 @@ class TestProcessContentErrors:
         assert result["result"]["artifact_type"] == "recipe"
         assert result["result"]["title"] == "Pizza Dough"
 
+    def test_none_llm_content_uses_sst_gated_degraded_fallback(self, monkeypatch):
+        """redteam F2 / BUG-026-006 adversarial regression: an EMPTY / None LLM
+        message content (some Ollama-served models return content=None on an
+        overrun/aborted generation) preserves the capture via the SST-gated
+        degraded fallback instead of hard-dropping it.
+
+        FAILS against the pre-completion code, whose _parse_llm_json(None) raised
+        a TypeError (json.loads(None)) that bypassed the except-JSONDecodeError
+        degraded-fallback branch and fell through to the generic "LLM processing
+        failed" hard drop (the TypeError is not an unavailable-LLM error, so the
+        unavailable-branch fallback did not catch it either).
+        """
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "true")
+        message = MagicMock()
+        # Model returned no content at all (None), not even an empty string.
+        message.content = None
+        choice = MagicMock()
+        choice.message = message
+        mock_response = MagicMock()
+        mock_response.choices = [choice]
+        mock_response.usage = None
+
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+
+            result = asyncio.run(
+                process_content(
+                    content="A meaningful capture the model returned empty for.",
+                    content_type="article",
+                    source_id="s",
+                    processing_tier="standard",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is True
+        assert result["model_used"] == "fallback"
+        assert result["result"]["topics"] == ["degraded-fallback-malformed-json"]
+        assert result["result"]["artifact_type"] == "article"
+        # The capture is preserved: the title is derived from the raw content,
+        # not dropped.
+        assert result["result"]["title"] == "A meaningful capture the model returned empty for."
+
+    def test_none_llm_content_hard_fails_when_fallback_disabled(self, monkeypatch):
+        """SST-gate integrity: when the degraded fallback is DISABLED, a None /
+        empty LLM content still returns a hard error (no silent success) and is
+        classified as the same Invalid-JSON failure as a truncated payload —
+        never the opaque generic "LLM processing failed"."""
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+        message = MagicMock()
+        message.content = None
+        choice = MagicMock()
+        choice.message = message
+        mock_response = MagicMock()
+        mock_response.choices = [choice]
+        mock_response.usage = None
+
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+
+            result = asyncio.run(
+                process_content(
+                    content="x",
+                    content_type="article",
+                    source_id="s",
+                    processing_tier="standard",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is False
+        assert "Invalid JSON" in result["error"]
+
     def test_total_llm_failure_returns_error(self, monkeypatch):
         """LLM connection failures fail when degraded fallback is disabled."""
         monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
