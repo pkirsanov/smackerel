@@ -8,12 +8,12 @@
   "severity": "high",
   "source": "redteam-adversarial-interrogation (live <deploy-host> prod, both models WARM)",
   "owningSpec": "026-domain-extraction",
-  "status": "in_progress",
+  "status": "done",
   "releaseTrain": "mvp",
   "workflowMode": "bugfix-fastlane",
   "flagsIntroduced": [],
-  "certifiedAt": null,
-  "certifiedBy": null,
+  "certifiedAt": "2026-07-19T09:11:47Z",
+  "certifiedBy": "bubbles.validate",
   "redeployRequired": true,
   "parentContext": {
     "parentSpec": "specs/026-domain-extraction",
@@ -169,7 +169,7 @@
     }
   ],
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "certificationReadiness": "certified",
     "completedScopes": ["1"],
     "certifiedCompletedPhases": [
@@ -183,7 +183,7 @@
       "audit"
     ],
     "certifierAgent": "bubbles.validate",
-    "certifiedAt": null,
+    "certifiedAt": "2026-07-19T09:11:47Z",
     "auditorAgent": "bubbles.audit",
     "auditedAt": "2026-07-19",
     "auditVerdict": "pass",
