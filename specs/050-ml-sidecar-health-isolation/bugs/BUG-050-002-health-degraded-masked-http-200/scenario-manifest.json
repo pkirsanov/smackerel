@@ -1,0 +1,115 @@
+{
+    "version": 1,
+    "featureDir": "specs/050-ml-sidecar-health-isolation/bugs/BUG-050-002-health-degraded-masked-http-200",
+    "generatedAt": "2026-07-19T00:00:00Z",
+    "scenarios": [
+        {
+            "scenarioId": "BUG-050-002-SCN-001",
+            "scope": "scope-1-ml-health-opt-in-strict-degraded-503",
+            "title": "A degraded ML sidecar surfaces 503 on the opt-in ?strict path",
+            "gherkin": {
+                "given": "the ML sidecar is degraded (NATS disconnected) so GET /health computes status:degraded (the live prod condition the redteam observed with HTTP 200)",
+                "when": "an operator / monitoring caller opts in with GET /health?strict=true",
+                "then": "the sidecar returns HTTP 503 with body status:degraded, so a status-code-only consumer sees the degraded state (adversarial: fails against the pre-fix unconditional 200)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_health_strict_degraded.py",
+                    "testId": "test_strict_degraded_returns_503"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-050-002-SCN-002",
+            "scope": "scope-1-ml-health-opt-in-strict-degraded-503",
+            "title": "The ?strict opt-in accepts the same truthy variants as the Go contract",
+            "gherkin": {
+                "given": "the ML sidecar is degraded (NATS disconnected)",
+                "when": "an operator calls GET /health?strict=<v> for v in {1, true, TRUE, Yes, yes}",
+                "then": "every case-insensitive truthy variant yields HTTP 503, matching the Go healthStrictRequested contract (adversarial: fails against the pre-fix unconditional 200)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_health_strict_degraded.py",
+                    "testId": "test_strict_truthy_variants_return_503"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-050-002-SCN-003",
+            "scope": "scope-1-ml-health-opt-in-strict-degraded-503",
+            "title": "The DEFAULT /health stays 200 when degraded (container-liveness non-destabilization)",
+            "gherkin": {
+                "given": "the ML sidecar is degraded (NATS disconnected)",
+                "when": "the Docker HEALTHCHECK sends the DEFAULT GET /health (no ?strict param)",
+                "then": "the sidecar returns HTTP 200 with body status:degraded, so a degraded-but-alive sidecar is NOT marked unhealthy / restart-flapped (non-destabilization invariant: fails if a naive fix flips the default to 503)"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_health_strict_degraded.py",
+                    "testId": "test_default_degraded_stays_200"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        },
+        {
+            "scenarioId": "BUG-050-002-SCN-004",
+            "scope": "scope-1-ml-health-opt-in-strict-degraded-503",
+            "title": "The ?strict opt-in stays 200 when the sidecar is up (no false alarms)",
+            "gherkin": {
+                "given": "the ML sidecar is up (NATS connected)",
+                "when": "an operator calls GET /health?strict=1",
+                "then": "the sidecar returns HTTP 200 with body status:up, so the opt-in readiness path does not raise a false alarm on a healthy sidecar"
+            },
+            "gherkinHash": null,
+            "behaviorClass": "unit",
+            "changeType": "bugfix",
+            "requiredTestType": "unit",
+            "regressionRequired": true,
+            "lockdown": false,
+            "linkedTests": [
+                {
+                    "file": "ml/tests/test_health_strict_degraded.py",
+                    "testId": "test_strict_healthy_returns_200"
+                }
+            ],
+            "evidenceRefs": [
+                "report.md#test-evidence"
+            ],
+            "replacedBy": null,
+            "invalidatedBy": null
+        }
+    ]
+}
