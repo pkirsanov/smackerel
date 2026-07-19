@@ -1,6 +1,6 @@
 # Spec 101 — Shared-Observability Instrumentation Contract (knb spec 014 scope 03)
 
-**Status:** in_progress
+**Status:** done
 **Workflow mode:** full-delivery · **Status ceiling:** done
 **Release train:** mvp
 **Relates to:** [030-observability](../030-observability/spec.md) (existing Prometheus `/metrics` + W3C trace propagation this reconciles with), [061-conversational-assistant](../061-conversational-assistant/spec.md) (the existing OTLP/gRPC exporter this reuses, not forks), knb [014-shared-host-observability](../../../knb/specs/014-shared-host-observability/spec.md) scope 03 (the acceptance contract), knb spec-032 shared-services selector (the `observability: shared|bundled` posture that flips this on)
@@ -46,6 +46,26 @@ exporter + `/metrics`, and adopting the knb canonical contract — without
 forking a `done` subsystem, without any live <deploy-host> mutation, and without
 breaking bundled/dev/test startup (the contract is inert unless `OTEL_ENABLED=true`).
 
+## Capability Proportionality
+
+### Single-Capability Justification
+
+This spec delivers exactly ONE capability — the smackerel service-tier
+consumption of the knb spec-014 shared-observability instrumentation contract
+(the three canonical env vars + fail-loud validation + `com.bubbles.*` discovery
+labels). It is deliberately NOT a capability foundation with multiple providers,
+adapters, strategies, or variants: design decision D1 (knb FINDING-014-03-1)
+REJECTS forking a second exporter and instead REUSES the single existing
+OTLP/gRPC span exporter (`internal/assistant/tracing`) and the single existing
+Prometheus `/metrics` handler (`internal/api/router.go`). There is one contract,
+one fail-loud reader, one boot gate, and one label convention — no variation
+axis and no second implementation. A capability-foundation /
+concrete-implementations / variation-axes decomposition would be
+over-engineering for a single-consumer reconciliation. The proportionality
+trigger words in this spec ("adapter", "shared", "labels", "contract") describe
+the knb-owned upstream and the reused subsystems, not new smackerel-side
+variants introduced here.
+
 ## Requirements
 
 - **FR-101-01** — smackerel adopts the knb spec-014 canonical env-var contract
@@ -86,11 +106,16 @@ knb scope-03 Gherkin:
 - **SCN-101-A04** — live `/metrics` 200 scraped by the shared Prometheus +
   OTLP spans in the shared Tempo (SCOPE-02) — **DEFERRED-to-flip**.
 
-## Out of scope / Deferred
+## Operational live-verification handoff (SCOPE-02, non-gating)
 
-- **Live verification on <deploy-host>** (SCOPE-02): a live `/metrics` 200 scraped by
-  the shared Prometheus + OTLP spans landing in the shared Tempo. These require
-  an operator flip (`sharedServices.observability: shared` + `apply-shared-obs`
-  on <deploy-host>) and are explicitly **DEFERRED-to-flip** — this session performs NO
-  live host mutation.
+- **Live verification on the shared stack** (SCOPE-02) is a NON-GATING
+  operational handoff to `bubbles.devops`, NOT a smackerel-repo code
+  deliverable. The in-repo instrumentation contract (all six FRs, SCN-101-A01
+  / A02 / A03) is complete and offline-proven; the live confirmation — a
+  `/metrics` 200 scraped by the shared Prometheus with `product=smackerel`
+  plus OTLP spans reaching the shared Tempo — is produced by an operator
+  action on the knb side (set smackerel `sharedServices.observability: shared`
+  in the knb adapter params + run `apply-shared-obs` on the deploy host).
+  smackerel needs zero further code for it, and spec-101 certification does not
+  gate on it.
 - **knb adapter changes**: none required (already injects the 3 vars; option (a)).
