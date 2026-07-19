@@ -1,0 +1,163 @@
+{
+  "version": 3,
+  "specId": "026-domain-extraction",
+  "bugId": "BUG-026-008-synthesis-schema-repair",
+  "featureDir": "specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair",
+  "featureName": "BUG-026-008 bounded synthesis extraction schema repair",
+  "title": "Parsed schema-invalid synthesis output becomes permanent failure after one LLM call",
+  "severity": "high",
+  "source": "operator-provided accepted-runtime logs plus source-path confirmation",
+  "owningSpec": "026-domain-extraction",
+  "status": "in_progress",
+  "releaseTrain": "mvp",
+  "workflowMode": "bugfix-fastlane",
+  "flagsIntroduced": [],
+  "createdAt": "2026-07-19",
+  "updatedAt": "2026-07-19",
+  "redeployRequired": true,
+  "deploymentReached": false,
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "validate",
+    "currentScope": "1",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-07-19",
+    "lastUpdatedAt": "2026-07-19T13:37:00Z",
+    "completedScopes": [],
+    "completedPhaseClaims": [],
+    "completedPhaseClaimsByScope": {},
+    "pendingTransitionRequests": [],
+    "scopeSummary": [
+      {
+        "scopeId": "1",
+        "title": "Repair one parsed schema-invalid synthesis response",
+        "owner": "bubbles.implement",
+        "dodCount": 14,
+        "status": "in_progress",
+        "dependsOn": [],
+        "notes": "Scenario-first bounded repair inside the existing synthesis extraction capability; source delivery stops before build/deploy."
+      }
+    ]
+  },
+  "completedScopes": [],
+  "transitionRequests": [
+    {
+      "id": "TR-026-008-TEST-001",
+      "requestedAt": "2026-07-19T13:10:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.test",
+      "reason": "Targeted shell E2E sets E2E_STACK_MANAGED=1 but does not boot the parent-owned stack, so test_synthesis.sh times out with service postgres is not running. Own under spec 031 live-stack test infrastructure.",
+      "packetRef": "report.md#discovered-issues",
+      "routedTo": "bubbles.test",
+      "status": "open"
+    },
+    {
+      "id": "TR-026-008-TEST-002",
+      "requestedAt": "2026-07-19T13:12:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.test",
+      "reason": "Dockerized full-unit tests mount the linked worktree but not the primary checkout Git metadata, so provenance and local-client tests fail with fatal not a git repository at the .git/worktrees pointer. Own under spec 031 test infrastructure.",
+      "packetRef": "report.md#discovered-issues",
+      "routedTo": "bubbles.test",
+      "status": "open"
+    },
+    {
+      "id": "TR-026-008-QUALITY-001",
+      "requestedAt": "2026-07-19T13:14:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.implement",
+      "reason": "Repo-wide format check names internal/config/release_trains_contract_test.go; git diff --exit-code proves it is byte-identical to origin/main and outside BUG-026-008's change boundary.",
+      "packetRef": "report.md#format-classification",
+      "routedTo": "bubbles.implement",
+      "status": "open"
+    },
+    {
+      "id": "TR-026-008-VALIDATE-001",
+      "requestedAt": "2026-07-19T13:37:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.validate",
+      "reason": "Source, config, tests, docs, red-green evidence, live synthesis E2E, artifact lint, traceability, regression guards, check, and lint are ready for independent validation. This runtime has no specialist invocation tool, so certification remains validate-owned and unset.",
+      "packetRef": "report.md#validation-evidence",
+      "routedTo": "bubbles.validate",
+      "status": "open"
+    },
+    {
+      "id": "TR-026-008-DEVOPS-001",
+      "requestedAt": "2026-07-19T13:37:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.devops",
+      "reason": "After validate/audit certification, build and deploy the pushed source through the signed delivery path and confirm accepted-runtime card-rewards synthesis repair; no deployment is authorized in this source-delivery session.",
+      "packetRef": "spec.md#deployment-boundary",
+      "routedTo": "bubbles.devops",
+      "status": "open"
+    }
+  ],
+  "transitionHistory": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.bug",
+      "phase": "bug",
+      "phasesExecuted": ["bug"],
+      "provenanceMode": "direct-authorized-runner",
+      "note": "Created the complete BUG-026-008 packet from the accepted-runtime missing-concepts symptom and confirmed the one-call terminal schema-validation branch in handle_extract."
+    },
+    {
+      "at": "2026-07-19T13:37:00Z",
+      "agent": "bubbles.bug",
+      "phase": "implementation-test-handoff",
+      "phasesExecuted": ["bug"],
+      "provenanceMode": "direct-authorized-runner",
+      "outcome": "route_required",
+      "note": "Implemented and exercised the bounded schema-repair source/config/test/doc delivery under the authorized top-level runner because no runSubagent tool exists. Did not claim implement/test/docs/validate/audit specialist phases. Routed independent certification to bubbles.validate, audit thereafter, and signed build/deploy to bubbles.devops."
+    }
+  ],
+  "certification": {
+    "status": "in_progress",
+    "certificationReadiness": "not_ready",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "certifierAgent": null,
+    "certifiedAt": null,
+    "scopeProgress": [
+      {
+        "scopeId": "1",
+        "status": "in_progress",
+        "dodComplete": 0,
+        "dodTotal": 14
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "lastCleanRound": 0,
+      "lockedScenarioIds": []
+    },
+    "observations": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "bugfix-fastlane-mode-default"},
+    "autoCommit": {"mode": "on", "source": "user-request"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "bugfix-fastlane-mode-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"},
+    "workflowMode": "bugfix-fastlane"
+  },
+  "routing": {
+    "outcome": "route_required",
+    "nextRequiredOwner": "bubbles.validate",
+    "reason": "Source/config/test/docs delivery is red-to-green and live-synthesis-E2E proven, but validate-owned certification and audit did not run in this runtime. Status remains in_progress; deployment remains routed to bubbles.devops after certification."
+  }
+}
