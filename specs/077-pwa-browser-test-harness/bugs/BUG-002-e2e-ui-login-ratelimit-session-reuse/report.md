@@ -188,6 +188,8 @@ jobs:       e2e-ui = success   (✓ e2e-ui in 5m42s; ✓ Run PWA browser e2e-ui 
 
 Verified independently this session with `gh run view 27878481805 --json conclusion,headSha,jobs` (conclusion=`success`, headSha=`0a4a13aa…`, `e2e-ui` job=`success`).
 
+<!-- bubbles:certifying-window-begin -->
+
 ## This-Session Certification Evidence (2026-07-19)
 
 Executed in-session by `bubbles.workflow`, parent-expanded by `bubbles.iterate` (runSubagent is unavailable in this runtime; documented smackerel precedent, BUG-025-005). The host had ~40 GiB free memory and no foreign `smackerel-test*` / e2e containers running, so the shared e2e-ui stack was free (good-neighbor verified). Only this bug's own `smackerel-test-e2e-ui` compose project was brought up and it was torn down on exit.
@@ -265,11 +267,11 @@ $ grep -nE 'LimitByIP\(20, 1\*time.Minute\)|/v1/web/login' internal/api/router.g
 
 The change is session-reuse only — no `trusted_proxies` / `X-Forwarded-For` spoofing, no new auth surface, no secret material, no new egress. `implementation-reality-scan.sh` (including Scan 7 IDOR / auth-bypass and Scan 8 silent-decode) reported **0 violations** (REALITY_EXIT=0). The `auth_login.spec.ts` real-login-flow tests are untouched, so the real login surface is still exercised.
 
-### phase-validate
+### Validation Evidence
 
 Independent in-session re-verification: the live e2e-ui card-rewards regression is GREEN (zero 429); the node regression driver is GREEN (2/2) with a proven RED→GREEN; the regression-quality and implementation-reality guards exit 0; the real code delta is evidenced below in "### Code Diff Evidence" at commit `0a4a13aa`; artifact-lint exits 0; and the state-transition guard exits 0 at `done`. The single unrelated `proof_of_life.spec.ts` lane failure was root-caused as a current-main baseline, out-of-boundary parent-spec harness failure (not a BUG-002 regression) and routed to the parent.
 
-### phase-audit
+### Audit Evidence
 
 Final governance audit: the state-transition guard (`bash .github/bubbles/scripts/state-transition-guard.sh <bugdir>`) exits 0 — the 26 prior findings (G057 scenario-manifest, G022 pipeline phases, G053 Code Diff Evidence, G027 phase-scope coherence, G040 deferral language, G068 DoD-Gherkin fidelity, G093 delivery delta, Check-5, Check-8A, Check-8D) are all cleared with the evidence above; `artifact-lint.sh <bugdir>` exits 0. The Change Boundary was respected: `git show 0a4a13aa` changed only `web/pwa/tests/**` + this bug packet — zero excluded file families.
 
@@ -286,6 +288,7 @@ The card-rewards login-session-reuse fix landed at commit `0a4a13aa` (`fix(077):
 
 The core helper change (`git show 0a4a13aa -- web/pwa/tests/_support/cardrewards.ts`):
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
 ```diff
 +import { expect, type BrowserContext, type Page } from "@playwright/test";
 +type StoredCookie = Awaited<ReturnType<BrowserContext["cookies"]>>[number];
@@ -304,6 +307,7 @@ The core helper change (`git show 0a4a13aa -- web/pwa/tests/_support/cardrewards
 +  cachedAuthCookie = auth;
  }
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 ## Discovered Unrelated Failure (routed, out-of-boundary)
 

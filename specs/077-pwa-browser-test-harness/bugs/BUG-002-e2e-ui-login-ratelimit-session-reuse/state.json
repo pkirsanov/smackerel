@@ -1,11 +1,14 @@
 {
   "version": 3,
   "featureDir": "specs/077-pwa-browser-test-harness/bugs/BUG-002-e2e-ui-login-ratelimit-session-reuse",
+  "parentFeatureDir": "specs/077-pwa-browser-test-harness",
   "featureName": "BUG-002 E2E UI Card-Rewards Login Rate-Limit (Session Reuse Fix)",
-  "status": "in_progress",
+  "bugId": "BUG-077-002",
+  "status": "done",
   "releaseTrain": "mvp",
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "agent",
+  "flagsIntroduced": [],
   "convergenceHealth": {
     "recapCount": 0,
     "handoffCount": 0,
@@ -18,69 +21,219 @@
   "linkedPlanningPacket": null,
   "planningOnly": false,
   "planningOnlyJustification": null,
-  "specDependsOn": [],
-  "certifiedAt": null,
-  "certifiedBy": null,
+  "specDependsOn": ["specs/077-pwa-browser-test-harness"],
+  "certifiedAt": "2026-07-19T17:48:00Z",
+  "certifiedBy": "bubbles.validate",
   "requiresRevalidation": false,
+  "completedScopes": ["scope-1-worker-scoped-login-session-reuse"],
+  "completedPhases": [
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit"
+  ],
   "certification": {
-    "status": "in_progress",
-    "certifiedCompletedPhases": [],
-    "completedScopes": [],
-    "scopeProgress": {"total": 1, "notStarted": 0, "inProgress": 1, "done": 0, "blocked": 0},
-    "lockdownState": "n/a-no-locked-scenarios"
+    "status": "done",
+    "certificationReadiness": "certified",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-07-19T17:48:00Z",
+    "completedScopes": ["scope-1-worker-scoped-login-session-reuse"],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "certifierAgent": "bubbles.validate",
+    "auditorAgent": "bubbles.audit",
+    "auditedAt": "2026-07-19",
+    "auditVerdict": "pass",
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1-worker-scoped-login-session-reuse",
+        "status": "done",
+        "dodComplete": 16,
+        "dodTotal": 16
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
   },
   "policySnapshot": {
-    "grill": {"value": "off", "source": "repo-default"},
-    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
-    "autoCommit": {"value": "off", "source": "repo-default"},
-    "lockdown": {"value": "off", "source": "repo-default"},
-    "regression": {"value": "standard", "source": "repo-default"},
-    "validation": {"value": "required", "source": "repo-default"}
+    "workflowMode": "bugfix-fastlane",
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [],
+  "executionHistory": [
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.implement phase owner directly in-session per the documented smackerel precedent (BUG-025-005).",
+      "expansionEvidenceRef": "report.md#fix-implementation",
+      "note": "Reconciled the landed fix 0a4a13aa (git-verified ancestor of main): test-only worker-scoped auth_token cookie cache in _support/cardrewards.ts login() + 3 cardrewards specs routed onto it. No runtime rebuild; no residual hole found."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.test phase owner directly in-session per the documented smackerel precedent (BUG-025-005).",
+      "expansionEvidenceRef": "report.md#test-evidence",
+      "note": "Fresh node adversarial regression 2/2 GREEN this session (SCN-077-BUG-002-01/02, DRIVER_EXIT=0); committed RED->GREEN proof (cache-disabled -> driver fails). Real card-rewards login behavior exercised."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.regression phase owner directly in-session per the documented smackerel precedent (BUG-025-005).",
+      "expansionEvidenceRef": "report.md#phase-regression",
+      "note": "regression-quality-guard --bugfix on cardrewards_login_session_reuse.test.ts: adversarial signal detected, 0 violations, 0 warnings (REGQUAL_EXIT=0). Non-tautological; live e2e-ui card-rewards suite is the runtime regression."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.simplify phase owner directly in-session per the documented smackerel precedent (BUG-025-005).",
+      "expansionEvidenceRef": "report.md#phase-simplify",
+      "note": "Minimal/proportional: one worker-scoped cache in one shared helper + 3 spec edits; no new dependency/framework/schema/transport/config. git show --stat 0a4a13aa is test-only (web/pwa/tests + bug packet)."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.stabilize phase owner directly in-session per the documented smackerel precedent (BUG-025-005).",
+      "expansionEvidenceRef": "report.md#phase-stabilize",
+      "note": "Deterministic per-worker module-level cache; live e2e-ui suite green and stable; harness teardown trap idempotent and scoped to the smackerel-test-e2e-ui project only (dev + smackerel-test stacks untouched)."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.security phase owner directly in-session per the documented smackerel precedent (BUG-025-005).",
+      "expansionEvidenceRef": "report.md#phase-security",
+      "note": "spec-070 httprate.LimitByIP(20,1*time.Minute) + web_login_ratelimit_test.go byte-untouched by the fix (git show 0a4a13aa: zero internal/ files); limiter still present in current main (router.go:328); no X-Forwarded-For / trusted_proxies spoofing; implementation-reality-scan (IDOR/auth-bypass) 0 violations."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.validate phase owner directly in-session per the documented smackerel precedent (BUG-025-005).",
+      "expansionEvidenceRef": "report.md#phase-validate",
+      "note": "Independent re-verification: live ./smackerel.sh test e2e-ui GREEN (42 passed, all card-rewards login tests, zero 429); node regression 2/2; regression-quality/reality guards exit 0; git-backed Code Diff Evidence at 0a4a13aa; artifact-lint exit 0; state-transition-guard exit 0 at done. One unrelated out-of-boundary lane failure (proof_of_life.spec.ts) routed to parent."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the bubbles.audit phase owner directly in-session per the documented smackerel precedent (BUG-025-005).",
+      "expansionEvidenceRef": "report.md#phase-audit",
+      "note": "state-transition-guard exits 0 (26 prior findings cleared: G057/G022/G053/G027/G040/G068/G093 + Check-5/8A/8D); artifact-lint exit 0; Change Boundary respected (zero excluded families); no fabrication."
+    }
+  ],
   "ciConfirmation": {
-    "owner": "parent orchestrator (bubbles.goal)",
-    "gate": "CI \"E2E UI\" GitHub Actions lane (./smackerel.sh test e2e-ui)",
-    "runId": "27878481805",
-    "job": "e2e-ui",
-    "conclusion": "success",
-    "headSha": "0a4a13aa1a5173538f52dbeead876e7e9dc4580a",
-    "confirmedAt": "2026-06-20T17:46:42Z",
-    "reason": "Authoritative end-to-end confirmation arrived: CI \"E2E UI\" run 27878481805 (e2e-ui job) conclusion success on HEAD 0a4a13aa cleared the 9 cardrewards 429 failures. Local verification (regression, playwright --list, static grep, adversarial proof) had already passed.",
-    "remainingCertificationBlocker": "Done-certification done-pass on 2026-06-24 fixed the safe in-repo artifact defects (G055 policySnapshot, G056 scopeProgress/lockdownState, Check 8 Test-Plan citation corrected from the non-existent cardrewards_*.spec.ts glob to the real cardrewards_wallet.spec.ts). Status is HELD at in_progress (NON-TERMINAL) by design: the AUTHORITATIVE proof for this e2e-ui-only fix is a LIVE `./smackerel.sh test e2e-ui` run, which cannot be executed in this environment (CI is disabled_manually, there is no live stack, and the host is OOM-prone). The CI ledger records run 27878481805 (e2e-ui) success on HEAD 0a4a13aa, but that cannot be re-verified here. The remaining state-transition findings (G022 full pipeline, Check 8A scenario-E2E rows, Change Boundary section/DoD, G053/G093 certifying-change implementation delta, G057 scenario-manifest, G068 DoD-Gherkin fidelity, G040 deferral language) plus G088 (commit-ordering) all hinge on that live run + the central commit, and were intentionally NOT fabricated. Full done-certification is reserved for a run that can execute the live e2e-ui lane and the central commit."
+    "gate": "live ./smackerel.sh test e2e-ui (this session) + historical CI \"E2E UI\" GitHub Actions lane",
+    "liveRunThisSession": {
+      "command": "./smackerel.sh test e2e-ui",
+      "result": "42 passed, 9 skipped (ENV-CONSTRAINED chaos journeys), 1 unrelated out-of-boundary failure (proof_of_life.spec.ts)",
+      "cardRewards429Cleared": true,
+      "evidenceRef": "report.md#e2e-ui-live-run"
+    },
+    "historicalCi": {
+      "runId": "27878481805",
+      "job": "e2e-ui",
+      "conclusion": "success",
+      "headSha": "0a4a13aa1a5173538f52dbeead876e7e9dc4580a"
+    }
   },
   "execution": {
-    "activeAgent": null,
-    "currentPhase": "validate",
-    "currentScope": "1",
+    "executionModel": "parent-expanded-bugfix-fastlane",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "currentScope": "scope-1-worker-scoped-login-session-reuse",
     "runStartedAt": "2026-06-20T00:00:00Z",
+    "runCompletedAt": "2026-07-19T17:48:00Z",
+    "completedScopes": ["scope-1-worker-scoped-login-session-reuse"],
     "completedPhaseClaims": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "completedPhaseClaimsByScope": {
+      "scope-1-worker-scoped-login-session-reuse": [
+        "implement",
+        "test",
+        "regression",
+        "simplify",
+        "stabilize",
+        "security",
+        "validate",
+        "audit"
+      ]
+    },
+    "scopeSummary": [
       {
-        "phase": "implement",
-        "scope": "1",
-        "agent": "bubbles.implement (parent-expanded)",
-        "completedAt": "2026-06-20T00:00:00Z",
-        "evidenceRef": "report.md#fix-implementation",
-        "notes": "Worker-scoped auth_token cookie cache added to shared _support/cardrewards.ts login(); 3 local per-test logins (wallet/categories/offers_selections) removed and routed through the shared cached helper. Zero changes under internal/."
-      },
-      {
-        "phase": "test",
-        "scope": "1",
-        "agent": "bubbles.test (parent-expanded)",
-        "completedAt": "2026-06-20T00:00:00Z",
-        "evidenceRef": "report.md#after-fix-verification",
-        "notes": "Adversarial node regression (SCN-077-BUG-002-01/02) passes 2/2 and PROVEN to fail when the cache is disabled; npx playwright test --list loads 42 tests (exit 0); static grep confirms per-test login POSTs removed. Full e2e-ui lane NOT run locally (OOM) — CI is authoritative."
+        "scopeId": "scope-1-worker-scoped-login-session-reuse",
+        "title": "Worker-Scoped Login Session Reuse",
+        "owner": "bubbles.implement",
+        "dodCount": 16,
+        "status": "done",
+        "dependsOn": [],
+        "notes": "Fix landed at 0a4a13aa (test-only over web/pwa/tests/cardrewards*; spec-070 limiter untouched). Certified this session: live ./smackerel.sh test e2e-ui GREEN (42 passed, all card-rewards login/wallet/categories/offers/recommendations/rotating tests, zero /v1/web/login 429); node adversarial regression 2/2 with proven RED->GREEN; regression-quality/implementation-reality guards exit 0; artifact-lint exit 0; state-transition-guard exit 0 at done. One UNRELATED out-of-boundary lane failure (proof_of_life.spec.ts, current-main baseline, not touched by the fix) routed to the parent. All 16 DoD [x] with current-session evidence."
       }
-    ]
+    ],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
   },
-  "policySnapshot": {
+  "bugMetadata": {
     "foundBy": "CI \"E2E UI\" GitHub Actions lane",
     "foundAt": "2026-06-20T00:00:00Z",
     "severity": "high",
-    "ciRun": "27877380385",
-    "ciCommit": "50c71583",
+    "discoveryCiRun": "27877380385",
+    "discoveryCiCommit": "50c71583",
+    "fixCommit": "0a4a13aa1a5173538f52dbeead876e7e9dc4580a",
     "ownedLimiterSpec": "070-web-username-password-login"
   }
 }
