@@ -3,7 +3,7 @@
   "featureDir": "specs/096-multi-provider-model-connections",
   "featureNumber": "096",
   "featureName": "Multi-Provider AI Model Connections",
-  "status": "in_progress",
+  "status": "blocked",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "executionRuntime": "manual",
@@ -24,6 +24,8 @@
   "unblocks": [],
   "certifiedAt": null,
   "requiresRevalidation": false,
+  "blockedReason": "VALIDATED-IN-REPO; blocked on the owner-directed bubbles.devops self-hosted handoff (same cohort as dependencies 084/087/088). In-repo work is complete and re-validated this session: ./smackerel.sh test unit --go --go-run Spec096 = 'go test ./... finished OK' (UNIT_EXIT=0, 139 ok packages, 0 FAIL; spec-096 config/api/agent/catalog/connstore/connvault/llm/metrics packages executed; 064/087/088/089 regression packages ok) and artifact-lint EXIT 0. Two EXTERNAL blockers make full-delivery done structurally unreachable from inside spec-096's boundary: (1) Gate G089 -- direct specDependsOn 088-runtime-switchable-models is owner-directed blocked (transitively 087->084) and G089 requires deps done; recertifying another spec's owner-directed terminal status is out of scope. (2) C7 -- spec-096's own live hosted-provider e2e-api legs (real Anthropic/OpenAI reachability, live Ollama, GPU answers, migration-062 live-apply) are self-hosted-gated. ACTIONABLE NEXT STEP (bubbles.devops): run the self-hosted handoff to certify the 088->087->084 cohort to done (clears G089) AND execute spec-096's C7 live e2e-api legs on the self-hosted target; then re-drive spec-096 full-delivery to done. See report.md -> Terminal Reconciliation (2026-07-19).",
+  "nextRequiredOwner": "bubbles.devops",
   "flagsIntroduced": [],
   "releaseTrain": "next",
   "execution": {
@@ -185,11 +187,24 @@
         "runStartedAt": "2026-06-24T00:00:00Z",
         "runEndedAt": "2026-06-24T01:00:00Z",
         "summary": "Closeout-gate reconciliation (in-repo only; NO live stack; top-level status STAYS in_progress — the spec is self-hosted-live-gated). Re-ran the four Tier-1 closeout gates, all EXIT 0, captured as real >=10-line evidence in report.md -> Tier-1 Closeout Gates -> Closeout Gate Re-Run (2026-06-24): ./smackerel.sh format --check EXIT 0 ('69 files already formatted' — the previously-foreign internal/connector/qfdecisions/chaos_hardening_test.go is now tracked + gofmt-clean tree-wide, clearing the recurring T1-3 blocker); ./smackerel.sh check EXIT 0 (config-sync + env_file drift guard + scenario-lint 17 registered/0 rejected); artifact-lint EXIT 0 (Artifact lint PASSED, mode-specific promotion gates skipped at in_progress); ./smackerel.sh test unit --go --go-run Spec096 EXIT 0 (go test ./... finished OK across internal/config, connvault, llm, catalog, agent, connstore, api, telegram, metrics, web/pwa/tests — NO skips). Reconciled scopes.md: ticked all 7 Dnn-T1-3 format DoD items (now genuinely MET); marked SCOPE-01 Done (all 14 DoD met; pure config/Go-loader/unit scope with NO live-stack leg) and recorded it in certification.completedScopes; reconciled SCOPE-02 to accurate all-13-DoD-met In Progress (integration vault-persist leg GREEN [core Healthy], held pending certification); fixed the stale SCOPE-05 status line ('[ ] Not started' -> '[~] In Progress (11 of 13 DoD met)'). The live-stack legs (tests/integration/..., e2e-api, e2e-ui triad walks, migration-062 live-apply, live hosted-provider reachability) remain HONESTLY DEFERRED [C7] and are the sole documented blocker to full-delivery done — NONE fabricated. NO source/test/config edits; reconciliation touched ONLY specs/096 artifacts."
+      },
+      {
+        "agent": "bubbles.iterate",
+        "phasesExecuted": ["closeout-reconciliation"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand in-session: the bubbles.iterate autonomous dispatch lacks runSubagent capability (documented smackerel precedent), so the closeout ladder ran parent-expanded within this runtime",
+        "expansionEvidenceRef": "report.md#terminal-reconciliation-2026-07-19",
+        "statusBefore": "in_progress",
+        "statusAfter": "blocked",
+        "runStartedAt": "2026-07-19T00:00:00Z",
+        "runEndedAt": "2026-07-19T00:00:00Z",
+        "summary": "Terminal reconciliation (in-repo only; NO source/test/config edits; touched only specs/096 artifacts). Re-ran the closeout gates: ./smackerel.sh test unit --go --go-run Spec096 = 'go test ./... finished OK' (UNIT_EXIT=0, 139 ok packages, 0 FAIL; spec-096 config/api/agent/catalog/connstore/connvault/llm/metrics packages executed; 064/087/088/089 regression packages ok) + artifact-lint EXIT 0. The full state-transition-guard (71 failures) surfaced the DECISIVE structural blocker Gate G089: direct specDependsOn 088-runtime-switchable-models is owner-directed 'blocked' (transitively 087->084), and G089 requires deps 'done'. 064 + 089 are done; 088/087/084 are the same 'VALIDATED-IN-REPO; blocked on the owner-directed bubbles.devops handoff' cohort. Recertifying another spec's owner-directed terminal status is out of scope for spec-096, so full-delivery done is structurally unreachable from inside this boundary. Combined with the C7 self-hosted live hosted-provider e2e-api gate, spec-096 is reconciled in_progress -> blocked (certification.status too), nextRequiredOwner bubbles.devops, joining the 084/087/088 cohort. Actionable next step: run the owner-directed bubbles.devops self-hosted handoff to certify 088->087->084 to done (clears G089) + execute spec-096's C7 live e2e-api legs; then re-drive to done. None fabricated; the block is external. Evidence: report.md -> Terminal Reconciliation (2026-07-19)."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "blocked",
     "completedScopes": [
       "SCOPE-01"
     ],
@@ -264,7 +279,7 @@
       "recordedAt": "2026-06-19T04:00:00Z"
     }
   ],
-  "lastUpdatedAt": "2026-06-24T01:00:00Z",
+  "lastUpdatedAt": "2026-07-19T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -284,5 +299,5 @@
     "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Notes-accuracy correction 2026-06-23: all seven artifacts now exist (spec.md, design.md, scopes.md, report.md ~150KB, uservalidation.md, scenario-manifest.json, state.json) and SCOPE-01..07 + §13 observability + uservalidation + security sign-off have landed on trunk; the admin surface lives in internal/api/model_connections_admin.go etc., gated by an empty-by-default operator allowlist (inert until an operator configures it). The full-delivery workflow ladder is not yet promoted past plan (completedPhaseClaims stops at plan); status stays in_progress and releaseTrain stays next. No status change or certification re-open by this correction. Closeout reconciliation 2026-06-24 (bubbles.iterate): the recurring T1-3 format --check blocker is RESOLVED — internal/connector/qfdecisions/chaos_hardening_test.go is now tracked + gofmt-clean and ./smackerel.sh format --check is EXIT 0 tree-wide; all four Tier-1 closeout gates (format/check/artifact-lint/spec-096 unit) are EXIT 0 (report.md -> Closeout Gate Re-Run). Ticked all 7 Dnn-T1-3 format DoD items; marked SCOPE-01 Done (zero live-stack leg) into certification.completedScopes + scopeProgress; reconciled SCOPE-02 (all DoD met, held In Progress pending certification) and fixed the stale SCOPE-05 status line. Top-level status STAYS in_progress: the live-stack legs (integration/e2e-api/e2e-ui/migration-062 live-apply/live hosted-provider reachability) remain self-hosted-gated [C7] and are the sole documented blocker to full-delivery done; none fabricated."
+  "notes": "Notes-accuracy correction 2026-06-23: all seven artifacts now exist (spec.md, design.md, scopes.md, report.md ~150KB, uservalidation.md, scenario-manifest.json, state.json) and SCOPE-01..07 + §13 observability + uservalidation + security sign-off have landed on trunk; the admin surface lives in internal/api/model_connections_admin.go etc., gated by an empty-by-default operator allowlist (inert until an operator configures it). The full-delivery workflow ladder is not yet promoted past plan (completedPhaseClaims stops at plan); status stays in_progress and releaseTrain stays next. No status change or certification re-open by this correction. Closeout reconciliation 2026-06-24 (bubbles.iterate): the recurring T1-3 format --check blocker is RESOLVED — internal/connector/qfdecisions/chaos_hardening_test.go is now tracked + gofmt-clean and ./smackerel.sh format --check is EXIT 0 tree-wide; all four Tier-1 closeout gates (format/check/artifact-lint/spec-096 unit) are EXIT 0 (report.md -> Closeout Gate Re-Run). Ticked all 7 Dnn-T1-3 format DoD items; marked SCOPE-01 Done (zero live-stack leg) into certification.completedScopes + scopeProgress; reconciled SCOPE-02 (all DoD met, held In Progress pending certification) and fixed the stale SCOPE-05 status line. Terminal reconciliation 2026-07-19 (bubbles.iterate): status moved in_progress -> blocked. The hermetic in-repo foundation re-validated GREEN this session (test unit --go --go-run Spec096 = finished OK, UNIT_EXIT=0, 139 ok packages), but the full transition guard surfaced Gate G089 -- direct dependency 088-runtime-switchable-models is owner-directed blocked (transitively 087->084), which G089 requires to be done; recertifying that cohort is out of scope for spec-096. Combined with the C7 self-hosted live-leg gate, full-delivery done is structurally unreachable from inside spec-096's boundary, so the spec joins the 084/087/088 owner-directed bubbles.devops handoff cohort as blocked (nextRequiredOwner: bubbles.devops). None fabricated; the block is external. See report.md -> Terminal Reconciliation (2026-07-19)."
 }

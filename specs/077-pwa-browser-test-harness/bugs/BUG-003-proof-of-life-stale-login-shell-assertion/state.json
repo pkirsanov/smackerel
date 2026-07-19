@@ -1,0 +1,233 @@
+{
+  "version": 3,
+  "featureDir": "specs/077-pwa-browser-test-harness/bugs/BUG-003-proof-of-life-stale-login-shell-assertion",
+  "parentFeatureDir": "specs/077-pwa-browser-test-harness",
+  "featureName": "BUG-003 proof_of_life e2e-ui stale 200-branch assertion (served login shell)",
+  "bugId": "BUG-077-003",
+  "status": "done",
+  "releaseTrain": "mvp",
+  "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "agent",
+  "flagsIntroduced": [],
+  "convergenceHealth": {
+    "recapCount": 0,
+    "handoffCount": 0,
+    "summarizeHistoryCount": 0,
+    "turnCount": 1,
+    "snapshotCompleteness": 1.0,
+    "slo": "pass"
+  },
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": ["specs/077-pwa-browser-test-harness"],
+  "certifiedAt": "2026-07-19T20:52:00Z",
+  "certifiedBy": "bubbles.validate",
+  "requiresRevalidation": false,
+  "completedScopes": ["scope-1-proof-of-life-served-login-shell"],
+  "completedPhases": [
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit"
+  ],
+  "certification": {
+    "status": "done",
+    "certificationReadiness": "certified",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-07-19T20:52:00Z",
+    "completedScopes": ["scope-1-proof-of-life-served-login-shell"],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "certifierAgent": "bubbles.validate",
+    "auditorAgent": "bubbles.audit",
+    "auditedAt": "2026-07-19",
+    "auditVerdict": "pass",
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1-proof-of-life-served-login-shell",
+        "status": "done",
+        "dodComplete": 13,
+        "dodTotal": 13
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; bubbles.workflow parent-expanded the phase owner directly in-session per the documented smackerel precedent (BUG-077-002 / BUG-025-005).",
+      "expansionEvidenceRef": "report.md#fix-implementation",
+      "note": "Updated web/pwa/tests/proof_of_life.spec.ts 200-branch to the ACTUAL live-observed served login-shell identity (title 'Sign in — Smackerel', h1 'Sign in') + corrected the docstring to the spec-057 login-shell reality. Test-only; +19/-8 in one file; zero app/runtime/source edits."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; parent-expanded per the documented smackerel precedent.",
+      "expansionEvidenceRef": "report.md#repro-after",
+      "note": "Live e2e-ui GREEN this session: ./smackerel.sh test e2e-ui proof_of_life.spec.ts -> 1 passed, exit 0 against the disposable smackerel-test-e2e-ui stack (all containers Healthy). Before-fix RED (exit 1, Received 'Sign in — Smackerel') captured as reproduction."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; parent-expanded per the documented smackerel precedent.",
+      "expansionEvidenceRef": "report.md#phase-regression",
+      "note": "regression-quality-guard on proof_of_life.spec.ts: plain 0 violations/0 warnings (exit 0) + --bugfix adversarial signal detected, 0 violations (exit 0). The before-fix RED is the adversarial proof the 200-branch executes and is not a silent-pass."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; parent-expanded per the documented smackerel precedent.",
+      "expansionEvidenceRef": "report.md#change-boundary",
+      "note": "Minimal/proportional: two assertion lines + docstring in one test file; no new dependency/framework/schema/config; no app change. git diff --stat = 1 file, +19/-8."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; parent-expanded per the documented smackerel precedent.",
+      "expansionEvidenceRef": "report.md#repro-after",
+      "note": "Deterministic exact-match against a stable served identity (login.html h1 rendered outside the AuthEnabled conditional). Good-neighbor: e2e-ui stack brought up only when no foreign smackerel-test* stack ran; teardown scoped to the smackerel-test-e2e-ui project only (dev + smackerel-test stacks untouched)."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; parent-expanded per the documented smackerel precedent.",
+      "expansionEvidenceRef": "report.md#change-boundary",
+      "note": "Zero app/runtime/source changes (git status -s: only web/pwa/tests/proof_of_life.spec.ts). The spec-057 /login?next= redirect middleware is untouched; no auth/routing behavior altered. Pure test-assertion staleness fix."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; parent-expanded per the documented smackerel precedent.",
+      "expansionEvidenceRef": "report.md#build-quality",
+      "note": "Independent re-verification: live e2e-ui proof_of_life GREEN (1 passed, exit 0); RED->GREEN proven this session; regression-quality plain + --bugfix exit 0; git-backed Code Diff Evidence; artifact-lint exit 0; state-transition-guard exit 0 at done."
+    },
+    {
+      "at": "2026-07-19",
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.iterate",
+      "expansionReason": "runSubagent unavailable in this runtime; parent-expanded per the documented smackerel precedent.",
+      "expansionEvidenceRef": "report.md#build-quality",
+      "note": "state-transition-guard exits 0; artifact-lint exit 0; Change Boundary respected (zero excluded families); no fabrication — every [x] backed by current-session raw evidence (RED/GREEN e2e-ui + guards)."
+    }
+  ],
+  "ciConfirmation": {
+    "gate": "live ./smackerel.sh test e2e-ui proof_of_life.spec.ts (this session)",
+    "liveRunThisSession": {
+      "command": "./smackerel.sh test e2e-ui proof_of_life.spec.ts",
+      "result": "before-fix: 1 failed (exit 1, Received 'Sign in — Smackerel'); after-fix: 1 passed (exit 0)",
+      "evidenceRef": "report.md#repro-before + report.md#repro-after"
+    },
+    "historicalCi": null
+  },
+  "execution": {
+    "executionModel": "parent-expanded-bugfix-fastlane",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "currentScope": "scope-1-proof-of-life-served-login-shell",
+    "runStartedAt": "2026-07-19T20:00:00Z",
+    "runCompletedAt": "2026-07-19T20:52:00Z",
+    "completedScopes": ["scope-1-proof-of-life-served-login-shell"],
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "completedPhaseClaimsByScope": {
+      "scope-1-proof-of-life-served-login-shell": [
+        "implement",
+        "test",
+        "regression",
+        "simplify",
+        "stabilize",
+        "security",
+        "validate",
+        "audit"
+      ]
+    },
+    "scopeSummary": [
+      {
+        "scopeId": "scope-1-proof-of-life-served-login-shell",
+        "title": "Correct the proof_of_life 200-branch to the real served login shell",
+        "owner": "bubbles.implement",
+        "dodCount": 13,
+        "status": "done",
+        "dependsOn": [],
+        "notes": "proof_of_life.spec.ts 200-branch updated to the ACTUAL live-observed served login shell (title 'Sign in — Smackerel', h1 'Sign in'); docstring corrected to the spec-057 login-shell reality. Before-fix RED (exit 1) and after-fix GREEN (exit 0) both captured live this session against the disposable smackerel-test-e2e-ui stack; regression-quality plain + --bugfix exit 0; +19/-8 in one test file; zero app/runtime/source edits. Root cause: spec-057 browser-login-redirect (/ -> 303 /login?next=/), surfaced by spec-100's F-100-OPT stack-boot fix, previously routed out-of-boundary by BUG-077-002. All 9 DoD [x] with current-session evidence."
+      }
+    ],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "bugMetadata": {
+    "foundBy": "spec-077 e2e-ui lane (surfaced during the BUG-077-002 e2e-ui run; routed out-of-boundary by BUG-077-002)",
+    "foundAt": "2026-07-19T00:00:00Z",
+    "severity": "medium",
+    "rootCauseSpec": "057-browser-login-redirect",
+    "surfacedBySpec": "100-unified-journey-ui-transformation",
+    "priorRoutingRef": "specs/077-pwa-browser-test-harness/bugs/BUG-002-e2e-ui-login-ratelimit-session-reuse/report.md",
+    "fixCommit": "2b8e145a82d8cd1028e20c681572c57f0cccdd17"
+  }
+}
