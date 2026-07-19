@@ -35,6 +35,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
+	"github.com/smackerel/smackerel/internal/testsupport/jssource"
 )
 
 func getServedText(t *testing.T, baseURL, path string) string {
@@ -65,6 +66,7 @@ func getServedText(t *testing.T, baseURL, path string) string {
 func TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09(t *testing.T) {
 	stack := loadHTTPTurnLiveStack(t)
 	waitHTTPTurnHealthy(t, stack, 30*time.Second)
+	isolateSharedHTTPConversation(t)
 
 	html := getServedText(t, stack.BaseURL, "/pwa/assistant.html")
 	for _, expect := range []string{
@@ -97,13 +99,14 @@ func TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarku
 			t.Fatalf("assistant.js missing expected wiring %q", expect)
 		}
 	}
+	executableJS := jssource.WithoutComments(js)
 	for _, forbidden := range []string{
 		"localStorage",
 		"sessionStorage",
 		"indexedDB",
 		"document.cookie",
 	} {
-		if strings.Contains(js, forbidden) {
+		if strings.Contains(executableJS, forbidden) {
 			t.Fatalf("assistant.js must not reference forbidden auth surface %q (SCN-073-A11)", forbidden)
 		}
 	}

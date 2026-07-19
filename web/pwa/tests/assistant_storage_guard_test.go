@@ -17,6 +17,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/testsupport/jssource"
 )
 
 // forbiddenStoragePatterns enumerates the storage-API surface that
@@ -82,10 +84,9 @@ func TestWebAssistantStorageGuard_TP_073_06(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", p, err)
 		}
-		// Strip line-comments so a comment that names an API for
-		// documentation doesn't trip the guard. Generated files use
-		// `//` headers; production code may too.
-		stripped := stripLineComments(string(body))
+		// Ignore comments that document forbidden APIs while preserving
+		// every executable token for the policy scan.
+		stripped := jssource.WithoutComments(string(body))
 		for _, pat := range forbiddenStoragePatterns {
 			if loc := pat.FindStringIndex(stripped); loc != nil {
 				rel, _ := filepath.Rel(root, p)
@@ -120,24 +121,8 @@ func TestWebAssistantStorageGuard_Adversarial_TP_073_06(t *testing.T) {
 
 	// Prove comment-stripping does not mask a real call.
 	masked := "// localStorage is forbidden\n const x = localStorage.getItem('a');"
-	stripped := stripLineComments(masked)
+	stripped := jssource.WithoutComments(masked)
 	if !regexp.MustCompile(`\blocalStorage\b`).MatchString(stripped) {
 		t.Fatal("comment stripping removed a real localStorage call — guard would miss violations")
 	}
-}
-
-// stripLineComments removes `//` line comments so the guard does
-// not flag the literal pattern names that appear in this very
-// file's own header comments inside the generated artifacts.
-func stripLineComments(s string) string {
-	var b strings.Builder
-	for _, line := range strings.Split(s, "\n") {
-		if idx := strings.Index(line, "//"); idx >= 0 {
-			b.WriteString(line[:idx])
-		} else {
-			b.WriteString(line)
-		}
-		b.WriteString("\n")
-	}
-	return b.String()
 }
