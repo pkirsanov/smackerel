@@ -1,6 +1,6 @@
 # Bug: BUG-002 E2E UI Card-Rewards Login Rate-Limit (Session Reuse)
 
-**Status:** in_progress
+**Status:** Fixed (certified done this session — see report.md)
 **Severity:** High
 **Found By:** CI "E2E UI" GitHub Actions lane (run 27877380385, commit 50c71583)
 **Date:** 2026-06-20

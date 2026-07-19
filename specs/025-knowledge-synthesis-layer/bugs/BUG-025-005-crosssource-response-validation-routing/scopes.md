@@ -90,15 +90,15 @@ Excluded surfaces:
 - [x] TP-06 Lint and format checks pass with zero warnings. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] TP-07 Governance gates pass with truthful current-session evidence. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] Root cause is confirmed by a focused pre-fix failing regression test. Evidence: [report.md#pre-fix-regression-test](report.md#pre-fix-regression-test)
-- [ ] Cross-source response validator enforces every FR-02 through FR-06 field rule.
-- [ ] Invalid validated output reaches existing poison/retry handling before publish or acknowledgement.
-- [ ] Artifact validation remains strict; digest, photo, and unknown behavior remains unchanged.
+- [x] Cross-source response validator enforces every FR-02 through FR-06 field rule. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
+- [x] Invalid validated output reaches existing poison/retry handling before publish or acknowledgement. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
+- [x] Artifact validation remains strict; digest, photo, and unknown behavior remains unchanged. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
 - [x] Adversarial regression cases would fail if generic artifact routing or log-and-publish behavior returned. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] Regression tests contain no silent-pass bailout patterns. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
 - [ ] Broader E2E regression suite passes
-- [ ] Change Boundary is respected and zero excluded file families were changed
-- [ ] Documentation is aligned; no runtime contract doc changes are needed beyond this bug packet unless implementation reveals drift.
+- [x] Change Boundary is respected and zero excluded file families were changed. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
+- [x] Documentation is aligned; no runtime contract doc changes are needed beyond this bug packet unless implementation reveals drift. Evidence: [report.md#documentation](report.md#documentation)
 - [ ] Build Quality Gate passes: zero warnings, zero deferrals, lint/format clean, artifact lint clean, and no skipped required tests.
 
 Test Plan rows: 7. Matching TP-labeled DoD items: 7.
