@@ -3,6 +3,39 @@ set -euo pipefail
 
 SMACKEREL_RUNTIME_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SMACKEREL_REPO_ROOT="$(cd "$SMACKEREL_RUNTIME_LIB_DIR/../.." && pwd)"
+# Populated for callers that source this library.
+# shellcheck disable=SC2034
+SMACKEREL_TOOLING_GIT_MOUNT_ARGS=()
+
+smackerel_prepare_tooling_git_mount_args() {
+  local repo_root="${1:?repository root required}"
+  local git_common_dir
+
+  SMACKEREL_TOOLING_GIT_MOUNT_ARGS=()
+  if [[ ! -f "$repo_root/.git" ]]; then
+    return 0
+  fi
+
+  if ! git_common_dir="$(git -C "$repo_root" rev-parse --git-common-dir 2>/dev/null)"; then
+    echo "ERROR: linked worktree Git metadata is unreadable: $repo_root/.git" >&2
+    return 1
+  fi
+  if [[ "$git_common_dir" != /* ]]; then
+    git_common_dir="$repo_root/$git_common_dir"
+  fi
+  if [[ ! -d "$git_common_dir" ]]; then
+    echo "ERROR: linked worktree Git common directory is missing: $git_common_dir" >&2
+    return 1
+  fi
+
+  # Consumed by the sourcing tooling runner.
+  # shellcheck disable=SC2034
+  SMACKEREL_TOOLING_GIT_MOUNT_ARGS=(
+    -v "$git_common_dir:$git_common_dir:ro"
+    -v "$repo_root/.git:$repo_root/.git:ro"
+    -e GIT_OPTIONAL_LOCKS=0
+  )
+}
 
 smackerel_repo_root() {
   printf '%s\n' "$SMACKEREL_REPO_ROOT"

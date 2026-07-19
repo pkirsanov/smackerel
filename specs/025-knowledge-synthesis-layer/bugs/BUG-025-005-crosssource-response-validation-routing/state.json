@@ -20,7 +20,7 @@
   "execution": {
     "executionModel": "direct-authorized-runner",
     "activeAgent": "bubbles.bug",
-    "currentPhase": "security",
+    "currentPhase": "bug",
     "currentScope": "scope-1-enforce-subject-correct-outgoing-validation",
     "runStartedAt": "2026-07-19T00:00:00Z",
     "runCompletedAt": null,
@@ -35,6 +35,12 @@
       }
     ],
     "pendingTransitionRequests": [
+      {
+        "findingId": "BUG-025-005-BROAD-ROUTE",
+        "scenarioIds": ["SCN-B0255-001", "SCN-B0255-002", "SCN-B0255-003"],
+        "nextRequiredOwner": "bubbles.bug",
+        "reason": "File the five independent assistant/PWA and Drive broad-E2E findings documented in report.md; do not treat later stack-loss cascades as independent bugs."
+      },
       {
         "findingId": "BUG-025-005-CERT-ROUTE",
         "scenarioIds": ["SCN-B0255-001", "SCN-B0255-002", "SCN-B0255-003"],
@@ -71,7 +77,20 @@
     "regression": {"mode": "protected-scenarios", "source": "repo-default"},
     "validation": {"mode": "certification-required", "source": "repo-default"}
   },
-  "transitionRequests": [],
+  "transitionRequests": [
+    {
+      "id": "TR-B0255-BROAD-001",
+      "requestedAt": "2026-07-19T16:03:34Z",
+      "requestedBy": "bubbles.test",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.bug",
+      "reason": "The final broad E2E run is RED on five independent assistant/PWA and Drive findings documented in report.md; later failures after core/network disappearance are cascade noise.",
+      "packetRef": "report.md#routed-independent-findings",
+      "routedTo": "bubbles.bug",
+      "status": "open"
+    }
+  ],
   "reworkQueue": [],
   "executionHistory": [
     {
@@ -96,12 +115,12 @@
   ],
   "routing": {
     "outcome": "route_required",
-    "nextRequiredOwner": "bubbles.security",
-    "reason": "Pushed fix requires security review, validate-owned certification, independent audit, then build/deploy. No deployment occurred in this invocation.",
-    "subsequentOwners": ["bubbles.validate", "bubbles.audit", "bubbles.devops"],
+    "nextRequiredOwner": "bubbles.bug",
+    "reason": "Five independent assistant/PWA and Drive regressions from the broad E2E run require owning bug packets before security review and certification continue.",
+    "subsequentOwners": ["bubbles.security", "bubbles.validate", "bubbles.audit", "bubbles.devops"],
     "redeployRequired": true
   },
-  "lastUpdatedAt": "2026-07-19T13:20:00Z",
+  "lastUpdatedAt": "2026-07-19T16:03:34Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",

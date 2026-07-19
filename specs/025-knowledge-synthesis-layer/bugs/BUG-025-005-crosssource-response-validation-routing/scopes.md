@@ -82,19 +82,19 @@ Excluded surfaces:
 
 ### Definition of Done
 
-- [ ] TP-01 Unit validator contract tests pass with red/green evidence.
-- [ ] TP-02 Regression E2E dispatch tests pass: valid concept response follows the cross-source validator with publish/ack, and malformed concept response enters poison handling before publish.
-- [ ] TP-03 Neighbor Regression E2E tests prove neighboring subject semantics remain intact for artifact, digest, photo, and unknown subjects.
-- [ ] TP-04 NATS integration tests pass against the ephemeral test stack.
+- [x] TP-01 Unit validator contract tests pass with red/green evidence. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
+- [x] TP-02 Regression E2E dispatch tests pass: valid concept response follows the cross-source validator with publish/ack, and malformed concept response enters poison handling before publish. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
+- [x] TP-03 Neighbor Regression E2E tests prove neighboring subject semantics remain intact for artifact, digest, photo, and unknown subjects. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
+- [x] TP-04 NATS integration tests pass against the ephemeral test stack. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
 - [ ] TP-05 Broader E2E regression suite passes.
-- [ ] TP-06 Lint and format checks pass with zero warnings.
-- [ ] TP-07 Governance gates pass with truthful current-session evidence.
-- [ ] Root cause is confirmed by a focused pre-fix failing regression test.
+- [x] TP-06 Lint and format checks pass with zero warnings. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] TP-07 Governance gates pass with truthful current-session evidence. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] Root cause is confirmed by a focused pre-fix failing regression test. Evidence: [report.md#pre-fix-regression-test](report.md#pre-fix-regression-test)
 - [ ] Cross-source response validator enforces every FR-02 through FR-06 field rule.
 - [ ] Invalid validated output reaches existing poison/retry handling before publish or acknowledgement.
 - [ ] Artifact validation remains strict; digest, photo, and unknown behavior remains unchanged.
-- [ ] Adversarial regression cases would fail if generic artifact routing or log-and-publish behavior returned.
-- [ ] Regression tests contain no silent-pass bailout patterns.
+- [x] Adversarial regression cases would fail if generic artifact routing or log-and-publish behavior returned. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] Regression tests contain no silent-pass bailout patterns. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
 - [ ] Broader E2E regression suite passes
 - [ ] Change Boundary is respected and zero excluded file families were changed

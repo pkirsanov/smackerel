@@ -55,7 +55,7 @@ Commands:
   lint                        Run Go vet, Python ruff, and web asset validation
   format [--check]            Format Go and Python files, or check formatting
   package extension           Package browser extension for Chrome and Firefox distribution
-  test unit [--go|--python] [--go-run <regex>] [--verbose]   Run unit tests; --go-run / --verbose require --go and apply focused subtest selection
+  test unit [--go|--python] [--go-run <regex>] [--python-k <expr>] [--verbose]   Run unit tests; focused selectors require their matching language
   test integration [--go-run <regex>] Run live-stack integration validation; optionally run only matching Go integration tests
   test integration-light [--go-run <regex>] Stores-only (postgres+nats) live integration lane; LIGHT preflight floor, no core/ml build or ml_sidecar gate. Optionally run only matching Go integration tests
   test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
@@ -124,8 +124,10 @@ require_docker() {
 run_go_tooling() {
   local script_path="$1"
   shift || true
+  smackerel_prepare_tooling_git_mount_args "$SCRIPT_DIR"
   docker run --rm \
     -v "$SCRIPT_DIR:/workspace" \
+    "${SMACKEREL_TOOLING_GIT_MOUNT_ARGS[@]}" \
     -v smackerel-gomod-cache:/go/pkg/mod \
     -v smackerel-gobuild-cache:/root/.cache/go-build \
     -w /workspace \
@@ -135,8 +137,10 @@ run_go_tooling() {
 run_python_tooling() {
   local script_path="$1"
   shift || true
+  smackerel_prepare_tooling_git_mount_args "$SCRIPT_DIR"
   docker run --rm \
     -v "$SCRIPT_DIR:/workspace" \
+    "${SMACKEREL_TOOLING_GIT_MOUNT_ARGS[@]}" \
     -v smackerel-pip-cache:/root/.cache/pip \
     -w /workspace \
     python:3.12-slim bash "$script_path" "$@"
@@ -930,6 +934,7 @@ case "$COMMAND" in
         # so report evidence can capture focused subtest output via the
         # repo-standard CLI (matches `test e2e --go-run` pattern).
         UNIT_GO_RUN_SELECTOR=""
+        UNIT_PYTHON_K_SELECTOR=""
         UNIT_VERBOSE=""
         UNIT_LANG_FILTER=""
         while [[ $# -gt 0 ]]; do
@@ -958,6 +963,22 @@ case "$COMMAND" in
               fi
               shift
               ;;
+            --python-k)
+              if [[ $# -lt 2 ]] || [[ -z "$2" ]]; then
+                echo "ERROR: --python-k requires a non-empty pytest expression" >&2
+                exit 1
+              fi
+              UNIT_PYTHON_K_SELECTOR="$2"
+              shift 2
+              ;;
+            --python-k=*)
+              UNIT_PYTHON_K_SELECTOR="${1#*=}"
+              if [[ -z "$UNIT_PYTHON_K_SELECTOR" ]]; then
+                echo "ERROR: --python-k requires a non-empty pytest expression" >&2
+                exit 1
+              fi
+              shift
+              ;;
             --verbose|-v)
               UNIT_VERBOSE="--verbose"
               shift
@@ -978,19 +999,27 @@ case "$COMMAND" in
             exit 1
           fi
         fi
+        if [[ -n "$UNIT_PYTHON_K_SELECTOR" ]] && [[ "$UNIT_LANG_FILTER" != "--python" ]]; then
+          echo "ERROR: --python-k requires --python (Python-runtime focused selection)" >&2
+          exit 1
+        fi
 
         unit_go_args=()
+        unit_python_args=()
         if [[ -n "$UNIT_VERBOSE" ]]; then
           unit_go_args+=("$UNIT_VERBOSE")
         fi
         if [[ -n "$UNIT_GO_RUN_SELECTOR" ]]; then
           unit_go_args+=(--run "$UNIT_GO_RUN_SELECTOR")
         fi
+        if [[ -n "$UNIT_PYTHON_K_SELECTOR" ]]; then
+          unit_python_args+=(--k "$UNIT_PYTHON_K_SELECTOR")
+        fi
 
         if [[ "$UNIT_LANG_FILTER" == "--go" ]]; then
           run_go_tooling /workspace/scripts/runtime/go-unit.sh "${unit_go_args[@]}"
         elif [[ "$UNIT_LANG_FILTER" == "--python" ]]; then
-          run_python_tooling /workspace/scripts/runtime/python-unit.sh
+          run_python_tooling /workspace/scripts/runtime/python-unit.sh "${unit_python_args[@]}"
         else
           run_go_tooling /workspace/scripts/runtime/go-unit.sh
           run_python_tooling /workspace/scripts/runtime/python-unit.sh
@@ -1155,7 +1184,29 @@ case "$COMMAND" in
         else
           echo "FAIL: go-integration (exit=${go_integration_status})"
         fi
-        exit "$go_integration_status"
+
+        set +e
+        docker run --rm \
+          --network "$compose_network" \
+          -v "$SCRIPT_DIR:/workspace" \
+          -v smackerel-pip-cache:/root/.cache/pip \
+          -w /workspace \
+          --env-file "$env_file" \
+          -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
+          -e "SMACKEREL_INTEGRATION_TESTS=1" \
+          python:3.12-slim bash /workspace/scripts/runtime/python-integration.sh
+        python_integration_status=$?
+        set -e
+        if [[ "$python_integration_status" -eq 0 ]]; then
+          echo "PASS: python-integration"
+        else
+          echo "FAIL: python-integration (exit=${python_integration_status})"
+        fi
+
+        if [[ "$go_integration_status" -ne 0 ]]; then
+          exit "$go_integration_status"
+        fi
+        exit "$python_integration_status"
         ;;
       integration-light)
         # OPS-005 F-RUNBOOK — stores-only ("light") integration lane. Brings up
@@ -1664,6 +1715,19 @@ case "$COMMAND" in
           esac
         }
 
+        e2e_shell_test_manages_stack() {
+          local shell_test_target="$1"
+
+          case "$shell_test_target" in
+            test_timeout_process_cleanup.sh|test_deploy_target_status.sh|test_compose_start.sh|test_persistence.sh|test_postgres_readiness_gate.sh|test_config_fail.sh)
+              return 0
+              ;;
+            *)
+              return 1
+              ;;
+          esac
+        }
+
         e2e_print_test_stack_state() {
           local compose_project
 
@@ -1820,7 +1884,20 @@ case "$COMMAND" in
           shell_e2e_timeout_s="$(e2e_shell_timeout_for "$SHELL_E2E_RUN_TARGET")"
           e2e_validate_shell_test_target "$SHELL_E2E_RUN_TARGET"
           echo "Running targeted shell E2E: $SHELL_E2E_RUN_TARGET"
-          e2e_run_shell_test "$SHELL_E2E_RUN_TARGET" "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=15s "$shell_e2e_timeout_s" env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$SHELL_E2E_RUN_TARGET"
+          if e2e_shell_test_manages_stack "$SHELL_E2E_RUN_TARGET"; then
+            e2e_run_shell_test "$SHELL_E2E_RUN_TARGET" "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=15s "$shell_e2e_timeout_s" bash "$SCRIPT_DIR/tests/e2e/$SHELL_E2E_RUN_TARGET"
+          else
+            e2e_down_test_stack "before targeted shared-stack shell E2E"
+            set +e
+            e2e_run_child "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=30s 360 "$SCRIPT_DIR/smackerel.sh" --env test up
+            targeted_stack_status=$?
+            set -e
+            if [[ "$targeted_stack_status" -ne 0 ]]; then
+              e2e_record_shell_result "targeted-stack-start" "$targeted_stack_status"
+            else
+              e2e_run_shell_test "$SHELL_E2E_RUN_TARGET" "$SCRIPT_DIR/scripts/lib/run-with-timeout.sh" --kill-after=15s "$shell_e2e_timeout_s" env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$SHELL_E2E_RUN_TARGET"
+            fi
+          fi
           e2e_print_shell_summary
           if [[ "$e2e_overall_status" -ne 0 ]]; then
             exit "$e2e_overall_status"

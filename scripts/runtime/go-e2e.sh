@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-go_test_args=(-tags e2e -v -count=1 -timeout 300s)
+go_test_args=(-p 1 -tags e2e -v -count=1 -timeout 300s)
 if [[ -n "$go_run_selector" ]]; then
 	echo "go-e2e: applying -run selector: $go_run_selector"
 	go_test_args+=(-run "$go_run_selector")

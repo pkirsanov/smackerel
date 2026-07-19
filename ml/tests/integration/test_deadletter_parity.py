@@ -1,6 +1,7 @@
 """Integration tests for spec 081 — NATS Python sidecar dead-letter parity.
 
-Marker: @pytest.mark.integration. Skipped unless SMACKEREL_INTEGRATION_TESTS=1.
+Marker: @pytest.mark.integration. The canonical integration runner supplies the
+live disposable stack and required environment.
 
 Requires a live NATS JetStream test stack with the DEADLETTER stream
 already created (spec 022 binding `deadletter.>`). Drive via
@@ -22,19 +23,13 @@ from datetime import datetime
 
 import pytest
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        os.environ.get("SMACKEREL_INTEGRATION_TESTS") != "1",
-        reason="set SMACKEREL_INTEGRATION_TESTS=1 to run live NATS integration tests",
-    ),
-]
+pytestmark = pytest.mark.integration
 
 
 def _required_env(name: str) -> str:
     val = os.environ.get(name, "")
     if not val:
-        pytest.skip(f"{name} not set — integration test requires the test stack env")
+        raise RuntimeError(f"{name} is required by the live integration test runner")
     return val
 
 

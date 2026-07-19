@@ -299,6 +299,146 @@ The red shows one-call permanent failure; the green shows invalid-then-valid suc
 | Source/test/doc delivery awaits independent certification; no validate/audit specialist invocation tool exists in this runtime | `routed` to `bubbles.validate` then `bubbles.audit` | `state.json` transition request `TR-026-008-VALIDATE-001` |
 | Pushed source must be built and deployed through the signed delivery path before live accepted-runtime confirmation | `routed` to `bubbles.devops` | `state.json` transition request `TR-026-008-DEVOPS-001` |
 
+## Interrupted Test Closeout Evidence - 2026-07-19
+
+### Harness And Category Repairs
+
+**Executed:** YES (current session, recovered from the interrupted terminal resources)
+**Commands:** `./smackerel.sh --env test test e2e --shell-run test_synthesis.sh`; `bash tests/unit/cli/linked_worktree_tooling_mount_test.sh`; `./smackerel.sh test unit --go`; `./smackerel.sh test unit --python --python-k 'crosssource or schema_repair or malformed_json or structured_extraction_thinking or output_token_budget'`; `./smackerel.sh test unit --python`; `./smackerel.sh --env test test integration`
+**Exit Code:** 0 for every listed command
+**Claim Source:** executed
+
+```text
+Container smackerel-test-postgres-1 Healthy
+Container smackerel-test-smackerel-core-1 Healthy
+Container smackerel-test-smackerel-ml-1 Healthy
+=== Synthesis Engine E2E ===
+Services healthy after 0s
+PASS: Intelligence tables exist
+PASS: SCN-004-001: Cross-domain cluster detected (size=3)
+PASS: test_synthesis.sh
+Total: 1
+Passed: 1
+Failed: 0
+PASS: linked worktree tooling mounts common Git metadata read-only
+[go-unit] go test ./... finished OK
+78 passed, 632 deselected in 1.11s
+708 passed, 2 deselected in 13.95s
+PASS: go-integration
+[py-integration] pip install OK; starting live integration pytest
+.                                                                        [100%]
+1 passed in 0.48s
+[py-integration] live integration pytest finished OK
+PASS: python-integration
+```
+
+The selector and full Python lane report deselection, not skipping: required live integration and external-Ollama categories are now excluded from the unit collection and the dead-letter test runs in the canonical integration lane. This directly addresses the behavioral substance of `TR-026-008-TEST-001`, `TR-026-008-TEST-002`, and `TR-026-008-TEST-003`; state accounting is updated only after the focused closeout checks rerun.
+
+### Focused Live Regression And Retirement Isolation
+
+**Executed:** YES (current session, recovered from the interrupted terminal resources)
+**Commands:** `./smackerel.sh --env test test e2e --go-run 'TestKnowledge(Synthesis_PipelineRoundTrip|CrossSource_ConnectionDetection)'`; `./smackerel.sh --env test test e2e --go-run TestLegacyRetirement_FullScenarioMatrix`
+**Exit Code:** 0 for both commands
+**Claim Source:** executed
+
+```text
+go-e2e: applying -run selector: TestKnowledge(Synthesis_PipelineRoundTrip|CrossSource_ConnectionDetection)
+=== RUN   TestKnowledgeCrossSource_ConnectionDetection
+--- PASS: TestKnowledgeCrossSource_ConnectionDetection (0.01s)
+=== RUN   TestKnowledgeSynthesis_PipelineRoundTrip
+--- PASS: TestKnowledgeSynthesis_PipelineRoundTrip (8.03s)
+PASS
+ok github.com/smackerel/smackerel/tests/e2e 8.150s
+PASS: go-e2e
+go-e2e: applying -run selector: TestLegacyRetirement_FullScenarioMatrix
+=== RUN   TestLegacyRetirement_FullScenarioMatrix
+--- PASS: TestLegacyRetirement_FullScenarioMatrix (0.15s)
+--- PASS: TestLegacyRetirement_FullScenarioMatrix/A01_FirstWeatherShowsNoticeAndServesBody (0.02s)
+--- PASS: TestLegacyRetirement_FullScenarioMatrix/A02_SecondWeatherDoesNotRenotify (0.02s)
+--- PASS: TestLegacyRetirement_FullScenarioMatrix/A03_RemindProducesIndependentNotice (0.01s)
+--- PASS: TestLegacyRetirement_FullScenarioMatrix/A04_ResidualMetricRegistered (0.00s)
+PASS
+ok github.com/smackerel/smackerel/tests/e2e/legacy_retirement 0.190s
+PASS: go-e2e
+```
+
+The cross-source live test remains collateral coverage because it accepts an empty concept store. It is not used to overstate exact outgoing-validation routing, which is covered by the focused Python dispatch regression.
+
+### Broad E2E Is RED
+
+**Executed:** YES (current session, recovered from the saved terminal resource)
+**Command:** `./smackerel.sh --env test test e2e`
+**Exit Code:** nonzero; the exact numeric exit was not retained after terminal scrollback truncation
+**Claim Source:** executed
+
+```text
+--- FAIL: TestAssistantTransportHintParity_WebAndMobileShareResponseShape (0.03s)
+web_pwa_chat_e2e_test.go:107: assistant.js must not reference forbidden auth surface "localStorage" (SCN-073-A11)
+--- FAIL: TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09 (0.02s)
+web_pwa_retry_e2e_test.go:67: trace.assistant_turn_id must be non-empty: first="" second=""
+--- FAIL: TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10 (0.17s)
+web_pwa_retry_e2e_test.go:89: trace.assistant_turn_id must be non-empty: a="" b=""
+--- FAIL: TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial (0.01s)
+=== RUN   TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers
+drive scan: completed provider=google seen=1 indexed=1 skipped=0
+drive scan: completed provider=memdrive seen=1 indexed=1 skipped=0
+drive_cross_feature_e2e_test.go:147: /api/search must return BOTH provider rows; google=false mem=false
+--- FAIL: TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers (3.87s)
+=== RUN   TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture
+drive_observability_e2e_test.go:48: e2e: services not healthy after 2m0s at http://smackerel-core:8080
+--- FAIL: TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture (121.94s)
+drive_policy_e2e_test.go:38: e2e: services not healthy after 30s at http://smackerel-core:8080
+drive_scan_e2e_test.go:17: waitForHealth
+FAIL github.com/smackerel/smackerel/tests/e2e/drive 300.054s
+spec_076_migrations_e2e_test.go:59: lookup postgres on 127.0.0.11:53: no such host
+FAIL github.com/smackerel/smackerel/tests/e2e/foundation 0.056s
+```
+
+**Uncertainty Declaration:** the named failures and timings above were retained verbatim, while the command header/footer was lost to terminal scrollback. The run is definitively RED. No broad-E2E pass or exact numeric exit claim is made.
+
+### Independent Broad Findings Routed Out Of Packet
+
+| Finding ID | Independent observation | Interpretation | Route |
+|---|---|---|---|
+| `BROAD-ASSISTANT-TRANSPORT-001` | Web/mobile transport-hint parity failed before the Drive package ran. | The E2E compares two state-mutating `/reset` calls even though the current adapter contract records the hint in telemetry-only metadata; the test appears stale or state-contaminated. | `bubbles.bug`, likely spec 073 / assistant ownership |
+| `BROAD-ASSISTANT-PWA-SCAN-001` | The served-JS test rejected the literal token `localStorage`. | `web/pwa/assistant.js` contains the token only in a prohibition comment, so the raw substring scanner is a false positive. | `bubbles.bug`, likely spec 073 / assistant ownership |
+| `BROAD-ASSISTANT-RETRY-001` | Both retry tests received empty `trace.assistant_turn_id` values. | The tests use `/reset`, whose short-circuit response carries empty trace fields; shared context-reset state may also contaminate sequential cases. | `bubbles.bug`, likely spec 073 / assistant ownership |
+| `BROAD-DRIVE-SEARCH-001` | Google and memdrive scans each indexed one row, but `/api/search` returned neither expected provider row. | This is an independent cross-feature search failure; later stack loss does not explain it. | `bubbles.bug`, Drive/search ownership |
+| `BROAD-DRIVE-HEALTH-001` | The Drive observability test independently waited two minutes and observed core unhealthy. | Investigate whether the observability fixture makes core unhealthy or exposes an existing health collapse. | `bubbles.bug`, Drive/observability ownership |
+
+All Drive, foundation, retirement, transport, and wiki failures after the core/container-network disappearance are classified as cascade noise until one of the independent health findings is reproduced in its owning packet. The two broader-E2E DoD items remain unchecked.
+
+### Final Cheap Closeout Checks
+
+**Executed:** YES (current session)
+**Commands:** targeted ShellCheck/shfmt and both CLI contracts; `./smackerel.sh format --check`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`; `./smackerel.sh lint`; packet artifact/traceability/reality/regression guards
+**Exit Code:** 0 for every listed check
+**Claim Source:** executed
+
+```text
+=== SHELLCHECK SUPPORT FILES PASS ===
+=== SHELLCHECK CLI PASS ===
+=== SHFMT NEW FILES PASS ===
+=== SHFMT CHANGED FILES PARSE PASS ===
+=== LINKED WORKTREE CONTRACT PASS ===
+=== SYNTHESIS HARNESS CONTRACT PASS ===
+=== REPO FORMAT CHECK PASS ===
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: OK
+=== REPO CHECK PASS ===
+All checks passed!
+Web validation passed
+=== REPO LINT PASS ===
+Artifact lint PASSED.
+Traceability RESULT: PASSED (0 warnings)
+Implementation reality: 13 files, 0 violations, 0 warnings
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+=== BUG-026 REGRESSION PASS ===
+```
+
+These checks close the test-infrastructure and format requests only. The broad E2E result remains RED, and validate-owned certification remains unchanged.
+
 ## Invocation Audit
 
 No subagent invocation API is available in this runtime. The authorized top-level `bubbles.bug` runner uses Smackerel's recorded parent-expanded phase convention and records each phase's real command provenance separately; it does not claim a `runSubagent` call occurred.

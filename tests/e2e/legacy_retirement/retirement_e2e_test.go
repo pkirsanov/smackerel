@@ -35,6 +35,68 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 )
 
+const sharedHTTPUserID = "shared"
+
+type retirementLedgerSnapshot struct {
+	transport string
+	ledger    []byte
+}
+
+func resetSharedRetirementLedger(t *testing.T, pool *pgxpool.Pool, windowID string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rows, err := pool.Query(ctx, `
+		SELECT transport, legacy_retirement_notices
+		  FROM assistant_conversations
+		 WHERE user_id = $1
+		 ORDER BY transport`, sharedHTTPUserID)
+	if err != nil {
+		t.Fatalf("snapshot shared retirement ledger: %v", err)
+	}
+	defer rows.Close()
+
+	var snapshots []retirementLedgerSnapshot
+	for rows.Next() {
+		var snapshot retirementLedgerSnapshot
+		if err := rows.Scan(&snapshot.transport, &snapshot.ledger); err != nil {
+			t.Fatalf("scan shared retirement ledger snapshot: %v", err)
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate shared retirement ledger snapshot: %v", err)
+	}
+	if len(snapshots) == 0 {
+		t.Fatal("shared HTTP conversation row missing after assistant readiness probe")
+	}
+
+	t.Cleanup(func() {
+		restoreCtx, restoreCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer restoreCancel()
+		for _, snapshot := range snapshots {
+			if _, err := pool.Exec(restoreCtx, `
+				UPDATE assistant_conversations
+				   SET legacy_retirement_notices = $3::jsonb
+				 WHERE user_id = $1 AND transport = $2`,
+				sharedHTTPUserID, snapshot.transport, snapshot.ledger); err != nil {
+				t.Errorf("restore shared retirement ledger transport=%s: %v", snapshot.transport, err)
+			}
+		}
+	})
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE assistant_conversations
+		   SET legacy_retirement_notices = jsonb_build_object(
+		           'schema_version', 1,
+		           'window_id', $2::text,
+		           'commands', '{}'::jsonb)
+		 WHERE user_id = $1`, sharedHTTPUserID, windowID); err != nil {
+		t.Fatalf("reset shared retirement ledger: %v", err)
+	}
+}
+
 func openPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dbURL := os.Getenv("DATABASE_URL")
@@ -64,29 +126,7 @@ func TestLegacyRetirement_FullScenarioMatrix(t *testing.T) {
 	waitAssistantReady(t, stack)
 
 	pool := openPool(t)
-	userID := fmt.Sprintf("tp-076-06-10-user-%d", time.Now().UnixNano())
-	t.Cleanup(func() {
-		cctx, ccancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer ccancel()
-		_, _ = pool.Exec(cctx, `DELETE FROM assistant_conversations WHERE user_id = $1`, userID)
-	})
-
-	// Reset the dedup ledger for the bearer-token user(s) on the
-	// disposable test stack so the A01 first-invocation assertion is
-	// not contaminated by a prior test in this run that already
-	// marked the notice for /weather under the same bearer identity.
-	// This is safe on the disposable test stack — never run against
-	// a persistent dev or production database.
-	resetCtx, resetCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer resetCancel()
-	if _, err := pool.Exec(resetCtx, `
-		UPDATE assistant_conversations
-		   SET legacy_retirement_notices = jsonb_set(
-		           jsonb_set(legacy_retirement_notices, '{commands}', '{}'::jsonb, true),
-		           '{window_id}', to_jsonb($1::text), true)
-		 WHERE legacy_retirement_notices IS NOT NULL`, stack.WindowID); err != nil {
-		t.Fatalf("reset ledger for matrix walk: %v", err)
-	}
+	resetSharedRetirementLedger(t, pool, stack.WindowID)
 
 	t.Run("A01_FirstWeatherShowsNoticeAndServesBody", func(t *testing.T) {
 		turnID := "tp-076-06-10-a01-" + time.Now().UTC().Format("20060102T150405.000000")
