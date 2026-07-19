@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "featureDir": "specs/038-cloud-drives-integration/bugs/BUG-038-002-provider-neutral-search-omission",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-038-002-SCN-001",
+      "scope": "scope-1-restore-deterministic-multi-provider-search-convergence",
+      "title": "Both providers surface after completed extraction",
+      "gherkin": {
+        "given": "one Google file and one memdrive file contain matching query terms and both extraction passes complete",
+        "when": "an authenticated client searches the live canonical API",
+        "then": "both exact artifact IDs and provider identities are returned"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/drive/drive_cross_feature_e2e_test.go", "testId": "TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers"}
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-038-002-SCN-002",
+      "scope": "scope-1-restore-deterministic-multi-provider-search-convergence",
+      "title": "Earlier generic contenders cannot suppress isolated provider rows",
+      "gherkin": {
+        "given": "twenty earlier exact-title generic contenders and two provider rows carrying a collision-resistant per-run term",
+        "when": "the authenticated client searches for the isolated term under the bounded result limit",
+        "then": "both exact provider rows remain discoverable"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/drive/drive_cross_feature_e2e_test.go", "testId": "TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers"}
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-038-002-SCN-003",
+      "scope": "scope-1-restore-deterministic-multi-provider-search-convergence",
+      "title": "Provider and audience policy remains strict",
+      "gherkin": {
+        "given": "provider and audience metadata on both fixture artifacts",
+        "when": "search filters are applied",
+        "then": "only eligible exact rows are returned without weakened policy"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/drive/drive_cross_feature_e2e_test.go", "testId": "TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers"}
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
