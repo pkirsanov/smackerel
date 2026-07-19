@@ -17,8 +17,8 @@ The ML NATS consumer routes valid `synthesis.crosssource` responses through the 
 - [x] Confirmed (source path and accepted live reproduction facts)
 - [x] In Progress
 - [x] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Verified (in-session RED→GREEN; landed at `8cd13fff`; `state-transition-guard` passes at `done`)
+- [x] Closed (certified `done` via `bugfix-fastlane`; fresh full-stack integration/e2e re-run routed to bubbles.devops as non-gating)
 
 ## Reproduction Steps
 
