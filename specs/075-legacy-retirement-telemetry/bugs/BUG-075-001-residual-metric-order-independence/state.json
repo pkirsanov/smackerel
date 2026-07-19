@@ -11,18 +11,23 @@
   "releaseTrain": "mvp",
   "flagsIntroduced": [],
   "workflowMode": "bugfix-fastlane",
+  "executionRuntime": "direct",
   "status": "in_progress",
   "createdAt": "2026-07-19",
   "updatedAt": "2026-07-19",
   "execution": {
     "activeAgent": "bubbles.bug",
-    "currentPhase": "handoff",
+    "currentPhase": "governance-reconciliation",
     "currentScope": "1",
     "executionModel": "direct-authorized-runner",
     "runStartedAt": "2026-07-19T00:00:00Z",
     "completedScopes": [],
-    "completedPhaseClaims": [],
-    "executionHistory": [],
+    "completedPhaseClaims": ["security", "validate", "audit"],
+    "executionHistory": [
+      {"at": "2026-07-19", "agent": "bubbles.security", "phasesExecuted": ["security"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate security review returned PASS for merge, build, and deploy."},
+      {"at": "2026-07-19", "agent": "bubbles.validate", "phasesExecuted": ["validate"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "completed_diagnostic", "note": "Exact-candidate diagnostic returned PASS for fast-forward merge, build, and deploy while preserving explicit skips and nonterminal certification."},
+      {"at": "2026-07-19", "agent": "bubbles.audit", "phasesExecuted": ["audit"], "provenanceMode": "specialist", "candidateRevision": "b476198898f005ac5bad25510fcb9d90cbe50939", "claimSource": "operator-attested-outer-session", "outcome": "blocked", "note": "Exact-candidate source, test, and documentation consistency passed; delivery completion was blocked only by packet governance."}
+    ],
     "scopeSummary": [{"scopeId": "1", "title": "Materialize residual telemetry through the live product path", "owner": "bubbles.test", "dodCount": 11, "status": "in_progress", "dependsOn": []}]
   },
   "certification": {
@@ -55,8 +60,25 @@
       "targetAgent": "bubbles.validate",
       "reason": "Order-independent live metric regression is green; validate/audit certification remains unexecuted.",
       "packetRef": "report.md#green-order-independent-real-sample",
+      "status": "resolved",
+      "resolution": "Exact-candidate validate and audit diagnostics ran; terminal certification remains withheld pending execution-owned reconciliation."
+    },
+    {
+      "id": "TR-BUG-075-001-GOVERNANCE-001",
+      "requestedAt": "2026-07-19T23:20:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.analyst",
+      "routedTo": "bubbles.analyst",
+      "routedToCommit": "b476198898f005ac5bad25510fcb9d90cbe50939",
+      "productAction": "none",
+      "crossRepoFollowUp": true,
+      "reason": "Add the G094 capability justification to spec.md; bubbles.design then supplies foundation/concrete implementation/variation-axis sections. bubbles.audit must append packet-attributed G053/G093 diff evidence before execution/validate reconciliation.",
+      "packetRef": "report.md#green-order-independent-real-sample",
       "status": "open"
     }
   ],
-  "reworkQueue": []
+  "reworkQueue": [],
+  "routing": {"outcome": "route_required", "nextRequiredOwner": "bubbles.analyst", "reason": "Repair G094 planning truth first, then append packet-attributed G053/G093 evidence and reconcile supported focused claims without full E2E.", "subsequentOwners": ["bubbles.design", "bubbles.audit", "bubbles.implement", "bubbles.test", "bubbles.validate"]}
 }
