@@ -58,6 +58,8 @@ Excluded surfaces (MUST NOT be touched):
 |-----|----------|----------|---------------|-------------------|---------|
 | TP-077-BUG-003-01 | SCN-077-BUG-003-01 | e2e-ui | `web/pwa/tests/proof_of_life.spec.ts` | `proof of life: served / route renders against the test stack` | `./smackerel.sh test e2e-ui proof_of_life.spec.ts` |
 | TP-077-BUG-003-02 | SCN-077-BUG-003-02 | e2e-ui (adversarial before/after) + guard | `web/pwa/tests/proof_of_life.spec.ts` | before-fix RED (title mismatch) → after-fix GREEN; `regression-quality-guard --bugfix` | `./smackerel.sh test e2e-ui proof_of_life.spec.ts` + `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix web/pwa/tests/proof_of_life.spec.ts` |
+| TP-077-BUG-003-03 | SCN-077-BUG-003-01 | Scenario-specific Regression E2E | `web/pwa/tests/proof_of_life.spec.ts` | `proof of life: served / route renders against the test stack` (persistent e2e-ui regression) | `./smackerel.sh test e2e-ui proof_of_life.spec.ts` |
+| TP-077-BUG-003-04 | SCN-077-BUG-003-01, SCN-077-BUG-003-02 | Broader Regression E2E | full PWA `web/pwa/tests/**` e2e-ui lane | full PWA suite discovers/compiles (52 tests, 28 files) + lane infra intact via the after-fix stack bring-up | `npx playwright test --list` (discovery) + `./smackerel.sh test e2e-ui proof_of_life.spec.ts` (lane) |
 
 ### Definition of Done
 
@@ -70,3 +72,7 @@ Excluded surfaces (MUST NOT be touched):
 - [x] Change Boundary respected: only `proof_of_life.spec.ts` (docstring + 200-branch) + this bug packet; zero app/runtime/source or other-spec-test changes → Evidence: report.md#change-boundary (`git status -s`, `git diff --stat` = 1 file, +19/-8) + report.md#code-diff-evidence
 - [x] Good-neighbor concurrency honored: e2e-ui stack brought up only when no foreign `smackerel-test*` stack was running; own project (`smackerel-test-e2e-ui`) torn down only → Evidence: report.md#repro-before + report.md#repro-after (good-neighbor gate output + scoped teardown)
 - [x] Build Quality Gate: `regression-quality-guard` exit 0 (plain + `--bugfix`), `artifact-lint.sh` exit 0, `state-transition-guard.sh` exit 0 at `done` → Evidence: report.md#phase-regression + report.md#build-quality
+- [x] SCN-077-BUG-003-01: proof_of_life 200 branch matches the real served login shell — unauthenticated `/` → 303 `/login?next=/` → served login shell, asserting title `"Sign in — Smackerel"` + `h1 "Sign in"`, passes GREEN → Evidence: report.md#repro-after
+- [x] SCN-077-BUG-003-02: the corrected 200 branch is adversarial, not a silent-pass — it FAILS on a blank/error/other served `/` (proven by the before-fix RED title mismatch; `regression-quality-guard --bugfix` adversarial signal) → Evidence: report.md#repro-before + report.md#phase-regression
+- [x] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior exists and passes — the persistent `proof_of_life.spec.ts` e2e-ui regression is GREEN this session → Evidence: report.md#repro-after
+- [x] Broader E2E regression suite passes for the affected surface — the full PWA `web/pwa/tests/**` lane discovers/compiles clean (52 tests, 28 files, exit 0), and the after-fix run exercised the full disposable stack end-to-end; the isolated one-file diff is confined to a single test assertion (+19/-8), affecting no other spec or module → Evidence: report.md#phase-broader-regression + report.md#change-boundary
