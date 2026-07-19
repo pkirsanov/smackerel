@@ -32,6 +32,7 @@ from .metrics import (
 from .url_validator import validate_fetch_url
 from .validation import (
     PayloadValidationError,
+    validate_crosssource_result,
     validate_process_payload,
     validate_processed_result,
 )
@@ -126,6 +127,48 @@ SUBJECT_RESPONSE_MAP = {
 }
 
 
+# Every subscribed subject declares its outgoing validation contract. ``None``
+# preserves an existing subject whose response is validated by its receiver or
+# handler rather than by this shared boundary. New subjects must choose a mode
+# explicitly instead of falling into the artifact validator by accident.
+OUTGOING_VALIDATION_MODES = {
+    "artifacts.process": "artifact",
+    "search.embed": None,
+    "search.rerank": None,
+    "digest.generate": None,
+    "keep.sync.request": None,
+    "keep.ocr.request": None,
+    "learning.classify": "artifact",
+    "content.analyze": None,
+    "monthly.generate": None,
+    "quickref.generate": None,
+    "seasonal.analyze": None,
+    "synthesis.extract": "artifact",
+    "synthesis.crosssource": "crosssource",
+    "domain.extract": "artifact",
+    "photos.classify": "photo",
+    "photos.ocr": "photo",
+    "photos.embed": "photo",
+    "photos.lifecycle": "photo",
+    "photos.dedupe": "photo",
+    "photos.sensitivity": "photo",
+    "photos.aesthetic": "photo",
+    "photos.removal.review": "photo",
+    "agent.invoke.request": None,
+    "drive.extract.request": "artifact",
+    "drive.classify.request": "artifact",
+}
+
+_validation_mode_subjects = set(OUTGOING_VALIDATION_MODES)
+_subscribed_subjects = set(SUBSCRIBE_SUBJECTS)
+if _validation_mode_subjects != _subscribed_subjects:
+    raise RuntimeError(
+        "OUTGOING_VALIDATION_MODES must declare exactly every subscribed subject; "
+        f"missing={sorted(_subscribed_subjects - _validation_mode_subjects)}, "
+        f"extra={sorted(_validation_mode_subjects - _subscribed_subjects)}"
+    )
+
+
 # Subjects that are critical — failure to subscribe is fatal
 CRITICAL_SUBJECTS = {"artifacts.process", "search.embed", "synthesis.extract", "photos.classify", "photos.embed"}
 
@@ -208,6 +251,26 @@ def _sanitize_header_value(s: str) -> str:
     if not any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in s):
         return s  # fast path: no control/DEL chars
     return "".join(" " if (ord(ch) < 0x20 or ord(ch) == 0x7F) else ch for ch in s)
+
+
+def _validate_outgoing_result(subject: str, response_subject: str | None, result: dict) -> None:
+    mode = OUTGOING_VALIDATION_MODES[subject]
+    if mode is None:
+        return
+    if mode == "artifact":
+        validate_processed_result(result)
+        return
+    if mode == "crosssource":
+        validate_crosssource_result(result)
+        return
+    if mode == "photo":
+        if response_subject is None:
+            raise RuntimeError(f"photo subject {subject} has no response subject")
+        from .photos import validate_photo_result
+
+        validate_photo_result(response_subject, result)
+        return
+    raise RuntimeError(f"unsupported outgoing validation mode {mode!r} for {subject}")
 
 
 class NATSClient:
@@ -631,28 +694,7 @@ class NATSClient:
                         ).inc(tokens)
 
                     response_subject = SUBJECT_RESPONSE_MAP.get(subject)
-                    if subject.startswith("photos.") and response_subject:
-                        from .photos import validate_photo_result
-
-                        validate_photo_result(response_subject, result)
-                    elif subject == "digest.generate":
-                        # Digest results carry digest_date / text, not
-                        # artifact_id. validate_processed_result enforces
-                        # the artifact-ingestion schema and rejects valid
-                        # digest payloads with "artifact_id is required",
-                        # which blocked the digest.generated publish and
-                        # left the daily-digest pipeline stuck on the
-                        # storeFallbackDigest line ("N items processed
-                        # overnight."). Skip the artifact-shape check for
-                        # digest results; their shape is validated by the
-                        # core-side Go subscriber on receipt instead.
-                        pass
-                    else:
-                        # Validate outgoing result before publishing
-                        try:
-                            validate_processed_result(result)
-                        except PayloadValidationError as ve:
-                            logger.error("Invalid outgoing result on %s: %s", subject, ve)
+                    _validate_outgoing_result(subject, response_subject, result)
 
                     if response_subject:
                         await self.publish(response_subject, result)
