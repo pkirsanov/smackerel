@@ -11,7 +11,7 @@
 
 ---
 
-## Acceptance Checklist
+## Checklist
 
 - [x] `DRY_RUN=true ./smackerel.sh --env dev clean smart` (dev plane) previews the exact planned command including `until=<N>h`, the project owner-label filter (`--filter label=io.smackerel.lifecycle.owner=smackerel`), and the env=prod exclusion (`--filter label!=io.smackerel.environment=prod`) — and changes nothing.
 - [x] Orphaned smackerel image versions older than `unused_image_min_age_hours` are reclaimed on a normal `clean smart` (reclaimed space appears in the summary), after the existing volume-preserving teardown; images newer than the age are preserved.
