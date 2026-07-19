@@ -68,6 +68,23 @@ from SST (the generator always emits `METRICS_SCRAPE_LABEL_PRODUCT=smackerel`);
 labels (including the spec-082 nats `persistent` lifecycle contract) are
 untouched.
 
+## Capability Foundation Disposition
+
+### Single-Implementation Justification
+
+This design intentionally ships a SINGLE implementation, not a capability
+foundation with concrete-implementation variants. The whole point of the
+reconciliation (D1, knb FINDING-014-03-1) is to REUSE the one existing
+OTLP/gRPC exporter and the one existing `/metrics` handler rather than fork a
+second one. The only new code is one fail-loud contract reader
+(`internal/observability/shared.go` — 117 lines, 4 functions) plus additive
+`com.bubbles.*` labels; there is no provider/adapter/strategy/plugin axis and no
+second variant to abstract over. A `## Capability Foundation` /
+`## Concrete Implementations` / `### Variation Axes` decomposition would invent
+seams the single-consumer contract does not have, so it is deliberately omitted
+in favour of this single-implementation justification (per the
+capability-foundation proportionality rule).
+
 ## Architecture (target state)
 
 ```
