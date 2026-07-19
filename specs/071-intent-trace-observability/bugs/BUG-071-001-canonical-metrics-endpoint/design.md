@@ -4,11 +4,11 @@
 
 ### Investigation Summary
 
-The canonical E2E runner injects `CORE_EXTERNAL_URL=http://smackerel-core:<container-port>` and `SMACKEREL_TEST_ENV_FILE`. The failing test ignores that core endpoint and instead requires `SMACKEREL_CORE_METRICS_URL`, a variable with no SST producer or runner wiring anywhere else in the repository.
+The canonical E2E runner injects `CORE_EXTERNAL_URL=http://smackerel-core:<container-port>` and `SMACKEREL_TEST_ENV_FILE`. The failing test ignores that core endpoint and instead requires `SMACKEREL_CORE_METRICS_URL`. After that mismatch is removed, the real scrape shows `openknowledge_refusal_total` and `smackerel_assistant_intent_traces_total` are registered label vectors but absent from exposition until a child series exists.
 
 ### Root Cause
 
-The test-side live environment contract drifted from the runner-owned endpoint contract. This is a test-harness defect, not a missing production metrics route.
+The test-side endpoint contract drifted from the runner-owned contract, and both production label vectors lacked pre-event closed-vocabulary child series. The route itself is present; visibility before first traffic is the production observability defect.
 
 ### Impact Analysis
 
@@ -20,7 +20,7 @@ The test-side live environment contract drifted from the runner-owned endpoint c
 
 ### Solution Approach
 
-Resolve the metrics URL from required `CORE_EXTERNAL_URL`, append `/metrics` exactly once, retain the bounded real HTTP request, and add a closed assistant-package selector to the repository E2E command so this package can run without the all-package suite. Preserve fail-loud behavior when the endpoint or either metric family is absent.
+Resolve the metrics URL from required `CORE_EXTERNAL_URL`, append `/metrics` exactly once, and retain the bounded real HTTP request. Initialize one valid zero series for intent traces and the complete bounded refusal-cause vocabulary for open knowledge; `Add(0)` exposes registration without fabricating usage. Add fresh-registry units and a closed assistant-package selector.
 
 ### Alternative Approaches Considered
 
