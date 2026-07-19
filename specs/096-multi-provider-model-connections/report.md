@@ -2515,6 +2515,105 @@ repo posture became WIRED, the §13 *"MUST-when-wired"* contract made wiring the
 production-ready choice for a cost-bearing feature. No DoD item was added to
 `scopes.md`; this is history/evidence only and changes no scope or spec status.
 
+---
+
+## Terminal Reconciliation (2026-07-19) — `in_progress` → `blocked` (dependency cohort + C7)
+
+A `bubbles.iterate` autonomous dispatch (parent-expanded in-session; no
+`runSubagent`) re-ran the full closeout gates to drive spec-096 to a clean
+terminal status. The in-repo foundation is proven GREEN this session, but a
+**hard inter-spec dependency blocker (Gate G089)** — surfaced by the full
+transition guard — makes full-delivery `done` structurally unreachable from
+inside this spec's boundary. Spec-096 is therefore reconciled to **`blocked`**,
+joining the same owner-directed `bubbles.devops` self-hosted-handoff cohort as
+its dependencies 084 / 087 / 088. No fabrication; the block is external.
+
+### Evidence R1 — hermetic in-repo foundation is GREEN (current session)
+
+`./smackerel.sh test unit --go --go-run Spec096` — the dockerized repo CLI ran
+`go test -run Spec096 -count=1 ./...`; every package COMPILED (proving no
+build breakage tree-wide) and every spec-096-named test PASSED with NO skips.
+The spec-096 packages (`internal/config`, `internal/api`,
+`internal/assistant/openknowledge/{agent,catalog,connstore,connvault,llm,metrics}`)
+all executed real tests (not `[no tests to run]`), and the 064 / 087 / 088 / 089
+regression packages all report `ok`:
+
+```text
+[go-unit] applying -run selector: Spec096
+[go-unit] starting go test ./...
+ok  github.com/smackerel/smackerel/internal/config  0.012s
+ok  github.com/smackerel/smackerel/internal/api     0.179s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/agent      0.074s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/catalog    0.075s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/connstore  0.040s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/connvault  0.028s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/llm        0.026s
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics    0.025s
+[go-unit] go test ./... finished OK
+UNIT_EXIT=0
+```
+
+139 `ok` package lines; 0 `FAIL`; `finished OK`; `UNIT_EXIT=0`. **Claim Source:
+executed** (current session). This confirms the block is purely external, not
+in-repo breakage.
+
+### Evidence R2 — decisive blocker: Gate G089 inter-spec dependency
+
+`bash <repo-root>/.github/bubbles/scripts/inter-spec-dependency-guard.sh specs/096-multi-provider-model-connections`
+(also surfaced as Check 31 of the transition guard) FAILS because a direct
+`specDependsOn[]` dependency is not `done`:
+
+```text
+G089 inter_spec_dependency_gate violation: specs/096-multi-provider-model-connections
+  depends on specs/088-runtime-switchable-models with invalid dependency status 'blocked'
+  (allowed: done; legacy read-only done_with_concerns only until touched or recertified)
+G089 inter_spec_dependency_gate violation: specs/088-runtime-switchable-models
+  depends on specs/087-open-knowledge-genuine-synthesis with invalid dependency status 'blocked'
+G089 inter_spec_dependency_gate violation: specs/087-open-knowledge-genuine-synthesis
+  depends on specs/084-open-knowledge-reasoning-loop with invalid dependency status 'blocked'
+G089 inter_spec_dependency_gate violation: specs/089-runtime-model-hotswap-persistent-selection
+  depends on specs/088-runtime-switchable-models with invalid dependency status 'blocked'
+G089 inter_spec_dependency_gate blocked: findings=4 dependencies=3 requiresRevalidation=false
+G089_EXIT=1
+```
+
+Dependency-cohort status (verified this session):
+
+| Dependency | Status | Note |
+|---|---|---|
+| `064-open-ended-knowledge-agent` | `done` | ✅ satisfied |
+| `089-runtime-model-hotswap-persistent-selection` | `done` | ✅ satisfied |
+| `088-runtime-switchable-models` | **`blocked`** | "VALIDATED-IN-REPO; blocked on the owner-directed `bubbles.devops` handoff (state.json terminal owner)" |
+| `087-open-knowledge-genuine-synthesis` (transitive) | **`blocked`** | same owner-directed devops handoff |
+| `084-open-knowledge-reasoning-loop` (transitive) | **`blocked`** | same owner-directed devops handoff |
+
+G089 requires every `specDependsOn[]` entry to be `done`. `088` is deliberately
+parked `blocked` by **its own owner** pending the self-hosted `bubbles.devops`
+handoff (it is not a defect and not in scope for spec-096 to recertify). Driving
+088 / 087 / 084 to `done`, or overriding another spec's owner-directed terminal
+status, is outside spec-096's boundary and is explicitly out of scope. Therefore
+`done` is structurally unreachable for spec-096 until that cohort is certified.
+**Claim Source: executed.**
+
+### Evidence R3 — the C7 live legs remain self-hosted-gated (unchanged)
+
+Independently of G089, spec-096's own live hosted-provider `e2e-api` legs
+(SCOPE-03/04/06/07: real Anthropic/OpenAI reachability, live Ollama, GPU
+answers, migration-062 live-apply) remain self-hosted-gated (C7) and are handed
+to the SAME downstream `bubbles.devops` self-hosted dispatch. They are NOT
+fabricated and are correctly recorded as the 8 remaining unchecked live-leg DoD
+items in `scopes.md` (all `unit` + hermetic-`integration` legs are GREEN).
+
+### Disposition
+
+Spec-096 is reconciled to **`blocked`** (top-level + `certification.status`),
+`nextRequiredOwner: bubbles.devops`, aligning it with its 084 / 087 / 088
+dependency cohort. The single actionable next step for the operator: run the
+owner-directed `bubbles.devops` self-hosted handoff to (a) certify the
+088 → 087 → 084 cohort to `done` (clearing G089), and (b) execute spec-096's C7
+live hosted-provider `e2e-api` legs on the self-hosted target; then re-drive
+spec-096 full-delivery to `done`. No source/test/config edits were made this
+session; the reconciliation touched only spec-096 artifacts.
 
 
 
