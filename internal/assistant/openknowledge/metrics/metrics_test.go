@@ -44,6 +44,27 @@ func TestOpenKnowledgeMetrics_NamesPinned(t *testing.T) {
 	}
 }
 
+func TestOpenKnowledgeMetrics_RefusalFamilyRegisteredBeforeFirstEvent(t *testing.T) {
+	m := New([]string{"calculator"})
+	reg := prometheus.NewRegistry()
+	if err := m.Register(reg); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, family := range families {
+		if family.GetName() == NameRefusal {
+			if got, want := len(family.Metric), len(contracts.AllRefusalCauses); got != want {
+				t.Fatalf("refusal zero-series count=%d, want closed vocabulary size %d", got, want)
+			}
+			return
+		}
+	}
+	t.Fatalf("fresh registry is missing %s", NameRefusal)
+}
+
 // TestOpenKnowledgeMetrics_RegisterAndScrape constructs Metrics
 // against a fresh registry, drives every helper, and reads the
 // values to prove the series materialise with the expected counts.
@@ -114,8 +135,9 @@ func TestOpenKnowledgeMetrics_RejectsUnknownCause_AdversarialG021(t *testing.T) 
 		m.ObserveToolLatency("not_a_tool", 1.0)
 	}
 
-	// Cardinality bounds: refusal vec has only the one legitimate label.
-	if got, want := testutil.CollectAndCount(m.refusal), 1; got != want {
+	// Cardinality bounds: refusal vec retains exactly the preinitialized
+	// closed vocabulary; adversarial labels add no new series.
+	if got, want := testutil.CollectAndCount(m.refusal), len(contracts.AllRefusalCauses); got != want {
 		t.Errorf("refusal series count = %d want %d (adversarial labels leaked)", got, want)
 	}
 	if got, want := testutil.CollectAndCount(m.toolCalls), 0; got != want {

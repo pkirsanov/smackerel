@@ -16,8 +16,10 @@ package assistant
 
 import (
 	"testing"
+	"time"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/assistant/contracts"
 )
 
 func TestOpenKnowledgeNoGround(t *testing.T) {
@@ -68,5 +70,52 @@ func TestOpenKnowledgeNoGround(t *testing.T) {
 				t.Errorf("openKnowledgeNoGround() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestCanonicalizeSuccessfulCaptureResponse_ClearsUpstreamFailureShape(t *testing.T) {
+	emittedAt := time.Date(2026, time.July, 19, 20, 30, 0, 0, time.UTC)
+	routing := &agent.RoutingDecision{}
+	invocation := &agent.InvocationResult{TraceID: "trace-preserved"}
+	got := canonicalizeSuccessfulCaptureResponse(contracts.AssistantResponse{
+		Invocation:             invocation,
+		Routing:                routing,
+		Status:                 contracts.StatusSavedAsIdea,
+		Sources:                []contracts.Source{{ID: "stale-source"}},
+		SourcesOverflowCount:   3,
+		ConfirmCard:            &contracts.ConfirmCard{},
+		DisambiguationPrompt:   &contracts.DisambiguationPrompt{},
+		ErrorCause:             contracts.ErrProviderUnavailable,
+		CaptureRoute:           true,
+		Body:                   "I don't have a sourced answer for that.",
+		LegacyRetirementNotice: &contracts.NoticePayload{Command: "/weather"},
+	}, emittedAt)
+
+	if got.Status != contracts.StatusSavedAsIdea || !got.CaptureRoute {
+		t.Fatalf("status=%q capture_route=%v, want saved_as_idea true", got.Status, got.CaptureRoute)
+	}
+	if got.ErrorCause != "" || got.Body != captureFallbackAcknowledgement {
+		t.Fatalf("error_cause=%q body=%q, want empty and canonical acknowledgement", got.ErrorCause, got.Body)
+	}
+	if len(got.Sources) != 0 || got.SourcesOverflowCount != 0 || got.ConfirmCard != nil || got.DisambiguationPrompt != nil {
+		t.Fatalf("stale response controls survived canonicalization: %+v", got)
+	}
+	if got.Invocation != invocation || got.Routing != routing || got.LegacyRetirementNotice == nil || !got.EmittedAt.Equal(emittedAt) {
+		t.Fatalf("correlation or additive notice metadata was not preserved: %+v", got)
+	}
+}
+
+func TestCanonicalizeSuccessfulCaptureResponse_LeavesExplicitFailureUnchanged(t *testing.T) {
+	emittedAt := time.Date(2026, time.July, 19, 20, 35, 0, 0, time.UTC)
+	want := contracts.AssistantResponse{
+		Status:       contracts.StatusUnavailable,
+		ErrorCause:   contracts.ErrInternalError,
+		CaptureRoute: false,
+		Body:         "capture failed: database unavailable",
+		EmittedAt:    emittedAt,
+	}
+	got := canonicalizeSuccessfulCaptureResponse(want, emittedAt.Add(time.Minute))
+	if got.Status != want.Status || got.ErrorCause != want.ErrorCause || got.CaptureRoute != want.CaptureRoute || got.Body != want.Body || !got.EmittedAt.Equal(want.EmittedAt) {
+		t.Fatalf("explicit capture failure changed: got=%+v want=%+v", got, want)
 	}
 }

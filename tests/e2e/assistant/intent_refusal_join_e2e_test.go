@@ -17,10 +17,9 @@
 //      include `final_response_status` so the same panel can
 //      filter by refused turns.
 //
-// Skip policy: honest skip when SMACKEREL_TEST_ENV_FILE and
-// SMACKEREL_CORE_METRICS_URL are both unset (matches the test-stack
-// harness contract used by spec 071 SCOPE-03 replay e2e). A partial
-// environment is a wiring bug per NO-DEFAULTS.
+// The canonical repository E2E runner supplies CORE_EXTERNAL_URL.
+// Missing endpoint wiring is a harness failure, never a successful
+// omission of this required live scenario.
 
 package assistant_e2e
 
@@ -34,17 +33,13 @@ import (
 	"time"
 )
 
-func refusalJoinResolveLiveEnv(t *testing.T) (envFile, metricsURL string) {
+func refusalJoinResolveMetricsURL(t *testing.T) string {
 	t.Helper()
-	envFile = os.Getenv("SMACKEREL_TEST_ENV_FILE")
-	metricsURL = os.Getenv("SMACKEREL_CORE_METRICS_URL")
-	if envFile == "" && metricsURL == "" {
-		t.Skip("e2e: neither SMACKEREL_TEST_ENV_FILE nor SMACKEREL_CORE_METRICS_URL set — live test stack not available")
+	baseURL := strings.TrimRight(os.Getenv("CORE_EXTERNAL_URL"), "/")
+	if baseURL == "" {
+		t.Fatal("e2e: CORE_EXTERNAL_URL is required; run through ./smackerel.sh test e2e --go-package assistant")
 	}
-	if envFile == "" || metricsURL == "" {
-		t.Fatalf("e2e: partial test env — SMACKEREL_TEST_ENV_FILE=%q SMACKEREL_CORE_METRICS_URL=%q (must be both set or both unset)", envFile, metricsURL)
-	}
-	return envFile, metricsURL
+	return baseURL + "/metrics"
 }
 
 func scrapeRefusalJoinMetrics(t *testing.T, url string) string {
@@ -74,7 +69,7 @@ func scrapeRefusalJoinMetrics(t *testing.T, url string) string {
 // SCN-071-A07 dashboard-join visibility check against the live core
 // /metrics endpoint.
 func TestIntentRefusalJoinE2E_LiveCoreExposesJoinKeyOnBothMetrics(t *testing.T) {
-	_, metricsURL := refusalJoinResolveLiveEnv(t)
+	metricsURL := refusalJoinResolveMetricsURL(t)
 
 	body := scrapeRefusalJoinMetrics(t, metricsURL)
 

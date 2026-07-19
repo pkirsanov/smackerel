@@ -75,6 +75,7 @@ Use `./smackerel.sh` for runtime work and keep the committed Bubbles validation 
 | Integration tests | `./smackerel.sh test integration` | Run live-stack foundation integration validation |
 | Integration tests (stores-only, light) | `./smackerel.sh test integration-light` | Run live-stack integration tests needing ONLY postgres+nats (no core/ml build, no ml_sidecar gate); LIGHT preflight floor (2000 MB / 8 GB) |
 | E2E tests | `./smackerel.sh test e2e` | Run compose start, persistence, and config-failure E2E checks |
+| Assistant E2E package | `./smackerel.sh test e2e --go-package assistant [--go-run <regex>]` | Run only `tests/e2e/assistant` on the disposable stack; Node-dependent renderer checks execute inside the repository tooling container |
 | Stress smoke | `./smackerel.sh test stress` | Run disposable test-stack shell and Go stress validation |
 | Resource pre-flight | `./smackerel.sh pre-flight` | Check host RAM/disk vs the SST minimums (`runtime.preflight.*`) before heavy ops; exit 0 ok, 1 below threshold (auto-run before build/up/test integration\|e2e\|e2e-ui\|stress) |
 | Start stack | `./smackerel.sh up` | Start the foundation runtime |

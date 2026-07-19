@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "featureDir": "specs/071-intent-trace-observability/bugs/BUG-071-001-canonical-metrics-endpoint",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-071-001-SCN-001",
+      "scope": "scope-1-canonical-metrics-endpoint",
+      "title": "Refusal and trace metrics are scraped from the live core",
+      "gherkin": {
+        "given": "the repository CLI started the disposable stack with its canonical core endpoint",
+        "when": "the refusal and intent-trace join scenario runs",
+        "then": "the real metrics endpoint exposes both required families"
+      },
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/intent_refusal_join_e2e_test.go", "testId": "TestIntentRefusalJoinE2E_LiveCoreExposesJoinKeyOnBothMetrics"}],
+      "evidenceRefs": ["report.md#red-canonical-metrics-endpoint-contract"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-071-001-SCN-002",
+      "scope": "scope-1-canonical-metrics-endpoint",
+      "title": "Missing canonical endpoint fails loudly",
+      "gherkin": {
+        "given": "the assistant package is selected without the canonical endpoint",
+        "when": "the join test starts",
+        "then": "the test fails and cannot silently succeed"
+      },
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/intent_refusal_join_e2e_test.go", "testId": "TestIntentRefusalJoinE2E_LiveCoreExposesJoinKeyOnBothMetrics"}],
+      "evidenceRefs": ["report.md#red-canonical-metrics-endpoint-contract"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

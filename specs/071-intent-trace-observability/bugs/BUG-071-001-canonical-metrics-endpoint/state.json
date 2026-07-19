@@ -1,0 +1,62 @@
+{
+  "version": 3,
+  "specId": "071-intent-trace-observability",
+  "bugId": "BUG-071-001-canonical-metrics-endpoint",
+  "featureDir": "specs/071-intent-trace-observability/bugs/BUG-071-001-canonical-metrics-endpoint",
+  "featureName": "BUG-071-001 canonical metrics endpoint",
+  "title": "Assistant refusal join E2E requires a metrics variable the canonical runner never supplies",
+  "severity": "medium",
+  "source": "current-session disposable-stack reproduction",
+  "owningSpec": "071-intent-trace-observability",
+  "releaseTrain": "mvp",
+  "flagsIntroduced": [],
+  "workflowMode": "bugfix-fastlane",
+  "status": "in_progress",
+  "createdAt": "2026-07-19",
+  "updatedAt": "2026-07-19",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "handoff",
+    "currentScope": "1",
+    "executionModel": "direct-authorized-runner",
+    "runStartedAt": "2026-07-19T00:00:00Z",
+    "completedScopes": [],
+    "completedPhaseClaims": [],
+    "executionHistory": [],
+    "scopeSummary": [{"scopeId": "1", "title": "Align assistant E2E with the canonical core endpoint", "owner": "bubbles.implement", "dodCount": 10, "status": "in_progress", "dependsOn": []}]
+  },
+  "certification": {
+    "status": "in_progress",
+    "certificationReadiness": "not_ready",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "certifierAgent": null,
+    "certifiedAt": null,
+    "scopeProgress": [{"scopeId": "1", "status": "in_progress", "dodComplete": 0, "dodTotal": 10}],
+    "lockdownState": {"active": false, "round": 0, "reason": "Active bugfix packet; certification is validate-owned.", "lastUpdatedAt": "2026-07-19T00:00:00Z"}
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "on", "source": "user-approved"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [
+    {
+      "id": "TR-BUG-071-001-VALIDATE-001",
+      "requestedAt": "2026-07-19T20:58:00Z",
+      "requestedBy": "bubbles.bug",
+      "fromStatus": "in_progress",
+      "toStatus": "route_required",
+      "targetAgent": "bubbles.validate",
+      "reason": "Implementation, exact-six GREEN, full assistant package, units, integration, lint, format, artifact, traceability, reality, and regression guards are ready for independent certification; no validate/audit specialist invocation occurred in this runtime.",
+      "packetRef": "report.md#green-live-canonical-metrics-endpoint",
+      "status": "open"
+    }
+  ],
+  "reworkQueue": []
+}

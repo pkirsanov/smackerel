@@ -57,6 +57,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+const captureFallbackAcknowledgement = "saved as an idea — i'll surface it later."
+
 // ScenarioExecutor is the small interface the facade depends on so
 // tests can substitute a stub for *agent.Executor. The single method
 // mirrors agent.Executor.Run exactly.
@@ -941,7 +943,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			Routing:      &decision,
 			Status:       contracts.StatusSavedAsIdea,
 			CaptureRoute: true,
-			Body:         "saved as an idea — i'll surface it later.",
+			Body:         captureFallbackAcknowledgement,
 			EmittedAt:    emittedAt,
 		}
 		assistantmetrics.CaptureFallbackTotal.WithLabelValues(assistantmetrics.CauseLowConfidence, transportLabel).Inc()
@@ -999,7 +1001,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 				Routing:      &decision,
 				Status:       contracts.StatusSavedAsIdea,
 				CaptureRoute: true,
-				Body:         "saved as an idea — i'll surface it later.",
+				Body:         captureFallbackAcknowledgement,
 				EmittedAt:    emittedAt,
 			}
 			assistantmetrics.CaptureFallbackTotal.WithLabelValues(assistantmetrics.CauseLowConfidence, transportLabel).Inc()
@@ -1264,6 +1266,12 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			EmittedAt:  emittedAt,
 		}
 	}
+
+	// Every successful capture response shares one transport-agnostic
+	// acknowledgement shape. Provenance and no-ground paths may carry
+	// an upstream refusal body/error into this boundary; clear those
+	// only when the response already declares a successful capture.
+	resp = canonicalizeSuccessfulCaptureResponse(resp, emittedAt)
 
 	// --- Step 7: persist conversation ---
 	conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
@@ -1600,6 +1608,22 @@ func truncateBody(body string, maxChars int) string {
 	return string(runes[:maxChars])
 }
 
+func canonicalizeSuccessfulCaptureResponse(resp contracts.AssistantResponse, emittedAt time.Time) contracts.AssistantResponse {
+	if !resp.CaptureRoute || resp.Status != contracts.StatusSavedAsIdea {
+		return resp
+	}
+	resp.Status = contracts.StatusSavedAsIdea
+	resp.Sources = nil
+	resp.SourcesOverflowCount = 0
+	resp.ConfirmCard = nil
+	resp.DisambiguationPrompt = nil
+	resp.ErrorCause = ""
+	resp.CaptureRoute = true
+	resp.Body = captureFallbackAcknowledgement
+	resp.EmittedAt = emittedAt
+	return resp
+}
+
 // --- Spec 061 SCOPE-09 telemetry helpers ---
 
 // normalizeTransportLabel maps msg.Transport to one of the closed
@@ -1920,7 +1944,7 @@ func (f *Facade) resolvePendingDisambig(
 	resp := contracts.AssistantResponse{
 		Status:       contracts.StatusSavedAsIdea,
 		CaptureRoute: true,
-		Body:         "saved as an idea — i'll surface it later.",
+		Body:         captureFallbackAcknowledgement,
 		EmittedAt:    emittedAt,
 	}
 	conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)

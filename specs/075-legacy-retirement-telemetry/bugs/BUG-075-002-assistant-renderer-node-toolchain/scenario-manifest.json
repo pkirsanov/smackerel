@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "featureDir": "specs/075-legacy-retirement-telemetry/bugs/BUG-075-002-assistant-renderer-node-toolchain",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-075-002-SCN-001",
+      "scope": "scope-1-containerized-node",
+      "title": "Open-window notice renders as an addendum",
+      "gherkin": {"given": "a live retired-command response and containerized Node", "when": "the PWA renderer processes the response", "then": "the body remains first and the notice follows"},
+      "behaviorClass": "e2e-ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/legacy_retirement_notice_test.go", "testId": "TestLegacyRetirementNoticeE2E_OpenWindowRendersAddendumWithoutBlockingBody"}],
+      "evidenceRefs": ["report.md#red-node-absent-in-sanctioned-e2e-container"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-075-002-SCN-002",
+      "scope": "scope-1-containerized-node",
+      "title": "Non-retired turn does not gain a notice node",
+      "gherkin": {"given": "a live ordinary response and containerized Node", "when": "the PWA renderer processes the response", "then": "removing an absent notice key does not change descriptor nodes"},
+      "behaviorClass": "e2e-ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/legacy_retirement_notice_test.go", "testId": "TestLegacyRetirementNoticeE2E_NonRetiredTurnOmitsNotice"}],
+      "evidenceRefs": ["report.md#red-node-absent-in-sanctioned-e2e-container"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-075-002-SCN-003",
+      "scope": "scope-1-containerized-node",
+      "title": "Missing Node cannot silently pass",
+      "gherkin": {"given": "the assistant renderer package requires Node", "when": "the wrapper stops invoking its Node prerequisite", "then": "the adversarial contract fails before coverage can be reported green"},
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "internal/deploy/assistant_e2e_package_contract_test.go", "testId": "TestAssistantE2EPrerequisitesContract_AdversarialRejectsMissingNodeCall"}],
+      "evidenceRefs": ["report.md#green-containerized-renderer-execution"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

@@ -1048,6 +1048,15 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES", "16384")
 	t.Setenv("ASSISTANT_INTENT_COMPILER_RETRY_BUDGET", "1")
 
+	// Spec 071 SCOPE-01 — IntentTrace SST baselines. These are explicit
+	// valid inputs for unrelated Load/Validate tests; the dedicated
+	// intent-trace tests remove each key to preserve fail-loud coverage.
+	t.Setenv("ASSISTANT_INTENT_TRACE_SAMPLING_RATIO", "1.0")
+	t.Setenv("ASSISTANT_INTENT_TRACE_RETENTION_DAYS", "14")
+	t.Setenv("ASSISTANT_INTENT_TRACE_EXPORT_TARGETS", "structured_log,otel,prometheus")
+	t.Setenv("ASSISTANT_INTENT_TRACE_REPLAY_ENABLED", "true")
+	t.Setenv("ASSISTANT_INTENT_TRACE_RETENTION_SWEEP_INTERVAL", "1h")
+
 	// Spec 072 SCOPE-1 — WhatsApp Business Cloud API transport SST.
 	// Defaults mirror config/smackerel.yaml (enabled=false). All keys
 	// are permissively loaded when disabled; dedicated WhatsApp tests

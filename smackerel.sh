@@ -58,7 +58,7 @@ Commands:
   test unit [--go|--python] [--go-run <regex>] [--python-k <expr>] [--verbose]   Run unit tests; focused selectors require their matching language
   test integration [--go-run <regex>] Run live-stack integration validation; optionally run only matching Go integration tests
   test integration-light [--go-run <regex>] Stores-only (postgres+nats) live integration lane; LIGHT preflight floor, no core/ml build or ml_sidecar gate. Optionally run only matching Go integration tests
-  test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
+  test e2e [--go-package assistant] [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run one Go package, matching Go tests, or one shell test
   test stress [--go-run <regex>] Run live-stack stress smoke test; optionally run only matching Go stress tests
   test e2e-ui [--help|--print-compose-project] Run PWA browser end-to-end UI tests via Playwright against the disposable
                               Compose project `smackerel-test-e2e-ui` (spec 077)
@@ -1391,9 +1391,30 @@ case "$COMMAND" in
         ;;
       e2e)
         GO_E2E_RUN_SELECTOR=""
+        GO_E2E_PACKAGE_SELECTOR=""
         SHELL_E2E_RUN_TARGET=""
         while [[ $# -gt 0 ]]; do
           case "$1" in
+            --go-package)
+              if [[ $# -lt 2 || -z "$2" ]]; then
+                echo "ERROR: --go-package requires a non-empty package name" >&2
+                exit 1
+              fi
+              if [[ "$2" != "assistant" ]]; then
+                echo "ERROR: unsupported --go-package value: $2 (allowed: assistant)" >&2
+                exit 1
+              fi
+              GO_E2E_PACKAGE_SELECTOR="$2"
+              shift 2
+              ;;
+            --go-package=*)
+              GO_E2E_PACKAGE_SELECTOR="${1#*=}"
+              if [[ "$GO_E2E_PACKAGE_SELECTOR" != "assistant" ]]; then
+                echo "ERROR: unsupported --go-package value: ${GO_E2E_PACKAGE_SELECTOR:-<empty>} (allowed: assistant)" >&2
+                exit 1
+              fi
+              shift
+              ;;
             --go-run)
               if [[ $# -lt 2 ]]; then
                 echo "ERROR: --go-run requires a non-empty regex" >&2
@@ -1442,8 +1463,8 @@ case "$COMMAND" in
           esac
         done
 
-        if [[ -n "$GO_E2E_RUN_SELECTOR" && -n "$SHELL_E2E_RUN_TARGET" ]]; then
-          echo "ERROR: --go-run and --shell-run cannot be combined" >&2
+        if [[ -n "$SHELL_E2E_RUN_TARGET" && ( -n "$GO_E2E_RUN_SELECTOR" || -n "$GO_E2E_PACKAGE_SELECTOR" ) ]]; then
+          echo "ERROR: --shell-run cannot be combined with --go-run or --go-package" >&2
           exit 1
         fi
 
@@ -1961,7 +1982,7 @@ case "$COMMAND" in
           exit 0
         fi
 
-        if [[ -z "$GO_E2E_RUN_SELECTOR" ]]; then
+        if [[ -z "$GO_E2E_RUN_SELECTOR" && -z "$GO_E2E_PACKAGE_SELECTOR" ]]; then
           # Lifecycle E2E scripts intentionally own their own stack boot,
           # restart, and teardown semantics.
           e2e_lifecycle_scripts=(
@@ -2063,6 +2084,9 @@ case "$COMMAND" in
         qf_decisions_base_url="$(smackerel_env_value "$env_file" "QF_DECISIONS_BASE_URL")"
         compose_network="$(smackerel_compose_project test)_default"
         go_e2e_args=()
+        if [[ -n "$GO_E2E_PACKAGE_SELECTOR" ]]; then
+          go_e2e_args+=(--package "$GO_E2E_PACKAGE_SELECTOR")
+        fi
         if [[ -n "$GO_E2E_RUN_SELECTOR" ]]; then
           go_e2e_args+=(--run "$GO_E2E_RUN_SELECTOR")
         fi
