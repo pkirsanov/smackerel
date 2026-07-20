@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 3,
+  "bugId": "BUG-096-001",
+  "feature": "096-multi-provider-model-connections",
+  "title": "Ollama discovery probe targets compose DNS, not the env-wired host seam (self-hosted false unreachable)",
+  "status": "blocked",
+  "workflowMode": "bugfix-fastlane",
+  "statusCeiling": "done",
+  "createdAt": "2026-07-20T00:00:00Z",
+  "updatedAt": "2026-07-20T00:00:00Z",
+  "lastUpdatedAt": "2026-07-20T00:00:00Z",
+  "blockedReason": "In-repo fix + hermetic contract test are COMPLETE and green this session: 3/3 cmd/core discovery tests PASS (incl. the adversarial env-seam-vs-registry-param case), the internal/config SST hardcoded-Ollama guard stays green (3/3 PASS), and full-repo `go test ./...` compiles with the dead-helper removal (UNIT_EXIT=0 / GUARD_EXIT=0). The ONE remaining item — live self-hosted re-verification that `GET /v1/agent/model` reports local-ollama reachable — requires a rebuild + redeploy at the fix's source SHA through the knb smackerel/home-lab adapter (8 pre-apply verifications, no bypass), because the fix changes the source SHA. That redeploy is BLOCKED on: (1) the same self-hosted handoff that gates the 084/087/088/096 cohort, AND (2) a stable <deploy-host> with good-neighbor rebuild headroom (at capture time the host was memory-oversubscribed by concurrent FOREIGN product load and the smackerel ML sidecar had just been OOM-killed; a rebuild that evicts foreign work is forbidden). ACTIONABLE NEXT STEP (bubbles.devops): on a stable self-hosted host with headroom, build smackerel-core at the fix SHA, apply via the knb adapter, then probe `GET /v1/agent/model` and confirm local-ollama's ProviderDiscoveryStatus is reachable (not unreachable) with its live-discovered models present in the unified catalog.",
+  "nextRequiredOwner": "bubbles.devops",
+  "execution": {
+    "activeAgent": "bubbles.devops",
+    "currentPhase": "implement",
+    "executionModel": "parent-expanded",
+    "completedPhases": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "implement",
+      "test"
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.devops",
+        "ranAt": "2026-07-20T00:00:00Z",
+        "outcome": "Re-verified the self-hosted discovery-leg gap: the SCOPE-04 Ollama discovery adapter built its base URL from the local-ollama registry base_url param (compose-service DNS name in the build-once bundle) while /health + synthesis use the env-wired cfg.OllamaURL seam that knb re-points to the host daemon; on the single-host topology the compose-DNS probe is NXDOMAIN => false local-ollama unreachable."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.devops",
+        "ranAt": "2026-07-20T00:00:00Z",
+        "outcome": "Added ollamaDiscoveryBaseURL(cfg) (trimmed cfg.OllamaURL, fail-loud on empty, no compose-DNS default); routed the Ollama discovery adapter through it in wireSpec096DiscoveryAndDispatch; removed the now-dead ollamaConnectionBaseURL; reworded the fix doc comment so the internal/config SST hardcoded-Ollama guard stays green."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.devops",
+        "ranAt": "2026-07-20T00:00:00Z",
+        "outcome": "Added cmd/core/wiring_ollama_discovery_baseurl_test.go (3 cases incl. adversarial env-seam-vs-registry-param). ./smackerel.sh test unit --go --go-run OllamaDiscoveryBaseURL => 3/3 PASS, cmd/core ok, UNIT_EXIT=0. SST guard re-run => 3/3 PASS, internal/config ok, GUARD_EXIT=0. Broader open-knowledge/spec-096/model-connection/discovery/dispatch selector => finished OK, REGRESSION_EXIT=0."
+      }
+    ]
+  },
+  "certification": {
+    "status": "blocked",
+    "completedScopes": [],
+    "completedAt": null,
+    "certifiedBy": null,
+    "note": "In-repo fix + hermetic test complete and green; certification withheld pending the live self-hosted redeploy-verify (see blockedReason)."
+  },
+  "policySnapshot": {
+    "boundary": "cmd/core/wiring_assistant_openknowledge.go (Ollama discovery adapter base-URL seam), cmd/core/wiring_ollama_discovery_baseurl_test.go, and this bug folder under specs/096-multi-provider-model-connections/bugs/BUG-096-001-discovery-probe-compose-dns/",
+    "forbidden": [
+      "config/smackerel.yaml, the config generator, or the knb bundle/params (the env-wired OLLAMA_URL seam is already correctly provisioned; the defect was purely which cfg field discovery consumed)",
+      "the /ask synthesis dispatch, provider-aware dispatch resolver, 088/089 switch precedence, per-user store, or credential/secret handling",
+      "spec 096 top-level status / ceiling mutation",
+      "any real host / IP / secret literal in the smackerel repo (generic-only; concrete host IP lives in the knb adapter)"
+    ]
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

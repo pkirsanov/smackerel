@@ -577,7 +577,13 @@ func wireSpec096DiscoveryAndDispatch(cfg *config.Config, svc *coreServices, spen
 			continue
 		}
 		if conn.Kind == config.ModelConnectionKindOllama {
-			baseURL, err := ollamaConnectionBaseURL(conn)
+			// DISCOVERY probe target — resolve from the env-wired OLLAMA_URL
+			// seam (cfg.OllamaURL), NOT the 096 connection registry's base_url
+			// param. See ollamaDiscoveryBaseURL for the BUG-096-001 rationale
+			// (the registry param is a dev-compose-DNS literal baked into the
+			// build-once bundle; the deploy adapter re-points the host Ollama
+			// daemon via OLLAMA_URL, the SAME seam /health and synthesis use).
+			baseURL, err := ollamaDiscoveryBaseURL(cfg)
 			if err != nil {
 				return fmt.Errorf("wireSpec096DiscoveryAndDispatch: connection %q: %w", conn.ID, err)
 			}
@@ -649,21 +655,32 @@ func wireSpec096DiscoveryAndDispatch(cfg *config.Config, svc *coreServices, spen
 	return nil
 }
 
-// ollamaConnectionBaseURL extracts the REQUIRED base_url param from an Ollama
-// connection. The SST registry Validate() already guarantees an ollama
-// connection carries a non-empty base_url string
-// (modelConnectionRequiredParams), so this is fail-loud belt-and-suspenders,
-// NEVER a substituted default (G028).
-func ollamaConnectionBaseURL(conn config.ModelConnection) (string, error) {
-	raw, ok := conn.Params["base_url"]
-	if !ok {
-		return "", errors.New("ollama connection is missing the required base_url param")
+// ollamaDiscoveryBaseURL resolves the base URL the Ollama DISCOVERY probe
+// (GET <base>/api/tags, SCOPE-04) targets. It comes from the env-wired
+// OLLAMA_URL seam (cfg.OllamaURL) — the SAME host-Ollama URL the /health probe
+// and the ML-sidecar synthesis path consume — NOT the 096 connection registry's
+// base_url param.
+//
+// BUG-096-001: the registry base_url param is a fixed dev compose-service DNS
+// name (host `ollama`, not a host-routable URL) carried verbatim in the
+// build-once bundle; it is NOT re-pointed per target. On the single-host
+// self-hosted topology the local Ollama daemon is a HOST singleton (no in-stack
+// `ollama` compose service), so
+// the deploy adapter re-points OLLAMA_URL / OLLAMA_BASE_URL to the host tailnet
+// IP. Discovery MUST follow that same env seam or it probes compose DNS
+// (NXDOMAIN) and falsely reports local-ollama "unreachable" while synthesis —
+// which routes through the sidecar's OLLAMA_URL — works.
+//
+// Fail loud on an empty seam — NEVER a substituted compose-DNS default
+// (G028 / smackerel-no-defaults). scripts/commands/config.sh always emits
+// OLLAMA_URL from the REQUIRED llm.ollama_url SST value, so an empty value here
+// is a genuine mis-provision, not an expected state.
+func ollamaDiscoveryBaseURL(cfg *config.Config) (string, error) {
+	s := strings.TrimSpace(cfg.OllamaURL)
+	if s == "" {
+		return "", errors.New("OLLAMA_URL is required to probe the local Ollama daemon for model discovery (env-wired seam; no compose-DNS default)")
 	}
-	s, isStr := raw.(string)
-	if !isStr || strings.TrimSpace(s) == "" {
-		return "", fmt.Errorf("ollama connection base_url must be a non-empty string, got %T", raw)
-	}
-	return strings.TrimSpace(s), nil
+	return s, nil
 }
 
 // ollamaCapabilityHints maps an Ollama connection's OPTIONAL operator-curated
