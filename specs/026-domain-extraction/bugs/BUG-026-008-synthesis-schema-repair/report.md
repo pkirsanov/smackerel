@@ -8,7 +8,7 @@ The accepted runtime exposed a parsed JSON extraction response that omitted requ
 
 The source/config/test/doc implementation is delivered and the scenario-specific regression is red-to-green. The bug remains `in_progress`: validate-owned certification and audit have not run in this runtime, the broader full-unit lane exposed routed linked-worktree infrastructure failures, and deployment is intentionally not performed here.
 
-## RED: Bug Reproduction - Before Fix
+## RED: Bug Reproduction Before Fix
 
 **Phase:** bug
 **Command:** `./smackerel.sh test unit --python`
@@ -273,6 +273,8 @@ Implementation reality: 13 files, 0 violations, 0 warnings
 ```
 
 ### Code Diff Evidence
+
+Existing executed git proof: git diff --exit-code origin/main -- internal/config/release_trains_contract_test.go and git diff --check. Evidence: [Format Classification](#format-classification).
 
 Runtime/config/contract/test/doc delta:
 

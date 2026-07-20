@@ -21,7 +21,7 @@ Packet status and validate-owned certification intentionally remain
 
 ## Test Evidence
 
-### Before Fix - Served Route E2E
+### RED: Before Fix Served Route E2E
 
 **Executed:** YES (current session)
 **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --go-run 'TestAssistantTransportHintParity_WebAndMobileShareResponseShape|TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09|TestAssistantWebPWARetryE2E_'`
@@ -63,7 +63,7 @@ comment and remains green.
 
 **Claim Source:** interpreted
 
-### After Fix - Scanner Unit And Live E2E
+### GREEN: After Fix Scanner Unit And Live E2E
 
 Concrete tests:
 
@@ -118,6 +118,30 @@ update.
   forbidden regex patterns and includes an executable-access adversary.
 
 **Claim Source:** interpreted
+
+### Code Diff Evidence
+
+**Phase:** plan reconciliation
+**Command:** `git log --oneline -n 12 -- internal/testsupport/jssource tests/e2e/assistant/web_pwa_chat_e2e_test.go web/pwa/tests/assistant_storage_guard_test.go specs/073-web-mobile-assistant-frontend/bugs/BUG-073-005-pwa-storage-comment-scan` and `git diff --name-status origin/main...HEAD -- internal/testsupport/jssource tests/e2e/assistant/web_pwa_chat_e2e_test.go web/pwa/tests/assistant_storage_guard_test.go`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Executed git log and git diff proof is reproduced below.
+
+```text
+BEGIN_BUG073005_GIT_PROOF
+21f6ae7f chore(governance): reconcile release candidate packets
+c5ddf562 fix(assistant): harden broad e2e retries and source scans
+1c941cd9 spec(073): Scope 5 - Knowledge Graph Browse Surface (wiki UI)
+b21f58e0 wip: round-2 convergence (066/067/069 plan/070/074/075)
+97786b84 wip: convergence loop progress across specs 063-075 (multi-agent session)
+--- implementation paths at candidate versus parent baseline ---
+A       internal/testsupport/jssource/comments.go
+A       internal/testsupport/jssource/comments_test.go
+M       tests/e2e/assistant/web_pwa_chat_e2e_test.go
+M       web/pwa/tests/assistant_storage_guard_test.go
+END_BUG073005_GIT_PROOF rc=0
+```
 
 ## Open Findings
 
