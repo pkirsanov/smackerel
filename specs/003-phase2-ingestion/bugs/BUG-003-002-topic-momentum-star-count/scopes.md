@@ -103,9 +103,91 @@ Excluded:
   ```
 
   **Result:** PASS
-- [ ] BUG-003-002-SCN-001 Canonical star aggregation updates momentum from zero and multiple persisted star relationships
-- [ ] BUG-003-002-SCN-002 Lifecycle query failures remain observable as scheduler failures without a success log
-- [ ] BUG-003-002-SCN-003 Existing topic lifecycle surface remains available through the targeted full-stack flow
+- [x] BUG-003-002-SCN-001 Canonical star aggregation updates momentum from zero and multiple persisted star relationships
+
+  **Phase:** test
+  **Executed:** YES (current session)
+  **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`
+  **Exit Code:** 0
+  **Claim Source:** executed
+  **Evidence:** [report.md#canonical-postgresql-integration](report.md#canonical-postgresql-integration)
+
+  ```text
+  PASS: integration-light db migration (schema applied via cmd/dbmigrate)
+  === RUN   TestTopicLifecycleMomentumFromPersistedStars
+  PASS: canonical relationship uniqueness rejects duplicate BELONGS_TO edges
+  INFO topic state transition topic=<fixture>-zero from=emerging to=dormant momentum=0.5
+  INFO topic state transition topic=<fixture>-multiple from=emerging to=active momentum=11.5
+  zero-star persisted momentum=0.5000 state=dormant
+  multiple-stars persisted momentum=11.5000 state=active
+  PASS: canonical topics schema has no star_count column
+  PASS: zero linked starred artifacts contribute 0.0 star momentum
+  PASS: one linked unstarred artifact contributes only 0.5 connection momentum
+  PASS: two distinct linked starred artifacts contribute exactly 10.0 star momentum
+  PASS: an unrelated starred artifact contributes nothing to the tested topic
+  --- PASS: TestTopicLifecycleMomentumFromPersistedStars (0.07s)
+  PASS: go-integration-light
+  Network smackerel-test_default Removed
+  ```
+
+  **Result:** PASS
+- [x] BUG-003-002-SCN-002 Lifecycle query failures remain observable as scheduler failures without a success log
+
+  **Phase:** test
+  **Executed:** YES (current session)
+  **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^TestTopicMomentumJob_LogsLifecycleQueryFailure$' --verbose`
+  **Exit Code:** 0
+  **Claim Source:** executed
+  **Evidence:** [report.md#scheduler-failure-log-regression](report.md#scheduler-failure-log-regression)
+
+  ```text
+  [go-unit] envsubst missing - installing gettext-base
+  [go-unit] gettext-base install OK
+  [go-unit] starting go test ./...
+  testing: warning: no tests to run
+  PASS
+  ok github.com/smackerel/smackerel/internal/retrieval/routing [no tests to run]
+  === RUN   TestTopicMomentumJob_LogsLifecycleQueryFailure
+  --- PASS: TestTopicMomentumJob_LogsLifecycleQueryFailure (0.00s)
+  PASS
+  ok github.com/smackerel/smackerel/internal/scheduler 0.038s
+  testing: warning: no tests to run
+  PASS
+  ok github.com/smackerel/smackerel/internal/topics [no tests to run]
+  [go-unit] go test ./... finished OK
+  ```
+
+  **Result:** PASS
+- [x] BUG-003-002-SCN-003 Existing topic lifecycle surface remains available through the targeted full-stack flow
+
+  **Phase:** test
+  **Executed:** YES (current session)
+  **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --shell-run test_topic_lifecycle.sh`
+  **Exit Code:** 0
+  **Claim Source:** executed
+  **Evidence:** [report.md#targeted-topic-lifecycle-e2e](report.md#targeted-topic-lifecycle-e2e)
+
+  ```text
+  === Topic Lifecycle E2E Tests ===
+  Waiting for services to be healthy (max 120s)...
+  Services healthy after 0s
+  Seeding topics...
+  Existing pricing topic owner: topic-lifecycle-existing-pricing
+  PASS: Adversarial pricing topic present without duplicate collision
+  Hot topic momentum: 20
+  Dormant topic momentum: 0.1
+  PASS: Topic lifecycle: states and momentum verified
+  === Topic Lifecycle E2E tests passed ===
+  PASS: test_topic_lifecycle.sh
+  Total: 1
+  Passed: 1
+  Failed: 0
+  Volume smackerel-test-postgres-data Removed
+  Volume smackerel-test-nats-data Removed
+  Network smackerel-test_default Removed
+  ```
+
+  **Result:** PASS
 - [ ] Pre-fix real PostgreSQL regression fails with the missing `topics.star_count` counterexample
 - [x] Lifecycle query derives explicit stars from linked `artifacts.user_starred` rows
 
@@ -194,9 +276,96 @@ Excluded:
   **Result:** PASS
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
 - [ ] Broader E2E regression suite passes
-- [ ] Focused unit, functional, integration, and scheduler regressions pass
-- [ ] Check, lint, and format gates pass with zero warnings
-- [ ] Artifact lint, traceability, implementation-reality, and adversarial regression guards pass
+- [x] Focused unit, functional, integration, and scheduler regressions pass
+
+  **Phase:** test
+  **Executed:** YES (current session)
+  **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^Test(CalculateMomentum|TransitionState)' --verbose`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^TestTopicMomentumJob_LogsLifecycleQueryFailure$' --verbose`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test integration-light --go-run '^TestTopicLifecycleMomentumFromPersistedStars$'`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go`
+  **Exit Code:** 0 for each final command
+  **Claim Source:** executed
+  **Evidence:** [report.md#focused-lifecycle-formula-and-state-tests](report.md#focused-lifecycle-formula-and-state-tests), [report.md#broader-go-unit-regression](report.md#broader-go-unit-regression)
+
+  ```text
+  === RUN   TestCalculateMomentum
+  --- PASS: TestCalculateMomentum (0.00s)
+  === RUN   TestTransitionState
+  --- PASS: TestTransitionState (0.00s)
+  === RUN   TestCalculateMomentum_StarsAndConnections
+  --- PASS: TestCalculateMomentum_StarsAndConnections (0.00s)
+  === RUN   TestTopicMomentumJob_LogsLifecycleQueryFailure
+  --- PASS: TestTopicMomentumJob_LogsLifecycleQueryFailure (0.00s)
+  === RUN   TestTopicLifecycleMomentumFromPersistedStars
+  --- PASS: TestTopicLifecycleMomentumFromPersistedStars (0.07s)
+  PASS: go-integration-light
+  [go-unit] starting go test ./...
+  ok github.com/smackerel/smackerel/internal/assistant/capturefallback 0.418s
+  ok github.com/smackerel/smackerel/internal/config 30.452s
+  ok github.com/smackerel/smackerel/internal/scheduler (cached)
+  ok github.com/smackerel/smackerel/internal/topics (cached)
+  ok github.com/smackerel/smackerel/tests/e2e/agent (cached)
+  ok github.com/smackerel/smackerel/tests/observability (cached)
+  ok github.com/smackerel/smackerel/tests/stress/readiness (cached)
+  [go-unit] go test ./... finished OK
+  ```
+
+  **Result:** PASS
+- [x] Check, lint, and format gates pass with zero warnings
+
+  **Phase:** test
+  **Executed:** YES (current session)
+  **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh lint`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh format --check`
+  **Exit Code:** 0, 0, 0
+  **Claim Source:** executed
+  **Evidence:** [report.md#check-lint-and-format](report.md#check-lint-and-format)
+
+  ```text
+  Config is in sync with SST
+  env_file drift guard: OK
+  scenarios registered: 17, rejected: 0
+  scenario-lint: OK
+  All checks passed!
+  OK: PWA manifest has required fields
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: Extension versions match (1.0.0)
+  Web validation passed
+  75 files already formatted
+  ```
+
+  **Result:** PASS
+- [x] Artifact lint, traceability, implementation-reality, and adversarial regression guards pass
+
+  **Phase:** test
+  **Executed:** YES (current session)
+  **Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`; `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count`; `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count --verbose`; `bash .github/bubbles/scripts/regression-quality-guard.sh tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh`; `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/topic_lifecycle_momentum_test.go internal/scheduler/jobs_test.go tests/e2e/test_topic_lifecycle.sh`
+  **Exit Code:** 0 for every command
+  **Claim Source:** executed
+  **Evidence:** [report.md#packet-local-guard-results](report.md#packet-local-guard-results)
+
+  ```text
+  Artifact lint PASSED.
+  scenario-manifest.json covers 3 scenario contract(s)
+  All linked tests from scenario-manifest.json exist
+  Scenarios checked: 3
+  Scenario-to-row mappings: 3
+  DoD fidelity scenarios: 3 (mapped: 3, unmapped: 0)
+  RESULT: PASSED (0 warnings)
+  Files scanned: 1
+  Violations: 0
+  Warnings: 0
+  PASSED: No source code reality violations detected
+  REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+  Adversarial signal detected in tests/integration/topic_lifecycle_momentum_test.go
+  Adversarial signal detected in internal/scheduler/jobs_test.go
+  Adversarial signal detected in tests/e2e/test_topic_lifecycle.sh
+  Files with adversarial signals: 3
+  ```
+
+  **Result:** PASS - artifact lint retained two non-blocking deprecation advisories for existing state fields.
 - [x] Change Boundary is respected and zero excluded file families were changed
 
   **Phase:** implement
