@@ -17,8 +17,9 @@
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG077004-001"],
       "linkedTests": [{"file": "tests/e2e/photos_pwa_test.go", "testId": "TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI"}],
-      "evidenceRefs": ["report.md#after-fix-focused-live-green"],
+      "evidenceRefs": ["report.md#red-before-fix-root-package", "report.md#green-after-fix-focused-live"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -36,8 +37,9 @@
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG077004-002"],
       "linkedTests": [{"file": "tests/e2e/photos_pwa_test.go", "testId": "TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI"}],
-      "evidenceRefs": ["report.md#after-fix-focused-live-green"],
+      "evidenceRefs": ["report.md#green-after-fix-focused-live"],
       "replacedBy": null,
       "invalidatedBy": null
     }

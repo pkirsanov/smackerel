@@ -10,7 +10,7 @@ The one-file test repair is implemented and executable RED/GREEN evidence is cap
 
 ## Test Evidence
 
-### Before Fix: Root Package RED
+### RED: Before Fix Root Package
 
 **Executed:** YES, current session
 **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e` followed by isolated root-package reproduction
@@ -35,7 +35,7 @@ FAIL    github.com/smackerel/smackerel/tests/e2e        221.156s
 FAIL: go-e2e (exit=1)
 ```
 
-### After Fix: Focused Live GREEN
+### GREEN: After Fix Focused Live
 
 **Executed:** YES, current session
 **Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test e2e --go-run '^TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI$'` using the temporary closed root-package diagnostic selector
@@ -57,6 +57,8 @@ Volume smackerel-test-nats-data Removed
 Volume smackerel-test-postgres-data Removed
 Network smackerel-test_default Removed
 ```
+
+Residual risk disposition: the opt-in Ollama agent lane was not executed; it is routed to `bubbles.test` under BUG-077-004 and remains unproven for certification.
 
 ### After Fix: Complete Root Package GREEN
 
@@ -91,6 +93,31 @@ Network smackerel-test_default Removed
 ## Change Boundary
 
 Production source remains unchanged. The temporary root-package selector used to recover truncated test output was removed before commit. The permanent implementation delta is `tests/e2e/photos_pwa_test.go` plus this bug packet.
+
+### Code Diff Evidence
+
+**Phase:** plan reconciliation
+**Command:** `git log --oneline -n 12 -- tests/e2e/photos_pwa_test.go specs/077-pwa-browser-test-harness/bugs/BUG-004-photos-pwa-cookie-auth-assertion` and `git diff --name-status origin/main...HEAD -- tests/e2e/photos_pwa_test.go`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Executed git log and git diff proof is reproduced below.
+
+```text
+BEGIN_BUG077004_GIT_PROOF
+21f6ae7f chore(governance): reconcile release candidate packets
+b4761988 fix(e2e): align Photos PWA cookie auth assertion
+50beb581 chore: stage uncommitted feature work before resuming sweep
+--- implementation paths at candidate versus parent baseline ---
+M       tests/e2e/photos_pwa_test.go
+END_BUG077004_GIT_PROOF rc=0
+```
+
+## Discovered Issues
+
+| Date (UTC) | Finding | Disposition | Reference |
+|---|---|---|---|
+| 2026-07-20 | The opt-in Ollama agent E2E was not executed during the recorded focused run. | `routed` to `bubbles.test`; residual risk remains unproven and is not counted as a pass. | `BUG-077-004`, `TP-BUG077004-003` |
 
 ## Invocation Audit
 
