@@ -348,3 +348,40 @@ active selection. The spec-087 synthesis-split machinery and trust invariants
 only WHICH model runs the forced-final synthesis turn changed. See
 `docs/experiments/open-knowledge-synthesis-model-ab.md` (superseded) and
 `docs/Operations.md` → "Model Envelope Sizing".
+
+---
+
+## DevOps Live Self-Hosted Re-Verify — 2026-07-20 (evidence only; NOT a promotion)
+
+Recorded by `bubbles.devops`. Status UNCHANGED (`blocked`); `certifiedAt` stays
+`null`. Live-stack evidence only; no certification/promotion.
+
+**Target:** self-hosted `<deploy-host>`; deployed core rev `a7ce6834fddb` (ancestor of HEAD
+`a8a64525`). Throwaway PASETO minted then revoked (redacted). Foreign `colibri` work
+left untouched.
+
+**ARM-A — genuine synthesis via `qwen3:30b-a3b` (per_request synthesis model)** —
+parsed this session from `~/smackerel-cohort-ab-1784510252.log` on `<deploy-host>` (HTTP 200,
+`TIME_TOTAL 312.17s`):
+
+```
+status: success | termination: final | refusal_cause: ""
+synthesis model: qwen3:30b-a3b (per_request) | gather: gemma4:26b (default)
+sources: 2 real searxng web results (cite-back / provenance perimeter intact)
+verdict: a genuinely synthesized USDA-hardiness-zone answer — Minneapolis USDA
+         Zone 4-5 is below the Zone-6 cold-hardy pomegranate threshold; Phoenix
+         USDA Zone 9 sits in the ideal 8-10 range — a real reconciliation, NOT a
+         raw-snippet dump and NOT the honest-salvage fallback.
+```
+
+This is the live proof this spec was parked on: the forced-final synthesis turn
+produced a real cited verdict on the live GPU stack. The same-question ARM-B
+(recorded in spec-088) where `gemma4:26b`-as-synthesis produced a non-answer is the
+empirical contrast that motivated this spec's split synthesis model.
+
+**Promotion NOT performed — not due to this evidence.** `state-transition-guard.sh`
+(2026-07-20, HEAD `a8a64525`) returns a SINGLE failure: **G089** (inter-spec
+dependency) because this spec depends on spec-084, which is itself `blocked` on its
+own `bubbles.plan`-owned `scopes.md` gaps. Every other gate PASSES (G053, G068,
+G022 all green). Route: unblock spec-084 first (owner `bubbles.plan`), then re-drive
+this guard — this spec is otherwise clean.
