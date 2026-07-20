@@ -1,0 +1,141 @@
+{
+  "version": 3,
+  "featureDir": "specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count",
+  "parentFeatureDir": "specs/003-phase2-ingestion",
+  "featureName": "BUG-003-002: Topic momentum star aggregation",
+  "bugId": "BUG-003-002",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/003-phase2-ingestion"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "validate",
+    "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
+    "runStartedAt": "2026-07-20T20:17:05Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-07-20T20:17:05Z",
+        "summary": "Created the complete in-progress BUG-003-002 packet from the live missing-column counterexample and grounded the repair in artifacts.user_starred plus artifact-to-topic BELONGS_TO edges. No delivery or certification claim made."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": null,
+      "currentAttemptId": null,
+      "attempts": []
+    }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore canonical topic star aggregation",
+        "status": "in_progress",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "invalidationLedger": []
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": [
+        "bug"
+      ],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-20T20:17:05Z",
+      "runCompletedAt": "2026-07-20T20:17:05Z",
+      "summary": "Documented the production counterexample, canonical star source, minimal query repair, real PostgreSQL RED contract, scheduler log regression, and isolated change boundary."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": [
+        "bug"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-07-20T20:17:05Z",
+      "runCompletedAt": "2026-07-20T20:43:05Z",
+      "summary": "Executed the operator-requested RED/GREEN integration, focused lifecycle and scheduler regressions, targeted topic lifecycle E2E, broader Go unit suite, and project quality gates. No implement/test/validate/audit specialist phase claim or certification write was fabricated."
+    }
+  ],
+  "activeBugs": [
+    "BUG-003-002"
+  ],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "live red-team at deployed source f5f05450848630fe84c0a215429bdfc701c4bcd2",
+      "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
+    }
+  ],
+  "lastUpdatedAt": "2026-07-20T20:43:05Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "routing": {
+    "nextOwner": "bubbles.validate",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "auditOwner": "bubbles.audit",
+    "targetSpec": "specs/003-phase2-ingestion",
+    "targetScope": "scope-06-topic-lifecycle"
+  }
+}

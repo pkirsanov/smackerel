@@ -120,7 +120,11 @@ func NewLifecycle(pool *pgxpool.Pool) *Lifecycle {
 func (l *Lifecycle) UpdateAllMomentum(ctx context.Context) error {
 	rows, err := l.Pool.Query(ctx, `
 		SELECT t.id, t.name, t.state, t.capture_count_30d, t.capture_count_90d, t.search_hit_count_30d,
-		       COALESCE(t.star_count, 0),
+		       COALESCE((SELECT COUNT(DISTINCT a.id)
+		                 FROM edges e
+		                 JOIN artifacts a ON a.id = e.src_id AND e.src_type = 'artifact'
+		                 WHERE e.dst_type = 'topic' AND e.dst_id = t.id
+		                   AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
 		       COALESCE((SELECT COUNT(*) FROM edges WHERE src_type = 'topic' AND src_id = t.id
 		                  OR dst_type = 'topic' AND dst_id = t.id), 0)::int,
 		       EXTRACT(DAY FROM NOW() - COALESCE(t.last_active, t.created_at))::int
