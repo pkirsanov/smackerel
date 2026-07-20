@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "featureDir": "specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count",
+  "generatedAt": "2026-07-20T20:17:05Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-003-002-SCN-001",
+      "scope": "scope-1-restore-canonical-topic-star-aggregation",
+      "title": "Canonical star aggregation updates momentum",
+      "gherkin": {
+        "given": "canonical migrations created topics without a star_count column and topics have zero or multiple linked starred artifacts",
+        "when": "the actual lifecycle momentum update runs",
+        "then": "momentum is updated from exactly the starred artifacts linked by BELONGS_TO relationships"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/topic_lifecycle_momentum_test.go",
+          "testId": "TestTopicLifecycleMomentumFromPersistedStars"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-003-002-SCN-002",
+      "scope": "scope-1-restore-canonical-topic-star-aggregation",
+      "title": "Lifecycle query failures remain observable",
+      "gherkin": {
+        "given": "the lifecycle database pool cannot execute the topic query",
+        "when": "the scheduler runs the topic momentum job",
+        "then": "the scheduler logs failure with query context and does not log success"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/scheduler/jobs_test.go",
+          "testId": "TestTopicMomentumJob_LogsLifecycleQueryFailure"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-003-002-SCN-003",
+      "scope": "scope-1-restore-canonical-topic-star-aggregation",
+      "title": "Existing topic lifecycle surface remains available",
+      "gherkin": {
+        "given": "the disposable full test stack contains topic lifecycle fixtures",
+        "when": "the targeted topic lifecycle shell flow runs",
+        "then": "the topics surface renders the lifecycle topics and momentum values"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_topic_lifecycle.sh",
+          "testId": "Topic lifecycle: states and momentum verified"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
