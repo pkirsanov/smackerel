@@ -16,10 +16,10 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": "scope-1-restore-canonical-topic-star-aggregation",
-    "runStartedAt": "2026-07-20T21:09:09Z",
+    "runStartedAt": "2026-07-20T21:22:48Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
@@ -149,7 +149,7 @@
       "summary": "Topic momentum update fails before row processing because UpdateAllMomentum selects nonexistent topics.star_count (SQLSTATE 42703)."
     }
   ],
-  "lastUpdatedAt": "2026-07-20T21:15:21Z",
+  "lastUpdatedAt": "2026-07-20T21:31:45Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
