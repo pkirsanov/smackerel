@@ -47,9 +47,22 @@ Feature: BUG-003-002 derive topic stars from canonical relationships
 
 ### Change Boundary
 
-Allowed: the lifecycle query, focused topic/scheduler/integration tests, and this bug packet.
+Allowed:
 
-Excluded: migrations, deploy adapters, manifests, host state, release trains, feature flags, secrets, generated config, scheduler cadence, health contracts, and unrelated cleanup.
+- `internal/topics/lifecycle.go`
+- `internal/scheduler/jobs_test.go`
+- `tests/integration/topic_lifecycle_momentum_test.go`
+- `tests/e2e/test_topic_lifecycle.sh` (execution only; file remains unchanged)
+- `specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/**`
+
+Excluded:
+
+- all database migrations and schema definitions
+- all deploy adapters, deployment manifests, and host state
+- all release-train and feature-flag configuration
+- all secrets and generated configuration
+- scheduler cadence and health contracts
+- all unrelated source, documentation, and tests
 
 ### Test Plan
 
@@ -78,4 +91,7 @@ Excluded: migrations, deploy adapters, manifests, host state, release trains, fe
 - [ ] Artifact lint, traceability, implementation-reality, and adversarial regression guards pass
 - [ ] Change Boundary is respected and zero excluded file families were changed
 - [ ] Documentation and bug packet match the implemented behavior
-- [ ] Validate-owned certification and audit evidence are recorded without self-certification
+
+### Post-Scope Certification Gate (Not Scope DoD)
+
+After every Scope 1 DoD item is completed with execution-backed evidence, route the packet through the authorized `bugfix-fastlane` implementation/test chain and then to `bubbles.validate` and `bubbles.audit` for independent certification. Validation and audit evidence remain owner-recorded phase-exit evidence; they do not gate Scope 1 completion and must not be self-certified by planning or implementation.
