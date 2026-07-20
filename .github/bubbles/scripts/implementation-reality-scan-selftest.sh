@@ -290,6 +290,103 @@ func (c *Connector) Sync() error {
 EOF
 }
 
+# NEGATIVE (must NOT flag): legitimate OpenTelemetry no-op tracer fallback plus
+# closed-vocabulary span-status literals ("noop"). These are observability
+# constructs, not faked upstream integration. Proves the Scan 1D telemetry
+# refinement exempts them. Mirrors the real assistant_adapter package shape: a
+# sibling with a real external call so the package carries an external signal.
+create_telemetry_noop_adapter_fixture() {
+  local feature_dir="$FIXTURE_ROOT/telemetry-noop-adapter-feature"
+  local package_dir="$feature_dir/internal/adapter/telemetry"
+  mkdir -p "$package_dir"
+
+  cat > "$feature_dir/scopes.md" <<EOF
+# Scopes: Telemetry No-op Adapter Fixture
+
+## Scope 1: OpenTelemetry no-op tracer fallback + closed-vocab span status
+
+### Implementation Files
+
+- \`$package_dir/tracer_fallback.go\`
+EOF
+
+  # Real upstream transport lives in a sibling (unlisted) so the package has a
+  # genuine external-call signal, exactly like the real adapter package.
+  cat > "$package_dir/sender.go" <<'EOF'
+package telemetry
+
+import "net/http"
+
+func send(client *http.Client, url string) error {
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+EOF
+
+  # The scanned file: OTel no-op tracer fallback + "noop" span-status literals,
+  # mirroring internal/telegram/assistant_adapter/adapter.go lines 147/152/154/
+  # 214/338. With the Scan 1D refinement these MUST NOT be flagged.
+  cat > "$package_dir/tracer_fallback.go" <<'EOF'
+package telemetry
+
+// buildTracer returns the real tracer, or a no-op tracer fallback when a
+// caller omits one so span-emission sites stay unconditional.
+func buildTracer() (Tracer, error) {
+	noopTr, _, err := tracing.NewTracer(ctx, tracing.Config{Enabled: false, ServiceName: "svc"})
+	if err != nil {
+		return nil, fmt.Errorf("build noop tracer fallback: %w", err)
+	}
+	tr = noopTr
+	return tr, nil
+}
+
+// endTranslate ends the root span with the closed-vocabulary status literal
+// "noop" (contract: status is one of ok|error|noop).
+func endTranslate(span Span) {
+	tracing.EndSpan(span, "noop", "not_assistant_message")
+	rootStatus := "noop"
+	_ = rootStatus
+}
+EOF
+}
+
+# ADVERSARIAL (must STILL flag): a genuinely faked no-op integration. 'Relay'
+# is supposed to reach an upstream bus, but the body is a bare, non-telemetry,
+# non-quoted no-op with no external call. The Scan 1D refinement MUST NOT exempt
+# this — proves the exclusion opens no hole for real fakes.
+create_fake_noop_integration_fixture() {
+  local feature_dir="$FIXTURE_ROOT/fake-noop-integration-feature"
+  local package_dir="$feature_dir/internal/connector/relay"
+  mkdir -p "$package_dir"
+
+  cat > "$feature_dir/scopes.md" <<EOF
+# Scopes: Fake No-op Integration Fixture
+
+## Scope 1: Bare no-op integration (must STILL flag)
+
+### Implementation Files
+
+- \`$package_dir/relay.go\`
+EOF
+
+  cat > "$package_dir/relay.go" <<'EOF'
+package relay
+
+// Relay is supposed to reach the upstream notification bus.
+func Relay(payload string) error {
+	outcome := noop
+	_ = outcome
+	return nil
+}
+
+func noop() {}
+EOF
+}
+
 create_sensitive_storage_fixture() {
   SENSITIVE_REPO="$FIXTURE_ROOT/sensitive-storage-repo"
   SENSITIVE_FEATURE="$SENSITIVE_REPO/specs/001-sensitive-storage"
@@ -379,6 +476,8 @@ create_shell_heavy_fixture
 create_missing_inventory_fixture
 create_go_connector_package_fixture
 create_fake_connector_fixture
+create_telemetry_noop_adapter_fixture
+create_fake_noop_integration_fixture
 create_sensitive_storage_fixture
 
 echo "Running implementation-reality-scan discovery selftest..."
@@ -393,6 +492,12 @@ run_expect_success "$FIXTURE_ROOT/go-connector-package-feature" "Go connector he
 
 echo "Scenario: no-op connector still fails external integration authenticity."
 run_expect_fake_integration_failure "$FIXTURE_ROOT/fake-connector-feature" "No-op connector without an external call is still flagged as FAKE_INTEGRATION"
+
+echo "Scenario: OpenTelemetry no-op tracer fallback + quoted 'noop' span-status literals are NOT flagged as fake integrations."
+run_expect_success "$FIXTURE_ROOT/telemetry-noop-adapter-feature" "Telemetry no-op tracer fallback + quoted 'noop' span-status literals pass Scan 1D (BUG-064-001 false-positive class)"
+
+echo "Scenario: a bare non-telemetry no-op integration body is STILL flagged (exclusion opens no hole)."
+run_expect_fake_integration_failure "$FIXTURE_ROOT/fake-noop-integration-feature" "Bare non-telemetry, non-quoted no-op integration body is still flagged as FAKE_INTEGRATION"
 
 echo "Scenario: semantic Scan 2B distinguishes storage operations and exact session classification."
 run_scan_in_repo "$SENSITIVE_REPO" "$SENSITIVE_FEATURE"
