@@ -55,7 +55,7 @@ Scenario: SCN-087-A02 — Forced-final uses the synthesis model, tool turns use 
   And every tool-calling request used the tool-calling model
 ```
 
-### Test Plan — SCOPE-01
+### Test Plan
 
 | Scenario | Concrete test (file::function) | Asserts |
 |----------|--------------------------------|---------|
@@ -126,7 +126,7 @@ Scenario: SCN-087-A04 — Retry-before-salvage rescues an empty forced-final
   And the honest snippet salvage does not fire
 ```
 
-### Test Plan — SCOPE-02
+### Test Plan
 
 | Scenario | Concrete test (file::function) | Asserts |
 |----------|--------------------------------|---------|
@@ -182,7 +182,7 @@ Scenario: SCN-087-A05 — Fabricated citation in the synthesis output is still r
   Then the answer is replaced with the canonical refusal
 ```
 
-### Test Plan — SCOPE-03
+### Test Plan
 
 | Scenario | Concrete test (file::function) | Asserts |
 |----------|--------------------------------|---------|
