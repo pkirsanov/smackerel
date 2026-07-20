@@ -489,3 +489,109 @@ requires scenario-specific + broader E2E-regression DoD rows they lack) and Chec
 `### Code Diff Evidence` section). `bubbles.devops` did not edit `scopes.md`
 (foreign-owned) nor force a green guard. Route: `bubbles.plan` to bring the
 `scopes.md` DoD to the v4.1.0 contract, then re-drive the guard.
+
+---
+
+## Guard-Gap Closure + Promotion — 2026-07-20 (bubbles.iterate, parent-expanded)
+
+The 9 guard gaps flagged in the DevOps section above are now CLOSED with real
+content (this session): Check 8A (SCOPE-02 + SCOPE-03 gained canonical
+scenario-specific + broader E2E-regression DoD rows referencing the hermetic
+adversarial suite + the proven live `/ask` A/B), Check 8B (SCOPE-01 Consumer
+Impact Sweep enumerates the 3 real Go consumer surfaces, grep-backed, with zero
+stale first-party references), and G053 (the `### Code Diff Evidence` section
+above now carries executed `git show` / `git log` proof of commit `f103be6a`).
+`state-transition-guard.sh` now exits 0 for this spec; `traceability-guard.sh`
+PASSED (0 warnings). The self-hosted live gate remains PROVEN by the ARM-A A/B
+above. This spec is promoted to `done`.
+
+<!-- bubbles:certifying-window-begin -->
+
+### Certifying Window — 2026-07-20 (promotion to done)
+
+Every code block BELOW this marker is the fresh promotion-certifying window,
+re-executed this session. Every block ABOVE is prior-window specialist-round
+history (authored + validated in the 2026-06-11 full-delivery rounds and the
+2026-07-20 devops live re-verify) and is exempt from the Check-3 signal heuristic
+per the append-only audit-trail rule.
+
+### Validation Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.validate (parent-expanded)
+**Command:** `bash .github/bubbles/scripts/traceability-guard.sh specs/084-open-knowledge-reasoning-loop`
+
+Claims-vs-reality re-verified: all 5 SCN-084-A0x scenarios map to concrete tests,
+DoD items, and report evidence refs; the hermetic spec-084 suite is GREEN.
+
+```text
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/084-open-knowledge-reasoning-loop
+--- Traceability Summary ---
+Scenarios checked: 5
+Test rows checked: 18
+Scenario-to-row mappings: 5
+Concrete test file references: 5
+Report evidence references: 5
+DoD fidelity scenarios: 5 (mapped: 5, unmapped: 0)
+RESULT: PASSED (0 warnings)
+TRACE_EXIT=0
+```
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'Spec084' --verbose
+--- PASS: TestAgent_MultiHop_AllowsDistinctToolCallsBeforeForcedFinal_Spec084 (0.00s)
+--- PASS: TestAgent_ComparisonSalvage_HonestlyFramed_BothSides_Spec084 (0.00s)
+--- PASS: TestAgent_HonestSalvage_EmptyForcedFinal_FramedWithSources_Spec084 (0.00s)
+--- PASS: TestAgent_GenuineSynthesis_ReturnedVerbatim_NoSalvageFrame_Spec084 (0.00s)
+--- PASS: TestAgent_FabricatedCitation_StillRejected_Spec084 (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agent
+[go-unit] go test ./... finished OK
+SPEC084_TEST_EXIT=0
+```
+
+### Audit Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.audit (parent-expanded)
+**Command:** `git show f103be6a -- config/smackerel.yaml`
+
+Policy re-verified: NO-DEFAULTS (G028) preserved; model matrix UNCHANGED; trust
+perimeter (cite-back + provenance) untouched. The committed SST diff changed ONLY
+`max_iterations` (4->6) and `per_query_token_budget` (64000->128000); no
+`llm_model_id` / `ollama_model` / hardware-tier model changed.
+
+```text
+$ git show f103be6a -- config/smackerel.yaml | grep '^[+-]'
+-    max_iterations: 4 # REQUIRED: > 0 when enabled. Spec 064 ...
+-    per_query_token_budget: 64000 # REQUIRED: > 0 when enabled. Spec 064 ...
++    max_iterations: 6 # REQUIRED: > 0 when enabled. Spec 084 ... Model matrix unchanged (gemma4:26b home-lab / gemma3:4b dev).
++    per_query_token_budget: 128000 # REQUIRED: > 0 when enabled. Spec 084 ... 50% of gemma4:26b ctx (262144); ... pure safety guardrail.
+
+$ grep -nE 'max_iterations|per_query_token_budget' config/smackerel.yaml | grep ':-'
+(no output — no ':-' fallback on the spec-084 SST keys; fail-loud preserved)
+
+$ git show f103be6a --stat | grep -iE 'citeback|provenance'
+(no output — no citeback/provenance file in the spec-084 commit; trust perimeter intact)
+```
+
+### Chaos Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.chaos (parent-expanded)
+**Command:** `./smackerel.sh test unit --go --go-run 'Spec084' --verbose`
+
+Adversarial scripted fakeLLM traces (hermetic; no live multi-service stack): the
+salvage-honesty + reasoning-loop abuse paths — comparison salvage, empty
+forced-final salvage, and the multi-hop distinct-tool-call path — all hold, and
+the genuine-synthesis + fabricated-citation trust guards still fire.
+
+```text
+$ ./smackerel.sh test unit --go --go-run 'Spec084' --verbose
+--- PASS: TestAgent_ComparisonSalvage_HonestlyFramed_BothSides_Spec084 (0.00s)
+--- PASS: TestAgent_HonestSalvage_EmptyForcedFinal_FramedWithSources_Spec084 (0.00s)
+--- PASS: TestAgent_GenuineSynthesis_ReturnedVerbatim_NoSalvageFrame_Spec084 (0.00s)
+--- PASS: TestAgent_FabricatedCitation_StillRejected_Spec084 (0.00s)
+--- PASS: TestAgent_MultiHop_AllowsDistinctToolCallsBeforeForcedFinal_Spec084 (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agent
+SPEC084_TEST_EXIT=0
+```
