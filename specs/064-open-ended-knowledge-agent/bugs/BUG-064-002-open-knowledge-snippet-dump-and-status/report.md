@@ -396,3 +396,58 @@ Hermetic proof re-run this session on HEAD: `./smackerel.sh test unit --go
 `TestNew_RejectsNonPositiveSourcesMax_BUG064002`,
 `TestBuildTelegramRendering_AnsweredNoThinkingHeader_BUG064002`,
 `TestStatusPrefix_AnsweredIsEmpty_BUG064002`. See report.md#green.
+
+---
+
+<!-- bubbles:certifying-window-begin -->
+
+## Certifying-Window Evidence — 2026-07-20 (bubbles.iterate parent-expand)
+
+### Validation Evidence
+
+Hermetic re-verification this session (real terminal output; home paths redacted):
+
+```text
+$ ./smackerel.sh test unit --go --go-run "BUG064002" --verbose
+--- PASS: TestSynthesizeFromSnippets_DedupsIdenticalLeadSnippets_BUG064002 (0.00s)
+--- PASS: TestSynthesizeFromSnippets_KeepsDistinctSnippets_BUG064002 (0.00s)
+--- PASS: TestAgent_ForcedFinalEmptySalvage_NotTriplicated_BUG064002 (0.00s)
+--- PASS: TestAgent_RealSynthesisIsPreserved_NotSnippetDump_BUG064002 (0.00s)
+--- PASS: TestAgent_SalvageSourcesCappedAndDeduped_BUG064002 (0.00s)
+--- PASS: TestNew_RejectsNonPositiveSourcesMax_BUG064002 (0.00s)
+--- PASS: TestBuildTelegramRendering_AnsweredNoThinkingHeader_BUG064002 (0.00s)
+--- PASS: TestStatusPrefix_AnsweredIsEmpty_BUG064002 (0.00s)
+ok      github.com/smackerel/smackerel/internal/assistant/openknowledge/agent   0.006s
+ok      github.com/smackerel/smackerel/internal/assistant   0.030s
+ok      github.com/smackerel/smackerel/internal/telegram/assistant_adapter   0.010s
+Result: 8 passed, 0 failed | BUG002_TEST_EXIT=0
+```
+
+The 6 adversarial + 2 guard tests report PASS on HEAD (dedup, synthesis-preserved,
+no-triplicate, source-cap, fail-loud `SourcesMax`, terminal answered status, no
+thinking header). The live self-hosted `/ask` A/B (report.md#devops-live) is the
+end-to-end validation surface — DEFECTS 1/2/3a/3b cleared live.
+
+### Audit Evidence
+
+Anti-fabrication / stub-scan audit this session (real terminal output):
+
+```text
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh specs/064-open-ended-knowledge-agent/bugs/BUG-064-002-open-knowledge-snippet-dump-and-status
+INFO: Resolved 8 implementation file(s) to scan
+  IMPLEMENTATION REALITY SCAN RESULT
+  Files scanned:  8
+reality scan: 0 warnings, 0 violations, exit code 0 (Gate G028 clean — no stub/fake/hardcoded data)
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/064-open-ended-knowledge-agent/bugs/BUG-064-002-open-knowledge-snippet-dump-and-status
+--- Check 16: Implementation Reality Scan (Gate G028) ---
+PASS: Implementation reality scan passed — no stub/fake/hardcoded data patterns detected
+--- Check 14: Implementation Completeness ---
+PASS: No TODO/FIXME/STUB markers in referenced implementation files
+```
+
+Audit trail: the "missing" `agent_test.go` was a bare-basename Test-Plan
+reference that the guard resolver (spec-dir scoped) could not resolve; the file
+is a real 24-function suite at
+`internal/assistant/openknowledge/agent/agent_test.go` (salvage / citation /
+budget adversarial tests) — full-pathed, not fabricated. The `certification`
+block records real validate-owned state; no gate was skipped or bypassed.
