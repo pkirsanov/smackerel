@@ -120,10 +120,75 @@ deployment adapters/manifests, release-train bundles, secrets, and host configur
 
 ### Definition of Done
 
-- [ ] Root cause and outcome contract are confirmed against the actual `handle_extract` branch.
+- [x] Root cause and outcome contract are confirmed against the actual `handle_extract` branch.
+  **Phase:** implement
+  **Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && printf '%s\n' '=== BUG-026-008 ROOT-CAUSE CONTRACT ===' && printf 'candidate=' && git rev-parse HEAD && printf 'pre_fix_parent=%s\n' 'e2ac9405b453698b5325b4b92f8b9cab4bd3cc35^' && printf '%s\n' '--- PRE-FIX TERMINAL BRANCH ---' && git grep -n -E 'Extraction output failed schema validation|Schema validation failed' 'e2ac9405b453698b5325b4b92f8b9cab4bd3cc35^' -- ml/app/synthesis.py && printf '%s\n' '--- CANDIDATE BOUNDED REPAIR BRANCH ---' && git grep -n -E 'resolve_synthesis_schema_repair_attempts|Synthesis schema repair attempt|repair_kwargs|Schema validation failed after repair' HEAD -- ml/app/synthesis.py && printf '%s\n' '--- INTRODUCING COMMIT ---' && git --no-pager log -1 --format='%H%n%s' e2ac9405b453698b5325b4b92f8b9cab4bd3cc35 && printf '%s\n' '=== ROOT-CAUSE CONTRACT PASS ==='`
+  **Exit Code:** 0
+  **Claim Source:** executed
+
+  ```text
+  === BUG-026-008 ROOT-CAUSE CONTRACT ===
+  candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+  pre_fix_parent=e2ac9405b453698b5325b4b92f8b9cab4bd3cc35^
+  --- PRE-FIX TERMINAL BRANCH ---
+  e2ac9405^:ml/app/synthesis.py:63: return False, f"Schema validation failed: {e.message}"
+  e2ac9405^:ml/app/synthesis.py:264: logger.error("Extraction output failed schema validation: %s", error_msg)
+  e2ac9405^:ml/app/synthesis.py:268: "error": f"Schema validation failed: {error_msg}",
+  --- CANDIDATE BOUNDED REPAIR BRANCH ---
+  HEAD:ml/app/synthesis.py:31:def resolve_synthesis_schema_repair_attempts() -> int:
+  HEAD:ml/app/synthesis.py:258:    resolve_synthesis_schema_repair_attempts()
+  HEAD:ml/app/synthesis.py:338: "Synthesis schema repair attempt class=schema_validation",
+  HEAD:ml/app/synthesis.py:342: repair_kwargs = dict(completion_kwargs)
+  HEAD:ml/app/synthesis.py:343: repair_kwargs["messages"] = [
+  HEAD:ml/app/synthesis.py:354: repair_kwargs,
+  HEAD:ml/app/synthesis.py:402: "error": f"Schema validation failed after repair: {repair_error_class}",
+  --- INTRODUCING COMMIT ---
+  e2ac9405b453698b5325b4b92f8b9cab4bd3cc35
+  fix(ml): repair synthesis schema failures once
+  === ROOT-CAUSE CONTRACT PASS ===
+  ```
 - [x] `TP-BUG026008-000` - Pre-fix focused regression fails because missing `concepts` returns permanent failure after one call. Evidence: [report.md#red-bug-reproduction-before-fix](report.md#red-bug-reproduction-before-fix)
-- [ ] `TP-BUG026008-008A` - Fail-loud startup/config unit contract permits exactly one schema-repair attempt.
-- [ ] `TP-BUG026008-008B` - Generated ML environment remains in SST sync.
+- [x] `TP-BUG026008-008A` - Fail-loud startup/config unit contract permits exactly one schema-repair attempt.
+  **Phase:** test
+  **Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && ./smackerel.sh test unit --python --python-k 'schema_repair_attempts or schema_repair_budget'`
+  **Exit Code:** 0
+  **Claim Source:** executed
+
+  ```text
+  === BUG-026-008 EXACT-ONE CONFIG CONTRACT START ===
+  candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+  + cd /workspace
+  + pytest_args=(-m "not integration and not live_ollama")
+  + pytest_args+=(-k "$2")
+  [py-unit] starting pip install -e ./ml[dev]
+  Successfully built smackerel-ml
+  Successfully installed smackerel-ml-0.1.0
+  [py-unit] pip install OK; starting unit-only pytest ml/tests
+  + pytest -q -m 'not integration and not live_ollama' -k 'schema_repair_attempts or schema_repair_budget' ml/tests
+  .............                                                            [100%]
+  13 passed, 697 deselected in 1.07s
+  [py-unit] pytest ml/tests finished OK
+  exact_one_config_contract_exit=0
+  === BUG-026-008 EXACT-ONE CONFIG CONTRACT END ===
+  ```
+- [x] `TP-BUG026008-008B` - Generated ML environment remains in SST sync.
+  **Phase:** test
+  **Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`
+  **Exit Code:** 0
+  **Claim Source:** executed
+
+  ```text
+  === BUG-026-008 SST CHECK START ===
+  candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+  config-validate: ~/smackerel-bug-026-008-synthesis-schema-repair/config/generated/dev.env.tmp.2094560 OK
+  Config is in sync with SST
+  env_file drift guard: OK
+  scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+  scenarios registered: 17, rejected: 0
+  scenario-lint: OK
+  sst_check_exit=0
+  === BUG-026-008 SST CHECK END ===
+  ```
 - [x] `TP-BUG026008-001` - Missing required concepts is corrected once: invalid-then-valid succeeds after exactly two calls and summed token usage. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
 - [x] `TP-BUG026008-002` - A second schema-invalid response is terminal: exactly two calls return the second response's content-free validator/path class. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
 - [x] `TP-BUG026008-003` - Malformed repair JSON is terminal: exactly two calls return the repair decode class and no model output. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
@@ -132,9 +197,73 @@ deployment adapters/manifests, release-train bundles, secrets, and host configur
 - [x] `TP-BUG026008-006A` - Repair retains the structured extraction request profile, original context, total token usage, and total processing duration. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
 - [x] `TP-BUG026008-006B` - Focused Go response contract preserves the full-pipeline trace and payload. Evidence: [report.md#focused-go-response-contract](report.md#focused-go-response-contract)
 - [x] `TP-BUG026008-007` - Required semantic content is never normalized: missing required concepts/claims trigger correction instead of fabricated empty defaults. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
-- [ ] Change Boundary is respected and zero excluded file families were changed.
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass (`TP-BUG026008-009`: `TestKnowledgeSynthesis_PipelineRoundTrip` through the live disposable stack).
+- [x] Change Boundary is respected and zero excluded file families were changed.
+  **Phase:** implement
+  **Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && classify every path from git diff-tree -r e2ac9405b453698b5325b4b92f8b9cab4bd3cc35 against the plan-owned allowlist and forbidden deployment/train/secret/manifest surfaces`
+  **Exit Code:** 0
+  **Claim Source:** executed
+
+  ```text
+  === BUG-026-008 CHANGE-BOUNDARY CONTRACT ===
+  candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+  implementation_commit=e2ac9405b453698b5325b4b92f8b9cab4bd3cc35
+  ALLOWED config/smackerel.yaml
+  ALLOWED docs/Development.md
+  ALLOWED internal/pipeline/synthesis_subscriber_test.go
+  ALLOWED internal/pipeline/synthesis_types.go
+  ALLOWED ml/app/main.py
+  ALLOWED ml/app/metrics.py
+  ALLOWED ml/app/synthesis.py
+  ALLOWED ml/tests/conftest.py
+  ALLOWED ml/tests/fixtures/card_rewards_missing_concepts.json
+  ALLOWED ml/tests/test_main.py
+  ALLOWED ml/tests/test_ollama_keepalive.py
+  ALLOWED ml/tests/test_synthesis.py
+  ALLOWED scripts/commands/config.sh
+  PACKET bug.md design.md report.md scenario-manifest.json scopes.md spec.md state.json uservalidation.md
+  unexpected_path_count=0
+  forbidden_surface_count=0
+  === ACTIVE WORKTREE PATHS ===
+   M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/scopes.md
+   M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json
+  === CHANGE-BOUNDARY CONTRACT END ===
+  ```
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass (`TP-BUG026008-009`: `TestKnowledgeSynthesis_PipelineRoundTrip` through the live disposable stack).
+  **Phase:** test
+  **Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh --env test test e2e --go-run TestKnowledgeSynthesis_PipelineRoundTrip`
+  **Exit Code:** 0
+  **Claim Source:** executed
+
+  ```text
+  === BUG-026-008 LIVE ROUND-TRIP RETRY START ===
+  candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+  Container smackerel-test-postgres-1 Healthy
+  Container smackerel-test-nats-1 Healthy
+  Container smackerel-test-smackerel-core-1 Healthy
+  Container smackerel-test-smackerel-ml-1 Healthy
+  go-e2e: applying -run selector: TestKnowledgeSynthesis_PipelineRoundTrip
+  === RUN   TestKnowledgeSynthesis_PipelineRoundTrip
+  knowledge_synthesis_test.go:115: capture response: 200 {"artifact_id":"<run-owned-id>","title":"Synthesis E2E deterministic article about knowledge management systems..."}
+  knowledge_synthesis_test.go:171: synthesis stats: completed=0 pending=4 failed=1 total=5
+  --- PASS: TestKnowledgeSynthesis_PipelineRoundTrip (19.56s)
+  PASS
+  ok github.com/smackerel/smackerel/tests/e2e 19.707s
+  PASS: go-e2e
+  Skipping Ollama agent E2E (set SMACKEREL_TEST_OLLAMA=1 to enable tests/e2e/agent/happy_path_test.go)
+  Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+  Volume smackerel-test-postgres-data Removed
+  Volume smackerel-test-nats-data Removed
+  Volume smackerel-test-ollama-data Removed
+  Network smackerel-test_default Removed
+  live_round_trip_retry_exit=0
+  === BUG-026-008 LIVE ROUND-TRIP RETRY END ===
+  ```
 - [ ] Broader E2E regression suite passes (`TP-BUG026008-010`).
+  > **Uncertainty Declaration**
+  > **What was attempted:** No full all-package E2E command was executed in this invocation because the operator explicitly prohibited rerunning it. The operator attested that the current outer session completed the root E2E run in 221.468s with every named subpackage passing.
+  > **What was observed:** This invocation directly observed only the focused `TestKnowledgeSynthesis_PipelineRoundTrip` PASS above. Raw output for the attested root run was not supplied to this invocation. The focused runner also explicitly skipped `tests/e2e/agent/happy_path_test.go` unless `SMACKEREL_TEST_OLLAMA=1`.
+  > **Why this is uncertain:** Operator attestation is preserved as diagnostic context but cannot be relabeled as this invocation's executed raw evidence under G021/G025/G072.
+  > **What would resolve this:** Provide the raw output from the attested 221.468s run to the certifier, or lift the no-rerun boundary for the canonical command `./smackerel.sh --env test test e2e`.
 - [x] `TP-BUG026008-011` - Full impacted Python suite passes, including BUG-026-006 malformed-JSON and BUG-026-007 thinking/token-profile regressions. Evidence: [report.md#harness-and-category-repairs](report.md#harness-and-category-repairs)
 - [x] `TP-BUG026008-012A` - Lint passes with no warnings in changed surfaces. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] `TP-BUG026008-012B` - Format validation passes for the active diff. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
@@ -142,6 +271,44 @@ deployment adapters/manifests, release-train bundles, secrets, and host configur
 - [x] `TP-BUG026008-013B` - Traceability guard passes. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] `TP-BUG026008-013C` - Implementation-reality scan passes. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
 - [x] `TP-BUG026008-013D` - Adversarial regression guards pass. Evidence: [report.md#adversarial-regression-guards](report.md#adversarial-regression-guards)
-- [ ] `TP-BUG026008-013E` - State-transition guard records the exact remaining owner-routed findings.
+- [x] `TP-BUG026008-013E` - State-transition guard records the exact remaining owner-routed findings.
+  **Phase:** bug
+  **Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && bash .github/bubbles/scripts/state-transition-guard.sh specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair`
+  **Exit Code:** 1 (expected nonterminal refusal)
+  **Claim Source:** executed
+
+  ```text
+  === BUG-026-008 STATE TRANSITION GUARD START ===
+  candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+  Current state.json status: in_progress
+  Current workflowMode: bugfix-fastlane
+  PASS: transitionRequest TR-026-008-VALIDATE-001 is open-but-routed to 'bubbles.validate'
+  PASS: transitionRequest TR-026-008-DEVOPS-001 is open-but-routed to 'bubbles.devops'
+  PASS: state.json reworkQueue is empty
+  DoD items total: 25 (checked: 21, unchecked: 4)
+  BLOCK: Resolved scope artifacts have 4 UNCHECKED DoD items
+  BLOCK: Resolved scope artifacts have 1 scope(s) still marked 'In Progress'
+  BLOCK: Required phase 'implement' NOT in execution/certification phase records
+  BLOCK: Required phase 'test' NOT in execution/certification phase records
+  BLOCK: Required phase 'regression' NOT in execution/certification phase records
+  BLOCK: Required phase 'simplify' NOT in execution/certification phase records
+  BLOCK: Required phase 'stabilize' NOT in execution/certification phase records
+  PASS: Implementation delta evidence recorded with git-backed proof and non-artifact file paths
+  passedGateIds: [G061,G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100]
+  failedGateIds: [G022]
+  blockingCode: DELIVERY_COMPLETION_FAILED
+  state_transition_guard_exit=1
+  === BUG-026-008 STATE TRANSITION GUARD END ===
+  ```
 - [ ] Security and audit review find no content/exception secret leakage, unbounded retry, config fallback, or change-boundary violation.
+  > **Uncertainty Declaration**
+  > **What was attempted:** This invocation ran focused content-free exception tests, exact-one budget tests, SST drift, git-backed change-boundary classification, and implementation-reality/regression checks. The operator also attested that prior outer-session security returned PASS and audit found source/test/documentation consistency but blocked on packet governance.
+  > **What was observed:** Current focused checks are green, but this invocation did not invoke a separate `bubbles.security` or `bubbles.audit` specialist and does not possess their raw diagnostic output.
+  > **Why this is uncertain:** A `bubbles.bug` parent-expanded execution may preserve operator-attested diagnostics, but it cannot fabricate fresh specialist-owned review or convert audit's governance block into a pass.
+  > **What would resolve this:** `bubbles.validate` should consume the current packet plus the outer-session security/audit diagnostic records and, if policy requires raw specialist replay, route the exact review item to its owner.
 - [ ] Validate-owned certification records the strongest status supported by executed evidence.
+  > **Uncertainty Declaration**
+  > **What was attempted:** All user-authorized BUG-026-008 execution phases and focused guards were run or queued in this invocation while `certification.status` remained `in_progress`.
+  > **What was observed:** The packet has current focused evidence plus explicit residual risks, but no validate-owned terminal certification write has occurred.
+  > **Why this is uncertain:** G056 reserves `certification.*` terminal fields to `bubbles.validate`; this runner must not self-certify.
+  > **What would resolve this:** Route the committed packet to `bubbles.validate` for independent evidence review and the strongest truthful certification outcome.

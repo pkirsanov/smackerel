@@ -6,7 +6,7 @@ The accepted runtime exposed a parsed JSON extraction response that omitted requ
 
 ## Completion Statement
 
-The source/config/test/doc implementation is delivered and the scenario-specific regression is red-to-green. The bug remains `in_progress`: validate-owned certification and audit have not run in this runtime, the broader full-unit lane exposed routed linked-worktree infrastructure failures, and deployment is intentionally not performed here.
+The source/config/test/doc implementation is present at exact candidate `5904f0266c2e9edd06db8fd8fb75794687dcf10e`. This invocation executed implement reconciliation, focused test, regression, simplify, and stabilize phases without source changes. The bug remains `in_progress`: the operator prohibited rerunning full all-package E2E and supplied its PASS as attestation rather than raw evidence, the focused live runner retained its explicit opt-in Ollama-agent skip, independent security/audit evidence is preserved only as outer-session diagnostics, and terminal certification remains exclusively owned by `bubbles.validate`.
 
 ## RED: Bug Reproduction Before Fix
 
@@ -472,6 +472,236 @@ REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
 === POST-MERGE BUG-026 GATES PASS ===
 ```
 
+## Remaining Workflow Execution - 2026-07-20
+
+### Implement Phase - Exact Candidate Reconciliation
+
+**Phase:** implement
+**Command:** `git grep` against the pre-fix parent and candidate, followed by `git diff-tree` path classification for implementation commit `e2ac9405b453698b5325b4b92f8b9cab4bd3cc35`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 ROOT-CAUSE CONTRACT ===
+candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+pre_fix_parent=e2ac9405b453698b5325b4b92f8b9cab4bd3cc35^
+--- PRE-FIX TERMINAL BRANCH ---
+e2ac9405^:ml/app/synthesis.py:264: logger.error("Extraction output failed schema validation: %s", error_msg)
+e2ac9405^:ml/app/synthesis.py:268: "error": f"Schema validation failed: {error_msg}",
+--- CANDIDATE BOUNDED REPAIR BRANCH ---
+HEAD:ml/app/synthesis.py:31:def resolve_synthesis_schema_repair_attempts() -> int:
+HEAD:ml/app/synthesis.py:338: "Synthesis schema repair attempt class=schema_validation",
+HEAD:ml/app/synthesis.py:342: repair_kwargs = dict(completion_kwargs)
+HEAD:ml/app/synthesis.py:402: "error": f"Schema validation failed after repair: {repair_error_class}",
+implementation_commit=e2ac9405b453698b5325b4b92f8b9cab4bd3cc35
+non_packet_allowed_paths=13
+unexpected_path_count=0
+forbidden_surface_count=0
+=== IMPLEMENT RECONCILIATION PASS ===
+```
+
+No source, test, config, runtime documentation, deployment, secret, release-train, or host file was changed in this invocation. The only active worktree paths after reconciliation were this bug packet's `scopes.md` and `state.json`.
+
+### Test Phase - Focused Contracts
+
+**Phase:** test
+**Commands:** `./smackerel.sh test unit --python --python-k 'schema_repair_attempts or schema_repair_budget'`; `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`; `./smackerel.sh test unit --python --python-k 'handle_extract or schema_repair'`; focused Go synthesis response selector
+**Exit Code:** 0 for every listed command
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 FOCUSED TEST CONTRACTS ===
+candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+pytest -q -m 'not integration and not live_ollama' -k 'schema_repair_attempts or schema_repair_budget' ml/tests
+.............                                                            [100%]
+13 passed, 697 deselected in 1.07s
+Config is in sync with SST
+env_file drift guard: OK
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+pytest -q -m 'not integration and not live_ollama' -k 'handle_extract or schema_repair' ml/tests
+....................                                                     [100%]
+20 passed, 690 deselected in 1.30s
+TestSynthesisExtractResponse_SuccessMarksCompleted PASS
+TestSynthesisExtractResponse_FailureMarksFailed PASS
+TestSynthesisExtractResponse_FullPipelinePayload PASS
+ok github.com/smackerel/smackerel/internal/pipeline 0.042s
+[go-unit] go test ./... finished OK
+=== FOCUSED TEST CONTRACTS PASS ===
+```
+
+### Test Phase - Live Disposable Round Trip
+
+**Phase:** test
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh --env test test e2e --go-run TestKnowledgeSynthesis_PipelineRoundTrip`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 LIVE ROUND-TRIP RETRY START ===
+candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+Container smackerel-test-postgres-1 Healthy
+Container smackerel-test-nats-1 Healthy
+Container smackerel-test-smackerel-core-1 Healthy
+Container smackerel-test-smackerel-ml-1 Healthy
+go-e2e: applying -run selector: TestKnowledgeSynthesis_PipelineRoundTrip
+=== RUN   TestKnowledgeSynthesis_PipelineRoundTrip
+--- PASS: TestKnowledgeSynthesis_PipelineRoundTrip (19.56s)
+PASS
+ok github.com/smackerel/smackerel/tests/e2e 19.707s
+PASS: go-e2e
+Skipping Ollama agent E2E (set SMACKEREL_TEST_OLLAMA=1 to enable tests/e2e/agent/happy_path_test.go)
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+Volume smackerel-test-postgres-data Removed
+Volume smackerel-test-nats-data Removed
+Volume smackerel-test-ollama-data Removed
+Network smackerel-test_default Removed
+live_round_trip_retry_exit=0
+=== BUG-026-008 LIVE ROUND-TRIP RETRY END ===
+```
+
+The first live command invocation failed before stack startup because the linked worktree had no local hardware-tier file. The exact same test passed after supplying the repository-required explicit `SMACKEREL_HARDWARE_TIER=cpu`; no fallback was introduced.
+
+### Residual Test Risk
+
+**Claim Source:** not-run
+
+- The operator attested that the outer session's complete root E2E run passed in `221.468s`, with every named subpackage passing. This invocation does not possess that raw output and therefore does not relabel the attestation as executed evidence.
+- The operator explicitly prohibited rerunning full all-package E2E, so `TP-BUG026008-010` remains unchecked.
+- The focused live runner explicitly skipped the opt-in Ollama agent E2E. That skip remains visible and is not counted as passing coverage.
+
+### Regression Phase
+
+**Phase:** regression
+**Commands:** `./smackerel.sh test unit --python --python-k 'schema_repair or malformed_json or structured_extraction_thinking or output_token_budget'`; `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix ml/tests/test_synthesis.py ml/tests/test_main.py ml/tests/test_ollama_keepalive.py`
+**Exit Code:** 0 for both commands
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 REGRESSION SELECTOR START ===
+candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+pytest -q -m 'not integration and not live_ollama' -k 'schema_repair or malformed_json or structured_extraction_thinking or output_token_budget' ml/tests
+.....................                                                    [100%]
+21 passed, 689 deselected in 1.02s
+[py-unit] pytest ml/tests finished OK
+regression_selector_exit=0
+=== BUG-026-008 ADVERSARIAL GUARD START ===
+Bugfix mode: true
+Adversarial signal detected in ml/tests/test_synthesis.py
+Adversarial signal detected in ml/tests/test_main.py
+Adversarial signal detected in ml/tests/test_ollama_keepalive.py
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files scanned: 3
+Files with adversarial signals: 3
+adversarial_guard_exit=0
+=== BUG-026-008 ADVERSARIAL GUARD END ===
+```
+
+### Simplify Phase
+
+**Phase:** simplify
+**Command:** `git diff --stat` for the implementation commit, `git grep` for completion-helper call sites, repair-message construction, and retry-loop signals, followed by an active non-packet diff check
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 SIMPLIFY START ===
+candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+implementation_commit=e2ac9405b453698b5325b4b92f8b9cab4bd3cc35
+=== COMPLETION HELPER CALL SITES ===
+HEAD:ml/app/synthesis.py:182:async def _dispatch_synthesis_completion(
+HEAD:ml/app/synthesis.py:293: llm_output_text, tokens_used, model_used = await _dispatch_synthesis_completion(
+HEAD:ml/app/synthesis.py:353: repair_text, repair_tokens, model_used = await _dispatch_synthesis_completion(
+=== REPAIR MESSAGE CONSTRUCTION ===
+HEAD:ml/app/synthesis.py:343: repair_kwargs["messages"] = [
+=== RETRY CONTROL SURFACE ===
+HEAD:ml/app/synthesis.py:31:def resolve_synthesis_schema_repair_attempts() -> int:
+HEAD:ml/app/synthesis.py:39: attempts = int(value)
+HEAD:ml/app/synthesis.py:44: if attempts != 1:
+HEAD:ml/app/synthesis.py:48: return attempts
+HEAD:ml/app/synthesis.py:258: resolve_synthesis_schema_repair_attempts()
+HEAD:ml/app/synthesis.py:341: synthesis_schema_repair_attempts_total.inc()
+=== ACTIVE SOURCE DIFF ===
+=== BUG-026-008 SIMPLIFY PASS ===
+```
+
+The existing helper is shared by both dispatches, the corrective message is constructed once, and no loop or parallel retry implementation exists. No simplification edit was warranted.
+
+### Stabilize Phase
+
+**Phase:** stabilize
+**Commands:** `./smackerel.sh test unit --python --python-k 'fails_when_schema_repair or schema_repair_exception_is_content_free or valid_first_response_remains_one_call'`; read-only Docker project-resource inspection
+**Exit Code:** 0 for both commands
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 STABILIZE FAILURE CONTRACT START ===
+candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+pytest -q -m 'not integration and not live_ollama' -k 'fails_when_schema_repair or schema_repair_exception_is_content_free or valid_first_response_remains_one_call' ml/tests
+....                                                                     [100%]
+4 passed, 706 deselected in 1.03s
+[py-unit] pytest ml/tests finished OK
+stabilize_failure_contract_exit=0
+=== BUG-026-008 DISPOSABLE STACK CLEANUP CHECK ===
+candidate=5904f0266c2e9edd06db8fd8fb75794687dcf10e
+--- PROJECT CONTAINERS ---
+container_count=0
+--- PROJECT VOLUMES ---
+volume_count=0
+--- PROJECT NETWORKS ---
+network_count=0
+=== DISPOSABLE STACK CLEANUP PASS ===
+```
+
+The terminal failure classes remain bounded and content-free, the initially valid path remains one call, and the focused live stack was fully removed after execution. No stabilization source edit was required.
+
+### Final Governance Guards
+
+**Phase:** bug
+**Commands:** packet artifact lint, traceability guard, implementation-reality scan, bugfix regression-quality guard, and state-transition guard
+**Exit Code:** 0, 0, 0, 0, and 1 respectively
+**Claim Source:** executed
+
+```text
+Artifact lint PASSED.
+artifact_lint_exit=0
+scenario-manifest.json covers 7 scenario contract(s)
+Scenarios checked: 7
+Scenario-to-row mappings: 7
+DoD fidelity scenarios: 7 (mapped: 7, unmapped: 0)
+RESULT: PASSED (0 warnings)
+traceability_exit=0
+Files scanned: 13
+Violations: 0
+Warnings: 0
+PASSED: No source code reality violations detected
+reality_scan_exit=0
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files scanned: 3
+Files with adversarial signals: 3
+final_regression_guard_exit=0
+DoD items total: 25 (checked: 22, unchecked: 3)
+BLOCK: Broader E2E regression suite passes (TP-BUG026008-010)
+BLOCK: Security and audit review find no leakage/retry/fallback/boundary violation
+BLOCK: Validate-owned certification records the strongest supported status
+BLOCK: Resolved scope artifacts have 1 scope(s) still marked 'In Progress'
+BLOCK: 5 specialist phase(s) missing from completion claims
+passedGateIds: [G061,G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100]
+failedGateIds: [G022]
+blockingCode: DELIVERY_COMPLETION_FAILED
+state_transition_guard_exit=1
+```
+
+The final state guard refusal is truthful: three DoD items remain open with uncertainty declarations, the scope remains `In Progress`, and five newly executed phases are recorded in `executionHistory` but not promoted into `completedPhaseClaims`, because G027 forbids implementation/test completion claims while the scope has open DoD items.
+
 ## Invocation Audit
 
-No subagent invocation API is available in this runtime. The authorized top-level `bubbles.bug` runner uses Smackerel's recorded parent-expanded phase convention and records each phase's real command provenance separately; it does not claim a `runSubagent` call occurred.
+No `runSubagent` API is available in this runtime, so no subagent invocation is claimed. The authorized top-level `bubbles.bug` runner parent-expanded the five requested phase owners in order, with each phase's command provenance recorded above and in `state.json.executionHistory`:
+
+| Bug phase | Phase owner | Why invoked | Requested work | Outcome | Primary evidence/blocker |
+|---|---|---|---|---|---|
+| Phase 5 | `bubbles.implement` | Reconcile delivered code after plan remediation | Prove root cause, implementation delta, and change boundary at exact candidate | `completed_owned` | `scopes.md` root-cause and Change Boundary evidence |
+| Phase 5 | `bubbles.test` | Execute only operator-authorized focused checks | Exact-one config, SST, focused Python/Go, live synthesis round-trip | `completed_diagnostic` | Focused checks pass; full E2E remains operator-attested and Ollama-agent E2E explicitly skipped |
+| Regression | `bubbles.regression` | Protect sibling and adversarial contracts | Focused sibling selector plus bugfix regression guard | `completed_diagnostic` | 21 tests pass; 0 guard violations/warnings |
+| Simplify | `bubbles.simplify` | Detect unnecessary parallel repair paths | Inspect helper reuse, repair construction, retry loops, active source diff | `completed_diagnostic` | One shared helper, one repair construction, no loop, no source edit |
+| Stabilize | `bubbles.stabilize` | Verify bounded failures and cleanup | Terminal/content-free tests plus disposable project resource inspection | `completed_diagnostic` | 4 tests pass; 0 containers/volumes/networks remain |
