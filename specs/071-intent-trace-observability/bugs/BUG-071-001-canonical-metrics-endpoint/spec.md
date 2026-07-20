@@ -14,6 +14,13 @@ The spec-071 refusal/trace join E2E MUST use the repository's canonical live cor
 6. The full assistant package runs through a repository CLI package selector without invoking every E2E package.
 7. No request interception, canned metrics body, hidden endpoint value, or conditional success path is introduced.
 
+### Single-Capability Justification
+
+- **Classification:** This change repairs two consumers of existing repository capabilities: the canonical core endpoint contract and the assistant observability registry. The closed `assistant` package selector narrows execution of the existing Go E2E lane; it is not a second runner or a new plugin capability.
+- **Existing foundation and reuse path:** `smackerel.sh` supplies `CORE_EXTERNAL_URL` to `scripts/runtime/go-e2e.sh`; `tests/e2e/assistant/intent_refusal_join_e2e_test.go` appends `/metrics` and scrapes the live core registry. The same registry already owns `openknowledge_refusal_total` and `smackerel_assistant_intent_traces_total`, whose valid closed-vocabulary child series are exposed at zero.
+- **Consumer set:** The refusal/intent-trace join E2E, the closed assistant-package E2E invocation, and monitoring queries that join the two metric families continue to use the canonical endpoint and existing metric names.
+- **Why no new abstraction or provider registry is needed:** Smackerel has one canonical core endpoint and one Prometheus registry for this process. The selector accepts one explicit package value rather than discovering interchangeable packages, so a URL registry, metric provider layer, or open selector registry would create unsupported variation instead of reuse.
+
 ## Release Train
 
 This bug targets the `mvp` train and introduces no feature flag. Behavior on every train remains explicit and identical.

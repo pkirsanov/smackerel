@@ -12,6 +12,14 @@ Target train: `mvp`. No feature flag is introduced.
 - **FR-04:** The test MUST exercise the real served PWA and live connector API on the disposable stack.
 - **FR-05:** Production PWA authentication behavior MUST remain unchanged.
 
+### Single-Capability Justification
+
+- **Classification:** This is a test-contract repair inside the existing Photos connector wizard and HttpOnly session capability. It does not add a photo provider, authentication mode, screen, or API variant.
+- **Existing foundation and reuse path:** `web/pwa/photo-library-add.js` already uses `fetch` with `credentials: "same-origin"` so the browser sends the existing HttpOnly session cookie to the Photos connector endpoints. `tests/e2e/photos_pwa_test.go` continues to inspect the served script and exercise the live connector API, included-album payload, and provider response.
+- **Consumer set:** The served Photos wizard, its connector create/list API calls, the included-album selection flow, and the Photos PWA E2E all consume the same cookie-authenticated contract.
+- **Why no new abstraction or provider registry is needed:** Provider handling and session authentication already exist outside this assertion. The repair replaces one obsolete bearer-token expectation with the current same-origin cookie invariant; adding an auth strategy or provider registry would create a production variation that this bug explicitly forbids.
+- **Residual risk:** The packet evidence records the opt-in Ollama agent E2E as not executed. That remains unproven broad coverage and is routed to `bubbles.test` by `TR-BUG-077-004-GOVERNANCE-001`; this analyst edit leaves the skip visible and makes no full-E2E or certification claim.
+
 ## Scenarios
 
 ```gherkin
