@@ -57,6 +57,16 @@ Excluded surfaces:
 - synthesis and assistant packets
 - deploy adapters, manifests, secrets, `knb`, and release-train bundles
 
+### Single-Implementation Justification
+
+- **Existing owning abstraction:** `internal/drive/scan.Service.InitialScan` and `internal/drive/extract.Service.ProcessPending` write the canonical `drive_files` plus `artifacts` model. `internal/drive/consumers.DriveArtifactSummary` and `LoadDriveArtifact` expose the provider-neutral read contract, while `internal/api.SearchHandler` and `SearchEngine` own authenticated `/api/search` retrieval.
+- **Concrete implementations:** The existing Google provider and `internal/drive/memprovider` both enter the same scan/extract pipeline. The regression consumes both through `LoadDriveArtifact` and the same `SearchResult.Drive` metadata shape; this repair changes only the per-run query term and adversarial corpus.
+- **Current consumers:** Provider-neutral downstream packages named by `internal/drive/consumers`, the authenticated search API, and `tests/e2e/drive/drive_cross_feature_e2e_test.go` depend on exact artifact IDs, provider IDs, folder breadcrumbs, sharing audience, and sensitivity remaining stable.
+- **Bounded variation axes:** Provider identity varies between `google` and `memdrive`, and Drive metadata varies within the existing folder/sharing/audience/sensitivity fields. Query uniqueness is test-fixture isolation, not a provider behavior or a new search implementation.
+- **Extension path:** Another Drive provider must implement the existing Drive provider contract and persist through the same scan/extract model; search and downstream consumers then continue through the existing provider-neutral structures. No search-provider registry or parallel artifact contract is introduced by this bug.
+- **Foundation decision:** This is a collision-resistant regression repair inside an established multi-provider foundation. A new reusable foundation would duplicate the current provider, artifact, consumer, and search boundaries without removing any implementation-specific branch.
+- **Residual coverage risk:** The packet's opt-in Ollama agent E2E skip remains an unexecuted coverage risk. This design remediation does not treat that skip as a pass or as evidence that Ollama-dependent behavior is covered.
+
 ## Complexity Tracking
 
 None - the smallest viable fix isolates the test query and retains an adversarial shared-corpus collision fixture.
