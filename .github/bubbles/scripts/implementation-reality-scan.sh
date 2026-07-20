@@ -590,6 +590,26 @@ for impl_file in "${impl_files[@]}"; do
         if echo "$matched_line" | grep -qE '^\s*(//|#|/\*|\*)'; then
           continue
         fi
+        # Scan 1D telemetry no-op refinement. The 'noop'/'no-op' suspicious
+        # patterns FALSE-POSITIVE on legitimate OpenTelemetry constructs: a
+        # no-op tracer fallback (so span-emission sites stay unconditional) and
+        # closed-vocabulary span-status literals ("noop"). For THESE TWO
+        # patterns ONLY, skip a matched line when it is either (a) in a
+        # telemetry/tracing context (incl. noopTr/noopTracer/noopSpan
+        # identifiers) or (b) a quoted status-vocab literal. A bare,
+        # non-telemetry, non-quoted noop/no-op in an integration body STILL
+        # flags, so real faked no-op integrations remain caught. All other
+        # suspicious patterns (mock/fake/Math.random/return nil/...) are
+        # untouched.
+        if [[ "$pattern" == 'noop' || "$pattern" == 'no-op' ]]; then
+          if echo "$matched_line" | grep -qiE '(tracing\.|tracer|\bspan\b|otel|opentelemetry|telemetry|endspan|startspan|setstatus|newtracer|tracerprovider|spanstatus|statuscode|noop(tr|span|meter|trace|provider|logger|exporter))'; then
+            continue
+          fi
+          _noop_quote='["'"'"'`]'
+          if echo "$matched_line" | grep -qiE "${_noop_quote}(noop|no-op)${_noop_quote}"; then
+            continue
+          fi
+        fi
         violation "$impl_file" "$line_num" "FAKE_INTEGRATION" "$matched_line"
       done < <(grep -nEi "$pattern" "$impl_file" 2>/dev/null || true)
     done
