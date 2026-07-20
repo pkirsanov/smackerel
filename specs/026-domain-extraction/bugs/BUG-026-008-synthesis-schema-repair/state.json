@@ -28,6 +28,30 @@
     "completedPhaseClaims": ["security", "validate", "audit"],
     "completedPhaseClaimsByScope": {},
     "pendingTransitionRequests": [],
+    "audit": {
+      "schemaVersion": "audit-run/v1",
+      "runId": "audit-026-008-20260720T024224Z",
+      "currentAttemptId": "audit-026-008-20260720T024224Z-a1",
+      "attempts": [
+        {
+          "attemptId": "audit-026-008-20260720T024224Z-a1",
+          "resultState": "ACTIVE",
+          "targetRevision": "sha256:e75a52015c91ccffa4701e1e26c81728254d70b5adfd52cae238bc53f648ced5",
+          "contractDigest": "sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f",
+          "auditProfile": "delivery-completion-v1",
+          "targetStatus": "done",
+          "auditVerdict": "REWORK_REQUIRED",
+          "outcome": "route_required",
+          "evidenceRef": ".specify/runtime/audit-026-008-20260720T024224Z-a1.txt",
+          "addressedFindings": [],
+          "unresolvedFindings": [
+            "AUD-026-008-BROAD-EVIDENCE-001",
+            "AUD-026-008-COMPLETION-ORDER-001",
+            "AUD-026-008-PHASE-CLAIMS-001"
+          ]
+        }
+      ]
+    },
     "scopeSummary": [
       {
         "scopeId": "1",
