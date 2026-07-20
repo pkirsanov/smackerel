@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "featureDir": "specs/069-assistant-http-transport/bugs/BUG-069-005-required-e2e-false-green",
+  "generatedAt": "2026-07-20T23:07:25Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG069005-001",
+      "scope": "Scope 1",
+      "title": "Annotation slots come from the live compiled intent",
+      "gherkin": {
+        "given": "the disposable test stack has the compiler enabled through the real ML route and the input omits legacy annotation keywords",
+        "when": "an authenticated user sends the annotation turn over POST /api/assistant/turn",
+        "then": "a persistent ConfirmCard is returned from compiled state-mutation slots and accepting it applies the compiled values exactly once"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/annotation_intent_test.go",
+          "name": "TestAnnotationIntentE2E_SlotsComeFromCompiledIntent"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#before-fix---accepted-bubblestest-handoff",
+        "report.md#post-fix-evidence"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG069005-002",
+      "scope": "Scope 1",
+      "title": "Springfield ambiguity creates a persistent choice",
+      "gherkin": {
+        "given": "the compiler and location normalization capability are wired",
+        "when": "an authenticated user asks for Springfield weather over HTTP",
+        "then": "the response contains a persistent DisambiguationPrompt with at least two choices and no weather lookup occurs before selection"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/intent_clarify_test.go",
+          "name": "TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#before-fix---accepted-bubblestest-handoff",
+        "report.md#post-fix-evidence"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG069005-003",
+      "scope": "Scope 2",
+      "title": "Disambiguation choice resolves pending state",
+      "gherkin": {
+        "given": "a prior HTTP turn persisted a DisambiguationPrompt",
+        "when": "the user submits one listed choice with the issued reference",
+        "then": "the same pending state is cleared exactly once and the selected candidate drives the resumed turn"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/http_disambiguation_test.go",
+          "name": "TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#before-fix---accepted-bubblestest-handoff",
+        "report.md#post-fix-evidence"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG069005-004",
+      "scope": "Scope 2",
+      "title": "List write is not persisted before confirmation",
+      "gherkin": {
+        "given": "the compiler returns a validated list-write intent",
+        "when": "an authenticated user asks to add milk to a shopping list",
+        "then": "the response contains a persistent ConfirmCard and the list remains unchanged until acceptance"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/intent_side_effect_test.go",
+          "name": "TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#before-fix---accepted-bubblestest-handoff",
+        "report.md#post-fix-evidence"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG069005-005",
+      "scope": "Scope 2",
+      "title": "Confirm acceptance executes the gated action once",
+      "gherkin": {
+        "given": "a prior HTTP turn persisted a ConfirmCard",
+        "when": "the user accepts the issued confirm reference",
+        "then": "the proposed action executes exactly once and replaying the same reference executes no additional action"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/http_confirm_test.go",
+          "name": "TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#before-fix---accepted-bubblestest-handoff",
+        "report.md#post-fix-evidence"
+      ],
+      "status": "in_progress"
+    },
+    {
+      "scenarioId": "SCN-BUG069005-006",
+      "scope": "Scope 3",
+      "title": "Required tests fail closed instead of skipping",
+      "gherkin": {
+        "given": "the five manifest-required assistant HTTP tests are selected through the repo CLI",
+        "when": "any required compiler, disambiguation, or confirmation behavior is absent",
+        "then": "the responsible test fails rather than calling a Go skip-family method and a healthy run reports five passes and zero skips"
+      },
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/annotation_intent_test.go",
+          "name": "TestAnnotationIntentE2E_SlotsComeFromCompiledIntent"
+        },
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/http_confirm_test.go",
+          "name": "TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce"
+        },
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/http_disambiguation_test.go",
+          "name": "TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn"
+        },
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/intent_clarify_test.go",
+          "name": "TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation"
+        },
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant/intent_side_effect_test.go",
+          "name": "TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#before-fix---accepted-bubblestest-handoff",
+        "report.md#post-fix-evidence"
+      ],
+      "status": "in_progress"
+    }
+  ]
+}
