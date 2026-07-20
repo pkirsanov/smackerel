@@ -215,7 +215,55 @@ FORMAT_CHECK_EXIT=0
 
 ### Code Diff Evidence
 
-`git diff --stat` (spec-084 source / config / docs files):
+The spec-084 source / config / docs changes are committed at `f103be6a`
+(executed git-backed proof, captured this session):
+
+```text
+$ git log -1 --format='%h %ad%n%s' --date=short f103be6a
+f103be6a 2026-06-11
+feat(open-knowledge): question-agnostic reasoning loop — decompose/reconcile prompt, drill-in iterations, honest salvage [spec-084]
+
+$ git show f103be6a --stat -- cmd/core/main.go config/prompt_contracts/open_knowledge.yaml config/smackerel.yaml docs/Operations.md internal/assistant/openknowledge/agent/agent.go cmd/core/openknowledge_prompt_contract_test.go internal/assistant/openknowledge/agent/reasoning_loop_spec084_test.go
+commit f103be6a
+Author-date: Thu Jun 11 19:41:17 2026 +0000
+Subject: feat(open-knowledge): question-agnostic reasoning loop — decompose/reconcile prompt, drill-in iterations, honest salvage [spec-084]
+
+ cmd/core/main.go                                   |  16 +-
+ cmd/core/openknowledge_prompt_contract_test.go     | 124 +++++++
+ config/prompt_contracts/open_knowledge.yaml        |  86 +++--
+ config/smackerel.yaml                              |   4 +-
+ docs/Operations.md                                 |  38 ++
+ internal/assistant/openknowledge/agent/agent.go    |  38 +-
+ .../agent/reasoning_loop_spec084_test.go           | 396 +++++++++++++++++++++
+ 7 files changed, 659 insertions(+), 43 deletions(-)
+```
+
+`$ git show f103be6a -- cmd/core/main.go` (WriteTimeout invariant, CHANGE 2 / Finding C1):
+
+```diff
+-               // Spec 064 SCOPE-17 — WriteTimeout sized for the longest legitimate
+-               WriteTimeout: 1800 * time.Second,
++               // Spec 064 SCOPE-17 / Spec 084 — WriteTimeout sized for the longest
++               // THIS request context, so WriteTimeout — not the substrate timeout_ms —
++               // so 6 × 600s = 3600s. Realistic GPU / home-lab turns complete in
++               WriteTimeout: 3600 * time.Second,
+```
+
+`$ git show f103be6a -- internal/assistant/openknowledge/agent/agent.go` (reflect-before-final nudge + honest-salvage frame, CHANGE 2 + CHANGE 4):
+
+```diff
++               case iter == a.cfg.MaxIterations-2 && len(trace) > 0:
++                       // Spec 084 (CHANGE 2) — reflect-before-final nudge. On the
++                               Content: "Before you give your final answer: re-read the question and check whether the evidence you have actually answers what was asked ... issue ONE more targeted tool call now to fill that specific gap. ...",
++// honestSalvagePrefix frames a snippet-salvaged body as raw findings so the
++const honestSalvagePrefix = "I searched but couldn't directly answer your question. Here is the most relevant information I found:"
++// honestSalvageBody wraps synthesizeFromSnippets(trace) with the honest frame.
++func honestSalvageBody(trace []ToolTraceEntry) string {
++       return honestSalvagePrefix + "\n\n" + syn
+```
+
+The pre-commit working-tree `git diff --stat` snapshot (5 modified source /
+config / docs files, taken before the two new test files were staged):
 
 ```text
  cmd/core/main.go                                | 16 ++--
@@ -257,6 +305,30 @@ FORMAT_CHECK_EXIT=0
 - per_query_token_budget: 64000
 + max_iterations: 6            # 5 tool-calling turns + 1 forced-synthesis turn
 + per_query_token_budget: 128000   # ~quadratic re-add growth at 6 iterations; zero-cost CostFn guardrail
+```
+
+### Consumer Impact Sweep (SCOPE-01)
+
+Real consumer sweep of the reworked `agent_system_prompt` prompt-text interface
+(executed this session; backs the SCOPE-01 Consumer Impact Sweep enumeration and
+the zero-stale-reference claim):
+
+```text
+$ grep -rn "loadOpenKnowledgeAgentPrompt" --include='*.go' .
+cmd/core/wiring_assistant_openknowledge.go:215:  systemPrompt, err := loadOpenKnowledgeAgentPrompt(...)
+cmd/core/wiring_assistant_openknowledge.go:417:func loadOpenKnowledgeAgentPrompt(path string) (string, error) {
+cmd/core/openknowledge_prompt_contract_test.go:43:   prompt, err := loadOpenKnowledgeAgentPrompt(path)
+cmd/core/wiring_assistant_openknowledge_test.go:64,67,79,91,103   (loader unit tests)
+
+$ grep -rn "\.SystemPrompt" --include='*.go' internal/assistant/openknowledge cmd/core
+internal/assistant/openknowledge/agent/agent.go:239-240:   fail-loud when SystemPrompt empty (G028, no silent default)
+internal/assistant/openknowledge/agent/agent.go:346:   {Role: llm.RoleSystem, Content: a.cfg.SystemPrompt}
+cmd/core/cmd_agent_admin.go:332:   fmt.Fprintln(w, indent(d.SystemPrompt, "  "))   # agent inspect CLI
+
+$ grep -rn "write the final answer in the NEXT turn|times, prices, temperatures" --include='*.go' --include='*.yaml' . | grep -v '/specs/'
+cmd/core/openknowledge_prompt_contract_test.go:62:  "write the final answer in the NEXT turn",   # ADVERSARIAL absence assertion
+cmd/core/openknowledge_prompt_contract_test.go:73:  "times, prices, temperatures",              # ADVERSARIAL absence assertion
+# => ZERO stale production references — both matches are the guard-test negative assertions that PROVE the removed clauses are absent.
 ```
 
 ### Full unit suite — out-of-changeset failure attribution
