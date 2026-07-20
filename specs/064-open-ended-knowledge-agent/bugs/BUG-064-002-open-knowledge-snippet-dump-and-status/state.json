@@ -3,12 +3,33 @@
   "title": "open-knowledge /ask returns a triplicated raw-snippet dump under a 'thinking…' header instead of a synthesized answer",
   "spec": "specs/064-open-ended-knowledge-agent",
   "severity": "S1",
-  "status": "blocked",
+  "status": "done",
   "workflowMode": "bugfix-fastlane",
   "owner": "bubbles.workflow",
   "discoveredBy": "operator (live self-hosted Telegram bot)",
   "discoveredAt": "2026-06-11",
-  "lastUpdatedAt": "2026-06-11",
+  "lastUpdatedAt": "2026-07-20",
+  "certifiedAt": "2026-07-20T16:39:30Z",
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-07-20T16:39:30Z",
+    "certifiedBy": "bubbles.iterate (parent-expanded)",
+    "evidenceRef": "report.md",
+    "lockdownState": { "round": 0, "lastCleanRound": 0 },
+    "scopeProgress": { "total": 1, "done": 1, "inProgress": 0, "notStarted": 0, "blocked": 0 },
+    "certifiedCompletedPhases": [
+      "select", "bootstrap", "implement", "test", "regression", "simplify",
+      "gaps", "harden", "stabilize", "security", "devops", "validate", "audit", "docs"
+    ],
+    "gatesPassed": [
+      "state-transition-guard (EXIT=0)",
+      "artifact-lint (EXIT=0)",
+      "test unit --go --go-run BUG064002: 8 BUG-064-002 tests GREEN (6 adversarial RED->GREEN + 2 guards)",
+      "reality-scan (Gate G028 clean — no stub/fake data in referenced source)",
+      "Code Diff Evidence recorded (git show --stat ded57e8a, Gate G053)"
+    ],
+    "liveEvidence": "2026-07-20 self-hosted /ask A/B (deployed core rev a7ce6834, ancestor of HEAD): DEFECTS 1/2/3a/3b cleared live — ONE synthesized grounded verdict, deduped+capped real sources (num_sources=2), terminal answered status. See report.md#devops-live."
+  },
   "rootCause": {
     "defect1_snippetDump": "internal/assistant/openknowledge/agent/agent.go::synthesizeFromSnippets emits raw web_search snippet text as the final body whenever the model fails to produce a cited synthesis (forced-final empty text, or an ungrounded-excuse body). The salvage masks a synthesis failure with a raw-snippet dump.",
     "defect2_triplicate": "synthesizeFromSnippets takes the lead snippet of EACH web_search tool call and joins with \\n\\n WITHOUT de-duplication; 3 searches returning the same top result produce the identical block 3x.",
@@ -52,9 +73,7 @@
     "validate",
     "docs"
   ],
-  "blockedReason": "In-repo code+config+prompt fix is COMPLETE and validated (scope-01 Done; all 9 DoD items [x] with inline raw evidence; 3 adversarial regression tests RED->GREEN; full `go test ./...` GREEN; `./smackerel.sh check` + `format --check` clean; scenario-lint OK). Two genuine external blockers prevent a clean terminal 'done' in this environment: (1) DEPLOYMENT (owner bubbles.devops): the deployed smackerel-core image still ships the snippet-dump/triplicate/thinking-status code, so the live self-hosted S1 symptom is cleared ONLY after a rebuild of smackerel-core from the fixed SHA + self-hosted config-bundle regen + redeploy via the knb <deployment-owner>/<product>/<target> adapter; (2) LIVE CERTIFICATION (owners bubbles.validate / bubbles.audit): the done-grade live E2E (real Telegram + searxng + gemma4:26b GPU stack) requires the self-hosted GPU stack which is unavailable in this sandbox. ACTIONABLE NEXT STEP: redeploy via bubbles.devops, then re-send the tide NL prompt on the self-hosted bot and confirm ONE synthesized answer (no 'thinking…' header, no triplicate, capped/deduped sources), then run the live openknowledge E2E + audit on the real stack.",
-  "nextRequiredOwner": "bubbles.devops",
-  "nextAction": "Rebuild smackerel-core from the fixed SHA (CI build-once), regenerate the self-hosted config-bundle, and redeploy via `bash scripts/deploy/promote.sh --target self-hosted --build-manifest <build-manifest-<sourceSha>.yaml>` (which calls `./smackerel.sh deploy-target self-hosted apply ...`). Then re-test the NL tide prompt on the live Telegram bot.",
+  "resolutionNote": "DONE 2026-07-20. In-repo code+config+prompt fix COMPLETE and validated (scope-01 Done; all DoD items [x] with inline raw evidence; adversarial regression RED->GREEN; hermetic `./smackerel.sh test unit --go --go-run BUG064002` GREEN this session). The prior deployment + live-certification blockers are CLEARED: the deployed smackerel-core rev a7ce6834 CONTAINS this fix (commit ded57e8a is an ancestor) and the 2026-07-20 self-hosted /ask A/B proved DEFECTS 1/2/3a/3b live — ONE synthesized grounded verdict, deduped+capped real sources (num_sources=2), terminal answered status. All bugfix-fastlane guard gaps closed with real content (report.md#devops-live); state-transition-guard exits 0.",
   "modelCapabilityNote": "Per operator directive the local model (gemma4:26b) is NOT swapped. The in-repo fixes maximize a real cited synthesis (prompt) and make the fallback non-terrible (dedup + source cap + terminal status). If gemma4:26b still cannot extract the exact tide table on the live GPU stack, the user receives a single deduplicated grounded evidence digest + capped sources (a strict improvement over the triplicated dump under a 'thinking…' header); perfecting extraction is a model/prompt-tuning follow-up, not in scope for this S1 quality bugfix.",
   "environmentalLimitations": [
     "internal/scopesdriftguard FAIL is PRE-EXISTING: 287 broken scopes.md evidence-pointers vs ratchet ceiling 270, dominated by done specs 034 (81), 035 (62), 036 (41), 063 (40), 061 (39), 083 (17). Spec 064 is ABSENT from the breakdown — BUG-064-002 added zero broken paths. Foreign done-spec artifacts (ownership boundary); not this bug's scope.",
