@@ -448,3 +448,251 @@ nextRequiredOwner: bubbles.plan
 supersedesAttemptId: none
 resumeFromPhase: none
 END AUDIT_RESULT_V1
+
+## Implement Phase Verification - 2026-07-20 21:22 UTC
+
+### Implement Owner Statement
+
+`bubbles.implement` inspected the authorized starting revision
+`49be4c9735955e5a3ccefa612e54c7d265160aee` and found no concrete defect in the
+scoped product delta. No product source or test file was modified in this phase.
+The existing repair is the minimal design-prescribed query replacement: it
+derives explicit stars from canonical persisted relationships, preserves the
+existing momentum/state code, and preserves query-error propagation.
+
+This phase does not claim the `test`, `regression`, `simplify`, `stabilize`,
+`security`, `validate`, or `audit` phases. Scope and certification status remain
+`in_progress`.
+
+### Canonical Root Cause Reconciliation
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `printf '%s\n' 'IMPLEMENT INSPECTION: root cause and canonical contracts' 'base revision: f5f05450848630fe84c0a215429bdfc701c4bcd2' 'pre-fix lifecycle reference:' && git grep -n 't.star_count' f5f05450848630fe84c0a215429bdfc701c4bcd2 -- internal/topics/lifecycle.go && printf '%s\n' 'canonical star persistence:' && grep -n 'user_starred' internal/db/migrations/001_initial_schema.sql && printf '%s\n' 'canonical edge table:' && grep -n -A 8 'CREATE TABLE IF NOT EXISTS edges' internal/db/migrations/001_initial_schema.sql && printf '%s\n' 'canonical BELONGS_TO producers:' && grep -n 'BELONGS_TO' internal/graph/linker.go internal/connector/bookmarks/topics.go`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+IMPLEMENT INSPECTION: root cause and canonical contracts
+base revision: f5f05450848630fe84c0a215429bdfc701c4bcd2
+pre-fix lifecycle reference:
+f5f05450848630fe84c0a215429bdfc701c4bcd2:internal/topics/lifecycle.go:123: COALESCE(t.star_count, 0),
+canonical star persistence:
+35:    user_starred            BOOLEAN DEFAULT FALSE,
+canonical edge table:
+122:CREATE TABLE IF NOT EXISTS edges (
+123-    id          TEXT PRIMARY KEY,
+124-    src_type    TEXT NOT NULL,
+125-    src_id      TEXT NOT NULL,
+126-    dst_type    TEXT NOT NULL,
+127-    dst_id      TEXT NOT NULL,
+128-    edge_type   TEXT NOT NULL,
+129-    weight      REAL DEFAULT 1.0,
+130-    metadata    JSONB,
+canonical BELONGS_TO producers:
+internal/graph/linker.go:216:// linkByTopics assigns artifacts to topics and creates BELONGS_TO edges.
+internal/graph/linker.go:266: if err := l.createEdge(ctx, "artifact", artifactID, "topic", topicID, "BELONGS_TO", 1.0); err != nil {
+internal/connector/bookmarks/topics.go:152:// CreateTopicEdge creates a BELONGS_TO edge from an artifact to a topic.
+internal/connector/bookmarks/topics.go:161: VALUES ($1, 'artifact', $2, 'topic', $3, 'BELONGS_TO', 1.0, '{}')
+```
+
+**Result:** PASS - the pre-fix query read an absent topic column while canonical
+source persists stars on artifacts and membership as artifact-to-topic
+`BELONGS_TO` edges.
+
+### Production Query Reconciliation
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `printf '%s\n' 'IMPLEMENT INSPECTION: production aggregation query' 'required source: artifacts.user_starred' 'required relation: artifact -> topic BELONGS_TO' 'required cardinality: distinct artifact ids' && grep -n -A 17 -B 2 'COUNT(DISTINCT a.id)' internal/topics/lifecycle.go`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+IMPLEMENT INSPECTION: production aggregation query
+required source: artifacts.user_starred
+required relation: artifact -> topic BELONGS_TO
+required cardinality: distinct artifact ids
+121-    rows, err := l.Pool.Query(ctx, `
+122-            SELECT t.id, t.name, t.state, t.capture_count_30d, t.capture_count_90d, t.search_hit_count_30d,
+123:                   COALESCE((SELECT COUNT(DISTINCT a.id)
+124-                             FROM edges e
+125-                             JOIN artifacts a ON a.id = e.src_id AND e.src_type = 'artifact'
+126-                             WHERE e.dst_type = 'topic' AND e.dst_id = t.id
+127-                               AND e.edge_type = 'BELONGS_TO' AND a.user_starred IS TRUE), 0)::int,
+128-                   COALESCE((SELECT COUNT(*) FROM edges WHERE src_type = 'topic' AND src_id = t.id
+129-                              OR dst_type = 'topic' AND dst_id = t.id), 0)::int,
+130-                   EXTRACT(DAY FROM NOW() - COALESCE(t.last_active, t.created_at))::int
+131-            FROM topics t
+132-    `)
+133-    if err != nil {
+134-            return fmt.Errorf("query topics: %w", err)
+135-    }
+136-    defer rows.Close()
+137-
+138-    for rows.Next() {
+139-            var id, name, state string
+140-            var cap30, cap90, search30, starCount, connCount, daysSince int
+```
+
+**Result:** PASS - all BUG-R2 predicates are present, duplicate relationships
+cannot inflate the star signal because artifact IDs are distinct, no
+denormalized column is introduced, and SQL query errors retain `query topics`
+context.
+
+### Persisted Case Contract Inspection
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `printf '%s\n' 'IMPLEMENT INSPECTION: persisted-star test contract' 'actual entrypoint: topics.NewLifecycle(pool).UpdateAllMomentum(ctx)' 'required cases: zero, multiple, unstarred, unrelated' && grep -n 'UpdateAllMomentum\|zero-star persisted\|multiple-stars persisted\|PASS: canonical\|PASS: zero\|PASS: one linked unstarred\|PASS: two linked starred\|PASS: three linked artifacts\|PASS: an unrelated' tests/integration/topic_lifecycle_momentum_test.go && printf '%s\n' 'fixture identities:' && grep -n 'artifact-zero\|artifact-star-one\|artifact-star-two\|artifact-unstarred\|artifact-unrelated-star' tests/integration/topic_lifecycle_momentum_test.go`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The inspected persistent regression invokes the production
+`Lifecycle.UpdateAllMomentum` entrypoint and encodes separate zero-star,
+multiple-star, unstarred, and unrelated-star fixtures and assertions. This is a
+test-code existence/fidelity claim only; this implement phase did not re-run the
+PostgreSQL integration test.
+**Output:**
+
+```text
+IMPLEMENT INSPECTION: persisted-star test contract
+actual entrypoint: topics.NewLifecycle(pool).UpdateAllMomentum(ctx)
+required cases: zero, multiple, unstarred, unrelated
+35:     if err := lifecycle.UpdateAllMomentum(ctx); err != nil {
+36:             t.Fatalf("UpdateAllMomentum against canonical migrations: %v", err)
+41:     t.Logf("zero-star persisted momentum=%.4f state=%s", zeroStar.momentum, zeroStar.state)
+45:     t.Logf("multiple-stars persisted momentum=%.4f state=%s", multipleStars.momentum, multipleStars.state)
+47:     t.Log("PASS: canonical topics schema has no star_count column")
+48:     t.Log("PASS: zero linked starred artifacts contribute 0.0 star momentum")
+49:     t.Log("PASS: one linked unstarred artifact contributes only 0.5 connection momentum")
+50:     t.Log("PASS: two linked starred artifacts contribute exactly 10.0 star momentum")
+51:     t.Log("PASS: three linked artifacts contribute exactly 1.5 connection momentum")
+52:     t.Log("PASS: an unrelated starred artifact contributes nothing to the tested topic")
+fixture identities:
+106: prefix+"-artifact-zero", prefix+"-hash-zero",
+107: prefix+"-artifact-star-one", prefix+"-hash-star-one",
+108: prefix+"-artifact-star-two", prefix+"-hash-star-two",
+109: prefix+"-artifact-unstarred", prefix+"-hash-unstarred",
+110: prefix+"-artifact-unrelated-star", prefix+"-hash-unrelated-star",
+126: prefix+"-edge-zero", prefix+"-artifact-zero", prefix+"-topic-zero",
+127: prefix+"-edge-star-one", prefix+"-artifact-star-one", prefix+"-topic-multiple",
+128: prefix+"-edge-star-two", prefix+"-artifact-star-two", prefix+"-topic-multiple",
+129: prefix+"-edge-unstarred", prefix+"-artifact-unstarred", prefix+"-topic-multiple",
+130: prefix+"-edge-unrelated-star", prefix+"-artifact-unrelated-star", prefix+"-topic-unrelated",
+```
+
+**Result:** PASS - the persistent regression contract directly represents every
+required star-association case without a test-only production path.
+
+### Focused Lifecycle And Scheduler Unit Check
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run '^(TestCalculateMomentum.*|TestTransitionState.*|TestDefaultMomentumConfig|TestNewLifecycle|TestTopicMomentumJob_LogsLifecycleQueryFailure)$' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+=== RUN   TestTopicMomentumJob_LogsLifecycleQueryFailure
+--- PASS: TestTopicMomentumJob_LogsLifecycleQueryFailure (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/scheduler       0.050s
+=== RUN   TestCalculateMomentum
+--- PASS: TestCalculateMomentum (0.00s)
+=== RUN   TestCalculateMomentum_Dormant
+--- PASS: TestCalculateMomentum_Dormant (0.00s)
+=== RUN   TestCalculateMomentum_Decay
+--- PASS: TestCalculateMomentum_Decay (0.00s)
+=== RUN   TestTransitionState
+--- PASS: TestTransitionState (0.00s)
+=== RUN   TestDefaultMomentumConfig
+--- PASS: TestDefaultMomentumConfig (0.00s)
+=== RUN   TestCalculateMomentum_StarsAndConnections
+--- PASS: TestCalculateMomentum_StarsAndConnections (0.00s)
+=== RUN   TestNewLifecycle
+--- PASS: TestNewLifecycle (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/topics  0.014s
+[go-unit] go test ./... finished OK
+```
+
+**Result:** PASS - focused formula/state behavior remains green, and the real
+closed-pool lifecycle path still returns enough query context for the scheduler
+to log failure without logging success.
+
+### Cheap Compile Check
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh check`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+IMPLEMENT COMPILE CHECK START
+worktree: ~/smackerel-bug-topic-momentum-star-count-20260720
+hardware tier: cpu
+command: ./smackerel.sh check
+config-validate: ~/smackerel-bug-topic-momentum-star-count-20260720/config/generated/dev.env.tmp.437564 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 17, rejected: 0
+scenario-lint: OK
+compile check exit: 0
+IMPLEMENT COMPILE CHECK END
+```
+
+**Result:** PASS - the scoped implementation compiles through the repository
+CLI and the check did not mutate tracked generated configuration.
+
+### Implement Change Boundary Proof
+
+**Phase:** implement
+**Executed:** YES (current session)
+**Command:** `BASE=$(git merge-base HEAD origin/main) && printf 'IMPLEMENT BOUNDARY CHECK\nBASE=%s\nHEAD=%s\n' "$BASE" "$(git rev-parse HEAD)" && git diff --name-status "$BASE"..HEAD && printf '%s\n' 'diff check:' && git diff --check "$BASE"..HEAD && printf '%s\n' 'excluded families changed: none shown above'`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+
+```text
+IMPLEMENT BOUNDARY CHECK
+BASE=f5f05450848630fe84c0a215429bdfc701c4bcd2
+HEAD=49be4c9735955e5a3ccefa612e54c7d265160aee
+M       internal/scheduler/jobs_test.go
+M       internal/topics/lifecycle.go
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/bug.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/design.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/report.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scenario-manifest.json
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/scopes.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/spec.md
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/state.json
+A       specs/003-phase2-ingestion/bugs/BUG-003-002-topic-momentum-star-count/uservalidation.md
+A       tests/integration/topic_lifecycle_momentum_test.go
+diff check:
+excluded families changed: none shown above
+```
+
+**Result:** PASS - the complete branch delta contains only the authorized query,
+focused test surfaces, and BUG-003-002 packet. No migration, deployment,
+configuration, release-train, secret, manifest, or unrelated packet path appears.
+
+### Implement Phase DoD Decision
+
+The implementation owner can support only these five Scope 1 claims from the
+current-session execution and inspection above:
+
+1. root cause confirmation against canonical persistence and relationship source;
+2. production query derivation from linked `artifacts.user_starred` rows;
+3. persistent zero/multiple/unstarred/unrelated case assertions exist against the real lifecycle entrypoint;
+4. query-error propagation and scheduler failure/success log separation remain intact;
+5. the mechanically enumerated Change Boundary is respected.
+
+All test-category, broad E2E, quality-chain, and documentation-phase claims
+remain unchecked for their owning specialists. This phase neither changes Scope
+1 to `Done` nor writes any `certification.*` field.
