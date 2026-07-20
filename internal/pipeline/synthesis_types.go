@@ -45,6 +45,7 @@ type SynthesisExtractResponse struct {
 	ProcessingTimeMs      int64            `json:"processing_time_ms"`
 	ModelUsed             string           `json:"model_used"`
 	TokensUsed            int              `json:"tokens_used"`
+	TraceID               string           `json:"trace_id,omitempty"`
 }
 
 // SynthesisResult holds the extracted knowledge from an artifact.

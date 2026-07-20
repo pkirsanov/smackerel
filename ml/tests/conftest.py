@@ -79,3 +79,9 @@ os.environ.setdefault("ML_STRUCTURED_EXTRACTION_THINKING", "false")
 # production module. The fail-loud contract is proven adversarially in
 # test_ollama_keepalive.py via monkeypatch.delenv.
 os.environ.setdefault("ML_DOMAIN_OUTPUT_TOKEN_BUDGET", "4096")
+
+# BUG-026-008 — handle_extract resolves the schema-repair budget fail-loud at
+# call time. Unit tests seed the SST value only when the repo CLI has not
+# generated it; dedicated adversarial tests delete/replace it to prove the
+# production resolver has no fallback.
+os.environ.setdefault("ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS", "1")

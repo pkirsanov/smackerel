@@ -191,6 +191,13 @@ func wireAssistantFacade(
 	// production wiring path sets it).
 	facade.WithTracer(svc.assistantTracer)
 
+	// Spec 071 SCOPE-02 — attach the persisted/redacted IntentTrace
+	// recorder before any transport can invoke the facade. This is the
+	// production consumer of the fail-loud intent_trace SST block.
+	if err := wireAssistantIntentTrace(ctx, cfg, svc, facade); err != nil {
+		return fmt.Errorf("wire assistant intent trace: %w", err)
+	}
+
 	// Spec 095 SCOPE-06 — inject the retrieval-strategy router as a
 	// pre-retrieval stage (design §3, mirroring the LookupNLRouting seam).
 	// Built from the fail-loud-validated retrieval.routing SST (loaded in

@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "featureDir": "specs/038-cloud-drives-integration/bugs/BUG-038-003-drive-e2e-core-health-collapse",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-038-003-SCN-001",
+      "scope": "scope-1-preserve-core-health-through-serialized-drive-observability",
+      "title": "Observability reconciliation remains isolated",
+      "gherkin": {
+        "given": "a fresh disposable stack with real core, database, NATS, and ML services",
+        "when": "the Drive observability fixture scans Google and memdrive rows",
+        "then": "metrics and rows reconcile and core remains healthy after cleanup"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/drive/drive_observability_e2e_test.go", "testId": "TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture"}
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-038-003-SCN-002",
+      "scope": "scope-1-preserve-core-health-through-serialized-drive-observability",
+      "title": "Serialized neighbors preserve core health",
+      "gherkin": {
+        "given": "cross-feature runs immediately before observability on one parent-owned stack",
+        "when": "the successor Drive health scenario begins",
+        "then": "core is still healthy without stack restart"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/drive/drive_cross_feature_e2e_test.go", "testId": "TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers"},
+        {"file": "tests/e2e/drive/drive_observability_e2e_test.go", "testId": "TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture"}
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-038-003-SCN-003",
+      "scope": "scope-1-preserve-core-health-through-serialized-drive-observability",
+      "title": "Readiness failure reports concrete terminal state",
+      "gherkin": {
+        "given": "core becomes unhealthy or unreachable during bounded polling",
+        "when": "readiness cannot succeed",
+        "then": "the failure reports the last HTTP or transport state without arbitrary sleep"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/e2e/drive/helpers.go", "testId": "focused readiness diagnostic regression if helper defect is confirmed"}
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

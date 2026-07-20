@@ -409,7 +409,7 @@ func New(allowedTools []string, allowedProviders ...string) *Metrics {
 	for _, o := range AllConnectionTestOutcomes {
 		connectionTestOutcomeSet[o] = struct{}{}
 	}
-	return &Metrics{
+	metrics := &Metrics{
 		toolCalls: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: NameToolCalls,
 			Help: "Open-knowledge tool invocations by tool and outcome (success|error).",
@@ -506,6 +506,13 @@ func New(allowedTools []string, allowedProviders ...string) *Metrics {
 		allowedConnectionTestKinds:    connectionTestKindSet,
 		allowedConnectionTestOutcomes: connectionTestOutcomeSet,
 	}
+	// Materialize the closed refusal vocabulary at zero so a fresh
+	// Prometheus scrape exposes the registered family before the first
+	// refusal. These are real zero counters, not synthetic events.
+	for cause := range causeSet {
+		metrics.refusal.WithLabelValues(cause).Add(0)
+	}
+	return metrics
 }
 
 // Register installs every collector into the supplied Registerer.

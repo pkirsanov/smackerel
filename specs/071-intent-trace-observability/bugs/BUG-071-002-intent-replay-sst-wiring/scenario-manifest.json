@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "featureDir": "specs/071-intent-trace-observability/bugs/BUG-071-002-intent-replay-sst-wiring",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-071-002-SCN-001",
+      "scope": "scope-1-intent-trace-config-propagation",
+      "title": "Explicit replay capability reaches the CLI",
+      "gherkin": {"given": "replay is enabled in test SST and a trace exists", "when": "replay-intent runs", "then": "route and tool calls match without side effects"},
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/intent_replay_test.go", "testId": "TestIntentReplayE2E_ReproducesRouteAndToolCallsWithoutSideEffects"}],
+      "evidenceRefs": ["report.md#red-replay-capability-is-false"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-071-002-SCN-002",
+      "scope": "scope-1-intent-trace-config-propagation",
+      "title": "Unknown trace keeps canonical vocabulary",
+      "gherkin": {"given": "replay is enabled and a trace is absent", "when": "replay-intent runs", "then": "the canonical not-found exit and vocabulary are returned"},
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/assistant/intent_replay_test.go", "testId": "TestIntentReplayE2E_UnknownTraceIDExits2"}],
+      "evidenceRefs": ["report.md#red-replay-capability-is-false"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-071-002-SCN-003",
+      "scope": "scope-1-intent-trace-config-propagation",
+      "title": "Missing intent-trace config fails loudly",
+      "gherkin": {"given": "a required intent-trace integration edge is absent", "when": "config generation or aggregate loading runs", "then": "the contract fails without a default"},
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "internal/config/assistant_intent_trace_wiring_contract_test.go", "testId": "TestIntentTraceSSTWiringContract_AdversarialRejectsMissingReplayEmission"}],
+      "evidenceRefs": ["report.md#green-sst-wiring-and-replay"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

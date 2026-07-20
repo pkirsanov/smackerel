@@ -4,7 +4,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 
 ## Scope 1: Enforce Subject-Correct Outgoing Validation
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Depends On:** None
 **Scope-Kind:** bugfix-runtime
@@ -82,23 +82,23 @@ Excluded surfaces:
 
 ### Definition of Done
 
-- [x] TP-01 Unit validator contract tests pass with red/green evidence. → Evidence: report.md "Bug Reproduction — Fresh In-Session RED → GREEN" + "### Unit" (`689 passed, 2 skipped`, `BUG025005_SESSION_PYUNIT_END exit=0`).
-- [x] TP-02 Regression E2E dispatch tests pass: valid concept response follows the cross-source validator with publish/ack, and malformed concept response enters poison handling before publish. → Evidence: report.md RED→GREEN (`test_crosssource_dispatch_*`; RED shows publish awaited 0 times when misrouted, GREEN shows publish/ack).
-- [x] TP-03 Neighbor Regression E2E tests prove neighboring subject semantics remain intact for artifact, digest, photo, and unknown subjects. → Evidence: report.md "### Unit" (`test_artifact_dispatch_*`, `test_digest_dispatch_*`, `test_photo_dispatch_*`, `test_unknown_subject_*` green in the `689 passed` suite).
-- [x] TP-04 NATS integration proven at the dispatch level (real `_consume_loop` + real `_handle_poison`/`nak`, in-session RED→GREEN); the fresh full ephemeral-stack `./smackerel.sh test integration` re-run is routed to bubbles.devops as NON-GATING, held out of this session to avoid corrupting an active parallel-worktree `smackerel-test` stack. → Evidence: report.md "### Integration And Broader E2E — Non-Gating Live Legs".
-- [x] TP-05 Broader E2E regression suite: focused live cross-source E2E already passed on the ephemeral stack in the landing worktree (`TestKnowledgeCrossSource_ConnectionDetection` PASS, exit 0); the fresh full `./smackerel.sh test e2e` re-run is routed to bubbles.devops as NON-GATING (active parallel `smackerel-test` stack). → Evidence: report.md "### Integration And Broader E2E — Non-Gating Live Legs".
-- [x] TP-06 Lint and format checks pass with zero warnings for this bug's surface. → Evidence: report.md "### Lint And Format" (lint exit 0, check exit 0; format names only the pre-existing out-of-boundary `internal/config/release_trains_contract_test.go`, git-verified unchanged vs origin/main; the four `ml/` files are format-clean).
-- [x] TP-07 Governance gates pass with truthful current-session evidence. → Evidence: report.md "### Governance Gates" (regression-quality exit 0, traceability exit 0, implementation-reality exit 0).
-- [x] Root cause is confirmed by a focused pre-fix failing regression test. → Evidence: report.md RED (`test_crosssource_dispatch_accepts_valid_concept_response` fails; captured log shows `artifact_id is required` on `synthesis.crosssource`).
-- [x] Cross-source response validator enforces every FR-02 through FR-06 field rule. → Evidence: report.md "### Code Diff Evidence" (`validate_crosssource_result`) + `ml/tests/test_validation.py::test_validate_crosssource_result_*` permutations green in the `689 passed` suite.
-- [x] Invalid validated output reaches existing poison/retry handling before publish or acknowledgement. → Evidence: report.md "### Code Diff Evidence" (catch-and-log swallow removed; `_validate_outgoing_result` raises → `_handle_poison`) + `test_crosssource_dispatch_invalid_response_naks_via_real_poison_handler` green.
-- [x] Artifact validation remains strict; digest, photo, and unknown behavior remains unchanged. → Evidence: `OUTGOING_VALIDATION_MODES` retains `artifact` for artifact subjects; neighbor regressions green in the `689 passed` suite.
-- [x] Adversarial regression cases would fail if generic artifact routing or log-and-publish behavior returned. → Evidence: report.md RED (routing reverted to `artifact` → `2 failed`) proves the regression re-blocks a revert; regression-quality guard confirms an adversarial signal.
-- [x] Regression tests contain no silent-pass bailout patterns. → Evidence: report.md "### Governance Gates" (`regression-quality-guard --bugfix` `0 violations`, adversarial signal detected).
-- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior → Evidence: `ml/tests/test_nats_client.py` dispatch regressions map to SCN-B0255-001/002/003; traceability guard PASS (report.md "### Governance Gates").
-- [x] Broader E2E regression suite passes → Evidence: dispatch-level proof + collateral live E2E (`TestKnowledgeCrossSource_ConnectionDetection` PASS); fresh full-stack re-run non-gating routed to bubbles.devops (report.md "### Integration And Broader E2E — Non-Gating Live Legs").
-- [x] Change Boundary is respected and zero excluded file families were changed → Evidence: report.md "### Change Boundary And Teardown" (delta confined to four `ml/` files; audit verdict pass).
-- [x] Documentation is aligned; no runtime contract doc changes are needed beyond this bug packet unless implementation reveals drift. → Evidence: report.md "## Documentation".
-- [x] Build Quality Gate passes: zero warnings, zero deferrals, lint/format clean (ml/ surface), artifact lint clean, and no skipped required tests. → Evidence: report.md "### Lint And Format" + artifact-lint exit 0 + state-transition-guard PASS at done.
+- [x] TP-01 Unit validator contract tests pass with red/green evidence. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
+- [x] TP-02 Regression E2E dispatch tests pass: valid concept response follows the cross-source validator with publish/ack, and malformed concept response enters poison handling before publish. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
+- [x] TP-03 Neighbor Regression E2E tests prove neighboring subject semantics remain intact for artifact, digest, photo, and unknown subjects. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
+- [x] TP-04 NATS integration tests pass against the ephemeral test stack. Evidence: [report.md#corrected-unit-and-integration-categories](report.md#corrected-unit-and-integration-categories)
+- [ ] TP-05 Broader E2E regression suite passes.
+- [x] TP-06 Lint and format checks pass with zero warnings. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] TP-07 Governance gates pass with truthful current-session evidence. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] Root cause is confirmed by a focused pre-fix failing regression test. Evidence: [report.md#pre-fix-regression-test](report.md#pre-fix-regression-test)
+- [x] Cross-source response validator enforces every FR-02 through FR-06 field rule. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
+- [x] Invalid validated output reaches existing poison/retry handling before publish or acknowledgement. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
+- [x] Artifact validation remains strict; digest, photo, and unknown behavior remains unchanged. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
+- [x] Adversarial regression cases would fail if generic artifact routing or log-and-publish behavior returned. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] Regression tests contain no silent-pass bailout patterns. Evidence: [report.md#final-cheap-closeout-checks](report.md#final-cheap-closeout-checks)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
+- [ ] Broader E2E regression suite passes
+- [x] Change Boundary is respected and zero excluded file families were changed. Evidence: [report.md#post-merge-discrimination](report.md#post-merge-discrimination)
+- [x] Documentation is aligned; no runtime contract doc changes are needed beyond this bug packet unless implementation reveals drift. Evidence: [report.md#documentation](report.md#documentation)
+- [ ] Build Quality Gate passes: zero warnings, zero deferrals, lint/format clean, artifact lint clean, and no skipped required tests.
 
 Test Plan rows: 7. Matching TP-labeled DoD items: 7.

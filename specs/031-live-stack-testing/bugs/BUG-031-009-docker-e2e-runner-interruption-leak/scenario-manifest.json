@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-009-docker-e2e-runner-interruption-leak",
+  "generatedAt": "2026-07-19T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-031-009-SCN-001",
+      "scope": "scope-1-reap-dockerized-e2e-children-before-stack-teardown",
+      "title": "Interrupted Dockerized Go runner is removed before teardown",
+      "gherkin": {
+        "given": "a focused Go E2E runner container is active under the current run identity",
+        "when": "the parent E2E command receives TERM",
+        "then": "the exact runner is removed before disposable stack teardown"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/test_timeout_process_cleanup.sh", "testId": "run_docker_runner_cleanup_check"}],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-031-009-SCN-002",
+      "scope": "scope-1-reap-dockerized-e2e-children-before-stack-teardown",
+      "title": "Docker cleanup is exact-label scoped",
+      "gherkin": {
+        "given": "a runner with the active identity and a canary without that identity",
+        "when": "the parent reaps Docker children",
+        "then": "only the exact-label runner is removed"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/test_timeout_process_cleanup.sh", "testId": "run_docker_runner_cleanup_check"}],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-031-009-SCN-003",
+      "scope": "scope-1-reap-dockerized-e2e-children-before-stack-teardown",
+      "title": "Stubborn shell descendants remain covered",
+      "gherkin": {
+        "given": "a shell grandchild ignores TERM",
+        "when": "the parent E2E command is interrupted",
+        "then": "the existing process-group and marker reaper removes it"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [{"file": "tests/e2e/test_timeout_process_cleanup.sh", "testId": "run_timeout_cleanup_check"}],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

@@ -129,6 +129,15 @@ func waitLegacyRetirementNoticeHealthy(t *testing.T, stack legacyRetirementNotic
 	t.Fatalf("e2e: core not healthy after %s at %s", maxWait, stack.BaseURL)
 }
 
+func waitLegacyRetirementNoticeReady(t *testing.T, stack legacyRetirementNoticeLiveStack) {
+	t.Helper()
+	waitLegacyRetirementNoticeHealthy(t, stack, 30*time.Second)
+	waitAssistantFacadeReady(t, httpTurnLiveStack{
+		BaseURL:   stack.BaseURL,
+		AuthToken: stack.AuthToken,
+	}, 90*time.Second)
+}
+
 func postNoticeAssistantTurn(t *testing.T, stack legacyRetirementNoticeLiveStack, text, turnID string) (*http.Response, []byte) {
 	t.Helper()
 	req := httpadapter.TurnRequest{
@@ -205,7 +214,7 @@ func TestLegacyRetirementNoticeE2E_OpenWindowRendersAddendumWithoutBlockingBody(
 	if stack.WindowState != "open" {
 		t.Skipf("LEGACY_RETIREMENT_WINDOW_STATE=%q — SCN-075-A14 / TP-075-09 only exercises the open branch", stack.WindowState)
 	}
-	waitLegacyRetirementNoticeHealthy(t, stack, 30*time.Second)
+	waitLegacyRetirementNoticeReady(t, stack)
 
 	turnID := "e2e-scope-075-06.3-notice-" + time.Now().UTC().Format("20060102T150405.000")
 	resp, raw := postNoticeAssistantTurn(t, stack, stack.RetiredCmd, turnID)
@@ -296,7 +305,7 @@ func TestLegacyRetirementNoticeE2E_OpenWindowRendersAddendumWithoutBlockingBody(
 // only on retired-command matches.
 func TestLegacyRetirementNoticeE2E_NonRetiredTurnOmitsNotice(t *testing.T) {
 	stack := loadLegacyRetirementNoticeLiveStack(t)
-	waitLegacyRetirementNoticeHealthy(t, stack, 30*time.Second)
+	waitLegacyRetirementNoticeReady(t, stack)
 
 	turnID := "e2e-scope-075-06.3-no-notice-" + time.Now().UTC().Format("20060102T150405.000")
 	resp, raw := postNoticeAssistantTurn(t, stack, "hello", turnID)

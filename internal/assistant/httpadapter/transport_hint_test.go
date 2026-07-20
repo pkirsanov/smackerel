@@ -42,6 +42,7 @@ func newHintTestAdapter(t *testing.T) *HTTPAdapter {
 			Enabled:                true,
 			SchemaVersion:          SchemaVersionV1,
 			BodySizeMaxBytes:       1 << 20,
+			ConversationTTL:        time.Hour,
 			TransportHintAllowlist: append([]string{}, AllowedTransportHints...),
 			RequiredScope:          "assistant:turn",
 		},

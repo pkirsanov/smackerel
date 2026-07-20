@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -72,6 +73,11 @@ func TestAnnotationClassifierWithShadowComparator(t *testing.T) {
 		bytes.NewReader(annotateBody))
 	annReq.Header.Set("Content-Type", "application/json")
 	annReq.Header.Set("Authorization", "Bearer "+stack.AuthToken)
+	sourceHeader := os.Getenv("ANNOTATIONS_SOURCE_HEADER_NAME")
+	if sourceHeader == "" {
+		t.Fatal("ANNOTATIONS_SOURCE_HEADER_NAME is required from generated test SST")
+	}
+	annReq.Header.Set(sourceHeader, "api")
 	annResp, err := client.Do(annReq)
 	if err != nil {
 		t.Fatalf("POST annotation: %v", err)
