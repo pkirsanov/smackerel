@@ -705,3 +705,93 @@ No `runSubagent` API is available in this runtime, so no subagent invocation is 
 | Regression | `bubbles.regression` | Protect sibling and adversarial contracts | Focused sibling selector plus bugfix regression guard | `completed_diagnostic` | 21 tests pass; 0 guard violations/warnings |
 | Simplify | `bubbles.simplify` | Detect unnecessary parallel repair paths | Inspect helper reuse, repair construction, retry loops, active source diff | `completed_diagnostic` | One shared helper, one repair construction, no loop, no source edit |
 | Stabilize | `bubbles.stabilize` | Verify bounded failures and cleanup | Terminal/content-free tests plus disposable project resource inspection | `completed_diagnostic` | 4 tests pass; 0 containers/volumes/networks remain |
+
+## Validate-Owned Bounded Certification - 2026-07-20
+
+### Findings
+
+1. **Product candidate is stable.** Packet tip `563b36a7717ad59628316bbfe4a3aa31fc8240f0` contains source candidate `5904f0266c2e9edd06db8fd8fb75794687dcf10e` and specialist-reviewed aggregate candidate `b476198898f005ac5bad25510fcb9d90cbe50939` in its ancestry. The delta after `b4761988` contains no product source, test, config, runtime, deployment, or managed-doc change.
+2. **The broad Go E2E claim is supported compositionally, with the explicit skip retained.** The outer authorized runner recorded a complete assistant-package PASS in `44.972s`, then a complete all-package execution in which every named subpackage passed and only the stale root Photos PWA assertion failed. The repaired candidate's committed sibling packet records the complete root package PASS in `221.468s` with project-scoped teardown. This covers the Go E2E package set on the same product candidate; it does not convert the opt-in Ollama-agent skip into a pass.
+3. **Specialist evidence is release-positive but not a terminal audit result.** Security and validate ran against `b4761988` and returned no product release blocker. Audit found source/test/documentation consistency clean and blocked on packet governance only. These outer-session outcomes are interpreted evidence because their full specialist transcripts are not embedded in this BUG packet.
+4. **Terminal certification is blocked by one missing audit-owned contract.** The resolved `bugfix-fastlane` transition targets `done` under audit profile `delivery-completion-v1`, but the packet contains no `execution.audit.currentAttemptId`, no persisted current audit attempt, and no complete `AUDIT_RESULT_V1` transcript. The prior governance-blocked audit result cannot be reused after governance-only packet edits.
+
+### Outcome Contract Verification (G070)
+
+| Field | Declared | Evidence | Status |
+|---|---|---|---|
+| Intent | Recover one parsed schema-invalid extraction without fabricating semantics or looping | RED one-call failure plus focused 20-test repair contract and exact-one config tests | PASS |
+| Success Signal | Invalid then valid succeeds through `handle_extract` with exactly two dispatches | `report.md#test-phase---focused-contracts` and the live disposable synthesis round trip | PASS |
+| Hard Constraints | Exact-one fail-loud budget, retained profile/context, summed accounting, content-free failures, sibling preservation | SST check, focused repair/profile tests, 21 sibling regressions, Go response tests, reality and regression guards | PASS |
+| Failure Condition | No permanent one-call schema failure, unbounded retry, fabricated semantic defaults, profile loss, partial accounting, false terminal success, leakage, or sibling regression | Focused terminal-path tests, adversarial guard, exact-one resolver, content-free exception tests, and sibling selector | PASS |
+
+### Candidate And Audit Contract Probe
+
+**Phase:** validate
+**Commands:** `git rev-parse HEAD`; ancestry checks for `5904f0266c2e9edd06db8fd8fb75794687dcf10e` and `b476198898f005ac5bad25510fcb9d90cbe50939`; product-delta check from `b4761988`; `git ls-remote --heads origin bug/026-008-synthesis-schema-repair`; structured audit-field probes; `transition-contract-resolver.sh`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 PRE-AUDIT CERTIFICATION PROBE ===
+tip=563b36a7717ad59628316bbfe4a3aa31fc8240f0
+source_candidate_ancestor=0
+specialist_candidate_ancestor=0
+post_review_product_delta=0
+--- REMOTE TIP ---
+563b36a7717ad59628316bbfe4a3aa31fc8240f0 refs/heads/bug/026-008-synthesis-schema-repair
+--- AUDIT CONTRACT FIELDS ---
+currentAttemptId=missing
+execution.audit=missing
+AUDIT_RESULT_V1=missing
+audit_profile=delivery-completion-v1
+target_status=done
+contract_digest=sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+target_revision=sha256:56fabeaf5820dff81a0f2fc1b6f32c65096e1725af3fe1d9be765729a0b41618
+=== PRE-AUDIT CERTIFICATION BLOCKED ===
+```
+
+### Specialist Evidence Reconciliation
+
+**Claim Source:** interpreted
+**Interpretation:** The outer authorized runner actually invoked each named specialist against aggregate candidate `b476198898f005ac5bad25510fcb9d90cbe50939`. Git ancestry and a zero product-delta check make those product conclusions applicable to packet tip `563b36a7`; however, audit's governance-blocked diagnostic is not equivalent to the current structured terminal audit attempt required by `delivery-completion-v1`.
+
+| Specialist | Exact candidate | Observed outcome | Certification treatment |
+|---|---|---|---|
+| `bubbles.security` | `b476198898f005ac5bad25510fcb9d90cbe50939` | PASS for merge/build/deploy; no blocker | Accepted as release-positive specialist evidence |
+| `bubbles.validate` | `b476198898f005ac5bad25510fcb9d90cbe50939` | PASS for exact fast-forward merge/build/deploy, with skips preserved | Accepted as prior diagnostic, not terminal certification |
+| `bubbles.audit` | `b476198898f005ac5bad25510fcb9d90cbe50939` | Source/test/docs consistency PASS; governance blocked | Accepted as technical review evidence; terminal audit remains missing |
+
+### Certification Decision
+
+`blocked`, next owner `bubbles.audit`. Top-level status and `certification.status` remain `in_progress`; Scope 1 remains `In Progress`; `certification.completedScopes`, `certification.certifiedCompletedPhases`, and the five withheld execution phase claims remain unchanged. The single required owner action is a current `delivery-completion-v1` audit attempt with a persisted ACTIVE attempt and complete `AUDIT_RESULT_V1` transcript resolved against the fresh transition contract. The explicit Ollama-agent E2E skip and compositional broad-suite proof remain disclosed residual risks.
+
+### Post-Edit Governance Validation
+
+**Phase:** validate
+**Commands:** packet artifact lint, traceability guard, implementation-reality scan, and state-transition guard
+**Exit Code:** 0, 0, 0, and 1 respectively
+**Claim Source:** executed
+
+```text
+Artifact lint PASSED.
+scenario-manifest.json covers 7 scenario contract(s)
+Scenarios checked: 7
+Scenario-to-row mappings: 7
+DoD fidelity scenarios: 7 (mapped: 7, unmapped: 0)
+Traceability RESULT: PASSED (0 warnings)
+Files scanned: 13
+Violations: 0
+Warnings: 0
+PASSED: No source code reality violations detected
+PASS: transitionRequest TR-026-008-AUDIT-001 is open-but-routed to 'bubbles.audit'
+PASS: transitionRequest TR-026-008-DEVOPS-001 is open-but-routed to 'bubbles.devops'
+DoD items total: 25 (checked: 22, unchecked: 3)
+BLOCK: Resolved scope artifacts have 1 scope still marked 'In Progress'
+BLOCK: 5 specialist phases remain withheld from completion claims
+passedGateIds: [G061,G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100]
+failedGateIds: [G022]
+blockingCode: DELIVERY_COMPLETION_FAILED
+state_transition_guard_exit=1
+```
+
+The nonzero state guard is the required terminal refusal. It confirms that no `done` write is truthful until the fresh audit result exists and the owning completion chain reconciles the three remaining DoD items, Scope 1, and the five evidence-backed phase claims.
