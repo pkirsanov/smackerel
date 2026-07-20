@@ -3,11 +3,11 @@
   "featureDir": "specs/084-open-knowledge-reasoning-loop",
   "featureNumber": "084",
   "featureName": "Open-Knowledge Reasoning Loop",
-  "status": "blocked",
+  "status": "done",
   "releaseTrain": "next",
-  "certifiedAt": null,
-  "certifiedBy": null,
-  "lastUpdatedAt": "2026-06-11T19:15:00Z",
+  "certifiedAt": "2026-07-20T15:31:50Z",
+  "certifiedBy": "bubbles.iterate (parent-expanded)",
+  "lastUpdatedAt": "2026-07-20T15:31:50Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -68,9 +68,9 @@
     ]
   },
   "certification": {
-    "status": "blocked",
-    "certifiedAt": null,
-    "certifiedBy": null,
+    "status": "done",
+    "certifiedAt": "2026-07-20T15:31:50Z",
+    "certifiedBy": "bubbles.iterate (parent-expanded)",
     "lockdownState": { "round": 0, "lastCleanRound": 0 },
     "evidenceRef": "report.md",
     "certifiedCompletedPhases": ["analyze", "ux", "design", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "docs", "validate", "audit", "chaos", "spec-review"],
@@ -91,7 +91,7 @@
       "tests/unit/clients render_descriptor canary (spec 073) fails in the container because node/dart are not on PATH; spec 084 touched no clients/render/073 code (same known failure documented in spec 082 state.json).",
       "internal/scopesdriftguard TestScopesPathRefDrift_NonIncreasing fails at 285>270 entirely due to the operator's uncommitted spec-083 card-rewards WIP (15 broken refs). Spec 084 contributes 0 broken refs (absent from the per-spec breakdown). The non-083 total is exactly 270 = the committed-baseline ceiling, so the isolated spec-084 changeset passes the ratchet. The spec-083 ratchet bump is owned by the spec-083 author (do-not-touch)."
     ],
-    "certificationNote": "Parent-expanded full-delivery (analyze-design-plan prelude; no specialist sub-agent dispatch available in this runtime). 3 scopes done; 5 adversarial tests RED->GREEN; trust contracts + happy path preserved by guard tests. Terminal state: validated-in-repo. self-hosted deploy is a SEPARATE bubbles.devops dispatch — NO push performed. Model matrix unchanged (gemma4:26b self-hosted / gemma3:4b dev); no deepseek-r1."
+    "certificationNote": "Certified done 2026-07-20 by bubbles.iterate (parent-expanded). The live self-hosted /ask reasoning-loop gate is PROVEN: ARM-A (qwen3:30b-a3b synthesis over gemma4:26b gather) returned HTTP 200 with a real cited USDA-hardiness-zone verdict via the genuine gather+synthesis loop (report.md -> DevOps Live Self-Hosted Re-Verify). Artifact/planning guard gaps closed this session: SCOPE-02/03 scenario-specific + broader E2E regression DoD rows (Check 8A), SCOPE-01 consumer-impact sweep + zero stale refs (Check 8B), report.md Code Diff Evidence with executed git show/log of commit f103be6a (G053). state-transition-guard EXIT 0; artifact-lint EXIT 0. 3 scopes done; 9 hermetic spec-084 tests GREEN (5 adversarial RED->GREEN + 4 guards); trust contracts + happy path preserved. Model matrix unchanged (gemma4:26b self-hosted / gemma3:4b dev); no deepseek-r1."
   },
   "execution": {
     "activeAgent": null,
@@ -118,11 +118,11 @@
       { "phase": "spec-review", "agent": "bubbles.workflow (parent-expanded)", "timestamp": "2026-06-11T19:01:00Z", "evidenceRef": "specs/084-open-knowledge-reasoning-loop", "summary": "Spec 084 freshly authored 2026-06-11, CURRENT and mutually consistent (spec/design/scopes/scenario-manifest/report/uservalidation/state); amends closed spec 064 without reopening BUG-064-001/002; artifact-lint + traceability-guard pass." }
     ],
     "scopeProgress": [
-      { "scopeId": "SCOPE-01", "name": "Question-agnostic reasoning prompt (CHANGE 1)", "status": "Done", "dodItemsChecked": 7, "dodItemsTotal": 7 },
-      { "scopeId": "SCOPE-02", "name": "Let the loop drill in (CHANGE 2)", "status": "Done", "dodItemsChecked": 7, "dodItemsTotal": 7 },
-      { "scopeId": "SCOPE-03", "name": "Honest salvage + adversarial tests + docs (CHANGE 4)", "status": "Done", "dodItemsChecked": 7, "dodItemsTotal": 7 }
+      { "scopeId": "SCOPE-01", "name": "Question-agnostic reasoning prompt (CHANGE 1)", "status": "Done", "dodItemsChecked": 8, "dodItemsTotal": 8 },
+      { "scopeId": "SCOPE-02", "name": "Let the loop drill in (CHANGE 2)", "status": "Done", "dodItemsChecked": 11, "dodItemsTotal": 11 },
+      { "scopeId": "SCOPE-03", "name": "Honest salvage + adversarial tests + docs (CHANGE 4)", "status": "Done", "dodItemsChecked": 10, "dodItemsTotal": 10 }
     ]
   },
-  "nextRequiredOwner": "bubbles.devops",
-  "blockedReason": "VALIDATED-IN-REPO; blocked on the owner-directed devops handoff. All in-repo work is complete and validated: 3 scopes Done, 9/9 spec-084 unit tests GREEN (5 adversarial RED->GREEN + 4 trust/guard), and check / format --check / artifact-lint / traceability-guard all pass. The remaining full-delivery `done` gates are NOT satisfiable in this session and are owned by the separate bubbles.devops dispatch: (1) the owner directive forbids any commit/push here (devops owns the isolated push + the spec(084) commit + CI + self-hosted apply + operator live re-verify of the pomegranate turn); (2) the self-hosted live E2E re-verification is model+GPU-dependent and runs post-apply. Additionally, the whole-working-tree state-transition guards (implementation-reality-scan ml/app/main.py DEFAULT_FALLBACK; scopesdriftguard; tests/unit/clients node/dart canary) report whole-tree noise this spec is directed NOT to touch. ATTRIBUTION REFRESHED 2026-06-23: specs 083 and 073 are now done/committed and absent from the working tree, so they no longer source this noise; the remaining ml/app/main.py DEFAULT_FALLBACK hits are the operator's IN-FLIGHT, UNCOMMITTED BUG-067-001 ML NO-DEFAULTS fix (which removes those exact violations once committed — in-flight, not yet resolved). The spec-084-ISOLATED changeset is clean: 084 contributes 0 drift refs and touches no ml/ or cardrewards source. Devops MUST isolate the spec-084 manifest in report.md from the in-flight working-tree noise before committing."
+  "nextRequiredOwner": null,
+  "resolvedBlockedReason": "RESOLVED 2026-07-20 — the live self-hosted /ask gate is now PROVEN (ARM-A HTTP 200 cited USDA-hardiness-zone verdict, report.md -> DevOps Live Self-Hosted Re-Verify), the artifact/planning guard gaps are closed (state-transition-guard EXIT 0, artifact-lint EXIT 0), and scoped local commit + push is authorized, so this spec is certified done. Prior blocked reason retained for audit: VALIDATED-IN-REPO; blocked on the owner-directed devops handoff. All in-repo work is complete and validated: 3 scopes Done, 9/9 spec-084 unit tests GREEN (5 adversarial RED->GREEN + 4 trust/guard), and check / format --check / artifact-lint / traceability-guard all pass. The remaining full-delivery `done` gates are NOT satisfiable in this session and are owned by the separate bubbles.devops dispatch: (1) the owner directive forbids any commit/push here (devops owns the isolated push + the spec(084) commit + CI + self-hosted apply + operator live re-verify of the pomegranate turn); (2) the self-hosted live E2E re-verification is model+GPU-dependent and runs post-apply. Additionally, the whole-working-tree state-transition guards (implementation-reality-scan ml/app/main.py DEFAULT_FALLBACK; scopesdriftguard; tests/unit/clients node/dart canary) report whole-tree noise this spec is directed NOT to touch. ATTRIBUTION REFRESHED 2026-06-23: specs 083 and 073 are now done/committed and absent from the working tree, so they no longer source this noise; the remaining ml/app/main.py DEFAULT_FALLBACK hits are the operator's IN-FLIGHT, UNCOMMITTED BUG-067-001 ML NO-DEFAULTS fix (which removes those exact violations once committed — in-flight, not yet resolved). The spec-084-ISOLATED changeset is clean: 084 contributes 0 drift refs and touches no ml/ or cardrewards source. Devops MUST isolate the spec-084 manifest in report.md from the in-flight working-tree noise before committing."
 }
