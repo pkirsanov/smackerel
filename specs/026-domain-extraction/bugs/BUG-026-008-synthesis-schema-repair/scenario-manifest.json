@@ -18,8 +18,9 @@
       "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG026008-001"],
       "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_repairs_missing_concepts_once"}],
-      "evidenceRefs": ["report.md#test-evidence"],
+      "evidenceRefs": ["report.md#red-bug-reproduction-before-fix", "report.md#harness-and-category-repairs"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -38,8 +39,9 @@
       "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG026008-002"],
       "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_fails_when_schema_repair_remains_invalid"}],
-      "evidenceRefs": ["report.md#test-evidence"],
+      "evidenceRefs": ["report.md#harness-and-category-repairs"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -58,8 +60,9 @@
       "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG026008-003"],
       "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_fails_when_schema_repair_is_malformed_json"}],
-      "evidenceRefs": ["report.md#test-evidence"],
+      "evidenceRefs": ["report.md#harness-and-category-repairs"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -78,8 +81,9 @@
       "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG026008-004"],
       "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_schema_repair_exception_is_content_free"}],
-      "evidenceRefs": ["report.md#test-evidence"],
+      "evidenceRefs": ["report.md#harness-and-category-repairs"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -98,8 +102,9 @@
       "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG026008-005"],
       "linkedTests": [{"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_valid_first_response_remains_one_call"}],
-      "evidenceRefs": ["report.md#test-evidence"],
+      "evidenceRefs": ["report.md#harness-and-category-repairs"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -118,11 +123,12 @@
       "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG026008-006A", "TP-BUG026008-006B"],
       "linkedTests": [
         {"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_schema_repair_retains_profile_and_sums_tokens"},
         {"file": "internal/pipeline/synthesis_subscriber_test.go", "testId": "TestSynthesisExtractResponse_FullPipelinePayload"}
       ],
-      "evidenceRefs": ["report.md#test-evidence"],
+      "evidenceRefs": ["report.md#harness-and-category-repairs", "report.md#focused-go-response-contract"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -141,10 +147,11 @@
       "requiredTestType": "unit",
       "regressionRequired": true,
       "lockdown": false,
+      "testPlanIds": ["TP-BUG026008-007"],
       "linkedTests": [
         {"file": "ml/tests/test_synthesis.py", "testId": "test_handle_extract_repairs_missing_concepts_once"}
       ],
-      "evidenceRefs": ["report.md#post-fix-green-python-unit-lane"],
+      "evidenceRefs": ["report.md#green-post-fix-python-unit-lane"],
       "replacedBy": null,
       "invalidatedBy": null
     }

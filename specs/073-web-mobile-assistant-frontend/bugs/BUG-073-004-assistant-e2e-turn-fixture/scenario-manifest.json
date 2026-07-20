@@ -14,8 +14,9 @@
       },
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
+      "testPlanIds": ["TP-BUG073004-001"],
       "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/transport_hint_parity_test.go", "name": "TestAssistantTransportHintParity_WebAndMobileShareResponseShape"}],
-      "evidenceRefs": ["report.md#before-fix---named-live-e2e", "report.md#after-fix---focused-and-package-e2e"],
+      "evidenceRefs": ["report.md#red-before-fix-named-live-e2e", "report.md#green-after-fix-focused-and-package-e2e"],
       "status": "in_progress"
     },
     {
@@ -27,10 +28,11 @@
         "when": "test isolation runs and cleanup executes",
         "then": "the target row is restored exactly and the unrelated row is unchanged"
       },
-      "requiredTestType": "integration",
+      "requiredTestType": "e2e-api",
       "regressionRequired": true,
+      "testPlanIds": ["TP-BUG073004-002"],
       "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/conversation_isolation_test.go", "name": "TestAssistantConversationIsolation_RestoresExactTargetAndPreservesNeighbor_Adversarial"}],
-      "evidenceRefs": ["report.md#after-fix---focused-and-package-e2e"],
+      "evidenceRefs": ["report.md#green-after-fix-focused-and-package-e2e"],
       "status": "in_progress"
     }
   ]

@@ -14,8 +14,9 @@
       },
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
+      "testPlanIds": ["TP-BUG073005-001"],
       "linkedTests": [{"type": "e2e-api", "file": "tests/e2e/assistant/web_pwa_chat_e2e_test.go", "name": "TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09"}],
-      "evidenceRefs": ["report.md#before-fix---served-route-e2e", "report.md#after-fix---scanner-unit-and-live-e2e"],
+      "evidenceRefs": ["report.md#red-before-fix-served-route-e2e", "report.md#green-after-fix-scanner-unit-and-live-e2e"],
       "status": "in_progress"
     },
     {
@@ -29,8 +30,9 @@
       },
       "requiredTestType": "unit",
       "regressionRequired": true,
+      "testPlanIds": ["TP-BUG073005-002"],
       "linkedTests": [{"type": "unit", "file": "internal/testsupport/jssource/comments_test.go", "name": "TestWithoutComments_IgnoresPolicyCommentsAndRetainsExecutableAccess"}],
-      "evidenceRefs": ["report.md#after-fix---scanner-unit-and-live-e2e"],
+      "evidenceRefs": ["report.md#green-after-fix-scanner-unit-and-live-e2e"],
       "status": "in_progress"
     },
     {
@@ -44,8 +46,9 @@
       },
       "requiredTestType": "unit",
       "regressionRequired": true,
+      "testPlanIds": ["TP-BUG073005-003"],
       "linkedTests": [{"type": "unit", "file": "internal/testsupport/jssource/comments_test.go", "name": "TestWithoutComments_PreservesStringsTemplatesAndFollowingCode"}],
-      "evidenceRefs": ["report.md#after-fix---scanner-unit-and-live-e2e"],
+      "evidenceRefs": ["report.md#green-after-fix-scanner-unit-and-live-e2e"],
       "status": "in_progress"
     }
   ]
