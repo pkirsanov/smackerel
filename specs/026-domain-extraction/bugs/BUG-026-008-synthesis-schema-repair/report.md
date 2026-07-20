@@ -300,6 +300,7 @@ The red shows one-call permanent failure; the green shows invalid-then-valid suc
 | Repo-wide format check names `internal/config/release_trains_contract_test.go`, byte-identical to current baseline | `routed` to repository quality owner | `state.json` transition request `TR-026-008-QUALITY-001` |
 | Source/test/doc delivery awaits independent certification; no validate/audit specialist invocation tool exists in this runtime | `routed` to `bubbles.validate` then `bubbles.audit` | `state.json` transition request `TR-026-008-VALIDATE-001` |
 | Pushed source must be built and deployed through the signed delivery path before live accepted-runtime confirmation | `routed` to `bubbles.devops` | `state.json` transition request `TR-026-008-DEVOPS-001` |
+| 2026-07-20 - The repo runner emits `Skipping Ollama agent E2E`; this is an explicit optional category unrelated to BUG-026-008's required synthesis scenarios | `not-required-for-BUG-026-008` - the raw output remains visible, and this packet does not claim or count the optional category as passed | `tests/e2e/agent/happy_path_test.go`; opt in with `SMACKEREL_TEST_OLLAMA=1` |
 
 ## Interrupted Test Closeout Evidence - 2026-07-19
 
@@ -1013,3 +1014,1314 @@ nextRequiredOwner: bubbles.plan
 supersedesAttemptId: none
 resumeFromPhase: none
 END AUDIT_RESULT_V1
+
+## Direct Specialist Implement Provenance - 2026-07-20
+
+**Phase:** implement
+**Agent:** `bubbles.implement`
+**Provenance Mode:** `specialist`
+**Candidate Revision:** `024cb65317645ed375c02bf574151f2ecee92f02`
+**Claim Source:** executed
+**Outcome:** `completed_owned`
+
+### Candidate Ancestry And Bounded Repair Bytes
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && printf '%s\n' '=== DIRECT IMPLEMENT SPECIALIST CONTRACT CHECK ===' && printf 'candidate=' && git rev-parse HEAD && printf 'origin=' && git rev-parse origin/bug/026-008-synthesis-schema-repair && git merge-base --is-ancestor e2ac9405b453698b5325b4b92f8b9cab4bd3cc35 HEAD && printf 'introducing_commit_ancestor=PASS\n' && git grep -n -E 'synthesis_schema_repair_attempts: 1|attempts != 1|repair_kwargs = dict\(completion_kwargs\)|\*completion_kwargs\["messages"\]|tokens_used \+= repair_tokens|LLM schema repair failed|LLM schema repair returned invalid JSON|Schema validation failed after repair' HEAD -- config/smackerel.yaml ml/app/synthesis.py && printf '%s\n' '--- POST-INTRODUCTION REPAIR-FILE NUMSTAT ---' && git --no-pager diff --numstat e2ac9405b453698b5325b4b92f8b9cab4bd3cc35 HEAD -- ml/app/synthesis.py ml/app/main.py && printf '%s\n' '=== DIRECT IMPLEMENT SPECIALIST CONTRACT CHECK PASS ==='`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== DIRECT IMPLEMENT SPECIALIST CONTRACT CHECK ===
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+origin=024cb65317645ed375c02bf574151f2ecee92f02
+introducing_commit_ancestor=PASS
+HEAD:config/smackerel.yaml:1868:    synthesis_schema_repair_attempts: 1
+HEAD:ml/app/synthesis.py:44:    if attempts != 1:
+HEAD:ml/app/synthesis.py:342:        repair_kwargs = dict(completion_kwargs)
+HEAD:ml/app/synthesis.py:344:            *completion_kwargs["messages"],
+HEAD:ml/app/synthesis.py:361:            tokens_used += repair_tokens
+HEAD:ml/app/synthesis.py:369:                "error": f"LLM schema repair failed: {type(e).__name__}",
+HEAD:ml/app/synthesis.py:384:                "error": f"LLM schema repair returned invalid JSON: {type(e).__name__}",
+HEAD:ml/app/synthesis.py:402:                "error": f"Schema validation failed after repair: {repair_error_class}",
+--- POST-INTRODUCTION REPAIR-FILE NUMSTAT ---
+0       1       ml/app/main.py
+1       2       ml/app/synthesis.py
+=== DIRECT IMPLEMENT SPECIALIST CONTRACT CHECK PASS ===
+```
+
+The introducing implementation commit is an ancestor of the exact local and remote candidate. Later changes to the repair implementation files are formatting-only; they do not alter the exact-one budget, corrective request, request profile, original message context, accumulated tokens, full-operation timing, or terminal error contracts.
+
+### Focused Current-Head Implementation Verification
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && ./smackerel.sh test unit --python --python-k 'schema_repair_budget or repairs_missing_concepts_once or fails_when_schema_repair or schema_repair_exception_is_content_free or valid_first_response_remains_one_call or schema_repair_retains_profile_and_sums_tokens'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
++ cd /workspace
++ pytest_args=(-m "not integration and not live_ollama")
++ [[ 2 -gt 0 ]]
++ case "$1" in
++ [[ 2 -lt 2 ]]
++ [[ -z schema_repair_budget or repairs_missing_concepts_once or fails_when_schema_repair or schema_repair_exception_is_content_free or valid_first_response_remains_one_call or schema_repair_retains_profile_and_sums_tokens ]]
++ pytest_args+=(-k "$2")
++ shift 2
++ [[ 0 -gt 0 ]]
++ echo '[py-unit] starting pip install -e ./ml[dev]'
+[py-unit] starting pip install -e ./ml[dev]
+Successfully built smackerel-ml
+[py-unit] pip install OK; starting unit-only pytest ml/tests
++ pytest -q -m 'not integration and not live_ollama' -k 'schema_repair_budget or repairs_missing_concepts_once or fails_when_schema_repair or schema_repair_exception_is_content_free or valid_first_response_remains_one_call or schema_repair_retains_profile_and_sums_tokens' ml/tests
+..............                                                           [100%]
+14 passed, 696 deselected in 1.18s
+[py-unit] pytest ml/tests finished OK
+```
+
+The focused current-HEAD selector proves the exact-one fail-loud budget, invalid-then-valid repair, second-invalid terminal result, malformed repair terminal result, content-free repair exception, unchanged valid-first one-call path, and request profile/context/token/time preservation. This is implement-phase verification only; it does not add or replace a `test`, `regression`, `simplify`, or `stabilize` phase claim.
+
+### Change Boundary Containment
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && printf '%s\n' '=== DIRECT IMPLEMENT CHANGE BOUNDARY CHECK ===' && printf 'candidate=' && git rev-parse HEAD && printf '%s\n' '--- INTRODUCING COMMIT PATHS ---' && git --no-pager diff-tree --no-commit-id --name-only -r e2ac9405b453698b5325b4b92f8b9cab4bd3cc35 && printf '%s\n' '--- CURRENT WORKTREE PATHS ---' && git status --short && printf '%s\n' '--- CURRENT NON-PACKET WORKTREE DIFF ---' && git --no-pager diff --name-only -- . ':(exclude)specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json' ':(exclude)specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md' && printf '%s\n' '=== DIRECT IMPLEMENT CHANGE BOUNDARY CHECK PASS ==='`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== DIRECT IMPLEMENT CHANGE BOUNDARY CHECK ===
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- INTRODUCING COMMIT PATHS ---
+config/smackerel.yaml
+docs/Development.md
+internal/pipeline/synthesis_subscriber_test.go
+internal/pipeline/synthesis_types.go
+ml/app/main.py
+ml/app/metrics.py
+ml/app/synthesis.py
+ml/tests/conftest.py
+ml/tests/fixtures/card_rewards_missing_concepts.json
+ml/tests/test_main.py
+ml/tests/test_ollama_keepalive.py
+ml/tests/test_synthesis.py
+scripts/commands/config.sh
+specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/bug.md
+specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/design.md
+specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md
+specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/scenario-manifest.json
+specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/scopes.md
+specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/spec.md
+specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json
+specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/uservalidation.md
+--- CURRENT WORKTREE PATHS ---
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json
+--- CURRENT NON-PACKET WORKTREE DIFF ---
+=== DIRECT IMPLEMENT CHANGE BOUNDARY CHECK PASS ===
+```
+
+No product source, test, config, managed documentation, deployment, host, release-train, framework, knb, or foreign packet file changed during this specialist invocation. The pre-existing validate-owned `state.json` edit was preserved; this invocation adds only this report evidence and the corresponding direct-specialist execution-history record.
+
+## Direct Specialist Test Provenance - 2026-07-20
+
+**Phase:** test
+**Agent:** `bubbles.test`
+**Provenance Mode:** `specialist`
+**Candidate Revision:** `024cb65317645ed375c02bf574151f2ecee92f02`
+**Claim Source:** executed
+**Outcome:** `completed_owned`
+
+This direct test phase executed only the four selectors authorized by the parent runner. It did not edit product source, tests, config, docs, planning artifacts, certification fields, framework assets, deployment surfaces, or other packets.
+
+### Exact-One Config And Startup Selector
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --python --python-k 'schema_repair_attempts or schema_repair_budget'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
++ cd /workspace
++ pytest_args=(-m "not integration and not live_ollama")
++ [[ 2 -gt 0 ]]
++ case "$1" in
++ [[ 2 -lt 2 ]]
++ [[ -z schema_repair_attempts or schema_repair_budget ]]
++ pytest_args+=(-k "$2")
++ shift 2
++ [[ 0 -gt 0 ]]
+[py-unit] starting pip install -e ./ml[dev]
+Successfully built smackerel-ml
+[py-unit] pip install OK; starting unit-only pytest ml/tests
++ pytest -q -m 'not integration and not live_ollama' -k 'schema_repair_attempts or schema_repair_budget' ml/tests
+.............                                                            [100%]
+13 passed, 697 deselected in 0.83s
+[py-unit] pytest ml/tests finished OK
+```
+
+Result: 13 selected tests passed; zero selected tests failed or skipped. The 697 non-matching tests were deselected by the required selector.
+
+### Focused Python Synthesis Schema-Repair Selector
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --python --python-k 'handle_extract or schema_repair'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
++ cd /workspace
++ pytest_args=(-m "not integration and not live_ollama")
++ [[ 2 -gt 0 ]]
++ case "$1" in
++ [[ 2 -lt 2 ]]
++ [[ -z handle_extract or schema_repair ]]
++ pytest_args+=(-k "$2")
++ shift 2
++ [[ 0 -gt 0 ]]
++ echo '[py-unit] starting pip install -e ./ml[dev]'
+[py-unit] starting pip install -e ./ml[dev]
+Successfully built smackerel-ml
+[py-unit] pip install OK; starting unit-only pytest ml/tests
++ pytest -q -m 'not integration and not live_ollama' -k 'handle_extract or schema_repair' ml/tests
+....................                                                     [100%]
+20 passed, 690 deselected in 1.46s
+[py-unit] pytest ml/tests finished OK
+```
+
+Result: 20 selected tests passed; zero selected tests failed or skipped. The 690 non-matching tests were deselected by the required selector.
+
+### Focused Go Synthesis Response Tests
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --go --go-run 'TestSynthesisExtractResponse_(FullPipelinePayload|FailureMarksFailed|SuccessMarksCompleted)' --verbose`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== RUN   TestSynthesisExtractResponse_SuccessMarksCompleted
+--- PASS: TestSynthesisExtractResponse_SuccessMarksCompleted (0.00s)
+=== RUN   TestSynthesisExtractResponse_FailureMarksFailed
+--- PASS: TestSynthesisExtractResponse_FailureMarksFailed (0.00s)
+=== RUN   TestSynthesisExtractResponse_FullPipelinePayload
+--- PASS: TestSynthesisExtractResponse_FullPipelinePayload (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/pipeline        0.047s
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
+```
+
+Result: exactly three selected synthesis response tests passed; zero selected tests failed or skipped. Because the canonical CLI applies the `-run` selector across `./...`, unrelated packages emitted Go's `testing: warning: no tests to run`; those no-match warnings are disclosed rather than suppressed and do not represent skipped required tests.
+
+### Live-Test Exclusivity Preflight
+
+**Executed:** YES (current invocation)
+**Command:** read-only process and Docker Compose project-label checks immediately before the live selector
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 LIVE EXCLUSIVITY RECHECK ===
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- ACTIVE TEST PROCESSES ---
+--- TEST CONTAINERS ---
+--- TEST VOLUMES ---
+--- TEST NETWORKS ---
+=== BUG-026-008 LIVE EXCLUSIVITY RECHECK END ===
+```
+
+The empty sections prove there was no matching Smackerel test process and no `smackerel-test` container, volume, or network before the live test began. The earlier initial preflight returned the same zero-resource result.
+
+### Focused Live Synthesis Round Trip
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh --env test test e2e --go-run TestKnowledgeSynthesis_PipelineRoundTrip`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Smackerel pre-flight resource check: OK
+	RAM  available: 38552 MB (required >= 6000 MB)
+	Disk available: 700849 MB / 684.4 GB (required >= 15 GB)
+Container smackerel-test-nats-1  Healthy
+Container smackerel-test-jaeger  Healthy
+Container smackerel-test-postgres-1  Healthy
+Container smackerel-test-stub-providers  Healthy
+Container smackerel-test-ollama-1  Healthy
+Container smackerel-test-searxng-1  Healthy
+Container smackerel-test-smackerel-core-1  Healthy
+Container smackerel-test-smackerel-ml-1  Healthy
+go-e2e: applying -run selector: TestKnowledgeSynthesis_PipelineRoundTrip
+=== RUN   TestKnowledgeSynthesis_PipelineRoundTrip
+		knowledge_synthesis_test.go:115: capture response: 200 {"artifact_id":"<run-owned-id>","title":"Synthesis E2E deterministic article about knowledge management systems, organizational learning, con","artifact_type":"generic","summary":"","conne
+		knowledge_synthesis_test.go:171: synthesis stats: completed=0 pending=3 failed=5 total=8
+--- PASS: TestKnowledgeSynthesis_PipelineRoundTrip (8.03s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        8.160s
+PASS: go-e2e
+Skipping Ollama agent E2E (set SMACKEREL_TEST_OLLAMA=1 to enable tests/e2e/agent/happy_path_test.go)
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+Container smackerel-test-ollama-1 Removed
+Container smackerel-test-jaeger Removed
+Container smackerel-test-stub-providers Removed
+Container smackerel-test-searxng-1 Removed
+Container smackerel-test-smackerel-core-1 Removed
+Container smackerel-test-postgres-1 Removed
+Container smackerel-test-smackerel-ml-1 Removed
+Container smackerel-test-nats-1 Removed
+Volume smackerel-test-nats-data Removed
+Volume smackerel-test-postgres-data Removed
+Volume smackerel-test-ollama-data Removed
+Network smackerel-test_default Removed
+```
+
+Result: the one required live round-trip test passed in 8.03 seconds and its Go package passed in 8.160 seconds. The runner removed eight test containers, three disposable volumes, and one project network. Its explicit opt-in Ollama-agent path was not enabled, was not required by this dispatch, and is not claimed as executed or passed.
+
+### Independent Live Cleanup Proof
+
+**Executed:** YES (current invocation)
+**Command:** read-only process and Docker Compose project-label counts immediately after the live runner returned
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 LIVE CLEANUP PROOF ===
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- ACTIVE TEST PROCESSES ---
+process_count=0
+--- TEST CONTAINERS ---
+container_count=0
+--- TEST VOLUMES ---
+volume_count=0
+--- TEST NETWORKS ---
+network_count=0
+cleanup_result=PASS
+=== BUG-026-008 LIVE CLEANUP PROOF END ===
+```
+
+### Test Selection Summary And Residuals
+
+| Selector | Passed | Failed | Required skipped | Deselected / not matched |
+|---|---:|---:|---:|---:|
+| Exact-one config/startup Python | 13 | 0 | 0 | 697 |
+| Focused synthesis schema-repair Python | 20 | 0 | 0 | 690 |
+| Focused Go synthesis response | 3 | 0 | 0 | unrelated packages did not match `-run` |
+| Live `TestKnowledgeSynthesis_PipelineRoundTrip` | 1 | 0 | 0 | unrelated E2E packages did not match `-run` |
+
+**Claim Source:** not-run
+
+- The full all-package E2E suite was intentionally not rerun under the parent dispatch boundary and is not claimed by this specialist record.
+- The explicit opt-in Ollama-agent E2E remained disabled and is not claimed as executed or passed.
+- Existing audit findings `AUD-026-008-BROAD-EVIDENCE-001`, `AUD-026-008-COMPLETION-ORDER-001`, and `AUD-026-008-PHASE-CLAIMS-001`, the ACTIVE `REWORK_REQUIRED` audit, and the open audit/deployment routes remain unchanged and outside this test-only ownership surface.
+
+### Direct Test Closeout Guards
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && bash .github/bubbles/scripts/artifact-lint.sh specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair; artifact_lint_exit=$?; git diff --check; diff_check_exit=$?`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 DIRECT TEST CLOSEOUT GUARDS ===
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- ARTIFACT LINT ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ uservalidation checklist has checked-by-default entries
+✅ All checklist bullet items use checkbox syntax
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+✅ state.json v3 has recommended field: transitionRequests
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+artifact_lint_exit=0
+--- GIT DIFF CHECK ---
+git_diff_check_exit=0
+--- WORKTREE ---
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json
+=== BUG-026-008 DIRECT TEST CLOSEOUT GUARDS END ===
+```
+
+The inherited `certification.scopeProgress` deprecation warning remains visible. It predates this direct test record, is certification-owned, and was not changed under the test-only boundary.
+
+## Direct Specialist Regression Provenance - 2026-07-20
+
+**Phase:** regression
+**Agent:** `bubbles.regression`
+**Provenance Mode:** `specialist`
+**Candidate Revision:** `024cb65317645ed375c02bf574151f2ecee92f02`
+**Claim Source:** executed
+**Outcome:** `completed_diagnostic`
+
+This direct regression phase executed only the bounded checks authorized by the parent runner. It did not invoke another runner or agent, rerun the full all-package E2E suite, mutate product or test code, alter certification fields, or close any audit or deployment route.
+
+### Canonical Bugfix Regression Quality Guard
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && printf '%s\n' '=== BUG-026-008 DIRECT REGRESSION QUALITY GUARD START ===' && printf 'candidate=' && git rev-parse HEAD && bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix ml/tests/test_synthesis.py ml/tests/test_main.py ml/tests/test_ollama_keepalive.py; guard_exit=$?; printf 'regression_quality_guard_exit=%s\n' "$guard_exit"; printf '%s\n' '=== BUG-026-008 DIRECT REGRESSION QUALITY GUARD END ==='; exit "$guard_exit"`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 DIRECT REGRESSION QUALITY GUARD START ===
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+============================================================
+	BUBBLES REGRESSION QUALITY GUARD
+	Repo: ~/smackerel-bug-026-008-synthesis-schema-repair
+	Timestamp: 2026-07-20T16:19:07Z
+	Bugfix mode: true
+============================================================
+ℹ️  Scanning ml/tests/test_synthesis.py
+✅ Adversarial signal detected in ml/tests/test_synthesis.py
+ℹ️  Scanning ml/tests/test_main.py
+✅ Adversarial signal detected in ml/tests/test_main.py
+ℹ️  Scanning ml/tests/test_ollama_keepalive.py
+✅ Adversarial signal detected in ml/tests/test_ollama_keepalive.py
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files scanned: 3
+Files with adversarial signals: 3
+regression_quality_guard_exit=0
+=== BUG-026-008 DIRECT REGRESSION QUALITY GUARD END ===
+```
+
+Result: all three required files carried adversarial signals; the canonical guard reported zero violations and zero warnings.
+
+### Authoritative Focused Sibling-Preservation Selector
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && printf '%s\n' '=== BUG-026-008 DIRECT AUTHORITATIVE SIBLING REGRESSION SELECTOR START ===' && printf 'timestamp=' && date -u +%FT%TZ && printf 'candidate=' && git rev-parse HEAD && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --python --python-k 'schema_repair or malformed_json or structured_extraction_thinking or output_token_budget or valid_first_response or repairs_missing_concepts_once'; selector_exit=$?; printf 'authoritative_sibling_regression_selector_exit=%s\n' "$selector_exit"; printf '%s\n' '=== BUG-026-008 DIRECT AUTHORITATIVE SIBLING REGRESSION SELECTOR END ==='; exit "$selector_exit"`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 DIRECT AUTHORITATIVE SIBLING REGRESSION SELECTOR START ===
+timestamp=2026-07-20T16:33:25Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
++ cd /workspace
++ pytest_args=(-m "not integration and not live_ollama")
++ [[ 2 -gt 0 ]]
++ case "$1" in
++ [[ 2 -lt 2 ]]
++ [[ -z schema_repair or malformed_json or structured_extraction_thinking or output_token_budget or valid_first_response or repairs_missing_concepts_once ]]
++ pytest_args+=(-k "$2")
++ shift 2
++ [[ 0 -gt 0 ]]
+[py-unit] starting pip install -e ./ml[dev]
+Successfully built smackerel-ml
+[py-unit] pip install OK; starting unit-only pytest ml/tests
++ pytest -q -m 'not integration and not live_ollama' -k 'schema_repair or malformed_json or structured_extraction_thinking or output_token_budget or valid_first_response or repairs_missing_concepts_once' ml/tests
+.......................                                                  [100%]
+23 passed, 687 deselected in 1.22s
+[py-unit] pytest ml/tests finished OK
+authoritative_sibling_regression_selector_exit=0
+=== BUG-026-008 DIRECT AUTHORITATIVE SIBLING REGRESSION SELECTOR END ===
+```
+
+Result: 23 selected tests passed; zero selected tests failed or skipped. The selector explicitly covers BUG-026-006 malformed-JSON preservation, BUG-026-007 structured-extraction thinking, output-token budget/profile fail-loud behavior, valid-first one-call behavior, invalid-then-valid repair, second-invalid terminal handling, malformed-repair terminal handling, repair-exception handling, and token/profile accounting. Earlier provisional expressions passed 21 and 22 tests; the 23-test selector above is the authoritative count for this specialist record.
+
+### Candidate Ancestry And Post-Review Product Delta
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && printf '%s\n' '=== BUG-026-008 DIRECT REGRESSION ANCESTRY REFINED START ===' && printf 'timestamp=' && date -u +%FT%TZ && printf 'candidate=' && git rev-parse HEAD && printf 'origin=' && git rev-parse origin/bug/026-008-synthesis-schema-repair && git merge-base --is-ancestor e2ac9405b453698b5325b4b92f8b9cab4bd3cc35 HEAD && printf '%s\n' 'repair_commit_ancestor=PASS' && git merge-base --is-ancestor 5904f0266c2e9edd06db8fd8fb75794687dcf10e HEAD && printf '%s\n' 'source_candidate_ancestor=PASS' && git merge-base --is-ancestor b476198898f005ac5bad25510fcb9d90cbe50939 HEAD && printf '%s\n' 'security_reviewed_candidate_ancestor=PASS' && printf '%s\n' '--- COMMITS AFTER SECURITY-REVIEWED CANDIDATE ---' && git --no-pager log --oneline --ancestry-path b476198898f005ac5bad25510fcb9d90cbe50939..HEAD && printf '%s\n' '--- COMMITTED PRODUCT DELTA AFTER REVIEWED CANDIDATE ---' && if git diff --quiet b476198898f005ac5bad25510fcb9d90cbe50939..HEAD -- . ':(exclude)specs/**'; then printf '%s\n' 'committed_product_delta=NONE'; else git --no-pager diff --name-status b476198898f005ac5bad25510fcb9d90cbe50939..HEAD -- . ':(exclude)specs/**'; exit 1; fi && printf '%s\n' '--- REGRESSION TEST BYTE DELTA AFTER REVIEWED CANDIDATE ---' && if git diff --quiet b476198898f005ac5bad25510fcb9d90cbe50939..HEAD -- ml/tests/test_synthesis.py ml/tests/test_main.py ml/tests/test_ollama_keepalive.py; then printf '%s\n' 'regression_test_byte_delta=NONE'; else git --no-pager diff --name-status b476198898f005ac5bad25510fcb9d90cbe50939..HEAD -- ml/tests/test_synthesis.py ml/tests/test_main.py ml/tests/test_ollama_keepalive.py; exit 1; fi && printf '%s\n' '--- ACTIVE WORKTREE PATHS ---' && git status --short && printf '%s\n' '--- ACTIVE NON-PACKET DELTA ---' && if git diff --quiet -- . ':(exclude)specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md' ':(exclude)specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json'; then printf '%s\n' 'active_non_packet_delta=NONE'; else git --no-pager diff --name-status -- . ':(exclude)specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md' ':(exclude)specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json'; exit 1; fi && printf '%s\n' '=== BUG-026-008 DIRECT REGRESSION ANCESTRY REFINED END ==='`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 DIRECT REGRESSION ANCESTRY REFINED START ===
+timestamp=2026-07-20T16:21:19Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+origin=024cb65317645ed375c02bf574151f2ecee92f02
+repair_commit_ancestor=PASS
+source_candidate_ancestor=PASS
+security_reviewed_candidate_ancestor=PASS
+--- COMMITTED PRODUCT DELTA AFTER REVIEWED CANDIDATE ---
+committed_product_delta=NONE
+--- REGRESSION TEST BYTE DELTA AFTER REVIEWED CANDIDATE ---
+regression_test_byte_delta=NONE
+--- ACTIVE WORKTREE PATHS ---
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json
+--- ACTIVE NON-PACKET DELTA ---
+active_non_packet_delta=NONE
+=== BUG-026-008 DIRECT REGRESSION ANCESTRY REFINED END ===
+```
+
+The exact local candidate equals the pushed branch tip. The introducing repair commit, source candidate, and security-reviewed aggregate candidate remain ancestors. Governance-only packet commits followed review, but no product source, test, config, runtime, deployment, host, train, or managed-document path changed; the three protected regression test files are byte-identical to the reviewed candidate.
+
+### Adversarial Failure Sensitivity
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && printf '%s\n' '=== BUG-026-008 ADVERSARIAL ASSERTION AUDIT START ===' && grep -nE 'assert len\(captured\) == (1|2)|assert result\["success"\] is (True|False)|assert result\["tokens_used"\] == (11|16|17|24|42)|assert result\["processing_time_ms"\] == 250|assert result\["result"\]\["concepts"\]\[0\]\["name"\]|assert sensitive_(invalid_value|model_text|error) not|assert SYNTHESIS_ARTIFACT_CONTENT not|do not substitute empty values for required semantic content|assert "concepts" in error_msg.lower\(\)|assert request\["think"\] is False|assert request\["keep_alive"\] == "30m"|assert request\["options"\]\["num_ctx"\] == 32768|assert request\["response_format"\]' ml/tests/test_synthesis.py && printf '%s\n' '--- SIBLING SELECTOR ANCHORS ---' && grep -nE 'malformed_json|structured_extraction_thinking|output_token_budget' ml/tests/test_synthesis.py ml/tests/test_main.py ml/tests/test_ollama_keepalive.py && printf '%s\n' '=== BUG-026-008 ADVERSARIAL ASSERTION AUDIT END ==='`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The current passing tests are adversarial to each prohibited regression. A third call fails the `len(captured) == 2` terminal assertions; restored one-call terminal schema handling fails invalid-then-valid's `success is True`, two-call, and corrected-concept assertions; fabricated empty required semantics fail the missing-`concepts` validator plus two-call corrected-concept contract; content leakage fails explicit sensitive model/error/artifact exclusions; and profile/accounting drift fails exact request-field, summed-token, and elapsed-time assertions. No code or test mutation was used to manufacture a RED.
+
+Relevant assertion window from the full observed command output:
+
+```text
+=== BUG-026-008 ADVERSARIAL ASSERTION AUDIT START ===
+184:    assert "concepts" in error_msg.lower()
+235:    assert len(captured) == 2, result
+236:    assert result["success"] is True
+237:    assert result["tokens_used"] == 24
+238:    assert result["result"]["concepts"][0]["name"] == "Quarterly Card Rewards"
+267:    assert len(captured) == 2
+268:    assert result["success"] is False
+271:    assert sensitive_invalid_value not in json.dumps(result)
+286:    assert len(captured) == 2
+287:    assert result["success"] is False
+290:    assert sensitive_model_text not in json.dumps(result)
+305:    assert len(captured) == 2
+306:    assert result["success"] is False
+309:    assert sensitive_error not in json.dumps(result)
+310:    assert sensitive_error not in caplog.text
+311:    assert SYNTHESIS_ARTIFACT_CONTENT not in caplog.text
+323:    assert len(captured) == 1
+324:    assert result["success"] is True
+348:    assert len(captured) == 2
+350:    assert result["tokens_used"] == 42
+351:    assert result["processing_time_ms"] == 250
+359:        assert request["response_format"] == {"type": "json_object"}
+360:        assert request["think"] is False
+361:        assert request["keep_alive"] == "30m"
+362:        assert request["options"]["num_ctx"] == 32768
+372:    assert "do not substitute empty values for required semantic content" in repair["messages"][-1]["content"]
+=== BUG-026-008 ADVERSARIAL ASSERTION AUDIT END ===
+```
+
+### Regression Baseline And Residuals
+
+| Check | Prior recorded baseline | Current direct specialist | Delta | Status |
+|---|---:|---:|---:|---|
+| Focused protected-scenario selector | 21 passed | 23 passed | +2 explicit valid-first and invalid-then-valid selections | CLEAN |
+| Bugfix guard files with adversarial signals | 3 | 3 | 0 | CLEAN |
+| Guard violations | 0 | 0 | 0 | CLEAN |
+| Guard warnings | 0 | 0 | 0 | CLEAN |
+| Protected regression test byte delta after review | none | none | 0 | CLEAN |
+
+**Claim Source:** executed
+
+- No new regression, coverage-gap, design-conflict, or UI-flow finding was detected by the bounded checks.
+- No deployment surface changed, so the deployment regression scan was not applicable.
+- Existing audit findings `AUD-026-008-BROAD-EVIDENCE-001`, `AUD-026-008-COMPLETION-ORDER-001`, and `AUD-026-008-PHASE-CLAIMS-001`, the ACTIVE `REWORK_REQUIRED` audit disposition, and open audit/deployment routes remain unresolved and unchanged.
+
+**Claim Source:** not-run
+
+- The full all-package E2E suite was prohibited by the bounded dispatch and was not rerun or claimed.
+- The command registry exposes no quantitative Python line-coverage command or prior percentage baseline for this selector; no line-coverage percentage is claimed. Protected-scenario count and reviewed-test byte stability are recorded instead.
+
+### Direct Regression Closeout Guards
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && printf '%s\n' '=== BUG-026-008 DIRECT REGRESSION CLOSEOUT GUARDS START ===' && printf 'candidate=' && git rev-parse HEAD && printf '%s\n' '--- ARTIFACT LINT ---' && bash .github/bubbles/scripts/artifact-lint.sh specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair; artifact_lint_exit=$?; printf 'artifact_lint_exit=%s\n' "$artifact_lint_exit"; printf '%s\n' '--- GIT DIFF CHECK ---'; git diff --check; diff_check_exit=$?; printf 'git_diff_check_exit=%s\n' "$diff_check_exit"; printf '%s\n' '--- WORKTREE ---'; git status --short; printf '%s\n' '=== BUG-026-008 DIRECT REGRESSION CLOSEOUT GUARDS END ==='; if [[ "$artifact_lint_exit" -ne 0 || "$diff_check_exit" -ne 0 ]]; then exit 1; fi`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== BUG-026-008 DIRECT REGRESSION CLOSEOUT GUARDS START ===
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- ARTIFACT LINT ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ uservalidation checklist has checked-by-default entries
+✅ All checklist bullet items use checkbox syntax
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+✅ state.json v3 has recommended field: transitionRequests
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+ℹ️  Workflow mode 'bugfix-fastlane' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+artifact_lint_exit=0
+--- GIT DIFF CHECK ---
+git_diff_check_exit=0
+--- WORKTREE ---
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json
+=== BUG-026-008 DIRECT REGRESSION CLOSEOUT GUARDS END ===
+```
+
+The inherited `certification.scopeProgress` deprecation warning remains visible. It predates this phase, is certification-owned, and was not changed. Artifact lint and `git diff --check` both passed.
+
+## Direct Specialist Simplify Provenance - 2026-07-20
+
+**Phase:** simplify
+**Agent:** `bubbles.simplify`
+**Provenance Mode:** `specialist`
+**Candidate Revision:** `024cb65317645ed375c02bf574151f2ecee92f02`
+**Claim Source:** executed
+**Outcome:** `completed_diagnostic`
+
+This direct simplify phase reviewed only the delivered repair and its config/startup and Go response-contract anchors. It did not invoke another runner or agent, mutate product source/tests/config/docs, alter planning or certification artifacts, or change audit and routing state.
+
+### Findings Aggregation
+
+| Review | Finding | Severity | Decision |
+|---|---|---:|---|
+| Reuse | Initial and corrective calls already share `_dispatch_synthesis_completion`, the same resolved request profile, and a copied request shape with only `messages` replaced. | none | No extraction or shared-module edit warranted. |
+| Quality | The repair budget is required and constrained to integer `1` at startup and at direct handler use. The repair prompt explicitly forbids invented or empty required semantics; terminal branches report content-free classes. | none | Keep both enforcement boundaries; sharing their small parser would increase module coupling without reducing repair complexity. |
+| Efficiency | The implementation has one helper definition and exactly two awaited call sites. Repair is a single conditional branch, not a loop; token accounting is additive and elapsed time spans the full operation. | none | No third-call path, retry abstraction, cache, or additional allocation layer warranted. |
+| Go contract | `trace_id` is one additive response field consumed by the existing response type and asserted by the existing full-pipeline response test. | none | No adapter or secondary response abstraction warranted. |
+
+No release-blocking complexity defect or simplification finding was detected. The small amount of repeated exact-one parsing is intentional defense at two runtime boundaries rather than duplicated repair behavior. Existing general prompt-contract behavior outside the bounded repair was not changed or reclassified by this phase.
+
+### Reuse, Quality, And Efficiency Inspection
+
+**Executed:** YES (current invocation)
+**Command:** three independent read-only `grep` and `git diff` passes over `ml/app/synthesis.py`, `ml/app/main.py`, `config/smackerel.yaml`, `scripts/commands/config.sh`, `internal/pipeline/synthesis_types.go`, and the focused tests
+**Exit Code:** 0 for all three completed passes
+**Claim Source:** executed
+
+Relevant window from the observed outputs:
+
+```text
+=== REUSE REVIEW PASS ===
+timestamp=2026-07-20T16:40:04Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+182:async def _dispatch_synthesis_completion(
+291:        apply_structured_extraction_thinking(completion_kwargs, provider)
+292:        profile = resolve_ollama_request_profile(model) if provider == "ollama" else None
+293:        llm_output_text, tokens_used, model_used = await _dispatch_synthesis_completion(
+342:        repair_kwargs = dict(completion_kwargs)
+343:        repair_kwargs["messages"] = [
+344:            *completion_kwargs["messages"],
+353:            repair_text, repair_tokens, model_used = await _dispatch_synthesis_completion(
+=== QUALITY REVIEW PASS ===
+config/smackerel.yaml:1868:    synthesis_schema_repair_attempts: 1
+scripts/commands/config.sh:766:ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS="$(required_value services.ml.synthesis_schema_repair_attempts)"
+ml/app/main.py:183:        schema_repair_attempts = int(required["ML_SYNTHESIS_SCHEMA_REPAIR_ATTEMPTS"])
+ml/app/main.py:187:    if schema_repair_attempts != 1:
+ml/app/synthesis.py:44:    if attempts != 1:
+ml/tests/test_synthesis.py:235:    assert len(captured) == 2, result
+ml/tests/test_synthesis.py:323:    assert len(captured) == 1
+ml/tests/test_synthesis.py:372:    assert "do not substitute empty values for required semantic content" in repair["messages"][-1]["content"]
+=== QUALITY REVIEW PASS END ===
+```
+
+The first attempted consolidated inspection used `rg`, which is not installed, and stopped before producing the intended sections. It is not used as evidence. The three completed passes above used the repository-permitted `grep` path and exited successfully.
+
+### Dispatch Cardinality And Product-Delta Proof
+
+**Executed:** YES (current invocation)
+**Command:** read-only dispatch-count, control-flow, accounting, reviewed-candidate ancestry, Go response-contract, and active-diff probes
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== EFFICIENCY REVIEW PASS ===
+timestamp=2026-07-20T16:40:06Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- DISPATCH COUNT ---
+182:async def _dispatch_synthesis_completion(
+293:        llm_output_text, tokens_used, model_used = await _dispatch_synthesis_completion(
+353:            repair_text, repair_tokens, model_used = await _dispatch_synthesis_completion(
+dispatch_definition_count=1
+dispatch_call_count=2
+--- REPAIR METRICS AND ACCOUNTING ---
+ml/app/synthesis.py:341:        synthesis_schema_repair_attempts_total.inc()
+ml/app/synthesis.py:361:            tokens_used += repair_tokens
+ml/app/synthesis.py:420:        "processing_time_ms": _elapsed_ms(start),
+active_non_packet_delta=NONE
+=== DIRECT SIMPLIFY CONTRACT PROBE ===
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+origin=024cb65317645ed375c02bf574151f2ecee92f02
+reviewed_candidate_ancestor=PASS
+post_review_product_delta=NONE
+internal/pipeline/synthesis_types.go:39:type SynthesisExtractResponse struct {
+internal/pipeline/synthesis_types.go:48:    TraceID string `json:"trace_id,omitempty"`
+internal/pipeline/synthesis_subscriber_test.go:128:func TestSynthesisExtractResponse_FullPipelinePayload(t *testing.T) {
+internal/pipeline/synthesis_subscriber_test.go:178:    if resp.TraceID != "trace-synthesis-roundtrip" {
+active_non_packet_delta=NONE
+=== DIRECT SIMPLIFY CONTRACT PROBE END ===
+```
+
+### Focused Behavior-Preservation Check
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --python --python-k 'schema_repair_budget or repairs_missing_concepts_once or fails_when_schema_repair_remains_invalid or valid_first_response_remains_one_call or schema_repair_retains_profile_and_sums_tokens'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== DIRECT SIMPLIFY FOCUSED CLI CHECK START ===
+timestamp=2026-07-20T16:41:31Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
++ cd /workspace
++ pytest_args=(-m "not integration and not live_ollama")
++ [[ 2 -gt 0 ]]
++ case "$1" in
++ pytest_args+=(-k "$2")
++ shift 2
++ [[ 0 -gt 0 ]]
+[py-unit] starting pip install -e ./ml[dev]
+Successfully built smackerel-ml
+[py-unit] pip install OK; starting unit-only pytest ml/tests
++ pytest -q -m 'not integration and not live_ollama' -k 'schema_repair_budget or repairs_missing_concepts_once or fails_when_schema_repair_remains_invalid or valid_first_response_remains_one_call or schema_repair_retains_profile_and_sums_tokens' ml/tests
+............                                                             [100%]
+12 passed, 698 deselected in 1.12s
+[py-unit] pytest ml/tests finished OK
+focused_cli_check_exit=0
+=== DIRECT SIMPLIFY FOCUSED CLI CHECK END ===
+```
+
+Result: 12 selected contracts passed with zero selected failures or skips. This focused check covers exact-one fail-loud config, invalid-then-valid repair, a terminal second invalid response, valid-first one-call preservation, and retained request profile plus cumulative accounting. Full tests and E2E were not rerun or claimed by this bounded phase.
+
+### Simplify Decision And Residuals
+
+- Product source edit warranted: **no**.
+- Product/test/config/doc files changed by this phase: **none**.
+- Packet files appended by this phase: `report.md` and `state.json` only.
+- New simplify findings: **none**.
+- Existing audit findings `AUD-026-008-BROAD-EVIDENCE-001`, `AUD-026-008-COMPLETION-ORDER-001`, and `AUD-026-008-PHASE-CLAIMS-001` remain recorded exactly as inherited; this phase does not resolve, alter, or reroute them.
+- Status, certification, audit attempt, transition requests, and routing fields remain unchanged.
+
+### Direct Simplify Closeout Guards
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && bash .github/bubbles/scripts/artifact-lint.sh specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair; artifact_lint_exit=$?; git diff --check; diff_check_exit=$?`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Relevant window from the full observed output:
+
+```text
+=== DIRECT SIMPLIFY CLOSEOUT GUARDS START ===
+timestamp=2026-07-20T16:43:38Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- ARTIFACT LINT ---
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+artifact_lint_exit=0
+--- GIT DIFF CHECK ---
+git_diff_check_exit=0
+--- WORKTREE ---
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json
+--- ACTIVE NON-PACKET DELTA ---
+active_non_packet_delta=NONE
+=== DIRECT SIMPLIFY CLOSEOUT GUARDS END ===
+```
+
+The inherited `certification.scopeProgress` deprecation warning remains certification-owned and unchanged. It is not a simplify finding or a clean-pass claim; the artifact lint itself completed successfully.
+
+## Direct Specialist Stabilize Provenance - 2026-07-20
+
+**Phase:** stabilize
+**Agent:** `bubbles.stabilize`
+**Provenance Mode:** `specialist`
+**Candidate Revision:** `024cb65317645ed375c02bf574151f2ecee92f02`
+**Claim Source:** executed
+**Outcome:** `completed_diagnostic`
+
+This direct stabilize phase ran only the bounded stability checks authorized by the parent runner. It did not invoke another runner or agent, start a live stack, mutate product source/tests/config/docs/planning/certification/deployment/host/train/framework/knb/foreign packets, or clean any Docker resource. The earlier direct test phase already executed the focused disposable live round trip cleanly, so a redundant live run was not needed to discriminate the repair's stability.
+
+### Stability Findings
+
+| Domain | Observed evidence | Finding |
+|---|---|---|
+| Reliability | Five focused current-HEAD contracts exercised a second schema-invalid response, malformed repair JSON, repair exception, valid-first success, and repair-profile/accounting behavior. | None found - all five selected contracts passed, terminal paths stopped after the second dispatch, and valid-first remained one call. |
+| Configuration | Thirteen selected startup/request checks exercised missing, blank, non-integer, zero, negative, greater-than-one, and exact-one repair budgets. | None found - the exact-one SST contract remained fail-loud at startup and request boundaries. |
+| Performance | The focused profile/accounting contract retained the configured request profile, summed tokens, measured the full two-call duration, and incremented the repair metric once. | None found within the bounded repair path - no latency benchmark or whole-system performance claim is made. |
+| Resource usage | Structural inspection found one completion helper, exactly two possible dispatch call sites, and no unbounded loop or retry/backoff/sleep marker. | None found - the repair cannot create a third model call or an unbounded queue/retry loop. |
+| Infrastructure/deployment | Read-only pre/post snapshots found zero matching Smackerel test processes and zero `smackerel-test` containers, volumes, or networks. | None found - the unit selectors left no test resource behind and did not touch foreign resources. |
+| Build/CI | Candidate and remote both remained `024cb65317645ed375c02bf574151f2ecee92f02`; the active non-packet delta was empty. | None found in the bounded source-unchanged phase; no build/deploy surface was exercised or claimed. |
+| Observability | Three terminal response forms expose only exception/decode/validator classes; three terminal tests contain five explicit sensitive-content non-leak assertions; repair metric, token, and elapsed-time accounting remain wired. | None found. The project posture is `wired`, but this bug scope declares zero `observabilityWorkflow` and zero SLO links, so no validate-plane trace/SLO run is mandatory for this phase. |
+
+No concrete release-blocking runtime instability was found in the bounded repair surface. This is not a security certification; it is an operational stability conclusion grounded in the requested reliability, configuration, resource, and content-free failure contracts.
+
+### Pre-Test Resource Exclusivity
+
+**Executed:** YES (current invocation)
+**Command:** read-only `ps` projection plus `docker ps -a`, `docker volume ls`, and `docker network ls` filtered only by Compose project label `com.docker.compose.project=smackerel-test`; the command refused execution if the aggregate count was nonzero
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== DIRECT STABILIZE PRE-RESOURCE CHECK ===
+timestamp=2026-07-20T16:51:43Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- MATCHING TEST PROCESSES ---
+process_count=0
+--- TEST CONTAINERS ---
+container_count=0
+--- TEST VOLUMES ---
+volume_count=0
+--- TEST NETWORKS ---
+network_count=0
+total_active_test_resources=0
+exclusivity=PASS
+=== DIRECT STABILIZE PRE-RESOURCE CHECK END ===
+```
+
+### Exact-One Config And Focused Stability Contracts
+
+**Executed:** YES (current invocation)
+**Commands:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --python --python-k 'schema_repair_attempts or schema_repair_budget'`; `cd ~/smackerel-bug-026-008-synthesis-schema-repair && SMACKEREL_HARDWARE_TIER=cpu ./smackerel.sh test unit --python --python-k 'fails_when_schema_repair_remains_invalid or fails_when_schema_repair_is_malformed_json or schema_repair_exception_is_content_free or valid_first_response_remains_one_call or schema_repair_retains_profile_and_sums_tokens'`
+**Exit Code:** 0 for both commands
+**Claim Source:** executed
+
+Relevant windows from the complete observed output:
+
+```text
+=== DIRECT STABILIZE FOCUSED CONTRACTS START ===
+timestamp=2026-07-20T16:52:05Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- EXACT-ONE CONFIG AND STARTUP CONTRACT ---
+[py-unit] starting pip install -e ./ml[dev]
+Successfully built smackerel-ml
+[py-unit] pip install OK; starting unit-only pytest ml/tests
++ pytest -q -m 'not integration and not live_ollama' -k 'schema_repair_attempts or schema_repair_budget' ml/tests
+.............                                                            [100%]
+13 passed, 697 deselected in 0.81s
+[py-unit] pytest ml/tests finished OK
+exact_one_config_exit=0
+--- TERMINAL, CONTENT-FREE, VALID-FIRST, PROFILE-ACCOUNTING CONTRACTS ---
+[py-unit] starting pip install -e ./ml[dev]
+Successfully built smackerel-ml
+[py-unit] pip install OK; starting unit-only pytest ml/tests
++ pytest -q -m 'not integration and not live_ollama' -k 'fails_when_schema_repair_remains_invalid or fails_when_schema_repair_is_malformed_json or schema_repair_exception_is_content_free or valid_first_response_remains_one_call or schema_repair_retains_profile_and_sums_tokens' ml/tests
+.....                                                                    [100%]
+5 passed, 705 deselected in 0.91s
+[py-unit] pytest ml/tests finished OK
+focused_stability_exit=0
+=== DIRECT STABILIZE FOCUSED CONTRACTS END ===
+```
+
+The two selectors passed 18 selected contracts in total with zero selected failures or skips. Deselection was intentional and selector-driven. The all-package E2E suite and opt-in Ollama-agent path were not executed or claimed by this bounded phase.
+
+### Bounded Dispatch And Non-Leak Inspection
+
+**Executed:** YES (current invocation)
+**Command:** read-only `grep` counts and contract anchors over `ml/app/synthesis.py`, `ml/tests/test_synthesis.py`, and `ml/tests/test_main.py`, followed by an active non-packet `git diff --quiet` boundary check
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== DIRECT STABILIZE STRUCTURAL PROBE ===
+timestamp=2026-07-20T16:54:27Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- DISPATCH BOUNDS ---
+dispatch_definition_count=1
+dispatch_call_count=2
+unbounded_loop_marker_count=0
+retry_backoff_sleep_marker_count=0
+--- CONTENT-FREE TERMINAL CONTRACTS ---
+369:                "error": f"LLM schema repair failed: {type(e).__name__}",
+384:                "error": f"LLM schema repair returned invalid JSON: {type(e).__name__}",
+402:                "error": f"Schema validation failed after repair: {repair_error_class}",
+terminal_content_free_test_count=3
+sensitive_nonleak_assertion_count=5
+--- PROFILE AND ACCOUNTING ---
+341:        synthesis_schema_repair_attempts_total.inc()
+361:            tokens_used += repair_tokens
+420:        "processing_time_ms": _elapsed_ms(start),
+--- ACTIVE CHANGE BOUNDARY ---
+active_non_packet_delta=NONE
+=== DIRECT STABILIZE STRUCTURAL PROBE END ===
+```
+
+### Post-Test Resource Proof
+
+**Executed:** YES (current invocation)
+**Command:** the same read-only process and Compose-label projection used by the pre-check, executed after both repo-CLI selectors returned
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== DIRECT STABILIZE POST-RESOURCE CHECK ===
+timestamp=2026-07-20T16:52:56Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+--- MATCHING TEST PROCESSES ---
+process_count=0
+--- TEST CONTAINERS ---
+container_count=0
+--- TEST VOLUMES ---
+volume_count=0
+--- TEST NETWORKS ---
+network_count=0
+total_active_test_resources=0
+cleanup_result=PASS
+=== DIRECT STABILIZE POST-RESOURCE CHECK END ===
+```
+
+### Stabilize Decision And Preserved Residuals
+
+- New stability findings: **none**.
+- Product/source/test/config/doc/deployment/host/framework/knb/foreign-packet files changed by this phase: **none**.
+- Packet files appended by this phase: `report.md` and `state.json` only.
+- Status and certification remain `in_progress`; no certification field changed.
+- The ACTIVE audit remains `REWORK_REQUIRED` with `AUD-026-008-BROAD-EVIDENCE-001`, `AUD-026-008-COMPLETION-ORDER-001`, and `AUD-026-008-PHASE-CLAIMS-001` unresolved.
+- Open routes remain `TR-026-008-AUDIT-001:bubbles.audit` and `TR-026-008-DEVOPS-001:bubbles.devops`; routing remains blocked on `bubbles.audit`.
+
+### Direct Stabilize Closeout Guards
+
+**Executed:** YES (current invocation)
+**Command:** `cd ~/smackerel-bug-026-008-synthesis-schema-repair && bash .github/bubbles/scripts/artifact-lint.sh specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair; jq -e . specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json; verify the exact specialist provenance/nonterminal audit contract; git diff --check; verify the active non-packet delta is empty`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Relevant window from the complete observed output:
+
+```text
+=== DIRECT STABILIZE POST-EDIT VALIDATION START ===
+timestamp=2026-07-20T16:58:14Z
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+origin=024cb65317645ed375c02bf574151f2ecee92f02
+--- ARTIFACT LINT ---
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: bugfix-fastlane
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+artifact_lint_exit=0
+--- JSON AND PROVENANCE CONTRACT ---
+state_json_parse_exit=0
+state_contract_exit=0
+direct_specialist_stabilize_record_count=1
+report_stabilize_anchor_count=1
+--- GIT DIFF CHECK ---
+git_diff_check_exit=0
+--- ACTIVE WORKTREE ---
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/report.md
+ M specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair/state.json
+--- ACTIVE NON-PACKET DELTA ---
+active_non_packet_delta=NONE
+non_packet_boundary_exit=0
+=== DIRECT STABILIZE POST-EDIT VALIDATION END ===
+```
+
+The inherited `certification.scopeProgress` warning remains certification-owned and unchanged. It is not a stability finding or a claim of terminal readiness; the canonical artifact lint itself passed.
+
+## Fresh Delivery Completion Audit - 2026-07-20
+
+### Findings
+
+1. **No blocking delivery finding remains.** The registry resolved `bugfix-fastlane` to
+	`delivery-completion-v1`, target `done`, and contract digest
+	`sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f`.
+	The assertion-bound transition guard exited `0` with `failedGateIds: []`,
+	`failureCount: 0`, and all universal, mode-required, and delivery-completion checks
+	applicable.
+2. **Exact candidate ancestry and change containment are clean.** Local `HEAD`, the
+	configured upstream, and the supplied pushed base are all
+	`024cb65317645ed375c02bf574151f2ecee92f02`. The introducing repair commit, source
+	candidate, and security-reviewed aggregate candidate are ancestors. There is no
+	committed product delta after security review and no active non-packet worktree delta.
+3. **The required bug scenarios reproduce independently.** This audit reran 13 exact-one
+	config/startup contracts, 20 synthesis repair contracts, three Go response contracts,
+	the canonical adversarial regression guard over all three protected Python files, and
+	live `TestKnowledgeSynthesis_PipelineRoundTrip`. The live test passed in `8.05s`, its
+	package passed in `8.210s`, and independent post-run checks found no test project
+	containers, volumes, or networks.
+4. **Security and non-leak posture remain clean.** The implementation-reality scan covered
+	13 referenced files with zero violations and zero warnings, including zero G047 IDOR
+	and G048 silent-decode findings. The changed terminal paths expose only exception,
+	decode, and validator/path classes. A coarse log scan matched only the required
+	configuration key name `SMACKEREL_AUTH_TOKEN`; it does not log a credential value.
+5. **The positive verdict carries notes.** Go selectors emit `testing: warning: no tests to
+	run` in unrelated packages, the state guard warns that no `completedAt` timestamps are
+	present, and it flags ten historical report evidence blocks as lacking terminal-output
+	signals. None is a failed applicable gate. The optional Ollama-agent category remains
+	explicitly not run and is not counted as passed.
+
+### Old Finding Dispositions
+
+| Finding | Disposition | Current evidence |
+|---|---|---|
+| `AUD-026-008-BROAD-EVIDENCE-001` | addressed | The broader Go package claim is checked by composition on the unchanged candidate; the complete root package has raw `221.468s` PASS evidence, the assistant repairs have raw live PASS evidence, and the current guard accepts the required scenario/test contract. The optional Ollama-agent category remains excluded from the pass claim. |
+| `AUD-026-008-COMPLETION-ORDER-001` | addressed | Scope 1 is now `Done`, all 23 of 23 DoD items are checked, execution and certification scope progress both identify Scope 1, and the current guard reports no completion-order failure. Audit did not alter the scope or DoD. |
+| `AUD-026-008-PHASE-CLAIMS-001` | addressed | `execution.completedPhaseClaims` contains all eight required phases and each has matching direct-specialist provenance accepted by G022/G027. Validate-owned certified phases remain empty, as required before terminal promotion. |
+
+### Independent Verification
+
+**Phase:** audit
+**Commands:** focused Python and Go selectors through `./smackerel.sh`; one live disposable-stack round trip; regression-quality guard; G095 guard; implementation-reality scan; candidate and resource-boundary probes
+**Exit Code:** 0 for every required command
+**Claim Source:** executed
+
+Relevant windows from the complete observed outputs:
+
+```text
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+13 passed, 697 deselected in 0.90s
+20 passed, 690 deselected in 1.23s
+=== RUN   TestSynthesisExtractResponse_SuccessMarksCompleted
+--- PASS: TestSynthesisExtractResponse_SuccessMarksCompleted (0.00s)
+=== RUN   TestSynthesisExtractResponse_FailureMarksFailed
+--- PASS: TestSynthesisExtractResponse_FailureMarksFailed (0.00s)
+=== RUN   TestSynthesisExtractResponse_FullPipelinePayload
+--- PASS: TestSynthesisExtractResponse_FullPipelinePayload (0.00s)
+=== RUN   TestKnowledgeSynthesis_PipelineRoundTrip
+--- PASS: TestKnowledgeSynthesis_PipelineRoundTrip (8.05s)
+ok github.com/smackerel/smackerel/tests/e2e 8.210s
+PASS: go-e2e
+live_test_exit=0
+post_container_resources=NONE
+post_volume_resources=NONE
+post_network_resources=NONE
+REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+Files with adversarial signals: 3
+G095: discovered-issue disposition clean (no unfiled deferrals)
+Files scanned: 13
+Violations: 0
+Warnings: 0
+PASSED: No source code reality violations detected
+```
+
+The repository runner also printed `Skipping Ollama agent E2E`; this is the dated,
+optional category disposition already recorded by G095. It is not a required
+BUG-026-008 scenario, was not executed, and is not included in any passed count.
+
+### Guard And State Coherence
+
+**Phase:** audit
+**Command:** registry contract resolution followed by assertion-only
+`state-transition-guard.sh` with the resolved target, mode, and contract digest
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+workflowMode: bugfix-fastlane
+auditProfile: delivery-completion-v1
+targetStatus: done
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+failedGateIds: []
+failedChecks: []
+blockingCode: none
+failureCount: 0
+exitStatus: 0
+verdict: PASS
+STATE_TRANSITION_GUARD_EXIT=0
+```
+
+State remains deliberately non-terminal: top-level and certification statuses are
+`in_progress`, readiness is `not_ready`, certified phases are empty, and certifier/timestamp
+remain null. Audit did not write any certification field or terminal status.
+
+### Evidence Provenance Review
+
+Every current `interpreted` claim was reviewed individually:
+
+1. **Broader E2E composition in `scopes.md`: reasonable.** The root-package PASS is raw,
+	the repaired assistant scenarios are raw, the cited candidates are ancestors of the
+	exact pushed candidate, and no product byte changed after review. The interpretation
+	does not count the optional Ollama-agent category.
+2. **Specialist Evidence Reconciliation in this report: reasonable.** Historical
+	security/validate conclusions remain bound by exact ancestry and zero post-review
+	product delta, while fresh direct specialist provenance now exists for implement,
+	test, regression, simplify, and stabilize.
+3. **Adversarial Assertion Audit in this report: reasonable.** This audit independently
+	reran the canonical bugfix guard, which found adversarial signals in all three files
+	with zero violations or warnings, and reran the focused scenarios those assertions
+	protect.
+
+Historical `not-run` blocks remain truthful disclosures. They are not used alone to support
+a required scenario, and this audit does not rewrite them as executed evidence. The earlier
+broad-suite RED uncertainty is historical evidence of the routed sibling defects; the
+current packet has zero unchecked DoD items and the resolved sibling evidence is preserved.
+
+## Spot-Check Recommendations
+
+These items passed the applicable gates or were honestly disclosed, but warrant manual
+review:
+
+1. **Broader E2E composition** - This checked DoD uses `interpreted` evidence. Verify the
+	assistant repair and `221.468s` complete-root transcripts remain on the same candidate
+	ancestry, and do not count the opt-in Ollama-agent category as passed.
+2. **Specialist Evidence Reconciliation** - This report claim is `interpreted`. Verify the
+	original security and prior validate transcripts before signed deployment; ancestry and
+	zero product delta support, but do not replace, their original evidence.
+3. **Adversarial Assertion Audit** - This report claim is `interpreted`. Verify the exact
+	call-count, content-exclusion, profile, token, and elapsed-time assertions still fail if
+	the one-call permanent-failure bug is reintroduced.
+4. **SST and Go response evidence** - Four historical raw fences sit exactly at the
+	ten-line minimum: the scope SST check, the report SST check, and two Go response-contract
+	windows. Verify the named tests and SST drift signals, not merely their exit codes.
+5. **Historical short windows** - The old format-classification and regression-summary
+	excerpts contain fewer than ten raw lines. Verify they are treated only as historical
+	context; later full format/regression evidence and the current green guards are the
+	controlling proof.
+6. **Guard warnings** - Verify the missing `completedAt` timestamps and historical
+	non-terminal-output evidence warnings remain informational and are not promoted into
+	validate-owned certification claims.
+
+### Audit Verdict
+
+`SHIP_WITH_NOTES` for the registry-bound delivery packet. No remediation-required finding
+remains, no product edit is needed, and all three findings inherited from attempt `a1` are
+addressed. The exact next owner is `bubbles.validate`, which alone may perform terminal
+promotion after consuming this ACTIVE audit attempt. Signed build/deploy remains a later
+`bubbles.devops` action and was not performed by audit.
+
+BEGIN AUDIT_RESULT_V1
+schemaVersion: audit-result/v1
+runId: audit-026-008-20260720T024224Z
+attemptId: audit-026-008-20260720T024224Z-a2
+target: specs/026-domain-extraction/bugs/BUG-026-008-synthesis-schema-repair
+targetRevision: sha256:9180b9c534072a486d843948d09fd1a181413b4597063381120f421a5897a963
+workflowMode: bugfix-fastlane
+modeClass: none
+auditClass: delivery-completion
+statusCeiling: done
+requestedStatus: done
+auditVerdict: SHIP_WITH_NOTES
+outcome: completed_diagnostic
+resultState: ACTIVE
+certifiedStatus: done
+planningEvaluation: NOT_EVALUATED
+deliveryEvaluation: CERTIFIED
+sourceEditLockout: PASS
+applicableCheckClasses: [universal,mode-required,delivery-completion]
+notApplicableChecks: []
+passedGateIds: [G061,G053,G040,G051,G068,G082,G083,G084,G128,G085,G086,G091,G087,G093,G088,G089,G092,G090,G094,G095,G097,G098,G099,G100,G001,G002,G003,G004,G005,G006,G007,G008,G009,G010,G011,G012,G014,G015,G016,G018,G019,G020,G021,G022,G023,G024,G025,G026,G027,G028,G029,G033,G034,G035,G044,G047,G048,G055,G056,G057,G059,G060]
+failedGateIds: []
+failedChecks: []
+blockingCode: none
+unresolvedFields: []
+contradictions: []
+contractRef: bubbles/workflows/modes.yaml#bugfix-fastlane
+contractDigest: sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+evidenceRefs: [.specify/runtime/audit-026-008-20260720T024224Z-a2.txt,report.md#fresh-delivery-completion-audit---2026-07-20]
+addressedFindings: [AUD-026-008-BROAD-EVIDENCE-001,AUD-026-008-COMPLETION-ORDER-001,AUD-026-008-PHASE-CLAIMS-001]
+unresolvedFindings: []
+nextRequiredOwner: none
+supersedesAttemptId: audit-026-008-20260720T024224Z-a1
+resumeFromPhase: none
+END AUDIT_RESULT_V1
+
+<!-- bubbles:certifying-window-begin -->
+
+## Validate-Owned Terminal Certification - 2026-07-20
+
+### Validation Evidence
+
+Fresh validate-owned terminal evidence is recorded below after the terminal state write and
+post-edit gate execution. Historical specialist and audit evidence above remains immutable and
+outside this certifying window.
+
+### Audit Evidence
+
+The controlling audit evidence is ACTIVE attempt
+`audit-026-008-20260720T024224Z-a2`, preserved in
+`.specify/runtime/audit-026-008-20260720T024224Z-a2.txt`. Validate consumed that result only after
+the canonical audit-result contract lint passed against the current packet state.
+
+### Outcome Contract Verification (G070)
+
+| Field | Declared | Evidence | Status |
+|---|---|---|---|
+| Intent | Recover one parsed schema-invalid synthesis response without fabricating semantics or creating an unbounded loop | 20 focused synthesis tests, three Go response tests, one live round trip, and the audit's bounded-dispatch inspection | PASS |
+| Success Signal | Missing `concepts`, then a valid corrected response, succeeds through `handle_extract` after exactly two calls | `report.md#harness-and-category-repairs` and `report.md#fresh-delivery-completion-audit---2026-07-20` | PASS |
+| Hard Constraints | Exact-one fail-loud budget, preserved profile/context, accumulated accounting, content-free failures, sibling regressions green | 13 config/startup tests, focused synthesis/profile/accounting selectors, regression guard, implementation-reality scan | PASS |
+| Failure Condition | No permanent first-response failure, third call, fabricated semantics, profile/context loss, one-call-only accounting, false success, leakage, or sibling regression remains | ACTIVE audit attempt `a2` has no unresolved findings; current guard has no failed gates | PASS |
+
+### Findings
+
+1. No blocking certification finding remains. The fresh pre-edit resolver matched ACTIVE audit
+	attempt `a2` on workflow mode, delivery profile, target status, contract digest, and target
+	revision; the audit-result contract lint passed.
+2. Scope 1 is `Done` with 23 of 23 DoD items checked. All eight required phases have specialist
+	provenance, and the audit's three inherited findings are addressed exactly once with none
+	unresolved.
+3. `HEAD` equals its upstream at `024cb65317645ed375c02bf574151f2ecee92f02`; no committed product
+	delta follows that candidate and no uncommitted path exists outside this packet's `report.md`
+	and `state.json`.
+4. The optional Ollama-agent E2E remains explicitly `NOT_RUN_NOT_CLAIMED`. It is not a required
+	BUG-026-008 scenario and is excluded from passed counts.
+5. Deployment was not performed: `deploymentReached=false`, `redeployRequired=true`, and the sole
+	open transition is `TR-026-008-DEVOPS-001` owned by `bubbles.devops`.
+
+### Pre-Edit Certification Gates
+
+**Phase:** validate
+**Command:** `bash artifact-lint, discovered-issue-disposition-guard, traceability-guard, implementation-reality-scan, audit-result-contract-lint, and assertion-bound state-transition-guard against BUG-026-008`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Relevant final window from the complete observed output:
+
+```text
+=== PRE-EDIT CERTIFICATION GATE EVIDENCE ===
+artifact-lint: PASS
+G095: PASS
+traceability-guard: PASS
+implementation-reality-scan: PASS
+audit-result-contract-lint: PASS
+state-transition-guard: PASS
+0 failed
+0 warnings
+workflowMode=bugfix-fastlane
+auditProfile=delivery-completion-v1
+targetStatus=done
+contractDigest=sha256:aa91472c047d3d985d38c1d308feb1e6081955b2aa553816deb5987d9cdc449f
+targetRevision=sha256:9180b9c534072a486d843948d09fd1a181413b4597063381120f421a5897a963
+failedGateIds=[]
+failedChecks=[]
+blockingCode=none
+failureCount=0
+exitStatus=0
+verdict=PASS
+=== PRE-EDIT CERTIFICATION GATE EVIDENCE PASS ===
+```
+
+### Audit And Completion Accounting
+
+**Phase:** validate
+**Command:** `jq and git predicates over state.json, scopes.md, report.md, the ACTIVE audit transcript, candidate ancestry, packet boundary, and optional Ollama disposition`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== CERTIFICATION ACCOUNTING EVIDENCE ===
+state.json: PASS
+scopes.md: PASS
+audit accounting: PASS
+deployment boundary: PASS
+optional Ollama E2E: NOT_RUN_NOT_CLAIMED
+23 tests
+0 failed
+0 warnings
+candidate=024cb65317645ed375c02bf574151f2ecee92f02
+certifiedAt=2026-07-20T18:15:46Z
+certifiedPhases=["implement","test","regression","simplify","stabilize","security","validate","audit"]
+auditAttempt=audit-026-008-20260720T024224Z-a2
+addressedFindings=["AUD-026-008-BROAD-EVIDENCE-001","AUD-026-008-COMPLETION-ORDER-001","AUD-026-008-PHASE-CLAIMS-001"]
+unresolvedFindings=[]
+deploymentReached=false
+redeployRequired=true
+nextRequiredOwner=bubbles.devops
+=== CERTIFICATION ACCOUNTING EVIDENCE PASS ===
+```
+
+### Post-Edit Terminal Gates
+
+**Phase:** validate
+**Command:** `fresh transition resolver; artifact lint; G095; traceability; implementation reality; audit-result contract lint; assertion-bound done guard; JSON contract; candidate boundary; git diff --check`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== POST-EDIT TERMINAL GATE EVIDENCE ===
+transition-contract-resolver: PASS
+artifact-lint: PASS
+G095: PASS
+traceability-guard: PASS
+implementation-reality-scan: PASS
+audit-result-contract-lint: PASS
+state-transition-guard: PASS
+JSON diagnostics: PASS
+candidate ancestry: PASS
+packet boundary: PASS
+git diff --check: PASS
+12 tests
+0 failed
+0 warnings
+status=done
+deploymentReached=false
+redeployRequired=true
+nextRequiredOwner=bubbles.devops
+=== POST-EDIT TERMINAL GATE EVIDENCE PASS ===
+```
+
+### Before And After Guard Summary
+
+| Guard point | Status | Failed gates | Failure count | Result |
+|---|---:|---|---:|---|
+| Pre-edit, `in_progress`, fresh audit contract | 0 | `[]` | 0 | PASS; transition permitted |
+| First terminal write before report-shape repair | 1 | `[]` | 1 applicable-integrity failure | BLOCKED by terminal artifact lint |
+| Final terminal posture after certifying-window repair | 0 | `[]` | 0 | PASS; `done` permitted |
+
+The intermediate blocked guard was honored: terminal artifact lint required canonical
+`### Validation Evidence` and `### Audit Evidence` headings and a truthful current certifying
+window. The report was repaired without rewriting historical evidence, then the same artifact
+lint and assertion-bound guard were rerun to green before certification was retained.
+
+### Certification Decision
+
+Validate certifies this source-delivery packet `done` at `2026-07-20T18:15:46Z`. This is not a
+deployment claim. The exact next owner is `bubbles.devops`, which owns the signed build/deploy and
+accepted-runtime confirmation. The optional Ollama-agent E2E remains outside this certification's
+executed coverage.
